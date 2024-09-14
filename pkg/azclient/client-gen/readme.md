@@ -3,7 +3,7 @@
 ## typescaffold
 
 ```shell
-typescaffold --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4 --package-alias network --resource PrivateLinkService --client-name PrivateLinkServicesClient 
+typescaffold --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6 --package-alias network --resource PrivateLinkService --client-name PrivateLinkServicesClient 
 ```
 
 ### client-gen

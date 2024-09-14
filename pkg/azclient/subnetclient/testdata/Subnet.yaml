@@ -72,7 +72,7 @@ interactions:
                 - "87"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource?api-version=2024-01-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -80,18 +80,18 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 517
+        content_length: 548
         uncompressed: false
-        body: '{"name":"testParentResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/virtualNetworks","location":"eastus","properties":{"provisioningState":"Updating","resourceGuid":"00000000-0000-0000-0000-000000000000","addressSpace":{"addressPrefixes":["10.1.0.0/16"]},"subnets":[],"virtualNetworkPeerings":[],"enableDdosProtection":false}}'
+        body: '{"name":"testParentResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/virtualNetworks","location":"eastus","properties":{"provisioningState":"Updating","resourceGuid":"00000000-0000-0000-0000-000000000000","addressSpace":{"addressPrefixes":["10.1.0.0/16"],"ipamPoolPrefixAllocations":[]},"subnets":[],"virtualNetworkPeerings":[],"enableDdosProtection":false}}'
         headers:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "517"
+                - "548"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -121,7 +121,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -166,7 +166,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -174,14 +174,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 518
+        content_length: 549
         uncompressed: false
-        body: '{"name":"testParentResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/virtualNetworks","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","addressSpace":{"addressPrefixes":["10.1.0.0/16"]},"subnets":[],"virtualNetworkPeerings":[],"enableDdosProtection":false}}'
+        body: '{"name":"testParentResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/virtualNetworks","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","addressSpace":{"addressPrefixes":["10.1.0.0/16"],"ipamPoolPrefixAllocations":[]},"subnets":[],"virtualNetworkPeerings":[],"enableDdosProtection":false}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "518"
+                - "549"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -219,7 +219,7 @@ interactions:
                 - "46"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2024-01-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -227,18 +227,18 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 482
+        content_length: 513
         uncompressed: false
-        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Updating","addressPrefix":"10.1.0.0/24","delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}'
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Updating","addressPrefix":"10.1.0.0/24","ipamPoolPrefixAllocations":[],"delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}'
         headers:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "482"
+                - "513"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -268,7 +268,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -313,7 +313,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -321,14 +321,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 483
+        content_length: 514
         uncompressed: false
-        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","addressPrefix":"10.1.0.0/24","delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}'
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","addressPrefix":"10.1.0.0/24","ipamPoolPrefixAllocations":[],"delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "483"
+                - "514"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -362,7 +362,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -370,14 +370,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 483
+        content_length: 514
         uncompressed: false
-        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","addressPrefix":"10.1.0.0/24","delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}'
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","addressPrefix":"10.1.0.0/24","ipamPoolPrefixAllocations":[],"delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "483"
+                - "514"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -411,7 +411,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResourcenotfound?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResourcenotfound?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -462,7 +462,7 @@ interactions:
                 - "46"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2024-01-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -470,18 +470,18 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 483
+        content_length: 514
         uncompressed: false
-        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","addressPrefix":"10.1.0.0/24","delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}'
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","addressPrefix":"10.1.0.0/24","ipamPoolPrefixAllocations":[],"delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}'
         headers:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "483"
+                - "514"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -511,7 +511,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -519,14 +519,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 483
+        content_length: 514
         uncompressed: false
-        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","addressPrefix":"10.1.0.0/24","delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}'
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","addressPrefix":"10.1.0.0/24","ipamPoolPrefixAllocations":[],"delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "483"
+                - "514"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -560,7 +560,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -568,14 +568,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 495
+        content_length: 526
         uncompressed: false
-        body: '{"value":[{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","addressPrefix":"10.1.0.0/24","delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}]}'
+        body: '{"value":[{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","addressPrefix":"10.1.0.0/24","ipamPoolPrefixAllocations":[],"delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}]}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "495"
+                - "526"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -607,7 +607,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnetnotfound/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnetnotfound/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -656,7 +656,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2024-01-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -671,7 +671,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -679,7 +679,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -705,7 +705,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -752,7 +752,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource?api-version=2024-01-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -767,7 +767,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -775,7 +775,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -801,7 +801,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0

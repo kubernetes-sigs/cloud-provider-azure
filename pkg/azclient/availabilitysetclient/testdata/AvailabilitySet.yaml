@@ -100,6 +100,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Need-To-Refresh-Epl-Cache:
+                - "False"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -147,6 +149,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Need-To-Refresh-Epl-Cache:
+                - "False"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -243,6 +247,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Need-To-Refresh-Epl-Cache:
+                - "False"
         status: 200 OK
         code: 200
         duration: 200ms

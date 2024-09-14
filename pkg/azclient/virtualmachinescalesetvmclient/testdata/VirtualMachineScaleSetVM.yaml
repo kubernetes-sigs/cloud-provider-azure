@@ -49,8 +49,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-        status: 201 Created
-        code: 201
+        status: 200 OK
+        code: 200
         duration: 200ms
     - id: 1
       request:
@@ -72,7 +72,7 @@ interactions:
                 - "163"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Network/virtualNetworks/vnet1?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Network/virtualNetworks/vnet1?api-version=2024-01-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -80,18 +80,18 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 986
+        content_length: 1048
         uncompressed: false
-        body: '{"name":"vnet1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Network/virtualNetworks/vnet1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/virtualNetworks","location":"eastus","properties":{"provisioningState":"Updating","resourceGuid":"00000000-0000-0000-0000-000000000000","addressSpace":{"addressPrefixes":["10.1.0.0/16"]},"subnets":[{"name":"subnet1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Updating","addressPrefix":"10.1.0.0/24","delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}],"virtualNetworkPeerings":[],"enableDdosProtection":false}}'
+        body: '{"name":"vnet1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Network/virtualNetworks/vnet1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/virtualNetworks","location":"eastus","properties":{"provisioningState":"Updating","resourceGuid":"00000000-0000-0000-0000-000000000000","addressSpace":{"addressPrefixes":["10.1.0.0/16"],"ipamPoolPrefixAllocations":[]},"subnets":[{"name":"subnet1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Updating","addressPrefix":"10.1.0.0/24","ipamPoolPrefixAllocations":[],"delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}],"virtualNetworkPeerings":[],"enableDdosProtection":false}}'
         headers:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "986"
+                - "1048"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -121,7 +121,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -166,7 +166,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Network/virtualNetworks/vnet1?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Network/virtualNetworks/vnet1?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -174,14 +174,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 988
+        content_length: 1050
         uncompressed: false
-        body: '{"name":"vnet1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Network/virtualNetworks/vnet1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/virtualNetworks","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","addressSpace":{"addressPrefixes":["10.1.0.0/16"]},"subnets":[{"name":"subnet1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","addressPrefix":"10.1.0.0/24","delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}],"virtualNetworkPeerings":[],"enableDdosProtection":false}}'
+        body: '{"name":"vnet1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Network/virtualNetworks/vnet1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/virtualNetworks","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","addressSpace":{"addressPrefixes":["10.1.0.0/16"],"ipamPoolPrefixAllocations":[]},"subnets":[{"name":"subnet1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","addressPrefix":"10.1.0.0/24","ipamPoolPrefixAllocations":[],"delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}],"virtualNetworkPeerings":[],"enableDdosProtection":false}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "988"
+                - "1050"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -253,6 +253,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Need-To-Refresh-Epl-Cache:
+                - "False"
             X-Ms-Request-Charge:
                 - "1"
         status: 201 Created
@@ -300,6 +302,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Need-To-Refresh-Epl-Cache:
+                - "False"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -347,6 +351,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Need-To-Refresh-Epl-Cache:
+                - "False"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -374,14 +380,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 1178
+        content_length: 1177
         uncompressed: false
-        body: "{\r\n  \"placementGroupId\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"platformUpdateDomain\": 0,\r\n  \"platformFaultDomain\": 0,\r\n  \"vmAgent\": {\r\n    \"vmAgentVersion\": \"Unknown\",\r\n    \"statuses\": [\r\n      {\r\n        \"code\": \"ProvisioningState/Unavailable\",\r\n        \"level\": \"Warning\",\r\n        \"displayStatus\": \"Not Ready\",\r\n        \"message\": \"VM status blob is found but not yet populated.\",\r\n        \"time\": \"2001-02-03T04:05:06Z\"\r\n      }\r\n    ]\r\n  },\r\n  \"disks\": [\r\n    {\r\n      \"name\": \"testParentResource_testParentResource_0_OS__1_f6dfafbcee4d4d108db07d7638160c60\",\r\n      \"statuses\": [\r\n        {\r\n          \"code\": \"ProvisioningState/succeeded\",\r\n          \"level\": \"Info\",\r\n          \"displayStatus\": \"Provisioning succeeded\",\r\n          \"time\": \"2001-02-03T04:05:06Z\"\r\n        }\r\n      ]\r\n    }\r\n  ],\r\n  \"hyperVGeneration\": \"V1\",\r\n  \"statuses\": [\r\n    {\r\n      \"code\": \"ProvisioningState/succeeded\",\r\n      \"level\": \"Info\",\r\n      \"displayStatus\": \"Provisioning succeeded\",\r\n      \"time\": \"2001-02-03T04:05:06Z\"\r\n    },\r\n    {\r\n      \"code\": \"PowerState/running\",\r\n      \"level\": \"Info\",\r\n      \"displayStatus\": \"VM running\"\r\n    }\r\n  ]\r\n}"
+        body: "{\r\n  \"placementGroupId\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"platformUpdateDomain\": 0,\r\n  \"platformFaultDomain\": 0,\r\n  \"vmAgent\": {\r\n    \"vmAgentVersion\": \"Unknown\",\r\n    \"statuses\": [\r\n      {\r\n        \"code\": \"ProvisioningState/Unavailable\",\r\n        \"level\": \"Warning\",\r\n        \"displayStatus\": \"Not Ready\",\r\n        \"message\": \"VM status blob is found but not yet populated.\",\r\n        \"time\": \"2001-02-03T04:05:06Z\"\r\n      }\r\n    ]\r\n  },\r\n  \"disks\": [\r\n    {\r\n      \"name\": \"testParentResource_testParentResource_0_OS__1_b86652b3b1984acea9acd0bf618edac4\",\r\n      \"statuses\": [\r\n        {\r\n          \"code\": \"ProvisioningState/succeeded\",\r\n          \"level\": \"Info\",\r\n          \"displayStatus\": \"Provisioning succeeded\",\r\n          \"time\": \"2001-02-03T04:05:06Z\"\r\n        }\r\n      ]\r\n    }\r\n  ],\r\n  \"hyperVGeneration\": \"V1\",\r\n  \"statuses\": [\r\n    {\r\n      \"code\": \"ProvisioningState/succeeded\",\r\n      \"level\": \"Info\",\r\n      \"displayStatus\": \"Provisioning succeeded\",\r\n      \"time\": \"2001-02-03T04:05:06Z\"\r\n    },\r\n    {\r\n      \"code\": \"PowerState/running\",\r\n      \"level\": \"Info\",\r\n      \"displayStatus\": \"VM running\"\r\n    }\r\n  ]\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "1178"
+                - "1177"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -394,6 +400,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Need-To-Refresh-Epl-Cache:
+                - "False"
             X-Ms-Request-Charge:
                 - "1"
         status: 200 OK
@@ -423,14 +431,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 4552
+        content_length: 4551
         uncompressed: false
-        body: "{\r\n  \"value\": [\r\n    {\r\n      \"name\": \"testParentResource_0\",\r\n      \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0\",\r\n      \"type\": \"Microsoft.Compute/virtualMachineScaleSets/virtualMachines\",\r\n      \"location\": \"eastus\",\r\n      \"instanceId\": \"0\",\r\n      \"sku\": {\r\n        \"name\": \"Standard_D2s_v3\",\r\n        \"tier\": \"Standard\"\r\n      },\r\n      \"properties\": {\r\n        \"latestModelApplied\": true,\r\n        \"modelDefinitionApplied\": \"VirtualMachineScaleSet\",\r\n        \"instanceView\": {\r\n          \"placementGroupId\": \"00000000-0000-0000-0000-000000000000\",\r\n          \"platformUpdateDomain\": 0,\r\n          \"platformFaultDomain\": 0,\r\n          \"vmAgent\": {\r\n            \"vmAgentVersion\": \"Unknown\",\r\n            \"statuses\": [\r\n              {\r\n                \"code\": \"ProvisioningState/Unavailable\",\r\n                \"level\": \"Warning\",\r\n                \"displayStatus\": \"Not Ready\",\r\n                \"message\": \"VM status blob is found but not yet populated.\",\r\n                \"time\": \"2001-02-03T04:05:06Z\"\r\n              }\r\n            ]\r\n          },\r\n          \"disks\": [\r\n            {\r\n              \"name\": \"testParentResource_testParentResource_0_OS__1_f6dfafbcee4d4d108db07d7638160c60\",\r\n              \"statuses\": [\r\n                {\r\n                  \"code\": \"ProvisioningState/succeeded\",\r\n                  \"level\": \"Info\",\r\n                  \"displayStatus\": \"Provisioning succeeded\",\r\n                  \"time\": \"2001-02-03T04:05:06Z\"\r\n                }\r\n              ]\r\n            }\r\n          ],\r\n          \"hyperVGeneration\": \"V1\",\r\n          \"statuses\": [\r\n            {\r\n              \"code\": \"ProvisioningState/succeeded\",\r\n              \"level\": \"Info\",\r\n              \"displayStatus\": \"Provisioning succeeded\",\r\n              \"time\": \"2001-02-03T04:05:06Z\"\r\n            },\r\n            {\r\n              \"code\": \"PowerState/running\",\r\n              \"level\": \"Info\",\r\n              \"displayStatus\": \"VM running\"\r\n            }\r\n          ]\r\n        },\r\n        \"networkProfileConfiguration\": {\"networkInterfaceConfigurations\":[{\"name\":\"vmss1\",\"properties\":{\"primary\":true,\"enableAcceleratedNetworking\":false,\"disableTcpStateTracking\":false,\"dnsSettings\":{\"dnsServers\":[]},\"enableIPForwarding\":true,\"ipConfigurations\":[{\"name\":\"vmss1\",\"properties\":{\"subnet\":{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1\"},\"privateIPAddressVersion\":\"IPv4\"}}]}}]},\r\n        \"provisioningState\": \"Succeeded\",\r\n        \"hardwareProfile\": {\r\n          \"vmSize\": \"Standard_D2s_v3\"\r\n        },\r\n        \"vmId\": \"00000000-0000-0000-0000-000000000000\",\r\n        \"storageProfile\": {\r\n          \"imageReference\": {\r\n            \"publisher\": \"MicrosoftWindowsServer\",\r\n            \"offer\": \"WindowsServer\",\r\n            \"sku\": \"2019-Datacenter\",\r\n            \"version\": \"latest\",\r\n            \"exactVersion\": \"17763.6189.240811\"\r\n          },\r\n          \"osDisk\": {\r\n            \"osType\": \"Windows\",\r\n            \"name\": \"testParentResource_testParentResource_0_OS__1_f6dfafbcee4d4d108db07d7638160c60\",\r\n            \"createOption\": \"FromImage\",\r\n            \"caching\": \"None\",\r\n            \"managedDisk\": {\r\n              \"storageAccountType\": \"Premium_LRS\",\r\n              \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/disks/testParentResource_testParentResource_0_OS__1_f6dfafbcee4d4d108db07d7638160c60\"\r\n            },\r\n            \"diskSizeGB\": 127\r\n          },\r\n          \"dataDisks\": []\r\n        },\r\n        \"osProfile\": {\r\n          \"computerName\": \"vmss000000\",\r\n          \"adminUsername\": \"sample-user\",\r\n          \"windowsConfiguration\": {\r\n            \"provisionVMAgent\": true,\r\n            \"enableAutomaticUpdates\": true\r\n          },\r\n          \"secrets\": [],\r\n          \"allowExtensionOperations\": true,\r\n          \"requireGuestProvisionSignal\": true\r\n        },\r\n        \"networkProfile\": {\"networkInterfaces\":[{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0/networkInterfaces/vmss1\"}]},\r\n        \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n      },\r\n      \"etag\": \"\\\"1\\\"\"\r\n    }\r\n  ]\r\n}"
+        body: "{\r\n  \"value\": [\r\n    {\r\n      \"name\": \"testParentResource_0\",\r\n      \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0\",\r\n      \"type\": \"Microsoft.Compute/virtualMachineScaleSets/virtualMachines\",\r\n      \"location\": \"eastus\",\r\n      \"instanceId\": \"0\",\r\n      \"sku\": {\r\n        \"name\": \"Standard_D2s_v3\",\r\n        \"tier\": \"Standard\"\r\n      },\r\n      \"properties\": {\r\n        \"latestModelApplied\": true,\r\n        \"modelDefinitionApplied\": \"VirtualMachineScaleSet\",\r\n        \"instanceView\": {\r\n          \"placementGroupId\": \"00000000-0000-0000-0000-000000000000\",\r\n          \"platformUpdateDomain\": 0,\r\n          \"platformFaultDomain\": 0,\r\n          \"vmAgent\": {\r\n            \"vmAgentVersion\": \"Unknown\",\r\n            \"statuses\": [\r\n              {\r\n                \"code\": \"ProvisioningState/Unavailable\",\r\n                \"level\": \"Warning\",\r\n                \"displayStatus\": \"Not Ready\",\r\n                \"message\": \"VM status blob is found but not yet populated.\",\r\n                \"time\": \"2001-02-03T04:05:06Z\"\r\n              }\r\n            ]\r\n          },\r\n          \"disks\": [\r\n            {\r\n              \"name\": \"testParentResource_testParentResource_0_OS__1_b86652b3b1984acea9acd0bf618edac4\",\r\n              \"statuses\": [\r\n                {\r\n                  \"code\": \"ProvisioningState/succeeded\",\r\n                  \"level\": \"Info\",\r\n                  \"displayStatus\": \"Provisioning succeeded\",\r\n                  \"time\": \"2001-02-03T04:05:06Z\"\r\n                }\r\n              ]\r\n            }\r\n          ],\r\n          \"hyperVGeneration\": \"V1\",\r\n          \"statuses\": [\r\n            {\r\n              \"code\": \"ProvisioningState/succeeded\",\r\n              \"level\": \"Info\",\r\n              \"displayStatus\": \"Provisioning succeeded\",\r\n              \"time\": \"2001-02-03T04:05:06Z\"\r\n            },\r\n            {\r\n              \"code\": \"PowerState/running\",\r\n              \"level\": \"Info\",\r\n              \"displayStatus\": \"VM running\"\r\n            }\r\n          ]\r\n        },\r\n        \"networkProfileConfiguration\": {\"networkInterfaceConfigurations\":[{\"name\":\"vmss1\",\"properties\":{\"primary\":true,\"enableAcceleratedNetworking\":false,\"disableTcpStateTracking\":false,\"dnsSettings\":{\"dnsServers\":[]},\"enableIPForwarding\":true,\"ipConfigurations\":[{\"name\":\"vmss1\",\"properties\":{\"subnet\":{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1\"},\"privateIPAddressVersion\":\"IPv4\"}}]}}]},\r\n        \"provisioningState\": \"Succeeded\",\r\n        \"hardwareProfile\": {\r\n          \"vmSize\": \"Standard_D2s_v3\"\r\n        },\r\n        \"vmId\": \"00000000-0000-0000-0000-000000000000\",\r\n        \"storageProfile\": {\r\n          \"imageReference\": {\r\n            \"publisher\": \"MicrosoftWindowsServer\",\r\n            \"offer\": \"WindowsServer\",\r\n            \"sku\": \"2019-Datacenter\",\r\n            \"version\": \"latest\",\r\n            \"exactVersion\": \"17763.6293.240905\"\r\n          },\r\n          \"osDisk\": {\r\n            \"osType\": \"Windows\",\r\n            \"name\": \"testParentResource_testParentResource_0_OS__1_b86652b3b1984acea9acd0bf618edac4\",\r\n            \"createOption\": \"FromImage\",\r\n            \"caching\": \"None\",\r\n            \"managedDisk\": {\r\n              \"storageAccountType\": \"Premium_LRS\",\r\n              \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/disks/testParentResource_testParentResource_0_OS__1_b86652b3b1984acea9acd0bf618edac4\"\r\n            },\r\n            \"diskSizeGB\": 127\r\n          },\r\n          \"dataDisks\": []\r\n        },\r\n        \"osProfile\": {\r\n          \"computerName\": \"vmss000000\",\r\n          \"adminUsername\": \"sample-user\",\r\n          \"windowsConfiguration\": {\r\n            \"provisionVMAgent\": true,\r\n            \"enableAutomaticUpdates\": true\r\n          },\r\n          \"secrets\": [],\r\n          \"allowExtensionOperations\": true,\r\n          \"requireGuestProvisionSignal\": true\r\n        },\r\n        \"networkProfile\": {\"networkInterfaces\":[{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0/networkInterfaces/vmss1\"}]},\r\n        \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n      },\r\n      \"etag\": \"\\\"1\\\"\"\r\n    }\r\n  ]\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "4552"
+                - "4551"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -443,6 +451,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Need-To-Refresh-Epl-Cache:
+                - "False"
             X-Ms-Request-Charge:
                 - "1"
         status: 200 OK
@@ -474,7 +484,7 @@ interactions:
         trailer: {}
         content_length: 2754
         uncompressed: false
-        body: "{\r\n  \"name\": \"testParentResource_0\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0\",\r\n  \"type\": \"Microsoft.Compute/virtualMachineScaleSets/virtualMachines\",\r\n  \"location\": \"eastus\",\r\n  \"instanceId\": \"0\",\r\n  \"sku\": {\r\n    \"name\": \"Standard_D2s_v3\",\r\n    \"tier\": \"Standard\"\r\n  },\r\n  \"properties\": {\r\n    \"latestModelApplied\": true,\r\n    \"modelDefinitionApplied\": \"VirtualMachineScaleSet\",\r\n    \"networkProfileConfiguration\": {\"networkInterfaceConfigurations\":[{\"name\":\"vmss1\",\"properties\":{\"primary\":true,\"enableAcceleratedNetworking\":false,\"disableTcpStateTracking\":false,\"dnsSettings\":{\"dnsServers\":[]},\"enableIPForwarding\":true,\"ipConfigurations\":[{\"name\":\"vmss1\",\"properties\":{\"subnet\":{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1\"},\"privateIPAddressVersion\":\"IPv4\"}}]}}]},\r\n    \"provisioningState\": \"Succeeded\",\r\n    \"hardwareProfile\": {\r\n      \"vmSize\": \"Standard_D2s_v3\"\r\n    },\r\n    \"vmId\": \"00000000-0000-0000-0000-000000000000\",\r\n    \"storageProfile\": {\r\n      \"imageReference\": {\r\n        \"publisher\": \"MicrosoftWindowsServer\",\r\n        \"offer\": \"WindowsServer\",\r\n        \"sku\": \"2019-Datacenter\",\r\n        \"version\": \"latest\",\r\n        \"exactVersion\": \"17763.6189.240811\"\r\n      },\r\n      \"osDisk\": {\r\n        \"osType\": \"Windows\",\r\n        \"name\": \"testParentResource_testParentResource_0_OS__1_f6dfafbcee4d4d108db07d7638160c60\",\r\n        \"createOption\": \"FromImage\",\r\n        \"caching\": \"None\",\r\n        \"managedDisk\": {\r\n          \"storageAccountType\": \"Premium_LRS\",\r\n          \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/disks/testParentResource_testParentResource_0_OS__1_f6dfafbcee4d4d108db07d7638160c60\"\r\n        },\r\n        \"diskSizeGB\": 127\r\n      },\r\n      \"dataDisks\": []\r\n    },\r\n    \"osProfile\": {\r\n      \"computerName\": \"vmss000000\",\r\n      \"adminUsername\": \"sample-user\",\r\n      \"windowsConfiguration\": {\r\n        \"provisionVMAgent\": true,\r\n        \"enableAutomaticUpdates\": true\r\n      },\r\n      \"secrets\": [],\r\n      \"allowExtensionOperations\": true,\r\n      \"requireGuestProvisionSignal\": true\r\n    },\r\n    \"networkProfile\": {\"networkInterfaces\":[{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0/networkInterfaces/vmss1\"}]},\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n  },\r\n  \"etag\": \"\\\"1\\\"\"\r\n}"
+        body: "{\r\n  \"name\": \"testParentResource_0\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0\",\r\n  \"type\": \"Microsoft.Compute/virtualMachineScaleSets/virtualMachines\",\r\n  \"location\": \"eastus\",\r\n  \"instanceId\": \"0\",\r\n  \"sku\": {\r\n    \"name\": \"Standard_D2s_v3\",\r\n    \"tier\": \"Standard\"\r\n  },\r\n  \"properties\": {\r\n    \"latestModelApplied\": true,\r\n    \"modelDefinitionApplied\": \"VirtualMachineScaleSet\",\r\n    \"networkProfileConfiguration\": {\"networkInterfaceConfigurations\":[{\"name\":\"vmss1\",\"properties\":{\"primary\":true,\"enableAcceleratedNetworking\":false,\"disableTcpStateTracking\":false,\"dnsSettings\":{\"dnsServers\":[]},\"enableIPForwarding\":true,\"ipConfigurations\":[{\"name\":\"vmss1\",\"properties\":{\"subnet\":{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1\"},\"privateIPAddressVersion\":\"IPv4\"}}]}}]},\r\n    \"provisioningState\": \"Succeeded\",\r\n    \"hardwareProfile\": {\r\n      \"vmSize\": \"Standard_D2s_v3\"\r\n    },\r\n    \"vmId\": \"00000000-0000-0000-0000-000000000000\",\r\n    \"storageProfile\": {\r\n      \"imageReference\": {\r\n        \"publisher\": \"MicrosoftWindowsServer\",\r\n        \"offer\": \"WindowsServer\",\r\n        \"sku\": \"2019-Datacenter\",\r\n        \"version\": \"latest\",\r\n        \"exactVersion\": \"17763.6293.240905\"\r\n      },\r\n      \"osDisk\": {\r\n        \"osType\": \"Windows\",\r\n        \"name\": \"testParentResource_testParentResource_0_OS__1_b86652b3b1984acea9acd0bf618edac4\",\r\n        \"createOption\": \"FromImage\",\r\n        \"caching\": \"None\",\r\n        \"managedDisk\": {\r\n          \"storageAccountType\": \"Premium_LRS\",\r\n          \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/disks/testParentResource_testParentResource_0_OS__1_b86652b3b1984acea9acd0bf618edac4\"\r\n        },\r\n        \"diskSizeGB\": 127\r\n      },\r\n      \"dataDisks\": []\r\n    },\r\n    \"osProfile\": {\r\n      \"computerName\": \"vmss000000\",\r\n      \"adminUsername\": \"sample-user\",\r\n      \"windowsConfiguration\": {\r\n        \"provisionVMAgent\": true,\r\n        \"enableAutomaticUpdates\": true\r\n      },\r\n      \"secrets\": [],\r\n      \"allowExtensionOperations\": true,\r\n      \"requireGuestProvisionSignal\": true\r\n    },\r\n    \"networkProfile\": {\"networkInterfaces\":[{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0/networkInterfaces/vmss1\"}]},\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n  },\r\n  \"etag\": \"\\\"1\\\"\"\r\n}"
         headers:
             Cache-Control:
                 - no-cache
@@ -494,6 +504,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Need-To-Refresh-Epl-Cache:
+                - "False"
             X-Ms-Request-Charge:
                 - "1"
         status: 200 OK
@@ -543,6 +555,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Need-To-Refresh-Epl-Cache:
+                - "False"
             X-Ms-Request-Charge:
                 - "1"
         status: 400 Bad Request
@@ -596,6 +610,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Need-To-Refresh-Epl-Cache:
+                - "False"
             X-Ms-Request-Charge:
                 - "1"
         status: 202 Accepted
@@ -643,6 +659,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Need-To-Refresh-Epl-Cache:
+                - "False"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -694,6 +712,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Need-To-Refresh-Epl-Cache:
+                - "False"
             X-Ms-Request-Charge:
                 - "0"
         status: 202 Accepted
@@ -741,6 +761,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Need-To-Refresh-Epl-Cache:
+                - "False"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -760,7 +782,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Network/virtualNetworks/vnet1?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Network/virtualNetworks/vnet1?api-version=2024-01-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -775,7 +797,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -783,7 +805,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -809,7 +831,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0

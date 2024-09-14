@@ -72,7 +72,7 @@ interactions:
                 - "116"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2024-01-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -87,7 +87,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -121,7 +121,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -166,7 +166,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -174,14 +174,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 612
+        content_length: 611
         uncompressed: false
-        body: '{"name":"pip1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/publicIPAddresses/pip1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","ipAddress":"137.135.74.232","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","idleTimeoutInMinutes":4,"ipTags":[],"ddosSettings":{"protectionMode":"VirtualNetworkInherited"}},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Standard","tier":"Regional"}}'
+        body: '{"name":"pip1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/publicIPAddresses/pip1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","ipAddress":"13.82.230.180","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","idleTimeoutInMinutes":4,"ipTags":[],"ddosSettings":{"protectionMode":"VirtualNetworkInherited"}},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Standard","tier":"Regional"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "612"
+                - "611"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -204,22 +204,22 @@ interactions:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 69
+        content_length: 68
         transfer_encoding: []
         trailer: {}
         host: management.azure.com
         remote_addr: ""
         request_uri: ""
-        body: '{"location":"eastus","properties":{"ipAddresses":["137.135.74.232"]}}'
+        body: '{"location":"eastus","properties":{"ipAddresses":["13.82.230.180"]}}'
         form: {}
         headers:
             Accept:
                 - application/json
             Content-Length:
-                - "69"
+                - "68"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2024-01-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -227,16 +227,16 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 459
+        content_length: 458
         uncompressed: false
-        body: "{\r\n  \"properties\": {\r\n    \"firewalls\": [],\r\n    \"firewallPolicies\": [],\r\n    \"ipAddresses\": [\r\n      \"137.135.74.232\"\r\n    ],\r\n    \"provisioningState\": \"Updating\"\r\n  },\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n  \"name\": \"testResource\",\r\n  \"type\": \"Microsoft.Network/IpGroups\",\r\n  \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"location\": \"eastus\"\r\n}"
+        body: "{\r\n  \"properties\": {\r\n    \"firewalls\": [],\r\n    \"firewallPolicies\": [],\r\n    \"ipAddresses\": [\r\n      \"13.82.230.180\"\r\n    ],\r\n    \"provisioningState\": \"Updating\"\r\n  },\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n  \"name\": \"testResource\",\r\n  \"type\": \"Microsoft.Network/IpGroups\",\r\n  \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"location\": \"eastus\"\r\n}"
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/nfvOperations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/nfvOperations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "459"
+                - "458"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -266,7 +266,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/nfvOperations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/nfvOperations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -311,7 +311,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -319,14 +319,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 460
+        content_length: 459
         uncompressed: false
-        body: "{\r\n  \"properties\": {\r\n    \"firewalls\": [],\r\n    \"firewallPolicies\": [],\r\n    \"ipAddresses\": [\r\n      \"137.135.74.232\"\r\n    ],\r\n    \"provisioningState\": \"Succeeded\"\r\n  },\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n  \"name\": \"testResource\",\r\n  \"type\": \"Microsoft.Network/IpGroups\",\r\n  \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"location\": \"eastus\"\r\n}"
+        body: "{\r\n  \"properties\": {\r\n    \"firewalls\": [],\r\n    \"firewallPolicies\": [],\r\n    \"ipAddresses\": [\r\n      \"13.82.230.180\"\r\n    ],\r\n    \"provisioningState\": \"Succeeded\"\r\n  },\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n  \"name\": \"testResource\",\r\n  \"type\": \"Microsoft.Network/IpGroups\",\r\n  \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"location\": \"eastus\"\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "460"
+                - "459"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -360,7 +360,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -368,14 +368,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 460
+        content_length: 459
         uncompressed: false
-        body: "{\r\n  \"properties\": {\r\n    \"firewalls\": [],\r\n    \"firewallPolicies\": [],\r\n    \"ipAddresses\": [\r\n      \"137.135.74.232\"\r\n    ],\r\n    \"provisioningState\": \"Succeeded\"\r\n  },\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n  \"name\": \"testResource\",\r\n  \"type\": \"Microsoft.Network/IpGroups\",\r\n  \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"location\": \"eastus\"\r\n}"
+        body: "{\r\n  \"properties\": {\r\n    \"firewalls\": [],\r\n    \"firewallPolicies\": [],\r\n    \"ipAddresses\": [\r\n      \"13.82.230.180\"\r\n    ],\r\n    \"provisioningState\": \"Succeeded\"\r\n  },\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n  \"name\": \"testResource\",\r\n  \"type\": \"Microsoft.Network/IpGroups\",\r\n  \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"location\": \"eastus\"\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "460"
+                - "459"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -409,7 +409,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResourcenotfound?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResourcenotfound?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -447,22 +447,22 @@ interactions:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 69
+        content_length: 68
         transfer_encoding: []
         trailer: {}
         host: management.azure.com
         remote_addr: ""
         request_uri: ""
-        body: '{"location":"eastus","properties":{"ipAddresses":["137.135.74.232"]}}'
+        body: '{"location":"eastus","properties":{"ipAddresses":["13.82.230.180"]}}'
         form: {}
         headers:
             Accept:
                 - application/json
             Content-Length:
-                - "69"
+                - "68"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2024-01-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -470,16 +470,16 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 459
+        content_length: 458
         uncompressed: false
-        body: "{\r\n  \"properties\": {\r\n    \"firewalls\": [],\r\n    \"firewallPolicies\": [],\r\n    \"ipAddresses\": [\r\n      \"137.135.74.232\"\r\n    ],\r\n    \"provisioningState\": \"Updating\"\r\n  },\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n  \"name\": \"testResource\",\r\n  \"type\": \"Microsoft.Network/IpGroups\",\r\n  \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"location\": \"eastus\"\r\n}"
+        body: "{\r\n  \"properties\": {\r\n    \"firewalls\": [],\r\n    \"firewallPolicies\": [],\r\n    \"ipAddresses\": [\r\n      \"13.82.230.180\"\r\n    ],\r\n    \"provisioningState\": \"Updating\"\r\n  },\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n  \"name\": \"testResource\",\r\n  \"type\": \"Microsoft.Network/IpGroups\",\r\n  \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"location\": \"eastus\"\r\n}"
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/nfvOperations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/nfvOperations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "459"
+                - "458"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -509,7 +509,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/nfvOperations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/nfvOperations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -554,7 +554,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -562,14 +562,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 460
+        content_length: 459
         uncompressed: false
-        body: "{\r\n  \"properties\": {\r\n    \"firewalls\": [],\r\n    \"firewallPolicies\": [],\r\n    \"ipAddresses\": [\r\n      \"137.135.74.232\"\r\n    ],\r\n    \"provisioningState\": \"Succeeded\"\r\n  },\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n  \"name\": \"testResource\",\r\n  \"type\": \"Microsoft.Network/IpGroups\",\r\n  \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"location\": \"eastus\"\r\n}"
+        body: "{\r\n  \"properties\": {\r\n    \"firewalls\": [],\r\n    \"firewallPolicies\": [],\r\n    \"ipAddresses\": [\r\n      \"13.82.230.180\"\r\n    ],\r\n    \"provisioningState\": \"Succeeded\"\r\n  },\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n  \"name\": \"testResource\",\r\n  \"type\": \"Microsoft.Network/IpGroups\",\r\n  \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"location\": \"eastus\"\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "460"
+                - "459"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -603,7 +603,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -611,14 +611,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 545
+        content_length: 544
         uncompressed: false
-        body: "{\r\n  \"value\": [\r\n    {\r\n      \"properties\": {\r\n        \"firewalls\": [],\r\n        \"firewallPolicies\": [],\r\n        \"ipAddresses\": [\r\n          \"137.135.74.232\"\r\n        ],\r\n        \"provisioningState\": \"Succeeded\"\r\n      },\r\n      \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n      \"name\": \"testResource\",\r\n      \"type\": \"Microsoft.Network/IpGroups\",\r\n      \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n      \"location\": \"eastus\"\r\n    }\r\n  ]\r\n}"
+        body: "{\r\n  \"value\": [\r\n    {\r\n      \"properties\": {\r\n        \"firewalls\": [],\r\n        \"firewallPolicies\": [],\r\n        \"ipAddresses\": [\r\n          \"13.82.230.180\"\r\n        ],\r\n        \"provisioningState\": \"Succeeded\"\r\n      },\r\n      \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n      \"name\": \"testResource\",\r\n      \"type\": \"Microsoft.Network/IpGroups\",\r\n      \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n      \"location\": \"eastus\"\r\n    }\r\n  ]\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "545"
+                - "544"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -650,7 +650,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroupnotfound/providers/Microsoft.Network/ipGroups?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroupnotfound/providers/Microsoft.Network/ipGroups?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -699,7 +699,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2024-01-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -744,7 +744,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2024-01-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -759,7 +759,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -767,7 +767,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -793,7 +793,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0

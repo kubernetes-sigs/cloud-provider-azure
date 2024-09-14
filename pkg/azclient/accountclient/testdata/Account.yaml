@@ -290,8 +290,6 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Resource-Requests:
-                - "11999"
         status: 200 OK
         code: 200
         duration: 200ms
