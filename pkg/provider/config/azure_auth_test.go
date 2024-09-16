@@ -24,7 +24,6 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/stretchr/testify/assert"
@@ -417,11 +416,9 @@ func TestGetMultiTenantServicePrincipalToken(t *testing.T) {
 				},
 			}
 			authProvider = &azclient.AuthProvider{
-				ManagedIdentityCredential: NewDummyTokenCredential(managedIdentityToken),
-				NetworkTokenCredential:    NewDummyTokenCredential(networkToken),
-				ClientOptions: &policy.ClientOptions{
-					Cloud: cloud.AzurePublic,
-				},
+				ComputeCredential: NewDummyTokenCredential(managedIdentityToken),
+				NetworkCredential: NewDummyTokenCredential(networkToken),
+				CloudConfig:       cloud.AzurePublic,
 			}
 		)
 
@@ -517,11 +514,9 @@ func TestGetNetworkResourceServicePrincipalToken(t *testing.T) {
 				},
 			}
 			authProvider = &azclient.AuthProvider{
-				ManagedIdentityCredential: NewDummyTokenCredential(managedIdentityToken),
-				NetworkTokenCredential:    NewDummyTokenCredential(networkToken),
-				ClientOptions: &policy.ClientOptions{
-					Cloud: cloud.AzurePublic,
-				},
+				ComputeCredential: NewDummyTokenCredential(managedIdentityToken),
+				NetworkCredential: NewDummyTokenCredential(networkToken),
+				CloudConfig:       cloud.AzurePublic,
 			}
 		)
 

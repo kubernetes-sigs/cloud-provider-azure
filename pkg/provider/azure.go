@@ -384,11 +384,11 @@ type Cloud struct {
 	deploymentClient                deploymentclient.Interface
 	ComputeClientFactory            azclient.ClientFactory
 	NetworkClientFactory            azclient.ClientFactory
-
-	ResourceRequestBackoff  wait.Backoff
-	Metadata                *InstanceMetadataService
-	VMSet                   VMSet
-	LoadBalancerBackendPool BackendPool
+	AuthProvider                    *azclient.AuthProvider
+	ResourceRequestBackoff          wait.Backoff
+	Metadata                        *InstanceMetadataService
+	VMSet                           VMSet
+	LoadBalancerBackendPool         BackendPool
 
 	// ipv6DualStack allows overriding for unit testing.  It's normally initialized from featuregates
 	ipv6DualStackEnabled bool
@@ -697,6 +697,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 	if err != nil {
 		return err
 	}
+	az.AuthProvider = authProvider
 	// If uses network resources in different AAD Tenant, then prepare corresponding Service Principal Token for VM/VMSS client and network resources client
 	multiTenantServicePrincipalToken, networkResourceServicePrincipalToken, err := az.getAuthTokenInMultiTenantEnv(servicePrincipalToken, authProvider)
 	if err != nil {

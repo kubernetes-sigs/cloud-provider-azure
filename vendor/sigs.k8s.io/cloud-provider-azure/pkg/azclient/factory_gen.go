@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileshareclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/identityclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/ipgroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
@@ -72,6 +73,7 @@ type ClientFactoryImpl struct {
 	deploymentclientInterface               deploymentclient.Interface
 	diskclientInterface                     sync.Map
 	fileshareclientInterface                sync.Map
+	identityclientInterface                 identityclient.Interface
 	interfaceclientInterface                interfaceclient.Interface
 	ipgroupclientInterface                  ipgroupclient.Interface
 	loadbalancerclientInterface             loadbalancerclient.Interface
@@ -154,6 +156,12 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 
 	//initialize fileshareclient
 	_, err = factory.GetFileShareClientForSub(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize identityclient
+	factory.identityclientInterface, err = factory.createIdentityClient(config.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
@@ -317,6 +325,12 @@ func (factory *ClientFactoryImpl) createAccountClient(subscription string) (acco
 		return nil, err
 	}
 
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("storageAccountRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
 	for _, optionMutFn := range factory.clientOptionsMutFn {
 		if optionMutFn != nil {
 			optionMutFn(options)
@@ -527,6 +541,25 @@ func (factory *ClientFactoryImpl) GetFileShareClientForSub(subscriptionID string
 	}
 	factory.fileshareclientInterface.Store(strings.ToLower(subscriptionID), clientImp)
 	return clientImp.(fileshareclient.Interface), nil
+}
+
+func (factory *ClientFactoryImpl) createIdentityClient(subscription string) (identityclient.Interface, error) {
+	//initialize identityclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return identityclient.New(subscription, factory.cred, options)
+}
+
+func (factory *ClientFactoryImpl) GetIdentityClient() identityclient.Interface {
+	return factory.identityclientInterface
 }
 
 func (factory *ClientFactoryImpl) createInterfaceClient(subscription string) (interfaceclient.Interface, error) {
@@ -1031,7 +1064,7 @@ func (factory *ClientFactoryImpl) createVirtualMachineScaleSetClient(subscriptio
 	}
 
 	//add ratelimit policy
-	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("virtualMachineSizesRateLimit")
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("virtualMachineScaleSetRateLimit")
 	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
