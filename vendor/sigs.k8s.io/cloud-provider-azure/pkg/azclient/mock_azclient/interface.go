@@ -37,6 +37,7 @@ import (
 	deploymentclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
 	diskclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient"
 	fileshareclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileshareclient"
+	identityclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/identityclient"
 	interfaceclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
 	ipgroupclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/ipgroupclient"
 	loadbalancerclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
@@ -257,6 +258,20 @@ func (m *MockClientFactory) GetIPGroupClient() ipgroupclient.Interface {
 func (mr *MockClientFactoryMockRecorder) GetIPGroupClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetIPGroupClient", reflect.TypeOf((*MockClientFactory)(nil).GetIPGroupClient))
+}
+
+// GetIdentityClient mocks base method.
+func (m *MockClientFactory) GetIdentityClient() identityclient.Interface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetIdentityClient")
+	ret0, _ := ret[0].(identityclient.Interface)
+	return ret0
+}
+
+// GetIdentityClient indicates an expected call of GetIdentityClient.
+func (mr *MockClientFactoryMockRecorder) GetIdentityClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetIdentityClient", reflect.TypeOf((*MockClientFactory)(nil).GetIdentityClient))
 }
 
 // GetInterfaceClient mocks base method.

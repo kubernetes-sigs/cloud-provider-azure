@@ -92,6 +92,9 @@ github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontai
 # github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault v1.4.0
 ## explicit; go 1.18
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault
+# github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi v1.2.0
+## explicit; go 1.18
+github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi
 # github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4 v4.3.0
 ## explicit; go 1.18
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4
@@ -1531,7 +1534,7 @@ sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client/metrics
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/common/metrics
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/proto/client
-# sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.53
+# sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.55
 ## explicit; go 1.23.1
 sigs.k8s.io/cloud-provider-azure/pkg/azclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient
@@ -1543,6 +1546,7 @@ sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobservicepropertiesclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileshareclient
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/identityclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/ipgroupclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient
