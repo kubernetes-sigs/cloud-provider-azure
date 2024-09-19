@@ -29,7 +29,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	gomock "go.uber.org/mock/gomock"
 )
 

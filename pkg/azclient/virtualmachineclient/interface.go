@@ -21,12 +21,12 @@ import (
 	"context"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
-	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=createorupdate;delete;list,resource=VirtualMachine,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5,packageAlias=armcompute,clientName=VirtualMachinesClient,expand=true,rateLimitKey=virtualMachineRateLimit
+// +azure:client:verbs=createorupdate;delete;list,resource=VirtualMachine,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6,packageAlias=armcompute,clientName=VirtualMachinesClient,expand=true,rateLimitKey=virtualMachineRateLimit
 type Interface interface {
 	utils.GetWithExpandFunc[armcompute.VirtualMachine]
 	utils.CreateOrUpdateFunc[armcompute.VirtualMachine]
