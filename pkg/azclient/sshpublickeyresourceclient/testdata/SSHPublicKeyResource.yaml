@@ -72,7 +72,7 @@ interactions:
                 - "21"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource?api-version=2024-03-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource?api-version=2024-07-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -121,7 +121,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource/generateKeyPair?api-version=2024-03-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource/generateKeyPair?api-version=2024-07-01
         method: POST
       response:
         proto: HTTP/2.0
@@ -129,14 +129,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 3350
+        content_length: 3354
         uncompressed: false
         body: "{\r\n  \"privateKey\": \"-----BEGIN RSA PRIVATE KEY-----\\r\\n\\r\\n-----END RSA PRIVATE KEY-----\\r\\n\",\r\n  \"publicKey\": \"ssh-rsa {KEY} generated-by-azure\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/AKS-CIT-SSHPUBLICKEYRESOURCE/providers/Microsoft.Compute/sshPublicKeys/testResource\"\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "3350"
+                - "3354"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -170,7 +170,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource?api-version=2024-03-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource?api-version=2024-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -219,7 +219,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResourcenotfound?api-version=2024-03-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResourcenotfound?api-version=2024-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -268,7 +268,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys?api-version=2024-03-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys?api-version=2024-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -317,7 +317,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResourcenotfound/providers/Microsoft.Compute/sshPublicKeys?api-version=2024-03-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResourcenotfound/providers/Microsoft.Compute/sshPublicKeys?api-version=2024-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -366,7 +366,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource?api-version=2024-03-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource?api-version=2024-07-01
         method: DELETE
       response:
         proto: HTTP/2.0

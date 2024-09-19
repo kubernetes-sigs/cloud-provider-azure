@@ -72,7 +72,7 @@ interactions:
                 - "120"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-AvailabilitySet/providers/Microsoft.Compute/availabilitySets/testResource?api-version=2024-03-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-AvailabilitySet/providers/Microsoft.Compute/availabilitySets/testResource?api-version=2024-07-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -121,7 +121,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-AvailabilitySet/providers/Microsoft.Compute/availabilitySets/testResource?api-version=2024-03-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-AvailabilitySet/providers/Microsoft.Compute/availabilitySets/testResource?api-version=2024-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -170,7 +170,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-AvailabilitySet/providers/Microsoft.Compute/availabilitySets/testResourcenotfound?api-version=2024-03-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-AvailabilitySet/providers/Microsoft.Compute/availabilitySets/testResourcenotfound?api-version=2024-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -219,7 +219,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-AvailabilitySet/providers/Microsoft.Compute/availabilitySets?api-version=2024-03-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-AvailabilitySet/providers/Microsoft.Compute/availabilitySets?api-version=2024-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -268,7 +268,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-AvailabilitySetnotfound/providers/Microsoft.Compute/availabilitySets?api-version=2024-03-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-AvailabilitySetnotfound/providers/Microsoft.Compute/availabilitySets?api-version=2024-07-01
         method: GET
       response:
         proto: HTTP/2.0
