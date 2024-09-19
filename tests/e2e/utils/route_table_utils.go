@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	aznetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
+	aznetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"k8s.io/utils/pointer"
 
 	providerazure "sigs.k8s.io/cloud-provider-azure/pkg/provider"
