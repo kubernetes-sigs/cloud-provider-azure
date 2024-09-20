@@ -17,4 +17,4 @@ ARG ARCH=amd64
 FROM mcr.microsoft.com/oss/kubernetes/windows-host-process-containers-base-image:v1.0.0
 ARG ARCH
 COPY bin/azure-cloud-node-manager-${ARCH}.exe /cloud-node-manager.exe
-ENTRYPOINT ["/azure-cloud-node-manager.exe"]
+ENTRYPOINT ["/cloud-node-manager.exe"]
