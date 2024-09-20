@@ -57,6 +57,10 @@ func (az *Cloud) useStandardLoadBalancer() bool {
 	return strings.EqualFold(az.LoadBalancerSku, consts.LoadBalancerSkuStandard)
 }
 
+func (az *Cloud) useServiceLoadBalancer() bool {
+	return strings.EqualFold(az.LoadBalancerSku, consts.LoadBalancerSkuService)
+}
+
 func (az *Cloud) excludeMasterNodesFromStandardLB() bool {
 	return az.ExcludeMasterFromStandardLB != nil && *az.ExcludeMasterFromStandardLB
 }

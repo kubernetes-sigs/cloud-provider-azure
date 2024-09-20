@@ -168,7 +168,7 @@ type Config struct {
 	// the `Tags` is changed. However, the old tags would be deleted if they are neither included in `Tags` nor
 	// in `SystemTags` after the update of `Tags`.
 	SystemTags string `json:"systemTags,omitempty" yaml:"systemTags,omitempty"`
-	// Sku of Load Balancer and Public IP. Candidate values are: basic and standard.
+	// Sku of Load Balancer and Public IP. Candidate values are: basic, standard and service
 	// If not set, it will be default to basic.
 	LoadBalancerSku string `json:"loadBalancerSku,omitempty" yaml:"loadBalancerSku,omitempty"`
 	// LoadBalancerName determines the specific name of the load balancer user want to use, working with
@@ -658,6 +658,18 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 		}
 	}
 
+	if az.useServiceLoadBalancer() && !az.isLBBackendPoolTypePodIP() {
+		err := fmt.Errorf("BackendPoolType is not POD IP for Service LB SKU")
+		klog.Fatal(err)
+		return err
+	}
+
+	if !az.useServiceLoadBalancer() && az.isLBBackendPoolTypePodIP() {
+	    err := fmt.Errorf("LB SKU type is not Service LB for BackendPoolType of POD IP")
+	    klog.Fatal(err)
+	    return err
+    }
+
 	if az.isLBBackendPoolTypeNodeIPConfig() {
 		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIPConfig(az)
 	} else if az.isLBBackendPoolTypeNodeIP() {
@@ -822,6 +834,10 @@ func (az *Cloud) isLBBackendPoolTypeNodeIPConfig() bool {
 
 func (az *Cloud) isLBBackendPoolTypeNodeIP() bool {
 	return strings.EqualFold(az.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypeNodeIP)
+}
+
+func (az *Cloud) isLBBackendPoolTypePodIP() bool {
+	return strings.EqualFold(az.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePODIP)
 }
 
 func (az *Cloud) getPutVMSSVMBatchSize() int {
