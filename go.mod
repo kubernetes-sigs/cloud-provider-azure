@@ -8,7 +8,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.14.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.7.0
 	github.com/Azure/azure-sdk-for-go/sdk/containers/azcontainerregistry v0.2.2
-	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 v5.7.0
+	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 v6.1.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerregistry/armcontainerregistry v1.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6 v6.0.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns v1.2.0
@@ -38,10 +38,10 @@ require (
 	golang.org/x/sync v0.8.0
 	golang.org/x/sys v0.25.0
 	golang.org/x/text v0.18.0
-	k8s.io/api v0.29.9
-	k8s.io/apimachinery v0.29.9
+	k8s.io/api v0.31.1
+	k8s.io/apimachinery v0.31.1
 	k8s.io/apiserver v0.29.9
-	k8s.io/client-go v0.29.9
+	k8s.io/client-go v0.31.1
 	k8s.io/cloud-provider v0.29.9
 	k8s.io/component-base v0.29.9
 	k8s.io/component-helpers v0.29.9
@@ -49,8 +49,8 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubelet v0.29.9
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.56
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.5
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.57
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.29
 	sigs.k8s.io/yaml v1.4.0
 )
 
@@ -153,4 +153,10 @@ require (
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.28.0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
+)
+
+replace (
+	k8s.io/api => k8s.io/api v0.29.9
+	k8s.io/apimachinery => k8s.io/apimachinery v0.29.9
+	k8s.io/client-go => k8s.io/client-go v0.29.9
 )

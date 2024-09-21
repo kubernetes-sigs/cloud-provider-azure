@@ -21,7 +21,7 @@ import (
 	"os"
 	"strings"
 
-	azcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+	azcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
