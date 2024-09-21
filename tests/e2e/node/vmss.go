@@ -17,7 +17,7 @@ limitations under the License.
 package node
 
 import (
-	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 

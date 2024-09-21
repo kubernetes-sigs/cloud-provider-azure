@@ -24,7 +24,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/tracing"
-	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"

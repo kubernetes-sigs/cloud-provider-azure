@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 )
 
 // ListVMs returns all VMs in the resource group
