@@ -1,8 +1,11 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 param baseName string
 param location string = resourceGroup().location
 
 resource registry 'Microsoft.ContainerRegistry/registries@2022-02-01-preview' = {
-  name: '${baseName}'
+  name: baseName
   location: location
   sku: {
     name: 'Standard'
