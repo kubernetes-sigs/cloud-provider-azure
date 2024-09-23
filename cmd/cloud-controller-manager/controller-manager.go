@@ -24,24 +24,18 @@ import (
 	"os"
 	"time"
 
-	"k8s.io/component-base/logs"
 	_ "k8s.io/component-base/metrics/prometheus/clientgo" // load all the prometheus client-go plugins
 
 	"sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	_ "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 )
 
 func main() {
-	rand.Seed(time.Now().UnixNano())
+	rand.Seed(time.Now().UnixNano()) // FIXME: should use crypto/rand for better randomness
+	defer log.Flush()
 
 	command := app.NewCloudControllerManagerCommand()
-
-	// TODO: once we switch everything over to Cobra commands, we can go back to calling
-	// utilflag.InitFlags() (by removing its pflag.Parse() call). For now, we have to set the
-	// normalize func and add the go flag set by hand.
-	// utilflag.InitFlags()
-	logs.InitLogs()
-	defer logs.FlushLogs()
 
 	if err := command.Execute(); err != nil {
 		os.Exit(1)
