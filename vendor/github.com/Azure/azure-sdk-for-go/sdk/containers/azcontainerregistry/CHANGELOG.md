@@ -1,5 +1,13 @@
 # Release History
 
+## 0.2.2 (2024-09-19)
+
+### Features Added
+* Add `AuthenticationClient` enabling third party libraries to interact with container and artifact registries
+
+### Other Changes
+* Updated dependencies.
+
 ## 0.2.1 (2024-01-24)
 
 ### Features Added
