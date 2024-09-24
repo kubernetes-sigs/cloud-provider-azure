@@ -21,6 +21,8 @@ interactions:
                 - "21"
             Content-Type:
                 - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-PrivateEndpoint?api-version=2021-04-01
         method: PUT
       response:
@@ -49,8 +51,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-        status: 200 OK
-        code: 200
+        status: 201 Created
+        code: 201
         duration: 200ms
     - id: 1
       request:
@@ -72,6 +74,8 @@ interactions:
                 - "148"
             Content-Type:
                 - application/json
+            User-Agent:
+                - azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2024-01-01
         method: PUT
       response:
@@ -80,9 +84,9 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 618
+        content_length: 590
         uncompressed: false
-        body: '{"name":"pip1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/publicIPAddresses/pip1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"eastus","properties":{"provisioningState":"Updating","resourceGuid":"00000000-0000-0000-0000-000000000000","ipAddress":"52.226.75.164","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","idleTimeoutInMinutes":4,"ipTags":[],"ddosSettings":{"protectionMode":"VirtualNetworkInherited"}},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Standard","tier":"Regional"}}'
+        body: '{"name":"pip1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/publicIPAddresses/pip1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"eastus","properties":{"provisioningState":"Updating","resourceGuid":"00000000-0000-0000-0000-000000000000","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","idleTimeoutInMinutes":4,"ipTags":[],"ddosSettings":{"protectionMode":"VirtualNetworkInherited"}},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Standard","tier":"Regional"}}'
         headers:
             Azure-Asyncnotification:
                 - Enabled
@@ -91,7 +95,7 @@ interactions:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "618"
+                - "590"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -104,8 +108,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-        status: 200 OK
-        code: 200
+        status: 201 Created
+        code: 201
         duration: 200ms
     - id: 2
       request:
@@ -120,7 +124,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
         method: GET
       response:
@@ -165,7 +171,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2024-01-01
         method: GET
       response:
@@ -174,14 +182,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 619
+        content_length: 618
         uncompressed: false
-        body: '{"name":"pip1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/publicIPAddresses/pip1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","ipAddress":"52.226.75.164","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","idleTimeoutInMinutes":4,"ipTags":[],"ddosSettings":{"protectionMode":"VirtualNetworkInherited"}},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Standard","tier":"Regional"}}'
+        body: '{"name":"pip1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/publicIPAddresses/pip1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","ipAddress":"40.71.94.228","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","idleTimeoutInMinutes":4,"ipTags":[],"ddosSettings":{"protectionMode":"VirtualNetworkInherited"}},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Standard","tier":"Regional"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "619"
+                - "618"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -204,21 +212,23 @@ interactions:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 789
+        content_length: 788
         transfer_encoding: []
         trailer: {}
         host: management.azure.com
         remote_addr: ""
         request_uri: ""
-        body: '{"location":"eastus","properties":{"frontendIPConfigurations":[{"name":"frontendConfig1","properties":{"publicIPAddress":{"etag":"W/\"00000000-0000-0000-0000-000000000000\"","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/publicIPAddresses/pip1","location":"eastus","name":"pip1","properties":{"ddosSettings":{"protectionMode":"VirtualNetworkInherited"},"idleTimeoutInMinutes":4,"ipAddress":"52.226.75.164","ipTags":[],"provisioningState":"Succeeded","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","resourceGuid":"00000000-0000-0000-0000-000000000000"},"sku":{"name":"Standard","tier":"Regional"},"type":"Microsoft.Network/publicIPAddresses"}}}]},"sku":{"name":"Standard","tier":"Regional"}}'
+        body: '{"location":"eastus","properties":{"frontendIPConfigurations":[{"name":"frontendConfig1","properties":{"publicIPAddress":{"etag":"W/\"00000000-0000-0000-0000-000000000000\"","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/publicIPAddresses/pip1","location":"eastus","name":"pip1","properties":{"ddosSettings":{"protectionMode":"VirtualNetworkInherited"},"idleTimeoutInMinutes":4,"ipAddress":"40.71.94.228","ipTags":[],"provisioningState":"Succeeded","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","resourceGuid":"00000000-0000-0000-0000-000000000000"},"sku":{"name":"Standard","tier":"Regional"},"type":"Microsoft.Network/publicIPAddresses"}}}]},"sku":{"name":"Standard","tier":"Regional"}}'
         form: {}
         headers:
             Accept:
                 - application/json
             Content-Length:
-                - "789"
+                - "788"
             Content-Type:
                 - application/json
+            User-Agent:
+                - azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/loadBalancers/lb1?api-version=2024-01-01
         method: PUT
       response:
@@ -267,7 +277,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/loadBalancers/lb1?api-version=2024-01-01
         method: GET
       response:
@@ -321,6 +333,8 @@ interactions:
                 - "254"
             Content-Type:
                 - application/json
+            User-Agent:
+                - azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/virtualNetworks/vnet1?api-version=2024-01-01
         method: PUT
       response:
@@ -329,9 +343,9 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 1033
+        content_length: 1031
         uncompressed: false
-        body: '{"name":"vnet1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/virtualNetworks/vnet1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/virtualNetworks","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","addressSpace":{"addressPrefixes":["10.1.0.0/16"],"ipamPoolPrefixAllocations":[]},"subnets":[{"name":"subnet1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","addressPrefix":"10.1.0.0/24","ipamPoolPrefixAllocations":[],"delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Disabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}],"virtualNetworkPeerings":[],"enableDdosProtection":false}}'
+        body: '{"name":"vnet1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/virtualNetworks/vnet1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/virtualNetworks","location":"eastus","properties":{"provisioningState":"Updating","resourceGuid":"00000000-0000-0000-0000-000000000000","addressSpace":{"addressPrefixes":["10.1.0.0/16"],"ipamPoolPrefixAllocations":[]},"subnets":[{"name":"subnet1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Updating","addressPrefix":"10.1.0.0/24","ipamPoolPrefixAllocations":[],"delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Disabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}],"virtualNetworkPeerings":[],"enableDdosProtection":false}}'
         headers:
             Azure-Asyncnotification:
                 - Enabled
@@ -340,7 +354,54 @@ interactions:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "1033"
+                - "1031"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+        status: 201 Created
+        code: 201
+        duration: 200ms
+    - id: 7
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 22
+        uncompressed: false
+        body: '{"status":"Succeeded"}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "22"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -356,7 +417,7 @@ interactions:
         status: 200 OK
         code: 200
         duration: 200ms
-    - id: 7
+    - id: 8
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -369,7 +430,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/virtualNetworks/vnet1?api-version=2024-01-01
         method: GET
       response:
@@ -403,7 +466,7 @@ interactions:
         status: 200 OK
         code: 200
         duration: 200ms
-    - id: 8
+    - id: 9
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -423,6 +486,8 @@ interactions:
                 - "1246"
             Content-Type:
                 - application/json
+            User-Agent:
+                - azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/privateLinkServices/pls1?api-version=2024-01-01
         method: PUT
       response:
@@ -458,7 +523,7 @@ interactions:
         status: 201 Created
         code: 201
         duration: 200ms
-    - id: 9
+    - id: 10
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -471,7 +536,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
         method: GET
       response:
@@ -503,7 +570,7 @@ interactions:
         status: 200 OK
         code: 200
         duration: 200ms
-    - id: 10
+    - id: 11
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -516,7 +583,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/privateLinkServices/pls1?api-version=2024-01-01
         method: GET
       response:
@@ -550,7 +619,7 @@ interactions:
         status: 200 OK
         code: 200
         duration: 200ms
-    - id: 11
+    - id: 12
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -570,6 +639,8 @@ interactions:
                 - "760"
             Content-Type:
                 - application/json
+            User-Agent:
+                - ccm-PrivateEndpoint-clie azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/privateEndpoints/testResource?api-version=2024-01-01
         method: PUT
       response:
@@ -605,7 +676,7 @@ interactions:
         status: 201 Created
         code: 201
         duration: 200ms
-    - id: 12
+    - id: 13
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -618,7 +689,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-PrivateEndpoint-clie azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
         method: GET
       response:
@@ -650,53 +723,6 @@ interactions:
         status: 200 OK
         code: 200
         duration: 200ms
-    - id: 13
-      request:
-        proto: HTTP/1.1
-        proto_major: 1
-        proto_minor: 1
-        content_length: 0
-        transfer_encoding: []
-        trailer: {}
-        host: management.azure.com
-        remote_addr: ""
-        request_uri: ""
-        body: ""
-        form: {}
-        headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/privateEndpoints/testResource?api-version=2024-01-01
-        method: GET
-      response:
-        proto: HTTP/2.0
-        proto_major: 2
-        proto_minor: 0
-        transfer_encoding: []
-        trailer: {}
-        content_length: 1663
-        uncompressed: false
-        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/privateEndpoints/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/privateEndpoints","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","privateLinkServiceConnections":[{"name":"plsConnection1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/privateEndpoints/testResource/privateLinkServiceConnections/plsConnection1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","privateLinkServiceId":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/privateLinkServices/pls1","privateLinkServiceConnectionState":{"status":"Approved","description":"Auto Approved","actionsRequired":"None"}},"type":"Microsoft.Network/privateEndpoints/privateLinkServiceConnections"}],"manualPrivateLinkServiceConnections":[],"customNetworkInterfaceName":"","subnet":{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1"},"ipConfigurations":[],"networkInterfaces":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/networkInterfaces/testResource.nic.00000000-0000-0000-0000-000000000000"}],"customDnsConfigs":[],"isIPv6EnabledPrivateEndpoint":false}}'
-        headers:
-            Cache-Control:
-                - no-cache
-            Content-Length:
-                - "1663"
-            Content-Type:
-                - application/json; charset=utf-8
-            Etag:
-                - W/"00000000-0000-0000-0000-000000000000"
-            Expires:
-                - "-1"
-            Pragma:
-                - no-cache
-            Strict-Transport-Security:
-                - max-age=31536000; includeSubDomains
-            X-Cache:
-                - CONFIG_NOCACHE
-            X-Content-Type-Options:
-                - nosniff
-        status: 200 OK
-        code: 200
-        duration: 200ms
     - id: 14
       request:
         proto: HTTP/1.1
@@ -711,8 +737,8 @@ interactions:
         body: ""
         form: {}
         headers:
-            Accept:
-                - application/json
+            User-Agent:
+                - ccm-PrivateEndpoint-clie azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/privateEndpoints/testResource?api-version=2024-01-01
         method: GET
       response:
@@ -762,6 +788,59 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-PrivateEndpoint-clie azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/privateEndpoints/testResource?api-version=2024-01-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 1663
+        uncompressed: false
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/privateEndpoints/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/privateEndpoints","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","privateLinkServiceConnections":[{"name":"plsConnection1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/privateEndpoints/testResource/privateLinkServiceConnections/plsConnection1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","privateLinkServiceId":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/privateLinkServices/pls1","privateLinkServiceConnectionState":{"status":"Approved","description":"Auto Approved","actionsRequired":"None"}},"type":"Microsoft.Network/privateEndpoints/privateLinkServiceConnections"}],"manualPrivateLinkServiceConnections":[],"customNetworkInterfaceName":"","subnet":{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1"},"ipConfigurations":[],"networkInterfaces":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/networkInterfaces/testResource.nic.00000000-0000-0000-0000-000000000000"}],"customDnsConfigs":[],"isIPv6EnabledPrivateEndpoint":false}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "1663"
+            Content-Type:
+                - application/json; charset=utf-8
+            Etag:
+                - W/"00000000-0000-0000-0000-000000000000"
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 16
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-PrivateEndpoint-clie azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/privateEndpoints/testResourcenotfound?api-version=2024-01-01
         method: GET
       response:
@@ -795,7 +874,7 @@ interactions:
         status: 404 Not Found
         code: 404
         duration: 200ms
-    - id: 16
+    - id: 17
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -815,6 +894,8 @@ interactions:
                 - "760"
             Content-Type:
                 - application/json
+            User-Agent:
+                - ccm-PrivateEndpoint-clie azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/privateEndpoints/testResource?api-version=2024-01-01
         method: PUT
       response:
@@ -850,7 +931,7 @@ interactions:
         status: 200 OK
         code: 200
         duration: 200ms
-    - id: 17
+    - id: 18
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -863,7 +944,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-PrivateEndpoint-clie azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/privateEndpoints/testResource?api-version=2024-01-01
         method: GET
       response:
@@ -897,7 +980,7 @@ interactions:
         status: 200 OK
         code: 200
         duration: 200ms
-    - id: 18
+    - id: 19
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -913,6 +996,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/privateEndpoints/testResource?api-version=2024-01-01
         method: DELETE
       response:
@@ -948,7 +1033,7 @@ interactions:
         status: 202 Accepted
         code: 202
         duration: 200ms
-    - id: 19
+    - id: 20
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -961,7 +1046,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
         method: GET
       response:
@@ -993,7 +1080,7 @@ interactions:
         status: 200 OK
         code: 200
         duration: 200ms
-    - id: 20
+    - id: 21
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -1009,6 +1096,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/privateLinkServices/pls1?api-version=2024-01-01
         method: DELETE
       response:
@@ -1044,7 +1133,7 @@ interactions:
         status: 202 Accepted
         code: 202
         duration: 200ms
-    - id: 21
+    - id: 22
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -1057,7 +1146,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
         method: GET
       response:
@@ -1089,7 +1180,7 @@ interactions:
         status: 200 OK
         code: 200
         duration: 200ms
-    - id: 22
+    - id: 23
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -1105,6 +1196,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/loadBalancers/lb1?api-version=2024-01-01
         method: DELETE
       response:
@@ -1140,7 +1233,7 @@ interactions:
         status: 202 Accepted
         code: 202
         duration: 200ms
-    - id: 23
+    - id: 24
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -1153,7 +1246,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
         method: GET
       response:
@@ -1185,7 +1280,7 @@ interactions:
         status: 200 OK
         code: 200
         duration: 200ms
-    - id: 24
+    - id: 25
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -1201,6 +1296,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2024-01-01
         method: DELETE
       response:
@@ -1236,7 +1333,7 @@ interactions:
         status: 202 Accepted
         code: 202
         duration: 200ms
-    - id: 25
+    - id: 26
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -1249,7 +1346,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
         method: GET
       response:
@@ -1281,7 +1380,7 @@ interactions:
         status: 200 OK
         code: 200
         duration: 200ms
-    - id: 26
+    - id: 27
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -1297,6 +1396,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateEndpoint/providers/Microsoft.Network/virtualNetworks/vnet1?api-version=2024-01-01
         method: DELETE
       response:
@@ -1332,7 +1433,7 @@ interactions:
         status: 202 Accepted
         code: 202
         duration: 200ms
-    - id: 27
+    - id: 28
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -1345,7 +1446,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
         method: GET
       response:
@@ -1377,7 +1480,7 @@ interactions:
         status: 200 OK
         code: 200
         duration: 200ms
-    - id: 28
+    - id: 29
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -1393,6 +1496,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-PrivateEndpoint?api-version=2021-04-01
         method: DELETE
       response:
@@ -1424,7 +1529,7 @@ interactions:
         status: 202 Accepted
         code: 202
         duration: 200ms
-    - id: 29
+    - id: 30
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -1437,7 +1542,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRQUklWQVRFRU5EUE9JTlQtRUFTVFVTIiwiam9iTG9jYXRpb24iOiJlYXN0dXMifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
         method: GET
       response:

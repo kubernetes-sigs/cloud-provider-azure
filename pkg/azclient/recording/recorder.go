@@ -39,9 +39,6 @@ import (
 var requestHeadersToRemove = []string{
 	// remove all Authorization headers from stored requests
 	"Authorization",
-
-	// Not needed, adds to diff churn:
-	"User-Agent",
 }
 
 var responseHeadersToRemove = []string{

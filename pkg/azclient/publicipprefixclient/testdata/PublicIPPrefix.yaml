@@ -21,6 +21,8 @@ interactions:
                 - "21"
             Content-Type:
                 - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-PublicIPPrefix?api-version=2021-04-01
         method: PUT
       response:
@@ -72,6 +74,8 @@ interactions:
                 - "130"
             Content-Type:
                 - application/json
+            User-Agent:
+                - ccm-PublicIPPrefix-clien azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPPrefix/providers/Microsoft.Network/publicIPPrefixes/testResource?api-version=2024-01-01
         method: PUT
       response:
@@ -120,7 +124,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-PublicIPPrefix-clien azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
         method: GET
       response:
@@ -165,7 +171,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-PublicIPPrefix-clien azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPPrefix/providers/Microsoft.Network/publicIPPrefixes/testResource?api-version=2024-01-01
         method: GET
       response:
@@ -174,14 +182,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 531
+        content_length: 530
         uncompressed: false
-        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPPrefix/providers/Microsoft.Network/publicIPPrefixes/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/publicIPPrefixes","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","prefixLength":31,"publicIPAddressVersion":"IPv4","ipPrefix":"138.91.116.40/31","ipTags":[]},"sku":{"name":"Standard","tier":"Regional"}}'
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPPrefix/providers/Microsoft.Network/publicIPPrefixes/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/publicIPPrefixes","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","prefixLength":31,"publicIPAddressVersion":"IPv4","ipPrefix":"168.62.49.34/31","ipTags":[]},"sku":{"name":"Standard","tier":"Regional"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "531"
+                - "530"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -215,6 +223,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-PublicIPPrefix-clien azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPPrefix/providers/Microsoft.Network/publicIPPrefixes/testResource?api-version=2024-01-01
         method: GET
       response:
@@ -223,14 +233,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 531
+        content_length: 530
         uncompressed: false
-        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPPrefix/providers/Microsoft.Network/publicIPPrefixes/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/publicIPPrefixes","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","prefixLength":31,"publicIPAddressVersion":"IPv4","ipPrefix":"138.91.116.40/31","ipTags":[]},"sku":{"name":"Standard","tier":"Regional"}}'
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPPrefix/providers/Microsoft.Network/publicIPPrefixes/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/publicIPPrefixes","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","prefixLength":31,"publicIPAddressVersion":"IPv4","ipPrefix":"168.62.49.34/31","ipTags":[]},"sku":{"name":"Standard","tier":"Regional"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "531"
+                - "530"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -264,6 +274,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-PublicIPPrefix-clien azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPPrefix/providers/Microsoft.Network/publicIPPrefixes/testResourcenotfound?api-version=2024-01-01
         method: GET
       response:
@@ -317,6 +329,8 @@ interactions:
                 - "130"
             Content-Type:
                 - application/json
+            User-Agent:
+                - ccm-PublicIPPrefix-clien azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPPrefix/providers/Microsoft.Network/publicIPPrefixes/testResource?api-version=2024-01-01
         method: PUT
       response:
@@ -325,9 +339,9 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 531
+        content_length: 530
         uncompressed: false
-        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPPrefix/providers/Microsoft.Network/publicIPPrefixes/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/publicIPPrefixes","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","prefixLength":31,"publicIPAddressVersion":"IPv4","ipPrefix":"138.91.116.40/31","ipTags":[]},"sku":{"name":"Standard","tier":"Regional"}}'
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPPrefix/providers/Microsoft.Network/publicIPPrefixes/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/publicIPPrefixes","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","prefixLength":31,"publicIPAddressVersion":"IPv4","ipPrefix":"168.62.49.34/31","ipTags":[]},"sku":{"name":"Standard","tier":"Regional"}}'
         headers:
             Azure-Asyncnotification:
                 - Enabled
@@ -336,7 +350,7 @@ interactions:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "531"
+                - "530"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -365,7 +379,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-PublicIPPrefix-clien azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPPrefix/providers/Microsoft.Network/publicIPPrefixes/testResource?api-version=2024-01-01
         method: GET
       response:
@@ -374,14 +390,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 531
+        content_length: 530
         uncompressed: false
-        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPPrefix/providers/Microsoft.Network/publicIPPrefixes/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/publicIPPrefixes","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","prefixLength":31,"publicIPAddressVersion":"IPv4","ipPrefix":"138.91.116.40/31","ipTags":[]},"sku":{"name":"Standard","tier":"Regional"}}'
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPPrefix/providers/Microsoft.Network/publicIPPrefixes/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/publicIPPrefixes","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","prefixLength":31,"publicIPAddressVersion":"IPv4","ipPrefix":"168.62.49.34/31","ipTags":[]},"sku":{"name":"Standard","tier":"Regional"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "531"
+                - "530"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -415,6 +431,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-PublicIPPrefix-clien azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPPrefix/providers/Microsoft.Network/publicIPPrefixes?api-version=2024-01-01
         method: GET
       response:
@@ -423,14 +441,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 543
+        content_length: 542
         uncompressed: false
-        body: '{"value":[{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPPrefix/providers/Microsoft.Network/publicIPPrefixes/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/publicIPPrefixes","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","prefixLength":31,"publicIPAddressVersion":"IPv4","ipPrefix":"138.91.116.40/31","ipTags":[]},"sku":{"name":"Standard","tier":"Regional"}}]}'
+        body: '{"value":[{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPPrefix/providers/Microsoft.Network/publicIPPrefixes/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/publicIPPrefixes","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","prefixLength":31,"publicIPAddressVersion":"IPv4","ipPrefix":"168.62.49.34/31","ipTags":[]},"sku":{"name":"Standard","tier":"Regional"}}]}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "543"
+                - "542"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -462,6 +480,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-PublicIPPrefix-clien azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPPrefixnotfound/providers/Microsoft.Network/publicIPPrefixes?api-version=2024-01-01
         method: GET
       response:
@@ -511,6 +531,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-PublicIPPrefix-clien azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPPrefix/providers/Microsoft.Network/publicIPPrefixes/testResource?api-version=2024-01-01
         method: DELETE
       response:
@@ -559,7 +581,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-PublicIPPrefix-clien azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
         method: GET
       response:
@@ -607,6 +631,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-PublicIPPrefix?api-version=2021-04-01
         method: DELETE
       response:
@@ -651,7 +677,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRQVUJMSUNJUFBSRUZJWC1FQVNUVVMiLCJqb2JMb2NhdGlvbiI6ImVhc3R1cyJ9?api-version=2021-04-01&c=c&h=h&s=s&t=t
         method: GET
       response:

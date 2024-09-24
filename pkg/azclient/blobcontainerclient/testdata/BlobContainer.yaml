@@ -21,6 +21,8 @@ interactions:
                 - "21"
             Content-Type:
                 - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-BlobContainer?api-version=2021-04-01
         method: PUT
       response:
@@ -72,6 +74,8 @@ interactions:
                 - "764"
             Content-Type:
                 - application/json
+            User-Agent:
+                - azsdk-go-armstorage/v1.6.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent?api-version=2023-05-01
         method: PUT
       response:
@@ -118,7 +122,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - azsdk-go-armstorage/v1.6.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Storage/locations/eastus/asyncoperations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&monitor=true&s=s&t=t
         method: GET
       response:
@@ -170,6 +176,8 @@ interactions:
                 - "38"
             Content-Type:
                 - application/json
+            User-Agent:
+                - ccm-BlobContainer-client azsdk-go-armstorage/v1.6.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent/blobServices/default/containers/akscitblobsdktest?api-version=2023-05-01
         method: PUT
       response:
@@ -189,7 +197,7 @@ interactions:
             Content-Type:
                 - application/json
             Etag:
-                - '"0x8DCD47B431D0E4A"'
+                - '"0x8DCDBDF7BABA973"'
             Expires:
                 - "-1"
             Pragma:
@@ -219,6 +227,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-BlobContainer-client azsdk-go-armstorage/v1.6.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent/blobServices/default/containers?api-version=2023-05-01
         method: GET
       response:
@@ -229,7 +239,7 @@ interactions:
         trailer: {}
         content_length: 721
         uncompressed: false
-        body: '{"value":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent/blobServices/default/containers/akscitblobsdktest","name":"akscitblobsdktest","type":"Microsoft.Storage/storageAccounts/blobServices/containers","etag":"\"0x8DCD47B431D0E4A\"","properties":{"immutableStorageWithVersioning":{"enabled":false},"deleted":false,"remainingRetentionDays":0,"defaultEncryptionScope":"$account-encryption-key","denyEncryptionScopeOverride":false,"publicAccess":"None","leaseStatus":"Unlocked","leaseState":"Available","lastModifiedTime":"2001-02-03T04:05:06Z","hasImmutabilityPolicy":false,"hasLegalHold":false}}]}'
+        body: '{"value":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent/blobServices/default/containers/akscitblobsdktest","name":"akscitblobsdktest","type":"Microsoft.Storage/storageAccounts/blobServices/containers","etag":"\"0x8DCDBDF7BABA973\"","properties":{"immutableStorageWithVersioning":{"enabled":false},"deleted":false,"remainingRetentionDays":0,"defaultEncryptionScope":"$account-encryption-key","denyEncryptionScopeOverride":false,"publicAccess":"None","leaseStatus":"Unlocked","leaseState":"Available","lastModifiedTime":"2001-02-03T04:05:06Z","hasImmutabilityPolicy":false,"hasLegalHold":false}}]}'
         headers:
             Cache-Control:
                 - no-cache
@@ -266,6 +276,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-BlobContainer-client azsdk-go-armstorage/v1.6.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent/blobServices/default/containers/akscitblobsdktest?api-version=2023-05-01
         method: GET
       response:
@@ -276,7 +288,7 @@ interactions:
         trailer: {}
         content_length: 703
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent/blobServices/default/containers/akscitblobsdktest","name":"akscitblobsdktest","type":"Microsoft.Storage/storageAccounts/blobServices/containers","etag":"\"0x8DCD47B431D0E4A\"","properties":{"deleted":false,"remainingRetentionDays":0,"defaultEncryptionScope":"$account-encryption-key","denyEncryptionScopeOverride":false,"publicAccess":"None","leaseStatus":"Unlocked","leaseState":"Available","lastModifiedTime":"2001-02-03T04:05:06Z","legalHold":{"hasLegalHold":false,"tags":[]},"hasImmutabilityPolicy":false,"hasLegalHold":false}}'
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent/blobServices/default/containers/akscitblobsdktest","name":"akscitblobsdktest","type":"Microsoft.Storage/storageAccounts/blobServices/containers","etag":"\"0x8DCDBDF7BABA973\"","properties":{"deleted":false,"remainingRetentionDays":0,"defaultEncryptionScope":"$account-encryption-key","denyEncryptionScopeOverride":false,"publicAccess":"None","leaseStatus":"Unlocked","leaseState":"Available","lastModifiedTime":"2001-02-03T04:05:06Z","legalHold":{"hasLegalHold":false,"tags":[]},"hasImmutabilityPolicy":false,"hasLegalHold":false}}'
         headers:
             Cache-Control:
                 - no-cache
@@ -285,7 +297,7 @@ interactions:
             Content-Type:
                 - application/json
             Etag:
-                - '"0x8DCD47B431D0E4A"'
+                - '"0x8DCDBDF7BABA973"'
             Expires:
                 - "-1"
             Pragma:
@@ -315,6 +327,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-BlobContainer-client azsdk-go-armstorage/v1.6.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent/blobServices/default/containers/akscitblobsdktestnotfound?api-version=2023-05-01
         method: GET
       response:
@@ -359,7 +373,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-BlobContainer-client azsdk-go-armstorage/v1.6.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent/blobServices/default/containers/akscitblobsdktest?api-version=2023-05-01
         method: DELETE
       response:
@@ -404,7 +420,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - azsdk-go-armstorage/v1.6.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent?api-version=2023-05-01
         method: DELETE
       response:
@@ -452,6 +470,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-BlobContainer?api-version=2021-04-01
         method: DELETE
       response:
@@ -496,7 +516,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRCTE9CQ09OVEFJTkVSLUVBU1RVUyIsImpvYkxvY2F0aW9uIjoiZWFzdHVzIn0?api-version=2021-04-01&c=c&h=h&s=s&t=t
         method: GET
       response:

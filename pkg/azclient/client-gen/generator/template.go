@@ -224,6 +224,9 @@ var _ = ginkgo.BeforeSuite(func(ctx context.Context) {
 		ClientOptions: azcore.ClientOptions{
 			Transport: recorder.HTTPClient(),
 			TracingProvider: utils.TracingProvider,
+			Telemetry: policy.TelemetryOptions{
+				ApplicationID: "ccm-resource-group-client",
+			},
 		},
 	})
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
@@ -231,6 +234,9 @@ var _ = ginkgo.BeforeSuite(func(ctx context.Context) {
 		ClientOptions: azcore.ClientOptions{
 			Transport: recorder.HTTPClient(),
 			TracingProvider: utils.TracingProvider,
+			Telemetry: policy.TelemetryOptions{
+				ApplicationID: "ccm-{{$resource}}-client",
+			},
 		},
 	})
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())

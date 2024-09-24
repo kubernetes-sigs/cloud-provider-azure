@@ -21,6 +21,8 @@ interactions:
                 - "21"
             Content-Type:
                 - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-BlobServiceProperties?api-version=2021-04-01
         method: PUT
       response:
@@ -72,6 +74,8 @@ interactions:
                 - "764"
             Content-Type:
                 - application/json
+            User-Agent:
+                - azsdk-go-armstorage/v1.6.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest?api-version=2023-05-01
         method: PUT
       response:
@@ -118,7 +122,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - azsdk-go-armstorage/v1.6.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Storage/locations/eastus/asyncoperations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&monitor=true&s=s&t=t
         method: GET
       response:
@@ -166,6 +172,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-BlobServicePropertie azsdk-go-armstorage/v1.6.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest/blobServices/default?api-version=2023-05-01
         method: GET
       response:
@@ -213,6 +221,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-BlobServicePropertie azsdk-go-armstorage/v1.6.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestnotfound/blobServices/default?api-version=2023-05-01
         method: GET
       response:
@@ -266,6 +276,8 @@ interactions:
                 - "66"
             Content-Type:
                 - application/json
+            User-Agent:
+                - ccm-BlobServicePropertie azsdk-go-armstorage/v1.6.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest/blobServices/default?api-version=2023-05-01
         method: PUT
       response:
@@ -317,6 +329,8 @@ interactions:
                 - "66"
             Content-Type:
                 - application/json
+            User-Agent:
+                - ccm-BlobServicePropertie azsdk-go-armstorage/v1.6.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestnotfound/blobServices/default?api-version=2023-05-01
         method: PUT
       response:
@@ -363,7 +377,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - azsdk-go-armstorage/v1.6.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest?api-version=2023-05-01
         method: DELETE
       response:
@@ -411,6 +427,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-BlobServiceProperties?api-version=2021-04-01
         method: DELETE
       response:
@@ -455,7 +473,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRCTE9CU0VSVklDRVBST1BFUlRJRVMtRUFTVFVTIiwiam9iTG9jYXRpb24iOiJlYXN0dXMifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
         method: GET
       response:
