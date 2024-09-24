@@ -674,6 +674,8 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIPConfig(az)
 	} else if az.isLBBackendPoolTypeNodeIP() {
 		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIP(az)
+	} else if az.isLBBackendPoolTypePodIP() {
+		az.LoadBalancerBackendPool = newBackendPoolTypePodIP(az)
 	}
 
 	if az.useMultipleStandardLoadBalancers() {
