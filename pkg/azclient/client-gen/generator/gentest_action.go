@@ -76,6 +76,7 @@ func generateTestSuite(ctx *genall.GenerationContext, root *loader.Package, _ st
 	importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"] = make(map[string]struct{})
 	importList["github.com/onsi/ginkgo/v2"] = map[string]struct{}{}
 	importList["github.com/onsi/gomega"] = map[string]struct{}{}
+	importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"] = make(map[string]struct{})
 	importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"] = make(map[string]struct{})
 
 	return WriteToFile(ctx, root, root.Name+"_suite_test.go", headerText, importList, &outContent)

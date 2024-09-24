@@ -21,6 +21,8 @@ interactions:
                 - "21"
             Content-Type:
                 - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Disk?api-version=2021-04-01
         method: PUT
       response:
@@ -72,6 +74,8 @@ interactions:
                 - "33"
             Content-Type:
                 - application/json
+            User-Agent:
+                - ccm-Disk-client azsdk-go-armcompute/v6.1.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Disk/providers/Microsoft.Compute/disks/testResource?api-version=2024-03-02
         method: PATCH
       response:
@@ -125,6 +129,8 @@ interactions:
                 - "93"
             Content-Type:
                 - application/json
+            User-Agent:
+                - ccm-Disk-client azsdk-go-armcompute/v6.1.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Disk/providers/Microsoft.Compute/disks/testResource?api-version=2024-03-02
         method: PUT
       response:
@@ -173,7 +179,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-Disk-client azsdk-go-armcompute/v6.1.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?api-version=2024-03-02&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
         method: GET
       response:
@@ -182,14 +190,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 1075
+        content_length: 1077
         uncompressed: false
         body: "{\r\n  \"startTime\": \"2001-02-03T04:05:06Z\",\r\n  \"endTime\": \"2001-02-03T04:05:06Z\",\r\n  \"status\": \"Succeeded\",\r\n  \"properties\": {\r\n    \"output\": {\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Disk/providers/Microsoft.Compute/disks/testResource\",\r\n  \"type\": \"Microsoft.Compute/disks\",\r\n  \"location\": \"eastus\",\r\n  \"sku\": {\r\n    \"name\": \"Standard_LRS\",\r\n    \"tier\": \"Standard\"\r\n  },\r\n  \"properties\": {\r\n    \"creationData\": {\r\n      \"createOption\": \"Empty\"\r\n    },\r\n    \"diskSizeGB\": 200,\r\n    \"diskIOPSReadWrite\": 500,\r\n    \"diskMBpsReadWrite\": 60,\r\n    \"encryption\": {\r\n      \"type\": \"EncryptionAtRestWithPlatformKey\"\r\n    },\r\n    \"networkAccessPolicy\": \"AllowAll\",\r\n    \"publicNetworkAccess\": \"Enabled\",\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\",\r\n    \"provisioningState\": \"Succeeded\",\r\n    \"diskState\": \"Unattached\",\r\n    \"diskSizeBytes\": 214748364800,\r\n    \"uniqueId\": \"00000000-0000-0000-0000-000000000000\"\r\n  }\r\n}\r\n  },\r\n  \"name\": \"00000000-0000-0000-0000-000000000000\"\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "1075"
+                - "1077"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -218,7 +226,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-Disk-client azsdk-go-armcompute/v6.1.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Disk/providers/Microsoft.Compute/disks/testResource?api-version=2024-03-02
         method: GET
       response:
@@ -227,14 +237,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 851
+        content_length: 852
         uncompressed: false
         body: "{\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Disk/providers/Microsoft.Compute/disks/testResource\",\r\n  \"type\": \"Microsoft.Compute/disks\",\r\n  \"location\": \"eastus\",\r\n  \"sku\": {\r\n    \"name\": \"Standard_LRS\",\r\n    \"tier\": \"Standard\"\r\n  },\r\n  \"properties\": {\r\n    \"creationData\": {\r\n      \"createOption\": \"Empty\"\r\n    },\r\n    \"diskSizeGB\": 200,\r\n    \"diskIOPSReadWrite\": 500,\r\n    \"diskMBpsReadWrite\": 60,\r\n    \"encryption\": {\r\n      \"type\": \"EncryptionAtRestWithPlatformKey\"\r\n    },\r\n    \"networkAccessPolicy\": \"AllowAll\",\r\n    \"publicNetworkAccess\": \"Enabled\",\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\",\r\n    \"provisioningState\": \"Succeeded\",\r\n    \"diskState\": \"Unattached\",\r\n    \"diskSizeBytes\": 214748364800,\r\n    \"uniqueId\": \"00000000-0000-0000-0000-000000000000\"\r\n  }\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "851"
+                - "852"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -266,6 +276,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-Disk-client azsdk-go-armcompute/v6.1.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Disk/providers/Microsoft.Compute/disks/testResource?api-version=2024-03-02
         method: GET
       response:
@@ -274,14 +286,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 851
+        content_length: 852
         uncompressed: false
         body: "{\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Disk/providers/Microsoft.Compute/disks/testResource\",\r\n  \"type\": \"Microsoft.Compute/disks\",\r\n  \"location\": \"eastus\",\r\n  \"sku\": {\r\n    \"name\": \"Standard_LRS\",\r\n    \"tier\": \"Standard\"\r\n  },\r\n  \"properties\": {\r\n    \"creationData\": {\r\n      \"createOption\": \"Empty\"\r\n    },\r\n    \"diskSizeGB\": 200,\r\n    \"diskIOPSReadWrite\": 500,\r\n    \"diskMBpsReadWrite\": 60,\r\n    \"encryption\": {\r\n      \"type\": \"EncryptionAtRestWithPlatformKey\"\r\n    },\r\n    \"networkAccessPolicy\": \"AllowAll\",\r\n    \"publicNetworkAccess\": \"Enabled\",\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\",\r\n    \"provisioningState\": \"Succeeded\",\r\n    \"diskState\": \"Unattached\",\r\n    \"diskSizeBytes\": 214748364800,\r\n    \"uniqueId\": \"00000000-0000-0000-0000-000000000000\"\r\n  }\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "851"
+                - "852"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -313,6 +325,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-Disk-client azsdk-go-armcompute/v6.1.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Disk/providers/Microsoft.Compute/disks/testResourcenotfound?api-version=2024-03-02
         method: GET
       response:
@@ -366,6 +380,8 @@ interactions:
                 - "93"
             Content-Type:
                 - application/json
+            User-Agent:
+                - ccm-Disk-client azsdk-go-armcompute/v6.1.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Disk/providers/Microsoft.Compute/disks/testResource?api-version=2024-03-02
         method: PUT
       response:
@@ -414,7 +430,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-Disk-client azsdk-go-armcompute/v6.1.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?api-version=2024-03-02&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
         method: GET
       response:
@@ -423,14 +441,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 1076
+        content_length: 1077
         uncompressed: false
         body: "{\r\n  \"startTime\": \"2001-02-03T04:05:06Z\",\r\n  \"endTime\": \"2001-02-03T04:05:06Z\",\r\n  \"status\": \"Succeeded\",\r\n  \"properties\": {\r\n    \"output\": {\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Disk/providers/Microsoft.Compute/disks/testResource\",\r\n  \"type\": \"Microsoft.Compute/disks\",\r\n  \"location\": \"eastus\",\r\n  \"sku\": {\r\n    \"name\": \"Standard_LRS\",\r\n    \"tier\": \"Standard\"\r\n  },\r\n  \"properties\": {\r\n    \"creationData\": {\r\n      \"createOption\": \"Empty\"\r\n    },\r\n    \"diskSizeGB\": 200,\r\n    \"diskIOPSReadWrite\": 500,\r\n    \"diskMBpsReadWrite\": 60,\r\n    \"encryption\": {\r\n      \"type\": \"EncryptionAtRestWithPlatformKey\"\r\n    },\r\n    \"networkAccessPolicy\": \"AllowAll\",\r\n    \"publicNetworkAccess\": \"Enabled\",\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\",\r\n    \"provisioningState\": \"Succeeded\",\r\n    \"diskState\": \"Unattached\",\r\n    \"diskSizeBytes\": 214748364800,\r\n    \"uniqueId\": \"00000000-0000-0000-0000-000000000000\"\r\n  }\r\n}\r\n  },\r\n  \"name\": \"00000000-0000-0000-0000-000000000000\"\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "1076"
+                - "1077"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -459,7 +477,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-Disk-client azsdk-go-armcompute/v6.1.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Disk/providers/Microsoft.Compute/disks/testResource?api-version=2024-03-02
         method: GET
       response:
@@ -468,14 +488,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 851
+        content_length: 852
         uncompressed: false
         body: "{\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Disk/providers/Microsoft.Compute/disks/testResource\",\r\n  \"type\": \"Microsoft.Compute/disks\",\r\n  \"location\": \"eastus\",\r\n  \"sku\": {\r\n    \"name\": \"Standard_LRS\",\r\n    \"tier\": \"Standard\"\r\n  },\r\n  \"properties\": {\r\n    \"creationData\": {\r\n      \"createOption\": \"Empty\"\r\n    },\r\n    \"diskSizeGB\": 200,\r\n    \"diskIOPSReadWrite\": 500,\r\n    \"diskMBpsReadWrite\": 60,\r\n    \"encryption\": {\r\n      \"type\": \"EncryptionAtRestWithPlatformKey\"\r\n    },\r\n    \"networkAccessPolicy\": \"AllowAll\",\r\n    \"publicNetworkAccess\": \"Enabled\",\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\",\r\n    \"provisioningState\": \"Succeeded\",\r\n    \"diskState\": \"Unattached\",\r\n    \"diskSizeBytes\": 214748364800,\r\n    \"uniqueId\": \"00000000-0000-0000-0000-000000000000\"\r\n  }\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "851"
+                - "852"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -507,6 +527,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-Disk-client azsdk-go-armcompute/v6.1.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Disk/providers/Microsoft.Compute/disks?api-version=2024-03-02
         method: GET
       response:
@@ -515,14 +537,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 988
+        content_length: 989
         uncompressed: false
         body: "{\r\n  \"value\": [\r\n    {\r\n      \"name\": \"testResource\",\r\n      \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Disk/providers/Microsoft.Compute/disks/testResource\",\r\n      \"type\": \"Microsoft.Compute/disks\",\r\n      \"location\": \"eastus\",\r\n      \"sku\": {\r\n        \"name\": \"Standard_LRS\",\r\n        \"tier\": \"Standard\"\r\n      },\r\n      \"properties\": {\r\n        \"creationData\": {\r\n          \"createOption\": \"Empty\"\r\n        },\r\n        \"diskSizeGB\": 200,\r\n        \"diskIOPSReadWrite\": 500,\r\n        \"diskMBpsReadWrite\": 60,\r\n        \"encryption\": {\r\n          \"type\": \"EncryptionAtRestWithPlatformKey\"\r\n        },\r\n        \"networkAccessPolicy\": \"AllowAll\",\r\n        \"publicNetworkAccess\": \"Enabled\",\r\n        \"timeCreated\": \"2001-02-03T04:05:06Z\",\r\n        \"provisioningState\": \"Succeeded\",\r\n        \"diskState\": \"Unattached\",\r\n        \"diskSizeBytes\": 214748364800,\r\n        \"uniqueId\": \"00000000-0000-0000-0000-000000000000\"\r\n      }\r\n    }\r\n  ]\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "988"
+                - "989"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -554,6 +576,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-Disk-client azsdk-go-armcompute/v6.1.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Disknotfound/providers/Microsoft.Compute/disks?api-version=2024-03-02
         method: GET
       response:
@@ -600,7 +624,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-Disk-client azsdk-go-armcompute/v6.1.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Disk/providers/Microsoft.Compute/disks/testResource?api-version=2024-03-02
         method: DELETE
       response:
@@ -647,7 +673,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-Disk-client azsdk-go-armcompute/v6.1.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?api-version=2024-03-02&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
         method: GET
       response:
@@ -656,14 +684,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 184
+        content_length: 183
         uncompressed: false
         body: "{\r\n  \"startTime\": \"2001-02-03T04:05:06Z\",\r\n  \"endTime\": \"2001-02-03T04:05:06Z\",\r\n  \"status\": \"Succeeded\",\r\n  \"name\": \"00000000-0000-0000-0000-000000000000\"\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "184"
+                - "183"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -695,6 +723,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Disk?api-version=2021-04-01
         method: DELETE
       response:
@@ -739,7 +769,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRESVNLLUVBU1RVUyIsImpvYkxvY2F0aW9uIjoiZWFzdHVzIn0?api-version=2021-04-01&c=c&h=h&s=s&t=t
         method: GET
       response:

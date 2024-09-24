@@ -21,6 +21,8 @@ interactions:
                 - "21"
             Content-Type:
                 - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-AvailabilitySet?api-version=2021-04-01
         method: PUT
       response:
@@ -72,6 +74,8 @@ interactions:
                 - "120"
             Content-Type:
                 - application/json
+            User-Agent:
+                - azsdk-go-armcompute/v6.1.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-AvailabilitySet/providers/Microsoft.Compute/availabilitySets/testResource?api-version=2024-07-01
         method: PUT
       response:
@@ -121,6 +125,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-AvailabilitySet-clie azsdk-go-armcompute/v6.1.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-AvailabilitySet/providers/Microsoft.Compute/availabilitySets/testResource?api-version=2024-07-01
         method: GET
       response:
@@ -170,6 +176,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-AvailabilitySet-clie azsdk-go-armcompute/v6.1.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-AvailabilitySet/providers/Microsoft.Compute/availabilitySets/testResourcenotfound?api-version=2024-07-01
         method: GET
       response:
@@ -219,6 +227,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-AvailabilitySet-clie azsdk-go-armcompute/v6.1.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-AvailabilitySet/providers/Microsoft.Compute/availabilitySets?api-version=2024-07-01
         method: GET
       response:
@@ -268,6 +278,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-AvailabilitySet-clie azsdk-go-armcompute/v6.1.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-AvailabilitySetnotfound/providers/Microsoft.Compute/availabilitySets?api-version=2024-07-01
         method: GET
       response:
@@ -317,6 +329,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-AvailabilitySet?api-version=2021-04-01
         method: DELETE
       response:
@@ -361,7 +375,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRBVkFJTEFCSUxJVFlTRVQtRUFTVFVTIiwiam9iTG9jYXRpb24iOiJlYXN0dXMifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
         method: GET
       response:

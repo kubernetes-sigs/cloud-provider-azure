@@ -21,6 +21,8 @@ interactions:
                 - "21"
             Content-Type:
                 - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-PrivateZone?api-version=2021-04-01
         method: PUT
       response:
@@ -49,8 +51,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-        status: 200 OK
-        code: 200
+        status: 201 Created
+        code: 201
         duration: 200ms
     - id: 1
       request:
@@ -72,6 +74,8 @@ interactions:
                 - "21"
             Content-Type:
                 - application/json
+            User-Agent:
+                - ccm-PrivateZone-client azsdk-go-armprivatedns/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateZone/providers/Microsoft.Network/privateDnsZones/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io?api-version=2020-06-01
         method: PUT
       response:
@@ -85,7 +89,7 @@ interactions:
         body: '{}'
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTsxZWU5MWRhYy1mNGQ0LTQzOGYtYTZhYS1hNTJhYjFmNzRmMmZfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTtmYWVlYzFkMC1hMzE3LTQwYTYtOGNlNy0xNWNhZDVmMjc2MDRfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - private
             Content-Length:
@@ -93,7 +97,7 @@ interactions:
             Content-Type:
                 - application/json; charset=utf-8
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTsxZWU5MWRhYy1mNGQ0LTQzOGYtYTZhYS1hNTJhYjFmNzRmMmZfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTtmYWVlYzFkMC1hMzE3LTQwYTYtOGNlNy0xNWNhZDVmMjc2MDRfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
@@ -120,8 +124,10 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTsxZWU5MWRhYy1mNGQ0LTQzOGYtYTZhYS1hNTJhYjFmNzRmMmZfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
+        headers:
+            User-Agent:
+                - ccm-PrivateZone-client azsdk-go-armprivatedns/v1.2.0 (go1.23.1; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTtmYWVlYzFkMC1hMzE3LTQwYTYtOGNlNy0xNWNhZDVmMjc2MDRfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -165,7 +171,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-PrivateZone-client azsdk-go-armprivatedns/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateZone/providers/Microsoft.Network/privateDnsZones/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io?api-version=2020-06-01
         method: GET
       response:
@@ -176,7 +184,7 @@ interactions:
         trailer: {}
         content_length: 751
         uncompressed: false
-        body: '{"id":"\/subscriptions\/00000000-0000-0000-0000-000000000000\/resourceGroups\/aks-cit-privatezone\/providers\/Microsoft.Network\/privateDnsZones\/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","name":"aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","type":"Microsoft.Network\/privateDnsZones","etag":"00000000-0000-0000-0000-000000000000","location":"global","properties":{"internalId":"SW1tdXRhYmxlWm9uZUlkZW50aXR5O2MyMzAzYzU4LTk0ZTUtNDgwMC05ODBjLTZhMGMwYTNiNDkzNzsw","maxNumberOfRecordSets":25000,"maxNumberOfVirtualNetworkLinks":1000,"maxNumberOfVirtualNetworkLinksWithRegistration":100,"numberOfRecordSets":1,"numberOfVirtualNetworkLinks":0,"numberOfVirtualNetworkLinksWithRegistration":0,"provisioningState":"Succeeded"}}'
+        body: '{"id":"\/subscriptions\/00000000-0000-0000-0000-000000000000\/resourceGroups\/aks-cit-privatezone\/providers\/Microsoft.Network\/privateDnsZones\/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","name":"aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","type":"Microsoft.Network\/privateDnsZones","etag":"00000000-0000-0000-0000-000000000000","location":"global","properties":{"internalId":"SW1tdXRhYmxlWm9uZUlkZW50aXR5O2M2Y2YxMDdkLTZiNGItNDE0Zi04MTRjLTFiMTlhMjY4ZjFmMDsw","maxNumberOfRecordSets":25000,"maxNumberOfVirtualNetworkLinks":1000,"maxNumberOfVirtualNetworkLinksWithRegistration":100,"numberOfRecordSets":1,"numberOfVirtualNetworkLinks":0,"numberOfVirtualNetworkLinksWithRegistration":0,"provisioningState":"Succeeded"}}'
         headers:
             Cache-Control:
                 - private
@@ -215,6 +223,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-PrivateZone-client azsdk-go-armprivatedns/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateZone/providers/Microsoft.Network/privateDnsZones/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io?api-version=2020-06-01
         method: GET
       response:
@@ -225,7 +235,7 @@ interactions:
         trailer: {}
         content_length: 751
         uncompressed: false
-        body: '{"id":"\/subscriptions\/00000000-0000-0000-0000-000000000000\/resourceGroups\/aks-cit-privatezone\/providers\/Microsoft.Network\/privateDnsZones\/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","name":"aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","type":"Microsoft.Network\/privateDnsZones","etag":"00000000-0000-0000-0000-000000000000","location":"global","properties":{"internalId":"SW1tdXRhYmxlWm9uZUlkZW50aXR5O2MyMzAzYzU4LTk0ZTUtNDgwMC05ODBjLTZhMGMwYTNiNDkzNzsw","maxNumberOfRecordSets":25000,"maxNumberOfVirtualNetworkLinks":1000,"maxNumberOfVirtualNetworkLinksWithRegistration":100,"numberOfRecordSets":1,"numberOfVirtualNetworkLinks":0,"numberOfVirtualNetworkLinksWithRegistration":0,"provisioningState":"Succeeded"}}'
+        body: '{"id":"\/subscriptions\/00000000-0000-0000-0000-000000000000\/resourceGroups\/aks-cit-privatezone\/providers\/Microsoft.Network\/privateDnsZones\/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","name":"aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","type":"Microsoft.Network\/privateDnsZones","etag":"00000000-0000-0000-0000-000000000000","location":"global","properties":{"internalId":"SW1tdXRhYmxlWm9uZUlkZW50aXR5O2M2Y2YxMDdkLTZiNGItNDE0Zi04MTRjLTFiMTlhMjY4ZjFmMDsw","maxNumberOfRecordSets":25000,"maxNumberOfVirtualNetworkLinks":1000,"maxNumberOfVirtualNetworkLinksWithRegistration":100,"numberOfRecordSets":1,"numberOfVirtualNetworkLinks":0,"numberOfVirtualNetworkLinksWithRegistration":0,"provisioningState":"Succeeded"}}'
         headers:
             Cache-Control:
                 - private
@@ -264,6 +274,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-PrivateZone-client azsdk-go-armprivatedns/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateZone/providers/Microsoft.Network/privateDnsZones/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.ionotfound?api-version=2020-06-01
         method: GET
       response:
@@ -317,6 +329,8 @@ interactions:
                 - "21"
             Content-Type:
                 - application/json
+            User-Agent:
+                - ccm-PrivateZone-client azsdk-go-armprivatedns/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateZone/providers/Microsoft.Network/privateDnsZones/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io?api-version=2020-06-01
         method: PUT
       response:
@@ -330,7 +344,7 @@ interactions:
         body: '{}'
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTtlYTQyYWVhOS1mMzFjLTQ0OGItOTYzYy1hZmQyZDBhYWRmNjNfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTszMjY3MTE3OS0zNmQxLTQ1Y2ItOTI4YS0zZDk2MThhNDdkYjhfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - private
             Content-Length:
@@ -338,7 +352,7 @@ interactions:
             Content-Type:
                 - application/json; charset=utf-8
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTtlYTQyYWVhOS1mMzFjLTQ0OGItOTYzYy1hZmQyZDBhYWRmNjNfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTszMjY3MTE3OS0zNmQxLTQ1Y2ItOTI4YS0zZDk2MThhNDdkYjhfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
@@ -365,8 +379,10 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTtlYTQyYWVhOS1mMzFjLTQ0OGItOTYzYy1hZmQyZDBhYWRmNjNfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
+        headers:
+            User-Agent:
+                - ccm-PrivateZone-client azsdk-go-armprivatedns/v1.2.0 (go1.23.1; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTszMjY3MTE3OS0zNmQxLTQ1Y2ItOTI4YS0zZDk2MThhNDdkYjhfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -410,7 +426,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-PrivateZone-client azsdk-go-armprivatedns/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateZone/providers/Microsoft.Network/privateDnsZones/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io?api-version=2020-06-01
         method: GET
       response:
@@ -421,7 +439,7 @@ interactions:
         trailer: {}
         content_length: 751
         uncompressed: false
-        body: '{"id":"\/subscriptions\/00000000-0000-0000-0000-000000000000\/resourceGroups\/aks-cit-privatezone\/providers\/Microsoft.Network\/privateDnsZones\/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","name":"aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","type":"Microsoft.Network\/privateDnsZones","etag":"00000000-0000-0000-0000-000000000000","location":"global","properties":{"internalId":"SW1tdXRhYmxlWm9uZUlkZW50aXR5O2MyMzAzYzU4LTk0ZTUtNDgwMC05ODBjLTZhMGMwYTNiNDkzNzsw","maxNumberOfRecordSets":25000,"maxNumberOfVirtualNetworkLinks":1000,"maxNumberOfVirtualNetworkLinksWithRegistration":100,"numberOfRecordSets":1,"numberOfVirtualNetworkLinks":0,"numberOfVirtualNetworkLinksWithRegistration":0,"provisioningState":"Succeeded"}}'
+        body: '{"id":"\/subscriptions\/00000000-0000-0000-0000-000000000000\/resourceGroups\/aks-cit-privatezone\/providers\/Microsoft.Network\/privateDnsZones\/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","name":"aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","type":"Microsoft.Network\/privateDnsZones","etag":"00000000-0000-0000-0000-000000000000","location":"global","properties":{"internalId":"SW1tdXRhYmxlWm9uZUlkZW50aXR5O2M2Y2YxMDdkLTZiNGItNDE0Zi04MTRjLTFiMTlhMjY4ZjFmMDsw","maxNumberOfRecordSets":25000,"maxNumberOfVirtualNetworkLinks":1000,"maxNumberOfVirtualNetworkLinksWithRegistration":100,"numberOfRecordSets":1,"numberOfVirtualNetworkLinks":0,"numberOfVirtualNetworkLinksWithRegistration":0,"provisioningState":"Succeeded"}}'
         headers:
             Cache-Control:
                 - private
@@ -460,6 +478,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - azsdk-go-armprivatedns/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateZone/providers/Microsoft.Network/privateDnsZones/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io?api-version=2020-06-01
         method: DELETE
       response:
@@ -473,13 +493,13 @@ interactions:
         body: ""
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTs2ZGQ5ZjJmZi01ODViLTQxNDUtOWZmOS00ZDI3Njg2ZDg0MjNfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTsyZGExN2U5YS02ZDQwLTRmMDgtOTEyYy1iM2FmY2U4M2QyN2FfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - private
             Content-Length:
                 - "0"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTs2ZGQ5ZjJmZi01ODViLTQxNDUtOWZmOS00ZDI3Njg2ZDg0MjNfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTsyZGExN2U5YS02ZDQwLTRmMDgtOTEyYy1iM2FmY2U4M2QyN2FfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
@@ -506,8 +526,10 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTs2ZGQ5ZjJmZi01ODViLTQxNDUtOWZmOS00ZDI3Njg2ZDg0MjNfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
+        headers:
+            User-Agent:
+                - azsdk-go-armprivatedns/v1.2.0 (go1.23.1; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTsyZGExN2U5YS02ZDQwLTRmMDgtOTEyYy1iM2FmY2U4M2QyN2FfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -554,6 +576,8 @@ interactions:
         headers:
             Accept:
                 - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-PrivateZone?api-version=2021-04-01
         method: DELETE
       response:
@@ -598,7 +622,9 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers: {}
+        headers:
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRQUklWQVRFWk9ORS1FQVNUVVMiLCJqb2JMb2NhdGlvbiI6ImVhc3R1cyJ9?api-version=2021-04-01&c=c&h=h&s=s&t=t
         method: GET
       response:
