@@ -17,6 +17,7 @@ limitations under the License.
 package ipam
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sync"
@@ -262,24 +263,24 @@ func (ca *cloudCIDRAllocator) updateNodeSubnetMaskSizes(nodeName, providerID str
 	return nil
 }
 
-func (ca *cloudCIDRAllocator) Run(stopCh <-chan struct{}) {
+func (ca *cloudCIDRAllocator) Run(ctx context.Context) {
 	defer utilruntime.HandleCrash()
 
 	klog.Infof("Starting cloud CIDR allocator")
 	defer klog.Infof("Shutting down cloud CIDR allocator")
 
-	if !cache.WaitForNamedCacheSync("cidrallocator", stopCh, ca.nodesSynced) {
+	if !cache.WaitForNamedCacheSync("cidrallocator", ctx.Done(), ca.nodesSynced) {
 		return
 	}
 
 	for i := 0; i < cidrUpdateWorkers; i++ {
-		go ca.worker(stopCh)
+		go ca.worker(ctx)
 	}
 
-	<-stopCh
+	<-ctx.Done()
 }
 
-func (ca *cloudCIDRAllocator) worker(stopChan <-chan struct{}) {
+func (ca *cloudCIDRAllocator) worker(ctx context.Context) {
 	for {
 		select {
 		case workItem, ok := <-ca.nodeUpdateChannel:
@@ -291,7 +292,7 @@ func (ca *cloudCIDRAllocator) worker(stopChan <-chan struct{}) {
 				// Requeue the failed node for update again.
 				ca.nodeUpdateChannel <- workItem
 			}
-		case <-stopChan:
+		case <-ctx.Done():
 			return
 		}
 	}

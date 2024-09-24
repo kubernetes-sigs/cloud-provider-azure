@@ -17,6 +17,7 @@ limitations under the License.
 package ipam
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strings"
@@ -171,24 +172,24 @@ func NewCIDRRangeAllocator(client clientset.Interface, nodeInformer informers.No
 	return ra, nil
 }
 
-func (r *rangeAllocator) Run(stopCh <-chan struct{}) {
+func (r *rangeAllocator) Run(ctx context.Context) {
 	defer utilruntime.HandleCrash()
 
 	klog.Infof("Starting range CIDR allocator")
 	defer klog.Infof("Shutting down range CIDR allocator")
 
-	if !cache.WaitForNamedCacheSync("cidrallocator", stopCh, r.nodesSynced) {
+	if !cache.WaitForNamedCacheSync("cidrallocator", ctx.Done(), r.nodesSynced) {
 		return
 	}
 
 	for i := 0; i < cidrUpdateWorkers; i++ {
-		go r.worker(stopCh)
+		go r.worker(ctx)
 	}
 
-	<-stopCh
+	<-ctx.Done()
 }
 
-func (r *rangeAllocator) worker(stopChan <-chan struct{}) {
+func (r *rangeAllocator) worker(ctx context.Context) {
 	for {
 		select {
 		case workItem, ok := <-r.nodeCIDRUpdateChannel:
@@ -200,7 +201,7 @@ func (r *rangeAllocator) worker(stopChan <-chan struct{}) {
 				// Requeue the failed node for update again.
 				r.nodeCIDRUpdateChannel <- workItem
 			}
-		case <-stopChan:
+		case <-ctx.Done():
 			return
 		}
 	}

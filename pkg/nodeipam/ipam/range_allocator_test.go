@@ -546,7 +546,7 @@ func TestAllocateOrOccupyCIDRSuccess(t *testing.T) {
 		}
 		rangeAllocator.nodesSynced = alwaysReady
 		rangeAllocator.recorder = testutil.NewFakeRecorder()
-		go allocator.Run(wait.NeverStop)
+		go allocator.Run(context.Background())
 
 		// this is a bit of white box testing
 		// pre allocate the cidrs as per the test
@@ -644,7 +644,7 @@ func TestAllocateOrOccupyCIDRFailure(t *testing.T) {
 		}
 		rangeAllocator.nodesSynced = alwaysReady
 		rangeAllocator.recorder = testutil.NewFakeRecorder()
-		go allocator.Run(wait.NeverStop)
+		go allocator.Run(context.Background())
 
 		// this is a bit of white box testing
 		for setIdx, allocatedList := range tc.allocatedCIDRs {
@@ -779,7 +779,7 @@ func TestReleaseCIDRSuccess(t *testing.T) {
 		}
 		rangeAllocator.nodesSynced = alwaysReady
 		rangeAllocator.recorder = testutil.NewFakeRecorder()
-		go allocator.Run(wait.NeverStop)
+		go allocator.Run(context.Background())
 
 		// this is a bit of white box testing
 		for setIdx, allocatedList := range tc.allocatedCIDRs {
@@ -901,7 +901,7 @@ func TestRetryAllocatingPodCidr(t *testing.T) {
 		}
 		rangeAllocator.nodesSynced = alwaysReady
 		rangeAllocator.recorder = testutil.NewFakeRecorder()
-		go allocator.Run(wait.NeverStop)
+		go allocator.Run(context.Background())
 
 		if err := allocator.AllocateOrOccupyCIDR(tc.fakeNodeHandler.Existing[0]); err != nil {
 			t.Errorf("%v: unexpected error in AllocateOrOccupyCIDR: %v", tc.description, err)
