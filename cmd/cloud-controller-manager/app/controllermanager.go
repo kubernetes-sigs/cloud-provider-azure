@@ -125,7 +125,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 				}
 			}
 
-			healthHandler, err := StartHTTPServer(c.Complete(), traceProvider, wait.NeverStop)
+			healthHandler, err := StartHTTPServer(cmd.Context(), c.Complete(), traceProvider)
 			if err != nil {
 				klog.Errorf("Run: railed to start HTTP server: %v", err)
 				os.Exit(1)
@@ -212,15 +212,13 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 
 // RunWrapper adapts the ccm boot logic to the leader elector call back function
 func RunWrapper(s *options.CloudControllerManagerOptions, c *cloudcontrollerconfig.Config, h *controllerhealthz.MutableHealthzHandler) func(ctx context.Context) {
-	return func(_ context.Context) {
+	return func(ctx context.Context) {
 		if !c.DynamicReloadingConfig.EnableDynamicReloading {
 			klog.V(1).Infof("using static initialization from config file %s", c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile)
-			if err := Run(context.TODO(), c.Complete(), h); err != nil {
+			if err := Run(ctx, c.Complete(), h); err != nil {
 				klog.Errorf("RunWrapper: failed to start cloud controller manager: %v", err)
 				os.Exit(1)
 			}
-
-			panic("unreachable")
 		}
 		var updateCh chan struct{}
 
@@ -311,7 +309,7 @@ func runAsync(s *options.CloudControllerManagerOptions, errCh chan error, h *con
 }
 
 // StartHTTPServer starts the controller manager HTTP server
-func StartHTTPServer(c *cloudcontrollerconfig.CompletedConfig, traceProvider *trace.Provider, stopCh <-chan struct{}) (*controllerhealthz.MutableHealthzHandler, error) {
+func StartHTTPServer(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig, traceProvider *trace.Provider) (*controllerhealthz.MutableHealthzHandler, error) {
 	// Setup any healthz checks we will want to use.
 	var checks []healthz.HealthChecker
 	var electionChecker *leaderelection.HealthzAdaptor
@@ -329,7 +327,7 @@ func StartHTTPServer(c *cloudcontrollerconfig.CompletedConfig, traceProvider *tr
 
 		handler := genericcontrollermanager.BuildHandlerChain(unsecuredMux, &c.Authorization, &c.Authentication)
 		// TODO: handle stoppedCh returned by c.SecureServing.Serve
-		if _, _, err := c.SecureServing.Serve(handler, 0, stopCh); err != nil {
+		if _, _, err := c.SecureServing.Serve(handler, 0, ctx.Done()); err != nil {
 			return nil, err
 		}
 
@@ -387,7 +385,7 @@ func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig, h *contr
 		klog.Fatalf("error building controller context: %v", err)
 	}
 
-	if err := startControllers(ctx, controllerContext, c, ctx.Done(), cloud, newControllerInitializers(), h); err != nil {
+	if err := startControllers(ctx, controllerContext, c, cloud, newControllerInitializers(), h); err != nil {
 		klog.Fatalf("error running controllers: %v", err)
 	}
 
@@ -395,10 +393,10 @@ func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig, h *contr
 }
 
 // startControllers starts the cloud specific controller loops.
-func startControllers(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, stopCh <-chan struct{},
+func startControllers(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig,
 	cloud cloudprovider.Interface, controllers map[string]initFunc, healthzHandler *controllerhealthz.MutableHealthzHandler) error {
 	// Initialize the cloud provider with a reference to the clientBuilder
-	cloud.Initialize(completedConfig.ClientBuilder, stopCh)
+	cloud.Initialize(completedConfig.ClientBuilder, ctx.Done())
 	// Set the informer on the user cloud object
 	if informerUserCloud, ok := cloud.(cloudprovider.InformerUser); ok {
 		informerUserCloud.SetInformers(completedConfig.SharedInformers)
@@ -412,7 +410,7 @@ func startControllers(ctx context.Context, controllerContext genericcontrollerma
 		}
 
 		klog.V(1).Infof("Starting %q", controllerName)
-		ctrl, started, err := initFn(ctx, controllerContext, completedConfig, cloud, stopCh)
+		ctrl, started, err := initFn(ctx, controllerContext, completedConfig, cloud)
 		if err != nil {
 			klog.Errorf("Error starting %q: %s", controllerName, err.Error())
 			return err
@@ -445,10 +443,9 @@ func startControllers(ctx context.Context, controllerContext genericcontrollerma
 	}
 
 	klog.V(2).Infof("startControllers: starting shared informers")
-	completedConfig.SharedInformers.Start(stopCh)
-	controllerContext.InformerFactory.Start(stopCh)
-
-	<-stopCh
+	completedConfig.SharedInformers.Start(ctx.Done())
+	controllerContext.InformerFactory.Start(ctx.Done())
+	<-ctx.Done()
 	klog.V(1).Infof("startControllers: received stopping signal, exiting")
 
 	return nil
@@ -457,7 +454,7 @@ func startControllers(ctx context.Context, controllerContext genericcontrollerma
 // initFunc is used to launch a particular controller.  It may run additional "should I activate checks".
 // Any error returned will cause the controller process to `Fatal`
 // The bool indicates whether the controller was enabled.
-type initFunc func(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stop <-chan struct{}) (debuggingHandler http.Handler, enabled bool, err error)
+type initFunc func(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface) (debuggingHandler http.Handler, enabled bool, err error)
 
 // KnownControllers indicate the default controller we are known.
 func KnownControllers() []string {

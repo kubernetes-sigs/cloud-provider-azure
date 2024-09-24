@@ -70,7 +70,7 @@ type CIDRAllocator interface {
 	// ReleaseCIDR releases the CIDR of the removed node
 	ReleaseCIDR(node *corev1.Node) error
 	// Run starts all the working logic of the allocator.
-	Run(stopCh <-chan struct{})
+	Run(ctx context.Context)
 }
 
 // CIDRAllocatorParams is parameters that's required for creating new
