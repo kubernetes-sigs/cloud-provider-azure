@@ -43,7 +43,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/nodeipam/ipam"
 )
 
-func startCloudNodeController(_ context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
+func startCloudNodeController(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface) (http.Handler, bool, error) {
 	// Start the CloudNodeController
 	nodeController, err := nodecontroller.NewCloudNodeController(
 		completedConfig.SharedInformers.Core().V1().Nodes(),
@@ -58,12 +58,12 @@ func startCloudNodeController(_ context.Context, controllerContext genericcontro
 		return nil, false, nil
 	}
 
-	go nodeController.Run(stopCh, controllerContext.ControllerManagerMetrics)
+	go nodeController.RunWithContext(ctx, controllerContext.ControllerManagerMetrics)
 
 	return nil, true, nil
 }
 
-func startCloudNodeLifecycleController(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, _ <-chan struct{}) (http.Handler, bool, error) {
+func startCloudNodeLifecycleController(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface) (http.Handler, bool, error) {
 	// Start the cloudNodeLifecycleController
 	cloudNodeLifecycleController, err := nodelifecyclecontroller.NewCloudNodeLifecycleController(
 		completedConfig.SharedInformers.Core().V1().Nodes(),
@@ -74,7 +74,7 @@ func startCloudNodeLifecycleController(ctx context.Context, controllerContext ge
 	)
 	if err != nil {
 		klog.Warningf("failed to start cloud node lifecycle controller: %s", err)
-		return nil, false, nil
+		return nil, false, err
 	}
 
 	go cloudNodeLifecycleController.Run(ctx, controllerContext.ControllerManagerMetrics)
@@ -82,7 +82,7 @@ func startCloudNodeLifecycleController(ctx context.Context, controllerContext ge
 	return nil, true, nil
 }
 
-func startServiceController(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, _ <-chan struct{}) (http.Handler, bool, error) {
+func startServiceController(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface) (http.Handler, bool, error) {
 	// Start the service controller
 	serviceController, err := servicecontroller.New(
 		cloud,
@@ -103,7 +103,7 @@ func startServiceController(ctx context.Context, controllerContext genericcontro
 	return nil, true, nil
 }
 
-func startRouteController(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, _ <-chan struct{}) (http.Handler, bool, error) {
+func startRouteController(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface) (http.Handler, bool, error) {
 	if !completedConfig.ComponentConfig.KubeCloudShared.ConfigureCloudRoutes {
 		klog.Infof("Will not configure cloud provider routes, --configure-cloud-routes: %v.", completedConfig.ComponentConfig.KubeCloudShared.ConfigureCloudRoutes)
 		return nil, false, nil
@@ -144,7 +144,7 @@ func startRouteController(ctx context.Context, controllerContext genericcontroll
 	return nil, true, nil
 }
 
-func startNodeIpamController(_ context.Context, _ genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
+func startNodeIpamController(ctx context.Context, _ genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface) (http.Handler, bool, error) {
 	var serviceCIDR *net.IPNet
 	var secondaryServiceCIDR *net.IPNet
 
@@ -218,7 +218,7 @@ func startNodeIpamController(_ context.Context, _ genericcontrollermanager.Contr
 	if err != nil {
 		return nil, true, err
 	}
-	go nodeIpamController.Run(stopCh)
+	go nodeIpamController.Run(ctx)
 	return nil, true, nil
 }
 

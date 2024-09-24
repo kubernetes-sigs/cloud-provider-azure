@@ -17,6 +17,7 @@ limitations under the License.
 package nodeipam
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sync"
@@ -44,7 +45,6 @@ var (
 
 type rateLimiterMetric struct {
 	metric metrics.GaugeMetric
-	stopCh chan struct{}
 }
 
 // Controller is the controller that manages node ipam state.
@@ -82,10 +82,8 @@ func registerRateLimiterMetric(ownerName string) error {
 	if err := legacyregistry.Register(metric); err != nil {
 		return fmt.Errorf("error registering rate limiter usage metric: %w", err)
 	}
-	stopCh := make(chan struct{})
 	rateLimiterMetrics[ownerName] = &rateLimiterMetric{
 		metric: metric,
-		stopCh: stopCh,
 	}
 	return nil
 }
@@ -189,16 +187,15 @@ func NewNodeIpamController(
 }
 
 // Run starts an asynchronous loop that monitors the status of cluster nodes.
-func (nc *Controller) Run(stopCh <-chan struct{}) {
+func (nc *Controller) Run(ctx context.Context) {
 	defer utilruntime.HandleCrash()
 
 	klog.Infof("Starting ipam controller")
 	defer klog.Infof("Shutting down ipam controller")
 
-	if !cache.WaitForNamedCacheSync("node", stopCh, nc.nodeInformerSynced) {
+	if !cache.WaitForNamedCacheSync("node", ctx.Done(), nc.nodeInformerSynced) {
 		return
 	}
 
-	go nc.cidrAllocator.Run(stopCh)
-	<-stopCh
+	nc.cidrAllocator.Run(ctx)
 }

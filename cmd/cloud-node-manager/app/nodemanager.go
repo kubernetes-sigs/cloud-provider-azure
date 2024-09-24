@@ -19,12 +19,10 @@ package app
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/server/healthz"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
@@ -52,26 +50,23 @@ func NewCloudNodeManagerCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:  "cloud-node-manager",
 		Long: `The Cloud node manager is a daemon that reconciles node information for its running node.`,
-		Run: func(cmd *cobra.Command, _ []string) {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			verflag.PrintAndExitIfRequested("Cloud Node Manager")
 			cliflag.PrintFlags(cmd.Flags())
 
 			c, err := s.Config()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "%v\n", err)
-				os.Exit(1)
+				return err
 			}
 
 			if err := initForOS(c.WindowsService); err != nil {
-				fmt.Fprintf(os.Stderr, "%v\n", err)
-				os.Exit(1)
+				return err
 			}
 
-			if err := Run(c, wait.NeverStop); err != nil {
-				fmt.Fprintf(os.Stderr, "%v\n", err)
-				os.Exit(1)
+			if err := Run(cmd.Context(), c); err != nil {
+				return err
 			}
-
+			return nil
 		},
 	}
 
@@ -98,7 +93,7 @@ func NewCloudNodeManagerCommand() *cobra.Command {
 }
 
 // Run runs the ExternalCMServer.  This should never exit.
-func Run(c *cloudnodeconfig.Config, stopCh <-chan struct{}) error {
+func Run(ctx context.Context, c *cloudnodeconfig.Config) error {
 	// To help debugging, immediately log version and nodeName
 	klog.Infof("Version: %+v", version.Get())
 	klog.Infof("NodeName: %s", c.NodeName)
@@ -110,13 +105,13 @@ func Run(c *cloudnodeconfig.Config, stopCh <-chan struct{}) error {
 		unsecuredMux := genericcontrollermanager.NewBaseHandler(&config.DebuggingConfiguration{}, healthzHandler)
 		handler := genericcontrollermanager.BuildHandlerChain(unsecuredMux, &c.Authorization, &c.Authentication)
 		// TODO: handle stoppedCh returned by c.SecureServing.Serve
-		if _, _, err := c.SecureServing.Serve(handler, 0, stopCh); err != nil {
+		if _, _, err := c.SecureServing.Serve(handler, 0, ctx.Done()); err != nil {
 			return err
 		}
 	}
 
 	run := func(ctx context.Context) {
-		if err := startControllers(ctx, c, ctx.Done(), healthzHandler); err != nil {
+		if err := startControllers(ctx, c, healthzHandler); err != nil {
 			klog.Fatalf("error running controllers: %v", err)
 		}
 	}
@@ -126,7 +121,7 @@ func Run(c *cloudnodeconfig.Config, stopCh <-chan struct{}) error {
 }
 
 // startControllers starts the cloud specific controller loops.
-func startControllers(ctx context.Context, c *cloudnodeconfig.Config, stopCh <-chan struct{}, healthzHandler *controllerhealthz.MutableHealthzHandler) error {
+func startControllers(ctx context.Context, c *cloudnodeconfig.Config, healthzHandler *controllerhealthz.MutableHealthzHandler) error {
 	klog.V(1).Infof("Starting cloud-node-manager...")
 
 	// Start the CloudNodeController
@@ -140,7 +135,7 @@ func startControllers(ctx context.Context, c *cloudnodeconfig.Config, stopCh <-c
 		c.WaitForRoutes,
 		c.EnableDeprecatedBetaTopologyLabels)
 
-	go nodeController.Run(stopCh)
+	go nodeController.Run(ctx)
 
 	check := controllerhealthz.NamedPingChecker(c.NodeName)
 	healthzHandler.AddHealthChecker(check)
@@ -153,7 +148,7 @@ func startControllers(ctx context.Context, c *cloudnodeconfig.Config, stopCh <-c
 		klog.Fatalf("Failed to wait for apiserver being healthy: %v", err)
 	}
 
-	c.SharedInformers.Start(stopCh)
+	c.SharedInformers.Start(ctx.Done())
 
 	select {}
 }
