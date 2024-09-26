@@ -53,21 +53,55 @@ func IsAll[T any](f func(T) bool, xs []T) bool {
 	return true
 }
 
-func IndexSet[T comparable](xs []T) map[T]bool {
-	rv := make(map[T]bool, len(xs))
+func PlanHashCode[D comparable](data D) D { return data }
+
+func IndexSet[D comparable](xs []D) *IndexSetWithComparableIndex[D, D] {
+	return NewIndexSetWithComparableIndex(PlanHashCode, xs)
+}
+
+type IndexSetWithComparableIndex[I comparable, D any] struct {
+	hashCode func(data D) I
+	data     map[I]D
+}
+
+func NewIndexSetWithComparableIndex[I comparable, D any](hashCode func(data D) I, xs []D) *IndexSetWithComparableIndex[I, D] {
+	if hashCode == nil {
+		panic("hashCode must not be nil")
+	}
+	rv := make(map[I]D, len(xs))
 	for _, x := range xs {
-		rv[x] = true
+		rv[hashCode(x)] = x
+	}
+	return &IndexSetWithComparableIndex[I, D]{
+		data:     rv,
+		hashCode: hashCode,
+	}
+}
+func (xs *IndexSetWithComparableIndex[I, D]) Contains(data D) bool {
+	_, ok := xs.data[xs.hashCode(data)]
+	return ok
+}
+
+func (xs *IndexSetWithComparableIndex[I, D]) Intersection(ys []D) []D {
+	var rv []D
+	for _, y := range ys {
+		if xs.Contains(y) {
+			rv = append(rv, y)
+		}
 	}
 	return rv
 }
 
-func Intersection[T comparable](xs, ys []T) []T {
-	ysSet := IndexSet(ys)
-	var rv []T
-	for _, x := range xs {
-		if ysSet[x] {
-			rv = append(rv, x)
+func (xs *IndexSetWithComparableIndex[I, D]) SubtractedBy(ys []D) []D {
+	var rv []D
+	for _, y := range ys {
+		if !xs.Contains(y) {
+			rv = append(rv, y)
 		}
 	}
 	return rv
+}
+
+func Intersection[D comparable](xs, ys []D) []D {
+	return IndexSet(xs).Intersection(ys)
 }
