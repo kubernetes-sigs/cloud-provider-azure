@@ -21,67 +21,67 @@ import (
 	"strings"
 )
 
-// AdminRulesClient contains the methods for the AdminRules group.
-// Don't use this type directly, use NewAdminRulesClient() instead.
-type AdminRulesClient struct {
+// RoutingRulesClient contains the methods for the RoutingRules group.
+// Don't use this type directly, use NewRoutingRulesClient() instead.
+type RoutingRulesClient struct {
 	internal       *arm.Client
 	subscriptionID string
 }
 
-// NewAdminRulesClient creates a new instance of AdminRulesClient with the specified values.
+// NewRoutingRulesClient creates a new instance of RoutingRulesClient with the specified values.
 //   - subscriptionID - The subscription credentials which uniquely identify the Microsoft Azure subscription. The subscription
 //     ID forms part of the URI for every service call.
 //   - credential - used to authorize requests. Usually a credential from azidentity.
 //   - options - pass nil to accept the default values.
-func NewAdminRulesClient(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (*AdminRulesClient, error) {
+func NewRoutingRulesClient(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (*RoutingRulesClient, error) {
 	cl, err := arm.NewClient(moduleName, moduleVersion, credential, options)
 	if err != nil {
 		return nil, err
 	}
-	client := &AdminRulesClient{
+	client := &RoutingRulesClient{
 		subscriptionID: subscriptionID,
 		internal:       cl,
 	}
 	return client, nil
 }
 
-// CreateOrUpdate - Creates or updates an admin rule.
+// CreateOrUpdate - Creates or updates an routing rule.
 // If the operation fails it returns an *azcore.ResponseError type.
 //
 // Generated from API version 2024-03-01
-//   - resourceGroupName - The name of the resource group.
+//   - resourceGroupName - The name of the resource group. The name is case insensitive.
 //   - networkManagerName - The name of the network manager.
-//   - configurationName - The name of the network manager Security Configuration.
-//   - ruleCollectionName - The name of the network manager security Configuration rule collection.
+//   - configurationName - The name of the network manager Routing Configuration.
+//   - ruleCollectionName - The name of the network manager routing Configuration rule collection.
 //   - ruleName - The name of the rule.
-//   - adminRule - The admin rule to create or update
-//   - options - AdminRulesClientCreateOrUpdateOptions contains the optional parameters for the AdminRulesClient.CreateOrUpdate
+//   - routingRule - The routing rule to create or update
+//   - options - RoutingRulesClientCreateOrUpdateOptions contains the optional parameters for the RoutingRulesClient.CreateOrUpdate
 //     method.
-func (client *AdminRulesClient) CreateOrUpdate(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, ruleCollectionName string, ruleName string, adminRule BaseAdminRuleClassification, options *AdminRulesClientCreateOrUpdateOptions) (AdminRulesClientCreateOrUpdateResponse, error) {
+func (client *RoutingRulesClient) CreateOrUpdate(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, ruleCollectionName string, ruleName string, routingRule RoutingRule, options *RoutingRulesClientCreateOrUpdateOptions) (RoutingRulesClientCreateOrUpdateResponse, error) {
 	var err error
-	const operationName = "AdminRulesClient.CreateOrUpdate"
+	const operationName = "RoutingRulesClient.CreateOrUpdate"
 	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
 	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
 	defer func() { endSpan(err) }()
-	req, err := client.createOrUpdateCreateRequest(ctx, resourceGroupName, networkManagerName, configurationName, ruleCollectionName, ruleName, adminRule, options)
+	req, err := client.createOrUpdateCreateRequest(ctx, resourceGroupName, networkManagerName, configurationName, ruleCollectionName, ruleName, routingRule, options)
 	if err != nil {
-		return AdminRulesClientCreateOrUpdateResponse{}, err
+		return RoutingRulesClientCreateOrUpdateResponse{}, err
 	}
 	httpResp, err := client.internal.Pipeline().Do(req)
 	if err != nil {
-		return AdminRulesClientCreateOrUpdateResponse{}, err
+		return RoutingRulesClientCreateOrUpdateResponse{}, err
 	}
 	if !runtime.HasStatusCode(httpResp, http.StatusOK, http.StatusCreated) {
 		err = runtime.NewResponseError(httpResp)
-		return AdminRulesClientCreateOrUpdateResponse{}, err
+		return RoutingRulesClientCreateOrUpdateResponse{}, err
 	}
 	resp, err := client.createOrUpdateHandleResponse(httpResp)
 	return resp, err
 }
 
 // createOrUpdateCreateRequest creates the CreateOrUpdate request.
-func (client *AdminRulesClient) createOrUpdateCreateRequest(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, ruleCollectionName string, ruleName string, adminRule BaseAdminRuleClassification, options *AdminRulesClientCreateOrUpdateOptions) (*policy.Request, error) {
-	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/networkManagers/{networkManagerName}/securityAdminConfigurations/{configurationName}/ruleCollections/{ruleCollectionName}/rules/{ruleName}"
+func (client *RoutingRulesClient) createOrUpdateCreateRequest(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, ruleCollectionName string, ruleName string, routingRule RoutingRule, options *RoutingRulesClientCreateOrUpdateOptions) (*policy.Request, error) {
+	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/networkManagers/{networkManagerName}/routingConfigurations/{configurationName}/ruleCollections/{ruleCollectionName}/rules/{ruleName}"
 	if client.subscriptionID == "" {
 		return nil, errors.New("parameter client.subscriptionID cannot be empty")
 	}
@@ -114,56 +114,57 @@ func (client *AdminRulesClient) createOrUpdateCreateRequest(ctx context.Context,
 	reqQP.Set("api-version", "2024-03-01")
 	req.Raw().URL.RawQuery = reqQP.Encode()
 	req.Raw().Header["Accept"] = []string{"application/json"}
-	if err := runtime.MarshalAsJSON(req, adminRule); err != nil {
+	if err := runtime.MarshalAsJSON(req, routingRule); err != nil {
 		return nil, err
 	}
 	return req, nil
 }
 
 // createOrUpdateHandleResponse handles the CreateOrUpdate response.
-func (client *AdminRulesClient) createOrUpdateHandleResponse(resp *http.Response) (AdminRulesClientCreateOrUpdateResponse, error) {
-	result := AdminRulesClientCreateOrUpdateResponse{}
-	if err := runtime.UnmarshalAsJSON(resp, &result); err != nil {
-		return AdminRulesClientCreateOrUpdateResponse{}, err
+func (client *RoutingRulesClient) createOrUpdateHandleResponse(resp *http.Response) (RoutingRulesClientCreateOrUpdateResponse, error) {
+	result := RoutingRulesClientCreateOrUpdateResponse{}
+	if err := runtime.UnmarshalAsJSON(resp, &result.RoutingRule); err != nil {
+		return RoutingRulesClientCreateOrUpdateResponse{}, err
 	}
 	return result, nil
 }
 
-// BeginDelete - Deletes an admin rule.
+// BeginDelete - Deletes a routing rule.
 // If the operation fails it returns an *azcore.ResponseError type.
 //
 // Generated from API version 2024-03-01
-//   - resourceGroupName - The name of the resource group.
+//   - resourceGroupName - The name of the resource group. The name is case insensitive.
 //   - networkManagerName - The name of the network manager.
-//   - configurationName - The name of the network manager Security Configuration.
-//   - ruleCollectionName - The name of the network manager security Configuration rule collection.
+//   - configurationName - The name of the network manager Routing Configuration.
+//   - ruleCollectionName - The name of the network manager routing Configuration rule collection.
 //   - ruleName - The name of the rule.
-//   - options - AdminRulesClientBeginDeleteOptions contains the optional parameters for the AdminRulesClient.BeginDelete method.
-func (client *AdminRulesClient) BeginDelete(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, ruleCollectionName string, ruleName string, options *AdminRulesClientBeginDeleteOptions) (*runtime.Poller[AdminRulesClientDeleteResponse], error) {
+//   - options - RoutingRulesClientBeginDeleteOptions contains the optional parameters for the RoutingRulesClient.BeginDelete
+//     method.
+func (client *RoutingRulesClient) BeginDelete(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, ruleCollectionName string, ruleName string, options *RoutingRulesClientBeginDeleteOptions) (*runtime.Poller[RoutingRulesClientDeleteResponse], error) {
 	if options == nil || options.ResumeToken == "" {
 		resp, err := client.deleteOperation(ctx, resourceGroupName, networkManagerName, configurationName, ruleCollectionName, ruleName, options)
 		if err != nil {
 			return nil, err
 		}
-		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[AdminRulesClientDeleteResponse]{
+		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[RoutingRulesClientDeleteResponse]{
 			FinalStateVia: runtime.FinalStateViaLocation,
 			Tracer:        client.internal.Tracer(),
 		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[AdminRulesClientDeleteResponse]{
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[RoutingRulesClientDeleteResponse]{
 			Tracer: client.internal.Tracer(),
 		})
 	}
 }
 
-// Delete - Deletes an admin rule.
+// Delete - Deletes a routing rule.
 // If the operation fails it returns an *azcore.ResponseError type.
 //
 // Generated from API version 2024-03-01
-func (client *AdminRulesClient) deleteOperation(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, ruleCollectionName string, ruleName string, options *AdminRulesClientBeginDeleteOptions) (*http.Response, error) {
+func (client *RoutingRulesClient) deleteOperation(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, ruleCollectionName string, ruleName string, options *RoutingRulesClientBeginDeleteOptions) (*http.Response, error) {
 	var err error
-	const operationName = "AdminRulesClient.BeginDelete"
+	const operationName = "RoutingRulesClient.BeginDelete"
 	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
 	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
 	defer func() { endSpan(err) }()
@@ -183,8 +184,8 @@ func (client *AdminRulesClient) deleteOperation(ctx context.Context, resourceGro
 }
 
 // deleteCreateRequest creates the Delete request.
-func (client *AdminRulesClient) deleteCreateRequest(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, ruleCollectionName string, ruleName string, options *AdminRulesClientBeginDeleteOptions) (*policy.Request, error) {
-	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/networkManagers/{networkManagerName}/securityAdminConfigurations/{configurationName}/ruleCollections/{ruleCollectionName}/rules/{ruleName}"
+func (client *RoutingRulesClient) deleteCreateRequest(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, ruleCollectionName string, ruleName string, options *RoutingRulesClientBeginDeleteOptions) (*policy.Request, error) {
+	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/networkManagers/{networkManagerName}/routingConfigurations/{configurationName}/ruleCollections/{ruleCollectionName}/rules/{ruleName}"
 	if client.subscriptionID == "" {
 		return nil, errors.New("parameter client.subscriptionID cannot be empty")
 	}
@@ -223,41 +224,41 @@ func (client *AdminRulesClient) deleteCreateRequest(ctx context.Context, resourc
 	return req, nil
 }
 
-// Get - Gets a network manager security configuration admin rule.
+// Get - Gets a network manager routing configuration routing rule.
 // If the operation fails it returns an *azcore.ResponseError type.
 //
 // Generated from API version 2024-03-01
-//   - resourceGroupName - The name of the resource group.
+//   - resourceGroupName - The name of the resource group. The name is case insensitive.
 //   - networkManagerName - The name of the network manager.
-//   - configurationName - The name of the network manager Security Configuration.
-//   - ruleCollectionName - The name of the network manager security Configuration rule collection.
+//   - configurationName - The name of the network manager Routing Configuration.
+//   - ruleCollectionName - The name of the network manager routing Configuration rule collection.
 //   - ruleName - The name of the rule.
-//   - options - AdminRulesClientGetOptions contains the optional parameters for the AdminRulesClient.Get method.
-func (client *AdminRulesClient) Get(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, ruleCollectionName string, ruleName string, options *AdminRulesClientGetOptions) (AdminRulesClientGetResponse, error) {
+//   - options - RoutingRulesClientGetOptions contains the optional parameters for the RoutingRulesClient.Get method.
+func (client *RoutingRulesClient) Get(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, ruleCollectionName string, ruleName string, options *RoutingRulesClientGetOptions) (RoutingRulesClientGetResponse, error) {
 	var err error
-	const operationName = "AdminRulesClient.Get"
+	const operationName = "RoutingRulesClient.Get"
 	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
 	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
 	defer func() { endSpan(err) }()
 	req, err := client.getCreateRequest(ctx, resourceGroupName, networkManagerName, configurationName, ruleCollectionName, ruleName, options)
 	if err != nil {
-		return AdminRulesClientGetResponse{}, err
+		return RoutingRulesClientGetResponse{}, err
 	}
 	httpResp, err := client.internal.Pipeline().Do(req)
 	if err != nil {
-		return AdminRulesClientGetResponse{}, err
+		return RoutingRulesClientGetResponse{}, err
 	}
 	if !runtime.HasStatusCode(httpResp, http.StatusOK) {
 		err = runtime.NewResponseError(httpResp)
-		return AdminRulesClientGetResponse{}, err
+		return RoutingRulesClientGetResponse{}, err
 	}
 	resp, err := client.getHandleResponse(httpResp)
 	return resp, err
 }
 
 // getCreateRequest creates the Get request.
-func (client *AdminRulesClient) getCreateRequest(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, ruleCollectionName string, ruleName string, options *AdminRulesClientGetOptions) (*policy.Request, error) {
-	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/networkManagers/{networkManagerName}/securityAdminConfigurations/{configurationName}/ruleCollections/{ruleCollectionName}/rules/{ruleName}"
+func (client *RoutingRulesClient) getCreateRequest(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, ruleCollectionName string, ruleName string, options *RoutingRulesClientGetOptions) (*policy.Request, error) {
+	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/networkManagers/{networkManagerName}/routingConfigurations/{configurationName}/ruleCollections/{ruleCollectionName}/rules/{ruleName}"
 	if client.subscriptionID == "" {
 		return nil, errors.New("parameter client.subscriptionID cannot be empty")
 	}
@@ -294,29 +295,29 @@ func (client *AdminRulesClient) getCreateRequest(ctx context.Context, resourceGr
 }
 
 // getHandleResponse handles the Get response.
-func (client *AdminRulesClient) getHandleResponse(resp *http.Response) (AdminRulesClientGetResponse, error) {
-	result := AdminRulesClientGetResponse{}
-	if err := runtime.UnmarshalAsJSON(resp, &result); err != nil {
-		return AdminRulesClientGetResponse{}, err
+func (client *RoutingRulesClient) getHandleResponse(resp *http.Response) (RoutingRulesClientGetResponse, error) {
+	result := RoutingRulesClientGetResponse{}
+	if err := runtime.UnmarshalAsJSON(resp, &result.RoutingRule); err != nil {
+		return RoutingRulesClientGetResponse{}, err
 	}
 	return result, nil
 }
 
-// NewListPager - List all network manager security configuration admin rules.
+// NewListPager - List all network manager routing configuration routing rules.
 //
 // Generated from API version 2024-03-01
-//   - resourceGroupName - The name of the resource group.
+//   - resourceGroupName - The name of the resource group. The name is case insensitive.
 //   - networkManagerName - The name of the network manager.
-//   - configurationName - The name of the network manager Security Configuration.
-//   - ruleCollectionName - The name of the network manager security Configuration rule collection.
-//   - options - AdminRulesClientListOptions contains the optional parameters for the AdminRulesClient.NewListPager method.
-func (client *AdminRulesClient) NewListPager(resourceGroupName string, networkManagerName string, configurationName string, ruleCollectionName string, options *AdminRulesClientListOptions) *runtime.Pager[AdminRulesClientListResponse] {
-	return runtime.NewPager(runtime.PagingHandler[AdminRulesClientListResponse]{
-		More: func(page AdminRulesClientListResponse) bool {
+//   - configurationName - The name of the network manager Routing Configuration.
+//   - ruleCollectionName - The name of the network manager routing Configuration rule collection.
+//   - options - RoutingRulesClientListOptions contains the optional parameters for the RoutingRulesClient.NewListPager method.
+func (client *RoutingRulesClient) NewListPager(resourceGroupName string, networkManagerName string, configurationName string, ruleCollectionName string, options *RoutingRulesClientListOptions) *runtime.Pager[RoutingRulesClientListResponse] {
+	return runtime.NewPager(runtime.PagingHandler[RoutingRulesClientListResponse]{
+		More: func(page RoutingRulesClientListResponse) bool {
 			return page.NextLink != nil && len(*page.NextLink) > 0
 		},
-		Fetcher: func(ctx context.Context, page *AdminRulesClientListResponse) (AdminRulesClientListResponse, error) {
-			ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, "AdminRulesClient.NewListPager")
+		Fetcher: func(ctx context.Context, page *RoutingRulesClientListResponse) (RoutingRulesClientListResponse, error) {
+			ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, "RoutingRulesClient.NewListPager")
 			nextLink := ""
 			if page != nil {
 				nextLink = *page.NextLink
@@ -325,7 +326,7 @@ func (client *AdminRulesClient) NewListPager(resourceGroupName string, networkMa
 				return client.listCreateRequest(ctx, resourceGroupName, networkManagerName, configurationName, ruleCollectionName, options)
 			}, nil)
 			if err != nil {
-				return AdminRulesClientListResponse{}, err
+				return RoutingRulesClientListResponse{}, err
 			}
 			return client.listHandleResponse(resp)
 		},
@@ -334,8 +335,8 @@ func (client *AdminRulesClient) NewListPager(resourceGroupName string, networkMa
 }
 
 // listCreateRequest creates the List request.
-func (client *AdminRulesClient) listCreateRequest(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, ruleCollectionName string, options *AdminRulesClientListOptions) (*policy.Request, error) {
-	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/networkManagers/{networkManagerName}/securityAdminConfigurations/{configurationName}/ruleCollections/{ruleCollectionName}/rules"
+func (client *RoutingRulesClient) listCreateRequest(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, ruleCollectionName string, options *RoutingRulesClientListOptions) (*policy.Request, error) {
+	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/networkManagers/{networkManagerName}/routingConfigurations/{configurationName}/ruleCollections/{ruleCollectionName}/rules"
 	if client.subscriptionID == "" {
 		return nil, errors.New("parameter client.subscriptionID cannot be empty")
 	}
@@ -374,10 +375,10 @@ func (client *AdminRulesClient) listCreateRequest(ctx context.Context, resourceG
 }
 
 // listHandleResponse handles the List response.
-func (client *AdminRulesClient) listHandleResponse(resp *http.Response) (AdminRulesClientListResponse, error) {
-	result := AdminRulesClientListResponse{}
-	if err := runtime.UnmarshalAsJSON(resp, &result.AdminRuleListResult); err != nil {
-		return AdminRulesClientListResponse{}, err
+func (client *RoutingRulesClient) listHandleResponse(resp *http.Response) (RoutingRulesClientListResponse, error) {
+	result := RoutingRulesClientListResponse{}
+	if err := runtime.UnmarshalAsJSON(resp, &result.RoutingRuleListResult); err != nil {
+		return RoutingRulesClientListResponse{}, err
 	}
 	return result, nil
 }
