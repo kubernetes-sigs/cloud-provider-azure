@@ -17,6 +17,7 @@ limitations under the License.
 package ipam
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
@@ -50,7 +51,6 @@ func hasNodeInProcessing(ca *cloudCIDRAllocator, name string) bool {
 func TestBoundedRetries(_ *testing.T) {
 	clientSet := fake.NewSimpleClientset()
 	updateChan := make(chan nodeReservedCIDRs, 1) // need to buffer as we are using only on go routine
-	stopChan := make(chan struct{})
 	sharedInfomer := informers.NewSharedInformerFactory(clientSet, 1*time.Hour)
 	ca := &cloudCIDRAllocator{
 		client:            clientSet,
@@ -59,7 +59,7 @@ func TestBoundedRetries(_ *testing.T) {
 		nodesSynced:       sharedInfomer.Core().V1().Nodes().Informer().HasSynced,
 		nodesInProcessing: map[string]struct{}{},
 	}
-	go ca.worker(stopChan)
+	go ca.worker(context.Background())
 	nodeName := "testNode"
 	_ = ca.AllocateOrOccupyCIDR(&v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
