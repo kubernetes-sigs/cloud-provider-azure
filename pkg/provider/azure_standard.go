@@ -28,9 +28,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -168,27 +168,27 @@ func getLastSegment(ID, separator string) (string, error) {
 
 // returns the equivalent LoadBalancerRule, SecurityRule and LoadBalancerProbe
 // protocol types for the given Kubernetes protocol type.
-func getProtocolsFromKubernetesProtocol(protocol v1.Protocol) (*network.TransportProtocol, *network.SecurityRuleProtocol, *network.ProbeProtocol, error) {
+func getProtocolsFromKubernetesProtocol(protocol v1.Protocol) (*network.TransportProtocol, armnetwork.SecurityRuleProtocol, *network.ProbeProtocol, error) {
 	var transportProto network.TransportProtocol
-	var securityProto network.SecurityRuleProtocol
+	var securityProto armnetwork.SecurityRuleProtocol
 	var probeProto network.ProbeProtocol
 
 	switch protocol {
 	case v1.ProtocolTCP:
 		transportProto = network.TransportProtocolTCP
-		securityProto = network.SecurityRuleProtocolTCP
+		securityProto = armnetwork.SecurityRuleProtocolTCP
 		probeProto = network.ProbeProtocolTCP
-		return &transportProto, &securityProto, &probeProto, nil
+		return &transportProto, securityProto, &probeProto, nil
 	case v1.ProtocolUDP:
 		transportProto = network.TransportProtocolUDP
-		securityProto = network.SecurityRuleProtocolUDP
-		return &transportProto, &securityProto, nil, nil
+		securityProto = armnetwork.SecurityRuleProtocolUDP
+		return &transportProto, securityProto, nil, nil
 	case v1.ProtocolSCTP:
 		transportProto = network.TransportProtocolAll
-		securityProto = network.SecurityRuleProtocolAsterisk
-		return &transportProto, &securityProto, nil, nil
+		securityProto = armnetwork.SecurityRuleProtocolAsterisk
+		return &transportProto, securityProto, nil, nil
 	default:
-		return &transportProto, &securityProto, &probeProto, fmt.Errorf("only TCP, UDP and SCTP are supported for Azure LoadBalancers")
+		return &transportProto, securityProto, &probeProto, fmt.Errorf("only TCP, UDP and SCTP are supported for Azure LoadBalancers")
 	}
 
 }
@@ -367,14 +367,14 @@ func publicIPOwnsFrontendIP(service *v1.Service, fip *network.FrontendIPConfigur
 }
 
 // This returns the next available rule priority level for a given set of security rules.
-func getNextAvailablePriority(rules []network.SecurityRule) (int32, error) {
+func getNextAvailablePriority(rules []*armnetwork.SecurityRule) (int32, error) {
 	var smallest int32 = consts.LoadBalancerMinimumPriority
 	var spread int32 = 1
 
 outer:
 	for smallest < consts.LoadBalancerMaximumPriority {
 		for _, rule := range rules {
-			if *rule.Priority == smallest {
+			if *rule.Properties.Priority == smallest {
 				smallest += spread
 				continue outer
 			}

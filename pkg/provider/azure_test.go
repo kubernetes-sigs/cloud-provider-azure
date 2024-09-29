@@ -27,12 +27,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
-
 	"go.uber.org/mock/gomock"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -42,15 +41,16 @@ import (
 	cloudproviderapi "k8s.io/cloud-provider/api"
 	servicehelpers "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatelinkserviceclient/mockprivatelinkserviceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/securitygroupclient/mocksecuritygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient/mockzoneclient"
@@ -180,7 +180,7 @@ func setMockEnvDualStack(az *Cloud, ctrl *gomock.Controller, expectedInterfaces 
 	setMockPublicIPs(az, ctrl, serviceCount, true, true)
 
 	sg := getTestSecurityGroupDualStack(az, services...)
-	setMockSecurityGroup(az, ctrl, sg)
+	setMockSecurityGroup(az, sg)
 }
 
 func setMockEnv(az *Cloud, ctrl *gomock.Controller, expectedInterfaces []network.Interface, expectedVirtualMachines []compute.VirtualMachine, serviceCount int, services ...v1.Service) {
@@ -201,7 +201,7 @@ func setMockEnv(az *Cloud, ctrl *gomock.Controller, expectedInterfaces []network
 	setMockPublicIPs(az, ctrl, serviceCount, true, false)
 
 	sg := getTestSecurityGroup(az, services...)
-	setMockSecurityGroup(az, ctrl, sg)
+	setMockSecurityGroup(az, sg)
 }
 
 func setMockPublicIPs(az *Cloud, ctrl *gomock.Controller, serviceCount int, v4Enabled, v6Enabled bool) {
@@ -284,13 +284,13 @@ func setMockPublicIP(az *Cloud, mockPIPsClient *mockpublicipclient.MockInterface
 	return expectedPIPs
 }
 
-func setMockSecurityGroup(az *Cloud, ctrl *gomock.Controller, sgs ...*network.SecurityGroup) {
-	mockSGsClient := mocksecuritygroupclient.NewMockInterface(ctrl)
-	az.SecurityGroupsClient = mockSGsClient
+func setMockSecurityGroup(az *Cloud, sgs ...*armnetwork.SecurityGroup) {
+	clientFactory := az.NetworkClientFactory.(*mock_azclient.MockClientFactory)
+	mockSGsClient := clientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
 	for _, sg := range sgs {
-		mockSGsClient.EXPECT().Get(gomock.Any(), az.SecurityGroupResourceGroup, az.SecurityGroupName, gomock.Any()).Return(*sg, nil).AnyTimes()
+		mockSGsClient.EXPECT().Get(gomock.Any(), az.SecurityGroupResourceGroup, az.SecurityGroupName).Return(sg, nil).AnyTimes()
 	}
-	mockSGsClient.EXPECT().CreateOrUpdate(gomock.Any(), az.SecurityGroupResourceGroup, az.SecurityGroupName, gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockSGsClient.EXPECT().CreateOrUpdate(gomock.Any(), az.SecurityGroupResourceGroup, az.SecurityGroupName, gomock.Any()).Return(nil, nil).AnyTimes()
 }
 
 func setMockLBsDualStack(az *Cloud, ctrl *gomock.Controller, expectedLBs *[]network.LoadBalancer, svcName string, lbCount, serviceIndex int, isInternal bool) string {
@@ -1692,17 +1692,17 @@ func getServiceSourceRanges(service *v1.Service) []string {
 	return service.Spec.LoadBalancerSourceRanges
 }
 
-func getTestSecurityGroupCommon(az *Cloud, v4Enabled, v6Enabled bool, services ...v1.Service) *network.SecurityGroup {
-	rules := []network.SecurityRule{}
+func getTestSecurityGroupCommon(az *Cloud, v4Enabled, v6Enabled bool, services ...v1.Service) *armnetwork.SecurityGroup {
+	rules := []*armnetwork.SecurityRule{}
 	for i, service := range services {
 		for _, port := range service.Spec.Ports {
-			getRule := func(svc *v1.Service, port v1.ServicePort, src string, isIPv6 bool) network.SecurityRule {
+			getRule := func(svc *v1.Service, port v1.ServicePort, src string, isIPv6 bool) *armnetwork.SecurityRule {
 				ruleName := az.getSecurityRuleName(svc, port, src, isIPv6)
-				return network.SecurityRule{
-					Name: pointer.String(ruleName),
-					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
-						SourceAddressPrefix:  pointer.String(src),
-						DestinationPortRange: pointer.String(fmt.Sprintf("%d", port.Port)),
+				return &armnetwork.SecurityRule{
+					Name: ptr.To(ruleName),
+					Properties: &armnetwork.SecurityRulePropertiesFormat{
+						SourceAddressPrefix:  ptr.To(src),
+						DestinationPortRange: ptr.To(fmt.Sprintf("%d", port.Port)),
 					},
 				}
 			}
@@ -1721,22 +1721,22 @@ func getTestSecurityGroupCommon(az *Cloud, v4Enabled, v6Enabled bool, services .
 		}
 	}
 
-	sg := network.SecurityGroup{
+	sg := armnetwork.SecurityGroup{
 		Name: &az.SecurityGroupName,
-		Etag: pointer.String("0000000-0000-0000-0000-000000000000"),
-		SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
-			SecurityRules: &rules,
+		Etag: ptr.To("0000000-0000-0000-0000-000000000000"),
+		Properties: &armnetwork.SecurityGroupPropertiesFormat{
+			SecurityRules: rules,
 		},
 	}
 
 	return &sg
 }
 
-func getTestSecurityGroupDualStack(az *Cloud, services ...v1.Service) *network.SecurityGroup {
+func getTestSecurityGroupDualStack(az *Cloud, services ...v1.Service) *armnetwork.SecurityGroup {
 	return getTestSecurityGroupCommon(az, true, true, services...)
 }
 
-func getTestSecurityGroup(az *Cloud, services ...v1.Service) *network.SecurityGroup {
+func getTestSecurityGroup(az *Cloud, services ...v1.Service) *armnetwork.SecurityGroup {
 	return getTestSecurityGroupCommon(az, true, false, services...)
 }
 
@@ -1943,25 +1943,25 @@ func validatePublicIP(t *testing.T, publicIP *network.PublicIPAddress, service *
 }
 
 func TestGetNextAvailablePriority(t *testing.T) {
-	rules50, rulesTooMany := []network.SecurityRule{}, []network.SecurityRule{}
+	rules50, rulesTooMany := []*armnetwork.SecurityRule{}, []*armnetwork.SecurityRule{}
 	for i := int32(consts.LoadBalancerMinimumPriority); i < consts.LoadBalancerMinimumPriority+50; i++ {
-		rules50 = append(rules50, network.SecurityRule{
-			SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
-				Priority: pointer.Int32(i),
+		rules50 = append(rules50, &armnetwork.SecurityRule{
+			Properties: &armnetwork.SecurityRulePropertiesFormat{
+				Priority: ptr.To(i),
 			},
 		})
 	}
 	for i := int32(consts.LoadBalancerMinimumPriority); i < consts.LoadBalancerMaximumPriority; i++ {
-		rulesTooMany = append(rulesTooMany, network.SecurityRule{
-			SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
-				Priority: pointer.Int32(i),
+		rulesTooMany = append(rulesTooMany, &armnetwork.SecurityRule{
+			Properties: &armnetwork.SecurityRulePropertiesFormat{
+				Priority: ptr.To(i),
 			},
 		})
 	}
 
 	testcases := []struct {
 		desc             string
-		rules            []network.SecurityRule
+		rules            []*armnetwork.SecurityRule
 		lastPriority     int32
 		expectErr        bool
 		expectedPriority int32
@@ -2003,7 +2003,7 @@ func TestProtocolTranslationTCP(t *testing.T) {
 	if *transportProto != network.TransportProtocolTCP {
 		t.Errorf("Expected TCP LoadBalancer Rule Protocol. Got %v", transportProto)
 	}
-	if *securityGroupProto != network.SecurityRuleProtocolTCP {
+	if securityGroupProto != armnetwork.SecurityRuleProtocolTCP {
 		t.Errorf("Expected TCP SecurityGroup Protocol. Got %v", transportProto)
 	}
 	if *probeProto != network.ProbeProtocolTCP {
@@ -2017,7 +2017,7 @@ func TestProtocolTranslationUDP(t *testing.T) {
 	if *transportProto != network.TransportProtocolUDP {
 		t.Errorf("Expected UDP LoadBalancer Rule Protocol. Got %v", transportProto)
 	}
-	if *securityGroupProto != network.SecurityRuleProtocolUDP {
+	if securityGroupProto != armnetwork.SecurityRuleProtocolUDP {
 		t.Errorf("Expected UDP SecurityGroup Protocol. Got %v", transportProto)
 	}
 	if probeProto != nil {

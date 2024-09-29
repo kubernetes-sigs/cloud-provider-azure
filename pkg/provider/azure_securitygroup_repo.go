@@ -18,58 +18,72 @@ package provider
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 // CreateOrUpdateSecurityGroup invokes az.SecurityGroupsClient.CreateOrUpdate with exponential backoff retry
-func (az *Cloud) CreateOrUpdateSecurityGroup(sg network.SecurityGroup) error {
+func (az *Cloud) CreateOrUpdateSecurityGroup(sg *armnetwork.SecurityGroup) error {
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
-
-	rerr := az.SecurityGroupsClient.CreateOrUpdate(ctx, az.SecurityGroupResourceGroup, *sg.Name, sg, pointer.StringDeref(sg.Etag, ""))
+	clientFactory := az.NetworkClientFactory
+	if clientFactory == nil {
+		clientFactory = az.ComputeClientFactory
+	}
+	sgClient := clientFactory.GetSecurityGroupClient()
+	_, rerr := sgClient.CreateOrUpdate(ctx, az.SecurityGroupResourceGroup, *sg.Name, *sg)
 	klog.V(10).Infof("SecurityGroupsClient.CreateOrUpdate(%s): end", *sg.Name)
 	if rerr == nil {
 		// Invalidate the cache right after updating
 		_ = az.nsgCache.Delete(*sg.Name)
 		return nil
 	}
+	var respError *azcore.ResponseError
+	if errors.As(rerr, &respError) && respError != nil {
+		nsgJSON, _ := json.Marshal(sg)
+		klog.Warningf("CreateOrUpdateSecurityGroup(%s) failed: %v, NSG request: %s", ptr.Deref(sg.Name, ""), rerr.Error(), string(nsgJSON))
 
-	nsgJSON, _ := json.Marshal(sg)
-	klog.Warningf("CreateOrUpdateSecurityGroup(%s) failed: %v, NSG request: %s", pointer.StringDeref(sg.Name, ""), rerr.Error(), string(nsgJSON))
+		// Invalidate the cache because ETAG precondition mismatch.
+		if respError.StatusCode == http.StatusPreconditionFailed {
+			klog.V(3).Infof("SecurityGroup cache for %s is cleanup because of http.StatusPreconditionFailed", *sg.Name)
+			_ = az.nsgCache.Delete(*sg.Name)
+		}
 
-	// Invalidate the cache because ETAG precondition mismatch.
-	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
-		klog.V(3).Infof("SecurityGroup cache for %s is cleanup because of http.StatusPreconditionFailed", *sg.Name)
-		_ = az.nsgCache.Delete(*sg.Name)
+		// Invalidate the cache because another new operation has canceled the current request.
+		if strings.Contains(strings.ToLower(respError.Error()), consts.OperationCanceledErrorMessage) {
+			klog.V(3).Infof("SecurityGroup cache for %s is cleanup because CreateOrUpdateSecurityGroup is canceled by another operation", *sg.Name)
+			_ = az.nsgCache.Delete(*sg.Name)
+		}
 	}
-
-	// Invalidate the cache because another new operation has canceled the current request.
-	if strings.Contains(strings.ToLower(rerr.Error().Error()), consts.OperationCanceledErrorMessage) {
-		klog.V(3).Infof("SecurityGroup cache for %s is cleanup because CreateOrUpdateSecurityGroup is canceled by another operation", *sg.Name)
-		_ = az.nsgCache.Delete(*sg.Name)
-	}
-
-	return rerr.Error()
+	return rerr
 }
 
 func (az *Cloud) newNSGCache() (azcache.Resource, error) {
 	getter := func(key string) (interface{}, error) {
 		ctx, cancel := getContextWithCancel()
 		defer cancel()
-		nsg, err := az.SecurityGroupsClient.Get(ctx, az.SecurityGroupResourceGroup, key, "")
-		exists, rerr := checkResourceExistsFromError(err)
+		clientFactory := az.NetworkClientFactory
+		if clientFactory == nil {
+			clientFactory = az.ComputeClientFactory
+		}
+		sgClient := clientFactory.GetSecurityGroupClient()
+
+		nsg, err := sgClient.Get(ctx, az.SecurityGroupResourceGroup, key)
+		exists, rerr := checkResourceExistsFromAzcoreError(err)
 		if rerr != nil {
-			return nil, rerr.Error()
+			return nil, err
 		}
 
 		if !exists {
@@ -77,7 +91,7 @@ func (az *Cloud) newNSGCache() (azcache.Resource, error) {
 			return nil, nil
 		}
 
-		return &nsg, nil
+		return nsg, nil
 	}
 
 	if az.NsgCacheTTLInSeconds == 0 {
@@ -86,8 +100,8 @@ func (az *Cloud) newNSGCache() (azcache.Resource, error) {
 	return azcache.NewTimedCache(time.Duration(az.NsgCacheTTLInSeconds)*time.Second, getter, az.Config.DisableAPICallCache)
 }
 
-func (az *Cloud) getSecurityGroup(crt azcache.AzureCacheReadType) (network.SecurityGroup, error) {
-	nsg := network.SecurityGroup{}
+func (az *Cloud) getSecurityGroup(crt azcache.AzureCacheReadType) (*armnetwork.SecurityGroup, error) {
+	nsg := &armnetwork.SecurityGroup{}
 	if az.SecurityGroupName == "" {
 		return nsg, fmt.Errorf("securityGroupName is not configured")
 	}
@@ -101,5 +115,5 @@ func (az *Cloud) getSecurityGroup(crt azcache.AzureCacheReadType) (network.Secur
 		return nsg, fmt.Errorf("nsg %q not found", az.SecurityGroupName)
 	}
 
-	return *(securityGroup.(*network.SecurityGroup)), nil
+	return securityGroup.(*armnetwork.SecurityGroup), nil
 }
