@@ -21,65 +21,65 @@ import (
 	"strings"
 )
 
-// SecurityAdminConfigurationsClient contains the methods for the SecurityAdminConfigurations group.
-// Don't use this type directly, use NewSecurityAdminConfigurationsClient() instead.
-type SecurityAdminConfigurationsClient struct {
+// SecurityUserConfigurationsClient contains the methods for the SecurityUserConfigurations group.
+// Don't use this type directly, use NewSecurityUserConfigurationsClient() instead.
+type SecurityUserConfigurationsClient struct {
 	internal       *arm.Client
 	subscriptionID string
 }
 
-// NewSecurityAdminConfigurationsClient creates a new instance of SecurityAdminConfigurationsClient with the specified values.
+// NewSecurityUserConfigurationsClient creates a new instance of SecurityUserConfigurationsClient with the specified values.
 //   - subscriptionID - The subscription credentials which uniquely identify the Microsoft Azure subscription. The subscription
 //     ID forms part of the URI for every service call.
 //   - credential - used to authorize requests. Usually a credential from azidentity.
 //   - options - pass nil to accept the default values.
-func NewSecurityAdminConfigurationsClient(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (*SecurityAdminConfigurationsClient, error) {
+func NewSecurityUserConfigurationsClient(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (*SecurityUserConfigurationsClient, error) {
 	cl, err := arm.NewClient(moduleName, moduleVersion, credential, options)
 	if err != nil {
 		return nil, err
 	}
-	client := &SecurityAdminConfigurationsClient{
+	client := &SecurityUserConfigurationsClient{
 		subscriptionID: subscriptionID,
 		internal:       cl,
 	}
 	return client, nil
 }
 
-// CreateOrUpdate - Creates or updates a network manager security admin configuration.
+// CreateOrUpdate - Creates or updates a network manager security user configuration.
 // If the operation fails it returns an *azcore.ResponseError type.
 //
 // Generated from API version 2024-03-01
-//   - resourceGroupName - The name of the resource group.
+//   - resourceGroupName - The name of the resource group. The name is case insensitive.
 //   - networkManagerName - The name of the network manager.
 //   - configurationName - The name of the network manager Security Configuration.
-//   - securityAdminConfiguration - The security admin configuration to create or update
-//   - options - SecurityAdminConfigurationsClientCreateOrUpdateOptions contains the optional parameters for the SecurityAdminConfigurationsClient.CreateOrUpdate
+//   - securityUserConfiguration - The security user configuration to create or update
+//   - options - SecurityUserConfigurationsClientCreateOrUpdateOptions contains the optional parameters for the SecurityUserConfigurationsClient.CreateOrUpdate
 //     method.
-func (client *SecurityAdminConfigurationsClient) CreateOrUpdate(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, securityAdminConfiguration SecurityAdminConfiguration, options *SecurityAdminConfigurationsClientCreateOrUpdateOptions) (SecurityAdminConfigurationsClientCreateOrUpdateResponse, error) {
+func (client *SecurityUserConfigurationsClient) CreateOrUpdate(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, securityUserConfiguration SecurityUserConfiguration, options *SecurityUserConfigurationsClientCreateOrUpdateOptions) (SecurityUserConfigurationsClientCreateOrUpdateResponse, error) {
 	var err error
-	const operationName = "SecurityAdminConfigurationsClient.CreateOrUpdate"
+	const operationName = "SecurityUserConfigurationsClient.CreateOrUpdate"
 	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
 	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
 	defer func() { endSpan(err) }()
-	req, err := client.createOrUpdateCreateRequest(ctx, resourceGroupName, networkManagerName, configurationName, securityAdminConfiguration, options)
+	req, err := client.createOrUpdateCreateRequest(ctx, resourceGroupName, networkManagerName, configurationName, securityUserConfiguration, options)
 	if err != nil {
-		return SecurityAdminConfigurationsClientCreateOrUpdateResponse{}, err
+		return SecurityUserConfigurationsClientCreateOrUpdateResponse{}, err
 	}
 	httpResp, err := client.internal.Pipeline().Do(req)
 	if err != nil {
-		return SecurityAdminConfigurationsClientCreateOrUpdateResponse{}, err
+		return SecurityUserConfigurationsClientCreateOrUpdateResponse{}, err
 	}
 	if !runtime.HasStatusCode(httpResp, http.StatusOK, http.StatusCreated) {
 		err = runtime.NewResponseError(httpResp)
-		return SecurityAdminConfigurationsClientCreateOrUpdateResponse{}, err
+		return SecurityUserConfigurationsClientCreateOrUpdateResponse{}, err
 	}
 	resp, err := client.createOrUpdateHandleResponse(httpResp)
 	return resp, err
 }
 
 // createOrUpdateCreateRequest creates the CreateOrUpdate request.
-func (client *SecurityAdminConfigurationsClient) createOrUpdateCreateRequest(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, securityAdminConfiguration SecurityAdminConfiguration, options *SecurityAdminConfigurationsClientCreateOrUpdateOptions) (*policy.Request, error) {
-	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/networkManagers/{networkManagerName}/securityAdminConfigurations/{configurationName}"
+func (client *SecurityUserConfigurationsClient) createOrUpdateCreateRequest(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, securityUserConfiguration SecurityUserConfiguration, options *SecurityUserConfigurationsClientCreateOrUpdateOptions) (*policy.Request, error) {
+	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/networkManagers/{networkManagerName}/securityUserConfigurations/{configurationName}"
 	if client.subscriptionID == "" {
 		return nil, errors.New("parameter client.subscriptionID cannot be empty")
 	}
@@ -104,55 +104,55 @@ func (client *SecurityAdminConfigurationsClient) createOrUpdateCreateRequest(ctx
 	reqQP.Set("api-version", "2024-03-01")
 	req.Raw().URL.RawQuery = reqQP.Encode()
 	req.Raw().Header["Accept"] = []string{"application/json"}
-	if err := runtime.MarshalAsJSON(req, securityAdminConfiguration); err != nil {
+	if err := runtime.MarshalAsJSON(req, securityUserConfiguration); err != nil {
 		return nil, err
 	}
 	return req, nil
 }
 
 // createOrUpdateHandleResponse handles the CreateOrUpdate response.
-func (client *SecurityAdminConfigurationsClient) createOrUpdateHandleResponse(resp *http.Response) (SecurityAdminConfigurationsClientCreateOrUpdateResponse, error) {
-	result := SecurityAdminConfigurationsClientCreateOrUpdateResponse{}
-	if err := runtime.UnmarshalAsJSON(resp, &result.SecurityAdminConfiguration); err != nil {
-		return SecurityAdminConfigurationsClientCreateOrUpdateResponse{}, err
+func (client *SecurityUserConfigurationsClient) createOrUpdateHandleResponse(resp *http.Response) (SecurityUserConfigurationsClientCreateOrUpdateResponse, error) {
+	result := SecurityUserConfigurationsClientCreateOrUpdateResponse{}
+	if err := runtime.UnmarshalAsJSON(resp, &result.SecurityUserConfiguration); err != nil {
+		return SecurityUserConfigurationsClientCreateOrUpdateResponse{}, err
 	}
 	return result, nil
 }
 
-// BeginDelete - Deletes a network manager security admin configuration.
+// BeginDelete - Deletes a network manager security user configuration.
 // If the operation fails it returns an *azcore.ResponseError type.
 //
 // Generated from API version 2024-03-01
-//   - resourceGroupName - The name of the resource group.
+//   - resourceGroupName - The name of the resource group. The name is case insensitive.
 //   - networkManagerName - The name of the network manager.
 //   - configurationName - The name of the network manager Security Configuration.
-//   - options - SecurityAdminConfigurationsClientBeginDeleteOptions contains the optional parameters for the SecurityAdminConfigurationsClient.BeginDelete
+//   - options - SecurityUserConfigurationsClientBeginDeleteOptions contains the optional parameters for the SecurityUserConfigurationsClient.BeginDelete
 //     method.
-func (client *SecurityAdminConfigurationsClient) BeginDelete(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, options *SecurityAdminConfigurationsClientBeginDeleteOptions) (*runtime.Poller[SecurityAdminConfigurationsClientDeleteResponse], error) {
+func (client *SecurityUserConfigurationsClient) BeginDelete(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, options *SecurityUserConfigurationsClientBeginDeleteOptions) (*runtime.Poller[SecurityUserConfigurationsClientDeleteResponse], error) {
 	if options == nil || options.ResumeToken == "" {
 		resp, err := client.deleteOperation(ctx, resourceGroupName, networkManagerName, configurationName, options)
 		if err != nil {
 			return nil, err
 		}
-		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[SecurityAdminConfigurationsClientDeleteResponse]{
+		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[SecurityUserConfigurationsClientDeleteResponse]{
 			FinalStateVia: runtime.FinalStateViaLocation,
 			Tracer:        client.internal.Tracer(),
 		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[SecurityAdminConfigurationsClientDeleteResponse]{
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[SecurityUserConfigurationsClientDeleteResponse]{
 			Tracer: client.internal.Tracer(),
 		})
 	}
 }
 
-// Delete - Deletes a network manager security admin configuration.
+// Delete - Deletes a network manager security user configuration.
 // If the operation fails it returns an *azcore.ResponseError type.
 //
 // Generated from API version 2024-03-01
-func (client *SecurityAdminConfigurationsClient) deleteOperation(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, options *SecurityAdminConfigurationsClientBeginDeleteOptions) (*http.Response, error) {
+func (client *SecurityUserConfigurationsClient) deleteOperation(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, options *SecurityUserConfigurationsClientBeginDeleteOptions) (*http.Response, error) {
 	var err error
-	const operationName = "SecurityAdminConfigurationsClient.BeginDelete"
+	const operationName = "SecurityUserConfigurationsClient.BeginDelete"
 	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
 	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
 	defer func() { endSpan(err) }()
@@ -172,8 +172,8 @@ func (client *SecurityAdminConfigurationsClient) deleteOperation(ctx context.Con
 }
 
 // deleteCreateRequest creates the Delete request.
-func (client *SecurityAdminConfigurationsClient) deleteCreateRequest(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, options *SecurityAdminConfigurationsClientBeginDeleteOptions) (*policy.Request, error) {
-	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/networkManagers/{networkManagerName}/securityAdminConfigurations/{configurationName}"
+func (client *SecurityUserConfigurationsClient) deleteCreateRequest(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, options *SecurityUserConfigurationsClientBeginDeleteOptions) (*policy.Request, error) {
+	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/networkManagers/{networkManagerName}/securityUserConfigurations/{configurationName}"
 	if client.subscriptionID == "" {
 		return nil, errors.New("parameter client.subscriptionID cannot be empty")
 	}
@@ -204,40 +204,40 @@ func (client *SecurityAdminConfigurationsClient) deleteCreateRequest(ctx context
 	return req, nil
 }
 
-// Get - Retrieves a network manager security admin configuration.
+// Get - Retrieves a network manager security user configuration.
 // If the operation fails it returns an *azcore.ResponseError type.
 //
 // Generated from API version 2024-03-01
-//   - resourceGroupName - The name of the resource group.
+//   - resourceGroupName - The name of the resource group. The name is case insensitive.
 //   - networkManagerName - The name of the network manager.
 //   - configurationName - The name of the network manager Security Configuration.
-//   - options - SecurityAdminConfigurationsClientGetOptions contains the optional parameters for the SecurityAdminConfigurationsClient.Get
+//   - options - SecurityUserConfigurationsClientGetOptions contains the optional parameters for the SecurityUserConfigurationsClient.Get
 //     method.
-func (client *SecurityAdminConfigurationsClient) Get(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, options *SecurityAdminConfigurationsClientGetOptions) (SecurityAdminConfigurationsClientGetResponse, error) {
+func (client *SecurityUserConfigurationsClient) Get(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, options *SecurityUserConfigurationsClientGetOptions) (SecurityUserConfigurationsClientGetResponse, error) {
 	var err error
-	const operationName = "SecurityAdminConfigurationsClient.Get"
+	const operationName = "SecurityUserConfigurationsClient.Get"
 	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
 	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
 	defer func() { endSpan(err) }()
 	req, err := client.getCreateRequest(ctx, resourceGroupName, networkManagerName, configurationName, options)
 	if err != nil {
-		return SecurityAdminConfigurationsClientGetResponse{}, err
+		return SecurityUserConfigurationsClientGetResponse{}, err
 	}
 	httpResp, err := client.internal.Pipeline().Do(req)
 	if err != nil {
-		return SecurityAdminConfigurationsClientGetResponse{}, err
+		return SecurityUserConfigurationsClientGetResponse{}, err
 	}
 	if !runtime.HasStatusCode(httpResp, http.StatusOK) {
 		err = runtime.NewResponseError(httpResp)
-		return SecurityAdminConfigurationsClientGetResponse{}, err
+		return SecurityUserConfigurationsClientGetResponse{}, err
 	}
 	resp, err := client.getHandleResponse(httpResp)
 	return resp, err
 }
 
 // getCreateRequest creates the Get request.
-func (client *SecurityAdminConfigurationsClient) getCreateRequest(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, options *SecurityAdminConfigurationsClientGetOptions) (*policy.Request, error) {
-	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/networkManagers/{networkManagerName}/securityAdminConfigurations/{configurationName}"
+func (client *SecurityUserConfigurationsClient) getCreateRequest(ctx context.Context, resourceGroupName string, networkManagerName string, configurationName string, options *SecurityUserConfigurationsClientGetOptions) (*policy.Request, error) {
+	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/networkManagers/{networkManagerName}/securityUserConfigurations/{configurationName}"
 	if client.subscriptionID == "" {
 		return nil, errors.New("parameter client.subscriptionID cannot be empty")
 	}
@@ -266,28 +266,28 @@ func (client *SecurityAdminConfigurationsClient) getCreateRequest(ctx context.Co
 }
 
 // getHandleResponse handles the Get response.
-func (client *SecurityAdminConfigurationsClient) getHandleResponse(resp *http.Response) (SecurityAdminConfigurationsClientGetResponse, error) {
-	result := SecurityAdminConfigurationsClientGetResponse{}
-	if err := runtime.UnmarshalAsJSON(resp, &result.SecurityAdminConfiguration); err != nil {
-		return SecurityAdminConfigurationsClientGetResponse{}, err
+func (client *SecurityUserConfigurationsClient) getHandleResponse(resp *http.Response) (SecurityUserConfigurationsClientGetResponse, error) {
+	result := SecurityUserConfigurationsClientGetResponse{}
+	if err := runtime.UnmarshalAsJSON(resp, &result.SecurityUserConfiguration); err != nil {
+		return SecurityUserConfigurationsClientGetResponse{}, err
 	}
 	return result, nil
 }
 
-// NewListPager - Lists all the network manager security admin configurations in a network manager, in a paginated format.
+// NewListPager - Lists all the network manager security user configurations in a network manager, in a paginated format.
 //
 // Generated from API version 2024-03-01
-//   - resourceGroupName - The name of the resource group.
+//   - resourceGroupName - The name of the resource group. The name is case insensitive.
 //   - networkManagerName - The name of the network manager.
-//   - options - SecurityAdminConfigurationsClientListOptions contains the optional parameters for the SecurityAdminConfigurationsClient.NewListPager
+//   - options - SecurityUserConfigurationsClientListOptions contains the optional parameters for the SecurityUserConfigurationsClient.NewListPager
 //     method.
-func (client *SecurityAdminConfigurationsClient) NewListPager(resourceGroupName string, networkManagerName string, options *SecurityAdminConfigurationsClientListOptions) *runtime.Pager[SecurityAdminConfigurationsClientListResponse] {
-	return runtime.NewPager(runtime.PagingHandler[SecurityAdminConfigurationsClientListResponse]{
-		More: func(page SecurityAdminConfigurationsClientListResponse) bool {
+func (client *SecurityUserConfigurationsClient) NewListPager(resourceGroupName string, networkManagerName string, options *SecurityUserConfigurationsClientListOptions) *runtime.Pager[SecurityUserConfigurationsClientListResponse] {
+	return runtime.NewPager(runtime.PagingHandler[SecurityUserConfigurationsClientListResponse]{
+		More: func(page SecurityUserConfigurationsClientListResponse) bool {
 			return page.NextLink != nil && len(*page.NextLink) > 0
 		},
-		Fetcher: func(ctx context.Context, page *SecurityAdminConfigurationsClientListResponse) (SecurityAdminConfigurationsClientListResponse, error) {
-			ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, "SecurityAdminConfigurationsClient.NewListPager")
+		Fetcher: func(ctx context.Context, page *SecurityUserConfigurationsClientListResponse) (SecurityUserConfigurationsClientListResponse, error) {
+			ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, "SecurityUserConfigurationsClient.NewListPager")
 			nextLink := ""
 			if page != nil {
 				nextLink = *page.NextLink
@@ -296,7 +296,7 @@ func (client *SecurityAdminConfigurationsClient) NewListPager(resourceGroupName 
 				return client.listCreateRequest(ctx, resourceGroupName, networkManagerName, options)
 			}, nil)
 			if err != nil {
-				return SecurityAdminConfigurationsClientListResponse{}, err
+				return SecurityUserConfigurationsClientListResponse{}, err
 			}
 			return client.listHandleResponse(resp)
 		},
@@ -305,8 +305,8 @@ func (client *SecurityAdminConfigurationsClient) NewListPager(resourceGroupName 
 }
 
 // listCreateRequest creates the List request.
-func (client *SecurityAdminConfigurationsClient) listCreateRequest(ctx context.Context, resourceGroupName string, networkManagerName string, options *SecurityAdminConfigurationsClientListOptions) (*policy.Request, error) {
-	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/networkManagers/{networkManagerName}/securityAdminConfigurations"
+func (client *SecurityUserConfigurationsClient) listCreateRequest(ctx context.Context, resourceGroupName string, networkManagerName string, options *SecurityUserConfigurationsClientListOptions) (*policy.Request, error) {
+	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/networkManagers/{networkManagerName}/securityUserConfigurations"
 	if client.subscriptionID == "" {
 		return nil, errors.New("parameter client.subscriptionID cannot be empty")
 	}
@@ -337,10 +337,10 @@ func (client *SecurityAdminConfigurationsClient) listCreateRequest(ctx context.C
 }
 
 // listHandleResponse handles the List response.
-func (client *SecurityAdminConfigurationsClient) listHandleResponse(resp *http.Response) (SecurityAdminConfigurationsClientListResponse, error) {
-	result := SecurityAdminConfigurationsClientListResponse{}
-	if err := runtime.UnmarshalAsJSON(resp, &result.SecurityAdminConfigurationListResult); err != nil {
-		return SecurityAdminConfigurationsClientListResponse{}, err
+func (client *SecurityUserConfigurationsClient) listHandleResponse(resp *http.Response) (SecurityUserConfigurationsClientListResponse, error) {
+	result := SecurityUserConfigurationsClientListResponse{}
+	if err := runtime.UnmarshalAsJSON(resp, &result.SecurityUserConfigurationListResult); err != nil {
+		return SecurityUserConfigurationsClientListResponse{}, err
 	}
 	return result, nil
 }
