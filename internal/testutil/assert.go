@@ -21,20 +21,20 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/stretchr/testify/assert"
 )
 
 // ExpectHasSecurityRules asserts the security group whether it has the given rules.
-func ExpectHasSecurityRules(t *testing.T, sg *network.SecurityGroup, expected []network.SecurityRule, msgAndArgs ...any) {
+func ExpectHasSecurityRules(t *testing.T, sg *armnetwork.SecurityGroup, expected []*armnetwork.SecurityRule, msgAndArgs ...any) {
 	t.Helper()
 
-	expectedRuleIndex := make(map[string]network.SecurityRule)
+	expectedRuleIndex := make(map[string]*armnetwork.SecurityRule)
 	for _, rule := range expected {
 		expectedRuleIndex[*rule.Name] = rule
 	}
 
-	for _, actual := range *sg.SecurityRules {
+	for _, actual := range sg.Properties.SecurityRules {
 		expected, found := expectedRuleIndex[*actual.Name]
 		if !found {
 			continue
@@ -48,21 +48,21 @@ func ExpectHasSecurityRules(t *testing.T, sg *network.SecurityGroup, expected []
 }
 
 // ExpectExactSecurityRules asserts the security group whether it has the exact same rules.
-func ExpectExactSecurityRules(t *testing.T, sg *network.SecurityGroup, expected []network.SecurityRule, msgAndArgs ...any) {
+func ExpectExactSecurityRules(t *testing.T, sg *armnetwork.SecurityGroup, expected []*armnetwork.SecurityRule, msgAndArgs ...any) {
 	t.Helper()
 
 	assert.NotNil(t, sg)
-	assert.NotNil(t, sg.SecurityGroupPropertiesFormat)
-	assert.NotNil(t, sg.SecurityGroupPropertiesFormat.SecurityRules)
+	assert.NotNil(t, sg.Properties)
+	assert.NotNil(t, sg.Properties.SecurityRules)
 
-	actual := *sg.SecurityRules
+	actual := sg.Properties.SecurityRules
 
 	// order insensitive
 	sort.Slice(actual, func(i, j int) bool {
-		return *actual[i].Priority < *actual[j].Priority
+		return *actual[i].Properties.Priority < *actual[j].Properties.Priority
 	})
 	sort.Slice(expected, func(i, j int) bool {
-		return *expected[i].Priority < *expected[j].Priority
+		return *expected[i].Properties.Priority < *expected[j].Properties.Priority
 	})
 
 	ExpectEqualInJSON(t, expected, actual, msgAndArgs...)

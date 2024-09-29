@@ -21,9 +21,8 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/go-logr/logr"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 
@@ -49,7 +48,7 @@ type AccessControl struct {
 	AllowedIPRanges                        []netip.Prefix
 	InvalidRanges                          []string
 	AllowedServiceTags                     []string
-	securityRuleDestinationPortsByProtocol map[network.SecurityRuleProtocol][]int32
+	securityRuleDestinationPortsByProtocol map[armnetwork.SecurityRuleProtocol][]int32
 }
 
 type accessControlOptions struct {
@@ -68,7 +67,7 @@ func SkipAnnotationValidation() AccessControlOption {
 	}
 }
 
-func NewAccessControl(logger logr.Logger, svc *v1.Service, sg *network.SecurityGroup, opts ...AccessControlOption) (*AccessControl, error) {
+func NewAccessControl(logger logr.Logger, svc *v1.Service, sg *armnetwork.SecurityGroup, opts ...AccessControlOption) (*AccessControl, error) {
 	logger = logger.WithName("AccessControl").WithValues("security-group", ptr.To(sg.Name))
 
 	options := defaultAccessControlOptions
@@ -210,10 +209,10 @@ func (ac *AccessControl) PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses [
 		"num-allowed-service-tags", len(allowedServiceTags),
 	)
 
-	protocols := []network.SecurityRuleProtocol{
-		network.SecurityRuleProtocolTCP,
-		network.SecurityRuleProtocolUDP,
-		network.SecurityRuleProtocolAsterisk,
+	protocols := []armnetwork.SecurityRuleProtocol{
+		armnetwork.SecurityRuleProtocolTCP,
+		armnetwork.SecurityRuleProtocolUDP,
+		armnetwork.SecurityRuleProtocolAsterisk,
 	}
 
 	for _, protocol := range protocols {
@@ -274,7 +273,7 @@ func (ac *AccessControl) PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses [
 // CleanSecurityGroup removes the given IP addresses from the SecurityGroup.
 func (ac *AccessControl) CleanSecurityGroup(
 	dstIPv4Addresses, dstIPv6Addresses []netip.Addr,
-	retainPortRanges map[network.SecurityRuleProtocol][]int32,
+	retainPortRanges map[armnetwork.SecurityRuleProtocol][]int32,
 ) error {
 	logger := ac.logger.WithName("CleanSecurityGroup").
 		WithValues("num-dst-ipv4-addresses", len(dstIPv4Addresses)).
@@ -286,10 +285,10 @@ func (ac *AccessControl) CleanSecurityGroup(
 		ipv6Prefixes = fnutil.Map(func(addr netip.Addr) string { return addr.String() }, dstIPv6Addresses)
 	)
 
-	protocols := []network.SecurityRuleProtocol{
-		network.SecurityRuleProtocolTCP,
-		network.SecurityRuleProtocolUDP,
-		network.SecurityRuleProtocolAsterisk,
+	protocols := []armnetwork.SecurityRuleProtocol{
+		armnetwork.SecurityRuleProtocolTCP,
+		armnetwork.SecurityRuleProtocolUDP,
+		armnetwork.SecurityRuleProtocolAsterisk,
 	}
 
 	for _, protocol := range protocols {
@@ -314,13 +313,13 @@ func (ac *AccessControl) CleanSecurityGroup(
 // 1. `PatchSecurityGroup`: Add rules for the given destination IP addresses.
 // 2. `CleanSecurityGroup`: Remove the given destination IP addresses from all rules.
 // It would return unchanged SecurityGroup and `false` if the operations undo each other.
-func (ac *AccessControl) SecurityGroup() (*network.SecurityGroup, bool, error) {
+func (ac *AccessControl) SecurityGroup() (*armnetwork.SecurityGroup, bool, error) {
 	return ac.sgHelper.SecurityGroup()
 }
 
 // SecurityRuleDestinationPortsByProtocol returns the service ports grouped by SecurityGroup protocol.
-func SecurityRuleDestinationPortsByProtocol(svc *v1.Service) (map[network.SecurityRuleProtocol][]int32, error) {
-	rv := make(map[network.SecurityRuleProtocol][]int32)
+func SecurityRuleDestinationPortsByProtocol(svc *v1.Service) (map[armnetwork.SecurityRuleProtocol][]int32, error) {
+	rv := make(map[armnetwork.SecurityRuleProtocol][]int32)
 	for _, port := range svc.Spec.Ports {
 		protocol, err := securitygroup.ProtocolFromKubernetes(port.Protocol)
 		if err != nil {
