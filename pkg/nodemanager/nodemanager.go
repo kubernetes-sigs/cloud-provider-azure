@@ -179,7 +179,7 @@ func NewCloudNodeController(
 // Run controller updates newly registered nodes with information
 // from the cloud provider. This call is blocking so should be called
 // via a goroutine
-func (cnc *CloudNodeController) Run(stopCh <-chan struct{}) {
+func (cnc *CloudNodeController) Run(ctx context.Context) {
 	defer utilruntime.HandleCrash()
 
 	// The following loops run communicate with the APIServer with a worst case complexity
@@ -187,7 +187,7 @@ func (cnc *CloudNodeController) Run(stopCh <-chan struct{}) {
 	// very infrequently. DO NOT MODIFY this to perform frequent operations.
 
 	// Start a loop to periodically update the node addresses obtained from the cloud
-	wait.Until(func() { cnc.UpdateNodeStatus(context.TODO()) }, cnc.nodeStatusUpdateFrequency, stopCh)
+	wait.UntilWithContext(ctx, func(ctx context.Context) { cnc.UpdateNodeStatus(ctx) }, cnc.nodeStatusUpdateFrequency)
 }
 
 // UpdateNodeStatus updates the node status, such as node addresses
