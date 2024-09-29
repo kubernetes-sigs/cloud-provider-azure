@@ -86,10 +86,10 @@ interactions:
         trailer: {}
         content_length: 645
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource","name":"testResource","type":"Microsoft.Resources/deployments","properties":{"templateHash":"3315814388681758746","parameters":{"location":{"type":"String","value":"East US"}},"mode":"Incremental","provisioningState":"Accepted","timestamp":"2001-02-03T04:05:06Z","duration":"PT0.0008892S","correlationId":"00000000-0000-0000-0000-000000000000","providers":[{"namespace":"Microsoft.Compute","resourceTypes":[{"resourceType":"availabilitySets","locations":["eastus"]}]}],"dependencies":[]}}'
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource","name":"testResource","type":"Microsoft.Resources/deployments","properties":{"templateHash":"3315814388681758746","parameters":{"location":{"type":"String","value":"East US"}},"mode":"Incremental","provisioningState":"Accepted","timestamp":"2001-02-03T04:05:06Z","duration":"PT0.0005557S","correlationId":"00000000-0000-0000-0000-000000000000","providers":[{"namespace":"Microsoft.Compute","resourceTypes":[{"resourceType":"availabilitySets","locations":["eastus"]}]}],"dependencies":[]}}'
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource/operationStatuses/08584745037002254551?api-version=2021-04-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource/operationStatuses/08584739986939313216?api-version=2021-04-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -127,7 +127,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource/operationStatuses/08584745037002254551?api-version=2021-04-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource/operationStatuses/08584739986939313216?api-version=2021-04-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -174,7 +174,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource/operationStatuses/08584745037002254551?api-version=2021-04-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource/operationStatuses/08584739986939313216?api-version=2021-04-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -231,7 +231,7 @@ interactions:
         trailer: {}
         content_length: 954
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource","name":"testResource","type":"Microsoft.Resources/deployments","properties":{"templateHash":"3315814388681758746","parameters":{"location":{"type":"String","value":"East US"}},"mode":"Incremental","provisioningState":"Succeeded","timestamp":"2001-02-03T04:05:06Z","duration":"PT5.2669023S","correlationId":"00000000-0000-0000-0000-000000000000","providers":[{"namespace":"Microsoft.Compute","resourceTypes":[{"resourceType":"availabilitySets","locations":["eastus"]}]}],"dependencies":[],"outputs":{"myparameter":{"type":"Object","value":{"platformUpdateDomainCount":5,"platformFaultDomainCount":3,"internalData":{}}}},"outputResources":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Compute/availabilitySets/availabilitySet1"}]}}'
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource","name":"testResource","type":"Microsoft.Resources/deployments","properties":{"templateHash":"3315814388681758746","parameters":{"location":{"type":"String","value":"East US"}},"mode":"Incremental","provisioningState":"Succeeded","timestamp":"2001-02-03T04:05:06Z","duration":"PT5.1876116S","correlationId":"00000000-0000-0000-0000-000000000000","providers":[{"namespace":"Microsoft.Compute","resourceTypes":[{"resourceType":"availabilitySets","locations":["eastus"]}]}],"dependencies":[],"outputs":{"myparameter":{"type":"Object","value":{"platformUpdateDomainCount":5,"platformFaultDomainCount":3,"internalData":{}}}},"outputResources":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Compute/availabilitySets/availabilitySet1"}]}}'
         headers:
             Cache-Control:
                 - no-cache
@@ -280,7 +280,7 @@ interactions:
         trailer: {}
         content_length: 954
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource","name":"testResource","type":"Microsoft.Resources/deployments","properties":{"templateHash":"3315814388681758746","parameters":{"location":{"type":"String","value":"East US"}},"mode":"Incremental","provisioningState":"Succeeded","timestamp":"2001-02-03T04:05:06Z","duration":"PT5.2669023S","correlationId":"00000000-0000-0000-0000-000000000000","providers":[{"namespace":"Microsoft.Compute","resourceTypes":[{"resourceType":"availabilitySets","locations":["eastus"]}]}],"dependencies":[],"outputs":{"myparameter":{"type":"Object","value":{"platformUpdateDomainCount":5,"platformFaultDomainCount":3,"internalData":{}}}},"outputResources":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Compute/availabilitySets/availabilitySet1"}]}}'
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource","name":"testResource","type":"Microsoft.Resources/deployments","properties":{"templateHash":"3315814388681758746","parameters":{"location":{"type":"String","value":"East US"}},"mode":"Incremental","provisioningState":"Succeeded","timestamp":"2001-02-03T04:05:06Z","duration":"PT5.1876116S","correlationId":"00000000-0000-0000-0000-000000000000","providers":[{"namespace":"Microsoft.Compute","resourceTypes":[{"resourceType":"availabilitySets","locations":["eastus"]}]}],"dependencies":[],"outputs":{"myparameter":{"type":"Object","value":{"platformUpdateDomainCount":5,"platformFaultDomainCount":3,"internalData":{}}}},"outputResources":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Compute/availabilitySets/availabilitySet1"}]}}'
         headers:
             Cache-Control:
                 - no-cache
@@ -380,7 +380,7 @@ interactions:
         trailer: {}
         content_length: 966
         uncompressed: false
-        body: '{"value":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource","name":"testResource","type":"Microsoft.Resources/deployments","properties":{"templateHash":"3315814388681758746","parameters":{"location":{"type":"String","value":"East US"}},"mode":"Incremental","provisioningState":"Succeeded","timestamp":"2001-02-03T04:05:06Z","duration":"PT5.2669023S","correlationId":"00000000-0000-0000-0000-000000000000","providers":[{"namespace":"Microsoft.Compute","resourceTypes":[{"resourceType":"availabilitySets","locations":["eastus"]}]}],"dependencies":[],"outputs":{"myparameter":{"type":"Object","value":{"platformUpdateDomainCount":5,"platformFaultDomainCount":3,"internalData":{}}}},"outputResources":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Compute/availabilitySets/availabilitySet1"}]}}]}'
+        body: '{"value":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource","name":"testResource","type":"Microsoft.Resources/deployments","properties":{"templateHash":"3315814388681758746","parameters":{"location":{"type":"String","value":"East US"}},"mode":"Incremental","provisioningState":"Succeeded","timestamp":"2001-02-03T04:05:06Z","duration":"PT5.1876116S","correlationId":"00000000-0000-0000-0000-000000000000","providers":[{"namespace":"Microsoft.Compute","resourceTypes":[{"resourceType":"availabilitySets","locations":["eastus"]}]}],"dependencies":[],"outputs":{"myparameter":{"type":"Object","value":{"platformUpdateDomainCount":5,"platformFaultDomainCount":3,"internalData":{}}}},"outputResources":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Compute/availabilitySets/availabilitySet1"}]}}]}'
         headers:
             Cache-Control:
                 - no-cache

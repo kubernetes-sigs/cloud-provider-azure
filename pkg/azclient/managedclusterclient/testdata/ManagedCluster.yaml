@@ -100,8 +100,8 @@ interactions:
               "kubernetesVersion": "1.29",
               "currentKubernetesVersion": "1.29.8",
               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-              "fqdn": "aks-cit-managedclustertestresourcednsprefix-tdzficdm.hcp.eastus.azmk8s.io",
-              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-tdzficdm.portal.hcp.eastus.azmk8s.io",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-bqtbmu13.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-bqtbmu13.portal.hcp.eastus.azmk8s.io",
               "agentPoolProfiles": [
                {
                 "name": "agentpool1",
@@ -190,7 +190,7 @@ interactions:
                "enabled": false
               },
               "workloadAutoScalerProfile": {},
-              "resourceUID": "66f181569817390001fbe39a",
+              "resourceUID": "66f93613a5c2ce0001199052",
               "metricsProfile": {
                "costAnalysis": {
                 "enabled": false
@@ -322,8 +322,8 @@ interactions:
               "kubernetesVersion": "1.29",
               "currentKubernetesVersion": "1.29.8",
               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-              "fqdn": "aks-cit-managedclustertestresourcednsprefix-tdzficdm.hcp.eastus.azmk8s.io",
-              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-tdzficdm.portal.hcp.eastus.azmk8s.io",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-bqtbmu13.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-bqtbmu13.portal.hcp.eastus.azmk8s.io",
               "agentPoolProfiles": [
                {
                 "name": "agentpool1",
@@ -423,7 +423,7 @@ interactions:
                "enabled": false
               },
               "workloadAutoScalerProfile": {},
-              "resourceUID": "66f181569817390001fbe39a",
+              "resourceUID": "66f93613a5c2ce0001199052",
               "metricsProfile": {
                "costAnalysis": {
                 "enabled": false
@@ -502,8 +502,8 @@ interactions:
               "kubernetesVersion": "1.29",
               "currentKubernetesVersion": "1.29.8",
               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-              "fqdn": "aks-cit-managedclustertestresourcednsprefix-tdzficdm.hcp.eastus.azmk8s.io",
-              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-tdzficdm.portal.hcp.eastus.azmk8s.io",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-bqtbmu13.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-bqtbmu13.portal.hcp.eastus.azmk8s.io",
               "agentPoolProfiles": [
                {
                 "name": "agentpool1",
@@ -603,7 +603,7 @@ interactions:
                "enabled": false
               },
               "workloadAutoScalerProfile": {},
-              "resourceUID": "66f181569817390001fbe39a",
+              "resourceUID": "66f93613a5c2ce0001199052",
               "metricsProfile": {
                "costAnalysis": {
                 "enabled": false
@@ -737,8 +737,8 @@ interactions:
               "kubernetesVersion": "1.29",
               "currentKubernetesVersion": "1.29.8",
               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-              "fqdn": "aks-cit-managedclustertestresourcednsprefix-tdzficdm.hcp.eastus.azmk8s.io",
-              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-tdzficdm.portal.hcp.eastus.azmk8s.io",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-bqtbmu13.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-bqtbmu13.portal.hcp.eastus.azmk8s.io",
               "agentPoolProfiles": [
                {
                 "name": "agentpool1",
@@ -840,7 +840,7 @@ interactions:
                "enabled": false
               },
               "workloadAutoScalerProfile": {},
-              "resourceUID": "66f181569817390001fbe39a",
+              "resourceUID": "66f93613a5c2ce0001199052",
               "metricsProfile": {
                "costAnalysis": {
                 "enabled": false
@@ -903,24 +903,20 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 399
+        content_length: 165
         uncompressed: false
         body: |-
             {
              "name": "00000000-0000-0000-0000-000000000000",
              "status": "Succeeded",
              "startTime": "2001-02-03T04:05:06Z",
-             "endTime": "2001-02-03T04:05:06Z",
-             "error": {
-              "code": "NotLatestOperation",
-              "message": "Expected goal state for managed cluster not saved yet. This means saving goal state to database was slow or failed. This type of failed operations can usually be retried."
-             }
+             "endTime": "2001-02-03T04:05:06Z"
             }
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "399"
+                - "165"
             Content-Type:
                 - application/json
             Expires:
@@ -976,8 +972,8 @@ interactions:
               "kubernetesVersion": "1.29",
               "currentKubernetesVersion": "1.29.8",
               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-              "fqdn": "aks-cit-managedclustertestresourcednsprefix-tdzficdm.hcp.eastus.azmk8s.io",
-              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-tdzficdm.portal.hcp.eastus.azmk8s.io",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-bqtbmu13.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-bqtbmu13.portal.hcp.eastus.azmk8s.io",
               "agentPoolProfiles": [
                {
                 "name": "agentpool1",
@@ -1078,7 +1074,7 @@ interactions:
                "enabled": false
               },
               "workloadAutoScalerProfile": {},
-              "resourceUID": "66f181569817390001fbe39a",
+              "resourceUID": "66f93613a5c2ce0001199052",
               "metricsProfile": {
                "costAnalysis": {
                 "enabled": false
@@ -1159,8 +1155,8 @@ interactions:
                 "kubernetesVersion": "1.29",
                 "currentKubernetesVersion": "1.29.8",
                 "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-                "fqdn": "aks-cit-managedclustertestresourcednsprefix-tdzficdm.hcp.eastus.azmk8s.io",
-                "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-tdzficdm.portal.hcp.eastus.azmk8s.io",
+                "fqdn": "aks-cit-managedclustertestresourcednsprefix-bqtbmu13.hcp.eastus.azmk8s.io",
+                "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-bqtbmu13.portal.hcp.eastus.azmk8s.io",
                 "agentPoolProfiles": [
                  {
                   "name": "agentpool1",
@@ -1261,7 +1257,7 @@ interactions:
                  "enabled": false
                 },
                 "workloadAutoScalerProfile": {},
-                "resourceUID": "66f181569817390001fbe39a",
+                "resourceUID": "66f93613a5c2ce0001199052",
                 "metricsProfile": {
                  "costAnalysis": {
                   "enabled": false
@@ -1279,7 +1275,7 @@ interactions:
                }
               }
              ],
-             "nextLink": "https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=9639745\u0026api-version=2024-05-01\u0026skipToken=9639745"
+             "nextLink": "https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=9675478\u0026api-version=2024-05-01\u0026skipToken=9675478"
             }
         headers:
             Cache-Control:
@@ -1317,7 +1313,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.0.0 (go1.23.1; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=9639745&api-version=2024-05-01&skipToken=9639745
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=9675478&api-version=2024-05-01&skipToken=9675478
         method: GET
       response:
         proto: HTTP/2.0

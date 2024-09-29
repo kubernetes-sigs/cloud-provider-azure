@@ -107,7 +107,7 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1319.0
+                - 1.5.1329.0
         status: 200 OK
         code: 200
         duration: 200ms
@@ -158,7 +158,7 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1319.0
+                - 1.5.1329.0
         status: 200 OK
         code: 200
         duration: 200ms
@@ -209,7 +209,7 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1319.0
+                - 1.5.1329.0
         status: 200 OK
         code: 200
         duration: 200ms
@@ -262,7 +262,7 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1319.0
+                - 1.5.1329.0
         status: 200 OK
         code: 200
         duration: 200ms
@@ -366,7 +366,7 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1319.0
+                - 1.5.1329.0
         status: 200 OK
         code: 200
         duration: 200ms
@@ -417,7 +417,7 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1319.0
+                - 1.5.1329.0
         status: 200 OK
         code: 200
         duration: 200ms
@@ -519,7 +519,7 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1319.0
+                - 1.5.1329.0
         status: 200 OK
         code: 200
         duration: 200ms
@@ -560,7 +560,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus/operationResults/VVR8MDYzODYyNzAwNDk2MjY3ODc3M3wyNjI2QkQ3QkQ4RUY0MzlGOTg0MTE5RjczNUY5NzJCMA?api-version=2023-07-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus/operationResults/VVR8MDYzODYzMjA1NTE5MDYyNDk4N3w0N0RBQjkzRTNBOEM0QzJDQUVBNTY1NkU1QTlBNUI3OA?api-version=2023-07-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -572,7 +572,7 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1319.0
+                - 1.5.1329.0
         status: 202 Accepted
         code: 202
         duration: 200ms
@@ -592,56 +592,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.1; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus/operationResults/VVR8MDYzODYyNzAwNDk2MjY3ODc3M3wyNjI2QkQ3QkQ4RUY0MzlGOTg0MTE5RjczNUY5NzJCMA?api-version=2023-07-01&c=c&h=h&s=s&t=t
-        method: GET
-      response:
-        proto: HTTP/2.0
-        proto_major: 2
-        proto_minor: 0
-        transfer_encoding: []
-        trailer: {}
-        content_length: 146
-        uncompressed: false
-        body: '{"error":{"code":"GatewayTimeout","message":"The gateway did not receive a response from ''Microsoft.KeyVault'' within the specified time period."}}'
-        headers:
-            Cache-Control:
-                - no-cache
-            Content-Length:
-                - "146"
-            Content-Type:
-                - application/json; charset=utf-8
-            Expires:
-                - "-1"
-            Pragma:
-                - no-cache
-            Strict-Transport-Security:
-                - max-age=31536000; includeSubDomains
-            X-Cache:
-                - CONFIG_NOCACHE
-            X-Content-Type-Options:
-                - nosniff
-            X-Ms-Failure-Cause:
-                - service
-        status: 504 Gateway Timeout
-        code: 504
-        duration: 200ms
-    - id: 12
-      request:
-        proto: HTTP/1.1
-        proto_major: 1
-        proto_minor: 1
-        content_length: 0
-        transfer_encoding: []
-        trailer: {}
-        host: management.azure.com
-        remote_addr: ""
-        request_uri: ""
-        body: ""
-        form: {}
-        headers:
-            User-Agent:
-                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.1; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus/operationResults/VVR8MDYzODYyNzAwNDk2MjY3ODc3M3wyNjI2QkQ3QkQ4RUY0MzlGOTg0MTE5RjczNUY5NzJCMA?api-version=2023-07-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus/operationResults/VVR8MDYzODYzMjA1NTE5MDYyNDk4N3w0N0RBQjkzRTNBOEM0QzJDQUVBNTY1NkU1QTlBNUI3OA?api-version=2023-07-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -651,7 +602,7 @@ interactions:
         trailer: {}
         content_length: 107
         uncompressed: false
-        body: '{"createdDateTime":"2024-09-23 15:01:35Z","lastActionDateTime":"2024-09-23 15:11:35Z","status":"Succeeded"}'
+        body: '{"createdDateTime":"2024-09-29 11:18:38Z","lastActionDateTime":"2024-09-29 11:28:39Z","status":"Succeeded"}'
         headers:
             Cache-Control:
                 - no-cache
@@ -672,11 +623,11 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1319.0
+                - 1.5.1329.0
         status: 200 OK
         code: 200
         duration: 200ms
-    - id: 13
+    - id: 12
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -725,7 +676,7 @@ interactions:
         status: 202 Accepted
         code: 202
         duration: 200ms
-    - id: 14
+    - id: 13
       request:
         proto: HTTP/1.1
         proto_major: 1
