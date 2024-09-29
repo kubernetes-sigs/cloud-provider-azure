@@ -332,8 +332,8 @@ func (helper *RuleHelper) removeDestinationFromRule(rule *network.SecurityRule, 
 		prefixIndex     = fnutil.IndexSet(prefixes) // Used to check whether the prefix should be removed.
 		currentPrefixes = ListDestinationPrefixes(rule)
 
-		expectedPrefixes = fnutil.RemoveIf(func(p string) bool { return prefixIndex[p] }, currentPrefixes) // The prefixes to keep.
-		targetPrefixes   = fnutil.Intersection(currentPrefixes, prefixes)                                  // The prefixes to remove.
+		expectedPrefixes = prefixIndex.SubtractedBy(currentPrefixes)      // The prefixes to keep.
+		targetPrefixes   = fnutil.Intersection(currentPrefixes, prefixes) // The prefixes to remove.
 	)
 
 	// Clean DenyAll rule
