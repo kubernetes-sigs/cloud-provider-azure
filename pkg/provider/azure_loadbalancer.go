@@ -29,8 +29,8 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -2902,7 +2902,7 @@ func (az *Cloud) reconcileSecurityGroup(
 	clusterName string, service *v1.Service,
 	lbName string,
 	lbIPs []string, wantLb bool,
-) (*network.SecurityGroup, error) {
+) (*armnetwork.SecurityGroup, error) {
 	logger := log.FromContextOrBackground(ctx).WithName("reconcileSecurityGroup").
 		WithValues("load-balancer", lbName).
 		WithValues("delete-lb", !wantLb)
@@ -2930,7 +2930,7 @@ func (az *Cloud) reconcileSecurityGroup(
 			// When deleting LB, we don't need to validate the annotation
 			opts = append(opts, loadbalancer.SkipAnnotationValidation())
 		}
-		accessControl, err = loadbalancer.NewAccessControl(logger, service, &sg, opts...)
+		accessControl, err = loadbalancer.NewAccessControl(logger, service, sg, opts...)
 		if err != nil {
 			logger.Error(err, "Failed to parse access control configuration for service")
 			return nil, err
@@ -3032,7 +3032,7 @@ func (az *Cloud) reconcileSecurityGroup(
 	if updated {
 		logger.V(2).Info("Preparing to update security group")
 		logger.V(5).Info("CreateOrUpdateSecurityGroup begin")
-		err := az.CreateOrUpdateSecurityGroup(*rv)
+		err := az.CreateOrUpdateSecurityGroup(rv)
 		if err != nil {
 			logger.Error(err, "Failed to update security group")
 			return nil, err
@@ -3053,7 +3053,7 @@ func (az *Cloud) shouldUpdateLoadBalancer(ctx context.Context, clusterName strin
 	return existsLb && service.ObjectMeta.DeletionTimestamp == nil && service.Spec.Type == v1.ServiceTypeLoadBalancer, nil
 }
 
-func allowsConsolidation(rule network.SecurityRule) bool {
+func allowsConsolidation(rule *armnetwork.SecurityRule) bool {
 	return strings.HasPrefix(ptr.Deref(rule.Name, ""), "shared")
 }
 
@@ -3489,35 +3489,35 @@ func equalSubResource(s *network.SubResource, t *network.SubResource) bool {
 // Note that it compares rule's DestinationAddressPrefix only when it's not consolidated rule as such rule does not have DestinationAddressPrefix defined.
 // We intentionally do not compare DestinationAddressPrefixes in consolidated case because reconcileSecurityRule has to consider the two rules equal,
 // despite different DestinationAddressPrefixes, in order to give it a chance to consolidate the two rules.
-func findSecurityRule(rules []network.SecurityRule, rule network.SecurityRule) bool {
+func findSecurityRule(rules []*armnetwork.SecurityRule, rule *armnetwork.SecurityRule) bool {
 	for _, existingRule := range rules {
 		if !strings.EqualFold(ptr.Deref(existingRule.Name, ""), ptr.Deref(rule.Name, "")) {
 			continue
 		}
-		if !strings.EqualFold(string(existingRule.Protocol), string(rule.Protocol)) {
+		if !strings.EqualFold(string(*existingRule.Properties.Protocol), string(*rule.Properties.Protocol)) {
 			continue
 		}
-		if !strings.EqualFold(ptr.Deref(existingRule.SourcePortRange, ""), ptr.Deref(rule.SourcePortRange, "")) {
+		if !strings.EqualFold(ptr.Deref(existingRule.Properties.SourcePortRange, ""), ptr.Deref(rule.Properties.SourcePortRange, "")) {
 			continue
 		}
-		if !strings.EqualFold(ptr.Deref(existingRule.DestinationPortRange, ""), ptr.Deref(rule.DestinationPortRange, "")) {
+		if !strings.EqualFold(ptr.Deref(existingRule.Properties.DestinationPortRange, ""), ptr.Deref(rule.Properties.DestinationPortRange, "")) {
 			continue
 		}
-		if !strings.EqualFold(ptr.Deref(existingRule.SourceAddressPrefix, ""), ptr.Deref(rule.SourceAddressPrefix, "")) {
+		if !strings.EqualFold(ptr.Deref(existingRule.Properties.SourceAddressPrefix, ""), ptr.Deref(rule.Properties.SourceAddressPrefix, "")) {
 			continue
 		}
 		if !allowsConsolidation(existingRule) && !allowsConsolidation(rule) {
-			if !strings.EqualFold(ptr.Deref(existingRule.DestinationAddressPrefix, ""), ptr.Deref(rule.DestinationAddressPrefix, "")) {
+			if !strings.EqualFold(ptr.Deref(existingRule.Properties.DestinationAddressPrefix, ""), ptr.Deref(rule.Properties.DestinationAddressPrefix, "")) {
 				continue
 			}
-			if !slices.Equal(stringSlice(existingRule.DestinationAddressPrefixes), stringSlice(rule.DestinationAddressPrefixes)) {
+			if !slices.Equal(stringSlice(existingRule.Properties.DestinationAddressPrefixes), stringSlice(rule.Properties.DestinationAddressPrefixes)) {
 				continue
 			}
 		}
-		if !strings.EqualFold(string(existingRule.Access), string(rule.Access)) {
+		if !strings.EqualFold(string(*existingRule.Properties.Access), string(*rule.Properties.Access)) {
 			continue
 		}
-		if !strings.EqualFold(string(existingRule.Direction), string(rule.Direction)) {
+		if !strings.EqualFold(string(*existingRule.Properties.Direction), string(*rule.Properties.Direction)) {
 			continue
 		}
 		return true
@@ -3814,7 +3814,7 @@ func (az *Cloud) ensureLoadBalancerTagged(lb *network.LoadBalancer) bool {
 }
 
 // ensureSecurityGroupTagged ensures the security group is tagged as configured
-func (az *Cloud) ensureSecurityGroupTagged(sg *network.SecurityGroup) bool {
+func (az *Cloud) ensureSecurityGroupTagged(sg *armnetwork.SecurityGroup) bool {
 	if az.Tags == "" && (len(az.TagsMap) == 0) {
 		return false
 	}

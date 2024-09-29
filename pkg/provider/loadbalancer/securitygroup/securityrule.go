@@ -23,7 +23,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	v1 "k8s.io/api/core/v1"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
@@ -32,7 +33,7 @@ import (
 
 // GenerateAllowSecurityRuleName returns the AllowInbound rule name based on the given rule properties.
 func GenerateAllowSecurityRuleName(
-	protocol network.SecurityRuleProtocol,
+	protocol armnetwork.SecurityRuleProtocol,
 	ipFamily iputil.Family,
 	srcPrefixes []string,
 	dstPorts []int32,
@@ -86,53 +87,53 @@ func NormalizeDestinationPortRanges(dstPorts []int32) []string {
 	return rv
 }
 
-func ListSourcePrefixes(r *network.SecurityRule) []string {
+func ListSourcePrefixes(r *armnetwork.SecurityRule) []string {
 	var rv []string
-	if r.SourceAddressPrefix != nil {
-		rv = append(rv, *r.SourceAddressPrefix)
+	if r.Properties.SourceAddressPrefix != nil {
+		rv = append(rv, *r.Properties.SourceAddressPrefix)
 	}
-	if r.SourceAddressPrefixes != nil {
-		rv = append(rv, *r.SourceAddressPrefixes...)
+	if r.Properties.SourceAddressPrefixes != nil {
+		rv = append(rv, fnutil.Map(func(data *string) string { return *data }, r.Properties.SourceAddressPrefixes)...)
 	}
 	return rv
 }
 
-func ListDestinationPrefixes(r *network.SecurityRule) []string {
+func ListDestinationPrefixes(r *armnetwork.SecurityRule) []string {
 	var rv []string
-	if r.DestinationAddressPrefix != nil {
-		rv = append(rv, *r.DestinationAddressPrefix)
+	if r.Properties.DestinationAddressPrefix != nil {
+		rv = append(rv, *r.Properties.DestinationAddressPrefix)
 	}
-	if r.DestinationAddressPrefixes != nil {
-		rv = append(rv, *r.DestinationAddressPrefixes...)
+	if r.Properties.DestinationAddressPrefixes != nil {
+		rv = append(rv, fnutil.Map(func(key *string) string { return *key }, r.Properties.DestinationAddressPrefixes)...)
 	}
 	return rv
 }
 
-func SetDestinationPrefixes(r *network.SecurityRule, prefixes []string) {
+func SetDestinationPrefixes(r *armnetwork.SecurityRule, prefixes []string) {
 	ps := NormalizeSecurityRuleAddressPrefixes(prefixes)
 	if len(ps) == 1 {
-		r.DestinationAddressPrefix = &ps[0]
-		r.DestinationAddressPrefixes = nil
+		r.Properties.DestinationAddressPrefix = to.Ptr(ps[0])
+		r.Properties.DestinationAddressPrefixes = nil
 	} else {
-		r.DestinationAddressPrefix = nil
-		r.DestinationAddressPrefixes = &ps
+		r.Properties.DestinationAddressPrefix = nil
+		r.Properties.DestinationAddressPrefixes = to.SliceOfPtrs(ps...)
 	}
 }
 
-func ListDestinationPortRanges(r *network.SecurityRule) ([]int32, error) {
-	var values []string
-	if r.DestinationPortRange != nil {
-		values = append(values, *r.DestinationPortRange)
+func ListDestinationPortRanges(r *armnetwork.SecurityRule) ([]int32, error) {
+	var values []*string
+	if r.Properties.DestinationPortRange != nil {
+		values = append(values, r.Properties.DestinationPortRange)
 	}
-	if r.DestinationPortRanges != nil {
-		values = append(values, *r.DestinationPortRanges...)
+	if r.Properties.DestinationPortRanges != nil {
+		values = append(values, r.Properties.DestinationPortRanges...)
 	}
 
 	rv := make([]int32, 0, len(values))
 	for _, v := range values {
-		p, err := strconv.ParseInt(v, 10, 32)
+		p, err := strconv.ParseInt(*v, 10, 32)
 		if err != nil {
-			return nil, fmt.Errorf("parse port range %q: %w", v, err)
+			return nil, fmt.Errorf("parse port range %q: %w", *v, err)
 		}
 		rv = append(rv, int32(p))
 	}
@@ -140,14 +141,14 @@ func ListDestinationPortRanges(r *network.SecurityRule) ([]int32, error) {
 	return rv, nil
 }
 
-func ProtocolFromKubernetes(p v1.Protocol) (network.SecurityRuleProtocol, error) {
+func ProtocolFromKubernetes(p v1.Protocol) (armnetwork.SecurityRuleProtocol, error) {
 	switch p {
 	case v1.ProtocolTCP:
-		return network.SecurityRuleProtocolTCP, nil
+		return armnetwork.SecurityRuleProtocolTCP, nil
 	case v1.ProtocolUDP:
-		return network.SecurityRuleProtocolUDP, nil
+		return armnetwork.SecurityRuleProtocolUDP, nil
 	case v1.ProtocolSCTP:
-		return network.SecurityRuleProtocolAsterisk, nil
+		return armnetwork.SecurityRuleProtocolAsterisk, nil
 	}
 	return "", fmt.Errorf("unsupported protocol %s", p)
 }
