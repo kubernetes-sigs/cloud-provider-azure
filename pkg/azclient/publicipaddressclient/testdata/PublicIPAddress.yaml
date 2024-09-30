@@ -75,8 +75,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2024-01-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.1.0 (go1.23.1; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2024-03-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -91,7 +91,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -126,8 +126,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.1.0 (go1.23.1; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -173,8 +173,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2024-01-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.1.0 (go1.23.1; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2024-03-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -224,8 +224,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2024-01-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.1.0 (go1.23.1; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2024-03-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -275,8 +275,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResourcenotfound?api-version=2024-01-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.1.0 (go1.23.1; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResourcenotfound?api-version=2024-03-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -330,8 +330,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2024-01-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.1.0 (go1.23.1; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2024-03-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -346,7 +346,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -381,8 +381,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2024-01-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.1.0 (go1.23.1; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2024-03-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -432,8 +432,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses?api-version=2024-01-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.1.0 (go1.23.1; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses?api-version=2024-03-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -481,8 +481,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddressnotfound/providers/Microsoft.Network/publicIPAddresses?api-version=2024-01-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.1.0 (go1.23.1; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddressnotfound/providers/Microsoft.Network/publicIPAddresses?api-version=2024-03-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -532,8 +532,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2024-01-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.1.0 (go1.23.1; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2024-03-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -548,7 +548,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -556,7 +556,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -583,8 +583,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.0.0 (go1.23.1; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&s=s&t=t
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.1.0 (go1.23.1; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
