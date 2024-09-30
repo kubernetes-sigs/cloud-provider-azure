@@ -94,6 +94,20 @@ func convertMapToMapPointer(origin map[string]string) map[string]*string {
 	return newly
 }
 
+// parseTags processes and combines tags from a string and a map into a single map of string pointers.
+// It handles tag parsing, trimming, and case-insensitive key conflicts.
+//
+// Parameters:
+//   - tags: A string containing tags in the format "key1=value1,key2=value2"
+//   - tagsMap: A map of string key-value pairs representing additional tags
+//
+// Returns:
+//   - A map[string]*string where keys are tag names and values are pointers to tag values
+//
+// The function prioritizes tags from tagsMap over those from the tags string in case of conflicts.
+// It logs warnings for parsing errors and empty keys, and info messages for case-insensitive key replacements.
+//
+// XXX: return error instead of logging; decouple tag parsing and tag application
 func parseTags(tags string, tagsMap map[string]string) map[string]*string {
 	formatted := make(map[string]*string)
 
