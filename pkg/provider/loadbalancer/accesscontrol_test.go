@@ -24,6 +24,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil"
@@ -135,7 +136,7 @@ func TestNewAccessControl(t *testing.T) {
 		sg      = azureFx.SecurityGroup().WithRules(azureFx.NoiseSecurityRules()).Build()
 	)
 
-	t.Run("it should return error if using both spec.LoadBalancerSourceRanges and service annotation service.beta.kubernetes.io/azure-allowed-ip-ranges", func(t *testing.T) {
+	t.Run("it should return error if using spec.LoadBalancerSourceRanges and azure-allowed-ip-ranges", func(t *testing.T) {
 		svc := k8sFx.Service().
 			WithLoadBalancerSourceRanges("20.0.0.1/32").
 			WithAllowedIPRanges("10.0.0.1/32").
@@ -143,6 +144,64 @@ func TestNewAccessControl(t *testing.T) {
 
 		_, err := NewAccessControl(log.Noop(), &svc, sg)
 		assert.ErrorIs(t, err, ErrSetBothLoadBalancerSourceRangesAndAllowedIPRanges)
+	})
+
+	t.Run("it should emit warning event if invalid spec.LoadBalancerSourceRanges", func(t *testing.T) {
+		svc := k8sFx.Service().
+			WithLoadBalancerSourceRanges("foo", "10.0.0.1/32", "bar").
+			Build()
+
+		called := 0
+		eventEmitter := func(obj runtime.Object, eventType, reason, message string) {
+			called++
+			assert.Equal(t, &svc, obj)
+			assert.Equal(t, v1.EventTypeWarning, eventType)
+			assert.Equal(t, "InvalidSourceRanges", reason)
+			assert.Equal(t, EventMessageOfInvalidSourceRanges([]string{"foo", "bar"}), message)
+		}
+
+		_, err := NewAccessControl(log.Noop(), &svc, sg, WithEventEmitter(eventEmitter))
+		assert.NoError(t, err)
+		assert.Equal(t, 1, called)
+	})
+
+	t.Run("it should emit warning event if invalid azure-allowed-ip-ranges", func(t *testing.T) {
+		svc := k8sFx.Service().
+			WithAllowedIPRanges("foo", "10.0.0.1/32", "bar").
+			Build()
+
+		called := 0
+		eventEmitter := func(obj runtime.Object, eventType, reason, message string) {
+			called++
+			assert.Equal(t, &svc, obj)
+			assert.Equal(t, v1.EventTypeWarning, eventType)
+			assert.Equal(t, "InvalidAllowedIPRanges", reason)
+			assert.Equal(t, EventMessageOfInvalidAllowedIPRanges([]string{"foo", "bar"}), message)
+		}
+
+		_, err := NewAccessControl(log.Noop(), &svc, sg, WithEventEmitter(eventEmitter))
+		assert.NoError(t, err)
+		assert.Equal(t, 1, called)
+	})
+
+	t.Run("it should emit warning event if using spec.LoadBalancerSourceRanges and azure-allowed-service-tags", func(t *testing.T) {
+		svc := k8sFx.Service().
+			WithLoadBalancerSourceRanges("20.0.0.1/32").
+			WithAllowedServiceTags("AKS").
+			Build()
+
+		called := 0
+		eventEmitter := func(obj runtime.Object, eventType, reason, message string) {
+			called++
+			assert.Equal(t, &svc, obj)
+			assert.Equal(t, v1.EventTypeWarning, eventType)
+			assert.Equal(t, "ConflictConfiguration", reason)
+			assert.Equal(t, EventMessageOfConflictLoadBalancerSourceRangesAndAllowedIPRanges(), message)
+		}
+
+		_, err := NewAccessControl(log.Noop(), &svc, sg, WithEventEmitter(eventEmitter))
+		assert.NoError(t, err)
+		assert.Equal(t, 1, called)
 	})
 }
 
