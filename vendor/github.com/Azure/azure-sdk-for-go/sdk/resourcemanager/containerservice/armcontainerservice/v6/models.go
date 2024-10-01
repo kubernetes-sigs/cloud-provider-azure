@@ -72,6 +72,12 @@ type AgentPoolAvailableVersionsPropertiesAgentPoolVersionsItem struct {
 	KubernetesVersion *string
 }
 
+// AgentPoolDeleteMachinesParameter - Specifies a list of machine names from the agent pool to be deleted.
+type AgentPoolDeleteMachinesParameter struct {
+	// REQUIRED; The agent pool machine names.
+	MachineNames []*string
+}
+
 // AgentPoolListResult - The response from the List Agent Pools operation.
 type AgentPoolListResult struct {
 	// The list of agent pools.
@@ -91,6 +97,19 @@ type AgentPoolNetworkProfile struct {
 
 	// IPTags of instance-level public IPs.
 	NodePublicIPTags []*IPTag
+}
+
+// AgentPoolSecurityProfile - The security settings of an agent pool.
+type AgentPoolSecurityProfile struct {
+	// Secure Boot is a feature of Trusted Launch which ensures that only signed operating systems and drivers can boot. For more
+	// details, see aka.ms/aks/trustedlaunch. If not specified, the default is
+	// false.
+	EnableSecureBoot *bool
+
+	// vTPM is a Trusted Launch feature for configuring a dedicated secure vault for keys and measurements held locally on the
+	// node. For more details, see aka.ms/aks/trustedlaunch. If not specified, the
+	// default is false.
+	EnableVTPM *bool
 }
 
 // AgentPoolUpgradeProfile - The list of available upgrades for an agent pool.
@@ -479,6 +498,56 @@ type LinuxProfile struct {
 	SSH *SSHConfiguration
 }
 
+// Machine - A machine. Contains details about the underlying virtual machine. A machine may be visible here but not in kubectl
+// get nodes; if so it may be because the machine has not been registered with the
+// Kubernetes API Server yet.
+type Machine struct {
+	// READ-ONLY; Resource ID.
+	ID *string
+
+	// READ-ONLY; The name of the resource that is unique within a resource group. This name can be used to access the resource.
+	Name *string
+
+	// READ-ONLY; The properties of the machine
+	Properties *MachineProperties
+
+	// READ-ONLY; Resource type
+	Type *string
+}
+
+// MachineIPAddress - The machine IP address details.
+type MachineIPAddress struct {
+	// READ-ONLY; To determine if address belongs IPv4 or IPv6 family
+	Family *IPFamily
+
+	// READ-ONLY; IPv4 or IPv6 address of the machine
+	IP *string
+}
+
+// MachineListResult - The response from the List Machines operation.
+type MachineListResult struct {
+	// The list of Machines in cluster.
+	Value []*Machine
+
+	// READ-ONLY; The URL to get the next set of machine results.
+	NextLink *string
+}
+
+// MachineNetworkProperties - network properties of the machine
+type MachineNetworkProperties struct {
+	// READ-ONLY; IPv4, IPv6 addresses of the machine
+	IPAddresses []*MachineIPAddress
+}
+
+// MachineProperties - The properties of the machine
+type MachineProperties struct {
+	// READ-ONLY; network properties of the machine
+	Network *MachineNetworkProperties
+
+	// READ-ONLY; Azure resource id of the machine. It can be used to GET underlying VM Instance
+	ResourceID *string
+}
+
 // MaintenanceConfiguration - See planned maintenance [https://docs.microsoft.com/azure/aks/planned-maintenance] for more
 // information about planned maintenance.
 type MaintenanceConfiguration struct {
@@ -799,6 +868,9 @@ type ManagedClusterAgentPoolProfile struct {
 	// The Virtual Machine Scale Set priority. If not specified, the default is 'Regular'.
 	ScaleSetPriority *ScaleSetPriority
 
+	// The security settings of an agent pool.
+	SecurityProfile *AgentPoolSecurityProfile
+
 	// Possible values are any decimal value greater than zero or -1 which indicates the willingness to pay any on-demand price.
 	// For more details on spot pricing, see spot VMs pricing
 	// [https://docs.microsoft.com/azure/virtual-machines/spot-vms#pricing]
@@ -963,6 +1035,9 @@ type ManagedClusterAgentPoolProfileProperties struct {
 
 	// The Virtual Machine Scale Set priority. If not specified, the default is 'Regular'.
 	ScaleSetPriority *ScaleSetPriority
+
+	// The security settings of an agent pool.
+	SecurityProfile *AgentPoolSecurityProfile
 
 	// Possible values are any decimal value greater than zero or -1 which indicates the willingness to pay any on-demand price.
 	// For more details on spot pricing, see spot VMs pricing

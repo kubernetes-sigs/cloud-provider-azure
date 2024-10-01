@@ -48,7 +48,7 @@ func NewAgentPoolsClient(subscriptionID string, credential azcore.TokenCredentia
 // before cancellation can take place, a 409 error code is returned.
 // If the operation fails it returns an *azcore.ResponseError type.
 //
-// Generated from API version 2024-05-01
+// Generated from API version 2024-07-01
 //   - resourceGroupName - The name of the resource group. The name is case insensitive.
 //   - resourceName - The name of the managed cluster resource.
 //   - agentPoolName - The name of the agent pool.
@@ -77,7 +77,7 @@ func (client *AgentPoolsClient) BeginAbortLatestOperation(ctx context.Context, r
 // before cancellation can take place, a 409 error code is returned.
 // If the operation fails it returns an *azcore.ResponseError type.
 //
-// Generated from API version 2024-05-01
+// Generated from API version 2024-07-01
 func (client *AgentPoolsClient) abortLatestOperation(ctx context.Context, resourceGroupName string, resourceName string, agentPoolName string, options *AgentPoolsClientBeginAbortLatestOperationOptions) (*http.Response, error) {
 	var err error
 	const operationName = "AgentPoolsClient.BeginAbortLatestOperation"
@@ -123,7 +123,7 @@ func (client *AgentPoolsClient) abortLatestOperationCreateRequest(ctx context.Co
 		return nil, err
 	}
 	reqQP := req.Raw().URL.Query()
-	reqQP.Set("api-version", "2024-05-01")
+	reqQP.Set("api-version", "2024-07-01")
 	req.Raw().URL.RawQuery = reqQP.Encode()
 	req.Raw().Header["Accept"] = []string{"application/json"}
 	return req, nil
@@ -132,7 +132,7 @@ func (client *AgentPoolsClient) abortLatestOperationCreateRequest(ctx context.Co
 // BeginCreateOrUpdate - Creates or updates an agent pool in the specified managed cluster.
 // If the operation fails it returns an *azcore.ResponseError type.
 //
-// Generated from API version 2024-05-01
+// Generated from API version 2024-07-01
 //   - resourceGroupName - The name of the resource group. The name is case insensitive.
 //   - resourceName - The name of the managed cluster resource.
 //   - agentPoolName - The name of the agent pool.
@@ -159,7 +159,7 @@ func (client *AgentPoolsClient) BeginCreateOrUpdate(ctx context.Context, resourc
 // CreateOrUpdate - Creates or updates an agent pool in the specified managed cluster.
 // If the operation fails it returns an *azcore.ResponseError type.
 //
-// Generated from API version 2024-05-01
+// Generated from API version 2024-07-01
 func (client *AgentPoolsClient) createOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, agentPoolName string, parameters AgentPool, options *AgentPoolsClientBeginCreateOrUpdateOptions) (*http.Response, error) {
 	var err error
 	const operationName = "AgentPoolsClient.BeginCreateOrUpdate"
@@ -205,7 +205,7 @@ func (client *AgentPoolsClient) createOrUpdateCreateRequest(ctx context.Context,
 		return nil, err
 	}
 	reqQP := req.Raw().URL.Query()
-	reqQP.Set("api-version", "2024-05-01")
+	reqQP.Set("api-version", "2024-07-01")
 	req.Raw().URL.RawQuery = reqQP.Encode()
 	req.Raw().Header["Accept"] = []string{"application/json"}
 	if err := runtime.MarshalAsJSON(req, parameters); err != nil {
@@ -217,7 +217,7 @@ func (client *AgentPoolsClient) createOrUpdateCreateRequest(ctx context.Context,
 // BeginDelete - Deletes an agent pool in the specified managed cluster.
 // If the operation fails it returns an *azcore.ResponseError type.
 //
-// Generated from API version 2024-05-01
+// Generated from API version 2024-07-01
 //   - resourceGroupName - The name of the resource group. The name is case insensitive.
 //   - resourceName - The name of the managed cluster resource.
 //   - agentPoolName - The name of the agent pool.
@@ -242,7 +242,7 @@ func (client *AgentPoolsClient) BeginDelete(ctx context.Context, resourceGroupNa
 // Delete - Deletes an agent pool in the specified managed cluster.
 // If the operation fails it returns an *azcore.ResponseError type.
 //
-// Generated from API version 2024-05-01
+// Generated from API version 2024-07-01
 func (client *AgentPoolsClient) deleteOperation(ctx context.Context, resourceGroupName string, resourceName string, agentPoolName string, options *AgentPoolsClientBeginDeleteOptions) (*http.Response, error) {
 	var err error
 	const operationName = "AgentPoolsClient.BeginDelete"
@@ -288,16 +288,101 @@ func (client *AgentPoolsClient) deleteCreateRequest(ctx context.Context, resourc
 		return nil, err
 	}
 	reqQP := req.Raw().URL.Query()
-	reqQP.Set("api-version", "2024-05-01")
+	reqQP.Set("api-version", "2024-07-01")
 	req.Raw().URL.RawQuery = reqQP.Encode()
 	req.Raw().Header["Accept"] = []string{"application/json"}
+	return req, nil
+}
+
+// BeginDeleteMachines - Deletes specific machines in an agent pool.
+// If the operation fails it returns an *azcore.ResponseError type.
+//
+// Generated from API version 2024-07-01
+//   - resourceGroupName - The name of the resource group. The name is case insensitive.
+//   - resourceName - The name of the managed cluster resource.
+//   - agentPoolName - The name of the agent pool.
+//   - machines - A list of machines from the agent pool to be deleted.
+//   - options - AgentPoolsClientBeginDeleteMachinesOptions contains the optional parameters for the AgentPoolsClient.BeginDeleteMachines
+//     method.
+func (client *AgentPoolsClient) BeginDeleteMachines(ctx context.Context, resourceGroupName string, resourceName string, agentPoolName string, machines AgentPoolDeleteMachinesParameter, options *AgentPoolsClientBeginDeleteMachinesOptions) (*runtime.Poller[AgentPoolsClientDeleteMachinesResponse], error) {
+	if options == nil || options.ResumeToken == "" {
+		resp, err := client.deleteMachines(ctx, resourceGroupName, resourceName, agentPoolName, machines, options)
+		if err != nil {
+			return nil, err
+		}
+		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[AgentPoolsClientDeleteMachinesResponse]{
+			Tracer: client.internal.Tracer(),
+		})
+		return poller, err
+	} else {
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[AgentPoolsClientDeleteMachinesResponse]{
+			Tracer: client.internal.Tracer(),
+		})
+	}
+}
+
+// DeleteMachines - Deletes specific machines in an agent pool.
+// If the operation fails it returns an *azcore.ResponseError type.
+//
+// Generated from API version 2024-07-01
+func (client *AgentPoolsClient) deleteMachines(ctx context.Context, resourceGroupName string, resourceName string, agentPoolName string, machines AgentPoolDeleteMachinesParameter, options *AgentPoolsClientBeginDeleteMachinesOptions) (*http.Response, error) {
+	var err error
+	const operationName = "AgentPoolsClient.BeginDeleteMachines"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
+	req, err := client.deleteMachinesCreateRequest(ctx, resourceGroupName, resourceName, agentPoolName, machines, options)
+	if err != nil {
+		return nil, err
+	}
+	httpResp, err := client.internal.Pipeline().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if !runtime.HasStatusCode(httpResp, http.StatusAccepted) {
+		err = runtime.NewResponseError(httpResp)
+		return nil, err
+	}
+	return httpResp, nil
+}
+
+// deleteMachinesCreateRequest creates the DeleteMachines request.
+func (client *AgentPoolsClient) deleteMachinesCreateRequest(ctx context.Context, resourceGroupName string, resourceName string, agentPoolName string, machines AgentPoolDeleteMachinesParameter, options *AgentPoolsClientBeginDeleteMachinesOptions) (*policy.Request, error) {
+	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerService/managedClusters/{resourceName}/agentPools/{agentPoolName}/deleteMachines"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
+	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
+	if resourceGroupName == "" {
+		return nil, errors.New("parameter resourceGroupName cannot be empty")
+	}
+	urlPath = strings.ReplaceAll(urlPath, "{resourceGroupName}", url.PathEscape(resourceGroupName))
+	if resourceName == "" {
+		return nil, errors.New("parameter resourceName cannot be empty")
+	}
+	urlPath = strings.ReplaceAll(urlPath, "{resourceName}", url.PathEscape(resourceName))
+	if agentPoolName == "" {
+		return nil, errors.New("parameter agentPoolName cannot be empty")
+	}
+	urlPath = strings.ReplaceAll(urlPath, "{agentPoolName}", url.PathEscape(agentPoolName))
+	req, err := runtime.NewRequest(ctx, http.MethodPost, runtime.JoinPaths(client.internal.Endpoint(), urlPath))
+	if err != nil {
+		return nil, err
+	}
+	reqQP := req.Raw().URL.Query()
+	reqQP.Set("api-version", "2024-07-01")
+	req.Raw().URL.RawQuery = reqQP.Encode()
+	req.Raw().Header["Accept"] = []string{"application/json"}
+	if err := runtime.MarshalAsJSON(req, machines); err != nil {
+		return nil, err
+	}
 	return req, nil
 }
 
 // Get - Gets the specified managed cluster agent pool.
 // If the operation fails it returns an *azcore.ResponseError type.
 //
-// Generated from API version 2024-05-01
+// Generated from API version 2024-07-01
 //   - resourceGroupName - The name of the resource group. The name is case insensitive.
 //   - resourceName - The name of the managed cluster resource.
 //   - agentPoolName - The name of the agent pool.
@@ -348,7 +433,7 @@ func (client *AgentPoolsClient) getCreateRequest(ctx context.Context, resourceGr
 		return nil, err
 	}
 	reqQP := req.Raw().URL.Query()
-	reqQP.Set("api-version", "2024-05-01")
+	reqQP.Set("api-version", "2024-07-01")
 	req.Raw().URL.RawQuery = reqQP.Encode()
 	req.Raw().Header["Accept"] = []string{"application/json"}
 	return req, nil
@@ -367,7 +452,7 @@ func (client *AgentPoolsClient) getHandleResponse(resp *http.Response) (AgentPoo
 // for more details about the version lifecycle.
 // If the operation fails it returns an *azcore.ResponseError type.
 //
-// Generated from API version 2024-05-01
+// Generated from API version 2024-07-01
 //   - resourceGroupName - The name of the resource group. The name is case insensitive.
 //   - resourceName - The name of the managed cluster resource.
 //   - options - AgentPoolsClientGetAvailableAgentPoolVersionsOptions contains the optional parameters for the AgentPoolsClient.GetAvailableAgentPoolVersions
@@ -414,7 +499,7 @@ func (client *AgentPoolsClient) getAvailableAgentPoolVersionsCreateRequest(ctx c
 		return nil, err
 	}
 	reqQP := req.Raw().URL.Query()
-	reqQP.Set("api-version", "2024-05-01")
+	reqQP.Set("api-version", "2024-07-01")
 	req.Raw().URL.RawQuery = reqQP.Encode()
 	req.Raw().Header["Accept"] = []string{"application/json"}
 	return req, nil
@@ -432,7 +517,7 @@ func (client *AgentPoolsClient) getAvailableAgentPoolVersionsHandleResponse(resp
 // GetUpgradeProfile - Gets the upgrade profile for an agent pool.
 // If the operation fails it returns an *azcore.ResponseError type.
 //
-// Generated from API version 2024-05-01
+// Generated from API version 2024-07-01
 //   - resourceGroupName - The name of the resource group. The name is case insensitive.
 //   - resourceName - The name of the managed cluster resource.
 //   - agentPoolName - The name of the agent pool.
@@ -484,7 +569,7 @@ func (client *AgentPoolsClient) getUpgradeProfileCreateRequest(ctx context.Conte
 		return nil, err
 	}
 	reqQP := req.Raw().URL.Query()
-	reqQP.Set("api-version", "2024-05-01")
+	reqQP.Set("api-version", "2024-07-01")
 	req.Raw().URL.RawQuery = reqQP.Encode()
 	req.Raw().Header["Accept"] = []string{"application/json"}
 	return req, nil
@@ -501,7 +586,7 @@ func (client *AgentPoolsClient) getUpgradeProfileHandleResponse(resp *http.Respo
 
 // NewListPager - Gets a list of agent pools in the specified managed cluster.
 //
-// Generated from API version 2024-05-01
+// Generated from API version 2024-07-01
 //   - resourceGroupName - The name of the resource group. The name is case insensitive.
 //   - resourceName - The name of the managed cluster resource.
 //   - options - AgentPoolsClientListOptions contains the optional parameters for the AgentPoolsClient.NewListPager method.
@@ -548,7 +633,7 @@ func (client *AgentPoolsClient) listCreateRequest(ctx context.Context, resourceG
 		return nil, err
 	}
 	reqQP := req.Raw().URL.Query()
-	reqQP.Set("api-version", "2024-05-01")
+	reqQP.Set("api-version", "2024-07-01")
 	req.Raw().URL.RawQuery = reqQP.Encode()
 	req.Raw().Header["Accept"] = []string{"application/json"}
 	return req, nil
@@ -568,7 +653,7 @@ func (client *AgentPoolsClient) listHandleResponse(resp *http.Response) (AgentPo
 // versions, see: https://docs.microsoft.com/azure/aks/node-image-upgrade
 // If the operation fails it returns an *azcore.ResponseError type.
 //
-// Generated from API version 2024-05-01
+// Generated from API version 2024-07-01
 //   - resourceGroupName - The name of the resource group. The name is case insensitive.
 //   - resourceName - The name of the managed cluster resource.
 //   - agentPoolName - The name of the agent pool.
@@ -597,7 +682,7 @@ func (client *AgentPoolsClient) BeginUpgradeNodeImageVersion(ctx context.Context
 // versions, see: https://docs.microsoft.com/azure/aks/node-image-upgrade
 // If the operation fails it returns an *azcore.ResponseError type.
 //
-// Generated from API version 2024-05-01
+// Generated from API version 2024-07-01
 func (client *AgentPoolsClient) upgradeNodeImageVersion(ctx context.Context, resourceGroupName string, resourceName string, agentPoolName string, options *AgentPoolsClientBeginUpgradeNodeImageVersionOptions) (*http.Response, error) {
 	var err error
 	const operationName = "AgentPoolsClient.BeginUpgradeNodeImageVersion"
@@ -643,7 +728,7 @@ func (client *AgentPoolsClient) upgradeNodeImageVersionCreateRequest(ctx context
 		return nil, err
 	}
 	reqQP := req.Raw().URL.Query()
-	reqQP.Set("api-version", "2024-05-01")
+	reqQP.Set("api-version", "2024-07-01")
 	req.Raw().URL.RawQuery = reqQP.Encode()
 	req.Raw().Header["Accept"] = []string{"application/json"}
 	return req, nil
