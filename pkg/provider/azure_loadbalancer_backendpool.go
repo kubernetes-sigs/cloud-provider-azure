@@ -932,7 +932,7 @@ func (bpi *backendPoolTypePodIP) EnsureHostsInPool(service *v1.Service, _ []*v1.
 		changed               bool
 		err                   error
 		podIPsToBeAdded []string
-		endpointsliceName string
+		endpointSliceName string
 		endpointSliceNames [] string
 		numOfAdd int
 	)
