@@ -19,6 +19,11 @@ type AgentPoolsClientCreateOrUpdateResponse struct {
 	AgentPool
 }
 
+// AgentPoolsClientDeleteMachinesResponse contains the response from method AgentPoolsClient.BeginDeleteMachines.
+type AgentPoolsClientDeleteMachinesResponse struct {
+	// placeholder for future response values
+}
+
 // AgentPoolsClientDeleteResponse contains the response from method AgentPoolsClient.BeginDelete.
 type AgentPoolsClientDeleteResponse struct {
 	// placeholder for future response values
@@ -52,6 +57,19 @@ type AgentPoolsClientListResponse struct {
 type AgentPoolsClientUpgradeNodeImageVersionResponse struct {
 	// Agent Pool.
 	AgentPool
+}
+
+// MachinesClientGetResponse contains the response from method MachinesClient.Get.
+type MachinesClientGetResponse struct {
+	// A machine. Contains details about the underlying virtual machine. A machine may be visible here but not in kubectl get
+	// nodes; if so it may be because the machine has not been registered with the Kubernetes API Server yet.
+	Machine
+}
+
+// MachinesClientListResponse contains the response from method MachinesClient.NewListPager.
+type MachinesClientListResponse struct {
+	// The response from the List Machines operation.
+	MachineListResult
 }
 
 // MaintenanceConfigurationsClientCreateOrUpdateResponse contains the response from method MaintenanceConfigurationsClient.CreateOrUpdate.
