@@ -70,7 +70,7 @@ func TestIsInternal(t *testing.T) {
 
 func TestAllowedServiceTags(t *testing.T) {
 	t.Run("no annotation", func(t *testing.T) {
-		actual, err := AllowedServiceTags(&v1.Service{
+		actual := AllowedServiceTags(&v1.Service{
 			Spec: v1.ServiceSpec{
 				Type: v1.ServiceTypeLoadBalancer,
 			},
@@ -78,11 +78,10 @@ func TestAllowedServiceTags(t *testing.T) {
 				Annotations: map[string]string{},
 			},
 		})
-		assert.NoError(t, err)
 		assert.Empty(t, actual)
 	})
 	t.Run("with 1 service tag", func(t *testing.T) {
-		actual, err := AllowedServiceTags(&v1.Service{
+		actual := AllowedServiceTags(&v1.Service{
 			Spec: v1.ServiceSpec{
 				Type: v1.ServiceTypeLoadBalancer,
 			},
@@ -92,11 +91,10 @@ func TestAllowedServiceTags(t *testing.T) {
 				},
 			},
 		})
-		assert.NoError(t, err)
 		assert.Equal(t, []string{"Microsoft.ContainerInstance/containerGroups"}, actual)
 	})
 	t.Run("with multiple service tags", func(t *testing.T) {
-		actual, err := AllowedServiceTags(&v1.Service{
+		actual := AllowedServiceTags(&v1.Service{
 			Spec: v1.ServiceSpec{
 				Type: v1.ServiceTypeLoadBalancer,
 			},
@@ -106,7 +104,6 @@ func TestAllowedServiceTags(t *testing.T) {
 				},
 			},
 		})
-		assert.NoError(t, err)
 		assert.Equal(t, []string{"Microsoft.ContainerInstance/containerGroups", "foo", "bar"}, actual)
 	})
 }
