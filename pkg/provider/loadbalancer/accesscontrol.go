@@ -46,24 +46,24 @@ type AccessControl struct {
 	// immutable pre-compute states.
 	SourceRanges                           []netip.Prefix
 	AllowedIPRanges                        []netip.Prefix
-	InvalidRanges                          []string
 	AllowedServiceTags                     []string
+	invalidRanges                          []string
 	securityRuleDestinationPortsByProtocol map[armnetwork.SecurityRuleProtocol][]int32
 }
 
 type accessControlOptions struct {
-	SkipAnnotationValidation bool
+	EventEmitter K8sEventEmitter
 }
 
 var defaultAccessControlOptions = accessControlOptions{
-	SkipAnnotationValidation: false,
+	EventEmitter: noopEventEmitter,
 }
 
 type AccessControlOption func(*accessControlOptions)
 
-func SkipAnnotationValidation() AccessControlOption {
+func WithEventEmitter(emitter K8sEventEmitter) AccessControlOption {
 	return func(o *accessControlOptions) {
-		o.SkipAnnotationValidation = true
+		o.EventEmitter = emitter
 	}
 }
 
@@ -74,6 +74,7 @@ func NewAccessControl(logger logr.Logger, svc *v1.Service, sg *armnetwork.Securi
 	for _, opt := range opts {
 		opt(&options)
 	}
+	eventEmitter := options.EventEmitter
 
 	sgHelper, err := securitygroup.NewSecurityGroupHelper(logger, sg)
 	if err != nil {
@@ -81,17 +82,20 @@ func NewAccessControl(logger logr.Logger, svc *v1.Service, sg *armnetwork.Securi
 		return nil, err
 	}
 	sourceRanges, invalidSourceRanges, err := SourceRanges(svc)
-	if err != nil && !options.SkipAnnotationValidation {
+	if err != nil {
 		logger.Error(err, "Failed to parse SourceRange configuration")
+
+		// Backward compatibility: no error but emit a warning event.
+		eventEmitter(svc, v1.EventTypeWarning, "InvalidSourceRanges", EventMessageOfInvalidSourceRanges(invalidSourceRanges))
 	}
 	allowedIPRanges, invalidAllowedIPRanges, err := AllowedIPRanges(svc)
-	if err != nil && !options.SkipAnnotationValidation {
+	if err != nil {
 		logger.Error(err, "Failed to parse AllowedIPRanges configuration")
+
+		// Backward compatibility: no error but emit a warning event.
+		eventEmitter(svc, v1.EventTypeWarning, "InvalidAllowedIPRanges", EventMessageOfInvalidAllowedIPRanges(invalidAllowedIPRanges))
 	}
-	allowedServiceTags, err := AllowedServiceTags(svc)
-	if err != nil && !options.SkipAnnotationValidation {
-		logger.Error(err, "Failed to parse AllowedServiceTags configuration")
-	}
+	allowedServiceTags := AllowedServiceTags(svc)
 	securityRuleDestinationPortsByProtocol, err := SecurityRuleDestinationPortsByProtocol(svc)
 	if err != nil {
 		logger.Error(err, "Failed to parse service spec.Ports")
@@ -102,6 +106,15 @@ func NewAccessControl(logger logr.Logger, svc *v1.Service, sg *armnetwork.Securi
 		return nil, ErrSetBothLoadBalancerSourceRangesAndAllowedIPRanges
 	}
 
+	if len(sourceRanges) > 0 && len(allowedServiceTags) > 0 {
+		logger.Info(
+			"Service is using both of spec.loadBalancerSourceRanges and annotation service.beta.kubernetes.io/azure-allowed-service-tags",
+		)
+		// Backward compatibility: emit a warning event.
+		// It won't work as expected if both are used at the same time.
+		eventEmitter(svc, v1.EventTypeWarning, "ConflictConfiguration", EventMessageOfConflictLoadBalancerSourceRangesAndAllowedIPRanges())
+	}
+
 	return &AccessControl{
 		logger:                                 logger,
 		svc:                                    svc,
@@ -109,7 +122,7 @@ func NewAccessControl(logger logr.Logger, svc *v1.Service, sg *armnetwork.Securi
 		SourceRanges:                           sourceRanges,
 		AllowedIPRanges:                        allowedIPRanges,
 		AllowedServiceTags:                     allowedServiceTags,
-		InvalidRanges:                          append(invalidSourceRanges, invalidAllowedIPRanges...),
+		invalidRanges:                          append(invalidSourceRanges, invalidAllowedIPRanges...),
 		securityRuleDestinationPortsByProtocol: securityRuleDestinationPortsByProtocol,
 	}, nil
 }
@@ -128,7 +141,7 @@ func (ac *AccessControl) IsAllowFromInternet() bool {
 	if len(ac.AllowedIPRanges) > 0 && !iputil.IsPrefixesAllowAll(ac.AllowedIPRanges) {
 		return false
 	}
-	if len(ac.InvalidRanges) > 0 {
+	if len(ac.invalidRanges) > 0 {
 		return false
 	}
 	if !IsInternal(ac.svc) {
@@ -144,7 +157,7 @@ func (ac *AccessControl) DenyAllExceptSourceRanges() bool {
 	var (
 		annotationEnabled      = strings.EqualFold(ac.svc.Annotations[consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges], "true")
 		sourceRangeSpecified   = len(ac.SourceRanges) > 0 || len(ac.AllowedIPRanges) > 0
-		invalidRangesSpecified = len(ac.InvalidRanges) > 0
+		invalidRangesSpecified = len(ac.invalidRanges) > 0
 	)
 	return (annotationEnabled && sourceRangeSpecified) || invalidRangesSpecified
 }
