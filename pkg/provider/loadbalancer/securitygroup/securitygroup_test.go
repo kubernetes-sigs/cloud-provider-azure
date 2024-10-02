@@ -444,6 +444,172 @@ func TestSecurityGroupHelper_AddRuleForAllowedIPRanges(t *testing.T) {
 			testutil.ExpectHasSecurityRules(t, outputSG, []*armnetwork.SecurityRule{targetRule}, "[`%s`] the target rule remain unchanged", c.TestName)
 		}
 	})
+	t.Run("when destination address prefixes can be aggregated, it should aggregate them", func(t *testing.T) {
+		var (
+			sg     = fx.Azure().SecurityGroup().Build()
+			helper = ExpectNewSecurityGroupHelper(t, sg)
+
+			protocol     = armnetwork.SecurityRuleProtocolTCP
+			ipFamily     = iputil.IPv4
+			serviceTag   = "AzureCloud"
+			dstAddresses = []netip.Addr{
+				netip.MustParseAddr("10.0.0.1"), // 10.0.0.b0000_0001
+				netip.MustParseAddr("10.0.0.2"), // 10.0.0.b0000_0010
+				netip.MustParseAddr("10.0.0.3"), // 10.0.0.b0000_0011
+				netip.MustParseAddr("10.0.0.4"), // 10.0.0.b0000_0100
+			}
+			dstPorts = []int32{80, 443}
+
+			expectedRule = &armnetwork.SecurityRule{
+				Name: ptr.To(GenerateAllowSecurityRuleName(protocol, ipFamily, []string{serviceTag}, dstPorts)),
+				Properties: &armnetwork.SecurityRulePropertiesFormat{
+					Protocol:                   to.Ptr(protocol),
+					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
+					Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
+					SourceAddressPrefix:        to.Ptr(serviceTag),
+					SourcePortRange:            ptr.To("*"),
+					DestinationAddressPrefixes: to.SliceOfPtrs("10.0.0.1", "10.0.0.2/31", "10.0.0.4"),
+					DestinationPortRanges:      to.SliceOfPtrs("443", "80"),
+					Priority:                   ptr.To(int32(500)),
+				},
+			}
+		)
+
+		err := helper.AddRuleForAllowedServiceTag(serviceTag, protocol, dstAddresses, dstPorts)
+		assert.NoError(t, err)
+
+		outputSG, updated, err := helper.SecurityGroup()
+		assert.NoError(t, err)
+		assert.True(t, updated)
+		assert.Equal(t, 1, len(outputSG.Properties.SecurityRules))
+		testutil.ExpectHasSecurityRules(t, outputSG, []*armnetwork.SecurityRule{expectedRule})
+	})
+	t.Run("when adding new IP to existing rule, it should aggregate with old IPs", func(t *testing.T) {
+		var (
+			sg     = fx.Azure().SecurityGroup().Build()
+			helper = ExpectNewSecurityGroupHelper(t, sg)
+
+			protocol            = armnetwork.SecurityRuleProtocolTCP
+			ipFamily            = iputil.IPv4
+			serviceTag          = "AzureCloud"
+			initialDstAddresses = []netip.Addr{
+				netip.MustParseAddr("10.0.0.1"),
+				netip.MustParseAddr("10.0.0.2"),
+			}
+			newDstAddress = netip.MustParseAddr("10.0.0.3")
+			dstPorts      = []int32{80, 443}
+
+			expectedInitialRule = &armnetwork.SecurityRule{
+				Name: ptr.To(GenerateAllowSecurityRuleName(protocol, ipFamily, []string{serviceTag}, dstPorts)),
+				Properties: &armnetwork.SecurityRulePropertiesFormat{
+					Protocol:                   to.Ptr(protocol),
+					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
+					Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
+					SourceAddressPrefix:        to.Ptr(serviceTag),
+					SourcePortRange:            ptr.To("*"),
+					DestinationAddressPrefixes: to.SliceOfPtrs("10.0.0.1", "10.0.0.2"),
+					DestinationPortRanges:      to.SliceOfPtrs("443", "80"),
+					Priority:                   ptr.To(int32(500)),
+				},
+			}
+
+			expectedUpdatedRule = &armnetwork.SecurityRule{
+				Name: ptr.To(GenerateAllowSecurityRuleName(protocol, ipFamily, []string{serviceTag}, dstPorts)),
+				Properties: &armnetwork.SecurityRulePropertiesFormat{
+					Protocol:                   to.Ptr(protocol),
+					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
+					Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
+					SourceAddressPrefix:        to.Ptr(serviceTag),
+					SourcePortRange:            ptr.To("*"),
+					DestinationAddressPrefixes: to.SliceOfPtrs("10.0.0.1", "10.0.0.2/31"),
+					DestinationPortRanges:      to.SliceOfPtrs("443", "80"),
+					Priority:                   ptr.To(int32(500)),
+				},
+			}
+		)
+
+		// Add initial rule
+		err := helper.AddRuleForAllowedServiceTag(serviceTag, protocol, initialDstAddresses, dstPorts)
+		assert.NoError(t, err)
+
+		outputSG, updated, err := helper.SecurityGroup()
+		assert.NoError(t, err)
+		assert.True(t, updated)
+		assert.Equal(t, 1, len(outputSG.Properties.SecurityRules))
+		testutil.ExpectHasSecurityRules(t, outputSG, []*armnetwork.SecurityRule{expectedInitialRule})
+
+		// Add new IP to existing rule
+		err = helper.AddRuleForAllowedServiceTag(serviceTag, protocol, []netip.Addr{newDstAddress}, dstPorts)
+		assert.NoError(t, err)
+
+		outputSG, updated, err = helper.SecurityGroup()
+		assert.NoError(t, err)
+		assert.True(t, updated)
+		assert.Equal(t, 1, len(outputSG.Properties.SecurityRules))
+		testutil.ExpectHasSecurityRules(t, outputSG, []*armnetwork.SecurityRule{expectedUpdatedRule})
+	})
+	t.Run("should aggregate IPv6 addresses", func(t *testing.T) {
+		var (
+			sg     = fx.Azure().SecurityGroup().Build()
+			helper = ExpectNewSecurityGroupHelper(t, sg)
+
+			protocol            = armnetwork.SecurityRuleProtocolTCP
+			serviceTag          = "AzureCloud"
+			ipFamily            = iputil.IPv6
+			initialDstAddresses = []netip.Addr{netip.MustParseAddr("2001:db8::1"), netip.MustParseAddr("2001:db8::2")}
+			newDstAddr          = netip.MustParseAddr("2001:db8::3")
+			dstPorts            = []int32{80, 443}
+
+			expectedInitialRule = &armnetwork.SecurityRule{
+				Name: ptr.To(GenerateAllowSecurityRuleName(protocol, ipFamily, []string{serviceTag}, dstPorts)),
+				Properties: &armnetwork.SecurityRulePropertiesFormat{
+					Protocol:                   to.Ptr(protocol),
+					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
+					Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
+					SourceAddressPrefix:        to.Ptr(serviceTag),
+					SourcePortRange:            ptr.To("*"),
+					DestinationAddressPrefixes: to.SliceOfPtrs("2001:db8::1", "2001:db8::2"),
+					DestinationPortRanges:      to.SliceOfPtrs("443", "80"),
+					Priority:                   ptr.To(int32(500)),
+				},
+			}
+
+			expectedUpdatedRule = &armnetwork.SecurityRule{
+				Name: ptr.To(GenerateAllowSecurityRuleName(protocol, ipFamily, []string{serviceTag}, dstPorts)),
+				Properties: &armnetwork.SecurityRulePropertiesFormat{
+					Protocol:                   to.Ptr(protocol),
+					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
+					Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
+					SourceAddressPrefix:        to.Ptr(serviceTag),
+					SourcePortRange:            ptr.To("*"),
+					DestinationAddressPrefixes: to.SliceOfPtrs("2001:db8::1", "2001:db8::2/127"),
+					DestinationPortRanges:      to.SliceOfPtrs("443", "80"),
+					Priority:                   ptr.To(int32(500)),
+				},
+			}
+		)
+
+		// Add initial rule
+		err := helper.AddRuleForAllowedServiceTag(serviceTag, protocol, initialDstAddresses, dstPorts)
+		assert.NoError(t, err)
+
+		outputSG, updated, err := helper.SecurityGroup()
+		assert.NoError(t, err)
+		assert.True(t, updated)
+		assert.Equal(t, 1, len(outputSG.Properties.SecurityRules))
+		testutil.ExpectHasSecurityRules(t, outputSG, []*armnetwork.SecurityRule{expectedInitialRule})
+
+		// Add new IPv6 address to existing rule
+		err = helper.AddRuleForAllowedServiceTag(serviceTag, protocol, []netip.Addr{newDstAddr}, dstPorts)
+		assert.NoError(t, err)
+
+		outputSG, updated, err = helper.SecurityGroup()
+		assert.NoError(t, err)
+		assert.True(t, updated)
+		assert.Equal(t, 1, len(outputSG.Properties.SecurityRules))
+		testutil.ExpectHasSecurityRules(t, outputSG, []*armnetwork.SecurityRule{expectedUpdatedRule})
+	})
+
 }
 
 func TestSecurityGroupHelper_AddRuleForAllowedServiceTag(t *testing.T) {

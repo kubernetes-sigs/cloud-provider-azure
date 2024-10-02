@@ -193,6 +193,18 @@ func (helper *RuleHelper) addAllowRule(
 	{
 		// Destination
 		addresses := append(ListDestinationPrefixes(rule), dstPrefixes...)
+
+		// Aggregate the prefixes
+		prefixes, serviceTags := SeparateIPsAndServiceTags(addresses)
+		prefixes = iputil.AggregatePrefixes(prefixes)
+		addresses = append(fnutil.Map(func(p netip.Prefix) string {
+			if p.Bits() == ipFamily.MaxMask() {
+				// Keep it as an IP address to avoid additional operation for old rules.
+				return p.Addr().String()
+			}
+			return p.String()
+		}, prefixes), serviceTags...)
+
 		SetDestinationPrefixes(rule, addresses)
 		rule.Properties.DestinationPortRanges = to.SliceOfPtrs(dstPortRanges...)
 	}
