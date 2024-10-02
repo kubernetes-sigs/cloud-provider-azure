@@ -261,3 +261,85 @@ func BenchmarkPrefixTree_List(b *testing.B) {
 		}
 	})
 }
+func TestPrefixTree_Remove(t *testing.T) {
+	tests := []struct {
+		name     string
+		add      []string
+		remove   []string
+		expected []string
+	}{
+		{
+			name:     "Remove single IPv4 prefix",
+			add:      []string{"192.168.0.0/16", "10.0.0.0/8"},
+			remove:   []string{"192.168.0.0/16"},
+			expected: []string{"10.0.0.0/8"},
+		},
+		{
+			name:     "Remove non-existent IPv4 prefix",
+			add:      []string{"192.168.0.0/16", "10.0.0.0/8"},
+			remove:   []string{"172.16.0.0/12"},
+			expected: []string{"192.168.0.0/16", "10.0.0.0/8"},
+		},
+		{
+			name:     "Remove multiple IPv4 prefixes",
+			add:      []string{"192.168.0.0/16", "10.0.0.0/8", "172.16.0.0/12"},
+			remove:   []string{"192.168.0.0/16", "10.0.0.0/8"},
+			expected: []string{"172.16.0.0/12"},
+		},
+		{
+			name:     "Remove single IPv6 prefix",
+			add:      []string{"2001:db8::/32", "2001::/32"},
+			remove:   []string{"2001:db8::/32"},
+			expected: []string{"2001::/32"},
+		},
+		{
+			name:     "Remove non-existent IPv6 prefix",
+			add:      []string{"2001:db8::/32", "2001::/32"},
+			remove:   []string{"2001:abc::/32"},
+			expected: []string{"2001:db8::/32", "2001::/32"},
+		},
+		{
+			name:     "Remove multiple IPv6 prefixes",
+			add:      []string{"2001:db8::/32", "2001::/32", "2001:abc::/32"},
+			remove:   []string{"2001:db8::/32", "2001::/32"},
+			expected: []string{"2001:abc::/32"},
+		},
+		{
+			name:     "Remove subnet and split IPv4",
+			add:      []string{"192.168.0.0/16"},
+			remove:   []string{"192.168.1.0/24"},
+			expected: []string{"192.168.0.0/24", "192.168.2.0/23", "192.168.4.0/22", "192.168.8.0/21", "192.168.16.0/20", "192.168.32.0/19", "192.168.64.0/18", "192.168.128.0/17"},
+		},
+		{
+			name:     "Remove subnet and split IPv6",
+			add:      []string{"2001:db8::/32"},
+			remove:   []string{"2001:db8:1::/48"},
+			expected: []string{"2001:db8::/48", "2001:db8:2::/47", "2001:db8:4::/46", "2001:db8:8::/45", "2001:db8:10::/44", "2001:db8:20::/43", "2001:db8:40::/42", "2001:db8:80::/41", "2001:db8:100::/40", "2001:db8:200::/39", "2001:db8:400::/38", "2001:db8:800::/37", "2001:db8:1000::/36", "2001:db8:2000::/35", "2001:db8:4000::/34", "2001:db8:8000::/33"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tree := newPrefixTreeForIPv4()
+			if len(tt.add) > 0 && netip.MustParsePrefix(tt.add[0]).Addr().Is6() {
+				tree = newPrefixTreeForIPv6()
+			}
+
+			for _, prefix := range tt.add {
+				tree.Add(netip.MustParsePrefix(prefix))
+			}
+
+			for _, prefix := range tt.remove {
+				tree.Remove(netip.MustParsePrefix(prefix))
+			}
+
+			result := tree.List()
+			var resultStrings []string
+			for _, prefix := range result {
+				resultStrings = append(resultStrings, prefix.String())
+			}
+
+			assert.ElementsMatch(t, tt.expected, resultStrings)
+		})
+	}
+}

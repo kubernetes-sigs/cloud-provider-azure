@@ -192,20 +192,10 @@ func (helper *RuleHelper) addAllowRule(
 	}
 	{
 		// Destination
-		addresses := append(ListDestinationPrefixes(rule), dstPrefixes...)
 
-		// Aggregate the prefixes
-		prefixes, serviceTags := SeparateIPsAndServiceTags(addresses)
-		prefixes = iputil.AggregatePrefixes(prefixes)
-		addresses = append(fnutil.Map(func(p netip.Prefix) string {
-			if p.Bits() == ipFamily.MaxMask() {
-				// Keep it as an IP address to avoid additional operation for old rules.
-				return p.Addr().String()
-			}
-			return p.String()
-		}, prefixes), serviceTags...)
-
-		SetDestinationPrefixes(rule, addresses)
+		// Tidy up and aggregate the destination prefixes.
+		addressPrefixes := NewAddressPrefixes(append(ListDestinationPrefixes(rule), dstPrefixes...))
+		SetDestinationPrefixes(rule, addressPrefixes.StringSlice())
 		rule.Properties.DestinationPortRanges = to.SliceOfPtrs(dstPortRanges...)
 	}
 
@@ -295,8 +285,10 @@ func (helper *RuleHelper) AddRuleForDenyAll(dstAddresses []netip.Addr) error {
 	{
 		// Destination
 		addresses := fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
-		addresses = append(addresses, ListDestinationPrefixes(rule)...)
-		SetDestinationPrefixes(rule, addresses)
+
+		// Tidy up and aggregate the destination prefixes.
+		addressPrefixes := NewAddressPrefixes(append(addresses, ListDestinationPrefixes(rule)...))
+		SetDestinationPrefixes(rule, addressPrefixes.StringSlice())
 		rule.Properties.DestinationPortRange = ptr.To("*")
 	}
 
@@ -342,12 +334,12 @@ func (helper *RuleHelper) removeDestinationFromRule(rule *armnetwork.SecurityRul
 		WithValues("security-rule-name", rule.Name)
 
 	var (
-		prefixIndex     = fnutil.IndexSet(prefixes) // Used to check whether the prefix should be removed.
-		currentPrefixes = ListDestinationPrefixes(rule)
-
-		expectedPrefixes = prefixIndex.SubtractedBy(currentPrefixes)      // The prefixes to keep.
-		targetPrefixes   = fnutil.Intersection(currentPrefixes, prefixes) // The prefixes to remove.
+		dstPrefixes                       = NewAddressPrefixes(ListDestinationPrefixes(rule))
+		targetPrefixes, targetServiceTags = SeparateIPsAndServiceTags(prefixes)
 	)
+	dstPrefixes.RemoveIPPrefixes(targetPrefixes...)
+	dstPrefixes.RemoveServiceTags(targetServiceTags...)
+	expectedPrefixes := dstPrefixes.StringSlice()
 
 	// Clean DenyAll rule
 	if *rule.Properties.Access == armnetwork.SecurityRuleAccessDeny && len(retainDstPorts) == 0 {

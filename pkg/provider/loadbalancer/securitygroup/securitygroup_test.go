@@ -1570,14 +1570,14 @@ func TestRuleHelper_RemoveDestinationFromRules(t *testing.T) {
 			{
 				Name: ptr.To("test-rule-2"),
 				Properties: &armnetwork.SecurityRulePropertiesFormat{
-					Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
-					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
-					Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-					SourceAddressPrefix:        ptr.To("*"),
-					SourcePortRange:            ptr.To("*"),
-					DestinationAddressPrefixes: to.SliceOfPtrs("8.8.8.8"),
-					DestinationPortRanges:      to.SliceOfPtrs("5000"),
-					Priority:                   ptr.To(int32(502)),
+					Protocol:                 to.Ptr(armnetwork.SecurityRuleProtocolTCP),
+					Access:                   to.Ptr(armnetwork.SecurityRuleAccessAllow),
+					Direction:                to.Ptr(armnetwork.SecurityRuleDirectionInbound),
+					SourceAddressPrefix:      ptr.To("*"),
+					SourcePortRange:          ptr.To("*"),
+					DestinationAddressPrefix: to.Ptr("8.8.8.8"),
+					DestinationPortRanges:    to.SliceOfPtrs("5000"),
+					Priority:                 ptr.To(int32(502)),
 				},
 			},
 			{

@@ -32,6 +32,20 @@ func IsPrefixesAllowAll(prefixes []netip.Prefix) bool {
 	return false
 }
 
+// AddressesAsPrefixes converts a list of IP addresses to a list of prefixes.
+// Each address is converted to a prefix with a mask length equal to its bit length.
+//
+// Examples:
+//   - 192.168.1.2 becomes 192.168.1.2/32
+//   - 2001:db8::1 becomes 2001:db8::1/128
+func AddressesAsPrefixes(addresses []netip.Addr) []netip.Prefix {
+	var rv []netip.Prefix
+	for _, addr := range addresses {
+		rv = append(rv, netip.PrefixFrom(addr, addr.BitLen()))
+	}
+	return rv
+}
+
 // ParsePrefix parses a CIDR string and returns a Prefix.
 func ParsePrefix(v string) (netip.Prefix, error) {
 	prefix, err := netip.ParsePrefix(v)
@@ -77,5 +91,36 @@ func AggregatePrefixes(prefixes []netip.Prefix) []netip.Prefix {
 		v6Tree.Add(p)
 	}
 
+	return append(v4Tree.List(), v6Tree.List()...)
+}
+
+// ExcludePrefixes excludes prefixes from the given prefixes.
+func ExcludePrefixes(prefixes []netip.Prefix, exclude []netip.Prefix) []netip.Prefix {
+	var (
+		v4Tree = newPrefixTreeForIPv4()
+		v6Tree = newPrefixTreeForIPv6()
+	)
+
+	// Build the prefix tree for the prefixes.
+	{
+		v4, v6 := GroupPrefixesByFamily(prefixes)
+		for _, p := range v4 {
+			v4Tree.Add(p)
+		}
+		for _, p := range v6 {
+			v6Tree.Add(p)
+		}
+	}
+
+	// Exclude the prefixes.
+	v4, v6 := GroupPrefixesByFamily(exclude)
+	for _, p := range v4 {
+		v4Tree.Remove(p)
+	}
+	for _, p := range v6 {
+		v6Tree.Remove(p)
+	}
+
+	// Return the remaining prefixes.
 	return append(v4Tree.List(), v6Tree.List()...)
 }

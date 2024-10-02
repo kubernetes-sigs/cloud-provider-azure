@@ -343,3 +343,84 @@ func BenchmarkAggregatePrefixes(b *testing.B) {
 		runMixedTests(b, n)
 	}
 }
+
+func TestExcludePrefixes(t *testing.T) {
+	tests := []struct {
+		name     string
+		prefixes []string
+		exclude  []string
+		expected []string
+	}{
+		{
+			name:     "Exclude single IPv4 prefix",
+			prefixes: []string{"192.168.0.0/16", "10.0.0.0/8"},
+			exclude:  []string{"192.168.0.0/16"},
+			expected: []string{"10.0.0.0/8"},
+		},
+		{
+			name:     "Exclude non-existent IPv4 prefix",
+			prefixes: []string{"192.168.0.0/16", "10.0.0.0/8"},
+			exclude:  []string{"172.16.0.0/12"},
+			expected: []string{"192.168.0.0/16", "10.0.0.0/8"},
+		},
+		{
+			name:     "Exclude multiple IPv4 prefixes",
+			prefixes: []string{"192.168.0.0/16", "10.0.0.0/8", "172.16.0.0/12"},
+			exclude:  []string{"192.168.0.0/16", "10.0.0.0/8"},
+			expected: []string{"172.16.0.0/12"},
+		},
+		{
+			name:     "Exclude single IPv6 prefix",
+			prefixes: []string{"2001:db8::/32", "2001::/32"},
+			exclude:  []string{"2001:db8::/32"},
+			expected: []string{"2001::/32"},
+		},
+		{
+			name:     "Exclude non-existent IPv6 prefix",
+			prefixes: []string{"2001:db8::/32", "2001::/32"},
+			exclude:  []string{"2001:abc::/32"},
+			expected: []string{"2001:db8::/32", "2001::/32"},
+		},
+		{
+			name:     "Exclude multiple IPv6 prefixes",
+			prefixes: []string{"2001:db8::/32", "2001::/32", "2001:abc::/32"},
+			exclude:  []string{"2001:db8::/32", "2001::/32"},
+			expected: []string{"2001:abc::/32"},
+		},
+		{
+			name:     "Exclude subnet and split IPv4",
+			prefixes: []string{"192.168.0.0/16"},
+			exclude:  []string{"192.168.1.0/24"},
+			expected: []string{"192.168.0.0/24", "192.168.2.0/23", "192.168.4.0/22", "192.168.8.0/21", "192.168.16.0/20", "192.168.32.0/19", "192.168.64.0/18", "192.168.128.0/17"},
+		},
+		{
+			name:     "Exclude subnet and split IPv6",
+			prefixes: []string{"2001:db8::/32"},
+			exclude:  []string{"2001:db8:1::/48"},
+			expected: []string{"2001:db8::/48", "2001:db8:2::/47", "2001:db8:4::/46", "2001:db8:8::/45", "2001:db8:10::/44", "2001:db8:20::/43", "2001:db8:40::/42", "2001:db8:80::/41", "2001:db8:100::/40", "2001:db8:200::/39", "2001:db8:400::/38", "2001:db8:800::/37", "2001:db8:1000::/36", "2001:db8:2000::/35", "2001:db8:4000::/34", "2001:db8:8000::/33"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prefixes := make([]netip.Prefix, len(tt.prefixes))
+			for i, p := range tt.prefixes {
+				prefixes[i] = netip.MustParsePrefix(p)
+			}
+
+			exclude := make([]netip.Prefix, len(tt.exclude))
+			for i, p := range tt.exclude {
+				exclude[i] = netip.MustParsePrefix(p)
+			}
+
+			result := ExcludePrefixes(prefixes, exclude)
+
+			resultStrings := make([]string, len(result))
+			for i, p := range result {
+				resultStrings[i] = p.String()
+			}
+
+			assert.ElementsMatch(t, tt.expected, resultStrings)
+		})
+	}
+}

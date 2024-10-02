@@ -19,7 +19,6 @@ package securitygroup
 import (
 	"crypto/md5" //nolint:gosec
 	"fmt"
-	"net/netip"
 	"sort"
 	"strconv"
 	"strings"
@@ -152,34 +151,4 @@ func ProtocolFromKubernetes(p v1.Protocol) (armnetwork.SecurityRuleProtocol, err
 		return armnetwork.SecurityRuleProtocolAsterisk, nil
 	}
 	return "", fmt.Errorf("unsupported protocol %s", p)
-}
-
-// SeparateIPsAndServiceTags divides a list of prefixes into IP addresses/ranges and Azure service tags.
-//
-// The input prefixes can be sourced from networkSecurityGroup.SourceAddressPrefixes or
-// networkSecurityGroup.DestinationAddressPrefixes, which are of type []string and may contain
-// both IP addresses/ranges and Azure service tags.
-//
-// Returns:
-//   - []netip.Prefix: A slice of IP addresses and ranges parsed as netip.Prefix
-//   - []string: A slice of Azure service tags
-func SeparateIPsAndServiceTags(prefixes []string) ([]netip.Prefix, []string) {
-	var (
-		ips         []netip.Prefix
-		serviceTags []string
-	)
-
-	for _, p := range prefixes {
-		if addr, err := netip.ParseAddr(p); err == nil {
-			ips = append(ips, netip.PrefixFrom(addr, addr.BitLen()))
-			continue
-		}
-		if prefix, err := netip.ParsePrefix(p); err == nil {
-			ips = append(ips, prefix)
-			continue
-		}
-		serviceTags = append(serviceTags, p)
-	}
-
-	return ips, serviceTags
 }

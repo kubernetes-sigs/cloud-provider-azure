@@ -20,6 +20,13 @@ import (
 	"net/netip"
 )
 
+// bitAt returns the bit at the i-th position in the byte slice.
+// The return value is either 0 or 1 as uint8.
+// Panics if the index is out of bounds.
+func bitAt(bytes []byte, i int) uint8 {
+	return bytes[i/8] >> (7 - i%8) & 1
+}
+
 type prefixTreeNode struct {
 	masked bool
 	prefix netip.Prefix
@@ -29,11 +36,38 @@ type prefixTreeNode struct {
 	r *prefixTreeNode // right child node
 }
 
-// pruneToRoot prunes the tree to the root.
-// If a node's left and right children are both masked,
-// it is masked and its children are pruned.
-// This is done recursively up to the root.
-func (n *prefixTreeNode) pruneToRoot() {
+func (n *prefixTreeNode) NewLeftChild() *prefixTreeNode {
+	prefix := netip.PrefixFrom(n.prefix.Addr(), n.prefix.Bits()+1)
+	n.l = &prefixTreeNode{
+		prefix: prefix,
+		p:      n,
+	}
+	return n.l
+}
+
+func (n *prefixTreeNode) NewRightChild() *prefixTreeNode {
+	prefixBytes := n.prefix.Addr().AsSlice()
+	{
+		// Set the next bit to 1 for the new prefix (it's the right child)
+		byteIndex := n.prefix.Bits() / 8
+		bitIndex := n.prefix.Bits() % 8
+		prefixBytes[byteIndex] |= 1 << (7 - bitIndex)
+	}
+
+	addr, _ := netip.AddrFromSlice(prefixBytes)
+	prefix := netip.PrefixFrom(addr, n.prefix.Bits()+1)
+	n.r = &prefixTreeNode{
+		prefix: prefix,
+		p:      n,
+	}
+	return n.r
+}
+
+// MaskAndPruneToRoot masks the current node and prunes the tree upwards.
+// It recursively checks parent nodes, masking and pruning them if both
+// children are masked. This process continues until reaching the root
+// or a node that cannot be pruned.
+func (n *prefixTreeNode) MaskAndPruneToRoot() {
 	var node = n
 	for node.p != nil {
 		p := node.p
@@ -75,48 +109,72 @@ func newPrefixTreeForIPv6() *prefixTree {
 // Add adds a prefix to the tree.
 func (t *prefixTree) Add(prefix netip.Prefix) {
 	var (
-		n    = t.root
-		bits = prefix.Addr().AsSlice()
+		n     = t.root
+		bytes = prefix.Addr().AsSlice()
 	)
 	for i := 0; i < prefix.Bits(); i++ {
 		if n.masked {
 			break // It's already masked, the rest of the bits are irrelevant
 		}
 
-		var bit = bits[i/8] >> (7 - i%8) & 1
-		switch bit {
-		case 0:
+		if bitAt(bytes, i) == 0 {
 			if n.l == nil {
-				next, err := prefix.Addr().Prefix(i + 1)
-				if err != nil {
-					panic("unreachable: invalid prefix")
-				}
-				n.l = &prefixTreeNode{
-					prefix: next,
-					p:      n,
-				}
+				n.NewLeftChild()
 			}
 			n = n.l
-		case 1:
+		} else {
 			if n.r == nil {
-				next, err := prefix.Addr().Prefix(i + 1)
-				if err != nil {
-					panic("unreachable: invalid prefix")
-				}
-				n.r = &prefixTreeNode{
-					prefix: next,
-					p:      n,
-				}
+				n.NewRightChild()
 			}
 			n = n.r
-		default:
-			panic("unreachable: unexpected bit")
 		}
 	}
 
 	n.masked = true
 	n.l, n.r = nil, nil
-	n.pruneToRoot()
+	n.MaskAndPruneToRoot()
+}
+
+// Remove removes a prefix from the tree.
+// If the prefix is not in the tree, it does nothing.
+func (t *prefixTree) Remove(prefix netip.Prefix) {
+	var (
+		n     = t.root
+		bytes = prefix.Addr().AsSlice()
+	)
+
+	isMasked := false
+	for i := 0; n != nil && i < prefix.Bits(); i++ {
+		var bit = bitAt(bytes, i)
+
+		if !n.masked && !isMasked {
+			// Keep going down until it finds a masked node
+			if bit == 0 {
+				n = n.l
+			} else {
+				n = n.r
+			}
+			continue
+		}
+
+		isMasked = true
+		n.masked = false
+
+		// If the node is masked, it should have no children,
+		// and we need to split it. The other side should be masked.
+		n.NewLeftChild()
+		n.NewRightChild()
+		if bit == 0 {
+			n.r.masked = true
+			n = n.l
+		} else {
+			n.l.masked = true
+			n = n.r
+		}
+	}
+	if n != nil {
+		n.masked = false
+	}
 }
 
 // List returns all prefixes in the tree.
