@@ -22,6 +22,13 @@ type AgentPoolsClientBeginCreateOrUpdateOptions struct {
 	ResumeToken string
 }
 
+// AgentPoolsClientBeginDeleteMachinesOptions contains the optional parameters for the AgentPoolsClient.BeginDeleteMachines
+// method.
+type AgentPoolsClientBeginDeleteMachinesOptions struct {
+	// Resumes the LRO from the provided token.
+	ResumeToken string
+}
+
 // AgentPoolsClientBeginDeleteOptions contains the optional parameters for the AgentPoolsClient.BeginDelete method.
 type AgentPoolsClientBeginDeleteOptions struct {
 	// Resumes the LRO from the provided token.
@@ -53,6 +60,16 @@ type AgentPoolsClientGetUpgradeProfileOptions struct {
 
 // AgentPoolsClientListOptions contains the optional parameters for the AgentPoolsClient.NewListPager method.
 type AgentPoolsClientListOptions struct {
+	// placeholder for future optional parameters
+}
+
+// MachinesClientGetOptions contains the optional parameters for the MachinesClient.Get method.
+type MachinesClientGetOptions struct {
+	// placeholder for future optional parameters
+}
+
+// MachinesClientListOptions contains the optional parameters for the MachinesClient.NewListPager method.
+type MachinesClientListOptions struct {
 	// placeholder for future optional parameters
 }
 
