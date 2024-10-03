@@ -281,8 +281,8 @@ func (ac *AccessControl) CleanSecurityGroup(
 	logger.V(10).Info("Start cleaning")
 
 	var (
-		ipv4Prefixes = fnutil.Map(func(addr netip.Addr) string { return addr.String() }, dstIPv4Addresses)
-		ipv6Prefixes = fnutil.Map(func(addr netip.Addr) string { return addr.String() }, dstIPv6Addresses)
+		ipv4Prefixes = fnutil.Map(fnutil.AsString, dstIPv4Addresses)
+		ipv6Prefixes = fnutil.Map(fnutil.AsString, dstIPv6Addresses)
 	)
 
 	protocols := []armnetwork.SecurityRuleProtocol{

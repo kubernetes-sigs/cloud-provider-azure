@@ -102,6 +102,12 @@ func (xs *IndexSetWithComparableIndex[I, D]) SubtractedBy(ys []D) []D {
 	return rv
 }
 
+// Intersection returns the elements that are in both xs and ys.
 func Intersection[D comparable](xs, ys []D) []D {
 	return IndexSet(xs).Intersection(ys)
+}
+
+// Difference returns the elements in xs but not in ys.
+func Difference[D comparable](xs, ys []D) []D {
+	return IndexSet(ys).SubtractedBy(xs)
 }

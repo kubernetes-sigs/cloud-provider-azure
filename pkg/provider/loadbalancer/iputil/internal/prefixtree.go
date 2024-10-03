@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package iputil
+package internal
 
 import (
 	"net/netip"
@@ -36,6 +36,8 @@ type prefixTreeNode struct {
 	r *prefixTreeNode // right child node
 }
 
+// NewLeftChild creates a new left child node for the current node.
+// No checks are performed to see if the child already exists.
 func (n *prefixTreeNode) NewLeftChild() *prefixTreeNode {
 	prefix := netip.PrefixFrom(n.prefix.Addr(), n.prefix.Bits()+1)
 	n.l = &prefixTreeNode{
@@ -45,6 +47,8 @@ func (n *prefixTreeNode) NewLeftChild() *prefixTreeNode {
 	return n.l
 }
 
+// NewRightChild creates a new right child node for the current node.
+// No checks are performed to see if the child already exists.
 func (n *prefixTreeNode) NewRightChild() *prefixTreeNode {
 	prefixBytes := n.prefix.Addr().AsSlice()
 	{
@@ -63,11 +67,27 @@ func (n *prefixTreeNode) NewRightChild() *prefixTreeNode {
 	return n.r
 }
 
-// MaskAndPruneToRoot masks the current node and prunes the tree upwards.
-// It recursively checks parent nodes, masking and pruning them if both
-// children are masked. This process continues until reaching the root
-// or a node that cannot be pruned.
-func (n *prefixTreeNode) MaskAndPruneToRoot() {
+// CondenseUntilRoot checks if the current node and its sibling are masked,
+// and if so, marks their parent as masked and removes both children.
+// This process is repeated up the tree until a node with an unmasked sibling is found.
+//
+// The process can be visualized as follows:
+//
+//	Before:           After:
+//	   P                 P (masked)
+//	  / \               / \
+//	 A   B     ->      X   X
+//	(M) (M)
+//
+// Where:
+//
+//	P: Parent node
+//	A, B: Child nodes
+//	M: Masked
+//	X: Removed
+//
+// This method helps to optimize the tree structure by condensing fully masked subtrees.
+func (n *prefixTreeNode) CondenseUntilRoot() {
 	var node = n
 	for node.p != nil {
 		p := node.p
@@ -83,13 +103,40 @@ func (n *prefixTreeNode) MaskAndPruneToRoot() {
 	}
 }
 
-type prefixTree struct {
+// PrefixTree represents a tree structure for storing and managing IP prefixes.
+// It efficiently handles prefix aggregation, merging of overlapping prefixes,
+// and collapsing of neighboring prefixes.
+//
+// The tree is structured as follows:
+// - Each node represents a bit in the IP address
+// - Left child represents a 0 bit, right child represents a 1 bit
+// - Masked nodes indicate the end of a prefix
+// - Unused branches are represented by nil pointers
+//
+// Example tree for 128.0.0.0/4 (binary 1000 0000):
+//
+//	    0 (0.0.0.0/0)
+//	   / \
+//	  X   1 (128.0.0.0/1)
+//	     / \
+//	    0   X
+//	   / \
+//	  0   X
+//	 / \
+//	0*  X
+//
+// Where:
+// * denotes a masked node (prefix end)
+// X denotes an unused branch (nil pointer)
+type PrefixTree struct {
 	maxBits int
 	root    *prefixTreeNode
 }
 
-func newPrefixTreeForIPv4() *prefixTree {
-	return &prefixTree{
+// NewPrefixTreeForIPv4 creates a new prefix tree for IPv4 addresses.
+// The max depth of the tree is 32 + 1 (for the root).
+func NewPrefixTreeForIPv4() *PrefixTree {
+	return &PrefixTree{
 		maxBits: 32,
 		root: &prefixTreeNode{
 			prefix: netip.MustParsePrefix("0.0.0.0/0"),
@@ -97,8 +144,10 @@ func newPrefixTreeForIPv4() *prefixTree {
 	}
 }
 
-func newPrefixTreeForIPv6() *prefixTree {
-	return &prefixTree{
+// NewPrefixTreeForIPv6 creates a new prefix tree for IPv6 addresses.
+// The max depth of the tree is 128 + 1 (for the root).
+func NewPrefixTreeForIPv6() *PrefixTree {
+	return &PrefixTree{
 		maxBits: 128,
 		root: &prefixTreeNode{
 			prefix: netip.MustParsePrefix("::/0"),
@@ -107,7 +156,8 @@ func newPrefixTreeForIPv6() *prefixTree {
 }
 
 // Add adds a prefix to the tree.
-func (t *prefixTree) Add(prefix netip.Prefix) {
+// It will merge overlapping prefixes and collapse neighboring prefixes if possible.
+func (t *PrefixTree) Add(prefix netip.Prefix) {
 	var (
 		n     = t.root
 		bytes = prefix.Addr().AsSlice()
@@ -132,12 +182,12 @@ func (t *prefixTree) Add(prefix netip.Prefix) {
 
 	n.masked = true
 	n.l, n.r = nil, nil
-	n.MaskAndPruneToRoot()
+	n.CondenseUntilRoot()
 }
 
 // Remove removes a prefix from the tree.
 // If the prefix is not in the tree, it does nothing.
-func (t *prefixTree) Remove(prefix netip.Prefix) {
+func (t *PrefixTree) Remove(prefix netip.Prefix) {
 	var (
 		n     = t.root
 		bytes = prefix.Addr().AsSlice()
@@ -185,7 +235,7 @@ func (t *prefixTree) Remove(prefix netip.Prefix) {
 // Example:
 //   - [192.168.0.0/16, 192.168.1.0/24, 192.168.0.1/32] -> [192.168.0.0/16]
 //   - [192.168.0.0/32, 192.168.0.1/32] -> [192.168.0.0/31]
-func (t *prefixTree) List() []netip.Prefix {
+func (t *PrefixTree) List() []netip.Prefix {
 	var (
 		rv []netip.Prefix
 		q  = []*prefixTreeNode{t.root}

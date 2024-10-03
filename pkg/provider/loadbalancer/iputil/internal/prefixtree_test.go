@@ -14,16 +14,43 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package iputil
+package internal
 
 import (
+	"fmt"
 	"math"
 	"net/netip"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
 	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func Test_bitAt(t *testing.T) {
+	bytes := []byte{0b1010_1010, 0b0101_0101}
+	assert.Equal(t, uint8(1), bitAt(bytes, 0))
+	assert.Equal(t, uint8(0), bitAt(bytes, 1))
+	assert.Equal(t, uint8(1), bitAt(bytes, 2))
+	assert.Equal(t, uint8(0), bitAt(bytes, 3))
+
+	assert.Equal(t, uint8(1), bitAt(bytes, 4))
+	assert.Equal(t, uint8(0), bitAt(bytes, 5))
+	assert.Equal(t, uint8(1), bitAt(bytes, 6))
+	assert.Equal(t, uint8(0), bitAt(bytes, 7))
+
+	assert.Equal(t, uint8(0), bitAt(bytes, 8))
+	assert.Equal(t, uint8(1), bitAt(bytes, 9))
+	assert.Equal(t, uint8(0), bitAt(bytes, 10))
+	assert.Equal(t, uint8(1), bitAt(bytes, 11))
+
+	assert.Equal(t, uint8(0), bitAt(bytes, 12))
+	assert.Equal(t, uint8(1), bitAt(bytes, 13))
+	assert.Equal(t, uint8(0), bitAt(bytes, 14))
+	assert.Equal(t, uint8(1), bitAt(bytes, 15))
+
+	assert.Panics(t, func() { bitAt(bytes, 16) })
+}
 
 func TestPrefixTreeIPv4(t *testing.T) {
 	tests := []struct {
@@ -86,7 +113,7 @@ func TestPrefixTreeIPv4(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			var tree = newPrefixTreeForIPv4()
+			var tree = NewPrefixTreeForIPv4()
 			for _, ip := range tt.Input {
 				p := netip.MustParsePrefix(ip)
 				tree.Add(p)
@@ -172,7 +199,7 @@ func TestPrefixTreeIPv6(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			var tree = newPrefixTreeForIPv6()
+			var tree = NewPrefixTreeForIPv6()
 			for _, ip := range tt.Input {
 				p := netip.MustParsePrefix(ip)
 				tree.Add(p)
@@ -191,76 +218,6 @@ func TestPrefixTreeIPv6(t *testing.T) {
 	}
 }
 
-func BenchmarkPrefixTree_Add(b *testing.B) {
-	b.Run("IPv4", func(b *testing.B) {
-		var tree = newPrefixTreeForIPv4()
-		for i := 0; i < b.N; i++ {
-			addr := netip.AddrFrom4([4]byte{
-				byte(i >> 24), byte(i >> 16), byte(i >> 8), byte(i),
-			})
-			prefix, _ := addr.Prefix(32)
-
-			tree.Add(prefix)
-		}
-	})
-
-	b.Run("IPv6", func(b *testing.B) {
-		var tree = newPrefixTreeForIPv6()
-		for i := 0; i < b.N; i++ {
-			addr := netip.AddrFrom16([16]byte{
-				0, 0, 0, 0,
-				0, 0, 0, 0,
-				byte(i >> 56), byte(i >> 48), byte(i >> 40), byte(i >> 32),
-				byte(i >> 24), byte(i >> 16), byte(i >> 8), byte(i),
-			})
-			prefix, _ := addr.Prefix(128)
-
-			tree.Add(prefix)
-		}
-	})
-}
-
-func BenchmarkPrefixTree_List(b *testing.B) {
-
-	b.Run("IPv4", func(b *testing.B) {
-		b.StopTimer()
-		var tree = newPrefixTreeForIPv4()
-		for i := 0; i < math.MaxInt8; i++ {
-			addr := netip.AddrFrom4([4]byte{
-				byte(i >> 24), byte(i >> 16), byte(i >> 8), byte(i),
-			})
-			prefix, err := addr.Prefix(32)
-			assert.NoError(b, err)
-
-			tree.Add(prefix)
-		}
-		b.StartTimer()
-		for i := 0; i < b.N; i++ {
-			tree.List()
-		}
-	})
-
-	b.Run("IPv6", func(b *testing.B) {
-		b.StopTimer()
-		var tree = newPrefixTreeForIPv6()
-		for i := 0; i < math.MaxInt8; i++ {
-			addr := netip.AddrFrom16([16]byte{
-				0, 0, 0, 0,
-				0, 0, 0, 0,
-				byte(i >> 56), byte(i >> 48), byte(i >> 40), byte(i >> 32),
-				byte(i >> 24), byte(i >> 16), byte(i >> 8), byte(i),
-			})
-			prefix, err := addr.Prefix(128)
-			assert.NoError(b, err)
-
-			tree.Add(prefix)
-		}
-		b.StartTimer()
-		for i := 0; i < b.N; i++ {
-			tree.List()
-		}
-	})
-}
 func TestPrefixTree_Remove(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -320,9 +277,9 @@ func TestPrefixTree_Remove(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tree := newPrefixTreeForIPv4()
+			tree := NewPrefixTreeForIPv4()
 			if len(tt.add) > 0 && netip.MustParsePrefix(tt.add[0]).Addr().Is6() {
-				tree = newPrefixTreeForIPv6()
+				tree = NewPrefixTreeForIPv6()
 			}
 
 			for _, prefix := range tt.add {
@@ -342,4 +299,162 @@ func TestPrefixTree_Remove(t *testing.T) {
 			assert.ElementsMatch(t, tt.expected, resultStrings)
 		})
 	}
+}
+
+func benchmarkFixtureForIPv4(b *testing.B) *PrefixTree {
+	b.StopTimer()
+	defer b.StartTimer()
+
+	var tree = NewPrefixTreeForIPv4()
+	for i := 0; i < math.MaxInt8; i++ {
+		prefix := netip.MustParsePrefix(fmt.Sprintf("%d.0.0.0/8", i))
+		tree.Add(prefix)
+	}
+	return tree
+}
+
+func benchmarkFixtureForIPv6(b *testing.B) *PrefixTree {
+	b.StopTimer()
+	defer b.StartTimer()
+
+	var tree = NewPrefixTreeForIPv6()
+	for i := 0; i < math.MaxInt8; i++ {
+		prefix := netip.MustParsePrefix(fmt.Sprintf("2001:db8:%x::/64", i))
+		tree.Add(prefix)
+	}
+	return tree
+}
+
+func BenchmarkPrefixTree_AddAndRemove(b *testing.B) {
+	b.Run("IPv4", func(b *testing.B) {
+		tree := benchmarkFixtureForIPv4(b)
+		for i := 0; i < b.N; i++ {
+			prefix := netip.MustParsePrefix("10.10.10.0/24")
+			tree.Remove(prefix)
+			tree.Add(prefix)
+		}
+	})
+
+	b.Run("IPv6", func(b *testing.B) {
+		tree := benchmarkFixtureForIPv6(b)
+		for i := 0; i < b.N; i++ {
+			prefix := netip.MustParsePrefix("2001:db8:10:ff::/90")
+			tree.Remove(prefix)
+			tree.Add(prefix)
+		}
+	})
+}
+
+func BenchmarkPrefixTree_List(b *testing.B) {
+
+	b.Run("IPv4", func(b *testing.B) {
+		tree := benchmarkFixtureForIPv4(b)
+		for i := 0; i < b.N; i++ {
+			tree.List()
+		}
+	})
+
+	b.Run("IPv6", func(b *testing.B) {
+		tree := benchmarkFixtureForIPv6(b)
+		for i := 0; i < b.N; i++ {
+			tree.List()
+		}
+	})
+}
+
+func FuzzPrefixTree(f *testing.F) {
+	// To reduce fuzzing time
+	const (
+		MinIPv4Bits = 20
+		MinIPv6Bits = 118
+	)
+	var (
+		InitialPrefixIPv4 = netip.MustParsePrefix(fmt.Sprintf("0.0.0.0/%d", MinIPv4Bits))
+		InitialPrefixIPv6 = netip.MustParsePrefix(fmt.Sprintf("::/%d", MinIPv6Bits))
+		InitialIPv4       = fnutil.Map(fnutil.AsString, ListAddresses(InitialPrefixIPv4))
+		InitialIPv6       = fnutil.Map(fnutil.AsString, ListAddresses(InitialPrefixIPv6))
+	)
+
+	f.Add(
+		netip.MustParseAddr("192.168.0.0").AsSlice(),
+		24,
+	)
+	f.Add(
+		netip.MustParseAddr("2001:db8::").AsSlice(),
+		64,
+	)
+
+	f.Fuzz(func(t *testing.T, ip []byte, bits int) {
+		var (
+			targetPrefix    netip.Prefix
+			targetAddresses []string
+		)
+		{
+			addr, ok := netip.AddrFromSlice(ip)
+			if !ok ||
+				(addr.Is4() && !InitialPrefixIPv4.Contains(addr)) ||
+				(addr.Is6() && !InitialPrefixIPv6.Contains(addr)) {
+				// Skip invalid addresses
+				t.SkipNow()
+				return
+			}
+			if bits < 0 ||
+				(addr.Is4() && (bits <= MinIPv4Bits || bits > 32)) ||
+				(addr.Is6() && (bits <= MinIPv6Bits || bits > 128)) {
+				// Skip invalid bit lengths
+				t.SkipNow()
+				return
+			}
+			p, err := addr.Prefix(bits)
+			assert.NoError(t, err)
+			targetPrefix = p
+			targetAddresses = fnutil.Map(fnutil.AsString, ListAddresses(targetPrefix))
+		}
+		fmt.Printf("target-prefix: %s\n", targetPrefix.String())
+
+		var (
+			tree         *PrefixTree
+			allAddresses []string
+			initPrefix   netip.Prefix
+		)
+		if targetPrefix.Addr().Is4() {
+			tree = NewPrefixTreeForIPv4()
+			tree.Add(InitialPrefixIPv4)
+			initPrefix = InitialPrefixIPv4
+			allAddresses = InitialIPv4
+		} else {
+			tree = NewPrefixTreeForIPv6()
+			tree.Add(InitialPrefixIPv6)
+			initPrefix = InitialPrefixIPv6
+			allAddresses = InitialIPv6
+		}
+
+		tree.Remove(targetPrefix)
+		{
+			prefixes := tree.List()
+			addresses := fnutil.Map(fnutil.AsString, ListAddresses(prefixes...))
+
+			assert.Empty(
+				t, fnutil.Intersection(targetAddresses, addresses),
+				"actual-prefixes: %s, target-prefixes: %s",
+				fnutil.Map(fnutil.AsString, prefixes),
+				targetPrefix.String(),
+			)
+			assert.ElementsMatch(
+				t, addresses, fnutil.Difference(allAddresses, targetAddresses),
+				"actual-prefixes: %s, target-prefixes: %s",
+				fnutil.Map(fnutil.AsString, prefixes),
+				targetPrefix.String(),
+			)
+		}
+
+		tree.Add(targetPrefix)
+		{
+			prefixes := tree.List()
+			addresses := fnutil.Map(fnutil.AsString, ListAddresses(prefixes...))
+
+			assert.Equal(t, []string{initPrefix.String()}, fnutil.Map(fnutil.AsString, prefixes))
+			assert.ElementsMatch(t, addresses, allAddresses)
+		}
+	})
 }

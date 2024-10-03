@@ -218,7 +218,7 @@ func (helper *RuleHelper) AddRuleForAllowedServiceTag(
 	var (
 		ipFamily    = iputil.FamilyOfAddr(dstAddresses[0])
 		srcPrefixes = []string{serviceTag}
-		dstPrefixes = fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
+		dstPrefixes = fnutil.Map(fnutil.AsString, dstAddresses)
 	)
 
 	helper.logger.V(4).Info("Patching a rule for allowed service tag", "ip-family", ipFamily)
@@ -245,8 +245,8 @@ func (helper *RuleHelper) AddRuleForAllowedIPRanges(
 
 	var (
 		ipFamily    = iputil.FamilyOfAddr(ipRanges[0].Addr())
-		srcPrefixes = fnutil.Map(func(ip netip.Prefix) string { return ip.String() }, ipRanges)
-		dstPrefixes = fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
+		srcPrefixes = fnutil.Map(fnutil.AsString, ipRanges)
+		dstPrefixes = fnutil.Map(fnutil.AsString, dstAddresses)
 	)
 
 	helper.logger.V(4).Info("Patching a rule for allowed IP ranges", "ip-family", ipFamily)
@@ -284,7 +284,7 @@ func (helper *RuleHelper) AddRuleForDenyAll(dstAddresses []netip.Addr) error {
 	}
 	{
 		// Destination
-		addresses := fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
+		addresses := fnutil.Map(fnutil.AsString, dstAddresses)
 
 		// Tidy up and aggregate the destination prefixes.
 		addressPrefixes := NewAddressPrefixes(append(addresses, ListDestinationPrefixes(rule)...))

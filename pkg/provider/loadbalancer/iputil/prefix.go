@@ -19,6 +19,8 @@ package iputil
 import (
 	"fmt"
 	"net/netip"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/iputil/internal"
 )
 
 // IsPrefixesAllowAll returns true if one of the prefixes allows all addresses.
@@ -80,8 +82,8 @@ func GroupPrefixesByFamily(vs []netip.Prefix) ([]netip.Prefix, []netip.Prefix) {
 func AggregatePrefixes(prefixes []netip.Prefix) []netip.Prefix {
 	var (
 		v4, v6 = GroupPrefixesByFamily(prefixes)
-		v4Tree = newPrefixTreeForIPv4()
-		v6Tree = newPrefixTreeForIPv6()
+		v4Tree = internal.NewPrefixTreeForIPv4()
+		v6Tree = internal.NewPrefixTreeForIPv6()
 	)
 
 	for _, p := range v4 {
@@ -97,8 +99,8 @@ func AggregatePrefixes(prefixes []netip.Prefix) []netip.Prefix {
 // ExcludePrefixes excludes prefixes from the given prefixes.
 func ExcludePrefixes(prefixes []netip.Prefix, exclude []netip.Prefix) []netip.Prefix {
 	var (
-		v4Tree = newPrefixTreeForIPv4()
-		v6Tree = newPrefixTreeForIPv6()
+		v4Tree = internal.NewPrefixTreeForIPv4()
+		v6Tree = internal.NewPrefixTreeForIPv6()
 	)
 
 	// Build the prefix tree for the prefixes.
