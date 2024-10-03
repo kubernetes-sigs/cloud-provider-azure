@@ -11,15 +11,15 @@
 {{- else if eq .Capabilities.KubeVersion.Minor "26" -}}
   {{- $_ := set . "cloudProviderAzureVersion" "v1.26.22" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "27" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.27.20" }}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.27.21" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "28" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.28.12" }}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.28.13" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "29" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.29.10" }}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.29.11" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "30" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.30.6" }}
-{{- else if eq .Capabilities.KubeVersion.Minor "30" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.31.0" }}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.30.7" }}
+{{- else if eq .Capabilities.KubeVersion.Minor "31" -}}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.31.1" }}
 {{- end -}}
 {{- if .Values.cloudControllerManager.enabled }}
 apiVersion: v1
