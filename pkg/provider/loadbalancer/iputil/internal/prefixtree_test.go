@@ -20,11 +20,12 @@ import (
 	"fmt"
 	"math"
 	"net/netip"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
 	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
 )
 
 func Test_bitAt(t *testing.T) {
