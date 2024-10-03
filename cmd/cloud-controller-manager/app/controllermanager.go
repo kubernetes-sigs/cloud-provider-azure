@@ -348,7 +348,7 @@ func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig, h *contr
 	)
 
 	if c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile != "" {
-		cloud, err = provider.NewCloudFromConfigFile(ctx, c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile, true)
+		cloud, err = provider.NewCloudFromConfigFile(ctx, c.ClientBuilder, c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile, true)
 		if err != nil {
 			klog.Fatalf("Cloud provider azure could not be initialized: %v", err)
 		}
