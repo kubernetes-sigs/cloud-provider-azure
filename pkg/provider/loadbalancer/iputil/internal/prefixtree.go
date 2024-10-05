@@ -20,13 +20,6 @@ import (
 	"net/netip"
 )
 
-// bitAt returns the bit at the i-th position in the byte slice.
-// The return value is either 0 or 1 as uint8.
-// Panics if the index is out of bounds.
-func bitAt(bytes []byte, i int) uint8 {
-	return bytes[i/8] >> (7 - i%8) & 1
-}
-
 type prefixTreeNode struct {
 	masked bool
 	prefix netip.Prefix

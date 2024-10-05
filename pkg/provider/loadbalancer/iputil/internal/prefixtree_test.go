@@ -28,31 +28,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
 )
 
-func Test_bitAt(t *testing.T) {
-	bytes := []byte{0b1010_1010, 0b0101_0101}
-	assert.Equal(t, uint8(1), bitAt(bytes, 0))
-	assert.Equal(t, uint8(0), bitAt(bytes, 1))
-	assert.Equal(t, uint8(1), bitAt(bytes, 2))
-	assert.Equal(t, uint8(0), bitAt(bytes, 3))
-
-	assert.Equal(t, uint8(1), bitAt(bytes, 4))
-	assert.Equal(t, uint8(0), bitAt(bytes, 5))
-	assert.Equal(t, uint8(1), bitAt(bytes, 6))
-	assert.Equal(t, uint8(0), bitAt(bytes, 7))
-
-	assert.Equal(t, uint8(0), bitAt(bytes, 8))
-	assert.Equal(t, uint8(1), bitAt(bytes, 9))
-	assert.Equal(t, uint8(0), bitAt(bytes, 10))
-	assert.Equal(t, uint8(1), bitAt(bytes, 11))
-
-	assert.Equal(t, uint8(0), bitAt(bytes, 12))
-	assert.Equal(t, uint8(1), bitAt(bytes, 13))
-	assert.Equal(t, uint8(0), bitAt(bytes, 14))
-	assert.Equal(t, uint8(1), bitAt(bytes, 15))
-
-	assert.Panics(t, func() { bitAt(bytes, 16) })
-}
-
 func TestPrefixTreeIPv4(t *testing.T) {
 	tests := []struct {
 		Name   string

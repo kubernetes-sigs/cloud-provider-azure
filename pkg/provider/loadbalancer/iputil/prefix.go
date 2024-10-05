@@ -77,26 +77,29 @@ func GroupPrefixesByFamily(vs []netip.Prefix) ([]netip.Prefix, []netip.Prefix) {
 	return v4, v6
 }
 
-// AggregatePrefixes aggregates prefixes.
-// Overlapping prefixes are merged.
+// AggregatePrefixes merges overlapping or adjacent prefixes.
+// It combines prefixes that can be represented by a single, larger prefix.
+//
+// Examples:
+//   - [192.168.0.0/32, 192.168.0.1/32] -> [192.168.0.0/31] (adjacent)
+//   - [192.168.0.0/24, 192.168.0.1/32] -> [192.168.0.0/24] (overlapping)
+//   - [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16] -> [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16] (non-overlapping)
 func AggregatePrefixes(prefixes []netip.Prefix) []netip.Prefix {
 	var (
 		v4, v6 = GroupPrefixesByFamily(prefixes)
-		v4Tree = internal.NewPrefixTreeForIPv4()
-		v6Tree = internal.NewPrefixTreeForIPv6()
 	)
 
-	for _, p := range v4 {
-		v4Tree.Add(p)
-	}
-	for _, p := range v6 {
-		v6Tree.Add(p)
-	}
+	v4 = internal.AggregatePrefixesForSingleIPFamily(v4)
+	v6 = internal.AggregatePrefixesForSingleIPFamily(v6)
 
-	return append(v4Tree.List(), v6Tree.List()...)
+	return append(v4, v6...)
 }
 
 // ExcludePrefixes excludes prefixes from the given prefixes.
+//
+// Examples:
+// - ([192.168.0.0/24], [192.168.0.0/25]) -> [192.168.0.128/25]
+// - ([2001:db8::/64], [2001:db8::1/128, 2001:db8::2/128]) -> [2001:db8::/64]
 func ExcludePrefixes(prefixes []netip.Prefix, exclude []netip.Prefix) []netip.Prefix {
 	var (
 		v4Tree = internal.NewPrefixTreeForIPv4()

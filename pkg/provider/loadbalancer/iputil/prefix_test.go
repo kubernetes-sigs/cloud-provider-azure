@@ -23,6 +23,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
 )
 
 func TestIsPrefixesAllowAll(t *testing.T) {
@@ -265,7 +267,10 @@ func TestAggregatePrefixes(t *testing.T) {
 			sort.Slice(tt.Output, func(i, j int) bool {
 				return tt.Output[i].String() < tt.Output[j].String()
 			})
-			assert.Equal(t, tt.Output, got)
+
+			expected := fnutil.Map(fnutil.AsString, tt.Output)
+			actual := fnutil.Map(fnutil.AsString, got)
+			assert.Equal(t, expected, actual)
 		})
 	}
 }

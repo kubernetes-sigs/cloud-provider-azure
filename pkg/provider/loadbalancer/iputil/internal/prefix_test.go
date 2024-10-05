@@ -17,6 +17,8 @@ limitations under the License.
 package internal
 
 import (
+	"fmt"
+	"math/rand"
 	"net/netip"
 	"testing"
 
@@ -82,5 +84,51 @@ func TestListAddresses(t *testing.T) {
 			actual := ListAddresses(tt.Prefixes...)
 			assert.Equal(t, tt.Expected, actual)
 		})
+	}
+}
+
+func benchmarkPrefixFixtures() []netip.Prefix {
+	var rv []netip.Prefix
+	for i := 0; i <= 255; i++ {
+		for j := 0; j <= 255; j++ {
+			rv = append(rv, netip.MustParsePrefix(fmt.Sprintf("192.168.%d.%d/32", i, j)))
+		}
+	}
+	rand.Shuffle(len(rv), func(i, j int) {
+		rv[i], rv[j] = rv[j], rv[i]
+	})
+
+	return rv
+}
+
+func BenchmarkAggregatePrefixesDefault(b *testing.B) {
+	prefixes := benchmarkPrefixFixtures()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		actual := AggregatePrefixesForSingleIPFamily(prefixes)
+		assert.Len(b, actual, 1)
+		assert.Equal(b, []netip.Prefix{
+			netip.MustParsePrefix("192.168.0.0/16"),
+		}, actual)
+	}
+}
+
+func BenchmarkAggregatePrefixesUsingPrefixTree(b *testing.B) {
+	do := func(prefixes []netip.Prefix) []netip.Prefix {
+		tree := NewPrefixTreeForIPv4()
+		for _, p := range prefixes {
+			tree.Add(p)
+		}
+		return tree.List()
+	}
+
+	prefixes := benchmarkPrefixFixtures()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		actual := do(prefixes)
+		assert.Len(b, actual, 1)
+		assert.Equal(b, []netip.Prefix{
+			netip.MustParsePrefix("192.168.0.0/16"),
+		}, actual)
 	}
 }
