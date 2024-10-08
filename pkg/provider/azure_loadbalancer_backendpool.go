@@ -19,6 +19,7 @@ package provider
 //go:generate sh -c "mockgen -destination=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/provider/azure_mock_loadbalancer_backendpool.go -source=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/provider/azure_loadbalancer_backendpool.go -package=provider BackendPool"
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -39,7 +40,7 @@ import (
 
 type BackendPool interface {
 	// EnsureHostsInPool ensures the nodes join the backend pool of the load balancer
-	EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, backendPoolID, vmSetName, clusterName, lbName string, backendPool network.BackendAddressPool) error
+	EnsureHostsInPool(ctx context.Context, service *v1.Service, nodes []*v1.Node, backendPoolID, vmSetName, clusterName, lbName string, backendPool network.BackendAddressPool) error
 
 	// CleanupVMSetFromBackendPoolByCondition removes nodes of the unwanted vmSet from the lb backend pool.
 	// This is needed in two scenarios:
@@ -66,8 +67,8 @@ func newBackendPoolTypeNodeIPConfig(c *Cloud) BackendPool {
 	return &backendPoolTypeNodeIPConfig{c}
 }
 
-func (bc *backendPoolTypeNodeIPConfig) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, backendPoolID, vmSetName, _, _ string, _ network.BackendAddressPool) error {
-	return bc.VMSet.EnsureHostsInPool(service, nodes, backendPoolID, vmSetName)
+func (bc *backendPoolTypeNodeIPConfig) EnsureHostsInPool(ctx context.Context, service *v1.Service, nodes []*v1.Node, backendPoolID, vmSetName, _, _ string, _ network.BackendAddressPool) error {
+	return bc.VMSet.EnsureHostsInPool(ctx, service, nodes, backendPoolID, vmSetName)
 }
 
 func isLBBackendPoolsExisting(lbBackendPoolNames map[bool]string, bpName *string) (found, isIPv6 bool) {
@@ -401,7 +402,7 @@ func (az *Cloud) getVnetResourceID() string {
 	)
 }
 
-func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, _, _, clusterName, lbName string, backendPool network.BackendAddressPool) error {
+func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(_ context.Context, service *v1.Service, nodes []*v1.Node, _, _, clusterName, lbName string, backendPool network.BackendAddressPool) error {
 	isIPv6 := isBackendPoolIPv6(ptr.Deref(backendPool.Name, ""))
 
 	var (
