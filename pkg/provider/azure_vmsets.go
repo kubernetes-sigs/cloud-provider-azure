@@ -40,13 +40,13 @@ type VMSet interface {
 	// GetInstanceIDByNodeName gets the cloud provider ID by node name.
 	// It must return ("", cloudprovider.InstanceNotFound) if the instance does
 	// not exist or is no longer running.
-	GetInstanceIDByNodeName(name string) (string, error)
+	GetInstanceIDByNodeName(ctx context.Context, name string) (string, error)
 	// GetInstanceTypeByNodeName gets the instance type by node name.
-	GetInstanceTypeByNodeName(name string) (string, error)
+	GetInstanceTypeByNodeName(ctx context.Context, name string) (string, error)
 	// GetIPByNodeName gets machine private IP and public IP by node name.
-	GetIPByNodeName(name string) (string, string, error)
+	GetIPByNodeName(ctx context.Context, name string) (string, string, error)
 	// GetPrimaryInterface gets machine primary network interface by node name.
-	GetPrimaryInterface(nodeName string) (network.Interface, error)
+	GetPrimaryInterface(ctx context.Context, nodeName string) (network.Interface, error)
 	// GetNodeNameByProviderID gets the node name by provider ID.
 	GetNodeNameByProviderID(providerID string) (types.NodeName, error)
 
@@ -66,10 +66,10 @@ type VMSet interface {
 	GetNodeVMSetName(node *v1.Node) (string, error)
 	// EnsureHostsInPool ensures the given Node's primary IP configurations are
 	// participating in the specified LoadBalancer Backend Pool.
-	EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetName string) error
+	EnsureHostsInPool(ctx context.Context, service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetName string) error
 	// EnsureHostInPool ensures the given VM's Primary NIC's Primary IP Configuration is
 	// participating in the specified LoadBalancer Backend Pool.
-	EnsureHostInPool(service *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetName string) (string, string, string, *compute.VirtualMachineScaleSetVM, error)
+	EnsureHostInPool(ctx context.Context, service *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetName string) (string, string, string, *compute.VirtualMachineScaleSetVM, error)
 	// EnsureBackendPoolDeleted ensures the loadBalancer backendAddressPools deleted from the specified nodes.
 	EnsureBackendPoolDeleted(service *v1.Service, backendPoolIDs []string, vmSetName string, backendAddressPools *[]network.BackendAddressPool, deleteFromVMSet bool) (bool, error)
 	//EnsureBackendPoolDeletedFromVMSets ensures the loadBalancer backendAddressPools deleted from the specified VMSS/VMAS
@@ -94,7 +94,7 @@ type VMSet interface {
 	GetProvisioningStateByNodeName(name string) (string, error)
 
 	// GetPrivateIPsByNodeName returns a slice of all private ips assigned to node (ipv6 and ipv4)
-	GetPrivateIPsByNodeName(name string) ([]string, error)
+	GetPrivateIPsByNodeName(ctx context.Context, name string) ([]string, error)
 
 	// GetNodeNameByIPConfigurationID gets the nodeName and vmSetName by IP configuration ID.
 	GetNodeNameByIPConfigurationID(ipConfigurationID string) (string, string, error)

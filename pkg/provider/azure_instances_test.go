@@ -967,7 +967,7 @@ func TestCloud_InstanceExists(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{Name: "foo"},
 		}
 
-		cloud.VMSet.(*MockVMSet).EXPECT().GetInstanceIDByNodeName("foo").Return("", cloudprovider.InstanceNotFound)
+		cloud.VMSet.(*MockVMSet).EXPECT().GetInstanceIDByNodeName(gomock.Any(), "foo").Return("", cloudprovider.InstanceNotFound)
 
 		exist, err := cloud.InstanceExists(ctx, node)
 		assert.False(t, exist)

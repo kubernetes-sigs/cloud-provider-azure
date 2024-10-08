@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -433,7 +434,7 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 			if tc.namespace != "" {
 				service.Namespace = tc.namespace
 			}
-			err := bi.EnsureHostsInPool(&service, nodes, "", "", "kubernetes", "kubernetes", tc.backendPool)
+			err := bi.EnsureHostsInPool(context.Background(), &service, nodes, "", "", "kubernetes", "kubernetes", tc.backendPool)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedBackendPool, tc.backendPool)
 		})
