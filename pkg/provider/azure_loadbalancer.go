@@ -41,6 +41,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 	"k8s.io/utils/strings/slices"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -2685,7 +2686,8 @@ func (az *Cloud) getExpectedLBRules(
 	// https://github.com/kubernetes/kubernetes/blob/7c013c3f64db33cf19f38bb2fc8d9182e42b0b7b/pkg/proxy/healthcheck/service_health.go#L236
 	var nodeEndpointHealthprobe *network.Probe
 	var nodeEndpointHealthprobeAdded bool
-	if servicehelpers.NeedsHealthCheck(service) && !(consts.IsPLSEnabled(service.Annotations) && consts.IsPLSProxyProtocolEnabled(service.Annotations)) {
+	if servicehelpers.NeedsHealthCheck(service) && !(consts.IsPLSEnabled(service.Annotations) && consts.IsPLSProxyProtocolEnabled(service.Annotations)) &&
+	   !az.useServiceLoadBalancer() {
 		podPresencePath, podPresencePort := servicehelpers.GetServiceHealthCheckPathPort(service)
 		lbRuleName := az.getLoadBalancerRuleName(service, v1.ProtocolTCP, podPresencePort, isIPv6)
 		probeInterval, numberOfProbes, err := az.getHealthProbeConfigProbeIntervalAndNumOfProbe(service, podPresencePort)
@@ -2706,7 +2708,8 @@ func (az *Cloud) getExpectedLBRules(
 
 	var useSharedProbe bool
 	if az.useSharedLoadBalancerHealthProbeMode() &&
-		!strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyLocal)) {
+		!strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyLocal)) &&
+		!az.useServiceLoadBalancer() {
 		nodeEndpointHealthprobe = az.buildClusterServiceSharedProbe()
 		useSharedProbe = true
 	}
@@ -2789,6 +2792,11 @@ func (az *Cloud) getExpectedLBRules(
 				klog.V(2).ErrorS(err, "error occurred when buildHealthProbeRulesForPort", "service", service.Name, "namespace", service.Namespace,
 					"rule-name", lbRuleName, "port", port.Port)
 			}
+
+			if az.useServiceLoadBalancer() {
+				isNoHealthProbeRule = true
+			}
+
 			if !isNoHealthProbeRule {
 				portprobe, err := az.buildHealthProbeRulesForPort(service, port, lbRuleName, nodeEndpointHealthprobe, useSharedProbe)
 				if err != nil {
@@ -2815,6 +2823,18 @@ func (az *Cloud) getExpectedLBRules(
 				props.BackendPort = ptr.To(port.NodePort)
 				props.EnableFloatingIP = ptr.To(false)
 			}
+
+			if az.useServiceLoadBalancer() {
+				//If Interger value of TargetPort is present in the service, use it as the backend port.
+				//We current don't support string(named Port).
+				if port.TargetPort.Type == intstr.Int && port.TargetPort.IntVal != 0 {
+					props.BackendPort = ptr.To(port.TargetPort.IntVal)
+				} else {
+					props.BackendPort = ptr.To(port.Port)
+				}
+				props.EnableFloatingIP = ptr.To(false)
+			}
+
 			expectedRules = append(expectedRules, network.LoadBalancingRule{
 				Name:                              &lbRuleName,
 				LoadBalancingRulePropertiesFormat: props,

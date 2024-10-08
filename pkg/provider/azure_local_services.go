@@ -409,7 +409,7 @@ func getLocalServiceBackendPoolName(serviceName string, ipv6 bool) string {
 // getBackendPoolNameForService determine the expected backend pool name
 // by checking the external traffic policy of the service.
 func (az *Cloud) getBackendPoolNameForService(service *v1.Service, clusterName string, ipv6 bool) string {
-	if !isLocalService(service) || !az.useMultipleStandardLoadBalancers() {
+	if !isLocalService(service) || (!az.useMultipleStandardLoadBalancers() && !az.useServiceLoadBalancer()) {
 		return getBackendPoolName(clusterName, ipv6)
 	}
 	return getLocalServiceBackendPoolName(getServiceName(service), ipv6)
@@ -622,4 +622,24 @@ func (az *Cloud) reconcileIPsInLocalServiceBackendPoolsAsync(
 			az.backendPoolUpdater.addOperation(getAddIPsToBackendPoolOperation(serviceName, lbName, bpName, expectedIPs))
 		}
 	}
+}
+
+func (az *Cloud) getEndpointSliceListForService(service *v1.Service) ([]*discovery_v1.EndpointSlice, error) {
+
+	var (
+		esList       []*discovery_v1.EndpointSlice
+	)
+
+	//Retrieving only from the cache to avoid expensive listing from k8 server as Informer
+	//code path would listen to updates to k8 api-server and store in the cache.
+	az.endpointSlicesCache.Range(func(key, value interface{}) bool {
+		endpointSlice := value.(*discovery_v1.EndpointSlice)
+		if strings.EqualFold(getServiceNameOfEndpointSlice(endpointSlice), service.Name) &&
+			strings.EqualFold(endpointSlice.Namespace, service.Namespace) {
+			esList = append(esList, endpointSlice)
+		}
+		return true
+	})
+
+	return esList, nil
 }

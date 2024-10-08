@@ -249,6 +249,8 @@ const (
 	LoadBalancerSkuBasic = "basic"
 	// LoadBalancerSkuStandard is the load balancer standard sku
 	LoadBalancerSkuStandard = "standard"
+	// LoadBalancerSkuService is the load balancer service sku
+	LoadBalancerSkuService = "service"
 
 	// ServiceAnnotationLoadBalancerInternal is the annotation used on the service
 	ServiceAnnotationLoadBalancerInternal = "service.beta.kubernetes.io/azure-load-balancer-internal"
