@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -76,7 +77,7 @@ func TestCreateOrUpdatePIP(t *testing.T) {
 		err := az.CreateOrUpdatePIP(&v1.Service{}, az.ResourceGroup, network.PublicIPAddress{Name: ptr.To("nic")})
 		assert.EqualError(t, test.expectedErr, err.Error())
 
-		cachedPIP, err := az.pipCache.GetWithDeepCopy(az.ResourceGroup, cache.CacheReadTypeDefault)
+		cachedPIP, err := az.pipCache.GetWithDeepCopy(context.TODO(), az.ResourceGroup, cache.CacheReadTypeDefault)
 		assert.NoError(t, err)
 		if test.cacheExpectedEmpty {
 			assert.Empty(t, cachedPIP)
@@ -140,7 +141,7 @@ func TestListPIP(t *testing.T) {
 			if test.expectPIPList {
 				mockPIPsClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(test.existingPIPs, nil).MaxTimes(2)
 			}
-			pips, err := az.listPIP(az.ResourceGroup, azcache.CacheReadTypeDefault)
+			pips, err := az.listPIP(context.TODO(), az.ResourceGroup, azcache.CacheReadTypeDefault)
 			if test.expectPIPList {
 				assert.ElementsMatch(t, test.existingPIPs, pips)
 			} else {
@@ -201,7 +202,7 @@ func TestGetPublicIPAddress(t *testing.T) {
 			if test.expectPIPList {
 				mockPIPsClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(test.existingPIPs, nil).MaxTimes(2)
 			}
-			pip, pipExists, err := az.getPublicIPAddress(az.ResourceGroup, "PIP", azcache.CacheReadTypeDefault)
+			pip, pipExists, err := az.getPublicIPAddress(context.TODO(), az.ResourceGroup, "PIP", azcache.CacheReadTypeDefault)
 			assert.Equal(t, test.expectedPIP, pip)
 			assert.Equal(t, test.expectExists, pipExists)
 			assert.NoError(t, err)
@@ -276,7 +277,7 @@ func TestFindMatchedPIP(t *testing.T) {
 				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(tc.pipsSecondTime, tc.listErrorSecondTime)
 			}
 
-			pip, err := az.findMatchedPIP(tc.loadBalancerIP, tc.pipName, "rg")
+			pip, err := az.findMatchedPIP(context.TODO(), tc.loadBalancerIP, tc.pipName, "rg")
 			assert.Equal(t, tc.expectedPIP, pip)
 			if tc.expectedError != nil {
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
@@ -330,7 +331,7 @@ func TestFindMatchedPIPByLoadBalancerIP(t *testing.T) {
 			if test.shouldRefreshCache {
 				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.pipsSecondTime, nil)
 			}
-			pip, err := az.findMatchedPIPByLoadBalancerIP(&test.pips, "1.2.3.4", "rg")
+			pip, err := az.findMatchedPIPByLoadBalancerIP(context.TODO(), &test.pips, "1.2.3.4", "rg")
 			assert.Equal(t, test.expectedPIP, pip)
 			assert.Equal(t, test.expectedError, err != nil)
 		})

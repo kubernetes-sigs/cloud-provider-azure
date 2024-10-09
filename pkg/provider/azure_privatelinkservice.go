@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strings"
@@ -36,6 +37,7 @@ import (
 // reconcilePrivateLinkService() function makes sure a PLS is created or deleted on
 // a Load Balancer frontend IP Configuration according to service spec and cluster operation
 func (az *Cloud) reconcilePrivateLinkService(
+	ctx context.Context,
 	clusterName string,
 	service *v1.Service,
 	fipConfig *network.FrontendIPConfiguration,
@@ -43,7 +45,7 @@ func (az *Cloud) reconcilePrivateLinkService(
 ) error {
 	isinternal := requiresInternalLoadBalancer(service)
 	pipRG := az.getPublicIPAddressResourceGroup(service)
-	_, _, fipIPVersion := az.serviceOwnsFrontendIP(*fipConfig, service)
+	_, _, fipIPVersion := az.serviceOwnsFrontendIP(ctx, *fipConfig, service)
 	serviceName := getServiceName(service)
 	var isIPv6 bool
 	var err error
@@ -86,7 +88,7 @@ func (az *Cloud) reconcilePrivateLinkService(
 		}
 
 		// Secondly, check if there is a private link service already created
-		existingPLS, err := az.getPrivateLinkService(az.getPLSResourceGroup(service), fipConfigID, azcache.CacheReadTypeDefault)
+		existingPLS, err := az.getPrivateLinkService(ctx, az.getPLSResourceGroup(service), fipConfigID, azcache.CacheReadTypeDefault)
 		if err != nil {
 			klog.Errorf("reconcilePrivateLinkService for service(%s): getPrivateLinkService(%s) failed: %v", serviceName, ptr.Deref(fipConfigID, ""), err)
 			return err
@@ -160,7 +162,7 @@ func (az *Cloud) reconcilePrivateLinkService(
 			}
 		}
 	} else if !wantPLS {
-		existingPLS, err := az.getPrivateLinkService(az.getPLSResourceGroup(service), fipConfigID, azcache.CacheReadTypeDefault)
+		existingPLS, err := az.getPrivateLinkService(ctx, az.getPLSResourceGroup(service), fipConfigID, azcache.CacheReadTypeDefault)
 		if err != nil {
 			klog.Errorf("reconcilePrivateLinkService for service(%s): getPrivateLinkService(%s) failed: %v", serviceName, ptr.Deref(fipConfigID, ""), err)
 			return err
