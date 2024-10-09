@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -26,6 +27,7 @@ import (
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatelinkserviceclient/mockprivatelinkserviceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
@@ -74,7 +76,7 @@ func TestCreateOrUpdatePLS(t *testing.T) {
 		assert.EqualError(t, test.expectedErr, err.Error())
 
 		// loadbalancer should be removed from cache if the etag is mismatch or the operation is canceled
-		pls, err := az.plsCache.GetWithDeepCopy("rg*frontendID", cache.CacheReadTypeDefault)
+		pls, err := az.plsCache.GetWithDeepCopy(context.TODO(), "rg*frontendID", cache.CacheReadTypeDefault)
 		assert.NoError(t, err)
 		assert.Equal(t, consts.PrivateLinkServiceNotExistID, *pls.(*network.PrivateLinkService).ID)
 	}
@@ -112,7 +114,7 @@ func TestGetPrivateLinkService(t *testing.T) {
 	az.plsCache.Set("rg*frontendID", &network.PrivateLinkService{Name: pointer.String("pls")})
 
 	// cache hit
-	pls, err := az.getPrivateLinkService("rg", pointer.String("frontendID"), azcache.CacheReadTypeDefault)
+	pls, err := az.getPrivateLinkService(context.TODO(), "rg", ptr.To("frontendID"), azcache.CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Equal(t, "pls", *pls.Name)
 
@@ -130,7 +132,7 @@ func TestGetPrivateLinkService(t *testing.T) {
 			},
 		},
 	}, nil)
-	pls, err = az.getPrivateLinkService("rg1", pointer.String("frontendID1"), azcache.CacheReadTypeDefault)
+	pls, err = az.getPrivateLinkService(context.TODO(), "rg1", ptr.To("frontendID1"), azcache.CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Equal(t, "pls1", *pls.Name)
 }

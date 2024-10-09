@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -27,6 +28,7 @@ import (
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
@@ -43,7 +45,7 @@ func TestDeleteLB(t *testing.T) {
 	mockLBClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
 	mockLBClient.EXPECT().Delete(gomock.Any(), az.ResourceGroup, "lb").Return(&retry.Error{HTTPStatusCode: http.StatusInternalServerError})
 
-	err := az.DeleteLB(&v1.Service{}, "lb")
+	err := az.DeleteLB(context.TODO(), &v1.Service{}, "lb")
 	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), fmt.Sprintf("%s", err.Error()))
 }
 
@@ -114,11 +116,11 @@ func TestListManagedLBs(t *testing.T) {
 		mockLBClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
 		mockLBClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(test.existingLBs, test.clientErr)
 		mockVMSet := NewMockVMSet(ctrl)
-		mockVMSet.EXPECT().GetAgentPoolVMSetNames(gomock.Any()).Return(&[]string{"vmas-0", "vmas-1"}, nil).Times(test.callTimes)
+		mockVMSet.EXPECT().GetAgentPoolVMSetNames(gomock.Any(), gomock.Any()).Return(&[]string{"vmas-0", "vmas-1"}, nil).Times(test.callTimes)
 		mockVMSet.EXPECT().GetPrimaryVMSetName().Return("vmas-0").AnyTimes()
 		az.VMSet = mockVMSet
 
-		lbs, err := az.ListManagedLBs(&v1.Service{}, []*v1.Node{}, "kubernetes")
+		lbs, err := az.ListManagedLBs(context.TODO(), &v1.Service{}, []*v1.Node{}, "kubernetes")
 		assert.Equal(t, test.expectedErr, err)
 		assert.Equal(t, test.expectedLBs, lbs)
 	}
@@ -165,19 +167,19 @@ func TestCreateOrUpdateLB(t *testing.T) {
 			},
 		}}, nil).MaxTimes(2)
 
-		err := az.CreateOrUpdateLB(&v1.Service{}, network.LoadBalancer{
-			Name: pointer.String("lb"),
-			Etag: pointer.String("etag"),
+		err := az.CreateOrUpdateLB(context.TODO(), &v1.Service{}, network.LoadBalancer{
+			Name: ptr.To("lb"),
+			Etag: ptr.To("etag"),
 		})
 		assert.EqualError(t, test.expectedErr, err.Error())
 
 		// loadbalancer should be removed from cache if the etag is mismatch or the operation is canceled
-		shouldBeEmpty, err := az.lbCache.GetWithDeepCopy("lb", cache.CacheReadTypeDefault)
+		shouldBeEmpty, err := az.lbCache.GetWithDeepCopy(context.TODO(), "lb", cache.CacheReadTypeDefault)
 		assert.NoError(t, err)
 		assert.Empty(t, shouldBeEmpty)
 
 		// public ip cache should be populated since there's GetPIP
-		shouldNotBeEmpty, err := az.pipCache.Get(az.ResourceGroup, cache.CacheReadTypeDefault)
+		shouldNotBeEmpty, err := az.pipCache.Get(context.TODO(), az.ResourceGroup, cache.CacheReadTypeDefault)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, shouldNotBeEmpty)
 	}
@@ -209,7 +211,7 @@ func TestCreateOrUpdateLBBackendPool(t *testing.T) {
 		lbClient.EXPECT().CreateOrUpdateBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.createOrUpdateErr)
 		az.LoadBalancerClient = lbClient
 
-		err := az.CreateOrUpdateLBBackendPool("kubernetes", network.BackendAddressPool{})
+		err := az.CreateOrUpdateLBBackendPool(context.TODO(), "kubernetes", network.BackendAddressPool{})
 		assert.Equal(t, tc.expectedErr, err != nil)
 	}
 }
@@ -240,7 +242,7 @@ func TestDeleteLBBackendPool(t *testing.T) {
 		lbClient.EXPECT().DeleteLBBackendPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.deleteErr)
 		az.LoadBalancerClient = lbClient
 
-		err := az.DeleteLBBackendPool("kubernetes", "kubernetes")
+		err := az.DeleteLBBackendPool(context.TODO(), "kubernetes", "kubernetes")
 		assert.Equal(t, tc.expectedErr, err != nil)
 	}
 }
@@ -315,7 +317,7 @@ func TestMigrateToIPBasedBackendPoolAndWaitForCompletion(t *testing.T) {
 			lbName := testClusterName
 			backendPoolNames := []string{testClusterName}
 			nicsCountMap := map[string]int{testClusterName: 2}
-			err := az.MigrateToIPBasedBackendPoolAndWaitForCompletion(lbName, backendPoolNames, nicsCountMap)
+			err := az.MigrateToIPBasedBackendPoolAndWaitForCompletion(context.TODO(), lbName, backendPoolNames, nicsCountMap)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
 			} else {

@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -25,7 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
@@ -39,6 +40,6 @@ func TestCreateOrUpdateInterface(t *testing.T) {
 	mockInterfaceClient := az.InterfacesClient.(*mockinterfaceclient.MockInterface)
 	mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(&retry.Error{HTTPStatusCode: http.StatusInternalServerError})
 
-	err := az.CreateOrUpdateInterface(&v1.Service{}, network.Interface{Name: pointer.String("nic")})
+	err := az.CreateOrUpdateInterface(context.TODO(), &v1.Service{}, network.Interface{Name: ptr.To("nic")})
 	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), err.Error())
 }
