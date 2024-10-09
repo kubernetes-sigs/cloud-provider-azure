@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -73,15 +74,15 @@ func (az *Cloud) ListVirtualMachines(resourceGroup string) ([]compute.VirtualMac
 
 // getPrivateIPsForMachine is wrapper for optional backoff getting private ips
 // list of a node by name
-func (az *Cloud) getPrivateIPsForMachine(nodeName types.NodeName) ([]string, error) {
-	return az.getPrivateIPsForMachineWithRetry(nodeName)
+func (az *Cloud) getPrivateIPsForMachine(ctx context.Context, nodeName types.NodeName) ([]string, error) {
+	return az.getPrivateIPsForMachineWithRetry(ctx, nodeName)
 }
 
-func (az *Cloud) getPrivateIPsForMachineWithRetry(nodeName types.NodeName) ([]string, error) {
+func (az *Cloud) getPrivateIPsForMachineWithRetry(ctx context.Context, nodeName types.NodeName) ([]string, error) {
 	var privateIPs []string
 	err := wait.ExponentialBackoff(az.RequestBackoff(), func() (bool, error) {
 		var retryErr error
-		privateIPs, retryErr = az.VMSet.GetPrivateIPsByNodeName(string(nodeName))
+		privateIPs, retryErr = az.VMSet.GetPrivateIPsByNodeName(ctx, string(nodeName))
 		if retryErr != nil {
 			// won't retry since the instance doesn't exist on Azure.
 			if errors.Is(retryErr, cloudprovider.InstanceNotFound) {
@@ -96,16 +97,16 @@ func (az *Cloud) getPrivateIPsForMachineWithRetry(nodeName types.NodeName) ([]st
 	return privateIPs, err
 }
 
-func (az *Cloud) getIPForMachine(nodeName types.NodeName) (string, string, error) {
-	return az.GetIPForMachineWithRetry(nodeName)
+func (az *Cloud) getIPForMachine(ctx context.Context, nodeName types.NodeName) (string, string, error) {
+	return az.GetIPForMachineWithRetry(ctx, nodeName)
 }
 
 // GetIPForMachineWithRetry invokes az.getIPForMachine with exponential backoff retry
-func (az *Cloud) GetIPForMachineWithRetry(name types.NodeName) (string, string, error) {
+func (az *Cloud) GetIPForMachineWithRetry(ctx context.Context, name types.NodeName) (string, string, error) {
 	var ip, publicIP string
-	err := wait.ExponentialBackoff(az.RequestBackoff(), func() (bool, error) {
+	err := wait.ExponentialBackoffWithContext(ctx, az.RequestBackoff(), func(ctx context.Context) (bool, error) {
 		var retryErr error
-		ip, publicIP, retryErr = az.VMSet.GetIPByNodeName(string(name))
+		ip, publicIP, retryErr = az.VMSet.GetIPByNodeName(ctx, string(name))
 		if retryErr != nil {
 			klog.Errorf("GetIPForMachineWithRetry(%s): backoff failure, will retry,err=%v", name, retryErr)
 			return false, nil

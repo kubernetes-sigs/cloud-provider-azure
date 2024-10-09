@@ -464,7 +464,7 @@ func newAvailabilitySet(az *Cloud) (VMSet, error) {
 // GetInstanceIDByNodeName gets the cloud provider ID by node name.
 // It must return ("", cloudprovider.InstanceNotFound) if the instance does
 // not exist or is no longer running.
-func (as *availabilitySet) GetInstanceIDByNodeName(name string) (string, error) {
+func (as *availabilitySet) GetInstanceIDByNodeName(_ context.Context, name string) (string, error) {
 	var machine compute.VirtualMachine
 	var err error
 
@@ -537,7 +537,7 @@ func (as *availabilitySet) GetNodeNameByProviderID(providerID string) (types.Nod
 }
 
 // GetInstanceTypeByNodeName gets the instance type by node name.
-func (as *availabilitySet) GetInstanceTypeByNodeName(name string) (string, error) {
+func (as *availabilitySet) GetInstanceTypeByNodeName(_ context.Context, name string) (string, error) {
 	machine, err := as.getVirtualMachine(types.NodeName(name), azcache.CacheReadTypeUnsafe)
 	if err != nil {
 		klog.Errorf("as.GetInstanceTypeByNodeName(%s) failed: as.getVirtualMachine(%s) err=%v", name, name, err)
@@ -588,8 +588,8 @@ func (as *availabilitySet) GetPrimaryVMSetName() string {
 }
 
 // GetIPByNodeName gets machine private IP and public IP by node name.
-func (as *availabilitySet) GetIPByNodeName(name string) (string, string, error) {
-	nic, err := as.GetPrimaryInterface(name)
+func (as *availabilitySet) GetIPByNodeName(ctx context.Context, name string) (string, string, error) {
+	nic, err := as.GetPrimaryInterface(ctx, name)
 	if err != nil {
 		return "", "", err
 	}
@@ -623,9 +623,9 @@ func (as *availabilitySet) GetIPByNodeName(name string) (string, string, error) 
 // returns a list of private ips assigned to node
 // TODO (khenidak): This should read all nics, not just the primary
 // allowing users to split ipv4/v6 on multiple nics
-func (as *availabilitySet) GetPrivateIPsByNodeName(name string) ([]string, error) {
+func (as *availabilitySet) GetPrivateIPsByNodeName(ctx context.Context, name string) ([]string, error) {
 	ips := make([]string, 0)
-	nic, err := as.GetPrimaryInterface(name)
+	nic, err := as.GetPrimaryInterface(ctx, name)
 	if err != nil {
 		return ips, err
 	}
@@ -770,7 +770,7 @@ func (as *availabilitySet) GetNodeVMSetName(node *v1.Node) (string, error) {
 }
 
 // GetPrimaryInterface gets machine primary network interface by node name.
-func (as *availabilitySet) GetPrimaryInterface(nodeName string) (network.Interface, error) {
+func (as *availabilitySet) GetPrimaryInterface(_ context.Context, nodeName string) (network.Interface, error) {
 	nic, _, err := as.getPrimaryInterfaceWithVMSet(nodeName, "")
 	return nic, err
 }
@@ -851,7 +851,7 @@ func (as *availabilitySet) getPrimaryInterfaceWithVMSet(nodeName, vmSetName stri
 
 // EnsureHostInPool ensures the given VM's Primary NIC's Primary IP Configuration is
 // participating in the specified LoadBalancer Backend Pool.
-func (as *availabilitySet) EnsureHostInPool(service *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetName string) (string, string, string, *compute.VirtualMachineScaleSetVM, error) {
+func (as *availabilitySet) EnsureHostInPool(_ context.Context, service *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetName string) (string, string, string, *compute.VirtualMachineScaleSetVM, error) {
 	vmName := mapNodeNameToVMName(nodeName)
 	serviceName := getServiceName(service)
 	nic, _, err := as.getPrimaryInterfaceWithVMSet(vmName, vmSetName)
@@ -936,7 +936,7 @@ func (as *availabilitySet) EnsureHostInPool(service *v1.Service, nodeName types.
 
 // EnsureHostsInPool ensures the given Node's primary IP configurations are
 // participating in the specified LoadBalancer Backend Pool.
-func (as *availabilitySet) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetName string) error {
+func (as *availabilitySet) EnsureHostsInPool(ctx context.Context, service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetName string) error {
 	mc := metrics.NewMetricContext("services", "vmas_ensure_hosts_in_pool", as.ResourceGroup, as.SubscriptionID, getServiceName(service))
 	isOperationSucceeded := false
 	defer func() {
@@ -962,7 +962,7 @@ func (as *availabilitySet) EnsureHostsInPool(service *v1.Service, nodes []*v1.No
 		}
 
 		f := func() error {
-			_, _, _, _, err := as.EnsureHostInPool(service, types.NodeName(localNodeName), backendPoolID, vmSetName)
+			_, _, _, _, err := as.EnsureHostInPool(ctx, service, types.NodeName(localNodeName), backendPoolID, vmSetName)
 			if err != nil {
 				return fmt.Errorf("ensure(%s): backendPoolID(%s) - failed to ensure host in pool: %w", getServiceName(service), backendPoolID, err)
 			}

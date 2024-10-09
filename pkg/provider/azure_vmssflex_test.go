@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -331,7 +332,7 @@ func TestGetInstanceIDByNodeNameVmssFlex(t *testing.T) {
 		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
 
-		instanceID, err := fs.GetInstanceIDByNodeName(tc.nodeName)
+		instanceID, err := fs.GetInstanceIDByNodeName(context.Background(), tc.nodeName)
 		assert.Equal(t, tc.expectedInstanceID, instanceID)
 		assert.Equal(t, tc.expectedErr, err)
 	}
@@ -381,7 +382,7 @@ func TestGetInstanceTypeByNodeNameVmssFlex(t *testing.T) {
 		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
 
-		instanceType, err := fs.GetInstanceTypeByNodeName(tc.nodeName)
+		instanceType, err := fs.GetInstanceTypeByNodeName(context.Background(), tc.nodeName)
 		assert.Equal(t, tc.expectedInstanceType, instanceType)
 		assert.Equal(t, tc.expectedErr, err)
 	}
@@ -646,7 +647,7 @@ func TestGetPrimaryInterfaceVmssFlex(t *testing.T) {
 		mockInterfacesClient := fs.InterfacesClient.(*mockinterfaceclient.MockInterface)
 		mockInterfacesClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.nic, tc.nicGetErr).AnyTimes()
 
-		nic, err := fs.GetPrimaryInterface(tc.nodeName)
+		nic, err := fs.GetPrimaryInterface(context.Background(), tc.nodeName)
 		assert.Equal(t, tc.expectedNeworkInterface, nic, tc.description)
 		if tc.expectedErr != nil {
 			assert.EqualError(t, err, tc.expectedErr.Error(), tc.description)
@@ -698,7 +699,7 @@ func TestGetIPByNodeNameVmssFlex(t *testing.T) {
 		mockInterfacesClient := fs.InterfacesClient.(*mockinterfaceclient.MockInterface)
 		mockInterfacesClient.EXPECT().Get(gomock.Any(), gomock.Any(), "testvm1-nic", gomock.Any()).Return(tc.nic, tc.nicGetErr).AnyTimes()
 
-		privateIP, publicIP, err := fs.GetIPByNodeName(tc.nodeName)
+		privateIP, publicIP, err := fs.GetIPByNodeName(context.Background(), tc.nodeName)
 		assert.Equal(t, tc.expectedPrivateIP, privateIP)
 		assert.Equal(t, tc.expectedPublicIP, publicIP)
 		assert.Equal(t, tc.expectedErr, err)
@@ -759,7 +760,7 @@ func TestGetPrivateIPsByNodeNameVmssFlex(t *testing.T) {
 		mockInterfacesClient := fs.InterfacesClient.(*mockinterfaceclient.MockInterface)
 		mockInterfacesClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.nic, tc.nicGetErr).AnyTimes()
 
-		ips, err := fs.GetPrivateIPsByNodeName(tc.nodeName)
+		ips, err := fs.GetPrivateIPsByNodeName(context.Background(), tc.nodeName)
 		assert.Equal(t, tc.expectedPrivateIPs, ips)
 		assert.Equal(t, tc.expectedErr, err)
 	}
@@ -1112,7 +1113,7 @@ func TestEnsureHostInPoolVmssFlex(t *testing.T) {
 		mockInterfacesClient.EXPECT().Get(gomock.Any(), gomock.Any(), "testvm1-nic", gomock.Any()).Return(tc.nic, tc.nicGetErr).AnyTimes()
 		mockInterfacesClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.nicPutErr).AnyTimes()
 
-		rg, vmSetName, nodeName, _, err := fs.EnsureHostInPool(tc.service, tc.nodeName, tc.backendPoolID, tc.vmSetNameOfLB)
+		rg, vmSetName, nodeName, _, err := fs.EnsureHostInPool(context.Background(), tc.service, tc.nodeName, tc.backendPoolID, tc.vmSetNameOfLB)
 		assert.Equal(t, tc.expectedNodeResourceGroup, rg, tc.description)
 		assert.Equal(t, tc.expectedVMSetName, vmSetName, tc.description)
 		assert.Equal(t, tc.expectedNodeName, nodeName, tc.description)
@@ -1378,7 +1379,7 @@ func TestEnsureHostsInPoolVmssFlex(t *testing.T) {
 		mockInterfacesClient.EXPECT().Get(gomock.Any(), gomock.Any(), "testvm1-nic", gomock.Any()).Return(tc.nic, tc.nicGetErr).AnyTimes()
 		mockInterfacesClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-		err = fs.EnsureHostsInPool(tc.service, tc.nodes, tc.backendPoolID, tc.vmSetNameOfLB)
+		err = fs.EnsureHostsInPool(context.Background(), tc.service, tc.nodes, tc.backendPoolID, tc.vmSetNameOfLB)
 
 		if tc.expectedErr != nil {
 			assert.EqualError(t, err, tc.expectedErr.Error(), tc.description)
