@@ -182,7 +182,7 @@ func TestNodeInitialized(t *testing.T) {
 			Address: "132.143.154.163",
 		},
 	}, nil).AnyTimes()
-	mockNP.EXPECT().GetPlatformSubFaultDomain().Return("1", nil)
+	mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("1", nil)
 
 	cloudNodeController := NewCloudNodeController(
 		"node0",
@@ -260,7 +260,7 @@ func TestUpdateCloudNode(t *testing.T) {
 			Address: "132.143.154.163",
 		},
 	}, nil).AnyTimes()
-	mockNP.EXPECT().GetPlatformSubFaultDomain().Return("1", nil)
+	mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("1", nil)
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := NewCloudNodeController(
@@ -393,7 +393,7 @@ func TestZoneInitialized(t *testing.T) {
 				Address: "132.143.154.163",
 			},
 		}, nil).AnyTimes()
-		mockNP.EXPECT().GetPlatformSubFaultDomain().Return("", nil)
+		mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("", nil)
 
 		eventBroadcaster := record.NewBroadcaster()
 		cloudNodeController := &CloudNodeController{
@@ -474,7 +474,7 @@ func TestZoneInitialized(t *testing.T) {
 				Address: "132.143.154.163",
 			},
 		}, nil).AnyTimes()
-		mockNP.EXPECT().GetPlatformSubFaultDomain().Return("", nil)
+		mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("", nil)
 
 		eventBroadcaster := record.NewBroadcaster()
 		cloudNodeController := &CloudNodeController{
@@ -571,7 +571,7 @@ func TestAddCloudNode(t *testing.T) {
 			Address: "132.143.154.163",
 		},
 	}, nil).AnyTimes()
-	mockNP.EXPECT().GetPlatformSubFaultDomain().Return("", nil)
+	mockNP.EXPECT().GetPlatformSubFaultDomain(gomock.Any()).Return("", nil)
 
 	factory := informers.NewSharedInformerFactory(fnh, 0)
 	nodeInformer := factory.Core().V1().Nodes()
@@ -735,7 +735,7 @@ func TestNodeProvidedIPAddresses(t *testing.T) {
 			Address: "132.143.154.163",
 		},
 	}, nil).AnyTimes()
-	mockNP.EXPECT().GetPlatformSubFaultDomain().Return("", nil)
+	mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("", nil)
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := NewCloudNodeController(
@@ -1157,7 +1157,7 @@ func TestNodeProviderID(t *testing.T) {
 			Address: "132.143.154.163",
 		},
 	}, nil).AnyTimes()
-	mockNP.EXPECT().GetPlatformSubFaultDomain().Return("", nil).AnyTimes()
+	mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("", nil).AnyTimes()
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := &CloudNodeController{
@@ -1243,7 +1243,7 @@ func TestNodeProviderIDAlreadySet(t *testing.T) {
 			Address: "132.143.154.163",
 		},
 	}, nil).AnyTimes()
-	mockNP.EXPECT().GetPlatformSubFaultDomain().Return("", nil).AnyTimes()
+	mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("", nil).AnyTimes()
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := &CloudNodeController{

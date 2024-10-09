@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -215,7 +216,7 @@ func TestStandardDetachDisk(t *testing.T) {
 		err := vmSet.DetachDisk(ctx, test.nodeName, diskMap, test.forceDetach)
 		assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
 		if !test.expectedError && len(test.disks) > 0 {
-			dataDisks, _, err := vmSet.GetDataDisks(test.nodeName, azcache.CacheReadTypeDefault)
+			dataDisks, _, err := vmSet.GetDataDisks(context.TODO(), test.nodeName, azcache.CacheReadTypeDefault)
 			assert.Equal(t, true, len(dataDisks) == 3, "TestCase[%d]: %s, err: %v", i, test.desc, err)
 		}
 	}
@@ -287,7 +288,7 @@ func TestStandardUpdateVM(t *testing.T) {
 		err = vmSet.UpdateVM(ctx, test.nodeName)
 		assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
 		if !test.expectedError && test.diskName != "" {
-			dataDisks, _, err := vmSet.GetDataDisks(test.nodeName, azcache.CacheReadTypeDefault)
+			dataDisks, _, err := vmSet.GetDataDisks(context.TODO(), test.nodeName, azcache.CacheReadTypeDefault)
 			assert.Equal(t, true, len(dataDisks) == 3, "TestCase[%d]: %s, err: %v", i, test.desc, err)
 		}
 	}
@@ -375,13 +376,13 @@ func TestGetDataDisks(t *testing.T) {
 		mockVMsClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, gomock.Not("vm1"), gomock.Any()).Return(compute.VirtualMachine{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 		mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
-		dataDisks, _, err := vmSet.GetDataDisks(test.nodeName, test.crt)
+		dataDisks, _, err := vmSet.GetDataDisks(context.TODO(), test.nodeName, test.crt)
 		assert.Equal(t, test.expectedDataDisks, dataDisks, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
 
 		if test.crt == azcache.CacheReadTypeUnsafe {
 			time.Sleep(fakeCacheTTL)
-			dataDisks, _, err := vmSet.GetDataDisks(test.nodeName, test.crt)
+			dataDisks, _, err := vmSet.GetDataDisks(context.TODO(), test.nodeName, test.crt)
 			assert.Equal(t, test.expectedDataDisks, dataDisks, "TestCase[%d]: %s", i, test.desc)
 			assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
 		}

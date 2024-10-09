@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -61,9 +62,7 @@ func (az *Cloud) CreateOrUpdateRouteTable(routeTable network.RouteTable) error {
 }
 
 func (az *Cloud) newRouteTableCache() (azcache.Resource, error) {
-	getter := func(key string) (interface{}, error) {
-		ctx, cancel := getContextWithCancel()
-		defer cancel()
+	getter := func(ctx context.Context, key string) (interface{}, error) {
 		rt, err := az.RouteTablesClient.Get(ctx, az.RouteTableResourceGroup, key, "")
 		exists, rerr := checkResourceExistsFromError(err)
 		if rerr != nil {

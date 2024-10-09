@@ -125,7 +125,7 @@ func NewCloudCIDRAllocator(
 				klog.Warningf("NewCloudCIDRAllocator: failed when trying to read the node mask size on node %s: no provider ID", node.Name)
 				continue
 			}
-			err := ca.updateNodeSubnetMaskSizes(node.Name, node.Spec.ProviderID)
+			err := ca.updateNodeSubnetMaskSizes(context.Background(), node.Name, node.Spec.ProviderID)
 			if err != nil {
 				return nil, err
 			}
@@ -223,7 +223,7 @@ func (ca *cloudCIDRAllocator) updateMaxSubnetMaskSizes() {
 }
 
 // updateNodeSubnetMaskSizes gets the node's VMSS/VMAS, reads the mask size tag on it and updates them into the map
-func (ca *cloudCIDRAllocator) updateNodeSubnetMaskSizes(nodeName, providerID string) error {
+func (ca *cloudCIDRAllocator) updateNodeSubnetMaskSizes(ctx context.Context, nodeName, providerID string) error {
 	ca.lock.Lock()
 	defer ca.lock.Unlock()
 
@@ -231,7 +231,7 @@ func (ca *cloudCIDRAllocator) updateNodeSubnetMaskSizes(nodeName, providerID str
 		klog.Warningf("updateNodeSubnetMaskSizes(%s): empty providerID", providerID)
 	}
 
-	ipv4Mask, ipv6Mask, err := ca.cloud.VMSet.GetNodeCIDRMasksByProviderID(providerID)
+	ipv4Mask, ipv6Mask, err := ca.cloud.VMSet.GetNodeCIDRMasksByProviderID(ctx, providerID)
 	if err != nil {
 		klog.Warningf("updateNodeSubnetMaskSizes(%s): cannot get node subnet mask size by providerID: %v", providerID, err)
 	}
@@ -358,7 +358,7 @@ func (ca *cloudCIDRAllocator) AllocateOrOccupyCIDR(node *v1.Node) error {
 		return nil
 	}
 
-	err := ca.updateNodeSubnetMaskSizes(node.Name, node.Spec.ProviderID)
+	err := ca.updateNodeSubnetMaskSizes(context.Background(), node.Name, node.Spec.ProviderID)
 	if err != nil {
 		klog.Errorf("AllocateOrOccupyCIDR(%s): failed to update node subnet mask sizes: %v", node.Name, err)
 		return err

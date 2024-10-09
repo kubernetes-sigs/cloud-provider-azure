@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"reflect"
 	"sync"
 	"testing"
@@ -389,7 +390,7 @@ func TestGetVMSSVMCacheKey(t *testing.T) {
 }
 
 func TestIsNodeInVMSSVMCache(t *testing.T) {
-	getter := func(_ string) (interface{}, error) {
+	getter := func(_ context.Context, _ string) (interface{}, error) {
 		return nil, nil
 	}
 	emptyCacheEntryTimedCache, _ := azcache.NewTimedCache(fakeCacheTTL, getter, false)

@@ -34,8 +34,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
-func (fs *FlexScaleSet) newVmssFlexCache(ctx context.Context) (azcache.Resource, error) {
-	getter := func(_ string) (interface{}, error) {
+func (fs *FlexScaleSet) newVmssFlexCache() (azcache.Resource, error) {
+	getter := func(ctx context.Context, _ string) (interface{}, error) {
 		localCache := &sync.Map{}
 
 		allResourceGroups, err := fs.GetResourceGroups()
@@ -76,8 +76,8 @@ func (fs *FlexScaleSet) newVmssFlexCache(ctx context.Context) (azcache.Resource,
 	return azcache.NewTimedCache(time.Duration(fs.Config.VmssFlexCacheTTLInSeconds)*time.Second, getter, fs.Cloud.Config.DisableAPICallCache)
 }
 
-func (fs *FlexScaleSet) newVmssFlexVMCache(ctx context.Context) (azcache.Resource, error) {
-	getter := func(key string) (interface{}, error) {
+func (fs *FlexScaleSet) newVmssFlexVMCache() (azcache.Resource, error) {
+	getter := func(ctx context.Context, key string) (interface{}, error) {
 		localCache := &sync.Map{}
 
 		vms, rerr := fs.VirtualMachinesClient.ListVmssFlexVMsWithoutInstanceView(ctx, key)
@@ -126,7 +126,7 @@ func (fs *FlexScaleSet) newVmssFlexVMCache(ctx context.Context) (azcache.Resourc
 	return azcache.NewTimedCache(time.Duration(fs.Config.VmssFlexVMCacheTTLInSeconds)*time.Second, getter, fs.Cloud.Config.DisableAPICallCache)
 }
 
-func (fs *FlexScaleSet) getNodeNameByVMName(vmName string) (string, error) {
+func (fs *FlexScaleSet) getNodeNameByVMName(ctx context.Context, vmName string) (string, error) {
 	fs.lockMap.LockEntry(consts.GetNodeVmssFlexIDLockKey)
 	defer fs.lockMap.UnlockEntry(consts.GetNodeVmssFlexIDLockKey)
 	cachedNodeName, isCached := fs.vmssFlexVMNameToNodeName.Load(vmName)
@@ -134,8 +134,8 @@ func (fs *FlexScaleSet) getNodeNameByVMName(vmName string) (string, error) {
 		return fmt.Sprintf("%v", cachedNodeName), nil
 	}
 
-	getter := func(vmName string, crt azcache.AzureCacheReadType) (string, error) {
-		cached, err := fs.vmssFlexCache.Get(consts.VmssFlexKey, crt)
+	getter := func(ctx context.Context, vmName string, crt azcache.AzureCacheReadType) (string, error) {
+		cached, err := fs.vmssFlexCache.Get(ctx, consts.VmssFlexKey, crt)
 		if err != nil {
 			return "", err
 		}
@@ -143,7 +143,7 @@ func (fs *FlexScaleSet) getNodeNameByVMName(vmName string) (string, error) {
 
 		vmssFlexes.Range(func(key, _ interface{}) bool {
 			vmssFlexID := key.(string)
-			_, err := fs.vmssFlexVMCache.Get(vmssFlexID, azcache.CacheReadTypeForceRefresh)
+			_, err := fs.vmssFlexVMCache.Get(ctx, vmssFlexID, azcache.CacheReadTypeForceRefresh)
 			if err != nil {
 				klog.Errorf("failed to refresh vmss flex VM cache for vmssFlexID %s", vmssFlexID)
 			}
@@ -157,16 +157,16 @@ func (fs *FlexScaleSet) getNodeNameByVMName(vmName string) (string, error) {
 		return "", cloudprovider.InstanceNotFound
 	}
 
-	nodeName, err := getter(vmName, azcache.CacheReadTypeDefault)
+	nodeName, err := getter(ctx, vmName, azcache.CacheReadTypeDefault)
 	if errors.Is(err, cloudprovider.InstanceNotFound) {
 		klog.V(2).Infof("Could not find node (%s) in the existing cache. Forcely freshing the cache to check again...", nodeName)
-		return getter(vmName, azcache.CacheReadTypeForceRefresh)
+		return getter(ctx, vmName, azcache.CacheReadTypeForceRefresh)
 	}
 	return nodeName, err
 
 }
 
-func (fs *FlexScaleSet) getNodeVmssFlexID(nodeName string) (string, error) {
+func (fs *FlexScaleSet) getNodeVmssFlexID(ctx context.Context, nodeName string) (string, error) {
 	fs.lockMap.LockEntry(consts.GetNodeVmssFlexIDLockKey)
 	defer fs.lockMap.UnlockEntry(consts.GetNodeVmssFlexIDLockKey)
 	cachedVmssFlexID, isCached := fs.vmssFlexVMNameToVmssID.Load(nodeName)
@@ -175,8 +175,8 @@ func (fs *FlexScaleSet) getNodeVmssFlexID(nodeName string) (string, error) {
 		return fmt.Sprintf("%v", cachedVmssFlexID), nil
 	}
 
-	getter := func(nodeName string, crt azcache.AzureCacheReadType) (string, error) {
-		cached, err := fs.vmssFlexCache.Get(consts.VmssFlexKey, crt)
+	getter := func(ctx context.Context, nodeName string, crt azcache.AzureCacheReadType) (string, error) {
+		cached, err := fs.vmssFlexCache.Get(ctx, consts.VmssFlexKey, crt)
 		if err != nil {
 			return "", err
 		}
@@ -203,7 +203,7 @@ func (fs *FlexScaleSet) getNodeVmssFlexID(nodeName string) (string, error) {
 		})
 
 		for _, vmssID := range vmssFlexIDs {
-			if _, err := fs.vmssFlexVMCache.Get(vmssID, azcache.CacheReadTypeForceRefresh); err != nil {
+			if _, err := fs.vmssFlexVMCache.Get(ctx, vmssID, azcache.CacheReadTypeForceRefresh); err != nil {
 				klog.Errorf("failed to refresh vmss flex VM cache for vmssFlexID %s", vmssID)
 			}
 			// if the vm is cached stop refreshing
@@ -215,22 +215,22 @@ func (fs *FlexScaleSet) getNodeVmssFlexID(nodeName string) (string, error) {
 		return "", cloudprovider.InstanceNotFound
 	}
 
-	vmssFlexID, err := getter(nodeName, azcache.CacheReadTypeDefault)
+	vmssFlexID, err := getter(ctx, nodeName, azcache.CacheReadTypeDefault)
 	if errors.Is(err, cloudprovider.InstanceNotFound) {
 		klog.V(2).Infof("Could not find node (%s) in the existing cache. Forcely freshing the cache to check again...", nodeName)
-		return getter(nodeName, azcache.CacheReadTypeForceRefresh)
+		return getter(ctx, nodeName, azcache.CacheReadTypeForceRefresh)
 	}
 	return vmssFlexID, err
 
 }
 
-func (fs *FlexScaleSet) getVmssFlexVM(nodeName string, crt azcache.AzureCacheReadType) (vm compute.VirtualMachine, err error) {
-	vmssFlexID, err := fs.getNodeVmssFlexID(nodeName)
+func (fs *FlexScaleSet) getVmssFlexVM(ctx context.Context, nodeName string, crt azcache.AzureCacheReadType) (vm compute.VirtualMachine, err error) {
+	vmssFlexID, err := fs.getNodeVmssFlexID(ctx, nodeName)
 	if err != nil {
 		return vm, err
 	}
 
-	cached, err := fs.vmssFlexVMCache.Get(vmssFlexID, crt)
+	cached, err := fs.vmssFlexVMCache.Get(ctx, vmssFlexID, crt)
 	if err != nil {
 		return vm, err
 	}
@@ -244,8 +244,8 @@ func (fs *FlexScaleSet) getVmssFlexVM(nodeName string, crt azcache.AzureCacheRea
 	return *(cachedVM.(*compute.VirtualMachine)), nil
 }
 
-func (fs *FlexScaleSet) getVmssFlexByVmssFlexID(vmssFlexID string, crt azcache.AzureCacheReadType) (*compute.VirtualMachineScaleSet, error) {
-	cached, err := fs.vmssFlexCache.Get(consts.VmssFlexKey, crt)
+func (fs *FlexScaleSet) getVmssFlexByVmssFlexID(ctx context.Context, vmssFlexID string, crt azcache.AzureCacheReadType) (*compute.VirtualMachineScaleSet, error) {
+	cached, err := fs.vmssFlexCache.Get(ctx, consts.VmssFlexKey, crt)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +256,7 @@ func (fs *FlexScaleSet) getVmssFlexByVmssFlexID(vmssFlexID string, crt azcache.A
 	}
 
 	klog.V(2).Infof("Couldn't find VMSS Flex with ID %s, refreshing the cache", vmssFlexID)
-	cached, err = fs.vmssFlexCache.Get(consts.VmssFlexKey, azcache.CacheReadTypeForceRefresh)
+	cached, err = fs.vmssFlexCache.Get(ctx, consts.VmssFlexKey, azcache.CacheReadTypeForceRefresh)
 	if err != nil {
 		return nil, err
 	}
@@ -268,20 +268,20 @@ func (fs *FlexScaleSet) getVmssFlexByVmssFlexID(vmssFlexID string, crt azcache.A
 	return nil, cloudprovider.InstanceNotFound
 }
 
-func (fs *FlexScaleSet) getVmssFlexByNodeName(nodeName string, crt azcache.AzureCacheReadType) (*compute.VirtualMachineScaleSet, error) {
-	vmssFlexID, err := fs.getNodeVmssFlexID(nodeName)
+func (fs *FlexScaleSet) getVmssFlexByNodeName(ctx context.Context, nodeName string, crt azcache.AzureCacheReadType) (*compute.VirtualMachineScaleSet, error) {
+	vmssFlexID, err := fs.getNodeVmssFlexID(ctx, nodeName)
 	if err != nil {
 		return nil, err
 	}
-	vmssFlex, err := fs.getVmssFlexByVmssFlexID(vmssFlexID, crt)
+	vmssFlex, err := fs.getVmssFlexByVmssFlexID(ctx, vmssFlexID, crt)
 	if err != nil {
 		return nil, err
 	}
 	return vmssFlex, nil
 }
 
-func (fs *FlexScaleSet) getVmssFlexIDByName(vmssFlexName string) (string, error) {
-	cached, err := fs.vmssFlexCache.Get(consts.VmssFlexKey, azcache.CacheReadTypeDefault)
+func (fs *FlexScaleSet) getVmssFlexIDByName(ctx context.Context, vmssFlexName string) (string, error) {
+	cached, err := fs.vmssFlexCache.Get(ctx, consts.VmssFlexKey, azcache.CacheReadTypeDefault)
 	if err != nil {
 		return "", err
 	}
@@ -305,8 +305,8 @@ func (fs *FlexScaleSet) getVmssFlexIDByName(vmssFlexName string) (string, error)
 	return "", cloudprovider.InstanceNotFound
 }
 
-func (fs *FlexScaleSet) getVmssFlexByName(vmssFlexName string) (*compute.VirtualMachineScaleSet, error) {
-	cached, err := fs.vmssFlexCache.Get(consts.VmssFlexKey, azcache.CacheReadTypeDefault)
+func (fs *FlexScaleSet) getVmssFlexByName(ctx context.Context, vmssFlexName string) (*compute.VirtualMachineScaleSet, error) {
+	cached, err := fs.vmssFlexCache.Get(ctx, consts.VmssFlexKey, azcache.CacheReadTypeDefault)
 	if err != nil {
 		return nil, err
 	}
@@ -332,11 +332,11 @@ func (fs *FlexScaleSet) getVmssFlexByName(vmssFlexName string) (*compute.Virtual
 	return nil, cloudprovider.InstanceNotFound
 }
 
-func (fs *FlexScaleSet) DeleteCacheForNode(nodeName string) error {
+func (fs *FlexScaleSet) DeleteCacheForNode(ctx context.Context, nodeName string) error {
 	if fs.Config.DisableAPICallCache {
 		return nil
 	}
-	vmssFlexID, err := fs.getNodeVmssFlexID(nodeName)
+	vmssFlexID, err := fs.getNodeVmssFlexID(ctx, nodeName)
 	if err != nil {
 		klog.Errorf("getNodeVmssFlexID(%s) failed with %v", nodeName, err)
 		return err
@@ -344,7 +344,7 @@ func (fs *FlexScaleSet) DeleteCacheForNode(nodeName string) error {
 
 	fs.lockMap.LockEntry(vmssFlexID)
 	defer fs.lockMap.UnlockEntry(vmssFlexID)
-	cached, err := fs.vmssFlexVMCache.Get(vmssFlexID, azcache.CacheReadTypeDefault)
+	cached, err := fs.vmssFlexVMCache.Get(ctx, vmssFlexID, azcache.CacheReadTypeDefault)
 	if err != nil {
 		klog.Errorf("vmssFlexVMCache.Get(%s, %s) failed with %v", vmssFlexID, nodeName, err)
 		return err
