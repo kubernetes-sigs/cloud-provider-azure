@@ -362,8 +362,8 @@ func TestCreateRoute(t *testing.T) {
 			cloud.nodeInformerSynced = func() bool { return true }
 		}
 
-		mockVMSet.EXPECT().GetIPByNodeName(gomock.Any()).Return(nodePrivateIP, "", test.getIPError).MaxTimes(1)
-		mockVMSet.EXPECT().GetPrivateIPsByNodeName("node").Return([]string{nodePrivateIP, "10.10.10.10"}, nil).MaxTimes(1)
+		mockVMSet.EXPECT().GetIPByNodeName(gomock.Any(), gomock.Any()).Return(nodePrivateIP, "", test.getIPError).MaxTimes(1)
+		mockVMSet.EXPECT().GetPrivateIPsByNodeName(gomock.Any(), "node").Return([]string{nodePrivateIP, "10.10.10.10"}, nil).MaxTimes(1)
 		routeTableClient.EXPECT().Get(gomock.Any(), cloud.RouteTableResourceGroup, cloud.RouteTableName, "").Return(initialTable, test.getErr).MaxTimes(1)
 		routeTableClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.RouteTableResourceGroup, cloud.RouteTableName, updatedTable, "").Return(test.createOrUpdateErr).MaxTimes(1)
 

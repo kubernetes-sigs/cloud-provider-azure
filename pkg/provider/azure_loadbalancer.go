@@ -1866,7 +1866,7 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 		if az.useMultipleStandardLoadBalancers() {
 			lbToReconcile = *existingLBs
 		}
-		lb, err = az.reconcileBackendPoolHosts(lb, lbToReconcile, service, nodes, clusterName, vmSetName, lbBackendPoolIDs)
+		lb, err = az.reconcileBackendPoolHosts(ctx, lb, lbToReconcile, service, nodes, clusterName, vmSetName, lbBackendPoolIDs)
 		if err != nil {
 			return nil, err
 		}
@@ -1881,6 +1881,7 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 }
 
 func (az *Cloud) reconcileBackendPoolHosts(
+	ctx context.Context,
 	currentLB *network.LoadBalancer,
 	lbs []network.LoadBalancer,
 	service *v1.Service,
@@ -1898,6 +1899,7 @@ func (az *Cloud) reconcileBackendPoolHosts(
 				isIPv6 := isBackendPoolIPv6(ptr.Deref(backendPool.Name, ""))
 				if strings.EqualFold(ptr.Deref(backendPool.Name, ""), az.getBackendPoolNameForService(service, clusterName, isIPv6)) {
 					if err := az.LoadBalancerBackendPool.EnsureHostsInPool(
+						ctx,
 						service,
 						nodes,
 						lbBackendPoolIDs[isIPv6],

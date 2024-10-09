@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -172,7 +173,7 @@ func TestGetPrivateIPsForMachine(t *testing.T) {
 		mockInterfaceClient := az.InterfacesClient.(*mockinterfaceclient.MockInterface)
 		mockInterfaceClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(expectedInterface, nil).MaxTimes(1)
 
-		privateIPs, err := az.getPrivateIPsForMachine("vm")
+		privateIPs, err := az.getPrivateIPsForMachine(context.Background(), "vm")
 		assert.Equal(t, test.expectedErr, err)
 		assert.Equal(t, test.expectedPrivateIPs, privateIPs)
 	}
@@ -247,7 +248,7 @@ func TestGetIPForMachineWithRetry(t *testing.T) {
 		mockPIPClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
 		mockPIPClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return([]network.PublicIPAddress{expectedPIP}, nil).MaxTimes(1)
 
-		privateIP, publicIP, err := az.GetIPForMachineWithRetry("vm")
+		privateIP, publicIP, err := az.GetIPForMachineWithRetry(context.Background(), "vm")
 		assert.Equal(t, test.expectedErr, err)
 		assert.Equal(t, test.expectedPrivateIP, privateIP)
 		assert.Equal(t, test.expectedPublicIP, publicIP)
