@@ -1070,7 +1070,7 @@ func TestGetStandardVMPowerStatusByNodeName(t *testing.T) {
 		mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nodeName, gomock.Any()).Return(test.vm, test.getErr).AnyTimes()
 
-		powerState, err := cloud.VMSet.GetPowerStatusByNodeName(test.nodeName)
+		powerState, err := cloud.VMSet.GetPowerStatusByNodeName(context.TODO(), test.nodeName)
 		assert.Equal(t, test.expectedErrMsg, err, test.name)
 		assert.Equal(t, test.expectedStatus, powerState, test.name)
 	}
@@ -1133,7 +1133,7 @@ func TestGetStandardVMProvisioningStateByNodeName(t *testing.T) {
 		mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nodeName, gomock.Any()).Return(test.vm, test.getErr).AnyTimes()
 
-		provisioningState, err := cloud.VMSet.GetProvisioningStateByNodeName(test.nodeName)
+		provisioningState, err := cloud.VMSet.GetProvisioningStateByNodeName(context.TODO(), test.nodeName)
 		assert.Equal(t, test.expectedErrMsg, err, test.name)
 		assert.Equal(t, test.expectedProvisioningState, provisioningState, test.name)
 	}
@@ -1218,7 +1218,7 @@ func TestGetStandardVMZoneByNodeName(t *testing.T) {
 		mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nodeName, gomock.Any()).Return(test.vm, test.getErr).AnyTimes()
 
-		zone, err := cloud.VMSet.GetZoneByNodeName(test.nodeName)
+		zone, err := cloud.VMSet.GetZoneByNodeName(context.TODO(), test.nodeName)
 		if test.expectedErrMsg != nil {
 			assert.EqualError(t, test.expectedErrMsg, err.Error(), test.name)
 		}
@@ -1334,7 +1334,7 @@ func TestGetStandardVMSetNames(t *testing.T) {
 		mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().List(gomock.Any(), cloud.ResourceGroup).Return(test.vm, nil).AnyTimes()
 
-		vmSetNames, err := cloud.VMSet.GetVMSetNames(test.service, test.nodes)
+		vmSetNames, err := cloud.VMSet.GetVMSetNames(context.TODO(), test.service, test.nodes)
 		assert.Equal(t, test.expectedErrMsg, err, test.name)
 		assert.Equal(t, test.expectedVMSetNames, vmSetNames, test.name)
 	}
@@ -1646,7 +1646,7 @@ func TestStandardEnsureBackendPoolDeleted(t *testing.T) {
 		mockNICClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		cloud.InterfacesClient = mockNICClient
 
-		nicUpdated, err := cloud.VMSet.EnsureBackendPoolDeleted(&service, []string{backendPoolID}, vmSetName, test.backendAddressPools, true)
+		nicUpdated, err := cloud.VMSet.EnsureBackendPoolDeleted(context.TODO(), &service, []string{backendPoolID}, vmSetName, test.backendAddressPools, true)
 		assert.NoError(t, err, test.desc)
 		assert.True(t, nicUpdated)
 	}
@@ -1709,7 +1709,7 @@ func TestStandardGetNodeNameByIPConfigurationID(t *testing.T) {
 	mockNICClient := cloud.InterfacesClient.(*mockinterfaceclient.MockInterface)
 	mockNICClient.EXPECT().Get(gomock.Any(), "rg", "k8s-agentpool1-00000000-nic-0", gomock.Any()).Return(expectedNIC, nil)
 	ipConfigurationID := `/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-0/ipConfigurations/ipconfig1`
-	nodeName, asName, err := cloud.VMSet.GetNodeNameByIPConfigurationID(ipConfigurationID)
+	nodeName, asName, err := cloud.VMSet.GetNodeNameByIPConfigurationID(context.TODO(), ipConfigurationID)
 	assert.NoError(t, err)
 	assert.Equal(t, "k8s-agentpool1-00000000-0", nodeName)
 	assert.Equal(t, "agentpool1-availabilityset-00000000", asName)
@@ -1775,7 +1775,7 @@ func TestGetAvailabilitySetByNodeName(t *testing.T) {
 		}
 		mockVMASClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.AvailabilitySet{expected}, test.vmasListError).AnyTimes()
 
-		actual, err := as.getAvailabilitySetByNodeName(test.nodeName, azcache.CacheReadTypeDefault)
+		actual, err := as.getAvailabilitySetByNodeName(context.TODO(), test.nodeName, azcache.CacheReadTypeDefault)
 		if test.expectedErr != nil {
 			assert.EqualError(t, test.expectedErr, err.Error(), test.description)
 		}
@@ -1854,7 +1854,7 @@ func TestGetNodeCIDRMasksByProviderIDAvailabilitySet(t *testing.T) {
 			}
 			mockVMASClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.AvailabilitySet{expected}, nil).AnyTimes()
 
-			ipv4MaskSize, ipv6MaskSize, err := as.GetNodeCIDRMasksByProviderID(tc.providerID)
+			ipv4MaskSize, ipv6MaskSize, err := as.GetNodeCIDRMasksByProviderID(context.TODO(), tc.providerID)
 			assert.Equal(t, tc.expectedErr, err)
 			assert.Equal(t, tc.expectedIPV4MaskSize, ipv4MaskSize)
 			assert.Equal(t, tc.expectedIPV6MaskSize, ipv6MaskSize)
@@ -1977,7 +1977,7 @@ func TestGetNodeVMSetName(t *testing.T) {
 		assert.NoError(t, err)
 		as := vmSet.(*availabilitySet)
 
-		vmSetName, err := as.GetNodeVMSetName(tc.node)
+		vmSetName, err := as.GetNodeVMSetName(context.TODO(), tc.node)
 		assert.Equal(t, tc.expectedErr, err, tc.description)
 		assert.Equal(t, tc.expectedVMSetName, vmSetName, tc.description)
 	}

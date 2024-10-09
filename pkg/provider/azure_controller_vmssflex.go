@@ -38,7 +38,7 @@ import (
 // AttachDisk attaches a disk to vm
 func (fs *FlexScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName, diskMap map[string]*AttachDiskOptions) error {
 	vmName := mapNodeNameToVMName(nodeName)
-	vm, err := fs.getVmssFlexVM(vmName, azcache.CacheReadTypeDefault)
+	vm, err := fs.getVmssFlexVM(ctx, vmName, azcache.CacheReadTypeDefault)
 	if err != nil {
 		return err
 	}
@@ -124,7 +124,7 @@ func (fs *FlexScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName,
 // DetachDisk detaches a disk from VM
 func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName, diskMap map[string]string, forceDetach bool) error {
 	vmName := mapNodeNameToVMName(nodeName)
-	vm, err := fs.getVmssFlexVM(vmName, azcache.CacheReadTypeDefault)
+	vm, err := fs.getVmssFlexVM(ctx, vmName, azcache.CacheReadTypeDefault)
 	if err != nil {
 		// if host doesn't exist, no need to detach
 		klog.Warningf("azureDisk - cannot find node %s, skip detaching disk list(%s)", nodeName, diskMap)
@@ -183,12 +183,12 @@ func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName,
 	var result *compute.VirtualMachine
 	var rerr *retry.Error
 	defer func() {
-		_ = fs.DeleteCacheForNode(vmName)
+		_ = fs.DeleteCacheForNode(ctx, vmName)
 
 		// update the cache with the updated result only if its not nil
 		// and contains the VirtualMachineProperties
 		if rerr == nil && result != nil && result.VirtualMachineProperties != nil {
-			if err := fs.updateCache(vmName, result); err != nil {
+			if err := fs.updateCache(ctx, vmName, result); err != nil {
 				klog.Errorf("updateCache(%s) failed with error: %v", vmName, err)
 			}
 		}
@@ -227,9 +227,9 @@ func (fs *FlexScaleSet) WaitForUpdateResult(ctx context.Context, future *azure.F
 	}
 
 	// clean node cache first and then update cache
-	_ = fs.DeleteCacheForNode(vmName)
+	_ = fs.DeleteCacheForNode(ctx, vmName)
 	if result != nil && result.VirtualMachineProperties != nil {
-		if err := fs.updateCache(vmName, result); err != nil {
+		if err := fs.updateCache(ctx, vmName, result); err != nil {
 			klog.Errorf("updateCache(%s) failed with error: %v", vmName, err)
 		}
 	}
@@ -248,7 +248,7 @@ func (fs *FlexScaleSet) UpdateVM(ctx context.Context, nodeName types.NodeName) e
 // UpdateVMAsync updates a vm asynchronously
 func (fs *FlexScaleSet) UpdateVMAsync(ctx context.Context, nodeName types.NodeName) (*azure.Future, error) {
 	vmName := mapNodeNameToVMName(nodeName)
-	vm, err := fs.getVmssFlexVM(vmName, azcache.CacheReadTypeDefault)
+	vm, err := fs.getVmssFlexVM(ctx, vmName, azcache.CacheReadTypeDefault)
 	if err != nil {
 		// if host doesn't exist, no need to update
 		klog.Warningf("azureDisk - cannot find node %s, skip updating vm", nodeName)
@@ -266,7 +266,7 @@ func (fs *FlexScaleSet) UpdateVMAsync(ctx context.Context, nodeName types.NodeNa
 	return future, nil
 }
 
-func (fs *FlexScaleSet) updateCache(nodeName string, vm *compute.VirtualMachine) error {
+func (fs *FlexScaleSet) updateCache(ctx context.Context, nodeName string, vm *compute.VirtualMachine) error {
 	if vm == nil {
 		return fmt.Errorf("vm is nil")
 	}
@@ -280,14 +280,14 @@ func (fs *FlexScaleSet) updateCache(nodeName string, vm *compute.VirtualMachine)
 		return fmt.Errorf("vm.OsProfile.ComputerName is nil")
 	}
 
-	vmssFlexID, err := fs.getNodeVmssFlexID(nodeName)
+	vmssFlexID, err := fs.getNodeVmssFlexID(ctx, nodeName)
 	if err != nil {
 		return err
 	}
 
 	fs.lockMap.LockEntry(vmssFlexID)
 	defer fs.lockMap.UnlockEntry(vmssFlexID)
-	cached, err := fs.vmssFlexVMCache.Get(vmssFlexID, azcache.CacheReadTypeDefault)
+	cached, err := fs.vmssFlexVMCache.Get(ctx, vmssFlexID, azcache.CacheReadTypeDefault)
 	if err != nil {
 		return err
 	}
@@ -301,8 +301,8 @@ func (fs *FlexScaleSet) updateCache(nodeName string, vm *compute.VirtualMachine)
 }
 
 // GetDataDisks gets a list of data disks attached to the node.
-func (fs *FlexScaleSet) GetDataDisks(nodeName types.NodeName, crt azcache.AzureCacheReadType) ([]*armcompute.DataDisk, *string, error) {
-	vm, err := fs.getVmssFlexVM(string(nodeName), crt)
+func (fs *FlexScaleSet) GetDataDisks(ctx context.Context, nodeName types.NodeName, crt azcache.AzureCacheReadType) ([]*armcompute.DataDisk, *string, error) {
+	vm, err := fs.getVmssFlexVM(ctx, string(nodeName), crt)
 	if err != nil {
 		return nil, nil, err
 	}

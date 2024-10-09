@@ -246,7 +246,7 @@ func TestInstanceID(t *testing.T) {
 			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
 		}
 		if test.useCustomImsCache {
-			cloud.Metadata.imsCache, err = azcache.NewTimedCache(consts.MetadataCacheTTL, func(_ string) (interface{}, error) {
+			cloud.Metadata.imsCache, err = azcache.NewTimedCache(consts.MetadataCacheTTL, func(_ context.Context, _ string) (interface{}, error) {
 				return nil, fmt.Errorf("getError")
 			}, false)
 			if err != nil {
@@ -641,7 +641,7 @@ func TestNodeAddresses(t *testing.T) {
 		}
 
 		if test.useCustomImsCache {
-			cloud.Metadata.imsCache, err = azcache.NewTimedCache(consts.MetadataCacheTTL, func(_ string) (interface{}, error) {
+			cloud.Metadata.imsCache, err = azcache.NewTimedCache(consts.MetadataCacheTTL, func(_ context.Context, _ string) (interface{}, error) {
 				return nil, fmt.Errorf("getError")
 			}, false)
 			if err != nil {
@@ -983,7 +983,7 @@ func TestCloud_InstanceExists(t *testing.T) {
 			Spec: v1.NodeSpec{ProviderID: "azure:///subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/VirtualMachines/vm"},
 		}
 
-		cloud.VMSet.(*MockVMSet).EXPECT().GetNodeNameByProviderID(node.Spec.ProviderID).Return(types.NodeName(""), cloudprovider.InstanceNotFound)
+		cloud.VMSet.(*MockVMSet).EXPECT().GetNodeNameByProviderID(gomock.Any(), node.Spec.ProviderID).Return(types.NodeName(""), cloudprovider.InstanceNotFound)
 
 		exist, err := cloud.InstanceExists(ctx, node)
 		assert.NoError(t, err)

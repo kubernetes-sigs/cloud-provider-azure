@@ -89,15 +89,15 @@ func newDelayedRouteUpdater(az *Cloud, interval time.Duration) batchProcessor {
 // run starts the updater reconciling loop.
 func (d *delayedRouteUpdater) run(ctx context.Context) {
 	klog.Info("delayedRouteUpdater: started")
-	err := wait.PollUntilContextCancel(ctx, d.interval, true, func(_ context.Context) (bool, error) {
-		d.updateRoutes()
+	err := wait.PollUntilContextCancel(ctx, d.interval, true, func(ctx context.Context) (bool, error) {
+		d.updateRoutes(ctx)
 		return false, nil
 	})
 	klog.Infof("delayedRouteUpdater: stopped due to %s", err.Error())
 }
 
 // updateRoutes invokes route table client to update all routes.
-func (d *delayedRouteUpdater) updateRoutes() {
+func (d *delayedRouteUpdater) updateRoutes(ctx context.Context) {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
@@ -122,7 +122,7 @@ func (d *delayedRouteUpdater) updateRoutes() {
 		routeTable       network.RouteTable
 		existsRouteTable bool
 	)
-	routeTable, existsRouteTable, err = d.az.getRouteTable(azcache.CacheReadTypeDefault)
+	routeTable, existsRouteTable, err = d.az.getRouteTable(ctx, azcache.CacheReadTypeDefault)
 	if err != nil {
 		klog.Errorf("getRouteTable() failed with error: %v", err)
 		return
@@ -136,7 +136,7 @@ func (d *delayedRouteUpdater) updateRoutes() {
 			return
 		}
 
-		routeTable, _, err = d.az.getRouteTable(azcache.CacheReadTypeDefault)
+		routeTable, _, err = d.az.getRouteTable(ctx, azcache.CacheReadTypeDefault)
 		if err != nil {
 			klog.Errorf("getRouteTable() failed with error: %v", err)
 			return
@@ -278,9 +278,9 @@ func (d *delayedRouteUpdater) removeOperation(_ string) {}
 
 // ListRoutes lists all managed routes that belong to the specified clusterName
 // implements cloudprovider.Routes.ListRoutes
-func (az *Cloud) ListRoutes(_ context.Context, clusterName string) ([]*cloudprovider.Route, error) {
+func (az *Cloud) ListRoutes(ctx context.Context, clusterName string) ([]*cloudprovider.Route, error) {
 	klog.V(10).Infof("ListRoutes: START clusterName=%q", clusterName)
-	routeTable, existsRouteTable, err := az.getRouteTable(azcache.CacheReadTypeDefault)
+	routeTable, existsRouteTable, err := az.getRouteTable(ctx, azcache.CacheReadTypeDefault)
 	routes, err := processRoutes(az.ipv6DualStackEnabled, routeTable, existsRouteTable, err)
 	if err != nil {
 		return nil, err

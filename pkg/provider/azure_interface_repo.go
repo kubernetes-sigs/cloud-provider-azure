@@ -17,16 +17,15 @@ limitations under the License.
 package provider
 
 import (
+	"context"
+
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 )
 
 // CreateOrUpdateInterface invokes az.InterfacesClient.CreateOrUpdate with exponential backoff retry
-func (az *Cloud) CreateOrUpdateInterface(service *v1.Service, nic network.Interface) error {
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
-
+func (az *Cloud) CreateOrUpdateInterface(ctx context.Context, service *v1.Service, nic network.Interface) error {
 	rerr := az.InterfacesClient.CreateOrUpdate(ctx, az.ResourceGroup, *nic.Name, nic)
 	klog.V(10).Infof("InterfacesClient.CreateOrUpdate(%s): end", *nic.Name)
 	if rerr != nil {
