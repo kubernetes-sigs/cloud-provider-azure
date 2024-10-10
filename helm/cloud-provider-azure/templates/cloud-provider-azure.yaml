@@ -206,9 +206,11 @@ spec:
             {{- if hasKey .Values.cloudControllerManager "certDir" }}
             - "--cert-dir={{ .Values.cloudControllerManager.certDir }}"
             {{- end }}
-            - "--cloud-config={{ .Values.cloudControllerManager.cloudConfig }}"
             {{- if hasKey .Values.cloudControllerManager "cloudConfigSecretName" }}
             - "--cloud-config-secret-name={{ .Values.cloudControllerManager.cloudConfigSecretName }}"
+            - "--enable-dynamic-reloading=true"
+            {{- else }}
+            - "--cloud-config={{ .Values.cloudControllerManager.cloudConfig }}"
             {{- end }}
             - "--cloud-provider=azure"
             - "--cluster-cidr={{ .Values.cloudControllerManager.clusterCIDR }}"
