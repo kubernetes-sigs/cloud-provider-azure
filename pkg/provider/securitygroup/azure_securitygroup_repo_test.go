@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package provider
+package securitygroup
 
 import (
 	"context"
@@ -31,7 +31,6 @@ import (
 
 	"k8s.io/utils/ptr"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -40,24 +39,23 @@ import (
 func TestCreateOrUpdateSecurityGroupCanceled(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+	mockSGClient := mock_securitygroupclient.NewMockInterface(ctrl)
+	az, err := NewSecurityGroupRepo("rg", "sg", 120, false, mockSGClient)
+	assert.NoError(t, err)
+	az.(*securityGroupRepo).nsgCache.Set("sg", "test")
 
-	az := GetTestCloud(ctrl)
-	az.nsgCache.Set("sg", "test")
-	clientFactory := az.NetworkClientFactory.(*mock_azclient.MockClientFactory)
-	mockSGClient := clientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-
-	mockSGClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any()).Return(nil, &azcore.ResponseError{
+	mockSGClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "sg", gomock.Any()).Return(nil, &azcore.ResponseError{
 		RawResponse: &http.Response{
 			Body: io.NopCloser(strings.NewReader(consts.OperationCanceledErrorMessage)),
 		},
 	})
-	mockSGClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "sg").Return(&armnetwork.SecurityGroup{}, nil)
+	mockSGClient.EXPECT().Get(gomock.Any(), "rg", "sg").Return(&armnetwork.SecurityGroup{}, nil)
 
-	err := az.CreateOrUpdateSecurityGroup(&armnetwork.SecurityGroup{Name: ptr.To("sg")})
+	err = az.CreateOrUpdateSecurityGroup(context.TODO(), &armnetwork.SecurityGroup{Name: ptr.To("sg")})
 	assert.Contains(t, err.Error(), "canceledandsupersededduetoanotheroperation")
 
 	// security group should be removed from cache if the operation is canceled
-	shouldBeEmpty, err := az.nsgCache.GetWithDeepCopy(context.TODO(), "sg", cache.CacheReadTypeDefault)
+	shouldBeEmpty, err := az.(*securityGroupRepo).nsgCache.GetWithDeepCopy(context.TODO(), "sg", cache.CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Empty(t, shouldBeEmpty)
 }
