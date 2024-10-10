@@ -29,6 +29,13 @@ const (
 	IPv6 Family = "IPv6"
 )
 
+func (f Family) MaxMask() int {
+	if f == IPv4 {
+		return 32
+	}
+	return 128
+}
+
 func FamilyOfAddr(addr netip.Addr) Family {
 	if addr.Is4() {
 		return IPv4
