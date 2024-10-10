@@ -48,7 +48,7 @@ func TestVMSSVMCache(t *testing.T) {
 	vmList := []string{"vmssee6c2000000", "vmssee6c2000001", "vmssee6c2000002"}
 	c := GetTestCloud(ctrl)
 	c.DisableAvailabilitySetNodes = true
-	vmSet, err := newScaleSet(context.Background(), c)
+	vmSet, err := newScaleSet(c)
 	assert.NoError(t, err)
 	ss := vmSet.(*ScaleSet)
 
@@ -67,7 +67,7 @@ func TestVMSSVMCache(t *testing.T) {
 	for i := range expectedVMs {
 		vm := expectedVMs[i]
 		vmName := ptr.Deref(vm.OsProfile.ComputerName, "")
-		realVM, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
+		realVM, err := ss.getVmssVM(context.TODO(), vmName, azcache.CacheReadTypeDefault)
 		assert.NoError(t, err)
 		assert.NotNil(t, realVM)
 		assert.Equal(t, "vmss", realVM.VMSSName)
@@ -78,11 +78,11 @@ func TestVMSSVMCache(t *testing.T) {
 	// validate DeleteCacheForNode().
 	vm := expectedVMs[0]
 	vmName := ptr.Deref(vm.OsProfile.ComputerName, "")
-	err = ss.DeleteCacheForNode(vmName)
+	err = ss.DeleteCacheForNode(context.TODO(), vmName)
 	assert.NoError(t, err)
 
 	// the VM should be in cache after refresh.
-	realVM, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
+	realVM, err := ss.getVmssVM(context.TODO(), vmName, azcache.CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Equal(t, "vmss", realVM.VMSSName)
 	assert.Equal(t, ptr.Deref(vm.InstanceID, ""), realVM.InstanceID)
@@ -116,7 +116,7 @@ func TestVMSSVMCacheWithDeletingNodes(t *testing.T) {
 		vmName := ptr.Deref(vm.OsProfile.ComputerName, "")
 		assert.Equal(t, vm.ProvisioningState, ptr.To(string(consts.ProvisioningStateDeleting)))
 
-		realVM, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
+		realVM, err := ss.getVmssVM(context.TODO(), vmName, azcache.CacheReadTypeDefault)
 		assert.Nil(t, realVM)
 		assert.Equal(t, cloudprovider.InstanceNotFound, err)
 	}
@@ -144,7 +144,7 @@ func TestVMSSVMCacheClearedWhenRGDeleted(t *testing.T) {
 	// validate getting VMSS VM via cache.
 	vm := expectedVMs[0]
 	vmName := ptr.Deref(vm.OsProfile.ComputerName, "")
-	realVM, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
+	realVM, err := ss.getVmssVM(context.TODO(), vmName, azcache.CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Equal(t, "vmss", realVM.VMSSName)
 	assert.Equal(t, ptr.Deref(vm.InstanceID, ""), realVM.InstanceID)
@@ -152,18 +152,18 @@ func TestVMSSVMCacheClearedWhenRGDeleted(t *testing.T) {
 
 	// verify cache has test vmss.
 	cacheKey := getVMSSVMCacheKey("rg", testVMSSName)
-	_, err = ss.vmssVMCache.Get(cacheKey, azcache.CacheReadTypeDefault)
+	_, err = ss.vmssVMCache.Get(context.TODO(), cacheKey, azcache.CacheReadTypeDefault)
 	assert.Nil(t, err)
 
 	// refresh the cache with error.
 	mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachineScaleSet{}, &retry.Error{HTTPStatusCode: http.StatusNotFound}).Times(2)
 	mockVMSSVMClient.EXPECT().List(gomock.Any(), "rg", testVMSSName, gomock.Any()).Return([]compute.VirtualMachineScaleSetVM{}, &retry.Error{HTTPStatusCode: http.StatusNotFound}).Times(1)
-	realVM, err = ss.getVmssVM(vmName, azcache.CacheReadTypeForceRefresh)
+	realVM, err = ss.getVmssVM(context.TODO(), vmName, azcache.CacheReadTypeForceRefresh)
 	assert.Nil(t, realVM)
 	assert.Equal(t, cloudprovider.InstanceNotFound, err)
 
 	// verify cache is cleared.
-	_, err = ss.vmssVMCache.Get(cacheKey, azcache.CacheReadTypeDefault)
+	_, err = ss.vmssVMCache.Get(context.TODO(), cacheKey, azcache.CacheReadTypeDefault)
 	assert.NotNil(t, err)
 }
 
@@ -238,7 +238,7 @@ func TestGetVMManagementTypeByNodeName(t *testing.T) {
 		mockVMClient := ss.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVMList, tc.vmListErr).AnyTimes()
 
-		vmManagementType, err := ss.getVMManagementTypeByNodeName(tc.nodeName, azcache.CacheReadTypeDefault)
+		vmManagementType, err := ss.getVMManagementTypeByNodeName(context.TODO(), tc.nodeName, azcache.CacheReadTypeDefault)
 		assert.Equal(t, tc.expectedVMManagementType, vmManagementType, tc.description)
 		if tc.expectedErr != nil {
 			assert.EqualError(t, err, tc.expectedErr.Error(), tc.description)
@@ -318,7 +318,7 @@ func TestGetVMManagementTypeByProviderID(t *testing.T) {
 		mockVMClient := ss.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVMList, tc.vmListErr).AnyTimes()
 
-		vmManagementType, err := ss.getVMManagementTypeByProviderID(tc.providerID, azcache.CacheReadTypeDefault)
+		vmManagementType, err := ss.getVMManagementTypeByProviderID(context.TODO(), tc.providerID, azcache.CacheReadTypeDefault)
 		assert.Equal(t, tc.expectedVMManagementType, vmManagementType, tc.description)
 		if tc.expectedErr != nil {
 			assert.EqualError(t, err, tc.expectedErr.Error(), tc.description)
@@ -451,7 +451,7 @@ func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
 			})
 		}
 
-		vmManagementType, err := ss.getVMManagementTypeByIPConfigurationID(tc.ipConfigurationID, azcache.CacheReadTypeDefault)
+		vmManagementType, err := ss.getVMManagementTypeByIPConfigurationID(context.TODO(), tc.ipConfigurationID, azcache.CacheReadTypeDefault)
 		assert.Equal(t, tc.expectedVMManagementType, vmManagementType, tc.description)
 		if tc.expectedErr != nil {
 			assert.EqualError(t, err, tc.expectedErr.Error(), tc.description)

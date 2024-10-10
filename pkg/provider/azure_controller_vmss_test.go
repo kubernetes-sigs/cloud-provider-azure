@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -302,7 +303,7 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 		}
 
 		if !test.expectedErr {
-			dataDisks, _, err := ss.GetDataDisks(test.vmssvmName, azcache.CacheReadTypeDefault)
+			dataDisks, _, err := ss.GetDataDisks(context.TODO(), test.vmssvmName, azcache.CacheReadTypeDefault)
 			assert.Equal(t, true, len(dataDisks) == 3, "TestCase[%d]: %s, actual data disk num: %d, err: %v", i, test.desc, len(dataDisks), err)
 		}
 	}
@@ -425,7 +426,7 @@ func TestUpdateVMWithVMSS(t *testing.T) {
 		}
 
 		if !test.expectedErr {
-			dataDisks, _, err := ss.GetDataDisks(test.vmssvmName, azcache.CacheReadTypeDefault)
+			dataDisks, _, err := ss.GetDataDisks(context.TODO(), test.vmssvmName, azcache.CacheReadTypeDefault)
 			assert.Equal(t, true, len(dataDisks) == 1, "TestCase[%d]: %s, actual data disk num: %d, err: %v", i, test.desc, len(dataDisks), err)
 		}
 	}
@@ -512,7 +513,7 @@ func TestGetDataDisksWithVMSS(t *testing.T) {
 		mockVMSSVMClient := testCloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
 		mockVMSSVMClient.EXPECT().List(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
 		mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any(), gomock.Any()).Return(updatedVMSSVM, nil).AnyTimes()
-		dataDisks, _, err := ss.GetDataDisks(test.nodeName, test.crt)
+		dataDisks, _, err := ss.GetDataDisks(context.TODO(), test.nodeName, test.crt)
 		assert.Equal(t, test.expectedDataDisks, dataDisks, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, test.expectedErrMsg, err, "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErrMsg, err)

@@ -77,7 +77,7 @@ func (az *Cloud) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.N
 	}
 
 	if az.UseInstanceMetadata {
-		metadata, err := az.Metadata.GetMetadata(azcache.CacheReadTypeDefault)
+		metadata, err := az.Metadata.GetMetadata(ctx, azcache.CacheReadTypeDefault)
 		if err != nil {
 			return nil, err
 		}
@@ -171,7 +171,7 @@ func (az *Cloud) NodeAddressesByProviderID(ctx context.Context, providerID strin
 		return nil, fmt.Errorf("no credentials provided for Azure cloud provider")
 	}
 
-	name, err := az.VMSet.GetNodeNameByProviderID(providerID)
+	name, err := az.VMSet.GetNodeNameByProviderID(ctx, providerID)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +197,7 @@ func (az *Cloud) InstanceExistsByProviderID(ctx context.Context, providerID stri
 		return false, fmt.Errorf("no credentials provided for Azure cloud provider")
 	}
 
-	name, err := az.VMSet.GetNodeNameByProviderID(providerID)
+	name, err := az.VMSet.GetNodeNameByProviderID(ctx, providerID)
 	if err != nil {
 		if errors.Is(err, cloudprovider.InstanceNotFound) {
 			return false, nil
@@ -217,7 +217,7 @@ func (az *Cloud) InstanceExistsByProviderID(ctx context.Context, providerID stri
 }
 
 // InstanceShutdownByProviderID returns true if the instance is in safe state to detach volumes
-func (az *Cloud) InstanceShutdownByProviderID(_ context.Context, providerID string) (bool, error) {
+func (az *Cloud) InstanceShutdownByProviderID(ctx context.Context, providerID string) (bool, error) {
 	if providerID == "" {
 		return false, nil
 	}
@@ -226,7 +226,7 @@ func (az *Cloud) InstanceShutdownByProviderID(_ context.Context, providerID stri
 		return false, fmt.Errorf("no credentials provided for Azure cloud provider")
 	}
 
-	nodeName, err := az.VMSet.GetNodeNameByProviderID(providerID)
+	nodeName, err := az.VMSet.GetNodeNameByProviderID(ctx, providerID)
 	if err != nil {
 		// Returns false, so the controller manager will continue to check InstanceExistsByProviderID().
 		if errors.Is(err, cloudprovider.InstanceNotFound) {
@@ -236,7 +236,7 @@ func (az *Cloud) InstanceShutdownByProviderID(_ context.Context, providerID stri
 		return false, err
 	}
 
-	powerStatus, err := az.VMSet.GetPowerStatusByNodeName(string(nodeName))
+	powerStatus, err := az.VMSet.GetPowerStatusByNodeName(ctx, string(nodeName))
 	if err != nil {
 		// Returns false, so the controller manager will continue to check InstanceExistsByProviderID().
 		if errors.Is(err, cloudprovider.InstanceNotFound) {
@@ -247,7 +247,7 @@ func (az *Cloud) InstanceShutdownByProviderID(_ context.Context, providerID stri
 	}
 	klog.V(3).Infof("InstanceShutdownByProviderID gets power status %q for node %q", powerStatus, nodeName)
 
-	provisioningState, err := az.VMSet.GetProvisioningStateByNodeName(string(nodeName))
+	provisioningState, err := az.VMSet.GetProvisioningStateByNodeName(ctx, string(nodeName))
 	if err != nil {
 		// Returns false, so the controller manager will continue to check InstanceExistsByProviderID().
 		if errors.Is(err, cloudprovider.InstanceNotFound) {
@@ -300,7 +300,7 @@ func (az *Cloud) InstanceID(ctx context.Context, name types.NodeName) (string, e
 	}
 
 	if az.UseInstanceMetadata {
-		metadata, err := az.Metadata.GetMetadata(azcache.CacheReadTypeDefault)
+		metadata, err := az.Metadata.GetMetadata(ctx, azcache.CacheReadTypeDefault)
 		if err != nil {
 			return "", err
 		}
@@ -365,7 +365,7 @@ func (az *Cloud) InstanceTypeByProviderID(ctx context.Context, providerID string
 		return "", fmt.Errorf("no credentials provided for Azure cloud provider")
 	}
 
-	name, err := az.VMSet.GetNodeNameByProviderID(providerID)
+	name, err := az.VMSet.GetNodeNameByProviderID(ctx, providerID)
 	if err != nil {
 		return "", err
 	}
@@ -389,7 +389,7 @@ func (az *Cloud) InstanceType(ctx context.Context, name types.NodeName) (string,
 	}
 
 	if az.UseInstanceMetadata {
-		metadata, err := az.Metadata.GetMetadata(azcache.CacheReadTypeDefault)
+		metadata, err := az.Metadata.GetMetadata(ctx, azcache.CacheReadTypeDefault)
 		if err != nil {
 			return "", err
 		}
