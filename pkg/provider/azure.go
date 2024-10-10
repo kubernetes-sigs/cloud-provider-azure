@@ -63,7 +63,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privateendpointclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatelinkserviceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routeclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routetableclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/snapshotclient"
@@ -359,7 +358,6 @@ type Cloud struct {
 	Config
 	Environment azure.Environment
 
-	RoutesClient                    routeclient.Interface
 	SubnetsClient                   subnetclient.Interface
 	InterfacesClient                interfaceclient.Interface
 	RouteTablesClient               routetableclient.Interface
@@ -1027,7 +1025,6 @@ func (az *Cloud) configAzureClients(
 	az.VirtualMachinesClient = vmclient.New(vmClientConfig)
 	az.VirtualMachineScaleSetsClient = vmssclient.New(vmssClientConfig)
 	az.VirtualMachineScaleSetVMsClient = vmssvmclient.New(vmssVMClientConfig)
-	az.RoutesClient = routeclient.New(routeClientConfig)
 	az.SubnetsClient = subnetclient.New(subnetClientConfig)
 	az.RouteTablesClient = routetableclient.New(routeTableClientConfig)
 	az.LoadBalancerClient = loadbalancerclient.New(loadBalancerClientConfig)
