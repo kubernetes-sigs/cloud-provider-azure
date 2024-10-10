@@ -29,9 +29,9 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil"
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil/fixture"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/iputil"
-	. "sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/securitygroup" //nolint:revive
+	. "sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup" //nolint:revive
+	fnutil "sigs.k8s.io/cloud-provider-azure/pkg/util/collectionutil"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/iputil"
 )
 
 func ExpectNewSecurityGroupHelper(t *testing.T, sg *armnetwork.SecurityGroup) *RuleHelper {

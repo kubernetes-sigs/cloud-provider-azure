@@ -27,9 +27,9 @@ import (
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/iputil"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/securitygroup"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
+	fnutil "sigs.k8s.io/cloud-provider-azure/pkg/util/collectionutil"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/iputil"
 )
 
 var (

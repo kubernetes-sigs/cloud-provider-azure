@@ -27,8 +27,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	v1 "k8s.io/api/core/v1"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/iputil"
+	fnutil "sigs.k8s.io/cloud-provider-azure/pkg/util/collectionutil"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/iputil"
 )
 
 // GenerateAllowSecurityRuleName returns the AllowInbound rule name based on the given rule properties.

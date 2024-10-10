@@ -29,9 +29,9 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil"
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil/fixture"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/iputil"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/securitygroup"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
+	fnutil "sigs.k8s.io/cloud-provider-azure/pkg/util/collectionutil"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/iputil"
 )
 
 func TestAccessControl_IsAllowFromInternet(t *testing.T) {

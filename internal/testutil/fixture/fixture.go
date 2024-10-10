@@ -24,7 +24,7 @@ import (
 	"math/big"
 	"net/netip"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
+	fnutil "sigs.k8s.io/cloud-provider-azure/pkg/util/collectionutil"
 )
 
 type Fixture struct{}

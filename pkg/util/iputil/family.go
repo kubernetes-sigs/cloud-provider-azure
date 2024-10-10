@@ -19,7 +19,7 @@ package iputil
 import (
 	"net/netip"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
+	fnutil "sigs.k8s.io/cloud-provider-azure/pkg/util/collectionutil"
 )
 
 type Family string
