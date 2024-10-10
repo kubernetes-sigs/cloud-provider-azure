@@ -3471,7 +3471,14 @@ func deduplicate(collection *[]string) *[]string {
 }
 
 // Determine if we should release existing owned public IPs
-func shouldReleaseExistingOwnedPublicIP(existingPip *network.PublicIPAddress, lbShouldExist, lbIsInternal, isUserAssignedPIP bool, desiredPipName string, ipTagRequest serviceIPTagRequest) bool {
+// FIXME: This function is a bit of a mess, and could use some refactoring.
+func shouldReleaseExistingOwnedPublicIP(
+	existingPip *network.PublicIPAddress,
+	serviceReferences []string,
+	lbShouldExist, lbIsInternal, isUserAssignedPIP bool,
+	desiredPipName string,
+	ipTagRequest serviceIPTagRequest,
+) bool {
 	// skip deleting user created pip
 	if isUserAssignedPIP {
 		return false
@@ -3489,16 +3496,14 @@ func shouldReleaseExistingOwnedPublicIP(existingPip *network.PublicIPAddress, lb
 
 	// Check whether the public IP is being referenced by other service.
 	// The owned public IP can be released only when there is not other service using it.
-	if serviceTag := getServiceFromPIPServiceTags(existingPip.Tags); serviceTag != "" {
-		// case 1: there is at least one reference when deleting the PIP
-		if !lbShouldExist && len(parsePIPServiceTag(&serviceTag)) > 0 {
-			return false
-		}
+	// case 1: there is at least one reference when deleting the PIP
+	if !lbShouldExist && len(serviceReferences) > 0 {
+		return false
+	}
 
-		// case 2: there is at least one reference from other service
-		if lbShouldExist && len(parsePIPServiceTag(&serviceTag)) > 1 {
-			return false
-		}
+	// case 2: there is at least one reference from other service
+	if lbShouldExist && len(serviceReferences) > 1 {
+		return false
 	}
 
 	// Release the ip under the following criteria -
@@ -3714,21 +3719,23 @@ func (az *Cloud) getPublicIPUpdates(
 		// We can only let them go if (a) they are owned by this service and (b) they meet the criteria for deletion.
 		owns, isUserAssignedPIP := serviceOwnsPublicIP(service, &pip, clusterName)
 		if owns {
-			var dirtyPIP, toBeDeleted bool
+			var (
+				serviceReferences     = parsePIPServiceTag(pointer.String(getServiceFromPIPServiceTags(pip.Tags)))
+				dirtyPIP, toBeDeleted bool
+			)
 			if !wantLb && !isUserAssignedPIP {
 				klog.V(2).Infof("reconcilePublicIP for service(%s): unbinding the service from pip %s", serviceName, *pip.Name)
-				if err = unbindServiceFromPIP(&pip, service, serviceName, clusterName, isUserAssignedPIP); err != nil {
+				if serviceReferences, err = unbindServiceFromPIP(&pip, serviceName, isUserAssignedPIP); err != nil {
 					return false, nil, false, nil, err
 				}
 				dirtyPIP = true
 			}
 			if !isUserAssignedPIP {
-				changed := az.ensurePIPTagged(service, &pip)
-				if changed {
+				if az.ensurePIPTagged(service, &pip) {
 					dirtyPIP = true
 				}
 			}
-			if shouldReleaseExistingOwnedPublicIP(&pip, wantLb, isInternal, isUserAssignedPIP, desiredPipName, serviceIPTagRequest) {
+			if shouldReleaseExistingOwnedPublicIP(&pip, serviceReferences, wantLb, isInternal, isUserAssignedPIP, desiredPipName, serviceIPTagRequest) {
 				// Then, release the public ip
 				pipsToBeDeleted = append(pipsToBeDeleted, &pip)
 
@@ -4199,17 +4206,22 @@ func bindServicesToPIP(pip *network.PublicIPAddress, incomingServiceNames []stri
 	return addedNew, nil
 }
 
-func unbindServiceFromPIP(pip *network.PublicIPAddress, service *v1.Service,
-	serviceName, clusterName string, isUserAssignedPIP bool) error {
+// unbindServiceFromPIP removes the service name from the PIP's tag.
+// And returns the updated service names.
+func unbindServiceFromPIP(
+	pip *network.PublicIPAddress,
+	serviceName string,
+	isUserAssignedPIP bool,
+) ([]string, error) {
 	if pip == nil || pip.Tags == nil {
-		return fmt.Errorf("nil public IP or tags")
+		return nil, fmt.Errorf("nil public IP or tags")
 	}
 
 	if existingServiceName := getServiceFromPIPDNSTags(pip.Tags); existingServiceName != "" && strings.EqualFold(existingServiceName, serviceName) {
 		deleteServicePIPDNSTags(&pip.Tags)
 	}
 	if isUserAssignedPIP {
-		return nil
+		return nil, nil
 	}
 
 	// skip removing tags for user assigned pips
@@ -4228,7 +4240,7 @@ func unbindServiceFromPIP(pip *network.PublicIPAddress, service *v1.Service,
 	}
 
 	_, err := bindServicesToPIP(pip, existingServiceNames, true)
-	return err
+	return existingServiceNames, err
 }
 
 // ensureLoadBalancerTagged ensures every load balancer in the resource group is tagged as configured
