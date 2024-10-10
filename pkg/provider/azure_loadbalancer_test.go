@@ -1102,10 +1102,10 @@ func TestShouldReleaseExistingOwnedPublicIP(t *testing.T) {
 		desiredPipName        string
 		existingPip           network.PublicIPAddress
 		ipTagRequest          serviceIPTagRequest
-		tags                  map[string]*string
 		lbShouldExist         bool
 		lbIsInternal          bool
 		isUserAssignedPIP     bool
+		serviceReferences     []string
 		expectedShouldRelease bool
 	}{
 		{
@@ -1217,12 +1217,12 @@ func TestShouldReleaseExistingOwnedPublicIP(t *testing.T) {
 			expectedShouldRelease: true,
 		},
 		{
-			desc:           "should delete orphaned managed public IP",
-			existingPip:    existingPipWithTag,
-			lbShouldExist:  false,
-			lbIsInternal:   false,
-			desiredPipName: *existingPipWithTag.Name,
-			tags:           map[string]*string{consts.ServiceTagKey: ptr.To("")},
+			desc:              "should delete orphaned managed public IP",
+			existingPip:       existingPipWithTag,
+			lbShouldExist:     false,
+			lbIsInternal:      false,
+			desiredPipName:    *existingPipWithTag.Name,
+			serviceReferences: []string{},
 			ipTagRequest: serviceIPTagRequest{
 				IPTagsRequestedByAnnotation: true,
 				IPTags:                      existingPipWithTag.PublicIPAddressPropertiesFormat.IPTags,
@@ -1230,24 +1230,24 @@ func TestShouldReleaseExistingOwnedPublicIP(t *testing.T) {
 			expectedShouldRelease: true,
 		},
 		{
-			desc:           "should not delete managed public IP which has references",
-			existingPip:    existingPipWithTag,
-			lbShouldExist:  false,
-			lbIsInternal:   false,
-			desiredPipName: *existingPipWithTag.Name,
-			tags:           map[string]*string{consts.ServiceTagKey: ptr.To("svc1")},
+			desc:              "should not delete managed public IP which has references",
+			existingPip:       existingPipWithTag,
+			lbShouldExist:     false,
+			lbIsInternal:      false,
+			desiredPipName:    *existingPipWithTag.Name,
+			serviceReferences: []string{"svc1"},
 			ipTagRequest: serviceIPTagRequest{
 				IPTagsRequestedByAnnotation: true,
 				IPTags:                      existingPipWithTag.PublicIPAddressPropertiesFormat.IPTags,
 			},
 		},
 		{
-			desc:           "should not delete orphaned unmanaged public IP",
-			existingPip:    existingPipWithTag,
-			lbShouldExist:  false,
-			lbIsInternal:   false,
-			desiredPipName: *existingPipWithTag.Name,
-			tags:           map[string]*string{consts.ServiceTagKey: ptr.To("")},
+			desc:              "should not delete orphaned unmanaged public IP",
+			existingPip:       existingPipWithTag,
+			lbShouldExist:     false,
+			lbIsInternal:      false,
+			desiredPipName:    *existingPipWithTag.Name,
+			serviceReferences: []string{},
 			ipTagRequest: serviceIPTagRequest{
 				IPTagsRequestedByAnnotation: true,
 				IPTags:                      existingPipWithTag.PublicIPAddressPropertiesFormat.IPTags,
@@ -1258,11 +1258,8 @@ func TestShouldReleaseExistingOwnedPublicIP(t *testing.T) {
 
 	for _, c := range tests {
 		t.Run(c.desc, func(t *testing.T) {
-			if c.tags != nil {
-				c.existingPip.Tags = c.tags
-			}
 			existingPip := c.existingPip
-			actualShouldRelease := shouldReleaseExistingOwnedPublicIP(&existingPip, c.lbShouldExist, c.lbIsInternal, c.isUserAssignedPIP, c.desiredPipName, c.ipTagRequest)
+			actualShouldRelease := shouldReleaseExistingOwnedPublicIP(&existingPip, c.serviceReferences, c.lbShouldExist, c.lbIsInternal, c.isUserAssignedPIP, c.desiredPipName, c.ipTagRequest)
 			assert.Equal(t, c.expectedShouldRelease, actualShouldRelease)
 		})
 	}
@@ -4384,7 +4381,10 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: ptr.To("pip1"),
-					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
+					Tags: map[string]*string{
+						consts.ServiceTagKey:       ptr.To("default/test1"),
+						consts.LegacyServiceTagKey: ptr.To("foo"), // It should be ignored when ServiceTagKey is present.
+					},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion: network.IPv4,
 						IPAddress:              ptr.To("1.2.3.4"),
@@ -5520,25 +5520,74 @@ func TestBindServicesToPIP(t *testing.T) {
 }
 
 func TestUnbindServiceFromPIP(t *testing.T) {
-	pips := []*network.PublicIPAddress{
-		{Tags: nil},
-		{Tags: map[string]*string{consts.ServiceTagKey: ptr.To("")}},
-		{Tags: map[string]*string{consts.ServiceTagKey: ptr.To("ns1/svc1")}},
-		{Tags: map[string]*string{consts.ServiceTagKey: ptr.To("ns1/svc1,ns2/svc2")}},
-	}
-	serviceName := "ns2/svc2"
-	service := getTestService(serviceName, v1.ProtocolTCP, nil, false, 80)
-	setServiceLoadBalancerIP(&service, "1.2.3.4")
-	expectedTags := []map[string]*string{
-		nil,
-		{consts.ServiceTagKey: ptr.To("")},
-		{consts.ServiceTagKey: ptr.To("ns1/svc1")},
-		{consts.ServiceTagKey: ptr.To("ns1/svc1")},
+	tests := []struct {
+		Name                      string
+		InputTags                 map[string]*string
+		InputIsUserAssigned       bool
+		ExpectedTags              map[string]*string
+		ExpectedServiceReferences []string
+		ExpectedErr               bool
+	}{
+		{
+			Name:        "Nil",
+			ExpectedErr: true,
+		},
+		{
+			Name:                "Empty tags",
+			InputTags:           map[string]*string{},
+			InputIsUserAssigned: true,
+			ExpectedTags:        map[string]*string{},
+		},
+		{
+			Name: "Single service",
+			InputTags: map[string]*string{
+				consts.ServiceTagKey: ptr.To("ns1/svc1"),
+			},
+			ExpectedTags: map[string]*string{
+				consts.ServiceTagKey: ptr.To("ns1/svc1"),
+			},
+			ExpectedServiceReferences: []string{"ns1/svc1"},
+		},
+		{
+			Name: "Multiple services #1",
+			InputTags: map[string]*string{
+				consts.ServiceTagKey: ptr.To("ns1/svc1,ns2/svc2"),
+			},
+			ExpectedTags: map[string]*string{
+				consts.ServiceTagKey: ptr.To("ns1/svc1"),
+			},
+			ExpectedServiceReferences: []string{"ns1/svc1"},
+		},
+		{
+			Name: "Multiple services #2",
+			InputTags: map[string]*string{
+				consts.ServiceTagKey: ptr.To("ns1/svc1,ns2/svc2,ns3/svc3"),
+			},
+			ExpectedTags: map[string]*string{
+				consts.ServiceTagKey: ptr.To("ns1/svc1,ns3/svc3"),
+			},
+			ExpectedServiceReferences: []string{"ns1/svc1", "ns3/svc3"},
+		},
 	}
 
-	for i, pip := range pips {
-		_ = unbindServiceFromPIP(pip, &service, serviceName, "", false)
-		assert.Equal(t, expectedTags[i], pip.Tags)
+	for _, tt := range tests {
+		t.Run(tt.Name, func(t *testing.T) {
+			svcName := "ns2/svc2"
+			svc := getTestService(svcName, v1.ProtocolTCP, nil, false, 80)
+			setServiceLoadBalancerIP(&svc, "1.2.3.4")
+
+			pip := &network.PublicIPAddress{
+				Tags: tt.InputTags,
+			}
+			serviceReferences, err := unbindServiceFromPIP(pip, svcName, tt.InputIsUserAssigned)
+			if tt.ExpectedErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.ExpectedServiceReferences, serviceReferences)
+				assert.Equal(t, tt.ExpectedTags, pip.Tags)
+			}
+		})
 	}
 }
 
