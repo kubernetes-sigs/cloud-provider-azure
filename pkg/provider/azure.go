@@ -195,6 +195,8 @@ type Config struct {
 	DisableAzureStackCloud bool `json:"disableAzureStackCloud,omitempty" yaml:"disableAzureStackCloud,omitempty"`
 	// Enable exponential backoff to manage resource request retries
 	CloudProviderBackoff bool `json:"cloudProviderBackoff,omitempty" yaml:"cloudProviderBackoff,omitempty"`
+	// Enable throttling to manage resource request retries
+	CloudProviderThrottling bool `json:"cloudProviderThrottling,omitempty" yaml:"cloudProviderThrottling,omitempty"`
 	// Use instance metadata service where possible
 	UseInstanceMetadata bool `json:"useInstanceMetadata,omitempty" yaml:"useInstanceMetadata,omitempty"`
 
@@ -202,7 +204,6 @@ type Config struct {
 	CloudProviderBackoffExponent float64 `json:"cloudProviderBackoffExponent,omitempty" yaml:"cloudProviderBackoffExponent,omitempty"`
 	// Backoff jitter
 	CloudProviderBackoffJitter float64 `json:"cloudProviderBackoffJitter,omitempty" yaml:"cloudProviderBackoffJitter,omitempty"`
-
 	// ExcludeMasterFromStandardLB excludes master nodes from standard load balancer.
 	// If not set, it will be default to true.
 	ExcludeMasterFromStandardLB *bool `json:"excludeMasterFromStandardLB,omitempty" yaml:"excludeMasterFromStandardLB,omitempty"`
@@ -636,7 +637,6 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 	if err != nil {
 		return err
 	}
-
 	if az.MaximumLoadBalancerRuleCount == 0 {
 		az.MaximumLoadBalancerRuleCount = consts.MaximumLoadBalancerRuleCount
 	}
@@ -1073,6 +1073,8 @@ func (az *Cloud) getAzureClientConfig(servicePrincipalToken *adal.ServicePrincip
 			Type: az.Config.ExtendedLocationType,
 		}
 	}
+
+	azClientConfig.EnableThrottling = az.Config.CloudProviderThrottling
 
 	return azClientConfig
 }
