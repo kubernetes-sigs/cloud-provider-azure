@@ -65,7 +65,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routeclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routetableclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/snapshotclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/storageaccountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient"
@@ -366,7 +365,6 @@ type Cloud struct {
 	RouteTablesClient               routetableclient.Interface
 	LoadBalancerClient              loadbalancerclient.Interface
 	PublicIPAddressesClient         publicipclient.Interface
-	SecurityGroupsClient            securitygroupclient.Interface
 	VirtualMachinesClient           vmclient.Interface
 	StorageAccountClient            storageaccountclient.Interface
 	DisksClient                     diskclient.Interface
@@ -979,7 +977,6 @@ func (az *Cloud) configAzureClients(
 	subnetClientConfig := azClientConfig.WithRateLimiter(az.Config.SubnetsRateLimit)
 	routeTableClientConfig := azClientConfig.WithRateLimiter(az.Config.RouteTableRateLimit)
 	loadBalancerClientConfig := azClientConfig.WithRateLimiter(az.Config.LoadBalancerRateLimit)
-	securityGroupClientConfig := azClientConfig.WithRateLimiter(az.Config.SecurityGroupRateLimit)
 	publicIPClientConfig := azClientConfig.WithRateLimiter(az.Config.PublicIPAddressRateLimit)
 	containerServiceConfig := azClientConfig.WithRateLimiter(az.Config.ContainerServiceRateLimit)
 	deploymentConfig := azClientConfig.WithRateLimiter(az.Config.DeploymentRateLimit)
@@ -1009,7 +1006,6 @@ func (az *Cloud) configAzureClients(
 		subnetClientConfig.Authorizer = networkResourceServicePrincipalTokenAuthorizer
 		routeTableClientConfig.Authorizer = networkResourceServicePrincipalTokenAuthorizer
 		loadBalancerClientConfig.Authorizer = networkResourceServicePrincipalTokenAuthorizer
-		securityGroupClientConfig.Authorizer = networkResourceServicePrincipalTokenAuthorizer
 		publicIPClientConfig.Authorizer = networkResourceServicePrincipalTokenAuthorizer
 	}
 
@@ -1018,7 +1014,6 @@ func (az *Cloud) configAzureClients(
 		subnetClientConfig.SubscriptionID = az.Config.NetworkResourceSubscriptionID
 		routeTableClientConfig.SubscriptionID = az.Config.NetworkResourceSubscriptionID
 		loadBalancerClientConfig.SubscriptionID = az.Config.NetworkResourceSubscriptionID
-		securityGroupClientConfig.SubscriptionID = az.Config.NetworkResourceSubscriptionID
 		publicIPClientConfig.SubscriptionID = az.Config.NetworkResourceSubscriptionID
 	}
 
@@ -1035,7 +1030,6 @@ func (az *Cloud) configAzureClients(
 	az.SubnetsClient = subnetclient.New(subnetClientConfig)
 	az.RouteTablesClient = routetableclient.New(routeTableClientConfig)
 	az.LoadBalancerClient = loadbalancerclient.New(loadBalancerClientConfig)
-	az.SecurityGroupsClient = securitygroupclient.New(securityGroupClientConfig)
 	az.PublicIPAddressesClient = publicipclient.New(publicIPClientConfig)
 	az.FileClient = fileclient.New(fileClientConfig)
 	az.BlobClient = blobclient.New(blobClientConfig)
