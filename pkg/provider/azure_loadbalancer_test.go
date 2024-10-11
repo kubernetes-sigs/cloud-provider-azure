@@ -44,8 +44,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/utils/pointer"
 	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/utils/pointer"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"

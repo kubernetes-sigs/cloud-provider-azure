@@ -479,6 +479,18 @@ func NewCloud(ctx context.Context, clientBuilder cloudprovider.ControllerClientB
 
 	az.ipv6DualStackEnabled = true
 	az.lockMap = newLockMap()
+
+	if clientBuilder != nil {
+		az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
+	}
+	az.azureResourceLocker = NewAzureResourceLocker(
+		az,
+		consts.AzureResourceLockHolderNameCloudControllerManager,
+		consts.AzureResourceLockLeaseName,
+		consts.AzureResourceLockLeaseNamespace,
+		consts.AzureResourceLockLeaseDuration,
+	)
+
 	return az, nil
 }
 
