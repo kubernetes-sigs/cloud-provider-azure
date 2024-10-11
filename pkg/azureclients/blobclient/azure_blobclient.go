@@ -71,7 +71,12 @@ func New(config *azclients.ClientConfig) *Client {
 	}
 
 	klog.V(2).Infof("Azure BlobClient using API version: %s", apiVersion)
-	armClient := armclient.New(authorizer, *config, baseURI, apiVersion)
+	mc := metrics.NewMetricContext("blobclient", "arm", config.ResourceManagerEndpoint, config.SubscriptionID, "")
+	decorators := make([]autorest.SendDecorator, 0)
+	if config.EnableThrottling {
+		decorators = append(decorators, armclient.NewThrottledSendDecorater(mc))
+	}
+	armClient := armclient.New(authorizer, *config, baseURI, apiVersion, decorators...)
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 
 	if azclients.RateLimitEnabled(config.RateLimitConfig) {

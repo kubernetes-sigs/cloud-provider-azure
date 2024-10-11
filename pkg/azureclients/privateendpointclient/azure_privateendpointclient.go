@@ -65,7 +65,12 @@ func New(config *azclients.ClientConfig) *Client {
 		// https://docs.microsoft.com/en-us/azure-stack/user/azure-stack-profiles-azure-resource-manager-versions?view=azs-2108
 		klog.Warningf("Azure Stack is not supported for Private Endpoint API")
 	}
-	armClient := armclient.New(config.Authorizer, *config, config.ResourceManagerEndpoint, apiVersion)
+	mc := metrics.NewMetricContext("privateendpoint", "arm", config.ResourceManagerEndpoint, config.SubscriptionID, "")
+	decorators := make([]autorest.SendDecorator, 0)
+	if config.EnableThrottling {
+		decorators = append(decorators, armclient.NewThrottledSendDecorater(mc))
+	}
+	armClient := armclient.New(config.Authorizer, *config, config.ResourceManagerEndpoint, apiVersion, decorators...)
 
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 	if azclients.RateLimitEnabled(config.RateLimitConfig) {

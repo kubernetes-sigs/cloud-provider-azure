@@ -64,7 +64,12 @@ func New(config *azclients.ClientConfig) *Client {
 	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
 		klog.Warningf("Azure Stack is not supported for Private DNS Zone API")
 	}
-	armClient := armclient.New(authorizer, *config, baseURI, apiVersion)
+	mc := metrics.NewMetricContext("privatedns", "arm", config.ResourceManagerEndpoint, config.SubscriptionID, "")
+	decorators := make([]autorest.SendDecorator, 0)
+	if config.EnableThrottling {
+		decorators = append(decorators, armclient.NewThrottledSendDecorater(mc))
+	}
+	armClient := armclient.New(authorizer, *config, baseURI, apiVersion, decorators...)
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 
 	if azclients.RateLimitEnabled(config.RateLimitConfig) {

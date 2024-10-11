@@ -62,7 +62,12 @@ func New(config *azclients.ClientConfig) *Client {
 	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
 		klog.Warningf("Azure Stack is not supported for Virtual Network Link API")
 	}
-	armClient := armclient.New(config.Authorizer, *config, config.ResourceManagerEndpoint, apiVersion)
+	mc := metrics.NewMetricContext("virtualnetworklinks", "arm", config.ResourceManagerEndpoint, config.SubscriptionID, "")
+	decorators := make([]autorest.SendDecorator, 0)
+	if config.EnableThrottling {
+		decorators = append(decorators, armclient.NewThrottledSendDecorater(mc))
+	}
+	armClient := armclient.New(config.Authorizer, *config, config.ResourceManagerEndpoint, apiVersion, decorators...)
 
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 	if azclients.RateLimitEnabled(config.RateLimitConfig) {

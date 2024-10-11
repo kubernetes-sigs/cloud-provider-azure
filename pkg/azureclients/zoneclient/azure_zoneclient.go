@@ -23,6 +23,7 @@ import (
 
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
+	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 
 	"k8s.io/klog/v2"
 
@@ -69,8 +70,12 @@ func New(config *azclients.ClientConfig) *Client {
 	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
 		apiVersion = AzureStackCloudAPIVersion
 	}
-
-	armClient := armclient.New(authorizer, *config, baseURI, apiVersion)
+	mc := metrics.NewMetricContext("zone", "arm", config.ResourceManagerEndpoint, config.SubscriptionID, "")
+	decorators := make([]autorest.SendDecorator, 0)
+	if config.EnableThrottling {
+		decorators = append(decorators, armclient.NewThrottledSendDecorater(mc))
+	}
+	armClient := armclient.New(authorizer, *config, baseURI, apiVersion, decorators...)
 	client := &Client{
 		armClient:      armClient,
 		subscriptionID: config.SubscriptionID,
