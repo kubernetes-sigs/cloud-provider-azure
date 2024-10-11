@@ -19,6 +19,8 @@ package iputil
 import (
 	"fmt"
 	"net/netip"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/iputil/internal"
 )
 
 // IsPrefixesAllowAll returns true if one of the prefixes allows all addresses.
@@ -30,6 +32,20 @@ func IsPrefixesAllowAll(prefixes []netip.Prefix) bool {
 		}
 	}
 	return false
+}
+
+// AddressesAsPrefixes converts a list of IP addresses to a list of prefixes.
+// Each address is converted to a prefix with a mask length equal to its bit length.
+//
+// Examples:
+//   - 192.168.1.2 becomes 192.168.1.2/32
+//   - 2001:db8::1 becomes 2001:db8::1/128
+func AddressesAsPrefixes(addresses []netip.Addr) []netip.Prefix {
+	var rv []netip.Prefix
+	for _, addr := range addresses {
+		rv = append(rv, netip.PrefixFrom(addr, addr.BitLen()))
+	}
+	return rv
 }
 
 // ParsePrefix parses a CIDR string and returns a Prefix.
@@ -61,21 +77,55 @@ func GroupPrefixesByFamily(vs []netip.Prefix) ([]netip.Prefix, []netip.Prefix) {
 	return v4, v6
 }
 
-// AggregatePrefixes aggregates prefixes.
-// Overlapping prefixes are merged.
+// AggregatePrefixes merges overlapping or adjacent prefixes.
+// It combines prefixes that can be represented by a single, larger prefix.
+//
+// Examples:
+//   - [192.168.0.0/32, 192.168.0.1/32] -> [192.168.0.0/31] (adjacent)
+//   - [192.168.0.0/24, 192.168.0.1/32] -> [192.168.0.0/24] (overlapping)
+//   - [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16] -> [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16] (non-overlapping)
 func AggregatePrefixes(prefixes []netip.Prefix) []netip.Prefix {
 	var (
 		v4, v6 = GroupPrefixesByFamily(prefixes)
-		v4Tree = newPrefixTreeForIPv4()
-		v6Tree = newPrefixTreeForIPv6()
 	)
 
-	for _, p := range v4 {
-		v4Tree.Add(p)
-	}
-	for _, p := range v6 {
-		v6Tree.Add(p)
+	v4 = internal.AggregatePrefixesForSingleIPFamily(v4)
+	v6 = internal.AggregatePrefixesForSingleIPFamily(v6)
+
+	return append(v4, v6...)
+}
+
+// ExcludePrefixes excludes prefixes from the given prefixes.
+//
+// Examples:
+// - ([192.168.0.0/24], [192.168.0.0/25]) -> [192.168.0.128/25]
+// - ([2001:db8::/64], [2001:db8::1/128, 2001:db8::2/128]) -> [2001:db8::/64]
+func ExcludePrefixes(prefixes []netip.Prefix, exclude []netip.Prefix) []netip.Prefix {
+	var (
+		v4Tree = internal.NewPrefixTreeForIPv4()
+		v6Tree = internal.NewPrefixTreeForIPv6()
+	)
+
+	// Build the prefix tree for the prefixes.
+	{
+		v4, v6 := GroupPrefixesByFamily(prefixes)
+		for _, p := range v4 {
+			v4Tree.Add(p)
+		}
+		for _, p := range v6 {
+			v6Tree.Add(p)
+		}
 	}
 
+	// Exclude the prefixes.
+	v4, v6 := GroupPrefixesByFamily(exclude)
+	for _, p := range v4 {
+		v4Tree.Remove(p)
+	}
+	for _, p := range v6 {
+		v6Tree.Remove(p)
+	}
+
+	// Return the remaining prefixes.
 	return append(v4Tree.List(), v6Tree.List()...)
 }
