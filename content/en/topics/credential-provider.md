@@ -32,3 +32,32 @@ providers:
   - /etc/kubernetes/azure.json
 ```
 
+## Registry Mirror
+
+Kubelet credential provider for Azure allows the user to mirror a registry to another one, and the latter registry will be used for authentication to Azure Registry when the image matches the first registry. Kubelet will request pulling image to the container runtime with the image from mirror source and credential from mirror target.
+
+This feature is beneficial for cases like when the user leverages [Containerd registry host namespace](https://github.com/containerd/containerd/blob/main/docs/hosts.md#registry-host-namespace) to proxy the workload image authentication to another registry server to achieve production-test environment agnostic or private registry.
+
+In order to turn on registry mirror configuration, you'll have to
+
+* add the mirror source image(s) in matchImages list
+* add the registry mirror(s) in `arg` field `--registry-mirror`
+* multiple registry mirrors are supported, for example, `--registry-mirror=mcrx.microsoft.com:xxx.azurecr.io,mcry.microsoft.com:yyy.azurecr.io`
+
+```yaml
+kind: CredentialProviderConfig
+apiVersion: kubelet.config.k8s.io/v1
+providers:
+- name: acr-credential-provider
+  apiVersion: credentialprovider.kubelet.k8s.io/v1
+  defaultCacheDuration: 10m
+  matchImages:
+  - "*.azurecr.io"
+  - "*.azurecr.cn"
+  - "*.azurecr.de"
+  - "*.azurecr.us"
+  - "mcr.microsoft.com"
+  args:
+  - /etc/kubernetes/azure.json
+  - --registry-mirror=mcr.microsoft.com:xxx.azurecr.io
+```
