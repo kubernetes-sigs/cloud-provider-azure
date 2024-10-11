@@ -62,10 +62,8 @@ func (l *AzureResourceLocker) Lock(ctx context.Context) error {
 	); err != nil {
 		return err
 	}
-
 	if err := l.acquireLease(
-		ctx, l.KubeClient, l.holder, l.leaseNamespace, l.leaseName,
-	); err != nil {
+		ctx, l.KubeClient, l.holder, l.leaseNamespace, l.leaseName); err != nil {
 		return err
 	}
 
@@ -163,14 +161,16 @@ func (l *AzureResourceLocker) acquireLease(
 	}
 
 	// invalidate caches if the previous holder was not the cloud controller manager
-	// TODO: invalidates more caches if needed
 	if lease.Annotations != nil &&
 		!strings.EqualFold(
 			lease.Annotations[consts.AzureResourceLockPreviousHolderNameAnnotation],
 			consts.AzureResourceLockHolderNameCloudControllerManager,
 		) {
-		l.Cloud.lbCache, err = l.Cloud.newLBCache()
+		l.lbCache, err = l.newLBCache()
 		if err != nil {
+			return err
+		}
+		if err := l.VMSet.RefreshCaches(); err != nil {
 			return err
 		}
 	}
