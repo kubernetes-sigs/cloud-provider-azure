@@ -24,9 +24,9 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/go-logr/logr"
-
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -61,32 +61,32 @@ var (
 // RuleHelper manages security rules within a security group.
 type RuleHelper struct {
 	logger   logr.Logger
-	sg       *network.SecurityGroup
+	sg       *armnetwork.SecurityGroup
 	snapshot []byte
 
 	// helper map to store the security rules
 	// name -> security rule
-	rules      map[string]*network.SecurityRule
+	rules      map[string]*armnetwork.SecurityRule
 	priorities map[int32]string
 }
 
-func NewSecurityGroupHelper(logger logr.Logger, sg *network.SecurityGroup) (*RuleHelper, error) {
+func NewSecurityGroupHelper(logger logr.Logger, sg *armnetwork.SecurityGroup) (*RuleHelper, error) {
 	if sg == nil ||
 		sg.Name == nil ||
-		sg.SecurityGroupPropertiesFormat == nil ||
-		sg.SecurityRules == nil {
+		sg.Properties == nil ||
+		sg.Properties.SecurityRules == nil {
 		// In the real world, this should never happen.
 		// Anyway, defensively check it.
 		return nil, ErrInvalidSecurityGroup
 	}
 	var (
-		rules      = make(map[string]*network.SecurityRule, len(*sg.SecurityGroupPropertiesFormat.SecurityRules))
-		priorities = make(map[int32]string, len(*sg.SecurityGroupPropertiesFormat.SecurityRules))
+		rules      = make(map[string]*armnetwork.SecurityRule, len(sg.Properties.SecurityRules))
+		priorities = make(map[int32]string, len(sg.Properties.SecurityRules))
 	)
-	for i := range *sg.SecurityGroupPropertiesFormat.SecurityRules {
-		rule := (*sg.SecurityGroupPropertiesFormat.SecurityRules)[i]
-		rules[*rule.Name] = &rule
-		priorities[*rule.Priority] = *rule.Name
+	for i := range sg.Properties.SecurityRules {
+		rule := (sg.Properties.SecurityRules)[i]
+		rules[*rule.Name] = rule
+		priorities[*rule.Properties.Priority] = *rule.Name
 	}
 
 	snapshot := makeSecurityGroupSnapshot(sg)
@@ -132,11 +132,11 @@ func (helper *RuleHelper) nextRulePriority(prefer rulePriorityPrefer) (int32, er
 }
 
 // getOrCreateRule returns an existing rule or create a new one if it doesn't exist.
-func (helper *RuleHelper) getOrCreateRule(name string, priorityPrefer rulePriorityPrefer) (*network.SecurityRule, error) {
+func (helper *RuleHelper) getOrCreateRule(name string, priorityPrefer rulePriorityPrefer) (*armnetwork.SecurityRule, error) {
 	logger := helper.logger.WithName("getOrCreateRule").WithValues("rule-name", name)
 
 	if rule, found := helper.rules[name]; found {
-		logger.V(4).Info("Found an existing rule", "priority", *rule.Priority)
+		logger.V(4).Info("Found an existing rule", "priority", *rule.Properties.Priority)
 		return rule, nil
 	}
 
@@ -147,9 +147,9 @@ func (helper *RuleHelper) getOrCreateRule(name string, priorityPrefer rulePriori
 		helper.logger.Error(err, "Failed to get an available rule priority")
 		return nil, err
 	}
-	rule := &network.SecurityRule{
+	rule := &armnetwork.SecurityRule{
 		Name: ptr.To(name),
-		SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+		Properties: &armnetwork.SecurityRulePropertiesFormat{
 			Priority: ptr.To(priority),
 		},
 	}
@@ -164,7 +164,7 @@ func (helper *RuleHelper) getOrCreateRule(name string, priorityPrefer rulePriori
 
 // addAllowRule adds a rule that allows certain traffic.
 func (helper *RuleHelper) addAllowRule(
-	protocol network.SecurityRuleProtocol,
+	protocol armnetwork.SecurityRuleProtocol,
 	ipFamily iputil.Family,
 	srcPrefixes []string,
 	dstPrefixes []string,
@@ -178,23 +178,23 @@ func (helper *RuleHelper) addAllowRule(
 	dstPortRanges := fnutil.Map(func(p int32) string { return strconv.FormatInt(int64(p), 10) }, dstPorts)
 	sort.Strings(dstPortRanges)
 
-	rule.Protocol = protocol
-	rule.Access = network.SecurityRuleAccessAllow
-	rule.Direction = network.SecurityRuleDirectionInbound
+	rule.Properties.Protocol = to.Ptr(protocol)
+	rule.Properties.Access = to.Ptr(armnetwork.SecurityRuleAccessAllow)
+	rule.Properties.Direction = to.Ptr(armnetwork.SecurityRuleDirectionInbound)
 	{
 		// Source
 		if len(srcPrefixes) == 1 {
-			rule.SourceAddressPrefix = ptr.To(srcPrefixes[0])
+			rule.Properties.SourceAddressPrefix = to.Ptr(srcPrefixes[0])
 		} else {
-			rule.SourceAddressPrefixes = ptr.To(srcPrefixes)
+			rule.Properties.SourceAddressPrefixes = to.SliceOfPtrs(srcPrefixes...)
 		}
-		rule.SourcePortRange = ptr.To("*")
+		rule.Properties.SourcePortRange = ptr.To("*")
 	}
 	{
 		// Destination
 		addresses := append(ListDestinationPrefixes(rule), dstPrefixes...)
 		SetDestinationPrefixes(rule, addresses)
-		rule.DestinationPortRanges = ptr.To(dstPortRanges)
+		rule.Properties.DestinationPortRanges = to.SliceOfPtrs(dstPortRanges...)
 	}
 
 	helper.logger.V(4).Info("Patched a rule for allow", "rule-name", name)
@@ -205,7 +205,7 @@ func (helper *RuleHelper) addAllowRule(
 // AddRuleForAllowedServiceTag adds a rule for traffic from a certain service tag.
 func (helper *RuleHelper) AddRuleForAllowedServiceTag(
 	serviceTag string,
-	protocol network.SecurityRuleProtocol,
+	protocol armnetwork.SecurityRuleProtocol,
 	dstAddresses []netip.Addr,
 	dstPorts []int32,
 ) error {
@@ -227,7 +227,7 @@ func (helper *RuleHelper) AddRuleForAllowedServiceTag(
 // AddRuleForAllowedIPRanges adds a rule for traffic from certain IP ranges.
 func (helper *RuleHelper) AddRuleForAllowedIPRanges(
 	ipRanges []netip.Prefix,
-	protocol network.SecurityRuleProtocol,
+	protocol armnetwork.SecurityRuleProtocol,
 	dstAddresses []netip.Addr,
 	dstPorts []int32,
 ) error {
@@ -272,20 +272,20 @@ func (helper *RuleHelper) AddRuleForDenyAll(dstAddresses []netip.Addr) error {
 	if err != nil {
 		return err
 	}
-	rule.Protocol = network.SecurityRuleProtocolAsterisk
-	rule.Access = network.SecurityRuleAccessDeny
-	rule.Direction = network.SecurityRuleDirectionInbound
+	rule.Properties.Protocol = to.Ptr(armnetwork.SecurityRuleProtocolAsterisk)
+	rule.Properties.Access = to.Ptr(armnetwork.SecurityRuleAccessDeny)
+	rule.Properties.Direction = to.Ptr(armnetwork.SecurityRuleDirectionInbound)
 	{
 		// Source
-		rule.SourceAddressPrefix = ptr.To("*")
-		rule.SourcePortRange = ptr.To("*")
+		rule.Properties.SourceAddressPrefix = ptr.To("*")
+		rule.Properties.SourcePortRange = ptr.To("*")
 	}
 	{
 		// Destination
 		addresses := fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
 		addresses = append(addresses, ListDestinationPrefixes(rule)...)
 		SetDestinationPrefixes(rule, addresses)
-		rule.DestinationPortRange = ptr.To("*")
+		rule.Properties.DestinationPortRange = ptr.To("*")
 	}
 
 	helper.logger.V(4).Info("Patched a rule for deny all", "rule-name", ptr.To(rule.Name))
@@ -296,7 +296,7 @@ func (helper *RuleHelper) AddRuleForDenyAll(dstAddresses []netip.Addr) error {
 // RemoveDestinationFromRules removes the given destination addresses from rules that match the given protocol and ports is in the retainDstPorts list.
 // It may add a new rule if the original rule needs to be split.
 func (helper *RuleHelper) RemoveDestinationFromRules(
-	protocol network.SecurityRuleProtocol,
+	protocol armnetwork.SecurityRuleProtocol,
 	dstPrefixes []string,
 	retainDstPorts []int32,
 ) error {
@@ -304,16 +304,16 @@ func (helper *RuleHelper) RemoveDestinationFromRules(
 	logger.V(10).Info("Cleaning destination from SecurityGroup")
 
 	for _, rule := range helper.rules {
-		if rule.Priority == nil {
+		if rule.Properties.Priority == nil {
 			continue
 		}
-		priority := *rule.Priority
+		priority := *rule.Properties.Priority
 		if priority < consts.LoadBalancerMinimumPriority || consts.LoadBalancerMaximumPriority < priority {
 			logger.V(4).Info("Skip rule with not-in-range priority", "rule-name", *rule.Name, "priority", priority)
 			continue
 		}
 
-		if rule.Protocol != protocol {
+		if *rule.Properties.Protocol != protocol {
 			continue
 		}
 
@@ -325,7 +325,7 @@ func (helper *RuleHelper) RemoveDestinationFromRules(
 	return nil
 }
 
-func (helper *RuleHelper) removeDestinationFromRule(rule *network.SecurityRule, prefixes []string, retainDstPorts []int32) error {
+func (helper *RuleHelper) removeDestinationFromRule(rule *armnetwork.SecurityRule, prefixes []string, retainDstPorts []int32) error {
 	logger := helper.logger.WithName("removeDestinationFromRule").
 		WithValues("security-rule-name", rule.Name)
 
@@ -338,7 +338,7 @@ func (helper *RuleHelper) removeDestinationFromRule(rule *network.SecurityRule, 
 	)
 
 	// Clean DenyAll rule
-	if rule.Access == network.SecurityRuleAccessDeny && len(retainDstPorts) == 0 {
+	if *rule.Properties.Access == armnetwork.SecurityRuleAccessDeny && len(retainDstPorts) == 0 {
 		// Update the prefixes
 		SetDestinationPrefixes(rule, expectedPrefixes)
 
@@ -376,29 +376,29 @@ func (helper *RuleHelper) removeDestinationFromRule(rule *network.SecurityRule, 
 		return fmt.Errorf("parse prefix as IP address %q: %w", prefixes[0], err)
 	}
 	ipFamily := iputil.FamilyOfAddr(addr)
-	return helper.addAllowRule(rule.Protocol, ipFamily, ListSourcePrefixes(rule), prefixes, expectedPorts)
+	return helper.addAllowRule(*rule.Properties.Protocol, ipFamily, ListSourcePrefixes(rule), prefixes, expectedPorts)
 }
 
 // SecurityGroup returns the underlying SecurityGroup object and a bool indicating whether any changes were made to the RuleHelper.
-func (helper *RuleHelper) SecurityGroup() (*network.SecurityGroup, bool, error) {
+func (helper *RuleHelper) SecurityGroup() (*armnetwork.SecurityGroup, bool, error) {
 	var (
 		rv    = helper.sg
-		rules = make([]network.SecurityRule, 0, len(helper.rules))
+		rules = make([]*armnetwork.SecurityRule, 0, len(helper.rules))
 	)
 	for _, r := range helper.rules {
 		var (
 			dstAddresses = ListDestinationPrefixes(r)
-			dstASGs      = ptr.Deref(r.DestinationApplicationSecurityGroups, []network.ApplicationSecurityGroup{})
+			dstASGs      = r.Properties.DestinationApplicationSecurityGroups
 		)
 
 		if len(dstAddresses) == 0 && len(dstASGs) == 0 {
 			// Skip the rule without destination prefixes.
 			continue
 		}
-		rules = append(rules, *r)
+		rules = append(rules, r)
 	}
 
-	rv.SecurityRules = &rules
+	rv.Properties.SecurityRules = rules
 
 	var (
 		snapshot = makeSecurityGroupSnapshot(rv)
@@ -409,18 +409,18 @@ func (helper *RuleHelper) SecurityGroup() (*network.SecurityGroup, bool, error) 
 	)
 	{
 		// Check whether the SecurityGroup exceeds the limit.
-		for _, rule := range *rv.SecurityRules {
+		for _, rule := range rv.Properties.SecurityRules {
 			nRules++
-			if rule.SourceAddressPrefixes != nil {
-				nSrcIPs += len(*rule.SourceAddressPrefixes)
+			if rule.Properties.SourceAddressPrefixes != nil {
+				nSrcIPs += len(rule.Properties.SourceAddressPrefixes)
 			}
-			if rule.SourceAddressPrefix != nil {
+			if rule.Properties.SourceAddressPrefix != nil {
 				nSrcIPs++
 			}
-			if rule.DestinationAddressPrefixes != nil {
-				nDstIPs += len(*rule.DestinationAddressPrefixes)
+			if rule.Properties.DestinationAddressPrefixes != nil {
+				nDstIPs += len(rule.Properties.DestinationAddressPrefixes)
 			}
-			if rule.DestinationAddressPrefix != nil {
+			if rule.Properties.DestinationAddressPrefix != nil {
 				nDstIPs++
 			}
 		}
@@ -441,9 +441,9 @@ func (helper *RuleHelper) SecurityGroup() (*network.SecurityGroup, bool, error) 
 
 // makeSecurityGroupSnapshot returns a byte array as the snapshot of the given SecurityGroup.
 // It's used to check if the SecurityGroup had been changed.
-func makeSecurityGroupSnapshot(sg *network.SecurityGroup) []byte {
-	sort.SliceStable(*sg.SecurityGroupPropertiesFormat.SecurityRules, func(i, j int) bool {
-		return *(*sg.SecurityGroupPropertiesFormat.SecurityRules)[i].Priority < *(*sg.SecurityGroupPropertiesFormat.SecurityRules)[j].Priority
+func makeSecurityGroupSnapshot(sg *armnetwork.SecurityGroup) []byte {
+	sort.SliceStable(sg.Properties.SecurityRules, func(i, j int) bool {
+		return *(sg.Properties.SecurityRules)[i].Properties.Priority < *(sg.Properties.SecurityRules)[j].Properties.Priority
 	})
 	snapshot, _ := json.Marshal(sg)
 	return snapshot

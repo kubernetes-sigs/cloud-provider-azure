@@ -25,6 +25,7 @@ import (
 	"sync"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 
@@ -260,7 +261,7 @@ func sameContentInSlices(s1 []string, s2 []string) bool {
 	return true
 }
 
-func removeDuplicatedSecurityRules(rules []network.SecurityRule) []network.SecurityRule {
+func removeDuplicatedSecurityRules(rules []*armnetwork.SecurityRule) []*armnetwork.SecurityRule {
 	ruleNames := make(map[string]bool)
 	for i := len(rules) - 1; i >= 0; i-- {
 		if _, ok := ruleNames[ptr.Deref(rules[i].Name, "")]; ok {

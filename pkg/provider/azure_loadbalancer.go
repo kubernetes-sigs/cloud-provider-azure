@@ -29,8 +29,8 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -2903,7 +2903,7 @@ func (az *Cloud) reconcileSecurityGroup(
 	clusterName string, service *v1.Service,
 	lbName string,
 	lbIPs []string, wantLb bool,
-) (*network.SecurityGroup, error) {
+) (*armnetwork.SecurityGroup, error) {
 	logger := log.FromContextOrBackground(ctx).WithName("reconcileSecurityGroup").
 		WithValues("load-balancer", lbName).
 		WithValues("delete-lb", !wantLb)
@@ -2931,7 +2931,7 @@ func (az *Cloud) reconcileSecurityGroup(
 			// When deleting LB, we don't need to validate the annotation
 			opts = append(opts, loadbalancer.SkipAnnotationValidation())
 		}
-		accessControl, err = loadbalancer.NewAccessControl(logger, service, &sg, opts...)
+		accessControl, err = loadbalancer.NewAccessControl(logger, service, sg, opts...)
 		if err != nil {
 			logger.Error(err, "Failed to parse access control configuration for service")
 			return nil, err
@@ -3033,7 +3033,7 @@ func (az *Cloud) reconcileSecurityGroup(
 	if updated {
 		logger.V(2).Info("Preparing to update security group")
 		logger.V(5).Info("CreateOrUpdateSecurityGroup begin")
-		err := az.CreateOrUpdateSecurityGroup(*rv)
+		err := az.CreateOrUpdateSecurityGroup(rv)
 		if err != nil {
 			logger.Error(err, "Failed to update security group")
 			return nil, err
@@ -3783,7 +3783,7 @@ func (az *Cloud) ensureLoadBalancerTagged(lb *network.LoadBalancer) bool {
 }
 
 // ensureSecurityGroupTagged ensures the security group is tagged as configured
-func (az *Cloud) ensureSecurityGroupTagged(sg *network.SecurityGroup) bool {
+func (az *Cloud) ensureSecurityGroupTagged(sg *armnetwork.SecurityGroup) bool {
 	if az.Tags == "" && (len(az.TagsMap) == 0) {
 		return false
 	}

@@ -34,7 +34,6 @@ import (
 
 	"k8s.io/utils/ptr"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatezoneclient/mock_privatezoneclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient/mock_virtualnetworklinkclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/blobclient/mockblobclient"
@@ -522,11 +521,9 @@ func TestEnsureStorageAccount(t *testing.T) {
 			mockSubnetsClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, vnetName, subnetName, gomock.Any()).Return(nil).Times(1)
 			cloud.SubnetsClient = mockSubnetsClient
 
-			computeClientFactory := mock_azclient.NewMockClientFactory(ctrl)
-			mockPrivateDNSClient := mock_privatezoneclient.NewMockInterface(ctrl)
+			mockPrivateDNSClient := cloud.ComputeClientFactory.GetPrivateZoneClient().(*mock_privatezoneclient.MockInterface)
 			mockPrivateDNSClient.EXPECT().Get(gomock.Any(), vnetResourceGroup, gomock.Any()).Return(&privatedns.PrivateZone{}, errors.New("ResourceNotFound")).Times(1)
 			mockPrivateDNSClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
-			computeClientFactory.EXPECT().GetPrivateZoneClient().Return(mockPrivateDNSClient).AnyTimes()
 
 			mockPrivateDNSZoneGroup := mockprivatednszonegroupclient.NewMockInterface(ctrl)
 			mockPrivateDNSZoneGroup.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), gomock.Any(), "", false).Return(nil).Times(1)
@@ -534,11 +531,9 @@ func TestEnsureStorageAccount(t *testing.T) {
 			mockPrivateEndpointClient := mockprivateendpointclient.NewMockInterface(ctrl)
 			mockPrivateEndpointClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), "", true).Return(nil).Times(1)
 			cloud.privateendpointclient = mockPrivateEndpointClient
-			mockVirtualNetworkLinksClient := mock_virtualnetworklinkclient.NewMockInterface(ctrl)
+			mockVirtualNetworkLinksClient := cloud.ComputeClientFactory.GetVirtualNetworkLinkClient().(*mock_virtualnetworklinkclient.MockInterface)
 			mockVirtualNetworkLinksClient.EXPECT().Get(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any()).Return(&privatedns.VirtualNetworkLink{}, errors.New("ResourceNotFound")).Times(1)
 			mockVirtualNetworkLinksClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
-			computeClientFactory.EXPECT().GetVirtualNetworkLinkClient().Return(mockVirtualNetworkLinksClient).AnyTimes()
-			cloud.ComputeClientFactory = computeClientFactory
 		}
 
 		var testAccountOptions *AccountOptions

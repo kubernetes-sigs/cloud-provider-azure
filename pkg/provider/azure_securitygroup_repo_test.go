@@ -17,20 +17,23 @@ limitations under the License.
 package provider
 
 import (
-	"fmt"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/stretchr/testify/assert"
 
 	"go.uber.org/mock/gomock"
 
 	"k8s.io/utils/ptr"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/securitygroupclient/mocksecuritygroupclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 func TestCreateOrUpdateSecurityGroupCanceled(t *testing.T) {
@@ -39,15 +42,18 @@ func TestCreateOrUpdateSecurityGroupCanceled(t *testing.T) {
 
 	az := GetTestCloud(ctrl)
 	az.nsgCache.Set("sg", "test")
+	clientFactory := az.NetworkClientFactory.(*mock_azclient.MockClientFactory)
+	mockSGClient := clientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
 
-	mockSGClient := az.SecurityGroupsClient.(*mocksecuritygroupclient.MockInterface)
-	mockSGClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(&retry.Error{
-		RawError: fmt.Errorf(consts.OperationCanceledErrorMessage),
+	mockSGClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any()).Return(nil, &azcore.ResponseError{
+		RawResponse: &http.Response{
+			Body: io.NopCloser(strings.NewReader(consts.OperationCanceledErrorMessage)),
+		},
 	})
-	mockSGClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "sg", gomock.Any()).Return(network.SecurityGroup{}, nil)
+	mockSGClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "sg").Return(&armnetwork.SecurityGroup{}, nil)
 
-	err := az.CreateOrUpdateSecurityGroup(network.SecurityGroup{Name: ptr.To("sg")})
-	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", fmt.Errorf("canceledandsupersededduetoanotheroperation")), err.Error())
+	err := az.CreateOrUpdateSecurityGroup(&armnetwork.SecurityGroup{Name: ptr.To("sg")})
+	assert.Contains(t, err.Error(), "canceledandsupersededduetoanotheroperation")
 
 	// security group should be removed from cache if the operation is canceled
 	shouldBeEmpty, err := az.nsgCache.GetWithDeepCopy("sg", cache.CacheReadTypeDefault)
