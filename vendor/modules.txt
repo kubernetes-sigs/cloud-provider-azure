@@ -1541,6 +1541,7 @@ sigs.k8s.io/cloud-provider-azure/pkg/azclient/roleassignmentclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/secretclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/snapshotclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/sshpublickeyresourceclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient

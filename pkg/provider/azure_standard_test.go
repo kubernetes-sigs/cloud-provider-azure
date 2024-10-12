@@ -23,11 +23,11 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-
 	v1 "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -581,7 +581,7 @@ func TestGetProtocolsFromKubernetesProtocol(t *testing.T) {
 		Name                       string
 		protocol                   v1.Protocol
 		expectedTransportProto     network.TransportProtocol
-		expectedSecurityGroupProto network.SecurityRuleProtocol
+		expectedSecurityGroupProto armnetwork.SecurityRuleProtocol
 		expectedProbeProto         network.ProbeProtocol
 		nilProbeProto              bool
 		expectedErrMsg             error
@@ -590,21 +590,21 @@ func TestGetProtocolsFromKubernetesProtocol(t *testing.T) {
 			Name:                       "getProtocolsFromKubernetesProtocol should get TCP protocol",
 			protocol:                   v1.ProtocolTCP,
 			expectedTransportProto:     network.TransportProtocolTCP,
-			expectedSecurityGroupProto: network.SecurityRuleProtocolTCP,
+			expectedSecurityGroupProto: armnetwork.SecurityRuleProtocolTCP,
 			expectedProbeProto:         network.ProbeProtocolTCP,
 		},
 		{
 			Name:                       "getProtocolsFromKubernetesProtocol should get UDP protocol",
 			protocol:                   v1.ProtocolUDP,
 			expectedTransportProto:     network.TransportProtocolUDP,
-			expectedSecurityGroupProto: network.SecurityRuleProtocolUDP,
+			expectedSecurityGroupProto: armnetwork.SecurityRuleProtocolUDP,
 			nilProbeProto:              true,
 		},
 		{
 			Name:                       "getProtocolsFromKubernetesProtocol should get SCTP protocol",
 			protocol:                   v1.ProtocolSCTP,
 			expectedTransportProto:     network.TransportProtocolAll,
-			expectedSecurityGroupProto: network.SecurityRuleProtocolAsterisk,
+			expectedSecurityGroupProto: armnetwork.SecurityRuleProtocolAsterisk,
 			nilProbeProto:              true,
 		},
 		{
@@ -617,7 +617,7 @@ func TestGetProtocolsFromKubernetesProtocol(t *testing.T) {
 	for _, test := range testcases {
 		transportProto, securityGroupProto, probeProto, err := getProtocolsFromKubernetesProtocol(test.protocol)
 		assert.Equal(t, test.expectedTransportProto, *transportProto, test.Name)
-		assert.Equal(t, test.expectedSecurityGroupProto, *securityGroupProto, test.Name)
+		assert.Equal(t, test.expectedSecurityGroupProto, securityGroupProto, test.Name)
 		if test.nilProbeProto {
 			assert.Nil(t, probeProto, test.Name)
 		} else {
