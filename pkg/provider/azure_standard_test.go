@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -992,7 +993,7 @@ func TestGetStandardInstanceIDByNodeName(t *testing.T) {
 			ID:   pointer.String(invalidResouceID),
 		}, nil).AnyTimes()
 
-		instanceID, err := cloud.VMSet.GetInstanceIDByNodeName(test.nodeName)
+		instanceID, err := cloud.VMSet.GetInstanceIDByNodeName(context.Background(), test.nodeName)
 		if test.expectedErrMsg != nil {
 			assert.EqualError(t, test.expectedErrMsg, err.Error(), test.name)
 		}
@@ -1471,7 +1472,7 @@ func TestStandardEnsureHostInPool(t *testing.T) {
 		mockInterfaceClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nicName, gomock.Any()).Return(testNIC, nil).AnyTimes()
 		mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.ResourceGroup, gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-		_, _, _, vm, err := cloud.VMSet.EnsureHostInPool(test.service, test.nodeName, test.backendPoolID, test.vmSetName)
+		_, _, _, vm, err := cloud.VMSet.EnsureHostInPool(context.Background(), test.service, test.nodeName, test.backendPoolID, test.vmSetName)
 		assert.Equal(t, test.expectedErrMsg, err, test.name)
 		assert.Nil(t, vm, test.name)
 	}
@@ -1586,7 +1587,7 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 			mockInterfaceClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nicName, gomock.Any()).Return(testNIC, nil).AnyTimes()
 			mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.ResourceGroup, gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-			err := cloud.VMSet.EnsureHostsInPool(test.service, test.nodes, test.backendPoolID, test.vmSetName)
+			err := cloud.VMSet.EnsureHostsInPool(context.Background(), test.service, test.nodes, test.backendPoolID, test.vmSetName)
 			if test.expectedErr {
 				assert.EqualError(t, test.expectedErrMsg, err.Error(), test.name)
 			} else {

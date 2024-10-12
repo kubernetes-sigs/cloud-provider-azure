@@ -181,7 +181,7 @@ func (fs *FlexScaleSet) GetNodeNameByProviderID(providerID string) (types.NodeNa
 // GetInstanceIDByNodeName gets the cloud provider ID by node name.
 // It must return ("", cloudprovider.InstanceNotFound) if the instance does
 // not exist or is no longer running.
-func (fs *FlexScaleSet) GetInstanceIDByNodeName(name string) (string, error) {
+func (fs *FlexScaleSet) GetInstanceIDByNodeName(_ context.Context, name string) (string, error) {
 	machine, err := fs.getVmssFlexVM(name, azcache.CacheReadTypeUnsafe)
 	if err != nil {
 		return "", err
@@ -200,7 +200,7 @@ func (fs *FlexScaleSet) GetInstanceIDByNodeName(name string) (string, error) {
 }
 
 // GetInstanceTypeByNodeName gets the instance type by node name.
-func (fs *FlexScaleSet) GetInstanceTypeByNodeName(name string) (string, error) {
+func (fs *FlexScaleSet) GetInstanceTypeByNodeName(_ context.Context, name string) (string, error) {
 	machine, err := fs.getVmssFlexVM(name, azcache.CacheReadTypeUnsafe)
 	if err != nil {
 		klog.Errorf("fs.GetInstanceTypeByNodeName(%s) failed: fs.getVmssFlexVMWithoutInstanceView(%s) err=%v", name, name, err)
@@ -280,7 +280,7 @@ func (fs *FlexScaleSet) GetPowerStatusByNodeName(name string) (powerState string
 }
 
 // GetPrimaryInterface gets machine primary network interface by node name.
-func (fs *FlexScaleSet) GetPrimaryInterface(nodeName string) (network.Interface, error) {
+func (fs *FlexScaleSet) GetPrimaryInterface(ctx context.Context, nodeName string) (network.Interface, error) {
 	machine, err := fs.getVmssFlexVM(nodeName, azcache.CacheReadTypeDefault)
 	if err != nil {
 		klog.Errorf("fs.GetInstanceTypeByNodeName(%s) failed: fs.getVmssFlexVMWithoutInstanceView(%s) err=%v", nodeName, nodeName, err)
@@ -301,8 +301,6 @@ func (fs *FlexScaleSet) GetPrimaryInterface(nodeName string) (network.Interface,
 		return network.Interface{}, err
 	}
 
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
 	nic, rerr := fs.InterfacesClient.Get(ctx, nicResourceGroup, nicName, "")
 	if rerr != nil {
 		return network.Interface{}, rerr.Error()
@@ -312,8 +310,8 @@ func (fs *FlexScaleSet) GetPrimaryInterface(nodeName string) (network.Interface,
 }
 
 // GetIPByNodeName gets machine private IP and public IP by node name.
-func (fs *FlexScaleSet) GetIPByNodeName(name string) (string, string, error) {
-	nic, err := fs.GetPrimaryInterface(name)
+func (fs *FlexScaleSet) GetIPByNodeName(ctx context.Context, name string) (string, string, error) {
+	nic, err := fs.GetPrimaryInterface(ctx, name)
 	if err != nil {
 		return "", "", err
 	}
@@ -348,9 +346,9 @@ func (fs *FlexScaleSet) GetIPByNodeName(name string) (string, string, error) {
 // GetPrivateIPsByNodeName returns a slice of all private ips assigned to node (ipv6 and ipv4)
 // TODO (khenidak): This should read all nics, not just the primary
 // allowing users to split ipv4/v6 on multiple nics
-func (fs *FlexScaleSet) GetPrivateIPsByNodeName(name string) ([]string, error) {
+func (fs *FlexScaleSet) GetPrivateIPsByNodeName(ctx context.Context, name string) ([]string, error) {
 	ips := make([]string, 0)
-	nic, err := fs.GetPrimaryInterface(name)
+	nic, err := fs.GetPrimaryInterface(ctx, name)
 	if err != nil {
 		return ips, err
 	}
@@ -442,7 +440,7 @@ func (fs *FlexScaleSet) GetNodeCIDRMasksByProviderID(providerID string) (int, in
 
 // EnsureHostInPool ensures the given VM's Primary NIC's Primary IP Configuration is
 // participating in the specified LoadBalancer Backend Pool, which returns (resourceGroup, vmasName, instanceID, vmssVM, error).
-func (fs *FlexScaleSet) EnsureHostInPool(service *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetNameOfLB string) (string, string, string, *compute.VirtualMachineScaleSetVM, error) {
+func (fs *FlexScaleSet) EnsureHostInPool(ctx context.Context, service *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetNameOfLB string) (string, string, string, *compute.VirtualMachineScaleSetVM, error) {
 	serviceName := getServiceName(service)
 	name := mapNodeNameToVMName(nodeName)
 	vmssFlexName, err := fs.getNodeVmssFlexName(name)
@@ -465,7 +463,7 @@ func (fs *FlexScaleSet) EnsureHostInPool(service *v1.Service, nodeName types.Nod
 		return "", "", "", nil, errNotInVMSet
 	}
 
-	nic, err := fs.GetPrimaryInterface(name)
+	nic, err := fs.GetPrimaryInterface(ctx, name)
 	if err != nil {
 		klog.Errorf("error: fs.EnsureHostInPool(%s), s.GetPrimaryInterface(%s), vmSetNameOfLB: %s, err=%v", name, name, vmSetNameOfLB, err)
 		return "", "", "", nil, err
@@ -703,7 +701,7 @@ func (fs *FlexScaleSet) ensureVMSSFlexInPool(_ *v1.Service, nodes []*v1.Node, ba
 
 // EnsureHostsInPool ensures the given Node's primary IP configurations are
 // participating in the specified LoadBalancer Backend Pool.
-func (fs *FlexScaleSet) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetNameOfLB string) error {
+func (fs *FlexScaleSet) EnsureHostsInPool(ctx context.Context, service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetNameOfLB string) error {
 	mc := metrics.NewMetricContext("services", "vmssflex_ensure_hosts_in_pool", fs.ResourceGroup, fs.SubscriptionID, getServiceName(service))
 	isOperationSucceeded := false
 	defer func() {
@@ -729,7 +727,7 @@ func (fs *FlexScaleSet) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node,
 		}
 
 		f := func() error {
-			_, _, _, _, err := fs.EnsureHostInPool(service, types.NodeName(localNodeName), backendPoolID, vmSetNameOfLB)
+			_, _, _, _, err := fs.EnsureHostInPool(ctx, service, types.NodeName(localNodeName), backendPoolID, vmSetNameOfLB)
 			if err != nil {
 				return fmt.Errorf("ensure(%s): backendPoolID(%s) - failed to ensure host in pool: %w", getServiceName(service), backendPoolID, err)
 			}

@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -432,7 +433,7 @@ func TestGetInstanceIDByNodeName(t *testing.T) {
 		mockVMsClient := ss.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachine{}, nil).AnyTimes()
 
-		realValue, err := ss.GetInstanceIDByNodeName(test.nodeName)
+		realValue, err := ss.GetInstanceIDByNodeName(context.Background(), test.nodeName)
 		if test.expectError {
 			assert.Error(t, err, test.description)
 			continue
@@ -581,7 +582,7 @@ func TestGetIPByNodeName(t *testing.T) {
 		mockVMsClient := ss.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachine{}, nil).AnyTimes()
 
-		privateIP, publicIP, err := ss.GetIPByNodeName(test.nodeName)
+		privateIP, publicIP, err := ss.GetIPByNodeName(context.Background(), test.nodeName)
 		if test.expectError {
 			assert.Error(t, err, test.description)
 			continue
@@ -1065,7 +1066,7 @@ func TestGetInstanceTypeByNodeName(t *testing.T) {
 		mockVMClient := ss.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, test.vmClientErr).AnyTimes()
 
-		sku, err := ss.GetInstanceTypeByNodeName("vmss-vm-000000")
+		sku, err := ss.GetInstanceTypeByNodeName(context.Background(), "vmss-vm-000000")
 		if test.expectedErr != nil {
 			assert.EqualError(t, err, test.expectedErr.Error(), test.description)
 		}
@@ -1250,7 +1251,7 @@ func TestGetPrimaryInterface(t *testing.T) {
 			expectedInterface = network.Interface{}
 		}
 
-		nic, err := ss.GetPrimaryInterface(test.nodeName)
+		nic, err := ss.GetPrimaryInterface(context.Background(), test.nodeName)
 		if test.expectedErr != nil {
 			assert.EqualError(t, err, test.expectedErr.Error(), test.description)
 		}
@@ -1363,7 +1364,7 @@ func TestGetPrivateIPsByNodeName(t *testing.T) {
 		mockInterfaceClient := ss.InterfacesClient.(*mockinterfaceclient.MockInterface)
 		mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), ss.ResourceGroup, testVMSSName, "0", test.nodeName, gomock.Any()).Return(expectedInterface, nil).AnyTimes()
 
-		privateIPs, err := ss.GetPrivateIPsByNodeName(test.nodeName)
+		privateIPs, err := ss.GetPrivateIPsByNodeName(context.Background(), test.nodeName)
 		if test.expectedErr != nil {
 			assert.EqualError(t, err, test.expectedErr.Error(), test.description)
 		}
@@ -2265,7 +2266,7 @@ func TestEnsureHostInPool(t *testing.T) {
 			gomock.Any(),
 		).Return(expectedVMSSVMs, test.vmssVMListError).AnyTimes()
 
-		nodeResourceGroup, ssName, instanceID, vm, err := ss.EnsureHostInPool(test.service, test.nodeName, test.backendPoolID, test.vmSetName)
+		nodeResourceGroup, ssName, instanceID, vm, err := ss.EnsureHostInPool(context.Background(), test.service, test.nodeName, test.backendPoolID, test.vmSetName)
 		assert.Equal(t, test.expectedErr, err, test.description+errMsgSuffix)
 		assert.Equal(t, test.expectedNodeResourceGroup, nodeResourceGroup, test.description)
 		assert.Equal(t, test.expectedVMSSName, ssName, test.description)
@@ -2575,7 +2576,7 @@ func TestEnsureVMSSInPool(t *testing.T) {
 
 			if test.expectedGetInstanceID != "" {
 				mockVMSet := NewMockVMSet(ctrl)
-				mockVMSet.EXPECT().GetInstanceIDByNodeName(gomock.Any()).Return(test.expectedGetInstanceID, test.getInstanceIDErr)
+				mockVMSet.EXPECT().GetInstanceIDByNodeName(gomock.Any(), gomock.Any()).Return(test.expectedGetInstanceID, test.getInstanceIDErr)
 				ss.VMSet = mockVMSet
 			}
 
@@ -2671,7 +2672,7 @@ func TestEnsureHostsInPool(t *testing.T) {
 		mockVMClient := ss.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
-		err = ss.EnsureHostsInPool(&v1.Service{}, test.nodes, test.backendpoolID, test.vmSetName)
+		err = ss.EnsureHostsInPool(context.Background(), &v1.Service{}, test.nodes, test.backendpoolID, test.vmSetName)
 		assert.Equal(t, test.expectedErr, err != nil, test.description+errMsgSuffix)
 	}
 }
