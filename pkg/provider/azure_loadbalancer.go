@@ -182,7 +182,7 @@ func (az *Cloud) reconcileService(ctx context.Context, clusterName string, servi
 		az.localServiceNameToServiceInfoMap.Store(key, newServiceInfo(getServiceIPFamily(service), lbName))
 		// There are chances that the endpointslice changes after EnsureHostsInPool, so
 		// need to check endpointslice for a second time.
-		if err := az.checkAndApplyLocalServiceBackendPoolUpdates(ctx, *lb, service); err != nil {
+		if err := az.checkAndApplyLocalServiceBackendPoolUpdates(*lb, service); err != nil {
 			logger.Error(err, "Failed to checkAndApplyLocalServiceBackendPoolUpdates")
 			return nil, err
 		}
