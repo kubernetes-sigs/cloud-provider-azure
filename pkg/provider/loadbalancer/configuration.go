@@ -35,7 +35,7 @@ func IsInternal(svc *v1.Service) bool {
 }
 
 // AllowedServiceTags returns the allowed service tags configured by user through AKS custom annotation.
-func AllowedServiceTags(svc *v1.Service) ([]string, error) {
+func AllowedServiceTags(svc *v1.Service) []string {
 	const (
 		Sep = ","
 		Key = consts.ServiceAnnotationAllowedServiceTags
@@ -43,14 +43,14 @@ func AllowedServiceTags(svc *v1.Service) ([]string, error) {
 
 	value, found := svc.Annotations[Key]
 	if !found {
-		return nil, nil
+		return nil
 	}
 
 	tags := strings.Split(strings.TrimSpace(value), Sep)
 	for i := range tags {
 		tags[i] = strings.TrimSpace(tags[i])
 	}
-	return tags, nil
+	return tags
 }
 
 // AllowedIPRanges returns the allowed IP ranges configured by user through AKS custom annotations:
