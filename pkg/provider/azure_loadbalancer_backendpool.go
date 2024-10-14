@@ -410,7 +410,6 @@ func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(ctx context.Context, service 
 		changed               bool
 		numOfAdd, numOfDelete int
 		activeNodes           *utilsets.IgnoreCaseSet
-		err                   error
 	)
 	if bi.useMultipleStandardLoadBalancers() {
 		if !isLocalService(service) {
@@ -425,10 +424,7 @@ func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(ctx context.Context, service 
 					"current load balancer", si.lbName)
 				return nil
 			}
-			activeNodes, err = bi.getLocalServiceEndpointsNodeNames(ctx, service)
-			if err != nil {
-				return err
-			}
+			activeNodes = bi.getLocalServiceEndpointsNodeNames(service)
 		}
 	}
 
@@ -463,7 +459,7 @@ func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(ctx context.Context, service 
 			}
 
 			if bi.useMultipleStandardLoadBalancers() {
-				if !activeNodes.Has(node.Name) {
+				if activeNodes != nil && !activeNodes.Has(node.Name) {
 					klog.V(4).Infof("bi.EnsureHostsInPool: node %s should not be in load balancer %q", node.Name, lbName)
 					continue
 				}

@@ -243,41 +243,6 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 			},
 		},
 		{
-			desc:  "should add ips to the local service dedicated backend pool",
-			local: true,
-			backendPool: network.BackendAddressPool{
-				Name: ptr.To("default-svc-1"),
-				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{},
-				},
-			},
-			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
-				{
-					Name: "kubernetes",
-				},
-			},
-			expectedBackendPool: network.BackendAddressPool{
-				Name: ptr.To("default-svc-1"),
-				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-					VirtualNetwork: &network.SubResource{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet")},
-					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
-						{
-							Name: ptr.To("vmss-0"),
-							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-								IPAddress: ptr.To("10.0.0.2"),
-							},
-						},
-						{
-							Name: ptr.To("vmss-1"),
-							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-								IPAddress: ptr.To("10.0.0.1"),
-							},
-						},
-					},
-				},
-			},
-		},
-		{
 			desc:     "local service without service info",
 			local:    true,
 			notFound: true,
