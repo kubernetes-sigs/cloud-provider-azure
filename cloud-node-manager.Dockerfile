@@ -19,11 +19,17 @@ FROM --platform=linux/amd64 mcr.microsoft.com/oss/go/microsoft/golang:1.24.11-bo
 ARG ENABLE_GIT_COMMAND=true
 ARG ARCH=amd64
 
+RUN if [ "$ARCH" = "arm64" ] ; then \
+    apt-get update && apt-get install -y gcc-aarch64-linux-gnu ; \
+    elif [ "$ARCH" = "arm" ] ; then \
+    apt-get update && apt-get install -y gcc-arm-linux-gnueabihf ; \
+    fi
+
 WORKDIR /go/src/sigs.k8s.io/cloud-provider-azure
 COPY . .
 
 # Build the Go app
-RUN make bin/azure-cloud-node-manager ENABLE_GIT_COMMAND=${ENABLE_GIT_COMMAND}
+RUN make bin/azure-cloud-node-manager ENABLE_GIT_COMMAND=${ENABLE_GIT_COMMAND} ARCH=${ARCH}
 
 # Use distroless static image for a lean production container.
 # Start a new build stage.
