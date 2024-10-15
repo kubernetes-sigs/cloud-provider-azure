@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -269,7 +270,7 @@ func TestGetNodeNameByVMName(t *testing.T) {
 		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
 
-		nodeName, err := fs.getNodeNameByVMName(tc.vmName)
+		nodeName, err := fs.getNodeNameByVMName(context.TODO(), tc.vmName)
 		assert.Equal(t, tc.expectedErr, err, tc.description)
 		assert.Equal(t, tc.expectedNodeName, nodeName, tc.description)
 	}
@@ -319,7 +320,7 @@ func TestGetNodeVmssFlexID(t *testing.T) {
 		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
 
-		vmssFlexID, err := fs.getNodeVmssFlexID(tc.nodeName)
+		vmssFlexID, err := fs.getNodeVmssFlexID(context.TODO(), tc.nodeName)
 		assert.Equal(t, tc.expectedErr, err, tc.description)
 		assert.Equal(t, tc.expectedVmssFlexID, vmssFlexID, tc.description)
 	}
@@ -385,7 +386,7 @@ func TestGetVmssFlexVM(t *testing.T) {
 		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
 
-		vmssFlexVM, err := fs.getVmssFlexVM(tc.nodeName, azcache.CacheReadTypeDefault)
+		vmssFlexVM, err := fs.getVmssFlexVM(context.TODO(), tc.nodeName, azcache.CacheReadTypeDefault)
 		assert.Equal(t, tc.expectedErr, err, tc.description)
 		assert.Equal(t, tc.expectedVmssFlexVM, vmssFlexVM, tc.description)
 	}
@@ -437,7 +438,7 @@ func TestGetVmssFlexByVmssFlexID(t *testing.T) {
 		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(tc.testVmssFlexList, tc.vmssFlexListErr).AnyTimes()
 
-		vmssFlex, err := fs.getVmssFlexByVmssFlexID(tc.vmssFlexID, azcache.CacheReadTypeDefault)
+		vmssFlex, err := fs.getVmssFlexByVmssFlexID(context.TODO(), tc.vmssFlexID, azcache.CacheReadTypeDefault)
 		if tc.expectedErr != nil {
 			assert.EqualError(t, tc.expectedErr, err.Error(), tc.description)
 		}
@@ -490,7 +491,7 @@ func TestGetVmssFlexIDByName(t *testing.T) {
 		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(tc.testVmssFlexList, tc.vmssFlexListErr).AnyTimes()
 
-		vmssFlexID, err := fs.getVmssFlexIDByName(tc.vmssFlexName)
+		vmssFlexID, err := fs.getVmssFlexIDByName(context.TODO(), tc.vmssFlexName)
 
 		assert.Equal(t, tc.expectedVmssFlexID, vmssFlexID, tc.description)
 		if tc.expectedErr != nil {
@@ -545,7 +546,7 @@ func TestGetVmssFlexByName(t *testing.T) {
 		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(tc.testVmssFlexList, tc.vmssFlexListErr).AnyTimes()
 
-		vmssFlex, err := fs.getVmssFlexByName(tc.vmssFlexName)
+		vmssFlex, err := fs.getVmssFlexByName(context.TODO(), tc.vmssFlexName)
 
 		assert.Equal(t, tc.expectedVmssFlex, vmssFlex, tc.description)
 		if tc.expectedErr != nil {
@@ -598,7 +599,7 @@ func TestGetVmssFlexByNodeName(t *testing.T) {
 		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(tc.testVmssFlexList, tc.vmssFlexListErr).AnyTimes()
 
-		vmssFlex, err := fs.getVmssFlexByNodeName(tc.nodeName, azcache.CacheReadTypeDefault)
+		vmssFlex, err := fs.getVmssFlexByNodeName(context.TODO(), tc.nodeName, azcache.CacheReadTypeDefault)
 		assert.Equal(t, tc.expectedErr, err, tc.description)
 		assert.Equal(t, tc.expectedVmssFlex, vmssFlex, tc.description)
 	}

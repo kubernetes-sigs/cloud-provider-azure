@@ -232,7 +232,7 @@ func TestUpdateNodeSubnetMaskSizes(t *testing.T) {
 				nodeNameSubnetMaskSizesMap: make(map[string][]int),
 			}
 
-			err = ca.updateNodeSubnetMaskSizes("vmss-0", tc.providerID)
+			err = ca.updateNodeSubnetMaskSizes(context.Background(), "vmss-0", tc.providerID)
 			assert.Equal(t, tc.expectedErr, err)
 			assert.Equal(t, tc.expectedNodeNameSubnetMaskSizesMap, ca.nodeNameSubnetMaskSizesMap)
 		})

@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"strings"
@@ -56,7 +57,7 @@ func TestCreateOrUpdateSecurityGroupCanceled(t *testing.T) {
 	assert.Contains(t, err.Error(), "canceledandsupersededduetoanotheroperation")
 
 	// security group should be removed from cache if the operation is canceled
-	shouldBeEmpty, err := az.nsgCache.GetWithDeepCopy("sg", cache.CacheReadTypeDefault)
+	shouldBeEmpty, err := az.nsgCache.GetWithDeepCopy(context.TODO(), "sg", cache.CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Empty(t, shouldBeEmpty)
 }

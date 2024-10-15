@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -96,9 +97,7 @@ func (az *Cloud) DeletePEConn(service *v1.Service, resourceGroup, plsName, peCon
 
 func (az *Cloud) newPLSCache() (azcache.Resource, error) {
 	// for PLS cache, key is LBFrontendIPConfiguration ID
-	getter := func(key string) (interface{}, error) {
-		ctx, cancel := getContextWithCancel()
-		defer cancel()
+	getter := func(ctx context.Context, key string) (interface{}, error) {
 		resourceGroup, frontendID := parsePLSCacheKey(key)
 		plsList, err := az.PrivateLinkServiceClient.List(ctx, resourceGroup)
 		exists, rerr := checkResourceExistsFromError(err)
@@ -136,8 +135,8 @@ func (az *Cloud) newPLSCache() (azcache.Resource, error) {
 	return azcache.NewTimedCache(time.Duration(az.PlsCacheTTLInSeconds)*time.Second, getter, az.Config.DisableAPICallCache)
 }
 
-func (az *Cloud) getPrivateLinkService(resourceGroup string, frontendIPConfigID *string, crt azcache.AzureCacheReadType) (pls network.PrivateLinkService, err error) {
-	cachedPLS, err := az.plsCache.GetWithDeepCopy(getPLSCacheKey(resourceGroup, *frontendIPConfigID), crt)
+func (az *Cloud) getPrivateLinkService(ctx context.Context, resourceGroup string, frontendIPConfigID *string, crt azcache.AzureCacheReadType) (pls network.PrivateLinkService, err error) {
+	cachedPLS, err := az.plsCache.GetWithDeepCopy(ctx, getPLSCacheKey(resourceGroup, *frontendIPConfigID), crt)
 	if err != nil {
 		return pls, err
 	}
