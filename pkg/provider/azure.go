@@ -53,7 +53,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/blobclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/deploymentclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/diskclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/fileclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient"
@@ -374,7 +373,6 @@ type Cloud struct {
 	privateendpointclient           privateendpointclient.Interface
 	privatednszonegroupclient       privatednszonegroupclient.Interface
 	PrivateLinkServiceClient        privatelinkserviceclient.Interface
-	deploymentClient                deploymentclient.Interface
 	ComputeClientFactory            azclient.ClientFactory
 	NetworkClientFactory            azclient.ClientFactory
 	AuthProvider                    *azclient.AuthProvider
@@ -966,12 +964,10 @@ func (az *Cloud) configAzureClients(
 	// But http.StatusNotFound is retriable because of ARM replication latency.
 	vmssVMClientConfig := azClientConfig.WithRateLimiter(az.Config.VirtualMachineScaleSetRateLimit)
 	vmssVMClientConfig.Backoff = vmssVMClientConfig.Backoff.WithNonRetriableErrors([]string{consts.VmssVMNotActiveErrorMessage}).WithRetriableHTTPStatusCodes([]int{http.StatusNotFound})
-	routeClientConfig := azClientConfig.WithRateLimiter(az.Config.RouteRateLimit)
 	subnetClientConfig := azClientConfig.WithRateLimiter(az.Config.SubnetsRateLimit)
 	routeTableClientConfig := azClientConfig.WithRateLimiter(az.Config.RouteTableRateLimit)
 	loadBalancerClientConfig := azClientConfig.WithRateLimiter(az.Config.LoadBalancerRateLimit)
 	publicIPClientConfig := azClientConfig.WithRateLimiter(az.Config.PublicIPAddressRateLimit)
-	deploymentConfig := azClientConfig.WithRateLimiter(az.Config.DeploymentRateLimit)
 	privateDNSZoenGroupConfig := azClientConfig.WithRateLimiter(az.Config.PrivateDNSZoneGroupRateLimit)
 	privateEndpointConfig := azClientConfig.WithRateLimiter(az.Config.PrivateEndpointRateLimit)
 	privateLinkServiceConfig := azClientConfig.WithRateLimiter(az.Config.PrivateLinkServiceRateLimit)
@@ -994,7 +990,6 @@ func (az *Cloud) configAzureClients(
 	// If uses network resources in different AAD Tenant, update SubscriptionID and Authorizer for network resources client config
 	if networkResourceServicePrincipalToken != nil {
 		networkResourceServicePrincipalTokenAuthorizer := autorest.NewBearerAuthorizer(networkResourceServicePrincipalToken)
-		routeClientConfig.Authorizer = networkResourceServicePrincipalTokenAuthorizer
 		subnetClientConfig.Authorizer = networkResourceServicePrincipalTokenAuthorizer
 		routeTableClientConfig.Authorizer = networkResourceServicePrincipalTokenAuthorizer
 		loadBalancerClientConfig.Authorizer = networkResourceServicePrincipalTokenAuthorizer
@@ -1002,7 +997,6 @@ func (az *Cloud) configAzureClients(
 	}
 
 	if az.UsesNetworkResourceInDifferentSubscription() {
-		routeClientConfig.SubscriptionID = az.Config.NetworkResourceSubscriptionID
 		subnetClientConfig.SubscriptionID = az.Config.NetworkResourceSubscriptionID
 		routeTableClientConfig.SubscriptionID = az.Config.NetworkResourceSubscriptionID
 		loadBalancerClientConfig.SubscriptionID = az.Config.NetworkResourceSubscriptionID
@@ -1027,7 +1021,6 @@ func (az *Cloud) configAzureClients(
 	az.privateendpointclient = privateendpointclient.New(privateEndpointConfig)
 	az.privatednszonegroupclient = privatednszonegroupclient.New(privateDNSZoenGroupConfig)
 	az.PrivateLinkServiceClient = privatelinkserviceclient.New(privateLinkServiceConfig)
-	az.deploymentClient = deploymentclient.New(deploymentConfig)
 
 	if az.ZoneClient == nil {
 		az.ZoneClient = zoneclient.New(zoneClientConfig)
