@@ -71,6 +71,16 @@ CONTROLLER_MANAGER_IMAGE_NAME=azure-cloud-controller-manager
 else
 CONTROLLER_MANAGER_IMAGE_NAME=azure-cloud-controller-manager-$(ARCH)
 endif
+
+# Cross-platform build with CGO_ENABLED=1
+ifeq ($(ARCH), amd64)
+CGO_OPTION ?= CGO_ENABLED=1
+else ifeq ($(ARCH), arm64)
+CGO_OPTION ?= CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc
+else ifeq ($(ARCH), arm)
+CGO_OPTION ?= CGO_ENABLED=1 CC=arm-linux-gnueabihf-gcc
+endif
+
 CONTROLLER_MANAGER_FULL_IMAGE_NAME=$(IMAGE_REGISTRY)/$(CONTROLLER_MANAGER_IMAGE_NAME)
 CONTROLLER_MANAGER_IMAGE=$(IMAGE_REGISTRY)/$(CONTROLLER_MANAGER_IMAGE_NAME):$(IMAGE_TAG)
 ALL_CONTROLLER_MANAGER_IMAGES = $(foreach arch, ${ALL_ARCH.linux}, $(CONTROLLER_MANAGER_FULL_IMAGE_NAME)-${arch}:$(IMAGE_TAG))
@@ -104,19 +114,19 @@ help: ## Display this help.
 all: $(BIN_DIR)/azure-cloud-controller-manager $(BIN_DIR)/azure-cloud-node-manager $(BIN_DIR)/azure-cloud-node-manager.exe ## Build binaries for the project.
 
 $(BIN_DIR)/azure-cloud-node-manager: $(PKG_CONFIG) $(wildcard cmd/cloud-node-manager/*) $(wildcard cmd/cloud-node-manager/**/*) $(wildcard pkg/**/*) ## Build node-manager binary for Linux.
-	CGO_ENABLED=1 GOOS=linux GOARCH=${ARCH} go build -a -o $(BIN_DIR)/azure-cloud-node-manager $(shell cat $(PKG_CONFIG)) ./cmd/cloud-node-manager
+	$(CGO_OPTION) GOOS=linux GOARCH=${ARCH} go build -a -o $(BIN_DIR)/azure-cloud-node-manager $(shell cat $(PKG_CONFIG)) ./cmd/cloud-node-manager
 
 $(BIN_DIR)/azure-cloud-node-manager.exe: $(PKG_CONFIG) $(wildcard cmd/cloud-node-manager/*) $(wildcard cmd/cloud-node-manager/**/*) $(wildcard pkg/**/*) ## Build node-manager binary for Windows.
-	CGO_ENABLED=1 GOOS=windows GOARCH=${ARCH} go build -a -o $(BIN_DIR)/azure-cloud-node-manager-${ARCH}.exe $(shell cat $(PKG_CONFIG)) ./cmd/cloud-node-manager
+	$(CGO_OPTION) GOOS=windows GOARCH=${ARCH} go build -a -o $(BIN_DIR)/azure-cloud-node-manager-${ARCH}.exe $(shell cat $(PKG_CONFIG)) ./cmd/cloud-node-manager
 
 $(BIN_DIR)/azure-cloud-controller-manager: $(PKG_CONFIG) $(wildcard cmd/cloud-controller-manager/*) $(wildcard cmd/cloud-controller-manager/**/*) $(wildcard pkg/**/*) ## Build binary for controller-manager.
-	CGO_ENABLED=1 GOOS=linux GOARCH=${ARCH} go build -a -o $(BIN_DIR)/azure-cloud-controller-manager $(shell cat $(PKG_CONFIG)) ./cmd/cloud-controller-manager
+	$(CGO_OPTION) GOOS=linux GOARCH=${ARCH} go build -a -o $(BIN_DIR)/azure-cloud-controller-manager $(shell cat $(PKG_CONFIG)) ./cmd/cloud-controller-manager
 
 $(BIN_DIR)/azure-acr-credential-provider: $(PKG_CONFIG) $(wildcard cmd/acr-credential-provider/*) $(wildcard cmd/acr-credential-provider/**/*) $(wildcard pkg/**/*) ## Build binary for acr-credential-provider.
-	CGO_ENABLED=1 GOOS=linux GOARCH=${ARCH} go build -a -o $(BIN_DIR)/azure-acr-credential-provider $(shell cat $(PKG_CONFIG)) ./cmd/acr-credential-provider
+	$(CGO_OPTION) GOOS=linux GOARCH=${ARCH} go build -a -o $(BIN_DIR)/azure-acr-credential-provider $(shell cat $(PKG_CONFIG)) ./cmd/acr-credential-provider
 
 $(BIN_DIR)/azure-acr-credential-provider.exe: $(PKG_CONFIG) $(wildcard cmd/acr-credential-provider/*) $(wildcard cmd/acr-credential-provider/**/*) $(wildcard pkg/**/*) ## Build binary for acr-credential-provider.
-	CGO_ENABLED=1 GOOS=windows GOARCH=${ARCH} go build -a -o $(BIN_DIR)/azure-acr-credential-provider.exe $(shell cat $(PKG_CONFIG)) ./cmd/acr-credential-provider
+	$(CGO_OPTION) GOOS=windows GOARCH=${ARCH} go build -a -o $(BIN_DIR)/azure-acr-credential-provider.exe $(shell cat $(PKG_CONFIG)) ./cmd/acr-credential-provider
 
 ## --------------------------------------
 ##@ Images
