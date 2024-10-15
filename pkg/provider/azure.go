@@ -986,7 +986,6 @@ func (az *Cloud) configAzureClients(
 	// But http.StatusNotFound is retriable because of ARM replication latency.
 	vmssVMClientConfig := azClientConfig.WithRateLimiter(az.Config.VirtualMachineScaleSetRateLimit)
 	vmssVMClientConfig.Backoff = vmssVMClientConfig.Backoff.WithNonRetriableErrors([]string{consts.VmssVMNotActiveErrorMessage}).WithRetriableHTTPStatusCodes([]int{http.StatusNotFound})
-	routeClientConfig := azClientConfig.WithRateLimiter(az.Config.RouteRateLimit)
 	subnetClientConfig := azClientConfig.WithRateLimiter(az.Config.SubnetsRateLimit)
 	routeTableClientConfig := azClientConfig.WithRateLimiter(az.Config.RouteTableRateLimit)
 	loadBalancerClientConfig := azClientConfig.WithRateLimiter(az.Config.LoadBalancerRateLimit)
@@ -1011,7 +1010,6 @@ func (az *Cloud) configAzureClients(
 	// If uses network resources in different AAD Tenant, update SubscriptionID and Authorizer for network resources client config
 	if networkResourceServicePrincipalToken != nil {
 		networkResourceServicePrincipalTokenAuthorizer := autorest.NewBearerAuthorizer(networkResourceServicePrincipalToken)
-		routeClientConfig.Authorizer = networkResourceServicePrincipalTokenAuthorizer
 		subnetClientConfig.Authorizer = networkResourceServicePrincipalTokenAuthorizer
 		routeTableClientConfig.Authorizer = networkResourceServicePrincipalTokenAuthorizer
 		loadBalancerClientConfig.Authorizer = networkResourceServicePrincipalTokenAuthorizer
@@ -1019,7 +1017,6 @@ func (az *Cloud) configAzureClients(
 	}
 
 	if az.UsesNetworkResourceInDifferentSubscription() {
-		routeClientConfig.SubscriptionID = az.Config.NetworkResourceSubscriptionID
 		subnetClientConfig.SubscriptionID = az.Config.NetworkResourceSubscriptionID
 		routeTableClientConfig.SubscriptionID = az.Config.NetworkResourceSubscriptionID
 		loadBalancerClientConfig.SubscriptionID = az.Config.NetworkResourceSubscriptionID
