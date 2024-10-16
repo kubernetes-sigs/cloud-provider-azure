@@ -2932,31 +2932,12 @@ func (az *Cloud) reconcileSecurityGroup(
 		var opts []loadbalancer.AccessControlOption
 		if !wantLb {
 			// When deleting LB, we don't need to validate the annotation
-			opts = append(opts, loadbalancer.SkipAnnotationValidation())
+			opts = append(opts, loadbalancer.WithEventEmitter(az.Event))
 		}
 		accessControl, err = loadbalancer.NewAccessControl(logger, service, sg, opts...)
 		if err != nil {
 			logger.Error(err, "Failed to parse access control configuration for service")
 			return nil, err
-		}
-		// - use both annotation `service.beta.kubernetes.io/azure-allowed-service-tags` and `spec.loadBalancerSourceRanges`
-		//   WARNING: This issue has been around for a while, and we shouldn’t mess with the existing settings.
-		if len(accessControl.SourceRanges) > 0 && len(accessControl.AllowedServiceTags) > 0 {
-			// Suggesting to use aks custom annotation instead of spec.loadBalancerSourceRanges
-			logger.V(2).Info(
-				"Service is using both of spec.loadBalancerSourceRanges and annotation service.beta.kubernetes.io/azure-allowed-service-tags",
-			)
-			az.Event(service, v1.EventTypeWarning, "ConflictConfiguration", fmt.Sprintf(
-				"Please use annotation %s instead of spec.loadBalancerSourceRanges while using %s annotation at the same time.",
-				consts.ServiceAnnotationAllowedIPRanges, consts.ServiceAnnotationAllowedServiceTags,
-			))
-		}
-
-		if len(accessControl.InvalidRanges) > 0 {
-			az.Event(service, v1.EventTypeWarning, "InvalidConfiguration", fmt.Sprintf(
-				"Found invalid LoadBalancerSourceRanges %v, ignoring and adding a default DenyAll rule in security group.",
-				accessControl.InvalidRanges,
-			))
 		}
 	}
 
