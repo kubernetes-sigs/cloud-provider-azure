@@ -5,8 +5,8 @@ github.com/Azure/azure-pipeline-go v0.2.3 h1:7U9HBg1JFK3jHl5qmo4CTZKFTVgMwdFHMVt
 github.com/Azure/azure-pipeline-go v0.2.3/go.mod h1:x841ezTBIMG6O3lAcl8ATHnsOPVl2bqk7S3ta6S6u4k=
 github.com/Azure/azure-sdk-for-go v68.0.0+incompatible h1:fcYLmCpyNYRnvJbPerq7U0hS+6+I79yEDJBqVNcqUzU=
 github.com/Azure/azure-sdk-for-go v68.0.0+incompatible/go.mod h1:9XXNKU+eRnpl9moKnB4QOLf1HestfXbmab5FXxiDBjc=
-github.com/Azure/azure-sdk-for-go/sdk/azcore v1.14.0 h1:nyQWyZvwGTvunIMxi1Y9uXkcyr+I7TeNrr/foo4Kpk8=
-github.com/Azure/azure-sdk-for-go/sdk/azcore v1.14.0/go.mod h1:l38EPgmsp71HHLq9j7De57JcKOWPyhrsW1Awm1JS6K0=
+github.com/Azure/azure-sdk-for-go/sdk/azcore v1.15.0 h1:eXzkOEXbSTOa7cJ7EqeCVi/OFi/ppDrUtQuttCWy74c=
+github.com/Azure/azure-sdk-for-go/sdk/azcore v1.15.0/go.mod h1:YL1xnZ6QejvQHWJrX/AvhFl4WW4rqHVoKspWNVwFk0M=
 github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.0 h1:B/dfvscEQtew9dVuoxqxrUKKv8Ih2f55PydknDamU+g=
 github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.0/go.mod h1:fiPSssYvltE08HJchL04dOy+RD4hgrjph0cwGGMntdI=
 github.com/Azure/azure-sdk-for-go/sdk/azidentity/cache v0.3.0 h1:+m0M/LFxN43KvULkDNfdXOgrjtg6UYJPFBJyuEcRCAw=
@@ -456,8 +456,8 @@ sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.30.3 h1:2770sDpzrjjsA
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.30.3/go.mod h1:Ve9uj1L+deCXFrPOk1LpFXqTg7LCFzFso6PA48q/XZw=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.64 h1:SnnrM1TP7RppZRCb4isotIAqe4lEftm2NLqQDtgwBlk=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.64/go.mod h1:E8Fm9xV9Ydu9N1clyyuUQNR4+6Vqak7q3ne8QCZLHcw=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.29 h1:AixTSBLVc89XycjD+GxbR26wMJyzcZGmyKE4Si5eIzY=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.29/go.mod h1:1OgjkvC3qbeJeFj7Ogl+17WQxE149kUDS3TLVJtfPDI=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.30 h1:Gz8FW1VbYz8awsIUtUfMslxiHhxNtLkm/P3xz7nEtP4=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.30/go.mod h1:7PZq+wByqZAhlKK9/h2MluEhshw92C2wMngSKFx29rw=
 sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd h1:EDPBXCAspyGV4jQlpZSudPeMmr1bNJefnuqLsRAsHZo=
 sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd/go.mod h1:B8JuhiUyNFVKdsE8h686QcCxMaH6HrOAZj4vswFpcB0=
 sigs.k8s.io/structured-merge-diff/v4 v4.4.1 h1:150L+0vs/8DA78h1u02ooW1/fFq/Lwr+sGiqlzvrtq4=
