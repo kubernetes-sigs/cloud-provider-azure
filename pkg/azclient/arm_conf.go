@@ -22,6 +22,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/useragent"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
@@ -52,7 +53,10 @@ func GetAzCoreClientOption(armConfig *ARMClientConfig) (*policy.ClientOptions, e
 	azCoreClientConfig := utils.GetDefaultAzCoreClientOption()
 	if armConfig != nil {
 		//update user agent header
-		azCoreClientConfig.Telemetry.ApplicationID = strings.TrimSpace(armConfig.UserAgent)
+		if userAgent := strings.TrimSpace(armConfig.UserAgent); userAgent != "" {
+			azCoreClientConfig.Telemetry.Disabled = true
+			azCoreClientConfig.PerCallPolicies = append(azCoreClientConfig.PerCallPolicies, useragent.NewCustomUserAgentPolicy(userAgent))
+		}
 		//set cloud
 		cloudConfig, err := GetAzureCloudConfig(armConfig)
 		if err != nil {
