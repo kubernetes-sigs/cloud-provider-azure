@@ -24,7 +24,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
+	fnutil "sigs.k8s.io/cloud-provider-azure/pkg/util/collectionutil"
 )
 
 func TestIsPrefixesAllowAll(t *testing.T) {
