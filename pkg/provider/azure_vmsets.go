@@ -72,7 +72,7 @@ type VMSet interface {
 	EnsureHostInPool(service *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetName string) (string, string, string, *compute.VirtualMachineScaleSetVM, error)
 	// EnsureBackendPoolDeleted ensures the loadBalancer backendAddressPools deleted from the specified nodes.
 	EnsureBackendPoolDeleted(service *v1.Service, backendPoolIDs []string, vmSetName string, backendAddressPools *[]network.BackendAddressPool, deleteFromVMSet bool) (bool, error)
-	//EnsureBackendPoolDeletedFromVMSets ensures the loadBalancer backendAddressPools deleted from the specified VMSS/VMAS
+	// EnsureBackendPoolDeletedFromVMSets ensures the loadBalancer backendAddressPools deleted from the specified VMSS/VMAS
 	EnsureBackendPoolDeletedFromVMSets(vmSetNamesMap map[string]bool, backendPoolIDs []string) error
 
 	// AttachDisk attaches a disk to vm
@@ -111,4 +111,7 @@ type VMSet interface {
 
 	// DeleteCacheForNode removes the node entry from cache.
 	DeleteCacheForNode(nodeName string) error
+
+	// RefreshCaches invalidates and renew all related caches.
+	RefreshCaches(ctx context.Context) error
 }

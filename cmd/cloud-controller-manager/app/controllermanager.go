@@ -312,7 +312,7 @@ func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig, h *contr
 	)
 
 	if c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile != "" {
-		cloud, err = provider.NewCloudFromConfigFile(ctx, c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile, true)
+		cloud, err = provider.NewCloudFromConfigFile(ctx, c.ClientBuilder, c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile, true)
 		if err != nil {
 			klog.Fatalf("Cloud provider azure could not be initialized: %v", err)
 		}
@@ -358,7 +358,8 @@ func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig, h *contr
 
 // startControllers starts the cloud specific controller loops.
 func startControllers(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, stopCh <-chan struct{},
-	cloud cloudprovider.Interface, controllers map[string]initFunc, healthzHandler *controllerhealthz.MutableHealthzHandler) error {
+	cloud cloudprovider.Interface, controllers map[string]initFunc, healthzHandler *controllerhealthz.MutableHealthzHandler,
+) error {
 	// Initialize the cloud provider with a reference to the clientBuilder
 	cloud.Initialize(completedConfig.ClientBuilder, stopCh)
 	// Set the informer on the user cloud object
