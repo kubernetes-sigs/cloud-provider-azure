@@ -105,6 +105,34 @@ type ScaleSet struct {
 	lockMap *lockMap
 }
 
+// RefreshCaches invalidates and renew all related caches.
+func (ss *ScaleSet) RefreshCaches(ctx context.Context) error {
+	logger := klog.Background().WithName("ss.RefreshCaches")
+
+	var err error
+	ss.vmssCache, err = ss.newVMSSCache(ctx)
+	if err != nil {
+		logger.Error(err, "failed to create or refresh vmss cache")
+		return err
+	}
+
+	if !ss.DisableAvailabilitySetNodes || ss.EnableVmssFlexNodes {
+		ss.nonVmssUniformNodesCache, err = ss.newNonVmssUniformNodesCache()
+		if err != nil {
+			logger.Error(err, "failed to create or refresh nonVmssUniformNodes cache")
+			return err
+		}
+	}
+
+	ss.vmssVMCache, err = ss.newVMSSVirtualMachinesCache()
+	if err != nil {
+		logger.Error(err, "failed to create or refresh vmssVM cache")
+		return err
+	}
+
+	return nil
+}
+
 // newScaleSet creates a new ScaleSet.
 func newScaleSet(ctx context.Context, az *Cloud) (VMSet, error) {
 	if az.Config.VmssVirtualMachinesCacheTTLInSeconds == 0 {
@@ -128,20 +156,7 @@ func newScaleSet(ctx context.Context, az *Cloud) (VMSet, error) {
 		lockMap:         newLockMap(),
 	}
 
-	if !ss.DisableAvailabilitySetNodes || ss.EnableVmssFlexNodes {
-		ss.nonVmssUniformNodesCache, err = ss.newNonVmssUniformNodesCache()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	ss.vmssCache, err = ss.newVMSSCache(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	ss.vmssVMCache, err = ss.newVMSSVirtualMachinesCache()
-	if err != nil {
+	if err := ss.RefreshCaches(ctx); err != nil {
 		return nil, err
 	}
 
@@ -424,7 +439,6 @@ func (ss *ScaleSet) GetInstanceIDByNodeName(name string) (string, error) {
 // azure:///subscriptions/subsid/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/aks-agentpool-22126781-vmss/virtualMachines/1
 // /subscriptions/subsid/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/aks-agentpool-22126781-vmss/virtualMachines/k8s-agentpool-36841236-vmss_1
 func (ss *ScaleSet) GetNodeNameByProviderID(providerID string) (types.NodeName, error) {
-
 	vmManagementType, err := ss.getVMManagementTypeByProviderID(providerID, azcache.CacheReadTypeUnsafe)
 	if err != nil {
 		klog.Errorf("Failed to check VM management type: %v", err)
@@ -2094,7 +2108,6 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolIDs
 	}
 
 	return updated, nil
-
 }
 
 // GetNodeCIDRMaskByProviderID returns the node CIDR subnet mask by provider ID.
