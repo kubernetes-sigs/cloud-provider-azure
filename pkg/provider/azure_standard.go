@@ -189,7 +189,6 @@ func getProtocolsFromKubernetesProtocol(protocol v1.Protocol) (*network.Transpor
 	default:
 		return &transportProto, securityProto, &probeProto, fmt.Errorf("only TCP, UDP and SCTP are supported for Azure LoadBalancers")
 	}
-
 }
 
 // This returns the full identifier of the primary NIC for the given VM.
@@ -446,15 +445,24 @@ func (as *availabilitySet) newVMASCache() (azcache.Resource, error) {
 	return azcache.NewTimedCache(time.Duration(as.Config.AvailabilitySetsCacheTTLInSeconds)*time.Second, getter, as.Cloud.Config.DisableAPICallCache)
 }
 
+// RefreshCaches invalidates and renew all related caches.
+func (as *availabilitySet) RefreshCaches() error {
+	var err error
+	as.vmasCache, err = as.newVMASCache()
+	if err != nil {
+		klog.Errorf("as.RefreshCaches: failed to create or refresh VMAS cache: %s", err)
+		return err
+	}
+	return nil
+}
+
 // newStandardSet creates a new availabilitySet.
 func newAvailabilitySet(az *Cloud) (VMSet, error) {
 	as := &availabilitySet{
 		Cloud: az,
 	}
 
-	var err error
-	as.vmasCache, err = as.newVMASCache()
-	if err != nil {
+	if err := as.RefreshCaches(); err != nil {
 		return nil, err
 	}
 
@@ -1010,7 +1018,6 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(ctx context.Context, service
 				}
 			}
 		}
-
 	}
 	nicUpdaters := make([]func() error, 0)
 	allErrs := make([]error, 0)

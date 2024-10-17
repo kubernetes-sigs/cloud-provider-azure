@@ -37,11 +37,14 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
+	coordinationv1 "k8s.io/api/coordination/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
@@ -794,6 +797,118 @@ func TestEnsureLoadBalancerDeleted(t *testing.T) {
 	}
 }
 
+func TestEnsureLoadBalancerLock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	az := GetTestCloud(ctrl)
+	kubeClient := fake.NewSimpleClientset()
+	kubeClient.PrependReactor(
+		"get", "leases",
+		func(_ k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			return true, nil, errors.New("get lease failed")
+		})
+	az.KubeClient = kubeClient
+	az.azureResourceLocker = NewAzureResourceLocker(
+		az, "holder", "aks-managed-resource-locker", "kube-system", 900,
+	)
+
+	svc := getTestService("service", v1.ProtocolTCP, nil, false, 80)
+	_, err := az.EnsureLoadBalancer(context.Background(), testClusterName, &svc, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "get lease failed")
+	assert.Contains(t, err.Error(), "EnsureLoadBalancer failed due to fail to lock azure resources")
+
+	kubeClient = fake.NewSimpleClientset(&coordinationv1.Lease{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "aks-managed-resource-locker",
+			Namespace: "kube-system",
+		},
+		Spec: coordinationv1.LeaseSpec{
+			LeaseDurationSeconds: ptr.To[int32](900),
+		},
+	})
+	// update lease failed for the second time
+	count := 0
+	kubeClient.PrependReactor(
+		"update", "leases",
+		func(_ k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			count++
+			if count == 2 {
+				return true, nil, errors.New("update lease failed")
+			}
+			return false, nil, nil
+		})
+	az.KubeClient = kubeClient
+	az.azureResourceLocker = NewAzureResourceLocker(
+		az, "holder", "aks-managed-resource-locker", "kube-system", 900,
+	)
+	mockLBClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+	mockLBClient.EXPECT().List(gomock.Any(), gomock.Any()).
+		Return(nil, retry.NewError(false, errors.New("list lb failed")))
+
+	_, err = az.EnsureLoadBalancer(context.Background(), testClusterName, &svc, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "update lease failed")
+	assert.Contains(t, err.Error(), "list lb failed")
+}
+
+func TestEnsureLoadBalancerDeletedLock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	az := GetTestCloud(ctrl)
+	kubeClient := fake.NewSimpleClientset()
+	kubeClient.PrependReactor(
+		"get", "leases",
+		func(_ k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			return true, nil, errors.New("get lease failed")
+		})
+	az.KubeClient = kubeClient
+	az.azureResourceLocker = NewAzureResourceLocker(
+		az, "holder", "aks-managed-resource-locker", "kube-system", 900,
+	)
+
+	svc := getTestService("service", v1.ProtocolTCP, nil, false, 80)
+	err := az.EnsureLoadBalancerDeleted(context.Background(), testClusterName, &svc)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "get lease failed")
+	assert.Contains(t, err.Error(), "EnsureLoadBalancerDeleted failed due to fail to lock azure resources")
+
+	kubeClient = fake.NewSimpleClientset(&coordinationv1.Lease{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "aks-managed-resource-locker",
+			Namespace: "kube-system",
+		},
+		Spec: coordinationv1.LeaseSpec{
+			LeaseDurationSeconds: ptr.To[int32](900),
+		},
+	})
+	// update lease failed for the second time
+	count := 0
+	kubeClient.PrependReactor(
+		"update", "leases",
+		func(_ k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			count++
+			if count == 2 {
+				return true, nil, errors.New("update lease failed")
+			}
+			return false, nil, nil
+		})
+	az.KubeClient = kubeClient
+	az.azureResourceLocker = NewAzureResourceLocker(
+		az, "holder", "aks-managed-resource-locker", "kube-system", 900,
+	)
+	mockLBClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+	mockLBClient.EXPECT().List(gomock.Any(), gomock.Any()).
+		Return(nil, retry.NewError(false, errors.New("list lb failed")))
+
+	err = az.EnsureLoadBalancerDeleted(context.Background(), testClusterName, &svc)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "update lease failed")
+	assert.Contains(t, err.Error(), "list lb failed")
+}
+
 func TestServiceOwnsPublicIP(t *testing.T) {
 	tests := []struct {
 		desc                    string
@@ -1402,7 +1517,6 @@ func TestConvertIPTagMapToSlice(t *testing.T) {
 				ipTagSlice := *c.expected
 				return ptr.Deref(ipTagSlice[i].IPTagType, "") < ptr.Deref(ipTagSlice[j].IPTagType, "")
 			})
-
 		}
 
 		assert.Equal(t, c.expected, actual, "TestCase[%d]: %s", i, c.desc)
@@ -1489,7 +1603,6 @@ func TestGetserviceIPTagRequestForPublicIP(t *testing.T) {
 				ipTagSlice := *c.expected.IPTags
 				return ptr.Deref(ipTagSlice[i].IPTagType, "") < ptr.Deref(ipTagSlice[j].IPTagType, "")
 			})
-
 		}
 
 		assert.Equal(t, actual, c.expected, "TestCase[%d]: %s", i, c.desc)
@@ -3543,7 +3656,7 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 		},
 	}
 
-	//change to false to test that reconciliation will fix it (despite the fact that disable-tcp-reset was removed in 1.20)
+	// change to false to test that reconciliation will fix it (despite the fact that disable-tcp-reset was removed in 1.20)
 	(*slb5.LoadBalancerPropertiesFormat.LoadBalancingRules)[0].EnableTCPReset = ptr.To(false)
 	(*slb5.LoadBalancerPropertiesFormat.LoadBalancingRules)[1].EnableTCPReset = ptr.To(false)
 
@@ -4688,7 +4801,6 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 					}
 
 					return network.PublicIPAddress{}, &retry.Error{HTTPStatusCode: http.StatusNotFound}
-
 				})
 				deleter := mockPIPsClient.EXPECT().Delete(gomock.Any(), "rg", *pip.Name).Return(nil).AnyTimes()
 				deleter.Do(func(_ context.Context, _ string, publicIPAddressName string) *retry.Error {
@@ -4972,7 +5084,6 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			foundDNSLabelAnnotation: true,
 			isIPv6:                  false,
 			existingPIPs: []network.PublicIPAddress{{
-
 				Name: ptr.To("pip1"),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					DNSSettings: &network.PublicIPAddressDNSSettings{
@@ -5199,6 +5310,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 		})
 	}
 }
+
 func TestEnsurePublicIPExistsWithExtendedLocation(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -6211,7 +6323,8 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 			description: "reconcileFrontendIPConfigs should use the nil zones of the existing frontend",
 			service: getTestServiceWithAnnotation("test", map[string]string{
 				consts.ServiceAnnotationLoadBalancerInternalSubnet: "subnet",
-				consts.ServiceAnnotationLoadBalancerInternal:       consts.TrueAnnotationValue}, true, 80),
+				consts.ServiceAnnotationLoadBalancerInternal:       consts.TrueAnnotationValue,
+			}, true, 80),
 			existingFrontendIPConfigs: []network.FrontendIPConfiguration{
 				{
 					Name: ptr.To("atest1"),
@@ -6228,7 +6341,8 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 			description: "reconcileFrontendIPConfigs should use the non-nil zones of the existing frontend",
 			service: getTestServiceWithAnnotation("test", map[string]string{
 				consts.ServiceAnnotationLoadBalancerInternalSubnet: "subnet",
-				consts.ServiceAnnotationLoadBalancerInternal:       consts.TrueAnnotationValue}, true, 80),
+				consts.ServiceAnnotationLoadBalancerInternal:       consts.TrueAnnotationValue,
+			}, true, 80),
 			existingFrontendIPConfigs: []network.FrontendIPConfiguration{
 				{
 					Name: ptr.To("not-this-one"),
@@ -7197,7 +7311,8 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 									Operator: metav1.LabelSelectorOpIn,
 									Values:   []string{},
 								},
-							}},
+							},
+						},
 					},
 				},
 			},
@@ -7218,7 +7333,8 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 									Operator: metav1.LabelSelectorOpIn,
 									Values:   []string{},
 								},
-							}},
+							},
+						},
 					},
 				},
 			},
@@ -7670,7 +7786,6 @@ func TestReconcileMultipleStandardLoadBalancerConfigurations(t *testing.T) {
 			for lbConfigName, svcNames := range tc.expectedActiveServices {
 				assert.Equal(t, svcNames, activeServices[lbConfigName])
 			}
-
 		})
 	}
 }

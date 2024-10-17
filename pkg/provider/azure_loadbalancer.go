@@ -202,13 +202,12 @@ func (az *Cloud) reconcileService(ctx context.Context, clusterName string, servi
 // load balancer is not ready yet (e.g., it is still being provisioned) and
 // polling at a fixed rate is preferred over backing off exponentially in
 // order to minimize latency.
-func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
+func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (lbStatus *v1.LoadBalancerStatus, err error) {
 	// When a client updates the internal load balancer annotation,
 	// the service may be switched from an internal LB to a public one, or vice versa.
 	// Here we'll firstly ensure service do not lie in the opposite LB.
 	const Operation = "EnsureLoadBalancer"
 
-	var err error
 	ctx, span := trace.BeginReconcile(ctx, trace.DefaultTracer(), Operation, attributes.FeatureOfService(service)...)
 	defer func() { span.Observe(ctx, err) }()
 
@@ -223,6 +222,41 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 		isOperationSucceeded = false
 	)
 
+	if az.azureResourceLocker != nil {
+		err = az.azureResourceLocker.Lock(ctx)
+		if err != nil {
+			logger.Error(err, "failed to lock azure resources")
+			return nil, fmt.Errorf(
+				consts.AzureResourceLockFailedToLockErrorTemplate,
+				"EnsureLoadBalancer",
+				err,
+			)
+		}
+
+		defer func() {
+			unlockErr := az.azureResourceLocker.Unlock(ctx)
+			if unlockErr != nil {
+				unlockErr = fmt.Errorf(
+					consts.AzureResourceLockFailedToUnlockErrorTemplate,
+					"EnsureLoadBalancer",
+					consts.AzureResourceLockLeaseNamespace,
+					consts.AzureResourceLockLeaseName,
+					unlockErr,
+				)
+			}
+			if err == nil {
+				err = unlockErr
+			} else if unlockErr != nil {
+				err = fmt.Errorf(
+					consts.AzureResourceLockFailedToReconcileWithUnlockErrorTemplate,
+					"EnsureLoadBalancer",
+					err,
+					unlockErr,
+				)
+			}
+		}()
+	}
+
 	logger.V(5).Info("Starting", "service-spec", log.ValueAsMap(service))
 
 	defer func() {
@@ -234,7 +268,7 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 		}
 	}()
 
-	lbStatus, err := az.reconcileService(ctx, clusterName, service, nodes)
+	lbStatus, err = az.reconcileService(ctx, clusterName, service, nodes)
 	if err != nil {
 		return nil, err
 	}
@@ -315,6 +349,41 @@ func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, ser
 		return nil
 	}
 
+	if az.azureResourceLocker != nil {
+		err = az.azureResourceLocker.Lock(ctx)
+		if err != nil {
+			logger.Error(err, "failed to lock azure resources")
+			return fmt.Errorf(
+				consts.AzureResourceLockFailedToLockErrorTemplate,
+				"UpdateLoadBalancer",
+				err,
+			)
+		}
+
+		defer func() {
+			unlockErr := az.azureResourceLocker.Unlock(ctx)
+			if unlockErr != nil {
+				unlockErr = fmt.Errorf(
+					consts.AzureResourceLockFailedToUnlockErrorTemplate,
+					"UpdateLoadBalancer",
+					consts.AzureResourceLockLeaseNamespace,
+					consts.AzureResourceLockLeaseName,
+					unlockErr,
+				)
+			}
+			if err == nil {
+				err = unlockErr
+			} else if unlockErr != nil {
+				err = fmt.Errorf(
+					consts.AzureResourceLockFailedToReconcileWithUnlockErrorTemplate,
+					"UpdateLoadBalancer",
+					err,
+					unlockErr,
+				)
+			}
+		}()
+	}
+
 	_, err = az.reconcileService(ctx, clusterName, service, nodes)
 	if err != nil {
 		return err
@@ -332,10 +401,9 @@ func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, ser
 // doesn't exist even if some part of it is still laying around.
 // Implementations must treat the *v1.Service parameter as read-only and not modify it.
 // Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
-func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
+func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) (err error) {
 	const Operation = "EnsureLoadBalancerDeleted"
 
-	var err error
 	ctx, span := trace.BeginReconcile(ctx, trace.DefaultTracer(), Operation, attributes.FeatureOfService(service)...)
 	defer func() { span.Observe(ctx, err) }()
 
@@ -350,6 +418,40 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 		isOperationSucceeded = false
 	)
 	ctx = log.NewContext(ctx, logger)
+	if az.azureResourceLocker != nil {
+		err = az.azureResourceLocker.Lock(ctx)
+		if err != nil {
+			logger.Error(err, "failed to lock azure resources")
+			return fmt.Errorf(
+				consts.AzureResourceLockFailedToLockErrorTemplate,
+				"EnsureLoadBalancerDeleted",
+				err,
+			)
+		}
+
+		defer func() {
+			unlockErr := az.azureResourceLocker.Unlock(ctx)
+			if unlockErr != nil {
+				unlockErr = fmt.Errorf(
+					consts.AzureResourceLockFailedToUnlockErrorTemplate,
+					"EnsureLoadBalancerDeleted",
+					consts.AzureResourceLockLeaseNamespace,
+					consts.AzureResourceLockLeaseName,
+					unlockErr,
+				)
+			}
+			if err == nil {
+				err = unlockErr
+			} else if unlockErr != nil {
+				err = fmt.Errorf(
+					consts.AzureResourceLockFailedToReconcileWithUnlockErrorTemplate,
+					"EnsureLoadBalancerDeleted",
+					err,
+					unlockErr,
+				)
+			}
+		}()
+	}
 
 	logger.V(5).Info("Starting", "service-spec", log.ValueAsMap(service))
 	defer func() {
@@ -2211,8 +2313,7 @@ func (az *Cloud) recordExistingNodesOnLoadBalancers(clusterName string, lbs *[]n
 					if strings.EqualFold(trimSuffixIgnoreCase(
 						lbName, consts.InternalLoadBalancerNameSuffix,
 					), multiSLBConfig.Name) {
-						az.MultipleStandardLoadBalancerConfigurations[i].ActiveNodes =
-							utilsets.SafeInsert(multiSLBConfig.ActiveNodes, nodeNames...)
+						az.MultipleStandardLoadBalancerConfigurations[i].ActiveNodes = utilsets.SafeInsert(multiSLBConfig.ActiveNodes, nodeNames...)
 					}
 				}
 			}
@@ -2339,7 +2440,8 @@ func (az *Cloud) reconcileFrontendIPConfigs(
 	lb *network.LoadBalancer,
 	status *v1.LoadBalancerStatus,
 	wantLb bool,
-	lbFrontendIPConfigNames map[bool]string) ([]*network.FrontendIPConfiguration, []network.FrontendIPConfiguration, bool, error) {
+	lbFrontendIPConfigNames map[bool]string,
+) ([]*network.FrontendIPConfiguration, []network.FrontendIPConfiguration, bool, error) {
 	var err error
 	lbName := *lb.Name
 	serviceName := getServiceName(service)
@@ -2546,7 +2648,8 @@ func (az *Cloud) getFrontendZones(
 	fipConfig *network.FrontendIPConfiguration,
 	previousZone *[]string,
 	isFipChanged bool,
-	serviceName, lbFrontendIPConfigName string) error {
+	serviceName, lbFrontendIPConfigName string,
+) error {
 	if !isFipChanged { // fetch zone information from API for new frontends
 		// only add zone information for new internal frontend IP configurations for standard load balancer not deployed to an edge zone.
 		location := az.Location
@@ -2678,8 +2781,8 @@ func (az *Cloud) getExpectedLBRules(
 	lbFrontendIPConfigID string,
 	lbBackendPoolID string,
 	lbName string,
-	isIPv6 bool) ([]network.Probe, []network.LoadBalancingRule, error) {
-
+	isIPv6 bool,
+) ([]network.Probe, []network.LoadBalancingRule, error) {
 	var expectedRules []network.LoadBalancingRule
 	var expectedProbes []network.Probe
 
@@ -2728,7 +2831,7 @@ func (az *Cloud) getExpectedLBRules(
 		if err != nil {
 			return nil, nil, fmt.Errorf("error generate lb rule for ha mod loadbalancer. err: %w", err)
 		}
-		//Here we need to find one health probe rule for the HA lb rule.
+		// Here we need to find one health probe rule for the HA lb rule.
 		if nodeEndpointHealthprobe == nil {
 			// use user customized health probe rule if any
 			for _, port := range service.Spec.Ports {
@@ -2736,7 +2839,7 @@ func (az *Cloud) getExpectedLBRules(
 				if err != nil {
 					klog.V(2).ErrorS(err, "error occurred when buildHealthProbeRulesForPort", "service", service.Name, "namespace", service.Namespace,
 						"rule-name", lbRuleName, "port", port.Port)
-					//ignore error because we only need one correct rule
+					// ignore error because we only need one correct rule
 				}
 				if portprobe != nil {
 					props.Probe = &network.SubResource{
@@ -2833,7 +2936,8 @@ func (az *Cloud) getExpectedLBRules(
 func (az *Cloud) getExpectedLoadBalancingRulePropertiesForPort(
 	service *v1.Service,
 	lbFrontendIPConfigID string,
-	lbBackendPoolID string, servicePort v1.ServicePort, transportProto network.TransportProtocol) (*network.LoadBalancingRulePropertiesFormat, error) {
+	lbBackendPoolID string, servicePort v1.ServicePort, transportProto network.TransportProtocol,
+) (*network.LoadBalancingRulePropertiesFormat, error) {
 	var err error
 
 	loadDistribution := network.LoadDistributionDefault
@@ -2889,7 +2993,8 @@ func (az *Cloud) getExpectedLoadBalancingRulePropertiesForPort(
 func (az *Cloud) getExpectedHAModeLoadBalancingRuleProperties(
 	service *v1.Service,
 	lbFrontendIPConfigID string,
-	lbBackendPoolID string) (*network.LoadBalancingRulePropertiesFormat, error) {
+	lbBackendPoolID string,
+) (*network.LoadBalancingRulePropertiesFormat, error) {
 	props, err := az.getExpectedLoadBalancingRulePropertiesForPort(service, lbFrontendIPConfigID, lbBackendPoolID, v1.ServicePort{}, network.TransportProtocolAll)
 	if err != nil {
 		return nil, fmt.Errorf("error generate lb rule for ha mod loadbalancer. err: %w", err)

@@ -592,3 +592,16 @@ const (
 	VMPowerStateDeallocating = "deallocating"
 	VMPowerStateUnknown      = "unknown"
 )
+
+// Azure resource lock
+const (
+	AzureResourceLockHolderNameCloudControllerManager = "cloud-controller-manager"
+	AzureResourceLockLeaseName                        = "aks-managed-resource-locker"
+	AzureResourceLockLeaseNamespace                   = "kube-system"
+	AzureResourceLockLeaseDuration                    = int32(15 * 60)
+	AzureResourceLockPreviousHolderNameAnnotation     = "aks-managed-resource-locker-previous-holder"
+
+	AzureResourceLockFailedToLockErrorTemplate                = "%s failed due to fail to lock azure resources. This may because another component is trying to update azure resources, e.g., load balancers. This will be automatically retried by cloud provider exponentially: %w"
+	AzureResourceLockFailedToUnlockErrorTemplate              = "%s failed due to fail to unlock azure resources. This will be automatically retried by cloud provider exponentially, but can also be manually unlocked by removing the holder of the lease '%s/%s'. Before doing this, please be aware that this could lead to unexpected issues: %w"
+	AzureResourceLockFailedToReconcileWithUnlockErrorTemplate = "%s failed due to %s, and when unlocking azure resources another error happened: %w"
+)

@@ -34,7 +34,7 @@ type IMDSNodeProvider struct {
 
 // NewIMDSNodeProvider creates a new IMDSNodeProvider.
 func NewIMDSNodeProvider(ctx context.Context) *IMDSNodeProvider {
-	az, err := azureprovider.NewCloud(ctx, &azureprovider.Config{
+	az, err := azureprovider.NewCloud(ctx, nil, &azureprovider.Config{
 		UseInstanceMetadata: true,
 		VMType:              "vmss",
 	}, false)

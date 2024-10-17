@@ -37,7 +37,7 @@ type ARMNodeProvider struct {
 func NewARMNodeProvider(ctx context.Context, cloudConfigFilePath string) *ARMNodeProvider {
 	var err error
 	var az cloudprovider.Interface
-	az, err = azureprovider.NewCloudFromConfigFile(ctx, cloudConfigFilePath, false)
+	az, err = azureprovider.NewCloudFromConfigFile(ctx, nil, cloudConfigFilePath, false)
 	if err != nil {
 		klog.Fatalf("Failed to initialize Azure cloud provider: %v", err)
 	}
