@@ -611,7 +611,7 @@ func TestCheckAndApplyLocalServiceBackendPoolUpdates(t *testing.T) {
 			cloud.backendPoolUpdater = u
 			go cloud.backendPoolUpdater.run(ctx)
 
-			err := cloud.checkAndApplyLocalServiceBackendPoolUpdates(existingLB, &svc)
+			err := cloud.checkAndApplyLocalServiceBackendPoolUpdates(ctx, existingLB, &svc)
 			if tc.expectedErr != nil {
 				assert.Equal(t, tc.expectedErr, err)
 			} else {

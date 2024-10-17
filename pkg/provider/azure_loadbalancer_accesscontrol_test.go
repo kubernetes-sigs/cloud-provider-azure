@@ -84,7 +84,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(loadBalancer, nil).
 				Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -170,7 +170,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(loadBalancer, nil).
 				Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -255,7 +255,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(loadBalancer, nil).
 				Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -329,7 +329,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(loadBalancer, nil).
 				Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -410,7 +410,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(loadBalancer, nil).
 				Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -484,7 +484,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(loadBalancer, nil).
 				Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -567,7 +567,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(loadBalancer, nil).
 				Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -664,7 +664,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(loadBalancer, nil).
 				Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -746,7 +746,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(loadBalancer, nil).
 				Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -838,7 +838,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(loadBalancer, nil).
 				Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -905,7 +905,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(loadBalancer, nil).
 				Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -967,7 +967,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(loadBalancer, nil).
 				Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -1033,7 +1033,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(loadBalancer, nil).
 				Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -1117,7 +1117,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(loadBalancer, nil).
 				Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -1184,7 +1184,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(loadBalancer, nil).
 				Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -1263,7 +1263,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(loadBalancer, nil).
 				Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -1360,7 +1360,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(loadBalancer, nil).
 				Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -1543,7 +1543,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			Return(loadBalancer, nil).
 			Times(1)
 		loadBalancerBackendPool.EXPECT().
-			GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+			GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 			Return(
 				azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 				azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -1673,7 +1673,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			Return(loadBalancer, nil).
 			Times(1)
 		loadBalancerBackendPool.EXPECT().
-			GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+			GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 			Return(
 				azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 				azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -1873,7 +1873,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			Return(loadBalancer, nil).
 			Times(1)
 		loadBalancerBackendPool.EXPECT().
-			GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+			GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 			Return(
 				azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 				azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -2153,7 +2153,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					Return(loadBalancer, nil).
 					Times(1)
 				loadBalancerBackendPool.EXPECT().
-					GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+					GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 					Return(
 						azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 						azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -2435,7 +2435,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					Return(loadBalancer, nil).
 					Times(1)
 				loadBalancerBackendPool.EXPECT().
-					GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+					GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 					Return(
 						azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 						azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -2623,7 +2623,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			Return(loadBalancer, nil).
 			Times(1)
 		loadBalancerBackendPool.EXPECT().
-			GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+			GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 			Return(
 				azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 				azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -2805,7 +2805,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			Return(loadBalancer, nil).
 			Times(1)
 		loadBalancerBackendPool.EXPECT().
-			GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+			GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 			Return(
 				azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 				azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -3057,7 +3057,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(loadBalancer, nil).
 				Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -3092,7 +3092,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(loadBalancer, nil).
 				Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),

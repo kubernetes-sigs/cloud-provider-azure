@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -137,7 +138,7 @@ func TestGetPlatformSubFaultDomain(t *testing.T) {
 				t.Errorf("Test [%s] unexpected error: %v", testCase.description, err)
 			}
 
-			fd, err := cloud.GetPlatformSubFaultDomain()
+			fd, err := cloud.GetPlatformSubFaultDomain(context.TODO())
 			if testCase.expectedErr != nil {
 				assert.Equal(t, testCase.expectedErr, err)
 			} else {

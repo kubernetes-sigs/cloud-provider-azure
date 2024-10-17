@@ -37,7 +37,7 @@ import (
 
 // AttachDisk attaches a disk to vm
 func (as *availabilitySet) AttachDisk(ctx context.Context, nodeName types.NodeName, diskMap map[string]*AttachDiskOptions) error {
-	vm, err := as.getVirtualMachine(nodeName, azcache.CacheReadTypeDefault)
+	vm, err := as.getVirtualMachine(ctx, nodeName, azcache.CacheReadTypeDefault)
 	if err != nil {
 		return err
 	}
@@ -120,7 +120,7 @@ func (as *availabilitySet) AttachDisk(ctx context.Context, nodeName types.NodeNa
 	return as.WaitForUpdateResult(ctx, future, nodeName, "attach_disk")
 }
 
-func (as *availabilitySet) DeleteCacheForNode(nodeName string) error {
+func (as *availabilitySet) DeleteCacheForNode(_ context.Context, nodeName string) error {
 	err := as.vmCache.Delete(nodeName)
 	if err == nil {
 		klog.V(2).Infof("DeleteCacheForNode(%s) successfully", nodeName)
@@ -144,7 +144,7 @@ func (as *availabilitySet) WaitForUpdateResult(ctx context.Context, future *azur
 	}
 
 	// clean node cache first and then update cache
-	_ = as.DeleteCacheForNode(vmName)
+	_ = as.DeleteCacheForNode(ctx, vmName)
 	if result != nil && result.VirtualMachineProperties != nil {
 		// if we have an updated result, we update the vmss vm cache
 		as.updateCache(vmName, result)
@@ -154,7 +154,7 @@ func (as *availabilitySet) WaitForUpdateResult(ctx context.Context, future *azur
 
 // DetachDisk detaches a disk from VM
 func (as *availabilitySet) DetachDisk(ctx context.Context, nodeName types.NodeName, diskMap map[string]string, forceDetach bool) error {
-	vm, err := as.getVirtualMachine(nodeName, azcache.CacheReadTypeDefault)
+	vm, err := as.getVirtualMachine(ctx, nodeName, azcache.CacheReadTypeDefault)
 	if err != nil {
 		// if host doesn't exist, no need to detach
 		klog.Warningf("azureDisk - cannot find node %s, skip detaching disk list(%s)", nodeName, diskMap)
@@ -216,7 +216,7 @@ func (as *availabilitySet) DetachDisk(ctx context.Context, nodeName types.NodeNa
 	var rerr *retry.Error
 	defer func() {
 		// invalidate the cache right after updating
-		_ = as.DeleteCacheForNode(vmName)
+		_ = as.DeleteCacheForNode(ctx, vmName)
 
 		// update the cache with the updated result only if its not nil
 		// and contains the VirtualMachineProperties
@@ -273,8 +273,8 @@ func (as *availabilitySet) updateCache(nodeName string, vm *compute.VirtualMachi
 }
 
 // GetDataDisks gets a list of data disks attached to the node.
-func (as *availabilitySet) GetDataDisks(nodeName types.NodeName, crt azcache.AzureCacheReadType) ([]*armcompute.DataDisk, *string, error) {
-	vm, err := as.getVirtualMachine(nodeName, crt)
+func (as *availabilitySet) GetDataDisks(ctx context.Context, nodeName types.NodeName, crt azcache.AzureCacheReadType) ([]*armcompute.DataDisk, *string, error) {
+	vm, err := as.getVirtualMachine(ctx, nodeName, crt)
 	if err != nil {
 		return nil, nil, err
 	}

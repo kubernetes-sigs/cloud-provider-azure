@@ -36,11 +36,11 @@ import (
 )
 
 // GetVirtualMachineWithRetry invokes az.getVirtualMachine with exponential backoff retry
-func (az *Cloud) GetVirtualMachineWithRetry(name types.NodeName, crt azcache.AzureCacheReadType) (compute.VirtualMachine, error) {
+func (az *Cloud) GetVirtualMachineWithRetry(ctx context.Context, name types.NodeName, crt azcache.AzureCacheReadType) (compute.VirtualMachine, error) {
 	var machine compute.VirtualMachine
 	var retryErr error
 	err := wait.ExponentialBackoff(az.RequestBackoff(), func() (bool, error) {
-		machine, retryErr = az.getVirtualMachine(name, crt)
+		machine, retryErr = az.getVirtualMachine(ctx, name, crt)
 		if errors.Is(retryErr, cloudprovider.InstanceNotFound) {
 			return true, cloudprovider.InstanceNotFound
 		}
@@ -58,10 +58,7 @@ func (az *Cloud) GetVirtualMachineWithRetry(name types.NodeName, crt azcache.Azu
 }
 
 // ListVirtualMachines invokes az.VirtualMachinesClient.List with exponential backoff retry
-func (az *Cloud) ListVirtualMachines(resourceGroup string) ([]compute.VirtualMachine, error) {
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
-
+func (az *Cloud) ListVirtualMachines(ctx context.Context, resourceGroup string) ([]compute.VirtualMachine, error) {
 	allNodes, rerr := az.VirtualMachinesClient.List(ctx, resourceGroup)
 	if rerr != nil {
 		klog.Errorf("VirtualMachinesClient.List(%v) failure with err=%v", resourceGroup, rerr)
@@ -117,15 +114,13 @@ func (az *Cloud) GetIPForMachineWithRetry(ctx context.Context, name types.NodeNa
 }
 
 func (az *Cloud) newVMCache() (azcache.Resource, error) {
-	getter := func(key string) (interface{}, error) {
+	getter := func(ctx context.Context, key string) (interface{}, error) {
 		// Currently InstanceView request are used by azure_zones, while the calls come after non-InstanceView
 		// request. If we first send an InstanceView request and then a non InstanceView request, the second
 		// request will still hit throttling. This is what happens now for cloud controller manager: In this
 		// case we do get instance view every time to fulfill the azure_zones requirement without hitting
 		// throttling.
 		// Consider adding separate parameter for controlling 'InstanceView' once node update issue #56276 is fixed
-		ctx, cancel := getContextWithCancel()
-		defer cancel()
 
 		resourceGroup, err := az.GetNodeResourceGroup(key)
 		if err != nil {
@@ -161,9 +156,9 @@ func (az *Cloud) newVMCache() (azcache.Resource, error) {
 // getVirtualMachine calls 'VirtualMachinesClient.Get' with a timed cache
 // The service side has throttling control that delays responses if there are multiple requests onto certain vm
 // resource request in short period.
-func (az *Cloud) getVirtualMachine(nodeName types.NodeName, crt azcache.AzureCacheReadType) (vm compute.VirtualMachine, err error) {
+func (az *Cloud) getVirtualMachine(ctx context.Context, nodeName types.NodeName, crt azcache.AzureCacheReadType) (vm compute.VirtualMachine, err error) {
 	vmName := string(nodeName)
-	cachedVM, err := az.vmCache.Get(vmName, crt)
+	cachedVM, err := az.vmCache.Get(ctx, vmName, crt)
 	if err != nil {
 		return vm, err
 	}
@@ -176,12 +171,12 @@ func (az *Cloud) getVirtualMachine(nodeName types.NodeName, crt azcache.AzureCac
 	return *(cachedVM.(*compute.VirtualMachine)), nil
 }
 
-func (az *Cloud) getRouteTable(crt azcache.AzureCacheReadType) (routeTable network.RouteTable, exists bool, err error) {
+func (az *Cloud) getRouteTable(ctx context.Context, crt azcache.AzureCacheReadType) (routeTable network.RouteTable, exists bool, err error) {
 	if len(az.RouteTableName) == 0 {
 		return routeTable, false, fmt.Errorf("route table name is not configured")
 	}
 
-	cachedRt, err := az.rtCache.GetWithDeepCopy(az.RouteTableName, crt)
+	cachedRt, err := az.rtCache.GetWithDeepCopy(ctx, az.RouteTableName, crt)
 	if err != nil {
 		return routeTable, false, err
 	}

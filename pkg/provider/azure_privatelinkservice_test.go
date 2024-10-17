@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"testing"
@@ -351,7 +352,7 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			if test.expectedPLSDelete {
 				mockPLSsClient.EXPECT().Delete(gomock.Any(), "rg", "testpls").Return(nil).Times(1)
 			}
-			err := az.reconcilePrivateLinkService(clusterName, &service, fipConfig, test.wantPLS)
+			err := az.reconcilePrivateLinkService(context.TODO(), clusterName, &service, fipConfig, test.wantPLS)
 			assert.Equal(t, test.expectedError, err != nil)
 		})
 	}

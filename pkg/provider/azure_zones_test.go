@@ -274,7 +274,7 @@ func TestSyncRegionZonesMap(t *testing.T) {
 			mockZoneClient := az.ZoneClient.(*mockzoneclient.MockInterface)
 			mockZoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(testCase.expectedZones, testCase.getZonesErr)
 
-			err := az.syncRegionZonesMap()
+			err := az.syncRegionZonesMap(context.TODO())
 			if err != nil {
 				assert.EqualError(t, testCase.expectedErr, err.Error())
 			}
@@ -311,7 +311,7 @@ func TestGetRegionZonesBackoff(t *testing.T) {
 			mockZoneClient := az.ZoneClient.(*mockzoneclient.MockInterface)
 			mockZoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(testCase.expectedZones, testCase.getZonesErr)
 
-			_, err := az.getRegionZonesBackoff("eastus2")
+			_, err := az.getRegionZonesBackoff(context.TODO(), "eastus2")
 			if err != nil {
 				assert.EqualError(t, testCase.expectedErr, err.Error())
 			}
