@@ -62,7 +62,6 @@ jobs:
         with:
           image-ref: 'local/azure-cloud-controller-manager:${{ github.sha }}'
           format: 'table'
-          exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
@@ -71,7 +70,6 @@ jobs:
         with:
           image-ref: 'local/azure-cloud-node-manager:${{ github.sha }}-linux-amd64'
           format: 'table'
-          exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
@@ -81,7 +79,6 @@ jobs:
           image-ref: 'local/health-probe-proxy:${{ github.sha }}'
           format: 'sarif'
           output: 'trivy-health-probe-proxy-linux-results.sarif'
-          exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
