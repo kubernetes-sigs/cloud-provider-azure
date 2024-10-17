@@ -59,9 +59,10 @@ type CredentialProvider interface {
 
 // acrProvider implements the credential provider interface for Azure Container Registry.
 type acrProvider struct {
-	config      *providerconfig.AzureAuthConfig
-	environment *azclient.Environment
-	credential  azcore.TokenCredential
+	config         *providerconfig.AzureAuthConfig
+	environment    *azclient.Environment
+	credential     azcore.TokenCredential
+	registryMirror map[string]string // Registry mirror relation: source registry -> target registry
 }
 
 func NewAcrProvider(config *providerconfig.AzureAuthConfig, environment *azclient.Environment, credential azcore.TokenCredential) CredentialProvider {
@@ -73,7 +74,7 @@ func NewAcrProvider(config *providerconfig.AzureAuthConfig, environment *azclien
 }
 
 // NewAcrProvider creates a new instance of the ACR provider.
-func NewAcrProviderFromConfig(configFile string) (CredentialProvider, error) {
+func NewAcrProviderFromConfig(configFile string, registryMirrorStr string) (CredentialProvider, error) {
 	if len(configFile) == 0 {
 		return nil, errors.New("no azure credential file is provided")
 	}
@@ -118,15 +119,16 @@ func NewAcrProviderFromConfig(configFile string) (CredentialProvider, error) {
 	}
 
 	return &acrProvider{
-		config:      config,
-		credential:  managedIdentityCredential,
-		environment: &envConfig,
+		config:         config,
+		credential:     managedIdentityCredential,
+		environment:    &envConfig,
+		registryMirror: parseRegistryMirror(registryMirrorStr),
 	}, nil
 }
 
 func (a *acrProvider) GetCredentials(ctx context.Context, image string, _ []string) (*v1.CredentialProviderResponse, error) {
-	loginServer := a.parseACRLoginServerFromImage(image)
-	if loginServer == "" {
+	targetloginServer, sourceloginServer := a.parseACRLoginServerFromImage(image)
+	if targetloginServer == "" {
 		klog.V(2).Infof("image(%s) is not from ACR, return empty authentication", image)
 		return &v1.CredentialProviderResponse{
 			CacheKeyType:  v1.RegistryPluginCacheKeyType,
@@ -148,15 +150,19 @@ func (a *acrProvider) GetCredentials(ctx context.Context, image string, _ []stri
 	}
 
 	if a.config.UseManagedIdentityExtension {
-		username, password, err := a.getFromACR(ctx, loginServer)
+		username, password, err := a.getFromACR(ctx, targetloginServer)
 		if err != nil {
-			klog.Errorf("error getting credentials from ACR for %s: %s", loginServer, err)
+			klog.Errorf("error getting credentials from ACR for %s: %s", targetloginServer, err)
 			return nil, err
 		}
 
-		response.Auth[loginServer] = v1.AuthConfig{
+		authConfig := v1.AuthConfig{
 			Username: username,
 			Password: password,
+		}
+		response.Auth[targetloginServer] = authConfig
+		if sourceloginServer != "" {
+			response.Auth[sourceloginServer] = authConfig
 		}
 	} else {
 		// Add our entry for each of the supported container registry URLs
@@ -227,13 +233,16 @@ func (a *acrProvider) getFromACR(ctx context.Context, loginServer string) (strin
 	return dockerTokenLoginUsernameGUID, registryRefreshToken, nil
 }
 
-// parseACRLoginServerFromImage takes image as parameter and returns login server of it.
-// Parameter `image` is expected in following format: foo.azurecr.io/bar/imageName:version
+// parseACRLoginServerFromImage inputs an image URL and outputs login servers of target registry and source registry if --registry-mirror is set.
+// Input is expected in following format: foo.azurecr.io/bar/imageName:version
 // If the provided image is not an acr image, this function will return an empty string.
-func (a *acrProvider) parseACRLoginServerFromImage(image string) string {
-	match := acrRE.FindAllString(image, -1)
+func (a *acrProvider) parseACRLoginServerFromImage(image string) (string, string) {
+	targetImage, sourceRegistry := a.processImageWithRegistryMirror(image)
+
+	match := acrRE.FindAllString(targetImage, -1)
 	if len(match) == 1 {
-		return match[0]
+		targetRegistry := match[0]
+		return targetRegistry, sourceRegistry
 	}
 
 	// handle the custom cloud case
@@ -241,13 +250,42 @@ func (a *acrProvider) parseACRLoginServerFromImage(image string) string {
 		cloudAcrSuffix := a.environment.ContainerRegistryDNSSuffix
 		cloudAcrSuffixLength := len(cloudAcrSuffix)
 		if cloudAcrSuffixLength > 0 {
-			customAcrSuffixIndex := strings.Index(image, cloudAcrSuffix)
+			customAcrSuffixIndex := strings.Index(targetImage, cloudAcrSuffix)
 			if customAcrSuffixIndex != -1 {
 				endIndex := customAcrSuffixIndex + cloudAcrSuffixLength
-				return image[0:endIndex]
+				return targetImage[0:endIndex], sourceRegistry
 			}
 		}
 	}
 
-	return ""
+	return "", ""
+}
+
+// With acrProvider registry mirror, e.g. {"mcr.microsoft.com": "abc.azurecr.io"}
+// processImageWithRegistryMirror input format: "mcr.microsoft.com/bar/image:version"
+// output format: "abc.azurecr.io/bar/image:version", "mcr.microsoft.com"
+func (a *acrProvider) processImageWithRegistryMirror(image string) (string, string) {
+	for sourceRegistry, targetRegistry := range a.registryMirror {
+		if strings.HasPrefix(image, sourceRegistry) {
+			return strings.Replace(image, sourceRegistry, targetRegistry, 1), sourceRegistry
+		}
+	}
+	return image, ""
+}
+
+// parseRegistryMirror input format: "--registry-mirror=aaa:bbb,ccc:ddd"
+// output format: map[string]string{"aaa": "bbb", "ccc": "ddd"}
+func parseRegistryMirror(registryMirrorStr string) map[string]string {
+	registryMirror := map[string]string{}
+
+	registryMirrorStr = strings.ReplaceAll(registryMirrorStr, " ", "")
+	for _, mapping := range strings.Split(registryMirrorStr, ",") {
+		parts := strings.Split(mapping, ":")
+		if len(parts) != 2 {
+			klog.Errorf("Invalid registry mirror format: %s", mapping)
+			continue
+		}
+		registryMirror[parts[0]] = parts[1]
+	}
+	return registryMirror
 }

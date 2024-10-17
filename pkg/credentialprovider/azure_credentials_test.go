@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -137,7 +138,7 @@ func TestGetCredentialsConfig(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Unexpected error when closing temp file: %v", err)
 		}
-		provider, err := NewAcrProviderFromConfig(configFile.Name())
+		provider, err := NewAcrProviderFromConfig(configFile.Name(), "")
 		if err != nil && !test.expectError {
 			t.Fatalf("Unexpected error when creating new acr provider: %v", err)
 		}
@@ -160,6 +161,53 @@ func TestGetCredentialsConfig(t *testing.T) {
 
 		assert.NotNil(t, credResponse)
 		assert.Equal(t, test.expectedCredsLength, len(credResponse.Auth), "TestCase[%d]: %s", i, test.desc)
+	}
+}
+
+func TestProcessImageWithMirrorMapping(t *testing.T) {
+	configStr := `
+	{
+	    "aadClientId": "foo",
+	    "aadClientSecret": "bar"
+	}`
+
+	configFile, err := os.CreateTemp(".", "config.json")
+	assert.Nilf(t, err, "Unexpected error when creating temp file")
+	defer os.Remove(configFile.Name())
+	_, err = configFile.WriteString(configStr)
+	assert.Nilf(t, err, "Unexpected error when writing to temp file")
+	assert.Nilf(t, configFile.Close(), "Unexpected error when closing temp file")
+
+	provider, err := NewAcrProviderFromConfig(configFile.Name(), "mcr.microsoft.com:abc.azurecr.io")
+	assert.Nilf(t, err, "Unexpected error when creating new acr provider")
+	acrProvider := provider.(*acrProvider)
+
+	testcases := []struct {
+		description               string
+		image                     string
+		expectedLoginServer       string
+		expectedLoginServerMirror string
+	}{
+		{
+			description:               "image in registry mirror map",
+			image:                     "mcr.microsoft.com/bar/image:version",
+			expectedLoginServer:       "abc.azurecr.io",
+			expectedLoginServerMirror: "mcr.microsoft.com",
+		},
+		{
+			description:               "image not in registry mirror map",
+			image:                     "foo.azurecr.io/bar/image:version",
+			expectedLoginServer:       "foo.azurecr.io",
+			expectedLoginServerMirror: "",
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.description, func(t *testing.T) {
+			targetloginServer, sourceloginServer := acrProvider.parseACRLoginServerFromImage(test.image)
+			assert.Equal(t, targetloginServer, test.expectedLoginServer)
+			assert.Equal(t, sourceloginServer, test.expectedLoginServerMirror)
+		})
 	}
 }
 
@@ -215,8 +263,48 @@ func TestParseACRLoginServerFromImage(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		if loginServer := provider.parseACRLoginServerFromImage(test.image); loginServer != test.expected {
-			t.Errorf("function parseACRLoginServerFromImage returns \"%s\" for image %s, expected \"%s\"", loginServer, test.image, test.expected)
-		}
+		t.Run(test.image, func(t *testing.T) {
+			targetloginServer, _ := provider.parseACRLoginServerFromImage(test.image)
+			assert.Equal(t, targetloginServer, test.expected)
+		})
+	}
+}
+
+func TestProcessMirrorMapping(t *testing.T) {
+	testcases := []struct {
+		description      string
+		mirrorMappingStr string
+		expected         map[string]string
+	}{
+		{
+			"multiple",
+			"aaa:bbb,ccc:ddd",
+			map[string]string{
+				"aaa": "bbb",
+				"ccc": "ddd",
+			},
+		},
+		{
+			"multiple with some spaces",
+			"aaa: bbb, ccc:ddd",
+			map[string]string{
+				"aaa": "bbb",
+				"ccc": "ddd",
+			},
+		},
+		{
+			"single",
+			"aaa:bbb",
+			map[string]string{
+				"aaa": "bbb",
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.description, func(t *testing.T) {
+			result := parseRegistryMirror(tc.mirrorMappingStr)
+			assert.True(t, reflect.DeepEqual(result, tc.expected))
+		})
 	}
 }
