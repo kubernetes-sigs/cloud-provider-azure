@@ -80,6 +80,7 @@ import (
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	ratelimitconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/taints"
@@ -423,10 +424,10 @@ type Cloud struct {
 	routeUpdater       batchProcessor
 	backendPoolUpdater batchProcessor
 
-	vmCache  azcache.Resource
-	lbCache  azcache.Resource
-	nsgCache azcache.Resource
-	rtCache  azcache.Resource
+	vmCache azcache.Resource
+	lbCache azcache.Resource
+	nsgRepo securitygroup.Repository
+	rtCache azcache.Resource
 	// public ip cache
 	// key: [resourceGroupName]
 	// Value: sync.Map of [pipName]*PublicIPAddress
@@ -727,8 +728,16 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 		if err != nil {
 			return err
 		}
-	}
 
+		networkClientFactory := az.NetworkClientFactory
+		if networkClientFactory == nil {
+			networkClientFactory = az.ComputeClientFactory
+		}
+		az.nsgRepo, err = securitygroup.NewSecurityGroupRepo(az.SecurityGroupResourceGroup, az.SecurityGroupName, az.NsgCacheTTLInSeconds, az.DisableAPICallCache, networkClientFactory.GetSecurityGroupClient())
+		if err != nil {
+			return err
+		}
+	}
 	err = az.initCaches()
 	if err != nil {
 		return err
@@ -837,11 +846,6 @@ func (az *Cloud) initCaches() (err error) {
 	}
 
 	az.lbCache, err = az.newLBCache()
-	if err != nil {
-		return err
-	}
-
-	az.nsgCache, err = az.newNSGCache()
 	if err != nil {
 		return err
 	}
