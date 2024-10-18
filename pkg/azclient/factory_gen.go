@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobservicepropertiesclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileservicepropertiesclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileshareclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/identityclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
@@ -72,6 +73,7 @@ type ClientFactoryImpl struct {
 	blobservicepropertiesclientInterface    blobservicepropertiesclient.Interface
 	deploymentclientInterface               deploymentclient.Interface
 	diskclientInterface                     sync.Map
+	fileservicepropertiesclientInterface    fileservicepropertiesclient.Interface
 	fileshareclientInterface                sync.Map
 	identityclientInterface                 identityclient.Interface
 	interfaceclientInterface                interfaceclient.Interface
@@ -150,6 +152,12 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 
 	//initialize diskclient
 	_, err = factory.GetDiskClientForSub(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize fileservicepropertiesclient
+	factory.fileservicepropertiesclientInterface, err = factory.createFileServicePropertiesClient(config.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
@@ -505,6 +513,25 @@ func (factory *ClientFactoryImpl) GetDiskClientForSub(subscriptionID string) (di
 	}
 	factory.diskclientInterface.Store(strings.ToLower(subscriptionID), clientImp)
 	return clientImp.(diskclient.Interface), nil
+}
+
+func (factory *ClientFactoryImpl) createFileServicePropertiesClient(subscription string) (fileservicepropertiesclient.Interface, error) {
+	//initialize fileservicepropertiesclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return fileservicepropertiesclient.New(subscription, factory.cred, options)
+}
+
+func (factory *ClientFactoryImpl) GetFileServicePropertiesClient() fileservicepropertiesclient.Interface {
+	return factory.fileservicepropertiesclientInterface
 }
 
 func (factory *ClientFactoryImpl) createFileShareClient(subscription string) (fileshareclient.Interface, error) {

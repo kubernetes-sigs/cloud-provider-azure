@@ -21,7 +21,7 @@ require (
 	github.com/onsi/gomega v1.34.2
 	go.opentelemetry.io/otel v1.31.0
 	go.opentelemetry.io/otel/metric v1.31.0
-	go.uber.org/mock v0.4.0
+	go.uber.org/mock v0.5.0
 	golang.org/x/crypto v0.28.0
 	golang.org/x/sync v0.8.0
 	golang.org/x/time v0.7.0
