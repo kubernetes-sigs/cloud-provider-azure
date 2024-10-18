@@ -41,10 +41,8 @@ import (
 	vmutil "sigs.k8s.io/cloud-provider-azure/pkg/util/vm"
 )
 
-var (
-	// ErrorVmssIDIsEmpty indicates the vmss id is empty.
-	ErrorVmssIDIsEmpty = errors.New("VMSS ID is empty")
-)
+// ErrorVmssIDIsEmpty indicates the vmss id is empty.
+var ErrorVmssIDIsEmpty = errors.New("VMSS ID is empty")
 
 // FlexScaleSet implements VMSet interface for Azure Flexible VMSS.
 type FlexScaleSet struct {
@@ -59,6 +57,23 @@ type FlexScaleSet struct {
 	lockMap *LockMap
 }
 
+// RefreshCaches invalidates and renew all related caches.
+func (fs *FlexScaleSet) RefreshCaches() error {
+	logger := klog.Background().WithName("fs.RefreshCaches")
+	var err error
+	fs.vmssFlexCache, err = fs.newVmssFlexCache()
+	if err != nil {
+		logger.Error(err, "failed to create or refresh vmssFlexCache")
+		return err
+	}
+	fs.vmssFlexVMCache, err = fs.newVmssFlexVMCache()
+	if err != nil {
+		logger.Error(err, "failed to create or refresh vmssFlexVMCache")
+		return err
+	}
+	return nil
+}
+
 func newFlexScaleSet(az *Cloud) (VMSet, error) {
 	fs := &FlexScaleSet{
 		Cloud:                    az,
@@ -67,13 +82,7 @@ func newFlexScaleSet(az *Cloud) (VMSet, error) {
 		lockMap:                  newLockMap(),
 	}
 
-	var err error
-	fs.vmssFlexCache, err = fs.newVmssFlexCache()
-	if err != nil {
-		return nil, err
-	}
-	fs.vmssFlexVMCache, err = fs.newVmssFlexVMCache()
-	if err != nil {
+	if err := fs.RefreshCaches(); err != nil {
 		return nil, err
 	}
 
@@ -97,7 +106,6 @@ func (fs *FlexScaleSet) getNodeVmssFlexName(ctx context.Context, nodeName string
 		return "", err
 	}
 	return vmssFlexName, nil
-
 }
 
 // GetNodeVMSetName returns the availability set or vmss name by the node name.
@@ -195,7 +203,6 @@ func (fs *FlexScaleSet) GetInstanceIDByNodeName(ctx context.Context, name string
 		return "", err
 	}
 	return convertedResourceID, nil
-
 }
 
 // GetInstanceTypeByNodeName gets the instance type by node name.
@@ -339,7 +346,6 @@ func (fs *FlexScaleSet) GetIPByNodeName(ctx context.Context, name string) (strin
 	}
 
 	return privateIP, publicIP, nil
-
 }
 
 // GetPrivateIPsByNodeName returns a slice of all private ips assigned to node (ipv6 and ipv4)
@@ -394,7 +400,6 @@ func (fs *FlexScaleSet) getNodeInformationByIPConfigurationID(ctx context.Contex
 	}
 
 	vmssFlexName, err := fs.getNodeVmssFlexName(ctx, nodeName)
-
 	if err != nil {
 		klog.Errorf("Unable to get the vmss flex name by node name %s: %v", vmName, err)
 		return "", "", "", err
@@ -545,7 +550,6 @@ func (fs *FlexScaleSet) EnsureHostInPool(ctx context.Context, service *v1.Servic
 	}
 
 	return nodeResourceGroup, vmssFlexName, name, nil, nil
-
 }
 
 func (fs *FlexScaleSet) ensureVMSSFlexInPool(ctx context.Context, _ *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetNameOfLB string) error {
@@ -910,7 +914,6 @@ func (fs *FlexScaleSet) EnsureBackendPoolDeleted(ctx context.Context, service *v
 					continue
 				}
 			}
-
 		}
 	}
 
@@ -936,7 +939,6 @@ func (fs *FlexScaleSet) EnsureBackendPoolDeleted(ctx context.Context, service *v
 
 	isOperationSucceeded = true
 	return nicUpdated, nil
-
 }
 
 func (fs *FlexScaleSet) ensureBackendPoolDeletedFromNode(ctx context.Context, vmssFlexVMNameMap map[string]string, backendPoolIDs []string) (bool, error) {

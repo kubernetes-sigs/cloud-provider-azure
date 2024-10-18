@@ -448,10 +448,12 @@ type Cloud struct {
 	multipleStandardLoadBalancersActiveNodesLock    sync.Mutex
 	localServiceNameToServiceInfoMap                sync.Map
 	endpointSlicesCache                             sync.Map
+
+	azureResourceLocker *AzureResourceLocker
 }
 
 // NewCloud returns a Cloud with initialized clients
-func NewCloud(ctx context.Context, config *Config, callFromCCM bool) (cloudprovider.Interface, error) {
+func NewCloud(ctx context.Context, clientBuilder cloudprovider.ControllerClientBuilder, config *Config, callFromCCM bool) (cloudprovider.Interface, error) {
 	az := &Cloud{
 		nodeNames:                  utilsets.NewString(),
 		nodeZones:                  map[string]*utilsets.IgnoreCaseSet{},
@@ -472,10 +474,22 @@ func NewCloud(ctx context.Context, config *Config, callFromCCM bool) (cloudprovi
 	if az.lockMap == nil {
 		az.lockMap = newLockMap()
 	}
+
+	if clientBuilder != nil {
+		az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
+	}
+	az.azureResourceLocker = NewAzureResourceLocker(
+		az,
+		consts.AzureResourceLockHolderNameCloudControllerManager,
+		consts.AzureResourceLockLeaseName,
+		consts.AzureResourceLockLeaseNamespace,
+		consts.AzureResourceLockLeaseDuration,
+	)
+
 	return az, nil
 }
 
-func NewCloudFromConfigFile(ctx context.Context, configFilePath string, calFromCCM bool) (cloudprovider.Interface, error) {
+func NewCloudFromConfigFile(ctx context.Context, clientBuilder cloudprovider.ControllerClientBuilder, configFilePath string, calFromCCM bool) (cloudprovider.Interface, error) {
 	var (
 		cloud cloudprovider.Interface
 		err   error
@@ -496,8 +510,7 @@ func NewCloudFromConfigFile(ctx context.Context, configFilePath string, calFromC
 			klog.Fatalf("Failed to parse Azure cloud provider config: %v", err)
 		}
 	}
-	cloud, err = NewCloud(ctx, configValue, calFromCCM && configFilePath != "")
-
+	cloud, err = NewCloud(ctx, clientBuilder, configValue, calFromCCM && configFilePath != "")
 	if err != nil {
 		return nil, fmt.Errorf("could not init cloud provider azure: %w", err)
 	}
@@ -520,7 +533,7 @@ func NewCloudFromSecret(ctx context.Context, clientBuilder cloudprovider.Control
 	if err != nil {
 		return nil, fmt.Errorf("NewCloudFromSecret: failed to get config from secret %s/%s: %w", secretNamespace, secretName, err)
 	}
-	az, err := NewCloud(ctx, config, true)
+	az, err := NewCloud(ctx, clientBuilder, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("NewCloudFromSecret: failed to initialize cloud from secret %s/%s: %w", secretNamespace, secretName, err)
 	}
@@ -952,7 +965,8 @@ func (az *Cloud) setCloudProviderBackoffDefaults(config *Config) wait.Backoff {
 func (az *Cloud) configAzureClients(
 	servicePrincipalToken *adal.ServicePrincipalToken,
 	multiTenantOAuthTokenProvider adal.MultitenantOAuthTokenProvider,
-	networkResourceServicePrincipalToken adal.OAuthTokenProvider) {
+	networkResourceServicePrincipalToken adal.OAuthTokenProvider,
+) {
 	azClientConfig := az.getAzureClientConfig(servicePrincipalToken)
 
 	// Prepare AzureClientConfig for all azure clients
@@ -1519,5 +1533,4 @@ func (az *Cloud) GetNodeVMSet(ctx context.Context, nodeName types.NodeName, crt 
 
 	// 5. Node is managed by vmss
 	return ss, nil
-
 }
