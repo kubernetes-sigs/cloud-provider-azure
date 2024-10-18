@@ -466,20 +466,33 @@ type Cloud struct {
 	multipleStandardLoadBalancersActiveNodesLock    sync.Mutex
 	localServiceNameToServiceInfoMap                sync.Map
 	endpointSlicesCache                             sync.Map
+
+	azureResourceLocker *AzureResourceLocker
 }
 
 // NewCloud returns a Cloud with initialized clients
-func NewCloud(ctx context.Context, configReader io.Reader, callFromCCM bool) (cloudprovider.Interface, error) {
+func NewCloud(ctx context.Context, clientBuilder cloudprovider.ControllerClientBuilder, configReader io.Reader, callFromCCM bool) (cloudprovider.Interface, error) {
 	az, err := NewCloudWithoutFeatureGates(ctx, configReader, callFromCCM)
 	if err != nil {
 		return nil, err
 	}
 	az.ipv6DualStackEnabled = true
 
+	if clientBuilder != nil {
+		az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
+	}
+	az.azureResourceLocker = NewAzureResourceLocker(
+		az,
+		consts.AzureResourceLockHolderNameCloudControllerManager,
+		consts.AzureResourceLockLeaseName,
+		consts.AzureResourceLockLeaseNamespace,
+		consts.AzureResourceLockLeaseDuration,
+	)
+
 	return az, nil
 }
 
-func NewCloudFromConfigFile(ctx context.Context, configFilePath string, calFromCCM bool) (cloudprovider.Interface, error) {
+func NewCloudFromConfigFile(ctx context.Context, clientBuilder cloudprovider.ControllerClientBuilder, configFilePath string, calFromCCM bool) (cloudprovider.Interface, error) {
 	var (
 		cloud cloudprovider.Interface
 		err   error
@@ -494,11 +507,11 @@ func NewCloudFromConfigFile(ctx context.Context, configFilePath string, calFromC
 		}
 
 		defer config.Close()
-		cloud, err = NewCloud(ctx, config, calFromCCM)
+		cloud, err = NewCloud(ctx, clientBuilder, config, calFromCCM)
 	} else {
 		// Pass explicit nil so plugins can actually check for nil. See
 		// "Why is my nil error value not equal to nil?" in golang.org/doc/faq.
-		cloud, err = NewCloud(ctx, nil, false)
+		cloud, err = NewCloud(ctx, clientBuilder, nil, false)
 	}
 
 	if err != nil {
@@ -965,7 +978,8 @@ func (az *Cloud) setCloudProviderBackoffDefaults(config *Config) wait.Backoff {
 func (az *Cloud) configAzureClients(
 	servicePrincipalToken *adal.ServicePrincipalToken,
 	multiTenantServicePrincipalToken *adal.MultiTenantServicePrincipalToken,
-	networkResourceServicePrincipalToken *adal.ServicePrincipalToken) {
+	networkResourceServicePrincipalToken *adal.ServicePrincipalToken,
+) {
 	azClientConfig := az.getAzureClientConfig(servicePrincipalToken)
 
 	// Prepare AzureClientConfig for all azure clients

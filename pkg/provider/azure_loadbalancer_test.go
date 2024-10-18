@@ -36,12 +36,16 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
+	coordinationv1 "k8s.io/api/coordination/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatelinkserviceclient/mockprivatelinkserviceclient"
@@ -785,6 +789,118 @@ func TestEnsureLoadBalancerDeleted(t *testing.T) {
 		assert.Nil(t, rerr, "TestCase[%d]: %s", i, c.desc)
 		assert.Equal(t, 0, len(result), "TestCase[%d]: %s", i, c.desc)
 	}
+}
+
+func TestEnsureLoadBalancerLock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	az := GetTestCloud(ctrl)
+	kubeClient := fake.NewSimpleClientset()
+	kubeClient.PrependReactor(
+		"get", "leases",
+		func(_ k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			return true, nil, errors.New("get lease failed")
+		})
+	az.KubeClient = kubeClient
+	az.azureResourceLocker = NewAzureResourceLocker(
+		az, "holder", "aks-managed-resource-locker", "kube-system", 900,
+	)
+
+	svc := getTestService("service", v1.ProtocolTCP, nil, false, 80)
+	_, err := az.EnsureLoadBalancer(context.Background(), testClusterName, &svc, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "get lease failed")
+	assert.Contains(t, err.Error(), "EnsureLoadBalancer failed due to fail to lock azure resources")
+
+	kubeClient = fake.NewSimpleClientset(&coordinationv1.Lease{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "aks-managed-resource-locker",
+			Namespace: "kube-system",
+		},
+		Spec: coordinationv1.LeaseSpec{
+			LeaseDurationSeconds: ptr.To[int32](900),
+		},
+	})
+	// update lease failed for the second time
+	count := 0
+	kubeClient.PrependReactor(
+		"update", "leases",
+		func(_ k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			count++
+			if count == 2 {
+				return true, nil, errors.New("update lease failed")
+			}
+			return false, nil, nil
+		})
+	az.KubeClient = kubeClient
+	az.azureResourceLocker = NewAzureResourceLocker(
+		az, "holder", "aks-managed-resource-locker", "kube-system", 900,
+	)
+	mockLBClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+	mockLBClient.EXPECT().List(gomock.Any(), gomock.Any()).
+		Return(nil, retry.NewError(false, errors.New("list lb failed")))
+
+	_, err = az.EnsureLoadBalancer(context.Background(), testClusterName, &svc, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "update lease failed")
+	assert.Contains(t, err.Error(), "list lb failed")
+}
+
+func TestEnsureLoadBalancerDeletedLock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	az := GetTestCloud(ctrl)
+	kubeClient := fake.NewSimpleClientset()
+	kubeClient.PrependReactor(
+		"get", "leases",
+		func(_ k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			return true, nil, errors.New("get lease failed")
+		})
+	az.KubeClient = kubeClient
+	az.azureResourceLocker = NewAzureResourceLocker(
+		az, "holder", "aks-managed-resource-locker", "kube-system", 900,
+	)
+
+	svc := getTestService("service", v1.ProtocolTCP, nil, false, 80)
+	err := az.EnsureLoadBalancerDeleted(context.Background(), testClusterName, &svc)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "get lease failed")
+	assert.Contains(t, err.Error(), "EnsureLoadBalancerDeleted failed due to fail to lock azure resources")
+
+	kubeClient = fake.NewSimpleClientset(&coordinationv1.Lease{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "aks-managed-resource-locker",
+			Namespace: "kube-system",
+		},
+		Spec: coordinationv1.LeaseSpec{
+			LeaseDurationSeconds: ptr.To[int32](900),
+		},
+	})
+	// update lease failed for the second time
+	count := 0
+	kubeClient.PrependReactor(
+		"update", "leases",
+		func(_ k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			count++
+			if count == 2 {
+				return true, nil, errors.New("update lease failed")
+			}
+			return false, nil, nil
+		})
+	az.KubeClient = kubeClient
+	az.azureResourceLocker = NewAzureResourceLocker(
+		az, "holder", "aks-managed-resource-locker", "kube-system", 900,
+	)
+	mockLBClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+	mockLBClient.EXPECT().List(gomock.Any(), gomock.Any()).
+		Return(nil, retry.NewError(false, errors.New("list lb failed")))
+
+	err = az.EnsureLoadBalancerDeleted(context.Background(), testClusterName, &svc)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "update lease failed")
+	assert.Contains(t, err.Error(), "list lb failed")
 }
 
 func TestServiceOwnsPublicIP(t *testing.T) {
