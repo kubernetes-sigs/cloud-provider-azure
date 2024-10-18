@@ -23,6 +23,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	fnutil "sigs.k8s.io/cloud-provider-azure/pkg/util/collectionutil"
 )
 
 func TestIsPrefixesAllowAll(t *testing.T) {
@@ -266,80 +268,250 @@ func TestAggregatePrefixes(t *testing.T) {
 				return tt.Output[i].String() < tt.Output[j].String()
 			})
 			assert.Equal(t, tt.Output, got)
+
+			{
+				// Test the prefix tree implementation
+				var got = AggregatePrefixesWithPrefixTree(tt.Input)
+
+				sort.Slice(got, func(i, j int) bool {
+					return got[i].String() < got[j].String()
+				})
+				sort.Slice(tt.Output, func(i, j int) bool {
+					return tt.Output[i].String() < tt.Output[j].String()
+				})
+				assert.Equal(t, tt.Output, got)
+			}
 		})
 	}
 }
 
+func TestContainsPrefix(t *testing.T) {
+	tests := []struct {
+		name     string
+		p        netip.Prefix
+		o        netip.Prefix
+		expected bool
+	}{
+		{
+			name:     "IPv4: Exact match",
+			p:        netip.MustParsePrefix("192.168.0.0/24"),
+			o:        netip.MustParsePrefix("192.168.0.0/24"),
+			expected: true,
+		},
+		{
+			name:     "IPv4: Larger contains smaller",
+			p:        netip.MustParsePrefix("192.168.0.0/16"),
+			o:        netip.MustParsePrefix("192.168.1.0/24"),
+			expected: true,
+		},
+		{
+			name:     "IPv4: Smaller doesn't contain larger",
+			p:        netip.MustParsePrefix("192.168.1.0/24"),
+			o:        netip.MustParsePrefix("192.168.0.0/16"),
+			expected: false,
+		},
+		{
+			name:     "IPv4: Non-overlapping",
+			p:        netip.MustParsePrefix("192.168.0.0/24"),
+			o:        netip.MustParsePrefix("192.169.0.0/24"),
+			expected: false,
+		},
+		{
+			name:     "IPv6: Exact match",
+			p:        netip.MustParsePrefix("2001:db8::/32"),
+			o:        netip.MustParsePrefix("2001:db8::/32"),
+			expected: true,
+		},
+		{
+			name:     "IPv6: Larger contains smaller",
+			p:        netip.MustParsePrefix("2001:db8::/32"),
+			o:        netip.MustParsePrefix("2001:db8:1::/48"),
+			expected: true,
+		},
+		{
+			name:     "IPv6: Smaller doesn't contain larger",
+			p:        netip.MustParsePrefix("2001:db8:1::/48"),
+			o:        netip.MustParsePrefix("2001:db8::/32"),
+			expected: false,
+		},
+		{
+			name:     "IPv6: Non-overlapping",
+			p:        netip.MustParsePrefix("2001:db8::/32"),
+			o:        netip.MustParsePrefix("2001:db9::/32"),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ContainsPrefix(tt.p, tt.o)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestMergePrefixes(t *testing.T) {
+	tests := []struct {
+		name     string
+		p1       netip.Prefix
+		p2       netip.Prefix
+		expected netip.Prefix
+		ok       bool
+	}{
+		{
+			name:     "IPv4: Overlapping prefixes",
+			p1:       netip.MustParsePrefix("192.168.0.0/24"),
+			p2:       netip.MustParsePrefix("192.168.0.0/25"),
+			expected: netip.Prefix{},
+			ok:       false,
+		},
+		{
+			name:     "IPv4: Adjacent prefixes",
+			p1:       netip.MustParsePrefix("192.168.0.0/25"),
+			p2:       netip.MustParsePrefix("192.168.0.128/25"),
+			expected: netip.MustParsePrefix("192.168.0.0/24"),
+			ok:       true,
+		},
+		{
+			name:     "IPv4: Non-mergeable prefixes",
+			p1:       netip.MustParsePrefix("192.168.0.0/24"),
+			p2:       netip.MustParsePrefix("192.168.2.0/24"),
+			expected: netip.Prefix{},
+			ok:       false,
+		},
+		{
+			name:     "IPv6: Overlapping prefixes",
+			p1:       netip.MustParsePrefix("2001:db8::/32"),
+			p2:       netip.MustParsePrefix("2001:db8::/48"),
+			expected: netip.Prefix{},
+			ok:       false,
+		},
+		{
+			name:     "IPv6: Adjacent prefixes",
+			p1:       netip.MustParsePrefix("2001:db8::/33"),
+			p2:       netip.MustParsePrefix("2001:db8:8000::/33"),
+			expected: netip.MustParsePrefix("2001:db8::/32"),
+			ok:       true,
+		},
+		{
+			name:     "IPv6: Non-mergeable prefixes",
+			p1:       netip.MustParsePrefix("2001:db8::/32"),
+			p2:       netip.MustParsePrefix("2001:db10::/32"),
+			expected: netip.Prefix{},
+			ok:       false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, ok := mergeAdjacentPrefixes(tt.p1, tt.p2)
+			assert.Equal(t, tt.ok, ok)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// BenchmarkPrefixFixtures generates a list of prefixes for aggregation benchmarks.
+// The second return value is the expected result of the aggregation.
+func benchmarkPrefixFixtures() ([]netip.Prefix, []netip.Prefix) {
+	var rv []netip.Prefix
+	for i := 0; i <= 255; i++ {
+		for j := 0; j <= 255; j++ {
+			rv = append(rv, netip.MustParsePrefix(fmt.Sprintf("192.168.%d.%d/32", i, j)))
+		}
+	}
+
+	return rv, []netip.Prefix{
+		netip.MustParsePrefix("192.168.0.0/16"),
+	}
+}
+
 func BenchmarkAggregatePrefixes(b *testing.B) {
-	fixtureIPv4Prefixes := func(n int64) []netip.Prefix {
-		prefixes := make([]netip.Prefix, 0, n)
-		for i := int64(0); i < n; i++ {
-			addr := netip.AddrFrom4([4]byte{
-				byte(i >> 24), byte(i >> 16), byte(i >> 8), byte(i),
-			})
-			prefix, err := addr.Prefix(32)
-			assert.NoError(b, err)
-			prefixes = append(prefixes, prefix)
+	prefixes, expected := benchmarkPrefixFixtures()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		actual := AggregatePrefixes(prefixes)
+		assert.Len(b, actual, 1)
+		assert.Equal(b, expected, actual)
+	}
+}
+
+func BenchmarkAggregatePrefixesWithPrefixTree(b *testing.B) {
+	prefixes, expected := benchmarkPrefixFixtures()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		actual := AggregatePrefixesWithPrefixTree(prefixes)
+		assert.Len(b, actual, 1)
+		assert.Equal(b, expected, actual)
+	}
+}
+
+func FuzzAggregatePrefixesIPv4(f *testing.F) {
+	f.Add(
+		netip.MustParseAddr("192.168.0.0").AsSlice(),
+		24,
+		netip.MustParseAddr("192.168.1.0").AsSlice(),
+		24,
+		netip.MustParseAddr("10.0.0.0").AsSlice(),
+		8,
+	)
+
+	parsePrefix := func(bytes []byte, bits int) (netip.Prefix, error) {
+		if bits < 0 || bits > 32 {
+			return netip.Prefix{}, fmt.Errorf("invalid bits")
 		}
 
-		return prefixes
-	}
-
-	fixtureIPv6Prefixes := func(n int64) []netip.Prefix {
-		prefixes := make([]netip.Prefix, 0, n)
-		for i := int64(0); i < n; i++ {
-			addr := netip.AddrFrom16([16]byte{
-				0, 0, 0, 0,
-				0, 0, 0, 0,
-				byte(i >> 56), byte(i >> 48), byte(i >> 40), byte(i >> 32),
-				byte(i >> 24), byte(i >> 16), byte(i >> 8), byte(i),
-			})
-			prefix, err := addr.Prefix(128)
-			assert.NoError(b, err)
-			prefixes = append(prefixes, prefix)
+		addr, ok := netip.AddrFromSlice(bytes)
+		if !ok {
+			return netip.Prefix{}, fmt.Errorf("invalid address")
 		}
-		return prefixes
+
+		return addr.Prefix(bits)
 	}
 
-	runIPv4Tests := func(b *testing.B, n int64) {
-		b.Run(fmt.Sprintf("IPv4-%d", n), func(b *testing.B) {
-			b.StopTimer()
-			prefixes := fixtureIPv4Prefixes(n)
-			b.StartTimer()
-
-			for i := 0; i < b.N; i++ {
-				AggregatePrefixes(prefixes)
+	listAddressesAsString := func(prefixes ...netip.Prefix) []string {
+		rv := make(map[string]struct{})
+		for _, p := range prefixes {
+			for addr := p.Addr(); p.Contains(addr); addr = addr.Next() {
+				rv[addr.String()] = struct{}{}
 			}
-		})
+		}
+		return fnutil.Keys(rv)
 	}
 
-	runIPv6Tests := func(b *testing.B, n int64) {
-		b.Run(fmt.Sprintf("IPv6-%d", n), func(b *testing.B) {
-			b.StopTimer()
-			prefixes := fixtureIPv4Prefixes(n)
-			b.StartTimer()
+	f.Fuzz(func(
+		t *testing.T,
+		p1Bytes []byte, p1Bits int,
+		p2Bytes []byte, p2Bits int,
+		p3Bytes []byte, p3Bits int,
+	) {
 
-			for i := 0; i < b.N; i++ {
-				AggregatePrefixes(prefixes)
-			}
-		})
-	}
+		p1, err := parsePrefix(p1Bytes, p1Bits)
+		if err != nil {
+			return
+		}
+		p2, err := parsePrefix(p2Bytes, p2Bits)
+		if err != nil {
+			return
+		}
+		p3, err := parsePrefix(p3Bytes, p3Bits)
+		if err != nil {
+			return
+		}
 
-	runMixedTests := func(b *testing.B, n int64) {
-		b.Run(fmt.Sprintf("IPv4-IPv6-%d", 2*n), func(b *testing.B) {
-			b.StopTimer()
-			prefixes := append(fixtureIPv4Prefixes(n), fixtureIPv6Prefixes(n)...)
-			b.StartTimer()
+		input := []netip.Prefix{p1, p2, p3}
+		output := AggregatePrefixes(input)
 
-			for i := 0; i < b.N; i++ {
-				AggregatePrefixes(prefixes)
-			}
-		})
-	}
+		prefixAsString := func(p netip.Prefix) string { return p.String() }
+		t.Logf("input: %s", fnutil.Map(prefixAsString, input))
+		t.Logf("output: %s", fnutil.Map(prefixAsString, output))
 
-	for _, n := range []int64{100, 1_000, 10_000} {
-		runIPv4Tests(b, n)
-		runIPv6Tests(b, n)
-		runMixedTests(b, n)
-	}
+		expectedAddresses := listAddressesAsString(input...)
+		actualAddresses := listAddressesAsString(output...)
+		assert.Equal(t, len(expectedAddresses), len(actualAddresses))
+
+		sort.Strings(expectedAddresses)
+		sort.Strings(actualAddresses)
+		assert.Equal(t, expectedAddresses, actualAddresses)
+	})
 }
