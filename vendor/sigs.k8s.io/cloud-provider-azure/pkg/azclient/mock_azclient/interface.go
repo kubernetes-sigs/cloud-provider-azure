@@ -36,6 +36,7 @@ import (
 	blobservicepropertiesclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobservicepropertiesclient"
 	deploymentclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
 	diskclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient"
+	fileservicepropertiesclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileservicepropertiesclient"
 	fileshareclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileshareclient"
 	identityclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/identityclient"
 	interfaceclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
@@ -215,6 +216,20 @@ func (m *MockClientFactory) GetDiskClientForSub(arg0 string) (diskclient.Interfa
 func (mr *MockClientFactoryMockRecorder) GetDiskClientForSub(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDiskClientForSub", reflect.TypeOf((*MockClientFactory)(nil).GetDiskClientForSub), arg0)
+}
+
+// GetFileServicePropertiesClient mocks base method.
+func (m *MockClientFactory) GetFileServicePropertiesClient() fileservicepropertiesclient.Interface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetFileServicePropertiesClient")
+	ret0, _ := ret[0].(fileservicepropertiesclient.Interface)
+	return ret0
+}
+
+// GetFileServicePropertiesClient indicates an expected call of GetFileServicePropertiesClient.
+func (mr *MockClientFactoryMockRecorder) GetFileServicePropertiesClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFileServicePropertiesClient", reflect.TypeOf((*MockClientFactory)(nil).GetFileServicePropertiesClient))
 }
 
 // GetFileShareClient mocks base method.
