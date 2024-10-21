@@ -29,10 +29,26 @@ type prefixTreeNode struct {
 	r *prefixTreeNode // right child node
 }
 
-// pruneToRoot prunes the tree to the root.
-// If a node's left and right children are both masked,
-// it is masked and its children are pruned.
-// This is done recursively up to the root.
+// pruneToRoot  checks if the current node and its sibling are masked,
+// and if so, marks their parent as masked and removes both children.
+// This process is repeated up the tree until a node with an unmasked sibling is found.
+//
+// The process can be visualized as follows:
+//
+//	Before:           After:
+//	   P                 P (masked)
+//	  / \               / \
+//	 A   B     ->      X   X
+//	(M) (M)
+//
+// Where:
+//
+//	P: Parent node
+//	A, B: Child nodes
+//	M: Masked
+//	X: Removed
+//
+// This method helps to optimize the tree structure by condensing fully masked subtrees.
 func (n *prefixTreeNode) pruneToRoot() {
 	var node = n
 	for node.p != nil {
@@ -49,6 +65,31 @@ func (n *prefixTreeNode) pruneToRoot() {
 	}
 }
 
+// prefixTree represents a tree structure for storing and managing IP prefixes.
+// It efficiently handles prefix aggregation, merging of overlapping prefixes,
+// and collapsing of neighboring prefixes.
+//
+// The tree is structured as follows:
+// - Each node represents a bit in the IP address
+// - Left child represents a 0 bit, right child represents a 1 bit
+// - Masked nodes indicate the end of a prefix
+// - Unused branches are represented by nil pointers
+//
+// Example tree for 128.0.0.0/4 (binary 1000 0000):
+//
+//	    0 (0.0.0.0/0)
+//	   / \
+//	  X   1 (128.0.0.0/1)
+//	     / \
+//	    0   X
+//	   / \
+//	  0   X
+//	 / \
+//	0*  X
+//
+// Where:
+// * denotes a masked node (prefix end)
+// X denotes an unused branch (nil pointer)
 type prefixTree struct {
 	maxBits int
 	root    *prefixTreeNode
