@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -65,7 +66,7 @@ func TestCreateOrUpdateRouteTable(t *testing.T) {
 		assert.EqualError(t, test.expectedErr, err.Error())
 
 		// route table should be removed from cache if the etag is mismatch or the operation is canceled
-		shouldBeEmpty, err := az.rtCache.GetWithDeepCopy("rt", cache.CacheReadTypeDefault)
+		shouldBeEmpty, err := az.rtCache.GetWithDeepCopy(context.TODO(), "rt", cache.CacheReadTypeDefault)
 		assert.NoError(t, err)
 		assert.Empty(t, shouldBeEmpty)
 	}

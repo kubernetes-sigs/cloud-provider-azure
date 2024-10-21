@@ -60,7 +60,7 @@ type NodeProvider interface {
 	// GetZone returns the Zone containing the current failure zone and locality region that the program is running in
 	GetZone(ctx context.Context, name types.NodeName) (cloudprovider.Zone, error)
 	// GetPlatformSubFaultDomain returns the PlatformSubFaultDomain from IMDS if set.
-	GetPlatformSubFaultDomain() (string, error)
+	GetPlatformSubFaultDomain(ctx context.Context) (string, error)
 }
 
 // labelReconcile holds information about a label to reconcile and how to reconcile it.
@@ -496,7 +496,7 @@ func (cnc *CloudNodeController) getNodeModifiersFromCloudProvider(ctx context.Co
 		}
 	}
 
-	platformSubFaultDomain, err := cnc.getPlatformSubFaultDomain()
+	platformSubFaultDomain, err := cnc.getPlatformSubFaultDomain(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get platformSubFaultDomain: %w", err)
 	}
@@ -643,8 +643,8 @@ func (cnc *CloudNodeController) getZoneByName(ctx context.Context, node *v1.Node
 	return zone, nil
 }
 
-func (cnc *CloudNodeController) getPlatformSubFaultDomain() (string, error) {
-	subFD, err := cnc.nodeProvider.GetPlatformSubFaultDomain()
+func (cnc *CloudNodeController) getPlatformSubFaultDomain(ctx context.Context) (string, error) {
+	subFD, err := cnc.nodeProvider.GetPlatformSubFaultDomain(ctx)
 	if err != nil {
 		return "", fmt.Errorf("cnc.getPlatformSubfaultDomain: %w", err)
 	}

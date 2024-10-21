@@ -655,12 +655,12 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 	}
 
 	if strings.EqualFold(consts.VMTypeVMSS, az.Config.VMType) {
-		az.VMSet, err = newScaleSet(ctx, az)
+		az.VMSet, err = newScaleSet(az)
 		if err != nil {
 			return err
 		}
 	} else if strings.EqualFold(consts.VMTypeVmssFlex, az.Config.VMType) {
-		az.VMSet, err = newFlexScaleSet(ctx, az)
+		az.VMSet, err = newFlexScaleSet(az)
 		if err != nil {
 			return err
 		}
@@ -778,7 +778,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 		// https://docs.microsoft.com/en-us/azure-stack/user/azure-stack-network-differences?view=azs-2102
 		if !az.isStackCloud() {
 			// wait for the success first time of syncing zones
-			err = az.syncRegionZonesMap()
+			err = az.syncRegionZonesMap(ctx)
 			if err != nil {
 				klog.Errorf("InitializeCloudFromConfig: failed to sync regional zones map for the first time: %s", err.Error())
 				return err
@@ -876,7 +876,7 @@ func (az *Cloud) initCaches() (err error) {
 		return err
 	}
 
-	getter := func(_ string) (interface{}, error) { return nil, nil }
+	getter := func(_ context.Context, _ string) (interface{}, error) { return nil, nil }
 	if az.storageAccountCache, err = azcache.NewTimedCache(time.Minute, getter, az.Config.DisableAPICallCache); err != nil {
 		return err
 	}
@@ -1224,7 +1224,7 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 			az.updateNodeCaches(node, nil)
 
 			klog.V(4).Infof("Removing node %s from VMSet cache.", node.Name)
-			_ = az.VMSet.DeleteCacheForNode(node.Name)
+			_ = az.VMSet.DeleteCacheForNode(context.Background(), node.Name)
 		},
 	})
 	az.nodeInformerSynced = nodeInformer.HasSynced
@@ -1513,7 +1513,7 @@ func isNodeReady(node *v1.Node) bool {
 }
 
 // getNodeVMSet gets the VMSet interface based on config.VMType and the real virtual machine type.
-func (az *Cloud) GetNodeVMSet(nodeName types.NodeName, crt azcache.AzureCacheReadType) (VMSet, error) {
+func (az *Cloud) GetNodeVMSet(ctx context.Context, nodeName types.NodeName, crt azcache.AzureCacheReadType) (VMSet, error) {
 	// 1. vmType is standard or vmssflex, return cloud.VMSet directly.
 	// 1.1 all the nodes in the cluster are avset nodes.
 	// 1.2 all the nodes in the cluster are vmssflex nodes.
@@ -1529,7 +1529,7 @@ func (az *Cloud) GetNodeVMSet(nodeName types.NodeName, crt azcache.AzureCacheRea
 		return nil, fmt.Errorf("error of converting vmSet (%q) to ScaleSet with vmType %q", az.VMSet, az.VMType)
 	}
 
-	vmManagementType, err := ss.getVMManagementTypeByNodeName(string(nodeName), crt)
+	vmManagementType, err := ss.getVMManagementTypeByNodeName(ctx, string(nodeName), crt)
 	if err != nil {
 		return nil, fmt.Errorf("getNodeVMSet: failed to check the node %s management type: %w", string(nodeName), err)
 	}

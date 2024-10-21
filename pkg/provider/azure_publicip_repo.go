@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -91,10 +92,7 @@ func (az *Cloud) DeletePublicIP(service *v1.Service, pipResourceGroup string, pi
 }
 
 func (az *Cloud) newPIPCache() (azcache.Resource, error) {
-	getter := func(key string) (interface{}, error) {
-		ctx, cancel := getContextWithCancel()
-		defer cancel()
-
+	getter := func(ctx context.Context, key string) (interface{}, error) {
 		pipResourceGroup := key
 		pipList, rerr := az.PublicIPAddressesClient.List(ctx, pipResourceGroup)
 		if rerr != nil {
@@ -115,8 +113,8 @@ func (az *Cloud) newPIPCache() (azcache.Resource, error) {
 	return azcache.NewTimedCache(time.Duration(az.PublicIPCacheTTLInSeconds)*time.Second, getter, az.Config.DisableAPICallCache)
 }
 
-func (az *Cloud) getPublicIPAddress(pipResourceGroup string, pipName string, crt azcache.AzureCacheReadType) (network.PublicIPAddress, bool, error) {
-	cached, err := az.pipCache.Get(pipResourceGroup, crt)
+func (az *Cloud) getPublicIPAddress(ctx context.Context, pipResourceGroup string, pipName string, crt azcache.AzureCacheReadType) (network.PublicIPAddress, bool, error) {
+	cached, err := az.pipCache.Get(ctx, pipResourceGroup, crt)
 	if err != nil {
 		return network.PublicIPAddress{}, false, err
 	}
@@ -125,7 +123,7 @@ func (az *Cloud) getPublicIPAddress(pipResourceGroup string, pipName string, crt
 	pip, ok := pips.Load(strings.ToLower(pipName))
 	if !ok {
 		// pip not found, refresh cache and retry
-		cached, err = az.pipCache.Get(pipResourceGroup, azcache.CacheReadTypeForceRefresh)
+		cached, err = az.pipCache.Get(ctx, pipResourceGroup, azcache.CacheReadTypeForceRefresh)
 		if err != nil {
 			return network.PublicIPAddress{}, false, err
 		}
@@ -140,8 +138,8 @@ func (az *Cloud) getPublicIPAddress(pipResourceGroup string, pipName string, crt
 	return *(deepcopy.Copy(pip).(*network.PublicIPAddress)), true, nil
 }
 
-func (az *Cloud) listPIP(pipResourceGroup string, crt azcache.AzureCacheReadType) ([]network.PublicIPAddress, error) {
-	cached, err := az.pipCache.Get(pipResourceGroup, crt)
+func (az *Cloud) listPIP(ctx context.Context, pipResourceGroup string, crt azcache.AzureCacheReadType) ([]network.PublicIPAddress, error) {
+	cached, err := az.pipCache.Get(ctx, pipResourceGroup, crt)
 	if err != nil {
 		return nil, err
 	}
@@ -155,14 +153,14 @@ func (az *Cloud) listPIP(pipResourceGroup string, crt azcache.AzureCacheReadType
 	return ret, nil
 }
 
-func (az *Cloud) findMatchedPIP(loadBalancerIP, pipName, pipResourceGroup string) (pip *network.PublicIPAddress, err error) {
-	pips, err := az.listPIP(pipResourceGroup, azcache.CacheReadTypeDefault)
+func (az *Cloud) findMatchedPIP(ctx context.Context, loadBalancerIP, pipName, pipResourceGroup string) (pip *network.PublicIPAddress, err error) {
+	pips, err := az.listPIP(ctx, pipResourceGroup, azcache.CacheReadTypeDefault)
 	if err != nil {
 		return nil, fmt.Errorf("findMatchedPIPByLoadBalancerIP: failed to listPIP: %w", err)
 	}
 
 	if loadBalancerIP != "" {
-		pip, err = az.findMatchedPIPByLoadBalancerIP(&pips, loadBalancerIP, pipResourceGroup)
+		pip, err = az.findMatchedPIPByLoadBalancerIP(ctx, &pips, loadBalancerIP, pipResourceGroup)
 		if err != nil {
 			return nil, err
 		}
@@ -170,7 +168,7 @@ func (az *Cloud) findMatchedPIP(loadBalancerIP, pipName, pipResourceGroup string
 	}
 
 	if pipResourceGroup != "" {
-		pip, err = az.findMatchedPIPByName(&pips, pipName, pipResourceGroup)
+		pip, err = az.findMatchedPIPByName(ctx, &pips, pipName, pipResourceGroup)
 		if err != nil {
 			return nil, err
 		}
@@ -178,14 +176,14 @@ func (az *Cloud) findMatchedPIP(loadBalancerIP, pipName, pipResourceGroup string
 	return pip, nil
 }
 
-func (az *Cloud) findMatchedPIPByName(pips *[]network.PublicIPAddress, pipName, pipResourceGroup string) (*network.PublicIPAddress, error) {
+func (az *Cloud) findMatchedPIPByName(ctx context.Context, pips *[]network.PublicIPAddress, pipName, pipResourceGroup string) (*network.PublicIPAddress, error) {
 	for _, pip := range *pips {
 		if strings.EqualFold(pointer.StringDeref(pip.Name, ""), pipName) {
 			return &pip, nil
 		}
 	}
 
-	pipList, err := az.listPIP(pipResourceGroup, azcache.CacheReadTypeForceRefresh)
+	pipList, err := az.listPIP(ctx, pipResourceGroup, azcache.CacheReadTypeForceRefresh)
 	if err != nil {
 		return nil, fmt.Errorf("findMatchedPIPByName: failed to listPIP force refresh: %w", err)
 	}
@@ -198,10 +196,10 @@ func (az *Cloud) findMatchedPIPByName(pips *[]network.PublicIPAddress, pipName, 
 	return nil, fmt.Errorf("findMatchedPIPByName: failed to find PIP %s in resource group %s", pipName, pipResourceGroup)
 }
 
-func (az *Cloud) findMatchedPIPByLoadBalancerIP(pips *[]network.PublicIPAddress, loadBalancerIP, pipResourceGroup string) (*network.PublicIPAddress, error) {
+func (az *Cloud) findMatchedPIPByLoadBalancerIP(ctx context.Context, pips *[]network.PublicIPAddress, loadBalancerIP, pipResourceGroup string) (*network.PublicIPAddress, error) {
 	pip, err := getExpectedPIPFromListByIPAddress(*pips, loadBalancerIP)
 	if err != nil {
-		pipList, err := az.listPIP(pipResourceGroup, azcache.CacheReadTypeForceRefresh)
+		pipList, err := az.listPIP(ctx, pipResourceGroup, azcache.CacheReadTypeForceRefresh)
 		if err != nil {
 			return nil, fmt.Errorf("findMatchedPIPByLoadBalancerIP: failed to listPIP force refresh: %w", err)
 		}

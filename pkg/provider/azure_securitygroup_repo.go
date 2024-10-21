@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -71,9 +72,7 @@ func (az *Cloud) CreateOrUpdateSecurityGroup(sg *armnetwork.SecurityGroup) error
 }
 
 func (az *Cloud) newNSGCache() (azcache.Resource, error) {
-	getter := func(key string) (interface{}, error) {
-		ctx, cancel := getContextWithCancel()
-		defer cancel()
+	getter := func(ctx context.Context, key string) (interface{}, error) {
 		clientFactory := az.NetworkClientFactory
 		if clientFactory == nil {
 			clientFactory = az.ComputeClientFactory
@@ -100,13 +99,13 @@ func (az *Cloud) newNSGCache() (azcache.Resource, error) {
 	return azcache.NewTimedCache(time.Duration(az.NsgCacheTTLInSeconds)*time.Second, getter, az.Config.DisableAPICallCache)
 }
 
-func (az *Cloud) getSecurityGroup(crt azcache.AzureCacheReadType) (*armnetwork.SecurityGroup, error) {
+func (az *Cloud) getSecurityGroup(ctx context.Context, crt azcache.AzureCacheReadType) (*armnetwork.SecurityGroup, error) {
 	nsg := &armnetwork.SecurityGroup{}
 	if az.SecurityGroupName == "" {
 		return nsg, fmt.Errorf("securityGroupName is not configured")
 	}
 
-	securityGroup, err := az.nsgCache.GetWithDeepCopy(az.SecurityGroupName, crt)
+	securityGroup, err := az.nsgCache.GetWithDeepCopy(ctx, az.SecurityGroupName, crt)
 	if err != nil {
 		return nsg, err
 	}

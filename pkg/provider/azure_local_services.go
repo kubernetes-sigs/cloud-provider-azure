@@ -35,6 +35,7 @@ import (
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
@@ -91,8 +92,8 @@ func newLoadBalancerBackendPoolUpdater(az *Cloud, interval time.Duration) *loadB
 // run starts the loadBalancerBackendPoolUpdater, and stops if the context exits.
 func (updater *loadBalancerBackendPoolUpdater) run(ctx context.Context) {
 	klog.V(2).Info("loadBalancerBackendPoolUpdater.run: started")
-	err := wait.PollUntilContextCancel(ctx, updater.interval, false, func(_ context.Context) (bool, error) {
-		updater.process()
+	err := wait.PollUntilContextCancel(ctx, updater.interval, false, func(ctx context.Context) (bool, error) {
+		updater.process(ctx)
 		return false, nil
 	})
 	klog.Infof("loadBalancerBackendPoolUpdater.run: stopped due to %s", err.Error())
@@ -162,7 +163,7 @@ func (updater *loadBalancerBackendPoolUpdater) removeOperation(serviceName strin
 // and then processes them in batches. If an operation fails, it will be retried
 // if it is retriable, otherwise all operations in the batch targeting to
 // this backend pool will fail.
-func (updater *loadBalancerBackendPoolUpdater) process() {
+func (updater *loadBalancerBackendPoolUpdater) process(ctx context.Context) {
 	updater.lock.Lock()
 	defer updater.lock.Unlock()
 
@@ -199,7 +200,7 @@ func (updater *loadBalancerBackendPoolUpdater) process() {
 		parts := strings.Split(key, ":")
 		lbName, poolName := parts[0], parts[1]
 		operationName := fmt.Sprintf("%s/%s", lbName, poolName)
-		bp, rerr := updater.az.LoadBalancerClient.GetLBBackendPool(context.Background(), updater.az.ResourceGroup, lbName, poolName, "")
+		bp, rerr := updater.az.LoadBalancerClient.GetLBBackendPool(ctx, updater.az.ResourceGroup, lbName, poolName, "")
 		if rerr != nil {
 			updater.processError(rerr, operationName, ops...)
 			continue
@@ -223,7 +224,7 @@ func (updater *loadBalancerBackendPoolUpdater) process() {
 		// but the backend pool object is not changed after multiple times of removal and re-adding.
 		if changed {
 			klog.V(2).Infof("loadBalancerBackendPoolUpdater.process: updating backend pool %s/%s", lbName, poolName)
-			rerr = updater.az.LoadBalancerClient.CreateOrUpdateBackendPools(context.Background(), updater.az.ResourceGroup, lbName, poolName, bp, pointer.StringDeref(bp.Etag, ""))
+			rerr = updater.az.LoadBalancerClient.CreateOrUpdateBackendPools(ctx, updater.az.ResourceGroup, lbName, poolName, bp, ptr.Deref(bp.Etag, ""))
 			if rerr != nil {
 				updater.processError(rerr, operationName, ops...)
 				continue
@@ -463,7 +464,7 @@ func newServiceInfo(ipFamily, lbName string) *serviceInfo {
 }
 
 // getLocalServiceEndpointsNodeNames gets the node names that host all endpoints of the local service.
-func (az *Cloud) getLocalServiceEndpointsNodeNames(service *v1.Service) (*utilsets.IgnoreCaseSet, error) {
+func (az *Cloud) getLocalServiceEndpointsNodeNames(ctx context.Context, service *v1.Service) (*utilsets.IgnoreCaseSet, error) {
 	var (
 		ep           *discovery_v1.EndpointSlice
 		foundInCache bool
@@ -480,7 +481,7 @@ func (az *Cloud) getLocalServiceEndpointsNodeNames(service *v1.Service) (*utilse
 	})
 	if ep == nil {
 		klog.Infof("EndpointSlice for service %s/%s not found, try to list EndpointSlices", service.Namespace, service.Name)
-		eps, err := az.KubeClient.DiscoveryV1().EndpointSlices(service.Namespace).List(context.Background(), metav1.ListOptions{})
+		eps, err := az.KubeClient.DiscoveryV1().EndpointSlices(service.Namespace).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			klog.Errorf("Failed to list EndpointSlices for service %s/%s: %s", service.Namespace, service.Name, err.Error())
 			return nil, err
@@ -512,6 +513,7 @@ func (az *Cloud) getLocalServiceEndpointsNodeNames(service *v1.Service) (*utilse
 // cleanupLocalServiceBackendPool cleans up the backend pool of
 // a local service among given load balancers.
 func (az *Cloud) cleanupLocalServiceBackendPool(
+	ctx context.Context,
 	svc *v1.Service,
 	nodes []*v1.Node,
 	lbs *[]network.LoadBalancer,
@@ -525,7 +527,7 @@ func (az *Cloud) cleanupLocalServiceBackendPool(
 				for _, bp := range *lb.BackendAddressPools {
 					bpName := pointer.StringDeref(bp.Name, "")
 					if localServiceOwnsBackendPool(getServiceName(svc), bpName) {
-						if err := az.DeleteLBBackendPool(lbName, bpName); err != nil {
+						if err := az.DeleteLBBackendPool(ctx, lbName, bpName); err != nil {
 							return nil, err
 						}
 						changed = true
@@ -537,7 +539,7 @@ func (az *Cloud) cleanupLocalServiceBackendPool(
 	if changed {
 		// Refresh the list of existing LBs after cleanup to update etags for the LBs.
 		klog.V(4).Info("Refreshing the list of existing LBs")
-		lbs, err = az.ListManagedLBs(svc, nodes, clusterName)
+		lbs, err = az.ListManagedLBs(ctx, svc, nodes, clusterName)
 		if err != nil {
 			return nil, fmt.Errorf("reconcileLoadBalancer: failed to list managed LB: %w", err)
 		}
@@ -547,9 +549,9 @@ func (az *Cloud) cleanupLocalServiceBackendPool(
 
 // checkAndApplyLocalServiceBackendPoolUpdates if the IPs in the backend pool are aligned
 // with the corresponding endpointslice, and update the backend pool if necessary.
-func (az *Cloud) checkAndApplyLocalServiceBackendPoolUpdates(lb network.LoadBalancer, service *v1.Service) error {
+func (az *Cloud) checkAndApplyLocalServiceBackendPoolUpdates(ctx context.Context, lb network.LoadBalancer, service *v1.Service) error {
 	serviceName := getServiceName(service)
-	endpointsNodeNames, err := az.getLocalServiceEndpointsNodeNames(service)
+	endpointsNodeNames, err := az.getLocalServiceEndpointsNodeNames(ctx, service)
 	if err != nil {
 		return err
 	}

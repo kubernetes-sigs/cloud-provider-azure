@@ -84,6 +84,6 @@ func (np *ARMNodeProvider) GetZone(ctx context.Context, name types.NodeName) (cl
 }
 
 // GetPlatformSubFaultDomain returns the PlatformSubFaultDomain from IMDS if set.
-func (np *ARMNodeProvider) GetPlatformSubFaultDomain() (string, error) {
+func (np *ARMNodeProvider) GetPlatformSubFaultDomain(_ context.Context) (string, error) {
 	return "", nil
 }

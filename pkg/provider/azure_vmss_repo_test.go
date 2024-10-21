@@ -103,7 +103,7 @@ func TestGetVirtualMachineWithRetry(t *testing.T) {
 		mockVMClient := az.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "vm", gomock.Any()).Return(compute.VirtualMachine{}, test.vmClientErr)
 
-		vm, err := az.GetVirtualMachineWithRetry("vm", cache.CacheReadTypeDefault)
+		vm, err := az.GetVirtualMachineWithRetry(context.TODO(), "vm", cache.CacheReadTypeDefault)
 		assert.Empty(t, vm)
 		if err != nil {
 			assert.EqualError(t, test.expectedErr, err.Error())
