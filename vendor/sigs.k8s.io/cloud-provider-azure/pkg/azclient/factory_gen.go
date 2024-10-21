@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobservicepropertiesclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileservicepropertiesclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileshareclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/identityclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
@@ -69,9 +70,10 @@ type ClientFactoryImpl struct {
 	accountclientInterface                  sync.Map
 	availabilitysetclientInterface          availabilitysetclient.Interface
 	blobcontainerclientInterface            sync.Map
-	blobservicepropertiesclientInterface    blobservicepropertiesclient.Interface
+	blobservicepropertiesclientInterface    sync.Map
 	deploymentclientInterface               deploymentclient.Interface
 	diskclientInterface                     sync.Map
+	fileservicepropertiesclientInterface    sync.Map
 	fileshareclientInterface                sync.Map
 	identityclientInterface                 identityclient.Interface
 	interfaceclientInterface                interfaceclient.Interface
@@ -137,7 +139,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	}
 
 	//initialize blobservicepropertiesclient
-	factory.blobservicepropertiesclientInterface, err = factory.createBlobServicePropertiesClient(config.SubscriptionID)
+	_, err = factory.GetBlobServicePropertiesClientForSub(config.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
@@ -150,6 +152,12 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 
 	//initialize diskclient
 	_, err = factory.GetDiskClientForSub(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize fileservicepropertiesclient
+	_, err = factory.GetFileServicePropertiesClientForSub(config.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
@@ -437,7 +445,24 @@ func (factory *ClientFactoryImpl) createBlobServicePropertiesClient(subscription
 }
 
 func (factory *ClientFactoryImpl) GetBlobServicePropertiesClient() blobservicepropertiesclient.Interface {
-	return factory.blobservicepropertiesclientInterface
+	clientImp, _ := factory.blobservicepropertiesclientInterface.Load(strings.ToLower(factory.facotryConfig.SubscriptionID))
+	return clientImp.(blobservicepropertiesclient.Interface)
+}
+func (factory *ClientFactoryImpl) GetBlobServicePropertiesClientForSub(subscriptionID string) (blobservicepropertiesclient.Interface, error) {
+	if subscriptionID == "" {
+		subscriptionID = factory.facotryConfig.SubscriptionID
+	}
+	clientImp, loaded := factory.blobservicepropertiesclientInterface.Load(strings.ToLower(subscriptionID))
+	if loaded {
+		return clientImp.(blobservicepropertiesclient.Interface), nil
+	}
+	//It's not thread safe, but it's ok for now. because it will be called once.
+	clientImp, err := factory.createBlobServicePropertiesClient(subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	factory.blobservicepropertiesclientInterface.Store(strings.ToLower(subscriptionID), clientImp)
+	return clientImp.(blobservicepropertiesclient.Interface), nil
 }
 
 func (factory *ClientFactoryImpl) createDeploymentClient(subscription string) (deploymentclient.Interface, error) {
@@ -505,6 +530,42 @@ func (factory *ClientFactoryImpl) GetDiskClientForSub(subscriptionID string) (di
 	}
 	factory.diskclientInterface.Store(strings.ToLower(subscriptionID), clientImp)
 	return clientImp.(diskclient.Interface), nil
+}
+
+func (factory *ClientFactoryImpl) createFileServicePropertiesClient(subscription string) (fileservicepropertiesclient.Interface, error) {
+	//initialize fileservicepropertiesclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return fileservicepropertiesclient.New(subscription, factory.cred, options)
+}
+
+func (factory *ClientFactoryImpl) GetFileServicePropertiesClient() fileservicepropertiesclient.Interface {
+	clientImp, _ := factory.fileservicepropertiesclientInterface.Load(strings.ToLower(factory.facotryConfig.SubscriptionID))
+	return clientImp.(fileservicepropertiesclient.Interface)
+}
+func (factory *ClientFactoryImpl) GetFileServicePropertiesClientForSub(subscriptionID string) (fileservicepropertiesclient.Interface, error) {
+	if subscriptionID == "" {
+		subscriptionID = factory.facotryConfig.SubscriptionID
+	}
+	clientImp, loaded := factory.fileservicepropertiesclientInterface.Load(strings.ToLower(subscriptionID))
+	if loaded {
+		return clientImp.(fileservicepropertiesclient.Interface), nil
+	}
+	//It's not thread safe, but it's ok for now. because it will be called once.
+	clientImp, err := factory.createFileServicePropertiesClient(subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	factory.fileservicepropertiesclientInterface.Store(strings.ToLower(subscriptionID), clientImp)
+	return clientImp.(fileservicepropertiesclient.Interface), nil
 }
 
 func (factory *ClientFactoryImpl) createFileShareClient(subscription string) (fileshareclient.Interface, error) {
