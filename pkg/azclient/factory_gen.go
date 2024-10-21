@@ -70,10 +70,10 @@ type ClientFactoryImpl struct {
 	accountclientInterface                  sync.Map
 	availabilitysetclientInterface          availabilitysetclient.Interface
 	blobcontainerclientInterface            sync.Map
-	blobservicepropertiesclientInterface    blobservicepropertiesclient.Interface
+	blobservicepropertiesclientInterface    sync.Map
 	deploymentclientInterface               deploymentclient.Interface
 	diskclientInterface                     sync.Map
-	fileservicepropertiesclientInterface    fileservicepropertiesclient.Interface
+	fileservicepropertiesclientInterface    sync.Map
 	fileshareclientInterface                sync.Map
 	identityclientInterface                 identityclient.Interface
 	interfaceclientInterface                interfaceclient.Interface
@@ -139,7 +139,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	}
 
 	//initialize blobservicepropertiesclient
-	factory.blobservicepropertiesclientInterface, err = factory.createBlobServicePropertiesClient(config.SubscriptionID)
+	_, err = factory.GetBlobServicePropertiesClientForSub(config.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +157,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	}
 
 	//initialize fileservicepropertiesclient
-	factory.fileservicepropertiesclientInterface, err = factory.createFileServicePropertiesClient(config.SubscriptionID)
+	_, err = factory.GetFileServicePropertiesClientForSub(config.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
@@ -445,7 +445,24 @@ func (factory *ClientFactoryImpl) createBlobServicePropertiesClient(subscription
 }
 
 func (factory *ClientFactoryImpl) GetBlobServicePropertiesClient() blobservicepropertiesclient.Interface {
-	return factory.blobservicepropertiesclientInterface
+	clientImp, _ := factory.blobservicepropertiesclientInterface.Load(strings.ToLower(factory.facotryConfig.SubscriptionID))
+	return clientImp.(blobservicepropertiesclient.Interface)
+}
+func (factory *ClientFactoryImpl) GetBlobServicePropertiesClientForSub(subscriptionID string) (blobservicepropertiesclient.Interface, error) {
+	if subscriptionID == "" {
+		subscriptionID = factory.facotryConfig.SubscriptionID
+	}
+	clientImp, loaded := factory.blobservicepropertiesclientInterface.Load(strings.ToLower(subscriptionID))
+	if loaded {
+		return clientImp.(blobservicepropertiesclient.Interface), nil
+	}
+	//It's not thread safe, but it's ok for now. because it will be called once.
+	clientImp, err := factory.createBlobServicePropertiesClient(subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	factory.blobservicepropertiesclientInterface.Store(strings.ToLower(subscriptionID), clientImp)
+	return clientImp.(blobservicepropertiesclient.Interface), nil
 }
 
 func (factory *ClientFactoryImpl) createDeploymentClient(subscription string) (deploymentclient.Interface, error) {
@@ -531,7 +548,24 @@ func (factory *ClientFactoryImpl) createFileServicePropertiesClient(subscription
 }
 
 func (factory *ClientFactoryImpl) GetFileServicePropertiesClient() fileservicepropertiesclient.Interface {
-	return factory.fileservicepropertiesclientInterface
+	clientImp, _ := factory.fileservicepropertiesclientInterface.Load(strings.ToLower(factory.facotryConfig.SubscriptionID))
+	return clientImp.(fileservicepropertiesclient.Interface)
+}
+func (factory *ClientFactoryImpl) GetFileServicePropertiesClientForSub(subscriptionID string) (fileservicepropertiesclient.Interface, error) {
+	if subscriptionID == "" {
+		subscriptionID = factory.facotryConfig.SubscriptionID
+	}
+	clientImp, loaded := factory.fileservicepropertiesclientInterface.Load(strings.ToLower(subscriptionID))
+	if loaded {
+		return clientImp.(fileservicepropertiesclient.Interface), nil
+	}
+	//It's not thread safe, but it's ok for now. because it will be called once.
+	clientImp, err := factory.createFileServicePropertiesClient(subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	factory.fileservicepropertiesclientInterface.Store(strings.ToLower(subscriptionID), clientImp)
+	return clientImp.(fileservicepropertiesclient.Interface), nil
 }
 
 func (factory *ClientFactoryImpl) createFileShareClient(subscription string) (fileshareclient.Interface, error) {
