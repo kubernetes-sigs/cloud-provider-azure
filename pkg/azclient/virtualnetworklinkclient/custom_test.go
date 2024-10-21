@@ -50,7 +50,7 @@ func init() {
 			},
 		})
 		Expect(err).NotTo(HaveOccurred())
-		parentResourceName = "aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io"
+		parentResourceName = "aks-cit-privatednszone-cit.privatelink.global.azmk8s.io"
 		privatednsClient = privatednsClientFactory.NewPrivateZonesClient()
 		dnsPoller, err := privatednsClient.BeginCreateOrUpdate(ctx, resourceGroupName, parentResourceName, armprivatedns.PrivateZone{
 			Location: to.Ptr("global"),
@@ -61,9 +61,7 @@ func init() {
 			},
 		})
 		Expect(err).NotTo(HaveOccurred())
-		_, err = dnsPoller.PollUntilDone(ctx, &runtime.PollUntilDoneOptions{
-			Frequency: 1 * time.Second,
-		})
+		_, err = dnsPoller.PollUntilDone(ctx, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		virtualNetworksClient = networkClientFactory.NewVirtualNetworksClient()
