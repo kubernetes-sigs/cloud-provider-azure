@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Kubernetes Authors.
+Copyright 2024 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // +azure:enableclientgen:=true
-package blobservicepropertiesclient
+package fileservicepropertiesclient
 
 import (
 	"context"
@@ -23,8 +23,8 @@ import (
 	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
 )
 
-// +azure:client:resource=BlobServiceProperties,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage,packageAlias=armstorage,clientName=BlobServicesClient,expand=false,crossSubFactory=true
+// +azure:client:resource=FileServiceProperties,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage,packageAlias=armstorage,clientName=FileServicesClient,expand=false,crossSubFactory=true
 type Interface interface {
-	Get(ctx context.Context, resourceGroupName string, resourceName string) (*armstorage.BlobServiceProperties, error)
-	Set(ctx context.Context, resourceGroupName string, resourceName string, parameters armstorage.BlobServiceProperties) (*armstorage.BlobServiceProperties, error)
+	Get(ctx context.Context, resourceGroupName string, resourceName string) (*armstorage.FileServiceProperties, error)
+	Set(ctx context.Context, resourceGroupName string, resourceName string, parameters armstorage.FileServiceProperties) (*armstorage.FileServiceProperties, error)
 }
