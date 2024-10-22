@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -350,7 +351,7 @@ func TestGetDataDisksWithVmssFlex(t *testing.T) {
 		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
 
-		dataDisks, _, err := fs.GetDataDisks(tc.nodeName, azcache.CacheReadTypeDefault)
+		dataDisks, _, err := fs.GetDataDisks(context.TODO(), tc.nodeName, azcache.CacheReadTypeDefault)
 		assert.Equal(t, tc.expectedDataDisks, dataDisks)
 		if tc.expectedErr != nil {
 			assert.EqualError(t, err, tc.expectedErr.Error(), tc.description)
@@ -405,7 +406,7 @@ func TestVMSSFlexUpdateCache(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		err = fs.updateCache(test.nodeName, test.vm)
+		err = fs.updateCache(context.TODO(), test.nodeName, test.vm)
 		assert.Equal(t, test.expectedErr, err, test.description)
 	}
 }

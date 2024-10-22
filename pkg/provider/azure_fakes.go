@@ -56,7 +56,7 @@ func NewTestScaleSet(ctrl *gomock.Controller) (*ScaleSet, error) {
 
 func newTestScaleSetWithState(ctrl *gomock.Controller) (*ScaleSet, error) {
 	cloud := GetTestCloud(ctrl)
-	ss, err := newScaleSet(context.Background(), cloud)
+	ss, err := newScaleSet(cloud)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +66,7 @@ func newTestScaleSetWithState(ctrl *gomock.Controller) (*ScaleSet, error) {
 
 func NewTestFlexScaleSet(ctrl *gomock.Controller) (*FlexScaleSet, error) {
 	cloud := GetTestCloud(ctrl)
-	fs, err := newFlexScaleSet(context.Background(), cloud)
+	fs, err := newFlexScaleSet(cloud)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	az.plsCache, _ = az.newPLSCache()
 	az.LoadBalancerBackendPool = NewMockBackendPool(ctrl)
 
-	getter := func(_ string) (interface{}, error) { return nil, nil }
+	getter := func(_ context.Context, _ string) (interface{}, error) { return nil, nil }
 	az.storageAccountCache, _ = azcache.NewTimedCache(time.Minute, getter, az.Config.DisableAPICallCache)
 	az.fileServicePropertiesCache, _ = azcache.NewTimedCache(5*time.Minute, getter, az.Config.DisableAPICallCache)
 

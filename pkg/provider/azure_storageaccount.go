@@ -709,7 +709,7 @@ func (az *Cloud) getStorageAccountWithCache(ctx context.Context, subsID, resourc
 	}
 
 	// search in cache first
-	cache, err := az.storageAccountCache.Get(account, cache.CacheReadTypeDefault)
+	cache, err := az.storageAccountCache.Get(ctx, account, cache.CacheReadTypeDefault)
 	if err != nil {
 		return storage.Account{}, retry.NewError(false, err)
 	}
@@ -738,7 +738,7 @@ func (az *Cloud) getFileServicePropertiesCache(ctx context.Context, subsID, reso
 	}
 
 	// search in cache first
-	cache, err := az.fileServicePropertiesCache.Get(account, cache.CacheReadTypeDefault)
+	cache, err := az.fileServicePropertiesCache.Get(ctx, account, cache.CacheReadTypeDefault)
 	if err != nil {
 		return storage.FileServiceProperties{}, err
 	}

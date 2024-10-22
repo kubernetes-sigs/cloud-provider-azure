@@ -170,7 +170,7 @@ func (l *AzureResourceLocker) acquireLease(
 		if err != nil {
 			return err
 		}
-		if err := l.VMSet.RefreshCaches(ctx); err != nil {
+		if err := l.VMSet.RefreshCaches(); err != nil {
 			return err
 		}
 	}
