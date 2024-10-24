@@ -85,12 +85,11 @@ jobs:
         make all
         go test -covermode=count -coverprofile=profile.cov ./pkg/...
 
-    - name: Send coverage
-      env:
-        COVERALLS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        go install github.com/mattn/goveralls@latest
-        $(go env GOPATH)/bin/goveralls -coverprofile=profile.cov -service=github
+    - name: Coveralls
+      uses: coverallsapp/github-action@4cdef0b2dbe0c9aa26bed48edb868db738625e79 # v2.3.3
+      with:
+        file: profile.cov
+        format: golang
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@662472033e021d55d94146f66f6058822b0b39fd # v3.27.0
