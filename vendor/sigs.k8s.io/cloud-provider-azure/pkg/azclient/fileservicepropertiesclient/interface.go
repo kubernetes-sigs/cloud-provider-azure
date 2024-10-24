@@ -23,7 +23,7 @@ import (
 	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
 )
 
-// +azure:client:resource=FileServiceProperties,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage,packageAlias=armstorage,clientName=FileServicesClient,expand=false
+// +azure:client:resource=FileServiceProperties,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage,packageAlias=armstorage,clientName=FileServicesClient,expand=false,crossSubFactory=true
 type Interface interface {
 	Get(ctx context.Context, resourceGroupName string, resourceName string) (*armstorage.FileServiceProperties, error)
 	Set(ctx context.Context, resourceGroupName string, resourceName string, parameters armstorage.FileServiceProperties) (*armstorage.FileServiceProperties, error)

@@ -31,6 +31,9 @@ type AgentPoolsClientBeginDeleteMachinesOptions struct {
 
 // AgentPoolsClientBeginDeleteOptions contains the optional parameters for the AgentPoolsClient.BeginDelete method.
 type AgentPoolsClientBeginDeleteOptions struct {
+	// ignore-pod-disruption-budget=true to delete those pods on a node without considering Pod Disruption Budget
+	IgnorePodDisruptionBudget *bool
+
 	// Resumes the LRO from the provided token.
 	ResumeToken string
 }
