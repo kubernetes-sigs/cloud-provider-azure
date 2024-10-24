@@ -175,6 +175,21 @@ func (mr *MockClientFactoryMockRecorder) GetBlobServicePropertiesClient() *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlobServicePropertiesClient", reflect.TypeOf((*MockClientFactory)(nil).GetBlobServicePropertiesClient))
 }
 
+// GetBlobServicePropertiesClientForSub mocks base method.
+func (m *MockClientFactory) GetBlobServicePropertiesClientForSub(arg0 string) (blobservicepropertiesclient.Interface, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBlobServicePropertiesClientForSub", arg0)
+	ret0, _ := ret[0].(blobservicepropertiesclient.Interface)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBlobServicePropertiesClientForSub indicates an expected call of GetBlobServicePropertiesClientForSub.
+func (mr *MockClientFactoryMockRecorder) GetBlobServicePropertiesClientForSub(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlobServicePropertiesClientForSub", reflect.TypeOf((*MockClientFactory)(nil).GetBlobServicePropertiesClientForSub), arg0)
+}
+
 // GetDeploymentClient mocks base method.
 func (m *MockClientFactory) GetDeploymentClient() deploymentclient.Interface {
 	m.ctrl.T.Helper()
@@ -230,6 +245,21 @@ func (m *MockClientFactory) GetFileServicePropertiesClient() fileserviceproperti
 func (mr *MockClientFactoryMockRecorder) GetFileServicePropertiesClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFileServicePropertiesClient", reflect.TypeOf((*MockClientFactory)(nil).GetFileServicePropertiesClient))
+}
+
+// GetFileServicePropertiesClientForSub mocks base method.
+func (m *MockClientFactory) GetFileServicePropertiesClientForSub(arg0 string) (fileservicepropertiesclient.Interface, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetFileServicePropertiesClientForSub", arg0)
+	ret0, _ := ret[0].(fileservicepropertiesclient.Interface)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetFileServicePropertiesClientForSub indicates an expected call of GetFileServicePropertiesClientForSub.
+func (mr *MockClientFactoryMockRecorder) GetFileServicePropertiesClientForSub(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFileServicePropertiesClientForSub", reflect.TypeOf((*MockClientFactory)(nil).GetFileServicePropertiesClientForSub), arg0)
 }
 
 // GetFileShareClient mocks base method.
