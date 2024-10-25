@@ -1,9 +1,12 @@
 name: Code Lint
 
-on:
-  workflow_dispatch:
+on: 
   push:
+    branches: [ master, 'release-**' ]
   pull_request:
+    # The branches below must be a subset of the branches above
+    branches: [ master, 'release-**' ]
+  workflow_dispatch:
 
 permissions:
   contents: read
