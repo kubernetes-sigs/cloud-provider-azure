@@ -49,7 +49,7 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubelet v0.29.9
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.1.0
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.1.5
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.29
 	sigs.k8s.io/yaml v1.4.0
 )
@@ -58,11 +58,11 @@ require (
 	github.com/Azure/azure-pipeline-go v0.2.3 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/authorization/armauthorization/v2 v2.2.0 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v6 v6.1.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v6 v6.2.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault v1.4.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi v1.2.0 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets v1.1.0 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal v1.0.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets v1.2.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal v1.1.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.1.0 // indirect
 	github.com/Azure/azure-storage-queue-go v0.0.0-20230531184854-c06a8eff66fe // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
@@ -135,7 +135,7 @@ require (
 	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/crypto v0.28.0 // indirect
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
-	golang.org/x/net v0.29.0 // indirect
+	golang.org/x/net v0.30.0 // indirect
 	golang.org/x/oauth2 v0.23.0 // indirect
 	golang.org/x/term v0.25.0 // indirect
 	golang.org/x/time v0.7.0 // indirect
