@@ -23,7 +23,7 @@ on:
       - '!vendor/**'
       - 'health-probe-proxy/**'
   schedule:
-    - cron: '0 */24 * * *'
+    - cron: '0 1 * * *'
 permissions:
   contents: read
 jobs:
@@ -80,7 +80,6 @@ jobs:
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
-          skip-setup-trivy: true
         env:
           TRIVY_SKIP_DB_UPDATE: true
       - name: Upload Trivy scan results to GitHub Security tab
@@ -97,7 +96,6 @@ jobs:
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
-          skip-setup-trivy: true
         env:
           TRIVY_SKIP_DB_UPDATE: true
       - name: Upload Trivy scan results to GitHub Security tab
@@ -114,6 +112,5 @@ jobs:
           output: 'dependency-results.sbom.json'
           scan-ref: '.'
           github-pat: ${{ secrets.GITHUB_TOKEN }}
-          skip-setup-trivy: true
         env:
           TRIVY_SKIP_DB_UPDATE: true
