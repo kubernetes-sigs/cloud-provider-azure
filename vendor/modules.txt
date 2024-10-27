@@ -84,7 +84,7 @@ github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6
 # github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerregistry/armcontainerregistry v1.2.0
 ## explicit; go 1.18
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerregistry/armcontainerregistry
-# github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v6 v6.1.0
+# github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v6 v6.2.0
 ## explicit; go 1.18
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v6
 # github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault v1.4.0
@@ -105,10 +105,10 @@ github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources
 # github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage v1.6.0
 ## explicit; go 1.18
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage
-# github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets v1.1.0
+# github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets v1.2.0
 ## explicit; go 1.18
 github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets
-# github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal v1.0.0
+# github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal v1.1.0
 ## explicit; go 1.18
 github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal
 # github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.1.0
@@ -592,7 +592,7 @@ golang.org/x/crypto/salsa20/salsa
 ## explicit; go 1.20
 golang.org/x/exp/constraints
 golang.org/x/exp/slices
-# golang.org/x/net v0.29.0
+# golang.org/x/net v0.30.0
 ## explicit; go 1.18
 golang.org/x/net/context
 golang.org/x/net/html
@@ -1532,7 +1532,7 @@ sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client/metrics
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/common/metrics
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/proto/client
-# sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.1.3
+# sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.1.5
 ## explicit; go 1.23.1
 sigs.k8s.io/cloud-provider-azure/pkg/azclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient
