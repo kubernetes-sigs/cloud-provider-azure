@@ -558,13 +558,7 @@ func TestCheckAndApplyLocalServiceBackendPoolUpdates(t *testing.T) {
 			cloud := GetTestCloud(ctrl)
 			cloud.localServiceNameToServiceInfoMap.Store("default/svc1", &serviceInfo{lbName: "lb1"})
 			svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
-			// var client kubernetes.Interface
 			client := fake.NewSimpleClientset(&svc)
-			// if tc.existingEPS != nil {
-			// 	client = fake.NewSimpleClientset(&svc, tc.existingEPS)
-			// } else {
-			// 	client = fake.NewSimpleClientset(&svc)
-			// }
 			cloud.KubeClient = client
 			informerFactory := informers.NewSharedInformerFactory(client, 0)
 			cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
