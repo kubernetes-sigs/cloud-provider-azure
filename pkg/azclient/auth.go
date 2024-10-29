@@ -29,6 +29,11 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/armauth"
 )
 
+var (
+	// ErrorNoAuth indicates that no credentials are provided.
+	ErrorNoAuth = fmt.Errorf("no credentials provided for Azure cloud provider")
+)
+
 type AuthProvider struct {
 	ComputeCredential     azcore.TokenCredential
 	NetworkCredential     azcore.TokenCredential
@@ -37,6 +42,13 @@ type AuthProvider struct {
 }
 
 func NewAuthProvider(armConfig *ARMClientConfig, config *AzureAuthConfig, clientOptionsMutFn ...func(option *policy.ClientOptions)) (*AuthProvider, error) {
+	if armConfig == nil {
+		// TenantID is required for the auth provider
+		return nil, ErrorNoAuth
+	}
+	if config == nil {
+		config = &AzureAuthConfig{}
+	}
 	clientOption, err := GetAzCoreClientOption(armConfig)
 	if err != nil {
 		return nil, err
@@ -93,7 +105,7 @@ func NewAuthProvider(armConfig *ARMClientConfig, config *AzureAuthConfig, client
 		}
 	}
 
-	if computeCredential == nil && len(config.GetAADClientSecret()) > 0 {
+	if computeCredential == nil && len(config.GetAADClientSecret()) > 0 && !strings.EqualFold(config.GetAADClientSecret(), "msi") {
 		credOptions := &azidentity.ClientSecretCredentialOptions{
 			ClientOptions: *clientOption,
 		}
@@ -154,6 +166,9 @@ func NewAuthProvider(armConfig *ARMClientConfig, config *AzureAuthConfig, client
 				return nil, err
 			}
 		}
+	}
+	if computeCredential == nil {
+		return nil, ErrorNoAuth
 	}
 
 	return &AuthProvider{
