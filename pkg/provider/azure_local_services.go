@@ -34,6 +34,7 @@ import (
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
@@ -209,7 +210,7 @@ func (updater *loadBalancerBackendPoolUpdater) process() {
 			lbOp := op.(*loadBalancerBackendPoolUpdateOperation)
 			switch lbOp.kind {
 			case consts.LoadBalancerBackendPoolUpdateOperationRemove:
-				removed := removeNodeIPAddressesFromBackendPool(bp, lbOp.nodeIPs, false, true)
+				removed := removeNodeIPAddressesFromBackendPool(bp, lbOp.nodeIPs, false, true, true)
 				changed = changed || removed
 			case consts.LoadBalancerBackendPoolUpdateOperationAdd:
 				added := updater.az.addNodeIPAddressesToBackendPool(&bp, lbOp.nodeIPs)
@@ -445,8 +446,10 @@ func (az *Cloud) getLocalServiceBackendPoolID(serviceName string, lbName string,
 
 // localServiceOwnsBackendPool checks if a backend pool is owned by a local service.
 func localServiceOwnsBackendPool(serviceName, bpName string) bool {
-	prefix := strings.Replace(serviceName, "/", "-", -1)
-	return strings.HasPrefix(strings.ToLower(bpName), strings.ToLower(prefix))
+	if strings.HasSuffix(strings.ToLower(bpName), consts.IPVersionIPv6StringLower) {
+		return strings.EqualFold(getLocalServiceBackendPoolName(serviceName, true), bpName)
+	}
+	return strings.EqualFold(getLocalServiceBackendPoolName(serviceName, false), bpName)
 }
 
 type serviceInfo struct {

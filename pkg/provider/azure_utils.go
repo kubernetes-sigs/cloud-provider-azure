@@ -511,13 +511,13 @@ func (az *Cloud) fillSubnet(subnet *network.Subnet, subnetName string) error {
 	return nil
 }
 
-func getLBNameFromBackendPoolID(backendPoolID string) (string, error) {
+func getBackendPoolNameFromBackendPoolID(backendPoolID string) (string, error) {
 	matches := backendPoolIDRE.FindStringSubmatch(backendPoolID)
-	if len(matches) != 2 {
+	if len(matches) != 3 {
 		return "", fmt.Errorf("backendPoolID %q is in wrong format", backendPoolID)
 	}
 
-	return matches[1], nil
+	return matches[2], nil
 }
 
 func countNICsOnBackendPool(backendPool network.BackendAddressPool) int {
