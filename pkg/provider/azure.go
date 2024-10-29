@@ -29,9 +29,8 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/go-autorest/autorest"
-	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
-
+	"github.com/jongio/azidext/go/azidext"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -662,12 +661,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 		return err
 	}
 	az.AuthProvider = authProvider
-	// If uses network resources in different AAD Tenant, then prepare corresponding Service Principal Token for VM/VMSS client and network resources client
-	multiTenantServicePrincipalToken, networkResourceServicePrincipalToken, err := az.getAuthTokenInMultiTenantEnv(servicePrincipalToken, authProvider)
-	if err != nil {
-		return err
-	}
-	az.configAzureClients(servicePrincipalToken, multiTenantServicePrincipalToken, networkResourceServicePrincipalToken)
+	az.configAzureClients(authProvider)
 
 	if az.ComputeClientFactory == nil {
 		var cred azcore.TokenCredential
@@ -870,23 +864,6 @@ func (az *Cloud) setLBDefaults(config *Config) error {
 	return nil
 }
 
-func (az *Cloud) getAuthTokenInMultiTenantEnv(_ *adal.ServicePrincipalToken, authProvider *azclient.AuthProvider) (adal.MultitenantOAuthTokenProvider, adal.OAuthTokenProvider, error) {
-	var err error
-	var multiTenantOAuthToken adal.MultitenantOAuthTokenProvider
-	var networkResourceServicePrincipalToken adal.OAuthTokenProvider
-	if az.Config.UsesNetworkResourceInDifferentTenant() {
-		multiTenantOAuthToken, err = ratelimitconfig.GetMultiTenantServicePrincipalToken(&az.Config.AzureClientConfig, &az.Environment, authProvider)
-		if err != nil {
-			return nil, nil, err
-		}
-		networkResourceServicePrincipalToken, err = ratelimitconfig.GetNetworkResourceServicePrincipalToken(&az.Config.AzureClientConfig, &az.Environment, authProvider)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-	return multiTenantOAuthToken, networkResourceServicePrincipalToken, nil
-}
-
 func (az *Cloud) setCloudProviderBackoffDefaults(config *Config) wait.Backoff {
 	// Conditionally configure resource request backoff
 	resourceRequestBackoff := wait.Backoff{
@@ -928,11 +905,10 @@ func (az *Cloud) setCloudProviderBackoffDefaults(config *Config) wait.Backoff {
 }
 
 func (az *Cloud) configAzureClients(
-	servicePrincipalToken *adal.ServicePrincipalToken,
-	multiTenantOAuthTokenProvider adal.MultitenantOAuthTokenProvider,
-	networkResourceServicePrincipalToken adal.OAuthTokenProvider,
+	authProvider *azclient.AuthProvider,
 ) {
-	azClientConfig := az.getAzureClientConfig(servicePrincipalToken)
+	token := azidext.NewTokenCredentialAdapter(authProvider.GetAzIdentity(), []string{azidext.DefaultManagementScope})
+	azClientConfig := az.getAzureClientConfig(token)
 
 	// Prepare AzureClientConfig for all azure clients
 	interfaceClientConfig := azClientConfig.WithRateLimiter(az.Config.InterfaceRateLimit)
@@ -957,22 +933,22 @@ func (az *Cloud) configAzureClients(
 	vmasClientConfig := azClientConfig.WithRateLimiter(az.Config.AvailabilitySetRateLimit)
 
 	// If uses network resources in different AAD Tenant, update Authorizer for VM/VMSS/VMAS client config
-	if multiTenantOAuthTokenProvider != nil {
-		multiTenantServicePrincipalTokenAuthorizer := autorest.NewMultiTenantServicePrincipalTokenAuthorizer(multiTenantOAuthTokenProvider)
+	if authProvider.IsMultiTenantModeEnabled() {
+		multiTenantOAuthTokenProvider := azidext.NewTokenCredentialAdapter(authProvider.GetMultiTenantIdentity(), []string{azidext.DefaultManagementScope})
 
-		vmClientConfig.Authorizer = multiTenantServicePrincipalTokenAuthorizer
-		vmssClientConfig.Authorizer = multiTenantServicePrincipalTokenAuthorizer
-		vmssVMClientConfig.Authorizer = multiTenantServicePrincipalTokenAuthorizer
-		vmasClientConfig.Authorizer = multiTenantServicePrincipalTokenAuthorizer
+		vmClientConfig.Authorizer = multiTenantOAuthTokenProvider
+		vmssClientConfig.Authorizer = multiTenantOAuthTokenProvider
+		vmssVMClientConfig.Authorizer = multiTenantOAuthTokenProvider
+		vmasClientConfig.Authorizer = multiTenantOAuthTokenProvider
 	}
 
 	// If uses network resources in different AAD Tenant, update SubscriptionID and Authorizer for network resources client config
-	if networkResourceServicePrincipalToken != nil {
-		networkResourceServicePrincipalTokenAuthorizer := autorest.NewBearerAuthorizer(networkResourceServicePrincipalToken)
-		subnetClientConfig.Authorizer = networkResourceServicePrincipalTokenAuthorizer
-		routeTableClientConfig.Authorizer = networkResourceServicePrincipalTokenAuthorizer
-		loadBalancerClientConfig.Authorizer = networkResourceServicePrincipalTokenAuthorizer
-		publicIPClientConfig.Authorizer = networkResourceServicePrincipalTokenAuthorizer
+	if authProvider.GetNetworkAzIdentity() != nil {
+		networkResourceServicePrincipalToken := azidext.NewTokenCredentialAdapter(authProvider.GetNetworkAzIdentity(), []string{azidext.DefaultManagementScope})
+		subnetClientConfig.Authorizer = networkResourceServicePrincipalToken
+		routeTableClientConfig.Authorizer = networkResourceServicePrincipalToken
+		loadBalancerClientConfig.Authorizer = networkResourceServicePrincipalToken
+		publicIPClientConfig.Authorizer = networkResourceServicePrincipalToken
 	}
 
 	if az.UsesNetworkResourceInDifferentSubscription() {
@@ -1000,13 +976,13 @@ func (az *Cloud) configAzureClients(
 	az.privatednszonegroupclient = privatednszonegroupclient.New(privateDNSZoenGroupConfig)
 }
 
-func (az *Cloud) getAzureClientConfig(servicePrincipalToken *adal.ServicePrincipalToken) *azclients.ClientConfig {
+func (az *Cloud) getAzureClientConfig(token autorest.Authorizer) *azclients.ClientConfig {
 	azClientConfig := &azclients.ClientConfig{
 		CloudName:               az.Config.Cloud,
 		Location:                az.Config.Location,
 		SubscriptionID:          az.Config.SubscriptionID,
 		ResourceManagerEndpoint: az.Environment.ResourceManagerEndpoint,
-		Authorizer:              autorest.NewBearerAuthorizer(servicePrincipalToken),
+		Authorizer:              token,
 		Backoff:                 &retry.Backoff{Steps: 1},
 		DisableAzureStackCloud:  az.Config.DisableAzureStackCloud,
 		UserAgent:               az.Config.UserAgent,

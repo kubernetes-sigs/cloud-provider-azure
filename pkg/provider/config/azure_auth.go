@@ -199,33 +199,34 @@ func GetMultiTenantServicePrincipalToken(config *AzureClientConfig, env *azure.E
 		return nil, fmt.Errorf("creating the multi-tenant OAuth config: %w", err)
 	}
 
-	if len(config.AADClientSecret) > 0 && !strings.EqualFold(config.AADClientSecret, "msi") {
-		logger.V(2).Info("Setup ARM multi-tenant token provider", "method", "sp_with_password")
-		return adal.NewMultiTenantServicePrincipalToken(
-			multiTenantOAuthConfig,
-			config.AADClientID,
-			config.AADClientSecret,
-			env.ServiceManagementEndpoint)
-	}
-
-	if len(config.AADClientCertPath) > 0 {
-		logger.V(2).Info("Setup ARM multi-tenant token provider", "method", "sp_with_certificate")
-		certData, err := os.ReadFile(config.AADClientCertPath)
-		if err != nil {
-			return nil, fmt.Errorf("reading the client certificate from file %s: %w", config.AADClientCertPath, err)
+	if !config.UseManagedIdentityExtension {
+		if len(config.AADClientSecret) > 0 {
+			logger.V(2).Info("Setup ARM multi-tenant token provider", "method", "sp_with_password")
+			return adal.NewMultiTenantServicePrincipalToken(
+				multiTenantOAuthConfig,
+				config.AADClientID,
+				config.AADClientSecret,
+				env.ServiceManagementEndpoint)
 		}
-		certificate, privateKey, err := parseCertificate(certData, config.AADClientCertPassword)
-		if err != nil {
-			return nil, fmt.Errorf("decoding the client certificate: %w", err)
-		}
-		return adal.NewMultiTenantServicePrincipalTokenFromCertificate(
-			multiTenantOAuthConfig,
-			config.AADClientID,
-			certificate,
-			privateKey,
-			env.ServiceManagementEndpoint)
-	}
 
+		if len(config.AADClientCertPath) > 0 {
+			logger.V(2).Info("Setup ARM multi-tenant token provider", "method", "sp_with_certificate")
+			certData, err := os.ReadFile(config.AADClientCertPath)
+			if err != nil {
+				return nil, fmt.Errorf("reading the client certificate from file %s: %w", config.AADClientCertPath, err)
+			}
+			certificate, privateKey, err := parseCertificate(certData, config.AADClientCertPassword)
+			if err != nil {
+				return nil, fmt.Errorf("decoding the client certificate: %w", err)
+			}
+			return adal.NewMultiTenantServicePrincipalTokenFromCertificate(
+				multiTenantOAuthConfig,
+				config.AADClientID,
+				certificate,
+				privateKey,
+				env.ServiceManagementEndpoint)
+		}
+	}
 	if authProvider.ComputeCredential != nil && authProvider.NetworkCredential != nil {
 		logger.V(2).Info("Setup ARM multi-tenant token provider", "method", "msi_with_auxiliary_token")
 		return armauth.NewMultiTenantTokenProvider(
