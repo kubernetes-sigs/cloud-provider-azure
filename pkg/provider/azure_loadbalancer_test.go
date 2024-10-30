@@ -6286,7 +6286,7 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 		existingPIPV4             network.PublicIPAddress
 		existingPIPV6             network.PublicIPAddress
 		status                    *v1.LoadBalancerStatus
-		getZoneError              *retry.Error
+		getZoneError              error
 		regionZonesMap            map[string][]string
 		expectedZones             *[]string
 		expectedDirty             bool
@@ -6316,7 +6316,7 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 		{
 			description:  "reconcileFrontendIPConfigs should report an error if failed to get zones",
 			service:      getInternalTestServiceDualStack("test", 80),
-			getZoneError: retry.NewError(false, errors.New("get zone failed")),
+			getZoneError: errors.New("get zone failed"),
 			expectedErr:  errors.New("get zone failed"),
 		},
 		{
