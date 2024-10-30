@@ -1560,6 +1560,7 @@ sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatelinkserviceclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatezoneclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatezoneclient/mock_privatezoneclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/providerclient
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/providerclient/mock_providerclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/registryclient
