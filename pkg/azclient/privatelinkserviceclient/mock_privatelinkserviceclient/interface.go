@@ -37,6 +37,7 @@ import (
 type MockInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockInterfaceMockRecorder
+	isgomock struct{}
 }
 
 // MockInterfaceMockRecorder is the mock recorder for MockInterface.
@@ -83,6 +84,20 @@ func (m *MockInterface) Delete(ctx context.Context, resourceGroupName, resourceN
 func (mr *MockInterfaceMockRecorder) Delete(ctx, resourceGroupName, resourceName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockInterface)(nil).Delete), ctx, resourceGroupName, resourceName)
+}
+
+// DeletePrivateEndpointConnection mocks base method.
+func (m *MockInterface) DeletePrivateEndpointConnection(ctx context.Context, resourceGroupName, serviceName, peConnectionName string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeletePrivateEndpointConnection", ctx, resourceGroupName, serviceName, peConnectionName)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeletePrivateEndpointConnection indicates an expected call of DeletePrivateEndpointConnection.
+func (mr *MockInterfaceMockRecorder) DeletePrivateEndpointConnection(ctx, resourceGroupName, serviceName, peConnectionName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePrivateEndpointConnection", reflect.TypeOf((*MockInterface)(nil).DeletePrivateEndpointConnection), ctx, resourceGroupName, serviceName, peConnectionName)
 }
 
 // Get mocks base method.
