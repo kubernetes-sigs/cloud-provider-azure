@@ -254,12 +254,10 @@ func TestSyncRegionZonesMap(t *testing.T) {
 		zones         map[string][]string
 		getZonesErr   error
 		expectedZones map[string][]string
-		expectedErr   error
 	}{
 		{
 			description: "syncRegionZonesMap should report an error if failed to get zones",
 			getZonesErr: fmt.Errorf("error"),
-			expectedErr: fmt.Errorf("error"),
 		},
 		{
 			description:   "syncRegionZonesMap should not report an error if the given zones map is empty",
@@ -275,7 +273,7 @@ func TestSyncRegionZonesMap(t *testing.T) {
 
 			err := az.syncRegionZonesMap(context.TODO())
 			if err != nil {
-				assert.EqualError(t, testCase.expectedErr, err.Error())
+				assert.ErrorIs(t, err, testCase.getZonesErr)
 			}
 			assert.Equal(t, testCase.expectedZones, az.regionZonesMap)
 		})
