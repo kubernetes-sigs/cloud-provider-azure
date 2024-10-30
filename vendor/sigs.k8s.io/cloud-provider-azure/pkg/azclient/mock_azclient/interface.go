@@ -36,6 +36,7 @@ import (
 	blobservicepropertiesclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobservicepropertiesclient"
 	deploymentclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
 	diskclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient"
+	fileservicepropertiesclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileservicepropertiesclient"
 	fileshareclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileshareclient"
 	identityclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/identityclient"
 	interfaceclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
@@ -69,6 +70,7 @@ import (
 type MockClientFactory struct {
 	ctrl     *gomock.Controller
 	recorder *MockClientFactoryMockRecorder
+	isgomock struct{}
 }
 
 // MockClientFactoryMockRecorder is the mock recorder for MockClientFactory.
@@ -103,18 +105,18 @@ func (mr *MockClientFactoryMockRecorder) GetAccountClient() *gomock.Call {
 }
 
 // GetAccountClientForSub mocks base method.
-func (m *MockClientFactory) GetAccountClientForSub(arg0 string) (accountclient.Interface, error) {
+func (m *MockClientFactory) GetAccountClientForSub(subscriptionID string) (accountclient.Interface, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAccountClientForSub", arg0)
+	ret := m.ctrl.Call(m, "GetAccountClientForSub", subscriptionID)
 	ret0, _ := ret[0].(accountclient.Interface)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetAccountClientForSub indicates an expected call of GetAccountClientForSub.
-func (mr *MockClientFactoryMockRecorder) GetAccountClientForSub(arg0 any) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetAccountClientForSub(subscriptionID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccountClientForSub", reflect.TypeOf((*MockClientFactory)(nil).GetAccountClientForSub), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccountClientForSub", reflect.TypeOf((*MockClientFactory)(nil).GetAccountClientForSub), subscriptionID)
 }
 
 // GetAvailabilitySetClient mocks base method.
@@ -146,18 +148,18 @@ func (mr *MockClientFactoryMockRecorder) GetBlobContainerClient() *gomock.Call {
 }
 
 // GetBlobContainerClientForSub mocks base method.
-func (m *MockClientFactory) GetBlobContainerClientForSub(arg0 string) (blobcontainerclient.Interface, error) {
+func (m *MockClientFactory) GetBlobContainerClientForSub(subscriptionID string) (blobcontainerclient.Interface, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBlobContainerClientForSub", arg0)
+	ret := m.ctrl.Call(m, "GetBlobContainerClientForSub", subscriptionID)
 	ret0, _ := ret[0].(blobcontainerclient.Interface)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetBlobContainerClientForSub indicates an expected call of GetBlobContainerClientForSub.
-func (mr *MockClientFactoryMockRecorder) GetBlobContainerClientForSub(arg0 any) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetBlobContainerClientForSub(subscriptionID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlobContainerClientForSub", reflect.TypeOf((*MockClientFactory)(nil).GetBlobContainerClientForSub), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlobContainerClientForSub", reflect.TypeOf((*MockClientFactory)(nil).GetBlobContainerClientForSub), subscriptionID)
 }
 
 // GetBlobServicePropertiesClient mocks base method.
@@ -172,6 +174,21 @@ func (m *MockClientFactory) GetBlobServicePropertiesClient() blobserviceproperti
 func (mr *MockClientFactoryMockRecorder) GetBlobServicePropertiesClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlobServicePropertiesClient", reflect.TypeOf((*MockClientFactory)(nil).GetBlobServicePropertiesClient))
+}
+
+// GetBlobServicePropertiesClientForSub mocks base method.
+func (m *MockClientFactory) GetBlobServicePropertiesClientForSub(subscriptionID string) (blobservicepropertiesclient.Interface, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBlobServicePropertiesClientForSub", subscriptionID)
+	ret0, _ := ret[0].(blobservicepropertiesclient.Interface)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBlobServicePropertiesClientForSub indicates an expected call of GetBlobServicePropertiesClientForSub.
+func (mr *MockClientFactoryMockRecorder) GetBlobServicePropertiesClientForSub(subscriptionID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlobServicePropertiesClientForSub", reflect.TypeOf((*MockClientFactory)(nil).GetBlobServicePropertiesClientForSub), subscriptionID)
 }
 
 // GetDeploymentClient mocks base method.
@@ -203,18 +220,47 @@ func (mr *MockClientFactoryMockRecorder) GetDiskClient() *gomock.Call {
 }
 
 // GetDiskClientForSub mocks base method.
-func (m *MockClientFactory) GetDiskClientForSub(arg0 string) (diskclient.Interface, error) {
+func (m *MockClientFactory) GetDiskClientForSub(subscriptionID string) (diskclient.Interface, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetDiskClientForSub", arg0)
+	ret := m.ctrl.Call(m, "GetDiskClientForSub", subscriptionID)
 	ret0, _ := ret[0].(diskclient.Interface)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetDiskClientForSub indicates an expected call of GetDiskClientForSub.
-func (mr *MockClientFactoryMockRecorder) GetDiskClientForSub(arg0 any) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetDiskClientForSub(subscriptionID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDiskClientForSub", reflect.TypeOf((*MockClientFactory)(nil).GetDiskClientForSub), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDiskClientForSub", reflect.TypeOf((*MockClientFactory)(nil).GetDiskClientForSub), subscriptionID)
+}
+
+// GetFileServicePropertiesClient mocks base method.
+func (m *MockClientFactory) GetFileServicePropertiesClient() fileservicepropertiesclient.Interface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetFileServicePropertiesClient")
+	ret0, _ := ret[0].(fileservicepropertiesclient.Interface)
+	return ret0
+}
+
+// GetFileServicePropertiesClient indicates an expected call of GetFileServicePropertiesClient.
+func (mr *MockClientFactoryMockRecorder) GetFileServicePropertiesClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFileServicePropertiesClient", reflect.TypeOf((*MockClientFactory)(nil).GetFileServicePropertiesClient))
+}
+
+// GetFileServicePropertiesClientForSub mocks base method.
+func (m *MockClientFactory) GetFileServicePropertiesClientForSub(subscriptionID string) (fileservicepropertiesclient.Interface, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetFileServicePropertiesClientForSub", subscriptionID)
+	ret0, _ := ret[0].(fileservicepropertiesclient.Interface)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetFileServicePropertiesClientForSub indicates an expected call of GetFileServicePropertiesClientForSub.
+func (mr *MockClientFactoryMockRecorder) GetFileServicePropertiesClientForSub(subscriptionID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFileServicePropertiesClientForSub", reflect.TypeOf((*MockClientFactory)(nil).GetFileServicePropertiesClientForSub), subscriptionID)
 }
 
 // GetFileShareClient mocks base method.
@@ -232,18 +278,18 @@ func (mr *MockClientFactoryMockRecorder) GetFileShareClient() *gomock.Call {
 }
 
 // GetFileShareClientForSub mocks base method.
-func (m *MockClientFactory) GetFileShareClientForSub(arg0 string) (fileshareclient.Interface, error) {
+func (m *MockClientFactory) GetFileShareClientForSub(subscriptionID string) (fileshareclient.Interface, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetFileShareClientForSub", arg0)
+	ret := m.ctrl.Call(m, "GetFileShareClientForSub", subscriptionID)
 	ret0, _ := ret[0].(fileshareclient.Interface)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetFileShareClientForSub indicates an expected call of GetFileShareClientForSub.
-func (mr *MockClientFactoryMockRecorder) GetFileShareClientForSub(arg0 any) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetFileShareClientForSub(subscriptionID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFileShareClientForSub", reflect.TypeOf((*MockClientFactory)(nil).GetFileShareClientForSub), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFileShareClientForSub", reflect.TypeOf((*MockClientFactory)(nil).GetFileShareClientForSub), subscriptionID)
 }
 
 // GetIPGroupClient mocks base method.
@@ -513,18 +559,18 @@ func (mr *MockClientFactoryMockRecorder) GetSnapshotClient() *gomock.Call {
 }
 
 // GetSnapshotClientForSub mocks base method.
-func (m *MockClientFactory) GetSnapshotClientForSub(arg0 string) (snapshotclient.Interface, error) {
+func (m *MockClientFactory) GetSnapshotClientForSub(subscriptionID string) (snapshotclient.Interface, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetSnapshotClientForSub", arg0)
+	ret := m.ctrl.Call(m, "GetSnapshotClientForSub", subscriptionID)
 	ret0, _ := ret[0].(snapshotclient.Interface)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetSnapshotClientForSub indicates an expected call of GetSnapshotClientForSub.
-func (mr *MockClientFactoryMockRecorder) GetSnapshotClientForSub(arg0 any) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetSnapshotClientForSub(subscriptionID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSnapshotClientForSub", reflect.TypeOf((*MockClientFactory)(nil).GetSnapshotClientForSub), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSnapshotClientForSub", reflect.TypeOf((*MockClientFactory)(nil).GetSnapshotClientForSub), subscriptionID)
 }
 
 // GetSubnetClient mocks base method.
