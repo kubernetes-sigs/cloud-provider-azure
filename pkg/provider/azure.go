@@ -70,7 +70,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmsizeclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
 
 	"sigs.k8s.io/yaml"
 
@@ -370,7 +370,6 @@ type Cloud struct {
 	VirtualMachineScaleSetVMsClient vmssvmclient.Interface
 	VirtualMachineSizesClient       vmsizeclient.Interface
 	AvailabilitySetsClient          vmasclient.Interface
-	ZoneClient                      zoneclient.Interface
 	privateendpointclient           privateendpointclient.Interface
 	privatednszonegroupclient       privatednszonegroupclient.Interface
 	PrivateLinkServiceClient        privatelinkserviceclient.Interface
@@ -418,10 +417,11 @@ type Cloud struct {
 	routeUpdater       batchProcessor
 	backendPoolUpdater batchProcessor
 
-	vmCache azcache.Resource
-	lbCache azcache.Resource
-	nsgRepo securitygroup.Repository
-	rtCache azcache.Resource
+	vmCache  azcache.Resource
+	lbCache  azcache.Resource
+	nsgRepo  securitygroup.Repository
+	zoneRepo zone.Repository
+	rtCache  azcache.Resource
 	// public ip cache
 	// key: [resourceGroupName]
 	// Value: sync.Map of [pipName]*PublicIPAddress
@@ -744,6 +744,11 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 		if err != nil {
 			return err
 		}
+
+		az.zoneRepo, err = zone.NewRepo(az.ComputeClientFactory.GetProviderClient())
+		if err != nil {
+			return err
+		}
 	}
 	err = az.initCaches()
 	if err != nil {
@@ -993,7 +998,6 @@ func (az *Cloud) configAzureClients(
 	fileClientConfig := azClientConfig.WithRateLimiter(nil)
 	blobClientConfig := azClientConfig.WithRateLimiter(nil)
 	vmasClientConfig := azClientConfig.WithRateLimiter(az.Config.AvailabilitySetRateLimit)
-	zoneClientConfig := azClientConfig.WithRateLimiter(nil)
 
 	// If uses network resources in different AAD Tenant, update Authorizer for VM/VMSS/VMAS client config
 	if multiTenantOAuthTokenProvider != nil {
@@ -1041,11 +1045,6 @@ func (az *Cloud) configAzureClients(
 	az.privateendpointclient = privateendpointclient.New(privateEndpointConfig)
 	az.privatednszonegroupclient = privatednszonegroupclient.New(privateDNSZoenGroupConfig)
 	az.PrivateLinkServiceClient = privatelinkserviceclient.New(privateLinkServiceConfig)
-	az.deploymentClient = deploymentclient.New(deploymentConfig)
-
-	if az.ZoneClient == nil {
-		az.ZoneClient = zoneclient.New(zoneClientConfig)
-	}
 }
 
 func (az *Cloud) getAzureClientConfig(servicePrincipalToken *adal.ServicePrincipalToken) *azclients.ClientConfig {
