@@ -280,7 +280,7 @@ github.com/google/go-cmp/cmp/internal/value
 ## explicit; go 1.12
 github.com/google/gofuzz
 github.com/google/gofuzz/bytesource
-# github.com/google/pprof v0.0.0-20240827171923-fa2c70bbbfe5
+# github.com/google/pprof v0.0.0-20241029153458-d1b30febd7db
 ## explicit; go 1.22
 github.com/google/pprof/profile
 # github.com/google/uuid v1.6.0
@@ -334,8 +334,8 @@ github.com/modern-go/reflect2
 # github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 ## explicit
 github.com/munnerz/goautoneg
-# github.com/onsi/ginkgo/v2 v2.20.2
-## explicit; go 1.22
+# github.com/onsi/ginkgo/v2 v2.21.0
+## explicit; go 1.22.0
 github.com/onsi/ginkgo/v2
 github.com/onsi/ginkgo/v2/config
 github.com/onsi/ginkgo/v2/formatter
@@ -510,7 +510,7 @@ go.uber.org/zap/internal/color
 go.uber.org/zap/internal/exit
 go.uber.org/zap/zapcore
 go.uber.org/zap/zapgrpc
-# golang.org/x/crypto v0.27.0
+# golang.org/x/crypto v0.28.0
 ## explicit; go 1.20
 golang.org/x/crypto/cryptobyte
 golang.org/x/crypto/cryptobyte/asn1
@@ -525,7 +525,7 @@ golang.org/x/crypto/salsa20/salsa
 ## explicit; go 1.20
 golang.org/x/exp/constraints
 golang.org/x/exp/slices
-# golang.org/x/net v0.29.0
+# golang.org/x/net v0.30.0
 ## explicit; go 1.18
 golang.org/x/net/context
 golang.org/x/net/html
@@ -555,7 +555,7 @@ golang.org/x/sys/unix
 golang.org/x/sys/windows
 golang.org/x/sys/windows/registry
 golang.org/x/sys/windows/svc
-# golang.org/x/term v0.24.0
+# golang.org/x/term v0.25.0
 ## explicit; go 1.18
 golang.org/x/term
 # golang.org/x/text v0.19.0
@@ -593,8 +593,8 @@ golang.org/x/text/width
 # golang.org/x/time v0.3.0
 ## explicit
 golang.org/x/time/rate
-# golang.org/x/tools v0.24.0
-## explicit; go 1.19
+# golang.org/x/tools v0.26.0
+## explicit; go 1.22.0
 golang.org/x/tools/cover
 golang.org/x/tools/go/ast/inspector
 # google.golang.org/appengine v1.6.7
