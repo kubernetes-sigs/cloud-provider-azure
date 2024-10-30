@@ -33,8 +33,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient/mockzoneclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -253,14 +252,14 @@ func TestSyncRegionZonesMap(t *testing.T) {
 	for _, testCase := range []struct {
 		description   string
 		zones         map[string][]string
-		getZonesErr   *retry.Error
+		getZonesErr   error
 		expectedZones map[string][]string
 		expectedErr   error
 	}{
 		{
 			description: "syncRegionZonesMap should report an error if failed to get zones",
-			getZonesErr: retry.NewError(false, fmt.Errorf("error")),
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"),
+			getZonesErr: fmt.Errorf("error"),
+			expectedErr: fmt.Errorf("error"),
 		},
 		{
 			description:   "syncRegionZonesMap should not report an error if the given zones map is empty",
@@ -268,11 +267,11 @@ func TestSyncRegionZonesMap(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.description, func(t *testing.T) {
+			m := zone.NewMockRepository(ctrl)
 			az := &Cloud{
-				ZoneClient: mockzoneclient.NewMockInterface(ctrl),
+				zoneRepo: m,
 			}
-			mockZoneClient := az.ZoneClient.(*mockzoneclient.MockInterface)
-			mockZoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(testCase.expectedZones, testCase.getZonesErr)
+			m.EXPECT().ListZones(gomock.Any()).Return(testCase.expectedZones, testCase.getZonesErr)
 
 			err := az.syncRegionZonesMap(context.TODO())
 			if err != nil {
@@ -290,14 +289,14 @@ func TestGetRegionZonesBackoff(t *testing.T) {
 	for _, testCase := range []struct {
 		description   string
 		zones         map[string][]string
-		getZonesErr   *retry.Error
+		getZonesErr   error
 		expectedZones map[string][]string
 		expectedErr   error
 	}{
 		{
 			description: "syncRegionZonesMap should report an error if failed to get zones",
-			getZonesErr: retry.NewError(false, fmt.Errorf("error")),
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"),
+			getZonesErr: fmt.Errorf("error"),
+			expectedErr: fmt.Errorf("error"),
 		},
 		{
 			description:   "syncRegionZonesMap should not report an error if the given zones map is empty",
@@ -305,11 +304,11 @@ func TestGetRegionZonesBackoff(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.description, func(t *testing.T) {
+			m := zone.NewMockRepository(ctrl)
 			az := &Cloud{
-				ZoneClient: mockzoneclient.NewMockInterface(ctrl),
+				zoneRepo: m,
 			}
-			mockZoneClient := az.ZoneClient.(*mockzoneclient.MockInterface)
-			mockZoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(testCase.expectedZones, testCase.getZonesErr)
+			m.EXPECT().ListZones(gomock.Any()).Return(testCase.expectedZones, testCase.getZonesErr)
 
 			_, err := az.getRegionZonesBackoff(context.TODO(), "eastus2")
 			if err != nil {
@@ -324,10 +323,10 @@ func TestRefreshZones(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	m := zone.NewMockRepository(ctrl)
 	az := GetTestCloud(ctrl)
-	mockZoneClient := mockzoneclient.NewMockInterface(ctrl)
-	mockZoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(map[string][]string{}, nil).Times(0)
-	az.ZoneClient = mockZoneClient
+	az.zoneRepo = m
+	m.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{}, nil).Times(0)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {

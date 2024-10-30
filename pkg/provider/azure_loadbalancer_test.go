@@ -53,8 +53,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient/mockzoneclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
@@ -6415,9 +6415,9 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 			subnetClient.EXPECT().Get(gomock.Any(), "rg", "vnet", "subnet", gomock.Any()).Return(
 				network.Subnet{ID: pointer.String("subnet0"), SubnetPropertiesFormat: &network.SubnetPropertiesFormat{AddressPrefixes: &[]string{"1.2.3.4/31", "2001::1/127"}}}, nil).MaxTimes(1)
 
-			zoneClient := mockzoneclient.NewMockInterface(ctrl)
-			zoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(map[string][]string{}, tc.getZoneError).MaxTimes(2)
-			cloud.ZoneClient = zoneClient
+			zoneMock := zone.NewMockRepository(ctrl)
+			zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{}, tc.getZoneError).MaxTimes(2)
+			cloud.zoneRepo = zoneMock
 
 			service := tc.service
 			isDualStack := isServiceDualStack(&service)
