@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobservicepropertiesclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileservicepropertiesclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileshareclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/identityclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
@@ -60,9 +61,12 @@ type ClientFactory interface {
 	GetBlobContainerClient() blobcontainerclient.Interface
 	GetBlobContainerClientForSub(subscriptionID string) (blobcontainerclient.Interface, error)
 	GetBlobServicePropertiesClient() blobservicepropertiesclient.Interface
+	GetBlobServicePropertiesClientForSub(subscriptionID string) (blobservicepropertiesclient.Interface, error)
 	GetDeploymentClient() deploymentclient.Interface
 	GetDiskClient() diskclient.Interface
 	GetDiskClientForSub(subscriptionID string) (diskclient.Interface, error)
+	GetFileServicePropertiesClient() fileservicepropertiesclient.Interface
+	GetFileServicePropertiesClientForSub(subscriptionID string) (fileservicepropertiesclient.Interface, error)
 	GetFileShareClient() fileshareclient.Interface
 	GetFileShareClientForSub(subscriptionID string) (fileshareclient.Interface, error)
 	GetIdentityClient() identityclient.Interface
