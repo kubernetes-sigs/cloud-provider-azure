@@ -890,9 +890,13 @@ func (az *Cloud) getServiceLoadBalancer(
 			}
 		}
 		if az.HasExtendedLocation() {
+			var typ network.ExtendedLocationTypes
+			if getExtendedLocationTypeFromString(az.ExtendedLocationType) == armnetwork.ExtendedLocationTypesEdgeZone {
+				typ = network.EdgeZone
+			}
 			defaultLB.ExtendedLocation = &network.ExtendedLocation{
 				Name: &az.ExtendedLocationName,
-				Type: getExtendedLocationTypeFromString(az.ExtendedLocationType),
+				Type: typ,
 			}
 		}
 	}
@@ -940,9 +944,13 @@ func (az *Cloud) selectLoadBalancer(ctx context.Context, clusterName string, ser
 				LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{},
 			}
 			if az.HasExtendedLocation() {
+				var typ network.ExtendedLocationTypes
+				if getExtendedLocationTypeFromString(az.ExtendedLocationType) == armnetwork.ExtendedLocationTypesEdgeZone {
+					typ = network.EdgeZone
+				}
 				selectedLB.ExtendedLocation = &network.ExtendedLocation{
 					Name: &az.ExtendedLocationName,
-					Type: getExtendedLocationTypeFromString(az.ExtendedLocationType),
+					Type: typ,
 				}
 			}
 
@@ -1176,9 +1184,13 @@ func (az *Cloud) ensurePublicIPExists(ctx context.Context, service *v1.Service, 
 		pip.Location = ptr.To(az.Location)
 		if az.HasExtendedLocation() {
 			klog.V(2).Infof("Using extended location with name %s, and type %s for PIP", az.ExtendedLocationName, az.ExtendedLocationType)
+			var typ network.ExtendedLocationTypes
+			if getExtendedLocationTypeFromString(az.ExtendedLocationType) == armnetwork.ExtendedLocationTypesEdgeZone {
+				typ = network.EdgeZone
+			}
 			pip.ExtendedLocation = &network.ExtendedLocation{
 				Name: &az.ExtendedLocationName,
-				Type: getExtendedLocationTypeFromString(az.ExtendedLocationType),
+				Type: typ,
 			}
 		}
 		pip.PublicIPAddressPropertiesFormat = &network.PublicIPAddressPropertiesFormat{
