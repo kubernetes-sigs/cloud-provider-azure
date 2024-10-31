@@ -18,6 +18,8 @@ limitations under the License.
 package privatelinkserviceclient
 
 import (
+	"context"
+
 	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
@@ -29,4 +31,5 @@ type Interface interface {
 	utils.CreateOrUpdateFunc[armnetwork.PrivateLinkService]
 	utils.DeleteFunc[armnetwork.PrivateLinkService]
 	utils.ListFunc[armnetwork.PrivateLinkService]
+	DeletePrivateEndpointConnection(ctx context.Context, resourceGroupName string, serviceName string, peConnectionName string) error
 }
