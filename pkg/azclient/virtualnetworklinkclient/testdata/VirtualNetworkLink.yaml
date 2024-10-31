@@ -91,7 +91,7 @@ interactions:
         body: '{}'
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTs4MDc2NzEyZS1hNzYyLTQ5ZTEtODQwNS00NDdmNGM5MTliMGVfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTtmY2E1ZDMwNy0xOWQyLTRkMmYtYjRkZS04NDcxZDcxNGM5YzNfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - private
             Content-Length:
@@ -99,7 +99,7 @@ interactions:
             Content-Type:
                 - application/json; charset=utf-8
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTs4MDc2NzEyZS1hNzYyLTQ5ZTEtODQwNS00NDdmNGM5MTliMGVfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTtmY2E1ZDMwNy0xOWQyLTRkMmYtYjRkZS04NDcxZDcxNGM5YzNfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
@@ -129,7 +129,7 @@ interactions:
         headers:
             User-Agent:
                 - azsdk-go-armprivatedns/v1.3.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTs4MDc2NzEyZS1hNzYyLTQ5ZTEtODQwNS00NDdmNGM5MTliMGVfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTtmY2E1ZDMwNy0xOWQyLTRkMmYtYjRkZS04NDcxZDcxNGM5YzNfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -186,7 +186,7 @@ interactions:
         trailer: {}
         content_length: 752
         uncompressed: false
-        body: '{"id":"\/subscriptions\/00000000-0000-0000-0000-000000000000\/resourceGroups\/aks-cit-virtualnetworklink\/providers\/Microsoft.Network\/privateDnsZones\/aks-cit-privatednszone-cit.privatelink.global.azmk8s.io","name":"aks-cit-privatednszone-cit.privatelink.global.azmk8s.io","type":"Microsoft.Network\/privateDnsZones","etag":"00000000-0000-0000-0000-000000000000","location":"global","properties":{"internalId":"SW1tdXRhYmxlWm9uZUlkZW50aXR5O2MyNjIzMTdhLTBhMWQtNDRmOC05NDlhLTZmNWU5MjU1NzU2ZDsw","maxNumberOfRecordSets":25000,"maxNumberOfVirtualNetworkLinks":1000,"maxNumberOfVirtualNetworkLinksWithRegistration":100,"numberOfRecordSets":1,"numberOfVirtualNetworkLinks":0,"numberOfVirtualNetworkLinksWithRegistration":0,"provisioningState":"Succeeded"}}'
+        body: '{"id":"\/subscriptions\/00000000-0000-0000-0000-000000000000\/resourceGroups\/aks-cit-virtualnetworklink\/providers\/Microsoft.Network\/privateDnsZones\/aks-cit-privatednszone-cit.privatelink.global.azmk8s.io","name":"aks-cit-privatednszone-cit.privatelink.global.azmk8s.io","type":"Microsoft.Network\/privateDnsZones","etag":"00000000-0000-0000-0000-000000000000","location":"global","properties":{"internalId":"SW1tdXRhYmxlWm9uZUlkZW50aXR5O2QyYWY5ODkxLTU2Y2YtNGE4MS1hNDY0LWMyM2ZiMGJjNmI1Njsw","maxNumberOfRecordSets":25000,"maxNumberOfVirtualNetworkLinks":1000,"maxNumberOfVirtualNetworkLinksWithRegistration":100,"numberOfRecordSets":1,"numberOfVirtualNetworkLinks":0,"numberOfVirtualNetworkLinksWithRegistration":0,"provisioningState":"Succeeded"}}'
         headers:
             Cache-Control:
                 - private
@@ -403,7 +403,7 @@ interactions:
         body: '{}'
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRWaXJ0dWFsTmV0d29ya0xpbms7YTE4YmE2YWQtYzEyOS00YmJmLWIzMmQtYWIwZjQ2OTFlNWZlXzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRWaXJ0dWFsTmV0d29ya0xpbms7OTkwZGFlNjktNmYzYy00ZTQzLTk1ZDgtNzQ1ZDk0ZGI0NDRlXzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - private
             Content-Length:
@@ -411,7 +411,7 @@ interactions:
             Content-Type:
                 - application/json; charset=utf-8
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRWaXJ0dWFsTmV0d29ya0xpbms7YTE4YmE2YWQtYzEyOS00YmJmLWIzMmQtYWIwZjQ2OTFlNWZlXzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRWaXJ0dWFsTmV0d29ya0xpbms7OTkwZGFlNjktNmYzYy00ZTQzLTk1ZDgtNzQ1ZDk0ZGI0NDRlXzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
@@ -441,7 +441,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-VirtualNetworkLink-c azsdk-go-armprivatedns/v1.3.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRWaXJ0dWFsTmV0d29ya0xpbms7YTE4YmE2YWQtYzEyOS00YmJmLWIzMmQtYWIwZjQ2OTFlNWZlXzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRWaXJ0dWFsTmV0d29ya0xpbms7OTkwZGFlNjktNmYzYy00ZTQzLTk1ZDgtNzQ1ZDk0ZGI0NDRlXzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -658,7 +658,7 @@ interactions:
         body: '{}'
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRWaXJ0dWFsTmV0d29ya0xpbms7M2VkYWU2M2UtMTc3Ny00NmIwLWIxZGMtOGVhODNmODBiMDkxXzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRWaXJ0dWFsTmV0d29ya0xpbms7YjJlMmNkMmEtNmQ2YS00ZDJlLTg2MzYtMDM5M2I5ZDJlYWY3XzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - private
             Content-Length:
@@ -666,7 +666,7 @@ interactions:
             Content-Type:
                 - application/json; charset=utf-8
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRWaXJ0dWFsTmV0d29ya0xpbms7M2VkYWU2M2UtMTc3Ny00NmIwLWIxZGMtOGVhODNmODBiMDkxXzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRWaXJ0dWFsTmV0d29ya0xpbms7YjJlMmNkMmEtNmQ2YS00ZDJlLTg2MzYtMDM5M2I5ZDJlYWY3XzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
@@ -696,7 +696,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-VirtualNetworkLink-c azsdk-go-armprivatedns/v1.3.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRWaXJ0dWFsTmV0d29ya0xpbms7M2VkYWU2M2UtMTc3Ny00NmIwLWIxZGMtOGVhODNmODBiMDkxXzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRWaXJ0dWFsTmV0d29ya0xpbms7YjJlMmNkMmEtNmQ2YS00ZDJlLTg2MzYtMDM5M2I5ZDJlYWY3XzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -807,13 +807,13 @@ interactions:
         body: ""
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVWaXJ0dWFsTmV0d29ya0xpbms7NWI1ZTIyMjgtOWE1NC00MGUyLTgwNTAtZmY3ZGU2ODU1Njk4XzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVWaXJ0dWFsTmV0d29ya0xpbms7ZGNlZmMwMDEtMmZkZi00NTAzLTgxMzEtOTcxYjI1N2EwYTFlXzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - private
             Content-Length:
                 - "0"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVWaXJ0dWFsTmV0d29ya0xpbms7NWI1ZTIyMjgtOWE1NC00MGUyLTgwNTAtZmY3ZGU2ODU1Njk4XzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVWaXJ0dWFsTmV0d29ya0xpbms7ZGNlZmMwMDEtMmZkZi00NTAzLTgxMzEtOTcxYjI1N2EwYTFlXzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
@@ -843,7 +843,7 @@ interactions:
         headers:
             User-Agent:
                 - azsdk-go-armprivatedns/v1.3.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVWaXJ0dWFsTmV0d29ya0xpbms7NWI1ZTIyMjgtOWE1NC00MGUyLTgwNTAtZmY3ZGU2ODU1Njk4XzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVWaXJ0dWFsTmV0d29ya0xpbms7ZGNlZmMwMDEtMmZkZi00NTAzLTgxMzEtOTcxYjI1N2EwYTFlXzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -905,13 +905,13 @@ interactions:
         body: ""
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTtjN2M1OTdjMy02MDBhLTQzYmQtYTdmZi1hMzEwMGNjNGI1NGRfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTs3NWY2MjRmOS0wYzNjLTQ5NGEtOTIzMS05ZDZjNWQ2NDU4YmFfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - private
             Content-Length:
                 - "0"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTtjN2M1OTdjMy02MDBhLTQzYmQtYTdmZi1hMzEwMGNjNGI1NGRfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTs3NWY2MjRmOS0wYzNjLTQ5NGEtOTIzMS05ZDZjNWQ2NDU4YmFfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
@@ -941,7 +941,7 @@ interactions:
         headers:
             User-Agent:
                 - azsdk-go-armprivatedns/v1.3.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTtjN2M1OTdjMy02MDBhLTQzYmQtYTdmZi1hMzEwMGNjNGI1NGRfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-virtualnetworklink/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTs3NWY2MjRmOS0wYzNjLTQ5NGEtOTIzMS05ZDZjNWQ2NDU4YmFfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0

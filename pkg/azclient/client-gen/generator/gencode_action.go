@@ -88,6 +88,10 @@ func generateClient(ctx *genall.GenerationContext, root *loader.Package, _ strin
 	if markerConf.OutOfSubscriptionScope && len(markerConf.Verbs) > 0 {
 		importList["go.opentelemetry.io/otel/attribute"] = make(map[string]struct{})
 	}
+	if markerConf.Etag {
+		importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"] = make(map[string]struct{})
+		importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/etag"] = make(map[string]struct{})
+	}
 	if err := WriteToFile(ctx, root, "zz_generated_client.go", headerText, importList, &outContent); err != nil {
 		return err
 	}

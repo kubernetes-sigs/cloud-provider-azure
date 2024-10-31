@@ -126,14 +126,7 @@ func (g Generator) Generate(ctx *genall.GenerationContext) error {
 	if err := factoryGenerator.Generate(ctx); err != nil {
 		return err
 	}
-
-	fmt.Println("Run go test ")
-
-	//nolint:gosec // G204 ignore this!
-	cmd = exec.Command("go", "test", "./...", "--timeout=30m")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	return nil
 }
 
 func (Generator) CheckFilter() loader.NodeFilter {

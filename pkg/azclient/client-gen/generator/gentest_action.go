@@ -106,6 +106,9 @@ func generateTestCase(ctx *genall.GenerationContext, root *loader.Package, _ str
 
 	importList["context"] = make(map[string]struct{})
 	importList["github.com/onsi/ginkgo/v2"] = map[string]struct{}{}
+	if markerConf.Etag {
+		importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/to"] = make(map[string]struct{})
+	}
 	return WriteToFile(ctx, root, root.Name+"_test.go", headerText, importList, &outContent)
 }
 

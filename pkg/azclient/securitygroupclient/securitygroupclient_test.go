@@ -21,6 +21,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
@@ -70,6 +71,12 @@ var _ = ginkgo.Describe("SecurityGroupsClient", ginkgo.Ordered, func() {
 			newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName, resourceName, *newResource)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(newResource).NotTo(gomega.BeNil())
+		})
+
+		ginkgo.It("should return error", func(ctx context.Context) {
+			newResource.Etag = to.Ptr("invalid")
+			_, err := realClient.CreateOrUpdate(ctx, resourceGroupName, resourceName, *newResource)
+			gomega.Expect(err).To(gomega.HaveOccurred())
 		})
 	})
 

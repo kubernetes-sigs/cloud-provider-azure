@@ -39,6 +39,7 @@ type TypeScaffoldOptions struct {
 	Expand          bool
 	RateLimitKey    string
 	CrossSubFactory bool
+	Etag            bool
 }
 
 var (
@@ -71,7 +72,7 @@ import (
 )
 `
 	TypeResourceTemplate = `
-// +azure:client:verbs={{join .Verbs ";"}},resource={{.Resource}},packageName={{.Package}},packageAlias={{tolower .PackageAlias}},clientName={{.ClientName}},expand={{.Expand}}{{with .RateLimitKey}},rateLimitKey={{.}}{{end}}
+// +azure:client:verbs={{join .Verbs ";"}},resource={{.Resource}},packageName={{.Package}},packageAlias={{tolower .PackageAlias}},clientName={{.ClientName}},expand={{.Expand}}{{with .RateLimitKey}},rateLimitKey={{.}}{{end}}{{with .Etag}},etag={{.}}{{end}}
 type Interface interface {
 {{ $expandable := .Expand}}
 {{ $packageAlias := .PackageAlias}}
@@ -193,6 +194,8 @@ func main() {
 	rootCmd.Flags().StringVar(&scaffoldOptions.SubResource, "subresource", "", "subresource name")
 	rootCmd.Flags().StringVar(&scaffoldOptions.RateLimitKey, "ratelimitkey", "", "ratelimit config key")
 	rootCmd.Flags().BoolVar(&scaffoldOptions.CrossSubFactory, "cross-sub-factory-support", false, "cross sub factory support")
+	rootCmd.Flags().BoolVar(&scaffoldOptions.Etag, "etag", false, "support etag")
+
 	err := rootCmd.Execute()
 	if err != nil {
 		fmt.Printf("failed to generate interface %s\n", err.Error())
