@@ -230,13 +230,11 @@ func (az *Cloud) safeDeletePLS(ctx context.Context, pls *armnetwork.PrivateLinkS
 	}
 
 	peConns := pls.Properties.PrivateEndpointConnections
-	if peConns != nil {
-		for _, peConn := range peConns {
-			klog.V(2).Infof("deletePLS: deleting PEConnection %s", ptr.Deref(peConn.Name, ""))
-			err := az.plsRepo.DeletePEConnection(ctx, az.getPLSResourceGroup(service), ptr.Deref(pls.Name, ""), ptr.Deref(peConn.Name, ""))
-			if err != nil {
-				return err
-			}
+	for _, peConn := range peConns {
+		klog.V(2).Infof("deletePLS: deleting PEConnection %s", ptr.Deref(peConn.Name, ""))
+		err := az.plsRepo.DeletePEConnection(ctx, az.getPLSResourceGroup(service), ptr.Deref(pls.Name, ""), ptr.Deref(peConn.Name, ""))
+		if err != nil {
+			return err
 		}
 	}
 
