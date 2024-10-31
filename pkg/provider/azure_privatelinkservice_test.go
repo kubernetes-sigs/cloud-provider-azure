@@ -346,7 +346,7 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 				mockSubnetsClient.EXPECT().Get(gomock.Any(), "rg", "vnet", "subnet", "").Return(*test.existingSubnet, nil).MaxTimes(2)
 			}
 			if test.expectedPLSList {
-				mockPLSRepo.EXPECT().Get(gomock.Any(), "rg", *fipConfig.ID, gomock.Any()).DoAndReturn(func(ctx context.Context, resourceGroup, frontendIPConfigID string, crt cache.AzureCacheReadType) (*armnetwork.PrivateLinkService, error) {
+				mockPLSRepo.EXPECT().Get(gomock.Any(), "rg", *fipConfig.ID, gomock.Any()).DoAndReturn(func(_ context.Context, _, frontendIPConfigID string, _ cache.AzureCacheReadType) (*armnetwork.PrivateLinkService, error) {
 					for _, pls := range test.existingPLSList {
 						if strings.EqualFold(*pls.Properties.LoadBalancerFrontendIPConfigurations[0].ID, frontendIPConfigID) {
 							return pls, nil
