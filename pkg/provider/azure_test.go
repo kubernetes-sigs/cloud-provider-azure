@@ -52,9 +52,9 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient/mockzoneclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/taints"
@@ -2264,6 +2264,7 @@ func getCloudFromConfig(t *testing.T, config string) *Cloud {
 	c, err := ParseConfig(configReader)
 	assert.NoError(t, err)
 
+	zoneMock := zone.NewMockRepository(ctrl)
 	az := &Cloud{
 		nodeNames:                utilsets.NewString(),
 		nodeZones:                map[string]*utilsets.IgnoreCaseSet{},
@@ -2271,12 +2272,11 @@ func getCloudFromConfig(t *testing.T, config string) *Cloud {
 		unmanagedNodes:           utilsets.NewString(),
 		excludeLoadBalancerNodes: utilsets.NewString(),
 		routeCIDRs:               map[string]string{},
-		ZoneClient:               mockzoneclient.NewMockInterface(ctrl),
+		zoneRepo:                 zoneMock,
 		ComputeClientFactory:     mock_azclient.NewMockClientFactory(ctrl),
 		NetworkClientFactory:     mock_azclient.NewMockClientFactory(ctrl),
 	}
-	mockZoneClient := az.ZoneClient.(*mockzoneclient.MockInterface)
-	mockZoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil)
+	zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil)
 
 	// Skip AAD client cert path validation since it will read the file from the path
 	aadCertPath := c.AADClientCertPath
@@ -2782,9 +2782,9 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 	defer ctrl.Finish()
 	az := GetTestCloud(ctrl)
 
-	mockZoneClient := mockzoneclient.NewMockInterface(ctrl)
-	mockZoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
-	az.ZoneClient = mockZoneClient
+	zoneMock := zone.NewMockRepository(ctrl)
+	zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
+	az.zoneRepo = zoneMock
 
 	err := az.InitializeCloudFromConfig(context.Background(), nil, false, true)
 	assert.Equal(t, fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config"), err)
