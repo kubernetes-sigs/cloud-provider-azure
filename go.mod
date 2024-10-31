@@ -23,7 +23,7 @@ require (
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/go-logr/logr v1.4.2
 	github.com/onsi/ginkgo/v2 v2.20.2
-	github.com/onsi/gomega v1.34.2
+	github.com/onsi/gomega v1.35.0
 	github.com/prometheus/client_golang v1.20.5
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
@@ -38,10 +38,10 @@ require (
 	golang.org/x/sync v0.8.0
 	golang.org/x/sys v0.26.0
 	golang.org/x/text v0.19.0
-	k8s.io/api v0.31.1
-	k8s.io/apimachinery v0.31.1
+	k8s.io/api v0.31.2
+	k8s.io/apimachinery v0.31.2
 	k8s.io/apiserver v0.30.5
-	k8s.io/client-go v0.31.1
+	k8s.io/client-go v0.31.2
 	k8s.io/cloud-provider v0.30.5
 	k8s.io/component-base v0.30.5
 	k8s.io/component-helpers v0.30.5
@@ -50,7 +50,7 @@ require (
 	k8s.io/kubelet v0.30.5
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.1.3
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.30
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.1.2
 	sigs.k8s.io/yaml v1.4.0
 )
 
@@ -135,7 +135,7 @@ require (
 	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/crypto v0.28.0 // indirect
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
-	golang.org/x/net v0.29.0 // indirect
+	golang.org/x/net v0.30.0 // indirect
 	golang.org/x/oauth2 v0.23.0 // indirect
 	golang.org/x/term v0.25.0 // indirect
 	golang.org/x/time v0.7.0 // indirect
