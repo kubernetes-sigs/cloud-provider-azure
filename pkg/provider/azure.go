@@ -71,6 +71,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
 
 	"sigs.k8s.io/yaml"
@@ -418,12 +419,13 @@ type Cloud struct {
 	routeUpdater       batchProcessor
 	backendPoolUpdater batchProcessor
 
-	vmCache  azcache.Resource
-	lbCache  azcache.Resource
-	nsgRepo  securitygroup.Repository
-	zoneRepo zone.Repository
-	plsRepo  privatelinkservice.Repository
-	rtCache  azcache.Resource
+	vmCache    azcache.Resource
+	lbCache    azcache.Resource
+	nsgRepo    securitygroup.Repository
+	zoneRepo   zone.Repository
+	plsRepo    privatelinkservice.Repository
+	subnetRepo subnet.Repository
+	rtCache    azcache.Resource
 	// public ip cache
 	// key: [resourceGroupName]
 	// Value: sync.Map of [pipName]*PublicIPAddress
@@ -751,6 +753,10 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 		}
 
 		az.plsRepo, err = privatelinkservice.NewRepo(az.ComputeClientFactory.GetPrivateLinkServiceClient(), time.Duration(az.PlsCacheTTLInSeconds)*time.Second, az.DisableAPICallCache)
+		if err != nil {
+			return err
+		}
+		az.subnetRepo, err = subnet.NewRepo(networkClientFactory.GetSubnetClient())
 		if err != nil {
 			return err
 		}
