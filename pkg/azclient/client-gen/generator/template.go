@@ -29,6 +29,7 @@ type ClientGenConfig struct {
 	Expand                 bool   `marker:"expand,optional"`
 	RateLimitKey           string `marker:"rateLimitKey,optional"`
 	CrossSubFactory        bool   `marker:"crossSubFactory,optional"`
+	Etag                   bool   `marker:"etag,optional"`
 }
 
 var ClientTemplate = template.Must(template.New("object-scaffolding-client-struct").Parse(`
@@ -45,7 +46,9 @@ func New({{if not .OutOfSubscriptionScope}}subscriptionID string, {{end}}credent
 		options = utils.GetDefaultOption()
 	}
 	tr := options.TracingProvider.NewTracer(utils.ModuleName, utils.ModuleVersion)
-
+	{{with .Etag}}
+	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, utils.FuncPolicyWrapper(etag.AppendEtag))
+	{{- end}}
 	client, err := {{.PackageAlias}}.New{{.ClientName}}({{if not .OutOfSubscriptionScope}}subscriptionID,{{end}} credential, options)
 	if err != nil {
 		return nil, err
@@ -294,8 +297,8 @@ var _ = ginkgo.Describe("{{.ClientName}}",ginkgo.Ordered, func() {
 	}
 
 {{if $HasCreateOrUpdate}}
-ginkgo.When("creation requests are raised", func() {
-ginkgo.It("should not return error", func(ctx context.Context) {
+	ginkgo.When("creation requests are raised", func() {
+		ginkgo.It("should not return error", func(ctx context.Context) {
 			newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName, *newResource)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(newResource).NotTo(gomega.BeNil())
@@ -304,15 +307,15 @@ ginkgo.It("should not return error", func(ctx context.Context) {
 	})
 {{end -}}
 {{if $HasGet}}
-ginkgo.When("get requests are raised", func() {
-ginkgo.It("should not return error", func(ctx context.Context) {
+	ginkgo.When("get requests are raised", func() {
+		ginkgo.It("should not return error", func(ctx context.Context) {
 			newResource, err := realClient.Get(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName{{if .Expand}}, nil{{end}})
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(newResource).NotTo(gomega.BeNil())
 		})
 	})
-ginkgo.When("invalid get requests are raised", func() {
-ginkgo.It("should return 404 error", func(ctx context.Context) {
+	ginkgo.When("invalid get requests are raised", func() {
+		ginkgo.It("should return 404 error", func(ctx context.Context) {
 			newResource, err := realClient.Get(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName+"notfound"{{if .Expand}}, nil{{end}})
 			gomega.Expect(err).To(gomega.HaveOccurred())
 			gomega.Expect(newResource).To(gomega.BeNil())
@@ -320,17 +323,24 @@ ginkgo.It("should return 404 error", func(ctx context.Context) {
 	})
 {{end -}}
 {{if $HasCreateOrUpdate}}
-ginkgo.When("update requests are raised", func() {
-ginkgo.It("should not return error", func(ctx context.Context) {
+	ginkgo.When("update requests are raised", func() {
+		ginkgo.It("should not return error", func(ctx context.Context) {
 			newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName, *newResource)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(newResource).NotTo(gomega.BeNil())
 		})
+{{if .Etag}}
+		ginkgo.It("should return error", func(ctx context.Context) {
+			newResource.Etag = to.Ptr("invalid")
+			_, err := realClient.CreateOrUpdate(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName, *newResource)
+			gomega.Expect(err).To(gomega.HaveOccurred())
+		})
+{{end -}}
 	})
 {{end -}}
 {{if or $HasListByRG $HasList}}
-ginkgo.When("list requests are raised", func() {
-ginkgo.It("should not return error", func(ctx context.Context) {
+	ginkgo.When("list requests are raised", func() {
+		ginkgo.It("should not return error", func(ctx context.Context) {
 			resourceList, err := realClient.List(ctx, resourceGroupName,{{with .SubResource}}parentResourceName{{end}})
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(resourceList).NotTo(gomega.BeNil())
@@ -338,8 +348,8 @@ ginkgo.It("should not return error", func(ctx context.Context) {
 			gomega.Expect(*resourceList[0].Name).To(gomega.Equal(resourceName))
 		})
 	})
-ginkgo.When("invalid list requests are raised", func() {
-ginkgo.It("should return error", func(ctx context.Context) {
+	ginkgo.When("invalid list requests are raised", func() {
+		ginkgo.It("should return error", func(ctx context.Context) {
 			resourceList, err := realClient.List(ctx, resourceGroupName+"notfound",{{with .SubResource}}parentResourceName{{end}})
 			gomega.Expect(err).To(gomega.HaveOccurred())
 			gomega.Expect(resourceList).To(gomega.BeNil())
@@ -347,8 +357,8 @@ ginkgo.It("should return error", func(ctx context.Context) {
 	})
 {{end -}}
 {{if $HasDelete}}
-ginkgo.When("deletion requests are raised", func() {
-ginkgo.It("should not return error", func(ctx context.Context) {
+	ginkgo.When("deletion requests are raised", func() {
+		ginkgo.It("should not return error", func(ctx context.Context) {
 			err = realClient.Delete(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		})

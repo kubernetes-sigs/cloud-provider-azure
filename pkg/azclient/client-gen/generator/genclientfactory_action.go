@@ -96,9 +96,8 @@ func (generator *ClientFactoryGenerator) Generate(_ *genall.GenerationContext) e
 		}
 		for _, v := range generator.clientRegistry {
 			if v.ClientGenConfig.CrossSubFactory {
-				importList["sync"] = map[string]struct{}{}
-				importList["strings"] = map[string]struct{}{}
-				break
+				importList["sync"] = make(map[string]struct{})
+				importList["strings"] = make(map[string]struct{})
 			}
 		}
 

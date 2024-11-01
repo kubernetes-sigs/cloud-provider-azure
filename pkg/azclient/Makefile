@@ -67,6 +67,10 @@ build: ## Build manager binary.
 	pushd client-gen; CGO_ENABLED=0 go build -o ../bin/client-gen ./cmd/client-gen/ ;popd
 	pushd client-gen; CGO_ENABLED=0 go build -o ../bin/typescaffold ./cmd/typescaffold/;popd
 
+.PHONY: test
+test: ## Run tests.
+	go test -v ./...
+
 .PHONY: generate
 generate: install-dependencies build generatecode generateimpl fmt vet-all
 
