@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
@@ -31,11 +32,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
 )
 
 func TestReconcilePrivateLinkService(t *testing.T) {
@@ -47,7 +47,7 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 		annotations       map[string]string
 		wantPLS           bool
 		expectedSubnetGet bool
-		existingSubnet    *network.Subnet
+		existingSubnet    *armnetwork.Subnet
 		expectedPLSList   bool
 		existingPLSList   []*armnetwork.PrivateLinkService
 		expectedPLSCreate bool
@@ -75,11 +75,11 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			},
 			wantPLS:           true,
 			expectedSubnetGet: true,
-			existingSubnet: &network.Subnet{
+			existingSubnet: &armnetwork.Subnet{
 				Name: ptr.To("subnet"),
 				ID:   ptr.To("subnetID"),
-				SubnetPropertiesFormat: &network.SubnetPropertiesFormat{
-					PrivateLinkServiceNetworkPolicies: network.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled,
+				Properties: &armnetwork.SubnetPropertiesFormat{
+					PrivateLinkServiceNetworkPolicies: to.Ptr(armnetwork.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled),
 				},
 			},
 			expectedPLSList:   true,
@@ -96,11 +96,11 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			},
 			wantPLS:           true,
 			expectedSubnetGet: true,
-			existingSubnet: &network.Subnet{
+			existingSubnet: &armnetwork.Subnet{
 				Name: ptr.To("subnet"),
 				ID:   ptr.To("subnetID"),
-				SubnetPropertiesFormat: &network.SubnetPropertiesFormat{
-					PrivateLinkServiceNetworkPolicies: network.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled,
+				Properties: &armnetwork.SubnetPropertiesFormat{
+					PrivateLinkServiceNetworkPolicies: to.Ptr(armnetwork.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled),
 				},
 			},
 			expectedPLSList:   true,
@@ -211,11 +211,11 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			},
 			wantPLS:           true,
 			expectedSubnetGet: true,
-			existingSubnet: &network.Subnet{
+			existingSubnet: &armnetwork.Subnet{
 				Name: ptr.To("subnet"),
 				ID:   ptr.To("subnetID"),
-				SubnetPropertiesFormat: &network.SubnetPropertiesFormat{
-					PrivateLinkServiceNetworkPolicies: network.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled,
+				Properties: &armnetwork.SubnetPropertiesFormat{
+					PrivateLinkServiceNetworkPolicies: to.Ptr(armnetwork.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled),
 				},
 			},
 			expectedPLSList: true,
@@ -252,11 +252,11 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			},
 			wantPLS:           true,
 			expectedSubnetGet: true,
-			existingSubnet: &network.Subnet{
+			existingSubnet: &armnetwork.Subnet{
 				Name: ptr.To("subnet"),
 				ID:   ptr.To("subnetID"),
-				SubnetPropertiesFormat: &network.SubnetPropertiesFormat{
-					PrivateLinkServiceNetworkPolicies: network.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled,
+				Properties: &armnetwork.SubnetPropertiesFormat{
+					PrivateLinkServiceNetworkPolicies: to.Ptr(armnetwork.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled),
 				},
 			},
 			expectedPLSList: true,
@@ -322,6 +322,7 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 		},
 	}
 	for _, test := range testCases {
+		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
 			service := getTestServiceWithAnnotation("test", test.annotations, false, 80)
@@ -340,10 +341,10 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			}
 			clusterName := testClusterName
 
-			mockSubnetsClient := az.SubnetsClient.(*mocksubnetclient.MockInterface)
+			mockSubnetsClient := az.subnetRepo.(*subnet.MockRepository)
 			mockPLSRepo := az.plsRepo.(*privatelinkservice.MockRepository)
 			if test.expectedSubnetGet {
-				mockSubnetsClient.EXPECT().Get(gomock.Any(), "rg", "vnet", "subnet", "").Return(*test.existingSubnet, nil).MaxTimes(2)
+				mockSubnetsClient.EXPECT().Get(gomock.Any(), "rg", "vnet", "subnet").Return(test.existingSubnet, nil).MaxTimes(2)
 			}
 			if test.expectedPLSList {
 				mockPLSRepo.EXPECT().Get(gomock.Any(), "rg", *fipConfig.ID, gomock.Any()).DoAndReturn(func(_ context.Context, _, frontendIPConfigID string, _ cache.AzureCacheReadType) (*armnetwork.PrivateLinkService, error) {
@@ -403,26 +404,26 @@ func TestDisablePLSNetworkPolicy(t *testing.T) {
 
 	testCases := []struct {
 		desc                 string
-		subnet               network.Subnet
+		subnet               *armnetwork.Subnet
 		expectedSubnetUpdate bool
 		expectedError        bool
 	}{
 		{
 			desc: "disablePLSNetworkPolicy shall not update subnet if pls-network-policy is disabled",
-			subnet: network.Subnet{
+			subnet: &armnetwork.Subnet{
 				Name: ptr.To("plsSubnet"),
-				SubnetPropertiesFormat: &network.SubnetPropertiesFormat{
-					PrivateLinkServiceNetworkPolicies: network.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled,
+				Properties: &armnetwork.SubnetPropertiesFormat{
+					PrivateLinkServiceNetworkPolicies: to.Ptr(armnetwork.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled),
 				},
 			},
 			expectedSubnetUpdate: false,
 		},
 		{
 			desc: "disablePLSNetworkPolicy shall update subnet if pls-network-policy is enabled",
-			subnet: network.Subnet{
+			subnet: &armnetwork.Subnet{
 				Name: ptr.To("plsSubnet"),
-				SubnetPropertiesFormat: &network.SubnetPropertiesFormat{
-					PrivateLinkServiceNetworkPolicies: network.VirtualNetworkPrivateLinkServiceNetworkPoliciesEnabled,
+				Properties: &armnetwork.SubnetPropertiesFormat{
+					PrivateLinkServiceNetworkPolicies: to.Ptr(armnetwork.VirtualNetworkPrivateLinkServiceNetworkPoliciesEnabled),
 				},
 			},
 			expectedSubnetUpdate: true,
@@ -430,22 +431,23 @@ func TestDisablePLSNetworkPolicy(t *testing.T) {
 	}
 
 	for i, test := range testCases {
+		test := test
 		az := GetTestCloud(ctrl)
 		service := &v1.Service{}
 		service.Annotations = map[string]string{
 			consts.ServiceAnnotationPLSIpConfigurationSubnet: "plsSubnet",
 		}
-		mockSubnetsClient := az.SubnetsClient.(*mocksubnetclient.MockInterface)
-		mockSubnetsClient.EXPECT().Get(gomock.Any(), "rg", "vnet", "plsSubnet", "").Return(test.subnet, nil).Times(1)
+		mockSubnetsClient := az.subnetRepo.(*subnet.MockRepository)
+		mockSubnetsClient.EXPECT().Get(gomock.Any(), "rg", "vnet", "plsSubnet").Return(test.subnet, nil).Times(1)
 		if test.expectedSubnetUpdate {
-			mockSubnetsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "vnet", "plsSubnet", network.Subnet{
+			mockSubnetsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "vnet", "plsSubnet", armnetwork.Subnet{
 				Name: ptr.To("plsSubnet"),
-				SubnetPropertiesFormat: &network.SubnetPropertiesFormat{
-					PrivateLinkServiceNetworkPolicies: network.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled,
+				Properties: &armnetwork.SubnetPropertiesFormat{
+					PrivateLinkServiceNetworkPolicies: to.Ptr(armnetwork.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled),
 				},
 			}).Return(nil).Times(1)
 		}
-		err := az.disablePLSNetworkPolicy(service)
+		err := az.disablePLSNetworkPolicy(context.TODO(), service)
 		assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
 	}
 }
@@ -574,14 +576,14 @@ func TestGetExpectedPrivateLinkService(t *testing.T) {
 		clusterName := testClusterName
 		fipConfig := &network.FrontendIPConfiguration{ID: ptr.To("fipConfigID")}
 		pls := &armnetwork.PrivateLinkService{Properties: &armnetwork.PrivateLinkServiceProperties{}}
-		subnetClient := cloud.SubnetsClient.(*mocksubnetclient.MockInterface)
-		subnetClient.EXPECT().Get(gomock.Any(), "rg", "vnet", "subnet", gomock.Any()).Return(
-			network.Subnet{
+		subnetClient := cloud.subnetRepo.(*subnet.MockRepository)
+		subnetClient.EXPECT().Get(gomock.Any(), "rg", "vnet", "subnet").Return(
+			&armnetwork.Subnet{
 				ID:   ptr.To("subnetID"),
 				Name: ptr.To("subnet"),
 			}, nil).MaxTimes(1)
 
-		dirtyPLS, err := cloud.getExpectedPrivateLinkService(pls, &plsName, &clusterName, service, fipConfig)
+		dirtyPLS, err := cloud.getExpectedPrivateLinkService(context.TODO(), pls, &plsName, &clusterName, service, fipConfig)
 		assert.NoError(t, err)
 		assert.True(t, dirtyPLS)
 
@@ -647,7 +649,7 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 		plsName           string
 		existingIPConfigs []*armnetwork.PrivateLinkServiceIPConfiguration
 		expectedIPConfigs []*armnetwork.PrivateLinkServiceIPConfiguration
-		getSubnetError    *retry.Error
+		getSubnetError    error
 		expectedChanged   bool
 		expectedErr       bool
 	}{
@@ -657,7 +659,7 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			annotations: map[string]string{
 				consts.ServiceAnnotationPLSIpConfigurationSubnet: "subnet",
 			},
-			getSubnetError: &retry.Error{HTTPStatusCode: http.StatusNotFound},
+			getSubnetError: &azcore.ResponseError{StatusCode: http.StatusNotFound},
 			expectedErr:    true,
 		},
 		{
@@ -1006,14 +1008,14 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 				IPConfigurations: test.existingIPConfigs,
 			},
 		}
-		subnetClient := cloud.SubnetsClient.(*mocksubnetclient.MockInterface)
-		subnetClient.EXPECT().Get(gomock.Any(), "rg", "vnet", "subnet", gomock.Any()).Return(
-			network.Subnet{
+		subnetClient := cloud.subnetRepo.(*subnet.MockRepository)
+		subnetClient.EXPECT().Get(gomock.Any(), "rg", "vnet", "subnet").Return(
+			&armnetwork.Subnet{
 				ID:   ptr.To("subnetID"),
 				Name: ptr.To("subnet"),
 			}, test.getSubnetError).MaxTimes(1)
 
-		changed, err := cloud.reconcilePLSIpConfigs(pls, service)
+		changed, err := cloud.reconcilePLSIpConfigs(context.TODO(), pls, service)
 		if test.expectedErr {
 			assert.Error(t, err, "TestCase[%d]: %s", i, test.desc)
 		} else {
