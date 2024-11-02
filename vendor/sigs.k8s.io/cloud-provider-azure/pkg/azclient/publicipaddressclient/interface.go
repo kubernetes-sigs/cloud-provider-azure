@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate;delete;list,resource=PublicIPAddress,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6,packageAlias=armnetwork,clientName=PublicIPAddressesClient,expand=true,rateLimitKey=publicIPAddressRateLimit
+// +azure:client:verbs=get;createorupdate;delete;list,resource=PublicIPAddress,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6,packageAlias=armnetwork,clientName=PublicIPAddressesClient,expand=true,rateLimitKey=publicIPAddressRateLimit,etag=true
 type Interface interface {
 	utils.GetWithExpandFunc[armnetwork.PublicIPAddress]
 	utils.CreateOrUpdateFunc[armnetwork.PublicIPAddress]
