@@ -26,6 +26,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
+const AzureStackCloudAPIVersion = "2019-06-01"
+
 type Client struct {
 	*armstorage.BlobServicesClient
 	subscriptionID string
