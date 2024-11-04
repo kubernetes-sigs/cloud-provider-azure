@@ -47,10 +47,10 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/iputil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	"sigs.k8s.io/cloud-provider-azure/pkg/trace"
 	"sigs.k8s.io/cloud-provider-azure/pkg/trace/attributes"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/iputil"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -3030,7 +3030,7 @@ func (az *Cloud) reconcileSecurityGroup(
 
 	var accessControl *loadbalancer.AccessControl
 	{
-		sg, err := az.getSecurityGroup(ctx, azcache.CacheReadTypeDefault)
+		sg, err := az.nsgRepo.GetSecurityGroup(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -3123,13 +3123,12 @@ func (az *Cloud) reconcileSecurityGroup(
 	if updated {
 		logger.V(2).Info("Preparing to update security group")
 		logger.V(5).Info("CreateOrUpdateSecurityGroup begin")
-		err := az.CreateOrUpdateSecurityGroup(rv)
+		err := az.nsgRepo.CreateOrUpdateSecurityGroup(ctx, rv)
 		if err != nil {
 			logger.Error(err, "Failed to update security group")
 			return nil, err
 		}
 		logger.V(5).Info("CreateOrUpdateSecurityGroup end")
-		_ = az.nsgCache.Delete(pointer.StringDeref(rv.Name, ""))
 	}
 	return rv, nil
 }
