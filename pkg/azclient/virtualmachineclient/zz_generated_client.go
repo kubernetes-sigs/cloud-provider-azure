@@ -30,6 +30,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
+const AzureStackCloudAPIVersion = "2017-12-01"
+
 type Client struct {
 	*armcompute.VirtualMachinesClient
 	subscriptionID string
