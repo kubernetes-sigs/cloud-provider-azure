@@ -99,6 +99,10 @@ func (generator *ClientFactoryGenerator) Generate(_ *genall.GenerationContext) e
 				importList["sync"] = make(map[string]struct{})
 				importList["strings"] = make(map[string]struct{})
 			}
+			if v.AzureStackCloudAPIVersion != "" {
+				importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"] = make(map[string]struct{})
+				importList["strings"] = make(map[string]struct{})
+			}
 		}
 
 		importList["github.com/Azure/azure-sdk-for-go/sdk/azcore"] = make(map[string]struct{})
@@ -221,6 +225,11 @@ func (factory *ClientFactoryImpl) create{{$resource}}Client(subscription string)
 	if err != nil {
 		return nil, err
 	}
+	{{if $client.AzureStackCloudAPIVersion}}
+	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) {
+		options.ClientOptions.APIVersion = {{.PkgAlias}}.AzureStackCloudAPIVersion
+	}
+	{{- end }}
 	{{with $client.RateLimitKey}}
 	//add ratelimit policy
 	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("{{.}}")

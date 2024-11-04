@@ -19,20 +19,24 @@ package generator
 import "html/template"
 
 type ClientGenConfig struct {
-	Verbs                  []string `marker:",optional"`
-	Resource               string
-	SubResource            string `marker:"subResource,optional"`
-	PackageName            string
-	PackageAlias           string
-	ClientName             string
-	OutOfSubscriptionScope bool   `marker:"outOfSubscriptionScope,optional"`
-	Expand                 bool   `marker:"expand,optional"`
-	RateLimitKey           string `marker:"rateLimitKey,optional"`
-	CrossSubFactory        bool   `marker:"crossSubFactory,optional"`
-	Etag                   bool   `marker:"etag,optional"`
+	Verbs                     []string `marker:",optional"`
+	Resource                  string
+	SubResource               string `marker:"subResource,optional"`
+	PackageName               string
+	PackageAlias              string
+	ClientName                string
+	OutOfSubscriptionScope    bool   `marker:"outOfSubscriptionScope,optional"`
+	Expand                    bool   `marker:"expand,optional"`
+	RateLimitKey              string `marker:"rateLimitKey,optional"`
+	CrossSubFactory           bool   `marker:"crossSubFactory,optional"`
+	Etag                      bool   `marker:"etag,optional"`
+	AzureStackCloudAPIVersion string `marker:"azureStackCloudAPIVersion,optional"`
 }
 
 var ClientTemplate = template.Must(template.New("object-scaffolding-client-struct").Parse(`
+{{- with .AzureStackCloudAPIVersion}}
+const AzureStackCloudAPIVersion = "{{.}}"
+{{- end }}
 type Client struct{
 	*{{.PackageAlias}}.{{.ClientName}}
 	{{if not .OutOfSubscriptionScope -}}subscriptionID string {{- end}}
