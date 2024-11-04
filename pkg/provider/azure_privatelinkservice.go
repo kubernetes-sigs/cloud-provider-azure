@@ -18,10 +18,13 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
@@ -144,14 +147,14 @@ func (az *Cloud) reconcilePrivateLinkService(
 			return err
 		}
 
-		dirtyPLS, err := az.getExpectedPrivateLinkService(existingPLS, &plsName, &clusterName, service, fipConfig)
+		dirtyPLS, err := az.getExpectedPrivateLinkService(ctx, existingPLS, &plsName, &clusterName, service, fipConfig)
 		if err != nil {
 			return err
 		}
 
 		if dirtyPLS {
 			klog.V(2).Infof("reconcilePrivateLinkService for service(%s): pls(%s) - updating", serviceName, plsName)
-			err := az.disablePLSNetworkPolicy(service)
+			err := az.disablePLSNetworkPolicy(ctx, service)
 			if err != nil {
 				klog.Errorf("reconcilePrivateLinkService for service(%s) disable PLS network policy failed for pls(%s): %v", serviceName, plsName, err.Error())
 				return err
@@ -196,28 +199,39 @@ func (az *Cloud) getPLSResourceGroup(service *v1.Service) string {
 	return az.PrivateLinkServiceResourceGroup
 }
 
-func (az *Cloud) disablePLSNetworkPolicy(service *v1.Service) error {
+func (az *Cloud) disablePLSNetworkPolicy(ctx context.Context, service *v1.Service) error {
 	serviceName := getServiceName(service)
 	subnetName := getPLSSubnetName(service)
 	if subnetName == nil {
 		subnetName = &az.SubnetName
 	}
 
-	subnet, existsSubnet, err := az.getSubnet("", az.VnetName, *subnetName)
+	rg := az.VnetResourceGroup
+	if rg == "" {
+		rg = az.ResourceGroup
+	}
+
+	subnet, err := az.subnetRepo.Get(ctx, rg, az.VnetName, *subnetName)
 	if err != nil {
+		var respErr *azcore.ResponseError
+		if errors.As(err, &respErr) {
+			if respErr != nil && respErr.StatusCode == http.StatusNotFound {
+				return fmt.Errorf("disablePLSNetworkPolicy: failed to get private link service subnet(%s) for service(%s)", *subnetName, serviceName)
+			}
+		}
 		return err
 	}
-	if !existsSubnet {
-		return fmt.Errorf("disablePLSNetworkPolicy: failed to get private link service subnet(%s) for service(%s)", *subnetName, serviceName)
+	if subnet.Properties == nil {
+		subnet.Properties = &armnetwork.SubnetPropertiesFormat{}
 	}
 
 	// Policy already disabled
-	if subnet.PrivateLinkServiceNetworkPolicies == network.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled {
+	if subnet.Properties.PrivateLinkServiceNetworkPolicies != nil && *subnet.Properties.PrivateLinkServiceNetworkPolicies == armnetwork.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled {
 		return nil
 	}
 
-	subnet.PrivateLinkServiceNetworkPolicies = network.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled
-	err = az.CreateOrUpdateSubnet(service, subnet)
+	subnet.Properties.PrivateLinkServiceNetworkPolicies = to.Ptr(armnetwork.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled)
+	err = az.subnetRepo.CreateOrUpdate(ctx, rg, az.VnetName, *subnetName, *subnet)
 	if err != nil {
 		return err
 	}
@@ -281,6 +295,7 @@ func (az *Cloud) getPrivateLinkServiceName(
 
 // getExpectedPrivateLinkService builds expected PLS object from service spec
 func (az *Cloud) getExpectedPrivateLinkService(
+	ctx context.Context,
 	existingPLS *armnetwork.PrivateLinkService,
 	plsName *string,
 	clusterName *string,
@@ -314,7 +329,7 @@ func (az *Cloud) getExpectedPrivateLinkService(
 		dirtyPLS = true
 	}
 
-	changed, err := az.reconcilePLSIpConfigs(existingPLS, service)
+	changed, err := az.reconcilePLSIpConfigs(ctx, existingPLS, service)
 	if err != nil {
 		return false, err
 	}
@@ -347,6 +362,7 @@ func (az *Cloud) getExpectedPrivateLinkService(
 
 // reconcile Private link service's IP configurations
 func (az *Cloud) reconcilePLSIpConfigs(
+	ctx context.Context,
 	existingPLS *armnetwork.PrivateLinkService,
 	service *v1.Service,
 ) (bool, error) {
@@ -357,12 +373,19 @@ func (az *Cloud) reconcilePLSIpConfigs(
 	if subnetName == nil {
 		subnetName = &az.SubnetName
 	}
-	subnet, existsSubnet, err := az.getSubnet("", az.VnetName, *subnetName)
-	if err != nil {
-		return false, err
+	rg := az.VnetResourceGroup
+	if rg == "" {
+		rg = az.ResourceGroup
 	}
-	if !existsSubnet {
-		return false, fmt.Errorf("checkAndUpdatePLSIPConfigs: failed to get private link service subnet(%s) for service(%s)", *subnetName, serviceName)
+	subnet, err := az.subnetRepo.Get(ctx, rg, az.VnetName, *subnetName)
+	if err != nil {
+		var runtimError *azcore.ResponseError
+		if errors.As(err, &runtimError) {
+			if runtimError != nil && runtimError.StatusCode == http.StatusNotFound {
+				return false, fmt.Errorf("checkAndUpdatePLSIPConfigs: failed to get private link service subnet(%s) for service(%s)", *subnetName, serviceName)
+			}
+		}
+		return false, err
 	}
 
 	ipConfigCount, err := getPLSIPConfigCount(service)

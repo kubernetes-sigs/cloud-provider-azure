@@ -1576,6 +1576,7 @@ sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securityg
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/snapshotclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/sshpublickeyresourceclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient/mock_subnetclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils/armbalancer
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/vaultclient
