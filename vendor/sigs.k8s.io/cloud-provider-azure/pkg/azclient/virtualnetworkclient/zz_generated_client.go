@@ -27,6 +27,7 @@ import (
 	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/metrics"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/etag"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
@@ -42,6 +43,7 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 	}
 	tr := options.TracingProvider.NewTracer(utils.ModuleName, utils.ModuleVersion)
 
+	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, utils.FuncPolicyWrapper(etag.AppendEtag))
 	client, err := armnetwork.NewVirtualNetworksClient(subscriptionID, credential, options)
 	if err != nil {
 		return nil, err
