@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
@@ -48,13 +49,13 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatelinkserviceclient/mockprivatelinkserviceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient/mockzoneclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/taints"
@@ -522,10 +523,9 @@ func testLoadBalancerServiceDefaultModeSelection(t *testing.T, isInternal bool) 
 
 		expectedLBName := setMockLBs(az, ctrl, &expectedLBs, "service", 1, index, isInternal)
 
-		expectedPLS := make([]network.PrivateLinkService, 0)
-		mockPLSClient := mockprivatelinkserviceclient.NewMockInterface(ctrl)
-		mockPLSClient.EXPECT().List(gomock.Any(), az.Config.ResourceGroup).Return(expectedPLS, nil).MinTimes(1).MaxTimes(1)
-		az.PrivateLinkServiceClient = mockPLSClient
+		mockPLSRepo := privatelinkservice.NewMockRepository(ctrl)
+		mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
+		az.plsRepo = mockPLSRepo
 
 		lbStatus, err := az.EnsureLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes)
 		if err != nil {
@@ -592,10 +592,9 @@ func testLoadBalancerServiceAutoModeSelection(t *testing.T, isInternal bool) {
 
 		setMockLBs(az, ctrl, &expectedLBs, "service", availabilitySetCount, index, isInternal)
 
-		expectedPLS := make([]network.PrivateLinkService, 0)
-		mockPLSClient := mockprivatelinkserviceclient.NewMockInterface(ctrl)
-		mockPLSClient.EXPECT().List(gomock.Any(), az.Config.ResourceGroup).Return(expectedPLS, nil).MinTimes(1).MaxTimes(1)
-		az.PrivateLinkServiceClient = mockPLSClient
+		mockPLSRepo := privatelinkservice.NewMockRepository(ctrl)
+		mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
+		az.plsRepo = mockPLSRepo
 
 		lbStatus, err := az.EnsureLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes)
 		assert.Nil(t, err)
@@ -670,10 +669,10 @@ func testLoadBalancerServicesSpecifiedSelection(t *testing.T, isInternal bool) {
 
 		setMockLBs(az, ctrl, &expectedLBs, "service", 1, index, isInternal)
 
-		expectedPLS := make([]network.PrivateLinkService, 0)
-		mockPLSClient := mockprivatelinkserviceclient.NewMockInterface(ctrl)
-		mockPLSClient.EXPECT().List(gomock.Any(), az.Config.ResourceGroup).Return(expectedPLS, nil).MinTimes(1).MaxTimes(1)
-		az.PrivateLinkServiceClient = mockPLSClient
+		expectedPLS := make([]*armnetwork.PrivateLinkService, 0)
+		mockPLSRepo := privatelinkservice.NewMockRepository(ctrl)
+		mockPLSRepo.EXPECT().List(gomock.Any(), az.Config.ResourceGroup).Return(expectedPLS, nil).MinTimes(1).MaxTimes(1)
+		az.plsRepo = mockPLSRepo
 
 		lbStatus, err := az.EnsureLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes)
 		if err != nil {
@@ -729,10 +728,10 @@ func testLoadBalancerMaxRulesServices(t *testing.T, isInternal bool) {
 
 		setMockLBs(az, ctrl, &expectedLBs, "service", az.Config.MaximumLoadBalancerRuleCount, index, isInternal)
 
-		expectedPLS := make([]network.PrivateLinkService, 0)
-		mockPLSClient := mockprivatelinkserviceclient.NewMockInterface(ctrl)
-		mockPLSClient.EXPECT().List(gomock.Any(), az.Config.ResourceGroup).Return(expectedPLS, nil).MinTimes(1).MaxTimes(1)
-		az.PrivateLinkServiceClient = mockPLSClient
+		expectedPLS := make([]*armnetwork.PrivateLinkService, 0)
+		mockPLSRepo := privatelinkservice.NewMockRepository(ctrl)
+		mockPLSRepo.EXPECT().List(gomock.Any(), az.Config.ResourceGroup).Return(expectedPLS, nil).MinTimes(1).MaxTimes(1)
+		az.plsRepo = mockPLSRepo
 
 		lbStatus, err := az.EnsureLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes)
 		if err != nil {
@@ -817,10 +816,9 @@ func testLoadBalancerServiceAutoModeDeleteSelection(t *testing.T, isInternal boo
 
 		setMockLBs(az, ctrl, &expectedLBs, "service", availabilitySetCount, index, isInternal)
 
-		expectedPLS := make([]network.PrivateLinkService, 0)
-		mockPLSClient := mockprivatelinkserviceclient.NewMockInterface(ctrl)
-		mockPLSClient.EXPECT().List(gomock.Any(), az.Config.ResourceGroup).Return(expectedPLS, nil).MinTimes(1).MaxTimes(1)
-		az.PrivateLinkServiceClient = mockPLSClient
+		mockPLSRepo := privatelinkservice.NewMockRepository(ctrl)
+		mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
+		az.plsRepo = mockPLSRepo
 
 		lbStatus, err := az.EnsureLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes)
 		if err != nil {
@@ -862,10 +860,9 @@ func testLoadBalancerServiceAutoModeDeleteSelection(t *testing.T, isInternal boo
 			t.Errorf("Unexpected number of LB's: Expected (%d) Found (%d)", expectedNumOfLB, lbCount)
 		}
 
-		expectedPLS := make([]network.PrivateLinkService, 0)
-		mockPLSClient := mockprivatelinkserviceclient.NewMockInterface(ctrl)
-		mockPLSClient.EXPECT().List(gomock.Any(), az.Config.ResourceGroup).Return(expectedPLS, nil).MinTimes(1).MaxTimes(1)
-		az.PrivateLinkServiceClient = mockPLSClient
+		mockPLSRepo := privatelinkservice.NewMockRepository(ctrl)
+		mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
+		az.plsRepo = mockPLSRepo
 
 		err := az.EnsureLoadBalancerDeleted(context.TODO(), testClusterName, &svc)
 		if err != nil {
@@ -978,9 +975,9 @@ func TestReconcileLoadBalancerEditServiceSubnet(t *testing.T) {
 	}).AnyTimes()
 	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-	expectedPLS := make([]network.PrivateLinkService, 0)
-	mockPLSClient := az.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
-	mockPLSClient.EXPECT().List(gomock.Any(), az.Config.ResourceGroup).Return(expectedPLS, nil).MinTimes(1).MaxTimes(1)
+	mockPLSRepo := privatelinkservice.NewMockRepository(ctrl)
+	mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
+	az.plsRepo = mockPLSRepo
 
 	lb, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	if err != nil {
@@ -1170,9 +1167,10 @@ func TestReconcileLoadBalancerMultipleServices(t *testing.T) {
 	}).AnyTimes()
 	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-	expectedPLS := make([]network.PrivateLinkService, 0)
-	mockPLSClient := az.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
-	mockPLSClient.EXPECT().List(gomock.Any(), az.Config.ResourceGroup).Return(expectedPLS, nil).MinTimes(1).MaxTimes(1)
+	expectedPLS := make([]*armnetwork.PrivateLinkService, 0)
+	mockPLSRepo := privatelinkservice.NewMockRepository(ctrl)
+	mockPLSRepo.EXPECT().List(gomock.Any(), az.Config.ResourceGroup).Return(expectedPLS, nil).MinTimes(1).MaxTimes(1)
+	az.plsRepo = mockPLSRepo
 
 	_, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc1, clusterResources.nodes, true /* wantLb */)
 	assert.Nil(t, err)
@@ -1285,9 +1283,9 @@ func TestServiceRespectsNoSessionAffinity(t *testing.T) {
 	mockPIPsClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return([]network.PublicIPAddress{expectedPIP}, nil).AnyTimes()
 	mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "testCluster-aservicesanone", gomock.Any()).Return(expectedPIP, nil).AnyTimes()
 
-	expectedPLS := make([]network.PrivateLinkService, 0)
-	mockPLSClient := az.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
-	mockPLSClient.EXPECT().List(gomock.Any(), az.Config.ResourceGroup).Return(expectedPLS, nil).MinTimes(1).MaxTimes(1)
+	mockPLSRepo := privatelinkservice.NewMockRepository(ctrl)
+	mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
+	az.plsRepo = mockPLSRepo
 
 	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
 	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ *v1.Service, lb *network.LoadBalancer) (bool, bool, *network.LoadBalancer, error) {
@@ -1348,9 +1346,9 @@ func TestServiceRespectsClientIPSessionAffinity(t *testing.T) {
 	mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "testCluster-aservicesaclientip", gomock.Any()).Return(expectedPIP, nil).AnyTimes()
 	mockPIPsClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return([]network.PublicIPAddress{expectedPIP}, nil).AnyTimes()
 
-	expectedPLS := make([]network.PrivateLinkService, 0)
-	mockPLSClient := az.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
-	mockPLSClient.EXPECT().List(gomock.Any(), az.Config.ResourceGroup).Return(expectedPLS, nil).MinTimes(1).MaxTimes(1)
+	mockPLSRepo := privatelinkservice.NewMockRepository(ctrl)
+	mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
+	az.plsRepo = mockPLSRepo
 
 	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
 	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ *v1.Service, lb *network.LoadBalancer) (bool, bool, *network.LoadBalancer, error) {
@@ -2264,6 +2262,7 @@ func getCloudFromConfig(t *testing.T, config string) *Cloud {
 	c, err := ParseConfig(configReader)
 	assert.NoError(t, err)
 
+	zoneMock := zone.NewMockRepository(ctrl)
 	az := &Cloud{
 		nodeNames:                utilsets.NewString(),
 		nodeZones:                map[string]*utilsets.IgnoreCaseSet{},
@@ -2271,12 +2270,11 @@ func getCloudFromConfig(t *testing.T, config string) *Cloud {
 		unmanagedNodes:           utilsets.NewString(),
 		excludeLoadBalancerNodes: utilsets.NewString(),
 		routeCIDRs:               map[string]string{},
-		ZoneClient:               mockzoneclient.NewMockInterface(ctrl),
+		zoneRepo:                 zoneMock,
 		ComputeClientFactory:     mock_azclient.NewMockClientFactory(ctrl),
 		NetworkClientFactory:     mock_azclient.NewMockClientFactory(ctrl),
 	}
-	mockZoneClient := az.ZoneClient.(*mockzoneclient.MockInterface)
-	mockZoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil)
+	zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil)
 
 	// Skip AAD client cert path validation since it will read the file from the path
 	aadCertPath := c.AADClientCertPath
@@ -2782,9 +2780,9 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 	defer ctrl.Finish()
 	az := GetTestCloud(ctrl)
 
-	mockZoneClient := mockzoneclient.NewMockInterface(ctrl)
-	mockZoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
-	az.ZoneClient = mockZoneClient
+	zoneMock := zone.NewMockRepository(ctrl)
+	zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
+	az.zoneRepo = zoneMock
 
 	err := az.InitializeCloudFromConfig(context.Background(), nil, false, true)
 	assert.Equal(t, fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config"), err)

@@ -53,14 +53,12 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/blobclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/deploymentclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/diskclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/fileclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatednszonegroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privateendpointclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatelinkserviceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routetableclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/storageaccountclient"
@@ -70,7 +68,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmsizeclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
 
 	"sigs.k8s.io/yaml"
 
@@ -370,11 +369,8 @@ type Cloud struct {
 	VirtualMachineScaleSetVMsClient vmssvmclient.Interface
 	VirtualMachineSizesClient       vmsizeclient.Interface
 	AvailabilitySetsClient          vmasclient.Interface
-	ZoneClient                      zoneclient.Interface
 	privateendpointclient           privateendpointclient.Interface
 	privatednszonegroupclient       privatednszonegroupclient.Interface
-	PrivateLinkServiceClient        privatelinkserviceclient.Interface
-	deploymentClient                deploymentclient.Interface
 	ComputeClientFactory            azclient.ClientFactory
 	NetworkClientFactory            azclient.ClientFactory
 	AuthProvider                    *azclient.AuthProvider
@@ -418,16 +414,16 @@ type Cloud struct {
 	routeUpdater       batchProcessor
 	backendPoolUpdater batchProcessor
 
-	vmCache azcache.Resource
-	lbCache azcache.Resource
-	nsgRepo securitygroup.Repository
-	rtCache azcache.Resource
+	vmCache  azcache.Resource
+	lbCache  azcache.Resource
+	nsgRepo  securitygroup.Repository
+	zoneRepo zone.Repository
+	plsRepo  privatelinkservice.Repository
+	rtCache  azcache.Resource
 	// public ip cache
 	// key: [resourceGroupName]
 	// Value: sync.Map of [pipName]*PublicIPAddress
 	pipCache azcache.Resource
-	// use [resourceGroupName*LBFrontEndIpConfigurationID] as the key and search for PLS attached to the frontEnd
-	plsCache azcache.Resource
 	// a timed cache storing storage account properties to avoid querying storage account frequently
 	storageAccountCache azcache.Resource
 	// a timed cache storing storage account file service properties to avoid querying storage account file service properties frequently
@@ -744,6 +740,16 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 		if err != nil {
 			return err
 		}
+
+		az.zoneRepo, err = zone.NewRepo(az.ComputeClientFactory.GetProviderClient())
+		if err != nil {
+			return err
+		}
+
+		az.plsRepo, err = privatelinkservice.NewRepo(az.ComputeClientFactory.GetPrivateLinkServiceClient(), time.Duration(az.PlsCacheTTLInSeconds)*time.Second, az.DisableAPICallCache)
+		if err != nil {
+			return err
+		}
 	}
 	err = az.initCaches()
 	if err != nil {
@@ -867,11 +873,6 @@ func (az *Cloud) initCaches() (err error) {
 		return err
 	}
 
-	az.plsCache, err = az.newPLSCache()
-	if err != nil {
-		return err
-	}
-
 	getter := func(_ context.Context, _ string) (interface{}, error) { return nil, nil }
 	if az.storageAccountCache, err = azcache.NewTimedCache(time.Minute, getter, az.Config.DisableAPICallCache); err != nil {
 		return err
@@ -985,15 +986,12 @@ func (az *Cloud) configAzureClients(
 	routeTableClientConfig := azClientConfig.WithRateLimiter(az.Config.RouteTableRateLimit)
 	loadBalancerClientConfig := azClientConfig.WithRateLimiter(az.Config.LoadBalancerRateLimit)
 	publicIPClientConfig := azClientConfig.WithRateLimiter(az.Config.PublicIPAddressRateLimit)
-	deploymentConfig := azClientConfig.WithRateLimiter(az.Config.DeploymentRateLimit)
 	privateDNSZoenGroupConfig := azClientConfig.WithRateLimiter(az.Config.PrivateDNSZoneGroupRateLimit)
 	privateEndpointConfig := azClientConfig.WithRateLimiter(az.Config.PrivateEndpointRateLimit)
-	privateLinkServiceConfig := azClientConfig.WithRateLimiter(az.Config.PrivateLinkServiceRateLimit)
 	// TODO(ZeroMagic): add azurefileRateLimit
 	fileClientConfig := azClientConfig.WithRateLimiter(nil)
 	blobClientConfig := azClientConfig.WithRateLimiter(nil)
 	vmasClientConfig := azClientConfig.WithRateLimiter(az.Config.AvailabilitySetRateLimit)
-	zoneClientConfig := azClientConfig.WithRateLimiter(nil)
 
 	// If uses network resources in different AAD Tenant, update Authorizer for VM/VMSS/VMAS client config
 	if multiTenantOAuthTokenProvider != nil {
@@ -1040,12 +1038,6 @@ func (az *Cloud) configAzureClients(
 	az.AvailabilitySetsClient = vmasclient.New(vmasClientConfig)
 	az.privateendpointclient = privateendpointclient.New(privateEndpointConfig)
 	az.privatednszonegroupclient = privatednszonegroupclient.New(privateDNSZoenGroupConfig)
-	az.PrivateLinkServiceClient = privatelinkserviceclient.New(privateLinkServiceConfig)
-	az.deploymentClient = deploymentclient.New(deploymentConfig)
-
-	if az.ZoneClient == nil {
-		az.ZoneClient = zoneclient.New(zoneClientConfig)
-	}
 }
 
 func (az *Cloud) getAzureClientConfig(servicePrincipalToken *adal.ServicePrincipalToken) *azclients.ClientConfig {
