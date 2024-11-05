@@ -986,7 +986,6 @@ func (az *Cloud) configAzureClients(
 	routeTableClientConfig := azClientConfig.WithRateLimiter(az.Config.RouteTableRateLimit)
 	loadBalancerClientConfig := azClientConfig.WithRateLimiter(az.Config.LoadBalancerRateLimit)
 	publicIPClientConfig := azClientConfig.WithRateLimiter(az.Config.PublicIPAddressRateLimit)
-	deploymentConfig := azClientConfig.WithRateLimiter(az.Config.DeploymentRateLimit)
 	privateDNSZoenGroupConfig := azClientConfig.WithRateLimiter(az.Config.PrivateDNSZoneGroupRateLimit)
 	privateEndpointConfig := azClientConfig.WithRateLimiter(az.Config.PrivateEndpointRateLimit)
 	// TODO(ZeroMagic): add azurefileRateLimit
