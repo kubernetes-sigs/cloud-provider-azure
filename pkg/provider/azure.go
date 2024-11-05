@@ -53,7 +53,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/blobclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/containerserviceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/deploymentclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/diskclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/fileclient"
@@ -63,10 +62,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privateendpointclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatelinkserviceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routeclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routetableclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/securitygroupclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/snapshotclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/storageaccountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmasclient"
@@ -360,7 +357,6 @@ type Cloud struct {
 	Config
 	Environment azure.Environment
 
-	RoutesClient                    routeclient.Interface
 	SubnetsClient                   subnetclient.Interface
 	InterfacesClient                interfaceclient.Interface
 	RouteTablesClient               routetableclient.Interface
@@ -370,7 +366,6 @@ type Cloud struct {
 	VirtualMachinesClient           vmclient.Interface
 	StorageAccountClient            storageaccountclient.Interface
 	DisksClient                     diskclient.Interface
-	SnapshotsClient                 snapshotclient.Interface
 	FileClient                      fileclient.Interface
 	BlobClient                      blobclient.Interface
 	VirtualMachineScaleSetsClient   vmssclient.Interface
@@ -381,7 +376,6 @@ type Cloud struct {
 	privateendpointclient           privateendpointclient.Interface
 	privatednszonegroupclient       privatednszonegroupclient.Interface
 	PrivateLinkServiceClient        privatelinkserviceclient.Interface
-	containerServiceClient          containerserviceclient.Interface
 	deploymentClient                deploymentclient.Interface
 	ComputeClientFactory            azclient.ClientFactory
 	NetworkClientFactory            azclient.ClientFactory
@@ -980,7 +974,6 @@ func (az *Cloud) configAzureClients(
 	// Prepare AzureClientConfig for all azure clients
 	interfaceClientConfig := azClientConfig.WithRateLimiter(az.Config.InterfaceRateLimit)
 	vmSizeClientConfig := azClientConfig.WithRateLimiter(az.Config.VirtualMachineSizeRateLimit)
-	snapshotClientConfig := azClientConfig.WithRateLimiter(az.Config.SnapshotRateLimit)
 	storageAccountClientConfig := azClientConfig.WithRateLimiter(az.Config.StorageAccountRateLimit)
 	diskClientConfig := azClientConfig.WithRateLimiter(az.Config.DiskRateLimit)
 	vmClientConfig := azClientConfig.WithRateLimiter(az.Config.VirtualMachineRateLimit)
@@ -995,7 +988,6 @@ func (az *Cloud) configAzureClients(
 	loadBalancerClientConfig := azClientConfig.WithRateLimiter(az.Config.LoadBalancerRateLimit)
 	securityGroupClientConfig := azClientConfig.WithRateLimiter(az.Config.SecurityGroupRateLimit)
 	publicIPClientConfig := azClientConfig.WithRateLimiter(az.Config.PublicIPAddressRateLimit)
-	containerServiceConfig := azClientConfig.WithRateLimiter(az.Config.ContainerServiceRateLimit)
 	deploymentConfig := azClientConfig.WithRateLimiter(az.Config.DeploymentRateLimit)
 	privateDNSZoenGroupConfig := azClientConfig.WithRateLimiter(az.Config.PrivateDNSZoneGroupRateLimit)
 	privateEndpointConfig := azClientConfig.WithRateLimiter(az.Config.PrivateEndpointRateLimit)
@@ -1039,13 +1031,11 @@ func (az *Cloud) configAzureClients(
 	// Initialize all azure clients based on client config
 	az.InterfacesClient = interfaceclient.New(interfaceClientConfig)
 	az.VirtualMachineSizesClient = vmsizeclient.New(vmSizeClientConfig)
-	az.SnapshotsClient = snapshotclient.New(snapshotClientConfig)
 	az.StorageAccountClient = storageaccountclient.New(storageAccountClientConfig)
 	az.DisksClient = diskclient.New(diskClientConfig)
 	az.VirtualMachinesClient = vmclient.New(vmClientConfig)
 	az.VirtualMachineScaleSetsClient = vmssclient.New(vmssClientConfig)
 	az.VirtualMachineScaleSetVMsClient = vmssvmclient.New(vmssVMClientConfig)
-	az.RoutesClient = routeclient.New(routeClientConfig)
 	az.SubnetsClient = subnetclient.New(subnetClientConfig)
 	az.RouteTablesClient = routetableclient.New(routeTableClientConfig)
 	az.LoadBalancerClient = loadbalancerclient.New(loadBalancerClientConfig)
@@ -1057,7 +1047,6 @@ func (az *Cloud) configAzureClients(
 	az.privateendpointclient = privateendpointclient.New(privateEndpointConfig)
 	az.privatednszonegroupclient = privatednszonegroupclient.New(privateDNSZoenGroupConfig)
 	az.PrivateLinkServiceClient = privatelinkserviceclient.New(privateLinkServiceConfig)
-	az.containerServiceClient = containerserviceclient.New(containerServiceConfig)
 	az.deploymentClient = deploymentclient.New(deploymentConfig)
 
 	if az.ZoneClient == nil {
