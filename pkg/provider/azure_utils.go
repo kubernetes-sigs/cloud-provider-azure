@@ -43,8 +43,8 @@ const (
 	IPVersionIPv4 bool = false
 )
 
-var strToExtendedLocationType = map[string]network.ExtendedLocationTypes{
-	"edgezone": network.EdgeZone,
+var strToExtendedLocationType = map[string]armnetwork.ExtendedLocationTypes{
+	"edgezone": armnetwork.ExtendedLocationTypesEdgeZone,
 }
 
 // LockMap used to lock on entries
@@ -205,12 +205,12 @@ func (az *Cloud) reconcileTags(currentTagsOnResource, newTags map[string]*string
 	return currentTagsOnResource, changed
 }
 
-func getExtendedLocationTypeFromString(extendedLocationType string) network.ExtendedLocationTypes {
+func getExtendedLocationTypeFromString(extendedLocationType string) armnetwork.ExtendedLocationTypes {
 	extendedLocationType = strings.ToLower(extendedLocationType)
 	if val, ok := strToExtendedLocationType[extendedLocationType]; ok {
 		return val
 	}
-	return network.EdgeZone
+	return armnetwork.ExtendedLocationTypesEdgeZone
 }
 
 func getNodePrivateIPAddress(node *v1.Node, isIPv6 bool) string {

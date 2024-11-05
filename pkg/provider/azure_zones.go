@@ -18,7 +18,6 @@ package provider
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -31,7 +30,6 @@ import (
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 var _ cloudprovider.Zones = (*Cloud)(nil)
@@ -47,11 +45,11 @@ func (az *Cloud) refreshZones(ctx context.Context, refreshFunc func(ctx context.
 
 func (az *Cloud) syncRegionZonesMap(ctx context.Context) error {
 	klog.V(2).Infof("syncRegionZonesMap: starting to fetch all available zones for the subscription %s", az.SubscriptionID)
-	zones, rerr := az.ZoneClient.GetZones(ctx, az.SubscriptionID)
-	if rerr != nil {
-		klog.Warningf("syncRegionZonesMap: error when get zones: %s, will retry after %s", rerr.Error().Error(), consts.ZoneFetchingInterval.String())
-		return rerr.Error()
+	zones, err := az.zoneRepo.ListZones(ctx)
+	if err != nil {
+		return fmt.Errorf("list zones: %w", err)
 	}
+
 	if len(zones) == 0 {
 		klog.Warning("syncRegionZonesMap: empty zone list")
 	}
@@ -92,21 +90,21 @@ func (az *Cloud) getRegionZonesBackoff(ctx context.Context, region string) ([]st
 	klog.V(2).Infof("getRegionZonesMapWrapper: the region-zones map is not initialized successfully, retrying immediately")
 
 	var (
-		zones map[string][]string
-		rerr  *retry.Error
+		zones    map[string][]string
+		innerErr error
 	)
 	err := wait.ExponentialBackoffWithContext(ctx, az.RequestBackoff(), func(ctx context.Context) (done bool, err error) {
-		zones, rerr = az.ZoneClient.GetZones(ctx, az.SubscriptionID)
-		if rerr != nil {
-			klog.Errorf("getRegionZonesMapWrapper: failed to fetch zones information: %v", rerr.Error())
+		zones, innerErr = az.zoneRepo.ListZones(ctx)
+		if innerErr != nil {
+			klog.ErrorS(err, "Failed to list zones")
 			return false, nil
 		}
 
 		return true, nil
 	})
 
-	if errors.Is(err, wait.ErrWaitTimeout) {
-		return []string{}, rerr.Error()
+	if wait.Interrupted(err) {
+		return []string{}, innerErr
 	}
 
 	az.updateRegionZonesMap(zones)
