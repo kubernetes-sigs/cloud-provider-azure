@@ -374,7 +374,6 @@ type Cloud struct {
 	AvailabilitySetsClient          vmasclient.Interface
 	privateendpointclient           privateendpointclient.Interface
 	privatednszonegroupclient       privatednszonegroupclient.Interface
-	containerServiceClient          containerserviceclient.Interface
 	deploymentClient                deploymentclient.Interface
 	ComputeClientFactory            azclient.ClientFactory
 	NetworkClientFactory            azclient.ClientFactory
@@ -1048,7 +1047,6 @@ func (az *Cloud) configAzureClients(
 	az.AvailabilitySetsClient = vmasclient.New(vmasClientConfig)
 	az.privateendpointclient = privateendpointclient.New(privateEndpointConfig)
 	az.privatednszonegroupclient = privatednszonegroupclient.New(privateDNSZoenGroupConfig)
-	az.containerServiceClient = containerserviceclient.New(containerServiceConfig)
 	az.deploymentClient = deploymentclient.New(deploymentConfig)
 }
 
