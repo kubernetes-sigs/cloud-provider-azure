@@ -18,10 +18,7 @@ limitations under the License.
 package generator
 
 import (
-	"fmt"
 	"go/ast"
-	"os"
-	"os/exec"
 
 	"sigs.k8s.io/controller-tools/pkg/genall"
 	"sigs.k8s.io/controller-tools/pkg/loader"
@@ -54,23 +51,6 @@ func (Generator) RegisterMarkers(into *markers.Registry) error {
 }
 
 func (g Generator) Generate(ctx *genall.GenerationContext) error {
-	cmd := exec.Command("go", "get", "go.uber.org/mock/mockgen/model")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-	var headerText string
-
-	if g.HeaderFile != "" {
-		headerBytes, err := ctx.ReadFile(g.HeaderFile)
-		if err != nil {
-			return err
-		}
-		headerText = string(headerBytes)
-	}
-
-	factoryGenerator := NewGenerator(headerText)
 
 	for _, root := range ctx.Roots {
 		pkgMakers, err := markers.PackageMarkers(ctx.Collector, root)
@@ -79,10 +59,10 @@ func (g Generator) Generate(ctx *genall.GenerationContext) error {
 			break
 		}
 		if _, markedForGeneration := pkgMakers[enableClientGenMarker.Name]; !markedForGeneration {
-			fmt.Println("Ignored pkg", root.Name)
+
 			continue
 		}
-		fmt.Println("Generate code for pkg ", root.PkgPath)
+
 		//check for syntax error
 		ctx.Checker.Check(root)
 
@@ -90,31 +70,21 @@ func (g Generator) Generate(ctx *genall.GenerationContext) error {
 		root.NeedTypesInfo()
 
 		err = markers.EachType(ctx.Collector, root, func(typeInfo *markers.TypeInfo) {
-			if marker := typeInfo.Markers.Get(clientGenMarker.Name); marker != nil {
-				fmt.Println("Generate code for Type ", typeInfo.Name)
+			marker := typeInfo.Markers.Get(clientGenMarker.Name)
+			if marker == nil {
+				return
+			}
 
-				markerConf := marker.(ClientGenConfig)
+			markerConf := marker.(ClientGenConfig)
 
-				if err := generateClient(ctx, root, typeInfo.Name, markerConf, headerText); err != nil {
-					root.AddError(err)
-					return
-				}
+			if err := g.generateClient(ctx, root, typeInfo.Name, markerConf); err != nil {
+				root.AddError(err)
+				return
+			}
 
-				if err := generateMock(ctx, root, typeInfo.Name, markerConf, headerText); err != nil {
-					root.AddError(err)
-					return
-				}
-
-				if err := generateTest(ctx, root, typeInfo.Name, markerConf, headerText); err != nil {
-					root.AddError(err)
-					return
-				}
-				if !markerConf.OutOfSubscriptionScope {
-					if err := factoryGenerator.RegisterClient(ctx, root, typeInfo.Name, markerConf, headerText); err != nil {
-						root.AddError(err)
-						return
-					}
-				}
+			if err := g.generateTest(ctx, root, typeInfo.Name, markerConf); err != nil {
+				root.AddError(err)
+				return
 			}
 		})
 		if err != nil {
@@ -123,9 +93,6 @@ func (g Generator) Generate(ctx *genall.GenerationContext) error {
 		}
 	}
 
-	if err := factoryGenerator.Generate(ctx); err != nil {
-		return err
-	}
 	return nil
 }
 
