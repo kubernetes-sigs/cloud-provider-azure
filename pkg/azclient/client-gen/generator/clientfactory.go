@@ -18,14 +18,14 @@ limitations under the License.
 package generator
 
 import (
-	"bytes"
-	"fmt"
+	"go/ast"
 	"html/template"
 	"os"
 	"os/exec"
 
 	"sigs.k8s.io/controller-tools/pkg/genall"
 	"sigs.k8s.io/controller-tools/pkg/loader"
+	"sigs.k8s.io/controller-tools/pkg/markers"
 )
 
 type ClientEntryConfig struct {
@@ -36,68 +36,82 @@ type ClientEntryConfig struct {
 }
 
 type ClientFactoryGenerator struct {
-	clientRegistry map[string]*ClientEntryConfig
-	importList     map[string]map[string]struct{}
-	headerText     string
+	HeaderFile string `marker:",optional"`
 }
 
-func NewGenerator(headerText string) *ClientFactoryGenerator {
-	return &ClientFactoryGenerator{
-		clientRegistry: make(map[string]*ClientEntryConfig),
-		importList:     make(map[string]map[string]struct{}),
-		headerText:     headerText,
-	}
+func (ClientFactoryGenerator) RegisterMarkers(into *markers.Registry) error {
+	return markers.RegisterAll(into, clientGenMarker, enableClientGenMarker)
 }
 
-func (generator *ClientFactoryGenerator) RegisterClient(_ *genall.GenerationContext, root *loader.Package, typeName string, markerConf ClientGenConfig, _ string) error {
-	if _, ok := generator.importList[root.PkgPath]; !ok {
-		generator.importList[root.PkgPath] = make(map[string]struct{})
+func (generator ClientFactoryGenerator) Generate(ctx *genall.GenerationContext) error {
+	clientRegistry := make(map[string]*ClientEntryConfig)
+	importList := make(map[string]map[string]struct{})
+	for _, root := range ctx.Roots {
+		pkgMakers, err := markers.PackageMarkers(ctx.Collector, root)
+		if err != nil {
+			root.AddError(err)
+			break
+		}
+		if _, markedForGeneration := pkgMakers[enableClientGenMarker.Name]; !markedForGeneration {
+			continue
+		}
+
+		//visit each type
+		root.NeedTypesInfo()
+
+		err = markers.EachType(ctx.Collector, root, func(typeInfo *markers.TypeInfo) {
+			marker := typeInfo.Markers.Get(clientGenMarker.Name)
+			if marker == nil {
+				return
+			}
+			markerConf := marker.(ClientGenConfig)
+			if !markerConf.OutOfSubscriptionScope {
+				if _, ok := importList[root.PkgPath]; !ok {
+					importList[root.PkgPath] = make(map[string]struct{})
+				}
+
+				clientRegistry[root.Name+typeInfo.Name] = &ClientEntryConfig{
+					ClientGenConfig:   markerConf,
+					PkgAlias:          root.Name,
+					PkgPath:           root.PkgPath,
+					InterfaceTypeName: typeInfo.Name,
+				}
+			}
+		})
 	}
 
-	generator.clientRegistry[root.Name+typeName] = &ClientEntryConfig{
-		ClientGenConfig:   markerConf,
-		PkgAlias:          root.Name,
-		PkgPath:           root.PkgPath,
-		InterfaceTypeName: typeName,
-	}
-	return nil
-}
-
-func (generator *ClientFactoryGenerator) Generate(_ *genall.GenerationContext) error {
 	{
-		var outContent bytes.Buffer
-		if err := AbstractClientFactoryInterfaceTemplate.Execute(&outContent, generator.clientRegistry); err != nil {
+		file, err := ctx.OutputRule.Open(nil, "factory.go")
+		if err != nil {
 			return err
 		}
-		file, err := os.Create("factory.go")
+
+		err = DumpHeaderToWriter(ctx, file, generator.HeaderFile, importList, "azclient")
+		if err != nil {
+			file.Close()
+			return err
+		}
+		if err := AbstractClientFactoryInterfaceTemplate.Execute(file, clientRegistry); err != nil {
+			file.Close()
+			return err
+		}
+		file.Close()
+	}
+	{
+		file, err := ctx.OutputRule.Open(nil, "factory_gen.go")
 		if err != nil {
 			return err
 		}
 		defer file.Close()
-		err = DumpToWriter(file, generator.headerText, generator.importList, "azclient", &outContent)
-		if err != nil {
-			return err
+
+		codeimportList := make(map[string]map[string]struct{})
+		for k, v := range importList {
+			codeimportList[k] = v
 		}
-		fmt.Println("Generated client factory interface")
-	}
-	{
-		var outContent bytes.Buffer
-		if err := AbstractClientFactoryImplTemplate.Execute(&outContent, generator.clientRegistry); err != nil {
-			return err
-		}
-		file, err := os.Create("factory_gen.go")
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-		importList := make(map[string]map[string]struct{})
-		for k, v := range generator.importList {
-			importList[k] = v
-		}
-		for _, v := range generator.clientRegistry {
+		for _, v := range clientRegistry {
 			if v.ClientGenConfig.CrossSubFactory {
-				importList["sync"] = make(map[string]struct{})
-				importList["strings"] = make(map[string]struct{})
+				codeimportList["sync"] = make(map[string]struct{})
+				codeimportList["strings"] = make(map[string]struct{})
 			}
 			if v.AzureStackCloudAPIVersion != "" {
 				importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"] = make(map[string]struct{})
@@ -105,63 +119,68 @@ func (generator *ClientFactoryGenerator) Generate(_ *genall.GenerationContext) e
 			}
 		}
 
-		importList["github.com/Azure/azure-sdk-for-go/sdk/azcore"] = make(map[string]struct{})
-		importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"] = make(map[string]struct{})
-		importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"] = make(map[string]struct{})
-		importList["github.com/Azure/azure-sdk-for-go/sdk/azidentity"] = make(map[string]struct{})
+		codeimportList["github.com/Azure/azure-sdk-for-go/sdk/azcore"] = make(map[string]struct{})
+		codeimportList["github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"] = make(map[string]struct{})
+		codeimportList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"] = make(map[string]struct{})
+		codeimportList["github.com/Azure/azure-sdk-for-go/sdk/azidentity"] = make(map[string]struct{})
 
-		err = DumpToWriter(file, generator.headerText, importList, "azclient", &outContent)
+		err = DumpHeaderToWriter(ctx, file, generator.HeaderFile, codeimportList, "azclient")
 		if err != nil {
 			return err
 		}
-		fmt.Println("Generated client factory impl")
+
+		if err := AbstractClientFactoryImplTemplate.Execute(file, clientRegistry); err != nil {
+			return err
+		}
+
 	}
 	{
-		var mockCache bytes.Buffer
-		//nolint:gosec // G204 ignore this!
-		cmd := exec.Command("mockgen", "-package", "mock_azclient", "sigs.k8s.io/cloud-provider-azure/pkg/azclient", "ClientFactory")
-		cmd.Stdout = &mockCache
-		cmd.Stderr = os.Stderr
-		err := cmd.Run()
-		if err != nil {
-			return err
-		}
-		if err := os.MkdirAll("mock_azclient", 0755); err != nil {
-			return err
-		}
-		mockFile, err := os.Create("mock_azclient/interface.go")
-		if err != nil {
-			return err
-		}
-		defer mockFile.Close()
-		err = DumpToWriter(mockFile, generator.headerText, nil, "", &mockCache)
-		if err != nil {
-			return err
-		}
-		fmt.Println("Generated client factory mock")
-	}
-	{
-		var outContent bytes.Buffer
-		if err := FactoryTestCaseTemplate.Execute(&outContent, generator.clientRegistry); err != nil {
-			return err
-		}
-		file, err := os.Create("factory_test.go")
+		file, err := ctx.OutputRule.Open(nil, "factory_test.go")
 		if err != nil {
 			return err
 		}
 		defer file.Close()
-		importList := make(map[string]map[string]struct{})
-		importList["github.com/onsi/ginkgo/v2"] = map[string]struct{}{}
-		importList["github.com/onsi/gomega"] = map[string]struct{}{}
+		testimportList := make(map[string]map[string]struct{})
+		for k, v := range importList {
+			testimportList[k] = v
+		}
 
-		err = DumpToWriter(file, generator.headerText, importList, "azclient", &outContent)
+		testimportList["github.com/onsi/ginkgo/v2"] = map[string]struct{}{}
+		testimportList["github.com/onsi/gomega"] = map[string]struct{}{}
+
+		err = DumpHeaderToWriter(ctx, file, generator.HeaderFile, testimportList, "azclient")
 		if err != nil {
 			return err
 		}
-		fmt.Println("Generated client factory test")
 
+		if err := FactoryTestCaseTemplate.Execute(file, clientRegistry); err != nil {
+			return err
+		}
+	}
+	{
+		mockFile, err := ctx.OutputRule.Open(nil, "mock_azclient/interface.go")
+		if err != nil {
+			return err
+		}
+		defer mockFile.Close()
+		//nolint:gosec // G204 ignore this!
+		cmd := exec.Command("mockgen", "-package", "mock_azclient", "-source", "factory.go", "-copyright_file", "../../hack/boilerplate/boilerplate.generatego.txt")
+		cmd.Stdout = mockFile
+		cmd.Stderr = os.Stderr
+		err = cmd.Run()
+		if err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+func (ClientFactoryGenerator) CheckFilter() loader.NodeFilter {
+	return func(node ast.Node) bool {
+		// ignore structs
+		_, isIface := node.(*ast.InterfaceType)
+		return isIface
+	}
 }
 
 var AbstractClientFactoryImplTemplate = template.Must(template.New("object-factory-impl").Parse(
