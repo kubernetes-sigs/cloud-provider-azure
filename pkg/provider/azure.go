@@ -71,6 +71,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
+	"sigs.k8s.io/cloud-provider-azure/pkg/version"
 
 	"sigs.k8s.io/yaml"
 
@@ -713,6 +714,8 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 	az.configAzureClients(servicePrincipalToken, multiTenantServicePrincipalToken, networkResourceServicePrincipalToken)
 
 	if az.ComputeClientFactory == nil {
+		k8sVersion := version.Get().GitVersion
+		az.ARMClientConfig.UserAgent = fmt.Sprintf("kubernetes-cloudprovider/%s; %s", k8sVersion, az.ARMClientConfig.UserAgent)
 		var cred azcore.TokenCredential
 		if authProvider.IsMultiTenantModeEnabled() {
 			multiTenantCred := authProvider.GetMultiTenantIdentity()
