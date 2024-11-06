@@ -72,7 +72,7 @@ test: ## Run tests.
 	go test -v ./...
 
 .PHONY: generate
-generate: install-dependencies build generatecode generateimpl fmt vet-all
+generate: install-dependencies build generatecode generateimpl generateclientfactory generatemock fmt vet-all test
 
 .PHONY: generatecode
 generatecode: build ## Generate client
@@ -116,6 +116,14 @@ generatecode: build ## Generate client
 .PHONY: generateimpl
 generateimpl: build ## Generate client
 	PATH=$(LOCALBIN):$$PATH $(CLIENTGEN) clientgen:headerFile=../../hack/boilerplate/boilerplate.gomock.txt paths=./...
+
+.PHONY: generatemock
+generatemock: build ## Generate client
+	PATH=$(LOCALBIN):$$PATH $(CLIENTGEN) mockgen:headerFile=../../hack/boilerplate/boilerplate.generatego.txt paths=./...
+
+.PHONY: generateclientfactory
+generateclientfactory: build ## Generate client
+	PATH=$(LOCALBIN):$$PATH $(CLIENTGEN) clientfactorygen:headerFile=../../hack/boilerplate/boilerplate.gomock.txt paths=./... output:dir=.
 
 .PHONY: vet-all
 vet-all: golangci-lint ## Run go vet against code.
