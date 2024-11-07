@@ -55,7 +55,7 @@ export LB_BACKEND_POOL_CONFIG_TYPE="${LB_BACKEND_POOL_CONFIG_TYPE:-nodeIPConfigu
 export PUT_VMSS_VM_BATCH_SIZE="${PUT_VMSS_VM_BATCH_SIZE:-0}"
 
 if [ "${AZURE_SSH_PUBLIC_KEY}" ]; then
-  AZURE_SSH_PUBLIC_KEY_B64="$(echo -n "${AZURE_SSH_PUBLIC_KEY}" | base64 | tr -d '\n')"
+  AZURE_SSH_PUBLIC_KEY_B64="$(echo -n "${AZURE_SSH_PUBLIC_KEY}" | base64 -w 0 | tr -d '\n')"
   export AZURE_SSH_PUBLIC_KEY_B64
 fi
 

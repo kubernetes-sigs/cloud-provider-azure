@@ -1,10 +1,6 @@
----
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
 metadata:
-  labels:
-    ccm: external
-    cni: calico
   name: ${CLUSTER_NAME}
   namespace: ${CLUSTER_NAME}
 spec:
@@ -27,18 +23,25 @@ metadata:
   name: ${CLUSTER_NAME}
   namespace: ${CLUSTER_NAME}
 spec:
+  bastionSpec:
+    azureBastion: {}
   identityRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
     kind: AzureClusterIdentity
     name: ${CLUSTER_IDENTITY_NAME}
   location: ${AZURE_LOCATION}
   networkSpec:
+    apiServerLB:
+      name: ${CLUSTER_NAME}-internal-lb
+      type: Internal
+    controlPlaneOutboundLB:
+      frontendIPsCount: 1
+    nodeOutboundLB:
+      frontendIPsCount: 1
     subnets:
     - name: control-plane-subnet
       role: control-plane
     - name: node-subnet
-      natGateway:
-        name: node-natgateway
       role: node
     vnet:
       name: ${CLUSTER_NAME}-vnet
@@ -55,25 +58,13 @@ spec:
     clusterConfiguration:
       apiServer:
         extraArgs:
-          cloud-config: /etc/kubernetes/azure.json
-        extraVolumes:
-        - hostPath: /etc/kubernetes/azure.json
-          mountPath: /etc/kubernetes/azure.json
-          name: cloud-config
-          readOnly: true
+          cloud-provider: external
         timeoutForControlPlane: 20m
       controllerManager:
         extraArgs:
           allocate-node-cidrs: "false"
-          cloud-config: /etc/kubernetes/azure.json
           cloud-provider: external
           cluster-name: ${CLUSTER_NAME}
-          v: "4"
-        extraVolumes:
-        - hostPath: /etc/kubernetes/azure.json
-          mountPath: /etc/kubernetes/azure.json
-          name: cloud-config
-          readOnly: true
       etcd:
         local:
           dataDir: /var/lib/etcddisk/etcd
@@ -107,20 +98,23 @@ spec:
     initConfiguration:
       nodeRegistration:
         kubeletExtraArgs:
-          cloud-config: /etc/kubernetes/azure.json
           cloud-provider: external
         name: '{{ ds.meta_data["local_hostname"] }}'
     joinConfiguration:
       nodeRegistration:
         kubeletExtraArgs:
-          cloud-config: /etc/kubernetes/azure.json
           cloud-provider: external
         name: '{{ ds.meta_data["local_hostname"] }}'
     mounts:
     - - LABEL=etcd_disk
       - /var/lib/etcddisk
-    postKubeadmCommands: []
-    preKubeadmCommands: []
+    postKubeadmCommands:
+    - if [ -f /tmp/kubeadm-join-config.yaml ] || [ -f /run/kubeadm/kubeadm-join-config.yaml
+      ]; then echo '127.0.0.1   apiserver.${CLUSTER_NAME}.capz.io apiserver' >> /etc/hosts;
+      fi
+    preKubeadmCommands:
+    - if [ -f /tmp/kubeadm.yaml ] || [ -f /run/kubeadm/kubeadm.yaml ]; then echo '127.0.0.1   apiserver.${CLUSTER_NAME}.capz.io
+      apiserver' >> /etc/hosts; fi
   machineTemplate:
     infrastructureRef:
       apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
@@ -137,166 +131,140 @@ metadata:
 spec:
   template:
     spec:
-      identity: UserAssigned
-      userAssignedIdentities:
-      - providerID: ${AZURE_USER_ASSIGNED_IDENTITY_PROVIDER_ID}
       dataDisks:
       - diskSizeGB: 256
         lun: 0
         nameSuffix: etcddisk
+      identity: UserAssigned
       osDisk:
         diskSizeGB: 128
         osType: Linux
-      sshPublicKey: "${AZURE_SSH_PUBLIC_KEY_B64}"
+      sshPublicKey: ${AZURE_SSH_PUBLIC_KEY_B64}
+      userAssignedIdentities:
+      - providerID: ${AZURE_USER_ASSIGNED_IDENTITY_PROVIDER_ID}
       vmSize: ${AZURE_CONTROL_PLANE_MACHINE_TYPE}
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
-kind: MachinePool
+kind: MachineDeployment
 metadata:
-  name: ${CLUSTER_NAME}-vmss-0
+  name: ${CLUSTER_NAME}-md-0
   namespace: ${CLUSTER_NAME}
 spec:
   clusterName: ${CLUSTER_NAME}
   replicas: ${WORKER_MACHINE_COUNT}
+  selector:
+    matchLabels: null
   template:
     spec:
-      clusterName: ${CLUSTER_NAME}
-      version: ${KUBERNETES_VERSION}
       bootstrap:
         configRef:
-          name: ${CLUSTER_NAME}-vmss-0
           apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
-          kind: KubeadmConfig
+          kind: KubeadmConfigTemplate
+          name: ${CLUSTER_NAME}-md-0
+      clusterName: ${CLUSTER_NAME}
       infrastructureRef:
-        name: ${CLUSTER_NAME}-vmss-0
         apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-        kind: AzureMachinePool
+        kind: AzureMachineTemplate
+        name: ${CLUSTER_NAME}-md-0
+      version: ${KUBERNETES_VERSION}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-kind: AzureMachinePool
+kind: AzureMachineTemplate
 metadata:
-  name: ${CLUSTER_NAME}-vmss-0
+  name: ${CLUSTER_NAME}-md-0
   namespace: ${CLUSTER_NAME}
 spec:
-  identity: UserAssigned
-  userAssignedIdentities:
-  - providerID: ${AZURE_USER_ASSIGNED_IDENTITY_PROVIDER_ID}
-  location: ${AZURE_LOCATION}
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 25%
-      maxUnavailable: 1
-      deletePolicy: Oldest
   template:
-    image:
-      marketplace:
-        offer: capi
-        publisher: cncf-upstream
-        sku: ubuntu-2204-gen1
-        version: latest
-    vmSize: Standard_D2s_v4
-    osDisk:
-      osType: "Linux"
-      diskSizeGB: 30
-      managedDisk:
-        storageAccountType: "Premium_LRS"
-    sshPublicKey: "${AZURE_SSH_PUBLIC_KEY_B64}"
+    spec:
+      osDisk:
+        diskSizeGB: 128
+        osType: Linux
+      sshPublicKey: ${AZURE_SSH_PUBLIC_KEY_B64}
+      vmSize: ${AZURE_NODE_MACHINE_TYPE}
 ---
 apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
-kind: KubeadmConfig
+kind: KubeadmConfigTemplate
 metadata:
-  name: ${CLUSTER_NAME}-vmss-0
+  name: ${CLUSTER_NAME}-md-0
   namespace: ${CLUSTER_NAME}
 spec:
-  joinConfiguration:
-    nodeRegistration:
-      name: '{{ ds.meta_data["local_hostname"] }}'
-      kubeletExtraArgs:
-        cloud-provider: external
-        cloud-config: /etc/kubernetes/azure.json
-  files:
-  - contentFrom:
-      secret:
-        name: ${CLUSTER_NAME}-vmss-0-azure-json
-        key: worker-node-azure.json
-    owner: root:root
-    path: /etc/kubernetes/azure.json
-    permissions: "0644"
+  template:
+    spec:
+      files:
+      - contentFrom:
+          secret:
+            key: worker-node-azure.json
+            name: ${CLUSTER_NAME}-md-0-azure-json
+        owner: root:root
+        path: /etc/kubernetes/azure.json
+        permissions: "0644"
+      joinConfiguration:
+        nodeRegistration:
+          kubeletExtraArgs:
+            cloud-provider: external
+          name: '{{ ds.meta_data["local_hostname"] }}'
+      preKubeadmCommands: []
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
-kind: MachinePool
+kind: MachineDeployment
 metadata:
-  name: ${CLUSTER_NAME}-vmss-1
+  name: ${CLUSTER_NAME}-md-1
   namespace: ${CLUSTER_NAME}
 spec:
   clusterName: ${CLUSTER_NAME}
   replicas: ${WORKER_MACHINE_COUNT}
+  selector:
+    matchLabels: null
   template:
     spec:
-      clusterName: ${CLUSTER_NAME}
-      version: ${KUBERNETES_VERSION}
       bootstrap:
         configRef:
-          name: ${CLUSTER_NAME}-vmss-1
           apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
-          kind: KubeadmConfig
+          kind: KubeadmConfigTemplate
+          name: ${CLUSTER_NAME}-md-1
+      clusterName: ${CLUSTER_NAME}
       infrastructureRef:
-        name: ${CLUSTER_NAME}-vmss-1
         apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-        kind: AzureMachinePool
+        kind: AzureMachineTemplate
+        name: ${CLUSTER_NAME}-md-1
+      version: ${KUBERNETES_VERSION}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-kind: AzureMachinePool
+kind: AzureMachineTemplate
 metadata:
-  name: ${CLUSTER_NAME}-vmss-1
+  name: ${CLUSTER_NAME}-md-1
   namespace: ${CLUSTER_NAME}
 spec:
-  identity: UserAssigned
-  userAssignedIdentities:
-  - providerID: ${AZURE_USER_ASSIGNED_IDENTITY_PROVIDER_ID}
-  location: ${AZURE_LOCATION}
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 25%
-      maxUnavailable: 1
-      deletePolicy: Oldest
   template:
-    image:
-      marketplace:
-        offer: capi
-        publisher: cncf-upstream
-        sku: ubuntu-2204-gen1
-        version: latest
-    vmSize: Standard_D2s_v4
-    osDisk:
-      osType: "Linux"
-      diskSizeGB: 30
-      managedDisk:
-        storageAccountType: "Premium_LRS"
-    sshPublicKey: "${AZURE_SSH_PUBLIC_KEY_B64}"
+    spec:
+      osDisk:
+        diskSizeGB: 128
+        osType: Linux
+      sshPublicKey: ${AZURE_SSH_PUBLIC_KEY_B64}
+      vmSize: ${AZURE_NODE_MACHINE_TYPE}
 ---
 apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
-kind: KubeadmConfig
+kind: KubeadmConfigTemplate
 metadata:
-  name: ${CLUSTER_NAME}-vmss-1
+  name: ${CLUSTER_NAME}-md-1
   namespace: ${CLUSTER_NAME}
 spec:
-  joinConfiguration:
-    nodeRegistration:
-      name: '{{ ds.meta_data["local_hostname"] }}'
-      kubeletExtraArgs:
-        cloud-provider: external
-        cloud-config: /etc/kubernetes/azure.json
-  files:
-  - contentFrom:
-      secret:
-        name: ${CLUSTER_NAME}-vmss-1-azure-json
-        key: worker-node-azure.json
-    owner: root:root
-    path: /etc/kubernetes/azure.json
-    permissions: "0644"
+  template:
+    spec:
+      files:
+      - contentFrom:
+          secret:
+            key: worker-node-azure.json
+            name: ${CLUSTER_NAME}-md-1-azure-json
+        owner: root:root
+        path: /etc/kubernetes/azure.json
+        permissions: "0644"
+      joinConfiguration:
+        nodeRegistration:
+          kubeletExtraArgs:
+            cloud-provider: external
+          name: '{{ ds.meta_data["local_hostname"] }}'
+      preKubeadmCommands: []
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: AzureClusterIdentity
@@ -310,31 +278,3 @@ spec:
   clientID: ${AZURE_CLIENT_ID}
   tenantID: ${AZURE_TENANT_ID}
   type: WorkloadIdentity
----
-apiVersion: addons.cluster.x-k8s.io/v1beta1
-kind: ClusterResourceSet
-metadata:
-  name: crs-ccm
-  namespace: ${CLUSTER_NAME}
-spec:
-  clusterSelector:
-    matchLabels:
-      ccm: external
-  resources:
-  - kind: ConfigMap
-    name: cloud-controller-manager-addon
-  strategy: ApplyOnce
----
-apiVersion: addons.cluster.x-k8s.io/v1beta1
-kind: ClusterResourceSet
-metadata:
-  name: crs-node-manager
-  namespace: ${CLUSTER_NAME}
-spec:
-  clusterSelector:
-    matchLabels:
-      ccm: external
-  resources:
-  - kind: ConfigMap
-    name: cloud-node-manager-addon
-  strategy: ApplyOnce
