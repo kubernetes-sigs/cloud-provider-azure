@@ -29,7 +29,6 @@ import (
 var (
 	vmCacheTTLDefaultInSeconds           = 60
 	loadBalancerCacheTTLDefaultInSeconds = 120
-	routeTableCacheTTLDefaultInSeconds   = 120
 	publicIPCacheTTLDefaultInSeconds     = 120
 
 	azureNodeProviderIDRE    = regexp.MustCompile(`^azure:///subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Compute/(?:.*)`)
