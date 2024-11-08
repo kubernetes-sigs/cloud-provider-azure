@@ -2009,7 +2009,9 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolIDs
 
 	for _, backendPool := range *backendAddressPools {
 		for _, backendPoolID := range backendPoolIDs {
-			if strings.EqualFold(*backendPool.ID, backendPoolID) && backendPool.BackendIPConfigurations != nil {
+			if strings.EqualFold(*backendPool.ID, backendPoolID) &&
+				backendPool.BackendAddressPoolPropertiesFormat != nil &&
+				backendPool.BackendIPConfigurations != nil {
 				for _, ipConf := range *backendPool.BackendIPConfigurations {
 					if ipConf.ID == nil {
 						continue
