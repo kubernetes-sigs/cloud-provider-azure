@@ -60,7 +60,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatednszonegroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privateendpointclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routetableclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/storageaccountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmasclient"
@@ -69,15 +68,15 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
-
 	"sigs.k8s.io/yaml"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	ratelimitconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/taints"
@@ -358,7 +357,6 @@ type Cloud struct {
 
 	SubnetsClient                   subnetclient.Interface
 	InterfacesClient                interfaceclient.Interface
-	RouteTablesClient               routetableclient.Interface
 	LoadBalancerClient              loadbalancerclient.Interface
 	PublicIPAddressesClient         publicipclient.Interface
 	VirtualMachinesClient           vmclient.Interface
@@ -415,13 +413,13 @@ type Cloud struct {
 	routeUpdater       batchProcessor
 	backendPoolUpdater batchProcessor
 
-	vmCache    azcache.Resource
-	lbCache    azcache.Resource
-	nsgRepo    securitygroup.Repository
-	zoneRepo   zone.Repository
-	plsRepo    privatelinkservice.Repository
-	subnetRepo subnet.Repository
-	rtCache    azcache.Resource
+	vmCache        azcache.Resource
+	lbCache        azcache.Resource
+	nsgRepo        securitygroup.Repository
+	zoneRepo       zone.Repository
+	plsRepo        privatelinkservice.Repository
+	subnetRepo     subnet.Repository
+	routeTableRepo routetable.Repository
 	// public ip cache
 	// key: [resourceGroupName]
 	// Value: sync.Map of [pipName]*PublicIPAddress
@@ -752,7 +750,13 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 		if err != nil {
 			return err
 		}
+
 		az.subnetRepo, err = subnet.NewRepo(networkClientFactory.GetSubnetClient())
+		if err != nil {
+			return err
+		}
+
+		az.routeTableRepo, err = routetable.NewRepo(networkClientFactory.GetRouteTableClient(), az.RouteTableResourceGroup, time.Duration(az.RouteTableCacheTTLInSeconds)*time.Second, az.DisableAPICallCache)
 		if err != nil {
 			return err
 		}
@@ -865,11 +869,6 @@ func (az *Cloud) initCaches() (err error) {
 	}
 
 	az.lbCache, err = az.newLBCache()
-	if err != nil {
-		return err
-	}
-
-	az.rtCache, err = az.newRouteTableCache()
 	if err != nil {
 		return err
 	}
@@ -1033,7 +1032,6 @@ func (az *Cloud) configAzureClients(
 	az.VirtualMachineScaleSetsClient = vmssclient.New(vmssClientConfig)
 	az.VirtualMachineScaleSetVMsClient = vmssvmclient.New(vmssVMClientConfig)
 	az.SubnetsClient = subnetclient.New(subnetClientConfig)
-	az.RouteTablesClient = routetableclient.New(routeTableClientConfig)
 	az.LoadBalancerClient = loadbalancerclient.New(loadBalancerClientConfig)
 	az.PublicIPAddressesClient = publicipclient.New(publicIPClientConfig)
 	az.FileClient = fileclient.New(fileClientConfig)
