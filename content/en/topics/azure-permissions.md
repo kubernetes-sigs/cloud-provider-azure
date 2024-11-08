@@ -27,6 +27,11 @@ Microsoft.Network/publicIPAddresses/write
 // This is because of the linked access check when adding the public IP to LB frontendIPConfiguration
 Microsoft.Network/publicIPAddresses/join/action
 
+// Required if a public IP Prefix from another resource group is used for LoadBalancer service
+// This is because of the linked access check when adding the public IP of a public IP
+// prefix to a LB frontendIPConfiguration
+Microsoft.Network/publicIPPrefixes/join/action
+
 // Required to create or delete security rules for LoadBalancer service
 Microsoft.Network/networkSecurityGroups/read
 Microsoft.Network/networkSecurityGroups/write
