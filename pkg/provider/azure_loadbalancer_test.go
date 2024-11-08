@@ -6236,6 +6236,8 @@ func TestCleanOrphanedLoadBalancerLBInUseByVMSS(t *testing.T) {
 		expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
 		mockVMSSClient := cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), "rg").Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil)
+		mockVMSSClient.EXPECT().Get(gomock.Any(), "rg", testVMSSName).Return(expectedVMSS, nil)
+		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", testVMSSName, gomock.Any()).Return(nil)
 
 		service := getTestService("test", v1.ProtocolTCP, nil, false, 80)
 		lb := getTestLoadBalancer(ptr.To("test"), ptr.To("rg"), ptr.To("test"), ptr.To("test"), service, consts.LoadBalancerSkuStandard)
