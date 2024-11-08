@@ -711,15 +711,12 @@ func (az *Cloud) cleanOrphanedLoadBalancer(ctx context.Context, lb *network.Load
 }
 
 // safeDeleteLoadBalancer deletes the load balancer after decoupling it from the vmSet
-func (az *Cloud) safeDeleteLoadBalancer(ctx context.Context, lb network.LoadBalancer, clusterName, vmSetName string, service *v1.Service) *retry.Error {
-	lbBackendPoolIDs := az.getBackendPoolIDs(clusterName, ptr.Deref(lb.Name, ""))
+func (az *Cloud) safeDeleteLoadBalancer(ctx context.Context, lb network.LoadBalancer, _, vmSetName string, service *v1.Service) *retry.Error {
 	lbBackendPoolIDsToDelete := []string{}
-	v4Enabled, v6Enabled := getIPFamiliesEnabled(service)
-	if v4Enabled {
-		lbBackendPoolIDsToDelete = append(lbBackendPoolIDsToDelete, lbBackendPoolIDs[consts.IPVersionIPv4])
-	}
-	if v6Enabled {
-		lbBackendPoolIDsToDelete = append(lbBackendPoolIDsToDelete, lbBackendPoolIDs[consts.IPVersionIPv6])
+	if lb.LoadBalancerPropertiesFormat != nil && lb.BackendAddressPools != nil {
+		for _, bp := range *lb.BackendAddressPools {
+			lbBackendPoolIDsToDelete = append(lbBackendPoolIDsToDelete, ptr.Deref(bp.ID, ""))
+		}
 	}
 	if _, err := az.VMSet.EnsureBackendPoolDeleted(ctx, service, lbBackendPoolIDsToDelete, vmSetName, lb.BackendAddressPools, true); err != nil {
 		return retry.NewError(false, fmt.Errorf("safeDeleteLoadBalancer: failed to EnsureBackendPoolDeleted: %w", err))
@@ -1495,7 +1492,7 @@ func (az *Cloud) isFrontendIPChanged(
 	if fipIPVersion != "" {
 		isIPv6 = fipIPVersion == network.IPv6
 	} else {
-		if isIPv6, err = az.isFIPIPv6(service, pipRG, &config); err != nil {
+		if isIPv6, err = az.isFIPIPv6(service, &config); err != nil {
 			return false, err
 		}
 	}
@@ -1645,7 +1642,6 @@ func (az *Cloud) findFrontendIPConfigsOfService(
 	service *v1.Service,
 ) (map[bool]*network.FrontendIPConfiguration, error) {
 	fipsOfServiceMap := map[bool]*network.FrontendIPConfiguration{}
-	pipRG := az.getPublicIPAddressResourceGroup(service)
 	for _, config := range *fipConfigs {
 		config := config
 		owns, _, fipIPVersion := az.serviceOwnsFrontendIP(ctx, config, service)
@@ -1655,7 +1651,7 @@ func (az *Cloud) findFrontendIPConfigsOfService(
 			if fipIPVersion != "" {
 				fipIsIPv6 = fipIPVersion == network.IPv6
 			} else {
-				if fipIsIPv6, err = az.isFIPIPv6(service, pipRG, &config); err != nil {
+				if fipIsIPv6, err = az.isFIPIPv6(service, &config); err != nil {
 					return nil, err
 				}
 			}
@@ -1831,7 +1827,6 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 	}
 
 	// update probes/rules
-	pipRG := az.getPublicIPAddressResourceGroup(service)
 	for _, ownedFIPConfig := range ownedFIPConfigs {
 		if ownedFIPConfig == nil {
 			continue
@@ -1846,7 +1841,7 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 		if fipIPVersion != "" {
 			isIPv6 = fipIPVersion == network.IPv6
 		} else {
-			if isIPv6, err = az.isFIPIPv6(service, pipRG, ownedFIPConfig); err != nil {
+			if isIPv6, err = az.isFIPIPv6(service, ownedFIPConfig); err != nil {
 				return nil, err
 			}
 		}
@@ -2507,8 +2502,6 @@ func (az *Cloud) reconcileFrontendIPConfigs(
 			}
 		}
 
-		pipRG := az.getPublicIPAddressResourceGroup(service)
-
 		for i := len(newConfigs) - 1; i >= 0; i-- {
 			config := newConfigs[i]
 			isServiceOwnsFrontendIP, _, fipIPVersion := az.serviceOwnsFrontendIP(ctx, config, service)
@@ -2522,7 +2515,7 @@ func (az *Cloud) reconcileFrontendIPConfigs(
 			if fipIPVersion != "" {
 				isIPv6 = fipIPVersion == network.IPv6
 			} else {
-				if isIPv6, err = az.isFIPIPv6(service, pipRG, &config); err != nil {
+				if isIPv6, err = az.isFIPIPv6(service, &config); err != nil {
 					return nil, toDeleteConfigs, false, err
 				}
 			}
