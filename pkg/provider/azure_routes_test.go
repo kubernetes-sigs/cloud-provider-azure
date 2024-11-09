@@ -197,17 +197,19 @@ func TestDeleteRouteDualStack(t *testing.T) {
 func TestCreateRoute(t *testing.T) {
 	t.Parallel()
 
-	route := cloudprovider.Route{TargetNode: "node", DestinationCIDR: "1.2.3.4/24"}
 	nodePrivateIP := "2.4.6.8"
-	networkRoute := []*armnetwork.Route{
-		{
-			Name: ptr.To("node"),
-			Properties: &armnetwork.RoutePropertiesFormat{
-				AddressPrefix:    ptr.To("1.2.3.4/24"),
-				NextHopIPAddress: &nodePrivateIP,
-				NextHopType:      ptr.To(armnetwork.RouteNextHopTypeVirtualAppliance),
+
+	defaultNetworkRoute := func() []*armnetwork.Route {
+		return []*armnetwork.Route{
+			{
+				Name: ptr.To("node"),
+				Properties: &armnetwork.RoutePropertiesFormat{
+					AddressPrefix:    ptr.To("1.2.3.4/24"),
+					NextHopIPAddress: &nodePrivateIP,
+					NextHopType:      ptr.To(armnetwork.RouteNextHopTypeVirtualAppliance),
+				},
 			},
-		},
+		}
 	}
 
 	tests := []struct {
@@ -233,20 +235,20 @@ func TestCreateRoute(t *testing.T) {
 		{
 			name:           "CreateRoute should create route if route doesn't exist",
 			routeTableName: "rt1",
-			updatedRoute:   networkRoute,
+			updatedRoute:   defaultNetworkRoute(),
 		},
 		{
 			name:              "CreateRoute should report error if error occurs when invoke CreateOrUpdateRouteTable",
 			routeTableName:    "rt2",
-			updatedRoute:      networkRoute,
+			updatedRoute:      defaultNetworkRoute(),
 			createOrUpdateErr: errors.New("dummy"),
 			expectedErrMsg:    errors.New("dummy"),
 		},
 		{
 			name:           "CreateRoute should do nothing if route already exists",
 			routeTableName: "rt3",
-			initialRoute:   networkRoute,
-			updatedRoute:   networkRoute,
+			initialRoute:   defaultNetworkRoute(),
+			updatedRoute:   defaultNetworkRoute(),
 		},
 		{
 			name:              "CreateRoute should report error if error occurs when invoke createRouteTable",
@@ -364,6 +366,7 @@ func TestCreateRoute(t *testing.T) {
 			} else {
 				mockRTRepo.EXPECT().Get(gomock.Any(), cloud.RouteTableName, gomock.Any()).Return(initialTable, tt.getErr).MaxTimes(1)
 			}
+
 			mockRTRepo.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, routeTable armnetwork.RouteTable) (*armnetwork.RouteTable, error) {
 					assert.Equal(t, updatedTable, routeTable)
@@ -376,6 +379,7 @@ func TestCreateRoute(t *testing.T) {
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
+			route := cloudprovider.Route{TargetNode: "node", DestinationCIDR: "1.2.3.4/24"}
 			err := cloud.CreateRoute(ctx, "cluster", "unused", &route)
 			assert.Equal(t, cloud.routeCIDRs, tt.expectedRouteCIDRs, tt.name)
 			if err != nil {
