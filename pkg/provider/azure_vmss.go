@@ -1379,6 +1379,13 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 		mc.ObserveOperationWithResult(isOperationSucceeded)
 	}()
 
+	// Ensure the backendPoolID is also added on VMSS itself.
+	// Refer to issue kubernetes/kubernetes#80365 for detailed information
+	err := ss.ensureVMSSInPool(ctx, service, nodes, backendPoolID, vmSetNameOfLB)
+	if err != nil {
+		return err
+	}
+
 	hostUpdates := make([]func() error, 0, len(nodes))
 	nodeUpdates := make(map[vmssMetaInfo]map[string]compute.VirtualMachineScaleSetVM)
 	errors := make([]error, 0)
@@ -1467,13 +1474,6 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 	// Fail if there are other errors.
 	if len(errors) > 0 {
 		return utilerrors.Flatten(utilerrors.NewAggregate(errors))
-	}
-
-	// Ensure the backendPoolID is also added on VMSS itself.
-	// Refer to issue kubernetes/kubernetes#80365 for detailed information
-	err := ss.ensureVMSSInPool(ctx, service, nodes, backendPoolID, vmSetNameOfLB)
-	if err != nil {
-		return err
 	}
 
 	isOperationSucceeded = true
