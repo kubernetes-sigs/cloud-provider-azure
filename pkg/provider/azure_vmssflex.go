@@ -710,8 +710,13 @@ func (fs *FlexScaleSet) EnsureHostsInPool(ctx context.Context, service *v1.Servi
 	defer func() {
 		mc.ObserveOperationWithResult(isOperationSucceeded)
 	}()
-	hostUpdates := make([]func() error, 0, len(nodes))
 
+	err := fs.ensureVMSSFlexInPool(ctx, service, nodes, backendPoolID, vmSetNameOfLB)
+	if err != nil {
+		return err
+	}
+
+	hostUpdates := make([]func() error, 0, len(nodes))
 	for _, node := range nodes {
 		localNodeName := node.Name
 		if fs.useStandardLoadBalancer() && fs.excludeMasterNodesFromStandardLB() && isControlPlaneNode(node) {
@@ -742,11 +747,6 @@ func (fs *FlexScaleSet) EnsureHostsInPool(ctx context.Context, service *v1.Servi
 	errs := utilerrors.AggregateGoroutines(hostUpdates...)
 	if errs != nil {
 		return utilerrors.Flatten(errs)
-	}
-
-	err := fs.ensureVMSSFlexInPool(ctx, service, nodes, backendPoolID, vmSetNameOfLB)
-	if err != nil {
-		return err
 	}
 
 	isOperationSucceeded = true
