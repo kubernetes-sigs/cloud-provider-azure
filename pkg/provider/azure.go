@@ -108,8 +108,7 @@ var (
 // See https://kubernetes.io/docs/reference/using-api/deprecation-policy/#deprecating-a-flag-or-cli
 // for more details.
 type Config struct {
-	ratelimitconfig.AzureAuthConfig              `json:",inline" yaml:",inline"`
-	ratelimitconfig.CloudProviderRateLimitConfig `json:",inline" yaml:",inline"`
+	ratelimitconfig.AzureClientConfig `json:",inline" yaml:",inline"`
 
 	// The cloud configure type for Azure cloud provider. Supported values are file, secret and merge.
 	CloudConfigType configloader.CloudConfigType `json:"cloudConfigType,omitempty" yaml:"cloudConfigType,omitempty"`
@@ -190,8 +189,6 @@ type Config struct {
 	// when setting AzureAuthConfig.Cloud with "AZURESTACKCLOUD" to customize ARM endpoints
 	// while the cluster is not running on AzureStack.
 	DisableAzureStackCloud bool `json:"disableAzureStackCloud,omitempty" yaml:"disableAzureStackCloud,omitempty"`
-	// Enable exponential backoff to manage resource request retries
-	CloudProviderBackoff bool `json:"cloudProviderBackoff,omitempty" yaml:"cloudProviderBackoff,omitempty"`
 	// Use instance metadata service where possible
 	UseInstanceMetadata bool `json:"useInstanceMetadata,omitempty" yaml:"useInstanceMetadata,omitempty"`
 
@@ -209,42 +206,7 @@ type Config struct {
 
 	// Maximum allowed LoadBalancer Rule Count is the limit enforced by Azure Load balancer
 	MaximumLoadBalancerRuleCount int `json:"maximumLoadBalancerRuleCount,omitempty" yaml:"maximumLoadBalancerRuleCount,omitempty"`
-	// Backoff retry limit
-	CloudProviderBackoffRetries int `json:"cloudProviderBackoffRetries,omitempty" yaml:"cloudProviderBackoffRetries,omitempty"`
-	// Backoff duration
-	CloudProviderBackoffDuration int `json:"cloudProviderBackoffDuration,omitempty" yaml:"cloudProviderBackoffDuration,omitempty"`
-	// NonVmssUniformNodesCacheTTLInSeconds sets the Cache TTL for NonVmssUniformNodesCacheTTLInSeconds
-	// if not set, will use default value
-	NonVmssUniformNodesCacheTTLInSeconds int `json:"nonVmssUniformNodesCacheTTLInSeconds,omitempty" yaml:"nonVmssUniformNodesCacheTTLInSeconds,omitempty"`
-	// VmssCacheTTLInSeconds sets the cache TTL for VMSS
-	VmssCacheTTLInSeconds int `json:"vmssCacheTTLInSeconds,omitempty" yaml:"vmssCacheTTLInSeconds,omitempty"`
-	// VmssVirtualMachinesCacheTTLInSeconds sets the cache TTL for vmssVirtualMachines
-	VmssVirtualMachinesCacheTTLInSeconds int `json:"vmssVirtualMachinesCacheTTLInSeconds,omitempty" yaml:"vmssVirtualMachinesCacheTTLInSeconds,omitempty"`
 
-	// VmssFlexCacheTTLInSeconds sets the cache TTL for VMSS Flex
-	VmssFlexCacheTTLInSeconds int `json:"vmssFlexCacheTTLInSeconds,omitempty" yaml:"vmssFlexCacheTTLInSeconds,omitempty"`
-	// VmssFlexVMCacheTTLInSeconds sets the cache TTL for vmss flex vms
-	VmssFlexVMCacheTTLInSeconds int `json:"vmssFlexVMCacheTTLInSeconds,omitempty" yaml:"vmssFlexVMCacheTTLInSeconds,omitempty"`
-
-	// VmCacheTTLInSeconds sets the cache TTL for vm
-	VMCacheTTLInSeconds int `json:"vmCacheTTLInSeconds,omitempty" yaml:"vmCacheTTLInSeconds,omitempty"`
-	// LoadBalancerCacheTTLInSeconds sets the cache TTL for load balancer
-	LoadBalancerCacheTTLInSeconds int `json:"loadBalancerCacheTTLInSeconds,omitempty" yaml:"loadBalancerCacheTTLInSeconds,omitempty"`
-	// NsgCacheTTLInSeconds sets the cache TTL for network security group
-	NsgCacheTTLInSeconds int `json:"nsgCacheTTLInSeconds,omitempty" yaml:"nsgCacheTTLInSeconds,omitempty"`
-	// RouteTableCacheTTLInSeconds sets the cache TTL for route table
-	RouteTableCacheTTLInSeconds int `json:"routeTableCacheTTLInSeconds,omitempty" yaml:"routeTableCacheTTLInSeconds,omitempty"`
-	// PlsCacheTTLInSeconds sets the cache TTL for private link service resource
-	PlsCacheTTLInSeconds int `json:"plsCacheTTLInSeconds,omitempty" yaml:"plsCacheTTLInSeconds,omitempty"`
-	// AvailabilitySetsCacheTTLInSeconds sets the cache TTL for VMAS
-	AvailabilitySetsCacheTTLInSeconds int `json:"availabilitySetsCacheTTLInSeconds,omitempty" yaml:"availabilitySetsCacheTTLInSeconds,omitempty"`
-	// PublicIPCacheTTLInSeconds sets the cache TTL for public ip
-	PublicIPCacheTTLInSeconds int `json:"publicIPCacheTTLInSeconds,omitempty" yaml:"publicIPCacheTTLInSeconds,omitempty"`
-	// RouteUpdateWaitingInSeconds is the delay time for waiting route updates to take effect. This waiting delay is added
-	// because the routes are not taken effect when the async route updating operation returns success. Default is 30 seconds.
-	RouteUpdateWaitingInSeconds int `json:"routeUpdateWaitingInSeconds,omitempty" yaml:"routeUpdateWaitingInSeconds,omitempty"`
-	// The user agent for Azure customer usage attribution
-	UserAgent string `json:"userAgent,omitempty" yaml:"userAgent,omitempty"`
 	// LoadBalancerBackendPoolConfigurationType defines how vms join the load balancer backend pools. Supported values
 	// are `nodeIPConfiguration`, `nodeIP` and `podIP`.
 	// `nodeIPConfiguration`: vm network interfaces will be attached to the inbound backend pool of the load balancer (default);
@@ -268,9 +230,6 @@ type Config struct {
 	// If the length is not 0, it is assumed the multiple standard load balancers mode is on. In this case,
 	// there must be one configuration named "<clustername>" or an error will be reported.
 	MultipleStandardLoadBalancerConfigurations []MultipleStandardLoadBalancerConfiguration `json:"multipleStandardLoadBalancerConfigurations,omitempty" yaml:"multipleStandardLoadBalancerConfigurations,omitempty"`
-
-	// DisableAPICallCache disables the cache for Azure API calls. It is for ARG support and not all resources will be disabled.
-	DisableAPICallCache bool `json:"disableAPICallCache,omitempty" yaml:"disableAPICallCache,omitempty"`
 
 	// RouteUpdateIntervalInSeconds is the interval for updating routes. Default is 30 seconds.
 	RouteUpdateIntervalInSeconds int `json:"routeUpdateIntervalInSeconds,omitempty" yaml:"routeUpdateIntervalInSeconds,omitempty"`
@@ -673,7 +632,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 			return err
 		}
 	}
-	servicePrincipalToken, err := ratelimitconfig.GetServicePrincipalToken(&config.AzureAuthConfig, env, env.ServiceManagementEndpoint)
+	servicePrincipalToken, err := ratelimitconfig.GetServicePrincipalToken(&config.AzureClientConfig, env, env.ServiceManagementEndpoint)
 	if errors.Is(err, ratelimitconfig.ErrorNoAuth) {
 		// Only controller-manager would lazy-initialize from secret, and credentials are required for such case.
 		if fromSecret {
@@ -700,7 +659,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 	}
 
 	var authProvider *azclient.AuthProvider
-	authProvider, err = azclient.NewAuthProvider(&az.ARMClientConfig, &az.AzureAuthConfig.AzureAuthConfig)
+	authProvider, err = azclient.NewAuthProvider(&az.ARMClientConfig, &az.AzureClientConfig.AzureAuthConfig)
 	if err != nil {
 		return err
 	}
@@ -917,11 +876,11 @@ func (az *Cloud) getAuthTokenInMultiTenantEnv(_ *adal.ServicePrincipalToken, aut
 	var multiTenantOAuthToken adal.MultitenantOAuthTokenProvider
 	var networkResourceServicePrincipalToken adal.OAuthTokenProvider
 	if az.Config.UsesNetworkResourceInDifferentTenant() {
-		multiTenantOAuthToken, err = ratelimitconfig.GetMultiTenantServicePrincipalToken(&az.Config.AzureAuthConfig, &az.Environment, authProvider)
+		multiTenantOAuthToken, err = ratelimitconfig.GetMultiTenantServicePrincipalToken(&az.Config.AzureClientConfig, &az.Environment, authProvider)
 		if err != nil {
 			return nil, nil, err
 		}
-		networkResourceServicePrincipalToken, err = ratelimitconfig.GetNetworkResourceServicePrincipalToken(&az.Config.AzureAuthConfig, &az.Environment, authProvider)
+		networkResourceServicePrincipalToken, err = ratelimitconfig.GetNetworkResourceServicePrincipalToken(&az.Config.AzureClientConfig, &az.Environment, authProvider)
 		if err != nil {
 			return nil, nil, err
 		}

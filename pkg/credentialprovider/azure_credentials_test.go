@@ -45,7 +45,7 @@ func TestGetCredentials(t *testing.T) {
 		"*.azurecr.us",
 	}
 
-	provider := NewAcrProvider(&config.AzureAuthConfig{
+	provider := NewAcrProvider(&config.AzureClientConfig{
 		AzureAuthConfig: azclient.AzureAuthConfig{
 			AADClientID:     "foo",
 			AADClientSecret: "bar",
@@ -213,7 +213,7 @@ func TestProcessImageWithMirrorMapping(t *testing.T) {
 
 func TestParseACRLoginServerFromImage(t *testing.T) {
 
-	providerInterface := NewAcrProvider(&config.AzureAuthConfig{
+	providerInterface := NewAcrProvider(&config.AzureClientConfig{
 		AzureAuthConfig: azclient.AzureAuthConfig{
 			AADClientID:     "foo",
 			AADClientSecret: "bar",
