@@ -79,7 +79,7 @@ func NewTestFlexScaleSet(ctrl *gomock.Controller) (*FlexScaleSet, error) {
 func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	az = &Cloud{
 		Config: Config{
-			AzureAuthConfig: config.AzureAuthConfig{
+			AzureClientConfig: config.AzureClientConfig{
 				ARMClientConfig: azclient.ARMClientConfig{
 					TenantID: "TenantID",
 				},

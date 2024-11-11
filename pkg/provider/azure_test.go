@@ -2797,7 +2797,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 	assert.Equal(t, expectedErr, err)
 
 	config = Config{
-		AzureAuthConfig: providerconfig.AzureAuthConfig{
+		AzureClientConfig: providerconfig.AzureClientConfig{
 			ARMClientConfig: azclient.ARMClientConfig{
 				Cloud: "AZUREPUBLICCLOUD",
 			},
