@@ -37,6 +37,13 @@ updates:
       - "lgtm"
       - "approved"
     groups:
+      opentelemetry:
+        applies-to: version-updates
+        patterns:
+        - "go.opentelemetry.io*"
+        update-types:
+        - "patch"
+        - "minor"        
       k8s:
         applies-to: version-updates
         patterns:
