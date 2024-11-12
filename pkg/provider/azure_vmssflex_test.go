@@ -1331,7 +1331,7 @@ func TestEnsureHostsInPoolVmssFlex(t *testing.T) {
 			vmListErr:                      nil,
 			nic:                            testNic1,
 			nicGetErr:                      nil,
-			expectedErr:                    fmt.Errorf("ensure(/): backendPoolID(/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb-internal/backendAddressPools/backendpool-1) - failed to ensure host in pool: EnsureHostInPool: VMSS Flex does not support Basic Load Balancer"),
+			expectedErr:                    fmt.Errorf("ensureVMSSFlexInPool: VMSS Flex does not support Basic Load Balancer"),
 		},
 		{
 			description: "EnsureHostsInPool should return error if vmss update fails",
