@@ -24,7 +24,7 @@ import (
 var _ = Describe("LoaderFile", func() {
 	When("invalid config content is provided", func() {
 		It("should return error", func() {
-			loader := newFileLoader[TestConfig]("error", nil, newYamlByteLoader[TestConfig])
+			loader := newFileLoader[TestConfig]("error", nil, NewYamlByteLoader[TestConfig])
 			config, err := loader.Load(nil)
 			Expect(err).NotTo(BeNil())
 			Expect(config).To(BeNil())
@@ -32,7 +32,7 @@ var _ = Describe("LoaderFile", func() {
 	})
 	When("valid config content is provided", func() {
 		It("should return error", func() {
-			loader := newFileLoader[TestConfig]("testdata/azure.json", nil, newYamlByteLoader[TestConfig])
+			loader := newFileLoader[TestConfig]("testdata/azure.json", nil, NewYamlByteLoader[TestConfig])
 			config, err := loader.Load(nil)
 			Expect(err).To(BeNil())
 			Expect(config).NotTo(BeNil())
