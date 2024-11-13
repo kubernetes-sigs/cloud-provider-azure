@@ -26,7 +26,7 @@ import (
 var _ = Describe("LoaderYaml", func() {
 	When("invalid config content is provided", func() {
 		It("should return error", func() {
-			loader := newYamlByteLoader[TestConfig]([]byte("error"), nil)
+			loader := NewYamlByteLoader[TestConfig]([]byte("error"), nil)
 			config, err := loader.Load(context.Background())
 			Expect(err).NotTo(BeNil())
 			Expect(config).To(BeNil())
@@ -34,7 +34,7 @@ var _ = Describe("LoaderYaml", func() {
 	})
 	When("valid config content is provided", func() {
 		It("should return error", func() {
-			loader := newYamlByteLoader[TestConfig]([]byte(`{"value":"123"}`), nil)
+			loader := NewYamlByteLoader[TestConfig]([]byte(`{"value":"123"}`), nil)
 			config, err := loader.Load(context.Background())
 			Expect(err).To(BeNil())
 			Expect(config).NotTo(BeNil())
@@ -43,7 +43,7 @@ var _ = Describe("LoaderYaml", func() {
 	})
 	When("valid config content is provided with default config", func() {
 		It("should return error", func() {
-			loader := newYamlByteLoader[TestConfig]([]byte(`{"value":"123"}`), newFileLoader[TestConfig]("wrong", nil, newYamlByteLoader[TestConfig]))
+			loader := NewYamlByteLoader[TestConfig]([]byte(`{"value":"123"}`), newFileLoader[TestConfig]("wrong", nil, NewYamlByteLoader[TestConfig]))
 			config, err := loader.Load(context.Background())
 			Expect(err).NotTo(BeNil())
 			Expect(config).To(BeNil())
