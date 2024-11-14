@@ -33,7 +33,9 @@ import (
 )
 
 func TestRepo_Get(t *testing.T) {
+	t.Parallel()
 	t.Run("refresh cache", func(t *testing.T) {
+		t.Parallel()
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		cli := mock_privatelinkserviceclient.NewMockInterface(ctrl)
@@ -69,6 +71,7 @@ func TestRepo_Get(t *testing.T) {
 	})
 
 	t.Run("refresh cache with not found", func(t *testing.T) {
+		t.Parallel()
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		cli := mock_privatelinkserviceclient.NewMockInterface(ctrl)
@@ -89,6 +92,7 @@ func TestRepo_Get(t *testing.T) {
 	})
 
 	t.Run("API error", func(t *testing.T) {
+		t.Parallel()
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		cli := mock_privatelinkserviceclient.NewMockInterface(ctrl)
@@ -112,7 +116,9 @@ func TestRepo_Get(t *testing.T) {
 }
 
 func TestRepo_CreateOrUpdate(t *testing.T) {
+	t.Parallel()
 	t.Run("create one", func(t *testing.T) {
+		t.Parallel()
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		cli := mock_privatelinkserviceclient.NewMockInterface(ctrl)
@@ -148,6 +154,7 @@ func TestRepo_CreateOrUpdate(t *testing.T) {
 	})
 
 	t.Run("create one with missing PLS name", func(t *testing.T) {
+		t.Parallel()
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		cli := mock_privatelinkserviceclient.NewMockInterface(ctrl)
@@ -165,6 +172,7 @@ func TestRepo_CreateOrUpdate(t *testing.T) {
 	})
 
 	t.Run("create one with missing LoadBalancerFrontendIPConfigurations", func(t *testing.T) {
+		t.Parallel()
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		cli := mock_privatelinkserviceclient.NewMockInterface(ctrl)
@@ -185,6 +193,7 @@ func TestRepo_CreateOrUpdate(t *testing.T) {
 	})
 
 	t.Run("should clear cache", func(t *testing.T) {
+		t.Parallel()
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		cli := mock_privatelinkserviceclient.NewMockInterface(ctrl)
@@ -242,7 +251,9 @@ func TestRepo_CreateOrUpdate(t *testing.T) {
 }
 
 func TestRepo_Delete(t *testing.T) {
+	t.Parallel()
 	t.Run("delete one", func(t *testing.T) {
+		t.Parallel()
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		cli := mock_privatelinkserviceclient.NewMockInterface(ctrl)
@@ -263,6 +274,7 @@ func TestRepo_Delete(t *testing.T) {
 	})
 
 	t.Run("API error", func(t *testing.T) {
+		t.Parallel()
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		cli := mock_privatelinkserviceclient.NewMockInterface(ctrl)
@@ -286,7 +298,9 @@ func TestRepo_Delete(t *testing.T) {
 }
 
 func TestRepo_DeletePEConnection(t *testing.T) {
+	t.Parallel()
 	t.Run("delete one", func(t *testing.T) {
+		t.Parallel()
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		cli := mock_privatelinkserviceclient.NewMockInterface(ctrl)
@@ -307,6 +321,7 @@ func TestRepo_DeletePEConnection(t *testing.T) {
 	})
 
 	t.Run("API error", func(t *testing.T) {
+		t.Parallel()
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		cli := mock_privatelinkserviceclient.NewMockInterface(ctrl)

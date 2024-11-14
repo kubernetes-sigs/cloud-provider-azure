@@ -1571,6 +1571,7 @@ sigs.k8s.io/cloud-provider-azure/pkg/azclient/registryclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/resourcegroupclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/roleassignmentclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient/mock_routetableclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/secretclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient

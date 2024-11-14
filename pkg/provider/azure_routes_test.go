@@ -18,13 +18,13 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"net/http"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
@@ -32,18 +32,18 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/ptr"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routetableclient/mockroutetableclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 func TestDeleteRoute(t *testing.T) {
+	t.Parallel()
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	routeTableClient := mockroutetableclient.NewMockInterface(ctrl)
 
+	mockRTRepo := routetable.NewMockRepository(ctrl)
 	cloud := &Cloud{
-		RouteTablesClient: routeTableClient,
+		routeTableRepo: mockRTRepo,
 		Config: Config{
 			RouteTableResourceGroup: "foo",
 			RouteTableName:          "bar",
@@ -52,8 +52,6 @@ func TestDeleteRoute(t *testing.T) {
 		unmanagedNodes:     utilsets.NewString(),
 		nodeInformerSynced: func() bool { return true },
 	}
-	cache, _ := cloud.newRouteTableCache()
-	cloud.rtCache = cache
 	cloud.routeUpdater = newDelayedRouteUpdater(cloud, 100*time.Millisecond)
 	go cloud.routeUpdater.run(context.Background())
 	route := cloudprovider.Route{
@@ -61,26 +59,33 @@ func TestDeleteRoute(t *testing.T) {
 		DestinationCIDR: "1.2.3.4/24",
 	}
 	routeName := mapNodeNameToRouteName(false, route.TargetNode, route.DestinationCIDR)
-	routeTables := network.RouteTable{
+	routeTables := &armnetwork.RouteTable{
 		Name:     &cloud.RouteTableName,
 		Location: &cloud.Location,
-		RouteTablePropertiesFormat: &network.RouteTablePropertiesFormat{
-			Routes: &[]network.Route{
+		Properties: &armnetwork.RouteTablePropertiesFormat{
+			Routes: []*armnetwork.Route{
 				{
 					Name: &routeName,
 				},
 			},
 		},
 	}
-	routeTablesAfterDeletion := network.RouteTable{
+	routeTablesAfterDeletion := armnetwork.RouteTable{
 		Name:     &cloud.RouteTableName,
 		Location: &cloud.Location,
-		RouteTablePropertiesFormat: &network.RouteTablePropertiesFormat{
-			Routes: &[]network.Route{},
+		Properties: &armnetwork.RouteTablePropertiesFormat{
+			Routes: []*armnetwork.Route{},
 		},
 	}
-	routeTableClient.EXPECT().Get(gomock.Any(), cloud.RouteTableResourceGroup, cloud.RouteTableName, "").Return(routeTables, nil).AnyTimes()
-	routeTableClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.RouteTableResourceGroup, cloud.RouteTableName, routeTablesAfterDeletion, "").Return(nil)
+
+	mockRTRepo.EXPECT().Get(gomock.Any(), cloud.RouteTableName, gomock.Any()).Return(routeTables, nil).AnyTimes()
+	mockRTRepo.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, routeTable armnetwork.RouteTable) (*armnetwork.RouteTable, error) {
+			assert.Equal(t, routeTablesAfterDeletion, routeTable)
+			return nil, nil
+		},
+	).AnyTimes()
+
 	err := cloud.DeleteRoute(context.TODO(), "cluster", &route)
 	if err != nil {
 		t.Errorf("unexpected error deleting route: %v", err)
@@ -110,12 +115,13 @@ func TestDeleteRoute(t *testing.T) {
 }
 
 func TestDeleteRouteDualStack(t *testing.T) {
+	t.Parallel()
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	routeTableClient := mockroutetableclient.NewMockInterface(ctrl)
 
+	mockRTRepo := routetable.NewMockRepository(ctrl)
 	cloud := &Cloud{
-		RouteTablesClient: routeTableClient,
+		routeTableRepo: mockRTRepo,
 		Config: Config{
 			RouteTableResourceGroup: "foo",
 			RouteTableName:          "bar",
@@ -125,8 +131,6 @@ func TestDeleteRouteDualStack(t *testing.T) {
 		nodeInformerSynced:   func() bool { return true },
 		ipv6DualStackEnabled: true,
 	}
-	cache, _ := cloud.newRouteTableCache()
-	cloud.rtCache = cache
 	cloud.routeUpdater = newDelayedRouteUpdater(cloud, 100*time.Millisecond)
 	go cloud.routeUpdater.run(context.Background())
 
@@ -136,11 +140,11 @@ func TestDeleteRouteDualStack(t *testing.T) {
 	}
 	routeName := mapNodeNameToRouteName(true, route.TargetNode, route.DestinationCIDR)
 	routeNameIPV4 := mapNodeNameToRouteName(false, route.TargetNode, route.DestinationCIDR)
-	routeTables := network.RouteTable{
+	routeTables := &armnetwork.RouteTable{
 		Name:     &cloud.RouteTableName,
 		Location: &cloud.Location,
-		RouteTablePropertiesFormat: &network.RouteTablePropertiesFormat{
-			Routes: &[]network.Route{
+		Properties: &armnetwork.RouteTablePropertiesFormat{
+			Routes: []*armnetwork.Route{
 				{
 					Name: &routeName,
 				},
@@ -150,28 +154,38 @@ func TestDeleteRouteDualStack(t *testing.T) {
 			},
 		},
 	}
-	routeTablesAfterFirstDeletion := network.RouteTable{
+	routeTablesAfterFirstDeletion := armnetwork.RouteTable{
 		Name:     &cloud.RouteTableName,
 		Location: &cloud.Location,
-		RouteTablePropertiesFormat: &network.RouteTablePropertiesFormat{
-			Routes: &[]network.Route{
+		Properties: &armnetwork.RouteTablePropertiesFormat{
+			Routes: []*armnetwork.Route{
 				{
 					Name: &routeNameIPV4,
 				},
 			},
 		},
 	}
-	routeTablesAfterSecondDeletion := network.RouteTable{
+	routeTablesAfterSecondDeletion := armnetwork.RouteTable{
 		Name:     &cloud.RouteTableName,
 		Location: &cloud.Location,
-		RouteTablePropertiesFormat: &network.RouteTablePropertiesFormat{
-			Routes: &[]network.Route{},
+		Properties: &armnetwork.RouteTablePropertiesFormat{
+			Routes: []*armnetwork.Route{},
 		},
 	}
-	routeTableClient.EXPECT().Get(gomock.Any(), cloud.RouteTableResourceGroup, cloud.RouteTableName, "").Return(routeTables, nil)
-	routeTableClient.EXPECT().Get(gomock.Any(), cloud.RouteTableResourceGroup, cloud.RouteTableName, "").Return(routeTablesAfterFirstDeletion, nil)
-	routeTableClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.RouteTableResourceGroup, cloud.RouteTableName, routeTablesAfterFirstDeletion, "").Return(nil)
-	routeTableClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.RouteTableResourceGroup, cloud.RouteTableName, routeTablesAfterSecondDeletion, "").Return(nil)
+	mockRTRepo.EXPECT().Get(gomock.Any(), cloud.RouteTableName, gomock.Any()).Return(routeTables, nil)
+	mockRTRepo.EXPECT().Get(gomock.Any(), cloud.RouteTableName, gomock.Any()).Return(&routeTablesAfterFirstDeletion, nil)
+	mockRTRepo.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, routeTable armnetwork.RouteTable) (*armnetwork.RouteTable, error) {
+			assert.Equal(t, routeTablesAfterFirstDeletion, routeTable)
+			return nil, nil
+		},
+	)
+	mockRTRepo.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, routeTable armnetwork.RouteTable) (*armnetwork.RouteTable, error) {
+			assert.Equal(t, routeTablesAfterSecondDeletion, routeTable)
+			return nil, nil
+		},
+	)
 	err := cloud.DeleteRoute(context.TODO(), "cluster", &route)
 	if err != nil {
 		t.Errorf("unexpected error deleting route: %v", err)
@@ -181,45 +195,28 @@ func TestDeleteRouteDualStack(t *testing.T) {
 }
 
 func TestCreateRoute(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	routeTableClient := mockroutetableclient.NewMockInterface(ctrl)
-	mockVMSet := NewMockVMSet(ctrl)
+	t.Parallel()
 
-	cloud := &Cloud{
-		RouteTablesClient: routeTableClient,
-		VMSet:             mockVMSet,
-		Config: Config{
-			RouteTableResourceGroup: "foo",
-			RouteTableName:          "bar",
-			Location:                "location",
-		},
-		unmanagedNodes:     utilsets.NewString(),
-		nodeInformerSynced: func() bool { return true },
-	}
-	cache, _ := cloud.newRouteTableCache()
-	cloud.rtCache = cache
-	cloud.routeUpdater = newDelayedRouteUpdater(cloud, 100*time.Millisecond)
-	go cloud.routeUpdater.run(context.Background())
-
-	route := cloudprovider.Route{TargetNode: "node", DestinationCIDR: "1.2.3.4/24"}
 	nodePrivateIP := "2.4.6.8"
-	networkRoute := &[]network.Route{
-		{
-			Name: ptr.To("node"),
-			RoutePropertiesFormat: &network.RoutePropertiesFormat{
-				AddressPrefix:    ptr.To("1.2.3.4/24"),
-				NextHopIPAddress: &nodePrivateIP,
-				NextHopType:      network.RouteNextHopTypeVirtualAppliance,
+
+	defaultNetworkRoute := func() []*armnetwork.Route {
+		return []*armnetwork.Route{
+			{
+				Name: ptr.To("node"),
+				Properties: &armnetwork.RoutePropertiesFormat{
+					AddressPrefix:    ptr.To("1.2.3.4/24"),
+					NextHopIPAddress: &nodePrivateIP,
+					NextHopType:      ptr.To(armnetwork.RouteNextHopTypeVirtualAppliance),
+				},
 			},
-		},
+		}
 	}
 
-	testCases := []struct {
+	tests := []struct {
 		name                  string
 		routeTableName        string
-		initialRoute          *[]network.Route
-		updatedRoute          *[]network.Route
+		initialRoute          []*armnetwork.Route
+		updatedRoute          []*armnetwork.Route
 		hasUnmanagedNodes     bool
 		nodeInformerNotSynced bool
 		ipv6DualStackEnabled  bool
@@ -229,71 +226,49 @@ func TestCreateRoute(t *testing.T) {
 		expectedRouteCIDRs    map[string]string
 
 		getIPError        error
-		getErr            *retry.Error
-		secondGetErr      *retry.Error
-		createOrUpdateErr *retry.Error
+		firstGetNotFound  bool // FIXME: it's very confusing; should refactor the whole test
+		getErr            error
+		secondGetErr      error
+		createOrUpdateErr error
 		expectedErrMsg    error
 	}{
 		{
-			name:           "CreateRoute should report an error if route table name is not configured",
-			routeTableName: "",
-			expectedErrMsg: fmt.Errorf("route table name is not configured"),
-		},
-		{
 			name:           "CreateRoute should create route if route doesn't exist",
 			routeTableName: "rt1",
-			updatedRoute:   networkRoute,
+			updatedRoute:   defaultNetworkRoute(),
 		},
 		{
-			name:           "CreateRoute should report error if error occurs when invoke CreateOrUpdateRouteTable",
-			routeTableName: "rt2",
-			updatedRoute:   networkRoute,
-			createOrUpdateErr: &retry.Error{
-				HTTPStatusCode: http.StatusInternalServerError,
-				RawError:       fmt.Errorf("CreateOrUpdate error"),
-			},
-			expectedErrMsg: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: CreateOrUpdate error"),
+			name:              "CreateRoute should report error if error occurs when invoke CreateOrUpdateRouteTable",
+			routeTableName:    "rt2",
+			updatedRoute:      defaultNetworkRoute(),
+			createOrUpdateErr: errors.New("dummy"),
+			expectedErrMsg:    errors.New("dummy"),
 		},
 		{
 			name:           "CreateRoute should do nothing if route already exists",
 			routeTableName: "rt3",
-			initialRoute:   networkRoute,
-			updatedRoute:   networkRoute,
+			initialRoute:   defaultNetworkRoute(),
+			updatedRoute:   defaultNetworkRoute(),
 		},
 		{
-			name:           "CreateRoute should report error if error occurs when invoke createRouteTable",
-			routeTableName: "rt4",
-			getErr: &retry.Error{
-				HTTPStatusCode: http.StatusNotFound,
-				RawError:       cloudprovider.InstanceNotFound,
-			},
-			createOrUpdateErr: &retry.Error{
-				HTTPStatusCode: http.StatusInternalServerError,
-				RawError:       fmt.Errorf("CreateOrUpdate error"),
-			},
-			expectedErrMsg: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: CreateOrUpdate error"),
+			name:              "CreateRoute should report error if error occurs when invoke createRouteTable",
+			routeTableName:    "rt4",
+			firstGetNotFound:  true,
+			createOrUpdateErr: errors.New("create or update dummy"),
+			expectedErrMsg:    errors.New("create or update dummy"),
 		},
 		{
-			name:           "CreateRoute should report error if error occurs when invoke getRouteTable for the second time",
-			routeTableName: "rt5",
-			getErr: &retry.Error{
-				HTTPStatusCode: http.StatusNotFound,
-				RawError:       cloudprovider.InstanceNotFound,
-			},
-			secondGetErr: &retry.Error{
-				HTTPStatusCode: http.StatusInternalServerError,
-				RawError:       fmt.Errorf("Get error"),
-			},
-			expectedErrMsg: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: Get error"),
+			name:             "CreateRoute should report error if error occurs when invoke getRouteTable for the second time",
+			routeTableName:   "rt5",
+			firstGetNotFound: true,
+			secondGetErr:     errors.New("second get dummy"),
+			expectedErrMsg:   errors.New("second get dummy"),
 		},
 		{
 			name:           "CreateRoute should report error if error occurs when invoke routeTableClient.Get",
 			routeTableName: "rt6",
-			getErr: &retry.Error{
-				HTTPStatusCode: http.StatusInternalServerError,
-				RawError:       fmt.Errorf("Get error"),
-			},
-			expectedErrMsg: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: Get error"),
+			getErr:         errors.New("first get dummy"),
+			expectedErrMsg: errors.New("first get dummy"),
 		},
 		{
 			name:           "CreateRoute should report error if error occurs when invoke GetIPByNodeName",
@@ -312,13 +287,13 @@ func TestCreateRoute(t *testing.T) {
 		{
 			name:           "CreateRoute should create route if cloud.ipv6DualStackEnabled is true and route doesn't exist",
 			routeTableName: "rt9",
-			updatedRoute: &[]network.Route{
+			updatedRoute: []*armnetwork.Route{
 				{
 					Name: ptr.To("node____123424"),
-					RoutePropertiesFormat: &network.RoutePropertiesFormat{
+					Properties: &armnetwork.RoutePropertiesFormat{
 						AddressPrefix:    ptr.To("1.2.3.4/24"),
 						NextHopIPAddress: &nodePrivateIP,
-						NextHopType:      network.RouteNextHopTypeVirtualAppliance,
+						NextHopType:      ptr.To(armnetwork.RouteNextHopTypeVirtualAppliance),
 					},
 				},
 			},
@@ -331,76 +306,111 @@ func TestCreateRoute(t *testing.T) {
 		},
 	}
 
-	for _, test := range testCases {
-		initialTable := network.RouteTable{
-			Name:     ptr.To(test.routeTableName),
-			Location: &cloud.Location,
-			RouteTablePropertiesFormat: &network.RouteTablePropertiesFormat{
-				Routes: test.initialRoute,
-			},
-		}
-		updatedTable := network.RouteTable{
-			Name:     ptr.To(test.routeTableName),
-			Location: &cloud.Location,
-			RouteTablePropertiesFormat: &network.RouteTablePropertiesFormat{
-				Routes: test.updatedRoute,
-			},
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		cloud.RouteTableName = test.routeTableName
-		cloud.ipv6DualStackEnabled = test.ipv6DualStackEnabled
-		if test.hasUnmanagedNodes {
-			cloud.unmanagedNodes.Insert(test.unmanagedNodeName)
-			cloud.routeCIDRs = test.routeCIDRs
-		} else {
-			cloud.unmanagedNodes = utilsets.NewString()
-			cloud.routeCIDRs = nil
-		}
-		if test.nodeInformerNotSynced {
-			cloud.nodeInformerSynced = func() bool { return false }
-		} else {
-			cloud.nodeInformerSynced = func() bool { return true }
-		}
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockVMSet := NewMockVMSet(ctrl)
 
-		mockVMSet.EXPECT().GetIPByNodeName(gomock.Any(), gomock.Any()).Return(nodePrivateIP, "", test.getIPError).MaxTimes(1)
-		mockVMSet.EXPECT().GetPrivateIPsByNodeName(gomock.Any(), "node").Return([]string{nodePrivateIP, "10.10.10.10"}, nil).MaxTimes(1)
-		routeTableClient.EXPECT().Get(gomock.Any(), cloud.RouteTableResourceGroup, cloud.RouteTableName, "").Return(initialTable, test.getErr).MaxTimes(1)
-		routeTableClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.RouteTableResourceGroup, cloud.RouteTableName, updatedTable, "").Return(test.createOrUpdateErr).MaxTimes(1)
+			mockRTRepo := routetable.NewMockRepository(ctrl)
+			cloud := &Cloud{
+				routeTableRepo: mockRTRepo,
+				VMSet:          mockVMSet,
+				Config: Config{
+					RouteTableResourceGroup: "foo",
+					RouteTableName:          "bar",
+					Location:                "location",
+				},
+				unmanagedNodes:     utilsets.NewString(),
+				nodeInformerSynced: func() bool { return true },
+			}
+			cloud.routeUpdater = newDelayedRouteUpdater(cloud, 100*time.Millisecond)
+			go cloud.routeUpdater.run(context.Background())
 
-		//Here is the second invocation when route table doesn't exist
-		routeTableClient.EXPECT().Get(gomock.Any(), cloud.RouteTableResourceGroup, cloud.RouteTableName, "").Return(initialTable, test.secondGetErr).MaxTimes(1)
+			initialTable := &armnetwork.RouteTable{
+				Name:     ptr.To(tt.routeTableName),
+				Location: &cloud.Location,
+				Properties: &armnetwork.RouteTablePropertiesFormat{
+					Routes: tt.initialRoute,
+				},
+			}
+			updatedTable := armnetwork.RouteTable{
+				Name:     ptr.To(tt.routeTableName),
+				Location: &cloud.Location,
+				Properties: &armnetwork.RouteTablePropertiesFormat{
+					Routes: tt.updatedRoute,
+				},
+			}
 
-		err := cloud.CreateRoute(context.TODO(), "cluster", "unused", &route)
-		assert.Equal(t, cloud.routeCIDRs, test.expectedRouteCIDRs, test.name)
-		if err != nil {
-			assert.EqualError(t, test.expectedErrMsg, err.Error(), test.name)
-		}
+			cloud.RouteTableName = tt.routeTableName
+			cloud.ipv6DualStackEnabled = tt.ipv6DualStackEnabled
+			if tt.hasUnmanagedNodes {
+				cloud.unmanagedNodes.Insert(tt.unmanagedNodeName)
+				cloud.routeCIDRs = tt.routeCIDRs
+			} else {
+				cloud.unmanagedNodes = utilsets.NewString()
+				cloud.routeCIDRs = nil
+			}
+			if tt.nodeInformerNotSynced {
+				cloud.nodeInformerSynced = func() bool { return false }
+			} else {
+				cloud.nodeInformerSynced = func() bool { return true }
+			}
+
+			mockVMSet.EXPECT().GetIPByNodeName(gomock.Any(), gomock.Any()).Return(nodePrivateIP, "", tt.getIPError).MaxTimes(1)
+			mockVMSet.EXPECT().GetPrivateIPsByNodeName(gomock.Any(), "node").Return([]string{nodePrivateIP, "10.10.10.10"}, nil).MaxTimes(1)
+			if tt.firstGetNotFound {
+				mockRTRepo.EXPECT().Get(gomock.Any(), cloud.RouteTableName, gomock.Any()).Return(nil, nil).MaxTimes(1)
+			} else {
+				mockRTRepo.EXPECT().Get(gomock.Any(), cloud.RouteTableName, gomock.Any()).Return(initialTable, tt.getErr).MaxTimes(1)
+			}
+
+			mockRTRepo.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, routeTable armnetwork.RouteTable) (*armnetwork.RouteTable, error) {
+					assert.Equal(t, updatedTable, routeTable)
+					return nil, tt.createOrUpdateErr
+				},
+			).MaxTimes(1)
+
+			//Here is the second invocation when route table doesn't exist
+			mockRTRepo.EXPECT().Get(gomock.Any(), cloud.RouteTableName, gomock.Any()).Return(initialTable, tt.secondGetErr).MaxTimes(1)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			route := cloudprovider.Route{TargetNode: "node", DestinationCIDR: "1.2.3.4/24"}
+			err := cloud.CreateRoute(ctx, "cluster", "unused", &route)
+			assert.Equal(t, cloud.routeCIDRs, tt.expectedRouteCIDRs, tt.name)
+			if err != nil {
+				assert.EqualError(t, tt.expectedErrMsg, err.Error(), tt.name)
+			}
+		})
 	}
 }
 
 func TestCreateRouteTable(t *testing.T) {
+	t.Parallel()
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	routeTableClient := mockroutetableclient.NewMockInterface(ctrl)
 
+	mockRTRepo := routetable.NewMockRepository(ctrl)
 	cloud := &Cloud{
-		RouteTablesClient: routeTableClient,
+		routeTableRepo: mockRTRepo,
 		Config: Config{
 			RouteTableResourceGroup: "foo",
 			RouteTableName:          "bar",
 			Location:                "location",
 		},
 	}
-	cache, _ := cloud.newRouteTableCache()
-	cloud.rtCache = cache
 
-	expectedTable := network.RouteTable{
-		Name:                       &cloud.RouteTableName,
-		Location:                   &cloud.Location,
-		RouteTablePropertiesFormat: &network.RouteTablePropertiesFormat{},
+	expectedTable := armnetwork.RouteTable{
+		Name:       &cloud.RouteTableName,
+		Location:   &cloud.Location,
+		Properties: &armnetwork.RouteTablePropertiesFormat{},
 	}
-	routeTableClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.RouteTableResourceGroup, cloud.RouteTableName, expectedTable, "").Return(nil)
-	err := cloud.createRouteTable()
+	mockRTRepo.EXPECT().CreateOrUpdate(gomock.Any(), expectedTable).Return(nil, nil)
+	err := cloud.createRouteTable(context.Background())
 	if err != nil {
 		t.Errorf("unexpected error in creating route table: %v", err)
 		t.FailNow()
@@ -409,9 +419,8 @@ func TestCreateRouteTable(t *testing.T) {
 
 func TestProcessRoutes(t *testing.T) {
 	tests := []struct {
-		rt            network.RouteTable
+		rt            *armnetwork.RouteTable
 		expectedRoute []cloudprovider.Route
-		exists        bool
 		expectErr     bool
 		name          string
 		expectedError string
@@ -423,35 +432,31 @@ func TestProcessRoutes(t *testing.T) {
 			expectedError: "test error",
 		},
 		{
-			exists: false,
-			name:   "doesn't exist",
+			name: "doesn't exist",
 		},
 		{
-			rt:     network.RouteTable{},
-			exists: true,
-			name:   "nil routes",
+			rt:   &armnetwork.RouteTable{},
+			name: "nil routes",
 		},
 		{
-			rt: network.RouteTable{
-				RouteTablePropertiesFormat: &network.RouteTablePropertiesFormat{},
+			rt: &armnetwork.RouteTable{
+				Properties: &armnetwork.RouteTablePropertiesFormat{},
 			},
-			exists: true,
-			name:   "no routes",
+			name: "no routes",
 		},
 		{
-			rt: network.RouteTable{
-				RouteTablePropertiesFormat: &network.RouteTablePropertiesFormat{
-					Routes: &[]network.Route{
+			rt: &armnetwork.RouteTable{
+				Properties: &armnetwork.RouteTablePropertiesFormat{
+					Routes: []*armnetwork.Route{
 						{
 							Name: ptr.To("name"),
-							RoutePropertiesFormat: &network.RoutePropertiesFormat{
+							Properties: &armnetwork.RoutePropertiesFormat{
 								AddressPrefix: ptr.To("1.2.3.4/16"),
 							},
 						},
 					},
 				},
 			},
-			exists: true,
 			expectedRoute: []cloudprovider.Route{
 				{
 					Name:            "name",
@@ -462,25 +467,24 @@ func TestProcessRoutes(t *testing.T) {
 			name: "one route",
 		},
 		{
-			rt: network.RouteTable{
-				RouteTablePropertiesFormat: &network.RouteTablePropertiesFormat{
-					Routes: &[]network.Route{
+			rt: &armnetwork.RouteTable{
+				Properties: &armnetwork.RouteTablePropertiesFormat{
+					Routes: []*armnetwork.Route{
 						{
 							Name: ptr.To("name"),
-							RoutePropertiesFormat: &network.RoutePropertiesFormat{
+							Properties: &armnetwork.RoutePropertiesFormat{
 								AddressPrefix: ptr.To("1.2.3.4/16"),
 							},
 						},
 						{
 							Name: ptr.To("name2"),
-							RoutePropertiesFormat: &network.RoutePropertiesFormat{
+							Properties: &armnetwork.RoutePropertiesFormat{
 								AddressPrefix: ptr.To("5.6.7.8/16"),
 							},
 						},
 					},
 				},
 			},
-			exists: true,
 			expectedRoute: []cloudprovider.Route{
 				{
 					Name:            "name",
@@ -497,7 +501,7 @@ func TestProcessRoutes(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		routes, err := processRoutes(false, test.rt, test.exists, test.err)
+		routes, err := processRoutes(false, test.rt, test.err)
 		if test.expectErr {
 			if err == nil {
 				t.Errorf("%s: unexpected non-error", test.name)
@@ -590,12 +594,12 @@ func TestRouteNameFuncs(t *testing.T) {
 func TestListRoutes(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	routeTableClient := mockroutetableclient.NewMockInterface(ctrl)
 	mockVMSet := NewMockVMSet(ctrl)
 
+	mockRTRepo := routetable.NewMockRepository(ctrl)
 	cloud := &Cloud{
-		RouteTablesClient: routeTableClient,
-		VMSet:             mockVMSet,
+		routeTableRepo: mockRTRepo,
+		VMSet:          mockVMSet,
 		Config: Config{
 			RouteTableResourceGroup: "foo",
 			RouteTableName:          "bar",
@@ -604,34 +608,32 @@ func TestListRoutes(t *testing.T) {
 		unmanagedNodes:     utilsets.NewString(),
 		nodeInformerSynced: func() bool { return true },
 	}
-	cache, _ := cloud.newRouteTableCache()
-	cloud.rtCache = cache
 	cloud.routeUpdater = newDelayedRouteUpdater(cloud, 100*time.Millisecond)
 	go cloud.routeUpdater.run(context.Background())
 
 	testCases := []struct {
 		name                  string
 		routeTableName        string
-		routeTable            network.RouteTable
+		routeTable            *armnetwork.RouteTable
 		hasUnmanagedNodes     bool
 		nodeInformerNotSynced bool
 		unmanagedNodeName     string
 		routeCIDRs            map[string]string
 		expectedRoutes        []*cloudprovider.Route
-		getErr                *retry.Error
+		getErr                error
 		expectedErrMsg        error
 	}{
 		{
 			name:           "ListRoutes should return correct routes",
 			routeTableName: "rt1",
-			routeTable: network.RouteTable{
+			routeTable: &armnetwork.RouteTable{
 				Name:     ptr.To("rt1"),
 				Location: &cloud.Location,
-				RouteTablePropertiesFormat: &network.RouteTablePropertiesFormat{
-					Routes: &[]network.Route{
+				Properties: &armnetwork.RouteTablePropertiesFormat{
+					Routes: []*armnetwork.Route{
 						{
 							Name: ptr.To("node"),
-							RoutePropertiesFormat: &network.RoutePropertiesFormat{
+							Properties: &armnetwork.RoutePropertiesFormat{
 								AddressPrefix: ptr.To("1.2.3.4/24"),
 							},
 						},
@@ -652,14 +654,14 @@ func TestListRoutes(t *testing.T) {
 			hasUnmanagedNodes: true,
 			unmanagedNodeName: "unmanaged-node",
 			routeCIDRs:        map[string]string{"unmanaged-node": "2.2.3.4/24"},
-			routeTable: network.RouteTable{
+			routeTable: &armnetwork.RouteTable{
 				Name:     ptr.To("rt2"),
 				Location: &cloud.Location,
-				RouteTablePropertiesFormat: &network.RouteTablePropertiesFormat{
-					Routes: &[]network.Route{
+				Properties: &armnetwork.RouteTablePropertiesFormat{
+					Routes: []*armnetwork.Route{
 						{
 							Name: ptr.To("node"),
-							RoutePropertiesFormat: &network.RoutePropertiesFormat{
+							Properties: &armnetwork.RoutePropertiesFormat{
 								AddressPrefix: ptr.To("1.2.3.4/24"),
 							},
 						},
@@ -682,28 +684,22 @@ func TestListRoutes(t *testing.T) {
 		{
 			name:           "ListRoutes should return nil if routeTable don't exist",
 			routeTableName: "rt3",
-			routeTable:     network.RouteTable{},
-			getErr: &retry.Error{
-				HTTPStatusCode: http.StatusNotFound,
-				RawError:       cloudprovider.InstanceNotFound,
-			},
+			routeTable:     &armnetwork.RouteTable{},
+			getErr:         errors.New("dummy"),
 			expectedRoutes: []*cloudprovider.Route{},
 		},
 		{
 			name:           "ListRoutes should report error if error occurs when invoke routeTableClient.Get",
 			routeTableName: "rt4",
-			routeTable:     network.RouteTable{},
-			getErr: &retry.Error{
-				HTTPStatusCode: http.StatusInternalServerError,
-				RawError:       fmt.Errorf("Get error"),
-			},
-			expectedErrMsg: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: Get error"),
+			routeTable:     &armnetwork.RouteTable{},
+			getErr:         errors.New("dummy"),
+			expectedErrMsg: errors.New("dummy"),
 		},
 		{
 			name:                  "ListRoutes should report error if node informer is not synced",
 			routeTableName:        "rt5",
 			nodeInformerNotSynced: true,
-			routeTable:            network.RouteTable{},
+			routeTable:            &armnetwork.RouteTable{},
 			expectedErrMsg:        fmt.Errorf("node informer is not synced when trying to GetUnmanagedNodes"),
 		},
 	}
@@ -724,11 +720,16 @@ func TestListRoutes(t *testing.T) {
 		}
 
 		cloud.RouteTableName = test.routeTableName
-		routeTableClient.EXPECT().Get(gomock.Any(), cloud.RouteTableResourceGroup, test.routeTableName, "").Return(test.routeTable, test.getErr)
+		mockRTRepo.EXPECT().Get(gomock.Any(), test.routeTableName, gomock.Any()).Return(test.routeTable, test.getErr)
 
 		routes, err := cloud.ListRoutes(context.TODO(), "cluster")
-		assert.Equal(t, test.expectedRoutes, routes, test.name)
+		if len(test.expectedRoutes) == 0 {
+			assert.Empty(t, routes, test.name)
+		} else {
+			assert.Equal(t, test.expectedRoutes, routes, test.name)
+		}
 		if test.expectedErrMsg != nil {
+			assert.Error(t, err)
 			assert.EqualError(t, test.expectedErrMsg, err.Error(), test.name)
 		}
 	}
@@ -740,17 +741,17 @@ func TestCleanupOutdatedRoutes(t *testing.T) {
 
 	for _, testCase := range []struct {
 		description                          string
-		existingRoutes, expectedRoutes       []network.Route
+		existingRoutes, expectedRoutes       []*armnetwork.Route
 		existingNodeNames                    *utilsets.IgnoreCaseSet
 		expectedChanged, enableIPV6DualStack bool
 	}{
 		{
 			description: "cleanupOutdatedRoutes should delete outdated non-dualstack routes when dualstack is enabled",
-			existingRoutes: []network.Route{
+			existingRoutes: []*armnetwork.Route{
 				{Name: ptr.To("aks-node1-vmss000000____xxx")},
 				{Name: ptr.To("aks-node1-vmss000000")},
 			},
-			expectedRoutes: []network.Route{
+			expectedRoutes: []*armnetwork.Route{
 				{Name: ptr.To("aks-node1-vmss000000____xxx")},
 			},
 			existingNodeNames:   utilsets.NewString("aks-node1-vmss000000"),
@@ -759,11 +760,11 @@ func TestCleanupOutdatedRoutes(t *testing.T) {
 		},
 		{
 			description: "cleanupOutdatedRoutes should delete outdated dualstack routes when dualstack is disabled",
-			existingRoutes: []network.Route{
+			existingRoutes: []*armnetwork.Route{
 				{Name: ptr.To("aks-node1-vmss000000____xxx")},
 				{Name: ptr.To("aks-node1-vmss000000")},
 			},
-			expectedRoutes: []network.Route{
+			expectedRoutes: []*armnetwork.Route{
 				{Name: ptr.To("aks-node1-vmss000000")},
 			},
 			existingNodeNames: utilsets.NewString("aks-node1-vmss000000"),
@@ -771,11 +772,11 @@ func TestCleanupOutdatedRoutes(t *testing.T) {
 		},
 		{
 			description: "cleanupOutdatedRoutes should not delete unmanaged routes when dualstack is enabled",
-			existingRoutes: []network.Route{
+			existingRoutes: []*armnetwork.Route{
 				{Name: ptr.To("aks-node1-vmss000000____xxx")},
 				{Name: ptr.To("aks-node1-vmss000000")},
 			},
-			expectedRoutes: []network.Route{
+			expectedRoutes: []*armnetwork.Route{
 				{Name: ptr.To("aks-node1-vmss000000____xxx")},
 				{Name: ptr.To("aks-node1-vmss000000")},
 			},
@@ -784,11 +785,11 @@ func TestCleanupOutdatedRoutes(t *testing.T) {
 		},
 		{
 			description: "cleanupOutdatedRoutes should not delete unmanaged routes when dualstack is disabled",
-			existingRoutes: []network.Route{
+			existingRoutes: []*armnetwork.Route{
 				{Name: ptr.To("aks-node1-vmss000000____xxx")},
 				{Name: ptr.To("aks-node1-vmss000000")},
 			},
-			expectedRoutes: []network.Route{
+			expectedRoutes: []*armnetwork.Route{
 				{Name: ptr.To("aks-node1-vmss000000____xxx")},
 				{Name: ptr.To("aks-node1-vmss000000")},
 			},
@@ -823,13 +824,13 @@ func TestEnsureRouteTableTagged(t *testing.T) {
 		"a": ptr.To("b"),
 		"c": ptr.To("d"),
 	}
-	rt := &network.RouteTable{}
+	rt := &armnetwork.RouteTable{}
 	tags, changed := cloud.ensureRouteTableTagged(rt)
 	assert.Equal(t, expectedTags, tags)
 	assert.True(t, changed)
 
 	cloud.RouteTableResourceGroup = "rg1"
-	rt = &network.RouteTable{}
+	rt = &armnetwork.RouteTable{}
 	tags, changed = cloud.ensureRouteTableTagged(rt)
 	assert.Nil(t, tags)
 	assert.False(t, changed)
