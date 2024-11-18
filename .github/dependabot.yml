@@ -15,6 +15,13 @@ updates:
       - "lgtm"
       - "approved"
     groups:
+      golang:
+        applies-to: version-updates
+        patterns:
+        - "golang.org*"
+        update-types:
+        - "patch"
+        - "minor" 
       opentelemetry:
         applies-to: version-updates
         patterns:
@@ -44,6 +51,13 @@ updates:
       - "lgtm"
       - "approved"
     groups:
+      golang:
+        applies-to: version-updates
+        patterns:
+        - "golang.org*"
+        update-types:
+        - "patch"
+        - "minor" 
       opentelemetry:
         applies-to: version-updates
         patterns:
@@ -72,7 +86,28 @@ updates:
       - "kind/testing"
       - "lgtm"
       - "approved"
-
+    groups:
+      golang:
+        applies-to: version-updates
+        patterns:
+        - "golang.org*"
+        update-types:
+        - "patch"
+        - "minor" 
+      opentelemetry:
+        applies-to: version-updates
+        patterns:
+        - "go.opentelemetry.io*"
+        update-types:
+        - "patch"
+        - "minor" 
+      k8s:
+        applies-to: version-updates
+        patterns:
+        - "k8s.io*"
+        update-types:
+        - "patch"
+        - "minor"
   - package-ecosystem: "gomod"
     directory: "/pkg/azclient"
     open-pull-requests-limit: 1
@@ -88,6 +123,13 @@ updates:
       - "lgtm"
       - "approved"
     groups:
+      golang:
+        applies-to: version-updates
+        patterns:
+        - "golang.org*"
+        update-types:
+        - "patch"
+        - "minor" 
       opentelemetry:
         applies-to: version-updates
         patterns:
@@ -95,6 +137,13 @@ updates:
         update-types:
         - "patch"
         - "minor" 
+      k8s:
+        applies-to: version-updates
+        patterns:
+        - "k8s.io*"
+        update-types:
+        - "patch"
+        - "minor"
   - package-ecosystem: gomod
     directory: /pkg/azclient/client-gen
     schedule:
@@ -108,7 +157,28 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
-
+    groups:
+      golang:
+        applies-to: version-updates
+        patterns:
+        - "golang.org*"
+        update-types:
+        - "patch"
+        - "minor" 
+      opentelemetry:
+        applies-to: version-updates
+        patterns:
+        - "go.opentelemetry.io*"
+        update-types:
+        - "patch"
+        - "minor" 
+      k8s:
+        applies-to: version-updates
+        patterns:
+        - "k8s.io*"
+        update-types:
+        - "patch"
+        - "minor"
   - package-ecosystem: gomod
     directory: /pkg/azclient/configloader
     schedule:
@@ -123,6 +193,13 @@ updates:
       - "lgtm"
       - "approved"
     groups:
+      golang:
+        applies-to: version-updates
+        patterns:
+        - "golang.org*"
+        update-types:
+        - "patch"
+        - "minor" 
       opentelemetry:
         applies-to: version-updates
         patterns:
@@ -151,6 +228,13 @@ updates:
       - "lgtm"
       - "approved"
     groups:
+      golang:
+        applies-to: version-updates
+        patterns:
+        - "golang.org*"
+        update-types:
+        - "patch"
+        - "minor" 
       opentelemetry:
         applies-to: version-updates
         patterns:
@@ -158,6 +242,13 @@ updates:
         update-types:
         - "patch"
         - "minor" 
+      k8s:
+        applies-to: version-updates
+        patterns:
+        - "k8s.io*"
+        update-types:
+        - "patch"
+        - "minor"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -219,6 +310,13 @@ updates:
       - dependency-name: "k8s.io/*"
         versions: [">=0.30.0"]
     groups:
+      golang:
+        applies-to: version-updates
+        patterns:
+        - "golang.org*"
+        update-types:
+        - "patch"
+        - "minor" 
       opentelemetry:
         applies-to: version-updates
         patterns:
@@ -283,6 +381,13 @@ updates:
       - dependency-name: "k8s.io/*"
         versions: [">=0.31.0"]
     groups:
+      golang:
+        applies-to: version-updates
+        patterns:
+        - "golang.org*"
+        update-types:
+        - "patch"
+        - "minor" 
       opentelemetry:
         applies-to: version-updates
         patterns:
@@ -347,6 +452,13 @@ updates:
       - dependency-name: "k8s.io/*"
         versions: [">=0.32.0"]
     groups:
+      golang:
+        applies-to: version-updates
+        patterns:
+        - "golang.org*"
+        update-types:
+        - "patch"
+        - "minor" 
       opentelemetry:
         applies-to: version-updates
         patterns:
@@ -411,6 +523,13 @@ updates:
       - dependency-name: "k8s.io/*"
         versions: [">=0.29.0"]
     groups:
+      golang:
+        applies-to: version-updates
+        patterns:
+        - "golang.org*"
+        update-types:
+        - "patch"
+        - "minor" 
       opentelemetry:
         applies-to: version-updates
         patterns:
