@@ -298,7 +298,6 @@ func (az *Cloud) MigrateToIPBasedBackendPoolAndWaitForCompletion(
 		}
 		return true, nil
 	})
-
 	if err != nil {
 		if errors.Is(err, wait.ErrWaitTimeout) {
 			klog.Warningf("MigrateToIPBasedBackendPoolAndWaitForCompletion: Timeout waiting for migration to IP based backend pool for lb %s, backend pool %s", lbName, strings.Join(backendPoolNames, ","))
@@ -352,7 +351,7 @@ func (az *Cloud) getAzureLoadBalancer(ctx context.Context, name string, crt azca
 // If not same, the lbName for existingBackendPools would also be returned.
 func isBackendPoolOnSameLB(newBackendPoolID string, existingBackendPools []string) (bool, string, error) {
 	matches := backendPoolIDRE.FindStringSubmatch(newBackendPoolID)
-	if len(matches) != 2 {
+	if len(matches) != 3 {
 		return false, "", fmt.Errorf("new backendPoolID %q is in wrong format", newBackendPoolID)
 	}
 
@@ -360,7 +359,7 @@ func isBackendPoolOnSameLB(newBackendPoolID string, existingBackendPools []strin
 	newLBNameTrimmed := trimSuffixIgnoreCase(newLBName, consts.InternalLoadBalancerNameSuffix)
 	for _, backendPool := range existingBackendPools {
 		matches := backendPoolIDRE.FindStringSubmatch(backendPool)
-		if len(matches) != 2 {
+		if len(matches) != 3 {
 			return false, "", fmt.Errorf("existing backendPoolID %q is in wrong format", backendPool)
 		}
 
@@ -380,4 +379,19 @@ func (az *Cloud) serviceOwnsRule(service *v1.Service, rule string) bool {
 	}
 	prefix := az.getRulePrefix(service)
 	return strings.HasPrefix(strings.ToUpper(rule), strings.ToUpper(prefix))
+}
+
+func isNICPool(bp network.BackendAddressPool) bool {
+	logger := klog.Background().WithName("isNICPool").WithValues("backendPoolName", ptr.Deref(bp.Name, ""))
+	if bp.BackendAddressPoolPropertiesFormat != nil &&
+		bp.LoadBalancerBackendAddresses != nil {
+		for _, addr := range *bp.LoadBalancerBackendAddresses {
+			if ptr.Deref(addr.IPAddress, "") == "" {
+				logger.V(4).Info("The load balancer backend address has empty ip address, assuming it is a NIC pool",
+					"loadBalancerBackendAddress", ptr.Deref(addr.Name, ""))
+				return true
+			}
+		}
+	}
+	return false
 }
