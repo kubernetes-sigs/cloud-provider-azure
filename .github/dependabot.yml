@@ -144,6 +144,42 @@ updates:
         update-types:
         - "patch"
         - "minor"
+  - package-ecosystem: "gomod"
+    directory: "/pkg/azclient/cache"
+    open-pull-requests-limit: 1
+    schedule:
+      interval: daily
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/cleanup"
+      - "lgtm"
+      - "approved"
+    groups:
+      golang:
+        applies-to: version-updates
+        patterns:
+        - "golang.org*"
+        update-types:
+        - "patch"
+        - "minor" 
+      opentelemetry:
+        applies-to: version-updates
+        patterns:
+        - "go.opentelemetry.io*"
+        update-types:
+        - "patch"
+        - "minor" 
+      k8s:
+        applies-to: version-updates
+        patterns:
+        - "k8s.io*"
+        update-types:
+        - "patch"
+        - "minor"
   - package-ecosystem: gomod
     directory: /pkg/azclient/client-gen
     schedule:

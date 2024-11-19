@@ -1,15 +1,11 @@
-name: Release azclient
+name: Release azclient cache
 on:
   workflow_dispatch:
   push:
     branches:
       - master
     paths:
-      - 'pkg/azclient/**'
-      - '!pkg/azclient/configloader/**'
-      - '!pkg/azclient/client-gen/**'
-      - '!pkg/azclient/trace/**'
-      - '!pkg/azclient/cache/**'
+      - 'pkg/azclient/cache/**'
 permissions:
   contents: read
 jobs:
@@ -19,7 +15,7 @@ jobs:
       contents: write
     steps:
     - name: Harden Runner
-      uses: step-security/harden-runner@0080882f6c36860b6ba35c610c98ce87d4e2f26f # v2.10.2
+      uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
       with:
         egress-policy: audit
 
@@ -30,6 +26,6 @@ jobs:
       id: tag_version
       uses: mathieudutour/github-tag-action@a22cf08638b34d5badda920f9daf6e72c477b07b # v6.2
       with:
-        tag_prefix: pkg/azclient/v
         github_token: ${{ secrets.GITHUB_TOKEN }}
+        tag_prefix: pkg/azclient/cache/v
         fetch_all_tags: true
