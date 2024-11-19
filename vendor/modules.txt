@@ -365,6 +365,8 @@ github.com/mailru/easyjson/jwriter
 # github.com/mattn/go-ieproxy v0.0.11
 ## explicit; go 1.17
 github.com/mattn/go-ieproxy
+# github.com/matttproud/golang_protobuf_extensions v1.0.4
+## explicit; go 1.9
 # github.com/moby/term v0.0.0-20221205130635-1aeaba878587
 ## explicit; go 1.18
 github.com/moby/term
@@ -556,6 +558,8 @@ go.opentelemetry.io/proto/otlp/collector/trace/v1
 go.opentelemetry.io/proto/otlp/common/v1
 go.opentelemetry.io/proto/otlp/resource/v1
 go.opentelemetry.io/proto/otlp/trace/v1
+# go.uber.org/atomic v1.10.0
+## explicit; go 1.18
 # go.uber.org/mock v0.5.0
 ## explicit; go 1.22
 go.uber.org/mock/gomock
