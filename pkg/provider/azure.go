@@ -51,6 +51,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient"
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/blobclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/deploymentclient"
@@ -62,7 +63,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privateendpointclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routetableclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/storageaccountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmasclient"
@@ -1046,7 +1046,6 @@ func (az *Cloud) configAzureClients(
 	az.SubnetsClient = subnetclient.New(subnetClientConfig)
 	az.RouteTablesClient = routetableclient.New(routeTableClientConfig)
 	az.LoadBalancerClient = loadbalancerclient.New(loadBalancerClientConfig)
-	az.SecurityGroupsClient = securitygroupclient.New(securityGroupClientConfig)
 	az.PublicIPAddressesClient = publicipclient.New(publicIPClientConfig)
 	az.FileClient = fileclient.New(fileClientConfig)
 	az.BlobClient = blobclient.New(blobClientConfig)
