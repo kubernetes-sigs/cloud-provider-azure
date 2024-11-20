@@ -58,7 +58,7 @@ jobs:
           cd health-probe-proxy && make build-health-probe-proxy-image && cd ..
 
       - name: Run Trivy scanner CCM
-        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # master
+        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # master
         with:
           image-ref: 'local/azure-cloud-controller-manager:${{ github.sha }}'
           format: 'table'
@@ -66,7 +66,7 @@ jobs:
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
       - name: Run Trivy scanner CNM
-        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # master
+        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # master
         with:
           image-ref: 'local/azure-cloud-node-manager:${{ github.sha }}-linux-amd64'
           format: 'table'
@@ -74,7 +74,7 @@ jobs:
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
       - name: Run Trivy scanner health-probe-proxy
-        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # master
+        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # master
         with:
           image-ref: 'local/health-probe-proxy:${{ github.sha }}'
           format: 'sarif'
@@ -84,7 +84,7 @@ jobs:
           severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
 
       - name: Run Trivy vulnerability scanner in repo mode
-        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # master
+        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # master
         with:
           scan-type: 'fs'
           ignore-unfixed: true
