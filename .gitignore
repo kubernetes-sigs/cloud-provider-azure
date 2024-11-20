@@ -11,6 +11,7 @@ public/
 !vendor/github.com/AzureAD/microsoft-authentication-library-for-go/apps/public
 site/public/
 site/resources/
+.kubeconfig/
 
 
 # bazel

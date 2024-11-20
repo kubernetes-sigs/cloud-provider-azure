@@ -34,7 +34,6 @@ import (
 	discovery_v1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/utils/pointer"
 
@@ -546,27 +545,20 @@ func TestCheckAndApplyLocalServiceBackendPoolUpdates(t *testing.T) {
 	for _, tc := range []struct {
 		description string
 		existingEPS *discovery_v1.EndpointSlice
-		expectedErr error
 	}{
 		{
 			description: "should update backend pool as expected",
 			existingEPS: getTestEndpointSlice("eps1", "default", "svc1", "node2"),
 		},
 		{
-			description: "should report an error if failed to get the endpointslice",
-			expectedErr: errors.New("failed to find EndpointSlice for service default/svc1"),
+			description: "should not report an error if failed to get the endpointslice",
 		},
 	} {
 		t.Run(tc.description, func(t *testing.T) {
 			cloud := GetTestCloud(ctrl)
 			cloud.localServiceNameToServiceInfoMap.Store("default/svc1", &serviceInfo{lbName: "lb1"})
 			svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
-			var client kubernetes.Interface
-			if tc.existingEPS != nil {
-				client = fake.NewSimpleClientset(&svc, tc.existingEPS)
-			} else {
-				client = fake.NewSimpleClientset(&svc)
-			}
+			client := fake.NewSimpleClientset(&svc)
 			cloud.KubeClient = client
 			informerFactory := informers.NewSharedInformerFactory(client, 0)
 			cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
@@ -581,6 +573,9 @@ func TestCheckAndApplyLocalServiceBackendPoolUpdates(t *testing.T) {
 			cloud.nodePrivateIPs = map[string]*utilsets.IgnoreCaseSet{
 				"node1": utilsets.NewString("10.0.0.1", "fd00::1"),
 				"node2": utilsets.NewString("10.0.0.2", "fd00::2"),
+			}
+			if tc.existingEPS != nil {
+				cloud.endpointSlicesCache.Store(fmt.Sprintf("%s/%s", tc.existingEPS.Name, tc.existingEPS.Namespace), tc.existingEPS)
 			}
 
 			existingBackendPool := getTestBackendAddressPoolWithIPs("lb1", "default-svc1", []string{"10.0.0.1"})
@@ -611,12 +606,12 @@ func TestCheckAndApplyLocalServiceBackendPoolUpdates(t *testing.T) {
 			cloud.backendPoolUpdater = u
 			go cloud.backendPoolUpdater.run(ctx)
 
-			err := cloud.checkAndApplyLocalServiceBackendPoolUpdates(existingLB, &svc)
-			if tc.expectedErr != nil {
-				assert.Equal(t, tc.expectedErr, err)
-			} else {
-				assert.NoError(t, err)
+			if tc.existingEPS != nil {
+				_, _ = client.DiscoveryV1().EndpointSlices("default").Create(context.Background(), tc.existingEPS, metav1.CreateOptions{})
 			}
+
+			err := cloud.checkAndApplyLocalServiceBackendPoolUpdates(existingLB, &svc)
+			assert.NoError(t, err)
 			time.Sleep(2 * time.Second)
 		})
 	}
