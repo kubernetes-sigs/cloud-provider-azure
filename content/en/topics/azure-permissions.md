@@ -17,6 +17,8 @@ Microsoft.Network/loadBalancers/write
 Microsoft.Network/loadBalancers/backendAddressPools/read
 Microsoft.Network/loadBalancers/backendAddressPools/write
 Microsoft.Network/loadBalancers/backendAddressPools/delete
+Microsoft.Network/loadBalancers/inboundNatRules/join/action
+
 
 // Required to allow query, create or delete public IPs for LoadBalancer service
 Microsoft.Network/publicIPAddresses/delete
@@ -35,6 +37,10 @@ Microsoft.Network/publicIPPrefixes/join/action
 // Required to create or delete security rules for LoadBalancer service
 Microsoft.Network/networkSecurityGroups/read
 Microsoft.Network/networkSecurityGroups/write
+Microsoft.Network/networkSecurityGroups/join/action
+
+// Required to read application security group IDs while writing security rules
+Microsoft.Network/applicationSecurityGroups/joinNetworkSecurityRule/action
 
 // Required to create, delete or update AzureDisks
 Microsoft.Compute/disks/delete
