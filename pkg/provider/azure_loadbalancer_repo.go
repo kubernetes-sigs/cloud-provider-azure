@@ -109,7 +109,7 @@ func (az *Cloud) ListManagedLBs(ctx context.Context, service *v1.Service, nodes 
 		}
 	}
 
-	if az.useMultipleStandardLoadBalancers() {
+	if az.UseMultipleStandardLoadBalancers() {
 		for _, multiSLBConfig := range az.MultipleStandardLoadBalancerConfigurations {
 			managedLBNames.Insert(multiSLBConfig.Name, fmt.Sprintf("%s%s", multiSLBConfig.Name, consts.InternalLoadBalancerNameSuffix))
 		}
