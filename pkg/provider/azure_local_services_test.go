@@ -39,6 +39,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
@@ -485,7 +486,7 @@ func TestEndpointSlicesInformer(t *testing.T) {
 			cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
 			cloud.LoadBalancerBackendPoolUpdateIntervalInSeconds = 1
 			cloud.LoadBalancerSku = consts.LoadBalancerSkuStandard
-			cloud.MultipleStandardLoadBalancerConfigurations = []MultipleStandardLoadBalancerConfiguration{
+			cloud.MultipleStandardLoadBalancerConfigurations = []config.MultipleStandardLoadBalancerConfiguration{
 				{
 					Name: "lb1",
 				},
@@ -529,7 +530,7 @@ func TestGetBackendPoolNamesAndIDsForService(t *testing.T) {
 	defer ctrl.Finish()
 
 	cloud := GetTestCloud(ctrl)
-	cloud.MultipleStandardLoadBalancerConfigurations = []MultipleStandardLoadBalancerConfiguration{
+	cloud.MultipleStandardLoadBalancerConfigurations = []config.MultipleStandardLoadBalancerConfiguration{
 		{},
 	}
 	svc := getTestService("test", v1.ProtocolTCP, nil, false)
@@ -564,7 +565,7 @@ func TestCheckAndApplyLocalServiceBackendPoolUpdates(t *testing.T) {
 			cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
 			cloud.LoadBalancerBackendPoolUpdateIntervalInSeconds = 1
 			cloud.LoadBalancerSku = consts.LoadBalancerSkuStandard
-			cloud.MultipleStandardLoadBalancerConfigurations = []MultipleStandardLoadBalancerConfiguration{
+			cloud.MultipleStandardLoadBalancerConfigurations = []config.MultipleStandardLoadBalancerConfiguration{
 				{
 					Name: "lb1",
 				},

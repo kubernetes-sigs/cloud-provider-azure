@@ -33,6 +33,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
@@ -44,7 +45,7 @@ const (
 func TestIsAvailabilityZone(t *testing.T) {
 	location := "eastus"
 	az := &Cloud{
-		Config: Config{
+		Config: config.Config{
 			Location: location,
 		},
 	}
@@ -70,7 +71,7 @@ func TestIsAvailabilityZone(t *testing.T) {
 func TestGetZoneID(t *testing.T) {
 	location := "eastus"
 	az := &Cloud{
-		Config: Config{
+		Config: config.Config{
 			Location: location,
 		},
 	}
@@ -95,7 +96,7 @@ func TestGetZoneID(t *testing.T) {
 
 func TestGetZone(t *testing.T) {
 	cloud := &Cloud{
-		Config: Config{
+		Config: config.Config{
 			Location:            "eastus",
 			UseInstanceMetadata: true,
 		},

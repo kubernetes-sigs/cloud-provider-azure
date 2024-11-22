@@ -50,22 +50,6 @@ func checkResourceExistsFromError(err *retry.Error) (bool, *retry.Error) {
 	return false, err
 }
 
-func (az *Cloud) useStandardLoadBalancer() bool {
-	return strings.EqualFold(az.LoadBalancerSku, consts.LoadBalancerSkuStandard)
-}
-
-func (az *Cloud) excludeMasterNodesFromStandardLB() bool {
-	return az.ExcludeMasterFromStandardLB != nil && *az.ExcludeMasterFromStandardLB
-}
-
-func (az *Cloud) disableLoadBalancerOutboundSNAT() bool {
-	if !az.useStandardLoadBalancer() || az.DisableOutboundSNAT == nil {
-		return false
-	}
-
-	return *az.DisableOutboundSNAT
-}
-
 // IsNodeUnmanaged returns true if the node is not managed by Azure cloud provider.
 // Those nodes includes on-prem or VMs from other clouds. They will not be added to load balancer
 // backends. Azure routes and managed disks are also not supported for them.

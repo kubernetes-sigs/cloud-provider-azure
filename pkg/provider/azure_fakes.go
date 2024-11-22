@@ -78,7 +78,7 @@ func NewTestFlexScaleSet(ctrl *gomock.Controller) (*FlexScaleSet, error) {
 // GetTestCloud returns a fake azure cloud for unit tests in Azure related CSI drivers
 func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	az = &Cloud{
-		Config: Config{
+		Config: config.Config{
 			AzureClientConfig: config.AzureClientConfig{
 				ARMClientConfig: azclient.ARMClientConfig{
 					TenantID: "TenantID",
