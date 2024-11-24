@@ -6,7 +6,7 @@ require (
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.16.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 v6.1.0
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	golang.org/x/sync v0.9.0
 	k8s.io/client-go v0.31.3
 	k8s.io/utils v0.0.0-20241104163129-6fe5fd82f078
