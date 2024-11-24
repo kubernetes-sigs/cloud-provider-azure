@@ -259,8 +259,8 @@ github.com/stretchr/testify v1.7.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/
 github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO+kdMU+MU=
 github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
 github.com/stretchr/testify v1.8.2/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
-github.com/stretchr/testify v1.9.0 h1:HtqpIVDClZ4nwg75+f6Lvsy/wHu+3BoSGCbBAcpTsTg=
-github.com/stretchr/testify v1.9.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
+github.com/stretchr/testify v1.10.0 h1:Xv5erBjTwe/5IxqUQTdXv5kgmIvbHo3QQyRwhJsOfJA=
+github.com/stretchr/testify v1.10.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 github.com/tj/assert v0.0.3 h1:Df/BlaZ20mq6kuai7f5z2TvPFiwC3xaWJSDQNiIS3Rk=
 github.com/tj/assert v0.0.3/go.mod h1:Ne6X72Q+TB1AteidzQncjw9PabbMp4PBMZ1k+vd1Pvk=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20220101234140-673ab2c3ae75 h1:6fotK7otjonDflCTK0BCfls4SPy3NcCVb5dqqmbRknE=
@@ -456,8 +456,8 @@ sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.29.0 h1:/U5vjBbQn3RCh
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.29.0/go.mod h1:z7+wmGM2dfIiLRfrC6jb5kV2Mq/sK1ZP303cxzkV5Y4=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.1.20 h1:eZAfeLlBujLvViWXN/r+b+Tg8XUdssePRWr7N8dG0qs=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.1.20/go.mod h1:U1hh84S6bNTLk2RQAF7ZlmaXm1g9XTHYi2gXZxv2TfQ=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.1.6 h1:Imxhux2vgnNxxXG1aqHQeC7y77SRaLzv3LyAtgDkKkM=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.1.6/go.mod h1:Sd2CUnWOBGQ8/oHWClys6lbw5Xmg4pIJRX4knFBgS2Y=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.1.7 h1:svbrF0iYij+ip8o87/FkJC4GW5gPHKQG8AGCKZqSNp4=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.1.7/go.mod h1:/Lw2NMdjFcIZESlZUSjBpcnzS+fY33uUoeo6+I6XyUI=
 sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd h1:EDPBXCAspyGV4jQlpZSudPeMmr1bNJefnuqLsRAsHZo=
 sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd/go.mod h1:B8JuhiUyNFVKdsE8h686QcCxMaH6HrOAZj4vswFpcB0=
 sigs.k8s.io/structured-merge-diff/v4 v4.4.1 h1:150L+0vs/8DA78h1u02ooW1/fFq/Lwr+sGiqlzvrtq4=
