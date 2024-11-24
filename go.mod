@@ -27,7 +27,7 @@ require (
 	github.com/prometheus/client_golang v1.20.5
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	go.opentelemetry.io/otel v1.32.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.54.0
 	go.opentelemetry.io/otel/metric v1.32.0
@@ -50,7 +50,7 @@ require (
 	k8s.io/kubelet v0.31.3
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.1.20
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.1.6
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.1.7
 	sigs.k8s.io/yaml v1.4.0
 )
 
