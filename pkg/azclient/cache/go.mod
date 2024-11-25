@@ -1,4 +1,4 @@
-module sigs.k8s.io/cloud-provider-azure/pkg/cache
+module sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache
 
 go 1.23.2
 
