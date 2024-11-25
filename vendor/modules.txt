@@ -400,13 +400,14 @@ github.com/onsi/ginkgo/v2/internal/parallel_support
 github.com/onsi/ginkgo/v2/internal/testingtproxy
 github.com/onsi/ginkgo/v2/reporters
 github.com/onsi/ginkgo/v2/types
-# github.com/onsi/gomega v1.35.1
+# github.com/onsi/gomega v1.36.0
 ## explicit; go 1.22
 github.com/onsi/gomega
 github.com/onsi/gomega/format
 github.com/onsi/gomega/internal
 github.com/onsi/gomega/internal/gutil
 github.com/onsi/gomega/matchers
+github.com/onsi/gomega/matchers/internal/miter
 github.com/onsi/gomega/matchers/support/goraph/bipartitegraph
 github.com/onsi/gomega/matchers/support/goraph/edge
 github.com/onsi/gomega/matchers/support/goraph/node
@@ -1533,7 +1534,7 @@ sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client/metrics
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/common/metrics
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/proto/client
-# sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.1.20
+# sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.1.21
 ## explicit; go 1.23.1
 sigs.k8s.io/cloud-provider-azure/pkg/azclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient
@@ -1588,7 +1589,7 @@ sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworkclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient/mock_virtualnetworklinkclient
-# sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.1.7
+# sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.1.8
 ## explicit; go 1.23.1
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader
 # sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd
