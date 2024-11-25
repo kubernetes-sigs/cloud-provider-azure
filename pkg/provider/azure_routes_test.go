@@ -32,6 +32,7 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
@@ -44,7 +45,7 @@ func TestDeleteRoute(t *testing.T) {
 	mockRTRepo := routetable.NewMockRepository(ctrl)
 	cloud := &Cloud{
 		routeTableRepo: mockRTRepo,
-		Config: Config{
+		Config: config.Config{
 			RouteTableResourceGroup: "foo",
 			RouteTableName:          "bar",
 			Location:                "location",
@@ -122,7 +123,7 @@ func TestDeleteRouteDualStack(t *testing.T) {
 	mockRTRepo := routetable.NewMockRepository(ctrl)
 	cloud := &Cloud{
 		routeTableRepo: mockRTRepo,
-		Config: Config{
+		Config: config.Config{
 			RouteTableResourceGroup: "foo",
 			RouteTableName:          "bar",
 			Location:                "location",
@@ -318,7 +319,7 @@ func TestCreateRoute(t *testing.T) {
 			cloud := &Cloud{
 				routeTableRepo: mockRTRepo,
 				VMSet:          mockVMSet,
-				Config: Config{
+				Config: config.Config{
 					RouteTableResourceGroup: "foo",
 					RouteTableName:          "bar",
 					Location:                "location",
@@ -397,7 +398,7 @@ func TestCreateRouteTable(t *testing.T) {
 	mockRTRepo := routetable.NewMockRepository(ctrl)
 	cloud := &Cloud{
 		routeTableRepo: mockRTRepo,
-		Config: Config{
+		Config: config.Config{
 			RouteTableResourceGroup: "foo",
 			RouteTableName:          "bar",
 			Location:                "location",
@@ -600,7 +601,7 @@ func TestListRoutes(t *testing.T) {
 	cloud := &Cloud{
 		routeTableRepo: mockRTRepo,
 		VMSet:          mockVMSet,
-		Config: Config{
+		Config: config.Config{
 			RouteTableResourceGroup: "foo",
 			RouteTableName:          "bar",
 			Location:                "location",

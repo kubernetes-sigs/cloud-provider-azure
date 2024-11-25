@@ -25,6 +25,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 )
 
 // TestFillNetInterfacePublicIPs tests if IPv6 IPs from imds load balancer are
@@ -110,7 +112,7 @@ func TestGetPlatformSubFaultDomain(t *testing.T) {
 	} {
 		t.Run(testCase.description, func(t *testing.T) {
 			cloud := &Cloud{
-				Config: Config{
+				Config: config.Config{
 					Location:            "eastus",
 					UseInstanceMetadata: true,
 				},

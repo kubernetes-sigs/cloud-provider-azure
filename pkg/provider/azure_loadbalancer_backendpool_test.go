@@ -36,6 +36,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
@@ -107,7 +108,7 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 	testcases := []struct {
 		desc                string
 		backendPool         network.BackendAddressPool
-		multiSLBConfigs     []MultipleStandardLoadBalancerConfiguration
+		multiSLBConfigs     []config.MultipleStandardLoadBalancerConfiguration
 		local               bool
 		notFound            bool
 		skip                bool
@@ -214,10 +215,10 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 					},
 				},
 			},
-			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
 				{
 					Name: "kubernetes",
-					MultipleStandardLoadBalancerConfigurationStatus: MultipleStandardLoadBalancerConfigurationStatus{
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
 						ActiveNodes: utilsets.NewString("vmss-2"),
 					},
 				},
@@ -255,10 +256,10 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 					},
 				},
 			},
-			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
 				{
 					Name: "kubernetes",
-					MultipleStandardLoadBalancerConfigurationStatus: MultipleStandardLoadBalancerConfigurationStatus{
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
 						ActiveNodes: utilsets.NewString("vmss-2"),
 					},
 				},
@@ -282,7 +283,7 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 			desc:     "local service without service info",
 			local:    true,
 			notFound: true,
-			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
 				{
 					Name: "kubernetes",
 				},
@@ -292,7 +293,7 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 			desc:  "local service with another load balancer",
 			local: true,
 			skip:  true,
-			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
 				{
 					Name: "kubernetes",
 				},
@@ -307,7 +308,7 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{},
 				},
 			},
-			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
 				{
 					Name: "kubernetes",
 				},
@@ -343,7 +344,7 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{},
 				},
 			},
-			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
 				{
 					Name: "kubernetes",
 				},
@@ -942,7 +943,7 @@ func TestReconcileBackendPoolsNodeIPConfigToIPWithMigrationAPI(t *testing.T) {
 	az.LoadBalancerClient = mockLBClient
 	az.EnableMigrateToIPBasedBackendPoolAPI = true
 	az.LoadBalancerSku = "standard"
-	az.MultipleStandardLoadBalancerConfigurations = []MultipleStandardLoadBalancerConfiguration{{Name: "kubernetes"}}
+	az.MultipleStandardLoadBalancerConfigurations = []config.MultipleStandardLoadBalancerConfiguration{{Name: "kubernetes"}}
 
 	bi := newBackendPoolTypeNodeIP(az)
 	svc := getTestService("test", v1.ProtocolTCP, nil, false, 80)

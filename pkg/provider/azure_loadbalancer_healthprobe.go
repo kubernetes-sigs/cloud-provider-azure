@@ -160,7 +160,7 @@ func (az *Cloud) buildHealthProbeRulesForPort(serviceManifest *v1.Service, port 
 	case strings.EqualFold(*protocol, string(network.ProtocolHTTPS)):
 		//HTTPS probe is only supported in standard loadbalancer
 		//For backward compatibility,when unsupported protocol is used, fall back to tcp protocol in basic lb mode instead
-		if !az.useStandardLoadBalancer() {
+		if !az.UseStandardLoadBalancer() {
 			properties.Protocol = network.ProbeProtocolTCP
 		} else {
 			properties.Protocol = network.ProbeProtocolHTTPS

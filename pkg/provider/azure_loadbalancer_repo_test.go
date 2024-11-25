@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -58,7 +59,7 @@ func TestListManagedLBs(t *testing.T) {
 		existingLBs     []network.LoadBalancer
 		expectedLBs     *[]network.LoadBalancer
 		callTimes       int
-		multiSLBConfigs []MultipleStandardLoadBalancerConfiguration
+		multiSLBConfigs []config.MultipleStandardLoadBalancerConfiguration
 		clientErr       *retry.Error
 		expectedErr     error
 	}{
@@ -94,7 +95,7 @@ func TestListManagedLBs(t *testing.T) {
 				{Name: ptr.To("lb1-internal")},
 				{Name: ptr.To("lb2")},
 			},
-			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
 				{Name: "kubernetes"},
 				{Name: "lb1"},
 			},
