@@ -17,6 +17,8 @@ limitations under the License.
 package config
 
 import (
+	"crypto/rsa"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -27,6 +29,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
 
@@ -44,10 +47,16 @@ const (
 	maxReadLength = 10 * 1 << 20 // 10MB
 )
 
-// AzureAuthConfig holds auth related part of cloud config
-type AzureAuthConfig struct {
-	azclient.ARMClientConfig `json:",inline" yaml:",inline"`
-	azclient.AzureAuthConfig `json:",inline" yaml:",inline"`
+// AzureClientConfig holds azure client related part of cloud config
+type AzureClientConfig struct {
+	azclient.ARMClientConfig     `json:",inline" yaml:",inline"`
+	azclient.AzureAuthConfig     `json:",inline" yaml:",inline"`
+	CloudProviderRateLimitConfig `json:",inline" yaml:",inline"`
+	CloudProviderCacheConfig     `json:",inline" yaml:",inline"`
+	// Backoff retry limit
+	CloudProviderBackoffRetries int `json:"cloudProviderBackoffRetries,omitempty" yaml:"cloudProviderBackoffRetries,omitempty"`
+	// Backoff duration
+	CloudProviderBackoffDuration int `json:"cloudProviderBackoffDuration,omitempty" yaml:"cloudProviderBackoffDuration,omitempty"`
 
 	// The ID of the Azure Subscription that the cluster is deployed in
 	SubscriptionID string `json:"subscriptionId,omitempty" yaml:"subscriptionId,omitempty"`
@@ -67,7 +76,7 @@ type AzureAuthConfig struct {
 // If NetworkResourceTenantID and NetworkResourceSubscriptionID are specified to have different values than TenantID and SubscriptionID, network resources are deployed in different AAD Tenant and Subscription than those for the cluster,
 // than only azure clients except VM/VMSS and network resource ones use this method to fetch Token.
 // For tokens for VM/VMSS and network resource ones, please check GetMultiTenantServicePrincipalToken and GetNetworkResourceServicePrincipalToken.
-func GetServicePrincipalToken(config *AzureAuthConfig, env *azure.Environment, resource string) (*adal.ServicePrincipalToken, error) {
+func GetServicePrincipalToken(config *AzureClientConfig, env *azure.Environment, resource string) (*adal.ServicePrincipalToken, error) {
 	logger := klog.Background().WithName("GetServicePrincipalToken")
 	var tenantID string
 	if strings.EqualFold(config.IdentitySystem, consts.ADFSIdentitySystem) {
@@ -151,7 +160,7 @@ func GetServicePrincipalToken(config *AzureAuthConfig, env *azure.Environment, r
 		if err != nil {
 			return nil, fmt.Errorf("reading the client certificate from file %s: %w", config.AADClientCertPath, err)
 		}
-		certificate, privateKey, err := adal.DecodePfxCertificateData(certData, config.AADClientCertPassword)
+		certificate, privateKey, err := parseCertificate(certData, config.AADClientCertPassword)
 		if err != nil {
 			return nil, fmt.Errorf("decoding the client certificate: %w", err)
 		}
@@ -176,7 +185,7 @@ func GetServicePrincipalToken(config *AzureAuthConfig, env *azure.Environment, r
 // PrimaryToken of the returned multi-tenant token is for the AAD Tenant specified by TenantID, and AuxiliaryToken of the returned multi-tenant token is for the AAD Tenant specified by NetworkResourceTenantID.
 //
 // Azure VM/VMSS clients use this multi-tenant token, in order to operate those VM/VMSS in AAD Tenant specified by TenantID, and meanwhile in their payload they are referencing network resources (e.g. Load Balancer, Network Security Group, etc.) in AAD Tenant specified by NetworkResourceTenantID.
-func GetMultiTenantServicePrincipalToken(config *AzureAuthConfig, env *azure.Environment, authProvider *azclient.AuthProvider) (adal.MultitenantOAuthTokenProvider, error) {
+func GetMultiTenantServicePrincipalToken(config *AzureClientConfig, env *azure.Environment, authProvider *azclient.AuthProvider) (adal.MultitenantOAuthTokenProvider, error) {
 	logger := klog.Background().WithName("GetMultiTenantServicePrincipalToken")
 
 	err := config.ValidateForMultiTenant()
@@ -205,7 +214,7 @@ func GetMultiTenantServicePrincipalToken(config *AzureAuthConfig, env *azure.Env
 		if err != nil {
 			return nil, fmt.Errorf("reading the client certificate from file %s: %w", config.AADClientCertPath, err)
 		}
-		certificate, privateKey, err := adal.DecodePfxCertificateData(certData, config.AADClientCertPassword)
+		certificate, privateKey, err := parseCertificate(certData, config.AADClientCertPassword)
 		if err != nil {
 			return nil, fmt.Errorf("decoding the client certificate: %w", err)
 		}
@@ -238,7 +247,7 @@ func GetMultiTenantServicePrincipalToken(config *AzureAuthConfig, env *azure.Env
 // and this method creates a new service principal token for network resources tenant based on the configuration.
 //
 // Azure network resource (Load Balancer, Public IP, Route Table, Network Security Group and their sub level resources) clients use this multi-tenant token, in order to operate resources in AAD Tenant specified by NetworkResourceTenantID.
-func GetNetworkResourceServicePrincipalToken(config *AzureAuthConfig, env *azure.Environment, authProvider *azclient.AuthProvider) (adal.OAuthTokenProvider, error) {
+func GetNetworkResourceServicePrincipalToken(config *AzureClientConfig, env *azure.Environment, authProvider *azclient.AuthProvider) (adal.OAuthTokenProvider, error) {
 	logger := klog.Background().WithName("GetNetworkResourceServicePrincipalToken")
 
 	err := config.ValidateForMultiTenant()
@@ -266,7 +275,7 @@ func GetNetworkResourceServicePrincipalToken(config *AzureAuthConfig, env *azure
 		if err != nil {
 			return nil, fmt.Errorf("reading the client certificate from file %s: %w", config.AADClientCertPath, err)
 		}
-		certificate, privateKey, err := adal.DecodePfxCertificateData(certData, config.AADClientCertPassword)
+		certificate, privateKey, err := parseCertificate(certData, config.AADClientCertPassword)
 		if err != nil {
 			return nil, fmt.Errorf("decoding the client certificate: %w", err)
 		}
@@ -317,8 +326,8 @@ func ParseAzureEnvironment(cloudName, resourceManagerEndpoint, identitySystem st
 }
 
 // ParseAzureAuthConfig returns a parsed configuration for an Azure cloudprovider config file
-func ParseAzureAuthConfig(configReader io.Reader) (*AzureAuthConfig, *azure.Environment, error) {
-	var config AzureAuthConfig
+func ParseAzureAuthConfig(configReader io.Reader) (*AzureClientConfig, *azure.Environment, error) {
+	var config AzureClientConfig
 
 	if configReader == nil {
 		return nil, nil, errors.New("nil config is provided")
@@ -348,14 +357,14 @@ func ParseAzureAuthConfig(configReader io.Reader) (*AzureAuthConfig, *azure.Envi
 // UsesNetworkResourceInDifferentTenant determines whether the AzureAuthConfig indicates to use network resources in
 // different AAD Tenant than those for the cluster. Return true when NetworkResourceTenantID is specified  and not equal
 // to one defined in global configs
-func (config *AzureAuthConfig) UsesNetworkResourceInDifferentTenant() bool {
+func (config *AzureClientConfig) UsesNetworkResourceInDifferentTenant() bool {
 	return len(config.NetworkResourceTenantID) > 0 && !strings.EqualFold(config.NetworkResourceTenantID, config.TenantID)
 }
 
 // UsesNetworkResourceInDifferentSubscription determines whether the AzureAuthConfig indicates to use network resources
 // in different Subscription than those for the cluster. Return true when NetworkResourceSubscriptionID is specified
 // and not equal to one defined in global configs
-func (config *AzureAuthConfig) UsesNetworkResourceInDifferentSubscription() bool {
+func (config *AzureClientConfig) UsesNetworkResourceInDifferentSubscription() bool {
 	return len(config.NetworkResourceSubscriptionID) > 0 && !strings.EqualFold(config.NetworkResourceSubscriptionID, config.SubscriptionID)
 }
 
@@ -372,7 +381,7 @@ func azureStackOverrides(env *azure.Environment, resourceManagerEndpoint, identi
 }
 
 // ValidateForMultiTenant checks configuration for the scenario of using network resource in different tenant
-func (config *AzureAuthConfig) ValidateForMultiTenant() error {
+func (config *AzureClientConfig) ValidateForMultiTenant() error {
 	if !config.UsesNetworkResourceInDifferentTenant() {
 		return fmt.Errorf("NetworkResourceTenantID must be configured")
 	}
@@ -382,4 +391,33 @@ func (config *AzureAuthConfig) ValidateForMultiTenant() error {
 	}
 
 	return nil
+}
+
+// parseCertificate extracts the x509 certificate and RSA private key from the provided PFX or PEM data.
+// The cert data must contain a private key along with a certificate whose public key matches that of the
+// private key or an error is returned.
+func parseCertificate(certData []byte, password string) (*x509.Certificate, *rsa.PrivateKey, error) {
+	certificates, privateKey, err := azidentity.ParseCertificates(certData, []byte(password))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	rsaPrivateKey, ok := privateKey.(*rsa.PrivateKey)
+	if !ok {
+		return nil, nil, fmt.Errorf("failed to parse certificate: private key is not RSA")
+	}
+
+	// find the certificate with the matching public key of private key
+	for _, cert := range certificates {
+		certKey, ok := cert.PublicKey.(*rsa.PublicKey)
+		if !ok {
+			continue
+		}
+		if rsaPrivateKey.E == certKey.E && rsaPrivateKey.N.Cmp(certKey.N) == 0 {
+			// found a match
+			return cert, rsaPrivateKey, nil
+		}
+	}
+
+	return nil, nil, fmt.Errorf("failed to parse certificate: cannot find public key for private key")
 }

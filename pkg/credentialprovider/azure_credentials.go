@@ -59,13 +59,13 @@ type CredentialProvider interface {
 
 // acrProvider implements the credential provider interface for Azure Container Registry.
 type acrProvider struct {
-	config         *providerconfig.AzureAuthConfig
+	config         *providerconfig.AzureClientConfig
 	environment    *azclient.Environment
 	credential     azcore.TokenCredential
 	registryMirror map[string]string // Registry mirror relation: source registry -> target registry
 }
 
-func NewAcrProvider(config *providerconfig.AzureAuthConfig, environment *azclient.Environment, credential azcore.TokenCredential) CredentialProvider {
+func NewAcrProvider(config *providerconfig.AzureClientConfig, environment *azclient.Environment, credential azcore.TokenCredential) CredentialProvider {
 	return &acrProvider{
 		config:      config,
 		credential:  credential,
@@ -78,7 +78,7 @@ func NewAcrProviderFromConfig(configFile string, registryMirrorStr string) (Cred
 	if len(configFile) == 0 {
 		return nil, errors.New("no azure credential file is provided")
 	}
-	config, err := configloader.Load[providerconfig.AzureAuthConfig](context.Background(), nil, &configloader.FileLoaderConfig{FilePath: configFile})
+	config, err := configloader.Load[providerconfig.AzureClientConfig](context.Background(), nil, &configloader.FileLoaderConfig{FilePath: configFile})
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}

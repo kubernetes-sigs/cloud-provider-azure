@@ -17,6 +17,7 @@ limitations under the License.
 package config
 
 import (
+	"crypto/rsa"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -24,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/stretchr/testify/assert"
@@ -33,7 +35,7 @@ import (
 )
 
 var (
-	CrossTenantNetworkResourceNegativeConfig = []*AzureAuthConfig{
+	CrossTenantNetworkResourceNegativeConfig = []*AzureClientConfig{
 		{
 			// missing NetworkResourceTenantID
 			ARMClientConfig: azclient.ARMClientConfig{
@@ -103,12 +105,12 @@ func TestGetServicePrincipalToken(t *testing.T) {
 		tests := []struct {
 			Name   string
 			Type   IDType
-			Config *AzureAuthConfig
+			Config *AzureClientConfig
 		}{
 			{
 				Name: "client id",
 				Type: ClientID,
-				Config: &AzureAuthConfig{
+				Config: &AzureClientConfig{
 					AzureAuthConfig: azclient.AzureAuthConfig{
 						UseManagedIdentityExtension: true,
 						UserAssignedIdentityID:      "00000000-0000-0000-0000-000000000000",
@@ -118,7 +120,7 @@ func TestGetServicePrincipalToken(t *testing.T) {
 			{
 				Name: "client id with SP (SP config should be ignored)",
 				Type: ClientID,
-				Config: &AzureAuthConfig{
+				Config: &AzureClientConfig{
 					ARMClientConfig: azclient.ARMClientConfig{
 						TenantID: "TenantID",
 					},
@@ -133,7 +135,7 @@ func TestGetServicePrincipalToken(t *testing.T) {
 			{
 				Name: "resource id",
 				Type: ResourceID,
-				Config: &AzureAuthConfig{
+				Config: &AzureClientConfig{
 					AzureAuthConfig: azclient.AzureAuthConfig{
 						UseManagedIdentityExtension: true,
 						UserAssignedIdentityID:      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/ua",
@@ -143,7 +145,7 @@ func TestGetServicePrincipalToken(t *testing.T) {
 			{
 				Name: "resource id with SP (SP config should be ignored)",
 				Type: ResourceID,
-				Config: &AzureAuthConfig{
+				Config: &AzureClientConfig{
 					ARMClientConfig: azclient.ARMClientConfig{
 						TenantID: "TenantID",
 					},
@@ -187,11 +189,11 @@ func TestGetServicePrincipalToken(t *testing.T) {
 	t.Run("setup with MSI (system managed identity)", func(t *testing.T) {
 		tests := []struct {
 			Name   string
-			Config *AzureAuthConfig
+			Config *AzureClientConfig
 		}{
 			{
 				Name: "default",
-				Config: &AzureAuthConfig{
+				Config: &AzureClientConfig{
 					AzureAuthConfig: azclient.AzureAuthConfig{
 						UseManagedIdentityExtension: true,
 					},
@@ -199,7 +201,7 @@ func TestGetServicePrincipalToken(t *testing.T) {
 			},
 			{
 				Name: "with SP (SP config should be ignored",
-				Config: &AzureAuthConfig{
+				Config: &AzureClientConfig{
 					ARMClientConfig: azclient.ARMClientConfig{
 						TenantID: "TenantID",
 					},
@@ -232,7 +234,7 @@ func TestGetServicePrincipalToken(t *testing.T) {
 	})
 
 	t.Run("setup with workload identity", func(t *testing.T) {
-		config := &AzureAuthConfig{
+		config := &AzureClientConfig{
 			ARMClientConfig: azclient.ARMClientConfig{
 				TenantID: "TenantID",
 			},
@@ -268,7 +270,7 @@ func TestGetServicePrincipalToken(t *testing.T) {
 	})
 
 	t.Run("setup with SP with password", func(t *testing.T) {
-		config := &AzureAuthConfig{
+		config := &AzureClientConfig{
 			ARMClientConfig: azclient.ARMClientConfig{
 				TenantID: "TenantID",
 			},
@@ -292,7 +294,7 @@ func TestGetServicePrincipalToken(t *testing.T) {
 	})
 
 	t.Run("setup with SP with certificate", func(t *testing.T) {
-		config := &AzureAuthConfig{
+		config := &AzureClientConfig{
 			ARMClientConfig: azclient.ARMClientConfig{
 				TenantID: "TenantID",
 			},
@@ -310,15 +312,15 @@ func TestGetServicePrincipalToken(t *testing.T) {
 		assert.NoError(t, err)
 		pfxContent, err := os.ReadFile("./testdata/test.pfx")
 		assert.NoError(t, err)
-		certificate, privateKey, err := adal.DecodePfxCertificateData(pfxContent, "id")
+		certificates, privateKey, err := azidentity.ParseCertificates(pfxContent, []byte("id"))
 		assert.NoError(t, err)
-		spt, err := adal.NewServicePrincipalTokenFromCertificate(*oauthConfig, config.AADClientID, certificate, privateKey, env.ServiceManagementEndpoint)
+		spt, err := adal.NewServicePrincipalTokenFromCertificate(*oauthConfig, config.AADClientID, certificates[0], privateKey.(*rsa.PrivateKey), env.ServiceManagementEndpoint)
 		assert.NoError(t, err)
 		assert.Equal(t, token, spt)
 	})
 
 	t.Run("setup with SP and certificate (no certificate password)", func(t *testing.T) {
-		config := &AzureAuthConfig{
+		config := &AzureClientConfig{
 			ARMClientConfig: azclient.ARMClientConfig{
 				TenantID: "TenantID",
 			},
@@ -335,17 +337,59 @@ func TestGetServicePrincipalToken(t *testing.T) {
 		assert.NoError(t, err)
 		pfxContent, err := os.ReadFile("./testdata/testnopassword.pfx")
 		assert.NoError(t, err)
-		certificate, privateKey, err := adal.DecodePfxCertificateData(pfxContent, "")
+		certificates, privateKey, err := azidentity.ParseCertificates(pfxContent, nil)
 		assert.NoError(t, err)
-		spt, err := adal.NewServicePrincipalTokenFromCertificate(*oauthConfig, config.AADClientID, certificate, privateKey, env.ServiceManagementEndpoint)
+		spt, err := adal.NewServicePrincipalTokenFromCertificate(*oauthConfig, config.AADClientID, certificates[0], privateKey.(*rsa.PrivateKey), env.ServiceManagementEndpoint)
 		assert.NoError(t, err)
 		assert.Equal(t, token, spt)
+	})
+
+	t.Run("setup with SP with certificate has multi public key", func(t *testing.T) {
+		config := &AzureClientConfig{
+			ARMClientConfig: azclient.ARMClientConfig{
+				TenantID: "TenantID",
+			},
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				AADClientID:       "AADClientID",
+				AADClientCertPath: "./testdata/testmultipublickey.pem",
+			},
+		}
+		env := &azure.PublicCloud
+		token, err := GetServicePrincipalToken(config, env, "")
+		assert.NoError(t, err)
+
+		oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.TenantID, nil)
+		assert.NoError(t, err)
+		pfxContent, err := os.ReadFile("./testdata/testmultipublickey.pem")
+		assert.NoError(t, err)
+		certificates, privateKey, err := azidentity.ParseCertificates(pfxContent, nil)
+		assert.NoError(t, err)
+		// expected public key is in second bag
+		certificate := certificates[1]
+		spt, err := adal.NewServicePrincipalTokenFromCertificate(*oauthConfig, config.AADClientID, certificate, privateKey.(*rsa.PrivateKey), env.ServiceManagementEndpoint)
+		assert.NoError(t, err)
+		assert.Equal(t, token, spt)
+	})
+
+	t.Run("setup with SP with certificate has no public key", func(t *testing.T) {
+		config := &AzureClientConfig{
+			ARMClientConfig: azclient.ARMClientConfig{
+				TenantID: "TenantID",
+			},
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				AADClientID:       "AADClientID",
+				AADClientCertPath: "./testdata/testnopublickey.pem",
+			},
+		}
+		env := &azure.PublicCloud
+		_, err := GetServicePrincipalToken(config, env, "")
+		assert.Error(t, err)
 	})
 }
 
 func TestGetMultiTenantServicePrincipalToken(t *testing.T) {
 	t.Run("setup with SP with password", func(t *testing.T) {
-		config := &AzureAuthConfig{
+		config := &AzureClientConfig{
 			ARMClientConfig: azclient.ARMClientConfig{
 				TenantID:                "TenantID",
 				NetworkResourceTenantID: "NetworkResourceTenantID",
@@ -371,7 +415,7 @@ func TestGetMultiTenantServicePrincipalToken(t *testing.T) {
 	})
 
 	t.Run("setup with SP with certificate", func(t *testing.T) {
-		config := &AzureAuthConfig{
+		config := &AzureClientConfig{
 			ARMClientConfig: azclient.ARMClientConfig{
 				TenantID:                "TenantID",
 				NetworkResourceTenantID: "NetworkResourceTenantID",
@@ -392,12 +436,29 @@ func TestGetMultiTenantServicePrincipalToken(t *testing.T) {
 
 		pfxContent, err := os.ReadFile("./testdata/testnopassword.pfx")
 		assert.NoError(t, err)
-		certificate, privateKey, err := adal.DecodePfxCertificateData(pfxContent, "")
+		certificates, privateKey, err := azidentity.ParseCertificates(pfxContent, nil)
 		assert.NoError(t, err)
-		spt, err := adal.NewMultiTenantServicePrincipalTokenFromCertificate(multiTenantOAuthConfig, config.AADClientID, certificate, privateKey, env.ServiceManagementEndpoint)
+		spt, err := adal.NewMultiTenantServicePrincipalTokenFromCertificate(multiTenantOAuthConfig, config.AADClientID, certificates[0], privateKey.(*rsa.PrivateKey), env.ServiceManagementEndpoint)
 		assert.NoError(t, err)
 
 		assert.Equal(t, multiTenantToken, spt)
+	})
+
+	t.Run("setup with SP with certificate has no public key", func(t *testing.T) {
+		config := &AzureClientConfig{
+			ARMClientConfig: azclient.ARMClientConfig{
+				TenantID:                "TenantID",
+				NetworkResourceTenantID: "NetworkResourceTenantID",
+			},
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				AADClientID:       "AADClientID",
+				AADClientCertPath: "./testdata/testnopublickey.pem",
+			},
+			NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
+		}
+		env := &azure.PublicCloud
+		_, err := GetMultiTenantServicePrincipalToken(config, env, nil)
+		assert.Error(t, err)
 	})
 
 	t.Run("setup with MSI and auxiliary token provider", func(t *testing.T) {
@@ -406,7 +467,7 @@ func TestGetMultiTenantServicePrincipalToken(t *testing.T) {
 			networkToken         = "network-token"
 		)
 		var (
-			cfg = &AzureAuthConfig{
+			cfg = &AzureClientConfig{
 				AzureAuthConfig: azclient.AzureAuthConfig{
 					UseManagedIdentityExtension: true,
 				},
@@ -443,7 +504,7 @@ func TestGetMultiTenantServicePrincipalToken(t *testing.T) {
 func TestGetNetworkResourceServicePrincipalToken(t *testing.T) {
 
 	t.Run("setup with SP with password", func(t *testing.T) {
-		config := &AzureAuthConfig{
+		config := &AzureClientConfig{
 			ARMClientConfig: azclient.ARMClientConfig{
 				TenantID:                "TenantID",
 				NetworkResourceTenantID: "NetworkResourceTenantID",
@@ -469,7 +530,7 @@ func TestGetNetworkResourceServicePrincipalToken(t *testing.T) {
 	})
 
 	t.Run("setup with SP with certificate", func(t *testing.T) {
-		config := &AzureAuthConfig{
+		config := &AzureClientConfig{
 			ARMClientConfig: azclient.ARMClientConfig{
 				TenantID:                "TenantID",
 				NetworkResourceTenantID: "NetworkResourceTenantID",
@@ -490,12 +551,30 @@ func TestGetNetworkResourceServicePrincipalToken(t *testing.T) {
 
 		pfxContent, err := os.ReadFile("./testdata/testnopassword.pfx")
 		assert.NoError(t, err)
-		certificate, privateKey, err := adal.DecodePfxCertificateData(pfxContent, "")
+		certificates, privateKey, err := azidentity.ParseCertificates(pfxContent, nil)
 		assert.NoError(t, err)
-		spt, err := adal.NewServicePrincipalTokenFromCertificate(*oauthConfig, config.AADClientID, certificate, privateKey, env.ServiceManagementEndpoint)
+		spt, err := adal.NewServicePrincipalTokenFromCertificate(*oauthConfig, config.AADClientID, certificates[0], privateKey.(*rsa.PrivateKey), env.ServiceManagementEndpoint)
 		assert.NoError(t, err)
 
 		assert.Equal(t, token, spt)
+	})
+
+	t.Run("setup with SP with certificate has no public key", func(t *testing.T) {
+		config := &AzureClientConfig{
+			ARMClientConfig: azclient.ARMClientConfig{
+				TenantID:                "TenantID",
+				NetworkResourceTenantID: "NetworkResourceTenantID",
+			},
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				AADClientID:       "AADClientID",
+				AADClientCertPath: "./testdata/testnopublickey.pem",
+			},
+			NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
+		}
+		env := &azure.PublicCloud
+
+		_, err := GetNetworkResourceServicePrincipalToken(config, env, nil)
+		assert.Error(t, err)
 	})
 
 	t.Run("setup with MSI and auxiliary token provider", func(t *testing.T) {
@@ -504,7 +583,7 @@ func TestGetNetworkResourceServicePrincipalToken(t *testing.T) {
 			networkToken         = "network-token"
 		)
 		var (
-			cfg = &AzureAuthConfig{
+			cfg = &AzureClientConfig{
 				AzureAuthConfig: azclient.AzureAuthConfig{
 					UseManagedIdentityExtension: true,
 				},
@@ -602,7 +681,7 @@ func TestAzureStackOverrides(t *testing.T) {
 }
 
 func TestUsesNetworkResourceInDifferentTenant(t *testing.T) {
-	config := &AzureAuthConfig{
+	config := &AzureClientConfig{
 		ARMClientConfig: azclient.ARMClientConfig{
 			TenantID:                "TenantID",
 			NetworkResourceTenantID: "NetworkResourceTenantID",
