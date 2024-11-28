@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -33,7 +32,6 @@ import (
 	"github.com/Azure/go-autorest/autorest/azure"
 
 	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
@@ -48,7 +46,6 @@ import (
 	cloudnodeutil "k8s.io/cloud-provider/node/helpers"
 	nodeutil "k8s.io/component-helpers/node/util"
 	"k8s.io/klog/v2"
-	"sigs.k8s.io/yaml"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
@@ -68,6 +65,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmsizeclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
@@ -76,7 +74,7 @@ import (
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-	ratelimitconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/taints"
@@ -99,208 +97,6 @@ var (
 	}
 )
 
-// Config holds the configuration parsed from the --cloud-config flag
-// All fields are required unless otherwise specified
-// NOTE: Cloud config files should follow the same Kubernetes deprecation policy as
-// flags or CLIs. Config fields should not change behavior in incompatible ways and
-// should be deprecated for at least 2 release prior to removing.
-// See https://kubernetes.io/docs/reference/using-api/deprecation-policy/#deprecating-a-flag-or-cli
-// for more details.
-type Config struct {
-	ratelimitconfig.AzureClientConfig `json:",inline" yaml:",inline"`
-
-	// The cloud configure type for Azure cloud provider. Supported values are file, secret and merge.
-	CloudConfigType configloader.CloudConfigType `json:"cloudConfigType,omitempty" yaml:"cloudConfigType,omitempty"`
-
-	// The name of the resource group that the cluster is deployed in
-	ResourceGroup string `json:"resourceGroup,omitempty" yaml:"resourceGroup,omitempty"`
-	// The location of the resource group that the cluster is deployed in
-	Location string `json:"location,omitempty" yaml:"location,omitempty"`
-	// The name of site where the cluster will be deployed to that is more granular than the region specified by the "location" field.
-	// Currently only public ip, load balancer and managed disks support this.
-	ExtendedLocationName string `json:"extendedLocationName,omitempty" yaml:"extendedLocationName,omitempty"`
-	// The type of site that is being targeted.
-	// Currently only public ip, load balancer and managed disks support this.
-	ExtendedLocationType string `json:"extendedLocationType,omitempty" yaml:"extendedLocationType,omitempty"`
-	// The name of the VNet that the cluster is deployed in
-	VnetName string `json:"vnetName,omitempty" yaml:"vnetName,omitempty"`
-	// The name of the resource group that the Vnet is deployed in
-	VnetResourceGroup string `json:"vnetResourceGroup,omitempty" yaml:"vnetResourceGroup,omitempty"`
-	// The name of the subnet that the cluster is deployed in
-	SubnetName string `json:"subnetName,omitempty" yaml:"subnetName,omitempty"`
-	// The name of the security group attached to the cluster's subnet
-	SecurityGroupName string `json:"securityGroupName,omitempty" yaml:"securityGroupName,omitempty"`
-	// The name of the resource group that the security group is deployed in
-	SecurityGroupResourceGroup string `json:"securityGroupResourceGroup,omitempty" yaml:"securityGroupResourceGroup,omitempty"`
-	// (Optional in 1.6) The name of the route table attached to the subnet that the cluster is deployed in
-	RouteTableName string `json:"routeTableName,omitempty" yaml:"routeTableName,omitempty"`
-	// The name of the resource group that the RouteTable is deployed in
-	RouteTableResourceGroup string `json:"routeTableResourceGroup,omitempty" yaml:"routeTableResourceGroup,omitempty"`
-	// (Optional) The name of the availability set that should be used as the load balancer backend
-	// If this is set, the Azure cloudprovider will only add nodes from that availability set to the load
-	// balancer backend pool. If this is not set, and multiple agent pools (availability sets) are used, then
-	// the cloudprovider will try to add all nodes to a single backend pool which is forbidden.
-	// In other words, if you use multiple agent pools (availability sets), you MUST set this field.
-	PrimaryAvailabilitySetName string `json:"primaryAvailabilitySetName,omitempty" yaml:"primaryAvailabilitySetName,omitempty"`
-	// The type of azure nodes. Candidate values are: vmss, standard and vmssflex.
-	// If not set, it will be default to vmss.
-	VMType string `json:"vmType,omitempty" yaml:"vmType,omitempty"`
-	// The name of the scale set that should be used as the load balancer backend.
-	// If this is set, the Azure cloudprovider will only add nodes from that scale set to the load
-	// balancer backend pool. If this is not set, and multiple agent pools (scale sets) are used, then
-	// the cloudprovider will try to add all nodes to a single backend pool which is forbidden in the basic sku.
-	// In other words, if you use multiple agent pools (scale sets), and loadBalancerSku is set to basic, you MUST set this field.
-	PrimaryScaleSetName string `json:"primaryScaleSetName,omitempty" yaml:"primaryScaleSetName,omitempty"`
-	// Tags determines what tags shall be applied to the shared resources managed by controller manager, which
-	// includes load balancer, security group and route table. The supported format is `a=b,c=d,...`. After updated
-	// this config, the old tags would be replaced by the new ones.
-	// Because special characters are not supported in "tags" configuration, "tags" support would be removed in a future release,
-	// please consider migrating the config to "tagsMap".
-	Tags string `json:"tags,omitempty" yaml:"tags,omitempty"`
-	// TagsMap is similar to Tags but holds tags with special characters such as `=` and `,`.
-	TagsMap map[string]string `json:"tagsMap,omitempty" yaml:"tagsMap,omitempty"`
-	// SystemTags determines the tag keys managed by cloud provider. If it is not set, no tags would be deleted if
-	// the `Tags` is changed. However, the old tags would be deleted if they are neither included in `Tags` nor
-	// in `SystemTags` after the update of `Tags`.
-	SystemTags string `json:"systemTags,omitempty" yaml:"systemTags,omitempty"`
-	// Sku of Load Balancer and Public IP. Candidate values are: basic and standard.
-	// If not set, it will be default to basic.
-	LoadBalancerSku string `json:"loadBalancerSku,omitempty" yaml:"loadBalancerSku,omitempty"`
-	// LoadBalancerName determines the specific name of the load balancer user want to use, working with
-	// LoadBalancerResourceGroup
-	LoadBalancerName string `json:"loadBalancerName,omitempty" yaml:"loadBalancerName,omitempty"`
-	// LoadBalancerResourceGroup determines the specific resource group of the load balancer user want to use, working
-	// with LoadBalancerName
-	LoadBalancerResourceGroup string `json:"loadBalancerResourceGroup,omitempty" yaml:"loadBalancerResourceGroup,omitempty"`
-	// PreConfiguredBackendPoolLoadBalancerTypes determines whether the LoadBalancer BackendPool has been preconfigured.
-	// Candidate values are:
-	//   "": exactly with today (not pre-configured for any LBs)
-	//   "internal": for internal LoadBalancer
-	//   "external": for external LoadBalancer
-	//   "all": for both internal and external LoadBalancer
-	PreConfiguredBackendPoolLoadBalancerTypes string `json:"preConfiguredBackendPoolLoadBalancerTypes,omitempty" yaml:"preConfiguredBackendPoolLoadBalancerTypes,omitempty"`
-
-	// DisableAvailabilitySetNodes disables VMAS nodes support when "VMType" is set to "vmss".
-	DisableAvailabilitySetNodes bool `json:"disableAvailabilitySetNodes,omitempty" yaml:"disableAvailabilitySetNodes,omitempty"`
-	// EnableVmssFlexNodes enables vmss flex nodes support when "VMType" is set to "vmss".
-	EnableVmssFlexNodes bool `json:"enableVmssFlexNodes,omitempty" yaml:"enableVmssFlexNodes,omitempty"`
-	// DisableAzureStackCloud disables AzureStackCloud support. It should be used
-	// when setting AzureAuthConfig.Cloud with "AZURESTACKCLOUD" to customize ARM endpoints
-	// while the cluster is not running on AzureStack.
-	DisableAzureStackCloud bool `json:"disableAzureStackCloud,omitempty" yaml:"disableAzureStackCloud,omitempty"`
-	// Use instance metadata service where possible
-	UseInstanceMetadata bool `json:"useInstanceMetadata,omitempty" yaml:"useInstanceMetadata,omitempty"`
-
-	// Backoff exponent
-	CloudProviderBackoffExponent float64 `json:"cloudProviderBackoffExponent,omitempty" yaml:"cloudProviderBackoffExponent,omitempty"`
-	// Backoff jitter
-	CloudProviderBackoffJitter float64 `json:"cloudProviderBackoffJitter,omitempty" yaml:"cloudProviderBackoffJitter,omitempty"`
-
-	// ExcludeMasterFromStandardLB excludes master nodes from standard load balancer.
-	// If not set, it will be default to true.
-	ExcludeMasterFromStandardLB *bool `json:"excludeMasterFromStandardLB,omitempty" yaml:"excludeMasterFromStandardLB,omitempty"`
-	// DisableOutboundSNAT disables the outbound SNAT for public load balancer rules.
-	// It should only be set when loadBalancerSku is standard. If not set, it will be default to false.
-	DisableOutboundSNAT *bool `json:"disableOutboundSNAT,omitempty" yaml:"disableOutboundSNAT,omitempty"`
-
-	// Maximum allowed LoadBalancer Rule Count is the limit enforced by Azure Load balancer
-	MaximumLoadBalancerRuleCount int `json:"maximumLoadBalancerRuleCount,omitempty" yaml:"maximumLoadBalancerRuleCount,omitempty"`
-
-	// LoadBalancerBackendPoolConfigurationType defines how vms join the load balancer backend pools. Supported values
-	// are `nodeIPConfiguration`, `nodeIP` and `podIP`.
-	// `nodeIPConfiguration`: vm network interfaces will be attached to the inbound backend pool of the load balancer (default);
-	// `nodeIP`: vm private IPs will be attached to the inbound backend pool of the load balancer;
-	// `podIP`: pod IPs will be attached to the inbound backend pool of the load balancer (not supported yet).
-	LoadBalancerBackendPoolConfigurationType string `json:"loadBalancerBackendPoolConfigurationType,omitempty" yaml:"loadBalancerBackendPoolConfigurationType,omitempty"`
-	// PutVMSSVMBatchSize defines how many requests the client send concurrently when putting the VMSS VMs.
-	// If it is smaller than or equal to zero, the request will be sent one by one in sequence (default).
-	PutVMSSVMBatchSize int `json:"putVMSSVMBatchSize" yaml:"putVMSSVMBatchSize"`
-	// PrivateLinkServiceResourceGroup determines the specific resource group of the private link services user want to use
-	PrivateLinkServiceResourceGroup string `json:"privateLinkServiceResourceGroup,omitempty" yaml:"privateLinkServiceResourceGroup,omitempty"`
-
-	// EnableMigrateToIPBasedBackendPoolAPI uses the migration API to migrate from NIC-based to IP-based backend pool.
-	// The migration API can provide a migration from NIC-based to IP-based backend pool without service downtime.
-	// If the API is not used, the migration will be done by decoupling all nodes on the backend pool and then re-attaching
-	// node IPs, which will introduce service downtime. The downtime increases with the number of nodes in the backend pool.
-	EnableMigrateToIPBasedBackendPoolAPI bool `json:"enableMigrateToIPBasedBackendPoolAPI" yaml:"enableMigrateToIPBasedBackendPoolAPI"`
-
-	// MultipleStandardLoadBalancerConfigurations stores the properties regarding multiple standard load balancers.
-	// It will be ignored if LoadBalancerBackendPoolConfigurationType is nodeIPConfiguration.
-	// If the length is not 0, it is assumed the multiple standard load balancers mode is on. In this case,
-	// there must be one configuration named "<clustername>" or an error will be reported.
-	MultipleStandardLoadBalancerConfigurations []MultipleStandardLoadBalancerConfiguration `json:"multipleStandardLoadBalancerConfigurations,omitempty" yaml:"multipleStandardLoadBalancerConfigurations,omitempty"`
-
-	// RouteUpdateIntervalInSeconds is the interval for updating routes. Default is 30 seconds.
-	RouteUpdateIntervalInSeconds int `json:"routeUpdateIntervalInSeconds,omitempty" yaml:"routeUpdateIntervalInSeconds,omitempty"`
-	// LoadBalancerBackendPoolUpdateIntervalInSeconds is the interval for updating load balancer backend pool of local services. Default is 30 seconds.
-	LoadBalancerBackendPoolUpdateIntervalInSeconds int `json:"loadBalancerBackendPoolUpdateIntervalInSeconds,omitempty" yaml:"loadBalancerBackendPoolUpdateIntervalInSeconds,omitempty"`
-
-	// ClusterServiceLoadBalancerHealthProbeMode determines the health probe mode for cluster service load balancer.
-	// Supported values are `shared` and `servicenodeport`.
-	// `servicenodeport`: the health probe will be created against each port of each service by watching the backend application (default).
-	// `shared`: all cluster services shares one HTTP probe targeting the kube-proxy on the node (<nodeIP>/healthz:10256).
-	ClusterServiceLoadBalancerHealthProbeMode string `json:"clusterServiceLoadBalancerHealthProbeMode,omitempty" yaml:"clusterServiceLoadBalancerHealthProbeMode,omitempty"`
-	// ClusterServiceSharedLoadBalancerHealthProbePort defines the target port of the shared health probe. Default to 10256.
-	ClusterServiceSharedLoadBalancerHealthProbePort int32 `json:"clusterServiceSharedLoadBalancerHealthProbePort,omitempty" yaml:"clusterServiceSharedLoadBalancerHealthProbePort,omitempty"`
-	// ClusterServiceSharedLoadBalancerHealthProbePath defines the target path of the shared health probe. Default to `/healthz`.
-	ClusterServiceSharedLoadBalancerHealthProbePath string `json:"clusterServiceSharedLoadBalancerHealthProbePath,omitempty" yaml:"clusterServiceSharedLoadBalancerHealthProbePath,omitempty"`
-}
-
-// MultipleStandardLoadBalancerConfiguration stores the properties regarding multiple standard load balancers.
-type MultipleStandardLoadBalancerConfiguration struct {
-	// Name of the public load balancer. There will be an internal load balancer
-	// created if needed, and the name will be `<name>-internal`. The internal lb
-	// shares the same configurations as the external one. The internal lbs
-	// are not needed to be included in `MultipleStandardLoadBalancerConfigurations`.
-	// There must be a name of "<clustername>" in the load balancer configuration list.
-	Name string `json:"name" yaml:"name"`
-
-	MultipleStandardLoadBalancerConfigurationSpec
-
-	MultipleStandardLoadBalancerConfigurationStatus
-}
-
-// MultipleStandardLoadBalancerConfigurationSpec stores the properties regarding multiple standard load balancers.
-type MultipleStandardLoadBalancerConfigurationSpec struct {
-	// This load balancer can have services placed on it. Defaults to true,
-	// can be set to false to drain and eventually remove a load balancer.
-	// This only affects services that will be using the LB. For services
-	// that is currently using the LB, they will not be affected.
-	AllowServicePlacement *bool `json:"allowServicePlacement" yaml:"allowServicePlacement"`
-
-	// A string value that must specify the name of an existing vmSet.
-	// All nodes in the given vmSet will always be added to this load balancer.
-	// A vmSet can only be the primary vmSet for a single load balancer.
-	PrimaryVMSet string `json:"primaryVMSet" yaml:"primaryVMSet"`
-
-	// Services that must match this selector can be placed on this load balancer. If not supplied,
-	// services with any labels can be created on the load balancer.
-	ServiceLabelSelector *metav1.LabelSelector `json:"serviceLabelSelector" yaml:"serviceLabelSelector"`
-
-	// Services created in namespaces with the supplied label will be allowed to select that load balancer.
-	// If not supplied, services created in any namespaces can be created on that load balancer.
-	ServiceNamespaceSelector *metav1.LabelSelector `json:"serviceNamespaceSelector" yaml:"serviceNamespaceSelector"`
-
-	// Nodes matching this selector will be preferentially added to the load balancers that
-	// they match selectors for. NodeSelector does not override primaryAgentPool for node allocation.
-	NodeSelector *metav1.LabelSelector `json:"nodeSelector" yaml:"nodeSelector"`
-}
-
-// MultipleStandardLoadBalancerConfigurationStatus stores the properties regarding multiple standard load balancers.
-type MultipleStandardLoadBalancerConfigurationStatus struct {
-	// ActiveServices stores the services that are supposed to use the load balancer.
-	ActiveServices *utilsets.IgnoreCaseSet `json:"activeServices" yaml:"activeServices"`
-
-	// ActiveNodes stores the nodes that are supposed to be in the load balancer.
-	// It will be used in EnsureHostsInPool to make sure the given ones are in the backend pool.
-	ActiveNodes *utilsets.IgnoreCaseSet `json:"activeNodes" yaml:"activeNodes"`
-}
-
-// HasExtendedLocation returns true if extendedlocation prop are specified.
-func (config *Config) HasExtendedLocation() bool {
-	return config.ExtendedLocationName != "" && config.ExtendedLocationType != ""
-}
-
 var (
 	_ cloudprovider.Interface    = (*Cloud)(nil)
 	_ cloudprovider.Instances    = (*Cloud)(nil)
@@ -311,7 +107,7 @@ var (
 
 // Cloud holds the config and clients
 type Cloud struct {
-	Config
+	azureconfig.Config
 	Environment azure.Environment
 
 	SubnetsClient                   subnetclient.Interface
@@ -408,7 +204,7 @@ type Cloud struct {
 }
 
 // NewCloud returns a Cloud with initialized clients
-func NewCloud(ctx context.Context, clientBuilder cloudprovider.ControllerClientBuilder, config *Config, callFromCCM bool) (cloudprovider.Interface, error) {
+func NewCloud(ctx context.Context, clientBuilder cloudprovider.ControllerClientBuilder, config *azureconfig.Config, callFromCCM bool) (cloudprovider.Interface, error) {
 	az := &Cloud{
 		nodeNames:                  utilsets.NewString(),
 		nodeZones:                  map[string]*utilsets.IgnoreCaseSet{},
@@ -450,17 +246,17 @@ func NewCloudFromConfigFile(ctx context.Context, clientBuilder cloudprovider.Con
 		err   error
 	)
 
-	var configValue *Config
+	var configValue *azureconfig.Config
 	if configFilePath != "" {
-		var config *os.File
-		config, err = os.Open(configFilePath)
+		var configFile *os.File
+		configFile, err = os.Open(configFilePath)
 		if err != nil {
 			klog.Fatalf("Couldn't open cloud provider configuration %s: %#v",
 				configFilePath, err)
 		}
 
-		defer config.Close()
-		configValue, err = ParseConfig(config)
+		defer configFile.Close()
+		configValue, err = config.ParseConfig(configFile)
 		if err != nil {
 			klog.Fatalf("Failed to parse Azure cloud provider config: %v", err)
 		}
@@ -477,7 +273,7 @@ func NewCloudFromConfigFile(ctx context.Context, clientBuilder cloudprovider.Con
 }
 
 func NewCloudFromSecret(ctx context.Context, clientBuilder cloudprovider.ControllerClientBuilder, secretName, secretNamespace, cloudConfigKey string) (cloudprovider.Interface, error) {
-	config, err := configloader.Load[Config](ctx, &configloader.K8sSecretLoaderConfig{
+	config, err := configloader.Load[azureconfig.Config](ctx, &configloader.K8sSecretLoaderConfig{
 		K8sSecretConfig: configloader.K8sSecretConfig{
 			SecretName:      secretName,
 			SecretNamespace: secretNamespace,
@@ -498,7 +294,7 @@ func NewCloudFromSecret(ctx context.Context, clientBuilder cloudprovider.Control
 }
 
 // InitializeCloudFromConfig initializes the Cloud from config.
-func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, fromSecret, callFromCCM bool) error {
+func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.Config, fromSecret, callFromCCM bool) error {
 	if config == nil {
 		// should not reach here
 		return fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config")
@@ -574,13 +370,13 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 		config.ClusterServiceSharedLoadBalancerHealthProbePath = consts.ClusterServiceLoadBalancerHealthProbeDefaultPath
 	}
 
-	env, err := ratelimitconfig.ParseAzureEnvironment(config.Cloud, config.ResourceManagerEndpoint, config.IdentitySystem)
+	env, err := azureconfig.ParseAzureEnvironment(config.Cloud, config.ResourceManagerEndpoint, config.IdentitySystem)
 	if err != nil {
 		return err
 	}
 
 	// Initialize rate limiting config options.
-	ratelimitconfig.InitializeCloudProviderRateLimitConfig(&config.CloudProviderRateLimitConfig)
+	azureconfig.InitializeCloudProviderRateLimitConfig(&config.CloudProviderRateLimitConfig)
 
 	resourceRequestBackoff := az.setCloudProviderBackoffDefaults(config)
 
@@ -619,19 +415,19 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 		}
 	}
 
-	if az.isLBBackendPoolTypeNodeIPConfig() {
+	if az.IsLBBackendPoolTypeNodeIPConfig() {
 		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIPConfig(az)
-	} else if az.isLBBackendPoolTypeNodeIP() {
+	} else if az.IsLBBackendPoolTypeNodeIP() {
 		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIP(az)
 	}
 
-	if az.useMultipleStandardLoadBalancers() {
+	if az.UseMultipleStandardLoadBalancers() {
 		if err := az.checkEnableMultipleStandardLoadBalancers(); err != nil {
 			return err
 		}
 	}
-	servicePrincipalToken, err := ratelimitconfig.GetServicePrincipalToken(&config.AzureClientConfig, env, env.ServiceManagementEndpoint)
-	if errors.Is(err, ratelimitconfig.ErrorNoAuth) {
+	servicePrincipalToken, err := azureconfig.GetServicePrincipalToken(&config.AzureClientConfig, env, env.ServiceManagementEndpoint)
+	if errors.Is(err, azureconfig.ErrorNoAuth) {
 		// Only controller-manager would lazy-initialize from secret, and credentials are required for such case.
 		if fromSecret {
 			err := fmt.Errorf("no credentials provided for Azure cloud provider")
@@ -727,8 +523,8 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 
 	// Common controller contains the function
 	// needed by both blob disk and managed disk controllers
-	qps := float32(ratelimitconfig.DefaultAtachDetachDiskQPS)
-	bucket := ratelimitconfig.DefaultAtachDetachDiskBucket
+	qps := float32(azureconfig.DefaultAtachDetachDiskQPS)
+	bucket := azureconfig.DefaultAtachDetachDiskBucket
 	if az.Config.AttachDetachDiskRateLimit != nil {
 		qps = az.Config.AttachDetachDiskRateLimit.CloudProviderRateLimitQPSWrite
 		bucket = az.Config.AttachDetachDiskRateLimit.CloudProviderRateLimitBucketWrite
@@ -745,14 +541,14 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 		go az.routeUpdater.run(ctx)
 
 		// start backend pool updater.
-		if az.useMultipleStandardLoadBalancers() {
+		if az.UseMultipleStandardLoadBalancers() {
 			az.backendPoolUpdater = newLoadBalancerBackendPoolUpdater(az, time.Duration(az.LoadBalancerBackendPoolUpdateIntervalInSeconds)*time.Second)
 			go az.backendPoolUpdater.run(ctx)
 		}
 
 		// Azure Stack does not support zone at the moment
 		// https://docs.microsoft.com/en-us/azure-stack/user/azure-stack-network-differences?view=azs-2102
-		if !az.isStackCloud() {
+		if !az.IsStackCloud() {
 			// wait for the success first time of syncing zones
 			err = az.syncRegionZonesMap(ctx)
 			if err != nil {
@@ -767,17 +563,9 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 	return nil
 }
 
-func (az *Cloud) useMultipleStandardLoadBalancers() bool {
-	return az.useStandardLoadBalancer() && len(az.MultipleStandardLoadBalancerConfigurations) > 0
-}
-
-func (az *Cloud) useSingleStandardLoadBalancer() bool {
-	return az.useStandardLoadBalancer() && len(az.MultipleStandardLoadBalancerConfigurations) == 0
-}
-
 // Multiple standard load balancer mode only supports IP-based load balancers.
 func (az *Cloud) checkEnableMultipleStandardLoadBalancers() error {
-	if az.isLBBackendPoolTypeNodeIPConfig() {
+	if az.IsLBBackendPoolTypeNodeIPConfig() {
 		return fmt.Errorf("multiple standard load balancers cannot be used with backend pool type %s", consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration)
 	}
 
@@ -803,18 +591,6 @@ func (az *Cloud) checkEnableMultipleStandardLoadBalancers() error {
 	}
 
 	return nil
-}
-
-func (az *Cloud) isLBBackendPoolTypeNodeIPConfig() bool {
-	return strings.EqualFold(az.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration)
-}
-
-func (az *Cloud) isLBBackendPoolTypeNodeIP() bool {
-	return strings.EqualFold(az.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypeNodeIP)
-}
-
-func (az *Cloud) getPutVMSSVMBatchSize() int {
-	return az.PutVMSSVMBatchSize
 }
 
 func (az *Cloud) initCaches() (err error) {
@@ -847,7 +623,7 @@ func (az *Cloud) initCaches() (err error) {
 	return nil
 }
 
-func (az *Cloud) setLBDefaults(config *Config) error {
+func (az *Cloud) setLBDefaults(config *azureconfig.Config) error {
 	if config.LoadBalancerSku == "" {
 		config.LoadBalancerSku = consts.LoadBalancerSkuStandard
 	}
@@ -875,11 +651,11 @@ func (az *Cloud) getAuthTokenInMultiTenantEnv(_ *adal.ServicePrincipalToken, aut
 	var multiTenantOAuthToken adal.MultitenantOAuthTokenProvider
 	var networkResourceServicePrincipalToken adal.OAuthTokenProvider
 	if az.Config.UsesNetworkResourceInDifferentTenant() {
-		multiTenantOAuthToken, err = ratelimitconfig.GetMultiTenantServicePrincipalToken(&az.Config.AzureClientConfig, &az.Environment, authProvider)
+		multiTenantOAuthToken, err = azureconfig.GetMultiTenantServicePrincipalToken(&az.Config.AzureClientConfig, &az.Environment, authProvider)
 		if err != nil {
 			return nil, nil, err
 		}
-		networkResourceServicePrincipalToken, err = ratelimitconfig.GetNetworkResourceServicePrincipalToken(&az.Config.AzureClientConfig, &az.Environment, authProvider)
+		networkResourceServicePrincipalToken, err = azureconfig.GetNetworkResourceServicePrincipalToken(&az.Config.AzureClientConfig, &az.Environment, authProvider)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -887,7 +663,7 @@ func (az *Cloud) getAuthTokenInMultiTenantEnv(_ *adal.ServicePrincipalToken, aut
 	return multiTenantOAuthToken, networkResourceServicePrincipalToken, nil
 }
 
-func (az *Cloud) setCloudProviderBackoffDefaults(config *Config) wait.Backoff {
+func (az *Cloud) setCloudProviderBackoffDefaults(config *azureconfig.Config) wait.Backoff {
 	// Conditionally configure resource request backoff
 	resourceRequestBackoff := wait.Backoff{
 		Steps: 1,
@@ -1031,45 +807,6 @@ func (az *Cloud) getAzureClientConfig(servicePrincipalToken *adal.ServicePrincip
 	return azClientConfig
 }
 
-// ParseConfig returns a parsed configuration for an Azure cloudprovider config file
-func ParseConfig(configReader io.Reader) (*Config, error) {
-	var config Config
-	if configReader == nil {
-		return nil, nil
-	}
-
-	configContents, err := io.ReadAll(configReader)
-	if err != nil {
-		return nil, err
-	}
-
-	err = yaml.Unmarshal(configContents, &config)
-	if err != nil {
-		return nil, err
-	}
-
-	// The resource group name may be in different cases from different Azure APIs, hence it is converted to lower here.
-	// See more context at https://github.com/kubernetes/kubernetes/issues/71994.
-	config.ResourceGroup = strings.ToLower(config.ResourceGroup)
-
-	// these environment variables are injected by workload identity webhook
-	if tenantID := os.Getenv("AZURE_TENANT_ID"); tenantID != "" {
-		config.TenantID = tenantID
-	}
-	if clientID := os.Getenv("AZURE_CLIENT_ID"); clientID != "" {
-		config.AADClientID = clientID
-	}
-	if federatedTokenFile := os.Getenv("AZURE_FEDERATED_TOKEN_FILE"); federatedTokenFile != "" {
-		config.AADFederatedTokenFile = federatedTokenFile
-		config.UseFederatedWorkloadIdentityExtension = true
-	}
-	return &config, nil
-}
-
-func (az *Cloud) isStackCloud() bool {
-	return strings.EqualFold(az.Config.Cloud, consts.AzureStackCloudName) && !az.Config.DisableAzureStackCloud
-}
-
 // Initialize passes a Kubernetes clientBuilder interface to the cloud provider
 func (az *Cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, _ <-chan struct{}) {
 	az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
@@ -1100,7 +837,7 @@ func (az *Cloud) InstancesV2() (cloudprovider.InstancesV2, bool) {
 // DEPRECATED: Zones is deprecated in favor of retrieving zone/region information from InstancesV2.
 // This interface will not be called if InstancesV2 is enabled.
 func (az *Cloud) Zones() (cloudprovider.Zones, bool) {
-	if az.isStackCloud() {
+	if az.IsStackCloud() {
 		// Azure stack does not support zones at this point
 		// https://docs.microsoft.com/en-us/azure-stack/user/azure-stack-network-differences?view=azs-2102
 		return nil, false

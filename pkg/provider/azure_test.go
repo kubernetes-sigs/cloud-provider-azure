@@ -53,6 +53,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
@@ -2254,12 +2255,12 @@ func validateConfig(t *testing.T, config string) { //nolint
 	}
 }
 
-func getCloudFromConfig(t *testing.T, config string) *Cloud {
+func getCloudFromConfig(t *testing.T, configContent string) *Cloud {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	configReader := strings.NewReader(config)
-	c, err := ParseConfig(configReader)
+	configReader := strings.NewReader(configContent)
+	c, err := config.ParseConfig(configReader)
 	assert.NoError(t, err)
 
 	zoneMock := zone.NewMockRepository(ctrl)
@@ -2787,15 +2788,15 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 	err := az.InitializeCloudFromConfig(context.Background(), nil, false, true)
 	assert.Equal(t, fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config"), err)
 
-	config := Config{
+	azureconfig := config.Config{
 		DisableAvailabilitySetNodes: true,
 		VMType:                      consts.VMTypeStandard,
 	}
-	err = az.InitializeCloudFromConfig(context.Background(), &config, false, true)
+	err = az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, true)
 	expectedErr := fmt.Errorf("disableAvailabilitySetNodes true is only supported when vmType is 'vmss'")
 	assert.Equal(t, expectedErr, err)
 
-	config = Config{
+	azureconfig = config.Config{
 		AzureClientConfig: providerconfig.AzureClientConfig{
 			ARMClientConfig: azclient.ARMClientConfig{
 				Cloud: "AZUREPUBLICCLOUD",
@@ -2803,19 +2804,19 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		},
 		CloudConfigType: configloader.CloudConfigTypeFile,
 	}
-	err = az.InitializeCloudFromConfig(context.Background(), &config, false, true)
+	err = az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, true)
 	expectedErr = fmt.Errorf("useInstanceMetadata must be enabled without Azure credentials")
 	assert.Equal(t, expectedErr, err)
 
-	config = Config{
+	azureconfig = config.Config{
 		LoadBalancerBackendPoolConfigurationType: "invalid",
 	}
-	err = az.InitializeCloudFromConfig(context.Background(), &config, false, true)
+	err = az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, true)
 	expectedErr = errors.New("loadBalancerBackendPoolConfigurationType invalid is not supported, supported values are")
 	assert.Contains(t, err.Error(), expectedErr.Error())
 
-	config = Config{}
-	err = az.InitializeCloudFromConfig(context.Background(), &config, false, true)
+	azureconfig = config.Config{}
+	err = az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, true)
 	assert.NoError(t, err)
 	assert.Equal(t, az.Config.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration)
 }
@@ -2825,7 +2826,7 @@ func TestSetLBDefaults(t *testing.T) {
 	defer ctrl.Finish()
 	az := GetTestCloud(ctrl)
 
-	config := &Config{}
+	config := &config.Config{}
 	_ = az.setLBDefaults(config)
 	assert.Equal(t, config.LoadBalancerSku, consts.LoadBalancerSkuStandard)
 }
@@ -2836,22 +2837,22 @@ func TestCheckEnableMultipleStandardLoadBalancers(t *testing.T) {
 	az := GetTestCloud(ctrl)
 	az.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypeNodeIP
 
-	az.MultipleStandardLoadBalancerConfigurations = []MultipleStandardLoadBalancerConfiguration{
+	az.MultipleStandardLoadBalancerConfigurations = []config.MultipleStandardLoadBalancerConfiguration{
 		{
 			Name: "kubernetes",
-			MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+			MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
 				PrimaryVMSet: "vmss-0",
 			},
 		},
 		{
 			Name: "lb1",
-			MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+			MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
 				PrimaryVMSet: "vmss-1",
 			},
 		},
 		{
 			Name: "kubernetes",
-			MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+			MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
 				PrimaryVMSet: "vmss-2",
 			},
 		},
@@ -2860,10 +2861,10 @@ func TestCheckEnableMultipleStandardLoadBalancers(t *testing.T) {
 	err := az.checkEnableMultipleStandardLoadBalancers()
 	assert.Equal(t, "duplicated multiple standard load balancer configuration name kubernetes", err.Error())
 
-	az.MultipleStandardLoadBalancerConfigurations = []MultipleStandardLoadBalancerConfiguration{
+	az.MultipleStandardLoadBalancerConfigurations = []config.MultipleStandardLoadBalancerConfiguration{
 		{
 			Name: "kubernetes",
-			MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+			MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
 				PrimaryVMSet: "vmss-0",
 			},
 		},
@@ -2875,22 +2876,22 @@ func TestCheckEnableMultipleStandardLoadBalancers(t *testing.T) {
 	err = az.checkEnableMultipleStandardLoadBalancers()
 	assert.Equal(t, "multiple standard load balancer configuration lb1 must have primary VMSet", err.Error())
 
-	az.MultipleStandardLoadBalancerConfigurations = []MultipleStandardLoadBalancerConfiguration{
+	az.MultipleStandardLoadBalancerConfigurations = []config.MultipleStandardLoadBalancerConfiguration{
 		{
 			Name: "kubernetes",
-			MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+			MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
 				PrimaryVMSet: "vmss-0",
 			},
 		},
 		{
 			Name: "lb1",
-			MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+			MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
 				PrimaryVMSet: "vmss-2",
 			},
 		},
 		{
 			Name: "lb2",
-			MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+			MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
 				PrimaryVMSet: "vmss-2",
 			},
 		},
