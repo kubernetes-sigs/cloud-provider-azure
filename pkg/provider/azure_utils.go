@@ -51,15 +51,6 @@ func getContextWithCancel() (context.Context, context.CancelFunc) {
 	return context.WithCancel(context.Background())
 }
 
-func convertMapToMapPointer(origin map[string]string) map[string]*string {
-	newly := make(map[string]*string)
-	for k, v := range origin {
-		value := v
-		newly[k] = &value
-	}
-	return newly
-}
-
 // parseTags processes and combines tags from a string and a map into a single map of string pointers.
 // It handles tag parsing, trimming, and case-insensitive key conflicts.
 //

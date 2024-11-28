@@ -1513,7 +1513,7 @@ k8s.io/kubelet/pkg/apis/credentialprovider/install
 k8s.io/kubelet/pkg/apis/credentialprovider/v1
 k8s.io/kubelet/pkg/apis/credentialprovider/v1alpha1
 k8s.io/kubelet/pkg/apis/credentialprovider/v1beta1
-# k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
+# k8s.io/utils v0.0.0-20241104163129-6fe5fd82f078
 ## explicit; go 1.18
 k8s.io/utils/buffer
 k8s.io/utils/clock
@@ -1617,6 +1617,9 @@ sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworkclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworkclient/mock_virtualnetworkclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient/mock_virtualnetworklinkclient
+# sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.1.0
+## explicit; go 1.23.2
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache
 # sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.1.8
 ## explicit; go 1.23.1
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader

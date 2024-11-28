@@ -1,6 +1,6 @@
 module sigs.k8s.io/cloud-provider-azure
 
-go 1.23.1
+go 1.23.2
 
 require (
 	github.com/Azure/azure-kusto-go v0.16.1
@@ -16,12 +16,12 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage v1.6.0
 	github.com/Azure/go-autorest/autorest v0.11.29
 	github.com/Azure/go-autorest/autorest/adal v0.9.24
-	github.com/Azure/go-autorest/autorest/date v0.3.0
 	github.com/Azure/go-autorest/autorest/mocks v0.4.2
 	github.com/Azure/go-autorest/tracing v0.6.0
 	github.com/evanphx/json-patch v5.9.0+incompatible
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/go-logr/logr v1.4.2
+	github.com/google/uuid v1.6.0
 	github.com/onsi/ginkgo/v2 v2.22.0
 	github.com/onsi/gomega v1.36.0
 	github.com/prometheus/client_golang v1.20.5
@@ -48,8 +48,9 @@ require (
 	k8s.io/controller-manager v0.31.3
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubelet v0.31.3
-	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
+	k8s.io/utils v0.0.0-20241104163129-6fe5fd82f078
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.2.4
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.1.0
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.1.8
 	sigs.k8s.io/yaml v1.4.0
 )
@@ -67,6 +68,7 @@ require (
 	github.com/Azure/azure-storage-queue-go v0.0.0-20230531184854-c06a8eff66fe // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
+	github.com/Azure/go-autorest/autorest/date v0.3.0 // indirect
 	github.com/Azure/go-autorest/autorest/to v0.4.0 // indirect
 	github.com/Azure/go-autorest/autorest/validation v0.3.1 // indirect
 	github.com/Azure/go-autorest/logger v0.2.1 // indirect
@@ -100,7 +102,6 @@ require (
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/pprof v0.0.0-20241029153458-d1b30febd7db // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0 // indirect
 	github.com/imdario/mergo v0.3.6 // indirect

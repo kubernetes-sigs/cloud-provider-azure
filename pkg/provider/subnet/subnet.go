@@ -42,7 +42,6 @@ func NewRepo(subnetsClient subnetclient.Interface) (Repository, error) {
 
 // CreateOrUpdateSubnet invokes az.SubnetClient.CreateOrUpdate with exponential backoff retry
 func (az *repo) CreateOrUpdate(ctx context.Context, rg string, vnetName string, subnetName string, subnet armnetwork.Subnet) error {
-
 	_, rerr := az.SubnetsClient.CreateOrUpdate(ctx, rg, vnetName, subnetName, subnet)
 	klog.V(10).Infof("SubnetsClient.CreateOrUpdate(%s): end", subnetName)
 	if rerr != nil {
@@ -54,7 +53,6 @@ func (az *repo) CreateOrUpdate(ctx context.Context, rg string, vnetName string, 
 }
 
 func (az *repo) Get(ctx context.Context, rg string, vnetName string, subnetName string) (*armnetwork.Subnet, error) {
-
 	subnet, err := az.SubnetsClient.Get(ctx, rg, vnetName, subnetName, nil)
 	if err != nil {
 		klog.Errorf("SubnetClient.Get(%s) failed: %s", subnetName, err.Error())

@@ -34,7 +34,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/uuid"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
@@ -1134,16 +1133,6 @@ func getAvailabilitySetNameByID(asID string) (string, error) {
 	}
 	vmasName := matches[1]
 	return vmasName, nil
-}
-
-// get a storage account by UUID
-func generateStorageAccountName(accountNamePrefix string) string {
-	uniqueID := strings.Replace(string(uuid.NewUUID()), "-", "", -1)
-	accountName := strings.ToLower(accountNamePrefix + uniqueID)
-	if len(accountName) > consts.StorageAccountNameMaxLength {
-		return accountName[:consts.StorageAccountNameMaxLength-1]
-	}
-	return accountName
 }
 
 // GetNodeNameByIPConfigurationID gets the node name and the availabilitySet name by IP configuration ID.
