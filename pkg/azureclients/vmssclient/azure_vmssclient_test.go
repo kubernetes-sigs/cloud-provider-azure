@@ -40,6 +40,7 @@ import (
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient/mockarmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -103,7 +104,7 @@ func TestGet(t *testing.T) {
 	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
-	expected := compute.VirtualMachineScaleSet{Response: autorest.Response{Response: response}}
+	expected := VirtualMachineScaleSet{VirtualMachineScaleSet: compute.VirtualMachineScaleSet{Response: autorest.Response{Response: response}}}
 	vmssClient := getTestVMSSClient(armClient)
 	result, rerr := vmssClient.Get(context.TODO(), "rg", "vmss1")
 	assert.Equal(t, expected, result)
@@ -121,7 +122,7 @@ func TestGetNeverRateLimiter(t *testing.T) {
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	vmssClient := getTestVMSSClientWithNeverRateLimiter(armClient)
-	expected := compute.VirtualMachineScaleSet{}
+	expected := VirtualMachineScaleSet{}
 	result, rerr := vmssClient.Get(context.TODO(), "rg", "vmss1")
 	assert.Equal(t, expected, result)
 	assert.Equal(t, vmssGetErr, rerr)
@@ -139,7 +140,7 @@ func TestGetRetryAfterReader(t *testing.T) {
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	vmssClient := getTestVMSSClientWithRetryAfterReader(armClient)
-	expected := compute.VirtualMachineScaleSet{}
+	expected := VirtualMachineScaleSet{}
 	result, rerr := vmssClient.Get(context.TODO(), "rg", "vmss1")
 	assert.Equal(t, expected, result)
 	assert.Equal(t, vmssGetErr, rerr)
@@ -158,7 +159,7 @@ func TestGetNotFound(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmssClient := getTestVMSSClient(armClient)
-	expectedVMSS := compute.VirtualMachineScaleSet{Response: autorest.Response{}}
+	expectedVMSS := VirtualMachineScaleSet{VirtualMachineScaleSet: compute.VirtualMachineScaleSet{Response: autorest.Response{}}}
 	result, rerr := vmssClient.Get(context.TODO(), "rg", "vmss1")
 	assert.Equal(t, expectedVMSS, result)
 	assert.NotNil(t, rerr)
@@ -178,7 +179,7 @@ func TestGetInternalError(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmssClient := getTestVMSSClient(armClient)
-	expectedVMSS := compute.VirtualMachineScaleSet{Response: autorest.Response{}}
+	expectedVMSS := VirtualMachineScaleSet{VirtualMachineScaleSet: compute.VirtualMachineScaleSet{Response: autorest.Response{}}}
 	result, rerr := vmssClient.Get(context.TODO(), "rg", "vmss1")
 	assert.Equal(t, expectedVMSS, result)
 	assert.NotNil(t, rerr)
@@ -214,8 +215,8 @@ func TestList(t *testing.T) {
 	defer ctrl.Finish()
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	vmssList := []compute.VirtualMachineScaleSet{getTestVMSS("vmss1"), getTestVMSS("vmss2"), getTestVMSS("vmss3")}
-	responseBody, err := json.Marshal(compute.VirtualMachineScaleSetListResult{Value: &vmssList})
+	vmssList := []VirtualMachineScaleSet{getTestVMSS("vmss1"), getTestVMSS("vmss2"), getTestVMSS("vmss3")}
+	responseBody, err := json.Marshal(VirtualMachineScaleSetListResult{Value: &vmssList})
 	assert.NoError(t, err)
 	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(
 		&http.Response{
@@ -243,7 +244,7 @@ func TestListNotFound(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmssClient := getTestVMSSClient(armClient)
-	expected := []compute.VirtualMachineScaleSet{}
+	expected := []VirtualMachineScaleSet{}
 	result, rerr := vmssClient.List(context.TODO(), "rg")
 	assert.Equal(t, expected, result)
 	assert.NotNil(t, rerr)
@@ -263,7 +264,7 @@ func TestListInternalError(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmssClient := getTestVMSSClient(armClient)
-	expected := []compute.VirtualMachineScaleSet{}
+	expected := []VirtualMachineScaleSet{}
 	result, rerr := vmssClient.List(context.TODO(), "rg")
 	assert.Equal(t, expected, result)
 	assert.NotNil(t, rerr)
@@ -299,8 +300,8 @@ func TestListWithListResponderError(t *testing.T) {
 	defer ctrl.Finish()
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	vmssList := []compute.VirtualMachineScaleSet{getTestVMSS("vmss1"), getTestVMSS("vmss2"), getTestVMSS("vmss3")}
-	responseBody, err := json.Marshal(compute.VirtualMachineScaleSetListResult{Value: &vmssList})
+	vmssList := []VirtualMachineScaleSet{getTestVMSS("vmss1"), getTestVMSS("vmss2"), getTestVMSS("vmss3")}
+	responseBody, err := json.Marshal(VirtualMachineScaleSetListResult{Value: &vmssList})
 	assert.NoError(t, err)
 	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(
 		&http.Response{
@@ -319,10 +320,10 @@ func TestListWithNextPage(t *testing.T) {
 	defer ctrl.Finish()
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	vmssList := []compute.VirtualMachineScaleSet{getTestVMSS("vmss1"), getTestVMSS("vmss2"), getTestVMSS("vmss3")}
-	partialResponse, err := json.Marshal(compute.VirtualMachineScaleSetListResult{Value: &vmssList, NextLink: ptr.To("nextLink")})
+	vmssList := []VirtualMachineScaleSet{getTestVMSS("vmss1"), getTestVMSS("vmss2"), getTestVMSS("vmss3")}
+	partialResponse, err := json.Marshal(VirtualMachineScaleSetListResult{Value: &vmssList, NextLink: ptr.To("nextLink")})
 	assert.NoError(t, err)
-	pagedResponse, err := json.Marshal(compute.VirtualMachineScaleSetListResult{Value: &vmssList})
+	pagedResponse, err := json.Marshal(VirtualMachineScaleSetListResult{Value: &vmssList})
 	assert.NoError(t, err)
 	armClient.EXPECT().PrepareGetRequest(gomock.Any(), gomock.Any()).Return(&http.Request{}, nil)
 	armClient.EXPECT().Send(gomock.Any(), gomock.Any()).Return(
@@ -404,7 +405,7 @@ func TestListNextResultsMultiPages(t *testing.T) {
 		},
 	}
 
-	lastResult := compute.VirtualMachineScaleSetListResult{
+	lastResult := VirtualMachineScaleSetListResult{
 		NextLink: ptr.To("next"),
 	}
 
@@ -460,7 +461,7 @@ func TestListNextResultsMultiPagesWithListResponderError(t *testing.T) {
 		},
 	}
 
-	lastResult := compute.VirtualMachineScaleSetListResult{
+	lastResult := VirtualMachineScaleSetListResult{
 		NextLink: ptr.To("next"),
 	}
 
@@ -482,7 +483,7 @@ func TestListNextResultsMultiPagesWithListResponderError(t *testing.T) {
 			StatusCode: http.StatusNotFound,
 			Body:       io.NopCloser(bytes.NewBuffer([]byte(`{"foo":"bar"}`))),
 		}
-		expected := compute.VirtualMachineScaleSetListResult{}
+		expected := VirtualMachineScaleSetListResult{}
 		expected.Response = autorest.Response{Response: response}
 		vmssClient := getTestVMSSClient(armClient)
 		result, err := vmssClient.listNextResults(context.TODO(), lastResult)
@@ -509,7 +510,7 @@ func TestCreateOrUpdate(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmssClient := getTestVMSSClient(armClient)
-	rerr := vmssClient.CreateOrUpdate(context.TODO(), "rg", "vmss1", vmss)
+	rerr := vmssClient.CreateOrUpdate(context.TODO(), "rg", "vmss1", vmss, "")
 	assert.Nil(t, rerr)
 }
 
@@ -526,7 +527,7 @@ func TestCreateOrUpdateWithCreateOrUpdateResponderError(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmssClient := getTestVMSSClient(armClient)
-	rerr := vmssClient.CreateOrUpdate(context.TODO(), "rg", "vmss1", vmss)
+	rerr := vmssClient.CreateOrUpdate(context.TODO(), "rg", "vmss1", vmss, "")
 	assert.NotNil(t, rerr)
 }
 
@@ -539,7 +540,7 @@ func TestCreateOrUpdateNeverRateLimiter(t *testing.T) {
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	vmssClient := getTestVMSSClientWithNeverRateLimiter(armClient)
 	vmss := getTestVMSS("vmss1")
-	rerr := vmssClient.CreateOrUpdate(context.TODO(), "rg", "vmss1", vmss)
+	rerr := vmssClient.CreateOrUpdate(context.TODO(), "rg", "vmss1", vmss, "")
 	assert.NotNil(t, rerr)
 	assert.Equal(t, vmssCreateOrUpdateErr, rerr)
 }
@@ -553,7 +554,7 @@ func TestCreateOrUpdateRetryAfterReader(t *testing.T) {
 	vmss := getTestVMSS("vmss1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	vmssClient := getTestVMSSClientWithRetryAfterReader(armClient)
-	rerr := vmssClient.CreateOrUpdate(context.TODO(), "rg", "vmss1", vmss)
+	rerr := vmssClient.CreateOrUpdate(context.TODO(), "rg", "vmss1", vmss, "")
 	assert.NotNil(t, rerr)
 	assert.Equal(t, vmssCreateOrUpdateErr, rerr)
 }
@@ -579,7 +580,7 @@ func TestCreateOrUpdateThrottle(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmssClient := getTestVMSSClient(armClient)
-	rerr := vmssClient.CreateOrUpdate(context.TODO(), "rg", "vmss1", vmss)
+	rerr := vmssClient.CreateOrUpdate(context.TODO(), "rg", "vmss1", vmss, "")
 	assert.NotNil(t, rerr)
 	assert.Equal(t, throttleErr, rerr)
 }
@@ -594,12 +595,12 @@ func TestCreateOrUpdateAsync(t *testing.T) {
 
 	armClient.EXPECT().PutResourceAsync(gomock.Any(), ptr.Deref(vmss.ID, ""), vmss).Return(future, nil).Times(1)
 	vmssClient := getTestVMSSClient(armClient)
-	_, rerr := vmssClient.CreateOrUpdateAsync(context.TODO(), "rg", "vmss1", vmss)
+	_, rerr := vmssClient.CreateOrUpdateAsync(context.TODO(), "rg", "vmss1", vmss, "")
 	assert.Nil(t, rerr)
 
 	retryErr := &retry.Error{RawError: fmt.Errorf("error")}
 	armClient.EXPECT().PutResourceAsync(gomock.Any(), ptr.Deref(vmss.ID, ""), vmss).Return(future, retryErr).Times(1)
-	_, rerr = vmssClient.CreateOrUpdateAsync(context.TODO(), "rg", "vmss1", vmss)
+	_, rerr = vmssClient.CreateOrUpdateAsync(context.TODO(), "rg", "vmss1", vmss, "")
 	assert.Equal(t, retryErr, rerr)
 }
 
@@ -615,7 +616,7 @@ func TestCreateOrUpdateAsyncNeverRateLimiter(t *testing.T) {
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	vmssClient := getTestVMSSClientWithNeverRateLimiter(armClient)
 	vmss := getTestVMSS("vmss1")
-	_, rerr := vmssClient.CreateOrUpdateAsync(context.TODO(), "rg", "vmss1", vmss)
+	_, rerr := vmssClient.CreateOrUpdateAsync(context.TODO(), "rg", "vmss1", vmss, "")
 	assert.NotNil(t, rerr)
 	assert.Equal(t, vmssCreateOrUpdateAsyncErr, rerr)
 }
@@ -633,7 +634,7 @@ func TestCreateOrUpdateAsyncRetryAfterReader(t *testing.T) {
 	vmss := getTestVMSS("vmss1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	vmssClient := getTestVMSSClientWithRetryAfterReader(armClient)
-	_, rerr := vmssClient.CreateOrUpdateAsync(context.TODO(), "rg", "vmss1", vmss)
+	_, rerr := vmssClient.CreateOrUpdateAsync(context.TODO(), "rg", "vmss1", vmss, "")
 	assert.NotNil(t, rerr)
 	assert.Equal(t, vmssCreateOrUpdateAsyncErr, rerr)
 }
@@ -655,7 +656,7 @@ func TestCreateOrUpdateAsyncThrottle(t *testing.T) {
 	armClient.EXPECT().PutResourceAsync(gomock.Any(), ptr.Deref(vmss.ID, ""), vmss).Return(future, throttleErr).Times(1)
 
 	vmssClient := getTestVMSSClient(armClient)
-	_, rerr := vmssClient.CreateOrUpdateAsync(context.TODO(), "rg", "vmss1", vmss)
+	_, rerr := vmssClient.CreateOrUpdateAsync(context.TODO(), "rg", "vmss1", vmss, "")
 	assert.NotNil(t, rerr)
 	assert.Equal(t, throttleErr, rerr)
 }
@@ -834,14 +835,16 @@ func TestDeleteInstancesAsync(t *testing.T) {
 	assert.Equal(t, retryErr, rerr)
 }
 
-func getTestVMSS(name string) compute.VirtualMachineScaleSet {
-	return compute.VirtualMachineScaleSet{
-		ID:       ptr.To("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss1"),
-		Name:     ptr.To(name),
-		Location: ptr.To("eastus"),
-		Sku: &compute.Sku{
-			Name:     ptr.To("Standard"),
-			Capacity: ptr.To(int64(3)),
+func getTestVMSS(name string) VirtualMachineScaleSet {
+	return VirtualMachineScaleSet{
+		VirtualMachineScaleSet: compute.VirtualMachineScaleSet{
+			ID:       ptr.To("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss1"),
+			Name:     ptr.To(name),
+			Location: ptr.To("eastus"),
+			Sku: &compute.Sku{
+				Name:     ptr.To("Standard"),
+				Capacity: ptr.To(int64(3)),
+			},
 		},
 	}
 }
@@ -882,4 +885,131 @@ func getTestVMSSClientWithRetryAfterReader(armClient armclient.Interface) *Clien
 
 func getFutureTime() time.Time {
 	return time.Unix(3000000000, 0)
+}
+
+func getFakeVmssVM() VirtualMachineScaleSet {
+	testLBBackendpoolID := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"
+	virtualMachineScaleSetNetworkConfiguration := compute.VirtualMachineScaleSetNetworkConfiguration{
+		VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
+			IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
+				{
+					VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+						LoadBalancerBackendAddressPools: &[]compute.SubResource{{ID: ptr.To(testLBBackendpoolID)}},
+						Primary:                         ptr.To(true),
+					},
+				},
+			},
+		},
+	}
+	vmssVM := VirtualMachineScaleSet{
+		VirtualMachineScaleSet: compute.VirtualMachineScaleSet{
+			Location: ptr.To("eastus"),
+			VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
+				VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
+					NetworkProfile: &compute.VirtualMachineScaleSetNetworkProfile{
+						NetworkInterfaceConfigurations: &[]compute.VirtualMachineScaleSetNetworkConfiguration{
+							virtualMachineScaleSetNetworkConfiguration,
+						},
+					},
+				},
+				OrchestrationMode: compute.Flexible,
+			},
+			Tags: map[string]*string{
+				consts.VMSetCIDRIPV4TagKey: ptr.To("24"),
+				consts.VMSetCIDRIPV6TagKey: ptr.To("64"),
+			},
+		},
+		Etag: ptr.To("\"120\""),
+	}
+	return vmssVM
+}
+
+func TestMarshal(t *testing.T) {
+	fakeVmss := getFakeVmssVM()
+	fakeVmssWithoutEtag := getFakeVmssVM()
+	fakeVmssWithoutEtag.Etag = nil
+	fakeVmssWithoutCompueVMSS := getFakeVmssVM()
+	fakeVmssWithoutCompueVMSS.VirtualMachineScaleSet = compute.VirtualMachineScaleSet{}
+	testcases := []struct {
+		name       string
+		vmss       VirtualMachineScaleSet
+		expectJson string
+	}{
+
+		{
+			name:       "should return empty json when vmss is empty",
+			vmss:       VirtualMachineScaleSet{},
+			expectJson: "{}",
+		},
+		{
+			name:       "should return only VirtualMachineScaleSet when etag is empty",
+			vmss:       fakeVmssWithoutEtag,
+			expectJson: `{"location":"eastus","properties":{"orchestrationMode":"Flexible","virtualMachineProfile":{"networkProfile":{"networkInterfaceConfigurations":[{"properties":{"ipConfigurations":[{"properties":{"primary":true,"loadBalancerBackendAddressPools":[{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"}]}}]}}]}}},"tags":{"kubernetesNodeCIDRMaskIPV4":"24","kubernetesNodeCIDRMaskIPV6":"64"}}`,
+		},
+		{
+			name:       "should return only etag json when vmss is empty",
+			vmss:       fakeVmssWithoutCompueVMSS,
+			expectJson: `{"etag":"\"120\""}`,
+		},
+		{
+			name:       "should return full json when both VirtualMachineScaleSet and etag are set",
+			vmss:       fakeVmss,
+			expectJson: `{"location":"eastus","properties":{"orchestrationMode":"Flexible","virtualMachineProfile":{"networkProfile":{"networkInterfaceConfigurations":[{"properties":{"ipConfigurations":[{"properties":{"primary":true,"loadBalancerBackendAddressPools":[{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"}]}}]}}]}}},"tags":{"kubernetesNodeCIDRMaskIPV4":"24","kubernetesNodeCIDRMaskIPV6":"64"},"etag":"\"120\""}`,
+		},
+	}
+
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
+			actualJson, err := json.Marshal(tt.vmss)
+			fmt.Println(string(actualJson))
+			assert.Nil(t, err)
+			assert.Equal(t, string(actualJson), tt.expectJson)
+		})
+	}
+}
+
+func TestUnMarshal(t *testing.T) {
+	fakeVmss := getFakeVmssVM()
+	fakeVmssWithoutEtag := getFakeVmssVM()
+	fakeVmssWithoutEtag.Etag = nil
+	fakeVmssWithoutCompueVMSS := getFakeVmssVM()
+	fakeVmssWithoutCompueVMSS.VirtualMachineScaleSet = compute.VirtualMachineScaleSet{}
+	testcases := []struct {
+		name         string
+		expectedVmss VirtualMachineScaleSet
+		inputJson    string
+	}{
+		{
+			name:         "should return empty json when vmss is empty",
+			expectedVmss: VirtualMachineScaleSet{},
+			inputJson:    "{}",
+		},
+
+		{
+			name:         "should return only compute.VirtualMachineScaleSetVM when etag is empty",
+			expectedVmss: fakeVmssWithoutEtag,
+			inputJson:    `{"location":"eastus","properties":{"orchestrationMode":"Flexible","virtualMachineProfile":{"networkProfile":{"networkInterfaceConfigurations":[{"properties":{"ipConfigurations":[{"properties":{"primary":true,"loadBalancerBackendAddressPools":[{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"}]}}]}}]}}},"tags":{"kubernetesNodeCIDRMaskIPV4":"24","kubernetesNodeCIDRMaskIPV6":"64"}}`,
+		},
+
+		{
+			name:         "should return only etag json when vmss is empty",
+			expectedVmss: fakeVmssWithoutCompueVMSS,
+			inputJson:    `{"etag":"\"120\""}`,
+		},
+
+		{
+			name:         "should return full json when both VirtualMachineScaleSetVM and etag are set",
+			expectedVmss: fakeVmss,
+			inputJson:    `{"location":"eastus","properties":{"orchestrationMode":"Flexible","virtualMachineProfile":{"networkProfile":{"networkInterfaceConfigurations":[{"properties":{"ipConfigurations":[{"properties":{"primary":true,"loadBalancerBackendAddressPools":[{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"}]}}]}}]}}},"tags":{"kubernetesNodeCIDRMaskIPV4":"24","kubernetesNodeCIDRMaskIPV6":"64"},"etag":"\"120\""}`,
+		},
+	}
+
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
+			var actualVmss VirtualMachineScaleSet
+			err := json.Unmarshal([]byte(tt.inputJson), &actualVmss)
+			assert.Nil(t, err)
+			assert.Equal(t, actualVmss, tt.expectedVmss)
+		})
+	}
 }

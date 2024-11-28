@@ -39,6 +39,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
@@ -859,7 +860,7 @@ func (as *availabilitySet) getPrimaryInterfaceWithVMSet(ctx context.Context, nod
 
 // EnsureHostInPool ensures the given VM's Primary NIC's Primary IP Configuration is
 // participating in the specified LoadBalancer Backend Pool.
-func (as *availabilitySet) EnsureHostInPool(ctx context.Context, service *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetName string) (string, string, string, *compute.VirtualMachineScaleSetVM, error) {
+func (as *availabilitySet) EnsureHostInPool(ctx context.Context, service *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetName string) (string, string, string, *vmssvmclient.VirtualMachineScaleSetVM, error) {
 	vmName := mapNodeNameToVMName(nodeName)
 	serviceName := getServiceName(service)
 	nic, _, err := as.getPrimaryInterfaceWithVMSet(ctx, vmName, vmSetName)

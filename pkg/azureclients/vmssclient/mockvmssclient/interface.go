@@ -34,6 +34,7 @@ import (
 	compute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	azure "github.com/Azure/go-autorest/autorest/azure"
 	gomock "go.uber.org/mock/gomock"
+	vmssclient "sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient"
 	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -61,32 +62,32 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 }
 
 // CreateOrUpdate mocks base method.
-func (m *MockInterface) CreateOrUpdate(ctx context.Context, resourceGroupName, VMScaleSetName string, parameters compute.VirtualMachineScaleSet) *retry.Error {
+func (m *MockInterface) CreateOrUpdate(ctx context.Context, resourceGroupName, VMScaleSetName string, parameters vmssclient.VirtualMachineScaleSet, etag string) *retry.Error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateOrUpdate", ctx, resourceGroupName, VMScaleSetName, parameters)
+	ret := m.ctrl.Call(m, "CreateOrUpdate", ctx, resourceGroupName, VMScaleSetName, parameters, etag)
 	ret0, _ := ret[0].(*retry.Error)
 	return ret0
 }
 
 // CreateOrUpdate indicates an expected call of CreateOrUpdate.
-func (mr *MockInterfaceMockRecorder) CreateOrUpdate(ctx, resourceGroupName, VMScaleSetName, parameters any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) CreateOrUpdate(ctx, resourceGroupName, VMScaleSetName, parameters, etag any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdate", reflect.TypeOf((*MockInterface)(nil).CreateOrUpdate), ctx, resourceGroupName, VMScaleSetName, parameters)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdate", reflect.TypeOf((*MockInterface)(nil).CreateOrUpdate), ctx, resourceGroupName, VMScaleSetName, parameters, etag)
 }
 
 // CreateOrUpdateAsync mocks base method.
-func (m *MockInterface) CreateOrUpdateAsync(ctx context.Context, resourceGroupName, VMScaleSetName string, parameters compute.VirtualMachineScaleSet) (*azure.Future, *retry.Error) {
+func (m *MockInterface) CreateOrUpdateAsync(ctx context.Context, resourceGroupName, VMScaleSetName string, parameters vmssclient.VirtualMachineScaleSet, etag string) (*azure.Future, *retry.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateOrUpdateAsync", ctx, resourceGroupName, VMScaleSetName, parameters)
+	ret := m.ctrl.Call(m, "CreateOrUpdateAsync", ctx, resourceGroupName, VMScaleSetName, parameters, etag)
 	ret0, _ := ret[0].(*azure.Future)
 	ret1, _ := ret[1].(*retry.Error)
 	return ret0, ret1
 }
 
 // CreateOrUpdateAsync indicates an expected call of CreateOrUpdateAsync.
-func (mr *MockInterfaceMockRecorder) CreateOrUpdateAsync(ctx, resourceGroupName, VMScaleSetName, parameters any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) CreateOrUpdateAsync(ctx, resourceGroupName, VMScaleSetName, parameters, etag any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdateAsync", reflect.TypeOf((*MockInterface)(nil).CreateOrUpdateAsync), ctx, resourceGroupName, VMScaleSetName, parameters)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdateAsync", reflect.TypeOf((*MockInterface)(nil).CreateOrUpdateAsync), ctx, resourceGroupName, VMScaleSetName, parameters, etag)
 }
 
 // DeallocateInstancesAsync mocks base method.
@@ -134,10 +135,10 @@ func (mr *MockInterfaceMockRecorder) DeleteInstancesAsync(ctx, resourceGroupName
 }
 
 // Get mocks base method.
-func (m *MockInterface) Get(ctx context.Context, resourceGroupName, VMScaleSetName string) (compute.VirtualMachineScaleSet, *retry.Error) {
+func (m *MockInterface) Get(ctx context.Context, resourceGroupName, VMScaleSetName string) (vmssclient.VirtualMachineScaleSet, *retry.Error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", ctx, resourceGroupName, VMScaleSetName)
-	ret0, _ := ret[0].(compute.VirtualMachineScaleSet)
+	ret0, _ := ret[0].(vmssclient.VirtualMachineScaleSet)
 	ret1, _ := ret[1].(*retry.Error)
 	return ret0, ret1
 }
@@ -149,10 +150,10 @@ func (mr *MockInterfaceMockRecorder) Get(ctx, resourceGroupName, VMScaleSetName 
 }
 
 // List mocks base method.
-func (m *MockInterface) List(ctx context.Context, resourceGroupName string) ([]compute.VirtualMachineScaleSet, *retry.Error) {
+func (m *MockInterface) List(ctx context.Context, resourceGroupName string) ([]vmssclient.VirtualMachineScaleSet, *retry.Error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "List", ctx, resourceGroupName)
-	ret0, _ := ret[0].([]compute.VirtualMachineScaleSet)
+	ret0, _ := ret[0].([]vmssclient.VirtualMachineScaleSet)
 	ret1, _ := ret[1].(*retry.Error)
 	return ret0, ret1
 }

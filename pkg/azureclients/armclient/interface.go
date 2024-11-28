@@ -71,6 +71,9 @@ type Interface interface {
 	// PutResourcesInBatches is similar with PutResources, but it sends sync request concurrently in batches.
 	PutResourcesInBatches(ctx context.Context, resources map[string]interface{}, batchSize int) map[string]*PutResourcesResponse
 
+	// PutResourcesInBatchesWithEtag is similar with PutResources, but it sends sync request concurrently in batches with Etag header when Etag field is not empty.
+	PutResourcesInBatchesWithEtag(ctx context.Context, resources map[string]interface{}, batchSize int) map[string]*PutResourcesResponse
+
 	// PatchResource patches a resource by resource ID
 	PatchResource(ctx context.Context, resourceID string, parameters interface{}, decorators ...autorest.PrepareDecorator) (*http.Response, *retry.Error)
 

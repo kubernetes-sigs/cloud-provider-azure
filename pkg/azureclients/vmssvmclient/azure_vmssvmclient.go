@@ -92,20 +92,20 @@ func New(config *azclients.ClientConfig) *Client {
 }
 
 // Get gets a VirtualMachineScaleSetVM.
-func (c *Client) Get(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, expand compute.InstanceViewTypes) (compute.VirtualMachineScaleSetVM, *retry.Error) {
+func (c *Client) Get(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, expand compute.InstanceViewTypes) (VirtualMachineScaleSetVM, *retry.Error) {
 	mc := metrics.NewMetricContext("vmssvm", "get", resourceGroupName, c.subscriptionID, "")
 
 	// Report errors if the client is rate limited.
 	if !c.rateLimiterReader.TryAccept() {
 		mc.RateLimitedCount()
-		return compute.VirtualMachineScaleSetVM{}, retry.GetRateLimitError(false, "VMSSVMGet")
+		return VirtualMachineScaleSetVM{}, retry.GetRateLimitError(false, "VMSSVMGet")
 	}
 
 	// Report errors if the client is throttled.
 	if c.RetryAfterReader.After(time.Now()) {
 		mc.ThrottledCount()
 		rerr := retry.GetThrottlingError("VMSSVMGet", "client throttled", c.RetryAfterReader)
-		return compute.VirtualMachineScaleSetVM{}, rerr
+		return VirtualMachineScaleSetVM{}, rerr
 	}
 
 	result, rerr := c.getVMSSVM(ctx, resourceGroupName, VMScaleSetName, instanceID, expand)
@@ -123,7 +123,7 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, VMScaleSetNa
 }
 
 // getVMSSVM gets a VirtualMachineScaleSetVM.
-func (c *Client) getVMSSVM(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, expand compute.InstanceViewTypes) (compute.VirtualMachineScaleSetVM, *retry.Error) {
+func (c *Client) getVMSSVM(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, expand compute.InstanceViewTypes) (VirtualMachineScaleSetVM, *retry.Error) {
 	resourceID := armclient.GetChildResourceID(
 		c.subscriptionID,
 		resourceGroupName,
@@ -132,7 +132,7 @@ func (c *Client) getVMSSVM(ctx context.Context, resourceGroupName string, VMScal
 		vmResourceType,
 		instanceID,
 	)
-	result := compute.VirtualMachineScaleSetVM{}
+	result := VirtualMachineScaleSetVM{}
 
 	response, rerr := c.armClient.GetResourceWithExpandQuery(ctx, resourceID, string(expand))
 	defer c.armClient.CloseResponse(ctx, response)
@@ -155,7 +155,7 @@ func (c *Client) getVMSSVM(ctx context.Context, resourceGroupName string, VMScal
 }
 
 // List gets a list of VirtualMachineScaleSetVMs in the virtualMachineScaleSet.
-func (c *Client) List(ctx context.Context, resourceGroupName string, virtualMachineScaleSetName string, expand string) ([]compute.VirtualMachineScaleSetVM, *retry.Error) {
+func (c *Client) List(ctx context.Context, resourceGroupName string, virtualMachineScaleSetName string, expand string) ([]VirtualMachineScaleSetVM, *retry.Error) {
 	mc := metrics.NewMetricContext("vmssvm", "list", resourceGroupName, c.subscriptionID, "")
 
 	// Report errors if the client is rate limited.
@@ -186,7 +186,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string, virtualMach
 }
 
 // listVMSSVM gets a list of VirtualMachineScaleSetVMs in the virtualMachineScaleSet.
-func (c *Client) listVMSSVM(ctx context.Context, resourceGroupName string, virtualMachineScaleSetName string, expand string) ([]compute.VirtualMachineScaleSetVM, *retry.Error) {
+func (c *Client) listVMSSVM(ctx context.Context, resourceGroupName string, virtualMachineScaleSetName string, expand string) ([]VirtualMachineScaleSetVM, *retry.Error) {
 	resourceID := armclient.GetChildResourcesListID(
 		c.subscriptionID,
 		resourceGroupName,
@@ -195,7 +195,7 @@ func (c *Client) listVMSSVM(ctx context.Context, resourceGroupName string, virtu
 		vmResourceType,
 	)
 
-	result := make([]compute.VirtualMachineScaleSetVM, 0)
+	result := make([]VirtualMachineScaleSetVM, 0)
 	page := &VirtualMachineScaleSetVMListResultPage{}
 	page.fn = c.listNextResults
 
@@ -231,7 +231,7 @@ func (c *Client) listVMSSVM(ctx context.Context, resourceGroupName string, virtu
 }
 
 // Update updates a VirtualMachineScaleSetVM.
-func (c *Client) Update(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters compute.VirtualMachineScaleSetVM, source string) (*compute.VirtualMachineScaleSetVM, *retry.Error) {
+func (c *Client) Update(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters VirtualMachineScaleSetVM, source, etag string) (*VirtualMachineScaleSetVM, *retry.Error) {
 	mc := metrics.NewMetricContext("vmssvm", "update", resourceGroupName, c.subscriptionID, source)
 
 	// Report errors if the client is rate limited.
@@ -247,7 +247,7 @@ func (c *Client) Update(ctx context.Context, resourceGroupName string, VMScaleSe
 		return nil, rerr
 	}
 
-	result, rerr := c.updateVMSSVM(ctx, resourceGroupName, VMScaleSetName, instanceID, parameters)
+	result, rerr := c.updateVMSSVM(ctx, resourceGroupName, VMScaleSetName, instanceID, parameters, etag)
 	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
@@ -260,7 +260,7 @@ func (c *Client) Update(ctx context.Context, resourceGroupName string, VMScaleSe
 }
 
 // UpdateAsync updates a VirtualMachineScaleSetVM asynchronously
-func (c *Client) UpdateAsync(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters compute.VirtualMachineScaleSetVM, source string) (*azure.Future, *retry.Error) {
+func (c *Client) UpdateAsync(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters VirtualMachineScaleSetVM, source string, etag string) (*azure.Future, *retry.Error) {
 	mc := metrics.NewMetricContext("vmssvm", "updateasync", resourceGroupName, c.subscriptionID, source)
 
 	// Report errors if the client is rate limited.
@@ -285,7 +285,12 @@ func (c *Client) UpdateAsync(ctx context.Context, resourceGroupName string, VMSc
 		instanceID,
 	)
 
-	future, rerr := c.armClient.PutResourceAsync(ctx, resourceID, parameters)
+	decorators := []autorest.PrepareDecorator{}
+	if etag != "" {
+		decorators = append(decorators, autorest.WithHeader("If-Match", autorest.String(etag)))
+	}
+
+	future, rerr := c.armClient.PutResourceAsync(ctx, resourceID, parameters, decorators...)
 	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
@@ -300,7 +305,7 @@ func (c *Client) UpdateAsync(ctx context.Context, resourceGroupName string, VMSc
 }
 
 // WaitForUpdateResult waits for the response of the update request
-func (c *Client) WaitForUpdateResult(ctx context.Context, future *azure.Future, resourceGroupName, source string) (*compute.VirtualMachineScaleSetVM, *retry.Error) {
+func (c *Client) WaitForUpdateResult(ctx context.Context, future *azure.Future, resourceGroupName, source string) (*VirtualMachineScaleSetVM, *retry.Error) {
 	mc := metrics.NewMetricContext("vmss", "wait_for_update_result", resourceGroupName, c.subscriptionID, source)
 	response, err := c.armClient.WaitForAsyncOperationResult(ctx, future, "VMSSWaitForUpdateResult")
 	mc.Observe(retry.NewErrorOrNil(false, err))
@@ -324,13 +329,13 @@ func (c *Client) WaitForUpdateResult(ctx context.Context, future *azure.Future, 
 		return result, rerr
 	}
 
-	result := &compute.VirtualMachineScaleSetVM{}
+	result := &VirtualMachineScaleSetVM{}
 	result.Response = autorest.Response{Response: response}
 	return result, nil
 }
 
 // updateVMSSVM updates a VirtualMachineScaleSetVM.
-func (c *Client) updateVMSSVM(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters compute.VirtualMachineScaleSetVM) (*compute.VirtualMachineScaleSetVM, *retry.Error) {
+func (c *Client) updateVMSSVM(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters VirtualMachineScaleSetVM, etag string) (*VirtualMachineScaleSetVM, *retry.Error) {
 	resourceID := armclient.GetChildResourceID(
 		c.subscriptionID,
 		resourceGroupName,
@@ -340,7 +345,12 @@ func (c *Client) updateVMSSVM(ctx context.Context, resourceGroupName string, VMS
 		instanceID,
 	)
 
-	response, rerr := c.armClient.PutResource(ctx, resourceID, parameters)
+	decorators := []autorest.PrepareDecorator{}
+	if etag != "" {
+		decorators = append(decorators, autorest.WithHeader("If-Match", autorest.String(etag)))
+	}
+
+	response, rerr := c.armClient.PutResource(ctx, resourceID, parameters, decorators...)
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vmssvm.put.request", resourceID, rerr.Error())
@@ -355,13 +365,13 @@ func (c *Client) updateVMSSVM(ctx context.Context, resourceGroupName string, VMS
 		return result, rerr
 	}
 
-	result := &compute.VirtualMachineScaleSetVM{}
+	result := &VirtualMachineScaleSetVM{}
 	result.Response = autorest.Response{Response: response}
 	return result, nil
 }
 
-func (c *Client) updateResponder(resp *http.Response) (*compute.VirtualMachineScaleSetVM, *retry.Error) {
-	result := &compute.VirtualMachineScaleSetVM{}
+func (c *Client) updateResponder(resp *http.Response) (*VirtualMachineScaleSetVM, *retry.Error) {
+	result := &VirtualMachineScaleSetVM{}
 	err := autorest.Respond(
 		resp,
 		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusCreated),
@@ -370,7 +380,7 @@ func (c *Client) updateResponder(resp *http.Response) (*compute.VirtualMachineSc
 	return result, retry.GetError(resp, err)
 }
 
-func (c *Client) listResponder(resp *http.Response) (result compute.VirtualMachineScaleSetVMListResult, err error) {
+func (c *Client) listResponder(resp *http.Response) (result VirtualMachineScaleSetVMListResult, err error) {
 	err = autorest.Respond(
 		resp,
 		autorest.ByIgnoring(),
@@ -382,7 +392,7 @@ func (c *Client) listResponder(resp *http.Response) (result compute.VirtualMachi
 
 // virtualMachineScaleSetListResultPreparer prepares a request to retrieve the next set of results.
 // It returns nil if no more results exist.
-func (c *Client) virtualMachineScaleSetVMListResultPreparer(ctx context.Context, vmssvmlr compute.VirtualMachineScaleSetVMListResult) (*http.Request, error) {
+func (c *Client) virtualMachineScaleSetVMListResultPreparer(ctx context.Context, vmssvmlr VirtualMachineScaleSetVMListResult) (*http.Request, error) {
 	if vmssvmlr.NextLink == nil || len(ptr.Deref(vmssvmlr.NextLink, "")) < 1 {
 		return nil, nil
 	}
@@ -394,7 +404,7 @@ func (c *Client) virtualMachineScaleSetVMListResultPreparer(ctx context.Context,
 }
 
 // listNextResults retrieves the next set of results, if any.
-func (c *Client) listNextResults(ctx context.Context, lastResults compute.VirtualMachineScaleSetVMListResult) (result compute.VirtualMachineScaleSetVMListResult, err error) {
+func (c *Client) listNextResults(ctx context.Context, lastResults VirtualMachineScaleSetVMListResult) (result VirtualMachineScaleSetVMListResult, err error) {
 	req, err := c.virtualMachineScaleSetVMListResultPreparer(ctx, lastResults)
 	if err != nil {
 		return result, autorest.NewErrorWithError(err, "vmssvmclient", "listNextResults", nil, "Failure preparing next results request")
@@ -420,8 +430,8 @@ func (c *Client) listNextResults(ctx context.Context, lastResults compute.Virtua
 
 // VirtualMachineScaleSetVMListResultPage contains a page of VirtualMachineScaleSetVM values.
 type VirtualMachineScaleSetVMListResultPage struct {
-	fn      func(context.Context, compute.VirtualMachineScaleSetVMListResult) (compute.VirtualMachineScaleSetVMListResult, error)
-	vmssvlr compute.VirtualMachineScaleSetVMListResult
+	fn      func(context.Context, VirtualMachineScaleSetVMListResult) (VirtualMachineScaleSetVMListResult, error)
+	vmssvlr VirtualMachineScaleSetVMListResult
 }
 
 // NextWithContext advances to the next page of values.  If there was an error making
@@ -448,12 +458,12 @@ func (page VirtualMachineScaleSetVMListResultPage) NotDone() bool {
 }
 
 // Response returns the raw server response from the last page request.
-func (page VirtualMachineScaleSetVMListResultPage) Response() compute.VirtualMachineScaleSetVMListResult {
+func (page VirtualMachineScaleSetVMListResultPage) Response() VirtualMachineScaleSetVMListResult {
 	return page.vmssvlr
 }
 
 // Values returns the slice of values for the current page or nil if there are no values.
-func (page VirtualMachineScaleSetVMListResultPage) Values() []compute.VirtualMachineScaleSetVM {
+func (page VirtualMachineScaleSetVMListResultPage) Values() []VirtualMachineScaleSetVM {
 	if page.vmssvlr.IsEmpty() {
 		return nil
 	}
@@ -463,7 +473,7 @@ func (page VirtualMachineScaleSetVMListResultPage) Values() []compute.VirtualMac
 // UpdateVMs updates a list of VirtualMachineScaleSetVM from map[instanceID]compute.VirtualMachineScaleSetVM.
 // If the batch size > 0, it will send sync requests concurrently in batches, or it will send sync requests in sequence.
 // No matter what the batch size is, it will process the async requests concurrently in one single batch.
-func (c *Client) UpdateVMs(ctx context.Context, resourceGroupName string, VMScaleSetName string, instances map[string]compute.VirtualMachineScaleSetVM, source string, batchSize int) *retry.Error {
+func (c *Client) UpdateVMs(ctx context.Context, resourceGroupName string, VMScaleSetName string, instances map[string]VirtualMachineScaleSetVM, source string, batchSize int) *retry.Error {
 	mc := metrics.NewMetricContext("vmssvm", "update_vms", resourceGroupName, c.subscriptionID, source)
 
 	// Report errors if the client is rate limited.
@@ -494,7 +504,7 @@ func (c *Client) UpdateVMs(ctx context.Context, resourceGroupName string, VMScal
 }
 
 // updateVMSSVMs updates a list of VirtualMachineScaleSetVM from map[instanceID]compute.VirtualMachineScaleSetVM.
-func (c *Client) updateVMSSVMs(ctx context.Context, resourceGroupName string, VMScaleSetName string, instances map[string]compute.VirtualMachineScaleSetVM, batchSize int) *retry.Error {
+func (c *Client) updateVMSSVMs(ctx context.Context, resourceGroupName string, VMScaleSetName string, instances map[string]VirtualMachineScaleSetVM, batchSize int) *retry.Error {
 	resources := make(map[string]interface{})
 	for instanceID, parameter := range instances {
 		resourceID := armclient.GetChildResourceID(
@@ -508,14 +518,14 @@ func (c *Client) updateVMSSVMs(ctx context.Context, resourceGroupName string, VM
 		resources[resourceID] = parameter
 	}
 
-	responses := c.armClient.PutResourcesInBatches(ctx, resources, batchSize)
+	responses := c.armClient.PutResourcesInBatchesWithEtag(ctx, resources, batchSize)
 	errors, retryIDs := c.parseResp(ctx, responses, true)
 	if len(retryIDs) > 0 {
 		retryResources := make(map[string]interface{})
 		for _, id := range retryIDs {
 			retryResources[id] = resources[id]
 		}
-		resps := c.armClient.PutResourcesInBatches(ctx, retryResources, batchSize)
+		resps := c.armClient.PutResourcesInBatchesWithEtag(ctx, retryResources, batchSize)
 		errs, _ := c.parseResp(ctx, resps, false)
 		errors = append(errors, errs...)
 	}

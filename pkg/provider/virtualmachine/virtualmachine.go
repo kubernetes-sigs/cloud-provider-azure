@@ -21,6 +21,7 @@ import (
 
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
@@ -51,7 +52,7 @@ func ByVMSS(vmssName string) ManageOption {
 type VirtualMachine struct {
 	Variant Variant
 	vm      *compute.VirtualMachine
-	vmssVM  *compute.VirtualMachineScaleSetVM
+	vmssVM  *vmssvmclient.VirtualMachineScaleSetVM
 
 	Manage   Manage
 	VMSSName string
@@ -66,6 +67,8 @@ type VirtualMachine struct {
 	Type      string
 	Plan      *compute.Plan
 	Resources *[]compute.VirtualMachineExtension
+
+	Etag *string
 
 	// fields of VirtualMachine
 	Identity                 *compute.VirtualMachineIdentity
@@ -102,7 +105,7 @@ func FromVirtualMachine(vm *compute.VirtualMachine, opt ...ManageOption) *Virtua
 	return v
 }
 
-func FromVirtualMachineScaleSetVM(vm *compute.VirtualMachineScaleSetVM, opt ManageOption) *VirtualMachine {
+func FromVirtualMachineScaleSetVM(vm *vmssvmclient.VirtualMachineScaleSetVM, opt ManageOption) *VirtualMachine {
 	v := &VirtualMachine{
 		Variant: VariantVirtualMachineScaleSetVM,
 		vmssVM:  vm,
@@ -115,6 +118,7 @@ func FromVirtualMachineScaleSetVM(vm *compute.VirtualMachineScaleSetVM, opt Mana
 		Zones:     stringSlice(vm.Zones),
 		Plan:      vm.Plan,
 		Resources: vm.Resources,
+		Etag:      vm.Etag,
 
 		SKU:                                vm.Sku,
 		InstanceID:                         ptr.Deref(vm.InstanceID, ""),
@@ -144,7 +148,7 @@ func (vm *VirtualMachine) AsVirtualMachine() *compute.VirtualMachine {
 	return vm.vm
 }
 
-func (vm *VirtualMachine) AsVirtualMachineScaleSetVM() *compute.VirtualMachineScaleSetVM {
+func (vm *VirtualMachine) AsVirtualMachineScaleSetVM() *vmssvmclient.VirtualMachineScaleSetVM {
 	return vm.vmssVM
 }
 
