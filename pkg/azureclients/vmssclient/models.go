@@ -76,13 +76,13 @@ func (vmss *VirtualMachineScaleSet) UnmarshalJSON(data []byte) error {
 // MarshalJSON is the custom marshaler for VirtualMachineScaleSet.
 func (vmss VirtualMachineScaleSet) MarshalJSON() ([]byte, error) {
 	var err error
-	var nestedVirtualMachineScaleSetJson, etagJson []byte
-	if nestedVirtualMachineScaleSetJson, err = vmss.VirtualMachineScaleSet.MarshalJSON(); err != nil {
+	var nestedVirtualMachineScaleSetJSON, etagJSON []byte
+	if nestedVirtualMachineScaleSetJSON, err = vmss.VirtualMachineScaleSet.MarshalJSON(); err != nil {
 		return nil, err
 	}
 
 	if vmss.Etag != nil {
-		if etagJson, err = json.Marshal(map[string]interface{}{
+		if etagJSON, err = json.Marshal(map[string]interface{}{
 			"etag": vmss.Etag,
 		}); err != nil {
 			return nil, err
@@ -90,26 +90,26 @@ func (vmss VirtualMachineScaleSet) MarshalJSON() ([]byte, error) {
 	}
 
 	// empty struct can be Unmarshaled to "{}"
-	nestedVirtualMachineScaleSetJsonEmpty := true
-	if string(nestedVirtualMachineScaleSetJson) != "{}" {
-		nestedVirtualMachineScaleSetJsonEmpty = false
+	nestedVirtualMachineScaleSetJSONEmpty := true
+	if string(nestedVirtualMachineScaleSetJSON) != "{}" {
+		nestedVirtualMachineScaleSetJSONEmpty = false
 	}
-	etagJsonEmpty := true
-	if len(etagJson) != 0 {
-		etagJsonEmpty = false
+	etagJSONEmpty := true
+	if len(etagJSON) != 0 {
+		etagJSONEmpty = false
 	}
 
 	// when both parts not empty, join the two parts with a comma but remove the open brace of nestedVirtualMachineScaleSetVMJson and the close brace of the etagJson
 	// {"location": "eastus"} + {"etag": "\"120\""} will be merged into {"location": "eastus", "etag": "\"120\""}
-	if !nestedVirtualMachineScaleSetJsonEmpty && !etagJsonEmpty {
-		etagJson[0] = ','
-		return append(nestedVirtualMachineScaleSetJson[:len(nestedVirtualMachineScaleSetJson)-1], etagJson...), nil
+	if !nestedVirtualMachineScaleSetJSONEmpty && !etagJSONEmpty {
+		etagJSON[0] = ','
+		return append(nestedVirtualMachineScaleSetJSON[:len(nestedVirtualMachineScaleSetJSON)-1], etagJSON...), nil
 	}
-	if !nestedVirtualMachineScaleSetJsonEmpty {
-		return nestedVirtualMachineScaleSetJson, nil
+	if !nestedVirtualMachineScaleSetJSONEmpty {
+		return nestedVirtualMachineScaleSetJSON, nil
 	}
-	if !etagJsonEmpty {
-		return etagJson, nil
+	if !etagJSONEmpty {
+		return etagJSON, nil
 	}
 	return []byte("{}"), nil
 }

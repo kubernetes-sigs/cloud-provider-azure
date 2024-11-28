@@ -1055,38 +1055,37 @@ func TestMarshal(t *testing.T) {
 	testcases := []struct {
 		name       string
 		vmss       VirtualMachineScaleSetVM
-		expectJson string
+		expectJSON string
 	}{
 
 		{
 			name:       "should return empty json when vmss is empty",
 			vmss:       VirtualMachineScaleSetVM{},
-			expectJson: "{}",
+			expectJSON: "{}",
 		},
 		{
 			name:       "should return only compute.VirtualMachineScaleSetVM when etag is empty",
 			vmss:       fakeVmssVMWithoutEtag,
-			expectJson: `{"location":"eastus","properties":{"hardwareProfile":{"vmSize":"Standard_D2s_v3"},"networkProfile":{"networkInterfaces":[{"id":"/subscriptions/fakesub/resourceGroups/fakerg/providers/Microsoft.Compute/virtualMachineScaleSets/fakevmss/virtualMachines/0/networkInterfaces/fakenic","properties":{"primary":true}}]},"networkProfileConfiguration":{"networkInterfaceConfigurations":[{"id":"fakeNetworkConfiguration","name":"vmss-nic","properties":{"primary":true,"ipConfigurations":[{"name":"ipconfig1","properties":{"primary":true,"privateIPAddressVersion":"IPv4","loadBalancerBackendAddressPools":[{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"}]}}]}}]},"osProfile":{"computerName":"fakevmss000000"}}}`,
+			expectJSON: `{"location":"eastus","properties":{"hardwareProfile":{"vmSize":"Standard_D2s_v3"},"networkProfile":{"networkInterfaces":[{"id":"/subscriptions/fakesub/resourceGroups/fakerg/providers/Microsoft.Compute/virtualMachineScaleSets/fakevmss/virtualMachines/0/networkInterfaces/fakenic","properties":{"primary":true}}]},"networkProfileConfiguration":{"networkInterfaceConfigurations":[{"id":"fakeNetworkConfiguration","name":"vmss-nic","properties":{"primary":true,"ipConfigurations":[{"name":"ipconfig1","properties":{"primary":true,"privateIPAddressVersion":"IPv4","loadBalancerBackendAddressPools":[{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"}]}}]}}]},"osProfile":{"computerName":"fakevmss000000"}}}`,
 		},
 		{
 			name:       "should return only etag json when vmss is empty",
 			vmss:       fakeVmssVMWithoutCompueVMSSVM,
-			expectJson: `{"etag":"\"120\""}`,
+			expectJSON: `{"etag":"\"120\""}`,
 		},
 
 		{
 			name:       "should return full json when both VirtualMachineScaleSetVM and etag are set",
 			vmss:       fakeVmssVM,
-			expectJson: `{"location":"eastus","properties":{"hardwareProfile":{"vmSize":"Standard_D2s_v3"},"networkProfile":{"networkInterfaces":[{"id":"/subscriptions/fakesub/resourceGroups/fakerg/providers/Microsoft.Compute/virtualMachineScaleSets/fakevmss/virtualMachines/0/networkInterfaces/fakenic","properties":{"primary":true}}]},"networkProfileConfiguration":{"networkInterfaceConfigurations":[{"id":"fakeNetworkConfiguration","name":"vmss-nic","properties":{"primary":true,"ipConfigurations":[{"name":"ipconfig1","properties":{"primary":true,"privateIPAddressVersion":"IPv4","loadBalancerBackendAddressPools":[{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"}]}}]}}]},"osProfile":{"computerName":"fakevmss000000"}},"etag":"\"120\""}`,
+			expectJSON: `{"location":"eastus","properties":{"hardwareProfile":{"vmSize":"Standard_D2s_v3"},"networkProfile":{"networkInterfaces":[{"id":"/subscriptions/fakesub/resourceGroups/fakerg/providers/Microsoft.Compute/virtualMachineScaleSets/fakevmss/virtualMachines/0/networkInterfaces/fakenic","properties":{"primary":true}}]},"networkProfileConfiguration":{"networkInterfaceConfigurations":[{"id":"fakeNetworkConfiguration","name":"vmss-nic","properties":{"primary":true,"ipConfigurations":[{"name":"ipconfig1","properties":{"primary":true,"privateIPAddressVersion":"IPv4","loadBalancerBackendAddressPools":[{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"}]}}]}}]},"osProfile":{"computerName":"fakevmss000000"}},"etag":"\"120\""}`,
 		},
 	}
 
 	for _, tt := range testcases {
 		t.Run(tt.name, func(t *testing.T) {
-			actualJson, err := json.Marshal(tt.vmss)
-			fmt.Println(string(actualJson))
+			actualJSON, err := json.Marshal(tt.vmss)
 			assert.Nil(t, err)
-			assert.Equal(t, string(actualJson), tt.expectJson)
+			assert.Equal(t, string(actualJSON), tt.expectJSON)
 		})
 	}
 }
@@ -1100,37 +1099,37 @@ func TestUnMarshal(t *testing.T) {
 	testcases := []struct {
 		name           string
 		expectedVmssVM VirtualMachineScaleSetVM
-		inputJson      string
+		inputJSON      string
 	}{
 		{
 			name:           "should return empty json when vmss is empty",
 			expectedVmssVM: VirtualMachineScaleSetVM{},
-			inputJson:      "{}",
+			inputJSON:      "{}",
 		},
 
 		{
 			name:           "should return only compute.VirtualMachineScaleSetVM when etag is empty",
 			expectedVmssVM: fakeVmssVMWithoutEtag,
-			inputJson:      `{"location":"eastus","properties":{"hardwareProfile":{"vmSize":"Standard_D2s_v3"},"networkProfile":{"networkInterfaces":[{"id":"/subscriptions/fakesub/resourceGroups/fakerg/providers/Microsoft.Compute/virtualMachineScaleSets/fakevmss/virtualMachines/0/networkInterfaces/fakenic","properties":{"primary":true}}]},"networkProfileConfiguration":{"networkInterfaceConfigurations":[{"id":"fakeNetworkConfiguration","name":"vmss-nic","properties":{"primary":true,"ipConfigurations":[{"name":"ipconfig1","properties":{"primary":true,"privateIPAddressVersion":"IPv4","loadBalancerBackendAddressPools":[{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"}]}}]}}]},"osProfile":{"computerName":"fakevmss000000"}}}`,
+			inputJSON:      `{"location":"eastus","properties":{"hardwareProfile":{"vmSize":"Standard_D2s_v3"},"networkProfile":{"networkInterfaces":[{"id":"/subscriptions/fakesub/resourceGroups/fakerg/providers/Microsoft.Compute/virtualMachineScaleSets/fakevmss/virtualMachines/0/networkInterfaces/fakenic","properties":{"primary":true}}]},"networkProfileConfiguration":{"networkInterfaceConfigurations":[{"id":"fakeNetworkConfiguration","name":"vmss-nic","properties":{"primary":true,"ipConfigurations":[{"name":"ipconfig1","properties":{"primary":true,"privateIPAddressVersion":"IPv4","loadBalancerBackendAddressPools":[{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"}]}}]}}]},"osProfile":{"computerName":"fakevmss000000"}}}`,
 		},
 
 		{
 			name:           "should return only etag json when vmss is empty",
 			expectedVmssVM: fakeVmssVMWithoutCompueVMSSVM,
-			inputJson:      `{"etag":"\"120\""}`,
+			inputJSON:      `{"etag":"\"120\""}`,
 		},
 
 		{
 			name:           "should return full json when both VirtualMachineScaleSetVM and etag are set",
 			expectedVmssVM: fakeVmssVM,
-			inputJson:      `{"location":"eastus","properties":{"hardwareProfile":{"vmSize":"Standard_D2s_v3"},"networkProfile":{"networkInterfaces":[{"id":"/subscriptions/fakesub/resourceGroups/fakerg/providers/Microsoft.Compute/virtualMachineScaleSets/fakevmss/virtualMachines/0/networkInterfaces/fakenic","properties":{"primary":true}}]},"networkProfileConfiguration":{"networkInterfaceConfigurations":[{"id":"fakeNetworkConfiguration","name":"vmss-nic","properties":{"primary":true,"ipConfigurations":[{"name":"ipconfig1","properties":{"primary":true,"privateIPAddressVersion":"IPv4","loadBalancerBackendAddressPools":[{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"}]}}]}}]},"osProfile":{"computerName":"fakevmss000000"}},"etag":"\"120\""}`,
+			inputJSON:      `{"location":"eastus","properties":{"hardwareProfile":{"vmSize":"Standard_D2s_v3"},"networkProfile":{"networkInterfaces":[{"id":"/subscriptions/fakesub/resourceGroups/fakerg/providers/Microsoft.Compute/virtualMachineScaleSets/fakevmss/virtualMachines/0/networkInterfaces/fakenic","properties":{"primary":true}}]},"networkProfileConfiguration":{"networkInterfaceConfigurations":[{"id":"fakeNetworkConfiguration","name":"vmss-nic","properties":{"primary":true,"ipConfigurations":[{"name":"ipconfig1","properties":{"primary":true,"privateIPAddressVersion":"IPv4","loadBalancerBackendAddressPools":[{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"}]}}]}}]},"osProfile":{"computerName":"fakevmss000000"}},"etag":"\"120\""}`,
 		},
 	}
 
 	for _, tt := range testcases {
 		t.Run(tt.name, func(t *testing.T) {
 			var actualVmssVM VirtualMachineScaleSetVM
-			err := json.Unmarshal([]byte(tt.inputJson), &actualVmssVM)
+			err := json.Unmarshal([]byte(tt.inputJSON), &actualVmssVM)
 			assert.Nil(t, err)
 			assert.Equal(t, actualVmssVM, tt.expectedVmssVM)
 		})

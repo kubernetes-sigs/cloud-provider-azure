@@ -933,37 +933,36 @@ func TestMarshal(t *testing.T) {
 	testcases := []struct {
 		name       string
 		vmss       VirtualMachineScaleSet
-		expectJson string
+		expectJSON string
 	}{
 
 		{
 			name:       "should return empty json when vmss is empty",
 			vmss:       VirtualMachineScaleSet{},
-			expectJson: "{}",
+			expectJSON: "{}",
 		},
 		{
 			name:       "should return only VirtualMachineScaleSet when etag is empty",
 			vmss:       fakeVmssWithoutEtag,
-			expectJson: `{"location":"eastus","properties":{"orchestrationMode":"Flexible","virtualMachineProfile":{"networkProfile":{"networkInterfaceConfigurations":[{"properties":{"ipConfigurations":[{"properties":{"primary":true,"loadBalancerBackendAddressPools":[{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"}]}}]}}]}}},"tags":{"kubernetesNodeCIDRMaskIPV4":"24","kubernetesNodeCIDRMaskIPV6":"64"}}`,
+			expectJSON: `{"location":"eastus","properties":{"orchestrationMode":"Flexible","virtualMachineProfile":{"networkProfile":{"networkInterfaceConfigurations":[{"properties":{"ipConfigurations":[{"properties":{"primary":true,"loadBalancerBackendAddressPools":[{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"}]}}]}}]}}},"tags":{"kubernetesNodeCIDRMaskIPV4":"24","kubernetesNodeCIDRMaskIPV6":"64"}}`,
 		},
 		{
 			name:       "should return only etag json when vmss is empty",
 			vmss:       fakeVmssWithoutCompueVMSS,
-			expectJson: `{"etag":"\"120\""}`,
+			expectJSON: `{"etag":"\"120\""}`,
 		},
 		{
 			name:       "should return full json when both VirtualMachineScaleSet and etag are set",
 			vmss:       fakeVmss,
-			expectJson: `{"location":"eastus","properties":{"orchestrationMode":"Flexible","virtualMachineProfile":{"networkProfile":{"networkInterfaceConfigurations":[{"properties":{"ipConfigurations":[{"properties":{"primary":true,"loadBalancerBackendAddressPools":[{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"}]}}]}}]}}},"tags":{"kubernetesNodeCIDRMaskIPV4":"24","kubernetesNodeCIDRMaskIPV6":"64"},"etag":"\"120\""}`,
+			expectJSON: `{"location":"eastus","properties":{"orchestrationMode":"Flexible","virtualMachineProfile":{"networkProfile":{"networkInterfaceConfigurations":[{"properties":{"ipConfigurations":[{"properties":{"primary":true,"loadBalancerBackendAddressPools":[{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"}]}}]}}]}}},"tags":{"kubernetesNodeCIDRMaskIPV4":"24","kubernetesNodeCIDRMaskIPV6":"64"},"etag":"\"120\""}`,
 		},
 	}
 
 	for _, tt := range testcases {
 		t.Run(tt.name, func(t *testing.T) {
-			actualJson, err := json.Marshal(tt.vmss)
-			fmt.Println(string(actualJson))
+			actualJSON, err := json.Marshal(tt.vmss)
 			assert.Nil(t, err)
-			assert.Equal(t, string(actualJson), tt.expectJson)
+			assert.Equal(t, string(actualJSON), tt.expectJSON)
 		})
 	}
 }
@@ -977,37 +976,37 @@ func TestUnMarshal(t *testing.T) {
 	testcases := []struct {
 		name         string
 		expectedVmss VirtualMachineScaleSet
-		inputJson    string
+		inputJSON    string
 	}{
 		{
 			name:         "should return empty json when vmss is empty",
 			expectedVmss: VirtualMachineScaleSet{},
-			inputJson:    "{}",
+			inputJSON:    "{}",
 		},
 
 		{
 			name:         "should return only compute.VirtualMachineScaleSetVM when etag is empty",
 			expectedVmss: fakeVmssWithoutEtag,
-			inputJson:    `{"location":"eastus","properties":{"orchestrationMode":"Flexible","virtualMachineProfile":{"networkProfile":{"networkInterfaceConfigurations":[{"properties":{"ipConfigurations":[{"properties":{"primary":true,"loadBalancerBackendAddressPools":[{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"}]}}]}}]}}},"tags":{"kubernetesNodeCIDRMaskIPV4":"24","kubernetesNodeCIDRMaskIPV6":"64"}}`,
+			inputJSON:    `{"location":"eastus","properties":{"orchestrationMode":"Flexible","virtualMachineProfile":{"networkProfile":{"networkInterfaceConfigurations":[{"properties":{"ipConfigurations":[{"properties":{"primary":true,"loadBalancerBackendAddressPools":[{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"}]}}]}}]}}},"tags":{"kubernetesNodeCIDRMaskIPV4":"24","kubernetesNodeCIDRMaskIPV6":"64"}}`,
 		},
 
 		{
 			name:         "should return only etag json when vmss is empty",
 			expectedVmss: fakeVmssWithoutCompueVMSS,
-			inputJson:    `{"etag":"\"120\""}`,
+			inputJSON:    `{"etag":"\"120\""}`,
 		},
 
 		{
 			name:         "should return full json when both VirtualMachineScaleSetVM and etag are set",
 			expectedVmss: fakeVmss,
-			inputJson:    `{"location":"eastus","properties":{"orchestrationMode":"Flexible","virtualMachineProfile":{"networkProfile":{"networkInterfaceConfigurations":[{"properties":{"ipConfigurations":[{"properties":{"primary":true,"loadBalancerBackendAddressPools":[{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"}]}}]}}]}}},"tags":{"kubernetesNodeCIDRMaskIPV4":"24","kubernetesNodeCIDRMaskIPV6":"64"},"etag":"\"120\""}`,
+			inputJSON:    `{"location":"eastus","properties":{"orchestrationMode":"Flexible","virtualMachineProfile":{"networkProfile":{"networkInterfaceConfigurations":[{"properties":{"ipConfigurations":[{"properties":{"primary":true,"loadBalancerBackendAddressPools":[{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"}]}}]}}]}}},"tags":{"kubernetesNodeCIDRMaskIPV4":"24","kubernetesNodeCIDRMaskIPV6":"64"},"etag":"\"120\""}`,
 		},
 	}
 
 	for _, tt := range testcases {
 		t.Run(tt.name, func(t *testing.T) {
 			var actualVmss VirtualMachineScaleSet
-			err := json.Unmarshal([]byte(tt.inputJson), &actualVmss)
+			err := json.Unmarshal([]byte(tt.inputJSON), &actualVmss)
 			assert.Nil(t, err)
 			assert.Equal(t, actualVmss, tt.expectedVmss)
 		})

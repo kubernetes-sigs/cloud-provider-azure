@@ -1333,7 +1333,7 @@ func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes [
 		rerr := ss.CreateOrUpdateVMSS(ss.ResourceGroup, vmssName, newVMSS)
 		defer func() {
 			// Invalidate the cache since the VMSS would be updated.
-			// See EnsureBackendPoolDeletedFromVMSets for detail explaination.
+			// See EnsureBackendPoolDeletedFromVMSets for detail explanation.
 			_ = ss.DeleteCacheForVMSS(ctx, vmssName)
 		}()
 		if rerr != nil {
