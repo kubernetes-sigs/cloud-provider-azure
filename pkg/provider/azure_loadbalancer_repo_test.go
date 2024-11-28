@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -58,7 +59,7 @@ func TestListManagedLBs(t *testing.T) {
 		existingLBs     []network.LoadBalancer
 		expectedLBs     *[]network.LoadBalancer
 		callTimes       int
-		multiSLBConfigs []MultipleStandardLoadBalancerConfiguration
+		multiSLBConfigs []config.MultipleStandardLoadBalancerConfiguration
 		clientErr       *retry.Error
 		expectedErr     error
 	}{
@@ -94,7 +95,7 @@ func TestListManagedLBs(t *testing.T) {
 				{Name: ptr.To("lb1-internal")},
 				{Name: ptr.To("lb2")},
 			},
-			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
 				{Name: "kubernetes"},
 				{Name: "lb1"},
 			},
@@ -426,6 +427,104 @@ func TestServiceOwnsRuleSharedProbe(t *testing.T) {
 			az := GetTestCloud(ctrl)
 			svc := getTestService("test", v1.ProtocolTCP, nil, false)
 			assert.True(t, az.serviceOwnsRule(&svc, consts.SharedProbeName))
+		})
+	}
+}
+
+func TestIsNICPool(t *testing.T) {
+	tests := []struct {
+		desc     string
+		bp       network.BackendAddressPool
+		expected bool
+	}{
+		{
+			desc: "nil BackendAddressPoolPropertiesFormat",
+			bp: network.BackendAddressPool{
+				Name: ptr.To("pool1"),
+			},
+			expected: false,
+		},
+		{
+			desc: "nil LoadBalancerBackendAddresses",
+			bp: network.BackendAddressPool{
+				Name:                               ptr.To("pool1"),
+				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{},
+			},
+			expected: false,
+		},
+		{
+			desc: "empty LoadBalancerBackendAddresses",
+			bp: network.BackendAddressPool{
+				Name: ptr.To("pool1"),
+				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{},
+				},
+			},
+			expected: false,
+		},
+		{
+			desc: "LoadBalancerBackendAddress with empty IPAddress",
+			bp: network.BackendAddressPool{
+				Name: ptr.To("pool1"),
+				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+						{
+							Name: ptr.To("addr1"),
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: ptr.To(""),
+							},
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			desc: "LoadBalancerBackendAddress with non-empty IPAddress",
+			bp: network.BackendAddressPool{
+				Name: ptr.To("pool1"),
+				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+						{
+							Name: ptr.To("addr1"),
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: ptr.To("10.0.0.1"),
+							},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			desc: "LoadBalancerBackendAddress with both empty and non-empty IPAddress",
+			bp: network.BackendAddressPool{
+				Name: ptr.To("pool1"),
+				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+						{
+							Name: ptr.To("addr1"),
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: ptr.To(""),
+							},
+						},
+						{
+							Name: ptr.To("addr2"),
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: ptr.To("10.0.0.2"),
+							},
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			result := isNICPool(test.bp)
+			assert.Equal(t, test.expected, result)
 		})
 	}
 }

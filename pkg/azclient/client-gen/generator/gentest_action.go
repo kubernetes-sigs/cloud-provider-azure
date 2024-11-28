@@ -19,35 +19,25 @@ package generator
 
 import (
 	"bytes"
-	"fmt"
-	"os"
 	"strings"
 
 	"sigs.k8s.io/controller-tools/pkg/genall"
 	"sigs.k8s.io/controller-tools/pkg/loader"
 )
 
-func generateTest(ctx *genall.GenerationContext, root *loader.Package, typeName string, markerConf ClientGenConfig, headerText string) error {
-	if err := generateTestSuite(ctx, root, typeName, markerConf, headerText); err != nil {
+func (g Generator) generateTest(ctx *genall.GenerationContext, root *loader.Package, typeName string, markerConf ClientGenConfig) error {
+	if err := g.generateTestSuite(ctx, root, typeName, markerConf); err != nil {
 		return err
 	}
 
-	if err := generateTestCase(ctx, root, typeName, markerConf, headerText); err != nil {
+	if err := g.generateTestCase(ctx, root, typeName, markerConf); err != nil {
 		return err
 	}
 
-	if err := generateTestCaseCustom(ctx, root, typeName, markerConf, headerText); err != nil {
-		return err
-	}
-
-	if err := os.MkdirAll(root.Name+"/testdata", 0755); err != nil {
-		return err
-	}
-	fmt.Println("Generated test in " + root.Name)
 	return nil
 }
 
-func generateTestSuite(ctx *genall.GenerationContext, root *loader.Package, _ string, markerConf ClientGenConfig, headerText string) error {
+func (g Generator) generateTestSuite(ctx *genall.GenerationContext, root *loader.Package, _ string, markerConf ClientGenConfig) error {
 	var importList = make(map[string]map[string]struct{})
 
 	for _, verb := range markerConf.Verbs {
@@ -79,10 +69,11 @@ func generateTestSuite(ctx *genall.GenerationContext, root *loader.Package, _ st
 	importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"] = make(map[string]struct{})
 	importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"] = make(map[string]struct{})
 
-	return WriteToFile(ctx, root, root.Name+"_suite_test.go", headerText, importList, &outContent)
+	// return DumpHeaderToWriter(ctx, root, root.Name+"_suite_test.go", headerText, importList, &outContent)
+	return nil
 }
 
-func generateTestCase(ctx *genall.GenerationContext, root *loader.Package, _ string, markerConf ClientGenConfig, headerText string) error {
+func (g Generator) generateTestCase(ctx *genall.GenerationContext, root *loader.Package, _ string, markerConf ClientGenConfig) error {
 	var importList = make(map[string]map[string]struct{})
 	for _, verb := range markerConf.Verbs {
 		if strings.EqualFold(FuncCreateOrUpdate, verb) {
@@ -95,43 +86,22 @@ func generateTestCase(ctx *genall.GenerationContext, root *loader.Package, _ str
 	if len(markerConf.Verbs) > 0 {
 		importList["github.com/onsi/gomega"] = map[string]struct{}{}
 	}
-	var outContent bytes.Buffer
-	if err := TestCaseTemplate.Execute(&outContent, markerConf); err != nil {
-		root.AddError(err)
-	}
-
-	if outContent.Len() <= 0 {
-		return nil
-	}
-
 	importList["context"] = make(map[string]struct{})
 	importList["github.com/onsi/ginkgo/v2"] = map[string]struct{}{}
 	if markerConf.Etag {
 		importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/to"] = make(map[string]struct{})
 	}
-	return WriteToFile(ctx, root, root.Name+"_test.go", headerText, importList, &outContent)
-}
-
-func generateTestCaseCustom(ctx *genall.GenerationContext, root *loader.Package, _ string, markerConf ClientGenConfig, headerText string) error {
-	if _, err := os.Lstat(root.Name + "/custom_test.go"); err == nil || !os.IsNotExist(err) {
-		fmt.Println(root.Name + "/custom_test.go already exists, skipping generation of custom test")
-		return nil
+	file, err := ctx.Open(root, root.Name+"_test.go")
+	if err != nil {
+		return err
 	}
+	defer file.Close()
 
-	var importList = make(map[string]map[string]struct{})
-	aliasMap := make(map[string]struct{})
-	aliasMap[markerConf.PackageAlias] = struct{}{}
-	importList[markerConf.PackageName] = aliasMap
-
-	var outContent bytes.Buffer
-	if err := TestCaseCustomTemplate.Execute(&outContent, markerConf); err != nil {
+	if err := DumpHeaderToWriter(ctx, file, g.HeaderFile, importList, root.Name); err != nil {
+		return err
+	}
+	if err := TestCaseTemplate.Execute(file, markerConf); err != nil {
 		root.AddError(err)
 	}
-
-	if outContent.Len() <= 0 {
-		return nil
-	}
-
-	importList["context"] = make(map[string]struct{})
-	return WriteToFile(ctx, root, "custom_test.go", headerText, importList, &outContent)
+	return nil
 }

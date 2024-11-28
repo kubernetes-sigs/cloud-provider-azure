@@ -49,7 +49,7 @@ import (
 var (
 	errNotInVMSet      = errors.New("vm is not in the vmset")
 	providerIDRE       = regexp.MustCompile(`.*/subscriptions/(?:.*)/Microsoft.Compute/virtualMachines/(.+)$`)
-	backendPoolIDRE    = regexp.MustCompile(`^/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Network/loadBalancers/(.+)/backendAddressPools/(?:.*)`)
+	backendPoolIDRE    = regexp.MustCompile(`^/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Network/loadBalancers/(.+)/backendAddressPools/(.+)`)
 	nicResourceGroupRE = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Network/networkInterfaces/(?:.*)`)
 	nicIDRE            = regexp.MustCompile(`(?i)/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Network/networkInterfaces/(.+)/ipConfigurations/(?:.*)`)
 	vmIDRE             = regexp.MustCompile(`(?i)/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Compute/virtualMachines/(.+)`)
@@ -695,7 +695,7 @@ func (as *availabilitySet) getAgentPoolAvailabilitySets(vms []compute.VirtualMac
 // annotation would be ignored when using one SLB per cluster.
 func (as *availabilitySet) GetVMSetNames(ctx context.Context, service *v1.Service, nodes []*v1.Node) (availabilitySetNames *[]string, err error) {
 	hasMode, isAuto, serviceAvailabilitySetName := as.getServiceLoadBalancerMode(service)
-	if !hasMode || as.useStandardLoadBalancer() {
+	if !hasMode || as.UseStandardLoadBalancer() {
 		// no mode specified in service annotation or use single SLB mode
 		// default to PrimaryAvailabilitySetName
 		availabilitySetNames = &[]string{as.Config.PrimaryAvailabilitySetName}
@@ -826,7 +826,7 @@ func (as *availabilitySet) getPrimaryInterfaceWithVMSet(ctx context.Context, nod
 	//   don't check vmSet for it.
 	// - For multiple standard SKU load balancers, the behavior is similar to the basic LB.
 	needCheck := false
-	if !as.useStandardLoadBalancer() {
+	if !as.UseStandardLoadBalancer() {
 		// need to check the vmSet name when using the basic LB
 		needCheck = true
 	}
@@ -905,7 +905,7 @@ func (as *availabilitySet) EnsureHostInPool(ctx context.Context, service *v1.Ser
 		}
 	}
 	if !foundPool {
-		if as.useStandardLoadBalancer() && len(newBackendPools) > 0 {
+		if as.UseStandardLoadBalancer() && len(newBackendPools) > 0 {
 			// Although standard load balancer supports backends from multiple availability
 			// sets, the same network interface couldn't be added to more than one load balancer of
 			// the same type. Omit those nodes (e.g. masters) so Azure ARM won't complain
@@ -955,7 +955,7 @@ func (as *availabilitySet) EnsureHostsInPool(ctx context.Context, service *v1.Se
 	hostUpdates := make([]func() error, 0, len(nodes))
 	for _, node := range nodes {
 		localNodeName := node.Name
-		if as.useStandardLoadBalancer() && as.excludeMasterNodesFromStandardLB() && isControlPlaneNode(node) {
+		if as.UseStandardLoadBalancer() && as.ExcludeMasterNodesFromStandardLB() && isControlPlaneNode(node) {
 			klog.V(4).Infof("Excluding master node %q from load balancer backendpool %q", localNodeName, backendPoolID)
 			continue
 		}

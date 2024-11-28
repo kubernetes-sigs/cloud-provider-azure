@@ -438,9 +438,12 @@ func getResourceByIPFamily(resource string, isDualStack, isIPv6 bool) string {
 
 // isFIPIPv6 checks if the frontend IP configuration is of IPv6.
 // NOTICE: isFIPIPv6 assumes the FIP is owned by the Service and it is the primary Service.
-func (az *Cloud) isFIPIPv6(service *v1.Service, _ string, fip *network.FrontendIPConfiguration) (bool, error) {
+func (az *Cloud) isFIPIPv6(service *v1.Service, fip *network.FrontendIPConfiguration) (bool, error) {
 	isDualStack := isServiceDualStack(service)
 	if !isDualStack {
+		if len(service.Spec.IPFamilies) == 0 {
+			return false, nil
+		}
 		return service.Spec.IPFamilies[0] == v1.IPv6Protocol, nil
 	}
 	return managedResourceHasIPv6Suffix(ptr.Deref(fip.Name, "")), nil
@@ -455,13 +458,13 @@ func getResourceIDPrefix(id string) string {
 	return id[:idx]
 }
 
-func getLBNameFromBackendPoolID(backendPoolID string) (string, error) {
+func getBackendPoolNameFromBackendPoolID(backendPoolID string) (string, error) {
 	matches := backendPoolIDRE.FindStringSubmatch(backendPoolID)
-	if len(matches) != 2 {
+	if len(matches) != 3 {
 		return "", fmt.Errorf("backendPoolID %q is in wrong format", backendPoolID)
 	}
 
-	return matches[1], nil
+	return matches[2], nil
 }
 
 func countNICsOnBackendPool(backendPool network.BackendAddressPool) int {

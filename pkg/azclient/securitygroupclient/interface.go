@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate;delete;list,resource=SecurityGroup,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6,packageAlias=armnetwork,clientName=SecurityGroupsClient,expand=false,rateLimitKey=securityGroupRateLimit,etag=true
+// +azure:client:verbs=get;createorupdate;delete;list,resource=SecurityGroup,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6,packageAlias=armnetwork,clientName=SecurityGroupsClient,expand=false,rateLimitKey=securityGroupRateLimit,etag=true,azureStackCloudAPIVersion="2018-11-01"
 type Interface interface {
 	utils.GetFunc[armnetwork.SecurityGroup]
 	utils.CreateOrUpdateFunc[armnetwork.SecurityGroup]

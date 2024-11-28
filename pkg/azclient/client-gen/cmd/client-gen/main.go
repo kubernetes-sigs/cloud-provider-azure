@@ -42,7 +42,9 @@ var (
 	// each turns into a command line option,
 	// and has options for output forms.
 	allGenerators = map[string]genall.Generator{
-		"clientgen": generator.Generator{},
+		"clientgen":        generator.Generator{},
+		"mockgen":          generator.MockGenerator{},
+		"clientfactorygen": generator.ClientFactoryGenerator{},
 	}
 	// allOutputRules defines the list of all known output rules, giving
 	// them names for use on the command line.

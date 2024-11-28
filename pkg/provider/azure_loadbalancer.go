@@ -45,6 +45,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	"sigs.k8s.io/cloud-provider-azure/pkg/trace"
@@ -177,11 +178,11 @@ func (az *Cloud) reconcileService(ctx context.Context, clusterName string, servi
 
 	lbName := strings.ToLower(ptr.Deref(lb.Name, ""))
 	key := strings.ToLower(getServiceName(service))
-	if az.useMultipleStandardLoadBalancers() && isLocalService(service) {
+	if az.UseMultipleStandardLoadBalancers() && isLocalService(service) {
 		az.localServiceNameToServiceInfoMap.Store(key, newServiceInfo(getServiceIPFamily(service), lbName))
 		// There are chances that the endpointslice changes after EnsureHostsInPool, so
 		// need to check endpointslice for a second time.
-		if err := az.checkAndApplyLocalServiceBackendPoolUpdates(ctx, *lb, service); err != nil {
+		if err := az.checkAndApplyLocalServiceBackendPoolUpdates(*lb, service); err != nil {
 			logger.Error(err, "Failed to checkAndApplyLocalServiceBackendPoolUpdates")
 			return nil, err
 		}
@@ -488,7 +489,7 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 		return err
 	}
 
-	if az.useMultipleStandardLoadBalancers() && isLocalService(service) {
+	if az.UseMultipleStandardLoadBalancers() && isLocalService(service) {
 		key := strings.ToLower(svcName)
 		az.localServiceNameToServiceInfoMap.Delete(key)
 	}
@@ -519,7 +520,7 @@ func (az *Cloud) shouldChangeLoadBalancer(service *v1.Service, currLBName, clust
 	// The load balancer can be changed in two cases:
 	// 1. Using multiple standard load balancers.
 	// 2. Migrate from multiple standard load balancers to single standard load balancer.
-	if az.useStandardLoadBalancer() {
+	if az.UseStandardLoadBalancer() {
 		if currLBName != expectedLBName {
 			klog.V(2).Infof("shouldChangeLoadBalancer(%s, %s, %s): change the LB to another one %s", service.Name, currLBName, clusterName, expectedLBName)
 			return true
@@ -711,15 +712,12 @@ func (az *Cloud) cleanOrphanedLoadBalancer(ctx context.Context, lb *network.Load
 }
 
 // safeDeleteLoadBalancer deletes the load balancer after decoupling it from the vmSet
-func (az *Cloud) safeDeleteLoadBalancer(ctx context.Context, lb network.LoadBalancer, clusterName, vmSetName string, service *v1.Service) *retry.Error {
-	lbBackendPoolIDs := az.getBackendPoolIDs(clusterName, ptr.Deref(lb.Name, ""))
+func (az *Cloud) safeDeleteLoadBalancer(ctx context.Context, lb network.LoadBalancer, _, vmSetName string, service *v1.Service) *retry.Error {
 	lbBackendPoolIDsToDelete := []string{}
-	v4Enabled, v6Enabled := getIPFamiliesEnabled(service)
-	if v4Enabled {
-		lbBackendPoolIDsToDelete = append(lbBackendPoolIDsToDelete, lbBackendPoolIDs[consts.IPVersionIPv4])
-	}
-	if v6Enabled {
-		lbBackendPoolIDsToDelete = append(lbBackendPoolIDsToDelete, lbBackendPoolIDs[consts.IPVersionIPv6])
+	if lb.LoadBalancerPropertiesFormat != nil && lb.BackendAddressPools != nil {
+		for _, bp := range *lb.BackendAddressPools {
+			lbBackendPoolIDsToDelete = append(lbBackendPoolIDsToDelete, ptr.Deref(bp.ID, ""))
+		}
 	}
 	if _, err := az.VMSet.EnsureBackendPoolDeleted(ctx, service, lbBackendPoolIDsToDelete, vmSetName, lb.BackendAddressPools, true); err != nil {
 		return retry.NewError(false, fmt.Errorf("safeDeleteLoadBalancer: failed to EnsureBackendPoolDeleted: %w", err))
@@ -829,7 +827,7 @@ func (az *Cloud) getServiceLoadBalancer(
 				ptr.Deref(existingLB.Name, ""),
 			)
 
-			if isLocalService(service) && az.useMultipleStandardLoadBalancers() {
+			if isLocalService(service) && az.UseMultipleStandardLoadBalancers() {
 				// No need for the endpoint slice informer to update the backend pool
 				// for the service because the main loop will delete the old backend pool
 				// and create a new one in the new load balancer.
@@ -857,7 +855,7 @@ func (az *Cloud) getServiceLoadBalancer(
 	// Service does not have a load balancer, select one.
 	// Single standard load balancer doesn't need this because
 	// all backends nodes should be added to same LB.
-	if wantLb && !az.useStandardLoadBalancer() {
+	if wantLb && !az.UseStandardLoadBalancer() {
 		// select new load balancer for service
 		selectedLB, exists, err := az.selectLoadBalancer(ctx, clusterName, service, existingLBs, nodes)
 		if err != nil {
@@ -884,7 +882,7 @@ func (az *Cloud) getServiceLoadBalancer(
 			Location:                     &az.Location,
 			LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{},
 		}
-		if az.useStandardLoadBalancer() {
+		if az.UseStandardLoadBalancer() {
 			defaultLB.Sku = &network.LoadBalancerSku{
 				Name: network.LoadBalancerSkuNameStandard,
 			}
@@ -932,7 +930,7 @@ func (az *Cloud) selectLoadBalancer(ctx context.Context, clusterName string, ser
 			// select this LB as this is a new LB and will have minimum rules
 			// create tmp lb struct to hold metadata for the new load-balancer
 			var loadBalancerSKU network.LoadBalancerSkuName
-			if az.useStandardLoadBalancer() {
+			if az.UseStandardLoadBalancer() {
 				loadBalancerSKU = network.LoadBalancerSkuNameStandard
 			} else {
 				loadBalancerSKU = network.LoadBalancerSkuNameBasic
@@ -1206,7 +1204,7 @@ func (az *Cloud) ensurePublicIPExists(ctx context.Context, service *v1.Service, 
 			return nil, err
 		}
 
-		if az.useStandardLoadBalancer() {
+		if az.UseStandardLoadBalancer() {
 			pip.Sku = &network.PublicIPAddressSku{
 				Name: network.PublicIPAddressSkuNameStandard,
 			}
@@ -1280,7 +1278,7 @@ func (az *Cloud) reconcileIPSettings(pip *network.PublicIPAddress, service *v1.S
 			changed = true
 		}
 
-		if az.useStandardLoadBalancer() {
+		if az.UseStandardLoadBalancer() {
 			// standard sku must have static allocation method for ipv6
 			if !strings.EqualFold(string(pip.PublicIPAddressPropertiesFormat.PublicIPAllocationMethod), string(network.Static)) {
 				pip.PublicIPAddressPropertiesFormat.PublicIPAllocationMethod = network.Static
@@ -1507,7 +1505,7 @@ func (az *Cloud) isFrontendIPChanged(
 	if fipIPVersion != "" {
 		isIPv6 = fipIPVersion == network.IPv6
 	} else {
-		if isIPv6, err = az.isFIPIPv6(service, pipRG, &config); err != nil {
+		if isIPv6, err = az.isFIPIPv6(service, &config); err != nil {
 			return false, err
 		}
 	}
@@ -1657,7 +1655,6 @@ func (az *Cloud) findFrontendIPConfigsOfService(
 	service *v1.Service,
 ) (map[bool]*network.FrontendIPConfiguration, error) {
 	fipsOfServiceMap := map[bool]*network.FrontendIPConfiguration{}
-	pipRG := az.getPublicIPAddressResourceGroup(service)
 	for _, config := range *fipConfigs {
 		config := config
 		owns, _, fipIPVersion := az.serviceOwnsFrontendIP(ctx, config, service)
@@ -1667,7 +1664,7 @@ func (az *Cloud) findFrontendIPConfigsOfService(
 			if fipIPVersion != "" {
 				fipIsIPv6 = fipIPVersion == network.IPv6
 			} else {
-				if fipIsIPv6, err = az.isFIPIPv6(service, pipRG, &config); err != nil {
+				if fipIsIPv6, err = az.isFIPIPv6(service, &config); err != nil {
 					return nil, err
 				}
 			}
@@ -1692,7 +1689,7 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurations(
 	existingLBs *[]network.LoadBalancer,
 	nodes []*v1.Node,
 ) (err error) {
-	if !az.useMultipleStandardLoadBalancers() {
+	if !az.UseMultipleStandardLoadBalancers() {
 		return nil
 	}
 
@@ -1781,7 +1778,7 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 	// Delete backend pools for local service if:
 	// 1. the cluster is migrating from multi-slb to single-slb,
 	// 2. the service is changed from local to cluster.
-	if !az.useMultipleStandardLoadBalancers() || !isLocalService(service) {
+	if !az.UseMultipleStandardLoadBalancers() || !isLocalService(service) {
 		existingLBs, err = az.cleanupLocalServiceBackendPool(ctx, service, nodes, existingLBs, clusterName)
 		if err != nil {
 			klog.Errorf("reconcileLoadBalancer: failed to cleanup local service backend pool for service %q, error: %s", serviceName, err.Error())
@@ -1843,7 +1840,6 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 	}
 
 	// update probes/rules
-	pipRG := az.getPublicIPAddressResourceGroup(service)
 	for _, ownedFIPConfig := range ownedFIPConfigs {
 		if ownedFIPConfig == nil {
 			continue
@@ -1858,7 +1854,7 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 		if fipIPVersion != "" {
 			isIPv6 = fipIPVersion == network.IPv6
 		} else {
-			if isIPv6, err = az.isFIPIPv6(service, pipRG, ownedFIPConfig); err != nil {
+			if isIPv6, err = az.isFIPIPv6(service, ownedFIPConfig); err != nil {
 				return nil, err
 			}
 		}
@@ -1962,7 +1958,7 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 			_ = az.lbCache.Delete(lbName)
 		}()
 
-		if az.useMultipleStandardLoadBalancers() {
+		if az.UseMultipleStandardLoadBalancers() {
 			err := az.reconcileMultipleStandardLoadBalancerBackendNodes(ctx, clusterName, lbName, existingLBs, service, nodes, false)
 			if err != nil {
 				return nil, err
@@ -1975,7 +1971,7 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 		// change in one reconciliation loop.
 		var lbToReconcile []network.LoadBalancer
 		lbToReconcile = append(lbToReconcile, *lb)
-		if az.useMultipleStandardLoadBalancers() {
+		if az.UseMultipleStandardLoadBalancers() {
 			lbToReconcile = *existingLBs
 		}
 		lb, err = az.reconcileBackendPoolHosts(ctx, lb, lbToReconcile, service, nodes, clusterName, vmSetName, lbBackendPoolIDs)
@@ -2519,8 +2515,6 @@ func (az *Cloud) reconcileFrontendIPConfigs(
 			}
 		}
 
-		pipRG := az.getPublicIPAddressResourceGroup(service)
-
 		for i := len(newConfigs) - 1; i >= 0; i-- {
 			config := newConfigs[i]
 			isServiceOwnsFrontendIP, _, fipIPVersion := az.serviceOwnsFrontendIP(ctx, config, service)
@@ -2534,7 +2528,7 @@ func (az *Cloud) reconcileFrontendIPConfigs(
 			if fipIPVersion != "" {
 				isIPv6 = fipIPVersion == network.IPv6
 			} else {
-				if isIPv6, err = az.isFIPIPv6(service, pipRG, &config); err != nil {
+				if isIPv6, err = az.isFIPIPv6(service, &config); err != nil {
 					return nil, toDeleteConfigs, false, err
 				}
 			}
@@ -2669,7 +2663,7 @@ func (az *Cloud) getFrontendZones(
 		if err != nil {
 			return err
 		}
-		if az.useStandardLoadBalancer() && len(zones) > 0 && !az.HasExtendedLocation() {
+		if az.UseStandardLoadBalancer() && len(zones) > 0 && !az.HasExtendedLocation() {
 			fipConfig.Zones = &zones
 		}
 	} else {
@@ -2833,7 +2827,7 @@ func (az *Cloud) getExpectedLBRules(
 	// In HA mode, lb forward traffic of all port to backend
 	// HA mode is only supported on standard loadbalancer SKU in internal mode
 	if consts.IsK8sServiceUsingInternalLoadBalancer(service) &&
-		az.useStandardLoadBalancer() &&
+		az.UseStandardLoadBalancer() &&
 		consts.IsK8sServiceHasHAModeEnabled(service) {
 
 		lbRuleName := az.getloadbalancerHAmodeRuleName(service, isIPv6)
@@ -2889,7 +2883,7 @@ func (az *Cloud) getExpectedLBRules(
 				klog.V(2).Infof("getExpectedLBRules lb name (%s) rule name (%s) no lb rule required", lbName, lbRuleName)
 				continue
 			}
-			if port.Protocol == v1.ProtocolSCTP && !(az.useStandardLoadBalancer() && consts.IsK8sServiceUsingInternalLoadBalancer(service)) {
+			if port.Protocol == v1.ProtocolSCTP && !(az.UseStandardLoadBalancer() && consts.IsK8sServiceUsingInternalLoadBalancer(service)) {
 				return expectedProbes, expectedRules, fmt.Errorf("SCTP is only supported on standard loadbalancer in internal mode")
 			}
 
@@ -2977,7 +2971,7 @@ func (az *Cloud) getExpectedLoadBalancingRulePropertiesForPort(
 		Protocol:            transportProto,
 		FrontendPort:        ptr.To(servicePort.Port),
 		BackendPort:         ptr.To(servicePort.Port),
-		DisableOutboundSnat: ptr.To(az.disableLoadBalancerOutboundSNAT()),
+		DisableOutboundSnat: ptr.To(az.DisableLoadBalancerOutboundSNAT()),
 		EnableFloatingIP:    ptr.To(true),
 		LoadDistribution:    loadDistribution,
 		FrontendIPConfiguration: &network.SubResource{
@@ -2988,7 +2982,7 @@ func (az *Cloud) getExpectedLoadBalancingRulePropertiesForPort(
 		},
 		IdleTimeoutInMinutes: lbIdleTimeout,
 	}
-	if strings.EqualFold(string(transportProto), string(network.TransportProtocolTCP)) && az.useStandardLoadBalancer() {
+	if strings.EqualFold(string(transportProto), string(network.TransportProtocolTCP)) && az.UseStandardLoadBalancer() {
 		props.EnableTCPReset = ptr.To(!consts.IsTCPResetDisabled(service.Annotations))
 	}
 
@@ -3670,7 +3664,7 @@ func ipInSubnet(ip string, subnet *network.Subnet) bool {
 // if anything else it returns the unique VM set names after trimming spaces.
 func (az *Cloud) getServiceLoadBalancerMode(service *v1.Service) (bool, bool, string) {
 	mode, hasMode := service.Annotations[consts.ServiceAnnotationLoadBalancerMode]
-	if az.useStandardLoadBalancer() && hasMode {
+	if az.UseStandardLoadBalancer() && hasMode {
 		klog.Warningf("single standard load balancer doesn't work with annotation %q, would ignore it", consts.ServiceAnnotationLoadBalancerMode)
 	}
 	mode = strings.TrimSpace(mode)
@@ -3916,14 +3910,14 @@ func (az *Cloud) getAzureLoadBalancerName(
 	// The LB name prefix is set to the name of the cluster when:
 	// 1. the LB belongs to the primary agent pool.
 	// 2. using the single SLB.
-	if strings.EqualFold(vmSetName, az.VMSet.GetPrimaryVMSetName()) || az.useSingleStandardLoadBalancer() {
+	if strings.EqualFold(vmSetName, az.VMSet.GetPrimaryVMSetName()) || az.UseSingleStandardLoadBalancer() {
 		lbNamePrefix = clusterName
 	}
 
 	// For multiple standard load balancers scenario:
 	// 1. Filter out the eligible load balancers.
 	// 2. Choose the most eligible load balancer.
-	if az.useMultipleStandardLoadBalancers() {
+	if az.UseMultipleStandardLoadBalancers() {
 		eligibleLBs, err := az.getEligibleLoadBalancersForService(ctx, service)
 		if err != nil {
 			return "", err
@@ -4015,7 +4009,7 @@ func (az *Cloud) getServiceCurrentLoadBalancerName(service *v1.Service) string {
 // 5. If there is no label/namespace selector on the LB, it can be a valid placement target if and only if the service has no other choice.
 func (az *Cloud) getEligibleLoadBalancersForService(ctx context.Context, service *v1.Service) ([]string, error) {
 	var (
-		eligibleLBs               []MultipleStandardLoadBalancerConfiguration
+		eligibleLBs               []config.MultipleStandardLoadBalancerConfiguration
 		eligibleLBNames           []string
 		lbSelectedByAnnotation    []string
 		lbFailedLabelSelector     []string
@@ -4166,7 +4160,7 @@ func (az *Cloud) getEligibleLoadBalancersForService(ctx context.Context, service
 	return eligibleLBNames, nil
 }
 
-func (az *Cloud) isLoadBalancerInUseByService(service *v1.Service, lbConfig MultipleStandardLoadBalancerConfiguration) bool {
+func (az *Cloud) isLoadBalancerInUseByService(service *v1.Service, lbConfig config.MultipleStandardLoadBalancerConfiguration) bool {
 	az.multipleStandardLoadBalancersActiveServicesLock.Lock()
 	defer az.multipleStandardLoadBalancersActiveServicesLock.Unlock()
 

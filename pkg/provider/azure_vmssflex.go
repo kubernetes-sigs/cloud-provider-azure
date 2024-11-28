@@ -137,7 +137,7 @@ func (fs *FlexScaleSet) GetAgentPoolVMSetNames(ctx context.Context, nodes []*v1.
 // annotation would be ignored when using one SLB per cluster.
 func (fs *FlexScaleSet) GetVMSetNames(ctx context.Context, service *v1.Service, nodes []*v1.Node) (*[]string, error) {
 	hasMode, isAuto, serviceVMSetName := fs.getServiceLoadBalancerMode(service)
-	if !hasMode || fs.useStandardLoadBalancer() {
+	if !hasMode || fs.UseStandardLoadBalancer() {
 		// no mode specified in service annotation or use single SLB mode
 		// default to PrimaryScaleSetName
 		vmssFlexNames := &[]string{fs.Config.PrimaryScaleSetName}
@@ -461,7 +461,7 @@ func (fs *FlexScaleSet) EnsureHostInPool(ctx context.Context, service *v1.Servic
 	//   don't check vmSet for it.
 	// - For multiple standard SKU load balancers, return nil if the node's scale set is mismatched with vmSetNameOfLB
 	needCheck := false
-	if !fs.useStandardLoadBalancer() {
+	if !fs.UseStandardLoadBalancer() {
 		return "", "", "", nil, fmt.Errorf("EnsureHostInPool: VMSS Flex does not support Basic Load Balancer")
 	}
 	if vmSetNameOfLB != "" && needCheck && !strings.EqualFold(vmSetNameOfLB, vmssFlexName) {
@@ -510,7 +510,7 @@ func (fs *FlexScaleSet) EnsureHostInPool(ctx context.Context, service *v1.Servic
 		return "", "", "", nil, nil
 	}
 
-	if fs.useStandardLoadBalancer() && len(newBackendPools) > 0 {
+	if fs.UseStandardLoadBalancer() && len(newBackendPools) > 0 {
 		// Although standard load balancer supports backends from multiple availability
 		// sets, the same network interface couldn't be added to more than one load balancer of
 		// the same type. Omit those nodes (e.g. masters) so Azure ARM won't complain
@@ -558,15 +558,15 @@ func (fs *FlexScaleSet) ensureVMSSFlexInPool(ctx context.Context, _ *v1.Service,
 	klog.V(2).Infof("ensureVMSSFlexInPool: ensuring VMSS Flex with backendPoolID %s", backendPoolID)
 	vmssFlexIDsMap := make(map[string]bool)
 
-	if !fs.useStandardLoadBalancer() {
+	if !fs.UseStandardLoadBalancer() {
 		return fmt.Errorf("ensureVMSSFlexInPool: VMSS Flex does not support Basic Load Balancer")
 	}
 
 	// the single standard load balancer supports multiple vmss in its backend while
 	// multiple standard load balancers doesn't
-	if fs.useStandardLoadBalancer() {
+	if fs.UseStandardLoadBalancer() {
 		for _, node := range nodes {
-			if fs.excludeMasterNodesFromStandardLB() && isControlPlaneNode(node) {
+			if fs.ExcludeMasterNodesFromStandardLB() && isControlPlaneNode(node) {
 				continue
 			}
 
@@ -651,7 +651,7 @@ func (fs *FlexScaleSet) ensureVMSSFlexInPool(ctx context.Context, _ *v1.Service,
 			continue
 		}
 
-		if fs.useStandardLoadBalancer() && len(loadBalancerBackendAddressPools) > 0 {
+		if fs.UseStandardLoadBalancer() && len(loadBalancerBackendAddressPools) > 0 {
 			// Although standard load balancer supports backends from multiple scale
 			// sets, the same network interface couldn't be added to more than one load balancer of
 			// the same type. Omit those nodes (e.g. masters) so Azure ARM won't complain
@@ -714,11 +714,16 @@ func (fs *FlexScaleSet) EnsureHostsInPool(ctx context.Context, service *v1.Servi
 	defer func() {
 		mc.ObserveOperationWithResult(isOperationSucceeded)
 	}()
-	hostUpdates := make([]func() error, 0, len(nodes))
 
+	err := fs.ensureVMSSFlexInPool(ctx, service, nodes, backendPoolID, vmSetNameOfLB)
+	if err != nil {
+		return err
+	}
+
+	hostUpdates := make([]func() error, 0, len(nodes))
 	for _, node := range nodes {
 		localNodeName := node.Name
-		if fs.useStandardLoadBalancer() && fs.excludeMasterNodesFromStandardLB() && isControlPlaneNode(node) {
+		if fs.UseStandardLoadBalancer() && fs.ExcludeMasterNodesFromStandardLB() && isControlPlaneNode(node) {
 			klog.V(4).Infof("Excluding master node %q from load balancer backendpool %q", localNodeName, backendPoolID)
 			continue
 		}
@@ -748,18 +753,13 @@ func (fs *FlexScaleSet) EnsureHostsInPool(ctx context.Context, service *v1.Servi
 		return utilerrors.Flatten(errs)
 	}
 
-	err := fs.ensureVMSSFlexInPool(ctx, service, nodes, backendPoolID, vmSetNameOfLB)
-	if err != nil {
-		return err
-	}
-
 	isOperationSucceeded = true
 	return nil
 }
 
 func (fs *FlexScaleSet) ensureBackendPoolDeletedFromVmssFlex(ctx context.Context, backendPoolIDs []string, vmSetName string) error {
 	vmssNamesMap := make(map[string]bool)
-	if fs.useStandardLoadBalancer() {
+	if fs.UseStandardLoadBalancer() {
 		cached, err := fs.vmssFlexCache.Get(ctx, consts.VmssFlexKey, azcache.CacheReadTypeDefault)
 		if err != nil {
 			klog.Errorf("ensureBackendPoolDeletedFromVmssFlex: failed to get vmss flex from cache: %v", err)
@@ -910,7 +910,7 @@ func (fs *FlexScaleSet) EnsureBackendPoolDeleted(ctx context.Context, service *v
 		}
 		// only vmsses in the resource group same as it's in azure config are included
 		if strings.EqualFold(resourceGroupName, fs.ResourceGroup) {
-			if fs.useStandardLoadBalancer() {
+			if fs.UseStandardLoadBalancer() {
 				vmssFlexVMNameMap[nodeName] = nicName
 			} else {
 				if strings.EqualFold(vmssFlexName, vmSetName) {

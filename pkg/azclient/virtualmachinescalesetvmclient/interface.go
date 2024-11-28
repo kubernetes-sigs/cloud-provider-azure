@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;delete,resource=VirtualMachineScaleSet,subResource=VirtualMachineScaleSetVM,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6,packageAlias=armcompute,clientName=VirtualMachineScaleSetVMsClient,expand=false
+// +azure:client:verbs=get;delete,resource=VirtualMachineScaleSet,subResource=VirtualMachineScaleSetVM,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6,packageAlias=armcompute,clientName=VirtualMachineScaleSetVMsClient,expand=false,azureStackCloudAPIVersion="2019-07-01"
 type Interface interface {
 	utils.SubResourceGetFunc[armcompute.VirtualMachineScaleSetVM]
 	utils.SubResourceDeleteFunc[armcompute.VirtualMachineScaleSetVM]

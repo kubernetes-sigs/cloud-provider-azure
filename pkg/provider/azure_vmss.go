@@ -875,7 +875,7 @@ func (ss *ScaleSet) getAgentPoolScaleSets(ctx context.Context, nodes []*v1.Node)
 // for loadbalancer exists then return the eligible VMSet.
 func (ss *ScaleSet) GetVMSetNames(ctx context.Context, service *v1.Service, nodes []*v1.Node) (*[]string, error) {
 	hasMode, isAuto, serviceVMSetName := ss.getServiceLoadBalancerMode(service)
-	if !hasMode || ss.useStandardLoadBalancer() {
+	if !hasMode || ss.UseStandardLoadBalancer() {
 		// no mode specified in service annotation or use single SLB mode
 		// default to PrimaryScaleSetName
 		scaleSetNames := &[]string{ss.Config.PrimaryScaleSetName}
@@ -1072,7 +1072,7 @@ func (ss *ScaleSet) EnsureHostInPool(ctx context.Context, _ *v1.Service, nodeNam
 	//   don't check vmSet for it.
 	// - For multiple standard SKU load balancers, the behavior is similar to the basic load balancer
 	needCheck := false
-	if !ss.useStandardLoadBalancer() {
+	if !ss.UseStandardLoadBalancer() {
 		// need to check the vmSet name when using the basic LB
 		needCheck = true
 	}
@@ -1118,7 +1118,7 @@ func (ss *ScaleSet) EnsureHostInPool(ctx context.Context, _ *v1.Service, nodeNam
 		return "", "", "", nil, nil
 	}
 
-	if ss.useStandardLoadBalancer() && len(newBackendPools) > 0 {
+	if ss.UseStandardLoadBalancer() && len(newBackendPools) > 0 {
 		// Although standard load balancer supports backends from multiple scale
 		// sets, the same network interface couldn't be added to more than one load balancer of
 		// the same type. Omit those nodes (e.g. masters) so Azure ARM won't complain
@@ -1189,9 +1189,9 @@ func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes [
 
 	// the single standard load balancer supports multiple vmss in its backend while
 	// multiple standard load balancers and the basic load balancer doesn't
-	if ss.useStandardLoadBalancer() {
+	if ss.UseStandardLoadBalancer() {
 		for _, node := range nodes {
-			if ss.excludeMasterNodesFromStandardLB() && isControlPlaneNode(node) {
+			if ss.ExcludeMasterNodesFromStandardLB() && isControlPlaneNode(node) {
 				continue
 			}
 
@@ -1288,7 +1288,7 @@ func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes [
 			continue
 		}
 
-		if ss.useStandardLoadBalancer() && len(loadBalancerBackendAddressPools) > 0 {
+		if ss.UseStandardLoadBalancer() && len(loadBalancerBackendAddressPools) > 0 {
 			// Although standard load balancer supports backends from multiple scale
 			// sets, the same network interface couldn't be added to more than one load balancer of
 			// the same type. Omit those nodes (e.g. masters) so Azure ARM won't complain
@@ -1391,13 +1391,20 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 		mc.ObserveOperationWithResult(isOperationSucceeded)
 	}()
 
+	// Ensure the backendPoolID is also added on VMSS itself.
+	// Refer to issue kubernetes/kubernetes#80365 for detailed information
+	err := ss.ensureVMSSInPool(ctx, service, nodes, backendPoolID, vmSetNameOfLB)
+	if err != nil {
+		return err
+	}
+
 	hostUpdates := make([]func() error, 0, len(nodes))
 	nodeUpdates := make(map[vmssMetaInfo]map[string]vmssvmclient.VirtualMachineScaleSetVM)
 	errors := make([]error, 0)
 	for _, node := range nodes {
 		localNodeName := node.Name
 
-		if ss.useStandardLoadBalancer() && ss.excludeMasterNodesFromStandardLB() && isControlPlaneNode(node) {
+		if ss.UseStandardLoadBalancer() && ss.ExcludeMasterNodesFromStandardLB() && isControlPlaneNode(node) {
 			klog.V(4).Infof("Excluding master node %q from load balancer backendpool %q", localNodeName, backendPoolID)
 			continue
 		}
@@ -1483,13 +1490,6 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 		return utilerrors.Flatten(utilerrors.NewAggregate(errors))
 	}
 
-	// Ensure the backendPoolID is also added on VMSS itself.
-	// Refer to issue kubernetes/kubernetes#80365 for detailed information
-	err := ss.ensureVMSSInPool(ctx, service, nodes, backendPoolID, vmSetNameOfLB)
-	if err != nil {
-		return err
-	}
-
 	isOperationSucceeded = true
 	return nil
 }
@@ -1507,7 +1507,7 @@ func (ss *ScaleSet) EnsureHostsInPool(ctx context.Context, service *v1.Service, 
 	for _, node := range nodes {
 		localNodeName := node.Name
 
-		if ss.useStandardLoadBalancer() && ss.excludeMasterNodesFromStandardLB() && isControlPlaneNode(node) {
+		if ss.UseStandardLoadBalancer() && ss.ExcludeMasterNodesFromStandardLB() && isControlPlaneNode(node) {
 			klog.V(4).Infof("Excluding master node %q from load balancer backendpool %q", localNodeName, backendPoolID)
 			continue
 		}
@@ -1532,7 +1532,7 @@ func (ss *ScaleSet) EnsureHostsInPool(ctx context.Context, service *v1.Service, 
 		if vmManagementType == ManagedByAvSet {
 			// vm is managed by availability set.
 			// VMAS nodes should also be added to the SLB backends.
-			if ss.useStandardLoadBalancer() {
+			if ss.UseStandardLoadBalancer() {
 				vmasNodes = append(vmasNodes, node)
 				continue
 			}
@@ -1541,7 +1541,7 @@ func (ss *ScaleSet) EnsureHostsInPool(ctx context.Context, service *v1.Service, 
 		}
 		if vmManagementType == ManagedByVmssFlex {
 			// vm is managed by vmss flex.
-			if ss.useStandardLoadBalancer() {
+			if ss.UseStandardLoadBalancer() {
 				vmssFlexNodes = append(vmssFlexNodes, node)
 				continue
 			}
@@ -1693,7 +1693,7 @@ func getScaleSetAndResourceGroupNameByIPConfigurationID(ipConfigurationID string
 }
 
 func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(ctx context.Context, backendPoolIDs []string, vmSetName string) error {
-	if !ss.useStandardLoadBalancer() {
+	if !ss.UseStandardLoadBalancer() {
 		found := false
 
 		cachedUniform, err := ss.vmssCache.Get(ctx, consts.VMSSKey, azcache.CacheReadTypeDefault)
@@ -1752,7 +1752,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(ctx context.Context, backen
 func (ss *ScaleSet) ensureBackendPoolDeletedFromVmssUniform(ctx context.Context, backendPoolIDs []string, vmSetName string) error {
 	vmssNamesMap := make(map[string]bool)
 	// the standard load balancer supports multiple vmss in its backend while the basic sku doesn't
-	if ss.useStandardLoadBalancer() {
+	if ss.UseStandardLoadBalancer() {
 		cachedUniform, err := ss.vmssCache.Get(ctx, consts.VMSSKey, azcache.CacheReadTypeDefault)
 		if err != nil {
 			klog.Errorf("ensureBackendPoolDeletedFromVMSS: failed to get vmss uniform from cache: %v", err)
@@ -1879,7 +1879,7 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 		var err error
 		if scaleSetName, err = extractScaleSetNameByProviderID(ipConfigurationID); err == nil {
 			// Only remove nodes belonging to specified vmSet to basic LB backends.
-			if !ss.useStandardLoadBalancer() && !strings.EqualFold(scaleSetName, vmSetName) {
+			if !ss.UseStandardLoadBalancer() && !strings.EqualFold(scaleSetName, vmSetName) {
 				continue
 			}
 		}
@@ -1988,7 +1988,9 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(ctx context.Context, service *v1.Se
 
 	for _, backendPool := range *backendAddressPools {
 		for _, backendPoolID := range backendPoolIDs {
-			if strings.EqualFold(*backendPool.ID, backendPoolID) && backendPool.BackendIPConfigurations != nil {
+			if strings.EqualFold(*backendPool.ID, backendPoolID) &&
+				backendPool.BackendAddressPoolPropertiesFormat != nil &&
+				backendPool.BackendIPConfigurations != nil {
 				for _, ipConf := range *backendPool.BackendIPConfigurations {
 					if ipConf.ID == nil {
 						continue
@@ -2343,7 +2345,7 @@ func (ss *ScaleSet) VMSSBatchSize(ctx context.Context, vmssName string) (int, er
 		return 0, fmt.Errorf("get vmss batch size: %w", err)
 	}
 	if _, ok := vmss.Tags[consts.VMSSTagForBatchOperation]; ok {
-		batchSize = ss.getPutVMSSVMBatchSize()
+		batchSize = ss.GetPutVMSSVMBatchSize()
 	}
 	klog.V(2).InfoS("Fetch VMSS batch size", "vmss", vmssName, "size", batchSize)
 	return batchSize, nil

@@ -18,8 +18,6 @@ limitations under the License.
 package generator
 
 import (
-	"bytes"
-	"fmt"
 	"strings"
 
 	"sigs.k8s.io/controller-tools/pkg/genall"
@@ -27,60 +25,11 @@ import (
 )
 
 // generateClient writes out the build tag, package declaration, and imports
-func generateClient(ctx *genall.GenerationContext, root *loader.Package, _ string, markerConf ClientGenConfig, headerText string) error {
+func (g Generator) generateClient(ctx *genall.GenerationContext, root *loader.Package, _ string, markerConf ClientGenConfig) error {
 	var importList = make(map[string]map[string]struct{})
 	aliasMap := make(map[string]struct{})
 	aliasMap[markerConf.PackageAlias] = struct{}{}
 	importList[markerConf.PackageName] = aliasMap
-
-	var outContent bytes.Buffer
-	if err := ClientTemplate.Execute(&outContent, markerConf); err != nil {
-		root.AddError(err)
-		return err
-	}
-	if err := ClientFactoryTemplate.Execute(&outContent, markerConf); err != nil {
-		root.AddError(err)
-		return err
-	}
-	if len(markerConf.Verbs) > 0 {
-		importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/metrics"] = make(map[string]struct{})
-		importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"] = make(map[string]struct{})
-		importList["context"] = make(map[string]struct{})
-	}
-	// define structs
-	for _, verb := range markerConf.Verbs {
-		switch true {
-		case strings.EqualFold(FuncCreateOrUpdate, verb):
-			if err := CreateOrUpdateFuncTemplate.Execute(&outContent, markerConf); err != nil {
-				root.AddError(err)
-				return err
-			}
-		case strings.EqualFold(FuncDelete, verb):
-			if err := DeleteFuncTemplate.Execute(&outContent, markerConf); err != nil {
-				root.AddError(err)
-				return err
-			}
-		case strings.EqualFold(FuncListByRG, verb):
-			if err := ListByRGFuncTemplate.Execute(&outContent, markerConf); err != nil {
-				root.AddError(err)
-				return err
-			}
-		case strings.EqualFold(FuncList, verb):
-			if err := ListFuncTemplate.Execute(&outContent, markerConf); err != nil {
-				root.AddError(err)
-				return err
-			}
-		case strings.EqualFold(FuncGet, verb):
-			if err := GetFuncTemplate.Execute(&outContent, markerConf); err != nil {
-				root.AddError(err)
-				return err
-			}
-		}
-	}
-
-	if outContent.Len() <= 0 {
-		return nil
-	}
 	importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"] = make(map[string]struct{})
 	importList["github.com/Azure/azure-sdk-for-go/sdk/azcore"] = make(map[string]struct{})
 	importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"] = make(map[string]struct{})
@@ -92,9 +41,61 @@ func generateClient(ctx *genall.GenerationContext, root *loader.Package, _ strin
 		importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"] = make(map[string]struct{})
 		importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/etag"] = make(map[string]struct{})
 	}
-	if err := WriteToFile(ctx, root, "zz_generated_client.go", headerText, importList, &outContent); err != nil {
+
+	file, err := ctx.Open(root, "zz_generated_client.go")
+	if err != nil {
 		return err
 	}
-	fmt.Println("Generated zz_generated_client.go in " + root.Name)
+	defer file.Close()
+
+	if len(markerConf.Verbs) > 0 {
+		importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/metrics"] = make(map[string]struct{})
+		importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"] = make(map[string]struct{})
+		importList["context"] = make(map[string]struct{})
+	}
+
+	if err := DumpHeaderToWriter(ctx, file, g.HeaderFile, importList, root.Name); err != nil {
+		return err
+	}
+
+	if err := ClientTemplate.Execute(file, markerConf); err != nil {
+		root.AddError(err)
+		return err
+	}
+	if err := ClientFactoryTemplate.Execute(file, markerConf); err != nil {
+		root.AddError(err)
+		return err
+	}
+	// define structs
+	for _, verb := range markerConf.Verbs {
+		switch true {
+		case strings.EqualFold(FuncCreateOrUpdate, verb):
+			if err := CreateOrUpdateFuncTemplate.Execute(file, markerConf); err != nil {
+				root.AddError(err)
+				return err
+			}
+		case strings.EqualFold(FuncDelete, verb):
+			if err := DeleteFuncTemplate.Execute(file, markerConf); err != nil {
+				root.AddError(err)
+				return err
+			}
+		case strings.EqualFold(FuncListByRG, verb):
+			if err := ListByRGFuncTemplate.Execute(file, markerConf); err != nil {
+				root.AddError(err)
+				return err
+			}
+		case strings.EqualFold(FuncList, verb):
+			if err := ListFuncTemplate.Execute(file, markerConf); err != nil {
+				root.AddError(err)
+				return err
+			}
+		case strings.EqualFold(FuncGet, verb):
+			if err := GetFuncTemplate.Execute(file, markerConf); err != nil {
+				root.AddError(err)
+				return err
+			}
+		}
+	}
+
 	return nil
 }
