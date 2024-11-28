@@ -873,12 +873,21 @@ func TestIsFIPIPv6(t *testing.T) {
 			},
 			expectedIsIPv6: true,
 		},
+		{
+			desc: "enpty ip families",
+			svc: v1.Service{
+				Spec: v1.ServiceSpec{
+					IPFamilies: []v1.IPFamily{},
+				},
+			},
+			expectedIsIPv6: false,
+		},
 	}
 	for _, tc := range testcases {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
-			isIPv6, err := az.isFIPIPv6(&tc.svc, "rg", tc.fip)
+			isIPv6, err := az.isFIPIPv6(&tc.svc, tc.fip)
 			assert.Nil(t, err)
 			assert.Equal(t, tc.expectedIsIPv6, isIPv6)
 		})

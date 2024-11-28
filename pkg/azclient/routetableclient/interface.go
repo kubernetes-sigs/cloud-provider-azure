@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate;delete;list,resource=RouteTable,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6,packageAlias=armnetwork,clientName=RouteTablesClient,expand=false,rateLimitKey=routeTableRateLimit,etag=true
+// +azure:client:verbs=get;createorupdate;delete;list,resource=RouteTable,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6,packageAlias=armnetwork,clientName=RouteTablesClient,expand=false,rateLimitKey=routeTableRateLimit,etag=true,azureStackCloudAPIVersion="2018-11-01"
 type Interface interface {
 	utils.CreateOrUpdateFunc[armnetwork.RouteTable]
 	utils.DeleteFunc[armnetwork.RouteTable]

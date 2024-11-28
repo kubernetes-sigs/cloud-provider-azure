@@ -30,12 +30,12 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatezoneclient/mock_privatezoneclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient/mock_subnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient/mock_virtualnetworklinkclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/diskclient/mockdiskclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routetableclient/mockroutetableclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
@@ -44,7 +44,9 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -76,8 +78,8 @@ func NewTestFlexScaleSet(ctrl *gomock.Controller) (*FlexScaleSet, error) {
 // GetTestCloud returns a fake azure cloud for unit tests in Azure related CSI drivers
 func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	az = &Cloud{
-		Config: Config{
-			AzureAuthConfig: config.AzureAuthConfig{
+		Config: config.Config{
+			AzureClientConfig: config.AzureClientConfig{
 				ARMClientConfig: azclient.ARMClientConfig{
 					TenantID: "TenantID",
 				},
@@ -114,7 +116,6 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	az.InterfacesClient = mockinterfaceclient.NewMockInterface(ctrl)
 	az.LoadBalancerClient = mockloadbalancerclient.NewMockInterface(ctrl)
 	az.PublicIPAddressesClient = mockpublicipclient.NewMockInterface(ctrl)
-	az.RouteTablesClient = mockroutetableclient.NewMockInterface(ctrl)
 	az.SubnetsClient = mocksubnetclient.NewMockInterface(ctrl)
 	az.VirtualMachineScaleSetsClient = mockvmssclient.NewMockInterface(ctrl)
 	az.VirtualMachineScaleSetVMsClient = mockvmssvmclient.NewMockInterface(ctrl)
@@ -128,6 +129,8 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	clientFactory.EXPECT().GetPrivateZoneClient().Return(mockPrivateDNSClient).AnyTimes()
 	virtualNetworkLinkClient := mock_virtualnetworklinkclient.NewMockInterface(ctrl)
 	clientFactory.EXPECT().GetVirtualNetworkLinkClient().Return(virtualNetworkLinkClient).AnyTimes()
+	subnetTrack2Client := mock_subnetclient.NewMockInterface(ctrl)
+	clientFactory.EXPECT().GetSubnetClient().Return(subnetTrack2Client).AnyTimes()
 	az.AuthProvider = &azclient.AuthProvider{
 		ComputeCredential: mock_azclient.NewMockTokenCredential(ctrl),
 	}
@@ -135,11 +138,12 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	az.vmCache, _ = az.newVMCache()
 	az.lbCache, _ = az.newLBCache()
 	az.nsgRepo, _ = securitygroup.NewSecurityGroupRepo(az.SecurityGroupResourceGroup, az.SecurityGroupName, az.NsgCacheTTLInSeconds, az.Config.DisableAPICallCache, securtyGrouptrack2Client)
-	az.rtCache, _ = az.newRouteTableCache()
+	az.subnetRepo = subnet.NewMockRepository(ctrl)
 	az.pipCache, _ = az.newPIPCache()
 	az.LoadBalancerBackendPool = NewMockBackendPool(ctrl)
 
 	az.plsRepo = privatelinkservice.NewMockRepository(ctrl)
+	az.routeTableRepo = routetable.NewMockRepository(ctrl)
 
 	getter := func(_ context.Context, _ string) (interface{}, error) { return nil, nil }
 	az.storageAccountCache, _ = azcache.NewTimedCache(time.Minute, getter, az.Config.DisableAPICallCache)

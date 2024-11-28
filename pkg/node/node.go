@@ -25,6 +25,7 @@ import (
 	"k8s.io/klog/v2"
 
 	azureprovider "sigs.k8s.io/cloud-provider-azure/pkg/provider"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 )
 
 // IMDSNodeProvider implements nodemanager.NodeProvider.
@@ -34,7 +35,7 @@ type IMDSNodeProvider struct {
 
 // NewIMDSNodeProvider creates a new IMDSNodeProvider.
 func NewIMDSNodeProvider(ctx context.Context) *IMDSNodeProvider {
-	az, err := azureprovider.NewCloud(ctx, nil, &azureprovider.Config{
+	az, err := azureprovider.NewCloud(ctx, nil, &config.Config{
 		UseInstanceMetadata: true,
 		VMType:              "vmss",
 	}, false)

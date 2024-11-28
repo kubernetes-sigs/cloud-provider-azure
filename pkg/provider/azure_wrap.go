@@ -29,7 +29,6 @@ import (
 var (
 	vmCacheTTLDefaultInSeconds           = 60
 	loadBalancerCacheTTLDefaultInSeconds = 120
-	routeTableCacheTTLDefaultInSeconds   = 120
 	publicIPCacheTTLDefaultInSeconds     = 120
 
 	azureNodeProviderIDRE    = regexp.MustCompile(`^azure:///subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Compute/(?:.*)`)
@@ -49,22 +48,6 @@ func checkResourceExistsFromError(err *retry.Error) (bool, *retry.Error) {
 	}
 
 	return false, err
-}
-
-func (az *Cloud) useStandardLoadBalancer() bool {
-	return strings.EqualFold(az.LoadBalancerSku, consts.LoadBalancerSkuStandard)
-}
-
-func (az *Cloud) excludeMasterNodesFromStandardLB() bool {
-	return az.ExcludeMasterFromStandardLB != nil && *az.ExcludeMasterFromStandardLB
-}
-
-func (az *Cloud) disableLoadBalancerOutboundSNAT() bool {
-	if !az.useStandardLoadBalancer() || az.DisableOutboundSNAT == nil {
-		return false
-	}
-
-	return *az.DisableOutboundSNAT
 }
 
 // IsNodeUnmanaged returns true if the node is not managed by Azure cloud provider.

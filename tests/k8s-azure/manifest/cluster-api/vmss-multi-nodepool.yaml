@@ -107,14 +107,12 @@ spec:
     initConfiguration:
       nodeRegistration:
         kubeletExtraArgs:
-          azure-container-registry-config: /etc/kubernetes/azure.json
           cloud-config: /etc/kubernetes/azure.json
           cloud-provider: external
         name: '{{ ds.meta_data["local_hostname"] }}'
     joinConfiguration:
       nodeRegistration:
         kubeletExtraArgs:
-          azure-container-registry-config: /etc/kubernetes/azure.json
           cloud-config: /etc/kubernetes/azure.json
           cloud-provider: external
         name: '{{ ds.meta_data["local_hostname"] }}'
@@ -191,7 +189,13 @@ spec:
       maxUnavailable: 1
       deletePolicy: Oldest
   template:
-    vmSize: Standard_D2s_v3
+    image:
+      marketplace:
+        offer: capi
+        publisher: cncf-upstream
+        sku: ubuntu-2204-gen1
+        version: latest
+    vmSize: Standard_D2s_v4
     osDisk:
       osType: "Linux"
       diskSizeGB: 30
@@ -211,7 +215,6 @@ spec:
       kubeletExtraArgs:
         cloud-provider: external
         cloud-config: /etc/kubernetes/azure.json
-        azure-container-registry-config: /etc/kubernetes/azure.json
   files:
   - contentFrom:
       secret:
@@ -260,7 +263,13 @@ spec:
       maxUnavailable: 1
       deletePolicy: Oldest
   template:
-    vmSize: Standard_D2s_v3
+    image:
+      marketplace:
+        offer: capi
+        publisher: cncf-upstream
+        sku: ubuntu-2204-gen1
+        version: latest
+    vmSize: Standard_D2s_v4
     osDisk:
       osType: "Linux"
       diskSizeGB: 30
@@ -280,7 +289,6 @@ spec:
       kubeletExtraArgs:
         cloud-provider: external
         cloud-config: /etc/kubernetes/azure.json
-        azure-container-registry-config: /etc/kubernetes/azure.json
   files:
   - contentFrom:
       secret:
