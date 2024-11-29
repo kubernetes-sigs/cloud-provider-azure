@@ -115,6 +115,13 @@ var _ = ginkgo.Describe("Factory", func() {
 			client := factory.GetManagedClusterClient()
 			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
+		ginkgo.It("should create factory instance without painc - PrivateDNSZoneGroup", func() {
+			factory, err := NewClientFactory(nil, nil, nil)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
+			client := factory.GetPrivateDNSZoneGroupClient()
+			gomega.Expect(client).NotTo(gomega.BeNil())
+		})
 		ginkgo.It("should create factory instance without painc - PrivateEndpoint", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())

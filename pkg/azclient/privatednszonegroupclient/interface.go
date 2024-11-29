@@ -15,17 +15,17 @@ limitations under the License.
 */
 
 // +azure:enableclientgen:=true
-package virtualnetworklinkclient
+package privatednszonegroupclient
 
 import (
-	armprivatedns "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns"
+	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate;delete,resource=PrivateZone,subResource=VirtualNetworkLink,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns,packageAlias=armprivatedns,clientName=VirtualNetworkLinksClient,expand=false,rateLimitKey=virtualNetworkRateLimit
+// +azure:client:verbs=get;createorupdate;delete,resource=PrivateEndpoint,subResource=PrivateDNSZoneGroup,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6,packageAlias=armnetwork,clientName=PrivateDNSZoneGroupsClient,expand=false
 type Interface interface {
-	utils.SubResourceGetFunc[armprivatedns.VirtualNetworkLink]
-	utils.SubResourceCreateOrUpdateFunc[armprivatedns.VirtualNetworkLink]
-	utils.SubResourceDeleteFunc[armprivatedns.VirtualNetworkLink]
+	utils.SubResourceGetFunc[armnetwork.PrivateDNSZoneGroup]
+	utils.SubResourceCreateOrUpdateFunc[armnetwork.PrivateDNSZoneGroup]
+	utils.SubResourceDeleteFunc[armnetwork.PrivateDNSZoneGroup]
 }

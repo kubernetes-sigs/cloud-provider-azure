@@ -102,16 +102,6 @@ func init() {
 
 	}
 	afterAllFunc = func(ctx context.Context) {
-		virtualNetworkLinksClient := privatednsClientFactory.NewVirtualNetworkLinksClient()
-		linkPoller, err := virtualNetworkLinksClient.BeginDelete(ctx, resourceGroupName, parentResourceName, resourceName, nil)
-		Expect(err).NotTo(HaveOccurred())
-		_, err = linkPoller.PollUntilDone(ctx, &runtime.PollUntilDoneOptions{
-			Frequency: 1 * time.Second,
-		})
-		Expect(err).NotTo(HaveOccurred())
-		if recorder.IsNewCassette() {
-			time.Sleep(10 * time.Second)
-		}
 		privatednsClient = privatednsClientFactory.NewPrivateZonesClient()
 		dnsPoller, err := privatednsClient.BeginDelete(ctx, resourceGroupName, parentResourceName, nil)
 		Expect(err).NotTo(HaveOccurred())

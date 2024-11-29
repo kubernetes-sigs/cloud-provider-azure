@@ -68,8 +68,17 @@ func (g Generator) generateTestSuite(ctx *genall.GenerationContext, root *loader
 	importList["github.com/onsi/gomega"] = map[string]struct{}{}
 	importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"] = make(map[string]struct{})
 	importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"] = make(map[string]struct{})
-
-	// return DumpHeaderToWriter(ctx, root, root.Name+"_suite_test.go", headerText, importList, &outContent)
+	file, err := ctx.Open(root, root.Name+"_suite_test.go")
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	if err := DumpHeaderToWriter(ctx, file, g.HeaderFile, importList, root.Name); err != nil {
+		return err
+	}
+	if err := TestSuiteTemplate.Execute(file, markerConf); err != nil {
+		root.AddError(err)
+	}
 	return nil
 }
 
