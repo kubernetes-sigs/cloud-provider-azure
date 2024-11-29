@@ -77,8 +77,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-08-01
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.3.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-09-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -86,7 +86,7 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 3228
+        content_length: 3230
         uncompressed: false
         body: |-
             {
@@ -100,10 +100,10 @@ interactions:
                "code": "Running"
               },
               "kubernetesVersion": "1.29",
-              "currentKubernetesVersion": "1.29.9",
+              "currentKubernetesVersion": "1.29.10",
               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-              "fqdn": "aks-cit-managedclustertestresourcednsprefix-76oauh09.hcp.eastus.azmk8s.io",
-              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-76oauh09.portal.hcp.eastus.azmk8s.io",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.portal.hcp.eastus.azmk8s.io",
               "agentPoolProfiles": [
                {
                 "name": "agentpool1",
@@ -119,13 +119,13 @@ interactions:
                  "code": "Running"
                 },
                 "orchestratorVersion": "1.29",
-                "currentOrchestratorVersion": "1.29.9",
+                "currentOrchestratorVersion": "1.29.10",
                 "enableNodePublicIP": false,
                 "nodeLabels": {},
                 "mode": "System",
                 "osType": "Linux",
                 "osSKU": "Ubuntu",
-                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202410.15.0",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202411.12.0",
                 "upgradeSettings": {
                  "maxSurge": "10%"
                 },
@@ -196,7 +196,7 @@ interactions:
                "enabled": false
               },
               "workloadAutoScalerProfile": {},
-              "resourceUID": "672391aa9ecf720001e72578",
+              "resourceUID": "674966dfbc7b0d0001630c2d",
               "metricsProfile": {
                "costAnalysis": {
                 "enabled": false
@@ -219,7 +219,7 @@ interactions:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "3228"
+                - "3230"
             Content-Type:
                 - application/json
             Expires:
@@ -252,7 +252,7 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.2.0 (go1.23.2; linux)
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.3.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&c=c&h=h&s=s&t=t
         method: GET
       response:
@@ -307,8 +307,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-08-01
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.3.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-09-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -316,7 +316,7 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 3853
+        content_length: 3855
         uncompressed: false
         body: |-
             {
@@ -330,10 +330,10 @@ interactions:
                "code": "Running"
               },
               "kubernetesVersion": "1.29",
-              "currentKubernetesVersion": "1.29.9",
+              "currentKubernetesVersion": "1.29.10",
               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-              "fqdn": "aks-cit-managedclustertestresourcednsprefix-76oauh09.hcp.eastus.azmk8s.io",
-              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-76oauh09.portal.hcp.eastus.azmk8s.io",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.portal.hcp.eastus.azmk8s.io",
               "agentPoolProfiles": [
                {
                 "name": "agentpool1",
@@ -349,12 +349,12 @@ interactions:
                  "code": "Running"
                 },
                 "orchestratorVersion": "1.29",
-                "currentOrchestratorVersion": "1.29.9",
+                "currentOrchestratorVersion": "1.29.10",
                 "enableNodePublicIP": false,
                 "mode": "System",
                 "osType": "Linux",
                 "osSKU": "Ubuntu",
-                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202410.15.0",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202411.12.0",
                 "upgradeSettings": {
                  "maxSurge": "10%"
                 },
@@ -437,7 +437,7 @@ interactions:
                "enabled": false
               },
               "workloadAutoScalerProfile": {},
-              "resourceUID": "672391aa9ecf720001e72578",
+              "resourceUID": "674966dfbc7b0d0001630c2d",
               "metricsProfile": {
                "costAnalysis": {
                 "enabled": false
@@ -458,7 +458,7 @@ interactions:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "3853"
+                - "3855"
             Content-Type:
                 - application/json
             Expires:
@@ -493,8 +493,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-08-01
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.3.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-09-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -502,7 +502,7 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 3853
+        content_length: 3855
         uncompressed: false
         body: |-
             {
@@ -516,10 +516,10 @@ interactions:
                "code": "Running"
               },
               "kubernetesVersion": "1.29",
-              "currentKubernetesVersion": "1.29.9",
+              "currentKubernetesVersion": "1.29.10",
               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-              "fqdn": "aks-cit-managedclustertestresourcednsprefix-76oauh09.hcp.eastus.azmk8s.io",
-              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-76oauh09.portal.hcp.eastus.azmk8s.io",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.portal.hcp.eastus.azmk8s.io",
               "agentPoolProfiles": [
                {
                 "name": "agentpool1",
@@ -535,12 +535,12 @@ interactions:
                  "code": "Running"
                 },
                 "orchestratorVersion": "1.29",
-                "currentOrchestratorVersion": "1.29.9",
+                "currentOrchestratorVersion": "1.29.10",
                 "enableNodePublicIP": false,
                 "mode": "System",
                 "osType": "Linux",
                 "osSKU": "Ubuntu",
-                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202410.15.0",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202411.12.0",
                 "upgradeSettings": {
                  "maxSurge": "10%"
                 },
@@ -623,7 +623,7 @@ interactions:
                "enabled": false
               },
               "workloadAutoScalerProfile": {},
-              "resourceUID": "672391aa9ecf720001e72578",
+              "resourceUID": "674966dfbc7b0d0001630c2d",
               "metricsProfile": {
                "costAnalysis": {
                 "enabled": false
@@ -644,7 +644,7 @@ interactions:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "3853"
+                - "3855"
             Content-Type:
                 - application/json
             Expires:
@@ -679,8 +679,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResourcenotfound?api-version=2024-08-01
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.3.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResourcenotfound?api-version=2024-09-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -734,8 +734,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-08-01
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.3.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-09-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -743,7 +743,7 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 3905
+        content_length: 3907
         uncompressed: false
         body: |-
             {
@@ -757,10 +757,10 @@ interactions:
                "code": "Running"
               },
               "kubernetesVersion": "1.29",
-              "currentKubernetesVersion": "1.29.9",
+              "currentKubernetesVersion": "1.29.10",
               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-              "fqdn": "aks-cit-managedclustertestresourcednsprefix-76oauh09.hcp.eastus.azmk8s.io",
-              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-76oauh09.portal.hcp.eastus.azmk8s.io",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.portal.hcp.eastus.azmk8s.io",
               "agentPoolProfiles": [
                {
                 "name": "agentpool1",
@@ -777,13 +777,13 @@ interactions:
                  "code": "Running"
                 },
                 "orchestratorVersion": "1.29",
-                "currentOrchestratorVersion": "1.29.9",
+                "currentOrchestratorVersion": "1.29.10",
                 "enableNodePublicIP": false,
                 "nodeLabels": {},
                 "mode": "System",
                 "osType": "Linux",
                 "osSKU": "Ubuntu",
-                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202410.15.0",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202411.12.0",
                 "upgradeSettings": {
                  "maxSurge": "10%"
                 },
@@ -866,7 +866,7 @@ interactions:
                "enabled": false
               },
               "workloadAutoScalerProfile": {},
-              "resourceUID": "672391aa9ecf720001e72578",
+              "resourceUID": "674966dfbc7b0d0001630c2d",
               "metricsProfile": {
                "costAnalysis": {
                 "enabled": false
@@ -889,7 +889,7 @@ interactions:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "3905"
+                - "3907"
             Content-Type:
                 - application/json
             Expires:
@@ -903,7 +903,7 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
-                - "11999"
+                - "12000"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -922,7 +922,7 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.2.0 (go1.23.2; linux)
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.3.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&c=c&h=h&s=s&t=t
         method: GET
       response:
@@ -977,8 +977,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-08-01
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.3.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-09-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -986,7 +986,7 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 3885
+        content_length: 3887
         uncompressed: false
         body: |-
             {
@@ -1000,10 +1000,10 @@ interactions:
                "code": "Running"
               },
               "kubernetesVersion": "1.29",
-              "currentKubernetesVersion": "1.29.9",
+              "currentKubernetesVersion": "1.29.10",
               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-              "fqdn": "aks-cit-managedclustertestresourcednsprefix-76oauh09.hcp.eastus.azmk8s.io",
-              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-76oauh09.portal.hcp.eastus.azmk8s.io",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.portal.hcp.eastus.azmk8s.io",
               "agentPoolProfiles": [
                {
                 "name": "agentpool1",
@@ -1020,12 +1020,12 @@ interactions:
                  "code": "Running"
                 },
                 "orchestratorVersion": "1.29",
-                "currentOrchestratorVersion": "1.29.9",
+                "currentOrchestratorVersion": "1.29.10",
                 "enableNodePublicIP": false,
                 "mode": "System",
                 "osType": "Linux",
                 "osSKU": "Ubuntu",
-                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202410.15.0",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202411.12.0",
                 "upgradeSettings": {
                  "maxSurge": "10%"
                 },
@@ -1108,7 +1108,7 @@ interactions:
                "enabled": false
               },
               "workloadAutoScalerProfile": {},
-              "resourceUID": "672391aa9ecf720001e72578",
+              "resourceUID": "674966dfbc7b0d0001630c2d",
               "metricsProfile": {
                "costAnalysis": {
                 "enabled": false
@@ -1129,7 +1129,7 @@ interactions:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "3885"
+                - "3887"
             Content-Type:
                 - application/json
             Expires:
@@ -1164,8 +1164,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?api-version=2024-08-01
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.3.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?api-version=2024-09-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -1173,7 +1173,7 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 4435
+        content_length: 4439
         uncompressed: false
         body: |-
             {
@@ -1189,10 +1189,10 @@ interactions:
                  "code": "Running"
                 },
                 "kubernetesVersion": "1.29",
-                "currentKubernetesVersion": "1.29.9",
+                "currentKubernetesVersion": "1.29.10",
                 "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-                "fqdn": "aks-cit-managedclustertestresourcednsprefix-76oauh09.hcp.eastus.azmk8s.io",
-                "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-76oauh09.portal.hcp.eastus.azmk8s.io",
+                "fqdn": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.hcp.eastus.azmk8s.io",
+                "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.portal.hcp.eastus.azmk8s.io",
                 "agentPoolProfiles": [
                  {
                   "name": "agentpool1",
@@ -1209,12 +1209,12 @@ interactions:
                    "code": "Running"
                   },
                   "orchestratorVersion": "1.29",
-                  "currentOrchestratorVersion": "1.29.9",
+                  "currentOrchestratorVersion": "1.29.10",
                   "enableNodePublicIP": false,
                   "mode": "System",
                   "osType": "Linux",
                   "osSKU": "Ubuntu",
-                  "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202410.15.0",
+                  "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202411.12.0",
                   "upgradeSettings": {
                    "maxSurge": "10%"
                   },
@@ -1297,7 +1297,7 @@ interactions:
                  "enabled": false
                 },
                 "workloadAutoScalerProfile": {},
-                "resourceUID": "672391aa9ecf720001e72578",
+                "resourceUID": "674966dfbc7b0d0001630c2d",
                 "metricsProfile": {
                  "costAnalysis": {
                   "enabled": false
@@ -1315,13 +1315,13 @@ interactions:
                }
               }
              ],
-             "nextLink": "https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=9855795\u0026api-version=2024-08-01\u0026skipToken=9855795"
+             "nextLink": "https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=10064527\u0026api-version=2024-09-01\u0026skipToken=10064527"
             }
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "4435"
+                - "4439"
             Content-Type:
                 - application/json
             Expires:
@@ -1335,7 +1335,7 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
-                - "16498"
+                - "16499"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -1354,8 +1354,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=9855795&api-version=2024-08-01&skipToken=9855795
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.3.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=10064527&api-version=2024-09-01&skipToken=10064527
         method: GET
       response:
         proto: HTTP/2.0
@@ -1408,8 +1408,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedClusternotfound/providers/Microsoft.ContainerService/managedClusters?api-version=2024-08-01
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.3.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedClusternotfound/providers/Microsoft.ContainerService/managedClusters?api-version=2024-09-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -1459,8 +1459,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-08-01
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.3.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-09-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -1510,7 +1510,7 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.2.0 (go1.23.2; linux)
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.3.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&c=c&h=h&s=s&t=t
         method: GET
       response:
@@ -1519,7 +1519,7 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 165
+        content_length: 164
         uncompressed: false
         body: |-
             {
@@ -1532,7 +1532,7 @@ interactions:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "165"
+                - "164"
             Content-Type:
                 - application/json
             Expires:
