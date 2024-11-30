@@ -85,6 +85,23 @@ func init() {
 				Expect(newResource).To(BeNil())
 			})
 		})
+		When("update requests are raised", func() {
+			It("should not return error", func(ctx context.Context) {
+				newResource, err := realClient.Update(ctx, resourceGroupName, resourceName, &armstorage.AccountUpdateParameters{
+					Properties: &armstorage.AccountPropertiesUpdateParameters{
+						AllowBlobPublicAccess:        to.Ptr(false),
+						AllowSharedKeyAccess:         to.Ptr(false),
+					},
+				})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(*newResource.Properties.AllowBlobPublicAccess).To(BeFalse())
+			})
+			It("should not return error when body is nil", func(ctx context.Context) {
+				newResource, err := realClient.Update(ctx, resourceGroupName, resourceName, nil)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(newResource).NotTo(BeNil())
+			})
+		})
 
 		When("listkeys requests are raised", func() {
 			It("should not return error", func(ctx context.Context) {
