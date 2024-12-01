@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/ipgroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/managedclusterclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatednszonegroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privateendpointclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatelinkserviceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatezoneclient"
@@ -74,6 +75,7 @@ type ClientFactory interface {
 	GetIPGroupClient() ipgroupclient.Interface
 	GetLoadBalancerClient() loadbalancerclient.Interface
 	GetManagedClusterClient() managedclusterclient.Interface
+	GetPrivateDNSZoneGroupClient() privatednszonegroupclient.Interface
 	GetPrivateEndpointClient() privateendpointclient.Interface
 	GetPrivateLinkServiceClient() privatelinkserviceclient.Interface
 	GetPrivateZoneClient() privatezoneclient.Interface
