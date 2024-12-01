@@ -73,6 +73,20 @@ func (mr *MockInterfaceMockRecorder) CreateOrUpdate(ctx, resourceGroupName, pare
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdate", reflect.TypeOf((*MockInterface)(nil).CreateOrUpdate), ctx, resourceGroupName, parentResourceName, resourceName, resourceParam)
 }
 
+// Delete mocks base method.
+func (m *MockInterface) Delete(ctx context.Context, resourceGroupName, parentResourceName, resourceName string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, resourceGroupName, parentResourceName, resourceName)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockInterfaceMockRecorder) Delete(ctx, resourceGroupName, parentResourceName, resourceName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockInterface)(nil).Delete), ctx, resourceGroupName, parentResourceName, resourceName)
+}
+
 // Get mocks base method.
 func (m *MockInterface) Get(ctx context.Context, resourceGroupName, parentResourceName, resourceName string) (*armprivatedns.VirtualNetworkLink, error) {
 	m.ctrl.T.Helper()
