@@ -1332,11 +1332,12 @@ func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes [
 
 		klog.V(2).Infof("ensureVMSSInPool begins to update vmss(%s) with new backendPoolID %s", vmssName, backendPoolID)
 		rerr := ss.CreateOrUpdateVMSS(ss.ResourceGroup, vmssName, newVMSS)
-		defer func() {
-			// Invalidate the cache since the VMSS would be updated.
-			// See EnsureBackendPoolDeletedFromVMSets for detail explanation.
-			_ = ss.DeleteCacheForVMSS(ctx, vmssName)
-		}()
+		// VMSS cache must be refreshed when etagmismatch error happens.
+		// TODO(mainred): we need to update the cache from the response of a successful request.
+		if rerr != nil && errors.Is(rerr.Error(), &retry.EtagMismatchError{}) {
+			klog.V(3).Infof("ensureVMSSInPool invalidate the vmss cache for EtagMismatchError")
+			_ = ss.vmssCache.Delete(consts.VMSSKey)
+		}
 		if rerr != nil {
 			klog.Errorf("ensureVMSSInPool CreateOrUpdateVMSS(%s) with new backendPoolID %s, err: %v", vmssName, backendPoolID, rerr.Error())
 			return rerr.Error()
@@ -1401,7 +1402,7 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 
 	hostUpdates := make([]func() error, 0, len(nodes))
 	nodeUpdates := make(map[vmssMetaInfo]map[string]vmssvmclient.VirtualMachineScaleSetVM)
-	errors := make([]error, 0)
+	errs := make([]error, 0)
 	for _, node := range nodes {
 		localNodeName := node.Name
 
@@ -1423,7 +1424,7 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 		nodeResourceGroup, nodeVMSS, nodeInstanceID, nodeVMSSVM, err := ss.EnsureHostInPool(ctx, service, types.NodeName(localNodeName), backendPoolID, vmSetNameOfLB)
 		if err != nil {
 			klog.Errorf("EnsureHostInPool(%s): backendPoolID(%s) - failed to ensure host in pool: %q", getServiceName(service), backendPoolID, err)
-			errors = append(errors, err)
+			errs = append(errs, err)
 			continue
 		}
 
@@ -1481,14 +1482,20 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 			return nil
 		})
 	}
-	errs := utilerrors.AggregateGoroutines(hostUpdates...)
-	if errs != nil {
-		return utilerrors.Flatten(errs)
+	updateErrors := utilerrors.AggregateGoroutines(hostUpdates...)
+	if updateErrors != nil {
+		// TODO(mainred): Update vm cache from response when a sucessful update is done instead of always invalidating the cache for a refresh.
+		// Invalidates the vm cache only when an etag mismatch error happens to reduce the cache triggered API call.
+		aggUpdateErrors := utilerrors.Flatten(updateErrors)
+		if errors.Is(aggUpdateErrors, &retry.EtagMismatchError{}) {
+			klog.V(3).Info("EnsureHostInPool UpdateVMs failed for EtagMismatchError")
+		}
+		return aggUpdateErrors
 	}
 
 	// Fail if there are other errors.
-	if len(errors) > 0 {
-		return utilerrors.Flatten(utilerrors.NewAggregate(errors))
+	if len(errs) > 0 {
+		return utilerrors.Flatten(utilerrors.NewAggregate(errs))
 	}
 
 	isOperationSucceeded = true
@@ -1964,9 +1971,15 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 			return nil
 		})
 	}
-	errs := utilerrors.AggregateGoroutines(hostUpdates...)
-	if errs != nil {
-		return updatedVM.Load(), utilerrors.Flatten(errs)
+	updateErrors := utilerrors.AggregateGoroutines(hostUpdates...)
+	if updateErrors != nil {
+		// TODO(mainred): Update vm cache from response when a sucessful update is done instead of always invalidating the cache for a refresh.
+		// Invalidates the vm cache only when an etag mismatch error happens to reduce the cache triggered API call.
+		aggUpdateErrors := utilerrors.Flatten(updateErrors)
+		if errors.Is(aggUpdateErrors, &retry.EtagMismatchError{}) {
+			klog.V(3).Info("EnsureBackendPoolDeleted UpdateVMs failed for EtagMismatchError")
+		}
+		return updatedVM.Load(), aggUpdateErrors
 	}
 
 	// Fail if there are other errors.
@@ -2230,8 +2243,9 @@ func (ss *ScaleSet) EnsureBackendPoolDeletedFromVMSets(ctx context.Context, vmss
 			rerr := ss.CreateOrUpdateVMSS(ss.ResourceGroup, vmssName, newVMSS)
 
 			// VMSS cache must be refreshed when etagmismatch error happens.
-			// TODO(mainred): we need to update the cache if update is successful
+			// TODO(mainred): we need to update the cache from the response of a successful request.
 			if rerr != nil && errors.Is(rerr.Error(), &retry.EtagMismatchError{}) {
+				klog.V(3).Infof("EnsureBackendPoolDeletedFromVMSets invalidate the vmss cache for EtagMismatchError")
 				_ = ss.vmssCache.Delete(consts.VMSSKey)
 			}
 
