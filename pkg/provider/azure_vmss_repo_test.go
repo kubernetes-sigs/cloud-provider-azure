@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -77,7 +78,7 @@ func TestCreateOrUpdateVMSS(t *testing.T) {
 		mockVMSSClient := az.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, testVMSSName).Return(test.vmss, test.clientErr)
 
-		err := az.CreateOrUpdateVMSS(az.ResourceGroup, testVMSSName, compute.VirtualMachineScaleSet{})
+		err := az.CreateOrUpdateVMSS(az.ResourceGroup, testVMSSName, vmssclient.VirtualMachineScaleSet{})
 		assert.Equal(t, test.expectedErr, err)
 	}
 }

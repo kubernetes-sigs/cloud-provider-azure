@@ -30,6 +30,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
@@ -185,7 +186,7 @@ func (fs *FlexScaleSet) getNodeVmssFlexID(ctx context.Context, nodeName string) 
 		var vmssFlexIDs []string
 		vmssFlexes.Range(func(key, value interface{}) bool {
 			vmssFlexID := key.(string)
-			vmssFlex := value.(*compute.VirtualMachineScaleSet)
+			vmssFlex := value.(*vmssclient.VirtualMachineScaleSet)
 			vmssPrefix := ptr.Deref(vmssFlex.Name, "")
 			if vmssFlex.VirtualMachineProfile != nil &&
 				vmssFlex.VirtualMachineProfile.OsProfile != nil &&
@@ -244,14 +245,14 @@ func (fs *FlexScaleSet) getVmssFlexVM(ctx context.Context, nodeName string, crt 
 	return *(cachedVM.(*compute.VirtualMachine)), nil
 }
 
-func (fs *FlexScaleSet) getVmssFlexByVmssFlexID(ctx context.Context, vmssFlexID string, crt azcache.AzureCacheReadType) (*compute.VirtualMachineScaleSet, error) {
+func (fs *FlexScaleSet) getVmssFlexByVmssFlexID(ctx context.Context, vmssFlexID string, crt azcache.AzureCacheReadType) (*vmssclient.VirtualMachineScaleSet, error) {
 	cached, err := fs.vmssFlexCache.Get(ctx, consts.VmssFlexKey, crt)
 	if err != nil {
 		return nil, err
 	}
 	vmssFlexes := cached.(*sync.Map)
 	if vmssFlex, ok := vmssFlexes.Load(vmssFlexID); ok {
-		result := vmssFlex.(*compute.VirtualMachineScaleSet)
+		result := vmssFlex.(*vmssclient.VirtualMachineScaleSet)
 		return result, nil
 	}
 
@@ -262,13 +263,13 @@ func (fs *FlexScaleSet) getVmssFlexByVmssFlexID(ctx context.Context, vmssFlexID 
 	}
 	vmssFlexes = cached.(*sync.Map)
 	if vmssFlex, ok := vmssFlexes.Load(vmssFlexID); ok {
-		result := vmssFlex.(*compute.VirtualMachineScaleSet)
+		result := vmssFlex.(*vmssclient.VirtualMachineScaleSet)
 		return result, nil
 	}
 	return nil, cloudprovider.InstanceNotFound
 }
 
-func (fs *FlexScaleSet) getVmssFlexByNodeName(ctx context.Context, nodeName string, crt azcache.AzureCacheReadType) (*compute.VirtualMachineScaleSet, error) {
+func (fs *FlexScaleSet) getVmssFlexByNodeName(ctx context.Context, nodeName string, crt azcache.AzureCacheReadType) (*vmssclient.VirtualMachineScaleSet, error) {
 	vmssFlexID, err := fs.getNodeVmssFlexID(ctx, nodeName)
 	if err != nil {
 		return nil, err
@@ -305,17 +306,17 @@ func (fs *FlexScaleSet) getVmssFlexIDByName(ctx context.Context, vmssFlexName st
 	return "", cloudprovider.InstanceNotFound
 }
 
-func (fs *FlexScaleSet) getVmssFlexByName(ctx context.Context, vmssFlexName string) (*compute.VirtualMachineScaleSet, error) {
+func (fs *FlexScaleSet) getVmssFlexByName(ctx context.Context, vmssFlexName string) (*vmssclient.VirtualMachineScaleSet, error) {
 	cached, err := fs.vmssFlexCache.Get(ctx, consts.VmssFlexKey, azcache.CacheReadTypeDefault)
 	if err != nil {
 		return nil, err
 	}
 
-	var targetVmssFlex *compute.VirtualMachineScaleSet
+	var targetVmssFlex *vmssclient.VirtualMachineScaleSet
 	vmssFlexes := cached.(*sync.Map)
 	vmssFlexes.Range(func(key, value interface{}) bool {
 		vmssFlexID := key.(string)
-		vmssFlex := value.(*compute.VirtualMachineScaleSet)
+		vmssFlex := value.(*vmssclient.VirtualMachineScaleSet)
 		name, err := getLastSegment(vmssFlexID, "/")
 		if err != nil {
 			return true

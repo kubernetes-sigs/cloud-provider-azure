@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/go-autorest/autorest/mocks"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -157,6 +158,16 @@ func TestGetErrorNil(t *testing.T) {
 	}
 	rerr = GetError(resp, nil)
 	assert.Equal(t, fmt.Errorf("empty HTTP response"), rerr.RawError)
+}
+
+func TestGetErrorErrorIs(t *testing.T) {
+	fakeResp := &http.Response{
+		StatusCode: http.StatusPreconditionFailed,
+		Body:       mocks.NewBody("Etag provided in if-match header \"771\" does not match etag \"773\" of resource."),
+	}
+	err := GetError(fakeResp, nil)
+	fmt.Println(errors.Is(err.Error(), &EtagMismatchError{}))
+	assert.True(t, errors.Is(err.Error(), &EtagMismatchError{}))
 }
 
 func TestGetStatusNotFoundAndForbiddenIgnoredError(t *testing.T) {

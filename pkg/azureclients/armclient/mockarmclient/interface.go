@@ -401,6 +401,20 @@ func (mr *MockInterfaceMockRecorder) PutResourcesInBatches(ctx, resources, batch
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutResourcesInBatches", reflect.TypeOf((*MockInterface)(nil).PutResourcesInBatches), ctx, resources, batchSize)
 }
 
+// PutResourcesInBatchesWithEtag mocks base method.
+func (m *MockInterface) PutResourcesInBatchesWithEtag(ctx context.Context, resources map[string]any, batchSize int) map[string]*armclient.PutResourcesResponse {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PutResourcesInBatchesWithEtag", ctx, resources, batchSize)
+	ret0, _ := ret[0].(map[string]*armclient.PutResourcesResponse)
+	return ret0
+}
+
+// PutResourcesInBatchesWithEtag indicates an expected call of PutResourcesInBatchesWithEtag.
+func (mr *MockInterfaceMockRecorder) PutResourcesInBatchesWithEtag(ctx, resources, batchSize any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutResourcesInBatchesWithEtag", reflect.TypeOf((*MockInterface)(nil).PutResourcesInBatchesWithEtag), ctx, resources, batchSize)
+}
+
 // Send mocks base method.
 func (m *MockInterface) Send(ctx context.Context, request *http.Request, decorators ...autorest.SendDecorator) (*http.Response, *retry.Error) {
 	m.ctrl.T.Helper()

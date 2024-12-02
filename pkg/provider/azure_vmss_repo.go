@@ -19,15 +19,15 @@ package provider
 import (
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"k8s.io/klog/v2"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 // CreateOrUpdateVMSS invokes az.VirtualMachineScaleSetsClient.Update().
-func (az *Cloud) CreateOrUpdateVMSS(resourceGroupName string, VMScaleSetName string, parameters compute.VirtualMachineScaleSet) *retry.Error {
+func (az *Cloud) CreateOrUpdateVMSS(resourceGroupName string, VMScaleSetName string, parameters vmssclient.VirtualMachineScaleSet) *retry.Error {
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 
@@ -44,8 +44,13 @@ func (az *Cloud) CreateOrUpdateVMSS(resourceGroupName string, VMScaleSetName str
 		return nil
 	}
 
-	rerr = az.VirtualMachineScaleSetsClient.CreateOrUpdate(ctx, resourceGroupName, VMScaleSetName, parameters)
-	klog.V(10).Infof("UpdateVmssVMWithRetry: VirtualMachineScaleSetsClient.CreateOrUpdate(%s): end", VMScaleSetName)
+	etag := ""
+	if parameters.Etag != nil {
+		etag = *parameters.Etag
+	}
+
+	rerr = az.VirtualMachineScaleSetsClient.CreateOrUpdate(ctx, resourceGroupName, VMScaleSetName, parameters, etag)
+	klog.V(10).Infof("CreateOrUpdateVMSS: VirtualMachineScaleSetsClient.CreateOrUpdate(%s): end", VMScaleSetName)
 	if rerr != nil {
 		klog.Errorf("CreateOrUpdateVMSS: error CreateOrUpdate vmss(%s): %v", VMScaleSetName, rerr)
 		return rerr

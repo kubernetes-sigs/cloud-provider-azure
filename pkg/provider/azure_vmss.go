@@ -36,10 +36,13 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/virtualmachine"
+	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	vmutil "sigs.k8s.io/cloud-provider-azure/pkg/util/vm"
 )
 
@@ -164,8 +167,8 @@ func newScaleSet(az *Cloud) (VMSet, error) {
 	return ss, nil
 }
 
-func (ss *ScaleSet) getVMSS(ctx context.Context, vmssName string, crt azcache.AzureCacheReadType) (*compute.VirtualMachineScaleSet, error) {
-	getter := func(vmssName string) (*compute.VirtualMachineScaleSet, error) {
+func (ss *ScaleSet) getVMSS(ctx context.Context, vmssName string, crt azcache.AzureCacheReadType) (*vmssclient.VirtualMachineScaleSet, error) {
+	getter := func(vmssName string) (*vmssclient.VirtualMachineScaleSet, error) {
 		cached, err := ss.vmssCache.Get(ctx, consts.VMSSKey, crt)
 		if err != nil {
 			return nil, err
@@ -223,6 +226,7 @@ func (ss *ScaleSet) getVmssVMByNodeIdentity(ctx context.Context, node *nodeIdent
 				return nil, true, nil
 			}
 			found = true
+
 			return virtualmachine.FromVirtualMachineScaleSetVM(result.VirtualMachine, virtualmachine.ByVMSS(result.VMSSName)), found, nil
 		}
 
@@ -339,8 +343,8 @@ func (ss *ScaleSet) GetProvisioningStateByNodeName(ctx context.Context, name str
 
 // getCachedVirtualMachineByInstanceID gets scaleSetVMInfo from cache.
 // The node must belong to one of scale sets.
-func (ss *ScaleSet) getVmssVMByInstanceID(ctx context.Context, resourceGroup, scaleSetName, instanceID string, crt azcache.AzureCacheReadType) (*compute.VirtualMachineScaleSetVM, error) {
-	getter := func(ctx context.Context, crt azcache.AzureCacheReadType) (vm *compute.VirtualMachineScaleSetVM, found bool, err error) {
+func (ss *ScaleSet) getVmssVMByInstanceID(ctx context.Context, resourceGroup, scaleSetName, instanceID string, crt azcache.AzureCacheReadType) (*vmssvmclient.VirtualMachineScaleSetVM, error) {
+	getter := func(ctx context.Context, crt azcache.AzureCacheReadType) (vm *vmssvmclient.VirtualMachineScaleSetVM, found bool, err error) {
 		virtualMachines, err := ss.getVMSSVMsFromCache(ctx, resourceGroup, scaleSetName, crt)
 		if err != nil {
 			return nil, false, err
@@ -816,7 +820,7 @@ func (ss *ScaleSet) getNodeIdentityByNodeName(ctx context.Context, nodeName stri
 }
 
 // listScaleSetVMs lists VMs belonging to the specified scale set.
-func (ss *ScaleSet) listScaleSetVMs(scaleSetName, resourceGroup string) ([]compute.VirtualMachineScaleSetVM, error) {
+func (ss *ScaleSet) listScaleSetVMs(scaleSetName, resourceGroup string) ([]vmssvmclient.VirtualMachineScaleSetVM, error) {
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 
@@ -1037,7 +1041,7 @@ func getPrimaryIPConfigFromVMSSNetworkConfig(config *compute.VirtualMachineScale
 
 // EnsureHostInPool ensures the given VM's Primary NIC's Primary IP Configuration is
 // participating in the specified LoadBalancer Backend Pool, which returns (resourceGroup, vmasName, instanceID, vmssVM, error).
-func (ss *ScaleSet) EnsureHostInPool(ctx context.Context, _ *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetNameOfLB string) (string, string, string, *compute.VirtualMachineScaleSetVM, error) {
+func (ss *ScaleSet) EnsureHostInPool(ctx context.Context, _ *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetNameOfLB string) (string, string, string, *vmssvmclient.VirtualMachineScaleSetVM, error) {
 	logger := klog.Background().WithName("EnsureHostInPool").
 		WithValues("nodeName", nodeName, "backendPoolID", backendPoolID, "vmSetNameOfLB", vmSetNameOfLB)
 	vmName := mapNodeNameToVMName(nodeName)
@@ -1142,14 +1146,17 @@ func (ss *ScaleSet) EnsureHostInPool(ctx context.Context, _ *v1.Service, nodeNam
 			ID: ptr.To(backendPoolID),
 		})
 	primaryIPConfiguration.LoadBalancerBackendAddressPools = &newBackendPools
-	newVM := &compute.VirtualMachineScaleSetVM{
-		Location: &vm.Location,
-		VirtualMachineScaleSetVMProperties: &compute.VirtualMachineScaleSetVMProperties{
-			HardwareProfile: vm.VirtualMachineScaleSetVMProperties.HardwareProfile,
-			NetworkProfileConfiguration: &compute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
-				NetworkInterfaceConfigurations: &networkInterfaceConfigurations,
+	newVM := &vmssvmclient.VirtualMachineScaleSetVM{
+		VirtualMachineScaleSetVM: compute.VirtualMachineScaleSetVM{
+			Location: &vm.Location,
+			VirtualMachineScaleSetVMProperties: &compute.VirtualMachineScaleSetVMProperties{
+				HardwareProfile: vm.VirtualMachineScaleSetVMProperties.HardwareProfile,
+				NetworkProfileConfiguration: &compute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
+					NetworkInterfaceConfigurations: &networkInterfaceConfigurations,
+				},
 			},
 		},
+		Etag: vm.Etag,
 	}
 
 	// Get the node resource group.
@@ -1309,21 +1316,30 @@ func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes [
 				ID: ptr.To(backendPoolID),
 			})
 		primaryIPConfig.LoadBalancerBackendAddressPools = &loadBalancerBackendAddressPools
-		newVMSS := compute.VirtualMachineScaleSet{
-			Location: vmss.Location,
-			VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
-				VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
-					NetworkProfile: &compute.VirtualMachineScaleSetNetworkProfile{
-						NetworkInterfaceConfigurations: &vmssNIC,
+		newVMSS := vmssclient.VirtualMachineScaleSet{
+			VirtualMachineScaleSet: compute.VirtualMachineScaleSet{
+				Location: vmss.Location,
+				VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
+					VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
+						NetworkProfile: &compute.VirtualMachineScaleSetNetworkProfile{
+							NetworkInterfaceConfigurations: &vmssNIC,
+						},
 					},
 				},
 			},
+			Etag: vmss.Etag,
 		}
 
 		klog.V(2).Infof("ensureVMSSInPool begins to update vmss(%s) with new backendPoolID %s", vmssName, backendPoolID)
 		rerr := ss.CreateOrUpdateVMSS(ss.ResourceGroup, vmssName, newVMSS)
+		// VMSS cache must be refreshed when etagmismatch error happens.
+		// TODO(mainred): we need to update the cache from the response of a successful request.
+		if rerr != nil && errors.Is(rerr.Error(), &retry.EtagMismatchError{}) {
+			klog.V(3).Infof("ensureVMSSInPool invalidate the vmss cache for EtagMismatchError")
+			_ = ss.vmssCache.Delete(consts.VMSSKey)
+		}
 		if rerr != nil {
-			klog.Errorf("ensureVMSSInPool CreateOrUpdateVMSS(%s) with new backendPoolID %s, err: %v", vmssName, backendPoolID, err)
+			klog.Errorf("ensureVMSSInPool CreateOrUpdateVMSS(%s) with new backendPoolID %s, err: %v", vmssName, backendPoolID, rerr.Error())
 			return rerr.Error()
 		}
 	}
@@ -1331,7 +1347,7 @@ func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes [
 }
 
 // isWindows2019 checks if the ImageReference on the VMSS matches a Windows Server 2019 image.
-func isWindows2019(vmss *compute.VirtualMachineScaleSet) bool {
+func isWindows2019(vmss *vmssclient.VirtualMachineScaleSet) bool {
 	if vmss == nil {
 		return false
 	}
@@ -1385,8 +1401,8 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 	}
 
 	hostUpdates := make([]func() error, 0, len(nodes))
-	nodeUpdates := make(map[vmssMetaInfo]map[string]compute.VirtualMachineScaleSetVM)
-	errors := make([]error, 0)
+	nodeUpdates := make(map[vmssMetaInfo]map[string]vmssvmclient.VirtualMachineScaleSetVM)
+	errs := make([]error, 0)
 	for _, node := range nodes {
 		localNodeName := node.Name
 
@@ -1408,7 +1424,7 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 		nodeResourceGroup, nodeVMSS, nodeInstanceID, nodeVMSSVM, err := ss.EnsureHostInPool(ctx, service, types.NodeName(localNodeName), backendPoolID, vmSetNameOfLB)
 		if err != nil {
 			klog.Errorf("EnsureHostInPool(%s): backendPoolID(%s) - failed to ensure host in pool: %q", getServiceName(service), backendPoolID, err)
-			errors = append(errors, err)
+			errs = append(errs, err)
 			continue
 		}
 
@@ -1421,7 +1437,7 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 		if v, ok := nodeUpdates[nodeVMSSMetaInfo]; ok {
 			v[nodeInstanceID] = *nodeVMSSVM
 		} else {
-			nodeUpdates[nodeVMSSMetaInfo] = map[string]compute.VirtualMachineScaleSetVM{
+			nodeUpdates[nodeVMSSMetaInfo] = map[string]vmssvmclient.VirtualMachineScaleSetVM{
 				nodeInstanceID: *nodeVMSSVM,
 			}
 		}
@@ -1455,6 +1471,8 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 			}
 
 			klog.V(2).InfoS("Begin to update VMs for VMSS with new backendPoolID", logFields...)
+			//NOTE(mainred): We don't have to invalidate the cache in case of ETagMismatch error, since the cache is already invalidated anyway
+			// in the last nodes loop in defer function.
 			rerr := ss.VirtualMachineScaleSetVMsClient.UpdateVMs(ctx, meta.resourceGroup, meta.vmssName, update, "network_update", batchSize)
 			if rerr != nil {
 				klog.ErrorS(err, "Failed to update VMs for VMSS", logFields...)
@@ -1464,14 +1482,20 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 			return nil
 		})
 	}
-	errs := utilerrors.AggregateGoroutines(hostUpdates...)
-	if errs != nil {
-		return utilerrors.Flatten(errs)
+	updateErrors := utilerrors.AggregateGoroutines(hostUpdates...)
+	if updateErrors != nil {
+		// TODO(mainred): Update vm cache from response when a sucessful update is done instead of always invalidating the cache for a refresh.
+		// Invalidates the vm cache only when an etag mismatch error happens to reduce the cache triggered API call.
+		aggUpdateErrors := utilerrors.Flatten(updateErrors)
+		if errors.Is(aggUpdateErrors, &retry.EtagMismatchError{}) {
+			klog.V(3).Info("EnsureHostInPool UpdateVMs failed for EtagMismatchError")
+		}
+		return aggUpdateErrors
 	}
 
 	// Fail if there are other errors.
-	if len(errors) > 0 {
-		return utilerrors.Flatten(utilerrors.NewAggregate(errors))
+	if len(errs) > 0 {
+		return utilerrors.Flatten(utilerrors.NewAggregate(errs))
 	}
 
 	isOperationSucceeded = true
@@ -1557,7 +1581,7 @@ func (ss *ScaleSet) EnsureHostsInPool(ctx context.Context, service *v1.Service, 
 
 // ensureBackendPoolDeletedFromNode ensures the loadBalancer backendAddressPools deleted
 // from the specified node, which returns (resourceGroup, vmasName, instanceID, vmssVM, error).
-func (ss *ScaleSet) ensureBackendPoolDeletedFromNode(ctx context.Context, nodeName string, backendPoolIDs []string) (string, string, string, *compute.VirtualMachineScaleSetVM, error) {
+func (ss *ScaleSet) ensureBackendPoolDeletedFromNode(ctx context.Context, nodeName string, backendPoolIDs []string) (string, string, string, *vmssvmclient.VirtualMachineScaleSetVM, error) {
 	logger := klog.Background().WithName("ensureBackendPoolDeletedFromNode").WithValues("nodeName", nodeName, "backendPoolIDs", backendPoolIDs)
 	vm, err := ss.getVmssVM(ctx, nodeName, azcache.CacheReadTypeDefault)
 	if err != nil {
@@ -1604,14 +1628,17 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromNode(ctx context.Context, nodeNa
 	}
 
 	// Compose a new vmssVM with added backendPoolID.
-	newVM := &compute.VirtualMachineScaleSetVM{
-		Location: &vm.Location,
-		VirtualMachineScaleSetVMProperties: &compute.VirtualMachineScaleSetVMProperties{
-			HardwareProfile: vm.VirtualMachineScaleSetVMProperties.HardwareProfile,
-			NetworkProfileConfiguration: &compute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
-				NetworkInterfaceConfigurations: &networkInterfaceConfigurations,
+	newVM := &vmssvmclient.VirtualMachineScaleSetVM{
+		VirtualMachineScaleSetVM: compute.VirtualMachineScaleSetVM{
+			Location: &vm.Location,
+			VirtualMachineScaleSetVMProperties: &compute.VirtualMachineScaleSetVMProperties{
+				HardwareProfile: vm.VirtualMachineScaleSetVMProperties.HardwareProfile,
+				NetworkProfileConfiguration: &compute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
+					NetworkInterfaceConfigurations: &networkInterfaceConfigurations,
+				},
 			},
 		},
+		Etag: vm.Etag,
 	}
 
 	// Get the node resource group.
@@ -1743,10 +1770,10 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVmssUniform(ctx context.Context,
 		vmssUniformMap := cachedUniform.(*sync.Map)
 		var errorList []error
 		walk := func(_, value interface{}) bool {
-			var vmss *compute.VirtualMachineScaleSet
+			var vmss *vmssclient.VirtualMachineScaleSet
 			if vmssEntry, ok := value.(*VMSSEntry); ok {
 				vmss = vmssEntry.VMSS
-			} else if v, ok := value.(*compute.VirtualMachineScaleSet); ok {
+			} else if v, ok := value.(*vmssclient.VirtualMachineScaleSet); ok {
 				vmss = v
 			}
 			klog.V(2).Infof("ensureBackendPoolDeletedFromVmssUniform: vmss %q, backendPoolIDs %q", ptr.Deref(vmss.Name, ""), backendPoolIDs)
@@ -1845,7 +1872,7 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 
 	// Ensure the backendPoolID is deleted from the VMSS VMs.
 	hostUpdates := make([]func() error, 0, len(ipConfigurationIDs))
-	nodeUpdates := make(map[vmssMetaInfo]map[string]compute.VirtualMachineScaleSetVM)
+	nodeUpdates := make(map[vmssMetaInfo]map[string]vmssvmclient.VirtualMachineScaleSetVM)
 	allErrs := make([]error, 0)
 	visitedIPConfigIDPrefix := map[string]bool{}
 	for i := range ipConfigurationIDs {
@@ -1900,7 +1927,7 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 		if v, ok := nodeUpdates[nodeVMSSMetaInfo]; ok {
 			v[nodeInstanceID] = *nodeVMSSVM
 		} else {
-			nodeUpdates[nodeVMSSMetaInfo] = map[string]compute.VirtualMachineScaleSetVM{
+			nodeUpdates[nodeVMSSMetaInfo] = map[string]vmssvmclient.VirtualMachineScaleSetVM{
 				nodeInstanceID: *nodeVMSSVM,
 			}
 		}
@@ -1932,6 +1959,8 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 			}
 
 			klog.V(2).InfoS("Begin to update VMs for VMSS with new backendPoolID", logFields...)
+			//NOTE(mainred): We don't have to invalidate the cache in case of ETagMismatch error, since the cache is already invalidated anyway
+			// in the last nodes loop in defer function.
 			rerr := ss.VirtualMachineScaleSetVMsClient.UpdateVMs(ctx, meta.resourceGroup, meta.vmssName, update, "network_update", batchSize)
 			if rerr != nil {
 				klog.ErrorS(err, "Failed to update VMs for VMSS", logFields...)
@@ -1942,9 +1971,15 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 			return nil
 		})
 	}
-	errs := utilerrors.AggregateGoroutines(hostUpdates...)
-	if errs != nil {
-		return updatedVM.Load(), utilerrors.Flatten(errs)
+	updateErrors := utilerrors.AggregateGoroutines(hostUpdates...)
+	if updateErrors != nil {
+		// TODO(mainred): Update vm cache from response when a sucessful update is done instead of always invalidating the cache for a refresh.
+		// Invalidates the vm cache only when an etag mismatch error happens to reduce the cache triggered API call.
+		aggUpdateErrors := utilerrors.Flatten(updateErrors)
+		if errors.Is(aggUpdateErrors, &retry.EtagMismatchError{}) {
+			klog.V(3).Info("EnsureBackendPoolDeleted UpdateVMs failed for EtagMismatchError")
+		}
+		return updatedVM.Load(), aggUpdateErrors
 	}
 
 	// Fail if there are other errors.
@@ -2146,13 +2181,13 @@ func deleteBackendPoolFromIPConfig(msg, backendPoolID, resource string, primaryN
 // EnsureBackendPoolDeletedFromVMSets ensures the loadBalancer backendAddressPools deleted from the specified VMSS
 func (ss *ScaleSet) EnsureBackendPoolDeletedFromVMSets(ctx context.Context, vmssNamesMap map[string]bool, backendPoolIDs []string) error {
 	vmssUpdaters := make([]func() error, 0, len(vmssNamesMap))
-	errors := make([]error, 0, len(vmssNamesMap))
+	errs := make([]error, 0, len(vmssNamesMap))
 	for vmssName := range vmssNamesMap {
 		vmssName := vmssName
 		vmss, err := ss.getVMSS(ctx, vmssName, azcache.CacheReadTypeDefault)
 		if err != nil {
-			klog.Errorf("ensureBackendPoolDeletedFromVMSS: failed to get VMSS %s: %v", vmssName, err)
-			errors = append(errors, err)
+			klog.Errorf("EnsureBackendPoolDeletedFromVMSets: failed to get VMSS %s: %v", vmssName, err)
+			errs = append(errs, err)
 			continue
 		}
 
@@ -2170,14 +2205,14 @@ func (ss *ScaleSet) EnsureBackendPoolDeletedFromVMSets(ctx context.Context, vmss
 		primaryNIC, err := getPrimaryNetworkInterfaceConfiguration(vmssNIC, vmssName)
 		if err != nil {
 			klog.Errorf("EnsureBackendPoolDeletedFromVMSets: failed to get the primary network interface config of the VMSS %s: %v", vmssName, err)
-			errors = append(errors, err)
+			errs = append(errs, err)
 			continue
 		}
 		foundTotal := false
 		for _, backendPoolID := range backendPoolIDs {
 			found, err := deleteBackendPoolFromIPConfig("EnsureBackendPoolDeletedFromVMSets", backendPoolID, vmssName, primaryNIC)
 			if err != nil {
-				errors = append(errors, err)
+				errs = append(errs, err)
 				continue
 			}
 			if found {
@@ -2190,19 +2225,30 @@ func (ss *ScaleSet) EnsureBackendPoolDeletedFromVMSets(ctx context.Context, vmss
 
 		vmssUpdaters = append(vmssUpdaters, func() error {
 			// Compose a new vmss with added backendPoolID.
-			newVMSS := compute.VirtualMachineScaleSet{
-				Location: vmss.Location,
-				VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
-					VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
-						NetworkProfile: &compute.VirtualMachineScaleSetNetworkProfile{
-							NetworkInterfaceConfigurations: &vmssNIC,
+			newVMSS := vmssclient.VirtualMachineScaleSet{
+				VirtualMachineScaleSet: compute.VirtualMachineScaleSet{
+					Location: vmss.Location,
+					VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
+						VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
+							NetworkProfile: &compute.VirtualMachineScaleSetNetworkProfile{
+								NetworkInterfaceConfigurations: &vmssNIC,
+							},
 						},
 					},
 				},
+				Etag: vmss.Etag,
 			}
 
 			klog.V(2).Infof("EnsureBackendPoolDeletedFromVMSets begins to update vmss(%s) with backendPoolIDs %q", vmssName, backendPoolIDs)
 			rerr := ss.CreateOrUpdateVMSS(ss.ResourceGroup, vmssName, newVMSS)
+
+			// VMSS cache must be refreshed when etagmismatch error happens.
+			// TODO(mainred): we need to update the cache from the response of a successful request.
+			if rerr != nil && errors.Is(rerr.Error(), &retry.EtagMismatchError{}) {
+				klog.V(3).Infof("EnsureBackendPoolDeletedFromVMSets invalidate the vmss cache for EtagMismatchError")
+				_ = ss.vmssCache.Delete(consts.VMSSKey)
+			}
+
 			if rerr != nil {
 				klog.Errorf("EnsureBackendPoolDeletedFromVMSets CreateOrUpdateVMSS(%s) with new backendPoolIDs %q, err: %v", vmssName, backendPoolIDs, rerr)
 				return rerr.Error()
@@ -2212,13 +2258,13 @@ func (ss *ScaleSet) EnsureBackendPoolDeletedFromVMSets(ctx context.Context, vmss
 		})
 	}
 
-	errs := utilerrors.AggregateGoroutines(vmssUpdaters...)
+	aggregateErrs := utilerrors.AggregateGoroutines(vmssUpdaters...)
 	if errs != nil {
-		return utilerrors.Flatten(errs)
+		return utilerrors.Flatten(aggregateErrs)
 	}
 	// Fail if there are other errors.
-	if len(errors) > 0 {
-		return utilerrors.Flatten(utilerrors.NewAggregate(errors))
+	if len(errs) > 0 {
+		return utilerrors.Flatten(utilerrors.NewAggregate(errs))
 	}
 
 	return nil

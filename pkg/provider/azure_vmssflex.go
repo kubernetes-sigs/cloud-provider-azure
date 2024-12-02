@@ -35,6 +35,8 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
@@ -444,7 +446,7 @@ func (fs *FlexScaleSet) GetNodeCIDRMasksByProviderID(ctx context.Context, provid
 
 // EnsureHostInPool ensures the given VM's Primary NIC's Primary IP Configuration is
 // participating in the specified LoadBalancer Backend Pool, which returns (resourceGroup, vmasName, instanceID, vmssVM, error).
-func (fs *FlexScaleSet) EnsureHostInPool(ctx context.Context, service *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetNameOfLB string) (string, string, string, *compute.VirtualMachineScaleSetVM, error) {
+func (fs *FlexScaleSet) EnsureHostInPool(ctx context.Context, service *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetNameOfLB string) (string, string, string, *vmssvmclient.VirtualMachineScaleSetVM, error) {
 	serviceName := getServiceName(service)
 	name := mapNodeNameToVMName(nodeName)
 	vmssFlexName, err := fs.getNodeVmssFlexName(ctx, name)
@@ -676,13 +678,15 @@ func (fs *FlexScaleSet) ensureVMSSFlexInPool(ctx context.Context, _ *v1.Service,
 				ID: ptr.To(backendPoolID),
 			})
 		primaryIPConfig.LoadBalancerBackendAddressPools = &loadBalancerBackendAddressPools
-		newVMSS := compute.VirtualMachineScaleSet{
-			Location: vmssFlex.Location,
-			VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
-				VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
-					NetworkProfile: &compute.VirtualMachineScaleSetNetworkProfile{
-						NetworkInterfaceConfigurations: &vmssNIC,
-						NetworkAPIVersion:              compute.TwoZeroTwoZeroHyphenMinusOneOneHyphenMinusZeroOne,
+		newVMSS := vmssclient.VirtualMachineScaleSet{
+			VirtualMachineScaleSet: compute.VirtualMachineScaleSet{
+				Location: vmssFlex.Location,
+				VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
+					VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
+						NetworkProfile: &compute.VirtualMachineScaleSetNetworkProfile{
+							NetworkInterfaceConfigurations: &vmssNIC,
+							NetworkAPIVersion:              compute.TwoZeroTwoZeroHyphenMinusOneOneHyphenMinusZeroOne,
+						},
 					},
 				},
 			},
@@ -763,7 +767,7 @@ func (fs *FlexScaleSet) ensureBackendPoolDeletedFromVmssFlex(ctx context.Context
 		}
 		vmssFlexes := cached.(*sync.Map)
 		vmssFlexes.Range(func(_, value interface{}) bool {
-			vmssFlex := value.(*compute.VirtualMachineScaleSet)
+			vmssFlex := value.(*vmssclient.VirtualMachineScaleSet)
 			vmssNamesMap[ptr.Deref(vmssFlex.Name, "")] = true
 			return true
 		})
@@ -820,13 +824,15 @@ func (fs *FlexScaleSet) EnsureBackendPoolDeletedFromVMSets(ctx context.Context, 
 
 		vmssUpdaters = append(vmssUpdaters, func() error {
 			// Compose a new vmss with added backendPoolID.
-			newVMSS := compute.VirtualMachineScaleSet{
-				Location: vmss.Location,
-				VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
-					VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
-						NetworkProfile: &compute.VirtualMachineScaleSetNetworkProfile{
-							NetworkInterfaceConfigurations: &vmssNIC,
-							NetworkAPIVersion:              compute.TwoZeroTwoZeroHyphenMinusOneOneHyphenMinusZeroOne,
+			newVMSS := vmssclient.VirtualMachineScaleSet{
+				VirtualMachineScaleSet: compute.VirtualMachineScaleSet{
+					Location: vmss.Location,
+					VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
+						VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
+							NetworkProfile: &compute.VirtualMachineScaleSetNetworkProfile{
+								NetworkInterfaceConfigurations: &vmssNIC,
+								NetworkAPIVersion:              compute.TwoZeroTwoZeroHyphenMinusOneOneHyphenMinusZeroOne,
+							},
 						},
 					},
 				},

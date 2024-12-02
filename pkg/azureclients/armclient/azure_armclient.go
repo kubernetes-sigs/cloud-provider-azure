@@ -19,6 +19,7 @@ package armclient
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"html"
 	"net"
@@ -430,6 +431,16 @@ func (c *Client) waitAsync(ctx context.Context, futures map[string]*azure.Future
 
 // PutResourcesInBatches is similar with PutResources, but it sends sync request concurrently in batches.
 func (c *Client) PutResourcesInBatches(ctx context.Context, resources map[string]interface{}, batchSize int) map[string]*PutResourcesResponse {
+	return c.PutResourcesInBatchesBase(ctx, resources, batchSize, false)
+}
+
+// PutResourcesInBatchesWithEtag is similar with PutResources, but it sends sync request concurrently in batches with Etag header when Etag field is not empty.
+func (c *Client) PutResourcesInBatchesWithEtag(ctx context.Context, resources map[string]interface{}, batchSize int) map[string]*PutResourcesResponse {
+	return c.PutResourcesInBatchesBase(ctx, resources, batchSize, true)
+}
+
+// PutResourcesInBatches is similar with PutResources, but it sends sync request concurrently in batches.
+func (c *Client) PutResourcesInBatchesBase(ctx context.Context, resources map[string]interface{}, batchSize int, enableEtag bool) map[string]*PutResourcesResponse {
 	if len(resources) == 0 {
 		return nil
 	}
@@ -458,7 +469,23 @@ func (c *Client) PutResourcesInBatches(ctx context.Context, resources map[string
 		go func(resourceID string, parameters interface{}) {
 			defer wg.Done()
 			defer func() { <-rateLimiter }()
-			future, rerr := c.PutResourceAsync(ctx, resourceID, parameters)
+			decorators := []autorest.PrepareDecorator{}
+			if enableEtag {
+				type etagPlaceholder struct {
+					Etag *string `json:"etag,omitempty"`
+				}
+
+				p := &etagPlaceholder{}
+				b, err := json.Marshal(parameters)
+				if err == nil {
+					err = json.Unmarshal(b, &p)
+					if err == nil && p.Etag != nil {
+						decorators = append(decorators, autorest.WithHeader("If-Match", autorest.String(*p.Etag)))
+					}
+				}
+			}
+
+			future, rerr := c.PutResourceAsync(ctx, resourceID, parameters, decorators...)
 			if rerr != nil {
 				responseLock.Lock()
 				responses[resourceID] = &PutResourcesResponse{

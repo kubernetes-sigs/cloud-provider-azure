@@ -60,7 +60,8 @@ type Error struct {
 	// RetryAfter indicates the time when the request should retry after throttling.
 	// A throttled request is retriable.
 	RetryAfter time.Time
-	// RetryAfter indicates the raw error from API.
+	// RawError indicates the raw error from API.
+	// It's beneficial to errors.Is() or errors.As() to check the real error type.
 	RawError error
 }
 
@@ -195,6 +196,10 @@ func getRawError(resp *http.Response, err error) error {
 	resp.Body = io.NopCloser(bytes.NewReader(respBody))
 	if len(respBody) == 0 {
 		return fmt.Errorf("HTTP status code (%d)", resp.StatusCode)
+	}
+
+	if IsPreconditionFailedEtagMismatch(resp.StatusCode, string(respBody)) {
+		return NewEtagMismatchError(resp.StatusCode, string(respBody))
 	}
 
 	// return the raw response body.

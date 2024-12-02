@@ -33,6 +33,7 @@ import (
 	compute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	azure "github.com/Azure/go-autorest/autorest/azure"
 	gomock "go.uber.org/mock/gomock"
+	vmssvmclient "sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient"
 	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -60,10 +61,10 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 }
 
 // Get mocks base method.
-func (m *MockInterface) Get(ctx context.Context, resourceGroupName, VMScaleSetName, instanceID string, expand compute.InstanceViewTypes) (compute.VirtualMachineScaleSetVM, *retry.Error) {
+func (m *MockInterface) Get(ctx context.Context, resourceGroupName, VMScaleSetName, instanceID string, expand compute.InstanceViewTypes) (vmssvmclient.VirtualMachineScaleSetVM, *retry.Error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", ctx, resourceGroupName, VMScaleSetName, instanceID, expand)
-	ret0, _ := ret[0].(compute.VirtualMachineScaleSetVM)
+	ret0, _ := ret[0].(vmssvmclient.VirtualMachineScaleSetVM)
 	ret1, _ := ret[1].(*retry.Error)
 	return ret0, ret1
 }
@@ -75,10 +76,10 @@ func (mr *MockInterfaceMockRecorder) Get(ctx, resourceGroupName, VMScaleSetName,
 }
 
 // List mocks base method.
-func (m *MockInterface) List(ctx context.Context, resourceGroupName, virtualMachineScaleSetName, expand string) ([]compute.VirtualMachineScaleSetVM, *retry.Error) {
+func (m *MockInterface) List(ctx context.Context, resourceGroupName, virtualMachineScaleSetName, expand string) ([]vmssvmclient.VirtualMachineScaleSetVM, *retry.Error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "List", ctx, resourceGroupName, virtualMachineScaleSetName, expand)
-	ret0, _ := ret[0].([]compute.VirtualMachineScaleSetVM)
+	ret0, _ := ret[0].([]vmssvmclient.VirtualMachineScaleSetVM)
 	ret1, _ := ret[1].(*retry.Error)
 	return ret0, ret1
 }
@@ -90,37 +91,37 @@ func (mr *MockInterfaceMockRecorder) List(ctx, resourceGroupName, virtualMachine
 }
 
 // Update mocks base method.
-func (m *MockInterface) Update(ctx context.Context, resourceGroupName, VMScaleSetName, instanceID string, parameters compute.VirtualMachineScaleSetVM, source string) (*compute.VirtualMachineScaleSetVM, *retry.Error) {
+func (m *MockInterface) Update(ctx context.Context, resourceGroupName, VMScaleSetName, instanceID string, parameters vmssvmclient.VirtualMachineScaleSetVM, source, etag string) (*vmssvmclient.VirtualMachineScaleSetVM, *retry.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Update", ctx, resourceGroupName, VMScaleSetName, instanceID, parameters, source)
-	ret0, _ := ret[0].(*compute.VirtualMachineScaleSetVM)
+	ret := m.ctrl.Call(m, "Update", ctx, resourceGroupName, VMScaleSetName, instanceID, parameters, source, etag)
+	ret0, _ := ret[0].(*vmssvmclient.VirtualMachineScaleSetVM)
 	ret1, _ := ret[1].(*retry.Error)
 	return ret0, ret1
 }
 
 // Update indicates an expected call of Update.
-func (mr *MockInterfaceMockRecorder) Update(ctx, resourceGroupName, VMScaleSetName, instanceID, parameters, source any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) Update(ctx, resourceGroupName, VMScaleSetName, instanceID, parameters, source, etag any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockInterface)(nil).Update), ctx, resourceGroupName, VMScaleSetName, instanceID, parameters, source)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockInterface)(nil).Update), ctx, resourceGroupName, VMScaleSetName, instanceID, parameters, source, etag)
 }
 
 // UpdateAsync mocks base method.
-func (m *MockInterface) UpdateAsync(ctx context.Context, resourceGroupName, VMScaleSetName, instanceID string, parameters compute.VirtualMachineScaleSetVM, source string) (*azure.Future, *retry.Error) {
+func (m *MockInterface) UpdateAsync(ctx context.Context, resourceGroupName, VMScaleSetName, instanceID string, parameters vmssvmclient.VirtualMachineScaleSetVM, source, etag string) (*azure.Future, *retry.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateAsync", ctx, resourceGroupName, VMScaleSetName, instanceID, parameters, source)
+	ret := m.ctrl.Call(m, "UpdateAsync", ctx, resourceGroupName, VMScaleSetName, instanceID, parameters, source, etag)
 	ret0, _ := ret[0].(*azure.Future)
 	ret1, _ := ret[1].(*retry.Error)
 	return ret0, ret1
 }
 
 // UpdateAsync indicates an expected call of UpdateAsync.
-func (mr *MockInterfaceMockRecorder) UpdateAsync(ctx, resourceGroupName, VMScaleSetName, instanceID, parameters, source any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) UpdateAsync(ctx, resourceGroupName, VMScaleSetName, instanceID, parameters, source, etag any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateAsync", reflect.TypeOf((*MockInterface)(nil).UpdateAsync), ctx, resourceGroupName, VMScaleSetName, instanceID, parameters, source)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateAsync", reflect.TypeOf((*MockInterface)(nil).UpdateAsync), ctx, resourceGroupName, VMScaleSetName, instanceID, parameters, source, etag)
 }
 
 // UpdateVMs mocks base method.
-func (m *MockInterface) UpdateVMs(ctx context.Context, resourceGroupName, VMScaleSetName string, instances map[string]compute.VirtualMachineScaleSetVM, source string, batchSize int) *retry.Error {
+func (m *MockInterface) UpdateVMs(ctx context.Context, resourceGroupName, VMScaleSetName string, instances map[string]vmssvmclient.VirtualMachineScaleSetVM, source string, batchSize int) *retry.Error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateVMs", ctx, resourceGroupName, VMScaleSetName, instances, source, batchSize)
 	ret0, _ := ret[0].(*retry.Error)
@@ -134,10 +135,10 @@ func (mr *MockInterfaceMockRecorder) UpdateVMs(ctx, resourceGroupName, VMScaleSe
 }
 
 // WaitForUpdateResult mocks base method.
-func (m *MockInterface) WaitForUpdateResult(ctx context.Context, future *azure.Future, resourceGroupName, source string) (*compute.VirtualMachineScaleSetVM, *retry.Error) {
+func (m *MockInterface) WaitForUpdateResult(ctx context.Context, future *azure.Future, resourceGroupName, source string) (*vmssvmclient.VirtualMachineScaleSetVM, *retry.Error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "WaitForUpdateResult", ctx, future, resourceGroupName, source)
-	ret0, _ := ret[0].(*compute.VirtualMachineScaleSetVM)
+	ret0, _ := ret[0].(*vmssvmclient.VirtualMachineScaleSetVM)
 	ret1, _ := ret[1].(*retry.Error)
 	return ret0, ret1
 }

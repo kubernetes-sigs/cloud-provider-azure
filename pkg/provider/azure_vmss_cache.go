@@ -28,6 +28,8 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -37,12 +39,12 @@ type VMSSVirtualMachineEntry struct {
 	ResourceGroup  string
 	VMSSName       string
 	InstanceID     string
-	VirtualMachine *compute.VirtualMachineScaleSetVM
+	VirtualMachine *vmssvmclient.VirtualMachineScaleSetVM
 	LastUpdate     time.Time
 }
 
 type VMSSEntry struct {
-	VMSS          *compute.VirtualMachineScaleSet
+	VMSS          *vmssclient.VirtualMachineScaleSet
 	ResourceGroup string
 	LastUpdate    time.Time
 }
@@ -287,7 +289,7 @@ func (ss *ScaleSet) DeleteCacheForNode(ctx context.Context, nodeName string) err
 	return nil
 }
 
-func (ss *ScaleSet) updateCache(ctx context.Context, nodeName, resourceGroupName, vmssName, instanceID string, updatedVM *compute.VirtualMachineScaleSetVM) error {
+func (ss *ScaleSet) updateCache(ctx context.Context, nodeName, resourceGroupName, vmssName, instanceID string, updatedVM *vmssvmclient.VirtualMachineScaleSetVM) error {
 	// lock the VMSS entry to ensure a consistent view of the VM map when there are concurrent updates.
 	cacheKey := getVMSSVMCacheKey(resourceGroupName, vmssName)
 	ss.lockMap.LockEntry(cacheKey)

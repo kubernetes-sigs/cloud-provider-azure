@@ -27,7 +27,7 @@ import (
 
 const (
 	// APIVersion is the API version for VMSS.
-	APIVersion = "2022-03-01"
+	APIVersion = "2024-03-01"
 	// AzureStackCloudAPIVersion is the API version for Azure Stack
 	AzureStackCloudAPIVersion = "2019-07-01"
 	// AzureStackCloudName is the cloud name of Azure Stack
@@ -38,20 +38,20 @@ const (
 // Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
 	// Get gets a VirtualMachineScaleSetVM.
-	Get(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, expand compute.InstanceViewTypes) (compute.VirtualMachineScaleSetVM, *retry.Error)
+	Get(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, expand compute.InstanceViewTypes) (VirtualMachineScaleSetVM, *retry.Error)
 
 	// List gets a list of VirtualMachineScaleSetVMs in the virtualMachineScaleSet.
-	List(ctx context.Context, resourceGroupName string, virtualMachineScaleSetName string, expand string) ([]compute.VirtualMachineScaleSetVM, *retry.Error)
+	List(ctx context.Context, resourceGroupName string, virtualMachineScaleSetName string, expand string) ([]VirtualMachineScaleSetVM, *retry.Error)
 
 	// Update updates a VirtualMachineScaleSetVM.
-	Update(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters compute.VirtualMachineScaleSetVM, source string) (*compute.VirtualMachineScaleSetVM, *retry.Error)
+	Update(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters VirtualMachineScaleSetVM, source string, etag string) (*VirtualMachineScaleSetVM, *retry.Error)
 
 	// UpdateAsync updates a VirtualMachineScaleSetVM asynchronously
-	UpdateAsync(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters compute.VirtualMachineScaleSetVM, source string) (*azure.Future, *retry.Error)
+	UpdateAsync(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters VirtualMachineScaleSetVM, source string, etag string) (*azure.Future, *retry.Error)
 
 	// WaitForUpdateResult waits for the response of the update request
-	WaitForUpdateResult(ctx context.Context, future *azure.Future, resourceGroupName, source string) (*compute.VirtualMachineScaleSetVM, *retry.Error)
+	WaitForUpdateResult(ctx context.Context, future *azure.Future, resourceGroupName, source string) (*VirtualMachineScaleSetVM, *retry.Error)
 
 	// UpdateVMs updates a list of VirtualMachineScaleSetVM from map[instanceID]compute.VirtualMachineScaleSetVM.
-	UpdateVMs(ctx context.Context, resourceGroupName string, VMScaleSetName string, instances map[string]compute.VirtualMachineScaleSetVM, source string, batchSize int) *retry.Error
+	UpdateVMs(ctx context.Context, resourceGroupName string, VMScaleSetName string, instances map[string]VirtualMachineScaleSetVM, source string, batchSize int) *retry.Error
 }

@@ -1262,7 +1262,7 @@ func TestEnsureVMSSFlexInPool(t *testing.T) {
 		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(expectedestVmssFlexList, nil).AnyTimes()
 		mockVMSSClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).Return(testVmssFlex1, nil).AnyTimes()
-		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.vmssPutErr).AnyTimes()
+		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "").Return(tc.vmssPutErr).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
@@ -1369,7 +1369,7 @@ func TestEnsureHostsInPoolVmssFlex(t *testing.T) {
 		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachineScaleSet{genreteTestVmssFlex("vmssflex1", testVmssFlex1ID)}, nil).AnyTimes()
 		mockVMSSClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).Return(testVmssFlex1, nil).AnyTimes()
-		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.vmssPutErr).AnyTimes()
+		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "").Return(tc.vmssPutErr).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
@@ -1519,7 +1519,7 @@ func TestEnsureBackendPoolDeletedFromVMSetsVmssFlex(t *testing.T) {
 			mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 			mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(vmssFlexList, nil).Times(tc.vmssListCallingTimes)
 			mockVMSSClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).Return(testVmssFlex1, nil).AnyTimes()
-			mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.vmssPutErr).AnyTimes()
+			mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "").Return(tc.vmssPutErr).AnyTimes()
 
 			err = fs.EnsureBackendPoolDeletedFromVMSets(context.TODO(), tc.vmssNamesMap, []string{tc.backendPoolID})
 			_, _ = fs.getVmssFlexByName(context.TODO(), "vmssflex1")
@@ -1707,7 +1707,7 @@ func TestEnsureBackendPoolDeletedVmssFlex(t *testing.T) {
 		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(vmssFlexList, nil).AnyTimes()
 		mockVMSSClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).Return(testVmssFlex1, nil).AnyTimes()
-		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.vmssPutErr).AnyTimes()
+		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "").Return(tc.vmssPutErr).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()

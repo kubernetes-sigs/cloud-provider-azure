@@ -28,7 +28,7 @@ import (
 
 const (
 	// APIVersion is the API version for VMSS.
-	APIVersion = "2022-03-01"
+	APIVersion = "2024-03-01"
 	// AzureStackCloudAPIVersion is the API version for Azure Stack
 	AzureStackCloudAPIVersion = "2019-07-01"
 	// AzureStackCloudName is the cloud name of Azure Stack
@@ -36,19 +36,20 @@ const (
 )
 
 // Interface is the client interface for VirtualMachineScaleSet.
+// For backward compatibility, the input
 // Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
 	// Get gets a VirtualMachineScaleSet.
-	Get(ctx context.Context, resourceGroupName string, VMScaleSetName string) (result compute.VirtualMachineScaleSet, rerr *retry.Error)
+	Get(ctx context.Context, resourceGroupName string, VMScaleSetName string) (result VirtualMachineScaleSet, rerr *retry.Error)
 
 	// List gets a list of VirtualMachineScaleSets in the resource group.
-	List(ctx context.Context, resourceGroupName string) (result []compute.VirtualMachineScaleSet, rerr *retry.Error)
+	List(ctx context.Context, resourceGroupName string) (result []VirtualMachineScaleSet, rerr *retry.Error)
 
 	// CreateOrUpdate creates or updates a VirtualMachineScaleSet.
-	CreateOrUpdate(ctx context.Context, resourceGroupName string, VMScaleSetName string, parameters compute.VirtualMachineScaleSet) *retry.Error
+	CreateOrUpdate(ctx context.Context, resourceGroupName string, VMScaleSetName string, parameters VirtualMachineScaleSet, etag string) *retry.Error
 
 	// CreateOrUpdateSync sends the request to arm client and DO NOT wait for the response
-	CreateOrUpdateAsync(ctx context.Context, resourceGroupName string, VMScaleSetName string, parameters compute.VirtualMachineScaleSet) (*azure.Future, *retry.Error)
+	CreateOrUpdateAsync(ctx context.Context, resourceGroupName string, VMScaleSetName string, parameters VirtualMachineScaleSet, etag string) (*azure.Future, *retry.Error)
 
 	// WaitForAsyncOperationResult waits for the response of the request
 	WaitForAsyncOperationResult(ctx context.Context, future *azure.Future, resourceGroupName, request, asyncOpName string) (*http.Response, error)
