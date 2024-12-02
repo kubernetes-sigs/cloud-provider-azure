@@ -40,6 +40,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/virtualmachine"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/lockmap"
 	vmutil "sigs.k8s.io/cloud-provider-azure/pkg/util/vm"
 )
 
@@ -102,7 +103,7 @@ type ScaleSet struct {
 	nonVmssUniformNodesCache azcache.Resource
 
 	// lockMap in cache refresh
-	lockMap *LockMap
+	lockMap *lockmap.LockMap
 }
 
 // RefreshCaches invalidates and renew all related caches.
@@ -153,14 +154,14 @@ func newScaleSet(az *Cloud) (VMSet, error) {
 		Cloud:           az,
 		availabilitySet: as,
 		flexScaleSet:    fs,
-		lockMap:         newLockMap(),
+		lockMap:         lockmap.NewLockMap(),
 	}
 
 	if err := ss.RefreshCaches(); err != nil {
 		return nil, err
 	}
 
-	ss.lockMap = newLockMap()
+	ss.lockMap = lockmap.NewLockMap()
 	return ss, nil
 }
 

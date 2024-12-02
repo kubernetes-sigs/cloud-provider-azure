@@ -76,6 +76,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/lockmap"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/taints"
 )
@@ -189,7 +190,7 @@ type Cloud struct {
 	// node-sync-loop routine and service-reconcile routine should not update LoadBalancer at the same time
 	serviceReconcileLock sync.Mutex
 
-	lockMap *LockMap
+	lockMap *lockmap.LockMap
 	// multipleStandardLoadBalancerConfigurationsSynced make sure the `reconcileMultipleStandardLoadBalancerConfigurations`
 	// runs only once every time the cloud provide restarts.
 	multipleStandardLoadBalancerConfigurationsSynced bool
@@ -223,7 +224,7 @@ func NewCloud(ctx context.Context, clientBuilder cloudprovider.ControllerClientB
 
 	az.ipv6DualStackEnabled = true
 	if az.lockMap == nil {
-		az.lockMap = newLockMap()
+		az.lockMap = lockmap.NewLockMap()
 	}
 
 	if clientBuilder != nil {
@@ -385,7 +386,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		return err
 	}
 
-	az.lockMap = newLockMap()
+	az.lockMap = lockmap.NewLockMap()
 	az.Config = *config
 	az.Environment = *env
 	az.ResourceRequestBackoff = resourceRequestBackoff
