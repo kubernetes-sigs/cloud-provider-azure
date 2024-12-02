@@ -87,3 +87,15 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 	}
 	return nil, nil
 }
+
+const DeleteOperationName = "VirtualNetworkLinksClient.Delete"
+
+// Delete deletes a VirtualNetworkLink by name.
+func (client *Client) Delete(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string) (err error) {
+	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "VirtualNetworkLink", "delete")
+	defer func() { metricsCtx.Observe(ctx, err) }()
+	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
+	defer endSpan(err)
+	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, parentResourceName, resourceName, nil)).WaitforPollerResp(ctx)
+	return err
+}
