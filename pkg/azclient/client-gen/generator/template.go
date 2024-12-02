@@ -16,7 +16,14 @@
 
 package generator
 
-import "html/template"
+import (
+	"strings"
+	"text/template"
+)
+
+var funcMap = template.FuncMap{
+	"toLower": strings.ToLower,
+}
 
 type ClientGenConfig struct {
 	Verbs                     []string `marker:",optional"`
@@ -33,7 +40,7 @@ type ClientGenConfig struct {
 	AzureStackCloudAPIVersion string   `marker:"azureStackCloudAPIVersion,optional"`
 }
 
-var ClientTemplate = template.Must(template.New("object-scaffolding-client-struct").Parse(`
+var ClientTemplate = template.Must(template.New("object-scaffolding-client-struct").Funcs(funcMap).Parse(`
 {{- with .AzureStackCloudAPIVersion}}
 const AzureStackCloudAPIVersion = "{{.}}"
 {{- end }}
@@ -44,7 +51,7 @@ type Client struct{
 }
 `))
 
-var ClientFactoryTemplate = template.Must(template.New("object-scaffolding-factory").Parse(`
+var ClientFactoryTemplate = template.Must(template.New("object-scaffolding-factory").Funcs(funcMap).Parse(`
 func New({{if not .OutOfSubscriptionScope}}subscriptionID string, {{end}}credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
 	if options == nil {
 		options = utils.GetDefaultOption()
@@ -65,14 +72,14 @@ func New({{if not .OutOfSubscriptionScope}}subscriptionID string, {{end}}credent
 }
 `))
 
-var CreateOrUpdateFuncTemplate = template.Must(template.New("object-scaffolding-create-func").Parse(`
+var CreateOrUpdateFuncTemplate = template.Must(template.New("object-scaffolding-create-func").Funcs(funcMap).Parse(`
 {{- $resource := .Resource}}
 {{- if (gt (len .SubResource) 0) }}
 {{- $resource = .SubResource}}
 {{- end }}
 const CreateOrUpdateOperationName = "{{.ClientName}}.Create"
 // CreateOrUpdate creates or updates a {{$resource}}.
-func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string,{{with .SubResource}}parentResourceName string, {{end}} resource {{.PackageAlias}}.{{$resource}}) (result *{{.PackageAlias}}.{{$resource}}, err error) {
+func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string,{{if .SubResource}}{{toLower .Resource}}Name string, {{end}} {{toLower $resource}}Name string, resource {{.PackageAlias}}.{{$resource}}) (result *{{.PackageAlias}}.{{$resource}}, err error) {
 	{{if .OutOfSubscriptionScope -}}
 	metricsCtx := metrics.BeginARMRequestWithAttributes(attribute.String("resource", "{{ $resource }}"), attribute.String("method", "create_or_update"))
 	{{else -}}
@@ -81,7 +88,7 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOrUpdateOperationName, client.tracer, nil)
 	defer endSpan(err)
-	resp, err := utils.NewPollerWrapper(client.{{.ClientName}}.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName,{{with .SubResource}}parentResourceName,{{end}} resource, nil)).WaitforPollerResp(ctx)
+	resp, err := utils.NewPollerWrapper(client.{{.ClientName}}.BeginCreateOrUpdate(ctx, resourceGroupName,{{if .SubResource}}{{toLower .Resource}}Name,{{end}} {{toLower $resource}}Name, resource, nil)).WaitforPollerResp(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -92,14 +99,14 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 }
 `))
 
-var ListByRGFuncTemplate = template.Must(template.New("object-scaffolding-list-func").Parse(`
+var ListByRGFuncTemplate = template.Must(template.New("object-scaffolding-list-func").Funcs(funcMap).Parse(`
 {{- $resource := .Resource}}
 {{- if (gt (len .SubResource) 0) }}
 {{- $resource = .SubResource}}
 {{- end }}
 const ListOperationName = "{{.ClientName}}.List"
 // List gets a list of {{$resource}} in the resource group.
-func (client *Client) List(ctx context.Context, resourceGroupName string{{with .SubResource}}, parentResourceName string{{end}}) (result []*{{.PackageAlias}}.{{$resource}}, err error) {
+func (client *Client) List(ctx context.Context, resourceGroupName string{{if .SubResource}}, {{toLower .Resource}}Name string{{end}}) (result []*{{.PackageAlias}}.{{$resource}}, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "{{ $resource }}", "list")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
@@ -116,14 +123,14 @@ func (client *Client) List(ctx context.Context, resourceGroupName string{{with .
 }
 `))
 
-var ListFuncTemplate = template.Must(template.New("object-scaffolding-list-func").Parse(`
+var ListFuncTemplate = template.Must(template.New("object-scaffolding-list-func").Funcs(funcMap).Parse(`
 {{- $resource := .Resource}}
 {{- if (gt (len .SubResource) 0) }}
 {{- $resource = .SubResource}}
 {{- end }}
 const ListOperationName = "{{.ClientName}}.List"
 // List gets a list of {{$resource}} in the resource group.
-func (client *Client) List(ctx context.Context,{{if .OutOfSubscriptionScope}} scopeName{{else}} resourceGroupName{{end}} string{{with .SubResource}}, parentResourceName string{{end}}) (result []*{{.PackageAlias}}.{{$resource}}, err error) {
+func (client *Client) List(ctx context.Context,{{if .OutOfSubscriptionScope}} scopeName{{else}} resourceGroupName{{end}} string{{if .SubResource}}, {{toLower .Resource}}Name string{{end}}) (result []*{{.PackageAlias}}.{{$resource}}, err error) {
 	{{if .OutOfSubscriptionScope -}}
 	metricsCtx := metrics.BeginARMRequestWithAttributes(attribute.String("resource", "{{ $resource }}"), attribute.String("method", "list"))
 	{{else -}}
@@ -132,7 +139,7 @@ func (client *Client) List(ctx context.Context,{{if .OutOfSubscriptionScope}} sc
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
-	pager := client.{{.ClientName}}.NewListPager({{if .OutOfSubscriptionScope}}scopeName{{else}}resourceGroupName{{end}},{{with .SubResource}} parentResourceName,{{end}} nil)
+	pager := client.{{.ClientName}}.NewListPager({{if .OutOfSubscriptionScope}}scopeName{{else}}resourceGroupName{{end}},{{if .SubResource}} {{toLower .Resource}}Name,{{end}} nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
 		if err != nil {
@@ -144,31 +151,31 @@ func (client *Client) List(ctx context.Context,{{if .OutOfSubscriptionScope}} sc
 }
 `))
 
-var DeleteFuncTemplate = template.Must(template.New("object-scaffolding-delete-func").Parse(`
+var DeleteFuncTemplate = template.Must(template.New("object-scaffolding-delete-func").Funcs(funcMap).Parse(`
 {{- $resource := .Resource}}
 {{- if (gt (len .SubResource) 0) }}
 {{- $resource = .SubResource}}
 {{- end }}
 const DeleteOperationName = "{{.ClientName}}.Delete"
 // Delete deletes a {{$resource}} by name.
-func (client *Client) Delete(ctx context.Context, resourceGroupName string, {{with .SubResource}} parentResourceName string, {{end}}resourceName string) (err error) {
+func (client *Client) Delete(ctx context.Context, resourceGroupName string, {{if .SubResource}} {{toLower .Resource}}Name string, {{end}}{{toLower $resource}}Name string) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "{{ $resource }}", "delete")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
 	defer endSpan(err)
-	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName, nil)).WaitforPollerResp(ctx)
+	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName,{{if .SubResource}}{{toLower .Resource}}Name,{{end}} {{toLower $resource}}Name, nil)).WaitforPollerResp(ctx)
 	return err
 }
 `))
 
-var GetFuncTemplate = template.Must(template.New("object-scaffolding-get-func").Parse(`
+var GetFuncTemplate = template.Must(template.New("object-scaffolding-get-func").Funcs(funcMap).Parse(`
 {{- $resource := .Resource}}
 {{- if (gt (len .SubResource) 0) }}
 {{- $resource = .SubResource}}
 {{- end }}
 const GetOperationName = "{{.ClientName}}.Get"
 // Get gets the {{$resource}}
-func (client *Client) Get(ctx context.Context, resourceGroupName string, {{with .SubResource}}parentResourceName string,{{end}} resourceName string{{if .Expand}}, expand *string{{end}}) (result *{{.PackageAlias}}.{{$resource}}, err error) {
+func (client *Client) Get(ctx context.Context, resourceGroupName string, {{if .SubResource}}{{toLower .Resource}}Name string,{{end}} {{toLower $resource}}Name string{{if .Expand}}, expand *string{{end}}) (result *{{.PackageAlias}}.{{$resource}}, err error) {
 	{{ if .Expand -}}var ops *{{.PackageAlias}}.{{.ClientName}}GetOptions
 	if expand != nil {
 		ops = &{{.PackageAlias}}.{{.ClientName}}GetOptions{ Expand: expand }
@@ -177,7 +184,7 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, {{with 
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
-	resp, err := client.{{.ClientName}}.Get(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName,{{if .Expand}} ops{{else}} nil{{end}})
+	resp, err := client.{{.ClientName}}.Get(ctx, resourceGroupName,{{if .SubResource}}{{toLower .Resource}}Name,{{end}} {{toLower $resource}}Name,{{if .Expand}} ops{{else}} nil{{end}})
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +193,7 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, {{with 
 }
 `))
 
-var HeaderTemplate = template.Must(template.New("import").Parse(
+var HeaderTemplate = template.Must(template.New("import").Funcs(funcMap).Parse(
 	`
 
 // Code generated by client-gen. DO NOT EDIT.
@@ -204,7 +211,7 @@ type HeaderTemplateVariable struct {
 	ImportList  map[string]map[string]struct{}
 }
 
-var TestSuiteTemplate = template.Must(template.New("object-scaffolding-test-suite").Parse(
+var TestSuiteTemplate = template.Must(template.New("object-scaffolding-test-suite").Funcs(funcMap).Parse(
 	`
 {{- $resource := .Resource}}
 {{- if (gt (len .SubResource) 0) }}
@@ -217,7 +224,7 @@ func TestClient(t *testing.T) {
 
 var resourceGroupName = "aks-cit-{{$resource}}"
 var resourceName = "testResource"
-{{if .SubResource}}var parentResourceName = "testParentResource"{{- end }}
+{{if .SubResource}}var {{toLower .Resource}}Name = "testParentResource"{{- end }}
 var subscriptionID string
 var location = "eastus"
 var resourceGroupClient *armresources.ResourceGroupsClient
@@ -271,7 +278,7 @@ var _ = ginkgo.AfterSuite(func(ctx context.Context) {
 })
 `))
 
-var TestCaseTemplate = template.Must(template.New("object-scaffolding-test-case").Parse(
+var TestCaseTemplate = template.Must(template.New("object-scaffolding-test-case").Funcs(funcMap).Parse(
 	`
 {{ $resource := .Resource}}
 {{- if (gt (len .SubResource) 0) }}
@@ -307,7 +314,7 @@ var _ = ginkgo.Describe("{{.ClientName}}",ginkgo.Ordered, func() {
 {{if $HasCreateOrUpdate}}
 	ginkgo.When("creation requests are raised", func() {
 		ginkgo.It("should not return error", func(ctx context.Context) {
-			newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName, *newResource)
+			newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName,{{if .SubResource}}{{toLower .Resource}}Name,{{end}} resourceName, *newResource)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(newResource).NotTo(gomega.BeNil())
 			gomega.Expect(strings.EqualFold(*newResource.Name,resourceName)).To(gomega.BeTrue())
@@ -317,14 +324,14 @@ var _ = ginkgo.Describe("{{.ClientName}}",ginkgo.Ordered, func() {
 {{if $HasGet}}
 	ginkgo.When("get requests are raised", func() {
 		ginkgo.It("should not return error", func(ctx context.Context) {
-			newResource, err := realClient.Get(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName{{if .Expand}}, nil{{end}})
+			newResource, err := realClient.Get(ctx, resourceGroupName,{{if .SubResource}}{{toLower .Resource}}Name,{{end}} resourceName{{if .Expand}}, nil{{end}})
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(newResource).NotTo(gomega.BeNil())
 		})
 	})
 	ginkgo.When("invalid get requests are raised", func() {
 		ginkgo.It("should return 404 error", func(ctx context.Context) {
-			newResource, err := realClient.Get(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName+"notfound"{{if .Expand}}, nil{{end}})
+			newResource, err := realClient.Get(ctx, resourceGroupName,{{if .SubResource}}{{toLower .Resource}}Name,{{end}} resourceName+"notfound"{{if .Expand}}, nil{{end}})
 			gomega.Expect(err).To(gomega.HaveOccurred())
 			gomega.Expect(newResource).To(gomega.BeNil())
 		})
@@ -333,14 +340,14 @@ var _ = ginkgo.Describe("{{.ClientName}}",ginkgo.Ordered, func() {
 {{if $HasCreateOrUpdate}}
 	ginkgo.When("update requests are raised", func() {
 		ginkgo.It("should not return error", func(ctx context.Context) {
-			newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName, *newResource)
+			newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName,{{if .SubResource}}{{toLower .Resource}}Name,{{end}} resourceName, *newResource)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(newResource).NotTo(gomega.BeNil())
 		})
 {{if .Etag}}
 		ginkgo.It("should return error", func(ctx context.Context) {
 			newResource.Etag = to.Ptr("invalid")
-			_, err := realClient.CreateOrUpdate(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName, *newResource)
+			_, err := realClient.CreateOrUpdate(ctx, resourceGroupName,{{if .SubResource}}{{toLower .Resource}}Name,{{end}} resourceName, *newResource)
 			gomega.Expect(err).To(gomega.HaveOccurred())
 		})
 {{end -}}
@@ -349,7 +356,7 @@ var _ = ginkgo.Describe("{{.ClientName}}",ginkgo.Ordered, func() {
 {{if or $HasListByRG $HasList}}
 	ginkgo.When("list requests are raised", func() {
 		ginkgo.It("should not return error", func(ctx context.Context) {
-			resourceList, err := realClient.List(ctx, resourceGroupName,{{with .SubResource}}parentResourceName{{end}})
+			resourceList, err := realClient.List(ctx, resourceGroupName,{{if .SubResource}}{{toLower .Resource}}Name{{end}})
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(resourceList).NotTo(gomega.BeNil())
 			gomega.Expect(len(resourceList)).To(gomega.Equal(1))
@@ -358,7 +365,7 @@ var _ = ginkgo.Describe("{{.ClientName}}",ginkgo.Ordered, func() {
 	})
 	ginkgo.When("invalid list requests are raised", func() {
 		ginkgo.It("should return error", func(ctx context.Context) {
-			resourceList, err := realClient.List(ctx, resourceGroupName+"notfound",{{with .SubResource}}parentResourceName{{end}})
+			resourceList, err := realClient.List(ctx, resourceGroupName+"notfound",{{if .SubResource}}{{toLower .Resource}}Name{{end}})
 			gomega.Expect(err).To(gomega.HaveOccurred())
 			gomega.Expect(resourceList).To(gomega.BeNil())
 		})
@@ -367,7 +374,7 @@ var _ = ginkgo.Describe("{{.ClientName}}",ginkgo.Ordered, func() {
 {{if $HasDelete}}
 	ginkgo.When("deletion requests are raised", func() {
 		ginkgo.It("should not return error", func(ctx context.Context) {
-			err = realClient.Delete(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName)
+			err = realClient.Delete(ctx, resourceGroupName,{{if .SubResource}}{{toLower .Resource}}Name,{{end}} resourceName)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		})
 	})

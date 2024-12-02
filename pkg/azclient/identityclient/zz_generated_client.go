@@ -56,13 +56,13 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 const GetOperationName = "UserAssignedIdentitiesClient.Get"
 
 // Get gets the Identity
-func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armmsi.Identity, err error) {
+func (client *Client) Get(ctx context.Context, resourceGroupName string, identityName string) (result *armmsi.Identity, err error) {
 
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "Identity", "get")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
-	resp, err := client.UserAssignedIdentitiesClient.Get(ctx, resourceGroupName, resourceName, nil)
+	resp, err := client.UserAssignedIdentitiesClient.Get(ctx, resourceGroupName, identityName, nil)
 	if err != nil {
 		return nil, err
 	}

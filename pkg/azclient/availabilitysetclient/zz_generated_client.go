@@ -58,13 +58,13 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 const GetOperationName = "AvailabilitySetsClient.Get"
 
 // Get gets the AvailabilitySet
-func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armcompute.AvailabilitySet, err error) {
+func (client *Client) Get(ctx context.Context, resourceGroupName string, availabilitysetName string) (result *armcompute.AvailabilitySet, err error) {
 
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "AvailabilitySet", "get")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
-	resp, err := client.AvailabilitySetsClient.Get(ctx, resourceGroupName, resourceName, nil)
+	resp, err := client.AvailabilitySetsClient.Get(ctx, resourceGroupName, availabilitysetName, nil)
 	if err != nil {
 		return nil, err
 	}

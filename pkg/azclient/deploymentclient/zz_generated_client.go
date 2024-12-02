@@ -56,11 +56,11 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 const DeleteOperationName = "DeploymentsClient.Delete"
 
 // Delete deletes a Deployment by name.
-func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) (err error) {
+func (client *Client) Delete(ctx context.Context, resourceGroupName string, deploymentName string) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "Deployment", "delete")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
 	defer endSpan(err)
-	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, resourceName, nil)).WaitforPollerResp(ctx)
+	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, deploymentName, nil)).WaitforPollerResp(ctx)
 	return err
 }

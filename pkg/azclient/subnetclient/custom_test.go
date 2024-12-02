@@ -56,7 +56,7 @@ func init() {
 
 	}
 	afterAllFunc = func(ctx context.Context) {
-		pollerResp, err := virtualNetworksClient.BeginDelete(ctx, resourceGroupName, parentResourceName, nil)
+		pollerResp, err := virtualNetworksClient.BeginDelete(ctx, resourceGroupName, virtualnetworkName, nil)
 		Expect(err).NotTo(HaveOccurred())
 		_, err = pollerResp.PollUntilDone(ctx, nil)
 		Expect(err).NotTo(HaveOccurred())
@@ -68,7 +68,7 @@ func createVirtualNetwork(ctx context.Context) (*armnetwork.VirtualNetwork, erro
 	pollerResp, err := virtualNetworksClient.BeginCreateOrUpdate(
 		ctx,
 		resourceGroupName,
-		parentResourceName,
+		virtualnetworkName,
 		armnetwork.VirtualNetwork{
 			Location: to.Ptr(location),
 			Properties: &armnetwork.VirtualNetworkPropertiesFormat{

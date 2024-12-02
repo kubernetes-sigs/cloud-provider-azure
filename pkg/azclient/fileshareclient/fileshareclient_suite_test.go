@@ -40,7 +40,7 @@ func TestClient(t *testing.T) {
 
 var resourceGroupName = "aks-cit-FileShare"
 var resourceName = "testResource"
-var parentResourceName = "testParentResource"
+var accountName = "testParentResource"
 var subscriptionID string
 var location = "eastus"
 var resourceGroupClient *armresources.ResourceGroupsClient

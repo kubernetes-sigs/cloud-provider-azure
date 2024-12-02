@@ -40,14 +40,14 @@ var _ = ginkgo.Describe("BlobContainersClient", ginkgo.Ordered, func() {
 
 	ginkgo.When("get requests are raised", func() {
 		ginkgo.It("should not return error", func(ctx context.Context) {
-			newResource, err := realClient.Get(ctx, resourceGroupName, parentResourceName, resourceName)
+			newResource, err := realClient.Get(ctx, resourceGroupName, accountName, resourceName)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(newResource).NotTo(gomega.BeNil())
 		})
 	})
 	ginkgo.When("invalid get requests are raised", func() {
 		ginkgo.It("should return 404 error", func(ctx context.Context) {
-			newResource, err := realClient.Get(ctx, resourceGroupName, parentResourceName, resourceName+"notfound")
+			newResource, err := realClient.Get(ctx, resourceGroupName, accountName, resourceName+"notfound")
 			gomega.Expect(err).To(gomega.HaveOccurred())
 			gomega.Expect(newResource).To(gomega.BeNil())
 		})

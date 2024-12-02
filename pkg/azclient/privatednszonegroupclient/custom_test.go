@@ -179,7 +179,7 @@ func init() {
 		peresp, err := peendointPoller.PollUntilDone(ctx, &runtime.PollUntilDoneOptions{Frequency: 1 * time.Second})
 		Expect(err).NotTo(HaveOccurred())
 		privateEndpoint = &peresp.PrivateEndpoint
-		parentResourceName = *privateEndpoint.Name
+		privateendpointName = *privateEndpoint.Name
 		privateZone = &armprivatedns.PrivateZone{
 			Name:       to.Ptr("privatezone1.testzone.local"),
 			Location:   to.Ptr("global"),

@@ -42,7 +42,7 @@ func init() {
 		When("creation requests are raised", func() {
 			It("should not return error", func(ctx context.Context) {
 				resourceName = "akscitaccountfilesharetest"
-				newResource, err := realClient.Create(ctx, resourceGroupName, parentResourceName, resourceName, armstorage.FileShare{
+				newResource, err := realClient.Create(ctx, resourceGroupName, accountName, resourceName, armstorage.FileShare{
 					FileShareProperties: &armstorage.FileShareProperties{
 						AccessTier:       to.Ptr(armstorage.ShareAccessTierCool),
 						EnabledProtocols: to.Ptr(armstorage.EnabledProtocolsSMB),
@@ -64,8 +64,8 @@ func init() {
 		Expect(err).NotTo(HaveOccurred())
 		storageaccountClient = storageClientFactory.NewAccountsClient()
 		newResource = &armstorage.FileShare{}
-		parentResourceName = "akscitacctsdktest"
-		storageAccount, err := utils.NewPollerWrapper(storageaccountClient.BeginCreate(ctx, resourceGroupName, parentResourceName, armstorage.AccountCreateParameters{
+		accountName = "akscitacctsdktest"
+		storageAccount, err := utils.NewPollerWrapper(storageaccountClient.BeginCreate(ctx, resourceGroupName, accountName, armstorage.AccountCreateParameters{
 			Location: to.Ptr(location),
 			Kind:     to.Ptr(armstorage.KindStorageV2),
 			Properties: &armstorage.AccountPropertiesCreateParameters{
@@ -110,13 +110,13 @@ func init() {
 		}, nil)).WaitforPollerResp(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(storageAccount).NotTo(BeNil())
-		Expect(*storageAccount.Name).To(Equal(parentResourceName))
+		Expect(*storageAccount.Name).To(Equal(accountName))
 
 	}
 	afterAllFunc = func(ctx context.Context) {
-		err := realClient.Delete(ctx, resourceGroupName, parentResourceName, resourceName)
+		err := realClient.Delete(ctx, resourceGroupName, accountName, resourceName)
 		Expect(err).NotTo(HaveOccurred())
-		_, err = storageaccountClient.Delete(ctx, resourceGroupName, parentResourceName, nil)
+		_, err = storageaccountClient.Delete(ctx, resourceGroupName, accountName, nil)
 		Expect(err).NotTo(HaveOccurred())
 	}
 }

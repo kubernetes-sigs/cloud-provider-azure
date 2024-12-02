@@ -40,14 +40,14 @@ var _ = ginkgo.Describe("SecretsClient", ginkgo.Ordered, func() {
 
 	ginkgo.When("get requests are raised", func() {
 		ginkgo.It("should not return error", func(ctx context.Context) {
-			newResource, err := realClient.Get(ctx, resourceGroupName, parentResourceName, resourceName)
+			newResource, err := realClient.Get(ctx, resourceGroupName, vaultName, resourceName)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(newResource).NotTo(gomega.BeNil())
 		})
 	})
 	ginkgo.When("invalid get requests are raised", func() {
 		ginkgo.It("should return 404 error", func(ctx context.Context) {
-			newResource, err := realClient.Get(ctx, resourceGroupName, parentResourceName, resourceName+"notfound")
+			newResource, err := realClient.Get(ctx, resourceGroupName, vaultName, resourceName+"notfound")
 			gomega.Expect(err).To(gomega.HaveOccurred())
 			gomega.Expect(newResource).To(gomega.BeNil())
 		})
@@ -55,7 +55,7 @@ var _ = ginkgo.Describe("SecretsClient", ginkgo.Ordered, func() {
 
 	ginkgo.When("list requests are raised", func() {
 		ginkgo.It("should not return error", func(ctx context.Context) {
-			resourceList, err := realClient.List(ctx, resourceGroupName, parentResourceName)
+			resourceList, err := realClient.List(ctx, resourceGroupName, vaultName)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(resourceList).NotTo(gomega.BeNil())
 			gomega.Expect(len(resourceList)).To(gomega.Equal(1))
@@ -64,7 +64,7 @@ var _ = ginkgo.Describe("SecretsClient", ginkgo.Ordered, func() {
 	})
 	ginkgo.When("invalid list requests are raised", func() {
 		ginkgo.It("should return error", func(ctx context.Context) {
-			resourceList, err := realClient.List(ctx, resourceGroupName+"notfound", parentResourceName)
+			resourceList, err := realClient.List(ctx, resourceGroupName+"notfound", vaultName)
 			gomega.Expect(err).To(gomega.HaveOccurred())
 			gomega.Expect(resourceList).To(gomega.BeNil())
 		})
