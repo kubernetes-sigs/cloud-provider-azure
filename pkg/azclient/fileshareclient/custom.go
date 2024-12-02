@@ -22,16 +22,16 @@ import (
 	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
 )
 
-func (client *Client) Create(ctx context.Context, resourceGroupName string, resourceName string, parentResourceName string, resource armstorage.FileShare) (*armstorage.FileShare, error) {
-	resp, err := client.FileSharesClient.Create(ctx, resourceGroupName, resourceName, parentResourceName, resource, nil)
+func (client *Client) Create(ctx context.Context, resourceGroupName, accountName, shareName string, resource armstorage.FileShare) (*armstorage.FileShare, error) {
+	resp, err := client.FileSharesClient.Create(ctx, resourceGroupName, accountName, shareName, resource, nil)
 	if err != nil {
 		return nil, err
 	}
 	return &resp.FileShare, nil
 }
 
-func (client *Client) Update(ctx context.Context, resourceGroupName string, resourceName string, parentResourceName string, resource armstorage.FileShare) (*armstorage.FileShare, error) {
-	resp, err := client.FileSharesClient.Update(ctx, resourceGroupName, resourceName, parentResourceName, resource, nil)
+func (client *Client) Update(ctx context.Context, resourceGroupName, accountName, shareName string, resource armstorage.FileShare) (*armstorage.FileShare, error) {
+	resp, err := client.FileSharesClient.Update(ctx, resourceGroupName, accountName, shareName, resource, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +39,7 @@ func (client *Client) Update(ctx context.Context, resourceGroupName string, reso
 }
 
 // Delete deletes a FileShare by name.
-func (client *Client) Delete(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string) error {
-	_, err := client.FileSharesClient.Delete(ctx, resourceGroupName, parentResourceName, resourceName, nil)
+func (client *Client) Delete(ctx context.Context, resourceGroupName, accountName, shareName string) error {
+	_, err := client.FileSharesClient.Delete(ctx, resourceGroupName, accountName, shareName, nil)
 	return err
 }

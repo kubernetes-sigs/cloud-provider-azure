@@ -28,7 +28,7 @@ import (
 // +azure:client:verbs=get,resource=Account,subResource=FileShare,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage,packageAlias=armstorage,clientName=FileSharesClient,expand=false,crossSubFactory=true
 type Interface interface {
 	utils.SubResourceGetFunc[armstorage.FileShare]
-	Create(ctx context.Context, resourceGroupName string, resourceName string, parentResourceName string, resource armstorage.FileShare) (*armstorage.FileShare, error)
-	Update(ctx context.Context, resourceGroupName string, resourceName string, parentResourceName string, resource armstorage.FileShare) (*armstorage.FileShare, error)
-	Delete(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string) error
+	Create(ctx context.Context, resourceGroupName, accountName, shareName string, resource armstorage.FileShare) (*armstorage.FileShare, error)
+	Update(ctx context.Context, resourceGroupName, accountName, shareName string, resource armstorage.FileShare) (*armstorage.FileShare, error)
+	Delete(ctx context.Context, resourceGroupName, accountName, shareName string) error
 }

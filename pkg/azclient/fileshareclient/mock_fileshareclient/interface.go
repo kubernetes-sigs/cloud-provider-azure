@@ -61,18 +61,18 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 }
 
 // Create mocks base method.
-func (m *MockInterface) Create(ctx context.Context, resourceGroupName, resourceName, parentResourceName string, resource armstorage.FileShare) (*armstorage.FileShare, error) {
+func (m *MockInterface) Create(ctx context.Context, resourceGroupName, accountName, shareName string, resource armstorage.FileShare) (*armstorage.FileShare, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Create", ctx, resourceGroupName, resourceName, parentResourceName, resource)
+	ret := m.ctrl.Call(m, "Create", ctx, resourceGroupName, accountName, shareName, resource)
 	ret0, _ := ret[0].(*armstorage.FileShare)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Create indicates an expected call of Create.
-func (mr *MockInterfaceMockRecorder) Create(ctx, resourceGroupName, resourceName, parentResourceName, resource any) *MockInterfaceCreateCall {
+func (mr *MockInterfaceMockRecorder) Create(ctx, resourceGroupName, accountName, shareName, resource any) *MockInterfaceCreateCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockInterface)(nil).Create), ctx, resourceGroupName, resourceName, parentResourceName, resource)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockInterface)(nil).Create), ctx, resourceGroupName, accountName, shareName, resource)
 	return &MockInterfaceCreateCall{Call: call}
 }
 
@@ -177,18 +177,18 @@ func (c *MockInterfaceGetCall) DoAndReturn(f func(context.Context, string, strin
 }
 
 // Update mocks base method.
-func (m *MockInterface) Update(ctx context.Context, resourceGroupName, resourceName, parentResourceName string, resource armstorage.FileShare) (*armstorage.FileShare, error) {
+func (m *MockInterface) Update(ctx context.Context, resourceGroupName, accountName, shareName string, resource armstorage.FileShare) (*armstorage.FileShare, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Update", ctx, resourceGroupName, resourceName, parentResourceName, resource)
+	ret := m.ctrl.Call(m, "Update", ctx, resourceGroupName, accountName, shareName, resource)
 	ret0, _ := ret[0].(*armstorage.FileShare)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Update indicates an expected call of Update.
-func (mr *MockInterfaceMockRecorder) Update(ctx, resourceGroupName, resourceName, parentResourceName, resource any) *MockInterfaceUpdateCall {
+func (mr *MockInterfaceMockRecorder) Update(ctx, resourceGroupName, accountName, shareName, resource any) *MockInterfaceUpdateCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockInterface)(nil).Update), ctx, resourceGroupName, resourceName, parentResourceName, resource)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockInterface)(nil).Update), ctx, resourceGroupName, accountName, shareName, resource)
 	return &MockInterfaceUpdateCall{Call: call}
 }
 
