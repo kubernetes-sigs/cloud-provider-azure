@@ -42,6 +42,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/virtualmachine"
+	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	vmutil "sigs.k8s.io/cloud-provider-azure/pkg/util/vm"
 )
 
@@ -2228,12 +2229,11 @@ func (ss *ScaleSet) EnsureBackendPoolDeletedFromVMSets(ctx context.Context, vmss
 			klog.V(2).Infof("EnsureBackendPoolDeletedFromVMSets begins to update vmss(%s) with backendPoolIDs %q", vmssName, backendPoolIDs)
 			rerr := ss.CreateOrUpdateVMSS(ss.ResourceGroup, vmssName, newVMSS)
 
-			defer func() {
-				// Invalidate the cache since the VMSS would be updated.
-				// When a successful update is done, the cache must be updated, and when an error occurs, we invalidate the cache anyway,
-				// since for etagmismatch error, the cache must be updated, and for the other errors, the cache is updated for potential cache error.
-				_ = ss.DeleteCacheForVMSS(ctx, vmssName)
-			}()
+			// VMSS cache must be refreshed when etagmismatch error happens.
+			// TODO(mainred): we need to update the cache if update is successful
+			if rerr != nil && errors.Is(rerr.Error(), &retry.EtagMismatchError{}) {
+				_ = ss.vmssCache.Delete(consts.VMSSKey)
+			}
 
 			if rerr != nil {
 				klog.Errorf("EnsureBackendPoolDeletedFromVMSets CreateOrUpdateVMSS(%s) with new backendPoolIDs %q, err: %v", vmssName, backendPoolIDs, rerr)

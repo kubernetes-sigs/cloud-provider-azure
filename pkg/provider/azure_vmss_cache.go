@@ -247,35 +247,6 @@ func (ss *ScaleSet) newVMSSVirtualMachinesCache() (azcache.Resource, error) {
 	return azcache.NewTimedCache(vmssVirtualMachinesCacheTTL, getter, ss.Cloud.Config.DisableAPICallCache)
 }
 
-// DeleteCacheForVMSS deletes VMSS from VMSS cache.
-func (ss *ScaleSet) DeleteCacheForVMSS(ctx context.Context, vmssName string) error {
-	if ss.Config.DisableAPICallCache {
-		return nil
-	}
-	ss.lockMap.LockEntry(consts.VMSSKey)
-	defer ss.lockMap.UnlockEntry(consts.VMSSKey)
-
-	entry, err := ss.vmssCache.Get(ctx, consts.VMSSKey, azcache.CacheReadTypeUnsafe)
-	if err != nil {
-		klog.Errorf("DeleteCacheForVMSS(%s) failed to get vmss from cache for %v", vmssName, err)
-		return err
-	}
-	if entry == nil {
-		return nil
-	}
-	vmssMap, ok := entry.(*sync.Map)
-	if !ok {
-		klog.V(2).Infof("DeleteCacheForVMSS(%s, %s) cache entry is sync.Map, deleting all vmss caches", ss.ResourceGroup, vmssName)
-		_ = ss.vmssCache.Delete(consts.VMSSKey)
-		return nil
-	}
-
-	vmssMap.Delete(vmssName)
-	ss.vmssCache.Update(consts.VMSSKey, vmssMap)
-	klog.V(2).Infof("DeleteCacheForVMSS(%s, %s) successfully", ss.ResourceGroup, vmssName)
-	return nil
-}
-
 // DeleteCacheForNode deletes Node from VMSS VM and VM caches.
 func (ss *ScaleSet) DeleteCacheForNode(ctx context.Context, nodeName string) error {
 	if ss.Config.DisableAPICallCache {
