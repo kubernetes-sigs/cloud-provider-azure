@@ -39,6 +39,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/managedclusterclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatednszonegroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privateendpointclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatelinkserviceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatezoneclient"
@@ -81,6 +82,7 @@ type ClientFactoryImpl struct {
 	ipgroupclientInterface                  ipgroupclient.Interface
 	loadbalancerclientInterface             loadbalancerclient.Interface
 	managedclusterclientInterface           managedclusterclient.Interface
+	privatednszonegroupclientInterface      privatednszonegroupclient.Interface
 	privateendpointclientInterface          privateendpointclient.Interface
 	privatelinkserviceclientInterface       privatelinkserviceclient.Interface
 	privatezoneclientInterface              privatezoneclient.Interface
@@ -195,6 +197,12 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 
 	//initialize managedclusterclient
 	factory.managedclusterclientInterface, err = factory.createManagedClusterClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize privatednszonegroupclient
+	factory.privatednszonegroupclientInterface, err = factory.createPrivateDNSZoneGroupClient(config.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
@@ -750,6 +758,25 @@ func (factory *ClientFactoryImpl) createManagedClusterClient(subscription string
 
 func (factory *ClientFactoryImpl) GetManagedClusterClient() managedclusterclient.Interface {
 	return factory.managedclusterclientInterface
+}
+
+func (factory *ClientFactoryImpl) createPrivateDNSZoneGroupClient(subscription string) (privatednszonegroupclient.Interface, error) {
+	//initialize privatednszonegroupclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return privatednszonegroupclient.New(subscription, factory.cred, options)
+}
+
+func (factory *ClientFactoryImpl) GetPrivateDNSZoneGroupClient() privatednszonegroupclient.Interface {
+	return factory.privatednszonegroupclientInterface
 }
 
 func (factory *ClientFactoryImpl) createPrivateEndpointClient(subscription string) (privateendpointclient.Interface, error) {
