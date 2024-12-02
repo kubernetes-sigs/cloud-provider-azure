@@ -89,8 +89,8 @@ func init() {
 			It("should not return error", func(ctx context.Context) {
 				newResource, err := realClient.Update(ctx, resourceGroupName, resourceName, &armstorage.AccountUpdateParameters{
 					Properties: &armstorage.AccountPropertiesUpdateParameters{
-						AllowBlobPublicAccess:        to.Ptr(false),
-						AllowSharedKeyAccess:         to.Ptr(false),
+						AllowBlobPublicAccess: to.Ptr(false),
+						AllowSharedKeyAccess:  to.Ptr(false),
 					},
 				})
 				Expect(err).NotTo(HaveOccurred())
