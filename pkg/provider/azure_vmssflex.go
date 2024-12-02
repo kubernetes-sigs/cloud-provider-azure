@@ -39,6 +39,7 @@ import (
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/lockmap"
 	vmutil "sigs.k8s.io/cloud-provider-azure/pkg/util/vm"
 )
 
@@ -55,7 +56,7 @@ type FlexScaleSet struct {
 	vmssFlexVMCache          azcache.Resource
 
 	// lockMap in cache refresh
-	lockMap *LockMap
+	lockMap *lockmap.LockMap
 }
 
 // RefreshCaches invalidates and renew all related caches.
@@ -80,7 +81,7 @@ func newFlexScaleSet(az *Cloud) (VMSet, error) {
 		Cloud:                    az,
 		vmssFlexVMNameToVmssID:   &sync.Map{},
 		vmssFlexVMNameToNodeName: &sync.Map{},
-		lockMap:                  newLockMap(),
+		lockMap:                  lockmap.NewLockMap(),
 	}
 
 	if err := fs.RefreshCaches(); err != nil {
