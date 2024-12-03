@@ -468,8 +468,11 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 	az.configAzureClients(servicePrincipalToken, multiTenantServicePrincipalToken, networkResourceServicePrincipalToken)
 
 	if az.ComputeClientFactory == nil {
-		k8sVersion := version.Get().GitVersion
-		az.ARMClientConfig.UserAgent = fmt.Sprintf("kubernetes-cloudprovider/%s; %s", k8sVersion, az.ARMClientConfig.UserAgent)
+		if az.ARMClientConfig.UserAgent == "" {
+			k8sVersion := version.Get().GitVersion
+			az.ARMClientConfig.UserAgent = fmt.Sprintf("kubernetes-cloudprovider/%s", k8sVersion)
+		}
+
 		var cred azcore.TokenCredential
 		if authProvider.IsMultiTenantModeEnabled() {
 			multiTenantCred := authProvider.GetMultiTenantIdentity()
