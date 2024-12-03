@@ -43,6 +43,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/lockmap"
 )
 
 const TestLocation = "testLocation"
@@ -678,7 +679,7 @@ func TestAddStorageAccountTags(t *testing.T) {
 	defer cancel()
 
 	cloud := &Cloud{}
-	cloud.lockMap = newLockMap()
+	cloud.lockMap = lockmap.NewLockMap()
 	tests := []struct {
 		name           string
 		subsID         string
@@ -782,7 +783,7 @@ func TestRemoveStorageAccountTags(t *testing.T) {
 
 	getter := func(_ context.Context, _ string) (interface{}, error) { return nil, nil }
 	cloud.storageAccountCache, _ = cache.NewTimedCache(time.Minute, getter, false)
-	cloud.lockMap = newLockMap()
+	cloud.lockMap = lockmap.NewLockMap()
 	for _, test := range tests {
 		mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
 		cloud.StorageAccountClient = mockStorageAccountsClient
