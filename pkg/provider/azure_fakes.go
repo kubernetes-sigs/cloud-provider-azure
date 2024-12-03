@@ -47,6 +47,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/lockmap"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -110,7 +111,7 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 		nodePrivateIPs:           map[string]*utilsets.IgnoreCaseSet{},
 		routeCIDRs:               map[string]string{},
 		eventRecorder:            &record.FakeRecorder{},
-		lockMap:                  newLockMap(),
+		lockMap:                  lockmap.NewLockMap(),
 	}
 	az.DisksClient = mockdiskclient.NewMockInterface(ctrl)
 	az.InterfacesClient = mockinterfaceclient.NewMockInterface(ctrl)
