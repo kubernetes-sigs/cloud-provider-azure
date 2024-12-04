@@ -56,13 +56,13 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 const GetOperationName = "PrivateDNSZoneGroupsClient.Get"
 
 // Get gets the PrivateDNSZoneGroup
-func (client *Client) Get(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string) (result *armnetwork.PrivateDNSZoneGroup, err error) {
+func (client *Client) Get(ctx context.Context, resourceGroupName string, privateendpointName string, privatednszonegroupName string) (result *armnetwork.PrivateDNSZoneGroup, err error) {
 
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "PrivateDNSZoneGroup", "get")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
-	resp, err := client.PrivateDNSZoneGroupsClient.Get(ctx, resourceGroupName, parentResourceName, resourceName, nil)
+	resp, err := client.PrivateDNSZoneGroupsClient.Get(ctx, resourceGroupName, privateendpointName, privatednszonegroupName, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -73,12 +73,12 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, parentR
 const CreateOrUpdateOperationName = "PrivateDNSZoneGroupsClient.Create"
 
 // CreateOrUpdate creates or updates a PrivateDNSZoneGroup.
-func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, parentResourceName string, resource armnetwork.PrivateDNSZoneGroup) (result *armnetwork.PrivateDNSZoneGroup, err error) {
+func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, privateendpointName string, privatednszonegroupName string, resource armnetwork.PrivateDNSZoneGroup) (result *armnetwork.PrivateDNSZoneGroup, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "PrivateDNSZoneGroup", "create_or_update")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOrUpdateOperationName, client.tracer, nil)
 	defer endSpan(err)
-	resp, err := utils.NewPollerWrapper(client.PrivateDNSZoneGroupsClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, parentResourceName, resource, nil)).WaitforPollerResp(ctx)
+	resp, err := utils.NewPollerWrapper(client.PrivateDNSZoneGroupsClient.BeginCreateOrUpdate(ctx, resourceGroupName, privateendpointName, privatednszonegroupName, resource, nil)).WaitforPollerResp(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -91,11 +91,11 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 const DeleteOperationName = "PrivateDNSZoneGroupsClient.Delete"
 
 // Delete deletes a PrivateDNSZoneGroup by name.
-func (client *Client) Delete(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string) (err error) {
+func (client *Client) Delete(ctx context.Context, resourceGroupName string, privateendpointName string, privatednszonegroupName string) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "PrivateDNSZoneGroup", "delete")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
 	defer endSpan(err)
-	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, parentResourceName, resourceName, nil)).WaitforPollerResp(ctx)
+	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, privateendpointName, privatednszonegroupName, nil)).WaitforPollerResp(ctx)
 	return err
 }

@@ -56,13 +56,13 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 const GetOperationName = "RegistriesClient.Get"
 
 // Get gets the Registry
-func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armcontainerregistry.Registry, err error) {
+func (client *Client) Get(ctx context.Context, resourceGroupName string, registryName string) (result *armcontainerregistry.Registry, err error) {
 
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "Registry", "get")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
-	resp, err := client.RegistriesClient.Get(ctx, resourceGroupName, resourceName, nil)
+	resp, err := client.RegistriesClient.Get(ctx, resourceGroupName, registryName, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -73,12 +73,12 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 const DeleteOperationName = "RegistriesClient.Delete"
 
 // Delete deletes a Registry by name.
-func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) (err error) {
+func (client *Client) Delete(ctx context.Context, resourceGroupName string, registryName string) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "Registry", "delete")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
 	defer endSpan(err)
-	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, resourceName, nil)).WaitforPollerResp(ctx)
+	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, registryName, nil)).WaitforPollerResp(ctx)
 	return err
 }
 

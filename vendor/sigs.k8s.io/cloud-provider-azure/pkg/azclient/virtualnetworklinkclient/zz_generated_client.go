@@ -56,13 +56,13 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 const GetOperationName = "VirtualNetworkLinksClient.Get"
 
 // Get gets the VirtualNetworkLink
-func (client *Client) Get(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string) (result *armprivatedns.VirtualNetworkLink, err error) {
+func (client *Client) Get(ctx context.Context, resourceGroupName string, privatezoneName string, virtualnetworklinkName string) (result *armprivatedns.VirtualNetworkLink, err error) {
 
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "VirtualNetworkLink", "get")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
-	resp, err := client.VirtualNetworkLinksClient.Get(ctx, resourceGroupName, parentResourceName, resourceName, nil)
+	resp, err := client.VirtualNetworkLinksClient.Get(ctx, resourceGroupName, privatezoneName, virtualnetworklinkName, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -73,12 +73,12 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, parentR
 const CreateOrUpdateOperationName = "VirtualNetworkLinksClient.Create"
 
 // CreateOrUpdate creates or updates a VirtualNetworkLink.
-func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, parentResourceName string, resource armprivatedns.VirtualNetworkLink) (result *armprivatedns.VirtualNetworkLink, err error) {
+func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, privatezoneName string, virtualnetworklinkName string, resource armprivatedns.VirtualNetworkLink) (result *armprivatedns.VirtualNetworkLink, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "VirtualNetworkLink", "create_or_update")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOrUpdateOperationName, client.tracer, nil)
 	defer endSpan(err)
-	resp, err := utils.NewPollerWrapper(client.VirtualNetworkLinksClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, parentResourceName, resource, nil)).WaitforPollerResp(ctx)
+	resp, err := utils.NewPollerWrapper(client.VirtualNetworkLinksClient.BeginCreateOrUpdate(ctx, resourceGroupName, privatezoneName, virtualnetworklinkName, resource, nil)).WaitforPollerResp(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -91,11 +91,11 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 const DeleteOperationName = "VirtualNetworkLinksClient.Delete"
 
 // Delete deletes a VirtualNetworkLink by name.
-func (client *Client) Delete(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string) (err error) {
+func (client *Client) Delete(ctx context.Context, resourceGroupName string, privatezoneName string, virtualnetworklinkName string) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "VirtualNetworkLink", "delete")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
 	defer endSpan(err)
-	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, parentResourceName, resourceName, nil)).WaitforPollerResp(ctx)
+	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, privatezoneName, virtualnetworklinkName, nil)).WaitforPollerResp(ctx)
 	return err
 }

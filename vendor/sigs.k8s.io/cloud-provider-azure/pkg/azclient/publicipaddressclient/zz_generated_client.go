@@ -60,7 +60,7 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 const GetOperationName = "PublicIPAddressesClient.Get"
 
 // Get gets the PublicIPAddress
-func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string, expand *string) (result *armnetwork.PublicIPAddress, err error) {
+func (client *Client) Get(ctx context.Context, resourceGroupName string, publicipaddressName string, expand *string) (result *armnetwork.PublicIPAddress, err error) {
 	var ops *armnetwork.PublicIPAddressesClientGetOptions
 	if expand != nil {
 		ops = &armnetwork.PublicIPAddressesClientGetOptions{Expand: expand}
@@ -69,7 +69,7 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
-	resp, err := client.PublicIPAddressesClient.Get(ctx, resourceGroupName, resourceName, ops)
+	resp, err := client.PublicIPAddressesClient.Get(ctx, resourceGroupName, publicipaddressName, ops)
 	if err != nil {
 		return nil, err
 	}
@@ -80,12 +80,12 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 const CreateOrUpdateOperationName = "PublicIPAddressesClient.Create"
 
 // CreateOrUpdate creates or updates a PublicIPAddress.
-func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource armnetwork.PublicIPAddress) (result *armnetwork.PublicIPAddress, err error) {
+func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, publicipaddressName string, resource armnetwork.PublicIPAddress) (result *armnetwork.PublicIPAddress, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "PublicIPAddress", "create_or_update")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOrUpdateOperationName, client.tracer, nil)
 	defer endSpan(err)
-	resp, err := utils.NewPollerWrapper(client.PublicIPAddressesClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
+	resp, err := utils.NewPollerWrapper(client.PublicIPAddressesClient.BeginCreateOrUpdate(ctx, resourceGroupName, publicipaddressName, resource, nil)).WaitforPollerResp(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -98,12 +98,12 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 const DeleteOperationName = "PublicIPAddressesClient.Delete"
 
 // Delete deletes a PublicIPAddress by name.
-func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) (err error) {
+func (client *Client) Delete(ctx context.Context, resourceGroupName string, publicipaddressName string) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "PublicIPAddress", "delete")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
 	defer endSpan(err)
-	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, resourceName, nil)).WaitforPollerResp(ctx)
+	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, publicipaddressName, nil)).WaitforPollerResp(ctx)
 	return err
 }
 
