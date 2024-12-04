@@ -58,13 +58,13 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 const GetOperationName = "SnapshotsClient.Get"
 
 // Get gets the Snapshot
-func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armcompute.Snapshot, err error) {
+func (client *Client) Get(ctx context.Context, resourceGroupName string, snapshotName string) (result *armcompute.Snapshot, err error) {
 
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "Snapshot", "get")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
-	resp, err := client.SnapshotsClient.Get(ctx, resourceGroupName, resourceName, nil)
+	resp, err := client.SnapshotsClient.Get(ctx, resourceGroupName, snapshotName, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -75,12 +75,12 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 const CreateOrUpdateOperationName = "SnapshotsClient.Create"
 
 // CreateOrUpdate creates or updates a Snapshot.
-func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource armcompute.Snapshot) (result *armcompute.Snapshot, err error) {
+func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, snapshotName string, resource armcompute.Snapshot) (result *armcompute.Snapshot, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "Snapshot", "create_or_update")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOrUpdateOperationName, client.tracer, nil)
 	defer endSpan(err)
-	resp, err := utils.NewPollerWrapper(client.SnapshotsClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
+	resp, err := utils.NewPollerWrapper(client.SnapshotsClient.BeginCreateOrUpdate(ctx, resourceGroupName, snapshotName, resource, nil)).WaitforPollerResp(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -93,11 +93,11 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 const DeleteOperationName = "SnapshotsClient.Delete"
 
 // Delete deletes a Snapshot by name.
-func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) (err error) {
+func (client *Client) Delete(ctx context.Context, resourceGroupName string, snapshotName string) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "Snapshot", "delete")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
 	defer endSpan(err)
-	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, resourceName, nil)).WaitforPollerResp(ctx)
+	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, snapshotName, nil)).WaitforPollerResp(ctx)
 	return err
 }
