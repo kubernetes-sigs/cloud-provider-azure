@@ -56,13 +56,13 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 const GetOperationName = "FileSharesClient.Get"
 
 // Get gets the FileShare
-func (client *Client) Get(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string) (result *armstorage.FileShare, err error) {
+func (client *Client) Get(ctx context.Context, resourceGroupName string, accountName string, fileshareName string) (result *armstorage.FileShare, err error) {
 
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "FileShare", "get")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
-	resp, err := client.FileSharesClient.Get(ctx, resourceGroupName, parentResourceName, resourceName, nil)
+	resp, err := client.FileSharesClient.Get(ctx, resourceGroupName, accountName, fileshareName, nil)
 	if err != nil {
 		return nil, err
 	}

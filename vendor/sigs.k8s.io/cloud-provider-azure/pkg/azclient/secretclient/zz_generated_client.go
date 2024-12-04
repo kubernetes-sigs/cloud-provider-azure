@@ -56,13 +56,13 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 const GetOperationName = "SecretsClient.Get"
 
 // Get gets the Secret
-func (client *Client) Get(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string) (result *armkeyvault.Secret, err error) {
+func (client *Client) Get(ctx context.Context, resourceGroupName string, vaultName string, secretName string) (result *armkeyvault.Secret, err error) {
 
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "Secret", "get")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
-	resp, err := client.SecretsClient.Get(ctx, resourceGroupName, parentResourceName, resourceName, nil)
+	resp, err := client.SecretsClient.Get(ctx, resourceGroupName, vaultName, secretName, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -73,12 +73,12 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, parentR
 const ListOperationName = "SecretsClient.List"
 
 // List gets a list of Secret in the resource group.
-func (client *Client) List(ctx context.Context, resourceGroupName string, parentResourceName string) (result []*armkeyvault.Secret, err error) {
+func (client *Client) List(ctx context.Context, resourceGroupName string, vaultName string) (result []*armkeyvault.Secret, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "Secret", "list")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
-	pager := client.SecretsClient.NewListPager(resourceGroupName, parentResourceName, nil)
+	pager := client.SecretsClient.NewListPager(resourceGroupName, vaultName, nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
 		if err != nil {
