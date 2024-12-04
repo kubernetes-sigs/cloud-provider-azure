@@ -59,8 +59,8 @@ func init() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 		vaultClient = vaultClientFactory.NewVaultsClient()
-		parentResourceName = "akscitsecretparevault"
-		resp, err := utils.NewPollerWrapper(vaultClient.BeginCreateOrUpdate(ctx, resourceGroupName, parentResourceName, armkeyvault.VaultCreateOrUpdateParameters{
+		vaultName = "akscitsecretparevault"
+		resp, err := utils.NewPollerWrapper(vaultClient.BeginCreateOrUpdate(ctx, resourceGroupName, vaultName, armkeyvault.VaultCreateOrUpdateParameters{
 			Location: to.Ptr("eastus"),
 			Properties: &armkeyvault.VaultProperties{
 				EnabledForDeployment:         to.Ptr(true),
@@ -125,7 +125,7 @@ func init() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(resp).NotTo(BeNil())
 		parentResource = &resp.Vault
-		Expect(*resp.Vault.Name).To(Equal(parentResourceName))
+		Expect(*resp.Vault.Name).To(Equal(vaultName))
 	}
 	afterAllFunc = func(ctx context.Context) {
 		_, err = vaultClient.Delete(ctx, resourceGroupName, *parentResource.Name, nil)

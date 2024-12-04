@@ -43,7 +43,7 @@ var _ = ginkgo.Describe("PrivateDNSZoneGroupsClient", ginkgo.Ordered, func() {
 
 	ginkgo.When("creation requests are raised", func() {
 		ginkgo.It("should not return error", func(ctx context.Context) {
-			newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName, parentResourceName, resourceName, *newResource)
+			newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName, privateendpointName, resourceName, *newResource)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(newResource).NotTo(gomega.BeNil())
 			gomega.Expect(strings.EqualFold(*newResource.Name, resourceName)).To(gomega.BeTrue())
@@ -52,14 +52,14 @@ var _ = ginkgo.Describe("PrivateDNSZoneGroupsClient", ginkgo.Ordered, func() {
 
 	ginkgo.When("get requests are raised", func() {
 		ginkgo.It("should not return error", func(ctx context.Context) {
-			newResource, err := realClient.Get(ctx, resourceGroupName, parentResourceName, resourceName)
+			newResource, err := realClient.Get(ctx, resourceGroupName, privateendpointName, resourceName)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(newResource).NotTo(gomega.BeNil())
 		})
 	})
 	ginkgo.When("invalid get requests are raised", func() {
 		ginkgo.It("should return 404 error", func(ctx context.Context) {
-			newResource, err := realClient.Get(ctx, resourceGroupName, parentResourceName, resourceName+"notfound")
+			newResource, err := realClient.Get(ctx, resourceGroupName, privateendpointName, resourceName+"notfound")
 			gomega.Expect(err).To(gomega.HaveOccurred())
 			gomega.Expect(newResource).To(gomega.BeNil())
 		})
@@ -67,7 +67,7 @@ var _ = ginkgo.Describe("PrivateDNSZoneGroupsClient", ginkgo.Ordered, func() {
 
 	ginkgo.When("update requests are raised", func() {
 		ginkgo.It("should not return error", func(ctx context.Context) {
-			newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName, parentResourceName, resourceName, *newResource)
+			newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName, privateendpointName, resourceName, *newResource)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(newResource).NotTo(gomega.BeNil())
 		})
@@ -75,7 +75,7 @@ var _ = ginkgo.Describe("PrivateDNSZoneGroupsClient", ginkgo.Ordered, func() {
 
 	ginkgo.When("deletion requests are raised", func() {
 		ginkgo.It("should not return error", func(ctx context.Context) {
-			err = realClient.Delete(ctx, resourceGroupName, parentResourceName, resourceName)
+			err = realClient.Delete(ctx, resourceGroupName, privateendpointName, resourceName)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		})
 	})

@@ -43,7 +43,7 @@ var _ = ginkgo.Describe("SubnetsClient", ginkgo.Ordered, func() {
 
 	ginkgo.When("creation requests are raised", func() {
 		ginkgo.It("should not return error", func(ctx context.Context) {
-			newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName, parentResourceName, resourceName, *newResource)
+			newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName, virtualnetworkName, resourceName, *newResource)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(newResource).NotTo(gomega.BeNil())
 			gomega.Expect(strings.EqualFold(*newResource.Name, resourceName)).To(gomega.BeTrue())
@@ -52,14 +52,14 @@ var _ = ginkgo.Describe("SubnetsClient", ginkgo.Ordered, func() {
 
 	ginkgo.When("get requests are raised", func() {
 		ginkgo.It("should not return error", func(ctx context.Context) {
-			newResource, err := realClient.Get(ctx, resourceGroupName, parentResourceName, resourceName, nil)
+			newResource, err := realClient.Get(ctx, resourceGroupName, virtualnetworkName, resourceName, nil)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(newResource).NotTo(gomega.BeNil())
 		})
 	})
 	ginkgo.When("invalid get requests are raised", func() {
 		ginkgo.It("should return 404 error", func(ctx context.Context) {
-			newResource, err := realClient.Get(ctx, resourceGroupName, parentResourceName, resourceName+"notfound", nil)
+			newResource, err := realClient.Get(ctx, resourceGroupName, virtualnetworkName, resourceName+"notfound", nil)
 			gomega.Expect(err).To(gomega.HaveOccurred())
 			gomega.Expect(newResource).To(gomega.BeNil())
 		})
@@ -67,7 +67,7 @@ var _ = ginkgo.Describe("SubnetsClient", ginkgo.Ordered, func() {
 
 	ginkgo.When("update requests are raised", func() {
 		ginkgo.It("should not return error", func(ctx context.Context) {
-			newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName, parentResourceName, resourceName, *newResource)
+			newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName, virtualnetworkName, resourceName, *newResource)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(newResource).NotTo(gomega.BeNil())
 		})
@@ -75,7 +75,7 @@ var _ = ginkgo.Describe("SubnetsClient", ginkgo.Ordered, func() {
 
 	ginkgo.When("list requests are raised", func() {
 		ginkgo.It("should not return error", func(ctx context.Context) {
-			resourceList, err := realClient.List(ctx, resourceGroupName, parentResourceName)
+			resourceList, err := realClient.List(ctx, resourceGroupName, virtualnetworkName)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(resourceList).NotTo(gomega.BeNil())
 			gomega.Expect(len(resourceList)).To(gomega.Equal(1))
@@ -84,7 +84,7 @@ var _ = ginkgo.Describe("SubnetsClient", ginkgo.Ordered, func() {
 	})
 	ginkgo.When("invalid list requests are raised", func() {
 		ginkgo.It("should return error", func(ctx context.Context) {
-			resourceList, err := realClient.List(ctx, resourceGroupName+"notfound", parentResourceName)
+			resourceList, err := realClient.List(ctx, resourceGroupName+"notfound", virtualnetworkName)
 			gomega.Expect(err).To(gomega.HaveOccurred())
 			gomega.Expect(resourceList).To(gomega.BeNil())
 		})
@@ -92,7 +92,7 @@ var _ = ginkgo.Describe("SubnetsClient", ginkgo.Ordered, func() {
 
 	ginkgo.When("deletion requests are raised", func() {
 		ginkgo.It("should not return error", func(ctx context.Context) {
-			err = realClient.Delete(ctx, resourceGroupName, parentResourceName, resourceName)
+			err = realClient.Delete(ctx, resourceGroupName, virtualnetworkName, resourceName)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		})
 	})

@@ -50,9 +50,9 @@ func init() {
 			},
 		})
 		Expect(err).NotTo(HaveOccurred())
-		parentResourceName = "aks-cit-privatednszone-cit.privatelink.global.azmk8s.io"
+		privatezoneName = "aks-cit-privatednszone-cit.privatelink.global.azmk8s.io"
 		privatednsClient = privatednsClientFactory.NewPrivateZonesClient()
-		dnsPoller, err := privatednsClient.BeginCreateOrUpdate(ctx, resourceGroupName, parentResourceName, armprivatedns.PrivateZone{
+		dnsPoller, err := privatednsClient.BeginCreateOrUpdate(ctx, resourceGroupName, privatezoneName, armprivatedns.PrivateZone{
 			Location: to.Ptr("global"),
 		}, nil)
 		networkClientFactory, err := armnetwork.NewClientFactory(recorder.SubscriptionID(), recorder.TokenCredential(), &arm.ClientOptions{
@@ -103,7 +103,7 @@ func init() {
 	}
 	afterAllFunc = func(ctx context.Context) {
 		privatednsClient = privatednsClientFactory.NewPrivateZonesClient()
-		dnsPoller, err := privatednsClient.BeginDelete(ctx, resourceGroupName, parentResourceName, nil)
+		dnsPoller, err := privatednsClient.BeginDelete(ctx, resourceGroupName, privatezoneName, nil)
 		Expect(err).NotTo(HaveOccurred())
 		_, err = dnsPoller.PollUntilDone(ctx, &runtime.PollUntilDoneOptions{
 			Frequency: 1 * time.Second,

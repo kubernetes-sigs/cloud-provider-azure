@@ -41,7 +41,7 @@ func init() {
 		When("creating a container", func() {
 			It("should not return an error", func(ctx context.Context) {
 				resourceName = "akscitblobsdktest"
-				newResource, err := realClient.CreateContainer(ctx, resourceGroupName, parentResourceName, resourceName, armstorage.BlobContainer{
+				newResource, err := realClient.CreateContainer(ctx, resourceGroupName, accountName, resourceName, armstorage.BlobContainer{
 					ContainerProperties: &armstorage.ContainerProperties{
 						PublicAccess: to.Ptr(armstorage.PublicAccessNone),
 					},
@@ -53,7 +53,7 @@ func init() {
 
 		When("list a container ", func() {
 			It("should not return an error", func(ctx context.Context) {
-				lists, err := realClient.List(ctx, resourceGroupName, parentResourceName)
+				lists, err := realClient.List(ctx, resourceGroupName, accountName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lists).To(HaveLen(1))
 				Expect(*lists[0].Name).To(Equal(resourceName))
@@ -69,8 +69,8 @@ func init() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 		storageaccountClient = storageClientFactory.NewAccountsClient()
-		parentResourceName = "akscitblobsdktestparent"
-		storageAccount, err := utils.NewPollerWrapper(storageaccountClient.BeginCreate(ctx, resourceGroupName, parentResourceName, armstorage.AccountCreateParameters{
+		accountName = "akscitblobsdktestparent"
+		storageAccount, err := utils.NewPollerWrapper(storageaccountClient.BeginCreate(ctx, resourceGroupName, accountName, armstorage.AccountCreateParameters{
 			Location: to.Ptr(location),
 			Kind:     to.Ptr(armstorage.KindStorageV2),
 			Properties: &armstorage.AccountPropertiesCreateParameters{
@@ -115,13 +115,13 @@ func init() {
 		}, nil)).WaitforPollerResp(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(storageAccount).NotTo(BeNil())
-		Expect(*storageAccount.Name).To(Equal(parentResourceName))
+		Expect(*storageAccount.Name).To(Equal(accountName))
 	}
 	afterAllFunc = func(ctx context.Context) {
-		err = realClient.DeleteContainer(ctx, resourceGroupName, parentResourceName, resourceName)
+		err = realClient.DeleteContainer(ctx, resourceGroupName, accountName, resourceName)
 		Expect(err).NotTo(HaveOccurred())
 
-		_, err = storageaccountClient.Delete(ctx, resourceGroupName, parentResourceName, nil)
+		_, err = storageaccountClient.Delete(ctx, resourceGroupName, accountName, nil)
 		Expect(err).NotTo(HaveOccurred())
 	}
 }

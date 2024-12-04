@@ -19,9 +19,9 @@ package generator
 
 import (
 	"go/ast"
-	"html/template"
 	"os"
 	"os/exec"
+	"text/template"
 
 	"sigs.k8s.io/controller-tools/pkg/genall"
 	"sigs.k8s.io/controller-tools/pkg/loader"

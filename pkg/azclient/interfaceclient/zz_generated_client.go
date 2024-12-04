@@ -58,7 +58,7 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 const GetOperationName = "InterfacesClient.Get"
 
 // Get gets the Interface
-func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string, expand *string) (result *armnetwork.Interface, err error) {
+func (client *Client) Get(ctx context.Context, resourceGroupName string, interfaceName string, expand *string) (result *armnetwork.Interface, err error) {
 	var ops *armnetwork.InterfacesClientGetOptions
 	if expand != nil {
 		ops = &armnetwork.InterfacesClientGetOptions{Expand: expand}
@@ -67,7 +67,7 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
-	resp, err := client.InterfacesClient.Get(ctx, resourceGroupName, resourceName, ops)
+	resp, err := client.InterfacesClient.Get(ctx, resourceGroupName, interfaceName, ops)
 	if err != nil {
 		return nil, err
 	}
@@ -78,12 +78,12 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 const CreateOrUpdateOperationName = "InterfacesClient.Create"
 
 // CreateOrUpdate creates or updates a Interface.
-func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource armnetwork.Interface) (result *armnetwork.Interface, err error) {
+func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, interfaceName string, resource armnetwork.Interface) (result *armnetwork.Interface, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "Interface", "create_or_update")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOrUpdateOperationName, client.tracer, nil)
 	defer endSpan(err)
-	resp, err := utils.NewPollerWrapper(client.InterfacesClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
+	resp, err := utils.NewPollerWrapper(client.InterfacesClient.BeginCreateOrUpdate(ctx, resourceGroupName, interfaceName, resource, nil)).WaitforPollerResp(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -96,12 +96,12 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 const DeleteOperationName = "InterfacesClient.Delete"
 
 // Delete deletes a Interface by name.
-func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) (err error) {
+func (client *Client) Delete(ctx context.Context, resourceGroupName string, interfaceName string) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "Interface", "delete")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
 	defer endSpan(err)
-	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, resourceName, nil)).WaitforPollerResp(ctx)
+	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, interfaceName, nil)).WaitforPollerResp(ctx)
 	return err
 }
 
