@@ -19,7 +19,7 @@ package iputil
 import (
 	"net/netip"
 
-	fnutil "sigs.k8s.io/cloud-provider-azure/pkg/util/collectionutil"
+	"github.com/samber/lo"
 )
 
 type Family string
@@ -40,16 +40,16 @@ func ArePrefixesFromSameFamily(prefixes []netip.Prefix) bool {
 	if len(prefixes) <= 1 {
 		return true
 	}
-	return fnutil.IsAll(func(p netip.Prefix) bool {
+	return len(lo.Filter(prefixes, func(p netip.Prefix, _ int) bool {
 		return p.Addr().Is4() == prefixes[0].Addr().Is4()
-	}, prefixes)
+	})) == len(prefixes)
 }
 
 func AreAddressesFromSameFamily(addresses []netip.Addr) bool {
 	if len(addresses) <= 1 {
 		return true
 	}
-	return fnutil.IsAll(func(p netip.Addr) bool {
+	return len(lo.Filter(addresses, func(p netip.Addr, _ int) bool {
 		return p.Is4() == addresses[0].Is4()
-	}, addresses)
+	})) == len(addresses)
 }

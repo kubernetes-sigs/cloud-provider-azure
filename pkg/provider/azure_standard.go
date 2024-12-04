@@ -28,16 +28,17 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/samber/lo"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/ptr"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -198,7 +199,7 @@ func getPrimaryInterfaceID(machine compute.VirtualMachine) (string, error) {
 	}
 
 	for _, ref := range *machine.NetworkProfile.NetworkInterfaces {
-		if ptr.Deref(ref.Primary, false) {
+		if lo.FromPtrOr(ref.Primary, false) {
 			return *ref.ID, nil
 		}
 	}
@@ -243,7 +244,7 @@ func getIPConfigByIPFamily(nic network.Interface, IPv6 bool) (*network.Interface
 			return &ref, nil
 		}
 	}
-	return nil, fmt.Errorf("failed to determine the ipconfig(IPv6=%v). nicname=%q", IPv6, ptr.Deref(nic.Name, ""))
+	return nil, fmt.Errorf("failed to determine the ipconfig(IPv6=%v). nicname=%q", IPv6, lo.FromPtrOr(nic.Name, ""))
 }
 
 // getBackendPoolName the LB BackendPool name for a service.
@@ -356,7 +357,7 @@ func publicIPOwnsFrontendIP(service *v1.Service, fip *network.FrontendIPConfigur
 		fip != nil &&
 		fip.FrontendIPConfigurationPropertiesFormat != nil &&
 		fip.FrontendIPConfigurationPropertiesFormat.PublicIPAddress != nil {
-		if strings.EqualFold(ptr.Deref(pip.ID, ""), ptr.Deref(fip.PublicIPAddress.ID, "")) {
+		if strings.EqualFold(lo.FromPtrOr(pip.ID, ""), lo.FromPtrOr(fip.PublicIPAddress.ID, "")) {
 			klog.V(6).Infof("publicIPOwnsFrontendIP:found secondary service %s of the frontend IP config %s", service.Name, *fip.Name)
 			return true
 		}
@@ -424,11 +425,11 @@ func (as *availabilitySet) newVMASCache() (azcache.Resource, error) {
 
 			for i := range allAvailabilitySets {
 				vmas := allAvailabilitySets[i]
-				if strings.EqualFold(ptr.Deref(vmas.Name, ""), "") {
+				if strings.EqualFold(lo.FromPtrOr(vmas.Name, ""), "") {
 					klog.Warning("failed to get the name of the VMAS")
 					continue
 				}
-				localCache.Store(ptr.Deref(vmas.Name, ""), &AvailabilitySetEntry{
+				localCache.Store(lo.FromPtrOr(vmas.Name, ""), &AvailabilitySetEntry{
 					VMAS:          &vmas,
 					ResourceGroup: resourceGroup,
 				})
@@ -511,7 +512,7 @@ func (as *availabilitySet) GetPowerStatusByNodeName(ctx context.Context, name st
 	}
 
 	if vm.InstanceView != nil {
-		return vmutil.GetVMPowerState(ptr.Deref(vm.Name, ""), vm.InstanceView.Statuses), nil
+		return vmutil.GetVMPowerState(lo.FromPtrOr(vm.Name, ""), vm.InstanceView.Statuses), nil
 	}
 
 	// vm.InstanceView or vm.InstanceView.Statuses are nil when the VM is under deleting.
@@ -530,7 +531,7 @@ func (as *availabilitySet) GetProvisioningStateByNodeName(ctx context.Context, n
 		return provisioningState, nil
 	}
 
-	return ptr.Deref(vm.VirtualMachineProperties.ProvisioningState, ""), nil
+	return lo.FromPtrOr(vm.VirtualMachineProperties.ProvisioningState, ""), nil
 }
 
 // GetNodeNameByProviderID gets the node name by provider ID.
@@ -576,15 +577,15 @@ func (as *availabilitySet) GetZoneByNodeName(ctx context.Context, name string) (
 			return cloudprovider.Zone{}, fmt.Errorf("failed to parse zone %q: %w", zones, err)
 		}
 
-		failureDomain = as.makeZone(ptr.Deref(vm.Location, ""), zoneID)
+		failureDomain = as.makeZone(lo.FromPtrOr(vm.Location, ""), zoneID)
 	} else {
 		// Availability zone is not used for the node, falling back to fault domain.
-		failureDomain = strconv.Itoa(int(ptr.Deref(vm.VirtualMachineProperties.InstanceView.PlatformFaultDomain, 0)))
+		failureDomain = strconv.Itoa(int(lo.FromPtrOr(vm.VirtualMachineProperties.InstanceView.PlatformFaultDomain, 0)))
 	}
 
 	zone := cloudprovider.Zone{
 		FailureDomain: strings.ToLower(failureDomain),
-		Region:        strings.ToLower(ptr.Deref(vm.Location, "")),
+		Region:        strings.ToLower(lo.FromPtrOr(vm.Location, "")),
 	}
 	return zone, nil
 }
@@ -758,13 +759,13 @@ func (as *availabilitySet) GetNodeVMSetName(ctx context.Context, node *v1.Node) 
 
 	var asName string
 	for _, vm := range vms {
-		if strings.EqualFold(ptr.Deref(vm.Name, ""), hostName) {
-			if vm.AvailabilitySet != nil && ptr.Deref(vm.AvailabilitySet.ID, "") != "" {
+		if strings.EqualFold(lo.FromPtrOr(vm.Name, ""), hostName) {
+			if vm.AvailabilitySet != nil && lo.FromPtrOr(vm.AvailabilitySet.ID, "") != "" {
 				klog.V(4).Infof("as.GetNodeVMSetName: found vm %s", hostName)
 
-				asName, err = getLastSegment(ptr.Deref(vm.AvailabilitySet.ID, ""), "/")
+				asName, err = getLastSegment(lo.FromPtrOr(vm.AvailabilitySet.ID, ""), "/")
 				if err != nil {
-					klog.Errorf("as.GetNodeVMSetName: failed to get last segment of ID %s: %s", ptr.Deref(vm.AvailabilitySet.ID, ""), err)
+					klog.Errorf("as.GetNodeVMSetName: failed to get last segment of ID %s: %s", lo.FromPtrOr(vm.AvailabilitySet.ID, ""), err)
 					return "", err
 				}
 			}
@@ -852,7 +853,7 @@ func (as *availabilitySet) getPrimaryInterfaceWithVMSet(ctx context.Context, nod
 
 	var availabilitySetID string
 	if machine.VirtualMachineProperties != nil && machine.AvailabilitySet != nil {
-		availabilitySetID = ptr.Deref(machine.AvailabilitySet.ID, "")
+		availabilitySetID = lo.FromPtrOr(machine.AvailabilitySet.ID, "")
 	}
 	return nic, availabilitySetID, nil
 }
@@ -927,7 +928,7 @@ func (as *availabilitySet) EnsureHostInPool(ctx context.Context, service *v1.Ser
 
 		newBackendPools = append(newBackendPools,
 			network.BackendAddressPool{
-				ID: ptr.To(backendPoolID),
+				ID: to.Ptr(backendPoolID),
 			})
 
 		primaryIPConfig.LoadBalancerBackendAddressPools = &newBackendPools
@@ -1005,7 +1006,7 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(ctx context.Context, service
 	ipConfigurationIDs := []string{}
 	for _, backendPool := range *backendAddressPools {
 		for _, backendPoolID := range backendPoolIDs {
-			if strings.EqualFold(ptr.Deref(backendPool.ID, ""), backendPoolID) {
+			if strings.EqualFold(lo.FromPtrOr(backendPool.ID, ""), backendPoolID) {
 				if backendPool.BackendAddressPoolPropertiesFormat != nil &&
 					backendPool.BackendIPConfigurations != nil {
 					for _, ipConf := range *backendPool.BackendIPConfigurations {
@@ -1077,7 +1078,7 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(ctx context.Context, service
 		nic := ipconfigPrefixToNicMap[k]
 		newIPConfigs := *nic.IPConfigurations
 		for j, ipConf := range newIPConfigs {
-			if isServiceIPv4 && !ptr.Deref(ipConf.Primary, false) {
+			if isServiceIPv4 && !lo.FromPtrOr(ipConf.Primary, false) {
 				continue
 			}
 			// To support IPv6 only and dual-stack clusters, all IP configurations
@@ -1088,7 +1089,7 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(ctx context.Context, service
 				for k := len(newLBAddressPools) - 1; k >= 0; k-- {
 					pool := newLBAddressPools[k]
 					for _, backendPoolID := range backendPoolIDs {
-						if strings.EqualFold(ptr.Deref(pool.ID, ""), backendPoolID) {
+						if strings.EqualFold(lo.FromPtrOr(pool.ID, ""), backendPoolID) {
 							newLBAddressPools = append(newLBAddressPools[:k], newLBAddressPools[k+1:]...)
 							break
 						}
@@ -1099,10 +1100,10 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(ctx context.Context, service
 		}
 		nic.IPConfigurations = &newIPConfigs
 		nicUpdaters = append(nicUpdaters, func() error {
-			klog.V(2).Infof("EnsureBackendPoolDeleted begins to CreateOrUpdate for NIC(%s, %s) with backendPoolIDs %q", as.ResourceGroup, ptr.Deref(nic.Name, ""), backendPoolIDs)
-			rerr := as.InterfacesClient.CreateOrUpdate(ctx, as.ResourceGroup, ptr.Deref(nic.Name, ""), nic)
+			klog.V(2).Infof("EnsureBackendPoolDeleted begins to CreateOrUpdate for NIC(%s, %s) with backendPoolIDs %q", as.ResourceGroup, lo.FromPtrOr(nic.Name, ""), backendPoolIDs)
+			rerr := as.InterfacesClient.CreateOrUpdate(ctx, as.ResourceGroup, lo.FromPtrOr(nic.Name, ""), nic)
 			if rerr != nil {
-				klog.Errorf("EnsureBackendPoolDeleted CreateOrUpdate for NIC(%s, %s) failed with error %v", as.ResourceGroup, ptr.Deref(nic.Name, ""), rerr.Error())
+				klog.Errorf("EnsureBackendPoolDeleted CreateOrUpdate for NIC(%s, %s) failed with error %v", as.ResourceGroup, lo.FromPtrOr(nic.Name, ""), rerr.Error())
 				return rerr.Error()
 			}
 			nicUpdated.Store(true)
@@ -1164,7 +1165,7 @@ func (as *availabilitySet) GetNodeNameByIPConfigurationID(ctx context.Context, i
 	}
 	vmID := ""
 	if nic.InterfacePropertiesFormat != nil && nic.VirtualMachine != nil {
-		vmID = ptr.Deref(nic.VirtualMachine.ID, "")
+		vmID = lo.FromPtrOr(nic.VirtualMachine.ID, "")
 	}
 	if vmID == "" {
 		klog.V(2).Infof("GetNodeNameByIPConfigurationID(%s): empty vmID", ipConfigurationID)
@@ -1184,7 +1185,7 @@ func (as *availabilitySet) GetNodeNameByIPConfigurationID(ctx context.Context, i
 	}
 	asID := ""
 	if vm.VirtualMachineProperties != nil && vm.AvailabilitySet != nil {
-		asID = ptr.Deref(vm.AvailabilitySet.ID, "")
+		asID = lo.FromPtrOr(vm.AvailabilitySet.ID, "")
 	}
 	if asID == "" {
 		return vmName, "", nil
@@ -1216,9 +1217,9 @@ func (as *availabilitySet) getAvailabilitySetByNodeName(ctx context.Context, nod
 		if vmas != nil && vmas.AvailabilitySetProperties != nil && vmas.VirtualMachines != nil {
 			for _, vmIDRef := range *vmas.VirtualMachines {
 				if vmIDRef.ID != nil {
-					matches := vmIDRE.FindStringSubmatch(ptr.Deref(vmIDRef.ID, ""))
+					matches := vmIDRE.FindStringSubmatch(lo.FromPtrOr(vmIDRef.ID, ""))
 					if len(matches) != 2 {
-						err = fmt.Errorf("invalid vm ID %s", ptr.Deref(vmIDRef.ID, ""))
+						err = fmt.Errorf("invalid vm ID %s", lo.FromPtrOr(vmIDRef.ID, ""))
 						return false
 					}
 
@@ -1263,15 +1264,15 @@ func (as *availabilitySet) GetNodeCIDRMasksByProviderID(ctx context.Context, pro
 
 	var ipv4Mask, ipv6Mask int
 	if v4, ok := vmas.Tags[consts.VMSetCIDRIPV4TagKey]; ok && v4 != nil {
-		ipv4Mask, err = strconv.Atoi(ptr.Deref(v4, ""))
+		ipv4Mask, err = strconv.Atoi(lo.FromPtrOr(v4, ""))
 		if err != nil {
-			klog.Errorf("GetNodeCIDRMasksByProviderID: error when paring the value of the ipv4 mask size %s: %v", ptr.Deref(v4, ""), err)
+			klog.Errorf("GetNodeCIDRMasksByProviderID: error when paring the value of the ipv4 mask size %s: %v", lo.FromPtrOr(v4, ""), err)
 		}
 	}
 	if v6, ok := vmas.Tags[consts.VMSetCIDRIPV6TagKey]; ok && v6 != nil {
-		ipv6Mask, err = strconv.Atoi(ptr.Deref(v6, ""))
+		ipv6Mask, err = strconv.Atoi(lo.FromPtrOr(v6, ""))
 		if err != nil {
-			klog.Errorf("GetNodeCIDRMasksByProviderID: error when paring the value of the ipv6 mask size%s: %v", ptr.Deref(v6, ""), err)
+			klog.Errorf("GetNodeCIDRMasksByProviderID: error when paring the value of the ipv6 mask size%s: %v", lo.FromPtrOr(v6, ""), err)
 		}
 	}
 

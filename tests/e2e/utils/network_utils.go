@@ -27,11 +27,10 @@ import (
 	"time"
 
 	aznetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
-
+	"github.com/samber/lo"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworkclient"
 )
@@ -139,7 +138,7 @@ func (azureTestClient *AzureTestClient) DeleteSubnet(vnetName string, subnetName
 			ipConfigIDs := []string{}
 			if subnet.Properties.IPConfigurations != nil {
 				for _, ipConfig := range subnet.Properties.IPConfigurations {
-					ipConfigIDs = append(ipConfigIDs, ptr.Deref(ipConfig.ID, ""))
+					ipConfigIDs = append(ipConfigIDs, lo.FromPtrOr(ipConfig.ID, ""))
 				}
 			}
 
@@ -366,7 +365,7 @@ func WaitGetPIPByPrefix(
 			return false, nil
 		}
 
-		pipID := ptr.Deref((prefix.Properties.PublicIPAddresses)[0].ID, "")
+		pipID := lo.FromPtrOr((prefix.Properties.PublicIPAddresses)[0].ID, "")
 		parts := strings.Split(pipID, "/")
 		pipName := parts[len(parts)-1]
 		pip, err = WaitGetPIP(cli, pipName)
@@ -500,7 +499,7 @@ func SelectAvailablePrivateIPs(tc *AzureTestClient) ([]*string, error) {
 		return []*string{}, err
 	}
 	if len(vNet.Properties.Subnets) == 0 {
-		return []*string{}, fmt.Errorf("failed to find a subnet in vNet %s", ptr.Deref(vNet.Name, ""))
+		return []*string{}, fmt.Errorf("failed to find a subnet in vNet %s", lo.FromPtrOr(vNet.Name, ""))
 	}
 	subnets, err := selectSubnets(tc.IPFamily, vNet.Properties.Subnets)
 	if err != nil {
@@ -513,7 +512,7 @@ func SelectAvailablePrivateIPs(tc *AzureTestClient) ([]*string, error) {
 	}
 	privateIPs := []*string{}
 	for _, subnet := range subnets {
-		ip, err := findIPInSubnet(vNetClient, tc.resourceGroup, *subnet, ptr.Deref(vNet.Name, ""))
+		ip, err := findIPInSubnet(vNetClient, tc.resourceGroup, *subnet, lo.FromPtrOr(vNet.Name, ""))
 		if err != nil {
 			return privateIPs, err
 		}
@@ -537,7 +536,7 @@ func (azureTestClient *AzureTestClient) GetPublicIPFromAddress(resourceGroupName
 		return pip, err
 	}
 	for _, pip := range pipList {
-		if strings.EqualFold(ptr.Deref(pip.Properties.IPAddress, ""), *ipAddr) {
+		if strings.EqualFold(lo.FromPtrOr(pip.Properties.IPAddress, ""), *ipAddr) {
 			return pip, err
 		}
 	}

@@ -22,13 +22,11 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/stretchr/testify/assert"
-
 	"go.uber.org/mock/gomock"
-
 	cloudprovider "k8s.io/cloud-provider"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
@@ -45,13 +43,13 @@ var (
 		VMName:              "testvm1",
 		VMID:                "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm1",
 		ComputerName:        "vmssflex1000001",
-		ProvisioningState:   ptr.To("Succeeded"),
+		ProvisioningState:   to.Ptr("Succeeded"),
 		VmssFlexID:          testVmssFlex1ID,
 		Zones:               &[]string{"1", "2", "3"},
-		PlatformFaultDomain: ptr.To(int32(1)),
+		PlatformFaultDomain: to.Ptr(int32(1)),
 		Status: &[]compute.InstanceViewStatus{
 			{
-				Code: ptr.To("PowerState/running"),
+				Code: to.Ptr("PowerState/running"),
 			},
 		},
 		NicID: "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm1-nic",
@@ -63,13 +61,13 @@ var (
 		VMName:              "testvm2",
 		VMID:                "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm2",
 		ComputerName:        "vmssflex1000002",
-		ProvisioningState:   ptr.To("Succeeded"),
+		ProvisioningState:   to.Ptr("Succeeded"),
 		VmssFlexID:          testVmssFlex1ID,
 		Zones:               nil,
-		PlatformFaultDomain: ptr.To(int32(1)),
+		PlatformFaultDomain: to.Ptr(int32(1)),
 		Status: &[]compute.InstanceViewStatus{
 			{
-				Code: ptr.To("PowerState/running"),
+				Code: to.Ptr("PowerState/running"),
 			},
 		},
 		NicID: "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm2-nic",
@@ -112,12 +110,12 @@ func genreateTestVmssFlexList() []compute.VirtualMachineScaleSet {
 
 func genreteTestVmssFlex(vmssFlexName string, testVmssFlexID string) compute.VirtualMachineScaleSet {
 	return compute.VirtualMachineScaleSet{
-		ID:   ptr.To(testVmssFlexID),
-		Name: ptr.To(vmssFlexName),
+		ID:   to.Ptr(testVmssFlexID),
+		Name: to.Ptr(vmssFlexName),
 		VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
 			VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
 				OsProfile: &compute.VirtualMachineScaleSetOSProfile{
-					ComputerNamePrefix: ptr.To(vmssFlexName),
+					ComputerNamePrefix: to.Ptr(vmssFlexName),
 				},
 				NetworkProfile: &compute.VirtualMachineScaleSetNetworkProfile{
 					NetworkInterfaceConfigurations: &[]compute.VirtualMachineScaleSetNetworkConfiguration{
@@ -128,10 +126,10 @@ func genreteTestVmssFlex(vmssFlexName string, testVmssFlexID string) compute.Vir
 										VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
 											LoadBalancerBackendAddressPools: &[]compute.SubResource{
 												{
-													ID: ptr.To(testBackendPoolID0),
+													ID: to.Ptr(testBackendPoolID0),
 												},
 											},
-											Primary: ptr.To(true),
+											Primary: to.Ptr(true),
 										},
 									},
 								},
@@ -143,8 +141,8 @@ func genreteTestVmssFlex(vmssFlexName string, testVmssFlexID string) compute.Vir
 			OrchestrationMode: compute.Flexible,
 		},
 		Tags: map[string]*string{
-			consts.VMSetCIDRIPV4TagKey: ptr.To("24"),
-			consts.VMSetCIDRIPV6TagKey: ptr.To("64"),
+			consts.VMSetCIDRIPV4TagKey: to.Ptr("24"),
+			consts.VMSetCIDRIPV6TagKey: to.Ptr("64"),
 		},
 	}
 }
@@ -163,31 +161,31 @@ type VmssFlexTestVMSpec struct {
 
 func generateVmssFlexTestVMWithoutInstanceView(spec VmssFlexTestVMSpec) (testVMWithoutInstanceView compute.VirtualMachine) {
 	return compute.VirtualMachine{
-		Name: ptr.To(spec.VMName),
-		ID:   ptr.To(spec.VMID),
+		Name: to.Ptr(spec.VMName),
+		ID:   to.Ptr(spec.VMID),
 		VirtualMachineProperties: &compute.VirtualMachineProperties{
 			OsProfile: &compute.OSProfile{
-				ComputerName: ptr.To(spec.ComputerName),
+				ComputerName: to.Ptr(spec.ComputerName),
 			},
 			ProvisioningState: spec.ProvisioningState,
 			VirtualMachineScaleSet: &compute.SubResource{
-				ID: ptr.To(spec.VmssFlexID),
+				ID: to.Ptr(spec.VmssFlexID),
 			},
 			StorageProfile: &compute.StorageProfile{
 				OsDisk: &compute.OSDisk{
-					Name: ptr.To("osdisk" + spec.VMName),
+					Name: to.Ptr("osdisk" + spec.VMName),
 					ManagedDisk: &compute.ManagedDiskParameters{
-						ID: ptr.To("ManagedID" + spec.VMName),
+						ID: to.Ptr("ManagedID" + spec.VMName),
 						DiskEncryptionSet: &compute.DiskEncryptionSetParameters{
-							ID: ptr.To("DiskEncryptionSetID" + spec.VMName),
+							ID: to.Ptr("DiskEncryptionSetID" + spec.VMName),
 						},
 					},
 				},
 				DataDisks: &[]compute.DataDisk{
 					{
-						Lun:         ptr.To(int32(1)),
-						Name:        ptr.To("dataDisk" + spec.VMName),
-						ManagedDisk: &compute.ManagedDiskParameters{ID: ptr.To("uri")},
+						Lun:         to.Ptr(int32(1)),
+						Name:        to.Ptr("dataDisk" + spec.VMName),
+						ManagedDisk: &compute.ManagedDiskParameters{ID: to.Ptr("uri")},
 					},
 				},
 			},
@@ -197,20 +195,20 @@ func generateVmssFlexTestVMWithoutInstanceView(spec VmssFlexTestVMSpec) (testVMW
 			NetworkProfile: &compute.NetworkProfile{
 				NetworkInterfaces: &[]compute.NetworkInterfaceReference{
 					{
-						ID: ptr.To(spec.NicID),
+						ID: to.Ptr(spec.NicID),
 					},
 				},
 			},
 		},
 		Zones:    spec.Zones,
-		Location: ptr.To("EastUS"),
+		Location: to.Ptr("EastUS"),
 	}
 }
 
 func generateVmssFlexTestVMWithOnlyInstanceView(spec VmssFlexTestVMSpec) (testVMWithOnlyInstanceView compute.VirtualMachine) {
 	return compute.VirtualMachine{
-		Name: ptr.To(spec.VMName),
-		ID:   ptr.To(spec.VMID),
+		Name: to.Ptr(spec.VMName),
+		ID:   to.Ptr(spec.VMID),
 		VirtualMachineProperties: &compute.VirtualMachineProperties{
 			InstanceView: &compute.VirtualMachineInstanceView{
 				PlatformFaultDomain: spec.PlatformFaultDomain,

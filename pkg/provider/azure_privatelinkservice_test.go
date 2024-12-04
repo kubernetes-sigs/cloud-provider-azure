@@ -26,11 +26,11 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -76,8 +76,8 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			wantPLS:           true,
 			expectedSubnetGet: true,
 			existingSubnet: &armnetwork.Subnet{
-				Name: ptr.To("subnet"),
-				ID:   ptr.To("subnetID"),
+				Name: to.Ptr("subnet"),
+				ID:   to.Ptr("subnetID"),
 				Properties: &armnetwork.SubnetPropertiesFormat{
 					PrivateLinkServiceNetworkPolicies: to.Ptr(armnetwork.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled),
 				},
@@ -85,7 +85,7 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			expectedPLSList:   true,
 			existingPLSList:   []*armnetwork.PrivateLinkService{},
 			expectedPLSCreate: true,
-			expectedPLS:       &armnetwork.PrivateLinkService{Name: ptr.To("pls-fipConfig")},
+			expectedPLS:       &armnetwork.PrivateLinkService{Name: to.Ptr("pls-fipConfig")},
 		},
 		{
 			desc: "reconcilePrivateLinkService should create a new PLS if no existing PLS attached to the LB frontend",
@@ -97,8 +97,8 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			wantPLS:           true,
 			expectedSubnetGet: true,
 			existingSubnet: &armnetwork.Subnet{
-				Name: ptr.To("subnet"),
-				ID:   ptr.To("subnetID"),
+				Name: to.Ptr("subnet"),
+				ID:   to.Ptr("subnetID"),
 				Properties: &armnetwork.SubnetPropertiesFormat{
 					PrivateLinkServiceNetworkPolicies: to.Ptr(armnetwork.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled),
 				},
@@ -106,7 +106,7 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			expectedPLSList:   true,
 			existingPLSList:   []*armnetwork.PrivateLinkService{},
 			expectedPLSCreate: true,
-			expectedPLS:       &armnetwork.PrivateLinkService{Name: ptr.To("testpls")},
+			expectedPLS:       &armnetwork.PrivateLinkService{Name: to.Ptr("testpls")},
 		},
 		{
 			desc: "reconcilePrivateLinkService should report error if existing PLS attached to LB frontEnd is unmanaged",
@@ -119,15 +119,15 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			expectedPLSList: true,
 			existingPLSList: []*armnetwork.PrivateLinkService{
 				{
-					Name: ptr.To("testpls"),
+					Name: to.Ptr("testpls"),
 					Properties: &armnetwork.PrivateLinkServiceProperties{
-						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: ptr.To("fipConfigID")}},
+						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: to.Ptr("fipConfigID")}},
 						IPConfigurations: []*armnetwork.PrivateLinkServiceIPConfiguration{
 							{
 								Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 									PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
-									Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-									Primary:                   ptr.To(true),
+									Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+									Primary:                   to.Ptr(true),
 									PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 								},
 							},
@@ -148,23 +148,23 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			expectedPLSList: true,
 			existingPLSList: []*armnetwork.PrivateLinkService{
 				{
-					Name: ptr.To("testpls"),
+					Name: to.Ptr("testpls"),
 					Properties: &armnetwork.PrivateLinkServiceProperties{
-						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: ptr.To("fipConfigID")}},
+						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: to.Ptr("fipConfigID")}},
 						IPConfigurations: []*armnetwork.PrivateLinkServiceIPConfiguration{
 							{
 								Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 									PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
-									Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-									Primary:                   ptr.To(true),
+									Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+									Primary:                   to.Ptr(true),
 									PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 								},
 							},
 						},
 					},
 					Tags: map[string]*string{
-						consts.ClusterNameTagKey:  ptr.To(testClusterName),
-						consts.OwnerServiceTagKey: ptr.To("default/test1"),
+						consts.ClusterNameTagKey:  to.Ptr(testClusterName),
+						consts.OwnerServiceTagKey: to.Ptr("default/test1"),
 					},
 				},
 			},
@@ -180,24 +180,24 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			expectedPLSList: true,
 			existingPLSList: []*armnetwork.PrivateLinkService{
 				{
-					Name: ptr.To("testpls"),
+					Name: to.Ptr("testpls"),
 					Properties: &armnetwork.PrivateLinkServiceProperties{
-						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: ptr.To("fipConfigID")}},
+						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: to.Ptr("fipConfigID")}},
 						IPConfigurations: []*armnetwork.PrivateLinkServiceIPConfiguration{
 							{
 								Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 									PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
-									PrivateIPAddress:          ptr.To("10.2.0.4"),
-									Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-									Primary:                   ptr.To(true),
+									PrivateIPAddress:          to.Ptr("10.2.0.4"),
+									Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+									Primary:                   to.Ptr(true),
 									PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 								},
 							},
 						},
 					},
 					Tags: map[string]*string{
-						consts.ClusterNameTagKey:  ptr.To(testClusterName),
-						consts.OwnerServiceTagKey: ptr.To("default/test1"),
+						consts.ClusterNameTagKey:  to.Ptr(testClusterName),
+						consts.OwnerServiceTagKey: to.Ptr("default/test1"),
 					},
 				},
 			},
@@ -212,8 +212,8 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			wantPLS:           true,
 			expectedSubnetGet: true,
 			existingSubnet: &armnetwork.Subnet{
-				Name: ptr.To("subnet"),
-				ID:   ptr.To("subnetID"),
+				Name: to.Ptr("subnet"),
+				ID:   to.Ptr("subnetID"),
 				Properties: &armnetwork.SubnetPropertiesFormat{
 					PrivateLinkServiceNetworkPolicies: to.Ptr(armnetwork.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled),
 				},
@@ -221,23 +221,23 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			expectedPLSList: true,
 			existingPLSList: []*armnetwork.PrivateLinkService{
 				{
-					Name: ptr.To("testpls"),
+					Name: to.Ptr("testpls"),
 					Properties: &armnetwork.PrivateLinkServiceProperties{
-						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: ptr.To("fipConfigID")}},
+						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: to.Ptr("fipConfigID")}},
 						IPConfigurations: []*armnetwork.PrivateLinkServiceIPConfiguration{
 							{
 								Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 									PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
-									Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-									Primary:                   ptr.To(true),
+									Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+									Primary:                   to.Ptr(true),
 									PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 								},
 							},
 						},
 					},
 					Tags: map[string]*string{
-						consts.ClusterNameTagKey:  ptr.To(testClusterName),
-						consts.OwnerServiceTagKey: ptr.To("default/test"),
+						consts.ClusterNameTagKey:  to.Ptr(testClusterName),
+						consts.OwnerServiceTagKey: to.Ptr("default/test"),
 					},
 				},
 			},
@@ -253,8 +253,8 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			wantPLS:           true,
 			expectedSubnetGet: true,
 			existingSubnet: &armnetwork.Subnet{
-				Name: ptr.To("subnet"),
-				ID:   ptr.To("subnetID"),
+				Name: to.Ptr("subnet"),
+				ID:   to.Ptr("subnetID"),
 				Properties: &armnetwork.SubnetPropertiesFormat{
 					PrivateLinkServiceNetworkPolicies: to.Ptr(armnetwork.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled),
 				},
@@ -262,28 +262,28 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			expectedPLSList: true,
 			existingPLSList: []*armnetwork.PrivateLinkService{
 				{
-					Name: ptr.To("testpls"),
+					Name: to.Ptr("testpls"),
 					Properties: &armnetwork.PrivateLinkServiceProperties{
-						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: ptr.To("fipConfigID")}},
+						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: to.Ptr("fipConfigID")}},
 						IPConfigurations: []*armnetwork.PrivateLinkServiceIPConfiguration{
 							{
 								Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 									PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
-									Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-									Primary:                   ptr.To(true),
+									Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+									Primary:                   to.Ptr(true),
 									PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 								},
 							},
 						},
 					},
 					Tags: map[string]*string{
-						consts.ClusterNameTagKey:  ptr.To(testClusterName),
-						consts.OwnerServiceTagKey: ptr.To("default/test"),
+						consts.ClusterNameTagKey:  to.Ptr(testClusterName),
+						consts.OwnerServiceTagKey: to.Ptr("default/test"),
 					},
 				},
 			},
 			expectedPLSCreate: true,
-			expectedPLS:       &armnetwork.PrivateLinkService{Name: ptr.To("testpls")},
+			expectedPLS:       &armnetwork.PrivateLinkService{Name: to.Ptr("testpls")},
 		},
 		{
 			desc: "reconcilePrivateLinkService should not do anything if no existing PLS attached to the LB frontend when deleting",
@@ -295,9 +295,9 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			expectedPLSList: true,
 			existingPLSList: []*armnetwork.PrivateLinkService{
 				{
-					Name: ptr.To("testpls"),
+					Name: to.Ptr("testpls"),
 					Properties: &armnetwork.PrivateLinkServiceProperties{
-						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: ptr.To("fipConfigID2")}},
+						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: to.Ptr("fipConfigID2")}},
 					},
 				},
 			},
@@ -312,9 +312,9 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			expectedPLSList: true,
 			existingPLSList: []*armnetwork.PrivateLinkService{
 				{
-					Name: ptr.To("testpls"),
+					Name: to.Ptr("testpls"),
 					Properties: &armnetwork.PrivateLinkServiceProperties{
-						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: ptr.To("fipConfigID")}},
+						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: to.Ptr("fipConfigID")}},
 					},
 				},
 			},
@@ -327,11 +327,11 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			az := GetTestCloud(ctrl)
 			service := getTestServiceWithAnnotation("test", test.annotations, false, 80)
 			fipConfig := &network.FrontendIPConfiguration{
-				Name: ptr.To("fipConfig"),
-				ID:   ptr.To("fipConfigID"),
+				Name: to.Ptr("fipConfig"),
+				ID:   to.Ptr("fipConfigID"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
 					PublicIPAddress: &network.PublicIPAddress{
-						ID: ptr.To("pipID"),
+						ID: to.Ptr("pipID"),
 						PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 							PublicIPAddressVersion: network.IPv4,
 						},
@@ -411,7 +411,7 @@ func TestDisablePLSNetworkPolicy(t *testing.T) {
 		{
 			desc: "disablePLSNetworkPolicy shall not update subnet if pls-network-policy is disabled",
 			subnet: &armnetwork.Subnet{
-				Name: ptr.To("plsSubnet"),
+				Name: to.Ptr("plsSubnet"),
 				Properties: &armnetwork.SubnetPropertiesFormat{
 					PrivateLinkServiceNetworkPolicies: to.Ptr(armnetwork.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled),
 				},
@@ -421,7 +421,7 @@ func TestDisablePLSNetworkPolicy(t *testing.T) {
 		{
 			desc: "disablePLSNetworkPolicy shall update subnet if pls-network-policy is enabled",
 			subnet: &armnetwork.Subnet{
-				Name: ptr.To("plsSubnet"),
+				Name: to.Ptr("plsSubnet"),
 				Properties: &armnetwork.SubnetPropertiesFormat{
 					PrivateLinkServiceNetworkPolicies: to.Ptr(armnetwork.VirtualNetworkPrivateLinkServiceNetworkPoliciesEnabled),
 				},
@@ -441,7 +441,7 @@ func TestDisablePLSNetworkPolicy(t *testing.T) {
 		mockSubnetsClient.EXPECT().Get(gomock.Any(), "rg", "vnet", "plsSubnet").Return(test.subnet, nil).Times(1)
 		if test.expectedSubnetUpdate {
 			mockSubnetsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "vnet", "plsSubnet", armnetwork.Subnet{
-				Name: ptr.To("plsSubnet"),
+				Name: to.Ptr("plsSubnet"),
 				Properties: &armnetwork.SubnetPropertiesFormat{
 					PrivateLinkServiceNetworkPolicies: to.Ptr(armnetwork.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled),
 				},
@@ -464,12 +464,12 @@ func TestSafeDeletePLS(t *testing.T) {
 		{
 			desc: "safeDeletePLS shall delete all PE connections and pls itself",
 			pls: &armnetwork.PrivateLinkService{
-				Name: ptr.To("testpls"),
+				Name: to.Ptr("testpls"),
 				Properties: &armnetwork.PrivateLinkServiceProperties{
-					LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: ptr.To("FipConfigID")}},
+					LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: to.Ptr("FipConfigID")}},
 					PrivateEndpointConnections: []*armnetwork.PrivateEndpointConnection{
-						{Name: ptr.To("pe1")},
-						{Name: ptr.To("pe2")},
+						{Name: to.Ptr("pe1")},
+						{Name: to.Ptr("pe2")},
 					},
 				},
 			},
@@ -513,14 +513,14 @@ func TestGetPrivateLinkServiceName(t *testing.T) {
 			desc: "If pls name does not set, and service does not configure, sets it as default(pls-fipConfigName)",
 			pls:  &armnetwork.PrivateLinkService{},
 			fipConfig: &network.FrontendIPConfiguration{
-				Name: ptr.To("fipname"),
+				Name: to.Ptr("fipname"),
 			},
 			expectedName: "pls-fipname",
 		},
 		{
 			desc: "If pls name is not equal to service configuration, error should be reported",
 			pls: &armnetwork.PrivateLinkService{
-				Name: ptr.To("testpls"),
+				Name: to.Ptr("testpls"),
 			},
 			annotations: map[string]string{
 				consts.ServiceAnnotationPLSName: "testpls1",
@@ -530,7 +530,7 @@ func TestGetPrivateLinkServiceName(t *testing.T) {
 		{
 			desc: "If pls name is same as service configuration, simply return it",
 			pls: &armnetwork.PrivateLinkService{
-				Name: ptr.To("testpls"),
+				Name: to.Ptr("testpls"),
 			},
 			annotations: map[string]string{
 				consts.ServiceAnnotationPLSName: "testpls",
@@ -574,13 +574,13 @@ func TestGetExpectedPrivateLinkService(t *testing.T) {
 		}
 		plsName := "testPLS"
 		clusterName := testClusterName
-		fipConfig := &network.FrontendIPConfiguration{ID: ptr.To("fipConfigID")}
+		fipConfig := &network.FrontendIPConfiguration{ID: to.Ptr("fipConfigID")}
 		pls := &armnetwork.PrivateLinkService{Properties: &armnetwork.PrivateLinkServiceProperties{}}
 		subnetClient := cloud.subnetRepo.(*subnet.MockRepository)
 		subnetClient.EXPECT().Get(gomock.Any(), "rg", "vnet", "subnet").Return(
 			&armnetwork.Subnet{
-				ID:   ptr.To("subnetID"),
-				Name: ptr.To("subnet"),
+				ID:   to.Ptr("subnetID"),
+				Name: to.Ptr("subnet"),
 			}, nil).MaxTimes(1)
 
 		dirtyPLS, err := cloud.getExpectedPrivateLinkService(context.TODO(), pls, &plsName, &clusterName, service, fipConfig)
@@ -594,31 +594,31 @@ func TestGetExpectedPrivateLinkService(t *testing.T) {
 
 		expectedConfigs := []*armnetwork.PrivateLinkServiceIPConfiguration{
 			{
-				Name: ptr.To("subnet-testPLS-static-10.2.0.4"),
+				Name: to.Ptr("subnet-testPLS-static-10.2.0.4"),
 				Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 					PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
-					PrivateIPAddress:          ptr.To("10.2.0.4"),
-					Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-					Primary:                   ptr.To(true),
+					PrivateIPAddress:          to.Ptr("10.2.0.4"),
+					Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+					Primary:                   to.Ptr(true),
 					PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 				},
 			},
 			{
-				Name: ptr.To("subnet-testPLS-static-10.2.0.5"),
+				Name: to.Ptr("subnet-testPLS-static-10.2.0.5"),
 				Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 					PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
-					PrivateIPAddress:          ptr.To("10.2.0.5"),
-					Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-					Primary:                   ptr.To(false),
+					PrivateIPAddress:          to.Ptr("10.2.0.5"),
+					Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+					Primary:                   to.Ptr(false),
 					PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 				},
 			},
 			{
-				Name: ptr.To("subnet-testPLS-dynamic-0"),
+				Name: to.Ptr("subnet-testPLS-dynamic-0"),
 				Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 					PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
-					Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-					Primary:                   ptr.To(false),
+					Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+					Primary:                   to.Ptr(false),
 					PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 				},
 			},
@@ -677,11 +677,11 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			plsName: "testpls",
 			expectedIPConfigs: []*armnetwork.PrivateLinkServiceIPConfiguration{
 				{
-					Name: ptr.To("subnet-testpls-dynamic-0"),
+					Name: to.Ptr("subnet-testpls-dynamic-0"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						Primary:                   ptr.To(true),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						Primary:                   to.Ptr(true),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
@@ -696,31 +696,31 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			},
 			existingIPConfigs: []*armnetwork.PrivateLinkServiceIPConfiguration{
 				{
-					Name: ptr.To("subnet-testpls-dynamic-0"),
+					Name: to.Ptr("subnet-testpls-dynamic-0"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						Primary:                   ptr.To(true),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						Primary:                   to.Ptr(true),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
 			},
 			expectedIPConfigs: []*armnetwork.PrivateLinkServiceIPConfiguration{
 				{
-					Name: ptr.To("subnet-testpls-dynamic-0"),
+					Name: to.Ptr("subnet-testpls-dynamic-0"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						Primary:                   ptr.To(true),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						Primary:                   to.Ptr(true),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
 				{
-					Name: ptr.To("subnet-testpls-dynamic-1"),
+					Name: to.Ptr("subnet-testpls-dynamic-1"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						Primary:                   ptr.To(false),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						Primary:                   to.Ptr(false),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
@@ -732,22 +732,22 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			plsName: "testpls",
 			existingIPConfigs: []*armnetwork.PrivateLinkServiceIPConfiguration{
 				{
-					Name: ptr.To("subnet-testpls-dynamic-0"),
+					Name: to.Ptr("subnet-testpls-dynamic-0"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID1")},
-						Primary:                   ptr.To(true),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID1")},
+						Primary:                   to.Ptr(true),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
 			},
 			expectedIPConfigs: []*armnetwork.PrivateLinkServiceIPConfiguration{
 				{
-					Name: ptr.To("subnet-testpls-dynamic-0"),
+					Name: to.Ptr("subnet-testpls-dynamic-0"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						Primary:                   ptr.To(true),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						Primary:                   to.Ptr(true),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
@@ -763,32 +763,32 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			},
 			existingIPConfigs: []*armnetwork.PrivateLinkServiceIPConfiguration{
 				{
-					Name: ptr.To("subnet-testpls-dynamic-0"),
+					Name: to.Ptr("subnet-testpls-dynamic-0"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						Primary:                   ptr.To(true),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						Primary:                   to.Ptr(true),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
 			},
 			expectedIPConfigs: []*armnetwork.PrivateLinkServiceIPConfiguration{
 				{
-					Name: ptr.To("subnet-testpls-static-10.2.0.4"),
+					Name: to.Ptr("subnet-testpls-static-10.2.0.4"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
-						PrivateIPAddress:          ptr.To("10.2.0.4"),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						Primary:                   ptr.To(true),
+						PrivateIPAddress:          to.Ptr("10.2.0.4"),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						Primary:                   to.Ptr(true),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
 				{
-					Name: ptr.To("subnet-testpls-dynamic-0"),
+					Name: to.Ptr("subnet-testpls-dynamic-0"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						Primary:                   ptr.To(false),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						Primary:                   to.Ptr(false),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
@@ -800,23 +800,23 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			plsName: "testpls",
 			existingIPConfigs: []*armnetwork.PrivateLinkServiceIPConfiguration{
 				{
-					Name: ptr.To("subnet-testpls-static-10.2.0.4"),
+					Name: to.Ptr("subnet-testpls-static-10.2.0.4"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						PrivateIPAddress:          ptr.To("10.2.0.4"),
-						Primary:                   ptr.To(true),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						PrivateIPAddress:          to.Ptr("10.2.0.4"),
+						Primary:                   to.Ptr(true),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
 			},
 			expectedIPConfigs: []*armnetwork.PrivateLinkServiceIPConfiguration{
 				{
-					Name: ptr.To("subnet-testpls-dynamic-0"),
+					Name: to.Ptr("subnet-testpls-dynamic-0"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						Primary:                   ptr.To(true),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						Primary:                   to.Ptr(true),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
@@ -831,24 +831,24 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			},
 			existingIPConfigs: []*armnetwork.PrivateLinkServiceIPConfiguration{
 				{
-					Name: ptr.To("subnet-testpls-static-10.2.0.4"),
+					Name: to.Ptr("subnet-testpls-static-10.2.0.4"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
-						PrivateIPAddress:          ptr.To("10.2.0.4"),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						Primary:                   ptr.To(true),
+						PrivateIPAddress:          to.Ptr("10.2.0.4"),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						Primary:                   to.Ptr(true),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
 			},
 			expectedIPConfigs: []*armnetwork.PrivateLinkServiceIPConfiguration{
 				{
-					Name: ptr.To("subnet-testpls-static-10.2.0.5"),
+					Name: to.Ptr("subnet-testpls-static-10.2.0.5"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
-						PrivateIPAddress:          ptr.To("10.2.0.5"),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						Primary:                   ptr.To(true),
+						PrivateIPAddress:          to.Ptr("10.2.0.5"),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						Primary:                   to.Ptr(true),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
@@ -860,22 +860,22 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			plsName: "testpls",
 			existingIPConfigs: []*armnetwork.PrivateLinkServiceIPConfiguration{
 				{
-					Name: ptr.To("subnet-testpls-dynamic-0"),
+					Name: to.Ptr("subnet-testpls-dynamic-0"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						Primary:                   ptr.To(true),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						Primary:                   to.Ptr(true),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
 			},
 			expectedIPConfigs: []*armnetwork.PrivateLinkServiceIPConfiguration{
 				{
-					Name: ptr.To("subnet-testpls-dynamic-0"),
+					Name: to.Ptr("subnet-testpls-dynamic-0"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						Primary:                   ptr.To(true),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						Primary:                   to.Ptr(true),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
@@ -889,24 +889,24 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			},
 			existingIPConfigs: []*armnetwork.PrivateLinkServiceIPConfiguration{
 				{
-					Name: ptr.To("subnet-testpls-static-10.2.0.5"),
+					Name: to.Ptr("subnet-testpls-static-10.2.0.5"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
-						PrivateIPAddress:          ptr.To("10.2.0.5"),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						Primary:                   ptr.To(true),
+						PrivateIPAddress:          to.Ptr("10.2.0.5"),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						Primary:                   to.Ptr(true),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
 			},
 			expectedIPConfigs: []*armnetwork.PrivateLinkServiceIPConfiguration{
 				{
-					Name: ptr.To("subnet-testpls-static-10.2.0.5"),
+					Name: to.Ptr("subnet-testpls-static-10.2.0.5"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
-						PrivateIPAddress:          ptr.To("10.2.0.5"),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						Primary:                   ptr.To(true),
+						PrivateIPAddress:          to.Ptr("10.2.0.5"),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						Primary:                   to.Ptr(true),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
@@ -922,21 +922,21 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			existingIPConfigs: []*armnetwork.PrivateLinkServiceIPConfiguration{},
 			expectedIPConfigs: []*armnetwork.PrivateLinkServiceIPConfiguration{
 				{
-					Name: ptr.To("subnet-" + strings.Repeat("12345678", 7) + "1" + "-static-10.2.0.5"),
+					Name: to.Ptr("subnet-" + strings.Repeat("12345678", 7) + "1" + "-static-10.2.0.5"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
-						PrivateIPAddress:          ptr.To("10.2.0.5"),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						Primary:                   ptr.To(true),
+						PrivateIPAddress:          to.Ptr("10.2.0.5"),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						Primary:                   to.Ptr(true),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
 				{
-					Name: ptr.To("subnet-" + strings.Repeat("12345678", 7) + "1234567" + "-dynamic-0"),
+					Name: to.Ptr("subnet-" + strings.Repeat("12345678", 7) + "1234567" + "-dynamic-0"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						Primary:                   ptr.To(false),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						Primary:                   to.Ptr(false),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
@@ -952,42 +952,42 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			},
 			existingIPConfigs: []*armnetwork.PrivateLinkServiceIPConfiguration{
 				{
-					Name: ptr.To("subnet-" + strings.Repeat("12345678", 7) + "1" + "-static-10.2.0.5"),
+					Name: to.Ptr("subnet-" + strings.Repeat("12345678", 7) + "1" + "-static-10.2.0.5"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
-						PrivateIPAddress:          ptr.To("10.2.0.5"),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						Primary:                   ptr.To(true),
+						PrivateIPAddress:          to.Ptr("10.2.0.5"),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						Primary:                   to.Ptr(true),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
 				{
-					Name: ptr.To("subnet-" + strings.Repeat("12345678", 7) + "1234567" + "-dynamic-0"),
+					Name: to.Ptr("subnet-" + strings.Repeat("12345678", 7) + "1234567" + "-dynamic-0"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						Primary:                   ptr.To(false),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						Primary:                   to.Ptr(false),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
 			},
 			expectedIPConfigs: []*armnetwork.PrivateLinkServiceIPConfiguration{
 				{
-					Name: ptr.To("subnet-" + strings.Repeat("12345678", 7) + "1" + "-static-10.2.0.5"),
+					Name: to.Ptr("subnet-" + strings.Repeat("12345678", 7) + "1" + "-static-10.2.0.5"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
-						PrivateIPAddress:          ptr.To("10.2.0.5"),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						Primary:                   ptr.To(true),
+						PrivateIPAddress:          to.Ptr("10.2.0.5"),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						Primary:                   to.Ptr(true),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
 				{
-					Name: ptr.To("subnet-" + strings.Repeat("12345678", 7) + "1234567" + "-dynamic-0"),
+					Name: to.Ptr("subnet-" + strings.Repeat("12345678", 7) + "1234567" + "-dynamic-0"),
 					Properties: &armnetwork.PrivateLinkServiceIPConfigurationProperties{
 						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
-						Subnet:                    &armnetwork.Subnet{ID: ptr.To("subnetID")},
-						Primary:                   ptr.To(false),
+						Subnet:                    &armnetwork.Subnet{ID: to.Ptr("subnetID")},
+						Primary:                   to.Ptr(false),
 						PrivateIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					},
 				},
@@ -1003,7 +1003,7 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			},
 		}
 		pls := &armnetwork.PrivateLinkService{
-			Name: ptr.To(test.plsName),
+			Name: to.Ptr(test.plsName),
 			Properties: &armnetwork.PrivateLinkServiceProperties{
 				IPConfigurations: test.existingIPConfigs,
 			},
@@ -1011,8 +1011,8 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 		subnetClient := cloud.subnetRepo.(*subnet.MockRepository)
 		subnetClient.EXPECT().Get(gomock.Any(), "rg", "vnet", "subnet").Return(
 			&armnetwork.Subnet{
-				ID:   ptr.To("subnetID"),
-				Name: ptr.To("subnet"),
+				ID:   to.Ptr("subnetID"),
+				Name: to.Ptr("subnet"),
 			}, test.getSubnetError).MaxTimes(1)
 
 		changed, err := cloud.reconcilePLSIpConfigs(context.TODO(), pls, service)
@@ -1030,10 +1030,10 @@ func testSamePLSIpConfigs(t *testing.T, actual []*armnetwork.PrivateLinkServiceI
 	actualIPConfigs := make(map[string]armnetwork.PrivateLinkServiceIPConfiguration)
 	expectedIPConfigs := make(map[string]armnetwork.PrivateLinkServiceIPConfiguration)
 	for _, ipConfig := range actual {
-		actualIPConfigs[ptr.Deref(ipConfig.Name, "")] = *ipConfig
+		actualIPConfigs[lo.FromPtrOr(ipConfig.Name, "")] = *ipConfig
 	}
 	for _, ipConfig := range expected {
-		expectedIPConfigs[ptr.Deref(ipConfig.Name, "")] = *ipConfig
+		expectedIPConfigs[lo.FromPtrOr(ipConfig.Name, "")] = *ipConfig
 	}
 
 	for name, expectedIPConfig := range expectedIPConfigs {
@@ -1112,10 +1112,10 @@ func TestReconcilePLSEnableProxyProtocol(t *testing.T) {
 			},
 			pls: &armnetwork.PrivateLinkService{
 				Properties: &armnetwork.PrivateLinkServiceProperties{
-					EnableProxyProtocol: ptr.To(false),
+					EnableProxyProtocol: to.Ptr(false),
 				},
 			},
-			expectedEnabled: ptr.To(false),
+			expectedEnabled: to.Ptr(false),
 		},
 		{
 			desc: "true service enableProxyProto and true pls enableProxyProto should not trigger any change",
@@ -1124,10 +1124,10 @@ func TestReconcilePLSEnableProxyProtocol(t *testing.T) {
 			},
 			pls: &armnetwork.PrivateLinkService{
 				Properties: &armnetwork.PrivateLinkServiceProperties{
-					EnableProxyProtocol: ptr.To(true),
+					EnableProxyProtocol: to.Ptr(true),
 				},
 			},
-			expectedEnabled: ptr.To(true),
+			expectedEnabled: to.Ptr(true),
 		},
 		{
 			desc: "true service enableProxyProto and empty pls enableProxyProto should trigger update",
@@ -1137,7 +1137,7 @@ func TestReconcilePLSEnableProxyProtocol(t *testing.T) {
 			pls: &armnetwork.PrivateLinkService{
 				Properties: &armnetwork.PrivateLinkServiceProperties{},
 			},
-			expectedEnabled: ptr.To(true),
+			expectedEnabled: to.Ptr(true),
 			expectedChanged: true,
 		},
 		{
@@ -1147,10 +1147,10 @@ func TestReconcilePLSEnableProxyProtocol(t *testing.T) {
 			},
 			pls: &armnetwork.PrivateLinkService{
 				Properties: &armnetwork.PrivateLinkServiceProperties{
-					EnableProxyProtocol: ptr.To(true),
+					EnableProxyProtocol: to.Ptr(true),
 				},
 			},
-			expectedEnabled: ptr.To(false),
+			expectedEnabled: to.Ptr(false),
 			expectedChanged: true,
 		},
 	}
@@ -1409,9 +1409,9 @@ func TestReconcilePLSTags(t *testing.T) {
 	}
 	pls := armnetwork.PrivateLinkService{
 		Tags: map[string]*string{
-			"foo": ptr.To("bar"),
-			"a":   ptr.To("j"),
-			"m":   ptr.To("n"),
+			"foo": to.Ptr("bar"),
+			"a":   to.Ptr("j"),
+			"m":   to.Ptr("n"),
 		},
 	}
 	clusterName := testClusterName
@@ -1419,12 +1419,12 @@ func TestReconcilePLSTags(t *testing.T) {
 	t.Run("reconcilePLSTags should ensure the pls is tagged as configured", func(t *testing.T) {
 		expectedPLS := armnetwork.PrivateLinkService{
 			Tags: map[string]*string{
-				consts.ClusterNameTagKey:  ptr.To(testClusterName),
-				consts.OwnerServiceTagKey: ptr.To("test-ns/test-svc"),
-				"foo":                     ptr.To("bar"),
-				"a":                       ptr.To("x"),
-				"y":                       ptr.To("z"),
-				"m":                       ptr.To("n"),
+				consts.ClusterNameTagKey:  to.Ptr(testClusterName),
+				consts.OwnerServiceTagKey: to.Ptr("test-ns/test-svc"),
+				"foo":                     to.Ptr("bar"),
+				"a":                       to.Ptr("x"),
+				"y":                       to.Ptr("z"),
+				"m":                       to.Ptr("n"),
 			},
 		}
 		changed := cloud.reconcilePLSTags(&pls, &clusterName, &service)
@@ -1436,11 +1436,11 @@ func TestReconcilePLSTags(t *testing.T) {
 		cloud.SystemTags = "a,foo,b"
 		expectedPLS := armnetwork.PrivateLinkService{
 			Tags: map[string]*string{
-				consts.ClusterNameTagKey:  ptr.To(testClusterName),
-				consts.OwnerServiceTagKey: ptr.To("test-ns/test-svc"),
-				"foo":                     ptr.To("bar"),
-				"a":                       ptr.To("x"),
-				"y":                       ptr.To("z"),
+				consts.ClusterNameTagKey:  to.Ptr(testClusterName),
+				consts.OwnerServiceTagKey: to.Ptr("test-ns/test-svc"),
+				"foo":                     to.Ptr("bar"),
+				"a":                       to.Ptr("x"),
+				"y":                       to.Ptr("z"),
 			},
 		}
 		changed := cloud.reconcilePLSTags(&pls, &clusterName, &service)
@@ -1453,11 +1453,11 @@ func TestReconcilePLSTags(t *testing.T) {
 		cloud.TagsMap = map[string]string{"a": "c", "a=b": "c=d", "Y": "zz"}
 		expectedPLS := armnetwork.PrivateLinkService{
 			Tags: map[string]*string{
-				consts.ClusterNameTagKey:  ptr.To(testClusterName),
-				consts.OwnerServiceTagKey: ptr.To("test-ns/test-svc"),
-				"foo":                     ptr.To("bar"),
-				"a":                       ptr.To("c"),
-				"a=b":                     ptr.To("c=d"),
+				consts.ClusterNameTagKey:  to.Ptr(testClusterName),
+				consts.OwnerServiceTagKey: to.Ptr("test-ns/test-svc"),
+				"foo":                     to.Ptr("bar"),
+				"a":                       to.Ptr("c"),
+				"a=b":                     to.Ptr("c=d"),
 			},
 		}
 		changed := cloud.reconcilePLSTags(&pls, &clusterName, &service)
@@ -1465,18 +1465,18 @@ func TestReconcilePLSTags(t *testing.T) {
 		assert.Equal(t, expectedPLS, pls)
 	})
 
-	pls.Tags[consts.ClusterNameTagKey] = ptr.To("testCluster1")
-	pls.Tags[consts.OwnerServiceTagKey] = ptr.To("default/svc")
+	pls.Tags[consts.ClusterNameTagKey] = to.Ptr("testCluster1")
+	pls.Tags[consts.OwnerServiceTagKey] = to.Ptr("default/svc")
 
 	t.Run("reconcilePLSTags should respect cluster and owner service tag keys", func(t *testing.T) {
 		expectedPLS := armnetwork.PrivateLinkService{
 			Tags: map[string]*string{
-				consts.ClusterNameTagKey:  ptr.To("testCluster1"),
-				consts.OwnerServiceTagKey: ptr.To("default/svc"),
-				"foo":                     ptr.To("bar"),
-				"a":                       ptr.To("c"),
-				"a=b":                     ptr.To("c=d"),
-				"Y":                       ptr.To("zz"),
+				consts.ClusterNameTagKey:  to.Ptr("testCluster1"),
+				consts.OwnerServiceTagKey: to.Ptr("default/svc"),
+				"foo":                     to.Ptr("bar"),
+				"a":                       to.Ptr("c"),
+				"a=b":                     to.Ptr("c=d"),
+				"Y":                       to.Ptr("zz"),
 			},
 		}
 		changed := cloud.reconcilePLSTags(&pls, &clusterName, &service)
@@ -1502,7 +1502,7 @@ func TestGetPLSSubnetName(t *testing.T) {
 			annotations: map[string]string{
 				consts.ServiceAnnotationPLSIpConfigurationSubnet: "pls-subnet",
 			},
-			expectedSubnet: ptr.To("pls-subnet"),
+			expectedSubnet: to.Ptr("pls-subnet"),
 		},
 		{
 			desc: "Service with empty private link subnet specified but LB subnet specified should return LB subnet",
@@ -1511,7 +1511,7 @@ func TestGetPLSSubnetName(t *testing.T) {
 				consts.ServiceAnnotationPLSIpConfigurationSubnet:   "",
 				consts.ServiceAnnotationLoadBalancerInternalSubnet: "lb-subnet",
 			},
-			expectedSubnet: ptr.To("lb-subnet"),
+			expectedSubnet: to.Ptr("lb-subnet"),
 		},
 		{
 			desc: "Service with LB subnet specified should return it",
@@ -1519,7 +1519,7 @@ func TestGetPLSSubnetName(t *testing.T) {
 				consts.ServiceAnnotationLoadBalancerInternal:       "true",
 				consts.ServiceAnnotationLoadBalancerInternalSubnet: "lb-subnet",
 			},
-			expectedSubnet: ptr.To("lb-subnet"),
+			expectedSubnet: to.Ptr("lb-subnet"),
 		},
 		{
 			desc: "Service with both empty subnets specified should return nil",
@@ -1857,7 +1857,7 @@ func TestIsManagedPrivateLinkSerivce(t *testing.T) {
 			desc: "Private link service with different cluster name should return false",
 			pls: &armnetwork.PrivateLinkService{
 				Tags: map[string]*string{
-					"k8s-azure-cluster-name": ptr.To("test-cluster1"),
+					"k8s-azure-cluster-name": to.Ptr("test-cluster1"),
 				},
 			},
 			clusterName: "test-cluster",
@@ -1866,7 +1866,7 @@ func TestIsManagedPrivateLinkSerivce(t *testing.T) {
 			desc: "Private link service with same cluster name should return true",
 			pls: &armnetwork.PrivateLinkService{
 				Tags: map[string]*string{
-					"k8s-azure-cluster-name": ptr.To("test-cluster"),
+					"k8s-azure-cluster-name": to.Ptr("test-cluster"),
 				},
 			},
 			clusterName: "test-cluster",
@@ -1898,7 +1898,7 @@ func TestGetPrivateLinkServiceOwner(t *testing.T) {
 		{
 			desc: "Private link service with service owner tag should return service owner",
 			pls: &armnetwork.PrivateLinkService{
-				Tags: map[string]*string{"k8s-azure-owner-service": ptr.To("test-service")},
+				Tags: map[string]*string{"k8s-azure-owner-service": to.Ptr("test-service")},
 			},
 			expected: "test-service",
 		},

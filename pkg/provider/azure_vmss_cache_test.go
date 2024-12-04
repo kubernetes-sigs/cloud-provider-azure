@@ -23,14 +23,13 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
-
 	"go.uber.org/mock/gomock"
-
 	cloudprovider "k8s.io/cloud-provider"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
@@ -66,18 +65,18 @@ func TestVMSSVMCache(t *testing.T) {
 	// validate getting VMSS VM via cache.
 	for i := range expectedVMs {
 		vm := expectedVMs[i]
-		vmName := ptr.Deref(vm.OsProfile.ComputerName, "")
+		vmName := lo.FromPtrOr(vm.OsProfile.ComputerName, "")
 		realVM, err := ss.getVmssVM(context.TODO(), vmName, azcache.CacheReadTypeDefault)
 		assert.NoError(t, err)
 		assert.NotNil(t, realVM)
 		assert.Equal(t, "vmss", realVM.VMSSName)
-		assert.Equal(t, ptr.Deref(vm.InstanceID, ""), realVM.InstanceID)
+		assert.Equal(t, lo.FromPtrOr(vm.InstanceID, ""), realVM.InstanceID)
 		assert.Equal(t, &vm, realVM.AsVirtualMachineScaleSetVM())
 	}
 
 	// validate DeleteCacheForNode().
 	vm := expectedVMs[0]
-	vmName := ptr.Deref(vm.OsProfile.ComputerName, "")
+	vmName := lo.FromPtrOr(vm.OsProfile.ComputerName, "")
 	err = ss.DeleteCacheForNode(context.TODO(), vmName)
 	assert.NoError(t, err)
 
@@ -85,7 +84,7 @@ func TestVMSSVMCache(t *testing.T) {
 	realVM, err := ss.getVmssVM(context.TODO(), vmName, azcache.CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Equal(t, "vmss", realVM.VMSSName)
-	assert.Equal(t, ptr.Deref(vm.InstanceID, ""), realVM.InstanceID)
+	assert.Equal(t, lo.FromPtrOr(vm.InstanceID, ""), realVM.InstanceID)
 	assert.Equal(t, &vm, realVM.AsVirtualMachineScaleSetVM())
 }
 
@@ -103,7 +102,7 @@ func TestVMSSVMCacheWithDeletingNodes(t *testing.T) {
 	ss.VirtualMachineScaleSetVMsClient = mockVMSSVMClient
 
 	expectedScaleSet := compute.VirtualMachineScaleSet{
-		Name:                             ptr.To(testVMSSName),
+		Name:                             to.Ptr(testVMSSName),
 		VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{},
 	}
 	mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachineScaleSet{expectedScaleSet}, nil).AnyTimes()
@@ -113,8 +112,8 @@ func TestVMSSVMCacheWithDeletingNodes(t *testing.T) {
 
 	for i := range expectedVMs {
 		vm := expectedVMs[i]
-		vmName := ptr.Deref(vm.OsProfile.ComputerName, "")
-		assert.Equal(t, vm.ProvisioningState, ptr.To(string(consts.ProvisioningStateDeleting)))
+		vmName := lo.FromPtrOr(vm.OsProfile.ComputerName, "")
+		assert.Equal(t, vm.ProvisioningState, to.Ptr(string(consts.ProvisioningStateDeleting)))
 
 		realVM, err := ss.getVmssVM(context.TODO(), vmName, azcache.CacheReadTypeDefault)
 		assert.Nil(t, realVM)
@@ -143,11 +142,11 @@ func TestVMSSVMCacheClearedWhenRGDeleted(t *testing.T) {
 
 	// validate getting VMSS VM via cache.
 	vm := expectedVMs[0]
-	vmName := ptr.Deref(vm.OsProfile.ComputerName, "")
+	vmName := lo.FromPtrOr(vm.OsProfile.ComputerName, "")
 	realVM, err := ss.getVmssVM(context.TODO(), vmName, azcache.CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Equal(t, "vmss", realVM.VMSSName)
-	assert.Equal(t, ptr.Deref(vm.InstanceID, ""), realVM.InstanceID)
+	assert.Equal(t, lo.FromPtrOr(vm.InstanceID, ""), realVM.InstanceID)
 	assert.Equal(t, &vm, realVM.AsVirtualMachineScaleSetVM())
 
 	// verify cache has test vmss.
@@ -332,7 +331,7 @@ func buildTestNICWithVMName(vmName string) network.Interface {
 		Name: &vmName,
 		InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
 			VirtualMachine: &network.SubResource{
-				ID: ptr.To(fmt.Sprintf("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/%s", vmName)),
+				ID: to.Ptr(fmt.Sprintf("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/%s", vmName)),
 			},
 		},
 	}
@@ -345,7 +344,7 @@ func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
 	testVM1 := generateVmssFlexTestVMWithoutInstanceView(testVM1Spec)
 	testVM2 := generateVmssFlexTestVMWithoutInstanceView(testVM2Spec)
 	testVM2.VirtualMachineScaleSet = nil
-	testVM2.VirtualMachineProperties.OsProfile.ComputerName = ptr.To("testvm2")
+	testVM2.VirtualMachineProperties.OsProfile.ComputerName = to.Ptr("testvm2")
 
 	testVMList := []compute.VirtualMachine{
 		testVM1,

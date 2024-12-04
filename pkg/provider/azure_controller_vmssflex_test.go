@@ -22,17 +22,15 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/go-autorest/autorest/azure"
 	autorestmocks "github.com/Azure/go-autorest/autorest/mocks"
 	"github.com/stretchr/testify/assert"
-
 	"go.uber.org/mock/gomock"
-
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
@@ -324,9 +322,9 @@ func TestGetDataDisksWithVmssFlex(t *testing.T) {
 			vmListErr:                      nil,
 			expectedDataDisks: []*armcompute.DataDisk{
 				{
-					Lun:         ptr.To(int32(1)),
-					Name:        ptr.To("dataDisktestvm1"),
-					ManagedDisk: &armcompute.ManagedDiskParameters{ID: ptr.To("uri")},
+					Lun:         to.Ptr(int32(1)),
+					Name:        to.Ptr("dataDisktestvm1"),
+					ManagedDisk: &armcompute.ManagedDiskParameters{ID: to.Ptr("uri")},
 				},
 			},
 			expectedErr: nil,
@@ -382,14 +380,14 @@ func TestVMSSFlexUpdateCache(t *testing.T) {
 		{
 			description: "vm.VirtualMachineProperties is nil",
 			nodeName:    "vmssflex1000001",
-			vm:          &compute.VirtualMachine{Name: ptr.To("vmssflex1000001")},
+			vm:          &compute.VirtualMachine{Name: to.Ptr("vmssflex1000001")},
 			expectedErr: fmt.Errorf("vm.VirtualMachineProperties is nil"),
 		},
 		{
 			description: "vm.OsProfile.ComputerName is nil",
 			nodeName:    "vmssflex1000001",
 			vm: &compute.VirtualMachine{
-				Name:                     ptr.To("vmssflex1000001"),
+				Name:                     to.Ptr("vmssflex1000001"),
 				VirtualMachineProperties: &compute.VirtualMachineProperties{},
 			},
 			expectedErr: fmt.Errorf("vm.OsProfile.ComputerName is nil"),
@@ -398,7 +396,7 @@ func TestVMSSFlexUpdateCache(t *testing.T) {
 			description: "vm.OsProfile.ComputerName is nil",
 			nodeName:    "vmssflex1000001",
 			vm: &compute.VirtualMachine{
-				Name: ptr.To("vmssflex1000001"),
+				Name: to.Ptr("vmssflex1000001"),
 				VirtualMachineProperties: &compute.VirtualMachineProperties{
 					OsProfile: &compute.OSProfile{},
 				},

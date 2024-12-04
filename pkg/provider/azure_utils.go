@@ -28,11 +28,10 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-
+	"github.com/samber/lo"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
-	"k8s.io/utils/ptr"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -90,7 +89,7 @@ func parseTags(tags string, tagsMap map[string]string) map[string]*string {
 				klog.Warning("parseTags: empty key, ignoring this key-value pair")
 				continue
 			}
-			formatted[k] = ptr.To(v)
+			formatted[k] = lo.ToPtr(v)
 		}
 	}
 
@@ -106,7 +105,7 @@ func parseTags(tags string, tagsMap map[string]string) map[string]*string {
 				klog.V(4).Infof("parseTags: found identical keys: %s from tags and %s from tagsMap (case-insensitive), %s will replace %s", k, key, key, k)
 				delete(formatted, k)
 			}
-			formatted[key] = ptr.To(value)
+			formatted[key] = lo.ToPtr(value)
 		}
 	}
 
@@ -134,7 +133,7 @@ func (az *Cloud) reconcileTags(currentTagsOnResource, newTags map[string]*string
 		}
 
 		for _, systemTag := range systemTags {
-			systemTagsMap[systemTag] = ptr.To("")
+			systemTagsMap[systemTag] = lo.ToPtr("")
 		}
 	}
 
@@ -145,7 +144,7 @@ func (az *Cloud) reconcileTags(currentTagsOnResource, newTags map[string]*string
 		if !found {
 			currentTagsOnResource[k] = v
 			changed = true
-		} else if !strings.EqualFold(ptr.Deref(v, ""), ptr.Deref(currentTagsOnResource[key], "")) {
+		} else if !strings.EqualFold(lo.FromPtrOr(v, ""), lo.FromPtrOr(currentTagsOnResource[key], "")) {
 			currentTagsOnResource[key] = v
 			changed = true
 		}
@@ -156,7 +155,7 @@ func (az *Cloud) reconcileTags(currentTagsOnResource, newTags map[string]*string
 		for k := range currentTagsOnResource {
 			if _, ok := newTags[k]; !ok {
 				if found, _ := findKeyInMapCaseInsensitive(systemTagsMap, k); !found {
-					klog.V(2).Infof("reconcileTags: delete tag %s: %s", k, ptr.Deref(currentTagsOnResource[k], ""))
+					klog.V(2).Infof("reconcileTags: delete tag %s: %s", k, lo.FromPtrOr(currentTagsOnResource[k], ""))
 					delete(currentTagsOnResource, k)
 					changed = true
 				}
@@ -226,11 +225,11 @@ func sameContentInSlices(s1 []string, s2 []string) bool {
 func removeDuplicatedSecurityRules(rules []*armnetwork.SecurityRule) []*armnetwork.SecurityRule {
 	ruleNames := make(map[string]bool)
 	for i := len(rules) - 1; i >= 0; i-- {
-		if _, ok := ruleNames[ptr.Deref(rules[i].Name, "")]; ok {
-			klog.Warningf("Found duplicated rule %s, will be removed.", ptr.Deref(rules[i].Name, ""))
+		if _, ok := ruleNames[lo.FromPtrOr(rules[i].Name, "")]; ok {
+			klog.Warningf("Found duplicated rule %s, will be removed.", lo.FromPtrOr(rules[i].Name, ""))
 			rules = append(rules[:i], rules[i+1:]...)
 		}
-		ruleNames[ptr.Deref(rules[i].Name, "")] = true
+		ruleNames[lo.FromPtrOr(rules[i].Name, "")] = true
 	}
 	return rules
 }
@@ -408,7 +407,7 @@ func (az *Cloud) isFIPIPv6(service *v1.Service, fip *network.FrontendIPConfigura
 		}
 		return service.Spec.IPFamilies[0] == v1.IPv6Protocol, nil
 	}
-	return managedResourceHasIPv6Suffix(ptr.Deref(fip.Name, "")), nil
+	return managedResourceHasIPv6Suffix(lo.FromPtrOr(fip.Name, "")), nil
 }
 
 // getResourceIDPrefix returns a substring from the provided one between beginning and the last "/".
@@ -447,7 +446,7 @@ func countIPsOnBackendPool(backendPool network.BackendAddressPool) int {
 	var ipsCount int
 	for _, loadBalancerBackendAddress := range *backendPool.LoadBalancerBackendAddresses {
 		if loadBalancerBackendAddress.LoadBalancerBackendAddressPropertiesFormat != nil &&
-			ptr.Deref(loadBalancerBackendAddress.IPAddress, "") != "" {
+			lo.FromPtrOr(loadBalancerBackendAddress.IPAddress, "") != "" {
 			ipsCount++
 		}
 	}

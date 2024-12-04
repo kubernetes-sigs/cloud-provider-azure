@@ -24,12 +24,10 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/stretchr/testify/assert"
-
 	"go.uber.org/mock/gomock"
-
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
@@ -51,7 +49,7 @@ func TestCreateOrUpdateSecurityGroupCanceled(t *testing.T) {
 	})
 	mockSGClient.EXPECT().Get(gomock.Any(), "rg", "sg").Return(&armnetwork.SecurityGroup{}, nil)
 
-	err = az.CreateOrUpdateSecurityGroup(context.TODO(), &armnetwork.SecurityGroup{Name: ptr.To("sg")})
+	err = az.CreateOrUpdateSecurityGroup(context.TODO(), &armnetwork.SecurityGroup{Name: to.Ptr("sg")})
 	assert.Contains(t, err.Error(), "canceledandsupersededduetoanotheroperation")
 
 	// security group should be removed from cache if the operation is canceled

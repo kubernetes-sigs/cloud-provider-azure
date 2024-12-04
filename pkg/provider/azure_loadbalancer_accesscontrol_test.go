@@ -33,7 +33,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil"
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil/fixture"
@@ -1414,29 +1413,29 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					Build(),
 
 				{
-					Name: ptr.To("foo"),
+					Name: to.Ptr("foo"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-						SourcePortRange:            ptr.To("*"),
+						SourcePortRange:            to.Ptr("*"),
 						SourceAddressPrefixes:      to.SliceOfPtrs("foo"),
 						DestinationPortRanges:      to.SliceOfPtrs("4000", "6000"),
 						DestinationAddressPrefixes: to.SliceOfPtrs(azureFx.LoadBalancer().Addresses()...), // Should remove the rule
-						Priority:                   ptr.To(int32(4003)),
+						Priority:                   to.Ptr(int32(4003)),
 					},
 				},
 				{
-					Name: ptr.To("bar"),
+					Name: to.Ptr("bar"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-						SourcePortRange:            ptr.To("*"),
+						SourcePortRange:            to.Ptr("*"),
 						SourceAddressPrefixes:      to.SliceOfPtrs("bar"),
 						DestinationPortRanges:      to.SliceOfPtrs("5000", "6000"),
 						DestinationAddressPrefixes: to.SliceOfPtrs(append(azureFx.LoadBalancer().Addresses(), "bar")...), // Should keep bar but clean the rest
-						Priority:                   ptr.To(int32(4004)),
+						Priority:                   to.Ptr(int32(4004)),
 					},
 				},
 			}
@@ -1520,16 +1519,16 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						Build(),
 
 					&armnetwork.SecurityRule{
-						Name: ptr.To("bar"),
+						Name: to.Ptr("bar"),
 						Properties: &armnetwork.SecurityRulePropertiesFormat{
 							Protocol:                 to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 							Access:                   to.Ptr(armnetwork.SecurityRuleAccessAllow),
 							Direction:                to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-							SourcePortRange:          ptr.To("*"),
+							SourcePortRange:          to.Ptr("*"),
 							SourceAddressPrefixes:    to.SliceOfPtrs("bar"),
 							DestinationPortRanges:    to.SliceOfPtrs("5000", "6000"),
-							DestinationAddressPrefix: ptr.To("bar"), // Should keep bar but clean the rest
-							Priority:                 ptr.To(int32(4004)),
+							DestinationAddressPrefix: to.Ptr("bar"), // Should keep bar but clean the rest
+							Priority:                 to.Ptr(int32(4004)),
 						},
 					},
 				)
@@ -1726,29 +1725,29 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					Build(),
 
 				{
-					Name: ptr.To("foo"),
+					Name: to.Ptr("foo"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-						SourcePortRange:            ptr.To("*"),
+						SourcePortRange:            to.Ptr("*"),
 						SourceAddressPrefixes:      to.SliceOfPtrs("foo"),
 						DestinationPortRanges:      to.SliceOfPtrs("4000", "6000"),
 						DestinationAddressPrefixes: to.SliceOfPtrs(azureFx.LoadBalancer().Addresses()...), // Should remove the rule
-						Priority:                   ptr.To(int32(4003)),
+						Priority:                   to.Ptr(int32(4003)),
 					},
 				},
 				{
-					Name: ptr.To("bar"),
+					Name: to.Ptr("bar"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-						SourcePortRange:            ptr.To("*"),
+						SourcePortRange:            to.Ptr("*"),
 						SourceAddressPrefixes:      to.SliceOfPtrs("bar"),
 						DestinationPortRanges:      to.SliceOfPtrs("5000", "6000"),
 						DestinationAddressPrefixes: to.SliceOfPtrs(append(azureFx.LoadBalancer().Addresses(), "bar")...), // Should keep bar but clean the rest
-						Priority:                   ptr.To(int32(4004)),
+						Priority:                   to.Ptr(int32(4004)),
 					},
 				},
 
@@ -1833,16 +1832,16 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						Build(),
 
 					&armnetwork.SecurityRule{
-						Name: ptr.To("bar"),
+						Name: to.Ptr("bar"),
 						Properties: &armnetwork.SecurityRulePropertiesFormat{
 							Protocol:                 to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 							Access:                   to.Ptr(armnetwork.SecurityRuleAccessAllow),
 							Direction:                to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-							SourcePortRange:          ptr.To("*"),
+							SourcePortRange:          to.Ptr("*"),
 							SourceAddressPrefixes:    to.SliceOfPtrs("bar"),
 							DestinationPortRanges:    to.SliceOfPtrs("5000", "6000"),
-							DestinationAddressPrefix: ptr.To("bar"), // Should keep bar but clean the rest
-							Priority:                 ptr.To(int32(4004)),
+							DestinationAddressPrefix: to.Ptr("bar"), // Should keep bar but clean the rest
+							Priority:                 to.Ptr(int32(4004)),
 						},
 					},
 					azureFx.
@@ -2513,29 +2512,29 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					Build(),
 
 				{
-					Name: ptr.To("foo"),
+					Name: to.Ptr("foo"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-						SourcePortRange:            ptr.To("*"),
+						SourcePortRange:            to.Ptr("*"),
 						SourceAddressPrefixes:      to.SliceOfPtrs("foo"),
 						DestinationPortRanges:      to.SliceOfPtrs("4000", "6000"),
 						DestinationAddressPrefixes: to.SliceOfPtrs(azureFx.LoadBalancer().Addresses()...), // Should remove the rule
-						Priority:                   ptr.To(int32(4003)),
+						Priority:                   to.Ptr(int32(4003)),
 					},
 				},
 				{
-					Name: ptr.To("bar"),
+					Name: to.Ptr("bar"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-						SourcePortRange:            ptr.To("*"),
+						SourcePortRange:            to.Ptr("*"),
 						SourceAddressPrefixes:      to.SliceOfPtrs("bar"),
 						DestinationPortRanges:      to.SliceOfPtrs("5000", "6000"),
 						DestinationAddressPrefixes: to.SliceOfPtrs(append(azureFx.LoadBalancer().Addresses(), "bar")...), // Should keep bar but clean the rest
-						Priority:                   ptr.To(int32(4004)),
+						Priority:                   to.Ptr(int32(4004)),
 					},
 				},
 			}
@@ -2589,16 +2588,16 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						Build(),
 
 					&armnetwork.SecurityRule{
-						Name: ptr.To("bar"),
+						Name: to.Ptr("bar"),
 						Properties: &armnetwork.SecurityRulePropertiesFormat{
 							Protocol:                 to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 							Access:                   to.Ptr(armnetwork.SecurityRuleAccessAllow),
 							Direction:                to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-							SourcePortRange:          ptr.To("*"),
+							SourcePortRange:          to.Ptr("*"),
 							SourceAddressPrefixes:    to.SliceOfPtrs("bar"),
 							DestinationPortRanges:    to.SliceOfPtrs("5000", "6000"),
-							DestinationAddressPrefix: ptr.To("bar"), // Should keep bar but clean the rest
-							Priority:                 ptr.To(int32(4004)),
+							DestinationAddressPrefix: to.Ptr("bar"), // Should keep bar but clean the rest
+							Priority:                 to.Ptr(int32(4004)),
 						},
 					},
 
@@ -2700,29 +2699,29 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					Build(),
 
 				{
-					Name: ptr.To("foo"),
+					Name: to.Ptr("foo"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-						SourcePortRange:            ptr.To("*"),
+						SourcePortRange:            to.Ptr("*"),
 						SourceAddressPrefixes:      to.SliceOfPtrs("foo"),
 						DestinationPortRanges:      to.SliceOfPtrs("4000", "6000"),
 						DestinationAddressPrefixes: to.SliceOfPtrs(azureFx.LoadBalancer().Addresses()...), // Should remove the rule
-						Priority:                   ptr.To(int32(4003)),
+						Priority:                   to.Ptr(int32(4003)),
 					},
 				},
 				{
-					Name: ptr.To("bar"),
+					Name: to.Ptr("bar"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-						SourcePortRange:            ptr.To("*"),
+						SourcePortRange:            to.Ptr("*"),
 						SourceAddressPrefixes:      to.SliceOfPtrs("bar"),
 						DestinationPortRanges:      to.SliceOfPtrs("5000", "6000"),
 						DestinationAddressPrefixes: to.SliceOfPtrs(append(azureFx.LoadBalancer().Addresses(), "bar")...), // Should keep bar but clean the rest
-						Priority:                   ptr.To(int32(4004)),
+						Priority:                   to.Ptr(int32(4004)),
 					},
 				},
 			}
@@ -2776,16 +2775,16 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						Build(),
 
 					&armnetwork.SecurityRule{
-						Name: ptr.To("bar"),
+						Name: to.Ptr("bar"),
 						Properties: &armnetwork.SecurityRulePropertiesFormat{
 							Protocol:                 to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 							Access:                   to.Ptr(armnetwork.SecurityRuleAccessAllow),
 							Direction:                to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-							SourcePortRange:          ptr.To("*"),
+							SourcePortRange:          to.Ptr("*"),
 							SourceAddressPrefixes:    to.SliceOfPtrs("bar"),
 							DestinationPortRanges:    to.SliceOfPtrs("5000", "6000"),
-							DestinationAddressPrefix: ptr.To("bar"), // Should keep bar but clean the rest
-							Priority:                 ptr.To(int32(4004)),
+							DestinationAddressPrefix: to.Ptr("bar"), // Should keep bar but clean the rest
+							Priority:                 to.Ptr(int32(4004)),
 						},
 					},
 
@@ -2875,29 +2874,29 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					Build(),
 
 				{
-					Name: ptr.To("foo"),
+					Name: to.Ptr("foo"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-						SourcePortRange:            ptr.To("*"),
+						SourcePortRange:            to.Ptr("*"),
 						SourceAddressPrefixes:      to.SliceOfPtrs("foo"),
 						DestinationPortRanges:      to.SliceOfPtrs("4000", "6000"),
 						DestinationAddressPrefixes: to.SliceOfPtrs(azureFx.LoadBalancer().Addresses()...), // Should remove the rule
-						Priority:                   ptr.To(int32(4003)),
+						Priority:                   to.Ptr(int32(4003)),
 					},
 				},
 				{
-					Name: ptr.To("bar"),
+					Name: to.Ptr("bar"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-						SourcePortRange:            ptr.To("*"),
+						SourcePortRange:            to.Ptr("*"),
 						SourceAddressPrefixes:      to.SliceOfPtrs("bar"),
 						DestinationPortRanges:      to.SliceOfPtrs("5000", "6000"),
 						DestinationAddressPrefixes: to.SliceOfPtrs(append(azureFx.LoadBalancer().Addresses(), "bar")...), // Should keep bar but clean the rest
-						Priority:                   ptr.To(int32(4004)),
+						Priority:                   to.Ptr(int32(4004)),
 					},
 				},
 			}

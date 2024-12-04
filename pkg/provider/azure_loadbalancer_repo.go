@@ -26,11 +26,10 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-
+	"github.com/samber/lo"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/ptr"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -116,9 +115,9 @@ func (az *Cloud) ListManagedLBs(ctx context.Context, service *v1.Service, nodes 
 	}
 
 	for _, lb := range allLBs {
-		if managedLBNames.Has(trimSuffixIgnoreCase(ptr.Deref(lb.Name, ""), consts.InternalLoadBalancerNameSuffix)) {
+		if managedLBNames.Has(trimSuffixIgnoreCase(lo.FromPtrOr(lb.Name, ""), consts.InternalLoadBalancerNameSuffix)) {
 			managedLBs = append(managedLBs, lb)
-			klog.V(4).Infof("ListManagedLBs: found managed LB %s", ptr.Deref(lb.Name, ""))
+			klog.V(4).Infof("ListManagedLBs: found managed LB %s", lo.FromPtrOr(lb.Name, ""))
 		}
 	}
 
@@ -130,7 +129,7 @@ func (az *Cloud) CreateOrUpdateLB(ctx context.Context, service *v1.Service, lb n
 	lb = cleanupSubnetInFrontendIPConfigurations(&lb)
 
 	rgName := az.getLoadBalancerResourceGroup()
-	rerr := az.LoadBalancerClient.CreateOrUpdate(ctx, rgName, ptr.Deref(lb.Name, ""), lb, ptr.Deref(lb.Etag, ""))
+	rerr := az.LoadBalancerClient.CreateOrUpdate(ctx, rgName, lo.FromPtrOr(lb.Name, ""), lb, lo.FromPtrOr(lb.Etag, ""))
 	klog.V(10).Infof("LoadBalancerClient.CreateOrUpdate(%s): end", *lb.Name)
 	if rerr == nil {
 		// Invalidate the cache right after updating
@@ -139,18 +138,18 @@ func (az *Cloud) CreateOrUpdateLB(ctx context.Context, service *v1.Service, lb n
 	}
 
 	lbJSON, _ := json.Marshal(lb)
-	klog.Warningf("LoadBalancerClient.CreateOrUpdate(%s) failed: %v, LoadBalancer request: %s", ptr.Deref(lb.Name, ""), rerr.Error(), string(lbJSON))
+	klog.Warningf("LoadBalancerClient.CreateOrUpdate(%s) failed: %v, LoadBalancer request: %s", lo.FromPtrOr(lb.Name, ""), rerr.Error(), string(lbJSON))
 
 	// Invalidate the cache because ETAG precondition mismatch.
 	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
-		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because of http.StatusPreconditionFailed", ptr.Deref(lb.Name, ""))
+		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because of http.StatusPreconditionFailed", lo.FromPtrOr(lb.Name, ""))
 		_ = az.lbCache.Delete(*lb.Name)
 	}
 
 	retryErrorMessage := rerr.Error().Error()
 	// Invalidate the cache because another new operation has canceled the current request.
 	if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceledErrorMessage) {
-		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because CreateOrUpdate is canceled by another operation", ptr.Deref(lb.Name, ""))
+		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because CreateOrUpdate is canceled by another operation", lo.FromPtrOr(lb.Name, ""))
 		_ = az.lbCache.Delete(*lb.Name)
 	}
 
@@ -162,7 +161,7 @@ func (az *Cloud) CreateOrUpdateLB(ctx context.Context, service *v1.Service, lb n
 			return rerr.Error()
 		}
 		pipRG, pipName := matches[1], matches[2]
-		klog.V(3).Infof("The public IP %s referenced by load balancer %s is not in Succeeded provisioning state, will try to update it", pipName, ptr.Deref(lb.Name, ""))
+		klog.V(3).Infof("The public IP %s referenced by load balancer %s is not in Succeeded provisioning state, will try to update it", pipName, lo.FromPtrOr(lb.Name, ""))
 		pip, _, err := az.getPublicIPAddress(ctx, pipRG, pipName, azcache.CacheReadTypeDefault)
 		if err != nil {
 			klog.Errorf("Failed to get the public IP %s in resource group %s: %v", pipName, pipRG, err)
@@ -183,8 +182,8 @@ func (az *Cloud) CreateOrUpdateLB(ctx context.Context, service *v1.Service, lb n
 }
 
 func (az *Cloud) CreateOrUpdateLBBackendPool(ctx context.Context, lbName string, backendPool network.BackendAddressPool) error {
-	klog.V(4).Infof("CreateOrUpdateLBBackendPool: updating backend pool %s in LB %s", ptr.Deref(backendPool.Name, ""), lbName)
-	rerr := az.LoadBalancerClient.CreateOrUpdateBackendPools(ctx, az.getLoadBalancerResourceGroup(), lbName, ptr.Deref(backendPool.Name, ""), backendPool, ptr.Deref(backendPool.Etag, ""))
+	klog.V(4).Infof("CreateOrUpdateLBBackendPool: updating backend pool %s in LB %s", lo.FromPtrOr(backendPool.Name, ""), lbName)
+	rerr := az.LoadBalancerClient.CreateOrUpdateBackendPools(ctx, az.getLoadBalancerResourceGroup(), lbName, lo.FromPtrOr(backendPool.Name, ""), backendPool, lo.FromPtrOr(backendPool.Etag, ""))
 	if rerr == nil {
 		// Invalidate the cache right after updating
 		_ = az.lbCache.Delete(lbName)
@@ -381,13 +380,13 @@ func (az *Cloud) serviceOwnsRule(service *v1.Service, rule string) bool {
 }
 
 func isNICPool(bp network.BackendAddressPool) bool {
-	logger := klog.Background().WithName("isNICPool").WithValues("backendPoolName", ptr.Deref(bp.Name, ""))
+	logger := klog.Background().WithName("isNICPool").WithValues("backendPoolName", lo.FromPtrOr(bp.Name, ""))
 	if bp.BackendAddressPoolPropertiesFormat != nil &&
 		bp.LoadBalancerBackendAddresses != nil {
 		for _, addr := range *bp.LoadBalancerBackendAddresses {
-			if ptr.Deref(addr.IPAddress, "") == "" {
+			if lo.FromPtrOr(addr.IPAddress, "") == "" {
 				logger.V(4).Info("The load balancer backend address has empty ip address, assuming it is a NIC pool",
-					"loadBalancerBackendAddress", ptr.Deref(addr.Name, ""))
+					"loadBalancerBackendAddress", lo.FromPtrOr(addr.Name, ""))
 				return true
 			}
 		}

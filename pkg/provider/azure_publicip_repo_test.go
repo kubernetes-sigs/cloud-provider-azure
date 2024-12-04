@@ -24,13 +24,12 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
-
 	"go.uber.org/mock/gomock"
-
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
@@ -67,14 +66,14 @@ func TestCreateOrUpdatePIP(t *testing.T) {
 
 	for _, test := range tests {
 		az := GetTestCloud(ctrl)
-		az.pipCache.Set(az.ResourceGroup, []network.PublicIPAddress{{Name: ptr.To("test")}})
+		az.pipCache.Set(az.ResourceGroup, []network.PublicIPAddress{{Name: to.Ptr("test")}})
 		mockPIPClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
 		mockPIPClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(test.clientErr)
 		if test.cacheExpectedEmpty {
 			mockPIPClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return([]network.PublicIPAddress{}, nil)
 		}
 
-		err := az.CreateOrUpdatePIP(&v1.Service{}, az.ResourceGroup, network.PublicIPAddress{Name: ptr.To("nic")})
+		err := az.CreateOrUpdatePIP(&v1.Service{}, az.ResourceGroup, network.PublicIPAddress{Name: to.Ptr("nic")})
 		assert.EqualError(t, test.expectedErr, err.Error())
 
 		cachedPIP, err := az.pipCache.GetWithDeepCopy(context.TODO(), az.ResourceGroup, cache.CacheReadTypeDefault)
@@ -116,14 +115,14 @@ func TestListPIP(t *testing.T) {
 		{
 			desc: "listPIP should return data from cache",
 			pipCache: []network.PublicIPAddress{
-				{Name: ptr.To("pip1")},
-				{Name: ptr.To("pip2")},
+				{Name: to.Ptr("pip1")},
+				{Name: to.Ptr("pip2")},
 			},
 		},
 		{
 			desc:          "listPIP should return data from arm list call",
 			expectPIPList: true,
-			existingPIPs:  []network.PublicIPAddress{{Name: ptr.To("pip")}},
+			existingPIPs:  []network.PublicIPAddress{{Name: to.Ptr("pip")}},
 		},
 	}
 	for _, test := range tests {
@@ -133,7 +132,7 @@ func TestListPIP(t *testing.T) {
 				pipCache := &sync.Map{}
 				for _, pip := range test.pipCache {
 					pip := pip
-					pipCache.Store(ptr.Deref(pip.Name, ""), &pip)
+					pipCache.Store(lo.FromPtrOr(pip.Name, ""), &pip)
 				}
 				az.pipCache.Set(az.ResourceGroup, pipCache)
 			}
@@ -166,25 +165,25 @@ func TestGetPublicIPAddress(t *testing.T) {
 	}{
 		{
 			desc:         "getPublicIPAddress should return pip from cache when it exists",
-			pipCache:     []network.PublicIPAddress{{Name: ptr.To("pip")}},
+			pipCache:     []network.PublicIPAddress{{Name: to.Ptr("pip")}},
 			expectExists: true,
-			expectedPIP:  network.PublicIPAddress{Name: ptr.To("pip")},
+			expectedPIP:  network.PublicIPAddress{Name: to.Ptr("pip")},
 		},
 		{
 			desc:          "getPublicIPAddress should from list call when cache is empty",
 			expectPIPList: true,
 			existingPIPs: []network.PublicIPAddress{
-				{Name: ptr.To("pip")},
-				{Name: ptr.To("pip1")},
+				{Name: to.Ptr("pip")},
+				{Name: to.Ptr("pip1")},
 			},
 			expectExists: true,
-			expectedPIP:  network.PublicIPAddress{Name: ptr.To("pip")},
+			expectedPIP:  network.PublicIPAddress{Name: to.Ptr("pip")},
 		},
 		{
 			desc:          "getPublicIPAddress should try listing when pip does not exist",
-			pipCache:      []network.PublicIPAddress{{Name: ptr.To("pip1")}},
+			pipCache:      []network.PublicIPAddress{{Name: to.Ptr("pip1")}},
 			expectPIPList: true,
-			existingPIPs:  []network.PublicIPAddress{{Name: ptr.To("pip1")}},
+			existingPIPs:  []network.PublicIPAddress{{Name: to.Ptr("pip1")}},
 			expectExists:  false,
 			expectedPIP:   network.PublicIPAddress{},
 		},
@@ -194,7 +193,7 @@ func TestGetPublicIPAddress(t *testing.T) {
 			pipCache := &sync.Map{}
 			for _, pip := range test.pipCache {
 				pip := pip
-				pipCache.Store(ptr.Deref(pip.Name, ""), &pip)
+				pipCache.Store(lo.FromPtrOr(pip.Name, ""), &pip)
 			}
 			az := GetTestCloud(ctrl)
 			az.pipCache.Set(az.ResourceGroup, pipCache)
@@ -215,9 +214,9 @@ func TestFindMatchedPIP(t *testing.T) {
 	defer ctrl.Finish()
 
 	testPIP := network.PublicIPAddress{
-		Name: ptr.To("pipName"),
+		Name: to.Ptr("pipName"),
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-			IPAddress: ptr.To("1.2.3.4"),
+			IPAddress: to.Ptr("1.2.3.4"),
 		},
 	}
 
@@ -291,9 +290,9 @@ func TestFindMatchedPIPByLoadBalancerIP(t *testing.T) {
 	defer ctrl.Finish()
 
 	testPIP := network.PublicIPAddress{
-		Name: ptr.To("pipName"),
+		Name: to.Ptr("pipName"),
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-			IPAddress: ptr.To("1.2.3.4"),
+			IPAddress: to.Ptr("1.2.3.4"),
 		},
 	}
 	testCases := []struct {

@@ -23,17 +23,15 @@ import (
 	"strconv"
 	"strings"
 
+	aznetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	aznetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
-
+	"github.com/samber/lo"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
@@ -54,13 +52,6 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 
 	// Helpers
 	var (
-		derefSliceOfStringPtr = func(vs []*string) []string {
-			rv := make([]string, 0, len(vs))
-			for _, v := range vs {
-				rv = append(rv, *v)
-			}
-			return rv
-		}
 		mustParseIPs = func(ips []string) []netip.Addr {
 			rv := make([]netip.Addr, 0, len(ips))
 			for _, ip := range ips {
@@ -145,7 +136,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 					}}
 				)
 				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, ServiceName, namespace.Name, labels, annotations, ports)
-				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(lo.FromSlicePtr(rv)))
 			})
 
 			logger.Info("Created a LoadBalancer service", "v4-IPs", serviceIPv4s, "v6-IPs", serviceIPv6s)
@@ -201,7 +192,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 					}}
 				)
 				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, ServiceName, namespace.Name, labels, annotations, ports)
-				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(lo.FromSlicePtr(rv)))
 			})
 
 			var validator *SecurityGroupValidator
@@ -275,7 +266,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 					}}
 				)
 				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, ServiceName, namespace.Name, labels, annotations, ports)
-				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(lo.FromSlicePtr(rv)))
 			})
 			logger.Info("Created a LoadBalancer service", "v4-IPs", serviceIPv4s, "v6-IPs", serviceIPv6s)
 
@@ -347,7 +338,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 					}}
 				)
 				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, ServiceName, namespace.Name, labels, annotations, ports)
-				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(lo.FromSlicePtr(rv)))
 			})
 			logger.Info("Created a LoadBalancer service", "v4-IPs", serviceIPv4s, "v6-IPs", serviceIPv6s)
 
@@ -414,7 +405,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 					}}
 				)
 				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, ServiceName, namespace.Name, labels, annotations, ports)
-				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(lo.FromSlicePtr(rv)))
 			})
 
 			var validator *SecurityGroupValidator
@@ -496,7 +487,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 					}}
 				)
 				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, Service1Name, namespace.Name, labels, annotations, ports)
-				svc1IPv4s, svc1IPv6s = groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+				svc1IPv4s, svc1IPv6s = groupIPsByFamily(mustParseIPs(lo.FromSlicePtr(rv)))
 				logger.Info("Created the first LoadBalancer service", "svc-name", Service1Name, "v4-IPs", svc1IPv4s, "v6-IPs", svc1IPv6s)
 			})
 
@@ -516,7 +507,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 				)
 
 				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, Service2Name, namespace.Name, labels, annotations, ports)
-				svc2IPv4s, svc2IPv6s = groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+				svc2IPv4s, svc2IPv6s = groupIPsByFamily(mustParseIPs(lo.FromSlicePtr(rv)))
 				logger.Info("Created the second LoadBalancer service", "svc-name", Service2Name, "v4-IPs", svc2IPv4s, "v6-IPs", svc2IPv6s)
 			})
 
@@ -592,7 +583,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 					}}
 				)
 				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, ServiceName, namespace.Name, labels, annotations, ports)
-				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(lo.FromSlicePtr(rv)))
 			})
 			logger.Info("Created a LoadBalancer service", "v4-IPs", serviceIPv4s, "v6-IPs", serviceIPv6s)
 
@@ -677,7 +668,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 					}}
 				)
 				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, ServiceName, namespace.Name, labels, annotations, ports)
-				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(lo.FromSlicePtr(rv)))
 			})
 			logger.Info("Created a LoadBalancer service", "v4-IPs", serviceIPv4s, "v6-IPs", serviceIPv6s)
 
@@ -746,7 +737,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 					}}
 				)
 				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, ServiceName, namespace.Name, labels, annotations, ports)
-				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(lo.FromSlicePtr(rv)))
 			})
 			logger.Info("Created a LoadBalancer service", "v4-IPs", serviceIPv4s, "v6-IPs", serviceIPv6s)
 
@@ -830,7 +821,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 					}}
 				)
 				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, ServiceName, namespace.Name, labels, annotations, ports)
-				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(lo.FromSlicePtr(rv)))
 			})
 			logger.Info("Created a LoadBalancer service", "v4-IPs", serviceIPv4s, "v6-IPs", serviceIPv6s)
 
@@ -938,7 +929,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 					}}
 				)
 				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, Service1Name, namespace.Name, labels, annotations, ports)
-				svc1IPv4s, svc1IPv6s = groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+				svc1IPv4s, svc1IPv6s = groupIPsByFamily(mustParseIPs(lo.FromSlicePtr(rv)))
 				logger.Info("Created the first LoadBalancer service", "svc-name", Service1Name, "v4-IPs", svc1IPv4s, "v6-IPs", svc1IPv6s)
 			})
 
@@ -967,7 +958,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 				)
 
 				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, Service2Name, namespace.Name, labels, annotations, ports)
-				svc2IPv4s, svc2IPv6s := groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+				svc2IPv4s, svc2IPv6s := groupIPsByFamily(mustParseIPs(lo.FromSlicePtr(rv)))
 				logger.Info("Created the second LoadBalancer service", "svc-name", Service2Name, "v4-IPs", svc2IPv4s, "v6-IPs", svc2IPv6s)
 				Expect(svc2IPv4s).To(Equal(svc1IPv4s))
 				Expect(svc2IPv6s).To(Equal(svc1IPv6s))
@@ -1038,15 +1029,15 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 					switch ipFamily {
 					case utils.IPv4:
 						svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol}
-						svc.Spec.IPFamilyPolicy = ptr.To(v1.IPFamilyPolicySingleStack)
+						svc.Spec.IPFamilyPolicy = lo.ToPtr(v1.IPFamilyPolicySingleStack)
 						svc.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]] = ipv4PIPName
 					case utils.IPv6:
 						svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
-						svc.Spec.IPFamilyPolicy = ptr.To(v1.IPFamilyPolicySingleStack)
+						svc.Spec.IPFamilyPolicy = lo.ToPtr(v1.IPFamilyPolicySingleStack)
 						svc.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]] = ipv6PIPName
 					case utils.DualStack:
 						svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}
-						svc.Spec.IPFamilyPolicy = ptr.To(v1.IPFamilyPolicyPreferDualStack)
+						svc.Spec.IPFamilyPolicy = lo.ToPtr(v1.IPFamilyPolicyPreferDualStack)
 						svc.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]] = ipv4PIPName
 						svc.Annotations[consts.ServiceAnnotationPIPNameDualStack[true]] = ipv6PIPName
 					default:
@@ -1105,7 +1096,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, Service1Name, namespace.Name, labels, annotations, ports, func(svc *v1.Service) error {
 					return applyIPFamilyForService(svc, azureClient.IPFamily, ipv4PIPName, ipv6PIPName)
 				})
-				ipv4s, ipv6s := groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+				ipv4s, ipv6s := groupIPsByFamily(mustParseIPs(lo.FromSlicePtr(rv)))
 				logger.Info("Created the first LoadBalancer service", "svc-name", Service1Name, "v4-IPs", ipv4s, "v6-IPs", ipv6s)
 				Expect(ipv4s).To(Equal(ipv4PIPs))
 				Expect(ipv6s).To(Equal(ipv6PIPs))
@@ -1126,7 +1117,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, Service2Name, namespace.Name, labels, annotations, ports, func(svc *v1.Service) error {
 					return applyIPFamilyForService(svc, azureClient.IPFamily, ipv4PIPName, ipv6PIPName)
 				})
-				ipv4s, ipv6s := groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+				ipv4s, ipv6s := groupIPsByFamily(mustParseIPs(lo.FromSlicePtr(rv)))
 				logger.Info("Created the second LoadBalancer service", "svc-name", Service2Name, "v4-IPs", ipv4s, "v6-IPs", ipv6s)
 				Expect(ipv4s).To(Equal(ipv4PIPs))
 				Expect(ipv6s).To(Equal(ipv6PIPs))
@@ -1294,7 +1285,7 @@ func SecurityGroupHasAllowRuleForDestination(
 		if *rule.Properties.Access != aznetwork.SecurityRuleAccessAllow ||
 			*rule.Properties.Direction != aznetwork.SecurityRuleDirectionInbound ||
 			*rule.Properties.Protocol != protocol ||
-			ptr.Deref(rule.Properties.SourcePortRange, "") != "*" ||
+			lo.FromPtrOr(rule.Properties.SourcePortRange, "") != "*" ||
 			len(rule.Properties.DestinationPortRanges) != len(dstPorts) {
 			logger.Info("skip rule", "rule", rule)
 			continue
@@ -1369,9 +1360,9 @@ func SecurityGroupHasDenyAllRuleForDestination(nsg *aznetwork.SecurityGroup, dst
 
 	for _, rule := range nsg.Properties.SecurityRules {
 		if *rule.Properties.Access != aznetwork.SecurityRuleAccessDeny ||
-			ptr.Deref(rule.Properties.SourceAddressPrefix, "") != "*" ||
-			ptr.Deref(rule.Properties.SourcePortRange, "") != "*" ||
-			ptr.Deref(rule.Properties.DestinationPortRange, "") != "*" {
+			lo.FromPtrOr(rule.Properties.SourceAddressPrefix, "") != "*" ||
+			lo.FromPtrOr(rule.Properties.SourcePortRange, "") != "*" ||
+			lo.FromPtrOr(rule.Properties.DestinationPortRange, "") != "*" {
 			logger.Info("skip rule", "rule-name", rule.Name)
 			continue
 		}

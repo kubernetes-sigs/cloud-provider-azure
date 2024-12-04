@@ -29,7 +29,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/utils/ptr"
 )
 
 var (
@@ -80,7 +79,7 @@ func ScaleVMSS(tc *AzureTestClient, vmssName string, instanceCount int64) (err e
 		Location: vmss.Location,
 		SKU: &azcompute.SKU{
 			Name:     vmss.SKU.Name,
-			Capacity: ptr.To(instanceCount),
+			Capacity: to.Ptr(instanceCount),
 		},
 	}
 

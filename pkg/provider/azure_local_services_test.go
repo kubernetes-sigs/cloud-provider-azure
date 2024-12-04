@@ -25,17 +25,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
-
 	"go.uber.org/mock/gomock"
-
 	v1 "k8s.io/api/core/v1"
 	discovery_v1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -395,22 +393,22 @@ func TestLoadBalancerBackendPoolUpdaterFailed(t *testing.T) {
 
 func getTestBackendAddressPoolWithIPs(lbName, bpName string, ips []string) network.BackendAddressPool {
 	bp := network.BackendAddressPool{
-		ID:   ptr.To(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s", lbName, bpName)),
-		Name: ptr.To(bpName),
+		ID:   to.Ptr(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s", lbName, bpName)),
+		Name: to.Ptr(bpName),
 		BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 			VirtualNetwork: &network.SubResource{
-				ID: ptr.To("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet"),
+				ID: to.Ptr("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet"),
 			},
-			Location:                     ptr.To("eastus"),
+			Location:                     to.Ptr("eastus"),
 			LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{},
 		},
 	}
 	for _, ip := range ips {
 		if len(ip) > 0 {
 			*bp.LoadBalancerBackendAddresses = append(*bp.LoadBalancerBackendAddresses, network.LoadBalancerBackendAddress{
-				Name: ptr.To(""),
+				Name: to.Ptr(""),
 				LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-					IPAddress: ptr.To(ip),
+					IPAddress: to.Ptr(ip),
 				},
 			})
 		}
@@ -582,7 +580,7 @@ func TestCheckAndApplyLocalServiceBackendPoolUpdates(t *testing.T) {
 			existingBackendPool := getTestBackendAddressPoolWithIPs("lb1", "default-svc1", []string{"10.0.0.1"})
 			existingBackendPoolIPv6 := getTestBackendAddressPoolWithIPs("lb1", "default-svc1-ipv6", []string{"fd00::1"})
 			existingLB := network.LoadBalancer{
-				Name: ptr.To("lb1"),
+				Name: to.Ptr("lb1"),
 				LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
 					BackendAddressPools: &[]network.BackendAddressPool{
 						existingBackendPool,

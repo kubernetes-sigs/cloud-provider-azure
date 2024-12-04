@@ -22,8 +22,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	aznetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/stretchr/testify/assert"
-
-	"k8s.io/utils/ptr"
 )
 
 func TestSelectSubnets(t *testing.T) {
@@ -37,7 +35,7 @@ func TestSelectSubnets(t *testing.T) {
 			"only control-plane subnet",
 			IPv4,
 			[]*aznetwork.Subnet{
-				{Name: ptr.To("control-plane")},
+				{Name: to.Ptr("control-plane")},
 			},
 			[]*string{},
 		},
@@ -45,7 +43,7 @@ func TestSelectSubnets(t *testing.T) {
 			"IPv4",
 			IPv4,
 			[]*aznetwork.Subnet{
-				{Name: ptr.To("subnet0"), Properties: &aznetwork.SubnetPropertiesFormat{AddressPrefix: ptr.To("10.0.0.0/24")}},
+				{Name: to.Ptr("subnet0"), Properties: &aznetwork.SubnetPropertiesFormat{AddressPrefix: to.Ptr("10.0.0.0/24")}},
 			},
 			[]*string{to.Ptr("10.0.0.0/24")},
 		},
@@ -54,9 +52,9 @@ func TestSelectSubnets(t *testing.T) {
 			IPv6,
 			[]*aznetwork.Subnet{
 				{
-					Name: ptr.To("subnet0"),
+					Name: to.Ptr("subnet0"),
 					Properties: &aznetwork.SubnetPropertiesFormat{
-						AddressPrefix:   ptr.To("10.0.0.0/24"),
+						AddressPrefix:   to.Ptr("10.0.0.0/24"),
 						AddressPrefixes: []*string{to.Ptr("10.0.0.0/24"), to.Ptr("2001::1/96")},
 					},
 				},
@@ -68,9 +66,9 @@ func TestSelectSubnets(t *testing.T) {
 			DualStack,
 			[]*aznetwork.Subnet{
 				{
-					Name: ptr.To("subnet0"),
+					Name: to.Ptr("subnet0"),
 					Properties: &aznetwork.SubnetPropertiesFormat{
-						AddressPrefix:   ptr.To("10.0.0.0/24"),
+						AddressPrefix:   to.Ptr("10.0.0.0/24"),
 						AddressPrefixes: []*string{to.Ptr("10.0.0.0/24"), to.Ptr("2001::1/96")},
 					},
 				},

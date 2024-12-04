@@ -21,24 +21,24 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-
+	"github.com/samber/lo"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 func (az *Cloud) buildClusterServiceSharedProbe() *network.Probe {
 	return &network.Probe{
-		Name: ptr.To(consts.SharedProbeName),
+		Name: to.Ptr(consts.SharedProbeName),
 		ProbePropertiesFormat: &network.ProbePropertiesFormat{
 			Protocol:          network.ProbeProtocolHTTP,
-			Port:              ptr.To(az.ClusterServiceSharedLoadBalancerHealthProbePort),
-			RequestPath:       ptr.To(az.ClusterServiceSharedLoadBalancerHealthProbePath),
-			IntervalInSeconds: ptr.To(consts.HealthProbeDefaultProbeInterval),
-			ProbeThreshold:    ptr.To(consts.HealthProbeDefaultNumOfProbe),
+			Port:              to.Ptr(az.ClusterServiceSharedLoadBalancerHealthProbePort),
+			RequestPath:       to.Ptr(az.ClusterServiceSharedLoadBalancerHealthProbePath),
+			IntervalInSeconds: to.Ptr(consts.HealthProbeDefaultProbeInterval),
+			ProbeThreshold:    to.Ptr(consts.HealthProbeDefaultNumOfProbe),
 		},
 	}
 }
@@ -99,7 +99,7 @@ func (az *Cloud) buildHealthProbeRulesForPort(serviceManifest *v1.Service, port 
 			for _, item := range serviceManifest.Spec.Ports {
 				if strings.EqualFold(item.Name, *probePort) {
 					//found the port
-					properties.Port = ptr.To(item.NodePort)
+					properties.Port = to.Ptr(item.NodePort)
 				}
 			}
 		} else {
@@ -109,14 +109,14 @@ func (az *Cloud) buildHealthProbeRulesForPort(serviceManifest *v1.Service, port 
 				//nolint:gosec
 				if item.Port == int32(port) {
 					//found the port
-					properties.Port = ptr.To(item.NodePort)
+					properties.Port = to.Ptr(item.NodePort)
 					found = true
 					break
 				}
 			}
 			if !found {
 				//nolint:gosec
-				properties.Port = ptr.To(int32(port))
+				properties.Port = to.Ptr(int32(port))
 			}
 		}
 	} else if healthCheckNodePortProbe != nil {
@@ -150,7 +150,7 @@ func (az *Cloud) buildHealthProbeRulesForPort(serviceManifest *v1.Service, port 
 
 	// 4. Finally, if protocol is still nil, default to TCP
 	if protocol == nil {
-		protocol = ptr.To(string(network.ProtocolTCP))
+		protocol = to.Ptr(string(network.ProtocolTCP))
 	}
 
 	*protocol = strings.TrimSpace(*protocol)
@@ -185,7 +185,7 @@ func (az *Cloud) buildHealthProbeRulesForPort(serviceManifest *v1.Service, port 
 			}
 		}
 		if path == nil {
-			path = ptr.To(consts.HealthProbeDefaultRequestPath)
+			path = to.Ptr(consts.HealthProbeDefaultRequestPath)
 		}
 		properties.RequestPath = path
 	}
@@ -244,7 +244,7 @@ func (*Cloud) getHealthProbeConfigProbeInterval(serviceManifest *v1.Service, por
 	}
 
 	if probeInterval == nil {
-		probeInterval = ptr.To(consts.HealthProbeDefaultProbeInterval)
+		probeInterval = to.Ptr(consts.HealthProbeDefaultProbeInterval)
 	}
 	return probeInterval, nil
 }
@@ -273,19 +273,19 @@ func (*Cloud) getHealthProbeConfigNumOfProbe(serviceManifest *v1.Service, port i
 	}
 
 	if numberOfProbes == nil {
-		numberOfProbes = ptr.To(consts.HealthProbeDefaultNumOfProbe)
+		numberOfProbes = to.Ptr(consts.HealthProbeDefaultNumOfProbe)
 	}
 	return numberOfProbes, nil
 }
 
 func findProbe(probes []network.Probe, probe network.Probe) bool {
 	for _, existingProbe := range probes {
-		if strings.EqualFold(ptr.Deref(existingProbe.Name, ""), ptr.Deref(probe.Name, "")) &&
-			ptr.Deref(existingProbe.Port, 0) == ptr.Deref(probe.Port, 0) &&
+		if strings.EqualFold(lo.FromPtrOr(existingProbe.Name, ""), lo.FromPtrOr(probe.Name, "")) &&
+			lo.FromPtrOr(existingProbe.Port, 0) == lo.FromPtrOr(probe.Port, 0) &&
 			strings.EqualFold(string(existingProbe.Protocol), string(probe.Protocol)) &&
-			strings.EqualFold(ptr.Deref(existingProbe.RequestPath, ""), ptr.Deref(probe.RequestPath, "")) &&
-			ptr.Deref(existingProbe.IntervalInSeconds, 0) == ptr.Deref(probe.IntervalInSeconds, 0) &&
-			ptr.Deref(existingProbe.ProbeThreshold, 0) == ptr.Deref(probe.ProbeThreshold, 0) {
+			strings.EqualFold(lo.FromPtrOr(existingProbe.RequestPath, ""), lo.FromPtrOr(probe.RequestPath, "")) &&
+			lo.FromPtrOr(existingProbe.IntervalInSeconds, 0) == lo.FromPtrOr(probe.IntervalInSeconds, 0) &&
+			lo.FromPtrOr(existingProbe.ProbeThreshold, 0) == lo.FromPtrOr(probe.ProbeThreshold, 0) {
 			return true
 		}
 	}
@@ -306,7 +306,7 @@ func (az *Cloud) keepSharedProbe(
 
 	if lb.LoadBalancerPropertiesFormat != nil && lb.Probes != nil {
 		for _, probe := range *lb.Probes {
-			if strings.EqualFold(ptr.Deref(probe.Name, ""), consts.SharedProbeName) {
+			if strings.EqualFold(lo.FromPtrOr(probe.Name, ""), consts.SharedProbeName) {
 				if !az.useSharedLoadBalancerHealthProbeMode() {
 					shouldConsiderRemoveSharedProbe = true
 				}

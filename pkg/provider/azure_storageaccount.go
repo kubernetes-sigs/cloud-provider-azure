@@ -25,13 +25,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	privatedns "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
-
+	"github.com/samber/lo"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
@@ -302,7 +302,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 	}
 
 	var privateDNSZoneName string
-	if ptr.Deref(accountOptions.CreatePrivateEndpoint, false) {
+	if lo.FromPtrOr(accountOptions.CreatePrivateEndpoint, false) {
 		if accountOptions.StorageType == "" {
 			klog.V(2).Info("set StorageType as file when not specified")
 			accountOptions.StorageType = StorageTypeFile
@@ -377,7 +377,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		}
 	}
 
-	if ptr.Deref(accountOptions.CreatePrivateEndpoint, false) {
+	if lo.FromPtrOr(accountOptions.CreatePrivateEndpoint, false) {
 		clientFactory := az.NetworkClientFactory
 		if clientFactory == nil {
 			// multi-tenant support
@@ -426,7 +426,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 			}
 		}
 
-		if ptr.Deref(accountOptions.CreatePrivateEndpoint, false) {
+		if lo.FromPtrOr(accountOptions.CreatePrivateEndpoint, false) {
 			networkRuleSet = &storage.NetworkRuleSet{
 				DefaultAction: storage.DefaultActionDeny,
 			}
@@ -477,8 +477,8 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 				RequireInfrastructureEncryption: accountOptions.RequireInfrastructureEncryption,
 				KeySource:                       storage.KeySourceMicrosoftStorage,
 				Services: &storage.EncryptionServices{
-					File: &storage.EncryptionService{Enabled: ptr.To(true)},
-					Blob: &storage.EncryptionService{Enabled: ptr.To(true)},
+					File: &storage.EncryptionService{Enabled: to.Ptr(true)},
+					Blob: &storage.EncryptionService{Enabled: to.Ptr(true)},
 				},
 			}
 		}
@@ -496,8 +496,8 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 				},
 				KeySource: storage.KeySourceMicrosoftKeyvault,
 				Services: &storage.EncryptionServices{
-					File: &storage.EncryptionService{Enabled: ptr.To(true)},
-					Blob: &storage.EncryptionService{Enabled: ptr.To(true)},
+					File: &storage.EncryptionService{Enabled: to.Ptr(true)},
+					Blob: &storage.EncryptionService{Enabled: to.Ptr(true)},
 				},
 			}
 		}
@@ -509,7 +509,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 			return "", "", fmt.Errorf("failed to create storage account %s, error: %v", accountName, rerr)
 		}
 
-		if ptr.Deref(accountOptions.EnableBlobVersioning, false) ||
+		if lo.FromPtrOr(accountOptions.EnableBlobVersioning, false) ||
 			accountOptions.SoftDeleteBlobs > 0 ||
 			accountOptions.SoftDeleteContainers > 0 {
 			var blobPolicy, containerPolicy *storage.DeleteRetentionPolicy
@@ -517,19 +517,19 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 
 			if accountOptions.SoftDeleteContainers > 0 {
 				containerPolicy = &storage.DeleteRetentionPolicy{
-					Enabled: ptr.To(accountOptions.SoftDeleteContainers > 0),
-					Days:    ptr.To(accountOptions.SoftDeleteContainers),
+					Enabled: to.Ptr(accountOptions.SoftDeleteContainers > 0),
+					Days:    to.Ptr(accountOptions.SoftDeleteContainers),
 				}
 			}
 			if accountOptions.SoftDeleteBlobs > 0 {
 				blobPolicy = &storage.DeleteRetentionPolicy{
-					Enabled: ptr.To(accountOptions.SoftDeleteBlobs > 0),
-					Days:    ptr.To(accountOptions.SoftDeleteBlobs),
+					Enabled: to.Ptr(accountOptions.SoftDeleteBlobs > 0),
+					Days:    to.Ptr(accountOptions.SoftDeleteBlobs),
 				}
 			}
 
 			if accountOptions.EnableBlobVersioning != nil {
-				enableBlobVersioning = ptr.To(*accountOptions.EnableBlobVersioning)
+				enableBlobVersioning = to.Ptr(*accountOptions.EnableBlobVersioning)
 			}
 
 			property := storage.BlobServiceProperties{
@@ -577,7 +577,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		}
 	}
 
-	if ptr.Deref(accountOptions.CreatePrivateEndpoint, false) {
+	if lo.FromPtrOr(accountOptions.CreatePrivateEndpoint, false) {
 		// Get properties of the storageAccount
 		storageAccount, err := az.StorageAccountClient.GetProperties(ctx, subsID, resourceGroup, accountName)
 		if err != nil {
@@ -687,7 +687,7 @@ func (az *Cloud) createVNetLink(ctx context.Context, vNetLinkName, vnetResourceG
 		Location: &location,
 		Properties: &privatedns.VirtualNetworkLinkProperties{
 			VirtualNetwork:      &privatedns.SubResource{ID: &vnetID},
-			RegistrationEnabled: ptr.To(false)},
+			RegistrationEnabled: to.Ptr(false)},
 	}
 	_, err := vnetLinkClient.CreateOrUpdate(ctx, vnetResourceGroup, privateDNSZoneName, vNetLinkName, parameters)
 	return err
@@ -856,7 +856,7 @@ func AreVNetRulesEqual(account storage.Account, accountOptions *AccountOptions) 
 		for _, subnetID := range accountOptions.VirtualNetworkResourceIDs {
 			found := false
 			for _, rule := range *account.AccountProperties.NetworkRuleSet.VirtualNetworkRules {
-				if strings.EqualFold(ptr.Deref(rule.VirtualNetworkResourceID, ""), subnetID) && rule.Action == storage.ActionAllow {
+				if strings.EqualFold(lo.FromPtrOr(rule.VirtualNetworkResourceID, ""), subnetID) && rule.Action == storage.ActionAllow {
 					found = true
 					break
 				}
@@ -865,7 +865,7 @@ func AreVNetRulesEqual(account storage.Account, accountOptions *AccountOptions) 
 				return false
 			}
 		}
-		klog.V(2).Infof("found all vnet rules(%v) in account %s", accountOptions.VirtualNetworkResourceIDs, ptr.Deref(account.Name, ""))
+		klog.V(2).Infof("found all vnet rules(%v) in account %s", accountOptions.VirtualNetworkResourceIDs, lo.FromPtrOr(account.Name, ""))
 	}
 	return true
 }
@@ -884,7 +884,7 @@ func isTaggedWithSkip(account storage.Account) bool {
 	if account.Tags != nil {
 		// skip account with SkipMatchingTag tag
 		if _, ok := account.Tags[SkipMatchingTag]; ok {
-			klog.V(2).Infof("found %s tag for account %s, skip matching", SkipMatchingTag, ptr.Deref(account.Name, ""))
+			klog.V(2).Infof("found %s tag for account %s, skip matching", SkipMatchingTag, lo.FromPtrOr(account.Name, ""))
 			return false
 		}
 	}
@@ -908,7 +908,7 @@ func isTagsEqual(account storage.Account, accountOptions *AccountOptions) bool {
 
 	// ensure all tags in accountOptions are in account
 	for k, v := range accountOptions.Tags {
-		if ptr.Deref(account.Tags[k], "") != v {
+		if lo.FromPtrOr(account.Tags[k], "") != v {
 			return false
 		}
 	}
@@ -916,15 +916,15 @@ func isTagsEqual(account storage.Account, accountOptions *AccountOptions) bool {
 }
 
 func isHnsPropertyEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	return ptr.Deref(accountOptions.IsHnsEnabled, false) == ptr.Deref(account.IsHnsEnabled, false)
+	return lo.FromPtrOr(accountOptions.IsHnsEnabled, false) == lo.FromPtrOr(account.IsHnsEnabled, false)
 }
 
 func isEnableNfsV3PropertyEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	return ptr.Deref(accountOptions.EnableNfsV3, false) == ptr.Deref(account.EnableNfsV3, false)
+	return lo.FromPtrOr(accountOptions.EnableNfsV3, false) == lo.FromPtrOr(account.EnableNfsV3, false)
 }
 
 func isEnableHTTPSTrafficOnlyEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	return accountOptions.EnableHTTPSTrafficOnly == ptr.Deref(account.EnableHTTPSTrafficOnly, true)
+	return accountOptions.EnableHTTPSTrafficOnly == lo.FromPtrOr(account.EnableHTTPSTrafficOnly, true)
 }
 
 func isPrivateEndpointAsExpected(account storage.Account, accountOptions *AccountOptions) bool {
@@ -933,29 +933,29 @@ func isPrivateEndpointAsExpected(account storage.Account, accountOptions *Accoun
 		return true
 	}
 
-	if ptr.Deref(accountOptions.CreatePrivateEndpoint, false) && account.PrivateEndpointConnections != nil && len(*account.PrivateEndpointConnections) > 0 {
+	if lo.FromPtrOr(accountOptions.CreatePrivateEndpoint, false) && account.PrivateEndpointConnections != nil && len(*account.PrivateEndpointConnections) > 0 {
 		return true
 	}
-	if !ptr.Deref(accountOptions.CreatePrivateEndpoint, false) && (account.PrivateEndpointConnections == nil || len(*account.PrivateEndpointConnections) == 0) {
+	if !lo.FromPtrOr(accountOptions.CreatePrivateEndpoint, false) && (account.PrivateEndpointConnections == nil || len(*account.PrivateEndpointConnections) == 0) {
 		return true
 	}
 	return false
 }
 
 func isAllowBlobPublicAccessEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	return ptr.Deref(accountOptions.AllowBlobPublicAccess, true) == ptr.Deref(account.AllowBlobPublicAccess, true)
+	return lo.FromPtrOr(accountOptions.AllowBlobPublicAccess, true) == lo.FromPtrOr(account.AllowBlobPublicAccess, true)
 }
 
 func isRequireInfrastructureEncryptionEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	requireInfraEncryption := ptr.Deref(accountOptions.RequireInfrastructureEncryption, false)
+	requireInfraEncryption := lo.FromPtrOr(accountOptions.RequireInfrastructureEncryption, false)
 	if account.Encryption == nil {
 		return !requireInfraEncryption
 	}
-	return requireInfraEncryption == ptr.Deref(account.Encryption.RequireInfrastructureEncryption, false)
+	return requireInfraEncryption == lo.FromPtrOr(account.Encryption.RequireInfrastructureEncryption, false)
 }
 
 func isAllowSharedKeyAccessEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	return ptr.Deref(accountOptions.AllowSharedKeyAccess, true) == ptr.Deref(account.AllowSharedKeyAccess, true)
+	return lo.FromPtrOr(accountOptions.AllowSharedKeyAccess, true) == lo.FromPtrOr(account.AllowSharedKeyAccess, true)
 }
 
 func isAccessTierEqual(account storage.Account, accountOptions *AccountOptions) bool {
@@ -975,7 +975,7 @@ func (az *Cloud) isMultichannelEnabledEqual(ctx context.Context, account storage
 		return false, nil
 	}
 
-	prop, err := az.getFileServicePropertiesCache(ctx, accountOptions.SubscriptionID, accountOptions.ResourceGroup, ptr.Deref(account.Name, ""))
+	prop, err := az.getFileServicePropertiesCache(ctx, accountOptions.SubscriptionID, accountOptions.ResourceGroup, lo.FromPtrOr(account.Name, ""))
 	if err != nil {
 		return false, err
 	}
@@ -987,7 +987,7 @@ func (az *Cloud) isMultichannelEnabledEqual(ctx context.Context, account storage
 		return !*accountOptions.IsMultichannelEnabled, nil
 	}
 
-	return *accountOptions.IsMultichannelEnabled == ptr.Deref(prop.FileServicePropertiesProperties.ProtocolSettings.Smb.Multichannel.Enabled, false), nil
+	return *accountOptions.IsMultichannelEnabled == lo.FromPtrOr(prop.FileServicePropertiesProperties.ProtocolSettings.Smb.Multichannel.Enabled, false), nil
 }
 
 func (az *Cloud) isDisableFileServiceDeleteRetentionPolicyEqual(ctx context.Context, account storage.Account, accountOptions *AccountOptions) (bool, error) {
@@ -1000,7 +1000,7 @@ func (az *Cloud) isDisableFileServiceDeleteRetentionPolicyEqual(ctx context.Cont
 		return false, nil
 	}
 
-	prop, err := az.FileClient.WithSubscriptionID(accountOptions.SubscriptionID).GetServiceProperties(ctx, accountOptions.ResourceGroup, ptr.Deref(account.Name, ""))
+	prop, err := az.FileClient.WithSubscriptionID(accountOptions.SubscriptionID).GetServiceProperties(ctx, accountOptions.ResourceGroup, lo.FromPtrOr(account.Name, ""))
 	if err != nil {
 		return false, err
 	}
@@ -1022,7 +1022,7 @@ func (az *Cloud) isEnableBlobDataProtectionEqual(ctx context.Context, account st
 		return true, nil
 	}
 
-	property, err := az.BlobClient.GetServiceProperties(ctx, accountOptions.SubscriptionID, accountOptions.ResourceGroup, ptr.Deref(account.Name, ""))
+	property, err := az.BlobClient.GetServiceProperties(ctx, accountOptions.SubscriptionID, accountOptions.ResourceGroup, lo.FromPtrOr(account.Name, ""))
 	if err != nil {
 		return false, err
 	}
@@ -1035,7 +1035,7 @@ func (az *Cloud) isEnableBlobDataProtectionEqual(ctx context.Context, account st
 func isSoftDeleteBlobsEqual(property storage.BlobServiceProperties, accountOptions *AccountOptions) bool {
 	wantEnable := accountOptions.SoftDeleteBlobs > 0
 	actualEnable := property.DeleteRetentionPolicy != nil &&
-		ptr.Deref(property.DeleteRetentionPolicy.Enabled, false)
+		lo.FromPtrOr(property.DeleteRetentionPolicy.Enabled, false)
 	if wantEnable != actualEnable {
 		return false
 	}
@@ -1043,13 +1043,13 @@ func isSoftDeleteBlobsEqual(property storage.BlobServiceProperties, accountOptio
 		return true
 	}
 
-	return accountOptions.SoftDeleteBlobs == ptr.Deref(property.DeleteRetentionPolicy.Days, 0)
+	return accountOptions.SoftDeleteBlobs == lo.FromPtrOr(property.DeleteRetentionPolicy.Days, 0)
 }
 
 func isSoftDeleteContainersEqual(property storage.BlobServiceProperties, accountOptions *AccountOptions) bool {
 	wantEnable := accountOptions.SoftDeleteContainers > 0
 	actualEnable := property.ContainerDeleteRetentionPolicy != nil &&
-		ptr.Deref(property.ContainerDeleteRetentionPolicy.Enabled, false)
+		lo.FromPtrOr(property.ContainerDeleteRetentionPolicy.Enabled, false)
 	if wantEnable != actualEnable {
 		return false
 	}
@@ -1057,9 +1057,9 @@ func isSoftDeleteContainersEqual(property storage.BlobServiceProperties, account
 		return true
 	}
 
-	return accountOptions.SoftDeleteContainers == ptr.Deref(property.ContainerDeleteRetentionPolicy.Days, 0)
+	return accountOptions.SoftDeleteContainers == lo.FromPtrOr(property.ContainerDeleteRetentionPolicy.Days, 0)
 }
 
 func isEnableBlobVersioningEqual(property storage.BlobServiceProperties, accountOptions *AccountOptions) bool {
-	return ptr.Deref(accountOptions.EnableBlobVersioning, false) == ptr.Deref(property.IsVersioningEnabled, false)
+	return lo.FromPtrOr(accountOptions.EnableBlobVersioning, false) == lo.FromPtrOr(property.IsVersioningEnabled, false)
 }

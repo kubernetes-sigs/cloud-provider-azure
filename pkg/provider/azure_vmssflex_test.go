@@ -22,17 +22,15 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
-
 	"go.uber.org/mock/gomock"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
@@ -65,11 +63,11 @@ var (
 
 	testBackendPools = &[]network.BackendAddressPool{
 		{
-			ID: ptr.To(testBackendPoolID0),
+			ID: to.Ptr(testBackendPoolID0),
 			BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 				BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
 					{
-						ID: ptr.To(testIPConfigurationID),
+						ID: to.Ptr(testIPConfigurationID),
 					},
 				},
 			},
@@ -83,17 +81,17 @@ var (
 
 func generateTestNic(nicName string, isIPConfigurationsNil bool, provisioningState network.ProvisioningState, vmID string) network.Interface {
 	result := network.Interface{
-		ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/" + nicName),
-		Name: ptr.To(nicName),
+		ID:   to.Ptr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/" + nicName),
+		Name: to.Ptr(nicName),
 		InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
 			IPConfigurations: &[]network.InterfaceIPConfiguration{
 				{
 					InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-						Primary:          ptr.To(true),
-						PrivateIPAddress: ptr.To(nicName + "testPrivateIP"),
+						Primary:          to.Ptr(true),
+						PrivateIPAddress: to.Ptr(nicName + "testPrivateIP"),
 						LoadBalancerBackendAddressPools: &[]network.BackendAddressPool{
 							{
-								ID: ptr.To(testBackendPoolID0),
+								ID: to.Ptr(testBackendPoolID0),
 							},
 						},
 					},
@@ -101,7 +99,7 @@ func generateTestNic(nicName string, isIPConfigurationsNil bool, provisioningSta
 			},
 			ProvisioningState: provisioningState,
 			VirtualMachine: &network.SubResource{
-				ID: ptr.To(vmID),
+				ID: to.Ptr(vmID),
 			},
 		},
 	}
@@ -889,7 +887,7 @@ func TestGetNodeCIDRMasksByProviderIDVmssFlex(t *testing.T) {
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
 			tags: map[string]*string{
-				consts.VMSetCIDRIPV4TagKey: ptr.To("24"),
+				consts.VMSetCIDRIPV4TagKey: to.Ptr("24"),
 			},
 			expectedNodeMaskCIDRIPv4: 24,
 			expectedNodeMaskCIDRIPv6: 0,
@@ -902,8 +900,8 @@ func TestGetNodeCIDRMasksByProviderIDVmssFlex(t *testing.T) {
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
 			tags: map[string]*string{
-				consts.VMSetCIDRIPV4TagKey: ptr.To("abc"),
-				consts.VMSetCIDRIPV6TagKey: ptr.To("64"),
+				consts.VMSetCIDRIPV4TagKey: to.Ptr("abc"),
+				consts.VMSetCIDRIPV6TagKey: to.Ptr("64"),
 			},
 			expectedNodeMaskCIDRIPv4: 0,
 			expectedNodeMaskCIDRIPv6: 64,
@@ -1252,7 +1250,7 @@ func TestEnsureVMSSFlexInPool(t *testing.T) {
 		testVmssFlex := genreteTestVmssFlex("vmssflex1", testVmssFlex1ID)
 
 		if tc.isVMSSDeallocating {
-			testVmssFlex.ProvisioningState = ptr.To(consts.ProvisionStateDeleting)
+			testVmssFlex.ProvisioningState = to.Ptr(consts.ProvisionStateDeleting)
 		}
 		if !tc.hasDefaultVMProfile {
 			testVmssFlex.VirtualMachineProfile = nil
@@ -1502,7 +1500,7 @@ func TestEnsureBackendPoolDeletedFromVMSetsVmssFlex(t *testing.T) {
 			testVmssFlex := genreteTestVmssFlex("vmssflex1", testVmssFlex1ID)
 
 			if tc.isVMSSDeallocating {
-				testVmssFlex.ProvisioningState = ptr.To(consts.ProvisionStateDeleting)
+				testVmssFlex.ProvisioningState = to.Ptr(consts.ProvisionStateDeleting)
 			}
 			if !tc.hasDefaultVMProfile {
 				testVmssFlex.VirtualMachineProfile = nil

@@ -31,6 +31,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
@@ -41,7 +42,6 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	cloudproviderapi "k8s.io/cloud-provider/api"
 	servicehelpers "k8s.io/cloud-provider/service/helpers"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
@@ -238,45 +238,45 @@ func setMockPublicIP(az *Cloud, mockPIPsClient *mockpublicipclient.MockInterface
 	}
 
 	expectedPIP := network.PublicIPAddress{
-		Name:     ptr.To("testCluster-aservicea"),
+		Name:     to.Ptr("testCluster-aservicea"),
 		Location: &az.Location,
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 			PublicIPAllocationMethod: network.Static,
 			PublicIPAddressVersion:   ipVer,
-			IPAddress:                ptr.To(ipAddr1),
+			IPAddress:                to.Ptr(ipAddr1),
 		},
 		Tags: map[string]*string{
-			consts.ServiceTagKey:  ptr.To("default/servicea"),
-			consts.ClusterNameKey: ptr.To(testClusterName),
+			consts.ServiceTagKey:  to.Ptr("default/servicea"),
+			consts.ClusterNameKey: to.Ptr(testClusterName),
 		},
 		Sku: &network.PublicIPAddressSku{
 			Name: network.PublicIPAddressSkuNameStandard,
 		},
-		ID: ptr.To("testCluster-aservice1"),
+		ID: to.Ptr("testCluster-aservice1"),
 	}
 
 	a := 'a'
 	var expectedPIPs []network.PublicIPAddress
 	for i := 1; i <= serviceCount; i++ {
-		expectedPIP.Name = ptr.To(fmt.Sprintf("testCluster-aservice%d%s", i, suffix))
-		expectedPIP.ID = ptr.To(fmt.Sprintf("testCluster-aservice%d%s", i, suffix))
+		expectedPIP.Name = to.Ptr(fmt.Sprintf("testCluster-aservice%d%s", i, suffix))
+		expectedPIP.ID = to.Ptr(fmt.Sprintf("testCluster-aservice%d%s", i, suffix))
 		expectedPIP.PublicIPAddressPropertiesFormat = &network.PublicIPAddressPropertiesFormat{
 			PublicIPAllocationMethod: network.Static,
 			PublicIPAddressVersion:   ipVer,
-			IPAddress:                ptr.To(ipAddr1),
+			IPAddress:                to.Ptr(ipAddr1),
 		}
-		expectedPIP.Tags[consts.ServiceTagKey] = ptr.To(fmt.Sprintf("default/service%d", i))
+		expectedPIP.Tags[consts.ServiceTagKey] = to.Ptr(fmt.Sprintf("default/service%d", i))
 		mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%d%s", i, suffix), gomock.Any()).Return(expectedPIP, nil).AnyTimes()
 		mockPIPsClient.EXPECT().Delete(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%d%s", i, suffix)).Return(nil).AnyTimes()
 		expectedPIPs = append(expectedPIPs, expectedPIP)
-		expectedPIP.Name = ptr.To(fmt.Sprintf("testCluster-aservice%c%s", a, suffix))
-		expectedPIP.ID = ptr.To(fmt.Sprintf("testCluster-aservice%c%s", a, suffix))
+		expectedPIP.Name = to.Ptr(fmt.Sprintf("testCluster-aservice%c%s", a, suffix))
+		expectedPIP.ID = to.Ptr(fmt.Sprintf("testCluster-aservice%c%s", a, suffix))
 		expectedPIP.PublicIPAddressPropertiesFormat = &network.PublicIPAddressPropertiesFormat{
 			PublicIPAllocationMethod: network.Static,
 			PublicIPAddressVersion:   ipVer,
-			IPAddress:                ptr.To(ipAddra),
+			IPAddress:                to.Ptr(ipAddra),
 		}
-		expectedPIP.Tags[consts.ServiceTagKey] = ptr.To(fmt.Sprintf("default/service%c", a))
+		expectedPIP.Tags[consts.ServiceTagKey] = to.Ptr(fmt.Sprintf("default/service%c", a))
 		mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%c%s", a, suffix), gomock.Any()).Return(expectedPIP, nil).AnyTimes()
 		mockPIPsClient.EXPECT().Delete(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%c%s", a, suffix)).Return(nil).AnyTimes()
 		expectedPIPs = append(expectedPIPs, expectedPIP)
@@ -314,10 +314,10 @@ func setMockLBsDualStack(az *Cloud, ctrl *gomock.Controller, expectedLBs *[]netw
 			LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
 				BackendAddressPools: &[]network.BackendAddressPool{
 					{
-						Name: ptr.To("testCluster"),
+						Name: to.Ptr("testCluster"),
 					},
 					{
-						Name: ptr.To("testCluster-IPv6"),
+						Name: to.Ptr("testCluster-IPv6"),
 					},
 				},
 			},
@@ -325,35 +325,35 @@ func setMockLBsDualStack(az *Cloud, ctrl *gomock.Controller, expectedLBs *[]netw
 		lb.Name = &expectedLBName
 		lb.LoadBalancingRules = &[]network.LoadBalancingRule{
 			{
-				Name: ptr.To(fmt.Sprintf("a%s%d-TCP-8081", fullServiceName, serviceIndex)),
+				Name: to.Ptr(fmt.Sprintf("a%s%d-TCP-8081", fullServiceName, serviceIndex)),
 			},
 			{
-				Name: ptr.To(fmt.Sprintf("a%s%d-TCP-8081-IPv6", fullServiceName, serviceIndex)),
+				Name: to.Ptr(fmt.Sprintf("a%s%d-TCP-8081-IPv6", fullServiceName, serviceIndex)),
 			},
 		}
 		fips := []network.FrontendIPConfiguration{
 			{
-				Name: ptr.To(fmt.Sprintf("a%s%d", fullServiceName, serviceIndex)),
-				ID:   ptr.To("fip"),
+				Name: to.Ptr(fmt.Sprintf("a%s%d", fullServiceName, serviceIndex)),
+				ID:   to.Ptr("fip"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
 					PrivateIPAllocationMethod: "Dynamic",
 					PrivateIPAddressVersion:   network.IPv4,
-					PublicIPAddress:           &network.PublicIPAddress{ID: ptr.To(fmt.Sprintf("testCluster-a%s%d", fullServiceName, serviceIndex))},
+					PublicIPAddress:           &network.PublicIPAddress{ID: to.Ptr(fmt.Sprintf("testCluster-a%s%d", fullServiceName, serviceIndex))},
 				},
 			},
 			{
-				Name: ptr.To(fmt.Sprintf("a%s%d-IPv6", fullServiceName, serviceIndex)),
-				ID:   ptr.To("fip-IPv6"),
+				Name: to.Ptr(fmt.Sprintf("a%s%d-IPv6", fullServiceName, serviceIndex)),
+				ID:   to.Ptr("fip-IPv6"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
 					PrivateIPAllocationMethod: "Dynamic",
 					PrivateIPAddressVersion:   network.IPv6,
-					PublicIPAddress:           &network.PublicIPAddress{ID: ptr.To(fmt.Sprintf("testCluster-a%s%d-IPv6", fullServiceName, serviceIndex))},
+					PublicIPAddress:           &network.PublicIPAddress{ID: to.Ptr(fmt.Sprintf("testCluster-a%s%d-IPv6", fullServiceName, serviceIndex))},
 				},
 			},
 		}
 		if isInternal {
-			fips[0].Subnet = &network.Subnet{Name: ptr.To("subnet")}
-			fips[1].Subnet = &network.Subnet{Name: ptr.To("subnet")}
+			fips[0].Subnet = &network.Subnet{Name: to.Ptr("subnet")}
+			fips[1].Subnet = &network.Subnet{Name: to.Ptr("subnet")}
 		}
 		lb.FrontendIPConfigurations = &fips
 
@@ -361,36 +361,36 @@ func setMockLBsDualStack(az *Cloud, ctrl *gomock.Controller, expectedLBs *[]netw
 	} else {
 		lbRules := []network.LoadBalancingRule{
 			{
-				Name: ptr.To(fmt.Sprintf("a%s%d-TCP-8081", fullServiceName, serviceIndex)),
+				Name: to.Ptr(fmt.Sprintf("a%s%d-TCP-8081", fullServiceName, serviceIndex)),
 			},
 			{
-				Name: ptr.To(fmt.Sprintf("a%s%d-TCP-8081-IPv6", fullServiceName, serviceIndex)),
+				Name: to.Ptr(fmt.Sprintf("a%s%d-TCP-8081-IPv6", fullServiceName, serviceIndex)),
 			},
 		}
 		*(*expectedLBs)[lbIndex].LoadBalancingRules = append(*(*expectedLBs)[lbIndex].LoadBalancingRules, lbRules...)
 		fips := []network.FrontendIPConfiguration{
 			{
-				Name: ptr.To(fmt.Sprintf("a%s%d", fullServiceName, serviceIndex)),
-				ID:   ptr.To("fip"),
+				Name: to.Ptr(fmt.Sprintf("a%s%d", fullServiceName, serviceIndex)),
+				ID:   to.Ptr("fip"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
 					PrivateIPAllocationMethod: "Dynamic",
 					PrivateIPAddressVersion:   network.IPv4,
-					PublicIPAddress:           &network.PublicIPAddress{ID: ptr.To(fmt.Sprintf("testCluster-a%s%d", fullServiceName, serviceIndex))},
+					PublicIPAddress:           &network.PublicIPAddress{ID: to.Ptr(fmt.Sprintf("testCluster-a%s%d", fullServiceName, serviceIndex))},
 				},
 			},
 			{
-				Name: ptr.To(fmt.Sprintf("a%s%d-IPv6", fullServiceName, serviceIndex)),
-				ID:   ptr.To("fip-IPv6"),
+				Name: to.Ptr(fmt.Sprintf("a%s%d-IPv6", fullServiceName, serviceIndex)),
+				ID:   to.Ptr("fip-IPv6"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
 					PrivateIPAllocationMethod: "Dynamic",
 					PrivateIPAddressVersion:   network.IPv6,
-					PublicIPAddress:           &network.PublicIPAddress{ID: ptr.To(fmt.Sprintf("testCluster-a%s%d-IPv6", fullServiceName, serviceIndex))},
+					PublicIPAddress:           &network.PublicIPAddress{ID: to.Ptr(fmt.Sprintf("testCluster-a%s%d-IPv6", fullServiceName, serviceIndex))},
 				},
 			},
 		}
 		if isInternal {
 			for _, fip := range fips {
-				fip.Subnet = &network.Subnet{Name: ptr.To("subnet")}
+				fip.Subnet = &network.Subnet{Name: to.Ptr("subnet")}
 			}
 		}
 		*(*expectedLBs)[lbIndex].FrontendIPConfigurations = append(*(*expectedLBs)[lbIndex].FrontendIPConfigurations, fips...)
@@ -430,7 +430,7 @@ func setMockLBs(az *Cloud, ctrl *gomock.Controller, expectedLBs *[]network.LoadB
 			LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
 				BackendAddressPools: &[]network.BackendAddressPool{
 					{
-						Name: ptr.To("testCluster"),
+						Name: to.Ptr("testCluster"),
 					},
 				},
 			},
@@ -438,41 +438,41 @@ func setMockLBs(az *Cloud, ctrl *gomock.Controller, expectedLBs *[]network.LoadB
 		lb.Name = &expectedLBName
 		lb.LoadBalancingRules = &[]network.LoadBalancingRule{
 			{
-				Name: ptr.To(fmt.Sprintf("a%s%d-TCP-8081", fullServiceName, serviceIndex)),
+				Name: to.Ptr(fmt.Sprintf("a%s%d-TCP-8081", fullServiceName, serviceIndex)),
 			},
 		}
 		fips := []network.FrontendIPConfiguration{
 			{
-				Name: ptr.To(fmt.Sprintf("a%s%d", fullServiceName, serviceIndex)),
-				ID:   ptr.To("fip"),
+				Name: to.Ptr(fmt.Sprintf("a%s%d", fullServiceName, serviceIndex)),
+				ID:   to.Ptr("fip"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
 					PrivateIPAllocationMethod: "Dynamic",
-					PublicIPAddress:           &network.PublicIPAddress{ID: ptr.To(fmt.Sprintf("testCluster-a%s%d", fullServiceName, serviceIndex))},
+					PublicIPAddress:           &network.PublicIPAddress{ID: to.Ptr(fmt.Sprintf("testCluster-a%s%d", fullServiceName, serviceIndex))},
 					PrivateIPAddressVersion:   network.IPv4,
 				},
 			},
 		}
 		if isInternal {
-			fips[0].Subnet = &network.Subnet{Name: ptr.To("subnet")}
+			fips[0].Subnet = &network.Subnet{Name: to.Ptr("subnet")}
 		}
 		lb.FrontendIPConfigurations = &fips
 
 		*expectedLBs = append(*expectedLBs, lb)
 	} else {
 		*(*expectedLBs)[lbIndex].LoadBalancingRules = append(*(*expectedLBs)[lbIndex].LoadBalancingRules, network.LoadBalancingRule{
-			Name: ptr.To(fmt.Sprintf("a%s%d-TCP-8081", fullServiceName, serviceIndex)),
+			Name: to.Ptr(fmt.Sprintf("a%s%d-TCP-8081", fullServiceName, serviceIndex)),
 		})
 		fip := network.FrontendIPConfiguration{
-			Name: ptr.To(fmt.Sprintf("a%s%d", fullServiceName, serviceIndex)),
-			ID:   ptr.To("fip"),
+			Name: to.Ptr(fmt.Sprintf("a%s%d", fullServiceName, serviceIndex)),
+			ID:   to.Ptr("fip"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
 				PrivateIPAllocationMethod: "Dynamic",
-				PublicIPAddress:           &network.PublicIPAddress{ID: ptr.To(fmt.Sprintf("testCluster-a%s%d", fullServiceName, serviceIndex))},
+				PublicIPAddress:           &network.PublicIPAddress{ID: to.Ptr(fmt.Sprintf("testCluster-a%s%d", fullServiceName, serviceIndex))},
 				PrivateIPAddressVersion:   network.IPv4,
 			},
 		}
 		if isInternal {
-			fip.Subnet = &network.Subnet{Name: ptr.To("subnet")}
+			fip.Subnet = &network.Subnet{Name: to.Ptr("subnet")}
 		}
 		*(*expectedLBs)[lbIndex].FrontendIPConfigurations = append(*(*expectedLBs)[lbIndex].FrontendIPConfigurations, fip)
 	}
@@ -1206,20 +1206,20 @@ func TestServiceDefaultsToNoSessionPersistence(t *testing.T) {
 	setMockLBs(az, ctrl, &expectedLBs, "service-sa-omitted", 1, 1, false)
 
 	expectedPIP := network.PublicIPAddress{
-		Name:     ptr.To("testCluster-aservicesaomitted1"),
+		Name:     to.Ptr("testCluster-aservicesaomitted1"),
 		Location: &az.Location,
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 			PublicIPAllocationMethod: network.Static,
 			PublicIPAddressVersion:   network.IPv4,
 		},
 		Tags: map[string]*string{
-			consts.ServiceTagKey:  ptr.To("aservicesaomitted1"),
-			consts.ClusterNameKey: ptr.To(testClusterName),
+			consts.ServiceTagKey:  to.Ptr("aservicesaomitted1"),
+			consts.ClusterNameKey: to.Ptr(testClusterName),
 		},
 		Sku: &network.PublicIPAddressSku{
 			Name: network.PublicIPAddressSkuNameStandard,
 		},
-		ID: ptr.To("testCluster-aservicesaomitted1"),
+		ID: to.Ptr("testCluster-aservicesaomitted1"),
 	}
 
 	mockPIPsClient := mockpublicipclient.NewMockInterface(ctrl)
@@ -1262,20 +1262,20 @@ func TestServiceRespectsNoSessionAffinity(t *testing.T) {
 	setMockLBs(az, ctrl, &expectedLBs, "service-sa-none", 1, 1, false)
 
 	expectedPIP := network.PublicIPAddress{
-		Name:     ptr.To("testCluster-aservicesanone"),
+		Name:     to.Ptr("testCluster-aservicesanone"),
 		Location: &az.Location,
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 			PublicIPAllocationMethod: network.Static,
 			PublicIPAddressVersion:   network.IPv4,
 		},
 		Tags: map[string]*string{
-			consts.ServiceTagKey:  ptr.To("aservicesanone"),
-			consts.ClusterNameKey: ptr.To(testClusterName),
+			consts.ServiceTagKey:  to.Ptr("aservicesanone"),
+			consts.ClusterNameKey: to.Ptr(testClusterName),
 		},
 		Sku: &network.PublicIPAddressSku{
 			Name: network.PublicIPAddressSkuNameStandard,
 		},
-		ID: ptr.To("testCluster-aservicesanone"),
+		ID: to.Ptr("testCluster-aservicesanone"),
 	}
 
 	mockPIPsClient := mockpublicipclient.NewMockInterface(ctrl)
@@ -1325,20 +1325,20 @@ func TestServiceRespectsClientIPSessionAffinity(t *testing.T) {
 	setMockLBs(az, ctrl, &expectedLBs, "service-sa-clientip", 1, 1, false)
 
 	expectedPIP := network.PublicIPAddress{
-		Name:     ptr.To("testCluster-aservicesaclientip"),
+		Name:     to.Ptr("testCluster-aservicesaclientip"),
 		Location: &az.Location,
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 			PublicIPAllocationMethod: network.Static,
 			PublicIPAddressVersion:   network.IPv4,
 		},
 		Tags: map[string]*string{
-			consts.ServiceTagKey:  ptr.To("aservicesaclientip"),
-			consts.ClusterNameKey: ptr.To(testClusterName),
+			consts.ServiceTagKey:  to.Ptr("aservicesaclientip"),
+			consts.ClusterNameKey: to.Ptr(testClusterName),
 		},
 		Sku: &network.PublicIPAddressSku{
 			Name: network.PublicIPAddressSkuNameStandard,
 		},
-		ID: ptr.To("testCluster-aservicesaclientip"),
+		ID: to.Ptr("testCluster-aservicesaclientip"),
 	}
 
 	mockPIPsClient := mockpublicipclient.NewMockInterface(ctrl)
@@ -1395,12 +1395,12 @@ func TestReconcilePublicIPsWithNewService(t *testing.T) {
 	pipsNames1, pipsNames2 := []string{}, []string{}
 	pipsAddrs1, pipsAddrs2 := []string{}, []string{}
 	for _, pip := range pips {
-		pipsNames1 = append(pipsNames1, ptr.Deref(pip.Name, ""))
-		pipsAddrs1 = append(pipsAddrs1, ptr.Deref(pip.PublicIPAddressPropertiesFormat.IPAddress, ""))
+		pipsNames1 = append(pipsNames1, lo.FromPtrOr(pip.Name, ""))
+		pipsAddrs1 = append(pipsAddrs1, lo.FromPtrOr(pip.PublicIPAddressPropertiesFormat.IPAddress, ""))
 	}
 	for _, pip := range pips2 {
-		pipsNames2 = append(pipsNames2, ptr.Deref(pip.Name, ""))
-		pipsAddrs2 = append(pipsAddrs2, ptr.Deref(pip.PublicIPAddressPropertiesFormat.IPAddress, ""))
+		pipsNames2 = append(pipsNames2, lo.FromPtrOr(pip.Name, ""))
+		pipsAddrs2 = append(pipsAddrs2, lo.FromPtrOr(pip.PublicIPAddressPropertiesFormat.IPAddress, ""))
 	}
 	assert.Truef(t, compareStrings(pipsNames1, pipsNames2) && compareStrings(pipsAddrs1, pipsAddrs2),
 		"We should get the exact same public ip resource after a second reconcile")
@@ -1697,10 +1697,10 @@ func getTestSecurityGroupCommon(az *Cloud, v4Enabled, v6Enabled bool, services .
 			getRule := func(svc *v1.Service, port v1.ServicePort, src string, isIPv6 bool) *armnetwork.SecurityRule {
 				ruleName := az.getSecurityRuleName(svc, port, src, isIPv6)
 				return &armnetwork.SecurityRule{
-					Name: ptr.To(ruleName),
+					Name: to.Ptr(ruleName),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
-						SourceAddressPrefix:  ptr.To(src),
-						DestinationPortRange: ptr.To(fmt.Sprintf("%d", port.Port)),
+						SourceAddressPrefix:  to.Ptr(src),
+						DestinationPortRange: to.Ptr(fmt.Sprintf("%d", port.Port)),
 					},
 				}
 			}
@@ -1721,7 +1721,7 @@ func getTestSecurityGroupCommon(az *Cloud, v4Enabled, v6Enabled bool, services .
 
 	sg := armnetwork.SecurityGroup{
 		Name: &az.SecurityGroupName,
-		Etag: ptr.To("0000000-0000-0000-0000-000000000000"),
+		Etag: to.Ptr("0000000-0000-0000-0000-000000000000"),
 		Properties: &armnetwork.SecurityGroupPropertiesFormat{
 			SecurityRules: rules,
 		},
@@ -1764,13 +1764,13 @@ func validateLoadBalancer(t *testing.T, loadBalancer *network.LoadBalancer, serv
 			}
 			expectedFrontendIP := ExpectedFrontendIPInfo{
 				Name:   az.getDefaultFrontendIPConfigName(&services[i]),
-				Subnet: ptr.To(expectedSubnetName),
+				Subnet: to.Ptr(expectedSubnetName),
 			}
 			expectedFrontendIPs = append(expectedFrontendIPs, expectedFrontendIP)
 			if svcIPFamilyCount == 2 {
 				expectedFrontendIP := ExpectedFrontendIPInfo{
 					Name:   az.getDefaultFrontendIPConfigName(&services[i]) + "-" + consts.IPVersionIPv6String,
-					Subnet: ptr.To(expectedSubnetName),
+					Subnet: to.Ptr(expectedSubnetName),
 				}
 				expectedFrontendIPs = append(expectedFrontendIPs, expectedFrontendIP)
 			}
@@ -1851,7 +1851,7 @@ func validateLoadBalancer(t *testing.T, loadBalancer *network.LoadBalancer, serv
 	frontendIPs := *loadBalancer.FrontendIPConfigurations
 	for _, expectedFrontendIP := range expectedFrontendIPs {
 		if !expectedFrontendIP.existsIn(frontendIPs) {
-			t.Errorf("Expected the loadbalancer to have frontend IP %s/%s. Found %s", expectedFrontendIP.Name, ptr.Deref(expectedFrontendIP.Subnet, ""), describeFIPs(frontendIPs))
+			t.Errorf("Expected the loadbalancer to have frontend IP %s/%s. Found %s", expectedFrontendIP.Name, lo.FromPtrOr(expectedFrontendIP.Subnet, ""), describeFIPs(frontendIPs))
 		}
 	}
 
@@ -1872,7 +1872,7 @@ type ExpectedFrontendIPInfo struct {
 }
 
 func (expected ExpectedFrontendIPInfo) matches(frontendIP network.FrontendIPConfiguration) bool {
-	return strings.EqualFold(expected.Name, ptr.Deref(frontendIP.Name, "")) && strings.EqualFold(ptr.Deref(expected.Subnet, ""), ptr.Deref(subnetName(frontendIP), ""))
+	return strings.EqualFold(expected.Name, lo.FromPtrOr(frontendIP.Name, "")) && strings.EqualFold(lo.FromPtrOr(expected.Subnet, ""), lo.FromPtrOr(subnetName(frontendIP), ""))
 }
 
 func (expected ExpectedFrontendIPInfo) existsIn(frontendIPs []network.FrontendIPConfiguration) bool {
@@ -1896,9 +1896,9 @@ func describeFIPs(frontendIPs []network.FrontendIPConfiguration) string {
 	for _, actualFIP := range frontendIPs {
 		actualSubnetName := ""
 		if actualFIP.Subnet != nil {
-			actualSubnetName = ptr.Deref(actualFIP.Subnet.Name, "")
+			actualSubnetName = lo.FromPtrOr(actualFIP.Subnet.Name, "")
 		}
-		actualFIPText := fmt.Sprintf("%s/%s ", ptr.Deref(actualFIP.Name, ""), actualSubnetName)
+		actualFIPText := fmt.Sprintf("%s/%s ", lo.FromPtrOr(actualFIP.Name, ""), actualSubnetName)
 		description = description + actualFIPText
 	}
 	return description
@@ -1929,10 +1929,10 @@ func validatePublicIP(t *testing.T, publicIP *network.PublicIPAddress, service *
 	}
 
 	serviceName := getServiceName(service)
-	assert.Equalf(t, serviceName, ptr.Deref(publicIP.Tags[consts.ServiceTagKey], ""),
+	assert.Equalf(t, serviceName, lo.FromPtrOr(publicIP.Tags[consts.ServiceTagKey], ""),
 		"Expected publicIP resource has matching tags[%s]", consts.ServiceTagKey)
 	assert.NotNilf(t, publicIP.Tags[consts.ClusterNameKey], "Expected publicIP resource does not have tags[%s]", consts.ClusterNameKey)
-	assert.Equalf(t, testClusterName, ptr.Deref(publicIP.Tags[consts.ClusterNameKey], ""),
+	assert.Equalf(t, testClusterName, lo.FromPtrOr(publicIP.Tags[consts.ClusterNameKey], ""),
 		"Expected publicIP resource has matching tags[%s]", consts.ClusterNameKey)
 
 	// We cannot use Service LoadBalancerIP to compare with
@@ -1945,14 +1945,14 @@ func TestGetNextAvailablePriority(t *testing.T) {
 	for i := int32(consts.LoadBalancerMinimumPriority); i < consts.LoadBalancerMinimumPriority+50; i++ {
 		rules50 = append(rules50, &armnetwork.SecurityRule{
 			Properties: &armnetwork.SecurityRulePropertiesFormat{
-				Priority: ptr.To(i),
+				Priority: to.Ptr(i),
 			},
 		})
 	}
 	for i := int32(consts.LoadBalancerMinimumPriority); i < consts.LoadBalancerMaximumPriority; i++ {
 		rulesTooMany = append(rulesTooMany, &armnetwork.SecurityRule{
 			Properties: &armnetwork.SecurityRulePropertiesFormat{
-				Priority: ptr.To(i),
+				Priority: to.Ptr(i),
 			},
 		})
 	}

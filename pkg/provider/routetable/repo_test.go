@@ -26,7 +26,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient/mock_routetableclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
@@ -51,7 +50,7 @@ func TestRepo_Get(t *testing.T) {
 		)
 
 		cli.EXPECT().Get(gomock.Any(), ResourceGroup, gomock.Any()).Return(&armnetwork.RouteTable{
-			Name: ptr.To(RouteTableName),
+			Name: to.Ptr(RouteTableName),
 		}, nil)
 
 		v, err := repo.Get(ctx, RouteTableName, cache.CacheReadTypeDefault)

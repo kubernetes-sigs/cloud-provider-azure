@@ -22,9 +22,8 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
-
-	fnutil "sigs.k8s.io/cloud-provider-azure/pkg/util/collectionutil"
 )
 
 func TestIsPrefixesAllowAll(t *testing.T) {
@@ -476,7 +475,7 @@ func FuzzAggregatePrefixesIPv4(f *testing.F) {
 				rv[addr.String()] = struct{}{}
 			}
 		}
-		return fnutil.Keys(rv)
+		return lo.Keys(rv)
 	}
 
 	f.Fuzz(func(
@@ -502,9 +501,9 @@ func FuzzAggregatePrefixesIPv4(f *testing.F) {
 		input := []netip.Prefix{p1, p2, p3}
 		output := AggregatePrefixes(input)
 
-		prefixAsString := func(p netip.Prefix) string { return p.String() }
-		t.Logf("input: %s", fnutil.Map(prefixAsString, input))
-		t.Logf("output: %s", fnutil.Map(prefixAsString, output))
+		prefixAsString := func(p netip.Prefix, _ int) string { return p.String() }
+		t.Logf("input: %s", lo.Map(input, prefixAsString))
+		t.Logf("output: %s", lo.Map(output, prefixAsString))
 
 		expectedAddresses := listAddressesAsString(input...)
 		actualAddresses := listAddressesAsString(output...)

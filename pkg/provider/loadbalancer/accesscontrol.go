@@ -23,12 +23,11 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/go-logr/logr"
+	"github.com/samber/lo"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
-	fnutil "sigs.k8s.io/cloud-provider-azure/pkg/util/collectionutil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/iputil"
 )
 
@@ -68,7 +67,7 @@ func WithEventEmitter(emitter K8sEventEmitter) AccessControlOption {
 }
 
 func NewAccessControl(logger logr.Logger, svc *v1.Service, sg *armnetwork.SecurityGroup, opts ...AccessControlOption) (*AccessControl, error) {
-	logger = logger.WithName("AccessControl").WithValues("security-group", ptr.To(sg.Name))
+	logger = logger.WithName("AccessControl").WithValues("security-group", lo.ToPtr(sg.Name))
 
 	options := defaultAccessControlOptions
 	for _, opt := range opts {
@@ -294,8 +293,8 @@ func (ac *AccessControl) CleanSecurityGroup(
 	logger.V(10).Info("Start cleaning")
 
 	var (
-		ipv4Prefixes = fnutil.Map(func(addr netip.Addr) string { return addr.String() }, dstIPv4Addresses)
-		ipv6Prefixes = fnutil.Map(func(addr netip.Addr) string { return addr.String() }, dstIPv6Addresses)
+		ipv4Prefixes = lo.Map(dstIPv4Addresses, func(addr netip.Addr, _ int) string { return addr.String() })
+		ipv6Prefixes = lo.Map(dstIPv6Addresses, func(addr netip.Addr, _ int) string { return addr.String() })
 	)
 
 	protocols := []armnetwork.SecurityRuleProtocol{

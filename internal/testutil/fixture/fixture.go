@@ -24,7 +24,7 @@ import (
 	"math/big"
 	"net/netip"
 
-	fnutil "sigs.k8s.io/cloud-provider-azure/pkg/util/collectionutil"
+	"github.com/samber/lo"
 )
 
 type Fixture struct{}
@@ -69,7 +69,7 @@ func (f *Fixture) RandomIPv4Addresses(n int) []netip.Addr {
 }
 
 func (f *Fixture) RandomIPv4AddressStrings(n int) []string {
-	return fnutil.Map(func(p netip.Addr) string { return p.String() }, f.RandomIPv4Addresses(n))
+	return lo.Map(f.RandomIPv4Addresses(n), func(p netip.Addr, _ int) string { return p.String() })
 }
 
 func (f *Fixture) RandomIPv4Prefixes(n int) []netip.Prefix {
@@ -91,7 +91,7 @@ func (f *Fixture) RandomIPv4Prefixes(n int) []netip.Prefix {
 }
 
 func (f *Fixture) RandomIPv4PrefixStrings(n int) []string {
-	return fnutil.Map(func(p netip.Prefix) string { return p.String() }, f.RandomIPv4Prefixes(n))
+	return lo.Map(f.RandomIPv4Prefixes(n), func(p netip.Prefix, _ int) string { return p.String() })
 }
 
 func (f *Fixture) RandomIPv6Addresses(n int) []netip.Addr {
@@ -108,7 +108,7 @@ func (f *Fixture) RandomIPv6Addresses(n int) []netip.Addr {
 }
 
 func (f *Fixture) RandomIPv6AddressStrings(n int) []string {
-	return fnutil.Map(func(p netip.Addr) string { return p.String() }, f.RandomIPv6Addresses(n))
+	return lo.Map(f.RandomIPv6Addresses(n), func(p netip.Addr, _ int) string { return p.String() })
 }
 
 func (f *Fixture) RandomIPv6Prefixes(n int) []netip.Prefix {
@@ -130,5 +130,5 @@ func (f *Fixture) RandomIPv6Prefixes(n int) []netip.Prefix {
 }
 
 func (f *Fixture) RandomIPv6PrefixStrings(n int) []string {
-	return fnutil.Map(func(p netip.Prefix) string { return p.String() }, f.RandomIPv6Prefixes(n))
+	return lo.Map(f.RandomIPv6Prefixes(n), func(p netip.Prefix, _ int) string { return p.String() })
 }

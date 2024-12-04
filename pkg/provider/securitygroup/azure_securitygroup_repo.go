@@ -27,9 +27,8 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
-
+	"github.com/samber/lo"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
@@ -100,7 +99,7 @@ func (az *securityGroupRepo) CreateOrUpdateSecurityGroup(ctx context.Context, sg
 	var respError *azcore.ResponseError
 	if errors.As(rerr, &respError) && respError != nil {
 		nsgJSON, _ := json.Marshal(sg)
-		klog.Warningf("CreateOrUpdateSecurityGroup(%s) failed: %v, NSG request: %s", ptr.Deref(sg.Name, ""), rerr.Error(), string(nsgJSON))
+		klog.Warningf("CreateOrUpdateSecurityGroup(%s) failed: %v, NSG request: %s", lo.FromPtrOr(sg.Name, ""), rerr.Error(), string(nsgJSON))
 
 		// Invalidate the cache because ETAG precondition mismatch.
 		if respError.StatusCode == http.StatusPreconditionFailed {

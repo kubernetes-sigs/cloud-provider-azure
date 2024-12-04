@@ -20,9 +20,8 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
-
+	"github.com/samber/lo"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	stringutils "sigs.k8s.io/cloud-provider-azure/pkg/util/string"
@@ -33,7 +32,7 @@ func GetVMPowerState(vmName string, vmStatuses *[]compute.InstanceViewStatus) st
 	logger := klog.Background().WithName("getVMSSVMPowerState").WithValues("vmName", vmName)
 	if vmStatuses != nil {
 		for _, status := range *vmStatuses {
-			state := ptr.Deref(status.Code, "")
+			state := lo.FromPtrOr(status.Code, "")
 			if stringutils.HasPrefixCaseInsensitive(state, consts.VMPowerStatePrefix) {
 				return strings.TrimPrefix(state, consts.VMPowerStatePrefix)
 			}

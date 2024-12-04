@@ -22,8 +22,9 @@ package zone
 import (
 	"context"
 
+	"github.com/samber/lo"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/providerclient"
-	fnutil "sigs.k8s.io/cloud-provider-azure/pkg/util/collectionutil"
 )
 
 type Repository interface {
@@ -46,7 +47,7 @@ func (r *repo) ListZones(ctx context.Context) (map[string][]string, error) {
 
 	var rv = make(map[string][]string, len(zones))
 	for region, z := range zones {
-		rv[region] = fnutil.Map(func(s *string) string { return *s }, z)
+		rv[region] = lo.Map(z, func(s *string, _ int) string { return *s })
 	}
 
 	return rv, nil

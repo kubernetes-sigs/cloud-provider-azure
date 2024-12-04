@@ -23,13 +23,11 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
-
 	"go.uber.org/mock/gomock"
-
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
@@ -73,36 +71,36 @@ func TestListManagedLBs(t *testing.T) {
 		},
 		{
 			existingLBs: []network.LoadBalancer{
-				{Name: ptr.To("kubernetes")},
-				{Name: ptr.To("kubernetes-internal")},
-				{Name: ptr.To("vmas-1")},
-				{Name: ptr.To("vmas-1-internal")},
-				{Name: ptr.To("unmanaged")},
-				{Name: ptr.To("unmanaged-internal")},
+				{Name: to.Ptr("kubernetes")},
+				{Name: to.Ptr("kubernetes-internal")},
+				{Name: to.Ptr("vmas-1")},
+				{Name: to.Ptr("vmas-1-internal")},
+				{Name: to.Ptr("unmanaged")},
+				{Name: to.Ptr("unmanaged-internal")},
 			},
 			expectedLBs: &[]network.LoadBalancer{
-				{Name: ptr.To("kubernetes")},
-				{Name: ptr.To("kubernetes-internal")},
-				{Name: ptr.To("vmas-1")},
-				{Name: ptr.To("vmas-1-internal")},
+				{Name: to.Ptr("kubernetes")},
+				{Name: to.Ptr("kubernetes-internal")},
+				{Name: to.Ptr("vmas-1")},
+				{Name: to.Ptr("vmas-1-internal")},
 			},
 			callTimes: 1,
 		},
 		{
 			existingLBs: []network.LoadBalancer{
-				{Name: ptr.To("kubernetes")},
-				{Name: ptr.To("kubernetes-internal")},
-				{Name: ptr.To("lb1-internal")},
-				{Name: ptr.To("lb2")},
+				{Name: to.Ptr("kubernetes")},
+				{Name: to.Ptr("kubernetes-internal")},
+				{Name: to.Ptr("lb1-internal")},
+				{Name: to.Ptr("lb2")},
 			},
 			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
 				{Name: "kubernetes"},
 				{Name: "lb1"},
 			},
 			expectedLBs: &[]network.LoadBalancer{
-				{Name: ptr.To("kubernetes")},
-				{Name: ptr.To("kubernetes-internal")},
-				{Name: ptr.To("lb1-internal")},
+				{Name: to.Ptr("kubernetes")},
+				{Name: to.Ptr("kubernetes-internal")},
+				{Name: to.Ptr("lb1-internal")},
 			},
 		},
 	}
@@ -163,15 +161,15 @@ func TestCreateOrUpdateLB(t *testing.T) {
 		mockPIPClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
 		mockPIPClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, "pip", gomock.Any()).Return(nil).MaxTimes(1)
 		mockPIPClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return([]network.PublicIPAddress{{
-			Name: ptr.To("pip"),
+			Name: to.Ptr("pip"),
 			PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 				ProvisioningState: network.ProvisioningStateSucceeded,
 			},
 		}}, nil).MaxTimes(2)
 
 		err := az.CreateOrUpdateLB(context.TODO(), &v1.Service{}, network.LoadBalancer{
-			Name: ptr.To("lb"),
-			Etag: ptr.To("etag"),
+			Name: to.Ptr("lb"),
+			Etag: to.Ptr("etag"),
 		})
 		assert.EqualError(t, test.expectedErr, err.Error())
 
@@ -274,29 +272,29 @@ func TestMigrateToIPBasedBackendPoolAndWaitForCompletion(t *testing.T) {
 		{
 			desc: "MigrateToIPBasedBackendPoolAndWaitForCompletion should retry if the number IPs on the backend pool is not expected",
 			backendPool: network.BackendAddressPool{
-				Name: ptr.To(testClusterName),
+				Name: to.Ptr(testClusterName),
 				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
 						{
 							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-								IPAddress: ptr.To("1.2.3.4"),
+								IPAddress: to.Ptr("1.2.3.4"),
 							},
 						},
 					},
 				},
 			},
 			backendPoolAfterRetry: &network.BackendAddressPool{
-				Name: ptr.To(testClusterName),
+				Name: to.Ptr(testClusterName),
 				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
 						{
 							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-								IPAddress: ptr.To("1.2.3.4"),
+								IPAddress: to.Ptr("1.2.3.4"),
 							},
 						},
 						{
 							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-								IPAddress: ptr.To("2.3.4.5"),
+								IPAddress: to.Ptr("2.3.4.5"),
 							},
 						},
 					},
@@ -440,14 +438,14 @@ func TestIsNICPool(t *testing.T) {
 		{
 			desc: "nil BackendAddressPoolPropertiesFormat",
 			bp: network.BackendAddressPool{
-				Name: ptr.To("pool1"),
+				Name: to.Ptr("pool1"),
 			},
 			expected: false,
 		},
 		{
 			desc: "nil LoadBalancerBackendAddresses",
 			bp: network.BackendAddressPool{
-				Name:                               ptr.To("pool1"),
+				Name:                               to.Ptr("pool1"),
 				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{},
 			},
 			expected: false,
@@ -455,7 +453,7 @@ func TestIsNICPool(t *testing.T) {
 		{
 			desc: "empty LoadBalancerBackendAddresses",
 			bp: network.BackendAddressPool{
-				Name: ptr.To("pool1"),
+				Name: to.Ptr("pool1"),
 				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{},
 				},
@@ -465,13 +463,13 @@ func TestIsNICPool(t *testing.T) {
 		{
 			desc: "LoadBalancerBackendAddress with empty IPAddress",
 			bp: network.BackendAddressPool{
-				Name: ptr.To("pool1"),
+				Name: to.Ptr("pool1"),
 				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
 						{
-							Name: ptr.To("addr1"),
+							Name: to.Ptr("addr1"),
 							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-								IPAddress: ptr.To(""),
+								IPAddress: to.Ptr(""),
 							},
 						},
 					},
@@ -482,13 +480,13 @@ func TestIsNICPool(t *testing.T) {
 		{
 			desc: "LoadBalancerBackendAddress with non-empty IPAddress",
 			bp: network.BackendAddressPool{
-				Name: ptr.To("pool1"),
+				Name: to.Ptr("pool1"),
 				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
 						{
-							Name: ptr.To("addr1"),
+							Name: to.Ptr("addr1"),
 							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-								IPAddress: ptr.To("10.0.0.1"),
+								IPAddress: to.Ptr("10.0.0.1"),
 							},
 						},
 					},
@@ -499,19 +497,19 @@ func TestIsNICPool(t *testing.T) {
 		{
 			desc: "LoadBalancerBackendAddress with both empty and non-empty IPAddress",
 			bp: network.BackendAddressPool{
-				Name: ptr.To("pool1"),
+				Name: to.Ptr("pool1"),
 				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
 						{
-							Name: ptr.To("addr1"),
+							Name: to.Ptr("addr1"),
 							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-								IPAddress: ptr.To(""),
+								IPAddress: to.Ptr(""),
 							},
 						},
 						{
-							Name: ptr.To("addr2"),
+							Name: to.Ptr("addr2"),
 							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-								IPAddress: ptr.To("10.0.0.2"),
+								IPAddress: to.Ptr("10.0.0.2"),
 							},
 						},
 					},
