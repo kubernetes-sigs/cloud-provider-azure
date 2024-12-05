@@ -20,18 +20,18 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	resources "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"k8s.io/apimachinery/pkg/util/uuid"
-	"k8s.io/utils/ptr"
 )
 
 // CreateTestResourceGroup create a test rg
 func CreateTestResourceGroup(tc *AzureTestClient) (*resources.ResourceGroup, func(string)) {
 	gc := tc.createResourceGroupClient()
-	rgName := ptr.To("e2e-" + string(uuid.NewUUID())[0:4])
+	rgName := to.Ptr("e2e-" + string(uuid.NewUUID())[0:4])
 	rg, err := gc.CreateOrUpdate(context.Background(), *rgName, createTestTemplate(tc, rgName))
 	Expect(err).NotTo(HaveOccurred())
 	By(fmt.Sprintf("resource group %s created", *rgName))
@@ -47,6 +47,6 @@ func CreateTestResourceGroup(tc *AzureTestClient) (*resources.ResourceGroup, fun
 func createTestTemplate(tc *AzureTestClient, name *string) resources.ResourceGroup {
 	return resources.ResourceGroup{
 		Name:     name,
-		Location: ptr.To(tc.location),
+		Location: to.Ptr(tc.location),
 	}
 }

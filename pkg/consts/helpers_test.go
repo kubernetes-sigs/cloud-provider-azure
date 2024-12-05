@@ -23,9 +23,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/samber/lo"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 )
 
 func TestIsK8sServiceHasHAModeEnabled(t *testing.T) {
@@ -184,13 +184,13 @@ func Test_extractInt32FromString(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "value is not a number", args: args{val: "cookies"}, wantErr: true},
-		{name: "value is zero", args: args{val: "0"}, wantErr: false, want: ptr.To(int32(0))},
+		{name: "value is zero", args: args{val: "0"}, wantErr: false, want: lo.ToPtr(int32(0))},
 		{name: "value is a float number", args: args{val: "0.1"}, wantErr: true},
-		{name: "value is a positive integer", args: args{val: "24"}, want: ptr.To(int32(24)), wantErr: false},
-		{name: "value negative integer", args: args{val: "-6"}, want: ptr.To(int32(-6)), wantErr: false},
+		{name: "value is a positive integer", args: args{val: "24"}, want: lo.ToPtr(int32(24)), wantErr: false},
+		{name: "value negative integer", args: args{val: "-6"}, want: lo.ToPtr(int32(-6)), wantErr: false},
 		{name: "validator is nil", args: args{val: "-6", businessValidator: []Int32BusinessValidator{
 			nil,
-		}}, want: ptr.To(int32(-6)), wantErr: false},
+		}}, want: lo.ToPtr(int32(-6)), wantErr: false},
 		{name: "validation failed", args: args{val: "-6", businessValidator: []Int32BusinessValidator{
 			func(_ *int32) error {
 				return fmt.Errorf("validator failed")
@@ -349,7 +349,7 @@ func TestGetInt32HealthProbeConfigOfPortFromK8sSvcAnnotation(t *testing.T) {
 				port:        80,
 				key:         HealthProbeParamsNumOfProbe,
 			},
-			want:    ptr.To(int32(2)),
+			want:    lo.ToPtr(int32(2)),
 			wantErr: false,
 		},
 		{

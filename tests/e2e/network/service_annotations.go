@@ -29,7 +29,9 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
-
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,13 +41,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 )
 
 var (
@@ -406,7 +404,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-resource-group'", func() {
 		By("creating a test resource group")
 		rg, cleanup := utils.CreateTestResourceGroup(tc)
-		defer cleanup(ptr.Deref(rg.Name, ""))
+		defer cleanup(lo.FromPtrOr(rg.Name, ""))
 
 		By("creating test PIP in the test resource group")
 		pips := []*string{}
@@ -437,7 +435,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}()
 
 		annotation := map[string]string{
-			consts.ServiceAnnotationLoadBalancerResourceGroup: ptr.Deref(rg.Name, ""),
+			consts.ServiceAnnotationLoadBalancerResourceGroup: lo.FromPtrOr(rg.Name, ""),
 		}
 		By("Creating service " + serviceName + " in namespace " + ns.Name)
 		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
@@ -462,10 +460,10 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}
 
 		expectedTags := map[string]*string{
-			"a": ptr.To("c"),
-			"c": ptr.To("d"),
-			"e": ptr.To(""),
-			"x": ptr.To("y"),
+			"a": lo.ToPtr("c"),
+			"c": lo.ToPtr("d"),
+			"e": lo.ToPtr(""),
+			"x": lo.ToPtr("y"),
 		}
 
 		testPIPTagAnnotationWithTags(cs, tc, ns, serviceName, labels, ports, expectedTags)
@@ -477,8 +475,8 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}
 
 		expectedTags := map[string]*string{
-			"a": ptr.To("c"),
-			"x": ptr.To("y"),
+			"a": lo.ToPtr("c"),
+			"x": lo.ToPtr("y"),
 		}
 
 		testPIPTagAnnotationWithTags(cs, tc, ns, serviceName, labels, ports, expectedTags)
@@ -582,7 +580,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				Expect(utils.DeletePIPPrefixWithRetry(tc, prefixName)).NotTo(HaveOccurred())
 			})
 			Expect(err).NotTo(HaveOccurred())
-			prefixIDs1[isIPv6] = ptr.Deref(prefix.ID, "")
+			prefixIDs1[isIPv6] = lo.FromPtrOr(prefix.ID, "")
 
 			prefixName = utils.GetNameWithSuffix(prefix2NameBase, utils.Suffixes[isIPv6])
 			prefixNames2[isIPv6] = prefixName
@@ -591,7 +589,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				Expect(utils.DeletePIPPrefixWithRetry(tc, prefixName)).NotTo(HaveOccurred())
 			})
 			Expect(err).NotTo(HaveOccurred())
-			prefixIDs2[isIPv6] = ptr.Deref(prefix.ID, "")
+			prefixIDs2[isIPv6] = lo.FromPtrOr(prefix.ID, "")
 		}
 		if v4Enabled {
 			createPIPPrefix(false)
@@ -635,8 +633,8 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(pip.Properties.IPAddress).NotTo(BeNil())
-				Expect(ptr.Deref(pip.Properties.PublicIPPrefix.ID, "")).To(Equal(prefixIDs1[isIPv6]))
-				Expect(*ip).To(Equal(ptr.Deref(pip.Properties.IPAddress, "")))
+				Expect(lo.FromPtrOr(pip.Properties.PublicIPPrefix.ID, "")).To(Equal(prefixIDs1[isIPv6]))
+				Expect(*ip).To(Equal(lo.FromPtrOr(pip.Properties.IPAddress, "")))
 			}
 		}
 
@@ -665,8 +663,8 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(pip.Properties.IPAddress).NotTo(BeNil())
-				Expect(ptr.Deref(pip.Properties.PublicIPPrefix.ID, "")).To(Equal(prefixIDs2[isIPv6]))
-				pipAddrs = append(pipAddrs, ptr.Deref(pip.Properties.IPAddress, ""))
+				Expect(lo.FromPtrOr(pip.Properties.PublicIPPrefix.ID, "")).To(Equal(prefixIDs2[isIPv6]))
+				pipAddrs = append(pipAddrs, lo.FromPtrOr(pip.Properties.IPAddress, ""))
 			}
 			if v4Enabled {
 				doPIPByPrefix(false)
@@ -1029,7 +1027,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				Expect(err).NotTo(HaveOccurred())
 			}
 
-			pipAddr := ptr.Deref(pip.Properties.IPAddress, "")
+			pipAddr := lo.FromPtrOr(pip.Properties.IPAddress, "")
 			utils.Logf("Created pip with address %s", pipAddr)
 			annotation[consts.ServiceAnnotationLoadBalancerIPDualStack[isIPv6]] = pipAddr
 			return pipAddr, cleanup
@@ -1184,7 +1182,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 		"app": serviceName,
 	}
 	ports := []v1.ServicePort{{
-		AppProtocol: ptr.To("Tcp"),
+		AppProtocol: lo.ToPtr("Tcp"),
 		Port:        serverPort,
 		Name:        "port1",
 		TargetPort:  intstr.FromInt(serverPort),
@@ -1192,7 +1190,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 		Port:        serverPort + 1,
 		Name:        "port2",
 		TargetPort:  intstr.FromInt(serverPort),
-		AppProtocol: ptr.To("Tcp"),
+		AppProtocol: lo.ToPtr("Tcp"),
 	},
 	}
 
@@ -1277,7 +1275,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 					pip, err := tc.GetPublicIPFromAddress(tc.GetResourceGroup(), ip)
 					Expect(err).NotTo(HaveOccurred())
 					if pip != nil {
-						err = utils.DeletePIPWithRetry(tc, ptr.Deref(pip.Name, ""), tc.GetResourceGroup())
+						err = utils.DeletePIPWithRetry(tc, lo.FromPtrOr(pip.Name, ""), tc.GetResourceGroup())
 						Expect(err).NotTo(HaveOccurred())
 					}
 				}
@@ -1480,7 +1478,7 @@ func getFrontendConfigurationIDFromPIP(tc *utils.AzureTestClient, pip, pipResour
 			ip.Properties.IPConfiguration != nil &&
 			ip.Properties.IPConfiguration.ID != nil &&
 			*ip.Properties.IPAddress == pip {
-			ipConfig := ptr.Deref(ip.Properties.IPConfiguration.ID, "")
+			ipConfig := lo.FromPtrOr(ip.Properties.IPConfiguration.ID, "")
 			utils.Logf("Found pip %q with ipConfig %q", pip, ipConfig)
 			pipFrontendConfigurationID = ipConfig
 			break
@@ -1705,18 +1703,18 @@ func testPIPTagAnnotationWithTags(
 
 	By("Checking tags on the corresponding public IP")
 	expectedTags := map[string]*string{
-		"a": ptr.To("b"),
-		"c": ptr.To("d"),
-		"e": ptr.To(""),
+		"a": lo.ToPtr("b"),
+		"c": lo.ToPtr("d"),
+		"e": lo.ToPtr(""),
 	}
 	pips, err := tc.ListPublicIPs(tc.GetResourceGroup())
 	Expect(err).NotTo(HaveOccurred())
 	var targetPIPs []network.PublicIPAddress
 	for _, pip := range pips {
 		for _, ip := range ips {
-			if strings.EqualFold(ptr.Deref(pip.Properties.IPAddress, ""), *ip) {
+			if strings.EqualFold(lo.FromPtrOr(pip.Properties.IPAddress, ""), *ip) {
 				targetPIPs = append(targetPIPs, *pip)
-				err := waitComparePIPTags(tc, expectedTags, ptr.Deref(pip.Name, ""))
+				err := waitComparePIPTags(tc, expectedTags, lo.FromPtrOr(pip.Name, ""))
 				Expect(err).NotTo(HaveOccurred())
 				break
 			}
@@ -1732,7 +1730,7 @@ func testPIPTagAnnotationWithTags(
 	_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	for _, targetPIP := range targetPIPs {
-		err = waitComparePIPTags(tc, expectedTagsAfterUpdate, ptr.Deref(targetPIP.Name, ""))
+		err = waitComparePIPTags(tc, expectedTagsAfterUpdate, lo.FromPtrOr(targetPIP.Name, ""))
 		Expect(err).NotTo(HaveOccurred())
 	}
 }

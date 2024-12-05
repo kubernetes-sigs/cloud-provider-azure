@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-
+	"github.com/samber/lo"
 	v1 "k8s.io/api/core/v1"
 	discovery_v1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -33,7 +33,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
@@ -222,7 +221,7 @@ func (updater *loadBalancerBackendPoolUpdater) process(ctx context.Context) {
 		// but the backend pool object is not changed after multiple times of removal and re-adding.
 		if changed {
 			klog.V(2).Infof("loadBalancerBackendPoolUpdater.process: updating backend pool %s/%s", lbName, poolName)
-			rerr = updater.az.LoadBalancerClient.CreateOrUpdateBackendPools(ctx, updater.az.ResourceGroup, lbName, poolName, bp, ptr.Deref(bp.Etag, ""))
+			rerr = updater.az.LoadBalancerClient.CreateOrUpdateBackendPools(ctx, updater.az.ResourceGroup, lbName, poolName, bp, lo.FromPtrOr(bp.Etag, ""))
 			if rerr != nil {
 				updater.processError(rerr, operationName, ops...)
 				continue
@@ -319,12 +318,12 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 				var previousIPs, currentIPs, previousNodeNames, currentNodeNames []string
 				if previousES != nil {
 					for _, ep := range previousES.Endpoints {
-						previousNodeNames = append(previousNodeNames, ptr.Deref(ep.NodeName, ""))
+						previousNodeNames = append(previousNodeNames, lo.FromPtrOr(ep.NodeName, ""))
 					}
 				}
 				if newES != nil {
 					for _, ep := range newES.Endpoints {
-						currentNodeNames = append(currentNodeNames, ptr.Deref(ep.NodeName, ""))
+						currentNodeNames = append(currentNodeNames, lo.FromPtrOr(ep.NodeName, ""))
 					}
 				}
 				for _, previousNodeName := range previousNodeNames {
@@ -482,8 +481,8 @@ func (az *Cloud) getLocalServiceEndpointsNodeNames(service *v1.Service) *utilset
 	var nodeNames []string
 	for _, ep := range eps {
 		for _, endpoint := range ep.Endpoints {
-			klog.V(4).Infof("EndpointSlice %s/%s has endpoint %s on node %s", ep.Namespace, ep.Name, endpoint.Addresses, ptr.Deref(endpoint.NodeName, ""))
-			nodeNames = append(nodeNames, ptr.Deref(endpoint.NodeName, ""))
+			klog.V(4).Infof("EndpointSlice %s/%s has endpoint %s on node %s", ep.Namespace, ep.Name, endpoint.Addresses, lo.FromPtrOr(endpoint.NodeName, ""))
+			nodeNames = append(nodeNames, lo.FromPtrOr(endpoint.NodeName, ""))
 		}
 	}
 
@@ -502,10 +501,10 @@ func (az *Cloud) cleanupLocalServiceBackendPool(
 	var changed bool
 	if lbs != nil {
 		for _, lb := range *lbs {
-			lbName := ptr.Deref(lb.Name, "")
+			lbName := lo.FromPtrOr(lb.Name, "")
 			if lb.BackendAddressPools != nil {
 				for _, bp := range *lb.BackendAddressPools {
-					bpName := ptr.Deref(bp.Name, "")
+					bpName := lo.FromPtrOr(bp.Name, "")
 					if localServiceOwnsBackendPool(getServiceName(svc), bpName) {
 						if err := az.DeleteLBBackendPool(ctx, lbName, bpName); err != nil {
 							return nil, err
@@ -543,7 +542,7 @@ func (az *Cloud) checkAndApplyLocalServiceBackendPoolUpdates(lb network.LoadBala
 	}
 	currentIPsInBackendPools := make(map[string][]string)
 	for _, bp := range *lb.BackendAddressPools {
-		bpName := ptr.Deref(bp.Name, "")
+		bpName := lo.FromPtrOr(bp.Name, "")
 		if localServiceOwnsBackendPool(serviceName, bpName) {
 			var currentIPs []string
 			for _, address := range *bp.LoadBalancerBackendAddresses {

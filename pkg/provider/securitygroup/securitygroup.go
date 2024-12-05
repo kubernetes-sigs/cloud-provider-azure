@@ -27,10 +27,9 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/go-logr/logr"
-	"k8s.io/utils/ptr"
+	"github.com/samber/lo"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-	fnutil "sigs.k8s.io/cloud-provider-azure/pkg/util/collectionutil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/iputil"
 )
 
@@ -148,9 +147,9 @@ func (helper *RuleHelper) getOrCreateRule(name string, priorityPrefer rulePriori
 		return nil, err
 	}
 	rule := &armnetwork.SecurityRule{
-		Name: ptr.To(name),
+		Name: to.Ptr(name),
 		Properties: &armnetwork.SecurityRulePropertiesFormat{
-			Priority: ptr.To(priority),
+			Priority: to.Ptr(priority),
 		},
 	}
 
@@ -175,7 +174,7 @@ func (helper *RuleHelper) addAllowRule(
 	if err != nil {
 		return err
 	}
-	dstPortRanges := fnutil.Map(func(p int32) string { return strconv.FormatInt(int64(p), 10) }, dstPorts)
+	dstPortRanges := lo.Map(dstPorts, func(p int32, _ int) string { return strconv.FormatInt(int64(p), 10) })
 	sort.Strings(dstPortRanges)
 
 	rule.Properties.Protocol = to.Ptr(protocol)
@@ -188,7 +187,7 @@ func (helper *RuleHelper) addAllowRule(
 		} else {
 			rule.Properties.SourceAddressPrefixes = to.SliceOfPtrs(srcPrefixes...)
 		}
-		rule.Properties.SourcePortRange = ptr.To("*")
+		rule.Properties.SourcePortRange = to.Ptr("*")
 	}
 	{
 		// Destination
@@ -216,7 +215,7 @@ func (helper *RuleHelper) AddRuleForAllowedServiceTag(
 	var (
 		ipFamily    = iputil.FamilyOfAddr(dstAddresses[0])
 		srcPrefixes = []string{serviceTag}
-		dstPrefixes = fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
+		dstPrefixes = lo.Map(dstAddresses, func(ip netip.Addr, _ int) string { return ip.String() })
 	)
 
 	helper.logger.V(4).Info("Patching a rule for allowed service tag", "ip-family", ipFamily)
@@ -243,8 +242,8 @@ func (helper *RuleHelper) AddRuleForAllowedIPRanges(
 
 	var (
 		ipFamily    = iputil.FamilyOfAddr(ipRanges[0].Addr())
-		srcPrefixes = fnutil.Map(func(ip netip.Prefix) string { return ip.String() }, ipRanges)
-		dstPrefixes = fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
+		srcPrefixes = lo.Map(ipRanges, func(ip netip.Prefix, _ int) string { return ip.String() })
+		dstPrefixes = lo.Map(dstAddresses, func(ip netip.Addr, _ int) string { return ip.String() })
 	)
 
 	helper.logger.V(4).Info("Patching a rule for allowed IP ranges", "ip-family", ipFamily)
@@ -277,18 +276,18 @@ func (helper *RuleHelper) AddRuleForDenyAll(dstAddresses []netip.Addr) error {
 	rule.Properties.Direction = to.Ptr(armnetwork.SecurityRuleDirectionInbound)
 	{
 		// Source
-		rule.Properties.SourceAddressPrefix = ptr.To("*")
-		rule.Properties.SourcePortRange = ptr.To("*")
+		rule.Properties.SourceAddressPrefix = to.Ptr("*")
+		rule.Properties.SourcePortRange = to.Ptr("*")
 	}
 	{
 		// Destination
-		addresses := fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
+		addresses := lo.Map(dstAddresses, func(ip netip.Addr, _ int) string { return ip.String() })
 		addresses = append(addresses, ListDestinationPrefixes(rule)...)
 		SetDestinationPrefixes(rule, addresses)
-		rule.Properties.DestinationPortRange = ptr.To("*")
+		rule.Properties.DestinationPortRange = to.Ptr("*")
 	}
 
-	helper.logger.V(4).Info("Patched a rule for deny all", "rule-name", ptr.To(rule.Name))
+	helper.logger.V(4).Info("Patched a rule for deny all", "rule-name", to.Ptr(rule.Name))
 
 	return nil
 }
@@ -330,11 +329,9 @@ func (helper *RuleHelper) removeDestinationFromRule(rule *armnetwork.SecurityRul
 		WithValues("security-rule-name", rule.Name)
 
 	var (
-		prefixIndex     = fnutil.IndexSet(prefixes) // Used to check whether the prefix should be removed.
-		currentPrefixes = ListDestinationPrefixes(rule)
-
-		expectedPrefixes = prefixIndex.SubtractedBy(currentPrefixes)      // The prefixes to keep.
-		targetPrefixes   = fnutil.Intersection(currentPrefixes, prefixes) // The prefixes to remove.
+		currentPrefixes     = ListDestinationPrefixes(rule)
+		_, expectedPrefixes = lo.Difference(prefixes, currentPrefixes)
+		targetPrefixes      = lo.Intersect(currentPrefixes, prefixes) // The prefixes to remove.
 	)
 
 	// Clean DenyAll rule
@@ -354,7 +351,7 @@ func (helper *RuleHelper) removeDestinationFromRule(rule *armnetwork.SecurityRul
 		return nil
 	}
 	var (
-		expectedPorts = fnutil.Intersection(currentPorts, retainDstPorts) // The ports to keep.
+		expectedPorts = lo.Intersect(currentPorts, retainDstPorts) // The ports to keep.
 	)
 
 	if len(targetPrefixes) == 0 || len(currentPorts) == len(expectedPorts) {

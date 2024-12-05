@@ -22,32 +22,32 @@ import (
 	"net/netip"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	"github.com/samber/lo"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
-	fnutil "sigs.k8s.io/cloud-provider-azure/pkg/util/collectionutil"
 )
 
 func filterServicesByIngressIPs(services []*v1.Service, ips []netip.Addr) []*v1.Service {
-	targetIPs := fnutil.Map(func(ip netip.Addr) string { return ip.String() }, ips)
+	targetIPs := lo.Map(ips, func(ip netip.Addr, _ int) string { return ip.String() })
 
-	return fnutil.Filter(func(svc *v1.Service) bool {
+	return lo.Filter(services, func(svc *v1.Service, _ int) bool {
 
-		ingressIPs := fnutil.Map(func(ing v1.LoadBalancerIngress) string { return ing.IP }, svc.Status.LoadBalancer.Ingress)
+		ingressIPs := lo.Map(svc.Status.LoadBalancer.Ingress, func(ing v1.LoadBalancerIngress, _ int) string { return ing.IP })
 
-		ingressIPs = fnutil.Filter(func(ip string) bool { return ip != "" }, ingressIPs)
+		ingressIPs = lo.Filter(ingressIPs, func(ip string, _ int) bool { return ip != "" })
 
-		return len(fnutil.Intersection(ingressIPs, targetIPs)) > 0
-	}, services)
+		return len(lo.Intersect(ingressIPs, targetIPs)) > 0
+	})
 }
 
 func filterServicesByDisableFloatingIP(services []*v1.Service) []*v1.Service {
-	return fnutil.Filter(func(svc *v1.Service) bool {
+	return lo.Filter(services, func(svc *v1.Service, _ int) bool {
 		return consts.IsK8sServiceDisableLoadBalancerFloatingIP(svc)
-	}, services)
+	})
 }
 
 // listSharedIPPortMapping lists the shared IP port mapping for the service excluding the service itself.

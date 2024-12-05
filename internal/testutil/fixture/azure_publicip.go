@@ -19,9 +19,8 @@ package fixture
 import (
 	"fmt"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-
-	"k8s.io/utils/ptr"
 )
 
 func (f *AzureFixture) PublicIPAddress(name string) *AzurePublicIPAddressFixture {
@@ -32,8 +31,8 @@ func (f *AzureFixture) PublicIPAddress(name string) *AzurePublicIPAddressFixture
 
 	return &AzurePublicIPAddressFixture{
 		pip: &network.PublicIPAddress{
-			ID:                              ptr.To(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s", SubscriptionID, ResourceGroup, name)),
-			Name:                            ptr.To(name),
+			ID:                              to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s", SubscriptionID, ResourceGroup, name)),
+			Name:                            to.Ptr(name),
 			Tags:                            make(map[string]*string),
 			PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{},
 		},
@@ -49,11 +48,11 @@ func (f *AzurePublicIPAddressFixture) Build() network.PublicIPAddress {
 }
 
 func (f *AzurePublicIPAddressFixture) WithTag(key, value string) *AzurePublicIPAddressFixture {
-	f.pip.Tags[key] = ptr.To(value)
+	f.pip.Tags[key] = to.Ptr(value)
 	return f
 }
 
 func (f *AzurePublicIPAddressFixture) WithAddress(address string) *AzurePublicIPAddressFixture {
-	f.pip.PublicIPAddressPropertiesFormat.IPAddress = ptr.To(address)
+	f.pip.PublicIPAddressPropertiesFormat.IPAddress = to.Ptr(address)
 	return f
 }

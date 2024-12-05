@@ -23,17 +23,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/go-autorest/autorest/azure"
 	autorestmocks "github.com/Azure/go-autorest/autorest/mocks"
 	"github.com/stretchr/testify/assert"
-
 	"go.uber.org/mock/gomock"
-
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
@@ -94,11 +92,11 @@ func TestStandardAttachDisk(t *testing.T) {
 		for _, vm := range expectedVMs {
 			vm.StorageProfile = &compute.StorageProfile{
 				OsDisk: &compute.OSDisk{
-					Name: ptr.To("osdisk1"),
+					Name: to.Ptr("osdisk1"),
 					ManagedDisk: &compute.ManagedDiskParameters{
-						ID: ptr.To("ManagedID"),
+						ID: to.Ptr("ManagedID"),
 						DiskEncryptionSet: &compute.DiskEncryptionSetParameters{
-							ID: ptr.To("DiskEncryptionSetID"),
+							ID: to.Ptr("DiskEncryptionSetID"),
 						},
 					},
 				},
@@ -108,7 +106,7 @@ func TestStandardAttachDisk(t *testing.T) {
 				diskName := "disk-name2"
 				diskURI := "uri"
 				vm.StorageProfile.DataDisks = &[]compute.DataDisk{
-					{Lun: ptr.To(int32(0)), Name: &diskName, ManagedDisk: &compute.ManagedDiskParameters{ID: &diskURI}},
+					{Lun: to.Ptr(int32(0)), Name: &diskName, ManagedDisk: &compute.ManagedDiskParameters{ID: &diskURI}},
 				}
 			}
 			mockVMsClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, *vm.Name, gomock.Any()).Return(vm, nil).AnyTimes()
@@ -318,16 +316,16 @@ func TestGetDataDisks(t *testing.T) {
 			nodeName: "vm1",
 			expectedDataDisks: []*armcompute.DataDisk{
 				{
-					Lun:  ptr.To(int32(0)),
-					Name: ptr.To("disk1"),
+					Lun:  to.Ptr(int32(0)),
+					Name: to.Ptr("disk1"),
 				},
 				{
-					Lun:  ptr.To(int32(1)),
-					Name: ptr.To("disk2"),
+					Lun:  to.Ptr(int32(1)),
+					Name: to.Ptr("disk2"),
 				},
 				{
-					Lun:  ptr.To(int32(2)),
-					Name: ptr.To("disk3"),
+					Lun:  to.Ptr(int32(2)),
+					Name: to.Ptr("disk3"),
 				},
 			},
 			expectedError: false,
@@ -338,16 +336,16 @@ func TestGetDataDisks(t *testing.T) {
 			nodeName: "vm1",
 			expectedDataDisks: []*armcompute.DataDisk{
 				{
-					Lun:  ptr.To(int32(0)),
-					Name: ptr.To("disk1"),
+					Lun:  to.Ptr(int32(0)),
+					Name: to.Ptr("disk1"),
 				},
 				{
-					Lun:  ptr.To(int32(1)),
-					Name: ptr.To("disk2"),
+					Lun:  to.Ptr(int32(1)),
+					Name: to.Ptr("disk2"),
 				},
 				{
-					Lun:  ptr.To(int32(2)),
-					Name: ptr.To("disk3"),
+					Lun:  to.Ptr(int32(2)),
+					Name: to.Ptr("disk3"),
 				},
 			},
 			expectedError: false,

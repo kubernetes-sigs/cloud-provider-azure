@@ -24,13 +24,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
@@ -203,11 +202,11 @@ func TestCreateRoute(t *testing.T) {
 	defaultNetworkRoute := func() []*armnetwork.Route {
 		return []*armnetwork.Route{
 			{
-				Name: ptr.To("node"),
+				Name: to.Ptr("node"),
 				Properties: &armnetwork.RoutePropertiesFormat{
-					AddressPrefix:    ptr.To("1.2.3.4/24"),
+					AddressPrefix:    to.Ptr("1.2.3.4/24"),
 					NextHopIPAddress: &nodePrivateIP,
-					NextHopType:      ptr.To(armnetwork.RouteNextHopTypeVirtualAppliance),
+					NextHopType:      to.Ptr(armnetwork.RouteNextHopTypeVirtualAppliance),
 				},
 			},
 		}
@@ -290,11 +289,11 @@ func TestCreateRoute(t *testing.T) {
 			routeTableName: "rt9",
 			updatedRoute: []*armnetwork.Route{
 				{
-					Name: ptr.To("node____123424"),
+					Name: to.Ptr("node____123424"),
 					Properties: &armnetwork.RoutePropertiesFormat{
-						AddressPrefix:    ptr.To("1.2.3.4/24"),
+						AddressPrefix:    to.Ptr("1.2.3.4/24"),
 						NextHopIPAddress: &nodePrivateIP,
-						NextHopType:      ptr.To(armnetwork.RouteNextHopTypeVirtualAppliance),
+						NextHopType:      to.Ptr(armnetwork.RouteNextHopTypeVirtualAppliance),
 					},
 				},
 			},
@@ -331,14 +330,14 @@ func TestCreateRoute(t *testing.T) {
 			go cloud.routeUpdater.run(context.Background())
 
 			initialTable := &armnetwork.RouteTable{
-				Name:     ptr.To(tt.routeTableName),
+				Name:     to.Ptr(tt.routeTableName),
 				Location: &cloud.Location,
 				Properties: &armnetwork.RouteTablePropertiesFormat{
 					Routes: tt.initialRoute,
 				},
 			}
 			updatedTable := armnetwork.RouteTable{
-				Name:     ptr.To(tt.routeTableName),
+				Name:     to.Ptr(tt.routeTableName),
 				Location: &cloud.Location,
 				Properties: &armnetwork.RouteTablePropertiesFormat{
 					Routes: tt.updatedRoute,
@@ -450,9 +449,9 @@ func TestProcessRoutes(t *testing.T) {
 				Properties: &armnetwork.RouteTablePropertiesFormat{
 					Routes: []*armnetwork.Route{
 						{
-							Name: ptr.To("name"),
+							Name: to.Ptr("name"),
 							Properties: &armnetwork.RoutePropertiesFormat{
-								AddressPrefix: ptr.To("1.2.3.4/16"),
+								AddressPrefix: to.Ptr("1.2.3.4/16"),
 							},
 						},
 					},
@@ -472,15 +471,15 @@ func TestProcessRoutes(t *testing.T) {
 				Properties: &armnetwork.RouteTablePropertiesFormat{
 					Routes: []*armnetwork.Route{
 						{
-							Name: ptr.To("name"),
+							Name: to.Ptr("name"),
 							Properties: &armnetwork.RoutePropertiesFormat{
-								AddressPrefix: ptr.To("1.2.3.4/16"),
+								AddressPrefix: to.Ptr("1.2.3.4/16"),
 							},
 						},
 						{
-							Name: ptr.To("name2"),
+							Name: to.Ptr("name2"),
 							Properties: &armnetwork.RoutePropertiesFormat{
-								AddressPrefix: ptr.To("5.6.7.8/16"),
+								AddressPrefix: to.Ptr("5.6.7.8/16"),
 							},
 						},
 					},
@@ -628,14 +627,14 @@ func TestListRoutes(t *testing.T) {
 			name:           "ListRoutes should return correct routes",
 			routeTableName: "rt1",
 			routeTable: &armnetwork.RouteTable{
-				Name:     ptr.To("rt1"),
+				Name:     to.Ptr("rt1"),
 				Location: &cloud.Location,
 				Properties: &armnetwork.RouteTablePropertiesFormat{
 					Routes: []*armnetwork.Route{
 						{
-							Name: ptr.To("node"),
+							Name: to.Ptr("node"),
 							Properties: &armnetwork.RoutePropertiesFormat{
-								AddressPrefix: ptr.To("1.2.3.4/24"),
+								AddressPrefix: to.Ptr("1.2.3.4/24"),
 							},
 						},
 					},
@@ -656,14 +655,14 @@ func TestListRoutes(t *testing.T) {
 			unmanagedNodeName: "unmanaged-node",
 			routeCIDRs:        map[string]string{"unmanaged-node": "2.2.3.4/24"},
 			routeTable: &armnetwork.RouteTable{
-				Name:     ptr.To("rt2"),
+				Name:     to.Ptr("rt2"),
 				Location: &cloud.Location,
 				Properties: &armnetwork.RouteTablePropertiesFormat{
 					Routes: []*armnetwork.Route{
 						{
-							Name: ptr.To("node"),
+							Name: to.Ptr("node"),
 							Properties: &armnetwork.RoutePropertiesFormat{
-								AddressPrefix: ptr.To("1.2.3.4/24"),
+								AddressPrefix: to.Ptr("1.2.3.4/24"),
 							},
 						},
 					},
@@ -749,11 +748,11 @@ func TestCleanupOutdatedRoutes(t *testing.T) {
 		{
 			description: "cleanupOutdatedRoutes should delete outdated non-dualstack routes when dualstack is enabled",
 			existingRoutes: []*armnetwork.Route{
-				{Name: ptr.To("aks-node1-vmss000000____xxx")},
-				{Name: ptr.To("aks-node1-vmss000000")},
+				{Name: to.Ptr("aks-node1-vmss000000____xxx")},
+				{Name: to.Ptr("aks-node1-vmss000000")},
 			},
 			expectedRoutes: []*armnetwork.Route{
-				{Name: ptr.To("aks-node1-vmss000000____xxx")},
+				{Name: to.Ptr("aks-node1-vmss000000____xxx")},
 			},
 			existingNodeNames:   utilsets.NewString("aks-node1-vmss000000"),
 			enableIPV6DualStack: true,
@@ -762,11 +761,11 @@ func TestCleanupOutdatedRoutes(t *testing.T) {
 		{
 			description: "cleanupOutdatedRoutes should delete outdated dualstack routes when dualstack is disabled",
 			existingRoutes: []*armnetwork.Route{
-				{Name: ptr.To("aks-node1-vmss000000____xxx")},
-				{Name: ptr.To("aks-node1-vmss000000")},
+				{Name: to.Ptr("aks-node1-vmss000000____xxx")},
+				{Name: to.Ptr("aks-node1-vmss000000")},
 			},
 			expectedRoutes: []*armnetwork.Route{
-				{Name: ptr.To("aks-node1-vmss000000")},
+				{Name: to.Ptr("aks-node1-vmss000000")},
 			},
 			existingNodeNames: utilsets.NewString("aks-node1-vmss000000"),
 			expectedChanged:   true,
@@ -774,12 +773,12 @@ func TestCleanupOutdatedRoutes(t *testing.T) {
 		{
 			description: "cleanupOutdatedRoutes should not delete unmanaged routes when dualstack is enabled",
 			existingRoutes: []*armnetwork.Route{
-				{Name: ptr.To("aks-node1-vmss000000____xxx")},
-				{Name: ptr.To("aks-node1-vmss000000")},
+				{Name: to.Ptr("aks-node1-vmss000000____xxx")},
+				{Name: to.Ptr("aks-node1-vmss000000")},
 			},
 			expectedRoutes: []*armnetwork.Route{
-				{Name: ptr.To("aks-node1-vmss000000____xxx")},
-				{Name: ptr.To("aks-node1-vmss000000")},
+				{Name: to.Ptr("aks-node1-vmss000000____xxx")},
+				{Name: to.Ptr("aks-node1-vmss000000")},
 			},
 			existingNodeNames:   utilsets.NewString("aks-node1-vmss000001"),
 			enableIPV6DualStack: true,
@@ -787,12 +786,12 @@ func TestCleanupOutdatedRoutes(t *testing.T) {
 		{
 			description: "cleanupOutdatedRoutes should not delete unmanaged routes when dualstack is disabled",
 			existingRoutes: []*armnetwork.Route{
-				{Name: ptr.To("aks-node1-vmss000000____xxx")},
-				{Name: ptr.To("aks-node1-vmss000000")},
+				{Name: to.Ptr("aks-node1-vmss000000____xxx")},
+				{Name: to.Ptr("aks-node1-vmss000000")},
 			},
 			expectedRoutes: []*armnetwork.Route{
-				{Name: ptr.To("aks-node1-vmss000000____xxx")},
-				{Name: ptr.To("aks-node1-vmss000000")},
+				{Name: to.Ptr("aks-node1-vmss000000____xxx")},
+				{Name: to.Ptr("aks-node1-vmss000000")},
 			},
 			existingNodeNames: utilsets.NewString("aks-node1-vmss000001"),
 		},
@@ -822,8 +821,8 @@ func TestEnsureRouteTableTagged(t *testing.T) {
 	cloud.Tags = "a=b,c=d"
 
 	expectedTags := map[string]*string{
-		"a": ptr.To("b"),
-		"c": ptr.To("d"),
+		"a": to.Ptr("b"),
+		"c": to.Ptr("d"),
 	}
 	rt := &armnetwork.RouteTable{}
 	tags, changed := cloud.ensureRouteTableTagged(rt)

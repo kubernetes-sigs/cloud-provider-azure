@@ -22,16 +22,15 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil"
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil/fixture"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
-	fnutil "sigs.k8s.io/cloud-provider-azure/pkg/util/collectionutil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/iputil"
 )
 
@@ -461,12 +460,12 @@ func TestAccessControl_AllowedRanges(t *testing.T) {
 		var (
 			ipv4         = ac.AllowedIPv4Ranges()
 			ipv6         = ac.AllowedIPv6Ranges()
-			expectedIPv4 = fnutil.Map(func(s string) netip.Prefix {
+			expectedIPv4 = lo.Map(tt.expectedIPv4, func(s string, _ int) netip.Prefix {
 				return netip.MustParsePrefix(s)
-			}, tt.expectedIPv4)
-			expectedIPv6 = fnutil.Map(func(s string) netip.Prefix {
+			})
+			expectedIPv6 = lo.Map(tt.expectedIPv6, func(s string, _ int) netip.Prefix {
 				return netip.MustParsePrefix(s)
-			}, tt.expectedIPv6)
+			})
 		)
 		if ipv4 == nil {
 			ipv4 = []netip.Prefix{}
@@ -502,8 +501,8 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 		assert.NoError(t, err)
 
 		err = ac.PatchSecurityGroup(
-			fnutil.Map(func(s string) netip.Addr { return netip.MustParseAddr(s) }, dstIPv4Addresses),
-			fnutil.Map(func(s string) netip.Addr { return netip.MustParseAddr(s) }, dstIPv6Addresses),
+			lo.Map(dstIPv4Addresses, func(s string, _ int) netip.Addr { return netip.MustParseAddr(s) }),
+			lo.Map(dstIPv6Addresses, func(s string, _ int) netip.Addr { return netip.MustParseAddr(s) }),
 		)
 		assert.NoError(t, err)
 
@@ -1161,29 +1160,29 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 		var (
 			rules = []*armnetwork.SecurityRule{
 				{
-					Name: ptr.To("test-rule-0"),
+					Name: to.Ptr("test-rule-0"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 						SourceAddressPrefixes:      to.SliceOfPtrs("src_foo", "src_bar"),
-						SourcePortRange:            ptr.To("*"),
+						SourcePortRange:            to.Ptr("*"),
 						DestinationAddressPrefixes: to.SliceOfPtrs("10.0.0.1", "10.0.0.2"),
 						DestinationPortRanges:      to.SliceOfPtrs("80", "443"),
-						Priority:                   ptr.To(int32(500)),
+						Priority:                   to.Ptr(int32(500)),
 					},
 				},
 				{
-					Name: ptr.To("test-rule-1"),
+					Name: to.Ptr("test-rule-1"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 						SourceAddressPrefixes:      to.SliceOfPtrs("src_baz", "src_quo"),
-						SourcePortRange:            ptr.To("*"),
+						SourcePortRange:            to.Ptr("*"),
 						DestinationAddressPrefixes: to.SliceOfPtrs("20.0.0.1", "20.0.0.2"),
 						DestinationPortRanges:      to.SliceOfPtrs("53"),
-						Priority:                   ptr.To(int32(501)),
+						Priority:                   to.Ptr(int32(501)),
 					},
 				},
 			}
@@ -1208,42 +1207,42 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 		var (
 			rules = []*armnetwork.SecurityRule{
 				{
-					Name: ptr.To("test-rule-0"),
+					Name: to.Ptr("test-rule-0"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 						SourceAddressPrefixes:      to.SliceOfPtrs("src_foo", "src_bar"),
-						SourcePortRange:            ptr.To("*"),
+						SourcePortRange:            to.Ptr("*"),
 						DestinationAddressPrefixes: to.SliceOfPtrs("10.0.0.1", "10.0.0.2", "192.168.0.1"),
 						DestinationPortRanges:      to.SliceOfPtrs("80", "443"),
-						Priority:                   ptr.To(int32(500)),
+						Priority:                   to.Ptr(int32(500)),
 					},
 				},
 				{
-					Name: ptr.To("test-rule-1"),
+					Name: to.Ptr("test-rule-1"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 						SourceAddressPrefixes:      to.SliceOfPtrs("src_baz", "src_quo"),
-						SourcePortRange:            ptr.To("*"),
+						SourcePortRange:            to.Ptr("*"),
 						DestinationAddressPrefixes: to.SliceOfPtrs("20.0.0.1", "192.168.0.1", "192.168.0.2", "20.0.0.2"),
 						DestinationPortRanges:      to.SliceOfPtrs("53"),
-						Priority:                   ptr.To(int32(501)),
+						Priority:                   to.Ptr(int32(501)),
 					},
 				},
 				{
-					Name: ptr.To("test-rule-2"),
+					Name: to.Ptr("test-rule-2"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolAsterisk),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 						SourceAddressPrefixes:      to.SliceOfPtrs("*"),
-						SourcePortRange:            ptr.To("*"),
+						SourcePortRange:            to.Ptr("*"),
 						DestinationAddressPrefixes: to.SliceOfPtrs("8.8.8.8"),
 						DestinationPortRanges:      to.SliceOfPtrs("5000"),
-						Priority:                   ptr.To(int32(502)),
+						Priority:                   to.Ptr(int32(502)),
 					},
 				},
 			}
@@ -1265,42 +1264,42 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 
 		testutil.ExpectEqualInJSON(t, []*armnetwork.SecurityRule{
 			{
-				Name: ptr.To("test-rule-0"),
+				Name: to.Ptr("test-rule-0"),
 				Properties: &armnetwork.SecurityRulePropertiesFormat{
 					Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
 					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 					Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 					SourceAddressPrefixes:      to.SliceOfPtrs("src_foo", "src_bar"),
-					SourcePortRange:            ptr.To("*"),
+					SourcePortRange:            to.Ptr("*"),
 					DestinationAddressPrefixes: to.SliceOfPtrs("10.0.0.1", "10.0.0.2"),
 					DestinationPortRanges:      to.SliceOfPtrs("80", "443"),
-					Priority:                   ptr.To(int32(500)),
+					Priority:                   to.Ptr(int32(500)),
 				},
 			},
 			{
-				Name: ptr.To("test-rule-1"),
+				Name: to.Ptr("test-rule-1"),
 				Properties: &armnetwork.SecurityRulePropertiesFormat{
 					Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 					Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 					SourceAddressPrefixes:      to.SliceOfPtrs("src_baz", "src_quo"),
-					SourcePortRange:            ptr.To("*"),
+					SourcePortRange:            to.Ptr("*"),
 					DestinationAddressPrefixes: to.SliceOfPtrs("20.0.0.1", "20.0.0.2"),
 					DestinationPortRanges:      to.SliceOfPtrs("53"),
-					Priority:                   ptr.To(int32(501)),
+					Priority:                   to.Ptr(int32(501)),
 				},
 			},
 			{
-				Name: ptr.To("test-rule-2"),
+				Name: to.Ptr("test-rule-2"),
 				Properties: &armnetwork.SecurityRulePropertiesFormat{
 					Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolAsterisk),
 					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 					Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 					SourceAddressPrefixes:      to.SliceOfPtrs("*"),
-					SourcePortRange:            ptr.To("*"),
+					SourcePortRange:            to.Ptr("*"),
 					DestinationAddressPrefixes: to.SliceOfPtrs("8.8.8.8"),
 					DestinationPortRanges:      to.SliceOfPtrs("5000"),
-					Priority:                   ptr.To(int32(502)),
+					Priority:                   to.Ptr(int32(502)),
 				},
 			},
 		}, outputSG.Properties.SecurityRules)
@@ -1310,55 +1309,55 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 		var (
 			rules = []*armnetwork.SecurityRule{
 				{
-					Name: ptr.To("test-rule-0"),
+					Name: to.Ptr("test-rule-0"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 						SourceAddressPrefixes:      to.SliceOfPtrs("src_foo", "src_bar"),
-						SourcePortRange:            ptr.To("*"),
+						SourcePortRange:            to.Ptr("*"),
 						DestinationAddressPrefixes: to.SliceOfPtrs("10.0.0.1", "10.0.0.2", "192.168.0.1"),
 						DestinationPortRanges:      to.SliceOfPtrs("80", "443"),
-						Priority:                   ptr.To(int32(500)),
+						Priority:                   to.Ptr(int32(500)),
 					},
 				},
 				{
-					Name: ptr.To("test-rule-1"),
+					Name: to.Ptr("test-rule-1"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 						SourceAddressPrefixes:      to.SliceOfPtrs("src_baz", "src_quo"),
-						SourcePortRange:            ptr.To("*"),
+						SourcePortRange:            to.Ptr("*"),
 						DestinationAddressPrefixes: to.SliceOfPtrs("192.168.0.1", "192.168.0.2"),
 						DestinationPortRanges:      to.SliceOfPtrs("53"),
-						Priority:                   ptr.To(int32(501)),
+						Priority:                   to.Ptr(int32(501)),
 					},
 				},
 				{
-					Name: ptr.To("test-rule-2"),
+					Name: to.Ptr("test-rule-2"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolAsterisk),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 						SourceAddressPrefixes:      to.SliceOfPtrs("*"),
-						SourcePortRange:            ptr.To("*"),
+						SourcePortRange:            to.Ptr("*"),
 						DestinationAddressPrefixes: to.SliceOfPtrs("8.8.8.8"),
 						DestinationPortRanges:      to.SliceOfPtrs("5000"),
-						Priority:                   ptr.To(int32(502)),
+						Priority:                   to.Ptr(int32(502)),
 					},
 				},
 				{
-					Name: ptr.To("test-rule-3"),
+					Name: to.Ptr("test-rule-3"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                 to.Ptr(armnetwork.SecurityRuleProtocolAsterisk),
 						Access:                   to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 						SourceAddressPrefixes:    to.SliceOfPtrs("*"),
-						SourcePortRange:          ptr.To("*"),
-						DestinationAddressPrefix: ptr.To("192.168.0.1"),
+						SourcePortRange:          to.Ptr("*"),
+						DestinationAddressPrefix: to.Ptr("192.168.0.1"),
 						DestinationPortRanges:    to.SliceOfPtrs("8000"),
-						Priority:                 ptr.To(int32(2000)),
+						Priority:                 to.Ptr(int32(2000)),
 					},
 				},
 			}
@@ -1380,29 +1379,29 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 		assert.True(t, updated)
 		testutil.ExpectEqualInJSON(t, []*armnetwork.SecurityRule{
 			{
-				Name: ptr.To("test-rule-0"),
+				Name: to.Ptr("test-rule-0"),
 				Properties: &armnetwork.SecurityRulePropertiesFormat{
 					Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
 					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 					Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 					SourceAddressPrefixes:      to.SliceOfPtrs("src_foo", "src_bar"),
-					SourcePortRange:            ptr.To("*"),
+					SourcePortRange:            to.Ptr("*"),
 					DestinationAddressPrefixes: to.SliceOfPtrs("10.0.0.1", "10.0.0.2"),
 					DestinationPortRanges:      to.SliceOfPtrs("80", "443"),
-					Priority:                   ptr.To(int32(500)),
+					Priority:                   to.Ptr(int32(500)),
 				},
 			},
 			{
-				Name: ptr.To("test-rule-2"),
+				Name: to.Ptr("test-rule-2"),
 				Properties: &armnetwork.SecurityRulePropertiesFormat{
 					Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolAsterisk),
 					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 					Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 					SourceAddressPrefixes:      to.SliceOfPtrs("*"),
-					SourcePortRange:            ptr.To("*"),
+					SourcePortRange:            to.Ptr("*"),
 					DestinationAddressPrefixes: to.SliceOfPtrs("8.8.8.8"),
 					DestinationPortRanges:      to.SliceOfPtrs("5000"),
-					Priority:                   ptr.To(int32(502)),
+					Priority:                   to.Ptr(int32(502)),
 				},
 			},
 		}, outputSG.Properties.SecurityRules)
@@ -1412,42 +1411,42 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 		var (
 			rules = []*armnetwork.SecurityRule{
 				{
-					Name: ptr.To("test-rule-0"),
+					Name: to.Ptr("test-rule-0"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 						SourceAddressPrefixes:      to.SliceOfPtrs("src_foo", "src_bar"),
-						SourcePortRange:            ptr.To("*"),
+						SourcePortRange:            to.Ptr("*"),
 						DestinationAddressPrefixes: to.SliceOfPtrs("10.0.0.1", "10.0.0.2", "192.168.0.1"),
 						DestinationPortRanges:      to.SliceOfPtrs("80", "443"),
-						Priority:                   ptr.To(int32(500)),
+						Priority:                   to.Ptr(int32(500)),
 					},
 				},
 				{
-					Name: ptr.To("test-rule-1"),
+					Name: to.Ptr("test-rule-1"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 						SourceAddressPrefixes:      to.SliceOfPtrs("src_baz", "src_quo"),
-						SourcePortRange:            ptr.To("*"),
+						SourcePortRange:            to.Ptr("*"),
 						DestinationAddressPrefixes: to.SliceOfPtrs("20.0.0.1", "192.168.0.1", "192.168.0.2", "20.0.0.2"),
 						DestinationPortRanges:      to.SliceOfPtrs("53", "54", "55", "56"),
-						Priority:                   ptr.To(int32(501)),
+						Priority:                   to.Ptr(int32(501)),
 					},
 				},
 				{
-					Name: ptr.To("test-rule-2"),
+					Name: to.Ptr("test-rule-2"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolAsterisk),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 						SourceAddressPrefixes:      to.SliceOfPtrs("*"),
-						SourcePortRange:            ptr.To("*"),
+						SourcePortRange:            to.Ptr("*"),
 						DestinationAddressPrefixes: to.SliceOfPtrs("8.8.8.8"),
 						DestinationPortRanges:      to.SliceOfPtrs("5000"),
-						Priority:                   ptr.To(int32(502)),
+						Priority:                   to.Ptr(int32(502)),
 					},
 				},
 			}
@@ -1471,55 +1470,55 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 
 		testutil.ExpectEqualInJSON(t, []*armnetwork.SecurityRule{
 			{
-				Name: ptr.To("test-rule-0"),
+				Name: to.Ptr("test-rule-0"),
 				Properties: &armnetwork.SecurityRulePropertiesFormat{
 					Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
 					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 					Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 					SourceAddressPrefixes:      to.SliceOfPtrs("src_foo", "src_bar"),
-					SourcePortRange:            ptr.To("*"),
+					SourcePortRange:            to.Ptr("*"),
 					DestinationAddressPrefixes: to.SliceOfPtrs("10.0.0.1", "10.0.0.2"),
 					DestinationPortRanges:      to.SliceOfPtrs("80", "443"),
-					Priority:                   ptr.To(int32(500)),
+					Priority:                   to.Ptr(int32(500)),
 				},
 			},
 			{
-				Name: ptr.To("test-rule-1"),
+				Name: to.Ptr("test-rule-1"),
 				Properties: &armnetwork.SecurityRulePropertiesFormat{
 					Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 					Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 					SourceAddressPrefixes:      to.SliceOfPtrs("src_baz", "src_quo"),
-					SourcePortRange:            ptr.To("*"),
+					SourcePortRange:            to.Ptr("*"),
 					DestinationAddressPrefixes: to.SliceOfPtrs("20.0.0.1", "20.0.0.2"),
 					DestinationPortRanges:      to.SliceOfPtrs("53", "54", "55", "56"),
-					Priority:                   ptr.To(int32(501)),
+					Priority:                   to.Ptr(int32(501)),
 				},
 			},
 			{
-				Name: ptr.To("test-rule-2"),
+				Name: to.Ptr("test-rule-2"),
 				Properties: &armnetwork.SecurityRulePropertiesFormat{
 					Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolAsterisk),
 					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 					Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 					SourceAddressPrefixes:      to.SliceOfPtrs("*"),
-					SourcePortRange:            ptr.To("*"),
+					SourcePortRange:            to.Ptr("*"),
 					DestinationAddressPrefixes: to.SliceOfPtrs("8.8.8.8"),
 					DestinationPortRanges:      to.SliceOfPtrs("5000"),
-					Priority:                   ptr.To(int32(502)),
+					Priority:                   to.Ptr(int32(502)),
 				},
 			},
 			{
-				Name: ptr.To("k8s-azure-lb_allow_IPv4_648b18e18a92d1a4b415033da37c79a5"),
+				Name: to.Ptr("k8s-azure-lb_allow_IPv4_648b18e18a92d1a4b415033da37c79a5"),
 				Properties: &armnetwork.SecurityRulePropertiesFormat{
 					Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
 					Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 					SourceAddressPrefixes:      to.SliceOfPtrs("src_baz", "src_quo"),
-					SourcePortRange:            ptr.To("*"),
+					SourcePortRange:            to.Ptr("*"),
 					DestinationAddressPrefixes: to.SliceOfPtrs("192.168.0.1", "192.168.0.2"),
 					DestinationPortRanges:      to.SliceOfPtrs("53", "56"), // 53 and 56 are retained
-					Priority:                   ptr.To(int32(503)),
+					Priority:                   to.Ptr(int32(503)),
 				},
 			},
 		}, outputSG.Properties.SecurityRules)

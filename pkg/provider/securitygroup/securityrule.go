@@ -25,9 +25,9 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	"github.com/samber/lo"
 	v1 "k8s.io/api/core/v1"
 
-	fnutil "sigs.k8s.io/cloud-provider-azure/pkg/util/collectionutil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/iputil"
 )
 
@@ -40,7 +40,7 @@ func GenerateAllowSecurityRuleName(
 ) string {
 	var ruleID string
 	{
-		dstPortRanges := fnutil.Map(func(p int32) string { return strconv.FormatInt(int64(p), 10) }, dstPorts)
+		dstPortRanges := lo.Map(dstPorts, func(p int32, _ int) string { return strconv.FormatInt(int64(p), 10) })
 		// Generate rule ID from protocol, source prefixes and destination port ranges.
 		sort.Strings(srcPrefixes)
 		sort.Strings(dstPortRanges)
@@ -82,7 +82,7 @@ func NormalizeSecurityRuleAddressPrefixes(vs []string) []string {
 
 // NormalizeDestinationPortRanges normalizes the given destination port ranges.
 func NormalizeDestinationPortRanges(dstPorts []int32) []string {
-	rv := fnutil.Map(func(p int32) string { return strconv.FormatInt(int64(p), 10) }, dstPorts)
+	rv := lo.Map(dstPorts, func(p int32, _ int) string { return strconv.FormatInt(int64(p), 10) })
 	sort.Strings(rv)
 	return rv
 }
@@ -93,7 +93,7 @@ func ListSourcePrefixes(r *armnetwork.SecurityRule) []string {
 		rv = append(rv, *r.Properties.SourceAddressPrefix)
 	}
 	if r.Properties.SourceAddressPrefixes != nil {
-		rv = append(rv, fnutil.Map(func(data *string) string { return *data }, r.Properties.SourceAddressPrefixes)...)
+		rv = append(rv, lo.Map(r.Properties.SourceAddressPrefixes, func(data *string, _ int) string { return *data })...)
 	}
 	return rv
 }
@@ -104,7 +104,7 @@ func ListDestinationPrefixes(r *armnetwork.SecurityRule) []string {
 		rv = append(rv, *r.Properties.DestinationAddressPrefix)
 	}
 	if r.Properties.DestinationAddressPrefixes != nil {
-		rv = append(rv, fnutil.Map(func(key *string) string { return *key }, r.Properties.DestinationAddressPrefixes)...)
+		rv = append(rv, lo.Map(r.Properties.DestinationAddressPrefixes, func(key *string, _ int) string { return *key })...)
 	}
 	return rv
 }

@@ -30,7 +30,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/utils/ptr"
 )
 
 // CreateContainerRegistry creates a test acr
@@ -43,8 +42,8 @@ func (tc *AzureTestClient) CreateContainerRegistry() (acr.Registry, error) {
 			Name: to.Ptr(acr.SKUNameStandard),
 			Tier: to.Ptr(acr.SKUTierStandard),
 		},
-		Name:     ptr.To(acrName),
-		Location: ptr.To(location),
+		Name:     to.Ptr(acrName),
+		Location: to.Ptr(location),
 	}
 
 	Logf("Creating ACR %s in resource group %s.", acrName, rgName)
@@ -137,8 +136,8 @@ func (tc *AzureTestClient) PushImageToACR(registryName, image string) (string, e
 	tag := "1.25"
 	err := acrClient.ImportImage(context.Background(), rgName, registryName, acr.ImportImageParameters{
 		Source: &acr.ImportSource{
-			RegistryURI: ptr.To("mcr.microsoft.com"),
-			SourceImage: ptr.To("mirror/docker/library/" + image + ":" + tag),
+			RegistryURI: to.Ptr("mcr.microsoft.com"),
+			SourceImage: to.Ptr("mirror/docker/library/" + image + ":" + tag),
 		},
 		TargetTags: []*string{
 			to.Ptr(image + ":" + tag),

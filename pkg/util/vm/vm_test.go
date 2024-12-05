@@ -19,8 +19,7 @@ package vm
 import (
 	"testing"
 
-	"k8s.io/utils/ptr"
-
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/stretchr/testify/assert"
 )
@@ -36,15 +35,15 @@ func TestGetVMPowerState(t *testing.T) {
 		{
 			name: "should return power state when there is power state status",
 			vmStatuses: &[]compute.InstanceViewStatus{
-				{Code: ptr.To("foo")},
-				{Code: ptr.To("PowerState/Running")},
+				{Code: to.Ptr("foo")},
+				{Code: to.Ptr("PowerState/Running")},
 			},
 			expected: "Running",
 		},
 		{
 			name: "should return unknown when there is no power state status",
 			vmStatuses: &[]compute.InstanceViewStatus{
-				{Code: ptr.To("foo")},
+				{Code: to.Ptr("foo")},
 			},
 			expected: "unknown",
 		},

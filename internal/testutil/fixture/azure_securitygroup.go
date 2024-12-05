@@ -23,12 +23,11 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
-	"k8s.io/utils/ptr"
+	"github.com/samber/lo"
 
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
-	fnutil "sigs.k8s.io/cloud-provider-azure/pkg/util/collectionutil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/iputil"
 )
 
@@ -58,9 +57,9 @@ func (f *AzureFixture) NNoiseSecurityRules(nRules int) []*armnetwork.SecurityRul
 	initPriority := int32(100)
 	for i := 0; i < nRules; i++ {
 		rule := &armnetwork.SecurityRule{
-			Name: ptr.To(fmt.Sprintf("test-security-rule_%d", i)),
+			Name: to.Ptr(fmt.Sprintf("test-security-rule_%d", i)),
 			Properties: &armnetwork.SecurityRulePropertiesFormat{
-				Priority:  ptr.To(initPriority),
+				Priority:  to.Ptr(initPriority),
 				Protocol:  protocolByID(i),
 				Direction: to.Ptr(armnetwork.SecurityRuleDirectionInbound),
 				Access:    to.Ptr(armnetwork.SecurityRuleAccessAllow),
@@ -68,7 +67,7 @@ func (f *AzureFixture) NNoiseSecurityRules(nRules int) []*armnetwork.SecurityRul
 					fmt.Sprintf("140.0.0.%d", i), // NOTE: keep the source IP / destination IP unique to LB ips.
 					fmt.Sprintf("130.0.50.%d", i),
 				),
-				SourcePortRange: ptr.To("*"),
+				SourcePortRange: to.Ptr("*"),
 				DestinationPortRanges: to.SliceOfPtrs(
 					fmt.Sprintf("4000%d", i),
 					fmt.Sprintf("5000%d", i),
@@ -83,11 +82,11 @@ func (f *AzureFixture) NNoiseSecurityRules(nRules int) []*armnetwork.SecurityRul
 				fmt.Sprintf("200.0.50.%d", i),
 			)
 		case 1:
-			rule.Properties.DestinationAddressPrefix = ptr.To(fmt.Sprintf("222.111.0.%d", i))
+			rule.Properties.DestinationAddressPrefix = to.Ptr(fmt.Sprintf("222.111.0.%d", i))
 		case 2:
 			rule.Properties.DestinationApplicationSecurityGroups = []*armnetwork.ApplicationSecurityGroup{
 				{
-					ID: ptr.To(fmt.Sprintf("/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/the-rg/providers/Microsoft.Network/applicationSecurityGroups/the-asg-%d", i)),
+					ID: to.Ptr(fmt.Sprintf("/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/the-rg/providers/Microsoft.Network/applicationSecurityGroups/the-asg-%d", i)),
 				},
 			}
 		}
@@ -106,7 +105,7 @@ func (f *AzureFixture) NNoiseSecurityRules(nRules int) []*armnetwork.SecurityRul
 func (f *AzureFixture) SecurityGroup() *AzureSecurityGroupFixture {
 	return &AzureSecurityGroupFixture{
 		sg: &armnetwork.SecurityGroup{
-			Name: ptr.To("nsg"),
+			Name: to.Ptr("nsg"),
 			Properties: &armnetwork.SecurityGroupPropertiesFormat{
 				SecurityRules: []*armnetwork.SecurityRule{},
 			},
@@ -120,25 +119,25 @@ func (f *AzureFixture) AllowSecurityRule(
 	srcPrefixes []string,
 	dstPorts []int32,
 ) *AzureAllowSecurityRuleFixture {
-	dstPortRanges := fnutil.Map(func(p int32) string { return strconv.FormatInt(int64(p), 10) }, dstPorts)
+	dstPortRanges := lo.Map(dstPorts, func(p int32, _ int) string { return strconv.FormatInt(int64(p), 10) })
 	sort.Strings(dstPortRanges)
 
 	rv := &AzureAllowSecurityRuleFixture{
 		rule: &armnetwork.SecurityRule{
-			Name: ptr.To(securitygroup.GenerateAllowSecurityRuleName(protocol, ipFamily, srcPrefixes, dstPorts)),
+			Name: to.Ptr(securitygroup.GenerateAllowSecurityRuleName(protocol, ipFamily, srcPrefixes, dstPorts)),
 			Properties: &armnetwork.SecurityRulePropertiesFormat{
 				Protocol:              to.Ptr(protocol),
 				Access:                to.Ptr(armnetwork.SecurityRuleAccessAllow),
 				Direction:             to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-				SourcePortRange:       ptr.To("*"),
+				SourcePortRange:       to.Ptr("*"),
 				DestinationPortRanges: to.SliceOfPtrs(dstPortRanges...),
-				Priority:              ptr.To(int32(consts.LoadBalancerMinimumPriority)),
+				Priority:              to.Ptr(int32(consts.LoadBalancerMinimumPriority)),
 			},
 		},
 	}
 
 	if len(srcPrefixes) == 1 {
-		rv.rule.Properties.SourceAddressPrefix = ptr.To(srcPrefixes[0])
+		rv.rule.Properties.SourceAddressPrefix = to.Ptr(srcPrefixes[0])
 	} else {
 		rv.rule.Properties.SourceAddressPrefixes = to.SliceOfPtrs(srcPrefixes...)
 	}
@@ -149,15 +148,15 @@ func (f *AzureFixture) AllowSecurityRule(
 func (f *AzureFixture) DenyAllSecurityRule(ipFamily iputil.Family) *AzureDenyAllSecurityRuleFixture {
 	return &AzureDenyAllSecurityRuleFixture{
 		rule: &armnetwork.SecurityRule{
-			Name: ptr.To(securitygroup.GenerateDenyAllSecurityRuleName(ipFamily)),
+			Name: to.Ptr(securitygroup.GenerateDenyAllSecurityRuleName(ipFamily)),
 			Properties: &armnetwork.SecurityRulePropertiesFormat{
 				Protocol:             to.Ptr(armnetwork.SecurityRuleProtocolAsterisk),
 				Access:               to.Ptr(armnetwork.SecurityRuleAccessDeny),
 				Direction:            to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-				SourcePortRange:      ptr.To("*"),
-				SourceAddressPrefix:  ptr.To("*"),
-				DestinationPortRange: ptr.To("*"),
-				Priority:             ptr.To(int32(consts.LoadBalancerMaximumPriority)),
+				SourcePortRange:      to.Ptr("*"),
+				SourceAddressPrefix:  to.Ptr("*"),
+				DestinationPortRange: to.Ptr("*"),
+				Priority:             to.Ptr(int32(consts.LoadBalancerMaximumPriority)),
 			},
 		},
 	}
@@ -187,13 +186,13 @@ type AzureAllowSecurityRuleFixture struct {
 }
 
 func (f *AzureAllowSecurityRuleFixture) WithPriority(p int32) *AzureAllowSecurityRuleFixture {
-	f.rule.Properties.Priority = ptr.To(p)
+	f.rule.Properties.Priority = to.Ptr(p)
 	return f
 }
 
 func (f *AzureAllowSecurityRuleFixture) WithDestination(prefixes ...string) *AzureAllowSecurityRuleFixture {
 	if len(prefixes) == 1 {
-		f.rule.Properties.DestinationAddressPrefix = ptr.To(prefixes[0])
+		f.rule.Properties.DestinationAddressPrefix = to.Ptr(prefixes[0])
 		f.rule.Properties.DestinationAddressPrefixes = nil
 	} else {
 		f.rule.Properties.DestinationAddressPrefix = nil
@@ -213,13 +212,13 @@ type AzureDenyAllSecurityRuleFixture struct {
 }
 
 func (f *AzureDenyAllSecurityRuleFixture) WithPriority(p int32) *AzureDenyAllSecurityRuleFixture {
-	f.rule.Properties.Priority = ptr.To(p)
+	f.rule.Properties.Priority = to.Ptr(p)
 	return f
 }
 
 func (f *AzureDenyAllSecurityRuleFixture) WithDestination(prefixes ...string) *AzureDenyAllSecurityRuleFixture {
 	if len(prefixes) == 1 {
-		f.rule.Properties.DestinationAddressPrefix = ptr.To(prefixes[0])
+		f.rule.Properties.DestinationAddressPrefix = to.Ptr(prefixes[0])
 		f.rule.Properties.DestinationAddressPrefixes = nil
 	} else {
 		f.rule.Properties.DestinationAddressPrefix = nil

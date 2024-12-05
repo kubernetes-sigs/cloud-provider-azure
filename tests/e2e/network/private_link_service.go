@@ -27,13 +27,12 @@ import (
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
+	"github.com/samber/lo"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
@@ -153,7 +152,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 	It("should support service annotation 'service.beta.kubernetes.io/azure-pls-resource-group'", func() {
 		By("creating a test resource group")
 		rg, cleanup := utils.CreateTestResourceGroup(tc)
-		defer cleanup(ptr.Deref(rg.Name, ""))
+		defer cleanup(lo.FromPtrOr(rg.Name, ""))
 
 		By("creating a test pls specifying the test resource group")
 		plsName := "testpls"
@@ -161,7 +160,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 			consts.ServiceAnnotationLoadBalancerInternal: "true",
 			consts.ServiceAnnotationPLSCreation:          "true",
 			consts.ServiceAnnotationPLSName:              plsName,
-			consts.ServiceAnnotationPLSResourceGroup:     ptr.Deref(rg.Name, ""),
+			consts.ServiceAnnotationPLSResourceGroup:     lo.FromPtrOr(rg.Name, ""),
 		}
 
 		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
@@ -175,20 +174,20 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		utils.Logf("Get Internal IP: %s", ip)
 
 		// get pls from azure client
-		pls := getPrivateLinkServiceFromIP(tc, ip, ptr.Deref(rg.Name, ""), "", plsName)
+		pls := getPrivateLinkServiceFromIP(tc, ip, lo.FromPtrOr(rg.Name, ""), "", plsName)
 		Expect(*pls.Name).To(Equal(plsName))
 	})
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-pls-ip-configuration-subnet'", func() {
 		subnetName := "pls-subnet"
 		subnet, isNew := createNewSubnet(tc, subnetName)
-		Expect(ptr.Deref(subnet.Name, "")).To(Equal(subnetName))
+		Expect(lo.FromPtrOr(subnet.Name, "")).To(Equal(subnetName))
 		if isNew {
 			defer func() {
 				utils.Logf("cleaning up test subnet %s", subnetName)
 				vNet, err := tc.GetClusterVirtualNetwork()
 				Expect(err).NotTo(HaveOccurred())
-				err = tc.DeleteSubnet(ptr.Deref(vNet.Name, ""), subnetName)
+				err = tc.DeleteSubnet(lo.FromPtrOr(vNet.Name, ""), subnetName)
 				Expect(err).NotTo(HaveOccurred())
 			}()
 		}

@@ -25,15 +25,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	privatedns "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
 	"github.com/Azure/go-autorest/autorest/date"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
-
 	"go.uber.org/mock/gomock"
-
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatezoneclient/mock_privatezoneclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient/mock_virtualnetworklinkclient"
@@ -349,7 +348,7 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 			testCase: "account options CreatePrivateEndpoint is true and no private endpoint exists",
 			testAccountOptions: &AccountOptions{
 				ResourceGroup:         "rg",
-				CreatePrivateEndpoint: ptr.To(true),
+				CreatePrivateEndpoint: to.Ptr(true),
 			},
 			testResourceGroups: []storage.Account{{Name: &name, Kind: "kind", Location: &location, Sku: sku, AccountProperties: &storage.AccountProperties{}}},
 			expectedResult:     []accountWithLocation{},
@@ -402,9 +401,9 @@ func TestEnsureStorageAccount(t *testing.T) {
 	}
 	testStorageAccounts :=
 		[]storage.Account{
-			{Name: ptr.To("testStorageAccount"), Kind: "kind", Location: &location, Sku: sku, AccountProperties: &storage.AccountProperties{NetworkRuleSet: &storage.NetworkRuleSet{}}},
-			{Name: ptr.To("wantedAccount"), Kind: "kind", Location: &location, Sku: sku, AccountProperties: &storage.AccountProperties{NetworkRuleSet: &storage.NetworkRuleSet{}}},
-			{Name: ptr.To("otherAccount"), Kind: "kind", Location: &location, Sku: sku, AccountProperties: &storage.AccountProperties{NetworkRuleSet: &storage.NetworkRuleSet{}}},
+			{Name: to.Ptr("testStorageAccount"), Kind: "kind", Location: &location, Sku: sku, AccountProperties: &storage.AccountProperties{NetworkRuleSet: &storage.NetworkRuleSet{}}},
+			{Name: to.Ptr("wantedAccount"), Kind: "kind", Location: &location, Sku: sku, AccountProperties: &storage.AccountProperties{NetworkRuleSet: &storage.NetworkRuleSet{}}},
+			{Name: to.Ptr("otherAccount"), Kind: "kind", Location: &location, Sku: sku, AccountProperties: &storage.AccountProperties{NetworkRuleSet: &storage.NetworkRuleSet{}}},
 		}
 
 	value := "foo bar"
@@ -436,13 +435,13 @@ func TestEnsureStorageAccount(t *testing.T) {
 		{
 			name:                            "[Success] EnsureStorageAccount with createPrivateEndpoint and storagetype blob",
 			createAccount:                   true,
-			createPrivateEndpoint:           ptr.To(true),
+			createPrivateEndpoint:           to.Ptr(true),
 			mockStorageAccountsClient:       true,
 			setAccountOptions:               true,
 			pickRandomMatchingAccount:       true,
 			storageType:                     StorageTypeBlob,
-			requireInfrastructureEncryption: ptr.To(true),
-			keyVaultURL:                     ptr.To("keyVaultURL"),
+			requireInfrastructureEncryption: to.Ptr(true),
+			keyVaultURL:                     to.Ptr("keyVaultURL"),
 			resourceGroup:                   "rg",
 			accessTier:                      "AccessTierHot",
 			accountName:                     "",
@@ -451,11 +450,11 @@ func TestEnsureStorageAccount(t *testing.T) {
 		{
 			name:                            "[Success] EnsureStorageAccount with createPrivateEndpoint",
 			createAccount:                   true,
-			createPrivateEndpoint:           ptr.To(true),
+			createPrivateEndpoint:           to.Ptr(true),
 			mockStorageAccountsClient:       true,
 			setAccountOptions:               true,
-			requireInfrastructureEncryption: ptr.To(true),
-			keyVaultURL:                     ptr.To("keyVaultURL"),
+			requireInfrastructureEncryption: to.Ptr(true),
+			keyVaultURL:                     to.Ptr("keyVaultURL"),
 			resourceGroup:                   "rg",
 			accessTier:                      "AccessTierHot",
 			accountName:                     "",
@@ -465,7 +464,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 			name:                            "[Success] EnsureStorageAccount returns with source account",
 			mockStorageAccountsClient:       true,
 			setAccountOptions:               true,
-			requireInfrastructureEncryption: ptr.To(true),
+			requireInfrastructureEncryption: to.Ptr(true),
 			resourceGroup:                   "rg",
 			sourceAccountName:               "wantedAccount",
 			accountName:                     "wantedAccount",
@@ -474,7 +473,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 		{
 			name:                      "[Failed] EnsureStorageAccount with createPrivateEndpoint: get storage key failed",
 			createAccount:             true,
-			createPrivateEndpoint:     ptr.To(true),
+			createPrivateEndpoint:     to.Ptr(true),
 			SubnetPropertiesFormatNil: true,
 			mockStorageAccountsClient: true,
 			setAccountOptions:         true,
@@ -516,7 +515,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 			cloud.StorageAccountClient = mockStorageAccountsClient
 		}
 
-		if ptr.Deref(test.createPrivateEndpoint, false) {
+		if lo.FromPtrOr(test.createPrivateEndpoint, false) {
 			mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), gomock.Any(), gomock.Any()).Return(testStorageAccounts, nil).AnyTimes()
 			mockStorageAccountsClient.EXPECT().Create(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 			mockStorageAccountsClient.EXPECT().GetProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(testStorageAccounts[0], nil).AnyTimes()
@@ -566,7 +565,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 				SubscriptionID:            test.subscriptionID,
 				AccessTier:                test.accessTier,
 				StorageType:               test.storageType,
-				EnableBlobVersioning:      ptr.To(true),
+				EnableBlobVersioning:      to.Ptr(true),
 				SoftDeleteBlobs:           7,
 				SoftDeleteContainers:      7,
 				PickRandomMatchingAccount: test.pickRandomMatchingAccount,
@@ -721,13 +720,13 @@ func TestAddStorageAccountTags(t *testing.T) {
 		{
 			name:        "tags update",
 			account:     "account",
-			tags:        map[string]*string{"key": ptr.To("value")},
+			tags:        map[string]*string{"key": to.Ptr("value")},
 			expectedErr: nil,
 		},
 		{
 			name:           "tags update in parallel",
 			account:        "account",
-			tags:           map[string]*string{"key": ptr.To("value")},
+			tags:           map[string]*string{"key": to.Ptr("value")},
 			parallelThread: 10,
 			expectedErr:    nil,
 		},
@@ -811,7 +810,7 @@ func TestRemoveStorageAccountTags(t *testing.T) {
 	for _, test := range tests {
 		mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
 		cloud.StorageAccountClient = mockStorageAccountsClient
-		mockStorageAccountsClient.EXPECT().GetProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storage.Account{Tags: map[string]*string{"key": ptr.To("value")}}, nil).AnyTimes()
+		mockStorageAccountsClient.EXPECT().GetProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storage.Account{Tags: map[string]*string{"key": to.Ptr("value")}}, nil).AnyTimes()
 
 		parallelThread := 1
 		if test.parallelThread > 1 {
@@ -853,7 +852,7 @@ func TestIsPrivateEndpointAsExpected(t *testing.T) {
 				},
 			},
 			accountOptions: &AccountOptions{
-				CreatePrivateEndpoint: ptr.To(true),
+				CreatePrivateEndpoint: to.Ptr(true),
 			},
 			expectedResult: true,
 		},
@@ -864,7 +863,7 @@ func TestIsPrivateEndpointAsExpected(t *testing.T) {
 				},
 			},
 			accountOptions: &AccountOptions{
-				CreatePrivateEndpoint: ptr.To(false),
+				CreatePrivateEndpoint: to.Ptr(false),
 			},
 			expectedResult: true,
 		},
@@ -875,7 +874,7 @@ func TestIsPrivateEndpointAsExpected(t *testing.T) {
 				},
 			},
 			accountOptions: &AccountOptions{
-				CreatePrivateEndpoint: ptr.To(false),
+				CreatePrivateEndpoint: to.Ptr(false),
 			},
 			expectedResult: false,
 		},
@@ -897,7 +896,7 @@ func TestIsPrivateEndpointAsExpected(t *testing.T) {
 				},
 			},
 			accountOptions: &AccountOptions{
-				CreatePrivateEndpoint: ptr.To(true),
+				CreatePrivateEndpoint: to.Ptr(true),
 			},
 			expectedResult: false,
 		},
@@ -936,7 +935,7 @@ func TestIsTagsEqual(t *testing.T) {
 			desc: "identitical tags",
 			account: storage.Account{
 				Tags: map[string]*string{
-					"key":  ptr.To("value"),
+					"key":  to.Ptr("value"),
 					"key2": nil,
 				},
 			},
@@ -952,8 +951,8 @@ func TestIsTagsEqual(t *testing.T) {
 			desc: "identitical tags",
 			account: storage.Account{
 				Tags: map[string]*string{
-					"key":  ptr.To("value"),
-					"key2": ptr.To("value2"),
+					"key":  to.Ptr("value"),
+					"key2": to.Ptr("value2"),
 				},
 			},
 			accountOptions: &AccountOptions{
@@ -968,7 +967,7 @@ func TestIsTagsEqual(t *testing.T) {
 			desc: "non-identitical tags while MatchTags is false",
 			account: storage.Account{
 				Tags: map[string]*string{
-					"key": ptr.To("value2"),
+					"key": to.Ptr("value2"),
 				},
 			},
 			accountOptions: &AccountOptions{
@@ -983,7 +982,7 @@ func TestIsTagsEqual(t *testing.T) {
 			desc: "non-identitical tags",
 			account: storage.Account{
 				Tags: map[string]*string{
-					"key": ptr.To("value2"),
+					"key": to.Ptr("value2"),
 				},
 			},
 			accountOptions: &AccountOptions{
@@ -998,7 +997,7 @@ func TestIsTagsEqual(t *testing.T) {
 			desc: "non-identitical tags with different keys",
 			account: storage.Account{
 				Tags: map[string]*string{
-					"key1": ptr.To("value2"),
+					"key1": to.Ptr("value2"),
 				},
 			},
 			accountOptions: &AccountOptions{
@@ -1039,7 +1038,7 @@ func TestIsHnsPropertyEqual(t *testing.T) {
 		{
 			account: storage.Account{
 				AccountProperties: &storage.AccountProperties{
-					IsHnsEnabled: ptr.To(true),
+					IsHnsEnabled: to.Ptr(true),
 				},
 			},
 			accountOptions: &AccountOptions{},
@@ -1050,18 +1049,18 @@ func TestIsHnsPropertyEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				IsHnsEnabled: ptr.To(false),
+				IsHnsEnabled: to.Ptr(false),
 			},
 			expectedResult: true,
 		},
 		{
 			account: storage.Account{
 				AccountProperties: &storage.AccountProperties{
-					IsHnsEnabled: ptr.To(true),
+					IsHnsEnabled: to.Ptr(true),
 				},
 			},
 			accountOptions: &AccountOptions{
-				IsHnsEnabled: ptr.To(true),
+				IsHnsEnabled: to.Ptr(true),
 			},
 			expectedResult: true,
 		},
@@ -1070,18 +1069,18 @@ func TestIsHnsPropertyEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				IsHnsEnabled: ptr.To(true),
+				IsHnsEnabled: to.Ptr(true),
 			},
 			expectedResult: false,
 		},
 		{
 			account: storage.Account{
 				AccountProperties: &storage.AccountProperties{
-					IsHnsEnabled: ptr.To(true),
+					IsHnsEnabled: to.Ptr(true),
 				},
 			},
 			accountOptions: &AccountOptions{
-				IsHnsEnabled: ptr.To(false),
+				IsHnsEnabled: to.Ptr(false),
 			},
 			expectedResult: false,
 		},
@@ -1102,7 +1101,7 @@ func TestIsEnableNfsV3PropertyEqual(t *testing.T) {
 		{
 			account: storage.Account{
 				AccountProperties: &storage.AccountProperties{
-					EnableNfsV3: ptr.To(true),
+					EnableNfsV3: to.Ptr(true),
 				},
 			},
 			accountOptions: &AccountOptions{},
@@ -1113,18 +1112,18 @@ func TestIsEnableNfsV3PropertyEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				EnableNfsV3: ptr.To(false),
+				EnableNfsV3: to.Ptr(false),
 			},
 			expectedResult: true,
 		},
 		{
 			account: storage.Account{
 				AccountProperties: &storage.AccountProperties{
-					EnableNfsV3: ptr.To(true),
+					EnableNfsV3: to.Ptr(true),
 				},
 			},
 			accountOptions: &AccountOptions{
-				EnableNfsV3: ptr.To(true),
+				EnableNfsV3: to.Ptr(true),
 			},
 			expectedResult: true,
 		},
@@ -1133,18 +1132,18 @@ func TestIsEnableNfsV3PropertyEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				EnableNfsV3: ptr.To(true),
+				EnableNfsV3: to.Ptr(true),
 			},
 			expectedResult: false,
 		},
 		{
 			account: storage.Account{
 				AccountProperties: &storage.AccountProperties{
-					EnableNfsV3: ptr.To(true),
+					EnableNfsV3: to.Ptr(true),
 				},
 			},
 			accountOptions: &AccountOptions{
-				EnableNfsV3: ptr.To(false),
+				EnableNfsV3: to.Ptr(false),
 			},
 			expectedResult: false,
 		},
@@ -1165,7 +1164,7 @@ func TestIsEnableHTTPSTrafficOnly(t *testing.T) {
 		{
 			account: storage.Account{
 				AccountProperties: &storage.AccountProperties{
-					EnableHTTPSTrafficOnly: ptr.To(true),
+					EnableHTTPSTrafficOnly: to.Ptr(true),
 				},
 			},
 			accountOptions: &AccountOptions{},
@@ -1183,7 +1182,7 @@ func TestIsEnableHTTPSTrafficOnly(t *testing.T) {
 		{
 			account: storage.Account{
 				AccountProperties: &storage.AccountProperties{
-					EnableHTTPSTrafficOnly: ptr.To(true),
+					EnableHTTPSTrafficOnly: to.Ptr(true),
 				},
 			},
 			accountOptions: &AccountOptions{
@@ -1203,7 +1202,7 @@ func TestIsEnableHTTPSTrafficOnly(t *testing.T) {
 		{
 			account: storage.Account{
 				AccountProperties: &storage.AccountProperties{
-					EnableHTTPSTrafficOnly: ptr.To(true),
+					EnableHTTPSTrafficOnly: to.Ptr(true),
 				},
 			},
 			accountOptions: &AccountOptions{
@@ -1228,7 +1227,7 @@ func TestIsAllowBlobPublicAccessEqual(t *testing.T) {
 		{
 			account: storage.Account{
 				AccountProperties: &storage.AccountProperties{
-					AllowBlobPublicAccess: ptr.To(true),
+					AllowBlobPublicAccess: to.Ptr(true),
 				},
 			},
 			accountOptions: &AccountOptions{},
@@ -1239,18 +1238,18 @@ func TestIsAllowBlobPublicAccessEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				AllowBlobPublicAccess: ptr.To(false),
+				AllowBlobPublicAccess: to.Ptr(false),
 			},
 			expectedResult: false,
 		},
 		{
 			account: storage.Account{
 				AccountProperties: &storage.AccountProperties{
-					AllowBlobPublicAccess: ptr.To(true),
+					AllowBlobPublicAccess: to.Ptr(true),
 				},
 			},
 			accountOptions: &AccountOptions{
-				AllowBlobPublicAccess: ptr.To(true),
+				AllowBlobPublicAccess: to.Ptr(true),
 			},
 			expectedResult: true,
 		},
@@ -1259,18 +1258,18 @@ func TestIsAllowBlobPublicAccessEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				AllowBlobPublicAccess: ptr.To(true),
+				AllowBlobPublicAccess: to.Ptr(true),
 			},
 			expectedResult: true,
 		},
 		{
 			account: storage.Account{
 				AccountProperties: &storage.AccountProperties{
-					AllowBlobPublicAccess: ptr.To(true),
+					AllowBlobPublicAccess: to.Ptr(true),
 				},
 			},
 			accountOptions: &AccountOptions{
-				AllowBlobPublicAccess: ptr.To(false),
+				AllowBlobPublicAccess: to.Ptr(false),
 			},
 			expectedResult: false,
 		},
@@ -1291,7 +1290,7 @@ func TestIsAllowSharedKeyAccessEqual(t *testing.T) {
 		{
 			account: storage.Account{
 				AccountProperties: &storage.AccountProperties{
-					AllowSharedKeyAccess: ptr.To(true),
+					AllowSharedKeyAccess: to.Ptr(true),
 				},
 			},
 			accountOptions: &AccountOptions{},
@@ -1302,18 +1301,18 @@ func TestIsAllowSharedKeyAccessEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				AllowSharedKeyAccess: ptr.To(false),
+				AllowSharedKeyAccess: to.Ptr(false),
 			},
 			expectedResult: false,
 		},
 		{
 			account: storage.Account{
 				AccountProperties: &storage.AccountProperties{
-					AllowSharedKeyAccess: ptr.To(true),
+					AllowSharedKeyAccess: to.Ptr(true),
 				},
 			},
 			accountOptions: &AccountOptions{
-				AllowSharedKeyAccess: ptr.To(true),
+				AllowSharedKeyAccess: to.Ptr(true),
 			},
 			expectedResult: true,
 		},
@@ -1322,18 +1321,18 @@ func TestIsAllowSharedKeyAccessEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				AllowSharedKeyAccess: ptr.To(true),
+				AllowSharedKeyAccess: to.Ptr(true),
 			},
 			expectedResult: true,
 		},
 		{
 			account: storage.Account{
 				AccountProperties: &storage.AccountProperties{
-					AllowSharedKeyAccess: ptr.To(true),
+					AllowSharedKeyAccess: to.Ptr(true),
 				},
 			},
 			accountOptions: &AccountOptions{
-				AllowSharedKeyAccess: ptr.To(false),
+				AllowSharedKeyAccess: to.Ptr(false),
 			},
 			expectedResult: false,
 		},
@@ -1355,7 +1354,7 @@ func TestIsRequireInfrastructureEncryptionEqual(t *testing.T) {
 			account: storage.Account{
 				AccountProperties: &storage.AccountProperties{
 					Encryption: &storage.Encryption{
-						RequireInfrastructureEncryption: ptr.To(true),
+						RequireInfrastructureEncryption: to.Ptr(true),
 					},
 				},
 			},
@@ -1366,12 +1365,12 @@ func TestIsRequireInfrastructureEncryptionEqual(t *testing.T) {
 			account: storage.Account{
 				AccountProperties: &storage.AccountProperties{
 					Encryption: &storage.Encryption{
-						RequireInfrastructureEncryption: ptr.To(true),
+						RequireInfrastructureEncryption: to.Ptr(true),
 					},
 				},
 			},
 			accountOptions: &AccountOptions{
-				RequireInfrastructureEncryption: ptr.To(true),
+				RequireInfrastructureEncryption: to.Ptr(true),
 			},
 			expectedResult: true,
 		},
@@ -1379,12 +1378,12 @@ func TestIsRequireInfrastructureEncryptionEqual(t *testing.T) {
 			account: storage.Account{
 				AccountProperties: &storage.AccountProperties{
 					Encryption: &storage.Encryption{
-						RequireInfrastructureEncryption: ptr.To(false),
+						RequireInfrastructureEncryption: to.Ptr(false),
 					},
 				},
 			},
 			accountOptions: &AccountOptions{
-				RequireInfrastructureEncryption: ptr.To(false),
+				RequireInfrastructureEncryption: to.Ptr(false),
 			},
 			expectedResult: true,
 		},
@@ -1393,7 +1392,7 @@ func TestIsRequireInfrastructureEncryptionEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				RequireInfrastructureEncryption: ptr.To(false),
+				RequireInfrastructureEncryption: to.Ptr(false),
 			},
 			expectedResult: true,
 		},
@@ -1401,12 +1400,12 @@ func TestIsRequireInfrastructureEncryptionEqual(t *testing.T) {
 			account: storage.Account{
 				AccountProperties: &storage.AccountProperties{
 					Encryption: &storage.Encryption{
-						RequireInfrastructureEncryption: ptr.To(true),
+						RequireInfrastructureEncryption: to.Ptr(true),
 					},
 				},
 			},
 			accountOptions: &AccountOptions{
-				RequireInfrastructureEncryption: ptr.To(false),
+				RequireInfrastructureEncryption: to.Ptr(false),
 			},
 			expectedResult: false,
 		},
@@ -1414,12 +1413,12 @@ func TestIsRequireInfrastructureEncryptionEqual(t *testing.T) {
 			account: storage.Account{
 				AccountProperties: &storage.AccountProperties{
 					Encryption: &storage.Encryption{
-						RequireInfrastructureEncryption: ptr.To(false),
+						RequireInfrastructureEncryption: to.Ptr(false),
 					},
 				},
 			},
 			accountOptions: &AccountOptions{
-				RequireInfrastructureEncryption: ptr.To(true),
+				RequireInfrastructureEncryption: to.Ptr(true),
 			},
 			expectedResult: false,
 		},
@@ -1428,7 +1427,7 @@ func TestIsRequireInfrastructureEncryptionEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				RequireInfrastructureEncryption: ptr.To(true),
+				RequireInfrastructureEncryption: to.Ptr(true),
 			},
 			expectedResult: false,
 		},
@@ -1460,7 +1459,7 @@ func TestIsLargeFileSharesPropertyEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				EnableLargeFileShare: ptr.To(false),
+				EnableLargeFileShare: to.Ptr(false),
 			},
 			expectedResult: true,
 		},
@@ -1471,7 +1470,7 @@ func TestIsLargeFileSharesPropertyEqual(t *testing.T) {
 				},
 			},
 			accountOptions: &AccountOptions{
-				EnableLargeFileShare: ptr.To(true),
+				EnableLargeFileShare: to.Ptr(true),
 			},
 			expectedResult: true,
 		},
@@ -1480,7 +1479,7 @@ func TestIsLargeFileSharesPropertyEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				EnableLargeFileShare: ptr.To(true),
+				EnableLargeFileShare: to.Ptr(true),
 			},
 			expectedResult: false,
 		},
@@ -1491,7 +1490,7 @@ func TestIsLargeFileSharesPropertyEqual(t *testing.T) {
 				},
 			},
 			accountOptions: &AccountOptions{
-				EnableLargeFileShare: ptr.To(false),
+				EnableLargeFileShare: to.Ptr(false),
 			},
 			expectedResult: false,
 		},
@@ -1583,7 +1582,7 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 	multichannelEnabled := storage.FileServiceProperties{
 		FileServicePropertiesProperties: &storage.FileServicePropertiesProperties{
 			ProtocolSettings: &storage.ProtocolSettings{
-				Smb: &storage.SmbSetting{Multichannel: &storage.Multichannel{Enabled: ptr.To(true)}},
+				Smb: &storage.SmbSetting{Multichannel: &storage.Multichannel{Enabled: to.Ptr(true)}},
 			},
 		},
 	}
@@ -1591,7 +1590,7 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 	multichannelDisabled := storage.FileServiceProperties{
 		FileServicePropertiesProperties: &storage.FileServicePropertiesProperties{
 			ProtocolSettings: &storage.ProtocolSettings{
-				Smb: &storage.SmbSetting{Multichannel: &storage.Multichannel{Enabled: ptr.To(false)}},
+				Smb: &storage.SmbSetting{Multichannel: &storage.Multichannel{Enabled: to.Ptr(false)}},
 			},
 		},
 	}
@@ -1628,7 +1627,7 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				IsMultichannelEnabled: ptr.To(false),
+				IsMultichannelEnabled: to.Ptr(false),
 			},
 			expectedResult: false,
 		},
@@ -1639,7 +1638,7 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				IsMultichannelEnabled: ptr.To(false),
+				IsMultichannelEnabled: to.Ptr(false),
 			},
 			serviceProperties: &multichannelEnabled,
 			expectedResult:    false,
@@ -1651,7 +1650,7 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				IsMultichannelEnabled: ptr.To(false),
+				IsMultichannelEnabled: to.Ptr(false),
 			},
 			serviceProperties:         &multichannelEnabled,
 			servicePropertiesRetError: fmt.Errorf("GetServiceProperties return error"),
@@ -1664,7 +1663,7 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				IsMultichannelEnabled: ptr.To(true),
+				IsMultichannelEnabled: to.Ptr(true),
 			},
 			serviceProperties: &multichannelDisabled,
 			expectedResult:    false,
@@ -1676,7 +1675,7 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				IsMultichannelEnabled: ptr.To(true),
+				IsMultichannelEnabled: to.Ptr(true),
 			},
 			serviceProperties: &multichannelEnabled,
 			expectedResult:    true,
@@ -1688,7 +1687,7 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				IsMultichannelEnabled: ptr.To(false),
+				IsMultichannelEnabled: to.Ptr(false),
 			},
 			serviceProperties: &multichannelDisabled,
 			expectedResult:    true,
@@ -1700,7 +1699,7 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				IsMultichannelEnabled: ptr.To(false),
+				IsMultichannelEnabled: to.Ptr(false),
 			},
 			serviceProperties: &incompleteServiceProperties,
 			expectedResult:    true,
@@ -1731,7 +1730,7 @@ func TestIsDisableFileServiceDeleteRetentionPolicyEqual(t *testing.T) {
 	deleteRetentionPolicyEnabled := storage.FileServiceProperties{
 		FileServicePropertiesProperties: &storage.FileServicePropertiesProperties{
 			ShareDeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
-				Enabled: ptr.To(true),
+				Enabled: to.Ptr(true),
 			},
 		},
 	}
@@ -1739,7 +1738,7 @@ func TestIsDisableFileServiceDeleteRetentionPolicyEqual(t *testing.T) {
 	deleteRetentionPolicyDisabled := storage.FileServiceProperties{
 		FileServicePropertiesProperties: &storage.FileServicePropertiesProperties{
 			ShareDeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
-				Enabled: ptr.To(false),
+				Enabled: to.Ptr(false),
 			},
 		},
 	}
@@ -1774,7 +1773,7 @@ func TestIsDisableFileServiceDeleteRetentionPolicyEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				DisableFileServiceDeleteRetentionPolicy: ptr.To(false),
+				DisableFileServiceDeleteRetentionPolicy: to.Ptr(false),
 			},
 			expectedResult: false,
 		},
@@ -1785,7 +1784,7 @@ func TestIsDisableFileServiceDeleteRetentionPolicyEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				DisableFileServiceDeleteRetentionPolicy: ptr.To(true),
+				DisableFileServiceDeleteRetentionPolicy: to.Ptr(true),
 			},
 			serviceProperties: &deleteRetentionPolicyEnabled,
 			expectedResult:    false,
@@ -1797,7 +1796,7 @@ func TestIsDisableFileServiceDeleteRetentionPolicyEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				DisableFileServiceDeleteRetentionPolicy: ptr.To(false),
+				DisableFileServiceDeleteRetentionPolicy: to.Ptr(false),
 			},
 			serviceProperties:         &deleteRetentionPolicyEnabled,
 			servicePropertiesRetError: fmt.Errorf("GetServiceProperties return error"),
@@ -1810,7 +1809,7 @@ func TestIsDisableFileServiceDeleteRetentionPolicyEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				DisableFileServiceDeleteRetentionPolicy: ptr.To(false),
+				DisableFileServiceDeleteRetentionPolicy: to.Ptr(false),
 			},
 			serviceProperties: &deleteRetentionPolicyDisabled,
 			expectedResult:    false,
@@ -1822,7 +1821,7 @@ func TestIsDisableFileServiceDeleteRetentionPolicyEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				DisableFileServiceDeleteRetentionPolicy: ptr.To(true),
+				DisableFileServiceDeleteRetentionPolicy: to.Ptr(true),
 			},
 			serviceProperties: &deleteRetentionPolicyDisabled,
 			expectedResult:    true,
@@ -1834,7 +1833,7 @@ func TestIsDisableFileServiceDeleteRetentionPolicyEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				DisableFileServiceDeleteRetentionPolicy: ptr.To(false),
+				DisableFileServiceDeleteRetentionPolicy: to.Ptr(false),
 			},
 			serviceProperties: &deleteRetentionPolicyEnabled,
 			expectedResult:    true,
@@ -1846,7 +1845,7 @@ func TestIsDisableFileServiceDeleteRetentionPolicyEqual(t *testing.T) {
 				AccountProperties: &storage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
-				DisableFileServiceDeleteRetentionPolicy: ptr.To(false),
+				DisableFileServiceDeleteRetentionPolicy: to.Ptr(false),
 			},
 			serviceProperties: &incompleteServiceProperties,
 			expectedResult:    true,
@@ -1891,7 +1890,7 @@ func TestIsSoftDeleteBlobsEqual(t *testing.T) {
 				property: storage.BlobServiceProperties{
 					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
 						DeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
-							Enabled: ptr.To(false),
+							Enabled: to.Ptr(false),
 						},
 					},
 				},
@@ -1907,8 +1906,8 @@ func TestIsSoftDeleteBlobsEqual(t *testing.T) {
 				property: storage.BlobServiceProperties{
 					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
 						DeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
-							Enabled: ptr.To(true),
-							Days:    ptr.To(int32(7)),
+							Enabled: to.Ptr(true),
+							Days:    to.Ptr(int32(7)),
 						},
 					},
 				},
@@ -1922,8 +1921,8 @@ func TestIsSoftDeleteBlobsEqual(t *testing.T) {
 				property: storage.BlobServiceProperties{
 					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
 						DeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
-							Enabled: ptr.To(true),
-							Days:    ptr.To(int32(7)),
+							Enabled: to.Ptr(true),
+							Days:    to.Ptr(int32(7)),
 						},
 					},
 				},
@@ -1971,7 +1970,7 @@ func Test_isSoftDeleteContainersEqual(t *testing.T) {
 				property: storage.BlobServiceProperties{
 					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
 						ContainerDeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
-							Enabled: ptr.To(false),
+							Enabled: to.Ptr(false),
 						},
 					},
 				},
@@ -1987,8 +1986,8 @@ func Test_isSoftDeleteContainersEqual(t *testing.T) {
 				property: storage.BlobServiceProperties{
 					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
 						ContainerDeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
-							Enabled: ptr.To(true),
-							Days:    ptr.To(int32(7)),
+							Enabled: to.Ptr(true),
+							Days:    to.Ptr(int32(7)),
 						},
 					},
 				},
@@ -2002,8 +2001,8 @@ func Test_isSoftDeleteContainersEqual(t *testing.T) {
 				property: storage.BlobServiceProperties{
 					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
 						ContainerDeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
-							Enabled: ptr.To(true),
-							Days:    ptr.To(int32(7)),
+							Enabled: to.Ptr(true),
+							Days:    to.Ptr(int32(7)),
 						},
 					},
 				},
@@ -2040,7 +2039,7 @@ func Test_isEnableBlobVersioningEqual(t *testing.T) {
 					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{},
 				},
 				accountOptions: &AccountOptions{
-					EnableBlobVersioning: ptr.To(false),
+					EnableBlobVersioning: to.Ptr(false),
 				},
 			},
 			want: true,
@@ -2050,11 +2049,11 @@ func Test_isEnableBlobVersioningEqual(t *testing.T) {
 			args: args{
 				property: storage.BlobServiceProperties{
 					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
-						IsVersioningEnabled: ptr.To(true),
+						IsVersioningEnabled: to.Ptr(true),
 					},
 				},
 				accountOptions: &AccountOptions{
-					EnableBlobVersioning: ptr.To(false),
+					EnableBlobVersioning: to.Ptr(false),
 				},
 			},
 		},
@@ -2144,7 +2143,7 @@ func TestAreVNetRulesEqual(t *testing.T) {
 						NetworkRuleSet: &storage.NetworkRuleSet{
 							VirtualNetworkRules: &[]storage.VirtualNetworkRule{
 								{
-									VirtualNetworkResourceID: ptr.To("id"),
+									VirtualNetworkResourceID: to.Ptr("id"),
 									Action:                   storage.ActionAllow,
 									State:                    "state",
 								},
@@ -2166,11 +2165,11 @@ func TestAreVNetRulesEqual(t *testing.T) {
 						NetworkRuleSet: &storage.NetworkRuleSet{
 							VirtualNetworkRules: &[]storage.VirtualNetworkRule{
 								{
-									VirtualNetworkResourceID: ptr.To("id1"),
+									VirtualNetworkResourceID: to.Ptr("id1"),
 									Action:                   storage.ActionAllow,
 								},
 								{
-									VirtualNetworkResourceID: ptr.To("id2"),
+									VirtualNetworkResourceID: to.Ptr("id2"),
 									Action:                   storage.ActionAllow,
 								},
 							},
@@ -2191,7 +2190,7 @@ func TestAreVNetRulesEqual(t *testing.T) {
 						NetworkRuleSet: &storage.NetworkRuleSet{
 							VirtualNetworkRules: &[]storage.VirtualNetworkRule{
 								{
-									VirtualNetworkResourceID: ptr.To("id1"),
+									VirtualNetworkResourceID: to.Ptr("id1"),
 									Action:                   storage.ActionAllow,
 									State:                    "state",
 								},

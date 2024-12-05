@@ -21,9 +21,8 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
-
-	"k8s.io/utils/ptr"
 )
 
 type fakeStruct struct {
@@ -43,12 +42,12 @@ func TestCopyBasic(t *testing.T) {
 	zones := []string{"zone0", "zone1"}
 	var vmOriginal *compute.VirtualMachine = &compute.VirtualMachine{
 		VirtualMachineProperties: &compute.VirtualMachineProperties{
-			ProvisioningState: ptr.To("Failed"),
+			ProvisioningState: lo.ToPtr("Failed"),
 		},
-		Name:  ptr.To("vmOriginal"),
+		Name:  lo.ToPtr("vmOriginal"),
 		Zones: &zones,
 		Tags: map[string]*string{
-			"tag0": ptr.To("tagVal0"),
+			"tag0": lo.ToPtr("tagVal0"),
 		},
 	}
 	vmCopied := Copy(vmOriginal).(*compute.VirtualMachine)
@@ -69,9 +68,9 @@ func TestCopyBasic(t *testing.T) {
 func TestCopyVMInSyncMap(t *testing.T) {
 	var vmOriginal *compute.VirtualMachine = &compute.VirtualMachine{
 		VirtualMachineProperties: &compute.VirtualMachineProperties{
-			ProvisioningState: ptr.To("Failed"),
+			ProvisioningState: lo.ToPtr("Failed"),
 		},
-		Name: ptr.To("vmOriginal"),
+		Name: lo.ToPtr("vmOriginal"),
 	}
 	vmCacheOriginal := &sync.Map{}
 	vmCacheOriginal.Store("vmOriginal", vmOriginal)
@@ -94,9 +93,9 @@ type vmssEntry struct {
 // TestCopyVMSSEntryInSyncMap tests object like vmssEntry in sync.Map.
 func TestCopyVMSSEntryInSyncMap(t *testing.T) {
 	vmssEntryOriginal := &vmssEntry{
-		Name: ptr.To("vmssEntryName"),
+		Name: lo.ToPtr("vmssEntryName"),
 		VirtualMachineScaleSet: &compute.VirtualMachineScaleSet{
-			Name: ptr.To("vmssOriginal"),
+			Name: lo.ToPtr("vmssOriginal"),
 		},
 	}
 	vmssCacheOriginal := &sync.Map{}

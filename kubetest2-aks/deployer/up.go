@@ -32,12 +32,13 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	armcontainerservicev2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v2"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	"k8s.io/apimachinery/pkg/util/wait"
+
 	"k8s.io/klog"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/kubetest2/pkg/exec"
 )
@@ -152,10 +153,10 @@ func (d *deployer) createResourceGroup(subscriptionID string) (armresources.Reso
 	now := time.Now()
 	timestamp := now.Unix()
 	param := armresources.ResourceGroup{
-		Location: ptr.To(d.Location),
+		Location: to.Ptr(d.Location),
 		Tags: map[string]*string{
-			"creation_date": ptr.To(fmt.Sprintf("%d", timestamp)),
-			"usage":         ptr.To(usageTag),
+			"creation_date": to.Ptr(fmt.Sprintf("%d", timestamp)),
+			"usage":         to.Ptr(usageTag),
 		},
 	}
 

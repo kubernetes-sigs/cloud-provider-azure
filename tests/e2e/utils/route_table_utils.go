@@ -21,8 +21,7 @@ import (
 	"fmt"
 
 	aznetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
-
-	"k8s.io/utils/ptr"
+	"github.com/samber/lo"
 
 	providerazure "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 )
@@ -46,7 +45,7 @@ func GetNodesInRouteTable(routeTable aznetwork.RouteTable) (map[string]interface
 
 	routeSet := make(map[string]interface{})
 	for _, route := range routeTable.Properties.Routes {
-		routeSet[string(providerazure.MapRouteNameToNodeName(true, ptr.Deref(route.Name, "")))] = true
+		routeSet[string(providerazure.MapRouteNameToNodeName(true, lo.FromPtrOr(route.Name, "")))] = true
 	}
 
 	return routeSet, nil

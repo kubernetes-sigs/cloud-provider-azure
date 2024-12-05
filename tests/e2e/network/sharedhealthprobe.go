@@ -21,18 +21,17 @@ import (
 	"strings"
 	"time"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Shared Health Probe", Label(utils.TestSuiteLabelSharedHealthProbe), func() {
@@ -97,7 +96,7 @@ var _ = Describe("Shared Health Probe", Label(utils.TestSuiteLabelSharedHealthPr
 		err = wait.PollUntilContextCancel(ctxWithTimeout, 5*time.Second, false, func(ctx context.Context) (bool, error) {
 			lb := getAzureInternalLoadBalancerFromPrivateIP(tc, ips[0], "")
 			probes := lb.Properties.Probes
-			if len(probes) != 1 || !strings.EqualFold(ptr.Deref(probes[0].Name, ""), "cluster-service-shared-health-probe") {
+			if len(probes) != 1 || !strings.EqualFold(lo.FromPtrOr(probes[0].Name, ""), "cluster-service-shared-health-probe") {
 				return false, nil
 			}
 			return true, nil
@@ -118,7 +117,7 @@ var _ = Describe("Shared Health Probe", Label(utils.TestSuiteLabelSharedHealthPr
 		err = wait.PollUntilContextCancel(ctxWithTimeout, 5*time.Second, false, func(ctx context.Context) (bool, error) {
 			lb := getAzureInternalLoadBalancerFromPrivateIP(tc, ips[0], "")
 			probes := lb.Properties.Probes
-			if len(probes) != 1 || !strings.EqualFold(ptr.Deref(probes[0].Name, ""), "cluster-service-shared-health-probe") {
+			if len(probes) != 1 || !strings.EqualFold(lo.FromPtrOr(probes[0].Name, ""), "cluster-service-shared-health-probe") {
 				return false, nil
 			}
 			return true, nil
@@ -198,7 +197,7 @@ var _ = Describe("Shared Health Probe", Label(utils.TestSuiteLabelSharedHealthPr
 		err = wait.PollUntilContextCancel(ctxWithTimeout, 5*time.Second, false, func(ctx context.Context) (bool, error) {
 			lb := getAzureInternalLoadBalancerFromPrivateIP(tc, ips[0], "")
 			probes := lb.Properties.Probes
-			if len(probes) != 1 || strings.EqualFold(ptr.Deref(probes[0].Name, ""), "cluster-service-shared-health-probe") {
+			if len(probes) != 1 || strings.EqualFold(lo.FromPtrOr(probes[0].Name, ""), "cluster-service-shared-health-probe") {
 				return false, nil
 			}
 			return true, nil

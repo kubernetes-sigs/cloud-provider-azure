@@ -22,13 +22,13 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/go-autorest/autorest/azure"
-
+	"github.com/samber/lo"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/ptr"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -96,7 +96,7 @@ func (ss *ScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName, dis
 				Caching:                 opt.CachingMode,
 				CreateOption:            "attach",
 				ManagedDisk:             managedDisk,
-				WriteAcceleratorEnabled: ptr.To(opt.WriteAcceleratorEnabled),
+				WriteAcceleratorEnabled: to.Ptr(opt.WriteAcceleratorEnabled),
 			})
 	}
 
@@ -192,7 +192,7 @@ func (ss *ScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName, dis
 				(disk.ManagedDisk != nil && diskURI != "" && strings.EqualFold(*disk.ManagedDisk.ID, diskURI)) {
 				// found the disk
 				klog.V(2).Infof("azureDisk - detach disk: name %s uri %s", diskName, diskURI)
-				disks[i].ToBeDetached = ptr.To(true)
+				disks[i].ToBeDetached = to.Ptr(true)
 				if forceDetach {
 					disks[i].DetachOption = compute.ForceDetach
 				}
@@ -209,7 +209,7 @@ func (ss *ScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName, dis
 			// Azure stack does not support ToBeDetached flag, use original way to detach disk
 			var newDisks []compute.DataDisk
 			for _, disk := range disks {
-				if !ptr.Deref(disk.ToBeDetached, false) {
+				if !lo.FromPtrOr(disk.ToBeDetached, false) {
 					newDisks = append(newDisks, disk)
 				}
 			}

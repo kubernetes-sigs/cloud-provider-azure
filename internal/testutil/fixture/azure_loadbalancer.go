@@ -17,15 +17,14 @@ limitations under the License.
 package fixture
 
 import (
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-
-	"k8s.io/utils/ptr"
 )
 
 func (f *AzureFixture) LoadBalancer() *AzureLoadBalancerFixture {
 	return &AzureLoadBalancerFixture{
 		lb: &network.LoadBalancer{
-			Name:                         ptr.To("lb"),
+			Name:                         to.Ptr("lb"),
 			LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
 				// TODO
 			},

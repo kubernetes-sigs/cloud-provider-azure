@@ -24,13 +24,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/stretchr/testify/assert"
-
 	"go.uber.org/mock/gomock"
-
 	cloudprovider "k8s.io/cloud-provider"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
@@ -214,7 +212,7 @@ func TestGetZoneByProviderID(t *testing.T) {
 	mockVMClient := az.VirtualMachinesClient.(*mockvmclient.MockInterface)
 	mockVMClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "vm-0", gomock.Any()).Return(compute.VirtualMachine{
 		Zones:    &[]string{"1"},
-		Location: ptr.To("eastus"),
+		Location: to.Ptr("eastus"),
 	}, nil)
 	zone, err = az.GetZoneByProviderID(context.Background(), testAvailabilitySetNodeProviderID)
 	assert.NoError(t, err)

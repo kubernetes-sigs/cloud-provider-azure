@@ -22,12 +22,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/samber/lo"
 	v1 "k8s.io/api/coordination/v1"
 	k8sapierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
@@ -97,7 +98,7 @@ func createLeaseIfNotExists(
 			Namespace: leaseNamespace,
 		},
 		Spec: v1.LeaseSpec{
-			LeaseDurationSeconds: ptr.To(leaseDurationSeconds),
+			LeaseDurationSeconds: to.Ptr(leaseDurationSeconds),
 		},
 	}
 
@@ -140,7 +141,7 @@ func (l *AzureResourceLocker) acquireLease(
 		// it means the same previous operation failed and the releaseLease
 		// also failed. In this case we should continue acquiring the lease.
 		// This should be a rare case, otherwise we should not acquire the lease.
-		prevHolder := ptr.Deref(lease.Spec.HolderIdentity, "")
+		prevHolder := lo.FromPtrOr(lease.Spec.HolderIdentity, "")
 		if !strings.EqualFold(prevHolder, holder) {
 			errMsg := "Lease has not expired yet, another component such as aks rp may be processing another request. This would be automatically recovered after the lease expires."
 			err := errors.New(errMsg)
@@ -149,7 +150,7 @@ func (l *AzureResourceLocker) acquireLease(
 		}
 	}
 
-	lease.Spec.HolderIdentity = ptr.To(holder)
+	lease.Spec.HolderIdentity = to.Ptr(holder)
 	now := &metav1.MicroTime{Time: time.Now()}
 	lease.Spec.AcquireTime = now
 	lease.Spec.RenewTime = now
@@ -180,12 +181,12 @@ func (l *AzureResourceLocker) acquireLease(
 }
 
 func hasExpired(lease *v1.Lease) bool {
-	if ptr.Deref(lease.Spec.HolderIdentity, "") == "" {
+	if lo.FromPtrOr(lease.Spec.HolderIdentity, "") == "" {
 		return true // No holder, hence expired
 	}
 
 	// Calculate the expiration time
-	leaseDuration := time.Duration(ptr.Deref(lease.Spec.LeaseDurationSeconds, 0)) * time.Second
+	leaseDuration := time.Duration(lo.FromPtrOr(lease.Spec.LeaseDurationSeconds, 0)) * time.Second
 	var expirationTime time.Time
 	if lease.Spec.RenewTime != nil {
 		expirationTime = lease.Spec.RenewTime.Add(leaseDuration)
@@ -213,7 +214,7 @@ func releaseLease(
 		return err
 	}
 
-	prevHolder := ptr.Deref(lease.Spec.HolderIdentity, "")
+	prevHolder := lo.FromPtrOr(lease.Spec.HolderIdentity, "")
 	if !strings.EqualFold(prevHolder, holder) {
 		logger.Info(
 			"%s is holding the lease instead of %s, no need to release it.",
@@ -227,7 +228,7 @@ func releaseLease(
 		return nil
 	}
 
-	lease.Spec.HolderIdentity = ptr.To("")
+	lease.Spec.HolderIdentity = to.Ptr("")
 	if lease.Annotations == nil {
 		lease.Annotations = make(map[string]string)
 	}
