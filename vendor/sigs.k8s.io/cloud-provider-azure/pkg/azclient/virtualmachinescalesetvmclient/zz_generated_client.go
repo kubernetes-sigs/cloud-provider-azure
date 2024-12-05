@@ -58,13 +58,13 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 const GetOperationName = "VirtualMachineScaleSetVMsClient.Get"
 
 // Get gets the VirtualMachineScaleSetVM
-func (client *Client) Get(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string) (result *armcompute.VirtualMachineScaleSetVM, err error) {
+func (client *Client) Get(ctx context.Context, resourceGroupName string, virtualmachinescalesetName string, virtualmachinescalesetvmName string) (result *armcompute.VirtualMachineScaleSetVM, err error) {
 
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "VirtualMachineScaleSetVM", "get")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
-	resp, err := client.VirtualMachineScaleSetVMsClient.Get(ctx, resourceGroupName, parentResourceName, resourceName, nil)
+	resp, err := client.VirtualMachineScaleSetVMsClient.Get(ctx, resourceGroupName, virtualmachinescalesetName, virtualmachinescalesetvmName, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -75,11 +75,11 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, parentR
 const DeleteOperationName = "VirtualMachineScaleSetVMsClient.Delete"
 
 // Delete deletes a VirtualMachineScaleSetVM by name.
-func (client *Client) Delete(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string) (err error) {
+func (client *Client) Delete(ctx context.Context, resourceGroupName string, virtualmachinescalesetName string, virtualmachinescalesetvmName string) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "VirtualMachineScaleSetVM", "delete")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
 	defer endSpan(err)
-	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, parentResourceName, resourceName, nil)).WaitforPollerResp(ctx)
+	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, virtualmachinescalesetName, virtualmachinescalesetvmName, nil)).WaitforPollerResp(ctx)
 	return err
 }

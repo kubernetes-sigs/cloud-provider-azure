@@ -56,13 +56,13 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 const GetOperationName = "SSHPublicKeysClient.Get"
 
 // Get gets the SSHPublicKeyResource
-func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armcompute.SSHPublicKeyResource, err error) {
+func (client *Client) Get(ctx context.Context, resourceGroupName string, sshpublickeyresourceName string) (result *armcompute.SSHPublicKeyResource, err error) {
 
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "SSHPublicKeyResource", "get")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
-	resp, err := client.SSHPublicKeysClient.Get(ctx, resourceGroupName, resourceName, nil)
+	resp, err := client.SSHPublicKeysClient.Get(ctx, resourceGroupName, sshpublickeyresourceName, nil)
 	if err != nil {
 		return nil, err
 	}
