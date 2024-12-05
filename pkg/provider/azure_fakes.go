@@ -17,9 +17,6 @@ limitations under the License.
 package provider
 
 import (
-	"context"
-	"time"
-
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
@@ -28,6 +25,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privateendpointclient/mock_privateendpointclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatezoneclient/mock_privatezoneclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient/mock_subnetclient"
@@ -40,14 +38,12 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient/mockvmssvmclient"
-	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
-	"sigs.k8s.io/cloud-provider-azure/pkg/util/lockmap"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -111,7 +107,6 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 		nodePrivateIPs:           map[string]*utilsets.IgnoreCaseSet{},
 		routeCIDRs:               map[string]string{},
 		eventRecorder:            &record.FakeRecorder{},
-		lockMap:                  lockmap.NewLockMap(),
 	}
 	az.DisksClient = mockdiskclient.NewMockInterface(ctrl)
 	az.InterfacesClient = mockinterfaceclient.NewMockInterface(ctrl)
@@ -132,6 +127,8 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	clientFactory.EXPECT().GetVirtualNetworkLinkClient().Return(virtualNetworkLinkClient).AnyTimes()
 	subnetTrack2Client := mock_subnetclient.NewMockInterface(ctrl)
 	clientFactory.EXPECT().GetSubnetClient().Return(subnetTrack2Client).AnyTimes()
+	privateendpointTrack2Client := mock_privateendpointclient.NewMockInterface(ctrl)
+	clientFactory.EXPECT().GetPrivateEndpointClient().Return(privateendpointTrack2Client).AnyTimes()
 	az.AuthProvider = &azclient.AuthProvider{
 		ComputeCredential: mock_azclient.NewMockTokenCredential(ctrl),
 	}
@@ -145,11 +142,6 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 
 	az.plsRepo = privatelinkservice.NewMockRepository(ctrl)
 	az.routeTableRepo = routetable.NewMockRepository(ctrl)
-
-	getter := func(_ context.Context, _ string) (interface{}, error) { return nil, nil }
-	az.storageAccountCache, _ = azcache.NewTimedCache(time.Minute, getter, az.Config.DisableAPICallCache)
-	az.fileServicePropertiesCache, _ = azcache.NewTimedCache(5*time.Minute, getter, az.Config.DisableAPICallCache)
-
 	az.regionZonesMap = map[string][]string{az.Location: {"1", "2", "3"}}
 
 	{

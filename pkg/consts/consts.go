@@ -19,8 +19,6 @@ package consts
 import (
 	"strings"
 	"time"
-
-	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
 )
 
 const (
@@ -95,17 +93,6 @@ const (
 	StorageAccountNameMaxLength = 24
 
 	CannotFindDiskLUN = "cannot find Lun"
-
-	// DefaultStorageAccountType is the default storage account type
-	DefaultStorageAccountType = string(storage.SkuNameStandardLRS)
-	// DefaultStorageAccountKind is the default storage account kind
-	DefaultStorageAccountKind = storage.KindStorageV2
-	// FileShareAccountNamePrefix is the file share account name prefix
-	FileShareAccountNamePrefix = "f"
-	// SharedDiskAccountNamePrefix is the shared disk account name prefix
-	SharedDiskAccountNamePrefix = "ds"
-	// DedicatedDiskAccountNamePrefix is the dedicated disk account name prefix
-	DedicatedDiskAccountNamePrefix = "dd"
 
 	// RetryAfterHeaderKey is the retry-after header key in ARM responses.
 	RetryAfterHeaderKey = "Retry-After"

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package provider
+package storage
 
 import (
 	"context"
@@ -25,26 +25,26 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	privatedns "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
-	"github.com/Azure/go-autorest/autorest/date"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
 	"github.com/stretchr/testify/assert"
-
 	"go.uber.org/mock/gomock"
-
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient/mock_accountclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobservicepropertiesclient/mock_blobservicepropertiesclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatednszonegroupclient/mock_privatednszonegroupclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privateendpointclient/mock_privateendpointclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatezoneclient/mock_privatezoneclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient/mock_virtualnetworklinkclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/blobclient/mockblobclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/fileclient/mockfileclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatednszonegroupclient/mockprivatednszonegroupclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privateendpointclient/mockprivateendpointclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/storageaccountclient/mockstorageaccountclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/storage/fileservice/mock_fileservice"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/lockmap"
 )
 
@@ -54,28 +54,28 @@ func TestGetStorageAccessKeys(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx, cancel := getContextWithCancel()
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cloud := &Cloud{}
+	storageAccountRepo := &AccountRepo{
+		ComputeClientFactory: mock_azclient.NewMockClientFactory(ctrl),
+	}
 	value := "foo bar"
-	oldTime := date.Time{}
-	oldTime.Time = time.Now().Add(-time.Hour)
+	oldTime := time.Now().Add(-time.Hour)
 	newValue := "newkey"
-	newTime := date.Time{}
-	newTime.Time = time.Now()
+	newTime := time.Now()
 
 	tests := []struct {
-		results             storage.AccountListKeysResult
+		results             *armstorage.AccountListKeysResult
 		getLatestAccountKey bool
 		expectedKey         string
 		expectErr           bool
 		err                 error
 	}{
-		{storage.AccountListKeysResult{}, false, "", true, nil},
+		{&armstorage.AccountListKeysResult{}, false, "", true, nil},
 		{
-			storage.AccountListKeysResult{
-				Keys: &[]storage.AccountKey{
+			&armstorage.AccountListKeysResult{
+				Keys: []*armstorage.AccountKey{
 					{Value: &value},
 				},
 			},
@@ -85,8 +85,8 @@ func TestGetStorageAccessKeys(t *testing.T) {
 			nil,
 		},
 		{
-			storage.AccountListKeysResult{
-				Keys: &[]storage.AccountKey{
+			&armstorage.AccountListKeysResult{
+				Keys: []*armstorage.AccountKey{
 					{},
 					{Value: &value},
 				},
@@ -97,8 +97,8 @@ func TestGetStorageAccessKeys(t *testing.T) {
 			nil,
 		},
 		{
-			storage.AccountListKeysResult{
-				Keys: &[]storage.AccountKey{
+			&armstorage.AccountListKeysResult{
+				Keys: []*armstorage.AccountKey{
 					{Value: &value, CreationTime: &oldTime},
 					{Value: &newValue, CreationTime: &newTime},
 				},
@@ -109,8 +109,8 @@ func TestGetStorageAccessKeys(t *testing.T) {
 			nil,
 		},
 		{
-			storage.AccountListKeysResult{
-				Keys: &[]storage.AccountKey{
+			&armstorage.AccountListKeysResult{
+				Keys: []*armstorage.AccountKey{
 					{Value: &value, CreationTime: &oldTime},
 					{Value: &newValue, CreationTime: &newTime},
 				},
@@ -120,14 +120,13 @@ func TestGetStorageAccessKeys(t *testing.T) {
 			false,
 			nil,
 		},
-		{storage.AccountListKeysResult{}, false, "", true, fmt.Errorf("test error")},
+		{&armstorage.AccountListKeysResult{}, false, "", true, fmt.Errorf("test error")},
 	}
 
 	for _, test := range tests {
-		mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
-		cloud.StorageAccountClient = mockStorageAccountsClient
-		mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), "", "rg", gomock.Any()).Return(test.results, nil).AnyTimes()
-		key, err := cloud.GetStorageAccesskey(ctx, "", "acct", "rg", test.getLatestAccountKey)
+		mockStorageAccountsClient := mock_accountclient.NewMockInterface(ctrl)
+		mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), "rg", gomock.Any()).Return(test.results.Keys, nil).AnyTimes()
+		key, err := storageAccountRepo.GetStorageAccesskey(ctx, mockStorageAccountsClient, "acct", "rg", test.getLatestAccountKey)
 		if test.expectErr && err == nil {
 			t.Errorf("Unexpected non-error")
 			continue
@@ -146,37 +145,38 @@ func TestGetStorageAccounts(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx, cancel := getContextWithCancel()
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cloud := &Cloud{}
-
+	storageAccountRepo := &AccountRepo{
+		ComputeClientFactory: mock_azclient.NewMockClientFactory(ctrl),
+	}
 	name := "testAccount"
 	location := TestLocation
 	networkID := "networkID"
-	accountProperties := storage.AccountProperties{
-		NetworkRuleSet: &storage.NetworkRuleSet{
-			VirtualNetworkRules: &[]storage.VirtualNetworkRule{
+	accountProperties := armstorage.AccountProperties{
+		NetworkRuleSet: &armstorage.NetworkRuleSet{
+			VirtualNetworkRules: []*armstorage.VirtualNetworkRule{
 				{
 					VirtualNetworkResourceID: &networkID,
-					Action:                   storage.ActionAllow,
-					State:                    "state",
+					Action:                   to.Ptr(string(armstorage.DefaultActionAllow)),
+					State:                    to.Ptr(armstorage.State("state")),
 				},
 			},
 		}}
 
-	account := storage.Account{
-		Sku: &storage.Sku{
-			Name: "testSku",
-			Tier: "testSkuTier",
+	account := &armstorage.Account{
+		SKU: &armstorage.SKU{
+			Name: to.Ptr(armstorage.SKUName("testSku")),
+			Tier: to.Ptr(armstorage.SKUTier("testSkuTier")),
 		},
-		Kind:              "testKind",
-		Location:          &location,
-		Name:              &name,
-		AccountProperties: &accountProperties,
+		Kind:       to.Ptr(armstorage.Kind("testKind")),
+		Location:   &location,
+		Name:       &name,
+		Properties: &accountProperties,
 	}
 
-	testResourceGroups := []storage.Account{account}
+	testResourceGroups := []*armstorage.Account{account}
 
 	accountOptions := &AccountOptions{
 		ResourceGroup:             "rg",
@@ -184,12 +184,10 @@ func TestGetStorageAccounts(t *testing.T) {
 		EnableHTTPSTrafficOnly:    true,
 	}
 
-	mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
-	cloud.StorageAccountClient = mockStorageAccountsClient
+	mockStorageAccountsClient := mock_accountclient.NewMockInterface(ctrl)
+	mockStorageAccountsClient.EXPECT().List(gomock.Any(), "rg").Return(testResourceGroups, nil).Times(1)
 
-	mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), "", "rg").Return(testResourceGroups, nil).Times(1)
-
-	accountsWithLocations, err := cloud.getStorageAccounts(ctx, accountOptions)
+	accountsWithLocations, err := storageAccountRepo.getStorageAccounts(ctx, mockStorageAccountsClient, accountOptions)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -226,35 +224,36 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx, cancel := getContextWithCancel()
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cloud := &Cloud{}
-
+	storageAccountRepo := &AccountRepo{
+		ComputeClientFactory: mock_azclient.NewMockClientFactory(ctrl),
+	}
 	// default account with name, location, sku, kind
 	name := "testAccount"
 	location := TestLocation
-	sku := &storage.Sku{
-		Name: "testSku",
-		Tier: "testSkuTier",
+	sku := &armstorage.SKU{
+		Name: to.Ptr(armstorage.SKUName("testSku")),
+		Tier: to.Ptr(armstorage.SKUTier("testSkuTier")),
 	}
-	account := storage.Account{
-		Sku:      sku,
-		Kind:     "testKind",
+	account := &armstorage.Account{
+		SKU:      sku,
+		Kind:     to.Ptr(armstorage.Kind("testKind")),
 		Location: &location,
 		Name:     &name,
 	}
 
-	accountPropertiesWithoutNetworkRuleSet := storage.AccountProperties{NetworkRuleSet: nil}
-	accountPropertiesWithoutVirtualNetworkRules := storage.AccountProperties{
-		NetworkRuleSet: &storage.NetworkRuleSet{
+	accountPropertiesWithoutNetworkRuleSet := armstorage.AccountProperties{NetworkRuleSet: nil}
+	accountPropertiesWithoutVirtualNetworkRules := armstorage.AccountProperties{
+		NetworkRuleSet: &armstorage.NetworkRuleSet{
 			VirtualNetworkRules: nil,
 		}}
 
 	tests := []struct {
 		testCase           string
 		testAccountOptions *AccountOptions
-		testResourceGroups []storage.Account
+		testResourceGroups []*armstorage.Account
 		expectedResult     []accountWithLocation
 		expectedError      error
 	}{
@@ -263,7 +262,7 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 			testAccountOptions: &AccountOptions{
 				ResourceGroup: "rg",
 			},
-			testResourceGroups: []storage.Account{},
+			testResourceGroups: []*armstorage.Account{},
 			expectedResult:     []accountWithLocation{},
 			expectedError:      nil,
 		},
@@ -272,7 +271,7 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 			testAccountOptions: &AccountOptions{
 				ResourceGroup: "rg",
 			},
-			testResourceGroups: []storage.Account{{Name: &name}},
+			testResourceGroups: []*armstorage.Account{{Name: &name}},
 			expectedResult:     []accountWithLocation{},
 			expectedError:      nil,
 		},
@@ -281,7 +280,7 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 			testAccountOptions: &AccountOptions{
 				ResourceGroup: "rg",
 			},
-			testResourceGroups: []storage.Account{{Name: &name, Location: &location}},
+			testResourceGroups: []*armstorage.Account{{Name: &name, Location: &location}},
 			expectedResult:     []accountWithLocation{},
 			expectedError:      nil,
 		},
@@ -291,7 +290,7 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 				ResourceGroup: "rg",
 				Type:          "testAccountOptionsType",
 			},
-			testResourceGroups: []storage.Account{account},
+			testResourceGroups: []*armstorage.Account{account},
 			expectedResult:     []accountWithLocation{},
 			expectedError:      nil,
 		},
@@ -301,7 +300,7 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 				ResourceGroup: "rg",
 				Kind:          "testAccountOptionsKind",
 			},
-			testResourceGroups: []storage.Account{account},
+			testResourceGroups: []*armstorage.Account{account},
 			expectedResult:     []accountWithLocation{},
 			expectedError:      nil,
 		},
@@ -311,7 +310,7 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 				ResourceGroup: "rg",
 				Location:      "testAccountOptionsLocation",
 			},
-			testResourceGroups: []storage.Account{account},
+			testResourceGroups: []*armstorage.Account{account},
 			expectedResult:     []accountWithLocation{},
 			expectedError:      nil,
 		},
@@ -321,7 +320,7 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 				ResourceGroup:             "rg",
 				VirtualNetworkResourceIDs: []string{"id"},
 			},
-			testResourceGroups: []storage.Account{},
+			testResourceGroups: []*armstorage.Account{},
 			expectedResult:     []accountWithLocation{},
 			expectedError:      nil,
 		},
@@ -331,7 +330,7 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 				ResourceGroup:             "rg",
 				VirtualNetworkResourceIDs: []string{"id"},
 			},
-			testResourceGroups: []storage.Account{{Name: &name, Kind: "kind", Location: &location, Sku: sku, AccountProperties: &accountPropertiesWithoutNetworkRuleSet}},
+			testResourceGroups: []*armstorage.Account{{Name: &name, Kind: to.Ptr(armstorage.Kind("kind")), Location: &location, SKU: sku, Properties: &accountPropertiesWithoutNetworkRuleSet}},
 			expectedResult:     []accountWithLocation{},
 			expectedError:      nil,
 		},
@@ -341,7 +340,7 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 				ResourceGroup:             "rg",
 				VirtualNetworkResourceIDs: []string{"id"},
 			},
-			testResourceGroups: []storage.Account{{Name: &name, Kind: "kind", Location: &location, Sku: sku, AccountProperties: &accountPropertiesWithoutVirtualNetworkRules}},
+			testResourceGroups: []*armstorage.Account{{Name: &name, Kind: to.Ptr(armstorage.Kind("kind")), Location: &location, SKU: sku, Properties: &accountPropertiesWithoutVirtualNetworkRules}},
 			expectedResult:     []accountWithLocation{},
 			expectedError:      nil,
 		},
@@ -351,7 +350,7 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 				ResourceGroup:         "rg",
 				CreatePrivateEndpoint: ptr.To(true),
 			},
-			testResourceGroups: []storage.Account{{Name: &name, Kind: "kind", Location: &location, Sku: sku, AccountProperties: &storage.AccountProperties{}}},
+			testResourceGroups: []*armstorage.Account{{Name: &name, Kind: to.Ptr(armstorage.Kind("kind")), Location: &location, SKU: sku, Properties: &armstorage.AccountProperties{}}},
 			expectedResult:     []accountWithLocation{},
 			expectedError:      nil,
 		},
@@ -359,12 +358,9 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 
 	for _, test := range tests {
 		t.Logf("running test case: %s", test.testCase)
-		mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
-		cloud.StorageAccountClient = mockStorageAccountsClient
-
-		mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), "", "rg").Return(test.testResourceGroups, nil).AnyTimes()
-
-		accountsWithLocations, err := cloud.getStorageAccounts(ctx, test.testAccountOptions)
+		mockStorageAccountsClient := mock_accountclient.NewMockInterface(ctrl)
+		mockStorageAccountsClient.EXPECT().List(gomock.Any(), "rg").Return(test.testResourceGroups, nil).AnyTimes()
+		accountsWithLocations, err := storageAccountRepo.getStorageAccounts(ctx, mockStorageAccountsClient, test.testAccountOptions)
 		if !errors.Is(err, test.expectedError) {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -376,10 +372,8 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 }
 
 func TestEnsureStorageAccount(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
-	ctx, cancel := getContextWithCancel()
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	resourceGroup := "ResourceGroup"
@@ -388,30 +382,32 @@ func TestEnsureStorageAccount(t *testing.T) {
 	subnetName := "SubnetName"
 	location := TestLocation
 
-	cloud := GetTestCloud(ctrl)
-	cloud.ResourceGroup = resourceGroup
-	cloud.VnetResourceGroup = vnetResourceGroup
-	cloud.VnetName = vnetName
-	cloud.SubnetName = subnetName
-	cloud.Location = location
-	cloud.SubscriptionID = "testSub"
+	config := azureconfig.Config{
+		AzureClientConfig: azureconfig.AzureClientConfig{
+			SubscriptionID:                "testSub",
+			NetworkResourceSubscriptionID: "testNetSub",
+		},
+		ResourceGroup:     resourceGroup,
+		VnetResourceGroup: vnetResourceGroup,
+		SubnetName:        subnetName,
+		VnetName:          vnetName,
+		Location:          location,
+	}
 
-	sku := &storage.Sku{
-		Name: "testSku",
-		Tier: "testSkuTier",
+	sku := &armstorage.SKU{
+		Name: to.Ptr(armstorage.SKUName("testSku")),
+		Tier: to.Ptr(armstorage.SKUTier("testSkuTier")),
 	}
 	testStorageAccounts :=
-		[]storage.Account{
-			{Name: ptr.To("testStorageAccount"), Kind: "kind", Location: &location, Sku: sku, AccountProperties: &storage.AccountProperties{NetworkRuleSet: &storage.NetworkRuleSet{}}},
-			{Name: ptr.To("wantedAccount"), Kind: "kind", Location: &location, Sku: sku, AccountProperties: &storage.AccountProperties{NetworkRuleSet: &storage.NetworkRuleSet{}}},
-			{Name: ptr.To("otherAccount"), Kind: "kind", Location: &location, Sku: sku, AccountProperties: &storage.AccountProperties{NetworkRuleSet: &storage.NetworkRuleSet{}}},
+		[]*armstorage.Account{
+			{Name: ptr.To("testStorageAccount"), Kind: to.Ptr(armstorage.Kind("kind")), Location: &location, SKU: sku, Properties: &armstorage.AccountProperties{NetworkRuleSet: &armstorage.NetworkRuleSet{}}},
+			{Name: ptr.To("wantedAccount"), Kind: to.Ptr(armstorage.Kind("kind")), Location: &location, SKU: sku, Properties: &armstorage.AccountProperties{NetworkRuleSet: &armstorage.NetworkRuleSet{}}},
+			{Name: ptr.To("otherAccount"), Kind: to.Ptr(armstorage.Kind("kind")), Location: &location, SKU: sku, Properties: &armstorage.AccountProperties{NetworkRuleSet: &armstorage.NetworkRuleSet{}}},
 		}
 
 	value := "foo bar"
-	storageAccountListKeys := storage.AccountListKeysResult{
-		Keys: &[]storage.AccountKey{
-			{Value: &value},
-		},
+	storageAccountListKeys := []*armstorage.AccountKey{
+		{Value: &value},
 	}
 
 	tests := []struct {
@@ -423,7 +419,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 		setAccountOptions               bool
 		pickRandomMatchingAccount       bool
 		accessTier                      string
-		storageType                     StorageType
+		storageType                     Type
 		requireInfrastructureEncryption *bool
 		keyVaultURL                     *string
 		sourceAccountName               string
@@ -495,105 +491,102 @@ func TestEnsureStorageAccount(t *testing.T) {
 			setAccountOptions: true,
 			expectedErr:       "resourceGroup must be specified when subscriptionID(abc) is not empty",
 		},
-		{
-			name:              "[Failed] could not get storage key for storage account",
-			subscriptionID:    "",
-			resourceGroup:     "",
-			setAccountOptions: true,
-			expectedErr:       "could not get storage key for storage account",
-		},
 	}
 
 	for _, test := range tests {
-		mockBlobClient := mockblobclient.NewMockInterface(ctrl)
-		cloud.BlobClient = mockBlobClient
-		mockBlobClient.EXPECT().GetServiceProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storage.BlobServiceProperties{
-			BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{}}, nil).AnyTimes()
-		mockBlobClient.EXPECT().SetServiceProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storage.BlobServiceProperties{}, nil).AnyTimes()
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			StorageAccountRepo := &AccountRepo{
+				ComputeClientFactory: mock_azclient.NewMockClientFactory(ctrl),
+				NetworkClientFactory: mock_azclient.NewMockClientFactory(ctrl),
+				subnetRepo:           subnet.NewMockRepository(ctrl),
+				Config:               config,
+			}
+			mockBlobClient := mock_blobservicepropertiesclient.NewMockInterface(ctrl)
+			StorageAccountRepo.ComputeClientFactory.(*mock_azclient.MockClientFactory).EXPECT().GetBlobServicePropertiesClientForSub(gomock.Any()).Return(mockBlobClient, nil).AnyTimes()
+			mockBlobClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).Return(&armstorage.BlobServiceProperties{
+				BlobServiceProperties: &armstorage.BlobServicePropertiesProperties{}}, nil).AnyTimes()
+			mockBlobClient.EXPECT().Set(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armstorage.BlobServiceProperties{}, nil).AnyTimes()
 
-		mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
-		if test.mockStorageAccountsClient {
-			cloud.StorageAccountClient = mockStorageAccountsClient
-		}
+			mockStorageAccountsClient := mock_accountclient.NewMockInterface(ctrl)
 
-		if ptr.Deref(test.createPrivateEndpoint, false) {
-			mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), gomock.Any(), gomock.Any()).Return(testStorageAccounts, nil).AnyTimes()
-			mockStorageAccountsClient.EXPECT().Create(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-			mockStorageAccountsClient.EXPECT().GetProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(testStorageAccounts[0], nil).AnyTimes()
-			if test.accountName == "" {
-				mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storageAccountListKeys, nil).AnyTimes()
-			} else {
-				mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storageAccountListKeys, &retry.Error{}).AnyTimes()
+			if test.mockStorageAccountsClient {
+				StorageAccountRepo.ComputeClientFactory.(*mock_azclient.MockClientFactory).EXPECT().GetAccountClientForSub(gomock.Any()).Return(mockStorageAccountsClient, nil).AnyTimes()
 			}
 
-			subnetPropertiesFormat := &network.SubnetPropertiesFormat{}
-			if test.SubnetPropertiesFormatNil {
-				subnetPropertiesFormat = nil
+			if ptr.Deref(test.createPrivateEndpoint, false) {
+				mockStorageAccountsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testStorageAccounts, nil).AnyTimes()
+				mockStorageAccountsClient.EXPECT().Create(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+				mockStorageAccountsClient.EXPECT().GetProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(testStorageAccounts[0], nil).AnyTimes()
+				if test.accountName == "" {
+					mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), gomock.Any(), gomock.Any()).Return(storageAccountListKeys, nil).AnyTimes()
+				} else {
+					mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), gomock.Any(), gomock.Any()).Return(storageAccountListKeys, errors.New("")).AnyTimes()
+				}
+
+				subnetPropertiesFormat := &armnetwork.SubnetPropertiesFormat{}
+				if test.SubnetPropertiesFormatNil {
+					subnetPropertiesFormat = nil
+				}
+				mockedSubnet := &armnetwork.Subnet{Properties: subnetPropertiesFormat}
+
+				subnetRepo := StorageAccountRepo.subnetRepo.(*subnet.MockRepository)
+				subnetRepo.EXPECT().Get(gomock.Any(), vnetResourceGroup, vnetName, subnetName).Return(mockedSubnet, nil).Times(1)
+				subnetRepo.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, vnetName, subnetName, gomock.Any()).Return(nil).Times(1)
+
+				mockPrivateDNSClient := mock_privatezoneclient.NewMockInterface(ctrl)
+				StorageAccountRepo.NetworkClientFactory.(*mock_azclient.MockClientFactory).EXPECT().GetPrivateZoneClient().Return(mockPrivateDNSClient).AnyTimes()
+				mockPrivateDNSClient.EXPECT().Get(gomock.Any(), vnetResourceGroup, gomock.Any()).Return(&privatedns.PrivateZone{}, errors.New("ResourceNotFound")).Times(1)
+				mockPrivateDNSClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
+
+				mockPrivateDNSZoneGroup := mock_privatednszonegroupclient.NewMockInterface(ctrl)
+				StorageAccountRepo.NetworkClientFactory.(*mock_azclient.MockClientFactory).EXPECT().GetPrivateDNSZoneGroupClient().Return(mockPrivateDNSZoneGroup).AnyTimes()
+				mockPrivateDNSZoneGroup.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
+				mockPrivateEndpointClient := mock_privateendpointclient.NewMockInterface(ctrl)
+				StorageAccountRepo.NetworkClientFactory.(*mock_azclient.MockClientFactory).EXPECT().GetPrivateEndpointClient().Return(mockPrivateEndpointClient).AnyTimes()
+				mockPrivateEndpointClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
+				mockVirtualNetworkLinksClient := mock_virtualnetworklinkclient.NewMockInterface(ctrl)
+				StorageAccountRepo.NetworkClientFactory.(*mock_azclient.MockClientFactory).EXPECT().GetVirtualNetworkLinkClient().Return(mockVirtualNetworkLinksClient).AnyTimes()
+				mockVirtualNetworkLinksClient.EXPECT().Get(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any()).Return(&privatedns.VirtualNetworkLink{}, errors.New("ResourceNotFound")).Times(1)
+				mockVirtualNetworkLinksClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
 			}
-			subnet := network.Subnet{SubnetPropertiesFormat: subnetPropertiesFormat}
 
-			mockSubnetsClient := mocksubnetclient.NewMockInterface(ctrl)
-			mockSubnetsClient.EXPECT().Get(gomock.Any(), vnetResourceGroup, vnetName, subnetName, gomock.Any()).Return(subnet, nil).Times(1)
-			mockSubnetsClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, vnetName, subnetName, gomock.Any()).Return(nil).Times(1)
-			cloud.SubnetsClient = mockSubnetsClient
-
-			mockPrivateDNSClient := cloud.ComputeClientFactory.GetPrivateZoneClient().(*mock_privatezoneclient.MockInterface)
-			mockPrivateDNSClient.EXPECT().Get(gomock.Any(), vnetResourceGroup, gomock.Any()).Return(&privatedns.PrivateZone{}, errors.New("ResourceNotFound")).Times(1)
-			mockPrivateDNSClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
-
-			mockPrivateDNSZoneGroup := mockprivatednszonegroupclient.NewMockInterface(ctrl)
-			mockPrivateDNSZoneGroup.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), gomock.Any(), "", false).Return(nil).Times(1)
-			cloud.privatednszonegroupclient = mockPrivateDNSZoneGroup
-			mockPrivateEndpointClient := mockprivateendpointclient.NewMockInterface(ctrl)
-			mockPrivateEndpointClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), "", true).Return(nil).Times(1)
-			cloud.privateendpointclient = mockPrivateEndpointClient
-			mockVirtualNetworkLinksClient := cloud.ComputeClientFactory.GetVirtualNetworkLinkClient().(*mock_virtualnetworklinkclient.MockInterface)
-			mockVirtualNetworkLinksClient.EXPECT().Get(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any()).Return(&privatedns.VirtualNetworkLink{}, errors.New("ResourceNotFound")).Times(1)
-			mockVirtualNetworkLinksClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
-		}
-
-		if test.sourceAccountName != "" {
-			mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storageAccountListKeys, nil).AnyTimes()
-		}
-
-		var testAccountOptions *AccountOptions
-		if test.setAccountOptions {
-			testAccountOptions = &AccountOptions{
-				ResourceGroup:             test.resourceGroup,
-				CreatePrivateEndpoint:     test.createPrivateEndpoint,
-				Name:                      test.accountName,
-				CreateAccount:             test.createAccount,
-				SubscriptionID:            test.subscriptionID,
-				AccessTier:                test.accessTier,
-				StorageType:               test.storageType,
-				EnableBlobVersioning:      ptr.To(true),
-				SoftDeleteBlobs:           7,
-				SoftDeleteContainers:      7,
-				PickRandomMatchingAccount: test.pickRandomMatchingAccount,
-				SourceAccountName:         test.sourceAccountName,
+			if test.sourceAccountName != "" {
+				mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), gomock.Any(), gomock.Any()).Return(storageAccountListKeys, nil).AnyTimes()
 			}
-		}
 
-		accountName, _, err := cloud.EnsureStorageAccount(ctx, testAccountOptions, "test")
-		if test.expectedAccountName != "" {
-			assert.Equal(t, accountName, test.expectedAccountName, test.name)
-		}
-		assert.Equal(t, err == nil, test.expectedErr == "", fmt.Sprintf("returned error: %v", err), test.name)
-		if test.expectedErr != "" {
-			assert.Equal(t, err != nil, strings.Contains(err.Error(), test.expectedErr), err.Error(), test.name)
-		}
+			var testAccountOptions *AccountOptions
+			if test.setAccountOptions {
+				testAccountOptions = &AccountOptions{
+					ResourceGroup:             test.resourceGroup,
+					CreatePrivateEndpoint:     test.createPrivateEndpoint,
+					Name:                      test.accountName,
+					CreateAccount:             test.createAccount,
+					SubscriptionID:            test.subscriptionID,
+					AccessTier:                test.accessTier,
+					StorageType:               test.storageType,
+					EnableBlobVersioning:      ptr.To(true),
+					SoftDeleteBlobs:           7,
+					SoftDeleteContainers:      7,
+					PickRandomMatchingAccount: test.pickRandomMatchingAccount,
+					SourceAccountName:         test.sourceAccountName,
+				}
+			}
+
+			accountName, _, err := StorageAccountRepo.EnsureStorageAccount(ctx, testAccountOptions, "test")
+			if test.expectedAccountName != "" {
+				assert.Equal(t, accountName, test.expectedAccountName, test.name)
+			}
+			assert.Equal(t, err == nil, test.expectedErr == "", fmt.Sprintf("returned error: %v", err), test.name)
+			if test.expectedErr != "" {
+				assert.Equal(t, err != nil, strings.Contains(err.Error(), test.expectedErr), err.Error(), test.name)
+			}
+			ctrl.Finish()
+		})
 	}
 }
 
 func TestGetStorageAccountWithCache(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
-
-	cloud := &Cloud{}
-
 	tests := []struct {
 		name                    string
 		subsID                  string
@@ -605,7 +598,7 @@ func TestGetStorageAccountWithCache(t *testing.T) {
 	}{
 		{
 			name:        "[failure] StorageAccountClient is nil",
-			expectedErr: "StorageAccountClient is nil",
+			expectedErr: "ComputeClientFactory is nil",
 		},
 		{
 			name:                    "[failure] storageAccountCache is nil",
@@ -621,89 +614,32 @@ func TestGetStorageAccountWithCache(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		if test.setStorageAccountClient {
-			mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
-			cloud.StorageAccountClient = mockStorageAccountsClient
-			mockStorageAccountsClient.EXPECT().GetProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storage.Account{}, nil).AnyTimes()
-		}
+		t.Run(test.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			ctrl := gomock.NewController(t)
+			storageAccountRepo := &AccountRepo{}
+			if test.setStorageAccountClient {
+				storageAccountRepo.ComputeClientFactory = mock_azclient.NewMockClientFactory(ctrl)
+				mockStorageAccountsClient := mock_accountclient.NewMockInterface(ctrl)
+				storageAccountRepo.ComputeClientFactory.(*mock_azclient.MockClientFactory).EXPECT().GetAccountClientForSub("").Return(mockStorageAccountsClient, nil).AnyTimes()
+				mockStorageAccountsClient.EXPECT().GetProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armstorage.Account{}, nil).AnyTimes()
+			}
 
-		if test.setStorageAccountCache {
-			getter := func(_ context.Context, _ string) (interface{}, error) { return nil, nil }
-			cloud.storageAccountCache, _ = cache.NewTimedCache(time.Minute, getter, false)
-		}
+			if test.setStorageAccountCache {
+				getter := func(_ context.Context, _ string) (*armstorage.Account, error) { return nil, nil }
+				storageAccountRepo.storageAccountCache, _ = cache.NewTimedCache(time.Minute, getter, false)
+			}
 
-		_, err := cloud.getStorageAccountWithCache(ctx, test.subsID, test.resourceGroup, test.account)
-		assert.Equal(t, err == nil, test.expectedErr == "", fmt.Sprintf("returned error: %v", err), test.name)
-		if test.expectedErr != "" && err != nil {
-			assert.Equal(t, err.RawError.Error(), test.expectedErr, err.RawError.Error(), test.name)
-		}
-	}
-}
-
-func TestGetFileServicePropertiesCache(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
-
-	cloud := &Cloud{}
-
-	tests := []struct {
-		name                          string
-		subsID                        string
-		resourceGroup                 string
-		account                       string
-		setFileClient                 bool
-		setFileServicePropertiesCache bool
-		expectedErr                   string
-	}{
-		{
-			name:        "[failure] FileClient is nil",
-			expectedErr: "FileClient is nil",
-		},
-		{
-			name:          "[failure] fileServicePropertiesCache is nil",
-			setFileClient: true,
-			expectedErr:   "fileServicePropertiesCache is nil",
-		},
-		{
-			name:                          "[Success]",
-			setFileClient:                 true,
-			setFileServicePropertiesCache: true,
-			expectedErr:                   "",
-		},
-	}
-
-	for _, test := range tests {
-		if test.setFileClient {
-			mockFileClient := mockfileclient.NewMockInterface(ctrl)
-			cloud.FileClient = mockFileClient
-			mockFileClient.EXPECT().WithSubscriptionID(gomock.Any()).Return(mockFileClient).AnyTimes()
-			mockFileClient.EXPECT().GetServiceProperties(gomock.Any(), gomock.Any(), gomock.Any()).Return(storage.FileServiceProperties{}, nil).AnyTimes()
-		}
-		if test.setFileServicePropertiesCache {
-			getter := func(_ context.Context, _ string) (interface{}, error) { return nil, nil }
-			cloud.fileServicePropertiesCache, _ = cache.NewTimedCache(time.Minute, getter, false)
-		}
-
-		_, err := cloud.getFileServicePropertiesCache(ctx, test.subsID, test.resourceGroup, test.account)
-		assert.Equal(t, err == nil, test.expectedErr == "", fmt.Sprintf("returned error: %v", err), test.name)
-		if test.expectedErr != "" && err != nil {
-			assert.Equal(t, err.Error(), test.expectedErr, err.Error(), test.name)
-		}
+			_, err := storageAccountRepo.getStorageAccountWithCache(ctx, test.subsID, test.resourceGroup, test.account)
+			assert.Equal(t, err == nil, test.expectedErr == "", fmt.Sprintf("returned error: %v", err), test.name)
+			ctrl.Finish()
+			cancel()
+		})
 	}
 }
 
 func TestAddStorageAccountTags(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
-
-	cloud := &Cloud{}
-	cloud.lockMap = lockmap.NewLockMap()
 	tests := []struct {
 		name           string
 		subsID         string
@@ -711,7 +647,7 @@ func TestAddStorageAccountTags(t *testing.T) {
 		account        string
 		tags           map[string]*string
 		parallelThread int
-		expectedErr    *retry.Error
+		expectedErr    error
 	}{
 		{
 			name:        "no tags update",
@@ -733,48 +669,54 @@ func TestAddStorageAccountTags(t *testing.T) {
 		},
 	}
 
-	getter := func(_ context.Context, _ string) (interface{}, error) { return nil, nil }
-	cloud.storageAccountCache, _ = cache.NewTimedCache(time.Minute, getter, false)
-
 	for _, test := range tests {
-		mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
-		cloud.StorageAccountClient = mockStorageAccountsClient
-		mockStorageAccountsClient.EXPECT().GetProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storage.Account{}, nil).AnyTimes()
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
 
-		parallelThread := 1
-		if test.parallelThread > 1 {
-			parallelThread = test.parallelThread
-		}
-		if len(test.tags) > 0 {
-			mockStorageAccountsClient.EXPECT().Update(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(parallelThread)
-		}
+			ctx, cancel := context.WithCancel(context.Background())
 
-		if parallelThread > 1 {
-			var wg sync.WaitGroup
-			wg.Add(parallelThread)
-			for i := 0; i < parallelThread; i++ {
-				go func() {
-					defer wg.Done()
-					err := cloud.AddStorageAccountTags(ctx, test.subsID, test.resourceGroup, test.account, test.tags)
-					assert.Equal(t, err, test.expectedErr, fmt.Sprintf("returned error: %v", err), test.name)
-				}()
+			storageAccountRepo := &AccountRepo{
+				ComputeClientFactory: mock_azclient.NewMockClientFactory(ctrl),
+				lockMap:              lockmap.NewLockMap(),
 			}
-			wg.Wait()
-		} else {
-			err := cloud.AddStorageAccountTags(ctx, test.subsID, test.resourceGroup, test.account, test.tags)
-			assert.Equal(t, err, test.expectedErr, fmt.Sprintf("returned error: %v", err), test.name)
-		}
+			getter := func(_ context.Context, _ string) (*armstorage.Account, error) { return nil, nil }
+			storageAccountRepo.storageAccountCache, _ = cache.NewTimedCache(time.Minute, getter, false)
+			mockStorageAccountsClient := mock_accountclient.NewMockInterface(ctrl)
+
+			storageAccountRepo.ComputeClientFactory.(*mock_azclient.MockClientFactory).EXPECT().GetAccountClientForSub("").Return(mockStorageAccountsClient, nil).AnyTimes()
+
+			mockStorageAccountsClient.EXPECT().GetProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armstorage.Account{}, nil).AnyTimes()
+
+			parallelThread := 1
+			if test.parallelThread > 1 {
+				parallelThread = test.parallelThread
+			}
+			if len(test.tags) > 0 {
+				mockStorageAccountsClient.EXPECT().Update(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(parallelThread)
+			}
+
+			if parallelThread > 1 {
+				var wg sync.WaitGroup
+				wg.Add(parallelThread)
+				for i := 0; i < parallelThread; i++ {
+					go func() {
+						defer wg.Done()
+						err := storageAccountRepo.AddStorageAccountTags(ctx, test.subsID, test.resourceGroup, test.account, test.tags)
+						assert.Equal(t, err, test.expectedErr, fmt.Sprintf("returned error: %v", err), test.name)
+					}()
+				}
+				wg.Wait()
+			} else {
+				err := storageAccountRepo.AddStorageAccountTags(ctx, test.subsID, test.resourceGroup, test.account, test.tags)
+				assert.Equal(t, err, test.expectedErr, fmt.Sprintf("returned error: %v", err), test.name)
+			}
+			cancel()
+			ctrl.Finish()
+		})
 	}
 }
 
 func TestRemoveStorageAccountTags(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
-
-	cloud := &Cloud{}
 
 	tests := []struct {
 		name           string
@@ -783,7 +725,7 @@ func TestRemoveStorageAccountTags(t *testing.T) {
 		account        string
 		key            string
 		parallelThread int
-		expectedErr    *retry.Error
+		expectedErr    error
 	}{
 		{
 			name:        "no tag removal",
@@ -805,51 +747,67 @@ func TestRemoveStorageAccountTags(t *testing.T) {
 		},
 	}
 
-	getter := func(_ context.Context, _ string) (interface{}, error) { return nil, nil }
-	cloud.storageAccountCache, _ = cache.NewTimedCache(time.Minute, getter, false)
-	cloud.lockMap = lockmap.NewLockMap()
 	for _, test := range tests {
-		mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
-		cloud.StorageAccountClient = mockStorageAccountsClient
-		mockStorageAccountsClient.EXPECT().GetProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storage.Account{Tags: map[string]*string{"key": ptr.To("value")}}, nil).AnyTimes()
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			ctx, cancel := context.WithCancel(context.Background())
 
-		parallelThread := 1
-		if test.parallelThread > 1 {
-			parallelThread = test.parallelThread
-		}
-		if len(test.key) > 0 {
-			mockStorageAccountsClient.EXPECT().Update(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
-		}
-
-		if parallelThread > 1 {
-			var wg sync.WaitGroup
-			wg.Add(parallelThread)
-			for i := 0; i < parallelThread; i++ {
-				go func() {
-					defer wg.Done()
-					err := cloud.RemoveStorageAccountTag(ctx, test.subsID, test.resourceGroup, test.account, test.key)
-					assert.Equal(t, err, test.expectedErr, fmt.Sprintf("returned error: %v", err), test.name)
-				}()
+			storageAccountRepo := &AccountRepo{
+				ComputeClientFactory: mock_azclient.NewMockClientFactory(ctrl),
 			}
-			wg.Wait()
-		} else {
-			err := cloud.RemoveStorageAccountTag(ctx, test.subsID, test.resourceGroup, test.account, test.key)
-			assert.Equal(t, err, test.expectedErr, fmt.Sprintf("returned error: %v", err), test.name)
-		}
+			getter := func(_ context.Context, _ string) (*armstorage.Account, error) { return nil, nil }
+			storageAccountRepo.storageAccountCache, _ = cache.NewTimedCache(time.Minute, getter, false)
+			storageAccountRepo.lockMap = lockmap.NewLockMap()
+			mockStorageAccountsClient := mock_accountclient.NewMockInterface(ctrl)
+
+			storageAccountRepo.ComputeClientFactory.(*mock_azclient.MockClientFactory).EXPECT().GetAccountClientForSub("").Return(mockStorageAccountsClient, nil).AnyTimes()
+
+			mockStorageAccountsClient.EXPECT().GetProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armstorage.Account{Tags: map[string]*string{"key": ptr.To("value")}}, nil).AnyTimes()
+
+			parallelThread := 1
+			if test.parallelThread > 1 {
+				parallelThread = test.parallelThread
+			}
+			if len(test.key) > 0 {
+				mockStorageAccountsClient.EXPECT().Update(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
+			}
+
+			if parallelThread > 1 {
+				var wg sync.WaitGroup
+				wg.Add(parallelThread)
+				for i := 0; i < parallelThread; i++ {
+					go func() {
+						defer wg.Done()
+						err := storageAccountRepo.RemoveStorageAccountTag(ctx, test.subsID, test.resourceGroup, test.account, test.key)
+						assert.Equal(t, err, test.expectedErr, fmt.Sprintf("returned error: %v", err), test.name)
+					}()
+				}
+				wg.Wait()
+			} else {
+				err := storageAccountRepo.RemoveStorageAccountTag(ctx, test.subsID, test.resourceGroup, test.account, test.key)
+				if test.expectedErr != nil {
+					assert.Equal(t, err, test.expectedErr, fmt.Sprintf("returned error: %v", err), test.name)
+				} else {
+					assert.Nil(t, err, fmt.Sprintf("returned error: %v", err), test.name)
+				}
+			}
+			ctrl.Finish()
+			cancel()
+		})
 	}
 
 }
 
 func TestIsPrivateEndpointAsExpected(t *testing.T) {
 	tests := []struct {
-		account        storage.Account
+		account        *armstorage.Account
 		accountOptions *AccountOptions
 		expectedResult bool
 	}{
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
-					PrivateEndpointConnections: &[]storage.PrivateEndpointConnection{{}},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					PrivateEndpointConnections: []*armstorage.PrivateEndpointConnection{{}},
 				},
 			},
 			accountOptions: &AccountOptions{
@@ -858,8 +816,8 @@ func TestIsPrivateEndpointAsExpected(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
 					PrivateEndpointConnections: nil,
 				},
 			},
@@ -869,9 +827,9 @@ func TestIsPrivateEndpointAsExpected(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
-					PrivateEndpointConnections: &[]storage.PrivateEndpointConnection{{}},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					PrivateEndpointConnections: []*armstorage.PrivateEndpointConnection{{}},
 				},
 			},
 			accountOptions: &AccountOptions{
@@ -880,9 +838,9 @@ func TestIsPrivateEndpointAsExpected(t *testing.T) {
 			expectedResult: false,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
-					PrivateEndpointConnections: &[]storage.PrivateEndpointConnection{{}},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					PrivateEndpointConnections: []*armstorage.PrivateEndpointConnection{{}},
 				},
 			},
 			accountOptions: &AccountOptions{
@@ -891,8 +849,8 @@ func TestIsPrivateEndpointAsExpected(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
 					PrivateEndpointConnections: nil,
 				},
 			},
@@ -912,13 +870,13 @@ func TestIsPrivateEndpointAsExpected(t *testing.T) {
 func TestIsTagsEqual(t *testing.T) {
 	tests := []struct {
 		desc           string
-		account        storage.Account
+		account        *armstorage.Account
 		accountOptions *AccountOptions
 		expectedResult bool
 	}{
 		{
 			desc: "nil tags",
-			account: storage.Account{
+			account: &armstorage.Account{
 				Tags: nil,
 			},
 			accountOptions: &AccountOptions{},
@@ -926,7 +884,7 @@ func TestIsTagsEqual(t *testing.T) {
 		},
 		{
 			desc: "empty tags",
-			account: storage.Account{
+			account: &armstorage.Account{
 				Tags: map[string]*string{},
 			},
 			accountOptions: &AccountOptions{},
@@ -934,7 +892,7 @@ func TestIsTagsEqual(t *testing.T) {
 		},
 		{
 			desc: "identitical tags",
-			account: storage.Account{
+			account: &armstorage.Account{
 				Tags: map[string]*string{
 					"key":  ptr.To("value"),
 					"key2": nil,
@@ -950,7 +908,7 @@ func TestIsTagsEqual(t *testing.T) {
 		},
 		{
 			desc: "identitical tags",
-			account: storage.Account{
+			account: &armstorage.Account{
 				Tags: map[string]*string{
 					"key":  ptr.To("value"),
 					"key2": ptr.To("value2"),
@@ -966,7 +924,7 @@ func TestIsTagsEqual(t *testing.T) {
 		},
 		{
 			desc: "non-identitical tags while MatchTags is false",
-			account: storage.Account{
+			account: &armstorage.Account{
 				Tags: map[string]*string{
 					"key": ptr.To("value2"),
 				},
@@ -981,7 +939,7 @@ func TestIsTagsEqual(t *testing.T) {
 		},
 		{
 			desc: "non-identitical tags",
-			account: storage.Account{
+			account: &armstorage.Account{
 				Tags: map[string]*string{
 					"key": ptr.To("value2"),
 				},
@@ -996,7 +954,7 @@ func TestIsTagsEqual(t *testing.T) {
 		},
 		{
 			desc: "non-identitical tags with different keys",
-			account: storage.Account{
+			account: &armstorage.Account{
 				Tags: map[string]*string{
 					"key1": ptr.To("value2"),
 				},
@@ -1011,7 +969,7 @@ func TestIsTagsEqual(t *testing.T) {
 		},
 		{
 			desc: "account tags is empty",
-			account: storage.Account{
+			account: &armstorage.Account{
 				Tags: map[string]*string{},
 			},
 			accountOptions: &AccountOptions{
@@ -1032,13 +990,13 @@ func TestIsTagsEqual(t *testing.T) {
 
 func TestIsHnsPropertyEqual(t *testing.T) {
 	tests := []struct {
-		account        storage.Account
+		account        *armstorage.Account
 		accountOptions *AccountOptions
 		expectedResult bool
 	}{
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
 					IsHnsEnabled: ptr.To(true),
 				},
 			},
@@ -1046,8 +1004,8 @@ func TestIsHnsPropertyEqual(t *testing.T) {
 			expectedResult: false,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				IsHnsEnabled: ptr.To(false),
@@ -1055,8 +1013,8 @@ func TestIsHnsPropertyEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
 					IsHnsEnabled: ptr.To(true),
 				},
 			},
@@ -1066,8 +1024,8 @@ func TestIsHnsPropertyEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				IsHnsEnabled: ptr.To(true),
@@ -1075,8 +1033,8 @@ func TestIsHnsPropertyEqual(t *testing.T) {
 			expectedResult: false,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
 					IsHnsEnabled: ptr.To(true),
 				},
 			},
@@ -1095,13 +1053,13 @@ func TestIsHnsPropertyEqual(t *testing.T) {
 
 func TestIsEnableNfsV3PropertyEqual(t *testing.T) {
 	tests := []struct {
-		account        storage.Account
+		account        *armstorage.Account
 		accountOptions *AccountOptions
 		expectedResult bool
 	}{
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
 					EnableNfsV3: ptr.To(true),
 				},
 			},
@@ -1109,8 +1067,8 @@ func TestIsEnableNfsV3PropertyEqual(t *testing.T) {
 			expectedResult: false,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				EnableNfsV3: ptr.To(false),
@@ -1118,8 +1076,8 @@ func TestIsEnableNfsV3PropertyEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
 					EnableNfsV3: ptr.To(true),
 				},
 			},
@@ -1129,8 +1087,8 @@ func TestIsEnableNfsV3PropertyEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				EnableNfsV3: ptr.To(true),
@@ -1138,8 +1096,8 @@ func TestIsEnableNfsV3PropertyEqual(t *testing.T) {
 			expectedResult: false,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
 					EnableNfsV3: ptr.To(true),
 				},
 			},
@@ -1158,13 +1116,13 @@ func TestIsEnableNfsV3PropertyEqual(t *testing.T) {
 
 func TestIsEnableHTTPSTrafficOnly(t *testing.T) {
 	tests := []struct {
-		account        storage.Account
+		account        *armstorage.Account
 		accountOptions *AccountOptions
 		expectedResult bool
 	}{
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
 					EnableHTTPSTrafficOnly: ptr.To(true),
 				},
 			},
@@ -1172,8 +1130,8 @@ func TestIsEnableHTTPSTrafficOnly(t *testing.T) {
 			expectedResult: false,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				EnableHTTPSTrafficOnly: false,
@@ -1181,8 +1139,8 @@ func TestIsEnableHTTPSTrafficOnly(t *testing.T) {
 			expectedResult: false,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
 					EnableHTTPSTrafficOnly: ptr.To(true),
 				},
 			},
@@ -1192,8 +1150,8 @@ func TestIsEnableHTTPSTrafficOnly(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				EnableHTTPSTrafficOnly: true,
@@ -1201,8 +1159,8 @@ func TestIsEnableHTTPSTrafficOnly(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
 					EnableHTTPSTrafficOnly: ptr.To(true),
 				},
 			},
@@ -1221,13 +1179,13 @@ func TestIsEnableHTTPSTrafficOnly(t *testing.T) {
 
 func TestIsAllowBlobPublicAccessEqual(t *testing.T) {
 	tests := []struct {
-		account        storage.Account
+		account        *armstorage.Account
 		accountOptions *AccountOptions
 		expectedResult bool
 	}{
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
 					AllowBlobPublicAccess: ptr.To(true),
 				},
 			},
@@ -1235,8 +1193,8 @@ func TestIsAllowBlobPublicAccessEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				AllowBlobPublicAccess: ptr.To(false),
@@ -1244,8 +1202,8 @@ func TestIsAllowBlobPublicAccessEqual(t *testing.T) {
 			expectedResult: false,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
 					AllowBlobPublicAccess: ptr.To(true),
 				},
 			},
@@ -1255,8 +1213,8 @@ func TestIsAllowBlobPublicAccessEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				AllowBlobPublicAccess: ptr.To(true),
@@ -1264,8 +1222,8 @@ func TestIsAllowBlobPublicAccessEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
 					AllowBlobPublicAccess: ptr.To(true),
 				},
 			},
@@ -1284,13 +1242,13 @@ func TestIsAllowBlobPublicAccessEqual(t *testing.T) {
 
 func TestIsAllowSharedKeyAccessEqual(t *testing.T) {
 	tests := []struct {
-		account        storage.Account
+		account        *armstorage.Account
 		accountOptions *AccountOptions
 		expectedResult bool
 	}{
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
 					AllowSharedKeyAccess: ptr.To(true),
 				},
 			},
@@ -1298,8 +1256,8 @@ func TestIsAllowSharedKeyAccessEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				AllowSharedKeyAccess: ptr.To(false),
@@ -1307,8 +1265,8 @@ func TestIsAllowSharedKeyAccessEqual(t *testing.T) {
 			expectedResult: false,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
 					AllowSharedKeyAccess: ptr.To(true),
 				},
 			},
@@ -1318,8 +1276,8 @@ func TestIsAllowSharedKeyAccessEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				AllowSharedKeyAccess: ptr.To(true),
@@ -1327,8 +1285,8 @@ func TestIsAllowSharedKeyAccessEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
 					AllowSharedKeyAccess: ptr.To(true),
 				},
 			},
@@ -1347,14 +1305,14 @@ func TestIsAllowSharedKeyAccessEqual(t *testing.T) {
 
 func TestIsRequireInfrastructureEncryptionEqual(t *testing.T) {
 	tests := []struct {
-		account        storage.Account
+		account        *armstorage.Account
 		accountOptions *AccountOptions
 		expectedResult bool
 	}{
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
-					Encryption: &storage.Encryption{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					Encryption: &armstorage.Encryption{
 						RequireInfrastructureEncryption: ptr.To(true),
 					},
 				},
@@ -1363,9 +1321,9 @@ func TestIsRequireInfrastructureEncryptionEqual(t *testing.T) {
 			expectedResult: false,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
-					Encryption: &storage.Encryption{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					Encryption: &armstorage.Encryption{
 						RequireInfrastructureEncryption: ptr.To(true),
 					},
 				},
@@ -1376,9 +1334,9 @@ func TestIsRequireInfrastructureEncryptionEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
-					Encryption: &storage.Encryption{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					Encryption: &armstorage.Encryption{
 						RequireInfrastructureEncryption: ptr.To(false),
 					},
 				},
@@ -1389,8 +1347,8 @@ func TestIsRequireInfrastructureEncryptionEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				RequireInfrastructureEncryption: ptr.To(false),
@@ -1398,9 +1356,9 @@ func TestIsRequireInfrastructureEncryptionEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
-					Encryption: &storage.Encryption{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					Encryption: &armstorage.Encryption{
 						RequireInfrastructureEncryption: ptr.To(true),
 					},
 				},
@@ -1411,9 +1369,9 @@ func TestIsRequireInfrastructureEncryptionEqual(t *testing.T) {
 			expectedResult: false,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
-					Encryption: &storage.Encryption{
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					Encryption: &armstorage.Encryption{
 						RequireInfrastructureEncryption: ptr.To(false),
 					},
 				},
@@ -1424,8 +1382,8 @@ func TestIsRequireInfrastructureEncryptionEqual(t *testing.T) {
 			expectedResult: false,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				RequireInfrastructureEncryption: ptr.To(true),
@@ -1442,22 +1400,22 @@ func TestIsRequireInfrastructureEncryptionEqual(t *testing.T) {
 
 func TestIsLargeFileSharesPropertyEqual(t *testing.T) {
 	tests := []struct {
-		account        storage.Account
+		account        *armstorage.Account
 		accountOptions *AccountOptions
 		expectedResult bool
 	}{
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
-					LargeFileSharesState: storage.LargeFileSharesStateEnabled,
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					LargeFileSharesState: to.Ptr(armstorage.LargeFileSharesStateEnabled),
 				},
 			},
 			accountOptions: &AccountOptions{},
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				EnableLargeFileShare: ptr.To(false),
@@ -1465,9 +1423,9 @@ func TestIsLargeFileSharesPropertyEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
-					LargeFileSharesState: storage.LargeFileSharesStateEnabled,
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					LargeFileSharesState: to.Ptr(armstorage.LargeFileSharesStateEnabled),
 				},
 			},
 			accountOptions: &AccountOptions{
@@ -1476,8 +1434,8 @@ func TestIsLargeFileSharesPropertyEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				EnableLargeFileShare: ptr.To(true),
@@ -1485,9 +1443,9 @@ func TestIsLargeFileSharesPropertyEqual(t *testing.T) {
 			expectedResult: false,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
-					LargeFileSharesState: storage.LargeFileSharesStateEnabled,
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					LargeFileSharesState: to.Ptr(armstorage.LargeFileSharesStateEnabled),
 				},
 			},
 			accountOptions: &AccountOptions{
@@ -1505,23 +1463,23 @@ func TestIsLargeFileSharesPropertyEqual(t *testing.T) {
 
 func TestIsAccessTierEqual(t *testing.T) {
 	tests := []struct {
-		account        storage.Account
+		account        *armstorage.Account
 		accountOptions *AccountOptions
 		expectedResult bool
 	}{
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
-					AccessTier: storage.AccessTierCool,
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					AccessTier: to.Ptr(armstorage.AccessTierCool),
 				},
 			},
 			accountOptions: &AccountOptions{},
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
-					AccessTier: storage.AccessTierHot,
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					AccessTier: to.Ptr(armstorage.AccessTierHot),
 				},
 			},
 			accountOptions: &AccountOptions{
@@ -1530,9 +1488,9 @@ func TestIsAccessTierEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
-					AccessTier: storage.AccessTierPremium,
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					AccessTier: to.Ptr(armstorage.AccessTierPremium),
 				},
 			},
 			accountOptions: &AccountOptions{
@@ -1541,8 +1499,8 @@ func TestIsAccessTierEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				AccessTier: "Hot",
@@ -1550,9 +1508,9 @@ func TestIsAccessTierEqual(t *testing.T) {
 			expectedResult: false,
 		},
 		{
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{
-					AccessTier: storage.AccessTierPremium,
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					AccessTier: to.Ptr(armstorage.AccessTierPremium),
 				},
 			},
 			accountOptions: &AccountOptions{
@@ -1572,60 +1530,57 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx, cancel := getContextWithCancel()
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	accountName := "account2"
 
-	cloud := GetTestCloud(ctrl)
-	getter := func(_ context.Context, _ string) (interface{}, error) { return nil, nil }
+	StorageAccountRepo := &AccountRepo{
+		fileServiceRepo: mock_fileservice.NewMockRepository(ctrl),
+	}
 
-	multichannelEnabled := storage.FileServiceProperties{
-		FileServicePropertiesProperties: &storage.FileServicePropertiesProperties{
-			ProtocolSettings: &storage.ProtocolSettings{
-				Smb: &storage.SmbSetting{Multichannel: &storage.Multichannel{Enabled: ptr.To(true)}},
+	multichannelEnabled := armstorage.FileServiceProperties{
+		FileServiceProperties: &armstorage.FileServicePropertiesProperties{
+			ProtocolSettings: &armstorage.ProtocolSettings{
+				Smb: &armstorage.SmbSetting{Multichannel: &armstorage.Multichannel{Enabled: ptr.To(true)}},
 			},
 		},
 	}
 
-	multichannelDisabled := storage.FileServiceProperties{
-		FileServicePropertiesProperties: &storage.FileServicePropertiesProperties{
-			ProtocolSettings: &storage.ProtocolSettings{
-				Smb: &storage.SmbSetting{Multichannel: &storage.Multichannel{Enabled: ptr.To(false)}},
+	multichannelDisabled := armstorage.FileServiceProperties{
+		FileServiceProperties: &armstorage.FileServicePropertiesProperties{
+			ProtocolSettings: &armstorage.ProtocolSettings{
+				Smb: &armstorage.SmbSetting{Multichannel: &armstorage.Multichannel{Enabled: ptr.To(false)}},
 			},
 		},
 	}
 
-	incompleteServiceProperties := storage.FileServiceProperties{
-		FileServicePropertiesProperties: &storage.FileServicePropertiesProperties{
-			ProtocolSettings: &storage.ProtocolSettings{},
+	incompleteServiceProperties := armstorage.FileServiceProperties{
+		FileServiceProperties: &armstorage.FileServicePropertiesProperties{
+			ProtocolSettings: &armstorage.ProtocolSettings{},
 		},
 	}
-
-	mockFileClient := mockfileclient.NewMockInterface(ctrl)
-	cloud.FileClient = mockFileClient
-	mockFileClient.EXPECT().WithSubscriptionID(gomock.Any()).Return(mockFileClient).AnyTimes()
 
 	tests := []struct {
 		desc                      string
-		account                   storage.Account
+		account                   *armstorage.Account
 		accountOptions            *AccountOptions
-		serviceProperties         *storage.FileServiceProperties
+		serviceProperties         *armstorage.FileServiceProperties
 		servicePropertiesRetError error
 		expectedResult            bool
 	}{
 		{
 			desc: "IsMultichannelEnabled is nil",
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{},
 			expectedResult: true,
 		},
 		{
 			desc: "account.Name is nil",
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				IsMultichannelEnabled: ptr.To(false),
@@ -1634,9 +1589,9 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 		},
 		{
 			desc: "IsMultichannelEnabled not equal #1",
-			account: storage.Account{
-				Name:              &accountName,
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Name:       &accountName,
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				IsMultichannelEnabled: ptr.To(false),
@@ -1646,9 +1601,9 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 		},
 		{
 			desc: "GetServiceProperties return error",
-			account: storage.Account{
-				Name:              &accountName,
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Name:       &accountName,
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				IsMultichannelEnabled: ptr.To(false),
@@ -1659,9 +1614,9 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 		},
 		{
 			desc: "IsMultichannelEnabled not equal #2",
-			account: storage.Account{
-				Name:              &accountName,
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Name:       &accountName,
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				IsMultichannelEnabled: ptr.To(true),
@@ -1671,9 +1626,9 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 		},
 		{
 			desc: "IsMultichannelEnabled is equal #1",
-			account: storage.Account{
-				Name:              &accountName,
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Name:       &accountName,
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				IsMultichannelEnabled: ptr.To(true),
@@ -1683,9 +1638,9 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 		},
 		{
 			desc: "IsMultichannelEnabled is equal #2",
-			account: storage.Account{
-				Name:              &accountName,
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Name:       &accountName,
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				IsMultichannelEnabled: ptr.To(false),
@@ -1695,9 +1650,9 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 		},
 		{
 			desc: "incompleteServiceProperties should be regarded as IsMultichannelDisabled",
-			account: storage.Account{
-				Name:              &accountName,
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Name:       &accountName,
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				IsMultichannelEnabled: ptr.To(false),
@@ -1708,70 +1663,59 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		cloud.fileServicePropertiesCache, _ = cache.NewTimedCache(time.Minute, getter, false)
 		if test.serviceProperties != nil {
-			mockFileClient.EXPECT().GetServiceProperties(gomock.Any(), gomock.Any(), gomock.Any()).Return(*test.serviceProperties, test.servicePropertiesRetError).Times(1)
+			StorageAccountRepo.fileServiceRepo.(*mock_fileservice.MockRepository).EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(test.serviceProperties, test.servicePropertiesRetError).Times(1)
 		}
 
-		result, _ := cloud.isMultichannelEnabledEqual(ctx, test.account, test.accountOptions)
+		result, _ := StorageAccountRepo.isMultichannelEnabledEqual(ctx, test.account, test.accountOptions)
 		assert.Equal(t, test.expectedResult, result, test.desc)
 	}
 }
 
 func TestIsDisableFileServiceDeleteRetentionPolicyEqual(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
 
 	accountName := "account"
-	cloud := GetTestCloud(ctrl)
 
-	deleteRetentionPolicyEnabled := storage.FileServiceProperties{
-		FileServicePropertiesProperties: &storage.FileServicePropertiesProperties{
-			ShareDeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
+	deleteRetentionPolicyEnabled := armstorage.FileServiceProperties{
+		FileServiceProperties: &armstorage.FileServicePropertiesProperties{
+			ShareDeleteRetentionPolicy: &armstorage.DeleteRetentionPolicy{
 				Enabled: ptr.To(true),
 			},
 		},
 	}
 
-	deleteRetentionPolicyDisabled := storage.FileServiceProperties{
-		FileServicePropertiesProperties: &storage.FileServicePropertiesProperties{
-			ShareDeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
+	deleteRetentionPolicyDisabled := armstorage.FileServiceProperties{
+		FileServiceProperties: &armstorage.FileServicePropertiesProperties{
+			ShareDeleteRetentionPolicy: &armstorage.DeleteRetentionPolicy{
 				Enabled: ptr.To(false),
 			},
 		},
 	}
 
-	incompleteServiceProperties := storage.FileServiceProperties{
-		FileServicePropertiesProperties: &storage.FileServicePropertiesProperties{},
+	incompleteServiceProperties := armstorage.FileServiceProperties{
+		FileServiceProperties: &armstorage.FileServicePropertiesProperties{},
 	}
-
-	mockFileClient := mockfileclient.NewMockInterface(ctrl)
-	cloud.FileClient = mockFileClient
-	mockFileClient.EXPECT().WithSubscriptionID(gomock.Any()).Return(mockFileClient).AnyTimes()
 
 	tests := []struct {
 		desc                      string
-		account                   storage.Account
+		account                   *armstorage.Account
 		accountOptions            *AccountOptions
-		serviceProperties         *storage.FileServiceProperties
+		serviceProperties         *armstorage.FileServiceProperties
 		servicePropertiesRetError error
 		expectedResult            bool
 	}{
 		{
 			desc: "DisableFileServiceDeleteRetentionPolicy is nil",
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{},
 			expectedResult: true,
 		},
 		{
 			desc: "account.Name is nil",
-			account: storage.Account{
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				DisableFileServiceDeleteRetentionPolicy: ptr.To(false),
@@ -1780,9 +1724,9 @@ func TestIsDisableFileServiceDeleteRetentionPolicyEqual(t *testing.T) {
 		},
 		{
 			desc: "DisableFileServiceDeleteRetentionPolicy not equal",
-			account: storage.Account{
-				Name:              &accountName,
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Name:       &accountName,
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				DisableFileServiceDeleteRetentionPolicy: ptr.To(true),
@@ -1792,9 +1736,9 @@ func TestIsDisableFileServiceDeleteRetentionPolicyEqual(t *testing.T) {
 		},
 		{
 			desc: "GetServiceProperties return error",
-			account: storage.Account{
-				Name:              &accountName,
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Name:       &accountName,
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				DisableFileServiceDeleteRetentionPolicy: ptr.To(false),
@@ -1805,9 +1749,9 @@ func TestIsDisableFileServiceDeleteRetentionPolicyEqual(t *testing.T) {
 		},
 		{
 			desc: "DisableFileServiceDeleteRetentionPolicy not equal",
-			account: storage.Account{
-				Name:              &accountName,
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Name:       &accountName,
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				DisableFileServiceDeleteRetentionPolicy: ptr.To(false),
@@ -1817,9 +1761,9 @@ func TestIsDisableFileServiceDeleteRetentionPolicyEqual(t *testing.T) {
 		},
 		{
 			desc: "DisableFileServiceDeleteRetentionPolicy is equal",
-			account: storage.Account{
-				Name:              &accountName,
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Name:       &accountName,
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				DisableFileServiceDeleteRetentionPolicy: ptr.To(true),
@@ -1829,9 +1773,9 @@ func TestIsDisableFileServiceDeleteRetentionPolicyEqual(t *testing.T) {
 		},
 		{
 			desc: "DisableFileServiceDeleteRetentionPolicy is equal",
-			account: storage.Account{
-				Name:              &accountName,
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Name:       &accountName,
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				DisableFileServiceDeleteRetentionPolicy: ptr.To(false),
@@ -1841,9 +1785,9 @@ func TestIsDisableFileServiceDeleteRetentionPolicyEqual(t *testing.T) {
 		},
 		{
 			desc: "incompleteServiceProperties should be regarded as not DisableFileServiceDeleteRetentionPolicy",
-			account: storage.Account{
-				Name:              &accountName,
-				AccountProperties: &storage.AccountProperties{},
+			account: &armstorage.Account{
+				Name:       &accountName,
+				Properties: &armstorage.AccountProperties{},
 			},
 			accountOptions: &AccountOptions{
 				DisableFileServiceDeleteRetentionPolicy: ptr.To(false),
@@ -1854,18 +1798,26 @@ func TestIsDisableFileServiceDeleteRetentionPolicyEqual(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		if test.serviceProperties != nil {
-			mockFileClient.EXPECT().GetServiceProperties(gomock.Any(), gomock.Any(), gomock.Any()).Return(*test.serviceProperties, test.servicePropertiesRetError).Times(1)
-		}
-
-		result, _ := cloud.isDisableFileServiceDeleteRetentionPolicyEqual(ctx, test.account, test.accountOptions)
-		assert.Equal(t, test.expectedResult, result, test.desc)
+		t.Run(test.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			StorageAccountRepo := &AccountRepo{
+				fileServiceRepo: mock_fileservice.NewMockRepository(ctrl),
+			}
+			if test.serviceProperties != nil {
+				StorageAccountRepo.fileServiceRepo.(*mock_fileservice.MockRepository).EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(test.serviceProperties, test.servicePropertiesRetError).Times(1)
+			}
+			result, _ := StorageAccountRepo.isDisableFileServiceDeleteRetentionPolicyEqual(ctx, test.account, test.accountOptions)
+			assert.Equal(t, test.expectedResult, result, test.desc)
+			ctrl.Finish()
+			cancel()
+		})
 	}
 }
 
 func TestIsSoftDeleteBlobsEqual(t *testing.T) {
 	type args struct {
-		property       storage.BlobServiceProperties
+		property       *armstorage.BlobServiceProperties
 		accountOptions *AccountOptions
 	}
 	tests := []struct {
@@ -1876,8 +1828,8 @@ func TestIsSoftDeleteBlobsEqual(t *testing.T) {
 		{
 			name: "not equal for property nil",
 			args: args{
-				property: storage.BlobServiceProperties{
-					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{},
+				property: &armstorage.BlobServiceProperties{
+					BlobServiceProperties: &armstorage.BlobServicePropertiesProperties{},
 				},
 				accountOptions: &AccountOptions{
 					SoftDeleteBlobs: 7,
@@ -1888,9 +1840,9 @@ func TestIsSoftDeleteBlobsEqual(t *testing.T) {
 		{
 			name: "not equal for property not enable",
 			args: args{
-				property: storage.BlobServiceProperties{
-					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
-						DeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
+				property: &armstorage.BlobServiceProperties{
+					BlobServiceProperties: &armstorage.BlobServicePropertiesProperties{
+						DeleteRetentionPolicy: &armstorage.DeleteRetentionPolicy{
 							Enabled: ptr.To(false),
 						},
 					},
@@ -1904,9 +1856,9 @@ func TestIsSoftDeleteBlobsEqual(t *testing.T) {
 		{
 			name: "not equal for accountOptions nil",
 			args: args{
-				property: storage.BlobServiceProperties{
-					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
-						DeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
+				property: &armstorage.BlobServiceProperties{
+					BlobServiceProperties: &armstorage.BlobServicePropertiesProperties{
+						DeleteRetentionPolicy: &armstorage.DeleteRetentionPolicy{
 							Enabled: ptr.To(true),
 							Days:    ptr.To(int32(7)),
 						},
@@ -1919,9 +1871,9 @@ func TestIsSoftDeleteBlobsEqual(t *testing.T) {
 		{
 			name: "qual",
 			args: args{
-				property: storage.BlobServiceProperties{
-					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
-						DeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
+				property: &armstorage.BlobServiceProperties{
+					BlobServiceProperties: &armstorage.BlobServicePropertiesProperties{
+						DeleteRetentionPolicy: &armstorage.DeleteRetentionPolicy{
 							Enabled: ptr.To(true),
 							Days:    ptr.To(int32(7)),
 						},
@@ -1945,7 +1897,7 @@ func TestIsSoftDeleteBlobsEqual(t *testing.T) {
 
 func Test_isSoftDeleteContainersEqual(t *testing.T) {
 	type args struct {
-		property       storage.BlobServiceProperties
+		property       *armstorage.BlobServiceProperties
 		accountOptions *AccountOptions
 	}
 	tests := []struct {
@@ -1956,8 +1908,8 @@ func Test_isSoftDeleteContainersEqual(t *testing.T) {
 		{
 			name: "not equal for property nil",
 			args: args{
-				property: storage.BlobServiceProperties{
-					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{},
+				property: &armstorage.BlobServiceProperties{
+					BlobServiceProperties: &armstorage.BlobServicePropertiesProperties{},
 				},
 				accountOptions: &AccountOptions{
 					SoftDeleteContainers: 7,
@@ -1968,9 +1920,9 @@ func Test_isSoftDeleteContainersEqual(t *testing.T) {
 		{
 			name: "not equal for property not enable",
 			args: args{
-				property: storage.BlobServiceProperties{
-					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
-						ContainerDeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
+				property: &armstorage.BlobServiceProperties{
+					BlobServiceProperties: &armstorage.BlobServicePropertiesProperties{
+						ContainerDeleteRetentionPolicy: &armstorage.DeleteRetentionPolicy{
 							Enabled: ptr.To(false),
 						},
 					},
@@ -1984,9 +1936,9 @@ func Test_isSoftDeleteContainersEqual(t *testing.T) {
 		{
 			name: "not equal for accountOptions nil",
 			args: args{
-				property: storage.BlobServiceProperties{
-					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
-						ContainerDeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
+				property: &armstorage.BlobServiceProperties{
+					BlobServiceProperties: &armstorage.BlobServicePropertiesProperties{
+						ContainerDeleteRetentionPolicy: &armstorage.DeleteRetentionPolicy{
 							Enabled: ptr.To(true),
 							Days:    ptr.To(int32(7)),
 						},
@@ -1999,9 +1951,9 @@ func Test_isSoftDeleteContainersEqual(t *testing.T) {
 		{
 			name: "qual",
 			args: args{
-				property: storage.BlobServiceProperties{
-					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
-						ContainerDeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
+				property: &armstorage.BlobServiceProperties{
+					BlobServiceProperties: &armstorage.BlobServicePropertiesProperties{
+						ContainerDeleteRetentionPolicy: &armstorage.DeleteRetentionPolicy{
 							Enabled: ptr.To(true),
 							Days:    ptr.To(int32(7)),
 						},
@@ -2025,7 +1977,7 @@ func Test_isSoftDeleteContainersEqual(t *testing.T) {
 
 func Test_isEnableBlobVersioningEqual(t *testing.T) {
 	type args struct {
-		property       storage.BlobServiceProperties
+		property       *armstorage.BlobServiceProperties
 		accountOptions *AccountOptions
 	}
 	tests := []struct {
@@ -2036,8 +1988,8 @@ func Test_isEnableBlobVersioningEqual(t *testing.T) {
 		{
 			name: "equal",
 			args: args{
-				property: storage.BlobServiceProperties{
-					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{},
+				property: &armstorage.BlobServiceProperties{
+					BlobServiceProperties: &armstorage.BlobServicePropertiesProperties{},
 				},
 				accountOptions: &AccountOptions{
 					EnableBlobVersioning: ptr.To(false),
@@ -2048,8 +2000,8 @@ func Test_isEnableBlobVersioningEqual(t *testing.T) {
 		{
 			name: "not equal",
 			args: args{
-				property: storage.BlobServiceProperties{
-					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
+				property: &armstorage.BlobServiceProperties{
+					BlobServiceProperties: &armstorage.BlobServicePropertiesProperties{
 						IsVersioningEnabled: ptr.To(true),
 					},
 				},
@@ -2116,7 +2068,7 @@ func TestParseServiceAccountToken(t *testing.T) {
 
 func TestAreVNetRulesEqual(t *testing.T) {
 	type args struct {
-		account       storage.Account
+		account       *armstorage.Account
 		accountOption *AccountOptions
 	}
 	tests := []struct {
@@ -2127,8 +2079,8 @@ func TestAreVNetRulesEqual(t *testing.T) {
 		{
 			name: "account option is empty",
 			args: args{
-				account: storage.Account{
-					AccountProperties: &storage.AccountProperties{},
+				account: &armstorage.Account{
+					Properties: &armstorage.AccountProperties{},
 				},
 				accountOption: &AccountOptions{
 					VirtualNetworkResourceIDs: []string{},
@@ -2139,14 +2091,14 @@ func TestAreVNetRulesEqual(t *testing.T) {
 		{
 			name: "VirtualNetworkRules are equal",
 			args: args{
-				account: storage.Account{
-					AccountProperties: &storage.AccountProperties{
-						NetworkRuleSet: &storage.NetworkRuleSet{
-							VirtualNetworkRules: &[]storage.VirtualNetworkRule{
+				account: &armstorage.Account{
+					Properties: &armstorage.AccountProperties{
+						NetworkRuleSet: &armstorage.NetworkRuleSet{
+							VirtualNetworkRules: []*armstorage.VirtualNetworkRule{
 								{
 									VirtualNetworkResourceID: ptr.To("id"),
-									Action:                   storage.ActionAllow,
-									State:                    "state",
+									Action:                   to.Ptr(string(armstorage.DefaultActionAllow)),
+									State:                    to.Ptr(armstorage.State("state")),
 								},
 							},
 						},
@@ -2161,17 +2113,17 @@ func TestAreVNetRulesEqual(t *testing.T) {
 		{
 			name: "VirtualNetworkRules are equal with multiple NetworkRules",
 			args: args{
-				account: storage.Account{
-					AccountProperties: &storage.AccountProperties{
-						NetworkRuleSet: &storage.NetworkRuleSet{
-							VirtualNetworkRules: &[]storage.VirtualNetworkRule{
+				account: &armstorage.Account{
+					Properties: &armstorage.AccountProperties{
+						NetworkRuleSet: &armstorage.NetworkRuleSet{
+							VirtualNetworkRules: []*armstorage.VirtualNetworkRule{
 								{
 									VirtualNetworkResourceID: ptr.To("id1"),
-									Action:                   storage.ActionAllow,
+									Action:                   to.Ptr(string(armstorage.DefaultActionAllow)),
 								},
 								{
 									VirtualNetworkResourceID: ptr.To("id2"),
-									Action:                   storage.ActionAllow,
+									Action:                   to.Ptr(string(armstorage.DefaultActionAllow)),
 								},
 							},
 						},
@@ -2186,14 +2138,14 @@ func TestAreVNetRulesEqual(t *testing.T) {
 		{
 			name: "VirtualNetworkRules not equal",
 			args: args{
-				account: storage.Account{
-					AccountProperties: &storage.AccountProperties{
-						NetworkRuleSet: &storage.NetworkRuleSet{
-							VirtualNetworkRules: &[]storage.VirtualNetworkRule{
+				account: &armstorage.Account{
+					Properties: &armstorage.AccountProperties{
+						NetworkRuleSet: &armstorage.NetworkRuleSet{
+							VirtualNetworkRules: []*armstorage.VirtualNetworkRule{
 								{
 									VirtualNetworkResourceID: ptr.To("id1"),
-									Action:                   storage.ActionAllow,
-									State:                    "state",
+									Action:                   to.Ptr(string(armstorage.DefaultActionAllow)),
+									State:                    to.Ptr(armstorage.State("state")),
 								},
 							},
 						},
@@ -2213,5 +2165,35 @@ func TestAreVNetRulesEqual(t *testing.T) {
 				t.Errorf("areVNetRulesEqual() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestGenerateStorageAccountName(t *testing.T) {
+	tests := []struct {
+		prefix string
+	}{
+		{
+			prefix: "",
+		},
+		{
+			prefix: "pvc",
+		},
+		{
+			prefix: "1234512345123451234512345",
+		},
+	}
+
+	for _, test := range tests {
+		accountName := generateStorageAccountName(test.prefix)
+		if len(accountName) > consts.StorageAccountNameMaxLength || len(accountName) < 3 {
+			t.Errorf("input prefix: %s, output account name: %s, length not in [3,%d]", test.prefix, accountName, consts.StorageAccountNameMaxLength)
+		}
+
+		for _, char := range accountName {
+			if (char < 'a' || char > 'z') && (char < '0' || char > '9') {
+				t.Errorf("input prefix: %s, output account name: %s, there is non-digit or non-letter(%q)", test.prefix, accountName, char)
+				break
+			}
+		}
 	}
 }

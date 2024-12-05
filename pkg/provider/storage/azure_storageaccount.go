@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package provider
+package storage
 
 import (
 	"context"
@@ -25,18 +25,24 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	privatedns "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
-
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
+	"github.com/Azure/go-autorest/autorest/azure"
+	"github.com/google/uuid"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/storage/fileservice"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/lockmap"
 )
 
 // SkipMatchingTag skip account matching tag
@@ -45,12 +51,12 @@ const LocationGlobal = "global"
 const privateDNSZoneNameFmt = "privatelink.%s.%s"
 const DefaultTokenAudience = "api://AzureADTokenExchange" //nolint:gosec // G101 ignore this!
 
-type StorageType string
+type Type string
 
 const (
-	StorageTypeBlob StorageType = "blob"
-	StorageTypeFile StorageType = "file"
-	blobNameSuffix              = "-blob"
+	StorageTypeBlob Type = "blob"
+	StorageTypeFile Type = "file"
+	blobNameSuffix       = "-blob"
 )
 
 // AccountOptions contains the fields which are used to create storage account.
@@ -61,7 +67,7 @@ type AccountOptions struct {
 	// indicate whether create new account when Name is empty or when account does not exists
 	CreateAccount                           bool
 	CreatePrivateEndpoint                   *bool
-	StorageType                             StorageType
+	StorageType                             Type
 	StorageEndpointSuffix                   string
 	DisableFileServiceDeleteRetentionPolicy *bool
 	EnableLargeFileShare                    *bool
@@ -94,20 +100,48 @@ type AccountOptions struct {
 type accountWithLocation struct {
 	Name, StorageType, Location string
 }
+type AccountRepo struct {
+	azureconfig.Config
+	Environment          azure.Environment
+	ComputeClientFactory azclient.ClientFactory
+	NetworkClientFactory azclient.ClientFactory
+	subnetRepo           subnet.Repository
+	fileServiceRepo      fileservice.Repository
+	storageAccountCache  cache.Resource[armstorage.Account]
+	lockMap              *lockmap.LockMap
+}
+
+func NewRepository(config azureconfig.Config, env azure.Environment, computeClientFactory azclient.ClientFactory, networkClientFactory azclient.ClientFactory) (*AccountRepo, error) {
+	getter := func(_ context.Context, _ string) (*armstorage.Account, error) { return nil, nil }
+	storageAccountCache, err := cache.NewTimedCache(time.Minute, getter, config.DisableAPICallCache)
+	if err != nil {
+		return nil, err
+	}
+	fileserviceRepo, err := fileservice.NewRepository(config, computeClientFactory)
+	if err != nil {
+		return nil, err
+	}
+	return &AccountRepo{
+		Config:               config,
+		Environment:          env,
+		fileServiceRepo:      fileserviceRepo,
+		ComputeClientFactory: computeClientFactory,
+		NetworkClientFactory: networkClientFactory,
+		storageAccountCache:  storageAccountCache,
+		lockMap:              lockmap.NewLockMap(),
+	}, nil
+}
 
 // getStorageAccounts get matching storage accounts
-func (az *Cloud) getStorageAccounts(ctx context.Context, accountOptions *AccountOptions) ([]accountWithLocation, error) {
-	if az.StorageAccountClient == nil {
-		return nil, fmt.Errorf("StorageAccountClient is nil")
-	}
-	result, rerr := az.StorageAccountClient.ListByResourceGroup(ctx, accountOptions.SubscriptionID, accountOptions.ResourceGroup)
-	if rerr != nil {
-		return nil, rerr.Error()
+func (az *AccountRepo) getStorageAccounts(ctx context.Context, storageAccountClient accountclient.Interface, accountOptions *AccountOptions) ([]accountWithLocation, error) {
+	result, err := storageAccountClient.List(ctx, accountOptions.ResourceGroup)
+	if err != nil {
+		return nil, err
 	}
 
 	accounts := []accountWithLocation{}
 	for _, acct := range result {
-		if acct.Name != nil && acct.Location != nil && acct.Sku != nil {
+		if acct.Name != nil && acct.Location != nil && acct.SKU != nil {
 			if !(isStorageTypeEqual(acct, accountOptions) &&
 				isAccountKindEqual(acct, accountOptions) &&
 				isLocationEqual(acct, accountOptions) &&
@@ -148,7 +182,7 @@ func (az *Cloud) getStorageAccounts(ctx context.Context, accountOptions *Account
 				continue
 			}
 
-			accounts = append(accounts, accountWithLocation{Name: *acct.Name, StorageType: string((*acct.Sku).Name), Location: *acct.Location})
+			accounts = append(accounts, accountWithLocation{Name: *acct.Name, StorageType: string(*acct.SKU.Name), Location: *acct.Location})
 			if !accountOptions.PickRandomMatchingAccount {
 				// return the first matching account if it's not required to pick a random one
 				break
@@ -182,7 +216,36 @@ func parseServiceAccountToken(tokenStr string) (string, error) {
 	return token.APIAzureADTokenExchange.Token, nil
 }
 
-func (az *Cloud) GetStorageAccesskeyFromServiceAccountToken(ctx context.Context, subsID, accountName, rgName, clientID, tenantID, serviceAccountToken string) (string, error) {
+func (az *AccountRepo) getStorageAccountWithCache(ctx context.Context, subsID, resourceGroup, account string) (armstorage.Account, error) {
+	if az.ComputeClientFactory == nil {
+		return armstorage.Account{}, fmt.Errorf("ComputeClientFactory is nil")
+	}
+	if az.storageAccountCache == nil {
+		return armstorage.Account{}, fmt.Errorf("storage account cache is nil")
+	}
+	// search in cache first
+	cache, err := az.storageAccountCache.Get(ctx, account, cache.CacheReadTypeDefault)
+	if err != nil {
+		return armstorage.Account{}, err
+	}
+	if cache != nil {
+		klog.V(2).Infof("Get storage account(%s) from cache", account)
+		return *cache, nil
+	}
+
+	accountClient, err := az.ComputeClientFactory.GetAccountClientForSub(subsID)
+	if err != nil {
+		return armstorage.Account{}, err
+	}
+	result, err := accountClient.GetProperties(ctx, resourceGroup, account, nil)
+	if err != nil {
+		return armstorage.Account{}, err
+	}
+	az.storageAccountCache.Set(account, result)
+	return *result, nil
+}
+
+func (az *AccountRepo) GetStorageAccesskeyFromServiceAccountToken(ctx context.Context, subsID, accountName, rgName, clientID, tenantID, serviceAccountToken string) (string, error) {
 	cred, err := azidentity.NewClientAssertionCredential(tenantID, clientID, func(context.Context) (string, error) {
 		return parseServiceAccountToken(serviceAccountToken)
 	}, &azidentity.ClientAssertionCredentialOptions{})
@@ -216,23 +279,19 @@ func (az *Cloud) GetStorageAccesskeyFromServiceAccountToken(ctx context.Context,
 
 // GetStorageAccesskey gets the storage account access key
 // getLatestAccountKey: get the latest account key per CreationTime if true, otherwise get the first account key
-func (az *Cloud) GetStorageAccesskey(ctx context.Context, subsID, account, resourceGroup string, getLatestAccountKey bool) (string, error) {
-	if az.StorageAccountClient == nil {
-		return "", fmt.Errorf("StorageAccountClient is nil")
+func (az *AccountRepo) GetStorageAccesskey(ctx context.Context, accountClient accountclient.Interface, account, resourceGroup string, getLatestAccountKey bool) (string, error) {
+	result, err := accountClient.ListKeys(ctx, resourceGroup, account)
+	if err != nil {
+		return "", err
 	}
-
-	result, rerr := az.StorageAccountClient.ListKeys(ctx, subsID, resourceGroup, account)
-	if rerr != nil {
-		return "", rerr.Error()
-	}
-	if result.Keys == nil {
+	if len(result) == 0 {
 		return "", fmt.Errorf("empty keys")
 	}
 
 	var key string
 	var creationTime time.Time
 
-	for _, k := range *result.Keys {
+	for _, k := range result {
 		if k.Value != nil && *k.Value != "" {
 			v := *k.Value
 			if ind := strings.LastIndex(v, " "); ind >= 0 {
@@ -246,13 +305,13 @@ func (az *Cloud) GetStorageAccesskey(ctx context.Context, subsID, account, resou
 			if key == "" {
 				key = v
 				if k.CreationTime != nil {
-					creationTime = k.CreationTime.ToTime()
+					creationTime = *k.CreationTime
 				}
 				klog.V(2).Infof("got storage account key with creation time: %v", creationTime)
 			} else {
-				if k.CreationTime != nil && creationTime.Before(k.CreationTime.ToTime()) {
+				if k.CreationTime != nil && creationTime.Before(*k.CreationTime) {
 					key = v
-					creationTime = k.CreationTime.ToTime()
+					creationTime = *k.CreationTime
 					klog.V(2).Infof("got storage account key with latest creation time: %v", creationTime)
 				}
 			}
@@ -266,7 +325,7 @@ func (az *Cloud) GetStorageAccesskey(ctx context.Context, subsID, account, resou
 }
 
 // EnsureStorageAccount search storage account, create one storage account(with genAccountNamePrefix) if not found, return accountName, accountKey
-func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *AccountOptions, genAccountNamePrefix string) (string, string, error) {
+func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions *AccountOptions, genAccountNamePrefix string) (string, string, error) {
 	if accountOptions == nil {
 		return "", "", fmt.Errorf("account options is nil")
 	}
@@ -321,11 +380,23 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 	accountOptions.Tags[consts.CreatedByTag] = "azure"
 
 	var createNewAccount bool
+	clientFactory := az.ComputeClientFactory
+	if clientFactory == nil {
+		return "", "", fmt.Errorf("clientFactory is nil")
+	}
+	storageAccountClient, err := clientFactory.GetAccountClientForSub(accountOptions.SubscriptionID)
+	if err != nil {
+		return "", "", err
+	}
+
+	if storageAccountClient == nil {
+		return "", "", fmt.Errorf("StorageAccountClient is nil")
+	}
 	if len(accountName) == 0 {
 		createNewAccount = true
 		if !accountOptions.CreateAccount {
 			// find a storage account that matches accountType
-			accounts, err := az.getStorageAccounts(ctx, accountOptions)
+			accounts, err := az.getStorageAccounts(ctx, storageAccountClient, accountOptions)
 			if err != nil {
 				return "", "", fmt.Errorf("could not list storage accounts for account type %s: %w", accountType, err)
 			}
@@ -363,7 +434,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		createNewAccount = false
 		if accountOptions.CreateAccount {
 			// check whether account exists
-			if _, err := az.GetStorageAccesskey(ctx, subsID, accountName, resourceGroup, accountOptions.GetLatestAccountKey); err != nil {
+			if _, err := az.GetStorageAccesskey(ctx, storageAccountClient, accountName, resourceGroup, accountOptions.GetLatestAccountKey); err != nil {
 				klog.V(2).Infof("get storage key for storage account %s returned with %v", accountName, err)
 				createNewAccount = true
 			}
@@ -409,120 +480,117 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 
 	if createNewAccount {
 		// set network rules for storage account
-		var networkRuleSet *storage.NetworkRuleSet
-		virtualNetworkRules := []storage.VirtualNetworkRule{}
+		var networkRuleSet *armstorage.NetworkRuleSet
+		virtualNetworkRules := []*armstorage.VirtualNetworkRule{}
 		for i, subnetID := range accountOptions.VirtualNetworkResourceIDs {
-			vnetRule := storage.VirtualNetworkRule{
+			vnetRule := &armstorage.VirtualNetworkRule{
 				VirtualNetworkResourceID: &accountOptions.VirtualNetworkResourceIDs[i],
-				Action:                   storage.ActionAllow,
+				Action:                   to.Ptr(string(armstorage.DefaultActionAllow)),
 			}
 			virtualNetworkRules = append(virtualNetworkRules, vnetRule)
 			klog.V(4).Infof("subnetID(%s) has been set", subnetID)
 		}
 		if len(virtualNetworkRules) > 0 {
-			networkRuleSet = &storage.NetworkRuleSet{
-				VirtualNetworkRules: &virtualNetworkRules,
-				DefaultAction:       storage.DefaultActionDeny,
+			networkRuleSet = &armstorage.NetworkRuleSet{
+				VirtualNetworkRules: virtualNetworkRules,
+				DefaultAction:       to.Ptr(armstorage.DefaultActionDeny),
 			}
 		}
 
 		if ptr.Deref(accountOptions.CreatePrivateEndpoint, false) {
-			networkRuleSet = &storage.NetworkRuleSet{
-				DefaultAction: storage.DefaultActionDeny,
+			networkRuleSet = &armstorage.NetworkRuleSet{
+				DefaultAction: to.Ptr(armstorage.DefaultActionDeny),
 			}
 		}
 
 		if accountType == "" {
-			accountType = consts.DefaultStorageAccountType
+			accountType = DefaultStorageAccountType
 		}
 
 		// use StorageV2 by default per https://docs.microsoft.com/en-us/azure/storage/common/storage-account-options
-		kind := consts.DefaultStorageAccountKind
+		kind := DefaultStorageAccountKind
 		if accountKind != "" {
-			kind = storage.Kind(accountKind)
+			kind = armstorage.Kind(accountKind)
 		}
 		tags := convertMapToMapPointer(accountOptions.Tags)
 
 		klog.V(2).Infof("azure - no matching account found, begin to create a new account %s in resource group %s, location: %s, accountType: %s, accountKind: %s, tags: %+v",
 			accountName, resourceGroup, location, accountType, kind, accountOptions.Tags)
 
-		cp := storage.AccountCreateParameters{
-			Sku:  &storage.Sku{Name: storage.SkuName(accountType)},
-			Kind: kind,
-			AccountPropertiesCreateParameters: &storage.AccountPropertiesCreateParameters{
+		cp := &armstorage.AccountCreateParameters{
+			SKU:  &armstorage.SKU{Name: to.Ptr(armstorage.SKUName(accountType))},
+			Kind: to.Ptr(kind),
+			Properties: &armstorage.AccountPropertiesCreateParameters{
 				EnableHTTPSTrafficOnly: &enableHTTPSTrafficOnly,
 				NetworkRuleSet:         networkRuleSet,
 				IsHnsEnabled:           accountOptions.IsHnsEnabled,
 				EnableNfsV3:            accountOptions.EnableNfsV3,
-				MinimumTLSVersion:      storage.MinimumTLSVersionTLS12,
+				MinimumTLSVersion:      to.Ptr(armstorage.MinimumTLSVersionTLS12),
 			},
 			Tags:     tags,
 			Location: &location}
 
 		if accountOptions.EnableLargeFileShare != nil {
-			state := storage.LargeFileSharesStateDisabled
+			state := armstorage.LargeFileSharesStateDisabled
 			if *accountOptions.EnableLargeFileShare {
-				state = storage.LargeFileSharesStateEnabled
+				state = armstorage.LargeFileSharesStateEnabled
 			}
 			klog.V(2).Infof("enable LargeFileShare(%s) for storage account(%s)", state, accountName)
-			cp.AccountPropertiesCreateParameters.LargeFileSharesState = state
+			cp.Properties.LargeFileSharesState = to.Ptr(state)
 		}
 		if accountOptions.AllowBlobPublicAccess != nil {
 			klog.V(2).Infof("set AllowBlobPublicAccess(%v) for storage account(%s)", *accountOptions.AllowBlobPublicAccess, accountName)
-			cp.AccountPropertiesCreateParameters.AllowBlobPublicAccess = accountOptions.AllowBlobPublicAccess
+			cp.Properties.AllowBlobPublicAccess = accountOptions.AllowBlobPublicAccess
 		}
 		if accountOptions.RequireInfrastructureEncryption != nil {
 			klog.V(2).Infof("set RequireInfrastructureEncryption(%v) for storage account(%s)", *accountOptions.RequireInfrastructureEncryption, accountName)
-			cp.AccountPropertiesCreateParameters.Encryption = &storage.Encryption{
+			cp.Properties.Encryption = &armstorage.Encryption{
 				RequireInfrastructureEncryption: accountOptions.RequireInfrastructureEncryption,
-				KeySource:                       storage.KeySourceMicrosoftStorage,
-				Services: &storage.EncryptionServices{
-					File: &storage.EncryptionService{Enabled: ptr.To(true)},
-					Blob: &storage.EncryptionService{Enabled: ptr.To(true)},
+				KeySource:                       to.Ptr(armstorage.KeySourceMicrosoftStorage),
+				Services: &armstorage.EncryptionServices{
+					File: &armstorage.EncryptionService{Enabled: ptr.To(true)},
+					Blob: &armstorage.EncryptionService{Enabled: ptr.To(true)},
 				},
 			}
 		}
 		if accountOptions.AllowSharedKeyAccess != nil {
 			klog.V(2).Infof("set Allow SharedKeyAccess (%v) for storage account (%s)", *accountOptions.AllowSharedKeyAccess, accountName)
-			cp.AccountPropertiesCreateParameters.AllowSharedKeyAccess = accountOptions.AllowSharedKeyAccess
+			cp.Properties.AllowSharedKeyAccess = accountOptions.AllowSharedKeyAccess
 		}
 		if accountOptions.KeyVaultURI != nil {
 			klog.V(2).Infof("set KeyVault(%v) for storage account(%s)", accountOptions.KeyVaultURI, accountName)
-			cp.AccountPropertiesCreateParameters.Encryption = &storage.Encryption{
-				KeyVaultProperties: &storage.KeyVaultProperties{
+			cp.Properties.Encryption = &armstorage.Encryption{
+				KeyVaultProperties: &armstorage.KeyVaultProperties{
 					KeyName:     accountOptions.KeyName,
 					KeyVersion:  accountOptions.KeyVersion,
 					KeyVaultURI: accountOptions.KeyVaultURI,
 				},
-				KeySource: storage.KeySourceMicrosoftKeyvault,
-				Services: &storage.EncryptionServices{
-					File: &storage.EncryptionService{Enabled: ptr.To(true)},
-					Blob: &storage.EncryptionService{Enabled: ptr.To(true)},
+				KeySource: to.Ptr(armstorage.KeySourceMicrosoftKeyvault),
+				Services: &armstorage.EncryptionServices{
+					File: &armstorage.EncryptionService{Enabled: ptr.To(true)},
+					Blob: &armstorage.EncryptionService{Enabled: ptr.To(true)},
 				},
 			}
 		}
-		if az.StorageAccountClient == nil {
-			return "", "", fmt.Errorf("StorageAccountClient is nil")
-		}
 
-		if rerr := az.StorageAccountClient.Create(ctx, subsID, resourceGroup, accountName, cp); rerr != nil {
-			return "", "", fmt.Errorf("failed to create storage account %s, error: %v", accountName, rerr)
+		if _, rerr := storageAccountClient.Create(ctx, resourceGroup, accountName, cp); rerr != nil {
+			return "", "", fmt.Errorf("failed to create storage account %s, error: %w", accountName, rerr)
 		}
 
 		if ptr.Deref(accountOptions.EnableBlobVersioning, false) ||
 			accountOptions.SoftDeleteBlobs > 0 ||
 			accountOptions.SoftDeleteContainers > 0 {
-			var blobPolicy, containerPolicy *storage.DeleteRetentionPolicy
+			var blobPolicy, containerPolicy *armstorage.DeleteRetentionPolicy
 			var enableBlobVersioning *bool
 
 			if accountOptions.SoftDeleteContainers > 0 {
-				containerPolicy = &storage.DeleteRetentionPolicy{
+				containerPolicy = &armstorage.DeleteRetentionPolicy{
 					Enabled: ptr.To(accountOptions.SoftDeleteContainers > 0),
 					Days:    ptr.To(accountOptions.SoftDeleteContainers),
 				}
 			}
 			if accountOptions.SoftDeleteBlobs > 0 {
-				blobPolicy = &storage.DeleteRetentionPolicy{
+				blobPolicy = &armstorage.DeleteRetentionPolicy{
 					Enabled: ptr.To(accountOptions.SoftDeleteBlobs > 0),
 					Days:    ptr.To(accountOptions.SoftDeleteBlobs),
 				}
@@ -532,56 +600,66 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 				enableBlobVersioning = ptr.To(*accountOptions.EnableBlobVersioning)
 			}
 
-			property := storage.BlobServiceProperties{
-				BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
+			property := armstorage.BlobServiceProperties{
+				BlobServiceProperties: &armstorage.BlobServicePropertiesProperties{
 					IsVersioningEnabled:            enableBlobVersioning,
 					ContainerDeleteRetentionPolicy: containerPolicy,
 					DeleteRetentionPolicy:          blobPolicy,
 				},
 			}
+			blobserviceClient, err := clientFactory.GetBlobServicePropertiesClientForSub(subsID)
+			if err != nil {
+				return "", "", fmt.Errorf("failed to get blob service properties client, error: %w", err)
+			}
 
-			if _, err := az.BlobClient.SetServiceProperties(ctx, subsID, resourceGroup, accountName, property); err != nil {
+			if _, err := blobserviceClient.Set(ctx, resourceGroup, accountName, property); err != nil {
 				return "", "", fmt.Errorf("failed to set blob service properties for storage account %s, error: %w", accountName, err)
 			}
 		}
 
 		if accountOptions.DisableFileServiceDeleteRetentionPolicy != nil || accountOptions.IsMultichannelEnabled != nil {
-			prop, err := az.getFileServicePropertiesCache(ctx, accountOptions.SubscriptionID, accountOptions.ResourceGroup, accountName)
+			prop, err := az.fileServiceRepo.Get(ctx, accountOptions.SubscriptionID, accountOptions.ResourceGroup, accountName)
 			if err != nil {
 				return "", "", err
 			}
-			if prop.FileServicePropertiesProperties == nil {
+			if prop.FileServiceProperties == nil {
 				return "", "", fmt.Errorf("FileServicePropertiesProperties of account(%s), subscription(%s), resource group(%s) is nil", accountName, subsID, resourceGroup)
 			}
-			prop.FileServicePropertiesProperties.ProtocolSettings = nil
-			prop.FileServicePropertiesProperties.Cors = nil
+			prop.FileServiceProperties.ProtocolSettings = nil
+			prop.FileServiceProperties.Cors = nil
 			if accountOptions.DisableFileServiceDeleteRetentionPolicy != nil {
 				enable := !*accountOptions.DisableFileServiceDeleteRetentionPolicy
 				klog.V(2).Infof("set ShareDeleteRetentionPolicy(%v) on account(%s), subscription(%s), resource group(%s)",
 					enable, accountName, subsID, resourceGroup)
-				prop.FileServicePropertiesProperties.ShareDeleteRetentionPolicy = &storage.DeleteRetentionPolicy{Enabled: &enable}
+				prop.FileServiceProperties.ShareDeleteRetentionPolicy = &armstorage.DeleteRetentionPolicy{Enabled: &enable}
 			}
 			if accountOptions.IsMultichannelEnabled != nil {
 				klog.V(2).Infof("enable SMB Multichannel setting on account(%s), subscription(%s), resource group(%s)", accountName, subsID, resourceGroup)
 				enabled := *accountOptions.IsMultichannelEnabled
-				prop.FileServicePropertiesProperties.ProtocolSettings = &storage.ProtocolSettings{Smb: &storage.SmbSetting{Multichannel: &storage.Multichannel{Enabled: &enabled}}}
+				prop.FileServiceProperties.ProtocolSettings = &armstorage.ProtocolSettings{Smb: &armstorage.SmbSetting{Multichannel: &armstorage.Multichannel{Enabled: &enabled}}}
 			}
-			if _, err := az.FileClient.WithSubscriptionID(subsID).SetServiceProperties(ctx, resourceGroup, accountName, prop); err != nil {
+
+			if err := az.fileServiceRepo.Set(ctx, subsID, resourceGroup, accountName, prop); err != nil {
 				return "", "", err
 			}
 		}
 
 		if accountOptions.AccessTier != "" {
 			klog.V(2).Infof("set AccessTier(%s) on account(%s), subscription(%s), resource group(%s)", accountOptions.AccessTier, accountName, subsID, resourceGroup)
-			cp.AccountPropertiesCreateParameters.AccessTier = storage.AccessTier(accountOptions.AccessTier)
+			cp.Properties.AccessTier = to.Ptr(armstorage.AccessTier(accountOptions.AccessTier))
 		}
 	}
 
 	if ptr.Deref(accountOptions.CreatePrivateEndpoint, false) {
 		// Get properties of the storageAccount
-		storageAccount, err := az.StorageAccountClient.GetProperties(ctx, subsID, resourceGroup, accountName)
+		clientFactory := az.ComputeClientFactory
+		if clientFactory == nil {
+			return "", "", fmt.Errorf("clientFactory is nil")
+		}
+
+		storageAccount, err := storageAccountClient.GetProperties(ctx, resourceGroup, accountName, nil)
 		if err != nil {
-			return "", "", fmt.Errorf("failed to get the properties of storage account(%s), resourceGroup(%s), error: %v", accountName, resourceGroup, err)
+			return "", "", fmt.Errorf("failed to get the properties of storage account(%s), resourceGroup(%s), error: %w", accountName, resourceGroup, err)
 		}
 
 		// Create private endpoint
@@ -604,7 +682,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 	}
 
 	// find the access key with this account
-	accountKey, err := az.GetStorageAccesskey(ctx, subsID, accountName, resourceGroup, accountOptions.GetLatestAccountKey)
+	accountKey, err := az.GetStorageAccesskey(ctx, storageAccountClient, accountName, resourceGroup, accountOptions.GetLatestAccountKey)
 	if err != nil {
 		return "", "", fmt.Errorf("could not get storage key for storage account %s: %w", accountName, err)
 	}
@@ -612,22 +690,22 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 	return accountName, accountKey, nil
 }
 
-func (az *Cloud) createPrivateEndpoint(ctx context.Context, accountName string, accountID *string, privateEndpointName, vnetResourceGroup, vnetName, subnetName, location string, storageType StorageType) error {
+func (az *AccountRepo) createPrivateEndpoint(ctx context.Context, accountName string, accountID *string, privateEndpointName, vnetResourceGroup, vnetName, subnetName, location string, storageType Type) error {
 	klog.V(2).Infof("Creating private endpoint(%s) for account (%s)", privateEndpointName, accountName)
 
-	subnet, _, err := az.getSubnet(vnetResourceGroup, vnetName, subnetName)
+	subnet, err := az.subnetRepo.Get(ctx, vnetResourceGroup, vnetName, subnetName)
 	if err != nil {
 		return err
 	}
-	if subnet.SubnetPropertiesFormat == nil {
-		klog.Errorf("SubnetPropertiesFormat of (%s, %s) is nil", vnetName, subnetName)
+	if subnet.Properties == nil {
+		klog.Errorf("Properties of (%s, %s) is nil", vnetName, subnetName)
 	} else {
 		// Disable the private endpoint network policies before creating private endpoint
-		subnet.SubnetPropertiesFormat.PrivateEndpointNetworkPolicies = network.VirtualNetworkPrivateEndpointNetworkPoliciesDisabled
+		subnet.Properties.PrivateEndpointNetworkPolicies = to.Ptr(armnetwork.VirtualNetworkPrivateEndpointNetworkPoliciesDisabled)
 	}
 
-	if rerr := az.SubnetsClient.CreateOrUpdate(ctx, vnetResourceGroup, vnetName, subnetName, subnet); rerr != nil {
-		return rerr.Error()
+	if err := az.subnetRepo.CreateOrUpdate(ctx, vnetResourceGroup, vnetName, subnetName, *subnet); err != nil {
+		return err
 	}
 
 	//Create private endpoint
@@ -635,23 +713,29 @@ func (az *Cloud) createPrivateEndpoint(ctx context.Context, accountName string, 
 	if storageType == StorageTypeBlob {
 		privateLinkServiceConnectionName = privateLinkServiceConnectionName + blobNameSuffix
 	}
-	privateLinkServiceConnection := network.PrivateLinkServiceConnection{
+	privateLinkServiceConnection := &armnetwork.PrivateLinkServiceConnection{
 		Name: &privateLinkServiceConnectionName,
-		PrivateLinkServiceConnectionProperties: &network.PrivateLinkServiceConnectionProperties{
-			GroupIds:             &[]string{string(storageType)},
+		Properties: &armnetwork.PrivateLinkServiceConnectionProperties{
+			GroupIDs:             to.SliceOfPtrs(string(storageType)),
 			PrivateLinkServiceID: accountID,
 		},
 	}
-	privateLinkServiceConnections := []network.PrivateLinkServiceConnection{privateLinkServiceConnection}
-	privateEndpoint := network.PrivateEndpoint{
-		Location:                  &location,
-		PrivateEndpointProperties: &network.PrivateEndpointProperties{Subnet: &subnet, PrivateLinkServiceConnections: &privateLinkServiceConnections},
+	privateLinkServiceConnections := []*armnetwork.PrivateLinkServiceConnection{privateLinkServiceConnection}
+	privateEndpoint := armnetwork.PrivateEndpoint{
+		Location:   &location,
+		Properties: &armnetwork.PrivateEndpointProperties{Subnet: subnet, PrivateLinkServiceConnections: privateLinkServiceConnections},
+	}
+	clientFactory := az.NetworkClientFactory
+	if clientFactory == nil {
+		// multi-tenant support
+		clientFactory = az.ComputeClientFactory
 	}
 
-	return az.privateendpointclient.CreateOrUpdate(ctx, vnetResourceGroup, privateEndpointName, privateEndpoint, "", true).Error()
+	_, err = clientFactory.GetPrivateEndpointClient().CreateOrUpdate(ctx, vnetResourceGroup, privateEndpointName, privateEndpoint)
+	return err
 }
 
-func (az *Cloud) createPrivateDNSZone(ctx context.Context, vnetResourceGroup, privateDNSZoneName string) error {
+func (az *AccountRepo) createPrivateDNSZone(ctx context.Context, vnetResourceGroup, privateDNSZoneName string) error {
 	klog.V(2).Infof("Creating private dns zone(%s) in resourceGroup (%s)", privateDNSZoneName, vnetResourceGroup)
 	location := LocationGlobal
 	privateDNSZone := privatedns.PrivateZone{Location: &location}
@@ -672,7 +756,7 @@ func (az *Cloud) createPrivateDNSZone(ctx context.Context, vnetResourceGroup, pr
 	return nil
 }
 
-func (az *Cloud) createVNetLink(ctx context.Context, vNetLinkName, vnetResourceGroup, vnetName, privateDNSZoneName string) error {
+func (az *AccountRepo) createVNetLink(ctx context.Context, vNetLinkName, vnetResourceGroup, vnetName, privateDNSZoneName string) error {
 	klog.V(2).Infof("Creating virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s)", vNetLinkName, privateDNSZoneName, vnetResourceGroup)
 	clientFactory := az.NetworkClientFactory
 	if clientFactory == nil {
@@ -693,90 +777,38 @@ func (az *Cloud) createVNetLink(ctx context.Context, vNetLinkName, vnetResourceG
 	return err
 }
 
-func (az *Cloud) createPrivateDNSZoneGroup(ctx context.Context, dnsZoneGroupName, privateEndpointName, vnetResourceGroup, vnetName, privateDNSZoneName string) error {
+func (az *AccountRepo) createPrivateDNSZoneGroup(ctx context.Context, dnsZoneGroupName, privateEndpointName, vnetResourceGroup, vnetName, privateDNSZoneName string) error {
 	klog.V(2).Infof("Creating private DNS zone group(%s) with privateEndpoint(%s), vNetName(%s), resourceGroup(%s)", dnsZoneGroupName, privateEndpointName, vnetName, vnetResourceGroup)
-	privateDNSZoneID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/privateDnsZones/%s", az.SubscriptionID, vnetResourceGroup, privateDNSZoneName)
-	privateDNSZoneConfig := network.PrivateDNSZoneConfig{
-		Name: &privateDNSZoneName,
-		PrivateDNSZonePropertiesFormat: &network.PrivateDNSZonePropertiesFormat{
-			PrivateDNSZoneID: &privateDNSZoneID},
-	}
-	privateDNSZoneConfigs := []network.PrivateDNSZoneConfig{privateDNSZoneConfig}
-	privateDNSZoneGroup := network.PrivateDNSZoneGroup{
-		PrivateDNSZoneGroupPropertiesFormat: &network.PrivateDNSZoneGroupPropertiesFormat{
-			PrivateDNSZoneConfigs: &privateDNSZoneConfigs,
+	privateDNSZoneGroup := &armnetwork.PrivateDNSZoneGroup{
+		Properties: &armnetwork.PrivateDNSZoneGroupPropertiesFormat{
+			PrivateDNSZoneConfigs: []*armnetwork.PrivateDNSZoneConfig{
+				&armnetwork.PrivateDNSZoneConfig{
+					Name: &privateDNSZoneName,
+					Properties: &armnetwork.PrivateDNSZonePropertiesFormat{
+						PrivateDNSZoneID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/privateDnsZones/%s", az.SubscriptionID, vnetResourceGroup, privateDNSZoneName)),
+					},
+				},
+			},
 		},
 	}
-	return az.privatednszonegroupclient.CreateOrUpdate(ctx, vnetResourceGroup, privateEndpointName, dnsZoneGroupName, privateDNSZoneGroup, "", false).Error()
-}
-
-func (az *Cloud) getStorageAccountWithCache(ctx context.Context, subsID, resourceGroup, account string) (storage.Account, *retry.Error) {
-	if az.StorageAccountClient == nil {
-		return storage.Account{}, retry.NewError(false, fmt.Errorf("StorageAccountClient is nil"))
+	clientFactory := az.NetworkClientFactory
+	if clientFactory == nil {
+		clientFactory = az.ComputeClientFactory
 	}
-
-	if az.storageAccountCache == nil {
-		return storage.Account{}, retry.NewError(false, fmt.Errorf("storageAccountCache is nil"))
-	}
-
-	// search in cache first
-	cache, err := az.storageAccountCache.Get(ctx, account, cache.CacheReadTypeDefault)
-	if err != nil {
-		return storage.Account{}, retry.NewError(false, err)
-	}
-	var result storage.Account
-	if cache != nil {
-		result = cache.(storage.Account)
-		klog.V(2).Infof("Get storage account(%s) from cache", account)
-	} else {
-		var rerr *retry.Error
-		result, rerr = az.StorageAccountClient.GetProperties(ctx, subsID, resourceGroup, account)
-		if rerr != nil {
-			return storage.Account{}, rerr
-		}
-		az.storageAccountCache.Set(account, result)
-	}
-
-	return result, nil
-}
-
-func (az *Cloud) getFileServicePropertiesCache(ctx context.Context, subsID, resourceGroup, account string) (storage.FileServiceProperties, error) {
-	if az.FileClient == nil {
-		return storage.FileServiceProperties{}, fmt.Errorf("FileClient is nil")
-	}
-	if az.fileServicePropertiesCache == nil {
-		return storage.FileServiceProperties{}, fmt.Errorf("fileServicePropertiesCache is nil")
-	}
-
-	// search in cache first
-	cache, err := az.fileServicePropertiesCache.Get(ctx, account, cache.CacheReadTypeDefault)
-	if err != nil {
-		return storage.FileServiceProperties{}, err
-	}
-	var result storage.FileServiceProperties
-	if cache != nil {
-		result = cache.(storage.FileServiceProperties)
-		klog.V(2).Infof("Get service properties(%s) from cache", account)
-	} else {
-		result, err = az.FileClient.WithSubscriptionID(subsID).GetServiceProperties(ctx, resourceGroup, account)
-		if err != nil {
-			return storage.FileServiceProperties{}, err
-		}
-		az.fileServicePropertiesCache.Set(account, result)
-	}
-
-	return result, nil
+	privatednsgroupClient := clientFactory.GetPrivateDNSZoneGroupClient()
+	_, err := privatednsgroupClient.CreateOrUpdate(ctx, vnetResourceGroup, privateEndpointName, dnsZoneGroupName, *privateDNSZoneGroup)
+	return err
 }
 
 // AddStorageAccountTags add tags to storage account
-func (az *Cloud) AddStorageAccountTags(ctx context.Context, subsID, resourceGroup, account string, tags map[string]*string) *retry.Error {
+func (az *AccountRepo) AddStorageAccountTags(ctx context.Context, subsID, resourceGroup, account string, tags map[string]*string) error {
 	// add lock to avoid concurrent update on the cache
 	az.lockMap.LockEntry(account)
 	defer az.lockMap.UnlockEntry(account)
 
-	result, rerr := az.getStorageAccountWithCache(ctx, subsID, resourceGroup, account)
-	if rerr != nil {
-		return rerr
+	result, err := az.getStorageAccountWithCache(ctx, subsID, resourceGroup, account)
+	if err != nil {
+		return err
 	}
 
 	// merge two tag map into one
@@ -791,15 +823,20 @@ func (az *Cloud) AddStorageAccountTags(ctx context.Context, subsID, resourceGrou
 	if len(newTags) > len(result.Tags) {
 		// only update when newTags is different from old tags
 		_ = az.storageAccountCache.Delete(account) // clean cache
-		updateParams := storage.AccountUpdateParameters{Tags: newTags}
+		updateParams := &armstorage.AccountUpdateParameters{Tags: newTags}
 		klog.V(2).Infof("add storage account(%s) with tags(%+v)", account, newTags)
-		return az.StorageAccountClient.Update(ctx, subsID, resourceGroup, account, updateParams)
+		accountClient, err := az.ComputeClientFactory.GetAccountClientForSub(subsID)
+		if err != nil {
+			return err
+		}
+		_, err = accountClient.Update(ctx, resourceGroup, account, updateParams)
+		return err
 	}
 	return nil
 }
 
 // RemoveStorageAccountTag remove tag from storage account
-func (az *Cloud) RemoveStorageAccountTag(ctx context.Context, subsID, resourceGroup, account, key string) *retry.Error {
+func (az *AccountRepo) RemoveStorageAccountTag(ctx context.Context, subsID, resourceGroup, account, key string) error {
 	// add lock to avoid concurrent update on the cache
 	az.lockMap.LockEntry(account)
 	defer az.lockMap.UnlockEntry(account)
@@ -818,45 +855,50 @@ func (az *Cloud) RemoveStorageAccountTag(ctx context.Context, subsID, resourceGr
 	if originalLen != len(result.Tags) {
 		// only update when newTags is different from old tags
 		_ = az.storageAccountCache.Delete(account) // clean cache
-		updateParams := storage.AccountUpdateParameters{Tags: result.Tags}
+		updateParams := &armstorage.AccountUpdateParameters{Tags: result.Tags}
 		klog.V(2).Infof("remove tag(%s) from storage account(%s)", key, account)
-		return az.StorageAccountClient.Update(ctx, subsID, resourceGroup, account, updateParams)
+		accountClient, err := az.ComputeClientFactory.GetAccountClientForSub(subsID)
+		if err != nil {
+			return err
+		}
+		_, err = accountClient.Update(ctx, resourceGroup, account, updateParams)
+		return err
 	}
 	return nil
 }
 
-func isStorageTypeEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	if accountOptions.Type != "" && !strings.EqualFold(accountOptions.Type, string((*account.Sku).Name)) {
+func isStorageTypeEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
+	if accountOptions.Type != "" && !strings.EqualFold(accountOptions.Type, string(*account.SKU.Name)) {
 		return false
 	}
 	return true
 }
 
-func isAccountKindEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	if accountOptions.Kind != "" && !strings.EqualFold(accountOptions.Kind, string(account.Kind)) {
+func isAccountKindEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
+	if accountOptions.Kind != "" && !strings.EqualFold(accountOptions.Kind, string(*account.Kind)) {
 		return false
 	}
 	return true
 }
 
-func isLocationEqual(account storage.Account, accountOptions *AccountOptions) bool {
+func isLocationEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
 	if accountOptions.Location != "" && !strings.EqualFold(accountOptions.Location, *account.Location) {
 		return false
 	}
 	return true
 }
 
-func AreVNetRulesEqual(account storage.Account, accountOptions *AccountOptions) bool {
+func AreVNetRulesEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
 	if len(accountOptions.VirtualNetworkResourceIDs) > 0 {
-		if account.AccountProperties == nil || account.AccountProperties.NetworkRuleSet == nil ||
-			account.AccountProperties.NetworkRuleSet.VirtualNetworkRules == nil {
+		if account.Properties == nil || account.Properties.NetworkRuleSet == nil ||
+			account.Properties.NetworkRuleSet.VirtualNetworkRules == nil {
 			return false
 		}
 
 		for _, subnetID := range accountOptions.VirtualNetworkResourceIDs {
 			found := false
-			for _, rule := range *account.AccountProperties.NetworkRuleSet.VirtualNetworkRules {
-				if strings.EqualFold(ptr.Deref(rule.VirtualNetworkResourceID, ""), subnetID) && rule.Action == storage.ActionAllow {
+			for _, rule := range account.Properties.NetworkRuleSet.VirtualNetworkRules {
+				if strings.EqualFold(ptr.Deref(rule.VirtualNetworkResourceID, ""), subnetID) && strings.EqualFold(*rule.Action, string(armstorage.DefaultActionAllow)) {
 					found = true
 					break
 				}
@@ -870,17 +912,17 @@ func AreVNetRulesEqual(account storage.Account, accountOptions *AccountOptions) 
 	return true
 }
 
-func isLargeFileSharesPropertyEqual(account storage.Account, accountOptions *AccountOptions) bool {
+func isLargeFileSharesPropertyEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
 	if accountOptions.EnableLargeFileShare == nil {
 		return true
 	}
 	if *accountOptions.EnableLargeFileShare {
-		return account.LargeFileSharesState == storage.LargeFileSharesStateEnabled
+		return account.Properties.LargeFileSharesState != nil && *account.Properties.LargeFileSharesState == armstorage.LargeFileSharesStateEnabled
 	}
-	return account.LargeFileSharesState == "" || account.LargeFileSharesState == storage.LargeFileSharesStateDisabled
+	return account.Properties.LargeFileSharesState == nil || *account.Properties.LargeFileSharesState == armstorage.LargeFileSharesStateDisabled
 }
 
-func isTaggedWithSkip(account storage.Account) bool {
+func isTaggedWithSkip(account *armstorage.Account) bool {
 	if account.Tags != nil {
 		// skip account with SkipMatchingTag tag
 		if _, ok := account.Tags[SkipMatchingTag]; ok {
@@ -891,7 +933,7 @@ func isTaggedWithSkip(account storage.Account) bool {
 	return true
 }
 
-func isTagsEqual(account storage.Account, accountOptions *AccountOptions) bool {
+func isTagsEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
 	if !accountOptions.MatchTags {
 		// always return true when tags matching is false (by default)
 		return true
@@ -915,57 +957,57 @@ func isTagsEqual(account storage.Account, accountOptions *AccountOptions) bool {
 	return true
 }
 
-func isHnsPropertyEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	return ptr.Deref(accountOptions.IsHnsEnabled, false) == ptr.Deref(account.IsHnsEnabled, false)
+func isHnsPropertyEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
+	return ptr.Deref(accountOptions.IsHnsEnabled, false) == ptr.Deref(account.Properties.IsHnsEnabled, false)
 }
 
-func isEnableNfsV3PropertyEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	return ptr.Deref(accountOptions.EnableNfsV3, false) == ptr.Deref(account.EnableNfsV3, false)
+func isEnableNfsV3PropertyEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
+	return ptr.Deref(accountOptions.EnableNfsV3, false) == ptr.Deref(account.Properties.EnableNfsV3, false)
 }
 
-func isEnableHTTPSTrafficOnlyEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	return accountOptions.EnableHTTPSTrafficOnly == ptr.Deref(account.EnableHTTPSTrafficOnly, true)
+func isEnableHTTPSTrafficOnlyEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
+	return accountOptions.EnableHTTPSTrafficOnly == ptr.Deref(account.Properties.EnableHTTPSTrafficOnly, true)
 }
 
-func isPrivateEndpointAsExpected(account storage.Account, accountOptions *AccountOptions) bool {
+func isPrivateEndpointAsExpected(account *armstorage.Account, accountOptions *AccountOptions) bool {
 	if accountOptions.CreatePrivateEndpoint == nil {
 		// CreatePrivateEndpoint is not set, match current account
 		return true
 	}
 
-	if ptr.Deref(accountOptions.CreatePrivateEndpoint, false) && account.PrivateEndpointConnections != nil && len(*account.PrivateEndpointConnections) > 0 {
+	if ptr.Deref(accountOptions.CreatePrivateEndpoint, false) && account.Properties.PrivateEndpointConnections != nil && len(account.Properties.PrivateEndpointConnections) > 0 {
 		return true
 	}
-	if !ptr.Deref(accountOptions.CreatePrivateEndpoint, false) && (account.PrivateEndpointConnections == nil || len(*account.PrivateEndpointConnections) == 0) {
+	if !ptr.Deref(accountOptions.CreatePrivateEndpoint, false) && len(account.Properties.PrivateEndpointConnections) == 0 {
 		return true
 	}
 	return false
 }
 
-func isAllowBlobPublicAccessEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	return ptr.Deref(accountOptions.AllowBlobPublicAccess, true) == ptr.Deref(account.AllowBlobPublicAccess, true)
+func isAllowBlobPublicAccessEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
+	return ptr.Deref(accountOptions.AllowBlobPublicAccess, true) == ptr.Deref(account.Properties.AllowBlobPublicAccess, true)
 }
 
-func isRequireInfrastructureEncryptionEqual(account storage.Account, accountOptions *AccountOptions) bool {
+func isRequireInfrastructureEncryptionEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
 	requireInfraEncryption := ptr.Deref(accountOptions.RequireInfrastructureEncryption, false)
-	if account.Encryption == nil {
+	if account.Properties.Encryption == nil {
 		return !requireInfraEncryption
 	}
-	return requireInfraEncryption == ptr.Deref(account.Encryption.RequireInfrastructureEncryption, false)
+	return requireInfraEncryption == ptr.Deref(account.Properties.Encryption.RequireInfrastructureEncryption, false)
 }
 
-func isAllowSharedKeyAccessEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	return ptr.Deref(accountOptions.AllowSharedKeyAccess, true) == ptr.Deref(account.AllowSharedKeyAccess, true)
+func isAllowSharedKeyAccessEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
+	return ptr.Deref(accountOptions.AllowSharedKeyAccess, true) == ptr.Deref(account.Properties.AllowSharedKeyAccess, true)
 }
 
-func isAccessTierEqual(account storage.Account, accountOptions *AccountOptions) bool {
+func isAccessTierEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
 	if accountOptions.AccessTier == "" {
 		return true
 	}
-	return accountOptions.AccessTier == string(account.AccessTier)
+	return account != nil && account.Properties != nil && account.Properties.AccessTier != nil && accountOptions.AccessTier == string(*account.Properties.AccessTier)
 }
 
-func (az *Cloud) isMultichannelEnabledEqual(ctx context.Context, account storage.Account, accountOptions *AccountOptions) (bool, error) {
+func (az *AccountRepo) isMultichannelEnabledEqual(ctx context.Context, account *armstorage.Account, accountOptions *AccountOptions) (bool, error) {
 	if accountOptions.IsMultichannelEnabled == nil {
 		return true, nil
 	}
@@ -975,22 +1017,22 @@ func (az *Cloud) isMultichannelEnabledEqual(ctx context.Context, account storage
 		return false, nil
 	}
 
-	prop, err := az.getFileServicePropertiesCache(ctx, accountOptions.SubscriptionID, accountOptions.ResourceGroup, ptr.Deref(account.Name, ""))
+	prop, err := az.fileServiceRepo.Get(ctx, accountOptions.SubscriptionID, accountOptions.ResourceGroup, ptr.Deref(account.Name, ""))
 	if err != nil {
 		return false, err
 	}
 
-	if prop.FileServicePropertiesProperties == nil ||
-		prop.FileServicePropertiesProperties.ProtocolSettings == nil ||
-		prop.FileServicePropertiesProperties.ProtocolSettings.Smb == nil ||
-		prop.FileServicePropertiesProperties.ProtocolSettings.Smb.Multichannel == nil {
+	if prop.FileServiceProperties == nil ||
+		prop.FileServiceProperties.ProtocolSettings == nil ||
+		prop.FileServiceProperties.ProtocolSettings.Smb == nil ||
+		prop.FileServiceProperties.ProtocolSettings.Smb.Multichannel == nil {
 		return !*accountOptions.IsMultichannelEnabled, nil
 	}
 
-	return *accountOptions.IsMultichannelEnabled == ptr.Deref(prop.FileServicePropertiesProperties.ProtocolSettings.Smb.Multichannel.Enabled, false), nil
+	return *accountOptions.IsMultichannelEnabled == ptr.Deref(prop.FileServiceProperties.ProtocolSettings.Smb.Multichannel.Enabled, false), nil
 }
 
-func (az *Cloud) isDisableFileServiceDeleteRetentionPolicyEqual(ctx context.Context, account storage.Account, accountOptions *AccountOptions) (bool, error) {
+func (az *AccountRepo) isDisableFileServiceDeleteRetentionPolicyEqual(ctx context.Context, account *armstorage.Account, accountOptions *AccountOptions) (bool, error) {
 	if accountOptions.DisableFileServiceDeleteRetentionPolicy == nil {
 		return true, nil
 	}
@@ -999,30 +1041,32 @@ func (az *Cloud) isDisableFileServiceDeleteRetentionPolicyEqual(ctx context.Cont
 		klog.Warningf("account.Name under resource group(%s) is nil", accountOptions.ResourceGroup)
 		return false, nil
 	}
-
-	prop, err := az.FileClient.WithSubscriptionID(accountOptions.SubscriptionID).GetServiceProperties(ctx, accountOptions.ResourceGroup, ptr.Deref(account.Name, ""))
+	prop, err := az.fileServiceRepo.Get(ctx, accountOptions.SubscriptionID, accountOptions.ResourceGroup, ptr.Deref(account.Name, ""))
 	if err != nil {
 		return false, err
 	}
 
-	if prop.FileServicePropertiesProperties == nil ||
-		prop.FileServicePropertiesProperties.ShareDeleteRetentionPolicy == nil ||
-		prop.FileServicePropertiesProperties.ShareDeleteRetentionPolicy.Enabled == nil {
+	if prop.FileServiceProperties == nil ||
+		prop.FileServiceProperties.ShareDeleteRetentionPolicy == nil ||
+		prop.FileServiceProperties.ShareDeleteRetentionPolicy.Enabled == nil {
 		// by default, ShareDeleteRetentionPolicy.Enabled is true if it's nil
 		return !*accountOptions.DisableFileServiceDeleteRetentionPolicy, nil
 	}
 
-	return *accountOptions.DisableFileServiceDeleteRetentionPolicy != *prop.FileServicePropertiesProperties.ShareDeleteRetentionPolicy.Enabled, nil
+	return *accountOptions.DisableFileServiceDeleteRetentionPolicy != *prop.FileServiceProperties.ShareDeleteRetentionPolicy.Enabled, nil
 }
 
-func (az *Cloud) isEnableBlobDataProtectionEqual(ctx context.Context, account storage.Account, accountOptions *AccountOptions) (bool, error) {
+func (az *AccountRepo) isEnableBlobDataProtectionEqual(ctx context.Context, account *armstorage.Account, accountOptions *AccountOptions) (bool, error) {
 	if accountOptions.SoftDeleteBlobs == 0 &&
 		accountOptions.SoftDeleteContainers == 0 &&
 		accountOptions.EnableBlobVersioning == nil {
 		return true, nil
 	}
-
-	property, err := az.BlobClient.GetServiceProperties(ctx, accountOptions.SubscriptionID, accountOptions.ResourceGroup, ptr.Deref(account.Name, ""))
+	blobserviceClient, err := az.ComputeClientFactory.GetBlobServicePropertiesClientForSub(accountOptions.SubscriptionID)
+	if err != nil {
+		return false, err
+	}
+	property, err := blobserviceClient.Get(ctx, accountOptions.ResourceGroup, ptr.Deref(account.Name, ""))
 	if err != nil {
 		return false, err
 	}
@@ -1032,10 +1076,10 @@ func (az *Cloud) isEnableBlobDataProtectionEqual(ctx context.Context, account st
 		isEnableBlobVersioningEqual(property, accountOptions), nil
 }
 
-func isSoftDeleteBlobsEqual(property storage.BlobServiceProperties, accountOptions *AccountOptions) bool {
+func isSoftDeleteBlobsEqual(property *armstorage.BlobServiceProperties, accountOptions *AccountOptions) bool {
 	wantEnable := accountOptions.SoftDeleteBlobs > 0
-	actualEnable := property.DeleteRetentionPolicy != nil &&
-		ptr.Deref(property.DeleteRetentionPolicy.Enabled, false)
+	actualEnable := property.BlobServiceProperties != nil && property.BlobServiceProperties.DeleteRetentionPolicy != nil &&
+		ptr.Deref(property.BlobServiceProperties.DeleteRetentionPolicy.Enabled, false)
 	if wantEnable != actualEnable {
 		return false
 	}
@@ -1043,13 +1087,13 @@ func isSoftDeleteBlobsEqual(property storage.BlobServiceProperties, accountOptio
 		return true
 	}
 
-	return accountOptions.SoftDeleteBlobs == ptr.Deref(property.DeleteRetentionPolicy.Days, 0)
+	return accountOptions.SoftDeleteBlobs == ptr.Deref(property.BlobServiceProperties.DeleteRetentionPolicy.Days, 0)
 }
 
-func isSoftDeleteContainersEqual(property storage.BlobServiceProperties, accountOptions *AccountOptions) bool {
+func isSoftDeleteContainersEqual(property *armstorage.BlobServiceProperties, accountOptions *AccountOptions) bool {
 	wantEnable := accountOptions.SoftDeleteContainers > 0
-	actualEnable := property.ContainerDeleteRetentionPolicy != nil &&
-		ptr.Deref(property.ContainerDeleteRetentionPolicy.Enabled, false)
+	actualEnable := property.BlobServiceProperties != nil && property.BlobServiceProperties.ContainerDeleteRetentionPolicy != nil &&
+		ptr.Deref(property.BlobServiceProperties.ContainerDeleteRetentionPolicy.Enabled, false)
 	if wantEnable != actualEnable {
 		return false
 	}
@@ -1057,9 +1101,28 @@ func isSoftDeleteContainersEqual(property storage.BlobServiceProperties, account
 		return true
 	}
 
-	return accountOptions.SoftDeleteContainers == ptr.Deref(property.ContainerDeleteRetentionPolicy.Days, 0)
+	return accountOptions.SoftDeleteContainers == ptr.Deref(property.BlobServiceProperties.ContainerDeleteRetentionPolicy.Days, 0)
 }
 
-func isEnableBlobVersioningEqual(property storage.BlobServiceProperties, accountOptions *AccountOptions) bool {
-	return ptr.Deref(accountOptions.EnableBlobVersioning, false) == ptr.Deref(property.IsVersioningEnabled, false)
+func isEnableBlobVersioningEqual(property *armstorage.BlobServiceProperties, accountOptions *AccountOptions) bool {
+	return ptr.Deref(accountOptions.EnableBlobVersioning, false) == ptr.Deref(property.BlobServiceProperties.IsVersioningEnabled, false)
+}
+
+// get a storage account by UUID
+func generateStorageAccountName(accountNamePrefix string) string {
+	uniqueID := strings.Replace(uuid.NewString(), "-", "", -1)
+	accountName := strings.ToLower(accountNamePrefix + uniqueID)
+	if len(accountName) > consts.StorageAccountNameMaxLength {
+		return accountName[:consts.StorageAccountNameMaxLength-1]
+	}
+	return accountName
+}
+
+func convertMapToMapPointer(origin map[string]string) map[string]*string {
+	newly := make(map[string]*string)
+	for k, v := range origin {
+		value := v
+		newly[k] = &value
+	}
+	return newly
 }
