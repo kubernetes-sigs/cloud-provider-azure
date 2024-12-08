@@ -782,7 +782,7 @@ func (az *AccountRepo) createPrivateDNSZoneGroup(ctx context.Context, dnsZoneGro
 	privateDNSZoneGroup := &armnetwork.PrivateDNSZoneGroup{
 		Properties: &armnetwork.PrivateDNSZoneGroupPropertiesFormat{
 			PrivateDNSZoneConfigs: []*armnetwork.PrivateDNSZoneConfig{
-				&armnetwork.PrivateDNSZoneConfig{
+				{
 					Name: &privateDNSZoneName,
 					Properties: &armnetwork.PrivateDNSZonePropertiesFormat{
 						PrivateDNSZoneID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/privateDnsZones/%s", az.SubscriptionID, vnetResourceGroup, privateDNSZoneName)),
