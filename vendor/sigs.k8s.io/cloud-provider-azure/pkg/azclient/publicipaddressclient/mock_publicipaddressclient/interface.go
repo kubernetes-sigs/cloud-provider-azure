@@ -176,6 +176,45 @@ func (c *MockInterfaceGetCall) DoAndReturn(f func(context.Context, string, strin
 	return c
 }
 
+// GetVirtualMachineScaleSetPublicIPAddress mocks base method.
+func (m *MockInterface) GetVirtualMachineScaleSetPublicIPAddress(ctx context.Context, resourceGroupName, virtualMachineScaleSetName, virtualmachineIndex, networkInterfaceName, ipConfigurationName, publicIPAddressName string, options *armnetwork.PublicIPAddressesClientGetVirtualMachineScaleSetPublicIPAddressOptions) (armnetwork.PublicIPAddressesClientGetVirtualMachineScaleSetPublicIPAddressResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetVirtualMachineScaleSetPublicIPAddress", ctx, resourceGroupName, virtualMachineScaleSetName, virtualmachineIndex, networkInterfaceName, ipConfigurationName, publicIPAddressName, options)
+	ret0, _ := ret[0].(armnetwork.PublicIPAddressesClientGetVirtualMachineScaleSetPublicIPAddressResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetVirtualMachineScaleSetPublicIPAddress indicates an expected call of GetVirtualMachineScaleSetPublicIPAddress.
+func (mr *MockInterfaceMockRecorder) GetVirtualMachineScaleSetPublicIPAddress(ctx, resourceGroupName, virtualMachineScaleSetName, virtualmachineIndex, networkInterfaceName, ipConfigurationName, publicIPAddressName, options any) *MockInterfaceGetVirtualMachineScaleSetPublicIPAddressCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVirtualMachineScaleSetPublicIPAddress", reflect.TypeOf((*MockInterface)(nil).GetVirtualMachineScaleSetPublicIPAddress), ctx, resourceGroupName, virtualMachineScaleSetName, virtualmachineIndex, networkInterfaceName, ipConfigurationName, publicIPAddressName, options)
+	return &MockInterfaceGetVirtualMachineScaleSetPublicIPAddressCall{Call: call}
+}
+
+// MockInterfaceGetVirtualMachineScaleSetPublicIPAddressCall wrap *gomock.Call
+type MockInterfaceGetVirtualMachineScaleSetPublicIPAddressCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockInterfaceGetVirtualMachineScaleSetPublicIPAddressCall) Return(arg0 armnetwork.PublicIPAddressesClientGetVirtualMachineScaleSetPublicIPAddressResponse, arg1 error) *MockInterfaceGetVirtualMachineScaleSetPublicIPAddressCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockInterfaceGetVirtualMachineScaleSetPublicIPAddressCall) Do(f func(context.Context, string, string, string, string, string, string, *armnetwork.PublicIPAddressesClientGetVirtualMachineScaleSetPublicIPAddressOptions) (armnetwork.PublicIPAddressesClientGetVirtualMachineScaleSetPublicIPAddressResponse, error)) *MockInterfaceGetVirtualMachineScaleSetPublicIPAddressCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockInterfaceGetVirtualMachineScaleSetPublicIPAddressCall) DoAndReturn(f func(context.Context, string, string, string, string, string, string, *armnetwork.PublicIPAddressesClientGetVirtualMachineScaleSetPublicIPAddressOptions) (armnetwork.PublicIPAddressesClientGetVirtualMachineScaleSetPublicIPAddressResponse, error)) *MockInterfaceGetVirtualMachineScaleSetPublicIPAddressCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // List mocks base method.
 func (m *MockInterface) List(ctx context.Context, resourceGroupName string) ([]*armnetwork.PublicIPAddress, error) {
 	m.ctrl.T.Helper()

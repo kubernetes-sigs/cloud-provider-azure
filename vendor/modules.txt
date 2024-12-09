@@ -1507,7 +1507,7 @@ sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client/metrics
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/common/metrics
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/proto/client
-# sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.2.5
+# sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.2.7
 ## explicit; go 1.23.1
 sigs.k8s.io/cloud-provider-azure/pkg/azclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient
@@ -1515,6 +1515,8 @@ sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient/mock_accountclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/armauth
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient/mock_availabilitysetclient
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/backendaddresspoolclient
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/backendaddresspoolclient/mock_backendaddresspoolclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobcontainerclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobcontainerclient/mock_blobcontainerclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobservicepropertiesclient

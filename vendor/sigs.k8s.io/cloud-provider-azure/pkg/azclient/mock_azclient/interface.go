@@ -33,6 +33,7 @@ import (
 
 	accountclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
 	availabilitysetclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient"
+	backendaddresspoolclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/backendaddresspoolclient"
 	blobcontainerclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobcontainerclient"
 	blobservicepropertiesclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobservicepropertiesclient"
 	deploymentclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
@@ -133,6 +134,20 @@ func (m *MockClientFactory) GetAvailabilitySetClient() availabilitysetclient.Int
 func (mr *MockClientFactoryMockRecorder) GetAvailabilitySetClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAvailabilitySetClient", reflect.TypeOf((*MockClientFactory)(nil).GetAvailabilitySetClient))
+}
+
+// GetBackendAddressPoolClient mocks base method.
+func (m *MockClientFactory) GetBackendAddressPoolClient() backendaddresspoolclient.Interface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBackendAddressPoolClient")
+	ret0, _ := ret[0].(backendaddresspoolclient.Interface)
+	return ret0
+}
+
+// GetBackendAddressPoolClient indicates an expected call of GetBackendAddressPoolClient.
+func (mr *MockClientFactoryMockRecorder) GetBackendAddressPoolClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBackendAddressPoolClient", reflect.TypeOf((*MockClientFactory)(nil).GetBackendAddressPoolClient))
 }
 
 // GetBlobContainerClient mocks base method.
