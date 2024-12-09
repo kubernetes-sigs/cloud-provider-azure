@@ -2,8 +2,6 @@ module sigs.k8s.io/cloud-provider-azure
 
 go 1.23.2
 
-godebug winreadlinkvolume=0
-
 godebug winsymlink=0
 
 require (
