@@ -20,6 +20,7 @@ package azclient
 import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/backendaddresspoolclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobcontainerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobservicepropertiesclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
@@ -59,6 +60,7 @@ type ClientFactory interface {
 	GetAccountClient() accountclient.Interface
 	GetAccountClientForSub(subscriptionID string) (accountclient.Interface, error)
 	GetAvailabilitySetClient() availabilitysetclient.Interface
+	GetBackendAddressPoolClient() backendaddresspoolclient.Interface
 	GetBlobContainerClient() blobcontainerclient.Interface
 	GetBlobContainerClientForSub(subscriptionID string) (blobcontainerclient.Interface, error)
 	GetBlobServicePropertiesClient() blobservicepropertiesclient.Interface
