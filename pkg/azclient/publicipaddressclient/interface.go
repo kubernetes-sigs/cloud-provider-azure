@@ -18,6 +18,8 @@ limitations under the License.
 package publicipaddressclient
 
 import (
+	"context"
+
 	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
@@ -29,4 +31,5 @@ type Interface interface {
 	utils.CreateOrUpdateFunc[armnetwork.PublicIPAddress]
 	utils.DeleteFunc[armnetwork.PublicIPAddress]
 	utils.ListFunc[armnetwork.PublicIPAddress]
+	GetVirtualMachineScaleSetPublicIPAddress(ctx context.Context, resourceGroupName string, virtualMachineScaleSetName string, virtualmachineIndex string, networkInterfaceName string, ipConfigurationName string, publicIPAddressName string, options *armnetwork.PublicIPAddressesClientGetVirtualMachineScaleSetPublicIPAddressOptions) (armnetwork.PublicIPAddressesClientGetVirtualMachineScaleSetPublicIPAddressResponse, error)
 }
