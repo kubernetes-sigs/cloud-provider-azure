@@ -27,6 +27,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/backendaddresspoolclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobcontainerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobservicepropertiesclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
@@ -71,6 +72,7 @@ type ClientFactoryImpl struct {
 	clientOptionsMutFn                      []func(option *arm.ClientOptions)
 	accountclientInterface                  sync.Map
 	availabilitysetclientInterface          availabilitysetclient.Interface
+	backendaddresspoolclientInterface       backendaddresspoolclient.Interface
 	blobcontainerclientInterface            sync.Map
 	blobservicepropertiesclientInterface    sync.Map
 	deploymentclientInterface               deploymentclient.Interface
@@ -131,6 +133,12 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 
 	//initialize availabilitysetclient
 	factory.availabilitysetclientInterface, err = factory.createAvailabilitySetClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize backendaddresspoolclient
+	factory.backendaddresspoolclientInterface, err = factory.createBackendAddressPoolClient(config.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
@@ -408,6 +416,31 @@ func (factory *ClientFactoryImpl) createAvailabilitySetClient(subscription strin
 
 func (factory *ClientFactoryImpl) GetAvailabilitySetClient() availabilitysetclient.Interface {
 	return factory.availabilitysetclientInterface
+}
+
+func (factory *ClientFactoryImpl) createBackendAddressPoolClient(subscription string) (backendaddresspoolclient.Interface, error) {
+	//initialize backendaddresspoolclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("loadBalancerRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return backendaddresspoolclient.New(subscription, factory.cred, options)
+}
+
+func (factory *ClientFactoryImpl) GetBackendAddressPoolClient() backendaddresspoolclient.Interface {
+	return factory.backendaddresspoolclientInterface
 }
 
 func (factory *ClientFactoryImpl) createBlobContainerClient(subscription string) (blobcontainerclient.Interface, error) {
