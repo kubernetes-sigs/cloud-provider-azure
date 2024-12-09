@@ -357,7 +357,23 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
-				es := obj.(*discovery_v1.EndpointSlice)
+				var es *discovery_v1.EndpointSlice
+				switch v := obj.(type) {
+				case *discovery_v1.EndpointSlice:
+					es = v
+				case cache.DeletedFinalStateUnknown:
+					// We may miss the deletion event if the watch stream is disconnected and the object is deleted.
+					var ok bool
+					es, ok = v.Obj.(*discovery_v1.EndpointSlice)
+					if !ok {
+						klog.Errorf("Cannot convert to *discovery_v1.EndpointSlice: %T", v.Obj)
+						return
+					}
+				default:
+					klog.Errorf("Cannot convert to *discovery_v1.EndpointSlice: %T", v)
+					return
+				}
+
 				az.endpointSlicesCache.Delete(strings.ToLower(fmt.Sprintf("%s/%s", es.Namespace, es.Name)))
 			},
 		})
