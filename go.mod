@@ -25,7 +25,7 @@ require (
 	github.com/go-logr/logr v1.4.2
 	github.com/google/uuid v1.6.0
 	github.com/onsi/ginkgo/v2 v2.22.0
-	github.com/onsi/gomega v1.36.0
+	github.com/onsi/gomega v1.36.1
 	github.com/prometheus/client_golang v1.20.5
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
@@ -51,9 +51,9 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubelet v0.31.3
 	k8s.io/utils v0.0.0-20241104163129-6fe5fd82f078
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.2.7
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.2.8
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.1.0
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.1.8
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.2.0
 	sigs.k8s.io/yaml v1.4.0
 )
 
