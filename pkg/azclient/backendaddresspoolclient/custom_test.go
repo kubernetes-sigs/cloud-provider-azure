@@ -66,6 +66,7 @@ func init() {
 		_, err = pollerResp.PollUntilDone(ctx, nil)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		pippollerResp, err := publicIPClient.BeginDelete(ctx, resourceGroupName, publicIPName, nil)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		_, err = pippollerResp.PollUntilDone(ctx, nil)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	}
