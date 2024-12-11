@@ -45,6 +45,10 @@ type ARMClientConfig struct {
 	CloudProviderBackoffRetries int32 `json:"cloudProviderBackoffRetries,omitempty" yaml:"cloudProviderBackoffRetries,omitempty"`
 	// Backoff duration
 	CloudProviderBackoffDuration int `json:"cloudProviderBackoffDuration,omitempty" yaml:"cloudProviderBackoffDuration,omitempty"`
+	//Storage suffix
+	StorageSuffix *string `json:"storageSuffix,omitempty" yaml:"storageSuffix,omitempty"`
+	//ACRLoginServer
+	ACRLoginServer *string `json:"acrLoginServer,omitempty" yaml:"containerRegistrySuffix,omitempty"`
 }
 
 func (config *ARMClientConfig) GetTenantID() string {
@@ -65,7 +69,7 @@ func GetAzCoreClientOption(armConfig *ARMClientConfig) (*policy.ClientOptions, e
 			azCoreClientConfig.PerCallPolicies = append(azCoreClientConfig.PerCallPolicies, useragent.NewCustomUserAgentPolicy(userAgent))
 		}
 		//set cloud
-		cloudConfig, err := GetAzureCloudConfig(armConfig)
+		cloudConfig, err := GetAzureCloudConfigAndBackfillARMClientConfig(armConfig)
 		if err != nil {
 			return nil, err
 		}
