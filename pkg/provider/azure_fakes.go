@@ -30,17 +30,17 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient/mock_subnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient/mock_virtualnetworklinkclient"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/diskclient/mockdiskclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient/mockvmssvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/networkinterface"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/publicip"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
@@ -109,10 +109,6 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 		eventRecorder:            &record.FakeRecorder{},
 	}
 	az.DisksClient = mockdiskclient.NewMockInterface(ctrl)
-	az.InterfacesClient = mockinterfaceclient.NewMockInterface(ctrl)
-	az.LoadBalancerClient = mockloadbalancerclient.NewMockInterface(ctrl)
-	az.PublicIPAddressesClient = mockpublicipclient.NewMockInterface(ctrl)
-	az.SubnetsClient = mocksubnetclient.NewMockInterface(ctrl)
 	az.VirtualMachineScaleSetsClient = mockvmssclient.NewMockInterface(ctrl)
 	az.VirtualMachineScaleSetVMsClient = mockvmssvmclient.NewMockInterface(ctrl)
 	az.VirtualMachinesClient = mockvmclient.NewMockInterface(ctrl)
@@ -134,12 +130,13 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	}
 	az.VMSet, _ = newAvailabilitySet(az)
 	az.vmCache, _ = az.newVMCache()
-	az.lbCache, _ = az.newLBCache()
 	az.nsgRepo, _ = securitygroup.NewSecurityGroupRepo(az.SecurityGroupResourceGroup, az.SecurityGroupName, az.NsgCacheTTLInSeconds, az.Config.DisableAPICallCache, securtyGrouptrack2Client)
 	az.subnetRepo = subnet.NewMockRepository(ctrl)
-	az.pipCache, _ = az.newPIPCache()
 	az.LoadBalancerBackendPool = NewMockBackendPool(ctrl)
 
+	az.lbRepo = loadbalancer.NewMockRepository(ctrl)
+	az.nicRepo = networkinterface.NewMockRepository(ctrl)
+	az.pipRepo = publicip.NewMockRepository(ctrl)
 	az.plsRepo = privatelinkservice.NewMockRepository(ctrl)
 	az.routeTableRepo = routetable.NewMockRepository(ctrl)
 	az.regionZonesMap = map[string][]string{az.Location: {"1", "2", "3"}}

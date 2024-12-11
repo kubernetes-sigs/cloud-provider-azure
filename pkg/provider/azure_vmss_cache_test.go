@@ -23,8 +23,8 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
 
 	"go.uber.org/mock/gomock"
@@ -32,12 +32,12 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/ptr"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient/mockvmssvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/networkinterface"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -327,11 +327,11 @@ func TestGetVMManagementTypeByProviderID(t *testing.T) {
 	}
 }
 
-func buildTestNICWithVMName(vmName string) network.Interface {
-	return network.Interface{
+func buildTestNICWithVMName(vmName string) *armnetwork.Interface {
+	return &armnetwork.Interface{
 		Name: &vmName,
-		InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-			VirtualMachine: &network.SubResource{
+		Properties: &armnetwork.InterfacePropertiesFormat{
+			VirtualMachine: &armnetwork.SubResource{
 				ID: ptr.To(fmt.Sprintf("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/%s", vmName)),
 			},
 		},
@@ -355,7 +355,7 @@ func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
 	testVM1NIC := buildTestNICWithVMName("testvm1")
 	testVM2NIC := buildTestNICWithVMName("testvm2")
 	testVM3NIC := buildTestNICWithVMName("testvm3")
-	testVM3NIC.VirtualMachine = nil
+	testVM3NIC.Properties.VirtualMachine = nil
 
 	testCases := []struct {
 		description                 string
@@ -363,7 +363,7 @@ func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
 		DisableAvailabilitySetNodes bool
 		EnableVmssFlexNodes         bool
 		vmListErr                   *retry.Error
-		nicGetErr                   *retry.Error
+		nicGetErr                   error
 		expectedNIC                 string
 		expectedVMManagementType    VMManagementType
 		expectedErr                 error
@@ -396,9 +396,9 @@ func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
 			description:              "getVMManagementTypeByIPConfigurationID should return an error if failed to get nic",
 			ipConfigurationID:        "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm1-nic/ipConfigurations/pipConfig",
 			expectedNIC:              "testvm1",
-			nicGetErr:                &retry.Error{RawError: fmt.Errorf("failed to get nic")},
+			nicGetErr:                fmt.Errorf("failed to get nic"),
 			expectedVMManagementType: ManagedByUnknownVMSet,
-			expectedErr:              fmt.Errorf("failed to get vm name by ip config ID /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm1-nic/ipConfigurations/pipConfig: %w", errors.New("failed to get interface of name testvm1-nic: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to get nic")),
+			expectedErr:              fmt.Errorf("failed to get vm name by ip config ID /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm1-nic/ipConfigurations/pipConfig: %w", errors.New("failed to get interface of name testvm1-nic: failed to get nic")),
 		},
 		{
 			description:              "getVMManagementTypeByIPConfigurationID should return ManagedByVmssUniform for vmss uniform node",
@@ -436,8 +436,8 @@ func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
 		mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVMList, tc.vmListErr).AnyTimes()
 
 		if tc.expectedNIC != "" {
-			mockNICClient := ss.InterfacesClient.(*mockinterfaceclient.MockInterface)
-			mockNICClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ string, _ string) (network.Interface, *retry.Error) {
+			mockNICClient := ss.nicRepo.(*networkinterface.MockRepository)
+			mockNICClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ string) (*armnetwork.Interface, error) {
 				switch tc.expectedNIC {
 				case "testvm1":
 					return testVM1NIC, tc.nicGetErr
@@ -446,7 +446,7 @@ func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
 				case "testvm3":
 					return testVM3NIC, tc.nicGetErr
 				default:
-					return network.Interface{}, retry.NewError(false, errors.New("failed to get nic"))
+					return nil, errors.New("failed to get nic")
 				}
 			})
 		}

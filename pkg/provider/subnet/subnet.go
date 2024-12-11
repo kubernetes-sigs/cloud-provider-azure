@@ -40,7 +40,7 @@ func NewRepo(subnetsClient subnetclient.Interface) (Repository, error) {
 	}, nil
 }
 
-// CreateOrUpdateSubnet invokes az.SubnetClient.CreateOrUpdate with exponential backoff retry
+// CreateOrUpdate invokes az.SubnetClient.CreateOrUpdate with exponential backoff retry
 func (az *repo) CreateOrUpdate(ctx context.Context, rg string, vnetName string, subnetName string, subnet armnetwork.Subnet) error {
 	_, rerr := az.SubnetsClient.CreateOrUpdate(ctx, rg, vnetName, subnetName, subnet)
 	klog.V(10).Infof("SubnetsClient.CreateOrUpdate(%s): end", subnetName)

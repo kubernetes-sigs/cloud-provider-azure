@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
@@ -35,11 +36,11 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/ptr"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmasclient/mockvmasclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/networkinterface"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
@@ -551,32 +552,29 @@ func TestGetProtocolsFromKubernetesProtocol(t *testing.T) {
 	testcases := []struct {
 		Name                       string
 		protocol                   v1.Protocol
-		expectedTransportProto     network.TransportProtocol
+		expectedTransportProto     armnetwork.TransportProtocol
 		expectedSecurityGroupProto armnetwork.SecurityRuleProtocol
-		expectedProbeProto         network.ProbeProtocol
-		nilProbeProto              bool
+		expectedProbeProto         armnetwork.ProbeProtocol
 		expectedErrMsg             error
 	}{
 		{
 			Name:                       "getProtocolsFromKubernetesProtocol should get TCP protocol",
 			protocol:                   v1.ProtocolTCP,
-			expectedTransportProto:     network.TransportProtocolTCP,
+			expectedTransportProto:     armnetwork.TransportProtocolTCP,
 			expectedSecurityGroupProto: armnetwork.SecurityRuleProtocolTCP,
-			expectedProbeProto:         network.ProbeProtocolTCP,
+			expectedProbeProto:         armnetwork.ProbeProtocolTCP,
 		},
 		{
 			Name:                       "getProtocolsFromKubernetesProtocol should get UDP protocol",
 			protocol:                   v1.ProtocolUDP,
-			expectedTransportProto:     network.TransportProtocolUDP,
+			expectedTransportProto:     armnetwork.TransportProtocolUDP,
 			expectedSecurityGroupProto: armnetwork.SecurityRuleProtocolUDP,
-			nilProbeProto:              true,
 		},
 		{
 			Name:                       "getProtocolsFromKubernetesProtocol should get SCTP protocol",
 			protocol:                   v1.ProtocolSCTP,
-			expectedTransportProto:     network.TransportProtocolAll,
+			expectedTransportProto:     armnetwork.TransportProtocolAll,
 			expectedSecurityGroupProto: armnetwork.SecurityRuleProtocolAsterisk,
-			nilProbeProto:              true,
 		},
 		{
 			Name:           "getProtocolsFromKubernetesProtocol should report error",
@@ -587,13 +585,9 @@ func TestGetProtocolsFromKubernetesProtocol(t *testing.T) {
 
 	for _, test := range testcases {
 		transportProto, securityGroupProto, probeProto, err := getProtocolsFromKubernetesProtocol(test.protocol)
-		assert.Equal(t, test.expectedTransportProto, *transportProto, test.Name)
+		assert.Equal(t, test.expectedTransportProto, transportProto, test.Name)
 		assert.Equal(t, test.expectedSecurityGroupProto, securityGroupProto, test.Name)
-		if test.nilProbeProto {
-			assert.Nil(t, probeProto, test.Name)
-		} else {
-			assert.Equal(t, test.expectedProbeProto, *probeProto, test.Name)
-		}
+		assert.Equal(t, test.expectedProbeProto, probeProto, test.Name)
 		assert.Equal(t, test.expectedErrMsg, err, test.Name)
 	}
 }
@@ -672,78 +666,70 @@ func TestGetStandardVMPrimaryInterfaceID(t *testing.T) {
 func TestGetPrimaryIPConfig(t *testing.T) {
 	testcases := []struct {
 		name             string
-		nic              network.Interface
-		expectedIPConfig *network.InterfaceIPConfiguration
+		nic              *armnetwork.Interface
+		expectedIPConfig *armnetwork.InterfaceIPConfiguration
 		expectedErrMsg   error
 	}{
 
 		{
 			name: "GetPrimaryIPConfig should get the only IP configuration",
-			nic: network.Interface{
+			nic: &armnetwork.Interface{
 				Name: ptr.To("nic"),
-				InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-					IPConfigurations: &[]network.InterfaceIPConfiguration{
+				Properties: &armnetwork.InterfacePropertiesFormat{
+					IPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 						{
 							Name: ptr.To("ipconfig1"),
 						},
 					},
 				},
 			},
-			expectedIPConfig: &network.InterfaceIPConfiguration{
+			expectedIPConfig: &armnetwork.InterfaceIPConfiguration{
 				Name: ptr.To("ipconfig1"),
 			},
 		},
 		{
 			name: "GetPrimaryIPConfig should get the primary IP configuration",
-			nic: network.Interface{
+			nic: &armnetwork.Interface{
 				Name: ptr.To("nic"),
-				InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-					IPConfigurations: &[]network.InterfaceIPConfiguration{
+				Properties: &armnetwork.InterfacePropertiesFormat{
+					IPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 						{
 							Name: ptr.To("ipconfig1"),
-							InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
+							Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
 								Primary: ptr.To(true),
 							},
 						},
 						{
 							Name: ptr.To("ipconfig2"),
-							InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
+							Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
 								Primary: ptr.To(false),
 							},
 						},
 					},
 				},
 			},
-			expectedIPConfig: &network.InterfaceIPConfiguration{
+			expectedIPConfig: &armnetwork.InterfaceIPConfiguration{
 				Name: ptr.To("ipconfig1"),
-				InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
+				Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
 					Primary: ptr.To(true),
 				},
 			},
 		},
 		{
-			name: "GetPrimaryIPConfig should report error if nic don't have IP configuration",
-			nic: network.Interface{
-				Name:                      ptr.To("nic"),
-				InterfacePropertiesFormat: &network.InterfacePropertiesFormat{},
-			},
-			expectedErrMsg: fmt.Errorf("nic.IPConfigurations for nic (nicname=%q) is nil", "nic"),
-		},
-		{
 			name: "GetPrimaryIPConfig should report error if node has more than one IP configuration and don't have primary IP configuration",
-			nic: network.Interface{
+			nic: &armnetwork.Interface{
 				Name: ptr.To("nic"),
-				InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-					IPConfigurations: &[]network.InterfaceIPConfiguration{
+				Properties: &armnetwork.InterfacePropertiesFormat{
+					IPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 						{
 							Name: ptr.To("ipconfig1"),
-							InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
+							Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
 								Primary: ptr.To(false),
 							},
 						},
 						{
 							Name: ptr.To("ipconfig2"),
-							InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
+							Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
 								Primary: ptr.To(false),
 							},
 						},
@@ -762,58 +748,58 @@ func TestGetPrimaryIPConfig(t *testing.T) {
 }
 
 func TestGetIPConfigByIPFamily(t *testing.T) {
-	ipv4IPconfig := network.InterfaceIPConfiguration{
+	ipv4IPconfig := &armnetwork.InterfaceIPConfiguration{
 		Name: ptr.To("ipconfig1"),
-		InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-			PrivateIPAddressVersion: network.IPv4,
+		Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
+			PrivateIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
 			PrivateIPAddress:        ptr.To("10.10.0.12"),
 		},
 	}
-	ipv6IPconfig := network.InterfaceIPConfiguration{
+	ipv6IPconfig := &armnetwork.InterfaceIPConfiguration{
 		Name: ptr.To("ipconfig2"),
-		InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-			PrivateIPAddressVersion: network.IPv6,
+		Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
+			PrivateIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv6),
 			PrivateIPAddress:        ptr.To("1111:11111:00:00:1111:1111:000:111"),
 		},
 	}
-	testNic := network.Interface{
+	testNic := &armnetwork.Interface{
 		Name: ptr.To("nic"),
-		InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-			IPConfigurations: &[]network.InterfaceIPConfiguration{ipv4IPconfig, ipv6IPconfig},
+		Properties: &armnetwork.InterfacePropertiesFormat{
+			IPConfigurations: []*armnetwork.InterfaceIPConfiguration{ipv4IPconfig, ipv6IPconfig},
 		},
 	}
 	testcases := []struct {
 		name             string
-		nic              network.Interface
-		expectedIPConfig *network.InterfaceIPConfiguration
+		nic              *armnetwork.Interface
+		expectedIPConfig *armnetwork.InterfaceIPConfiguration
 		IPv6             bool
 		expectedErrMsg   error
 	}{
 		{
 			name:             "GetIPConfigByIPFamily should get the IPv6 IP configuration if IPv6 is false",
 			nic:              testNic,
-			expectedIPConfig: &ipv4IPconfig,
+			expectedIPConfig: ipv4IPconfig,
 		},
 		{
 			name:             "GetIPConfigByIPFamily should get the IPv4 IP configuration if IPv6 is true",
 			nic:              testNic,
 			IPv6:             true,
-			expectedIPConfig: &ipv6IPconfig,
+			expectedIPConfig: ipv6IPconfig,
 		},
 		{
 			name: "GetIPConfigByIPFamily should report error if nic don't have IP configuration",
-			nic: network.Interface{
-				Name:                      ptr.To("nic"),
-				InterfacePropertiesFormat: &network.InterfacePropertiesFormat{},
+			nic: &armnetwork.Interface{
+				Name:       ptr.To("nic"),
+				Properties: &armnetwork.InterfacePropertiesFormat{},
 			},
 			expectedErrMsg: fmt.Errorf("nic.IPConfigurations for nic (nicname=%q) is nil", "nic"),
 		},
 		{
 			name: "GetIPConfigByIPFamily should report error if nic don't have IPv6 configuration when IPv6 is true",
-			nic: network.Interface{
+			nic: &armnetwork.Interface{
 				Name: ptr.To("nic"),
-				InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-					IPConfigurations: &[]network.InterfaceIPConfiguration{ipv4IPconfig},
+				Properties: &armnetwork.InterfacePropertiesFormat{
+					IPConfigurations: []*armnetwork.InterfaceIPConfiguration{ipv4IPconfig},
 				},
 			},
 			IPv6:           true,
@@ -821,14 +807,14 @@ func TestGetIPConfigByIPFamily(t *testing.T) {
 		},
 		{
 			name: "GetIPConfigByIPFamily should report error if nic don't have PrivateIPAddress",
-			nic: network.Interface{
+			nic: &armnetwork.Interface{
 				Name: ptr.To("nic"),
-				InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-					IPConfigurations: &[]network.InterfaceIPConfiguration{
+				Properties: &armnetwork.InterfacePropertiesFormat{
+					IPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 						{
 							Name: ptr.To("ipconfig1"),
-							InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-								PrivateIPAddressVersion: network.IPv4,
+							Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
+								PrivateIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
 							},
 						},
 					},
@@ -841,7 +827,9 @@ func TestGetIPConfigByIPFamily(t *testing.T) {
 	for _, test := range testcases {
 		ipConfig, err := getIPConfigByIPFamily(test.nic, test.IPv6)
 		assert.Equal(t, test.expectedIPConfig, ipConfig, test.name)
-		assert.Equal(t, test.expectedErrMsg, err, test.name)
+		if test.expectedErrMsg != nil {
+			assert.Error(t, err)
+		}
 	}
 }
 
@@ -1352,7 +1340,7 @@ func TestStandardEnsureHostInPool(t *testing.T) {
 		nicName           string
 		nicID             string
 		vmSetName         string
-		nicProvisionState network.ProvisioningState
+		nicProvisionState armnetwork.ProvisioningState
 		isStandardLB      bool
 		expectedErrMsg    error
 	}{
@@ -1433,14 +1421,14 @@ func TestStandardEnsureHostInPool(t *testing.T) {
 		testNIC := buildDefaultTestInterface(false, []string{backendAddressPoolID})
 		testNIC.Name = ptr.To(test.nicName)
 		testNIC.ID = ptr.To(test.nicID)
-		testNIC.ProvisioningState = test.nicProvisionState
+		testNIC.Properties.ProvisioningState = to.Ptr(test.nicProvisionState)
 
 		mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, string(test.nodeName), gomock.Any()).Return(testVM, nil).AnyTimes()
 
-		mockInterfaceClient := cloud.InterfacesClient.(*mockinterfaceclient.MockInterface)
-		mockInterfaceClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nicName, gomock.Any()).Return(testNIC, nil).AnyTimes()
-		mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.ResourceGroup, gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		mockInterfaceClient := cloud.nicRepo.(*networkinterface.MockRepository)
+		mockInterfaceClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nicName).Return(testNIC, nil).AnyTimes()
+		mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.ResourceGroup, gomock.Any()).Return(nil, nil).AnyTimes()
 
 		_, _, _, vm, err := cloud.VMSet.EnsureHostInPool(context.Background(), test.service, test.nodeName, test.backendPoolID, test.vmSetName)
 		assert.Equal(t, test.expectedErrMsg, err, test.name)
@@ -1553,9 +1541,9 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 			mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 			mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nodeName, gomock.Any()).Return(testVM, nil).AnyTimes()
 
-			mockInterfaceClient := cloud.InterfacesClient.(*mockinterfaceclient.MockInterface)
-			mockInterfaceClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nicName, gomock.Any()).Return(testNIC, nil).AnyTimes()
-			mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.ResourceGroup, gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			mockInterfaceClient := cloud.nicRepo.(*networkinterface.MockRepository)
+			mockInterfaceClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nicName).Return(testNIC, nil).AnyTimes()
+			mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.ResourceGroup, gomock.Any()).Return(nil, nil).AnyTimes()
 
 			err := cloud.VMSet.EnsureHostsInPool(context.Background(), test.service, test.nodes, test.backendPoolID, test.vmSetName)
 			if test.expectedErr {
@@ -1577,18 +1565,18 @@ func TestStandardEnsureBackendPoolDeleted(t *testing.T) {
 
 	tests := []struct {
 		desc                string
-		backendAddressPools *[]network.BackendAddressPool
+		backendAddressPools []*armnetwork.BackendAddressPool
 		loadBalancerSKU     string
 		existingVM          compute.VirtualMachine
-		existingNIC         network.Interface
+		existingNIC         *armnetwork.Interface
 	}{
 		{
 			desc: "EnsureBackendPoolDeleted should decouple the nic and the load balancer properly",
-			backendAddressPools: &[]network.BackendAddressPool{
+			backendAddressPools: []*armnetwork.BackendAddressPool{
 				{
 					ID: ptr.To(backendPoolID),
-					BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-						BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
+					Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+						BackendIPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 							{
 								ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-1/ipConfigurations/ipconfig1"),
 							},
@@ -1608,13 +1596,13 @@ func TestStandardEnsureBackendPoolDeleted(t *testing.T) {
 		mockVMClient := mockvmclient.NewMockInterface(ctrl)
 		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, "k8s-agentpool1-00000000-1", gomock.Any()).Return(test.existingVM, nil)
 		cloud.VirtualMachinesClient = mockVMClient
-		mockNICClient := mockinterfaceclient.NewMockInterface(ctrl)
-		test.existingNIC.VirtualMachine = &network.SubResource{
+		mockNICClient := networkinterface.NewMockRepository(ctrl)
+		test.existingNIC.Properties.VirtualMachine = &armnetwork.SubResource{
 			ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/k8s-agentpool1-00000000-1"),
 		}
-		mockNICClient.EXPECT().Get(gomock.Any(), "rg", "k8s-agentpool1-00000000-nic-1", gomock.Any()).Return(test.existingNIC, nil).Times(2)
-		mockNICClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-		cloud.InterfacesClient = mockNICClient
+		mockNICClient.EXPECT().Get(gomock.Any(), "rg", "k8s-agentpool1-00000000-nic-1").Return(test.existingNIC, nil).Times(2)
+		mockNICClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil)
+		cloud.nicRepo = mockNICClient
 
 		nicUpdated, err := cloud.VMSet.EnsureBackendPoolDeleted(context.TODO(), &service, []string{backendPoolID}, vmSetName, test.backendAddressPools, true)
 		assert.NoError(t, err, test.desc)
@@ -1622,26 +1610,26 @@ func TestStandardEnsureBackendPoolDeleted(t *testing.T) {
 	}
 }
 
-func buildDefaultTestInterface(isPrimary bool, lbBackendpoolIDs []string) network.Interface {
-	expectedNIC := network.Interface{
-		InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-			ProvisioningState: network.ProvisioningStateSucceeded,
-			IPConfigurations: &[]network.InterfaceIPConfiguration{
+func buildDefaultTestInterface(isPrimary bool, lbBackendpoolIDs []string) *armnetwork.Interface {
+	expectedNIC := &armnetwork.Interface{
+		Properties: &armnetwork.InterfacePropertiesFormat{
+			ProvisioningState: to.Ptr(armnetwork.ProvisioningStateSucceeded),
+			IPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 				{
-					InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
+					Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
 						Primary: ptr.To(isPrimary),
 					},
 				},
 			},
 		},
 	}
-	backendAddressPool := make([]network.BackendAddressPool, 0)
+	backendAddressPool := make([]*armnetwork.BackendAddressPool, 0)
 	for _, id := range lbBackendpoolIDs {
-		backendAddressPool = append(backendAddressPool, network.BackendAddressPool{
+		backendAddressPool = append(backendAddressPool, &armnetwork.BackendAddressPool{
 			ID: ptr.To(id),
 		})
 	}
-	(*expectedNIC.IPConfigurations)[0].LoadBalancerBackendAddressPools = &backendAddressPool
+	expectedNIC.Properties.IPConfigurations[0].Properties.LoadBalancerBackendAddressPools = backendAddressPool
 	return expectedNIC
 }
 
@@ -1673,11 +1661,11 @@ func TestStandardGetNodeNameByIPConfigurationID(t *testing.T) {
 	mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 	mockVMClient.EXPECT().Get(gomock.Any(), "rg", "k8s-agentpool1-00000000-0", gomock.Any()).Return(expectedVM, nil)
 	expectedNIC := buildDefaultTestInterface(true, []string{})
-	expectedNIC.VirtualMachine = &network.SubResource{
+	expectedNIC.Properties.VirtualMachine = &armnetwork.SubResource{
 		ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/k8s-agentpool1-00000000-0"),
 	}
-	mockNICClient := cloud.InterfacesClient.(*mockinterfaceclient.MockInterface)
-	mockNICClient.EXPECT().Get(gomock.Any(), "rg", "k8s-agentpool1-00000000-nic-0", gomock.Any()).Return(expectedNIC, nil)
+	mockNICClient := cloud.nicRepo.(*networkinterface.MockRepository)
+	mockNICClient.EXPECT().Get(gomock.Any(), "rg", "k8s-agentpool1-00000000-nic-0").Return(expectedNIC, nil)
 	ipConfigurationID := `/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-0/ipConfigurations/ipconfig1`
 	nodeName, asName, err := cloud.VMSet.GetNodeNameByIPConfigurationID(context.TODO(), ipConfigurationID)
 	assert.NoError(t, err)

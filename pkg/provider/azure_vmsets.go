@@ -20,9 +20,8 @@ import (
 	"context"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
@@ -30,7 +29,7 @@ import (
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 )
 
-//go:generate sh -c "mockgen -destination=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/provider/azure_mock_vmsets.go -source=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/provider/azure_vmsets.go -package=provider VMSet"
+//go:generate sh -c "mockgen -destination=./azure_mock_vmsets.go -source=./azure_vmsets.go -package=provider VMSet"
 
 // VMSet defines functions all vmsets (including scale set and availability
 // set) should be implemented.
@@ -46,7 +45,7 @@ type VMSet interface {
 	// GetIPByNodeName gets machine private IP and public IP by node name.
 	GetIPByNodeName(ctx context.Context, name string) (string, string, error)
 	// GetPrimaryInterface gets machine primary network interface by node name.
-	GetPrimaryInterface(ctx context.Context, nodeName string) (network.Interface, error)
+	GetPrimaryInterface(ctx context.Context, nodeName string) (*armnetwork.Interface, error)
 	// GetNodeNameByProviderID gets the node name by provider ID.
 	GetNodeNameByProviderID(ctx context.Context, providerID string) (types.NodeName, error)
 
@@ -71,7 +70,7 @@ type VMSet interface {
 	// participating in the specified LoadBalancer Backend Pool.
 	EnsureHostInPool(ctx context.Context, service *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetName string) (string, string, string, *compute.VirtualMachineScaleSetVM, error)
 	// EnsureBackendPoolDeleted ensures the loadBalancer backendAddressPools deleted from the specified nodes.
-	EnsureBackendPoolDeleted(ctx context.Context, service *v1.Service, backendPoolIDs []string, vmSetName string, backendAddressPools *[]network.BackendAddressPool, deleteFromVMSet bool) (bool, error)
+	EnsureBackendPoolDeleted(ctx context.Context, service *v1.Service, backendPoolIDs []string, vmSetName string, backendAddressPools []*armnetwork.BackendAddressPool, deleteFromVMSet bool) (bool, error)
 	// EnsureBackendPoolDeletedFromVMSets ensures the loadBalancer backendAddressPools deleted from the specified VMSS/VMAS
 	EnsureBackendPoolDeletedFromVMSets(ctx context.Context, vmSetNamesMap map[string]bool, backendPoolIDs []string) error
 

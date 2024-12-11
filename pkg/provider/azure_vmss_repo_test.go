@@ -22,8 +22,8 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
 
 	"go.uber.org/mock/gomock"
@@ -32,12 +32,12 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/ptr"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/networkinterface"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/publicip"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -153,11 +153,11 @@ func TestGetPrivateIPsForMachine(t *testing.T) {
 		},
 	}
 
-	expectedInterface := network.Interface{
-		InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-			IPConfigurations: &[]network.InterfaceIPConfiguration{
+	expectedInterface := &armnetwork.Interface{
+		Properties: &armnetwork.InterfacePropertiesFormat{
+			IPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 				{
-					InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
+					Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
 						PrivateIPAddress: ptr.To("1.2.3.4"),
 					},
 				},
@@ -170,8 +170,8 @@ func TestGetPrivateIPsForMachine(t *testing.T) {
 		mockVMClient := az.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "vm", gomock.Any()).Return(expectedVM, test.vmClientErr)
 
-		mockInterfaceClient := az.InterfacesClient.(*mockinterfaceclient.MockInterface)
-		mockInterfaceClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(expectedInterface, nil).MaxTimes(1)
+		mockInterfaceClient := az.nicRepo.(*networkinterface.MockRepository)
+		mockInterfaceClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "nic").Return(expectedInterface, nil).MaxTimes(1)
 
 		privateIPs, err := az.getPrivateIPsForMachine(context.Background(), "vm")
 		assert.Equal(t, test.expectedErr, err)
@@ -215,13 +215,13 @@ func TestGetIPForMachineWithRetry(t *testing.T) {
 		},
 	}
 
-	expectedInterface := network.Interface{
-		InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-			IPConfigurations: &[]network.InterfaceIPConfiguration{
+	expectedInterface := &armnetwork.Interface{
+		Properties: &armnetwork.InterfacePropertiesFormat{
+			IPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 				{
-					InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
+					Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
 						PrivateIPAddress: ptr.To("1.2.3.4"),
-						PublicIPAddress: &network.PublicIPAddress{
+						PublicIPAddress: &armnetwork.PublicIPAddress{
 							ID: ptr.To("test/pip"),
 						},
 					},
@@ -230,9 +230,9 @@ func TestGetIPForMachineWithRetry(t *testing.T) {
 		},
 	}
 
-	expectedPIP := network.PublicIPAddress{
+	expectedPIP := &armnetwork.PublicIPAddress{
 		Name: ptr.To("pip"),
-		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+		Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 			IPAddress: ptr.To("5.6.7.8"),
 		},
 	}
@@ -242,11 +242,11 @@ func TestGetIPForMachineWithRetry(t *testing.T) {
 		mockVMClient := az.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "vm", gomock.Any()).Return(expectedVM, test.clientErr)
 
-		mockInterfaceClient := az.InterfacesClient.(*mockinterfaceclient.MockInterface)
-		mockInterfaceClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(expectedInterface, nil).MaxTimes(1)
+		mockInterfaceClient := az.nicRepo.(*networkinterface.MockRepository)
+		mockInterfaceClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "nic").Return(expectedInterface, nil).MaxTimes(1)
 
-		mockPIPClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-		mockPIPClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return([]network.PublicIPAddress{expectedPIP}, nil).MaxTimes(1)
+		mockPIPClient := az.pipRepo.(*publicip.MockRepository)
+		mockPIPClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any()).Return(expectedPIP, nil).MaxTimes(1)
 
 		privateIP, publicIP, err := az.GetIPForMachineWithRetry(context.Background(), "vm")
 		assert.Equal(t, test.expectedErr, err)

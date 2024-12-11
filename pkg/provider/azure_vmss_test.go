@@ -23,8 +23,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
@@ -35,13 +35,13 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/ptr"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient/mockvmssvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/networkinterface"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/publicip"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/virtualmachine"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -158,10 +158,10 @@ func buildTestVMSS(name, computerNamePrefix string) compute.VirtualMachineScaleS
 	}
 }
 
-func buildTestVirtualMachineEnv(ss *Cloud, scaleSetName, zone string, faultDomain int32, vmList []string, state string, isIPv6 bool) ([]compute.VirtualMachineScaleSetVM, network.Interface, network.PublicIPAddress) {
+func buildTestVirtualMachineEnv(ss *Cloud, scaleSetName, zone string, faultDomain int32, vmList []string, state string, isIPv6 bool) ([]compute.VirtualMachineScaleSetVM, *armnetwork.Interface, *armnetwork.PublicIPAddress) {
 	expectedVMSSVMs := make([]compute.VirtualMachineScaleSetVM, 0)
-	expectedInterface := network.Interface{}
-	expectedPIP := network.PublicIPAddress{}
+	expectedInterface := &armnetwork.Interface{}
+	expectedPIP := &armnetwork.PublicIPAddress{}
 
 	for i := range vmList {
 		nodeName := vmList[i]
@@ -242,16 +242,16 @@ func buildTestVirtualMachineEnv(ss *Cloud, scaleSetName, zone string, faultDomai
 		}
 
 		// set interfaces.
-		expectedInterface = network.Interface{
+		expectedInterface = &armnetwork.Interface{
 			Name: ptr.To("nic"),
 			ID:   &interfaceID,
-			InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-				IPConfigurations: &[]network.InterfaceIPConfiguration{
+			Properties: &armnetwork.InterfacePropertiesFormat{
+				IPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 					{
-						InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
+						Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
 							Primary:          ptr.To(true),
 							PrivateIPAddress: ptr.To(fakePrivateIP),
-							PublicIPAddress: &network.PublicIPAddress{
+							PublicIPAddress: &armnetwork.PublicIPAddress{
 								ID: ptr.To(publicAddressID),
 							},
 						},
@@ -261,9 +261,9 @@ func buildTestVirtualMachineEnv(ss *Cloud, scaleSetName, zone string, faultDomai
 		}
 
 		// set public IPs.
-		expectedPIP = network.PublicIPAddress{
+		expectedPIP = &armnetwork.PublicIPAddress{
 			ID: ptr.To(publicAddressID),
-			PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+			Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 				IPAddress: ptr.To(fakePublicIP),
 			},
 		}
@@ -563,20 +563,20 @@ func TestGetIPByNodeName(t *testing.T) {
 
 		mockVMSSClient := mockvmssclient.NewMockInterface(ctrl)
 		mockVMSSVMClient := mockvmssvmclient.NewMockInterface(ctrl)
-		mockInterfaceClient := mockinterfaceclient.NewMockInterface(ctrl)
-		mockPIPClient := mockpublicipclient.NewMockInterface(ctrl)
+		mockInterfaceClient := networkinterface.NewMockRepository(ctrl)
+		mockPIPClient := publicip.NewMockRepository(ctrl)
 		ss.VirtualMachineScaleSetsClient = mockVMSSClient
 		ss.VirtualMachineScaleSetVMsClient = mockVMSSVMClient
-		ss.InterfacesClient = mockInterfaceClient
-		ss.PublicIPAddressesClient = mockPIPClient
+		ss.nicRepo = mockInterfaceClient
+		ss.pipRepo = mockPIPClient
 
 		expectedScaleSet := buildTestVMSS(test.scaleSet, "vmssee6c2")
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachineScaleSet{expectedScaleSet}, nil).AnyTimes()
 
 		expectedVMs, expectedInterface, expectedPIP := buildTestVirtualMachineEnv(ss.Cloud, test.scaleSet, "", 0, test.vmList, "", false)
 		mockVMSSVMClient.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).AnyTimes()
-		mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedInterface, nil).AnyTimes()
-		mockPIPClient.EXPECT().GetVirtualMachineScaleSetPublicIPAddress(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedPIP, nil).AnyTimes()
+		mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedInterface, nil).AnyTimes()
+		mockPIPClient.EXPECT().GetVirtualMachineScaleSetPublicIPAddress(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedPIP, nil).AnyTimes()
 
 		mockVMsClient := ss.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachine{}, nil).AnyTimes()
@@ -1145,8 +1145,7 @@ func TestGetPrimaryInterfaceID(t *testing.T) {
 }
 
 func TestGetPrimaryInterface(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	t.Parallel()
 
 	testCases := []struct {
 		description         string
@@ -1154,7 +1153,7 @@ func TestGetPrimaryInterface(t *testing.T) {
 		vmList              []string
 		vmClientErr         *retry.Error
 		vmssClientErr       *retry.Error
-		nicClientErr        *retry.Error
+		nicClientErr        error
 		hasPrimaryInterface bool
 		isInvalidNICID      bool
 		expectedErr         error
@@ -1201,60 +1200,68 @@ func TestGetPrimaryInterface(t *testing.T) {
 			nodeName:            "vmss-vm-000000",
 			vmList:              []string{"vmss-vm-000000"},
 			hasPrimaryInterface: true,
-			nicClientErr:        &retry.Error{RawError: fmt.Errorf("error")},
-			expectedErr:         fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"),
+			nicClientErr:        fmt.Errorf("error"),
+			expectedErr:         fmt.Errorf("error"),
 		},
 		{
 			description:         "GetPrimaryInterface should report the error if the NIC instance is not found",
 			nodeName:            "vmss-vm-000000",
 			vmList:              []string{"vmss-vm-000000"},
 			hasPrimaryInterface: true,
-			nicClientErr:        &retry.Error{HTTPStatusCode: 404, RawError: fmt.Errorf("not found")},
+			nicClientErr:        networkinterface.ErrNotFound,
 			expectedErr:         cloudprovider.InstanceNotFound,
 		},
 	}
 
-	for _, test := range testCases {
-		ss, err := NewTestScaleSet(ctrl)
-		assert.NoError(t, err, "unexpected error when creating test VMSS")
+	for _, tt := range testCases {
+		t.Run(tt.description, func(t *testing.T) {
+			t.Parallel()
 
-		expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
-		mockVMSSClient := ss.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
-		mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, test.vmssClientErr).AnyTimes()
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-		expectedVMSSVMs, expectedInterface, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, test.vmList, "", false)
-		if !test.hasPrimaryInterface {
-			networkInterfaces := *expectedVMSSVMs[0].NetworkProfile.NetworkInterfaces
-			networkInterfaces[0].Primary = ptr.To(false)
-			networkInterfaces = append(networkInterfaces, compute.NetworkInterfaceReference{
-				NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{Primary: ptr.To(false)},
-			})
-			expectedVMSSVMs[0].NetworkProfile.NetworkInterfaces = &networkInterfaces
-		}
-		if test.isInvalidNICID {
-			networkInterfaces := *expectedVMSSVMs[0].NetworkProfile.NetworkInterfaces
-			networkInterfaces[0].ID = ptr.To("invalid/id/")
-			expectedVMSSVMs[0].NetworkProfile.NetworkInterfaces = &networkInterfaces
-		}
-		mockVMSSVMClient := ss.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
-		mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
+			ss, err := NewTestScaleSet(ctrl)
+			assert.NoError(t, err, "unexpected error when creating test VMSS")
 
-		mockVMClient := ss.VirtualMachinesClient.(*mockvmclient.MockInterface)
-		mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, test.vmClientErr).AnyTimes()
+			expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
+			mockVMSSClient := ss.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, tt.vmssClientErr).AnyTimes()
 
-		mockInterfaceClient := ss.InterfacesClient.(*mockinterfaceclient.MockInterface)
-		mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), ss.ResourceGroup, testVMSSName, "0", test.nodeName, gomock.Any()).Return(expectedInterface, test.nicClientErr).AnyTimes()
-		expectedInterface.Location = &ss.Location
+			expectedVMSSVMs, expectedInterface, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, tt.vmList, "", false)
+			if !tt.hasPrimaryInterface {
+				networkInterfaces := *expectedVMSSVMs[0].NetworkProfile.NetworkInterfaces
+				networkInterfaces[0].Primary = ptr.To(false)
+				networkInterfaces = append(networkInterfaces, compute.NetworkInterfaceReference{
+					NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{Primary: ptr.To(false)},
+				})
+				expectedVMSSVMs[0].NetworkProfile.NetworkInterfaces = &networkInterfaces
+			}
+			if tt.isInvalidNICID {
+				networkInterfaces := *expectedVMSSVMs[0].NetworkProfile.NetworkInterfaces
+				networkInterfaces[0].ID = ptr.To("invalid/id/")
+				expectedVMSSVMs[0].NetworkProfile.NetworkInterfaces = &networkInterfaces
+			}
+			mockVMSSVMClient := ss.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
+			mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
 
-		if test.vmClientErr != nil || test.vmssClientErr != nil || test.nicClientErr != nil || !test.hasPrimaryInterface || test.isInvalidNICID {
-			expectedInterface = network.Interface{}
-		}
+			mockVMClient := ss.VirtualMachinesClient.(*mockvmclient.MockInterface)
+			mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, tt.vmClientErr).AnyTimes()
 
-		nic, err := ss.GetPrimaryInterface(context.Background(), test.nodeName)
-		if test.expectedErr != nil {
-			assert.EqualError(t, err, test.expectedErr.Error(), test.description)
-		}
-		assert.Equal(t, expectedInterface, nic, test.description)
+			mockInterfaceClient := ss.nicRepo.(*networkinterface.MockRepository)
+			mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), ss.ResourceGroup, testVMSSName, "0", tt.nodeName).Return(expectedInterface, tt.nicClientErr).AnyTimes()
+			expectedInterface.Location = &ss.Location
+
+			if tt.vmClientErr != nil || tt.vmssClientErr != nil || tt.nicClientErr != nil || !tt.hasPrimaryInterface || tt.isInvalidNICID {
+				expectedInterface = &armnetwork.Interface{}
+			}
+
+			nic, err := ss.GetPrimaryInterface(context.Background(), tt.nodeName)
+			if tt.expectedErr != nil {
+				assert.EqualError(t, err, tt.expectedErr.Error(), tt.description)
+			} else {
+				assert.Equal(t, expectedInterface, nic, tt.description)
+			}
+		})
 	}
 }
 
@@ -1264,7 +1271,7 @@ func TestGetVMSSPublicIPAddress(t *testing.T) {
 
 	testCases := []struct {
 		description  string
-		pipClientErr *retry.Error
+		pipClientErr error
 		pipName      string
 		found        bool
 		expectedErr  error
@@ -1278,8 +1285,8 @@ func TestGetVMSSPublicIPAddress(t *testing.T) {
 			description:  "GetVMSSPublicIPAddress should report the error if the pip client returns retry.Error",
 			pipName:      "pip",
 			found:        false,
-			pipClientErr: &retry.Error{RawError: fmt.Errorf("error")},
-			expectedErr:  fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"),
+			pipClientErr: fmt.Errorf("error"),
+			expectedErr:  fmt.Errorf("error"),
 		},
 		{
 			description: "GetVMSSPublicIPAddress should not report errors if the pip cannot be found",
@@ -1292,9 +1299,9 @@ func TestGetVMSSPublicIPAddress(t *testing.T) {
 		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test VMSS")
 
-		mockPIPClient := ss.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-		mockPIPClient.EXPECT().GetVirtualMachineScaleSetPublicIPAddress(gomock.Any(), ss.ResourceGroup, testVMSSName, "0", "nic", "ip", "pip", "").Return(network.PublicIPAddress{}, test.pipClientErr).AnyTimes()
-		mockPIPClient.EXPECT().GetVirtualMachineScaleSetPublicIPAddress(gomock.Any(), ss.ResourceGroup, testVMSSName, "0", "nic", "ip", gomock.Not("pip"), "").Return(network.PublicIPAddress{}, &retry.Error{HTTPStatusCode: 404, RawError: fmt.Errorf("not found")}).AnyTimes()
+		mockPIPClient := ss.pipRepo.(*publicip.MockRepository)
+		mockPIPClient.EXPECT().GetVirtualMachineScaleSetPublicIPAddress(gomock.Any(), ss.ResourceGroup, testVMSSName, "0", "nic", "ip", "pip").Return(&armnetwork.PublicIPAddress{}, test.pipClientErr).AnyTimes()
+		mockPIPClient.EXPECT().GetVirtualMachineScaleSetPublicIPAddress(gomock.Any(), ss.ResourceGroup, testVMSSName, "0", "nic", "ip", gomock.Not("pip")).Return(&armnetwork.PublicIPAddress{}, publicip.ErrNotFound).AnyTimes()
 
 		_, found, err := ss.getVMSSPublicIPAddress(ss.ResourceGroup, testVMSSName, "0", "nic", "ip", test.pipName)
 		if test.expectedErr != nil {
@@ -1324,14 +1331,6 @@ func TestGetPrivateIPsByNodeName(t *testing.T) {
 			expectedPrivateIPs: []string{fakePrivateIP},
 		},
 		{
-			description:        "GetPrivateIPsByNodeName should report the error if the ipconfig of the nic is nil",
-			nodeName:           "vmss-vm-000000",
-			vmList:             []string{"vmss-vm-000000"},
-			isNilIPConfigs:     true,
-			expectedPrivateIPs: []string{},
-			expectedErr:        fmt.Errorf("nic.IPConfigurations for nic (nicname=\"nic\") is nil"),
-		},
-		{
 			description:        "GetPrivateIPsByNodeName should report the error if error happens during GetPrimaryInterface",
 			nodeName:           "vmss-vm-000000",
 			vmList:             []string{"vmss-vm-000000"},
@@ -1358,10 +1357,10 @@ func TestGetPrivateIPsByNodeName(t *testing.T) {
 		mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, test.vmClientErr).AnyTimes()
 
 		if test.isNilIPConfigs {
-			expectedInterface.IPConfigurations = nil
+			expectedInterface.Properties.IPConfigurations = nil
 		}
-		mockInterfaceClient := ss.InterfacesClient.(*mockinterfaceclient.MockInterface)
-		mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), ss.ResourceGroup, testVMSSName, "0", test.nodeName, gomock.Any()).Return(expectedInterface, nil).AnyTimes()
+		mockInterfaceClient := ss.nicRepo.(*networkinterface.MockRepository)
+		mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), ss.ResourceGroup, testVMSSName, "0", test.nodeName).Return(expectedInterface, nil).AnyTimes()
 
 		privateIPs, err := ss.GetPrivateIPsByNodeName(context.Background(), test.nodeName)
 		if test.expectedErr != nil {
@@ -2889,7 +2888,7 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 	testCases := []struct {
 		description            string
 		backendpoolID          string
-		backendAddressPools    *[]network.BackendAddressPool
+		backendAddressPools    []*armnetwork.BackendAddressPool
 		expectedVMSSVMPutTimes int
 		vmClientErr            *retry.Error
 		expectedErr            bool
@@ -2897,11 +2896,11 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 		{
 			description:   "EnsureBackendPoolDeleted should skip the unwanted backend address pools and update the VMSS VM correctly",
 			backendpoolID: testLBBackendpoolID0,
-			backendAddressPools: &[]network.BackendAddressPool{
+			backendAddressPools: []*armnetwork.BackendAddressPool{
 				{
 					ID: ptr.To(testLBBackendpoolID0),
-					BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-						BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
+					Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+						BackendIPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 							{
 								Name: ptr.To("ip-1"),
 								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0/networkInterfaces/nic"),
@@ -2925,11 +2924,11 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 		{
 			description:   "EnsureBackendPoolDeleted should report the error that occurs during the call of VMSS VM client",
 			backendpoolID: testLBBackendpoolID0,
-			backendAddressPools: &[]network.BackendAddressPool{
+			backendAddressPools: []*armnetwork.BackendAddressPool{
 				{
 					ID: ptr.To(testLBBackendpoolID0),
-					BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-						BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
+					Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+						BackendIPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 							{
 								Name: ptr.To("ip-1"),
 								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0/networkInterfaces/nic"),
@@ -2948,11 +2947,11 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 		{
 			description:   "EnsureBackendPoolDeleted should skip the node that doesn't exist",
 			backendpoolID: testLBBackendpoolID0,
-			backendAddressPools: &[]network.BackendAddressPool{
+			backendAddressPools: []*armnetwork.BackendAddressPool{
 				{
 					ID: ptr.To(testLBBackendpoolID0),
-					BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-						BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
+					Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+						BackendIPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 							{
 								Name: ptr.To("ip-1"),
 								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/6/networkInterfaces/nic"),
@@ -3007,11 +3006,11 @@ func TestEnsureBackendPoolDeletedConcurrently(t *testing.T) {
 	ss, err := NewTestScaleSet(ctrl)
 	assert.NoError(t, err)
 
-	backendAddressPools := &[]network.BackendAddressPool{
+	backendAddressPools := []*armnetwork.BackendAddressPool{
 		{
 			ID: ptr.To(testLBBackendpoolID0),
-			BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-				BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
+			Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+				BackendIPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 					{
 						Name: ptr.To("ip-1"),
 						ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss-0/virtualMachines/0/networkInterfaces/nic"),
@@ -3021,8 +3020,8 @@ func TestEnsureBackendPoolDeletedConcurrently(t *testing.T) {
 		},
 		{
 			ID: ptr.To(testLBBackendpoolID1),
-			BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-				BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
+			Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+				BackendIPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 					{
 						Name: ptr.To("ip-1"),
 						ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss-1/virtualMachines/0/networkInterfaces/nic"),
@@ -3032,8 +3031,8 @@ func TestEnsureBackendPoolDeletedConcurrently(t *testing.T) {
 		},
 		{
 			ID: ptr.To(testLBBackendpoolID2),
-			BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-				BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
+			Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+				BackendIPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 					{
 						Name: ptr.To("ip-1"),
 						ID:   ptr.To("/subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachineScaleSets/vmss-0/virtualMachines/0/networkInterfaces/nic"),

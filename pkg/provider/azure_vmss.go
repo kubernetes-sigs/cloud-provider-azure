@@ -26,9 +26,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -39,6 +38,8 @@ import (
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/networkinterface"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/publicip"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/virtualmachine"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/lockmap"
 	vmutil "sigs.k8s.io/cloud-provider-azure/pkg/util/vm"
@@ -612,10 +613,10 @@ func (ss *ScaleSet) GetIPByNodeName(ctx context.Context, nodeName string) (strin
 		return "", "", err
 	}
 
-	internalIP := *ipConfig.PrivateIPAddress
+	internalIP := *ipConfig.Properties.PrivateIPAddress
 	publicIP := ""
-	if ipConfig.PublicIPAddress != nil && ipConfig.PublicIPAddress.ID != nil {
-		pipID := *ipConfig.PublicIPAddress.ID
+	if ipConfig.Properties.PublicIPAddress != nil && ipConfig.Properties.PublicIPAddress.ID != nil {
+		pipID := *ipConfig.Properties.PublicIPAddress.ID
 		matches := vmssPIPConfigurationRE.FindStringSubmatch(pipID)
 		if len(matches) == 7 {
 			resourceGroupName := matches[1]
@@ -629,8 +630,8 @@ func (ss *ScaleSet) GetIPByNodeName(ctx context.Context, nodeName string) (strin
 				klog.Errorf("ss.getVMSSPublicIPAddress() failed with error: %v", err)
 				return "", "", err
 			}
-			if existsPip && pip.IPAddress != nil {
-				publicIP = *pip.IPAddress
+			if existsPip && pip.Properties.IPAddress != nil {
+				publicIP = *pip.Properties.IPAddress
 			}
 		} else {
 			klog.Warningf("Failed to get VMSS Public IP with ID %s", pipID)
@@ -640,22 +641,30 @@ func (ss *ScaleSet) GetIPByNodeName(ctx context.Context, nodeName string) (strin
 	return internalIP, publicIP, nil
 }
 
-func (ss *ScaleSet) getVMSSPublicIPAddress(resourceGroupName string, virtualMachineScaleSetName string, virtualMachineIndex string, networkInterfaceName string, IPConfigurationName string, publicIPAddressName string) (network.PublicIPAddress, bool, error) {
+func (ss *ScaleSet) getVMSSPublicIPAddress(
+	resourceGroupName string,
+	virtualMachineScaleSetName string,
+	virtualMachineIndex string,
+	networkInterfaceName string,
+	IPConfigurationName string,
+	publicIPAddressName string,
+) (*armnetwork.PublicIPAddress, bool, error) {
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 
-	pip, err := ss.PublicIPAddressesClient.GetVirtualMachineScaleSetPublicIPAddress(ctx, resourceGroupName, virtualMachineScaleSetName, virtualMachineIndex, networkInterfaceName, IPConfigurationName, publicIPAddressName, "")
-	exists, rerr := checkResourceExistsFromError(err)
-	if rerr != nil {
-		return pip, false, rerr.Error()
+	pip, err := ss.pipRepo.GetVirtualMachineScaleSetPublicIPAddress(
+		ctx, resourceGroupName, virtualMachineScaleSetName, virtualMachineIndex, networkInterfaceName, IPConfigurationName, publicIPAddressName)
+
+	if err != nil {
+		if publicip.IsNotFound(err) {
+			klog.V(2).Infof("Public IP %q not found", publicIPAddressName)
+			return nil, false, nil
+		}
+
+		return pip, false, err
 	}
 
-	if !exists {
-		klog.V(2).Infof("Public IP %q not found", publicIPAddressName)
-		return pip, false, nil
-	}
-
-	return pip, exists, nil
+	return pip, true, nil
 }
 
 // returns a list of private ips assigned to node
@@ -684,13 +693,9 @@ func (ss *ScaleSet) GetPrivateIPsByNodeName(ctx context.Context, nodeName string
 		return ips, err
 	}
 
-	if nic.IPConfigurations == nil {
-		return ips, fmt.Errorf("nic.IPConfigurations for nic (nicname=%q) is nil", *nic.Name)
-	}
-
-	for _, ipConfig := range *(nic.IPConfigurations) {
-		if ipConfig.PrivateIPAddress != nil {
-			ips = append(ips, *(ipConfig.PrivateIPAddress))
+	for _, ipConfig := range nic.Properties.IPConfigurations {
+		if ipConfig.Properties.PrivateIPAddress != nil {
+			ips = append(ips, *ipConfig.Properties.PrivateIPAddress)
 		}
 	}
 
@@ -920,11 +925,11 @@ func extractResourceGroupByVMSSNicID(nicID string) (string, error) {
 }
 
 // GetPrimaryInterface gets machine primary network interface by node name and vmSet.
-func (ss *ScaleSet) GetPrimaryInterface(ctx context.Context, nodeName string) (network.Interface, error) {
+func (ss *ScaleSet) GetPrimaryInterface(ctx context.Context, nodeName string) (*armnetwork.Interface, error) {
 	vmManagementType, err := ss.getVMManagementTypeByNodeName(ctx, nodeName, azcache.CacheReadTypeUnsafe)
 	if err != nil {
 		klog.Errorf("Failed to check VM management type: %v", err)
-		return network.Interface{}, err
+		return nil, err
 	}
 
 	if vmManagementType == ManagedByAvSet {
@@ -944,40 +949,40 @@ func (ss *ScaleSet) GetPrimaryInterface(ctx context.Context, nodeName string) (n
 		}
 
 		klog.Errorf("error: ss.GetPrimaryInterface(%s), ss.getVmssVM(ctx,%s), err=%v", nodeName, nodeName, err)
-		return network.Interface{}, err
+		return nil, err
 	}
 
 	primaryInterfaceID, err := ss.getPrimaryInterfaceID(vm)
 	if err != nil {
 		klog.Errorf("error: ss.GetPrimaryInterface(%s), ss.getPrimaryInterfaceID(), err=%v", nodeName, err)
-		return network.Interface{}, err
+		return nil, err
 	}
 
 	nicName, err := getLastSegment(primaryInterfaceID, "/")
 	if err != nil {
 		klog.Errorf("error: ss.GetPrimaryInterface(%s), getLastSegment(%s), err=%v", nodeName, primaryInterfaceID, err)
-		return network.Interface{}, err
+		return nil, err
 	}
 	resourceGroup, err := extractResourceGroupByVMSSNicID(primaryInterfaceID)
 	if err != nil {
-		return network.Interface{}, err
+		return nil, err
 	}
 
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
-	nic, rerr := ss.InterfacesClient.GetVirtualMachineScaleSetNetworkInterface(ctx, resourceGroup, vm.VMSSName,
+	nic, err := ss.nicRepo.GetVirtualMachineScaleSetNetworkInterface(
+		ctx, resourceGroup, vm.VMSSName,
 		vm.InstanceID,
-		nicName, "")
-	if rerr != nil {
-		exists, realErr := checkResourceExistsFromError(rerr)
-		if realErr != nil {
-			klog.Errorf("error: ss.GetPrimaryInterface(%s), ss.GetVirtualMachineScaleSetNetworkInterface.Get(%s, %s, %s), err=%v", nodeName, resourceGroup, vm.VMSSName, nicName, realErr)
-			return network.Interface{}, realErr.Error()
+		nicName,
+	)
+	if err != nil {
+		if networkinterface.IsNotFound(err) {
+			return nil, cloudprovider.InstanceNotFound
 		}
 
-		if !exists {
-			return network.Interface{}, cloudprovider.InstanceNotFound
-		}
+		klog.Errorf("error: ss.GetPrimaryInterface(%s), ss.GetVirtualMachineScaleSetNetworkInterface.Get(%s, %s, %s), err=%v", nodeName, resourceGroup, vm.VMSSName, nicName, err)
+
+		return nil, err
 	}
 
 	// Fix interface's location, which is required when updating the interface.
@@ -1817,9 +1822,9 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVmssUniform(ctx context.Context,
 }
 
 // ensureBackendPoolDeleted ensures the loadBalancer backendAddressPools deleted from the specified nodes.
-func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Service, backendPoolIDs []string, vmSetName string, backendAddressPools *[]network.BackendAddressPool) (bool, error) {
+func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Service, backendPoolIDs []string, vmSetName string, backendAddressPools []*armnetwork.BackendAddressPool) (bool, error) {
 	// Returns nil if backend address pools already deleted.
-	if backendAddressPools == nil {
+	if len(backendAddressPools) == 0 {
 		return false, nil
 	}
 
@@ -1830,10 +1835,10 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 	}()
 
 	ipConfigurationIDs := []string{}
-	for _, backendPool := range *backendAddressPools {
+	for _, backendPool := range backendAddressPools {
 		for _, backendPoolID := range backendPoolIDs {
-			if strings.EqualFold(*backendPool.ID, backendPoolID) && backendPool.BackendIPConfigurations != nil {
-				for _, ipConf := range *backendPool.BackendIPConfigurations {
+			if strings.EqualFold(*backendPool.ID, backendPoolID) {
+				for _, ipConf := range backendPool.Properties.BackendIPConfigurations {
 					if ipConf.ID == nil {
 						continue
 					}
@@ -1958,20 +1963,19 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 }
 
 // EnsureBackendPoolDeleted ensures the loadBalancer backendAddressPools deleted from the specified nodes.
-func (ss *ScaleSet) EnsureBackendPoolDeleted(ctx context.Context, service *v1.Service, backendPoolIDs []string, vmSetName string, backendAddressPools *[]network.BackendAddressPool, deleteFromVMSet bool) (bool, error) {
+func (ss *ScaleSet) EnsureBackendPoolDeleted(ctx context.Context, service *v1.Service, backendPoolIDs []string, vmSetName string, backendAddressPools []*armnetwork.BackendAddressPool, deleteFromVMSet bool) (bool, error) {
 	if backendAddressPools == nil {
 		return false, nil
 	}
-	vmssUniformBackendIPConfigurationsMap := map[string][]network.InterfaceIPConfiguration{}
-	vmssFlexBackendIPConfigurationsMap := map[string][]network.InterfaceIPConfiguration{}
-	avSetBackendIPConfigurationsMap := map[string][]network.InterfaceIPConfiguration{}
+	vmssUniformBackendIPConfigurationsMap := map[string][]*armnetwork.InterfaceIPConfiguration{}
+	vmssFlexBackendIPConfigurationsMap := map[string][]*armnetwork.InterfaceIPConfiguration{}
+	avSetBackendIPConfigurationsMap := map[string][]*armnetwork.InterfaceIPConfiguration{}
 
-	for _, backendPool := range *backendAddressPools {
+	for _, backendPool := range backendAddressPools {
 		for _, backendPoolID := range backendPoolIDs {
 			if strings.EqualFold(*backendPool.ID, backendPoolID) &&
-				backendPool.BackendAddressPoolPropertiesFormat != nil &&
-				backendPool.BackendIPConfigurations != nil {
-				for _, ipConf := range *backendPool.BackendIPConfigurations {
+				backendPool.Properties != nil {
+				for _, ipConf := range backendPool.Properties.BackendIPConfigurations {
 					if ipConf.ID == nil {
 						continue
 					}
@@ -2008,18 +2012,18 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(ctx context.Context, service *v1.Se
 	}
 
 	var updated bool
-	vmssUniformBackendPools := []network.BackendAddressPool{}
+	vmssUniformBackendPools := []*armnetwork.BackendAddressPool{}
 	for backendPoolID, vmssUniformBackendIPConfigurations := range vmssUniformBackendIPConfigurationsMap {
 		vmssUniformBackendIPConfigurations := vmssUniformBackendIPConfigurations
-		vmssUniformBackendPools = append(vmssUniformBackendPools, network.BackendAddressPool{
+		vmssUniformBackendPools = append(vmssUniformBackendPools, &armnetwork.BackendAddressPool{
 			ID: ptr.To(backendPoolID),
-			BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-				BackendIPConfigurations: &vmssUniformBackendIPConfigurations,
+			Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+				BackendIPConfigurations: vmssUniformBackendIPConfigurations,
 			},
 		})
 	}
 	if len(vmssUniformBackendPools) > 0 {
-		updatedVM, err := ss.ensureBackendPoolDeleted(ctx, service, backendPoolIDs, vmSetName, &vmssUniformBackendPools)
+		updatedVM, err := ss.ensureBackendPoolDeleted(ctx, service, backendPoolIDs, vmSetName, vmssUniformBackendPools)
 		if err != nil {
 			return false, err
 		}
@@ -2028,18 +2032,18 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(ctx context.Context, service *v1.Se
 		}
 	}
 
-	vmssFlexBackendPools := []network.BackendAddressPool{}
+	vmssFlexBackendPools := []*armnetwork.BackendAddressPool{}
 	for backendPoolID, vmssFlexBackendIPConfigurations := range vmssFlexBackendIPConfigurationsMap {
 		vmssFlexBackendIPConfigurations := vmssFlexBackendIPConfigurations
-		vmssFlexBackendPools = append(vmssFlexBackendPools, network.BackendAddressPool{
+		vmssFlexBackendPools = append(vmssFlexBackendPools, &armnetwork.BackendAddressPool{
 			ID: ptr.To(backendPoolID),
-			BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-				BackendIPConfigurations: &vmssFlexBackendIPConfigurations,
+			Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+				BackendIPConfigurations: vmssFlexBackendIPConfigurations,
 			},
 		})
 	}
 	if len(vmssFlexBackendPools) > 0 {
-		updatedNIC, err := ss.flexScaleSet.EnsureBackendPoolDeleted(ctx, service, backendPoolIDs, vmSetName, &vmssFlexBackendPools, false)
+		updatedNIC, err := ss.flexScaleSet.EnsureBackendPoolDeleted(ctx, service, backendPoolIDs, vmSetName, vmssFlexBackendPools, false)
 		if err != nil {
 			return false, err
 		}
@@ -2048,18 +2052,18 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(ctx context.Context, service *v1.Se
 		}
 	}
 
-	avSetBackendPools := []network.BackendAddressPool{}
+	var avSetBackendPools []*armnetwork.BackendAddressPool
 	for backendPoolID, avSetBackendIPConfigurations := range avSetBackendIPConfigurationsMap {
 		avSetBackendIPConfigurations := avSetBackendIPConfigurations
-		avSetBackendPools = append(avSetBackendPools, network.BackendAddressPool{
+		avSetBackendPools = append(avSetBackendPools, &armnetwork.BackendAddressPool{
 			ID: ptr.To(backendPoolID),
-			BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-				BackendIPConfigurations: &avSetBackendIPConfigurations,
+			Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+				BackendIPConfigurations: avSetBackendIPConfigurations,
 			},
 		})
 	}
 	if len(avSetBackendPools) > 0 {
-		updatedNIC, err := ss.availabilitySet.EnsureBackendPoolDeleted(ctx, service, backendPoolIDs, vmSetName, &avSetBackendPools, false)
+		updatedNIC, err := ss.availabilitySet.EnsureBackendPoolDeleted(ctx, service, backendPoolIDs, vmSetName, avSetBackendPools, false)
 		if err != nil {
 			return false, err
 		}

@@ -166,10 +166,6 @@ func (l *AzureResourceLocker) acquireLease(
 			lease.Annotations[consts.AzureResourceLockPreviousHolderNameAnnotation],
 			consts.AzureResourceLockHolderNameCloudControllerManager,
 		) {
-		l.lbCache, err = l.newLBCache()
-		if err != nil {
-			return err
-		}
 		if err := l.VMSet.RefreshCaches(); err != nil {
 			return err
 		}

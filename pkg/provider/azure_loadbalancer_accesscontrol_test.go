@@ -18,7 +18,7 @@ package provider
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -35,19 +35,19 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient"
+
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil"
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil/fixture"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/iputil"
 )
 
 func TestCloud_reconcileSecurityGroup(t *testing.T) {
+	t.Parallel()
 	const (
 		EnsureLB    = true
 		ClusterName = "test-cluster"
@@ -61,12 +61,14 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 	)
 
 	t.Run("internal Load Balancer", func(t *testing.T) {
+		t.Parallel()
 		t.Run("noop when no allow list specified", func(t *testing.T) {
+			t.Parallel()
 			var (
 				ctrl                    = gomock.NewController(t)
 				az                      = GetTestCloud(ctrl)
 				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 				securityGroup           = azureFx.SecurityGroup().Build()
 				loadBalancer            = azureFx.LoadBalancer().Build()
@@ -79,12 +81,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
 				Return(securityGroup, nil).
 				Times(1)
-			loadBalancerClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-				Return(loadBalancer, nil).
-				Times(1)
+			loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -97,11 +96,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		})
 
 		t.Run("add Internet allow rules if allow all", func(t *testing.T) {
+			t.Parallel()
 			var (
 				ctrl                    = gomock.NewController(t)
 				az                      = GetTestCloud(ctrl)
 				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 				securityGroup           = azureFx.SecurityGroup().Build()
 				loadBalancer            = azureFx.LoadBalancer().Build()
@@ -165,12 +165,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					testutil.ExpectExactSecurityRules(t, &properties, rules)
 					return nil, nil
 				}).Times(1)
-			loadBalancerClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-				Return(loadBalancer, nil).
-				Times(1)
+			loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -182,11 +179,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		})
 
 		t.Run("add rules with a mix of settings", func(t *testing.T) {
+			t.Parallel()
 			var (
 				ctrl                    = gomock.NewController(t)
 				az                      = GetTestCloud(ctrl)
 				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 				securityGroup           = azureFx.SecurityGroup().Build()
 				loadBalancer            = azureFx.LoadBalancer().Build()
@@ -250,12 +248,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					testutil.ExpectExactSecurityRules(t, &properties, rules)
 					return nil, nil
 				}).Times(1)
-			loadBalancerClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-				Return(loadBalancer, nil).
-				Times(1)
+			loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -268,12 +263,13 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 	})
 
 	t.Run("public Load Balancer", func(t *testing.T) {
+		t.Parallel()
 		t.Run("add Internet allow rules if no allow list specified", func(t *testing.T) {
 			var (
 				ctrl                    = gomock.NewController(t)
 				az                      = GetTestCloud(ctrl)
 				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 				svc                     = k8sFx.Service().Build()
 				securityGroup           = azureFx.SecurityGroup().Build()
@@ -324,12 +320,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					testutil.ExpectExactSecurityRules(t, &properties, rules)
 					return nil, nil
 				}).Times(1)
-			loadBalancerClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-				Return(loadBalancer, nil).
-				Times(1)
+			loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -342,12 +335,14 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 	})
 
 	t.Run("add rules - when no rules exist", func(t *testing.T) {
+		t.Parallel()
 		t.Run("with `service.beta.kubernetes.io/azure-additional-public-ips` specified", func(t *testing.T) {
+			t.Parallel()
 			var (
 				ctrl                    = gomock.NewController(t)
 				az                      = GetTestCloud(ctrl)
 				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 				svc                     = k8sFx.Service().Build()
 				securityGroup           = azureFx.SecurityGroup().Build()
@@ -405,12 +400,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					testutil.ExpectExactSecurityRules(t, &properties, rules)
 					return nil, nil
 				}).Times(1)
-			loadBalancerClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-				Return(loadBalancer, nil).
-				Times(1)
+			loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -422,11 +414,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		})
 
 		t.Run("with `service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip` specified", func(t *testing.T) {
+			t.Parallel()
 			var (
 				ctrl                    = gomock.NewController(t)
 				az                      = GetTestCloud(ctrl)
 				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 				svc                     = k8sFx.Service().Build()
 				securityGroup           = azureFx.SecurityGroup().Build()
@@ -479,12 +472,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					testutil.ExpectExactSecurityRules(t, &properties, rules)
 					return nil, nil
 				}).Times(1)
-			loadBalancerClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-				Return(loadBalancer, nil).
-				Times(1)
+			loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -496,11 +486,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		})
 
 		t.Run("with `service.beta.kubernetes.io/azure-allowed-ip-ranges` specified", func(t *testing.T) {
+			t.Parallel()
 			var (
 				ctrl                    = gomock.NewController(t)
 				az                      = GetTestCloud(ctrl)
 				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 				svc                     = k8sFx.Service().Build()
 				securityGroup           = azureFx.SecurityGroup().Build()
@@ -562,12 +553,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 					return nil, nil
 				}).Times(1)
-			loadBalancerClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-				Return(loadBalancer, nil).
-				Times(1)
+			loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -579,11 +567,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		})
 
 		t.Run("with `service.beta.kubernetes.io/azure-allowed-service-tags` specified", func(t *testing.T) {
+			t.Parallel()
 			var (
 				ctrl                    = gomock.NewController(t)
 				az                      = GetTestCloud(ctrl)
 				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 				svc                     = k8sFx.Service().Build()
 				securityGroup           = azureFx.SecurityGroup().Build()
@@ -659,12 +648,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 					return nil, nil
 				}).Times(1)
-			loadBalancerClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-				Return(loadBalancer, nil).
-				Times(1)
+			loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -676,11 +662,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		})
 
 		t.Run("with `spec.loadBalancerSourceRanges` specified", func(t *testing.T) {
+			t.Parallel()
 			var (
 				ctrl                    = gomock.NewController(t)
 				az                      = GetTestCloud(ctrl)
 				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 				svc                     = k8sFx.Service().Build()
 				securityGroup           = azureFx.SecurityGroup().Build()
@@ -741,12 +728,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					testutil.ExpectExactSecurityRules(t, &properties, rules)
 					return nil, nil
 				}).Times(1)
-			loadBalancerClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-				Return(loadBalancer, nil).
-				Times(1)
+			loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -758,11 +742,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		})
 
 		t.Run("with `service.beta.kubernetes.io/azure-deny-all-except-load-balancer-source-ranges` specified", func(t *testing.T) {
+			t.Parallel()
 			var (
 				ctrl                    = gomock.NewController(t)
 				az                      = GetTestCloud(ctrl)
 				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 				svc                     = k8sFx.Service().Build()
 				securityGroup           = azureFx.SecurityGroup().Build()
@@ -833,12 +818,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 					return nil, nil
 				}).Times(1)
-			loadBalancerClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-				Return(loadBalancer, nil).
-				Times(1)
+			loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -851,12 +833,14 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 	})
 
 	t.Run("skip - when rules are up-to-date", func(t *testing.T) {
+		t.Parallel()
 		t.Run("with `service.beta.kubernetes.io/azure-additional-public-ips` specified", func(t *testing.T) {
+			t.Parallel()
 			var (
 				ctrl                    = gomock.NewController(t)
 				az                      = GetTestCloud(ctrl)
 				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 				svc                     = k8sFx.Service().Build()
 				loadBalancer            = azureFx.LoadBalancer().Build()
@@ -900,12 +884,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
 				Return(securityGroup, nil).
 				Times(1)
-			loadBalancerClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-				Return(loadBalancer, nil).
-				Times(1)
+			loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -917,11 +898,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		})
 
 		t.Run("with `service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip` specified", func(t *testing.T) {
+			t.Parallel()
 			var (
 				ctrl                    = gomock.NewController(t)
 				az                      = GetTestCloud(ctrl)
 				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 				svc                     = k8sFx.Service().Build()
 				loadBalancer            = azureFx.LoadBalancer().Build()
@@ -962,12 +944,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
 				Return(securityGroup, nil).
 				Times(1)
-			loadBalancerClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-				Return(loadBalancer, nil).
-				Times(1)
+			loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -979,11 +958,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		})
 
 		t.Run("with `service.beta.kubernetes.io/azure-allowed-ip-ranges` specified", func(t *testing.T) {
+			t.Parallel()
 			var (
 				ctrl                    = gomock.NewController(t)
 				az                      = GetTestCloud(ctrl)
 				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 				svc                     = k8sFx.Service().Build()
 				loadBalancer            = azureFx.LoadBalancer().Build()
@@ -1028,12 +1008,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
 				Return(securityGroup, nil).
 				Times(1)
-			loadBalancerClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-				Return(loadBalancer, nil).
-				Times(1)
+			loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -1045,11 +1022,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		})
 
 		t.Run("with `service.beta.kubernetes.io/azure-allowed-service-tags` specified", func(t *testing.T) {
+			t.Parallel()
 			var (
 				ctrl                    = gomock.NewController(t)
 				az                      = GetTestCloud(ctrl)
 				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 				svc                     = k8sFx.Service().Build()
 				loadBalancer            = azureFx.LoadBalancer().Build()
@@ -1112,12 +1090,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
 				Return(securityGroup, nil).
 				Times(1)
-			loadBalancerClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-				Return(loadBalancer, nil).
-				Times(1)
+			loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -1129,11 +1104,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		})
 
 		t.Run("with `spec.loadBalancerSourceRanges` specified", func(t *testing.T) {
+			t.Parallel()
 			var (
 				ctrl                    = gomock.NewController(t)
 				az                      = GetTestCloud(ctrl)
 				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 				svc                     = k8sFx.Service().Build()
 				loadBalancer            = azureFx.LoadBalancer().Build()
@@ -1179,12 +1155,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
 				Return(securityGroup, nil).
 				Times(1)
-			loadBalancerClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-				Return(loadBalancer, nil).
-				Times(1)
+			loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -1196,11 +1169,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		})
 
 		t.Run("with `service.beta.kubernetes.io/azure-deny-all-except-load-balancer-source-ranges` specified", func(t *testing.T) {
+			t.Parallel()
 			var (
 				ctrl                    = gomock.NewController(t)
 				az                      = GetTestCloud(ctrl)
 				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 				svc                     = k8sFx.Service().Build()
 				loadBalancer            = azureFx.LoadBalancer().Build()
@@ -1258,12 +1232,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
 				Return(securityGroup, nil).
 				Times(1)
-			loadBalancerClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-				Return(loadBalancer, nil).
-				Times(1)
+			loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -1275,11 +1246,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		})
 
 		t.Run("expected rules with random priority", func(t *testing.T) {
+			t.Parallel()
 			var (
 				ctrl                    = gomock.NewController(t)
 				az                      = GetTestCloud(ctrl)
 				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 				loadBalancer            = azureFx.LoadBalancer().Build()
 
@@ -1355,12 +1327,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
 				Return(securityGroup, nil).
 				Times(1)
-			loadBalancerClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-				Return(loadBalancer, nil).
-				Times(1)
+			loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -1373,11 +1342,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 	})
 
 	t.Run("update rules - remove from unrelated rules", func(t *testing.T) {
+		t.Parallel()
 		var (
 			ctrl                    = gomock.NewController(t)
 			az                      = GetTestCloud(ctrl)
 			securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-			loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+			loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 			loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 			loadBalancer            = azureFx.LoadBalancer().Build()
 
@@ -1538,12 +1508,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 				return nil, nil
 			}).Times(1)
-		loadBalancerClient.EXPECT().
-			Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-			Return(loadBalancer, nil).
-			Times(1)
+		loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 		loadBalancerBackendPool.EXPECT().
-			GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+			GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 			Return(
 				azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 				azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -1555,11 +1522,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 	})
 
 	t.Run("update rules - add to related rules", func(t *testing.T) {
+		t.Parallel()
 		var (
 			ctrl                    = gomock.NewController(t)
 			az                      = GetTestCloud(ctrl)
 			securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-			loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+			loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 			loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 			loadBalancer            = azureFx.LoadBalancer().Build()
 
@@ -1668,12 +1636,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 				return nil, nil
 			}).Times(1)
-		loadBalancerClient.EXPECT().
-			Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-			Return(loadBalancer, nil).
-			Times(1)
+		loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 		loadBalancerBackendPool.EXPECT().
-			GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+			GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 			Return(
 				azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 				azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -1685,11 +1650,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 	})
 
 	t.Run("update rules - remove and add", func(t *testing.T) {
+		t.Parallel()
 		var (
 			ctrl                    = gomock.NewController(t)
 			az                      = GetTestCloud(ctrl)
 			securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-			loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+			loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 			loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 			loadBalancer            = azureFx.LoadBalancer().Build()
 
@@ -1868,12 +1834,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 				return nil, nil
 			}).Times(1)
-		loadBalancerClient.EXPECT().
-			Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-			Return(loadBalancer, nil).
-			Times(1)
+		loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 		loadBalancerBackendPool.EXPECT().
-			GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+			GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 			Return(
 				azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 				azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -1885,6 +1848,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 	})
 
 	t.Run("update rules - keep retain ports - external IPs", func(t *testing.T) {
+		t.Parallel()
 		var (
 			ingressIPs   = azureFx.LoadBalancer().IPv4Addresses()
 			loadBalancer = azureFx.LoadBalancer().Build()
@@ -2115,11 +2079,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.Name, func(t *testing.T) {
+				t.Parallel()
 				var (
 					ctrl                    = gomock.NewController(t)
 					az                      = GetTestCloud(ctrl)
 					securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-					loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+					loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 					loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 
 					kubeClient      = fake.NewSimpleClientset(&sharedIPSvc, &svc)
@@ -2148,12 +2113,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						testutil.ExpectExactSecurityRules(t, &properties, tt.RulesAfterReconcile)
 						return nil, nil
 					}).Times(1)
-				loadBalancerClient.EXPECT().
-					Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-					Return(loadBalancer, nil).
-					Times(1)
+				loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 				loadBalancerBackendPool.EXPECT().
-					GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+					GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 					Return(
 						azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 						azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -2167,6 +2129,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 	})
 
 	t.Run("update rules - keep retain ports - disable floating IP", func(t *testing.T) {
+		t.Parallel()
 		var (
 			ingressIPs   = azureFx.LoadBalancer().IPv4Addresses()
 			loadBalancer = azureFx.LoadBalancer().Build()
@@ -2397,11 +2360,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.Name, func(t *testing.T) {
+				t.Parallel()
 				var (
 					ctrl                    = gomock.NewController(t)
 					az                      = GetTestCloud(ctrl)
 					securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-					loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+					loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 					loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 
 					kubeClient      = fake.NewSimpleClientset(&sharedIPSvc, &svc)
@@ -2430,12 +2394,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						testutil.ExpectExactSecurityRules(t, &properties, tt.RulesAfterReconcile)
 						return nil, nil
 					}).Times(1)
-				loadBalancerClient.EXPECT().
-					Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-					Return(loadBalancer, nil).
-					Times(1)
+				loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 				loadBalancerBackendPool.EXPECT().
-					GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+					GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 					Return(
 						azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 						azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -2449,11 +2410,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 	})
 
 	t.Run("clean rules - when deleting LB / AzureLoadBalancer had been created", func(t *testing.T) {
+		t.Parallel()
 		var (
 			ctrl                    = gomock.NewController(t)
 			az                      = GetTestCloud(ctrl)
 			securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-			loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+			loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 			loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 			loadBalancer            = azureFx.LoadBalancer().Build()
 
@@ -2618,12 +2580,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 				return nil, nil
 			}).Times(1)
-		loadBalancerClient.EXPECT().
-			Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-			Return(loadBalancer, nil).
-			Times(1)
+		loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 		loadBalancerBackendPool.EXPECT().
-			GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+			GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 			Return(
 				azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 				azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -2635,11 +2594,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 	})
 
 	t.Run("clean rules - when deleting LB / AzureLoadBalancer had been created / service with invalid annotation", func(t *testing.T) {
+		t.Parallel()
 		var (
 			ctrl                    = gomock.NewController(t)
 			az                      = GetTestCloud(ctrl)
 			securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-			loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+			loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 			loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 			loadBalancer            = azureFx.LoadBalancer().Build()
 
@@ -2800,12 +2760,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 				return nil, nil
 			}).Times(1)
-		loadBalancerClient.EXPECT().
-			Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-			Return(loadBalancer, nil).
-			Times(1)
+		loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 		loadBalancerBackendPool.EXPECT().
-			GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+			GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 			Return(
 				azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 				azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -2817,12 +2774,14 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 	})
 
 	t.Run("clean rules - when deleting LB and AzureLoadBalancer not found", func(t *testing.T) {
+		t.Parallel()
 		var (
-			ctrl                = gomock.NewController(t)
-			az                  = GetTestCloud(ctrl)
-			securityGroupClient = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-			loadBalancerClient  = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
-			loadBalancer        = azureFx.LoadBalancer().Build()
+			ctrl                    = gomock.NewController(t)
+			az                      = GetTestCloud(ctrl)
+			securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+			loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
+			loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
+			loadBalancer            = azureFx.LoadBalancer().Build()
 
 			allowedServiceTag = azureFx.ServiceTag()
 			allowedIPv4Ranges = fx.RandomIPv4PrefixStrings(3)
@@ -2929,9 +2888,16 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
 			Return(securityGroup, nil).
 			Times(1)
-		loadBalancerClient.EXPECT().
+		loadBalancerRepo.EXPECT().
 			Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-			Return(loadBalancer, &retry.Error{HTTPStatusCode: http.StatusNotFound}).
+			Return(loadBalancer, loadbalancer.ErrNotFound).
+			Times(1)
+		loadBalancerBackendPool.EXPECT().
+			GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
+			Return(
+				azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
+				azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
+			).
 			Times(1)
 
 		_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, nil, false) // deleting
@@ -2939,7 +2905,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 	})
 
 	t.Run("negative cases", func(t *testing.T) {
+		t.Parallel()
 		t.Run("with both `service.beta.kubernetes.io/azure-allowed-ip-ranges` and `spec.loadBalancerSourceRanges` specified", func(t *testing.T) {
+			t.Parallel()
 			var (
 				ctrl                = gomock.NewController(t)
 				az                  = GetTestCloud(ctrl)
@@ -2968,6 +2936,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		})
 
 		t.Run("when SecurityGroupClient.Get returns error", func(t *testing.T) {
+			t.Parallel()
 			var (
 				ctrl                = gomock.NewController(t)
 				az                  = GetTestCloud(ctrl)
@@ -2995,42 +2964,42 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		})
 
 		t.Run("when LoadBalancerClient.Get returns error", func(t *testing.T) {
+			t.Parallel()
 			var (
 				ctrl                = gomock.NewController(t)
 				az                  = GetTestCloud(ctrl)
 				securityGroupClient = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				loadBalancerClient  = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				loadBalancerRepo    = az.lbRepo.(*loadbalancer.MockRepository)
 				svc                 = k8sFx.Service().Build()
 				securityGroup       = azureFx.SecurityGroup().Build()
 				loadBalancer        = azureFx.LoadBalancer().Build()
 			)
 			defer ctrl.Finish()
 
-			expectedErr := &retry.Error{
-				RawError: fmt.Errorf("foo"),
-			}
+			expectedErr := errors.New("foo")
 
 			securityGroupClient.EXPECT().
 				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
 				Return(securityGroup, nil).
 				Times(1)
-			loadBalancerClient.EXPECT().
+			loadBalancerRepo.EXPECT().
 				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
 				Return(loadBalancer, expectedErr).
 				Times(1)
 
 			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.Error(t, err)
-			assert.ErrorIs(t, err, expectedErr.RawError)
+			assert.ErrorIs(t, err, expectedErr)
 		})
 
 		t.Run("when SecurityGroupClient.CreateOrUpdate returns error", func(t *testing.T) {
+			t.Parallel()
 
 			var (
 				ctrl                    = gomock.NewController(t)
 				az                      = GetTestCloud(ctrl)
 				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 				svc                     = k8sFx.Service().Build()
 				securityGroup           = azureFx.SecurityGroup().Build()
@@ -3052,12 +3021,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any()).
 				Return(nil, expectedErr).
 				Times(1)
-			loadBalancerClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-				Return(loadBalancer, nil).
-				Times(1)
+			loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
@@ -3070,12 +3036,13 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		})
 
 		t.Run("when the number of rules exceeds the limit", func(t *testing.T) {
+			t.Parallel()
 
 			var (
 				ctrl                    = gomock.NewController(t)
 				az                      = GetTestCloud(ctrl)
 				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				loadBalancerRepo        = az.lbRepo.(*loadbalancer.MockRepository)
 				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
 				svc                     = k8sFx.Service().Build()
 				securityGroup           = azureFx.SecurityGroup().WithRules(azureFx.NNoiseSecurityRules(securitygroup.MaxSecurityRulesPerGroup)).Build()
@@ -3087,12 +3054,9 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
 				Return(securityGroup, nil).
 				Times(1)
-			loadBalancerClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-				Return(loadBalancer, nil).
-				Times(1)
+			loadBalancerRepo.EXPECT().Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).Return(loadBalancer, nil).Times(1)
 			loadBalancerBackendPool.EXPECT().
-				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, &loadBalancer).
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
 				Return(
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),

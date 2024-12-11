@@ -524,14 +524,14 @@ func (ss *ScaleSet) getVMManagementTypeByIPConfigurationID(ctx context.Context, 
 }
 
 func (az *Cloud) GetVMNameByIPConfigurationName(ctx context.Context, nicResourceGroup, nicName string) (string, error) {
-	nic, rerr := az.InterfacesClient.Get(ctx, nicResourceGroup, nicName, "")
-	if rerr != nil {
-		return "", fmt.Errorf("failed to get interface of name %s: %w", nicName, rerr.Error())
+	nic, err := az.nicRepo.Get(ctx, nicResourceGroup, nicName)
+	if err != nil {
+		return "", fmt.Errorf("failed to get interface of name %s: %w", nicName, err)
 	}
-	if nic.InterfacePropertiesFormat == nil || nic.InterfacePropertiesFormat.VirtualMachine == nil || nic.InterfacePropertiesFormat.VirtualMachine.ID == nil {
+	if nic.Properties == nil || nic.Properties.VirtualMachine == nil || nic.Properties.VirtualMachine.ID == nil {
 		return "", fmt.Errorf("failed to get vm ID of nic %s", ptr.Deref(nic.Name, ""))
 	}
-	vmID := ptr.Deref(nic.InterfacePropertiesFormat.VirtualMachine.ID, "")
+	vmID := ptr.Deref(nic.Properties.VirtualMachine.ID, "")
 	matches := vmIDRE.FindStringSubmatch(vmID)
 	if len(matches) != 2 {
 		return "", fmt.Errorf("invalid virtual machine ID %s", vmID)

@@ -25,7 +25,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
 
 	"go.uber.org/mock/gomock"
@@ -764,7 +763,7 @@ func TestIsFIPIPv6(t *testing.T) {
 	testcases := []struct {
 		desc           string
 		svc            v1.Service
-		fip            *network.FrontendIPConfiguration
+		fip            *armnetwork.FrontendIPConfiguration
 		expectedIsIPv6 bool
 	}{
 		{
@@ -794,7 +793,7 @@ func TestIsFIPIPv6(t *testing.T) {
 					IPFamilies: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
 				},
 			},
-			fip: &network.FrontendIPConfiguration{
+			fip: &armnetwork.FrontendIPConfiguration{
 				Name: ptr.To("fip"),
 			},
 			expectedIsIPv6: false,
@@ -806,7 +805,7 @@ func TestIsFIPIPv6(t *testing.T) {
 					IPFamilies: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
 				},
 			},
-			fip: &network.FrontendIPConfiguration{
+			fip: &armnetwork.FrontendIPConfiguration{
 				Name: ptr.To("fip-IPv6"),
 			},
 			expectedIsIPv6: true,
@@ -852,26 +851,26 @@ func TestGetResourceIDPrefix(t *testing.T) {
 func TestIsInternalLoadBalancer(t *testing.T) {
 	tests := []struct {
 		name     string
-		lb       network.LoadBalancer
+		lb       *armnetwork.LoadBalancer
 		expected bool
 	}{
 		{
 			name: "internal load balancer",
-			lb: network.LoadBalancer{
+			lb: &armnetwork.LoadBalancer{
 				Name: ptr.To("test-internal"),
 			},
 			expected: true,
 		},
 		{
 			name: "internal load balancer",
-			lb: network.LoadBalancer{
+			lb: &armnetwork.LoadBalancer{
 				Name: ptr.To("TEST-INTERNAL"),
 			},
 			expected: true,
 		},
 		{
 			name: "not internal load balancer",
-			lb: network.LoadBalancer{
+			lb: &armnetwork.LoadBalancer{
 				Name: ptr.To("test"),
 			},
 			expected: false,
@@ -881,7 +880,7 @@ func TestIsInternalLoadBalancer(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			lb := test.lb
-			result := isInternalLoadBalancer(&lb)
+			result := isInternalLoadBalancer(lb)
 			assert.Equal(t, test.expected, result)
 		})
 	}

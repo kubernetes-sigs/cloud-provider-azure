@@ -25,7 +25,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
@@ -326,17 +325,17 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
 			service := getTestServiceWithAnnotation("test", test.annotations, false, 80)
-			fipConfig := &network.FrontendIPConfiguration{
+			fipConfig := &armnetwork.FrontendIPConfiguration{
 				Name: ptr.To("fipConfig"),
 				ID:   ptr.To("fipConfigID"),
-				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-					PublicIPAddress: &network.PublicIPAddress{
+				Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &armnetwork.PublicIPAddress{
 						ID: ptr.To("pipID"),
-						PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-							PublicIPAddressVersion: network.IPv4,
+						Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+							PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
 						},
 					},
-					PrivateIPAddressVersion: network.IPv4,
+					PrivateIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
 				},
 			}
 			clusterName := testClusterName
@@ -497,7 +496,7 @@ func TestGetPrivateLinkServiceName(t *testing.T) {
 		desc         string
 		annotations  map[string]string
 		pls          *armnetwork.PrivateLinkService
-		fipConfig    *network.FrontendIPConfiguration
+		fipConfig    *armnetwork.FrontendIPConfiguration
 		expectedName string
 		expectedErr  bool
 	}{
@@ -512,7 +511,7 @@ func TestGetPrivateLinkServiceName(t *testing.T) {
 		{
 			desc: "If pls name does not set, and service does not configure, sets it as default(pls-fipConfigName)",
 			pls:  &armnetwork.PrivateLinkService{},
-			fipConfig: &network.FrontendIPConfiguration{
+			fipConfig: &armnetwork.FrontendIPConfiguration{
 				Name: ptr.To("fipname"),
 			},
 			expectedName: "pls-fipname",
@@ -574,7 +573,7 @@ func TestGetExpectedPrivateLinkService(t *testing.T) {
 		}
 		plsName := "testPLS"
 		clusterName := testClusterName
-		fipConfig := &network.FrontendIPConfiguration{ID: ptr.To("fipConfigID")}
+		fipConfig := &armnetwork.FrontendIPConfiguration{ID: ptr.To("fipConfigID")}
 		pls := &armnetwork.PrivateLinkService{Properties: &armnetwork.PrivateLinkServiceProperties{}}
 		subnetClient := cloud.subnetRepo.(*subnet.MockRepository)
 		subnetClient.EXPECT().Get(gomock.Any(), "rg", "vnet", "subnet").Return(

@@ -25,9 +25,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -38,6 +37,7 @@ import (
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/publicip"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/lockmap"
 	vmutil "sigs.k8s.io/cloud-provider-azure/pkg/util/vm"
 )
@@ -287,30 +287,30 @@ func (fs *FlexScaleSet) GetPowerStatusByNodeName(ctx context.Context, name strin
 }
 
 // GetPrimaryInterface gets machine primary network interface by node name.
-func (fs *FlexScaleSet) GetPrimaryInterface(ctx context.Context, nodeName string) (network.Interface, error) {
+func (fs *FlexScaleSet) GetPrimaryInterface(ctx context.Context, nodeName string) (*armnetwork.Interface, error) {
 	machine, err := fs.getVmssFlexVM(ctx, nodeName, azcache.CacheReadTypeDefault)
 	if err != nil {
 		klog.Errorf("fs.GetInstanceTypeByNodeName(%s) failed: fs.getVmssFlexVMWithoutInstanceView(%s) err=%v", nodeName, nodeName, err)
-		return network.Interface{}, err
+		return nil, err
 	}
 
 	primaryNicID, err := getPrimaryInterfaceID(machine)
 	if err != nil {
-		return network.Interface{}, err
+		return nil, err
 	}
 	nicName, err := getLastSegment(primaryNicID, "/")
 	if err != nil {
-		return network.Interface{}, err
+		return nil, err
 	}
 
 	nicResourceGroup, err := extractResourceGroupByNicID(primaryNicID)
 	if err != nil {
-		return network.Interface{}, err
+		return nil, err
 	}
 
-	nic, rerr := fs.InterfacesClient.Get(ctx, nicResourceGroup, nicName, "")
-	if rerr != nil {
-		return network.Interface{}, rerr.Error()
+	nic, err := fs.nicRepo.Get(ctx, nicResourceGroup, nicName)
+	if err != nil {
+		return nil, err
 	}
 
 	return nic, nil
@@ -329,21 +329,19 @@ func (fs *FlexScaleSet) GetIPByNodeName(ctx context.Context, name string) (strin
 		return "", "", err
 	}
 
-	privateIP := *ipConfig.PrivateIPAddress
+	privateIP := *ipConfig.Properties.PrivateIPAddress
 	publicIP := ""
-	if ipConfig.PublicIPAddress != nil && ipConfig.PublicIPAddress.ID != nil {
-		pipID := *ipConfig.PublicIPAddress.ID
+	if ipConfig.Properties.PublicIPAddress != nil && ipConfig.Properties.PublicIPAddress.ID != nil {
+		pipID := *ipConfig.Properties.PublicIPAddress.ID
 		pipName, err := getLastSegment(pipID, "/")
 		if err != nil {
 			return "", "", fmt.Errorf("failed to publicIP name for node %q with pipID %q", name, pipID)
 		}
-		pip, existsPip, err := fs.getPublicIPAddress(ctx, fs.ResourceGroup, pipName, azcache.CacheReadTypeDefault)
-		if err != nil {
+		pip, err := fs.pipRepo.Get(ctx, fs.ResourceGroup, pipName, azcache.CacheReadTypeDefault)
+		if err != nil && !publicip.IsNotFound(err) {
 			return "", "", err
 		}
-		if existsPip {
-			publicIP = *pip.IPAddress
-		}
+		publicIP = *pip.Properties.IPAddress
 	}
 
 	return privateIP, publicIP, nil
@@ -359,13 +357,9 @@ func (fs *FlexScaleSet) GetPrivateIPsByNodeName(ctx context.Context, name string
 		return ips, err
 	}
 
-	if nic.IPConfigurations == nil {
-		return ips, fmt.Errorf("nic.IPConfigurations for nic (nicname=%s) is nil", *nic.Name)
-	}
-
-	for _, ipConfig := range *(nic.IPConfigurations) {
-		if ipConfig.PrivateIPAddress != nil {
-			ips = append(ips, *(ipConfig.PrivateIPAddress))
+	for _, ipConfig := range nic.Properties.IPConfigurations {
+		if ipConfig.Properties.PrivateIPAddress != nil {
+			ips = append(ips, *(ipConfig.Properties.PrivateIPAddress))
 		}
 	}
 
@@ -474,12 +468,12 @@ func (fs *FlexScaleSet) EnsureHostInPool(ctx context.Context, service *v1.Servic
 		return "", "", "", nil, err
 	}
 
-	if nic.ProvisioningState == consts.NicFailedState {
+	if *nic.Properties.ProvisioningState == armnetwork.ProvisioningStateFailed {
 		klog.Warningf("EnsureHostInPool skips node %s because its primary nic %s is in Failed state", nodeName, *nic.Name)
 		return "", "", "", nil, nil
 	}
 
-	var primaryIPConfig *network.InterfaceIPConfiguration
+	var primaryIPConfig *armnetwork.InterfaceIPConfiguration
 	ipv6 := isBackendPoolIPv6(backendPoolID)
 	if !fs.Cloud.ipv6DualStackEnabled && !ipv6 {
 		primaryIPConfig, err = getPrimaryIPConfig(nic)
@@ -494,10 +488,8 @@ func (fs *FlexScaleSet) EnsureHostInPool(ctx context.Context, service *v1.Servic
 	}
 
 	foundPool := false
-	newBackendPools := []network.BackendAddressPool{}
-	if primaryIPConfig.LoadBalancerBackendAddressPools != nil {
-		newBackendPools = *primaryIPConfig.LoadBalancerBackendAddressPools
-	}
+	newBackendPools := []*armnetwork.BackendAddressPool{}
+	newBackendPools = primaryIPConfig.Properties.LoadBalancerBackendAddressPools
 	for _, existingPool := range newBackendPools {
 		if strings.EqualFold(backendPoolID, *existingPool.ID) {
 			foundPool = true
@@ -531,15 +523,15 @@ func (fs *FlexScaleSet) EnsureHostInPool(ctx context.Context, service *v1.Servic
 	}
 
 	newBackendPools = append(newBackendPools,
-		network.BackendAddressPool{
+		&armnetwork.BackendAddressPool{
 			ID: ptr.To(backendPoolID),
 		})
 
-	primaryIPConfig.LoadBalancerBackendAddressPools = &newBackendPools
+	primaryIPConfig.Properties.LoadBalancerBackendAddressPools = newBackendPools
 
 	nicName := *nic.Name
 	klog.V(3).Infof("nicupdate(%s): nic(%s) - updating", serviceName, nicName)
-	err = fs.CreateOrUpdateInterface(ctx, service, nic)
+	_, err = fs.nicRepo.CreateOrUpdate(ctx, fs.ResourceGroup, nic)
 	if err != nil {
 		return "", "", "", nil, err
 	}
@@ -861,9 +853,9 @@ func (fs *FlexScaleSet) EnsureBackendPoolDeletedFromVMSets(ctx context.Context, 
 }
 
 // EnsureBackendPoolDeleted ensures the loadBalancer backendAddressPools deleted from the specified nodes.
-func (fs *FlexScaleSet) EnsureBackendPoolDeleted(ctx context.Context, service *v1.Service, backendPoolIDs []string, vmSetName string, backendAddressPools *[]network.BackendAddressPool, deleteFromVMSet bool) (bool, error) {
+func (fs *FlexScaleSet) EnsureBackendPoolDeleted(ctx context.Context, service *v1.Service, backendPoolIDs []string, vmSetName string, backendAddressPools []*armnetwork.BackendAddressPool, deleteFromVMSet bool) (bool, error) {
 	// Returns nil if backend address pools already deleted.
-	if backendAddressPools == nil {
+	if len(backendAddressPools) == 0 {
 		return false, nil
 	}
 
@@ -874,10 +866,10 @@ func (fs *FlexScaleSet) EnsureBackendPoolDeleted(ctx context.Context, service *v
 	}()
 
 	ipConfigurationIDs := []string{}
-	for _, backendPool := range *backendAddressPools {
+	for _, backendPool := range backendAddressPools {
 		for _, backendPoolID := range backendPoolIDs {
-			if strings.EqualFold(ptr.Deref(backendPool.ID, ""), backendPoolID) && backendPool.BackendAddressPoolPropertiesFormat != nil && backendPool.BackendIPConfigurations != nil {
-				for _, ipConf := range *backendPool.BackendIPConfigurations {
+			if strings.EqualFold(ptr.Deref(backendPool.ID, ""), backendPoolID) && backendPool.Properties != nil {
+				for _, ipConf := range backendPool.Properties.BackendIPConfigurations {
 					if ipConf.ID == nil {
 						continue
 					}
@@ -945,38 +937,36 @@ func (fs *FlexScaleSet) EnsureBackendPoolDeleted(ctx context.Context, service *v
 func (fs *FlexScaleSet) ensureBackendPoolDeletedFromNode(ctx context.Context, vmssFlexVMNameMap map[string]string, backendPoolIDs []string) (bool, error) {
 	nicUpdaters := make([]func() error, 0)
 	allErrs := make([]error, 0)
-	nics := map[string]network.Interface{} // nicName -> nic
+	nics := map[string]*armnetwork.Interface{} // nicName -> nic
 	for nodeName, nicName := range vmssFlexVMNameMap {
 		if _, ok := nics[nicName]; ok {
 			continue
 		}
 
-		nic, rerr := fs.InterfacesClient.Get(ctx, fs.ResourceGroup, nicName, "")
-		if rerr != nil {
-			return false, fmt.Errorf("ensureBackendPoolDeletedFromNode: failed to get interface of name %s: %w", nicName, rerr.Error())
+		nic, err := fs.nicRepo.Get(ctx, fs.ResourceGroup, nicName)
+		if err != nil {
+			return false, fmt.Errorf("ensureBackendPoolDeletedFromNode: failed to get interface of name %s: %w", nicName, err)
 		}
 
-		if nic.ProvisioningState == consts.NicFailedState {
+		if *nic.Properties.ProvisioningState == armnetwork.ProvisioningStateFailed {
 			klog.Warningf("EnsureBackendPoolDeleted skips node %s because its primary nic %s is in Failed state", nodeName, *nic.Name)
 			continue
 		}
 
-		if nic.InterfacePropertiesFormat != nil && nic.InterfacePropertiesFormat.IPConfigurations != nil {
-			nicName := ptr.Deref(nic.Name, "")
-			nics[nicName] = nic
-		}
+		nicName := ptr.Deref(nic.Name, "")
+		nics[nicName] = nic
 	}
 	var nicUpdated atomic.Bool
 	for _, nic := range nics {
 		nic := nic
-		newIPConfigs := *nic.IPConfigurations
+		newIPConfigs := nic.Properties.IPConfigurations
 		for j, ipConf := range newIPConfigs {
-			if !ptr.Deref(ipConf.Primary, false) {
+			if !ptr.Deref(ipConf.Properties.Primary, false) {
 				continue
 			}
 			// found primary ip configuration
-			if ipConf.LoadBalancerBackendAddressPools != nil {
-				newLBAddressPools := *ipConf.LoadBalancerBackendAddressPools
+			if ipConf.Properties.LoadBalancerBackendAddressPools != nil {
+				newLBAddressPools := ipConf.Properties.LoadBalancerBackendAddressPools
 				for k := len(newLBAddressPools) - 1; k >= 0; k-- {
 					pool := newLBAddressPools[k]
 					for _, backendPoolID := range backendPoolIDs {
@@ -985,17 +975,17 @@ func (fs *FlexScaleSet) ensureBackendPoolDeletedFromNode(ctx context.Context, vm
 						}
 					}
 				}
-				newIPConfigs[j].LoadBalancerBackendAddressPools = &newLBAddressPools
+				newIPConfigs[j].Properties.LoadBalancerBackendAddressPools = newLBAddressPools
 			}
 		}
-		nic.IPConfigurations = &newIPConfigs
+		nic.Properties.IPConfigurations = newIPConfigs
 
 		nicUpdaters = append(nicUpdaters, func() error {
 			klog.V(2).Infof("EnsureBackendPoolDeleted begins to CreateOrUpdate for NIC(%s, %s) with backendPoolIDs %q", fs.ResourceGroup, ptr.Deref(nic.Name, ""), backendPoolIDs)
-			rerr := fs.InterfacesClient.CreateOrUpdate(ctx, fs.ResourceGroup, ptr.Deref(nic.Name, ""), nic)
-			if rerr != nil {
-				klog.Errorf("EnsureBackendPoolDeleted CreateOrUpdate for NIC(%s, %s) failed with error %v", fs.ResourceGroup, ptr.Deref(nic.Name, ""), rerr.Error())
-				return rerr.Error()
+			_, err := fs.nicRepo.CreateOrUpdate(ctx, fs.ResourceGroup, nic)
+			if err != nil {
+				klog.Errorf("EnsureBackendPoolDeleted CreateOrUpdate for NIC(%s, %s) failed with error %v", fs.ResourceGroup, ptr.Deref(nic.Name, ""), err)
+				return err
 			}
 			nicUpdated.Store(true)
 			klog.V(2).Infof("EnsureBackendPoolDeleted done")
