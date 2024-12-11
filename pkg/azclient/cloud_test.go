@@ -75,8 +75,9 @@ var _ = ginkgo.Describe("Cloud", func() {
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 				}))
 				defer server.Close()
-
-				cloudConfig, err := azclient.AzureCloudConfigFromURL(server.URL)
+				armconfig := &azclient.ARMClientConfig{}
+				cloudConfig := &cloud.AzurePublic
+				err := azclient.OverrideAzureCloudConfigFromMetadataService(armconfig, cloudConfig)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 				gomega.Expect(cloudConfig).ToNot(gomega.BeNil())
 				gomega.Expect(cloudConfig.ActiveDirectoryAuthorityHost).To(gomega.Equal("https://login.microsoftonline.com/"))
@@ -129,8 +130,13 @@ var _ = ginkgo.Describe("Cloud", func() {
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 				}))
 				defer server.Close()
-
-				cloudConfig, err := azclient.AzureCloudConfigFromURL(server.URL)
+				armconfig := &azclient.ARMClientConfig{
+					ResourceManagerEndpoint: server.URL,
+				}
+				cloudConfig := &cloud.Configuration{
+					ActiveDirectoryAuthorityHost: "https://login.microsoftonline.com/", Services: map[cloud.ServiceName]cloud.ServiceConfiguration{},
+				}
+				err := azclient.OverrideAzureCloudConfigFromMetadataService(armconfig, cloudConfig)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 				gomega.Expect(cloudConfig).ToNot(gomega.BeNil())
 				gomega.Expect(cloudConfig.ActiveDirectoryAuthorityHost).To(gomega.Equal("https://login.microsoftonline.com/"))
@@ -170,7 +176,9 @@ var _ = ginkgo.Describe("Cloud", func() {
 	ginkgo.Context("AzureCloudFromEnvironment", func() {
 		ginkgo.When("the environment is empty", func() {
 			ginkgo.It("should return the default cloud", func() {
-				cloudConfig, err := azclient.AzureCloudConfigOverrideFromEnv(nil)
+				armconfig := &azclient.ARMClientConfig{}
+				cloudConfig := &cloud.AzurePublic
+				err := azclient.OverrideAzureCloudConfigFromEnv(armconfig, cloudConfig)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 				gomega.Expect(cloudConfig).ToNot(gomega.BeNil())
 				gomega.Expect(cloudConfig.ActiveDirectoryAuthorityHost).To(gomega.Equal("https://login.microsoftonline.com/"))
@@ -182,18 +190,20 @@ var _ = ginkgo.Describe("Cloud", func() {
 		ginkgo.When("the environment is set,file is not found", func() {
 			ginkgo.It("should return error", func() {
 				os.Setenv(azclient.EnvironmentFilepathName, "notfound")
-				cloudConfig, err := azclient.AzureCloudConfigOverrideFromEnv(nil)
+				armconfig := &azclient.ARMClientConfig{}
+				cloudConfig := &cloud.AzurePublic
+				err := azclient.OverrideAzureCloudConfigFromEnv(armconfig, cloudConfig)
 				gomega.Expect(err).To(gomega.HaveOccurred())
-				gomega.Expect(cloudConfig).To(gomega.BeNil())
 				os.Unsetenv(azclient.EnvironmentFilepathName)
 			})
 		})
 		ginkgo.When("the environment is set,file is empty", func() {
 			ginkgo.It("should return error", func() {
 				os.Setenv(azclient.EnvironmentFilepathName, "notfound")
-				cloudConfig, err := azclient.AzureCloudConfigOverrideFromEnv(nil)
+				armconfig := &azclient.ARMClientConfig{}
+				cloudConfig := &cloud.AzurePublic
+				err := azclient.OverrideAzureCloudConfigFromEnv(armconfig, cloudConfig)
 				gomega.Expect(err).To(gomega.HaveOccurred())
-				gomega.Expect(cloudConfig).To(gomega.BeNil())
 				os.Unsetenv(azclient.EnvironmentFilepathName)
 			})
 		})
@@ -211,7 +221,11 @@ var _ = ginkgo.Describe("Cloud", func() {
 				}`), 0600)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 				os.Setenv(azclient.EnvironmentFilepathName, configFile.Name())
-				cloudConfig, err := azclient.AzureCloudConfigOverrideFromEnv(&cloud.AzureGovernment)
+				armconfig := &azclient.ARMClientConfig{
+					Cloud: "AzureGovernment",
+				}
+				cloudConfig := &cloud.AzureGovernment
+				err = azclient.OverrideAzureCloudConfigFromEnv(armconfig, cloudConfig)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 				gomega.Expect(cloudConfig).ToNot(gomega.BeNil())
 				gomega.Expect(cloudConfig.ActiveDirectoryAuthorityHost).To(gomega.Equal("https://login.chinacloudapi.cn"))

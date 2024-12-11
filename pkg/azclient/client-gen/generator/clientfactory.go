@@ -187,7 +187,7 @@ var AbstractClientFactoryImplTemplate = template.Must(template.New("object-facto
 	`
 type ClientFactoryImpl struct {
 	armConfig     *ARMClientConfig
-	facotryConfig *ClientFactoryConfig
+	factoryConfig *ClientFactoryConfig
 	cred               azcore.TokenCredential
 	clientOptionsMutFn []func(option *arm.ClientOptions)
 	{{range $key, $client := . -}}
@@ -211,7 +211,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 
 	factory := &ClientFactoryImpl{
 		armConfig: 	   armConfig,
-		facotryConfig: config,
+		factoryConfig: config,
 		cred:          cred,
 		clientOptionsMutFn: clientOptionsMutFn,
 	}
@@ -240,7 +240,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 {{- end }}
 func (factory *ClientFactoryImpl) create{{$resource}}Client(subscription string)({{.PkgAlias}}.{{.InterfaceTypeName}},error) {
 	//initialize {{.PkgAlias}}
-	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.factoryConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +251,7 @@ func (factory *ClientFactoryImpl) create{{$resource}}Client(subscription string)
 	{{- end }}
 	{{with $client.RateLimitKey}}
 	//add ratelimit policy
-	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("{{.}}")
+	ratelimitOption := factory.factoryConfig.GetRateLimitConfig("{{.}}")
 	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
@@ -266,12 +266,12 @@ func (factory *ClientFactoryImpl) create{{$resource}}Client(subscription string)
 }
 {{ if $client.CrossSubFactory }}
 func (factory *ClientFactoryImpl) Get{{$resource}}Client(){{.PkgAlias}}.{{.InterfaceTypeName}} {
-	clientImp,_:= factory.{{ $key }}.Load(strings.ToLower(factory.facotryConfig.SubscriptionID))
+	clientImp,_:= factory.{{ $key }}.Load(strings.ToLower(factory.factoryConfig.SubscriptionID))
 	return clientImp.({{.PkgAlias}}.{{.InterfaceTypeName}})
 }
 func (factory *ClientFactoryImpl) Get{{$resource}}ClientForSub(subscriptionID string)({{.PkgAlias}}.{{.InterfaceTypeName}},error) {
 	if subscriptionID == "" {
-		subscriptionID = factory.facotryConfig.SubscriptionID
+		subscriptionID = factory.factoryConfig.SubscriptionID
 	}
 	clientImp,loaded:= factory.{{ $key }}.Load(strings.ToLower(subscriptionID))
 	if loaded {
