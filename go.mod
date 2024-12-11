@@ -40,19 +40,19 @@ require (
 	golang.org/x/sync v0.10.0
 	golang.org/x/sys v0.28.0
 	golang.org/x/text v0.21.0
-	k8s.io/api v0.31.3
-	k8s.io/apimachinery v0.31.3
-	k8s.io/apiserver v0.31.3
-	k8s.io/client-go v0.31.3
-	k8s.io/cloud-provider v0.31.3
-	k8s.io/component-base v0.31.3
-	k8s.io/component-helpers v0.31.3
-	k8s.io/controller-manager v0.31.3
+	k8s.io/api v0.31.4
+	k8s.io/apimachinery v0.31.4
+	k8s.io/apiserver v0.31.4
+	k8s.io/client-go v0.31.4
+	k8s.io/cloud-provider v0.31.4
+	k8s.io/component-base v0.31.4
+	k8s.io/component-helpers v0.31.4
+	k8s.io/controller-manager v0.31.4
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/kubelet v0.31.3
+	k8s.io/kubelet v0.31.4
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.2.7
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.1.8
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.2.9
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.2.0
 	sigs.k8s.io/yaml v1.4.0
 )
 
