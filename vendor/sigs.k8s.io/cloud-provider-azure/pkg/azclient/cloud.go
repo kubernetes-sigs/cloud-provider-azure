@@ -52,67 +52,80 @@ func AzureCloudConfigFromName(cloudName string) *cloud.Configuration {
 	return nil
 }
 
-// AzureCloudConfigFromURL returns cloud config from url
+// OverrideAzureCloudConfigFromMetadataService returns cloud config from url
 // track2 sdk will add this one in the near future https://github.com/Azure/azure-sdk-for-go/issues/20959
-func AzureCloudConfigFromURL(endpoint string) (*cloud.Configuration, error) {
-	managementEndpoint := fmt.Sprintf("%s%s", strings.TrimSuffix(endpoint, "/"), "/metadata/endpoints?api-version=2019-05-01")
+func OverrideAzureCloudConfigFromMetadataService(armconfig *ARMClientConfig, config *cloud.Configuration) error {
+	if armconfig == nil || armconfig.ResourceManagerEndpoint == "" {
+		return nil
+	}
+
+	managementEndpoint := fmt.Sprintf("%s%s", strings.TrimSuffix(armconfig.ResourceManagerEndpoint, "/"), "/metadata/endpoints?api-version=2019-05-01")
 	res, err := http.Get(managementEndpoint) //nolint
 	if err != nil {
-		return nil, err
+		return err
 	}
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	metadata := []struct {
-		Authentication struct {
-			Audiences     []string
-			LoginEndpoint string
-		}
-		Name, ResourceManager string
+		Name            string `json:"name"`
+		ResourceManager string `json:"resourceManager,omitempty"`
+		Authentication  struct {
+			Audiences     []string `json:"audiences"`
+			LoginEndpoint string   `json:"loginEndpoint,omitempty"`
+		} `json:"authentication"`
+		Suffixes struct {
+			AcrLoginServer *string `json:"acrLoginServer,omitempty"`
+			Storage        *string `json:"storage,omitempty"`
+		} `json:"suffixes,omitempty"`
 	}{}
 	err = json.Unmarshal(body, &metadata)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	if len(metadata) > 0 {
-		// We use the endpoint to build our config, but on ASH the config returned
-		// does not contain the endpoint, and this is not accounted for. This
-		// ultimately unsets it for the returned config, causing the bootstrap of
-		// the provider to fail. Instead, check if the endpoint is returned, and if
-		// It is not then set it.
-		if len(metadata[0].ResourceManager) == 0 {
-			metadata[0].ResourceManager = endpoint
+	for _, item := range metadata {
+		if armconfig.Cloud == "" || strings.EqualFold(item.Name, armconfig.Cloud) {
+			// We use the endpoint to build our config, but on ASH the config returned
+			// does not contain the endpoint, and this is not accounted for. This
+			// ultimately unsets it for the returned config, causing the bootstrap of
+			// the provider to fail. Instead, check if the endpoint is returned, and if
+			// It is not then set it.
+			if item.ResourceManager == "" {
+				item.ResourceManager = armconfig.ResourceManagerEndpoint
+			}
+			config.Services[cloud.ResourceManager] = cloud.ServiceConfiguration{
+				Endpoint: item.ResourceManager,
+				Audience: item.Authentication.Audiences[0],
+			}
+			if item.Authentication.LoginEndpoint != "" {
+				config.ActiveDirectoryAuthorityHost = item.Authentication.LoginEndpoint
+			}
+			if item.Suffixes.Storage != nil && armconfig.StorageSuffix == nil {
+				armconfig.StorageSuffix = item.Suffixes.Storage
+			}
+			if item.Suffixes.AcrLoginServer != nil && armconfig.ACRLoginServer == nil {
+				armconfig.ACRLoginServer = item.Suffixes.AcrLoginServer
+			}
+			return nil
 		}
-		return &cloud.Configuration{
-			ActiveDirectoryAuthorityHost: metadata[0].Authentication.LoginEndpoint,
-			Services: map[cloud.ServiceName]cloud.ServiceConfiguration{
-				cloud.ResourceManager: {
-					Endpoint: metadata[0].ResourceManager,
-					Audience: metadata[0].Authentication.Audiences[0],
-				},
-			},
-		}, nil
 	}
-	return nil, nil
+	return nil
 }
 
-func AzureCloudConfigOverrideFromEnv(config *cloud.Configuration) (*cloud.Configuration, error) {
-	if config == nil {
-		config = &cloud.AzurePublic
-	}
+func OverrideAzureCloudConfigFromEnv(armconfig *ARMClientConfig, config *cloud.Configuration) error {
 	envFilePath, ok := os.LookupEnv(EnvironmentFilepathName)
 	if !ok {
-		return config, nil
+		return nil
 	}
 	content, err := os.ReadFile(envFilePath)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	var envConfig Environment
 	if err = json.Unmarshal(content, &envConfig); err != nil {
-		return nil, err
+		return err
 	}
 	if len(envConfig.ActiveDirectoryEndpoint) > 0 {
 		config.ActiveDirectoryAuthorityHost = envConfig.ActiveDirectoryEndpoint
@@ -123,61 +136,44 @@ func AzureCloudConfigOverrideFromEnv(config *cloud.Configuration) (*cloud.Config
 			Audience: envConfig.TokenAudience,
 		}
 	}
-	return config, nil
+	if len(envConfig.StorageEndpointSuffix) > 0 {
+		armconfig.StorageSuffix = &envConfig.StorageEndpointSuffix
+	}
+	if len(envConfig.ContainerRegistryDNSSuffix) > 0 {
+		armconfig.ACRLoginServer = &envConfig.ContainerRegistryDNSSuffix
+	}
+	return nil
 }
 
-// GetAzureCloudConfig returns the cloud configuration for the given ARMClientConfig.
-func GetAzureCloudConfig(armConfig *ARMClientConfig) (*cloud.Configuration, error) {
+// GetAzureCloudConfigAndBackfillArmClientConfig retrieves the Azure cloud configuration based on the provided ARM client configuration.
+// If the ARM client configuration is nil, it returns the default Azure public cloud configuration.
+// It attempts to override the cloud configuration using metadata service and environment variables.
+//
+// Parameters:
+// - armConfig: A pointer to an ARMClientConfig struct containing the ARM client configuration.
+//
+// Returns:
+// - A pointer to a cloud.Configuration struct representing the Azure cloud configuration.
+// - An error if there is an issue overriding the cloud configuration from metadata service or environment variables.
+func GetAzureCloudConfigAndBackfillARMClientConfig(armConfig *ARMClientConfig) (*cloud.Configuration, error) {
+	config := &cloud.AzurePublic
 	if armConfig == nil {
-		return &cloud.AzurePublic, nil
+		return config, nil
 	}
-	if armConfig.ResourceManagerEndpoint != "" {
-		return AzureCloudConfigFromURL(armConfig.ResourceManagerEndpoint)
+	config = AzureCloudConfigFromName(armConfig.Cloud)
+	if err := OverrideAzureCloudConfigFromMetadataService(armConfig, config); err != nil {
+		return nil, err
 	}
-
-	return AzureCloudConfigOverrideFromEnv(AzureCloudConfigFromName(armConfig.Cloud))
+	err := OverrideAzureCloudConfigFromEnv(armConfig, config)
+	return config, err
 }
 
 // Environment represents a set of endpoints for each of Azure's Clouds.
 type Environment struct {
-	Name                         string             `json:"name"`
-	ManagementPortalURL          string             `json:"managementPortalURL"`
-	PublishSettingsURL           string             `json:"publishSettingsURL"`
-	ServiceManagementEndpoint    string             `json:"serviceManagementEndpoint"`
-	ResourceManagerEndpoint      string             `json:"resourceManagerEndpoint"`
-	ActiveDirectoryEndpoint      string             `json:"activeDirectoryEndpoint"`
-	GalleryEndpoint              string             `json:"galleryEndpoint"`
-	KeyVaultEndpoint             string             `json:"keyVaultEndpoint"`
-	ManagedHSMEndpoint           string             `json:"managedHSMEndpoint"`
-	GraphEndpoint                string             `json:"graphEndpoint"`
-	ServiceBusEndpoint           string             `json:"serviceBusEndpoint"`
-	BatchManagementEndpoint      string             `json:"batchManagementEndpoint"`
-	MicrosoftGraphEndpoint       string             `json:"microsoftGraphEndpoint"`
-	StorageEndpointSuffix        string             `json:"storageEndpointSuffix"`
-	CosmosDBDNSSuffix            string             `json:"cosmosDBDNSSuffix"`
-	MariaDBDNSSuffix             string             `json:"mariaDBDNSSuffix"`
-	MySQLDatabaseDNSSuffix       string             `json:"mySqlDatabaseDNSSuffix"`
-	PostgresqlDatabaseDNSSuffix  string             `json:"postgresqlDatabaseDNSSuffix"`
-	SQLDatabaseDNSSuffix         string             `json:"sqlDatabaseDNSSuffix"`
-	TrafficManagerDNSSuffix      string             `json:"trafficManagerDNSSuffix"`
-	KeyVaultDNSSuffix            string             `json:"keyVaultDNSSuffix"`
-	ManagedHSMDNSSuffix          string             `json:"managedHSMDNSSuffix"`
-	ServiceBusEndpointSuffix     string             `json:"serviceBusEndpointSuffix"`
-	ServiceManagementVMDNSSuffix string             `json:"serviceManagementVMDNSSuffix"`
-	ResourceManagerVMDNSSuffix   string             `json:"resourceManagerVMDNSSuffix"`
-	ContainerRegistryDNSSuffix   string             `json:"containerRegistryDNSSuffix"`
-	TokenAudience                string             `json:"tokenAudience"`
-	APIManagementHostNameSuffix  string             `json:"apiManagementHostNameSuffix"`
-	SynapseEndpointSuffix        string             `json:"synapseEndpointSuffix"`
-	DatalakeSuffix               string             `json:"datalakeSuffix"`
-	ResourceIdentifiers          ResourceIdentifier `json:"resourceIdentifiers"`
-}
-
-// ResourceIdentifier contains a set of Azure resource IDs.
-type ResourceIdentifier struct {
-	Graph               string `json:"graph"`
-	KeyVault            string `json:"keyVault"`
-	Datalake            string `json:"datalake"`
-	Batch               string `json:"batch"`
-	OperationalInsights string `json:"operationalInsights"`
+	Name                       string `json:"name"`
+	ResourceManagerEndpoint    string `json:"resourceManagerEndpoint"`
+	ActiveDirectoryEndpoint    string `json:"activeDirectoryEndpoint"`
+	StorageEndpointSuffix      string `json:"storageEndpointSuffix"`
+	ContainerRegistryDNSSuffix string `json:"containerRegistryDNSSuffix"`
+	TokenAudience              string `json:"tokenAudience"`
 }
