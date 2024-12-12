@@ -120,7 +120,9 @@ func (generator ClientFactoryGenerator) Generate(ctx *genall.GenerationContext) 
 		}
 
 		codeimportList["github.com/Azure/azure-sdk-for-go/sdk/azcore"] = make(map[string]struct{})
+		codeimportList["github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"] = make(map[string]struct{})
 		codeimportList["github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"] = make(map[string]struct{})
+		codeimportList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"] = make(map[string]struct{})
 		codeimportList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"] = make(map[string]struct{})
 		codeimportList["github.com/Azure/azure-sdk-for-go/sdk/azidentity"] = make(map[string]struct{})
 
@@ -141,12 +143,9 @@ func (generator ClientFactoryGenerator) Generate(ctx *genall.GenerationContext) 
 		}
 		defer file.Close()
 		testimportList := make(map[string]map[string]struct{})
-		for k, v := range importList {
-			testimportList[k] = v
-		}
-
 		testimportList["github.com/onsi/ginkgo/v2"] = map[string]struct{}{}
 		testimportList["github.com/onsi/gomega"] = map[string]struct{}{}
+		testimportList["github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"] = make(map[string]struct{})
 
 		err = DumpHeaderToWriter(ctx, file, generator.HeaderFile, testimportList, "azclient")
 		if err != nil {
@@ -187,6 +186,7 @@ var AbstractClientFactoryImplTemplate = template.Must(template.New("object-facto
 	`
 type ClientFactoryImpl struct {
 	armConfig     *ARMClientConfig
+	cloudConfig   cloud.Configuration
 	factoryConfig *ClientFactoryConfig
 	cred               azcore.TokenCredential
 	clientOptionsMutFn []func(option *arm.ClientOptions)
@@ -199,7 +199,7 @@ type ClientFactoryImpl struct {
 	{{end -}}
 }
 
-func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, cred azcore.TokenCredential, clientOptionsMutFn ...func(option *arm.ClientOptions)) (ClientFactory,error) {
+func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig,cloud cloud.Configuration, cred azcore.TokenCredential, clientOptionsMutFn ...func(option *arm.ClientOptions)) (ClientFactory,error) {
 	if config == nil {
 		config = &ClientFactoryConfig{}
 	}
@@ -212,6 +212,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	factory := &ClientFactoryImpl{
 		armConfig: 	   armConfig,
 		factoryConfig: config,
+		cloudConfig: 	  cloud,
 		cred:          cred,
 		clientOptionsMutFn: clientOptionsMutFn,
 	}
@@ -240,10 +241,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 {{- end }}
 func (factory *ClientFactoryImpl) create{{$resource}}Client(subscription string)({{.PkgAlias}}.{{.InterfaceTypeName}},error) {
 	//initialize {{.PkgAlias}}
-	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.factoryConfig)
+	options, err := GetDefaultResourceClientOption(factory.armConfig)
 	if err != nil {
 		return nil, err
 	}
+	options.Cloud = factory.cloudConfig
 	{{if $client.AzureStackCloudAPIVersion}}
 	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) {
 		options.ClientOptions.APIVersion = {{.PkgAlias}}.AzureStackCloudAPIVersion
@@ -319,7 +321,7 @@ ginkgo.When("config is nil", func() {
 			{{- $resource = $client.SubResource -}}
 			{{- end -}}
 ginkgo.It("should create factory instance without painc - {{$resource}}", func() {
-				factory, err := NewClientFactory(nil, nil, nil)
+				factory, err := NewClientFactory(nil, nil,cloud.AzurePublic, nil)
 				gomega.Expect(err).NotTo(gomega.HaveOccurred())
 				gomega.Expect(factory).NotTo(gomega.BeNil())
 				client := factory.Get{{$resource}}Client()

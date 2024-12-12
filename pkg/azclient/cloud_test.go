@@ -75,14 +75,18 @@ var _ = ginkgo.Describe("Cloud", func() {
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 				}))
 				defer server.Close()
-				armconfig := &azclient.ARMClientConfig{}
-				cloudConfig := &cloud.AzurePublic
-				err := azclient.OverrideAzureCloudConfigFromMetadataService(armconfig, cloudConfig)
+				cloudConfig := cloud.AzurePublic
+				env := &azclient.Environment{}
+				err := azclient.OverrideAzureCloudConfigAndEnvConfigFromMetadataService(server.URL, "AzureCloud", &cloudConfig, env)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 				gomega.Expect(cloudConfig).ToNot(gomega.BeNil())
 				gomega.Expect(cloudConfig.ActiveDirectoryAuthorityHost).To(gomega.Equal("https://login.microsoftonline.com/"))
 				gomega.Expect(cloudConfig.Services).NotTo(gomega.BeEmpty())
 				gomega.Expect(cloudConfig.Services[cloud.ResourceManager].Audience).To(gomega.Equal("https://management.core.windows.net/"))
+				gomega.Expect(env).ToNot(gomega.BeNil())
+				gomega.Expect(env.ResourceManagerEndpoint).To(gomega.Equal("https://management.azure.com/"))
+				gomega.Expect(env.ContainerRegistryDNSSuffix).To(gomega.Equal("azurecr.io"))
+				gomega.Expect(env.StorageEndpointSuffix).To(gomega.Equal("core.windows.net"))
 			})
 		})
 
@@ -130,19 +134,17 @@ var _ = ginkgo.Describe("Cloud", func() {
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 				}))
 				defer server.Close()
-				armconfig := &azclient.ARMClientConfig{
-					ResourceManagerEndpoint: server.URL,
-				}
-				cloudConfig := &cloud.Configuration{
-					ActiveDirectoryAuthorityHost: "https://login.microsoftonline.com/", Services: map[cloud.ServiceName]cloud.ServiceConfiguration{},
-				}
-				err := azclient.OverrideAzureCloudConfigFromMetadataService(armconfig, cloudConfig)
+				cloudConfig := cloud.AzurePublic
+				env := &azclient.Environment{}
+				err := azclient.OverrideAzureCloudConfigAndEnvConfigFromMetadataService(server.URL, "AzureCloud", &cloudConfig, env)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 				gomega.Expect(cloudConfig).ToNot(gomega.BeNil())
 				gomega.Expect(cloudConfig.ActiveDirectoryAuthorityHost).To(gomega.Equal("https://login.microsoftonline.com/"))
 				gomega.Expect(cloudConfig.Services).NotTo(gomega.BeEmpty())
 				gomega.Expect(cloudConfig.Services[cloud.ResourceManager].Audience).To(gomega.Equal("https://management.core.windows.net/"))
 				gomega.Expect(cloudConfig.Services[cloud.ResourceManager].Endpoint).To(gomega.Equal(server.URL))
+				gomega.Expect(env).ToNot(gomega.BeNil())
+				gomega.Expect(env.ResourceManagerEndpoint).To(gomega.Equal(server.URL))
 			})
 		})
 	})
@@ -159,7 +161,7 @@ var _ = ginkgo.Describe("Cloud", func() {
 		ginkgo.When("cloud name is wrong", func() {
 			ginkgo.It("should return the default cloud", func() {
 				cloudConfig := azclient.AzureCloudConfigFromName("wrong")
-				gomega.Expect(cloudConfig).To(gomega.BeNil())
+				gomega.Expect(*cloudConfig).To(gomega.Equal(cloud.AzurePublic))
 			})
 		})
 		ginkgo.When("cloud name is AzureChinaCloud", func() {
@@ -176,9 +178,9 @@ var _ = ginkgo.Describe("Cloud", func() {
 	ginkgo.Context("AzureCloudFromEnvironment", func() {
 		ginkgo.When("the environment is empty", func() {
 			ginkgo.It("should return the default cloud", func() {
-				armconfig := &azclient.ARMClientConfig{}
+				env := &azclient.Environment{}
 				cloudConfig := &cloud.AzurePublic
-				err := azclient.OverrideAzureCloudConfigFromEnv(armconfig, cloudConfig)
+				err := azclient.OverrideAzureCloudConfigFromEnv(cloudConfig, env)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 				gomega.Expect(cloudConfig).ToNot(gomega.BeNil())
 				gomega.Expect(cloudConfig.ActiveDirectoryAuthorityHost).To(gomega.Equal("https://login.microsoftonline.com/"))
@@ -190,9 +192,9 @@ var _ = ginkgo.Describe("Cloud", func() {
 		ginkgo.When("the environment is set,file is not found", func() {
 			ginkgo.It("should return error", func() {
 				os.Setenv(azclient.EnvironmentFilepathName, "notfound")
-				armconfig := &azclient.ARMClientConfig{}
+				env := &azclient.Environment{}
 				cloudConfig := &cloud.AzurePublic
-				err := azclient.OverrideAzureCloudConfigFromEnv(armconfig, cloudConfig)
+				err := azclient.OverrideAzureCloudConfigFromEnv(cloudConfig, env)
 				gomega.Expect(err).To(gomega.HaveOccurred())
 				os.Unsetenv(azclient.EnvironmentFilepathName)
 			})
@@ -200,9 +202,9 @@ var _ = ginkgo.Describe("Cloud", func() {
 		ginkgo.When("the environment is set,file is empty", func() {
 			ginkgo.It("should return error", func() {
 				os.Setenv(azclient.EnvironmentFilepathName, "notfound")
-				armconfig := &azclient.ARMClientConfig{}
+				env := &azclient.Environment{}
 				cloudConfig := &cloud.AzurePublic
-				err := azclient.OverrideAzureCloudConfigFromEnv(armconfig, cloudConfig)
+				err := azclient.OverrideAzureCloudConfigFromEnv(cloudConfig, env)
 				gomega.Expect(err).To(gomega.HaveOccurred())
 				os.Unsetenv(azclient.EnvironmentFilepathName)
 			})
@@ -221,16 +223,16 @@ var _ = ginkgo.Describe("Cloud", func() {
 				}`), 0600)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 				os.Setenv(azclient.EnvironmentFilepathName, configFile.Name())
-				armconfig := &azclient.ARMClientConfig{
-					Cloud: "AzureGovernment",
-				}
+				env := &azclient.Environment{}
 				cloudConfig := &cloud.AzureGovernment
-				err = azclient.OverrideAzureCloudConfigFromEnv(armconfig, cloudConfig)
+				err = azclient.OverrideAzureCloudConfigFromEnv(cloudConfig, env)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 				gomega.Expect(cloudConfig).ToNot(gomega.BeNil())
 				gomega.Expect(cloudConfig.ActiveDirectoryAuthorityHost).To(gomega.Equal("https://login.chinacloudapi.cn"))
 				gomega.Expect(cloudConfig.Services).NotTo(gomega.BeEmpty())
 				gomega.Expect(cloudConfig.Services[cloud.ResourceManager].Audience).To(gomega.Equal("https://management.core.chinacloudapi.cn/"))
+				gomega.Expect(env).ToNot(gomega.BeNil())
+				gomega.Expect(env.ResourceManagerEndpoint).To(gomega.Equal("https://management.chinacloudapi.cn"))
 				os.Unsetenv(azclient.EnvironmentFilepathName)
 			})
 		})
