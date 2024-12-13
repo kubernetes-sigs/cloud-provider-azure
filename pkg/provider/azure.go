@@ -27,10 +27,9 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
-	"github.com/Azure/go-autorest/autorest/azure"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -104,7 +103,7 @@ var (
 // Cloud holds the config and clients
 type Cloud struct {
 	azureconfig.Config
-	Environment azure.Environment
+	Environment *azclient.Environment
 
 	SubnetsClient                   subnetclient.Interface
 	InterfacesClient                interfaceclient.Interface
@@ -352,23 +351,17 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		config.ClusterServiceSharedLoadBalancerHealthProbePath = consts.ClusterServiceLoadBalancerHealthProbeDefaultPath
 	}
 
-	env, err := azureconfig.ParseAzureEnvironment(config.Cloud, config.ResourceManagerEndpoint, config.IdentitySystem)
-	if err != nil {
-		return err
-	}
-
 	// Initialize rate limiting config options.
 	azureconfig.InitializeCloudProviderRateLimitConfig(&config.CloudProviderRateLimitConfig)
 
 	resourceRequestBackoff := az.setCloudProviderBackoffDefaults(config)
 
-	err = az.setLBDefaults(config)
+	err := az.setLBDefaults(config)
 	if err != nil {
 		return err
 	}
 
 	az.Config = *config
-	az.Environment = *env
 	az.ResourceRequestBackoff = resourceRequestBackoff
 	az.Metadata, err = NewInstanceMetadataService(consts.ImdsServer)
 	if err != nil {
@@ -407,7 +400,22 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 			return err
 		}
 	}
-	servicePrincipalToken, err := azureconfig.GetServicePrincipalToken(&config.AzureClientConfig, env, env.ServiceManagementEndpoint)
+
+	clientOption, env, err := azclient.GetAzCoreClientOption(&az.ARMClientConfig)
+	if err != nil {
+		return err
+	}
+	az.Environment = env
+
+	aadEndpoint := env.ActiveDirectoryEndpoint
+	if aadEndpoint == "" {
+		aadEndpoint = clientOption.Cloud.ActiveDirectoryAuthorityHost
+	}
+	armAudience := env.ServiceManagementEndpoint
+	if armAudience == "" {
+		armAudience = string(clientOption.Cloud.Services[cloud.ResourceManager].Audience[0])
+	}
+	servicePrincipalToken, err := azureconfig.GetServicePrincipalToken(&config.AzureClientConfig, aadEndpoint, armAudience)
 	if errors.Is(err, azureconfig.ErrorNoAuth) {
 		// Only controller-manager would lazy-initialize from secret, and credentials are required for such case.
 		if fromSecret {
@@ -440,7 +448,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 	}
 	az.AuthProvider = authProvider
 	// If uses network resources in different AAD Tenant, then prepare corresponding Service Principal Token for VM/VMSS client and network resources client
-	multiTenantServicePrincipalToken, networkResourceServicePrincipalToken, err := az.getAuthTokenInMultiTenantEnv(servicePrincipalToken, authProvider)
+	multiTenantServicePrincipalToken, networkResourceServicePrincipalToken, err := az.getAuthTokenInMultiTenantEnv(servicePrincipalToken, &clientOption.Cloud, authProvider)
 	if err != nil {
 		return err
 	}
@@ -458,7 +466,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 			networkTenantCred := authProvider.GetNetworkAzIdentity()
 			az.NetworkClientFactory, err = azclient.NewClientFactory(&azclient.ClientFactoryConfig{
 				SubscriptionID: az.NetworkResourceSubscriptionID,
-			}, &az.ARMClientConfig, networkTenantCred)
+			}, &az.ARMClientConfig, clientOption.Cloud, networkTenantCred)
 			if err != nil {
 				return err
 			}
@@ -468,7 +476,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		}
 		az.ComputeClientFactory, err = azclient.NewClientFactory(&azclient.ClientFactoryConfig{
 			SubscriptionID: az.SubscriptionID,
-		}, &az.ARMClientConfig, cred)
+		}, &az.ARMClientConfig, clientOption.Cloud, cred)
 		if err != nil {
 			return err
 		}
@@ -625,16 +633,24 @@ func (az *Cloud) setLBDefaults(config *azureconfig.Config) error {
 	return nil
 }
 
-func (az *Cloud) getAuthTokenInMultiTenantEnv(_ *adal.ServicePrincipalToken, authProvider *azclient.AuthProvider) (adal.MultitenantOAuthTokenProvider, adal.OAuthTokenProvider, error) {
+func (az *Cloud) getAuthTokenInMultiTenantEnv(_ *adal.ServicePrincipalToken, cloudConfig *cloud.Configuration, authProvider *azclient.AuthProvider) (adal.MultitenantOAuthTokenProvider, adal.OAuthTokenProvider, error) {
 	var err error
 	var multiTenantOAuthToken adal.MultitenantOAuthTokenProvider
 	var networkResourceServicePrincipalToken adal.OAuthTokenProvider
 	if az.Config.UsesNetworkResourceInDifferentTenant() {
-		multiTenantOAuthToken, err = azureconfig.GetMultiTenantServicePrincipalToken(&az.Config.AzureClientConfig, &az.Environment, authProvider)
+		aadEndpoint := az.Environment.ActiveDirectoryEndpoint
+		if aadEndpoint == "" {
+			aadEndpoint = cloudConfig.ActiveDirectoryAuthorityHost
+		}
+		armAudience := az.Environment.ServiceManagementEndpoint
+		if armAudience == "" {
+			armAudience = string(cloudConfig.Services[cloud.ResourceManager].Audience[0])
+		}
+		multiTenantOAuthToken, err = azureconfig.GetMultiTenantServicePrincipalToken(&az.Config.AzureClientConfig, aadEndpoint, armAudience, authProvider)
 		if err != nil {
 			return nil, nil, err
 		}
-		networkResourceServicePrincipalToken, err = azureconfig.GetNetworkResourceServicePrincipalToken(&az.Config.AzureClientConfig, &az.Environment, authProvider)
+		networkResourceServicePrincipalToken, err = azureconfig.GetNetworkResourceServicePrincipalToken(&az.Config.AzureClientConfig, aadEndpoint, armAudience, authProvider)
 		if err != nil {
 			return nil, nil, err
 		}

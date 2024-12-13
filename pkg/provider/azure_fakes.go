@@ -107,6 +107,15 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 		nodePrivateIPs:           map[string]*utilsets.IgnoreCaseSet{},
 		routeCIDRs:               map[string]string{},
 		eventRecorder:            &record.FakeRecorder{},
+		Environment: &azclient.Environment{
+			Name:                       "AzurePublicCloud",
+			ServiceManagementEndpoint:  "https://management.core.windows.net/",
+			ResourceManagerEndpoint:    "https://management.azure.com/",
+			ActiveDirectoryEndpoint:    "https://login.microsoftonline.com/",
+			StorageEndpointSuffix:      "core.windows.net",
+			ContainerRegistryDNSSuffix: "azurecr.io",
+			TokenAudience:              "https://management.azure.com/",
+		},
 	}
 	az.DisksClient = mockdiskclient.NewMockInterface(ctrl)
 	az.InterfacesClient = mockinterfaceclient.NewMockInterface(ctrl)

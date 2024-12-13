@@ -76,7 +76,7 @@ type AzureClientConfig struct {
 // If NetworkResourceTenantID and NetworkResourceSubscriptionID are specified to have different values than TenantID and SubscriptionID, network resources are deployed in different AAD Tenant and Subscription than those for the cluster,
 // than only azure clients except VM/VMSS and network resource ones use this method to fetch Token.
 // For tokens for VM/VMSS and network resource ones, please check GetMultiTenantServicePrincipalToken and GetNetworkResourceServicePrincipalToken.
-func GetServicePrincipalToken(config *AzureClientConfig, env *azure.Environment, resource string) (*adal.ServicePrincipalToken, error) {
+func GetServicePrincipalToken(config *AzureClientConfig, aadEndpoint, resource string) (*adal.ServicePrincipalToken, error) {
 	logger := klog.Background().WithName("GetServicePrincipalToken")
 	var tenantID string
 	if strings.EqualFold(config.IdentitySystem, consts.ADFSIdentitySystem) {
@@ -85,13 +85,9 @@ func GetServicePrincipalToken(config *AzureClientConfig, env *azure.Environment,
 		tenantID = config.TenantID
 	}
 
-	if resource == "" {
-		resource = env.ServiceManagementEndpoint
-	}
-
 	if config.UseFederatedWorkloadIdentityExtension {
 		logger.V(2).Info("Setup ARM general resource token provider", "method", "workload_identity")
-		oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.TenantID, nil)
+		oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(aadEndpoint, config.TenantID, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create the OAuth config: %w", err)
 		}
@@ -104,7 +100,7 @@ func GetServicePrincipalToken(config *AzureClientConfig, env *azure.Environment,
 			return string(jwt), nil
 		}
 
-		token, err := adal.NewServicePrincipalTokenFromFederatedTokenCallback(*oauthConfig, config.AADClientID, jwtCallback, env.ResourceManagerEndpoint)
+		token, err := adal.NewServicePrincipalTokenFromFederatedTokenCallback(*oauthConfig, config.AADClientID, jwtCallback, resource)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create a workload identity token: %w", err)
 		}
@@ -140,7 +136,7 @@ func GetServicePrincipalToken(config *AzureClientConfig, env *azure.Environment,
 			resource)
 	}
 
-	oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, tenantID, nil)
+	oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(aadEndpoint, tenantID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating the OAuth config: %w", err)
 	}
@@ -185,7 +181,7 @@ func GetServicePrincipalToken(config *AzureClientConfig, env *azure.Environment,
 // PrimaryToken of the returned multi-tenant token is for the AAD Tenant specified by TenantID, and AuxiliaryToken of the returned multi-tenant token is for the AAD Tenant specified by NetworkResourceTenantID.
 //
 // Azure VM/VMSS clients use this multi-tenant token, in order to operate those VM/VMSS in AAD Tenant specified by TenantID, and meanwhile in their payload they are referencing network resources (e.g. Load Balancer, Network Security Group, etc.) in AAD Tenant specified by NetworkResourceTenantID.
-func GetMultiTenantServicePrincipalToken(config *AzureClientConfig, env *azure.Environment, authProvider *azclient.AuthProvider) (adal.MultitenantOAuthTokenProvider, error) {
+func GetMultiTenantServicePrincipalToken(config *AzureClientConfig, aadEndpoint string, resource string, authProvider *azclient.AuthProvider) (adal.MultitenantOAuthTokenProvider, error) {
 	logger := klog.Background().WithName("GetMultiTenantServicePrincipalToken")
 
 	err := config.ValidateForMultiTenant()
@@ -194,7 +190,7 @@ func GetMultiTenantServicePrincipalToken(config *AzureClientConfig, env *azure.E
 	}
 
 	multiTenantOAuthConfig, err := adal.NewMultiTenantOAuthConfig(
-		env.ActiveDirectoryEndpoint, config.TenantID, []string{config.NetworkResourceTenantID}, adal.OAuthOptions{})
+		aadEndpoint, config.TenantID, []string{config.NetworkResourceTenantID}, adal.OAuthOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("creating the multi-tenant OAuth config: %w", err)
 	}
@@ -205,7 +201,7 @@ func GetMultiTenantServicePrincipalToken(config *AzureClientConfig, env *azure.E
 			multiTenantOAuthConfig,
 			config.AADClientID,
 			config.AADClientSecret,
-			env.ServiceManagementEndpoint)
+			resource)
 	}
 
 	if len(config.AADClientCertPath) > 0 {
@@ -223,7 +219,7 @@ func GetMultiTenantServicePrincipalToken(config *AzureClientConfig, env *azure.E
 			config.AADClientID,
 			certificate,
 			privateKey,
-			env.ServiceManagementEndpoint)
+			resource)
 	}
 
 	if authProvider.ComputeCredential != nil && authProvider.NetworkCredential != nil {
@@ -247,7 +243,7 @@ func GetMultiTenantServicePrincipalToken(config *AzureClientConfig, env *azure.E
 // and this method creates a new service principal token for network resources tenant based on the configuration.
 //
 // Azure network resource (Load Balancer, Public IP, Route Table, Network Security Group and their sub level resources) clients use this multi-tenant token, in order to operate resources in AAD Tenant specified by NetworkResourceTenantID.
-func GetNetworkResourceServicePrincipalToken(config *AzureClientConfig, env *azure.Environment, authProvider *azclient.AuthProvider) (adal.OAuthTokenProvider, error) {
+func GetNetworkResourceServicePrincipalToken(config *AzureClientConfig, aadEndpoint string, resource string, authProvider *azclient.AuthProvider) (adal.OAuthTokenProvider, error) {
 	logger := klog.Background().WithName("GetNetworkResourceServicePrincipalToken")
 
 	err := config.ValidateForMultiTenant()
@@ -255,7 +251,7 @@ func GetNetworkResourceServicePrincipalToken(config *AzureClientConfig, env *azu
 		return nil, fmt.Errorf("got error(%w) in getting network resources service principal token", err)
 	}
 
-	oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.NetworkResourceTenantID, nil)
+	oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(aadEndpoint, config.NetworkResourceTenantID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating the OAuth config for network resources tenant: %w", err)
 	}
@@ -266,7 +262,7 @@ func GetNetworkResourceServicePrincipalToken(config *AzureClientConfig, env *azu
 			*oauthConfig,
 			config.AADClientID,
 			config.AADClientSecret,
-			env.ServiceManagementEndpoint)
+			resource)
 	}
 
 	if len(config.AADClientCertPath) > 0 {
@@ -284,7 +280,7 @@ func GetNetworkResourceServicePrincipalToken(config *AzureClientConfig, env *azu
 			config.AADClientID,
 			certificate,
 			privateKey,
-			env.ServiceManagementEndpoint)
+			resource)
 	}
 
 	if authProvider.ComputeCredential != nil && authProvider.NetworkCredential != nil {
