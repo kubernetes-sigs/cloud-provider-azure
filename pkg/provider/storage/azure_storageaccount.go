@@ -30,7 +30,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	privatedns "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
-	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/google/uuid"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
@@ -102,7 +101,7 @@ type accountWithLocation struct {
 }
 type AccountRepo struct {
 	azureconfig.Config
-	Environment          azure.Environment
+	Environment          *azclient.Environment
 	ComputeClientFactory azclient.ClientFactory
 	NetworkClientFactory azclient.ClientFactory
 	subnetRepo           subnet.Repository
@@ -111,7 +110,7 @@ type AccountRepo struct {
 	lockMap              *lockmap.LockMap
 }
 
-func NewRepository(config azureconfig.Config, env azure.Environment, computeClientFactory azclient.ClientFactory, networkClientFactory azclient.ClientFactory) (*AccountRepo, error) {
+func NewRepository(config azureconfig.Config, env *azclient.Environment, computeClientFactory azclient.ClientFactory, networkClientFactory azclient.ClientFactory) (*AccountRepo, error) {
 	getter := func(_ context.Context, _ string) (*armstorage.Account, error) { return nil, nil }
 	storageAccountCache, err := cache.NewTimedCache(time.Minute, getter, config.DisableAPICallCache)
 	if err != nil {
@@ -121,12 +120,17 @@ func NewRepository(config azureconfig.Config, env azure.Environment, computeClie
 	if err != nil {
 		return nil, err
 	}
+	subnetRepo, err := subnet.NewRepo(networkClientFactory.GetSubnetClient())
+	if err != nil {
+		return nil, err
+	}
 	return &AccountRepo{
 		Config:               config,
 		Environment:          env,
 		fileServiceRepo:      fileserviceRepo,
 		ComputeClientFactory: computeClientFactory,
 		NetworkClientFactory: networkClientFactory,
+		subnetRepo:           subnetRepo,
 		storageAccountCache:  storageAccountCache,
 		lockMap:              lockmap.NewLockMap(),
 	}, nil
@@ -367,7 +371,7 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 			accountOptions.StorageType = StorageTypeFile
 		}
 
-		if len(accountOptions.StorageEndpointSuffix) == 0 {
+		if len(accountOptions.StorageEndpointSuffix) == 0 && az.Environment != nil {
 			accountOptions.StorageEndpointSuffix = az.Environment.StorageEndpointSuffix
 		}
 		privateDNSZoneName = fmt.Sprintf(privateDNSZoneNameFmt, accountOptions.StorageType, accountOptions.StorageEndpointSuffix)
