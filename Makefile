@@ -168,7 +168,7 @@ build-node-image-linux: buildx-setup ## Build node-manager image.
 		--sbom=false
 
 .PHONY: build-node-image-windows
-build-node-image-windows: buildx-setup $(BIN_DIR)/azure-cloud-node-manager.exe ## Build node-manager image for Windows.
+build-node-image-windows: buildx-setup ## Build node-manager image for Windows.
 	$(DOCKER_BUILDX) build --pull \
 		--output=type=$(OUTPUT_TYPE) \
 		--platform windows/$(ARCH) \
@@ -180,7 +180,7 @@ build-node-image-windows: buildx-setup $(BIN_DIR)/azure-cloud-node-manager.exe #
 		--sbom=false
 
 .PHONY: build-node-image-windows-hpc
-build-node-image-windows-hpc: buildx-setup $(BIN_DIR)/azure-cloud-node-manager.exe ## Build node-manager image for Windows.
+build-node-image-windows-hpc: buildx-setup ## Build node-manager image for Windows.
 	$(DOCKER_BUILDX) build --pull \
 		--output=type=$(OUTPUT_TYPE) \
 		--platform windows/$(ARCH) \

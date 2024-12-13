@@ -27,8 +27,6 @@ RUN if [ "$ARCH" = "arm64" ] ; then \
 
 WORKDIR /go/src/sigs.k8s.io/cloud-provider-azure
 COPY . .
-
-# Build the Go app
 RUN make bin/azure-cloud-node-manager ENABLE_GIT_COMMAND=${ENABLE_GIT_COMMAND} ARCH=${ARCH}
 
 # Use distroless base image for a lean production container.
