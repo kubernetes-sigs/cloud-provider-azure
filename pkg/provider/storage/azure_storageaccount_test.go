@@ -33,6 +33,7 @@ import (
 	"go.uber.org/mock/gomock"
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient/mock_accountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobservicepropertiesclient/mock_blobservicepropertiesclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache"
@@ -501,6 +502,9 @@ func TestEnsureStorageAccount(t *testing.T) {
 				NetworkClientFactory: mock_azclient.NewMockClientFactory(ctrl),
 				subnetRepo:           subnet.NewMockRepository(ctrl),
 				Config:               config,
+				Environment: &azclient.Environment{
+					StorageEndpointSuffix: "storagesuffix",
+				},
 			}
 			mockBlobClient := mock_blobservicepropertiesclient.NewMockInterface(ctrl)
 			StorageAccountRepo.ComputeClientFactory.(*mock_azclient.MockClientFactory).EXPECT().GetBlobServicePropertiesClientForSub(gomock.Any()).Return(mockBlobClient, nil).AnyTimes()
