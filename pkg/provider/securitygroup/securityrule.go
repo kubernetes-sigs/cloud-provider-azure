@@ -100,7 +100,7 @@ func ListSourcePrefixes(r *armnetwork.SecurityRule) []string {
 
 func ListDestinationPrefixes(r *armnetwork.SecurityRule) []string {
 	var rv []string
-	if r.Properties.DestinationAddressPrefix != nil {
+	if r.Properties.DestinationAddressPrefix != nil && *r.Properties.DestinationAddressPrefix != "" {
 		rv = append(rv, *r.Properties.DestinationAddressPrefix)
 	}
 	if r.Properties.DestinationAddressPrefixes != nil {
