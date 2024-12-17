@@ -60,7 +60,7 @@ func GetPodList(cs clientset.Interface, ns string) (*v1.PodList, error) {
 }
 
 // countPendingPods counts how many pods is in the `pending` state
-func countPendingPods(cs clientset.Interface, ns string, pods []v1.Pod) int {
+func countPendingPods(_ clientset.Interface, _ string, pods []v1.Pod) int {
 	pendingPodCount := 0
 	for _, p := range pods {
 		if p.Status.Phase == v1.PodPending {
@@ -81,10 +81,6 @@ func WaitPodsToBeReady(cs clientset.Interface, ns string) error {
 		}
 		pods = podList.Items
 		pendingPodCount := countPendingPods(cs, ns, pods)
-		if err != nil {
-			Logf("unexpected error: %w", err)
-			return false, err
-		}
 
 		Logf("%d pods in namespace %s are pending", pendingPodCount, ns)
 		return pendingPodCount == 0, nil

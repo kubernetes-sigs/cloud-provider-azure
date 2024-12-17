@@ -24,7 +24,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/stretchr/testify/assert"
 
 	"go.uber.org/mock/gomock"
@@ -32,7 +33,7 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/ptr"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient/mock_virtualmachineclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -211,9 +212,9 @@ func TestGetZoneByProviderID(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, cloudprovider.Zone{}, zone)
 
-	mockVMClient := az.VirtualMachinesClient.(*mockvmclient.MockInterface)
-	mockVMClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "vm-0", gomock.Any()).Return(compute.VirtualMachine{
-		Zones:    &[]string{"1"},
+	mockVMClient := az.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+	mockVMClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "vm-0", gomock.Any()).Return(&armcompute.VirtualMachine{
+		Zones:    to.SliceOfPtrs("1"),
 		Location: ptr.To("eastus"),
 	}, nil)
 	zone, err = az.GetZoneByProviderID(context.Background(), testAvailabilitySetNodeProviderID)

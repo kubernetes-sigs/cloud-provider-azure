@@ -89,7 +89,7 @@ type Config struct {
 	SystemTags string `json:"systemTags,omitempty" yaml:"systemTags,omitempty"`
 	// Sku of Load Balancer and Public IP. Candidate values are: basic and standard.
 	// If not set, it will be default to basic.
-	LoadBalancerSku string `json:"loadBalancerSku,omitempty" yaml:"loadBalancerSku,omitempty"`
+	LoadBalancerSKU string `json:"loadBalancerSku,omitempty" yaml:"loadBalancerSku,omitempty"`
 	// LoadBalancerName determines the specific name of the load balancer user want to use, working with
 	// LoadBalancerResourceGroup
 	LoadBalancerName string `json:"loadBalancerName,omitempty" yaml:"loadBalancerName,omitempty"`
@@ -188,7 +188,7 @@ func (az *Config) GetPutVMSSVMBatchSize() int {
 }
 
 func (az *Config) UseStandardLoadBalancer() bool {
-	return strings.EqualFold(az.LoadBalancerSku, consts.LoadBalancerSkuStandard)
+	return strings.EqualFold(az.LoadBalancerSKU, consts.LoadBalancerSKUStandard)
 }
 
 func (az *Config) ExcludeMasterNodesFromStandardLB() bool {

@@ -17,13 +17,15 @@ limitations under the License.
 package provider
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 var (
@@ -38,13 +40,15 @@ var (
 // checkExistsFromError inspects an error and returns a true if err is nil,
 // false if error is an autorest.Error with StatusCode=404 and will return the
 // error back if error is another status code or another type of error.
-func checkResourceExistsFromError(err *retry.Error) (bool, *retry.Error) {
+func checkResourceExistsFromError(err error) (bool, error) {
 	if err == nil {
 		return true, nil
 	}
-
-	if err.HTTPStatusCode == http.StatusNotFound {
-		return false, nil
+	var rerr *azcore.ResponseError
+	if errors.As(err, &rerr) {
+		if rerr.StatusCode == http.StatusNotFound {
+			return false, nil
+		}
 	}
 
 	return false, err

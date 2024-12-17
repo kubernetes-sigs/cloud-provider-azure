@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	cloudprovider "k8s.io/cloud-provider"
@@ -34,8 +34,8 @@ import (
 )
 
 // GetVirtualMachineWithRetry invokes az.getVirtualMachine with exponential backoff retry
-func (az *Cloud) GetVirtualMachineWithRetry(ctx context.Context, name types.NodeName, crt azcache.AzureCacheReadType) (compute.VirtualMachine, error) {
-	var machine compute.VirtualMachine
+func (az *Cloud) GetVirtualMachineWithRetry(ctx context.Context, name types.NodeName, crt azcache.AzureCacheReadType) (*armcompute.VirtualMachine, error) {
+	var machine *armcompute.VirtualMachine
 	var retryErr error
 	err := wait.ExponentialBackoff(az.RequestBackoff(), func() (bool, error) {
 		machine, retryErr = az.getVirtualMachine(ctx, name, crt)
@@ -55,14 +55,14 @@ func (az *Cloud) GetVirtualMachineWithRetry(ctx context.Context, name types.Node
 	return machine, err
 }
 
-// ListVirtualMachines invokes az.VirtualMachinesClient.List with exponential backoff retry
-func (az *Cloud) ListVirtualMachines(ctx context.Context, resourceGroup string) ([]compute.VirtualMachine, error) {
-	allNodes, rerr := az.VirtualMachinesClient.List(ctx, resourceGroup)
-	if rerr != nil {
-		klog.Errorf("VirtualMachinesClient.List(%v) failure with err=%v", resourceGroup, rerr)
-		return nil, rerr.Error()
+// ListVirtualMachines invokes az.ComputeClientFactory.GetVirtualMachineScaleSetClient().List with exponential backoff retry
+func (az *Cloud) ListVirtualMachines(ctx context.Context, resourceGroup string) ([]*armcompute.VirtualMachine, error) {
+	allNodes, err := az.ComputeClientFactory.GetVirtualMachineClient().List(ctx, resourceGroup)
+	if err != nil {
+		klog.Errorf("ComputeClientFactory.GetVirtualMachineScaleSetClient().List(%v) failure with err=%v", resourceGroup, err)
+		return nil, err
 	}
-	klog.V(6).Infof("VirtualMachinesClient.List(%v) success", resourceGroup)
+	klog.V(6).Infof("ComputeClientFactory.GetVirtualMachineScaleSetClient().List(%v) success", resourceGroup)
 	return allNodes, nil
 }
 
@@ -125,10 +125,10 @@ func (az *Cloud) newVMCache() (azcache.Resource, error) {
 			return nil, err
 		}
 
-		vm, verr := az.VirtualMachinesClient.Get(ctx, resourceGroup, key, compute.InstanceViewTypesInstanceView)
+		vm, verr := az.ComputeClientFactory.GetVirtualMachineClient().Get(ctx, resourceGroup, key, nil)
 		exists, rerr := checkResourceExistsFromError(verr)
 		if rerr != nil {
-			return nil, rerr.Error()
+			return nil, rerr
 		}
 
 		if !exists {
@@ -136,13 +136,13 @@ func (az *Cloud) newVMCache() (azcache.Resource, error) {
 			return nil, nil
 		}
 
-		if vm.VirtualMachineProperties != nil &&
-			strings.EqualFold(ptr.Deref(vm.VirtualMachineProperties.ProvisioningState, ""), string(consts.ProvisioningStateDeleting)) {
+		if vm != nil && vm.Properties != nil &&
+			strings.EqualFold(ptr.Deref(vm.Properties.ProvisioningState, ""), string(consts.ProvisioningStateDeleting)) {
 			klog.V(2).Infof("Virtual machine %q is under deleting", key)
 			return nil, nil
 		}
 
-		return &vm, nil
+		return vm, nil
 	}
 
 	if az.VMCacheTTLInSeconds == 0 {
@@ -151,10 +151,10 @@ func (az *Cloud) newVMCache() (azcache.Resource, error) {
 	return azcache.NewTimedCache(time.Duration(az.VMCacheTTLInSeconds)*time.Second, getter, az.Config.DisableAPICallCache)
 }
 
-// getVirtualMachine calls 'VirtualMachinesClient.Get' with a timed cache
+// getVirtualMachine calls 'ComputeClientFactory.GetVirtualMachineScaleSetClient().Get' with a timed cache
 // The service side has throttling control that delays responses if there are multiple requests onto certain vm
 // resource request in short period.
-func (az *Cloud) getVirtualMachine(ctx context.Context, nodeName types.NodeName, crt azcache.AzureCacheReadType) (vm compute.VirtualMachine, err error) {
+func (az *Cloud) getVirtualMachine(ctx context.Context, nodeName types.NodeName, crt azcache.AzureCacheReadType) (vm *armcompute.VirtualMachine, err error) {
 	vmName := string(nodeName)
 	cachedVM, err := az.vmCache.Get(ctx, vmName, crt)
 	if err != nil {
@@ -166,5 +166,5 @@ func (az *Cloud) getVirtualMachine(ctx context.Context, nodeName types.NodeName,
 		return vm, cloudprovider.InstanceNotFound
 	}
 
-	return *(cachedVM.(*compute.VirtualMachine)), nil
+	return (cachedVM.(*armcompute.VirtualMachine)), nil
 }

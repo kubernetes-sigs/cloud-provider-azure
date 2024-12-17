@@ -23,18 +23,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/utils/ptr"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient/mock_virtualmachineclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	azureprovider "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/controller/testutil"
@@ -208,18 +208,18 @@ func TestUpdateNodeSubnetMaskSizes(t *testing.T) {
 			ss, err := azureprovider.NewTestScaleSet(ctrl)
 			assert.NoError(t, err)
 
-			expectedVMSS := compute.VirtualMachineScaleSet{
+			expectedVMSS := &armcompute.VirtualMachineScaleSet{
 				Name: ptr.To("vmss"),
 				Tags: tc.tags,
-				VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
-					OrchestrationMode: compute.Uniform,
+				Properties: &armcompute.VirtualMachineScaleSetProperties{
+					OrchestrationMode: to.Ptr(armcompute.OrchestrationModeUniform),
 				},
 			}
-			mockVMSSClient := ss.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
-			mockVMSSClient.EXPECT().List(gomock.Any(), cloud.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil).MaxTimes(1)
+			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+			mockVMSSClient.EXPECT().List(gomock.Any(), cloud.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).MaxTimes(1)
 			cloud.VMSet = ss
-			mockVMsClient := ss.VirtualMachinesClient.(*mockvmclient.MockInterface)
-			mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachine{}, nil).AnyTimes()
+			mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+			mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
 
 			clusterCIDRs := func() []*net.IPNet {
 				_, cidrIPV4, _ := net.ParseCIDR("10.240.0.0/16")

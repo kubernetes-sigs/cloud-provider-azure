@@ -326,8 +326,7 @@ func (helper *RuleHelper) RemoveDestinationFromRules(
 }
 
 func (helper *RuleHelper) removeDestinationFromRule(rule *armnetwork.SecurityRule, prefixes []string, retainDstPorts []int32) error {
-	logger := helper.logger.WithName("removeDestinationFromRule").
-		WithValues("security-rule-name", rule.Name)
+	logger := helper.logger.WithName("removeDestinationFromRule").WithValues("security-rule-name", rule.Name)
 
 	var (
 		prefixIndex     = fnutil.IndexSet(prefixes) // Used to check whether the prefix should be removed.

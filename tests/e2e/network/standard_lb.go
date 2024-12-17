@@ -21,8 +21,8 @@ import (
 	"os"
 	"strings"
 
-	azcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
-	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
@@ -87,7 +87,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 	})
 
 	It("should add all nodes in different agent pools to backends", Label(utils.TestSuiteLabelMultiNodePools), Label(utils.TestSuiteLabelNonMultiSLB), func() {
-		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.LoadBalancerSKUNameStandard)) {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSKUEnv), string(armnetwork.LoadBalancerSKUNameStandard)) {
 			Skip("only test standard load balancer")
 		}
 
@@ -139,7 +139,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		utils.Logf("got BackendIPConfigurations IDs: %q", ipcIDs)
 
 		if isVMSS {
-			allVMs := []*azcompute.VirtualMachineScaleSetVM{}
+			allVMs := []*armcompute.VirtualMachineScaleSetVM{}
 			for _, vmss := range vmsses {
 				if strings.Contains(*vmss.ID, "control-plane") || strings.Contains(*vmss.ID, "master") {
 					continue
@@ -192,7 +192,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 	})
 
 	It("should make outbound IP of pod same as in SLB's outbound rules", Label(utils.TestSuiteLabelSLBOutbound), func() {
-		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.LoadBalancerSKUNameStandard)) {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSKUEnv), string(armnetwork.LoadBalancerSKUNameStandard)) {
 			Skip("only test standard load balancer")
 		}
 

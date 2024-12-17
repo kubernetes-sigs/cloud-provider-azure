@@ -17,10 +17,10 @@ limitations under the License.
 package node
 
 import (
-	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -62,11 +62,11 @@ var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS, utils.Test
 		By("fetch VMSS")
 		vmss, err := utils.FindTestVMSS(azCli, azCli.GetResourceGroup())
 		Expect(err).NotTo(HaveOccurred())
-		if vmss == nil || vmss.Properties == nil || vmss.Properties.OrchestrationMode == nil || *vmss.Properties.OrchestrationMode == compute.OrchestrationModeFlexible {
+		if vmss == nil || vmss.Properties == nil || vmss.Properties.OrchestrationMode == nil || *vmss.Properties.OrchestrationMode == armcompute.OrchestrationModeFlexible {
 			Skip("skip non-VMSS or VMSS Flex")
 		}
 		numInstance := *vmss.SKU.Capacity
-		utils.Logf("Current VMSS %q sku capacity: %d", *vmss.Name, numInstance)
+		utils.Logf("Current VMSS %q SKU capacity: %d", *vmss.Name, numInstance)
 		expectedCap := map[string]int64{*vmss.Name: numInstance}
 		originalNodes, err := utils.GetAgentNodes(k8sCli)
 		Expect(err).NotTo(HaveOccurred())
@@ -87,7 +87,7 @@ var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS, utils.Test
 
 			vmssAfterTest, err := utils.GetVMSS(azCli, *vmss.Name)
 			Expect(err).NotTo(HaveOccurred())
-			utils.Logf("VMSS %q sku capacity after the test: %d", *vmssAfterTest.Name, *vmssAfterTest.SKU.Capacity)
+			utils.Logf("VMSS %q SKU capacity after the test: %d", *vmssAfterTest.Name, *vmssAfterTest.SKU.Capacity)
 		}()
 
 		err = utils.ValidateClusterNodesMatchVMSSInstances(azCli, expectedCap, originalNodes)
@@ -98,11 +98,11 @@ var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS, utils.Test
 		By("fetch VMSS")
 		vmss, err := utils.FindTestVMSS(azCli, azCli.GetResourceGroup())
 		Expect(err).NotTo(HaveOccurred())
-		if vmss == nil || vmss.Properties == nil || vmss.Properties.OrchestrationMode == nil || *vmss.Properties.OrchestrationMode == compute.OrchestrationModeFlexible {
+		if vmss == nil || vmss.Properties == nil || vmss.Properties.OrchestrationMode == nil || *vmss.Properties.OrchestrationMode == armcompute.OrchestrationModeFlexible {
 			Skip("skip non-VMSS or VMSS Flex")
 		}
 		numInstance := *vmss.SKU.Capacity
-		utils.Logf("Current VMSS %q sku capacity: %d", *vmss.Name, numInstance)
+		utils.Logf("Current VMSS %q SKU capacity: %d", *vmss.Name, numInstance)
 		expectedCap := map[string]int64{*vmss.Name: numInstance}
 		originalNodes, err := utils.GetAgentNodes(k8sCli)
 		Expect(err).NotTo(HaveOccurred())
@@ -123,7 +123,7 @@ var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS, utils.Test
 
 			vmssAfterTest, err := utils.GetVMSS(azCli, *vmss.Name)
 			Expect(err).NotTo(HaveOccurred())
-			utils.Logf("VMSS %q sku capacity after the test: %d", *vmssAfterTest.Name, *vmssAfterTest.SKU.Capacity)
+			utils.Logf("VMSS %q SKU capacity after the test: %d", *vmssAfterTest.Name, *vmssAfterTest.SKU.Capacity)
 		}()
 
 		err = utils.ValidateClusterNodesMatchVMSSInstances(azCli, expectedCap, originalNodes)
