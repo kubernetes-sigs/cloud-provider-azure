@@ -37,18 +37,12 @@ type AuthProvider struct {
 }
 
 func NewAuthProvider(armConfig *ARMClientConfig, config *AzureAuthConfig, clientOptionsMutFn ...func(option *policy.ClientOptions)) (*AuthProvider, error) {
-	clientOption, err := GetAzCoreClientOption(armConfig)
+	clientOption, _, err := GetAzCoreClientOption(armConfig)
 	if err != nil {
 		return nil, err
 	}
 	for _, fn := range clientOptionsMutFn {
 		fn(clientOption)
-		if clientOption == nil {
-			clientOption, err = GetAzCoreClientOption(armConfig)
-			if err != nil {
-				return nil, err
-			}
-		}
 	}
 	var computeCredential azcore.TokenCredential
 	var networkTokenCredential azcore.TokenCredential
