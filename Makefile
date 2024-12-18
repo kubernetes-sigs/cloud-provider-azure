@@ -45,6 +45,9 @@ ARCH ?= amd64
 WINDOWS_OSVERSION ?= 1809
 # The output type for `docker buildx build` could either be docker (local), or registry.
 OUTPUT_TYPE ?= docker
+# LOCAL_WINDOWS_BUILD, when set to true, allows picking a local windows binary built locally.
+# This is beneficial when the windows binary requires additional security protection like binary signing.
+LOCAL_WINDOWS_BUILD ?=false
 
 BASE.windows := mcr.microsoft.com/windows/nanoserver
 
@@ -168,24 +171,26 @@ build-node-image-linux: buildx-setup ## Build node-manager image.
 		--sbom=false
 
 .PHONY: build-node-image-windows
-build-node-image-windows: buildx-setup $(BIN_DIR)/azure-cloud-node-manager.exe ## Build node-manager image for Windows.
+build-node-image-windows: buildx-setup ## Build node-manager image for Windows.
 	$(DOCKER_BUILDX) build --pull \
 		--output=type=$(OUTPUT_TYPE) \
 		--platform windows/$(ARCH) \
 		-t $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-$(WINDOWS_OSVERSION)-$(ARCH) \
 		--build-arg OSVERSION=$(WINDOWS_OSVERSION) \
 		--build-arg ARCH=$(ARCH) \
+		--build-arg LOCAL_BUILD=$(LOCAL_WINDOWS_BUILD) \
 		-f cloud-node-manager-windows.Dockerfile . \
 		--provenance=false \
 		--sbom=false
 
 .PHONY: build-node-image-windows-hpc
-build-node-image-windows-hpc: buildx-setup $(BIN_DIR)/azure-cloud-node-manager.exe ## Build node-manager image for Windows.
+build-node-image-windows-hpc: buildx-setup ## Build node-manager image for Windows.
 	$(DOCKER_BUILDX) build --pull \
 		--output=type=$(OUTPUT_TYPE) \
 		--platform windows/$(ARCH) \
 		-t $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-hpc-$(ARCH) \
 		--build-arg ARCH=$(ARCH) \
+		--build-arg LOCAL_BUILD=$(LOCAL_WINDOWS_BUILD) \
 		-f cloud-node-manager-windows-hpc.Dockerfile . \
 		--provenance=false \
 		--sbom=false
