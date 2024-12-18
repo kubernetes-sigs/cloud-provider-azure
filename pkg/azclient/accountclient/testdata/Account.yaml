@@ -109,7 +109,7 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
-                - "12000"
+                - "11998"
         status: 202 Accepted
         code: 202
         duration: 200ms
@@ -621,7 +621,7 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
-                - "12000"
+                - "11999"
         status: 202 Accepted
         code: 202
         duration: 200ms

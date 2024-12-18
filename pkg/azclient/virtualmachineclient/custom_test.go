@@ -57,6 +57,20 @@ func init() {
 				Expect(newResource).To(BeNil())
 			})
 		})
+		When("listflexvmssvmInstanceview requests are raised", func() {
+			It("should return 200", func(ctx context.Context) {
+				newResource, err := realClient.ListVmssFlexVMsWithOnlyInstanceView(ctx, resourceGroupName, "notexists")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(newResource).To(BeNil())
+			})
+		})
+		When("listflexvmssvm requests are raised", func() {
+			It("should return 200", func(ctx context.Context) {
+				newResource, err := realClient.ListVmssFlexVMsWithOutInstanceView(ctx, resourceGroupName, "notexists")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(newResource).To(BeNil())
+			})
+		})
 	}
 
 	beforeAllFunc = func(ctx context.Context) {

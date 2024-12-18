@@ -22,7 +22,7 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Vault?api-version=2021-04-01
         method: PUT
       response:
@@ -51,6 +51,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "11999"
         status: 201 Created
         code: 201
         duration: 200ms
@@ -75,7 +77,7 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.1; linux)
+                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2023-07-01
         method: PUT
       response:
@@ -107,7 +109,9 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1329.0
+                - 1.5.1416.0
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "11999"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -126,7 +130,7 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.1; linux)
+                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2023-07-01
         method: GET
       response:
@@ -158,7 +162,9 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1329.0
+                - 1.5.1416.0
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16499"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -177,7 +183,7 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.1; linux)
+                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2023-07-01
         method: GET
       response:
@@ -209,7 +215,9 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1329.0
+                - 1.5.1416.0
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16499"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -230,7 +238,7 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.1; linux)
+                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2023-07-01
         method: GET
       response:
@@ -262,7 +270,9 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1329.0
+                - 1.5.1416.0
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16499"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -283,7 +293,7 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.1; linux)
+                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestvanotfound?api-version=2023-07-01
         method: GET
       response:
@@ -334,7 +344,7 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.1; linux)
+                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01
         method: GET
       response:
@@ -366,7 +376,9 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1329.0
+                - 1.5.1416.0
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16499"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -385,7 +397,7 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.1; linux)
+                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults?%24skiptoken=YWtzY2l0a2V5dmF1bHR0ZXN0dmE%3D&api-version=2023-07-01
         method: GET
       response:
@@ -417,7 +429,9 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1329.0
+                - 1.5.1416.0
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16498"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -438,7 +452,7 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.1; linux)
+                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vaultnotfound/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01
         method: GET
       response:
@@ -489,7 +503,7 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.1; linux)
+                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2023-07-01
         method: DELETE
       response:
@@ -519,7 +533,9 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1329.0
+                - 1.5.1416.0
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
+                - "12000"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -540,7 +556,7 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.1; linux)
+                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus/deletedVaults/akscitkeyvaulttestva/purge?api-version=2023-07-01
         method: POST
       response:
@@ -560,7 +576,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus/operationResults/VVR8MDYzODYzMjA1NTE5MDYyNDk4N3w0N0RBQjkzRTNBOEM0QzJDQUVBNTY1NkU1QTlBNUI3OA?api-version=2023-07-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus/operationResults/VVR8MDYzODcwMDk3OTQzNjI4Njk0M3w3MDk3RTI3RDVBNUI0NThCQTE4Rjg2RTgzNzJERDE4Mw?api-version=2023-07-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -572,7 +588,9 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1329.0
+                - 1.5.1416.0
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "11999"
         status: 202 Accepted
         code: 202
         duration: 200ms
@@ -591,8 +609,57 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.1; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus/operationResults/VVR8MDYzODYzMjA1NTE5MDYyNDk4N3w0N0RBQjkzRTNBOEM0QzJDQUVBNTY1NkU1QTlBNUI3OA?api-version=2023-07-01&c=c&h=h&s=s&t=t
+                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus/operationResults/VVR8MDYzODcwMDk3OTQzNjI4Njk0M3w3MDk3RTI3RDVBNUI0NThCQTE4Rjg2RTgzNzJERDE4Mw?api-version=2023-07-01&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 146
+        uncompressed: false
+        body: '{"error":{"code":"GatewayTimeout","message":"The gateway did not receive a response from ''Microsoft.KeyVault'' within the specified time period."}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "146"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Failure-Cause:
+                - service
+        status: 504 Gateway Timeout
+        code: 504
+        duration: 200ms
+    - id: 12
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus/operationResults/VVR8MDYzODcwMDk3OTQzNjI4Njk0M3w3MDk3RTI3RDVBNUI0NThCQTE4Rjg2RTgzNzJERDE4Mw?api-version=2023-07-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -602,7 +669,7 @@ interactions:
         trailer: {}
         content_length: 107
         uncompressed: false
-        body: '{"createdDateTime":"2024-09-29 11:18:38Z","lastActionDateTime":"2024-09-29 11:28:39Z","status":"Succeeded"}'
+        body: '{"createdDateTime":"2024-12-18 05:52:22Z","lastActionDateTime":"2024-12-18 06:02:23Z","status":"Succeeded"}'
         headers:
             Cache-Control:
                 - no-cache
@@ -623,11 +690,13 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1329.0
+                - 1.5.1416.0
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16499"
         status: 200 OK
         code: 200
         duration: 200ms
-    - id: 12
+    - id: 13
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -644,7 +713,7 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Vault?api-version=2021-04-01
         method: DELETE
       response:
@@ -673,10 +742,12 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
+                - "11999"
         status: 202 Accepted
         code: 202
         duration: 200ms
-    - id: 13
+    - id: 14
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -691,7 +762,7 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRWQVVMVC1FQVNUVVMiLCJqb2JMb2NhdGlvbiI6ImVhc3R1cyJ9?api-version=2021-04-01&c=c&h=h&s=s&t=t
         method: GET
       response:
@@ -718,6 +789,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16499"
         status: 200 OK
         code: 200
         duration: 200ms
