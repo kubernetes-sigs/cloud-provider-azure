@@ -315,7 +315,7 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
-                - "11999"
+                - "11998"
         status: 200 OK
         code: 200
         duration: 200ms

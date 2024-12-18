@@ -77,8 +77,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2024-03-01
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2024-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -93,7 +93,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -130,8 +130,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -179,8 +179,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2024-03-01
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2024-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -188,14 +188,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 622
+        content_length: 621
         uncompressed: false
-        body: '{"name":"pip1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/publicIPAddresses/pip1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","ipAddress":"52.170.58.30","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","idleTimeoutInMinutes":4,"ipTags":[],"ddosSettings":{"protectionMode":"VirtualNetworkInherited"}},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Standard","tier":"Regional"}}'
+        body: '{"name":"pip1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/publicIPAddresses/pip1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","ipAddress":"40.71.20.25","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","idleTimeoutInMinutes":4,"ipTags":[],"ddosSettings":{"protectionMode":"VirtualNetworkInherited"}},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Standard","tier":"Regional"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "622"
+                - "621"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -211,7 +211,7 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
-                - "16498"
+                - "16499"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -220,24 +220,24 @@ interactions:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 792
+        content_length: 791
         transfer_encoding: []
         trailer: {}
         host: management.azure.com
         remote_addr: ""
         request_uri: ""
-        body: '{"location":"eastus","properties":{"frontendIPConfigurations":[{"name":"frontendConfig1","properties":{"publicIPAddress":{"etag":"W/\"00000000-0000-0000-0000-000000000000\"","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/publicIPAddresses/pip1","location":"eastus","name":"pip1","properties":{"ddosSettings":{"protectionMode":"VirtualNetworkInherited"},"idleTimeoutInMinutes":4,"ipAddress":"52.170.58.30","ipTags":[],"provisioningState":"Succeeded","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","resourceGuid":"00000000-0000-0000-0000-000000000000"},"sku":{"name":"Standard","tier":"Regional"},"type":"Microsoft.Network/publicIPAddresses"}}}]},"sku":{"name":"Standard","tier":"Regional"}}'
+        body: '{"location":"eastus","properties":{"frontendIPConfigurations":[{"name":"frontendConfig1","properties":{"publicIPAddress":{"etag":"W/\"00000000-0000-0000-0000-000000000000\"","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/publicIPAddresses/pip1","location":"eastus","name":"pip1","properties":{"ddosSettings":{"protectionMode":"VirtualNetworkInherited"},"idleTimeoutInMinutes":4,"ipAddress":"40.71.20.25","ipTags":[],"provisioningState":"Succeeded","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","resourceGuid":"00000000-0000-0000-0000-000000000000"},"sku":{"name":"Standard","tier":"Regional"},"type":"Microsoft.Network/publicIPAddresses"}}}]},"sku":{"name":"Standard","tier":"Regional"}}'
         form: {}
         headers:
             Accept:
                 - application/json
             Content-Length:
-                - "792"
+                - "791"
             Content-Type:
                 - application/json
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/loadBalancers/lb1?api-version=2024-03-01
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/loadBalancers/lb1?api-version=2024-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -252,7 +252,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -289,8 +289,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/loadBalancers/lb1?api-version=2024-03-01
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/loadBalancers/lb1?api-version=2024-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -346,8 +346,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/virtualNetworks/vnet1?api-version=2024-03-01
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/virtualNetworks/vnet1?api-version=2024-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -362,7 +362,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -399,8 +399,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -448,8 +448,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/virtualNetworks/vnet1?api-version=2024-03-01
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/virtualNetworks/vnet1?api-version=2024-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -505,8 +505,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateLinkServices/pls1?api-version=2024-03-01
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateLinkServices/pls1?api-version=2024-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -521,7 +521,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -558,8 +558,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -607,8 +607,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateLinkServices/pls1?api-version=2024-03-01
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateLinkServices/pls1?api-version=2024-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -664,8 +664,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateEndpoints/testResource?api-version=2024-03-01
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateEndpoints/testResource?api-version=2024-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -680,7 +680,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -717,8 +717,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -766,8 +766,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateEndpoints/testResource?api-version=2024-03-01
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateEndpoints/testResource?api-version=2024-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -837,7 +837,7 @@ interactions:
         body: '{}'
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTtlODNlMDFiMC1mOTE0LTRiZTgtOGMwZC05Yjk3MDgwYWE3ZmNfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTtkNjRjNmQ2MS1kYmNjLTQ3ZTgtYjk5NC0xMTE4ZGJhYWI1NDNfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - private
             Content-Length:
@@ -845,7 +845,7 @@ interactions:
             Content-Type:
                 - application/json; charset=utf-8
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTtlODNlMDFiMC1mOTE0LTRiZTgtOGMwZC05Yjk3MDgwYWE3ZmNfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTtkNjRjNmQ2MS1kYmNjLTQ3ZTgtYjk5NC0xMTE4ZGJhYWI1NDNfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
@@ -875,7 +875,7 @@ interactions:
         headers:
             User-Agent:
                 - azsdk-go-armprivatedns/v1.3.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTtlODNlMDFiMC1mOTE0LTRiZTgtOGMwZC05Yjk3MDgwYWE3ZmNfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTtkNjRjNmQ2MS1kYmNjLTQ3ZTgtYjk5NC0xMTE4ZGJhYWI1NDNfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -932,7 +932,7 @@ interactions:
         trailer: {}
         content_length: 697
         uncompressed: false
-        body: '{"id":"\/subscriptions\/00000000-0000-0000-0000-000000000000\/resourceGroups\/aks-cit-privatednszonegroup\/providers\/Microsoft.Network\/privateDnsZones\/privatezone1.testzone.local","name":"privatezone1.testzone.local","type":"Microsoft.Network\/privateDnsZones","etag":"00000000-0000-0000-0000-000000000000","location":"global","properties":{"internalId":"SW1tdXRhYmxlWm9uZUlkZW50aXR5O2JmYjg1NGY5LWY4ZDItNDY5Ni05ZTY5LTFkZDliOTc3ZmYyYTsw","maxNumberOfRecordSets":25000,"maxNumberOfVirtualNetworkLinks":1000,"maxNumberOfVirtualNetworkLinksWithRegistration":100,"numberOfRecordSets":1,"numberOfVirtualNetworkLinks":0,"numberOfVirtualNetworkLinksWithRegistration":0,"provisioningState":"Succeeded"}}'
+        body: '{"id":"\/subscriptions\/00000000-0000-0000-0000-000000000000\/resourceGroups\/aks-cit-privatednszonegroup\/providers\/Microsoft.Network\/privateDnsZones\/privatezone1.testzone.local","name":"privatezone1.testzone.local","type":"Microsoft.Network\/privateDnsZones","etag":"00000000-0000-0000-0000-000000000000","location":"global","properties":{"internalId":"SW1tdXRhYmxlWm9uZUlkZW50aXR5Ozg3MjU3NGRjLWE5YzEtNGEyNy1hZGJiLTUxMGMzYzMzOWNmNjsw","maxNumberOfRecordSets":25000,"maxNumberOfVirtualNetworkLinks":1000,"maxNumberOfVirtualNetworkLinksWithRegistration":100,"numberOfRecordSets":1,"numberOfVirtualNetworkLinks":0,"numberOfVirtualNetworkLinksWithRegistration":0,"provisioningState":"Succeeded"}}'
         headers:
             Cache-Control:
                 - private
@@ -990,7 +990,7 @@ interactions:
         body: '{}'
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRWaXJ0dWFsTmV0d29ya0xpbms7OTIyYTA3N2MtZGUyYy00YWNmLThjNDctNzhhZDhjMjZkYTA3XzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRWaXJ0dWFsTmV0d29ya0xpbms7ZWEyY2M2MzUtODYzYy00M2U4LTg0OWMtNmI5MGU3NDgwNTM3XzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - private
             Content-Length:
@@ -998,7 +998,7 @@ interactions:
             Content-Type:
                 - application/json; charset=utf-8
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRWaXJ0dWFsTmV0d29ya0xpbms7OTIyYTA3N2MtZGUyYy00YWNmLThjNDctNzhhZDhjMjZkYTA3XzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRWaXJ0dWFsTmV0d29ya0xpbms7ZWEyY2M2MzUtODYzYy00M2U4LTg0OWMtNmI5MGU3NDgwNTM3XzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
@@ -1028,7 +1028,7 @@ interactions:
         headers:
             User-Agent:
                 - azsdk-go-armprivatedns/v1.3.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRWaXJ0dWFsTmV0d29ya0xpbms7OTIyYTA3N2MtZGUyYy00YWNmLThjNDctNzhhZDhjMjZkYTA3XzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRWaXJ0dWFsTmV0d29ya0xpbms7ZWEyY2M2MzUtODYzYy00M2U4LTg0OWMtNmI5MGU3NDgwNTM3XzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -1129,8 +1129,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-PrivateDNSZoneGroup- azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateEndpoints/testResource/privateDnsZoneGroups/testResource?api-version=2024-03-01
+                - ccm-PrivateDNSZoneGroup- azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateEndpoints/testResource/privateDnsZoneGroups/testResource?api-version=2024-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -1145,7 +1145,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -1182,8 +1182,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-PrivateDNSZoneGroup- azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - ccm-PrivateDNSZoneGroup- azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -1231,8 +1231,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-PrivateDNSZoneGroup- azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateEndpoints/testResource/privateDnsZoneGroups/testResource?api-version=2024-03-01
+                - ccm-PrivateDNSZoneGroup- azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateEndpoints/testResource/privateDnsZoneGroups/testResource?api-version=2024-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -1284,8 +1284,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-PrivateDNSZoneGroup- azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateEndpoints/testResource/privateDnsZoneGroups/testResource?api-version=2024-03-01
+                - ccm-PrivateDNSZoneGroup- azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateEndpoints/testResource/privateDnsZoneGroups/testResource?api-version=2024-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -1337,8 +1337,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-PrivateDNSZoneGroup- azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateEndpoints/testResource/privateDnsZoneGroups/testResourcenotfound?api-version=2024-03-01
+                - ccm-PrivateDNSZoneGroup- azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateEndpoints/testResource/privateDnsZoneGroups/testResourcenotfound?api-version=2024-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -1392,8 +1392,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-PrivateDNSZoneGroup- azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateEndpoints/testResource/privateDnsZoneGroups/testResource?api-version=2024-03-01
+                - ccm-PrivateDNSZoneGroup- azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateEndpoints/testResource/privateDnsZoneGroups/testResource?api-version=2024-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -1408,7 +1408,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -1445,8 +1445,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-PrivateDNSZoneGroup- azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateEndpoints/testResource/privateDnsZoneGroups/testResource?api-version=2024-03-01
+                - ccm-PrivateDNSZoneGroup- azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateEndpoints/testResource/privateDnsZoneGroups/testResource?api-version=2024-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -1477,7 +1477,7 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
-                - "16499"
+                - "16498"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -1498,8 +1498,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-PrivateDNSZoneGroup- azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateEndpoints/testResource/privateDnsZoneGroups/testResource?api-version=2024-03-01
+                - ccm-PrivateDNSZoneGroup- azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateEndpoints/testResource/privateDnsZoneGroups/testResource?api-version=2024-05-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -1514,7 +1514,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -1522,7 +1522,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -1551,8 +1551,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-PrivateDNSZoneGroup- azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - ccm-PrivateDNSZoneGroup- azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -1616,13 +1616,13 @@ interactions:
         body: ""
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVWaXJ0dWFsTmV0d29ya0xpbms7MTM1NWQ2ZWMtMGY2OC00ZGUzLThkZWMtYmQzMjU2YzM2MDE2XzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVWaXJ0dWFsTmV0d29ya0xpbms7ZTgxYWU4ZWEtOTNmMy00NDdkLThiMWYtNjcwZDFmZWMwMjU5XzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - private
             Content-Length:
                 - "0"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVWaXJ0dWFsTmV0d29ya0xpbms7MTM1NWQ2ZWMtMGY2OC00ZGUzLThkZWMtYmQzMjU2YzM2MDE2XzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVWaXJ0dWFsTmV0d29ya0xpbms7ZTgxYWU4ZWEtOTNmMy00NDdkLThiMWYtNjcwZDFmZWMwMjU5XzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
@@ -1652,7 +1652,7 @@ interactions:
         headers:
             User-Agent:
                 - azsdk-go-armprivatedns/v1.3.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVWaXJ0dWFsTmV0d29ya0xpbms7MTM1NWQ2ZWMtMGY2OC00ZGUzLThkZWMtYmQzMjU2YzM2MDE2XzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVWaXJ0dWFsTmV0d29ya0xpbms7ZTgxYWU4ZWEtOTNmMy00NDdkLThiMWYtNjcwZDFmZWMwMjU5XzhlY2FkZmM5LWQxYTMtNGVhNC1iODQ0LTBkOWY4N2U0ZDdjOA==?api-version=2024-06-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -1714,13 +1714,13 @@ interactions:
         body: ""
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTsyYjVkZTljYS0xMjM4LTRiYTMtYjFmMC1iN2VjZjQ4MWNlZDFfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTtiMDQyMzM2ZS04MWQ0LTRlYTMtYTY5NS03ODljZmY2YWYxOThfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - private
             Content-Length:
                 - "0"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTsyYjVkZTljYS0xMjM4LTRiYTMtYjFmMC1iN2VjZjQ4MWNlZDFfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTtiMDQyMzM2ZS04MWQ0LTRlYTMtYTY5NS03ODljZmY2YWYxOThfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
@@ -1750,7 +1750,7 @@ interactions:
         headers:
             User-Agent:
                 - azsdk-go-armprivatedns/v1.3.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTsyYjVkZTljYS0xMjM4LTRiYTMtYjFmMC1iN2VjZjQ4MWNlZDFfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatednszonegroup/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTtiMDQyMzM2ZS04MWQ0LTRlYTMtYTY5NS03ODljZmY2YWYxOThfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2024-06-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -1798,8 +1798,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateEndpoints/testResource?api-version=2024-03-01
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateEndpoints/testResource?api-version=2024-05-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -1814,7 +1814,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -1822,7 +1822,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -1851,8 +1851,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -1902,8 +1902,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateLinkServices/pls1?api-version=2024-03-01
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/privateLinkServices/pls1?api-version=2024-05-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -1918,7 +1918,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -1926,7 +1926,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -1955,8 +1955,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -2006,8 +2006,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/loadBalancers/lb1?api-version=2024-03-01
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/loadBalancers/lb1?api-version=2024-05-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -2022,7 +2022,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -2030,7 +2030,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -2059,8 +2059,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -2110,8 +2110,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2024-03-01
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2024-05-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -2126,7 +2126,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -2134,7 +2134,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -2163,8 +2163,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -2214,8 +2214,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/virtualNetworks/vnet1?api-version=2024-03-01
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateDNSZoneGroup/providers/Microsoft.Network/virtualNetworks/vnet1?api-version=2024-05-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -2230,7 +2230,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -2238,7 +2238,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -2267,8 +2267,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - azsdk-go-armnetwork/v6.1.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-03-01&c=c&h=h&s=s&t=t
+                - azsdk-go-armnetwork/v6.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0

@@ -86,7 +86,7 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 3230
+        content_length: 3293
         uncompressed: false
         body: |-
             {
@@ -99,11 +99,11 @@ interactions:
               "powerState": {
                "code": "Running"
               },
-              "kubernetesVersion": "1.29",
-              "currentKubernetesVersion": "1.29.10",
+              "kubernetesVersion": "1.30",
+              "currentKubernetesVersion": "1.30.6",
               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-              "fqdn": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.hcp.eastus.azmk8s.io",
-              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.portal.hcp.eastus.azmk8s.io",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-h2q5oqr4.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-h2q5oqr4.portal.hcp.eastus.azmk8s.io",
               "agentPoolProfiles": [
                {
                 "name": "agentpool1",
@@ -112,20 +112,20 @@ interactions:
                 "osDiskSizeGB": 128,
                 "osDiskType": "Managed",
                 "kubeletDiskType": "OS",
-                "maxPods": 110,
+                "maxPods": 250,
                 "type": "VirtualMachineScaleSets",
                 "provisioningState": "Creating",
                 "powerState": {
                  "code": "Running"
                 },
-                "orchestratorVersion": "1.29",
-                "currentOrchestratorVersion": "1.29.10",
+                "orchestratorVersion": "1.30",
+                "currentOrchestratorVersion": "1.30.6",
                 "enableNodePublicIP": false,
                 "nodeLabels": {},
                 "mode": "System",
                 "osType": "Linux",
                 "osSKU": "Ubuntu",
-                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202411.12.0",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202412.04.0",
                 "upgradeSettings": {
                  "maxSurge": "10%"
                 },
@@ -153,8 +153,10 @@ interactions:
               "enableRBAC": true,
               "supportPlan": "KubernetesOfficial",
               "networkProfile": {
-               "networkPlugin": "kubenet",
+               "networkPlugin": "azure",
+               "networkPluginMode": "overlay",
                "networkPolicy": "none",
+               "networkDataplane": "azure",
                "loadBalancerSku": "standard",
                "loadBalancerProfile": {
                 "managedOutboundIPs": {
@@ -196,7 +198,7 @@ interactions:
                "enabled": false
               },
               "workloadAutoScalerProfile": {},
-              "resourceUID": "674966dfbc7b0d0001630c2d",
+              "resourceUID": "67626279360b0200011e0af0",
               "metricsProfile": {
                "costAnalysis": {
                 "enabled": false
@@ -219,7 +221,7 @@ interactions:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "3230"
+                - "3293"
             Content-Type:
                 - application/json
             Expires:
@@ -316,7 +318,7 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 3855
+        content_length: 3918
         uncompressed: false
         body: |-
             {
@@ -329,11 +331,11 @@ interactions:
               "powerState": {
                "code": "Running"
               },
-              "kubernetesVersion": "1.29",
-              "currentKubernetesVersion": "1.29.10",
+              "kubernetesVersion": "1.30",
+              "currentKubernetesVersion": "1.30.6",
               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-              "fqdn": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.hcp.eastus.azmk8s.io",
-              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.portal.hcp.eastus.azmk8s.io",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-h2q5oqr4.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-h2q5oqr4.portal.hcp.eastus.azmk8s.io",
               "agentPoolProfiles": [
                {
                 "name": "agentpool1",
@@ -342,19 +344,19 @@ interactions:
                 "osDiskSizeGB": 128,
                 "osDiskType": "Managed",
                 "kubeletDiskType": "OS",
-                "maxPods": 110,
+                "maxPods": 250,
                 "type": "VirtualMachineScaleSets",
                 "provisioningState": "Succeeded",
                 "powerState": {
                  "code": "Running"
                 },
-                "orchestratorVersion": "1.29",
-                "currentOrchestratorVersion": "1.29.10",
+                "orchestratorVersion": "1.30",
+                "currentOrchestratorVersion": "1.30.6",
                 "enableNodePublicIP": false,
                 "mode": "System",
                 "osType": "Linux",
                 "osSKU": "Ubuntu",
-                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202411.12.0",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202412.04.0",
                 "upgradeSettings": {
                  "maxSurge": "10%"
                 },
@@ -382,8 +384,10 @@ interactions:
               "enableRBAC": true,
               "supportPlan": "KubernetesOfficial",
               "networkProfile": {
-               "networkPlugin": "kubenet",
+               "networkPlugin": "azure",
+               "networkPluginMode": "overlay",
                "networkPolicy": "none",
+               "networkDataplane": "azure",
                "loadBalancerSku": "standard",
                "loadBalancerProfile": {
                 "managedOutboundIPs": {
@@ -437,7 +441,7 @@ interactions:
                "enabled": false
               },
               "workloadAutoScalerProfile": {},
-              "resourceUID": "674966dfbc7b0d0001630c2d",
+              "resourceUID": "67626279360b0200011e0af0",
               "metricsProfile": {
                "costAnalysis": {
                 "enabled": false
@@ -458,7 +462,7 @@ interactions:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "3855"
+                - "3918"
             Content-Type:
                 - application/json
             Expires:
@@ -472,7 +476,7 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
-                - "16499"
+                - "16498"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -502,7 +506,7 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 3855
+        content_length: 3918
         uncompressed: false
         body: |-
             {
@@ -515,11 +519,11 @@ interactions:
               "powerState": {
                "code": "Running"
               },
-              "kubernetesVersion": "1.29",
-              "currentKubernetesVersion": "1.29.10",
+              "kubernetesVersion": "1.30",
+              "currentKubernetesVersion": "1.30.6",
               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-              "fqdn": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.hcp.eastus.azmk8s.io",
-              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.portal.hcp.eastus.azmk8s.io",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-h2q5oqr4.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-h2q5oqr4.portal.hcp.eastus.azmk8s.io",
               "agentPoolProfiles": [
                {
                 "name": "agentpool1",
@@ -528,19 +532,19 @@ interactions:
                 "osDiskSizeGB": 128,
                 "osDiskType": "Managed",
                 "kubeletDiskType": "OS",
-                "maxPods": 110,
+                "maxPods": 250,
                 "type": "VirtualMachineScaleSets",
                 "provisioningState": "Succeeded",
                 "powerState": {
                  "code": "Running"
                 },
-                "orchestratorVersion": "1.29",
-                "currentOrchestratorVersion": "1.29.10",
+                "orchestratorVersion": "1.30",
+                "currentOrchestratorVersion": "1.30.6",
                 "enableNodePublicIP": false,
                 "mode": "System",
                 "osType": "Linux",
                 "osSKU": "Ubuntu",
-                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202411.12.0",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202412.04.0",
                 "upgradeSettings": {
                  "maxSurge": "10%"
                 },
@@ -568,8 +572,10 @@ interactions:
               "enableRBAC": true,
               "supportPlan": "KubernetesOfficial",
               "networkProfile": {
-               "networkPlugin": "kubenet",
+               "networkPlugin": "azure",
+               "networkPluginMode": "overlay",
                "networkPolicy": "none",
+               "networkDataplane": "azure",
                "loadBalancerSku": "standard",
                "loadBalancerProfile": {
                 "managedOutboundIPs": {
@@ -623,7 +629,7 @@ interactions:
                "enabled": false
               },
               "workloadAutoScalerProfile": {},
-              "resourceUID": "674966dfbc7b0d0001630c2d",
+              "resourceUID": "67626279360b0200011e0af0",
               "metricsProfile": {
                "costAnalysis": {
                 "enabled": false
@@ -644,7 +650,7 @@ interactions:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "3855"
+                - "3918"
             Content-Type:
                 - application/json
             Expires:
@@ -658,7 +664,7 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
-                - "16499"
+                - "16497"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -743,7 +749,7 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 3907
+        content_length: 3970
         uncompressed: false
         body: |-
             {
@@ -756,11 +762,11 @@ interactions:
               "powerState": {
                "code": "Running"
               },
-              "kubernetesVersion": "1.29",
-              "currentKubernetesVersion": "1.29.10",
+              "kubernetesVersion": "1.30",
+              "currentKubernetesVersion": "1.30.6",
               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-              "fqdn": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.hcp.eastus.azmk8s.io",
-              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.portal.hcp.eastus.azmk8s.io",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-h2q5oqr4.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-h2q5oqr4.portal.hcp.eastus.azmk8s.io",
               "agentPoolProfiles": [
                {
                 "name": "agentpool1",
@@ -769,21 +775,21 @@ interactions:
                 "osDiskSizeGB": 128,
                 "osDiskType": "Managed",
                 "kubeletDiskType": "OS",
-                "maxPods": 110,
+                "maxPods": 250,
                 "type": "VirtualMachineScaleSets",
                 "enableAutoScaling": false,
                 "provisioningState": "Updating",
                 "powerState": {
                  "code": "Running"
                 },
-                "orchestratorVersion": "1.29",
-                "currentOrchestratorVersion": "1.29.10",
+                "orchestratorVersion": "1.30",
+                "currentOrchestratorVersion": "1.30.6",
                 "enableNodePublicIP": false,
                 "nodeLabels": {},
                 "mode": "System",
                 "osType": "Linux",
                 "osSKU": "Ubuntu",
-                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202411.12.0",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202412.04.0",
                 "upgradeSettings": {
                  "maxSurge": "10%"
                 },
@@ -811,8 +817,10 @@ interactions:
               "enableRBAC": true,
               "supportPlan": "KubernetesOfficial",
               "networkProfile": {
-               "networkPlugin": "kubenet",
+               "networkPlugin": "azure",
+               "networkPluginMode": "overlay",
                "networkPolicy": "none",
+               "networkDataplane": "azure",
                "loadBalancerSku": "standard",
                "loadBalancerProfile": {
                 "managedOutboundIPs": {
@@ -866,7 +874,7 @@ interactions:
                "enabled": false
               },
               "workloadAutoScalerProfile": {},
-              "resourceUID": "674966dfbc7b0d0001630c2d",
+              "resourceUID": "67626279360b0200011e0af0",
               "metricsProfile": {
                "costAnalysis": {
                 "enabled": false
@@ -889,7 +897,7 @@ interactions:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "3907"
+                - "3970"
             Content-Type:
                 - application/json
             Expires:
@@ -986,7 +994,7 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 3887
+        content_length: 3950
         uncompressed: false
         body: |-
             {
@@ -999,11 +1007,11 @@ interactions:
               "powerState": {
                "code": "Running"
               },
-              "kubernetesVersion": "1.29",
-              "currentKubernetesVersion": "1.29.10",
+              "kubernetesVersion": "1.30",
+              "currentKubernetesVersion": "1.30.6",
               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-              "fqdn": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.hcp.eastus.azmk8s.io",
-              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.portal.hcp.eastus.azmk8s.io",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-h2q5oqr4.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-h2q5oqr4.portal.hcp.eastus.azmk8s.io",
               "agentPoolProfiles": [
                {
                 "name": "agentpool1",
@@ -1012,20 +1020,20 @@ interactions:
                 "osDiskSizeGB": 128,
                 "osDiskType": "Managed",
                 "kubeletDiskType": "OS",
-                "maxPods": 110,
+                "maxPods": 250,
                 "type": "VirtualMachineScaleSets",
                 "enableAutoScaling": false,
                 "provisioningState": "Succeeded",
                 "powerState": {
                  "code": "Running"
                 },
-                "orchestratorVersion": "1.29",
-                "currentOrchestratorVersion": "1.29.10",
+                "orchestratorVersion": "1.30",
+                "currentOrchestratorVersion": "1.30.6",
                 "enableNodePublicIP": false,
                 "mode": "System",
                 "osType": "Linux",
                 "osSKU": "Ubuntu",
-                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202411.12.0",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202412.04.0",
                 "upgradeSettings": {
                  "maxSurge": "10%"
                 },
@@ -1053,8 +1061,10 @@ interactions:
               "enableRBAC": true,
               "supportPlan": "KubernetesOfficial",
               "networkProfile": {
-               "networkPlugin": "kubenet",
+               "networkPlugin": "azure",
+               "networkPluginMode": "overlay",
                "networkPolicy": "none",
+               "networkDataplane": "azure",
                "loadBalancerSku": "standard",
                "loadBalancerProfile": {
                 "managedOutboundIPs": {
@@ -1108,7 +1118,7 @@ interactions:
                "enabled": false
               },
               "workloadAutoScalerProfile": {},
-              "resourceUID": "674966dfbc7b0d0001630c2d",
+              "resourceUID": "67626279360b0200011e0af0",
               "metricsProfile": {
                "costAnalysis": {
                 "enabled": false
@@ -1129,7 +1139,7 @@ interactions:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "3887"
+                - "3950"
             Content-Type:
                 - application/json
             Expires:
@@ -1143,7 +1153,7 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
-                - "16499"
+                - "16498"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -1173,7 +1183,7 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 4439
+        content_length: 4506
         uncompressed: false
         body: |-
             {
@@ -1188,11 +1198,11 @@ interactions:
                 "powerState": {
                  "code": "Running"
                 },
-                "kubernetesVersion": "1.29",
-                "currentKubernetesVersion": "1.29.10",
+                "kubernetesVersion": "1.30",
+                "currentKubernetesVersion": "1.30.6",
                 "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-                "fqdn": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.hcp.eastus.azmk8s.io",
-                "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-3fvmxigx.portal.hcp.eastus.azmk8s.io",
+                "fqdn": "aks-cit-managedclustertestresourcednsprefix-h2q5oqr4.hcp.eastus.azmk8s.io",
+                "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-h2q5oqr4.portal.hcp.eastus.azmk8s.io",
                 "agentPoolProfiles": [
                  {
                   "name": "agentpool1",
@@ -1201,20 +1211,20 @@ interactions:
                   "osDiskSizeGB": 128,
                   "osDiskType": "Managed",
                   "kubeletDiskType": "OS",
-                  "maxPods": 110,
+                  "maxPods": 250,
                   "type": "VirtualMachineScaleSets",
                   "enableAutoScaling": false,
                   "provisioningState": "Succeeded",
                   "powerState": {
                    "code": "Running"
                   },
-                  "orchestratorVersion": "1.29",
-                  "currentOrchestratorVersion": "1.29.10",
+                  "orchestratorVersion": "1.30",
+                  "currentOrchestratorVersion": "1.30.6",
                   "enableNodePublicIP": false,
                   "mode": "System",
                   "osType": "Linux",
                   "osSKU": "Ubuntu",
-                  "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202411.12.0",
+                  "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202412.04.0",
                   "upgradeSettings": {
                    "maxSurge": "10%"
                   },
@@ -1242,8 +1252,10 @@ interactions:
                 "enableRBAC": true,
                 "supportPlan": "KubernetesOfficial",
                 "networkProfile": {
-                 "networkPlugin": "kubenet",
+                 "networkPlugin": "azure",
+                 "networkPluginMode": "overlay",
                  "networkPolicy": "none",
+                 "networkDataplane": "azure",
                  "loadBalancerSku": "standard",
                  "loadBalancerProfile": {
                   "managedOutboundIPs": {
@@ -1297,7 +1309,7 @@ interactions:
                  "enabled": false
                 },
                 "workloadAutoScalerProfile": {},
-                "resourceUID": "674966dfbc7b0d0001630c2d",
+                "resourceUID": "67626279360b0200011e0af0",
                 "metricsProfile": {
                  "costAnalysis": {
                   "enabled": false
@@ -1315,13 +1327,13 @@ interactions:
                }
               }
              ],
-             "nextLink": "https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=10064527\u0026api-version=2024-09-01\u0026skipToken=10064527"
+             "nextLink": "https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=10196374\u0026api-version=2024-09-01\u0026skipToken=10196374"
             }
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "4439"
+                - "4506"
             Content-Type:
                 - application/json
             Expires:
@@ -1335,7 +1347,7 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
-                - "16499"
+                - "16497"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -1355,7 +1367,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.3.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=10064527&api-version=2024-09-01&skipToken=10064527
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=10196374&api-version=2024-09-01&skipToken=10196374
         method: GET
       response:
         proto: HTTP/2.0
@@ -1387,7 +1399,7 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
-                - "16499"
+                - "16496"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -1519,20 +1531,24 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 164
+        content_length: 398
         uncompressed: false
         body: |-
             {
              "name": "00000000-0000-0000-0000-000000000000",
              "status": "Succeeded",
              "startTime": "2001-02-03T04:05:06Z",
-             "endTime": "2001-02-03T04:05:06Z"
+             "endTime": "2001-02-03T04:05:06Z",
+             "error": {
+              "code": "NotLatestOperation",
+              "message": "Expected goal state for managed cluster not saved yet. This means saving goal state to database was slow or failed. This type of failed operations can usually be retried."
+             }
             }
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "164"
+                - "398"
             Content-Type:
                 - application/json
             Expires:

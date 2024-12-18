@@ -22,7 +22,7 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Deployment?api-version=2021-04-01
         method: PUT
       response:
@@ -51,6 +51,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "11999"
         status: 201 Created
         code: 201
         duration: 200ms
@@ -75,7 +77,7 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
+                - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource?api-version=2021-04-01
         method: PUT
       response:
@@ -86,10 +88,10 @@ interactions:
         trailer: {}
         content_length: 645
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource","name":"testResource","type":"Microsoft.Resources/deployments","properties":{"templateHash":"3315814388681758746","parameters":{"location":{"type":"String","value":"East US"}},"mode":"Incremental","provisioningState":"Accepted","timestamp":"2001-02-03T04:05:06Z","duration":"PT0.0005557S","correlationId":"00000000-0000-0000-0000-000000000000","providers":[{"namespace":"Microsoft.Compute","resourceTypes":[{"resourceType":"availabilitySets","locations":["eastus"]}]}],"dependencies":[]}}'
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource","name":"testResource","type":"Microsoft.Resources/deployments","properties":{"templateHash":"3315814388681758746","parameters":{"location":{"type":"String","value":"East US"}},"mode":"Incremental","provisioningState":"Accepted","timestamp":"2001-02-03T04:05:06Z","duration":"PT0.0002455S","correlationId":"00000000-0000-0000-0000-000000000000","providers":[{"namespace":"Microsoft.Compute","resourceTypes":[{"resourceType":"availabilitySets","locations":["eastus"]}]}],"dependencies":[]}}'
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource/operationStatuses/08584739986939313216?api-version=2021-04-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource/operationStatuses/08584671059089853983?api-version=2021-04-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -107,7 +109,9 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Deployment-Engine-Version:
-                - 1.109.0
+                - 1.158.0
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "12000"
         status: 201 Created
         code: 201
         duration: 200ms
@@ -126,8 +130,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource/operationStatuses/08584739986939313216?api-version=2021-04-01&c=c&h=h&s=s&t=t
+                - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource/operationStatuses/08584671059089853983?api-version=2021-04-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -155,6 +159,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16499"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -173,8 +179,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource/operationStatuses/08584739986939313216?api-version=2021-04-01&c=c&h=h&s=s&t=t
+                - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource/operationStatuses/08584671059089853983?api-version=2021-04-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -202,6 +208,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16499"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -220,7 +228,7 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
+                - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource?api-version=2021-04-01
         method: GET
       response:
@@ -231,7 +239,7 @@ interactions:
         trailer: {}
         content_length: 954
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource","name":"testResource","type":"Microsoft.Resources/deployments","properties":{"templateHash":"3315814388681758746","parameters":{"location":{"type":"String","value":"East US"}},"mode":"Incremental","provisioningState":"Succeeded","timestamp":"2001-02-03T04:05:06Z","duration":"PT5.1876116S","correlationId":"00000000-0000-0000-0000-000000000000","providers":[{"namespace":"Microsoft.Compute","resourceTypes":[{"resourceType":"availabilitySets","locations":["eastus"]}]}],"dependencies":[],"outputs":{"myparameter":{"type":"Object","value":{"platformUpdateDomainCount":5,"platformFaultDomainCount":3,"internalData":{}}}},"outputResources":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Compute/availabilitySets/availabilitySet1"}]}}'
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource","name":"testResource","type":"Microsoft.Resources/deployments","properties":{"templateHash":"3315814388681758746","parameters":{"location":{"type":"String","value":"East US"}},"mode":"Incremental","provisioningState":"Succeeded","timestamp":"2001-02-03T04:05:06Z","duration":"PT5.7364245S","correlationId":"00000000-0000-0000-0000-000000000000","providers":[{"namespace":"Microsoft.Compute","resourceTypes":[{"resourceType":"availabilitySets","locations":["eastus"]}]}],"dependencies":[],"outputs":{"myparameter":{"type":"Object","value":{"platformUpdateDomainCount":5,"platformFaultDomainCount":3,"internalData":{}}}},"outputResources":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Compute/availabilitySets/availabilitySet1"}]}}'
         headers:
             Cache-Control:
                 - no-cache
@@ -249,6 +257,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16498"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -269,7 +279,7 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
+                - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource?api-version=2021-04-01
         method: GET
       response:
@@ -280,7 +290,7 @@ interactions:
         trailer: {}
         content_length: 954
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource","name":"testResource","type":"Microsoft.Resources/deployments","properties":{"templateHash":"3315814388681758746","parameters":{"location":{"type":"String","value":"East US"}},"mode":"Incremental","provisioningState":"Succeeded","timestamp":"2001-02-03T04:05:06Z","duration":"PT5.1876116S","correlationId":"00000000-0000-0000-0000-000000000000","providers":[{"namespace":"Microsoft.Compute","resourceTypes":[{"resourceType":"availabilitySets","locations":["eastus"]}]}],"dependencies":[],"outputs":{"myparameter":{"type":"Object","value":{"platformUpdateDomainCount":5,"platformFaultDomainCount":3,"internalData":{}}}},"outputResources":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Compute/availabilitySets/availabilitySet1"}]}}'
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource","name":"testResource","type":"Microsoft.Resources/deployments","properties":{"templateHash":"3315814388681758746","parameters":{"location":{"type":"String","value":"East US"}},"mode":"Incremental","provisioningState":"Succeeded","timestamp":"2001-02-03T04:05:06Z","duration":"PT5.7364245S","correlationId":"00000000-0000-0000-0000-000000000000","providers":[{"namespace":"Microsoft.Compute","resourceTypes":[{"resourceType":"availabilitySets","locations":["eastus"]}]}],"dependencies":[],"outputs":{"myparameter":{"type":"Object","value":{"platformUpdateDomainCount":5,"platformFaultDomainCount":3,"internalData":{}}}},"outputResources":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Compute/availabilitySets/availabilitySet1"}]}}'
         headers:
             Cache-Control:
                 - no-cache
@@ -298,6 +308,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16497"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -318,7 +330,7 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
+                - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResourcenotfound?api-version=2021-04-01
         method: GET
       response:
@@ -349,6 +361,8 @@ interactions:
                 - nosniff
             X-Ms-Failure-Cause:
                 - gateway
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16498"
         status: 404 Not Found
         code: 404
         duration: 200ms
@@ -369,7 +383,7 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
+                - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/?api-version=2021-04-01
         method: GET
       response:
@@ -380,7 +394,7 @@ interactions:
         trailer: {}
         content_length: 966
         uncompressed: false
-        body: '{"value":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource","name":"testResource","type":"Microsoft.Resources/deployments","properties":{"templateHash":"3315814388681758746","parameters":{"location":{"type":"String","value":"East US"}},"mode":"Incremental","provisioningState":"Succeeded","timestamp":"2001-02-03T04:05:06Z","duration":"PT5.1876116S","correlationId":"00000000-0000-0000-0000-000000000000","providers":[{"namespace":"Microsoft.Compute","resourceTypes":[{"resourceType":"availabilitySets","locations":["eastus"]}]}],"dependencies":[],"outputs":{"myparameter":{"type":"Object","value":{"platformUpdateDomainCount":5,"platformFaultDomainCount":3,"internalData":{}}}},"outputResources":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Compute/availabilitySets/availabilitySet1"}]}}]}'
+        body: '{"value":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource","name":"testResource","type":"Microsoft.Resources/deployments","properties":{"templateHash":"3315814388681758746","parameters":{"location":{"type":"String","value":"East US"}},"mode":"Incremental","provisioningState":"Succeeded","timestamp":"2001-02-03T04:05:06Z","duration":"PT5.7364245S","correlationId":"00000000-0000-0000-0000-000000000000","providers":[{"namespace":"Microsoft.Compute","resourceTypes":[{"resourceType":"availabilitySets","locations":["eastus"]}]}],"dependencies":[],"outputs":{"myparameter":{"type":"Object","value":{"platformUpdateDomainCount":5,"platformFaultDomainCount":3,"internalData":{}}}},"outputResources":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Deployment/providers/Microsoft.Compute/availabilitySets/availabilitySet1"}]}}]}'
         headers:
             Cache-Control:
                 - no-cache
@@ -398,6 +412,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16497"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -418,7 +434,7 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
+                - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Deploymentnotfound/providers/Microsoft.Resources/deployments/?api-version=2021-04-01
         method: GET
       response:
@@ -449,6 +465,8 @@ interactions:
                 - nosniff
             X-Ms-Failure-Cause:
                 - gateway
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16496"
         status: 404 Not Found
         code: 404
         duration: 200ms
@@ -469,7 +487,7 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
+                - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Deployment/providers/Microsoft.Resources/deployments/testResource?api-version=2021-04-01
         method: DELETE
       response:
@@ -498,6 +516,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
+                - "11999"
         status: 202 Accepted
         code: 202
         duration: 200ms
@@ -516,7 +536,7 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
+                - ccm-Deployment-client azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IkRlcGxveW1lbnREZWxldGlvbkpvYi1BS1M6MkRDSVQ6MkRERVBMT1lNRU5ULVRFU1RSRVNPVVJDRSIsImpvYkxvY2F0aW9uIjoiZWFzdHVzIn0?api-version=2021-04-01&c=c&h=h&s=s&t=t
         method: GET
       response:
@@ -541,6 +561,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16499"
         status: 204 No Content
         code: 204
         duration: 200ms
@@ -561,7 +583,7 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Deployment?api-version=2021-04-01
         method: DELETE
       response:
@@ -590,6 +612,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
+                - "11998"
         status: 202 Accepted
         code: 202
         duration: 200ms
@@ -608,7 +632,7 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.1; linux)
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRERVBMT1lNRU5ULUVBU1RVUyIsImpvYkxvY2F0aW9uIjoiZWFzdHVzIn0?api-version=2021-04-01&c=c&h=h&s=s&t=t
         method: GET
       response:
@@ -635,6 +659,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16499"
         status: 200 OK
         code: 200
         duration: 200ms
