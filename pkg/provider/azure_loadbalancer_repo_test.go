@@ -23,7 +23,9 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/stretchr/testify/assert"
 
 	"go.uber.org/mock/gomock"
@@ -31,12 +33,12 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/backendaddresspoolclient/mock_backendaddresspoolclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 func TestDeleteLB(t *testing.T) {
@@ -44,35 +46,37 @@ func TestDeleteLB(t *testing.T) {
 	defer ctrl.Finish()
 
 	az := GetTestCloud(ctrl)
-	mockLBClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
-	mockLBClient.EXPECT().Delete(gomock.Any(), az.ResourceGroup, "lb").Return(&retry.Error{HTTPStatusCode: http.StatusInternalServerError})
+	mockLBClient := az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+	mockLBClient.EXPECT().Delete(gomock.Any(), az.ResourceGroup, "lb").Return(&azcore.ResponseError{StatusCode: http.StatusInternalServerError})
 
 	err := az.DeleteLB(context.TODO(), &v1.Service{}, "lb")
-	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), fmt.Sprintf("%s", err.Error()))
+	assert.Contains(t, err.Error(), "UNAVAILABLE")
 }
 
 func TestListManagedLBs(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	tests := []struct {
-		existingLBs     []network.LoadBalancer
-		expectedLBs     *[]network.LoadBalancer
+		name            string
+		existingLBs     []*armnetwork.LoadBalancer
+		expectedLBs     []*armnetwork.LoadBalancer
 		callTimes       int
 		multiSLBConfigs []config.MultipleStandardLoadBalancerConfiguration
-		clientErr       *retry.Error
+		clientErr       error
 		expectedErr     error
 	}{
 		{
-			clientErr:   &retry.Error{HTTPStatusCode: http.StatusInternalServerError},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)),
+			name:        "Internal Server Error",
+			clientErr:   &azcore.ResponseError{StatusCode: http.StatusInternalServerError},
+			expectedErr: fmt.Errorf("UNAVAILABLE"),
 		},
 		{
-			clientErr:   &retry.Error{HTTPStatusCode: http.StatusNotFound},
+			name:        "Resource Not Found",
+			clientErr:   &azcore.ResponseError{StatusCode: http.StatusNotFound},
 			expectedErr: nil,
 		},
 		{
-			existingLBs: []network.LoadBalancer{
+			name: "filtered the result",
+			existingLBs: []*armnetwork.LoadBalancer{
 				{Name: ptr.To("kubernetes")},
 				{Name: ptr.To("kubernetes-internal")},
 				{Name: ptr.To("vmas-1")},
@@ -80,7 +84,7 @@ func TestListManagedLBs(t *testing.T) {
 				{Name: ptr.To("unmanaged")},
 				{Name: ptr.To("unmanaged-internal")},
 			},
-			expectedLBs: &[]network.LoadBalancer{
+			expectedLBs: []*armnetwork.LoadBalancer{
 				{Name: ptr.To("kubernetes")},
 				{Name: ptr.To("kubernetes-internal")},
 				{Name: ptr.To("vmas-1")},
@@ -89,7 +93,8 @@ func TestListManagedLBs(t *testing.T) {
 			callTimes: 1,
 		},
 		{
-			existingLBs: []network.LoadBalancer{
+			name: "filtered the result with multiple standard load balancer configurations",
+			existingLBs: []*armnetwork.LoadBalancer{
 				{Name: ptr.To("kubernetes")},
 				{Name: ptr.To("kubernetes-internal")},
 				{Name: ptr.To("lb1-internal")},
@@ -99,7 +104,7 @@ func TestListManagedLBs(t *testing.T) {
 				{Name: "kubernetes"},
 				{Name: "lb1"},
 			},
-			expectedLBs: &[]network.LoadBalancer{
+			expectedLBs: []*armnetwork.LoadBalancer{
 				{Name: ptr.To("kubernetes")},
 				{Name: ptr.To("kubernetes-internal")},
 				{Name: ptr.To("lb1-internal")},
@@ -107,83 +112,101 @@ func TestListManagedLBs(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		az := GetTestCloud(ctrl)
-		if len(test.multiSLBConfigs) > 0 {
-			az.LoadBalancerSku = consts.LoadBalancerSkuStandard
-			az.MultipleStandardLoadBalancerConfigurations = test.multiSLBConfigs
-		} else {
-			az.LoadBalancerSku = consts.LoadBalancerSkuBasic
-		}
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			az := GetTestCloud(ctrl)
+			if len(test.multiSLBConfigs) > 0 {
+				az.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+				az.MultipleStandardLoadBalancerConfigurations = test.multiSLBConfigs
+			} else {
+				az.LoadBalancerSKU = consts.LoadBalancerSKUBasic
+			}
 
-		mockLBClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
-		mockLBClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(test.existingLBs, test.clientErr)
-		mockVMSet := NewMockVMSet(ctrl)
-		mockVMSet.EXPECT().GetAgentPoolVMSetNames(gomock.Any(), gomock.Any()).Return(&[]string{"vmas-0", "vmas-1"}, nil).Times(test.callTimes)
-		mockVMSet.EXPECT().GetPrimaryVMSetName().Return("vmas-0").AnyTimes()
-		az.VMSet = mockVMSet
+			mockLBClient := az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+			mockLBClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(test.existingLBs, test.clientErr)
+			mockVMSet := NewMockVMSet(ctrl)
+			mockVMSet.EXPECT().GetAgentPoolVMSetNames(gomock.Any(), gomock.Any()).Return(to.SliceOfPtrs("vmas-0", "vmas-1"), nil).Times(test.callTimes)
+			mockVMSet.EXPECT().GetPrimaryVMSetName().Return("vmas-0").AnyTimes()
+			az.VMSet = mockVMSet
 
-		lbs, err := az.ListManagedLBs(context.TODO(), &v1.Service{}, []*v1.Node{}, "kubernetes")
-		assert.Equal(t, test.expectedErr, err)
-		assert.Equal(t, test.expectedLBs, lbs)
+			lbs, err := az.ListManagedLBs(context.TODO(), &v1.Service{}, []*v1.Node{}, "kubernetes")
+			if test.expectedErr != nil {
+				assert.NotNil(t, err)
+				assert.Contains(t, err.Error(), test.expectedErr.Error())
+			} else {
+				assert.Nil(t, err)
+			}
+			assert.Equal(t, test.expectedLBs, lbs)
+
+			ctrl.Finish()
+		})
 	}
 }
 
 func TestCreateOrUpdateLB(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
-	referencedResourceNotProvisionedRawErrorString := `Code="ReferencedResourceNotProvisioned" Message="Cannot proceed with operation because resource /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip used by resource /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb is not in Succeeded state. Resource is in Failed state and the last operation that updated/is updating the resource is PutPublicIpAddressOperation."`
+	const referencedResourceNotProvisionedRawErrorString = `Code="ReferencedResourceNotProvisioned" Message="Cannot proceed with operation because resource /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip used by resource /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb is not in Succeeded state. Resource is in Failed state and the last operation that updated/is updating the resource is PutPublicIpAddressOperation."`
 
 	tests := []struct {
-		clientErr   *retry.Error
+		name        string
+		clientErr   error
 		expectedErr error
 	}{
 		{
-			clientErr:   &retry.Error{HTTPStatusCode: http.StatusPreconditionFailed},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 412, RawError: %w", error(nil)),
+			name:        "StatusPreconditionFailed",
+			clientErr:   &azcore.ResponseError{StatusCode: http.StatusPreconditionFailed, ErrorCode: "412"},
+			expectedErr: fmt.Errorf("412"),
 		},
 		{
-			clientErr:   &retry.Error{RawError: fmt.Errorf(consts.OperationCanceledErrorMessage)},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", errors.New("canceledandsupersededduetoanotheroperation")),
+			name:        "OperationCanceled",
+			clientErr:   &azcore.ResponseError{ErrorCode: consts.OperationCanceledErrorMessage},
+			expectedErr: fmt.Errorf("canceledandsupersededduetoanotheroperation"),
 		},
 		{
-			clientErr:   &retry.Error{RawError: errors.New(referencedResourceNotProvisionedRawErrorString)},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", errors.New(referencedResourceNotProvisionedRawErrorString)),
+			name:        "ReferencedResourceNotProvisioned",
+			clientErr:   &azcore.ResponseError{ErrorCode: referencedResourceNotProvisionedRawErrorString},
+			expectedErr: errors.New(referencedResourceNotProvisionedRawErrorString),
 		},
 	}
 
 	for _, test := range tests {
-		az := GetTestCloud(ctrl)
-		az.lbCache.Set("lb", "test")
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			az := GetTestCloud(ctrl)
+			az.lbCache.Set("lb", "test")
 
-		mockLBClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
-		mockLBClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(test.clientErr)
-		mockLBClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "lb", gomock.Any()).Return(network.LoadBalancer{}, nil)
+			mockLBClient := az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+			mockLBClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any()).Return(nil, test.clientErr)
+			mockLBClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "lb", gomock.Any()).Return(&armnetwork.LoadBalancer{}, nil)
 
-		mockPIPClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-		mockPIPClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, "pip", gomock.Any()).Return(nil).MaxTimes(1)
-		mockPIPClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return([]network.PublicIPAddress{{
-			Name: ptr.To("pip"),
-			PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-				ProvisioningState: network.ProvisioningStateSucceeded,
-			},
-		}}, nil).MaxTimes(2)
+			mockPIPClient := az.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
+			mockPIPClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, "pip", gomock.Any()).Return(nil, nil).MaxTimes(1)
+			mockPIPClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return([]*armnetwork.PublicIPAddress{{
+				Name: ptr.To("pip"),
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					ProvisioningState: to.Ptr(armnetwork.ProvisioningStateSucceeded),
+				},
+			}}, nil).MaxTimes(2)
 
-		err := az.CreateOrUpdateLB(context.TODO(), &v1.Service{}, network.LoadBalancer{
-			Name: ptr.To("lb"),
-			Etag: ptr.To("etag"),
+			err := az.CreateOrUpdateLB(context.TODO(), &v1.Service{}, armnetwork.LoadBalancer{
+				Name: ptr.To("lb"),
+				Etag: ptr.To("etag"),
+			})
+			assert.Contains(t, err.Error(), test.expectedErr.Error())
+
+			// loadbalancer should be removed from cache if the etag is mismatch or the operation is canceled
+			shouldBeEmpty, err := az.lbCache.GetWithDeepCopy(context.TODO(), "lb", cache.CacheReadTypeDefault)
+			assert.NoError(t, err)
+			assert.Empty(t, shouldBeEmpty)
+
+			// public ip cache should be populated since there's GetPIP
+			shouldNotBeEmpty, err := az.pipCache.Get(context.TODO(), az.ResourceGroup, cache.CacheReadTypeDefault)
+			assert.NoError(t, err)
+			assert.NotEmpty(t, shouldNotBeEmpty)
+			ctrl.Finish()
 		})
-		assert.EqualError(t, test.expectedErr, err.Error())
-
-		// loadbalancer should be removed from cache if the etag is mismatch or the operation is canceled
-		shouldBeEmpty, err := az.lbCache.GetWithDeepCopy(context.TODO(), "lb", cache.CacheReadTypeDefault)
-		assert.NoError(t, err)
-		assert.Empty(t, shouldBeEmpty)
-
-		// public ip cache should be populated since there's GetPIP
-		shouldNotBeEmpty, err := az.pipCache.Get(context.TODO(), az.ResourceGroup, cache.CacheReadTypeDefault)
-		assert.NoError(t, err)
-		assert.NotEmpty(t, shouldNotBeEmpty)
 	}
 }
 
@@ -193,7 +216,7 @@ func TestCreateOrUpdateLBBackendPool(t *testing.T) {
 
 	for _, tc := range []struct {
 		description       string
-		createOrUpdateErr *retry.Error
+		createOrUpdateErr error
 		expectedErr       bool
 	}{
 		{
@@ -201,19 +224,18 @@ func TestCreateOrUpdateLBBackendPool(t *testing.T) {
 		},
 		{
 			description: "CreateOrUpdateLBBackendPool should report an error if the api call fails",
-			createOrUpdateErr: &retry.Error{
-				HTTPStatusCode: http.StatusPreconditionFailed,
-				RawError:       errors.New(consts.OperationCanceledErrorMessage),
+			createOrUpdateErr: &azcore.ResponseError{
+				StatusCode: http.StatusPreconditionFailed,
+				ErrorCode:  consts.OperationCanceledErrorMessage,
 			},
 			expectedErr: true,
 		},
 	} {
 		az := GetTestCloud(ctrl)
-		lbClient := mockloadbalancerclient.NewMockInterface(ctrl)
-		lbClient.EXPECT().CreateOrUpdateBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.createOrUpdateErr)
-		az.LoadBalancerClient = lbClient
+		lbClient := az.NetworkClientFactory.GetBackendAddressPoolClient().(*mock_backendaddresspoolclient.MockInterface)
+		lbClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, tc.createOrUpdateErr)
 
-		err := az.CreateOrUpdateLBBackendPool(context.TODO(), "kubernetes", network.BackendAddressPool{})
+		err := az.CreateOrUpdateLBBackendPool(context.TODO(), "kubernetes", &armnetwork.BackendAddressPool{})
 		assert.Equal(t, tc.expectedErr, err != nil)
 	}
 }
@@ -224,7 +246,7 @@ func TestDeleteLBBackendPool(t *testing.T) {
 
 	for _, tc := range []struct {
 		description string
-		deleteErr   *retry.Error
+		deleteErr   error
 		expectedErr bool
 	}{
 		{
@@ -232,17 +254,16 @@ func TestDeleteLBBackendPool(t *testing.T) {
 		},
 		{
 			description: "DeleteLBBackendPool should report an error if the api call fails",
-			deleteErr: &retry.Error{
-				HTTPStatusCode: http.StatusPreconditionFailed,
-				RawError:       errors.New(consts.OperationCanceledErrorMessage),
+			deleteErr: &azcore.ResponseError{
+				StatusCode: http.StatusPreconditionFailed,
+				ErrorCode:  consts.OperationCanceledErrorMessage,
 			},
 			expectedErr: true,
 		},
 	} {
 		az := GetTestCloud(ctrl)
-		lbClient := mockloadbalancerclient.NewMockInterface(ctrl)
-		lbClient.EXPECT().DeleteLBBackendPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.deleteErr)
-		az.LoadBalancerClient = lbClient
+		backendClient := az.NetworkClientFactory.GetBackendAddressPoolClient().(*mock_backendaddresspoolclient.MockInterface)
+		backendClient.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.deleteErr)
 
 		err := az.DeleteLBBackendPool(context.TODO(), "kubernetes", "kubernetes")
 		assert.Equal(t, tc.expectedErr, err != nil)
@@ -255,47 +276,47 @@ func TestMigrateToIPBasedBackendPoolAndWaitForCompletion(t *testing.T) {
 
 	for _, tc := range []struct {
 		desc                  string
-		migrationError        *retry.Error
-		backendPool           network.BackendAddressPool
-		backendPoolAfterRetry *network.BackendAddressPool
-		getBackendPoolError   *retry.Error
+		migrationError        error
+		backendPool           *armnetwork.BackendAddressPool
+		backendPoolAfterRetry *armnetwork.BackendAddressPool
+		getBackendPoolError   error
 		expectedError         error
 	}{
 		{
 			desc:           "MigrateToIPBasedBackendPoolAndWaitForCompletion should return the error if the migration fails",
-			migrationError: retry.NewError(false, errors.New("error")),
-			expectedError:  retry.NewError(false, errors.New("error")).Error(),
+			migrationError: &azcore.ResponseError{ErrorCode: "error"},
+			expectedError:  &azcore.ResponseError{ErrorCode: "error"},
 		},
 		{
 			desc:                "MigrateToIPBasedBackendPoolAndWaitForCompletion should return the error if failed to get the backend pool",
-			getBackendPoolError: retry.NewError(false, errors.New("error")),
-			expectedError:       retry.NewError(false, errors.New("error")).Error(),
+			getBackendPoolError: &azcore.ResponseError{ErrorCode: "error"},
+			expectedError:       &azcore.ResponseError{ErrorCode: "error"},
 		},
 		{
 			desc: "MigrateToIPBasedBackendPoolAndWaitForCompletion should retry if the number IPs on the backend pool is not expected",
-			backendPool: network.BackendAddressPool{
+			backendPool: &armnetwork.BackendAddressPool{
 				Name: ptr.To(testClusterName),
-				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+				Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+					LoadBalancerBackendAddresses: []*armnetwork.LoadBalancerBackendAddress{
 						{
-							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+							Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{
 								IPAddress: ptr.To("1.2.3.4"),
 							},
 						},
 					},
 				},
 			},
-			backendPoolAfterRetry: &network.BackendAddressPool{
+			backendPoolAfterRetry: &armnetwork.BackendAddressPool{
 				Name: ptr.To(testClusterName),
-				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+				Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+					LoadBalancerBackendAddresses: []*armnetwork.LoadBalancerBackendAddress{
 						{
-							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+							Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{
 								IPAddress: ptr.To("1.2.3.4"),
 							},
 						},
 						{
-							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+							Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{
 								IPAddress: ptr.To("2.3.4.5"),
 							},
 						},
@@ -306,15 +327,16 @@ func TestMigrateToIPBasedBackendPoolAndWaitForCompletion(t *testing.T) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
-			lbClient := mockloadbalancerclient.NewMockInterface(ctrl)
-			lbClient.EXPECT().MigrateToIPBasedBackendPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.migrationError)
+			lbClient := az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+			lbClient.EXPECT().MigrateToIPBased(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(armnetwork.LoadBalancersClientMigrateToIPBasedResponse{}, tc.migrationError)
+			backendPoolClient := az.NetworkClientFactory.GetBackendAddressPoolClient().(*mock_backendaddresspoolclient.MockInterface)
+
 			if tc.migrationError == nil {
-				lbClient.EXPECT().GetLBBackendPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.backendPool, tc.getBackendPoolError)
+				backendPoolClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.backendPool, tc.getBackendPoolError)
 			}
 			if tc.backendPoolAfterRetry != nil {
-				lbClient.EXPECT().GetLBBackendPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(*tc.backendPoolAfterRetry, nil)
+				backendPoolClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.backendPoolAfterRetry, nil)
 			}
-			az.LoadBalancerClient = lbClient
 
 			lbName := testClusterName
 			backendPoolNames := []string{testClusterName}
@@ -434,43 +456,43 @@ func TestServiceOwnsRuleSharedProbe(t *testing.T) {
 func TestIsNICPool(t *testing.T) {
 	tests := []struct {
 		desc     string
-		bp       network.BackendAddressPool
+		bp       *armnetwork.BackendAddressPool
 		expected bool
 	}{
 		{
 			desc: "nil BackendAddressPoolPropertiesFormat",
-			bp: network.BackendAddressPool{
+			bp: &armnetwork.BackendAddressPool{
 				Name: ptr.To("pool1"),
 			},
 			expected: false,
 		},
 		{
 			desc: "nil LoadBalancerBackendAddresses",
-			bp: network.BackendAddressPool{
-				Name:                               ptr.To("pool1"),
-				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{},
+			bp: &armnetwork.BackendAddressPool{
+				Name:       ptr.To("pool1"),
+				Properties: &armnetwork.BackendAddressPoolPropertiesFormat{},
 			},
 			expected: false,
 		},
 		{
 			desc: "empty LoadBalancerBackendAddresses",
-			bp: network.BackendAddressPool{
+			bp: &armnetwork.BackendAddressPool{
 				Name: ptr.To("pool1"),
-				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{},
+				Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+					LoadBalancerBackendAddresses: []*armnetwork.LoadBalancerBackendAddress{},
 				},
 			},
 			expected: false,
 		},
 		{
 			desc: "LoadBalancerBackendAddress with empty IPAddress",
-			bp: network.BackendAddressPool{
+			bp: &armnetwork.BackendAddressPool{
 				Name: ptr.To("pool1"),
-				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+				Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+					LoadBalancerBackendAddresses: []*armnetwork.LoadBalancerBackendAddress{
 						{
 							Name: ptr.To("addr1"),
-							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+							Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{
 								IPAddress: ptr.To(""),
 							},
 						},
@@ -481,13 +503,13 @@ func TestIsNICPool(t *testing.T) {
 		},
 		{
 			desc: "LoadBalancerBackendAddress with non-empty IPAddress",
-			bp: network.BackendAddressPool{
+			bp: &armnetwork.BackendAddressPool{
 				Name: ptr.To("pool1"),
-				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+				Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+					LoadBalancerBackendAddresses: []*armnetwork.LoadBalancerBackendAddress{
 						{
 							Name: ptr.To("addr1"),
-							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+							Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{
 								IPAddress: ptr.To("10.0.0.1"),
 							},
 						},
@@ -498,19 +520,19 @@ func TestIsNICPool(t *testing.T) {
 		},
 		{
 			desc: "LoadBalancerBackendAddress with both empty and non-empty IPAddress",
-			bp: network.BackendAddressPool{
+			bp: &armnetwork.BackendAddressPool{
 				Name: ptr.To("pool1"),
-				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+				Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+					LoadBalancerBackendAddresses: []*armnetwork.LoadBalancerBackendAddress{
 						{
 							Name: ptr.To("addr1"),
-							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+							Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{
 								IPAddress: ptr.To(""),
 							},
 						},
 						{
 							Name: ptr.To("addr2"),
-							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+							Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{
 								IPAddress: ptr.To("10.0.0.2"),
 							},
 						},

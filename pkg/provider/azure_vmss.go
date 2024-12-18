@@ -26,8 +26,11 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	"github.com/samber/lo"
+	"golang.org/x/sync/errgroup"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -40,6 +43,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/virtualmachine"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/lockmap"
 	vmutil "sigs.k8s.io/cloud-provider-azure/pkg/util/vm"
 )
@@ -165,8 +169,8 @@ func newScaleSet(az *Cloud) (VMSet, error) {
 	return ss, nil
 }
 
-func (ss *ScaleSet) getVMSS(ctx context.Context, vmssName string, crt azcache.AzureCacheReadType) (*compute.VirtualMachineScaleSet, error) {
-	getter := func(vmssName string) (*compute.VirtualMachineScaleSet, error) {
+func (ss *ScaleSet) getVMSS(ctx context.Context, vmssName string, crt azcache.AzureCacheReadType) (*armcompute.VirtualMachineScaleSet, error) {
+	getter := func(vmssName string) (*armcompute.VirtualMachineScaleSet, error) {
 		cached, err := ss.vmssCache.Get(ctx, consts.VMSSKey, crt)
 		if err != nil {
 			return nil, err
@@ -299,12 +303,12 @@ func (ss *ScaleSet) GetPowerStatusByNodeName(ctx context.Context, name string) (
 
 	if vm.IsVirtualMachineScaleSetVM() {
 		v := vm.AsVirtualMachineScaleSetVM()
-		if v.InstanceView != nil {
-			return vmutil.GetVMPowerState(ptr.Deref(v.Name, ""), v.InstanceView.Statuses), nil
+		if v.Properties.InstanceView != nil {
+			return vmutil.GetVMPowerState(ptr.Deref(v.Name, ""), v.Properties.InstanceView.Statuses), nil
 		}
 	}
 
-	// vm.InstanceView or vm.InstanceView.Statuses are nil when the VM is under deleting.
+	// vm.Properties.InstanceView or vm.Properties.InstanceView.Statuses are nil when the VM is under deleting.
 	klog.V(3).Infof("InstanceView for node %q is nil, assuming it's deleting", name)
 	return consts.VMPowerStateUnknown, nil
 }
@@ -340,8 +344,8 @@ func (ss *ScaleSet) GetProvisioningStateByNodeName(ctx context.Context, name str
 
 // getCachedVirtualMachineByInstanceID gets scaleSetVMInfo from cache.
 // The node must belong to one of scale sets.
-func (ss *ScaleSet) getVmssVMByInstanceID(ctx context.Context, resourceGroup, scaleSetName, instanceID string, crt azcache.AzureCacheReadType) (*compute.VirtualMachineScaleSetVM, error) {
-	getter := func(ctx context.Context, crt azcache.AzureCacheReadType) (vm *compute.VirtualMachineScaleSetVM, found bool, err error) {
+func (ss *ScaleSet) getVmssVMByInstanceID(ctx context.Context, resourceGroup, scaleSetName, instanceID string, crt azcache.AzureCacheReadType) (*armcompute.VirtualMachineScaleSetVM, error) {
+	getter := func(ctx context.Context, crt azcache.AzureCacheReadType) (vm *armcompute.VirtualMachineScaleSetVM, found bool, err error) {
 		virtualMachines, err := ss.getVMSSVMsFromCache(ctx, resourceGroup, scaleSetName, crt)
 		if err != nil {
 			return nil, false, err
@@ -486,8 +490,8 @@ func (ss *ScaleSet) GetNodeNameByProviderID(ctx context.Context, providerID stri
 		return "", err
 	}
 
-	if vm.OsProfile != nil && vm.OsProfile.ComputerName != nil {
-		nodeName := strings.ToLower(*vm.OsProfile.ComputerName)
+	if vm.Properties.OSProfile != nil && vm.Properties.OSProfile.ComputerName != nil {
+		nodeName := strings.ToLower(*vm.Properties.OSProfile.ComputerName)
 		return types.NodeName(nodeName), nil
 	}
 
@@ -518,8 +522,8 @@ func (ss *ScaleSet) GetInstanceTypeByNodeName(ctx context.Context, name string) 
 
 	if vm.IsVirtualMachineScaleSetVM() {
 		v := vm.AsVirtualMachineScaleSetVM()
-		if v.Sku != nil && v.Sku.Name != nil {
-			return *v.Sku.Name, nil
+		if v.SKU != nil && v.SKU.Name != nil {
+			return *v.SKU.Name, nil
 		}
 	}
 
@@ -553,17 +557,17 @@ func (ss *ScaleSet) GetZoneByNodeName(ctx context.Context, name string) (cloudpr
 	if len(vm.Zones) > 0 {
 		// Get availability zone for the node.
 		zones := vm.Zones
-		zoneID, err := strconv.Atoi(zones[0])
+		zoneID, err := strconv.Atoi(*zones[0])
 		if err != nil {
-			return cloudprovider.Zone{}, fmt.Errorf("failed to parse zone %q: %w", zones, err)
+			return cloudprovider.Zone{}, fmt.Errorf("failed to parse zone %q: %w", lo.FromSlicePtr(zones), err)
 		}
 
 		failureDomain = ss.makeZone(vm.Location, zoneID)
 	} else if vm.IsVirtualMachineScaleSetVM() &&
-		vm.AsVirtualMachineScaleSetVM().InstanceView != nil &&
-		vm.AsVirtualMachineScaleSetVM().InstanceView.PlatformFaultDomain != nil {
+		vm.AsVirtualMachineScaleSetVM().Properties.InstanceView != nil &&
+		vm.AsVirtualMachineScaleSetVM().Properties.InstanceView.PlatformFaultDomain != nil {
 		// Availability zone is not used for the node, falling back to fault domain.
-		failureDomain = strconv.Itoa(int(*vm.AsVirtualMachineScaleSetVM().InstanceView.PlatformFaultDomain))
+		failureDomain = strconv.Itoa(int(*vm.AsVirtualMachineScaleSetVM().Properties.InstanceView.PlatformFaultDomain))
 	} else {
 		err = fmt.Errorf("failed to get zone info")
 		klog.Errorf("GetZoneByNodeName: got unexpected error %v", err)
@@ -612,10 +616,10 @@ func (ss *ScaleSet) GetIPByNodeName(ctx context.Context, nodeName string) (strin
 		return "", "", err
 	}
 
-	internalIP := *ipConfig.PrivateIPAddress
+	internalIP := *ipConfig.Properties.PrivateIPAddress
 	publicIP := ""
-	if ipConfig.PublicIPAddress != nil && ipConfig.PublicIPAddress.ID != nil {
-		pipID := *ipConfig.PublicIPAddress.ID
+	if ipConfig.Properties.PublicIPAddress != nil && ipConfig.Properties.PublicIPAddress.ID != nil {
+		pipID := *ipConfig.Properties.PublicIPAddress.ID
 		matches := vmssPIPConfigurationRE.FindStringSubmatch(pipID)
 		if len(matches) == 7 {
 			resourceGroupName := matches[1]
@@ -629,8 +633,8 @@ func (ss *ScaleSet) GetIPByNodeName(ctx context.Context, nodeName string) (strin
 				klog.Errorf("ss.getVMSSPublicIPAddress() failed with error: %v", err)
 				return "", "", err
 			}
-			if existsPip && pip.IPAddress != nil {
-				publicIP = *pip.IPAddress
+			if existsPip && pip.Properties.IPAddress != nil {
+				publicIP = *pip.Properties.IPAddress
 			}
 		} else {
 			klog.Warningf("Failed to get VMSS Public IP with ID %s", pipID)
@@ -640,22 +644,22 @@ func (ss *ScaleSet) GetIPByNodeName(ctx context.Context, nodeName string) (strin
 	return internalIP, publicIP, nil
 }
 
-func (ss *ScaleSet) getVMSSPublicIPAddress(resourceGroupName string, virtualMachineScaleSetName string, virtualMachineIndex string, networkInterfaceName string, IPConfigurationName string, publicIPAddressName string) (network.PublicIPAddress, bool, error) {
+func (ss *ScaleSet) getVMSSPublicIPAddress(resourceGroupName string, virtualMachineScaleSetName string, virtualMachineIndex string, networkInterfaceName string, IPConfigurationName string, publicIPAddressName string) (*armnetwork.PublicIPAddress, bool, error) {
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 
-	pip, err := ss.PublicIPAddressesClient.GetVirtualMachineScaleSetPublicIPAddress(ctx, resourceGroupName, virtualMachineScaleSetName, virtualMachineIndex, networkInterfaceName, IPConfigurationName, publicIPAddressName, "")
+	pip, err := ss.NetworkClientFactory.GetPublicIPAddressClient().GetVirtualMachineScaleSetPublicIPAddress(ctx, resourceGroupName, virtualMachineScaleSetName, virtualMachineIndex, networkInterfaceName, IPConfigurationName, publicIPAddressName, nil)
 	exists, rerr := checkResourceExistsFromError(err)
 	if rerr != nil {
-		return pip, false, rerr.Error()
+		return nil, false, err
 	}
 
 	if !exists {
 		klog.V(2).Infof("Public IP %q not found", publicIPAddressName)
-		return pip, false, nil
+		return nil, false, nil
 	}
 
-	return pip, exists, nil
+	return &pip.PublicIPAddress, exists, nil
 }
 
 // returns a list of private ips assigned to node
@@ -684,13 +688,13 @@ func (ss *ScaleSet) GetPrivateIPsByNodeName(ctx context.Context, nodeName string
 		return ips, err
 	}
 
-	if nic.IPConfigurations == nil {
-		return ips, fmt.Errorf("nic.IPConfigurations for nic (nicname=%q) is nil", *nic.Name)
+	if nic.Properties.IPConfigurations == nil {
+		return ips, fmt.Errorf("nic.Properties.IPConfigurations for nic (nicname=%q) is nil", *nic.Name)
 	}
 
-	for _, ipConfig := range *(nic.IPConfigurations) {
-		if ipConfig.PrivateIPAddress != nil {
-			ips = append(ips, *(ipConfig.PrivateIPAddress))
+	for _, ipConfig := range nic.Properties.IPConfigurations {
+		if ipConfig.Properties.PrivateIPAddress != nil {
+			ips = append(ips, *(ipConfig.Properties.PrivateIPAddress))
 		}
 	}
 
@@ -700,16 +704,16 @@ func (ss *ScaleSet) GetPrivateIPsByNodeName(ctx context.Context, nodeName string
 // This returns the full identifier of the primary NIC for the given VM.
 func (ss *ScaleSet) getPrimaryInterfaceID(vm *virtualmachine.VirtualMachine) (string, error) {
 	machine := vm.AsVirtualMachineScaleSetVM()
-	if machine.NetworkProfile == nil || machine.NetworkProfile.NetworkInterfaces == nil {
+	if machine.Properties.NetworkProfile == nil || machine.Properties.NetworkProfile.NetworkInterfaces == nil {
 		return "", fmt.Errorf("failed to find the network interfaces for vm %s", ptr.Deref(machine.Name, ""))
 	}
 
-	if len(*machine.NetworkProfile.NetworkInterfaces) == 1 {
-		return *(*machine.NetworkProfile.NetworkInterfaces)[0].ID, nil
+	if len(machine.Properties.NetworkProfile.NetworkInterfaces) == 1 {
+		return *machine.Properties.NetworkProfile.NetworkInterfaces[0].ID, nil
 	}
 
-	for _, ref := range *machine.NetworkProfile.NetworkInterfaces {
-		if ptr.Deref(ref.Primary, false) {
+	for _, ref := range machine.Properties.NetworkProfile.NetworkInterfaces {
+		if ptr.Deref(ref.Properties.Primary, false) {
 			return *ref.ID, nil
 		}
 	}
@@ -774,10 +778,10 @@ func (ss *ScaleSet) getNodeIdentityByNodeName(ctx context.Context, nodeName stri
 			}
 
 			vmssPrefix := *v.VMSS.Name
-			if v.VMSS.VirtualMachineProfile != nil &&
-				v.VMSS.VirtualMachineProfile.OsProfile != nil &&
-				v.VMSS.VirtualMachineProfile.OsProfile.ComputerNamePrefix != nil {
-				vmssPrefix = *v.VMSS.VirtualMachineProfile.OsProfile.ComputerNamePrefix
+			if v.VMSS.Properties.VirtualMachineProfile != nil &&
+				v.VMSS.Properties.VirtualMachineProfile.OSProfile != nil &&
+				v.VMSS.Properties.VirtualMachineProfile.OSProfile.ComputerNamePrefix != nil {
+				vmssPrefix = *v.VMSS.Properties.VirtualMachineProfile.OSProfile.ComputerNamePrefix
 			}
 
 			if strings.EqualFold(vmssPrefix, nodeName[:len(nodeName)-6]) {
@@ -817,17 +821,17 @@ func (ss *ScaleSet) getNodeIdentityByNodeName(ctx context.Context, nodeName stri
 }
 
 // listScaleSetVMs lists VMs belonging to the specified scale set.
-func (ss *ScaleSet) listScaleSetVMs(scaleSetName, resourceGroup string) ([]compute.VirtualMachineScaleSetVM, error) {
+func (ss *ScaleSet) listScaleSetVMs(scaleSetName, resourceGroup string) ([]*armcompute.VirtualMachineScaleSetVM, error) {
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 
-	allVMs, rerr := ss.VirtualMachineScaleSetVMsClient.List(ctx, resourceGroup, scaleSetName, string(compute.InstanceViewTypesInstanceView))
+	allVMs, rerr := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().ListVMInstanceView(ctx, resourceGroup, scaleSetName)
 	if rerr != nil {
-		klog.Errorf("VirtualMachineScaleSetVMsClient.List(%s, %s) failed: %v", resourceGroup, scaleSetName, rerr)
-		if rerr.IsNotFound() {
+		klog.Errorf("ComputeClientFactory.GetVirtualMachineScaleSetVMClient().List(%s, %s) failed: %v", resourceGroup, scaleSetName, rerr)
+		if exists, err := errutils.CheckResourceExistsFromAzcoreError(rerr); !exists && err == nil {
 			return nil, cloudprovider.InstanceNotFound
 		}
-		return nil, rerr.Error()
+		return nil, rerr
 	}
 
 	return allVMs, nil
@@ -835,8 +839,8 @@ func (ss *ScaleSet) listScaleSetVMs(scaleSetName, resourceGroup string) ([]compu
 
 // getAgentPoolScaleSets lists the virtual machines for the resource group and then builds
 // a list of scale sets that match the nodes available to k8s.
-func (ss *ScaleSet) getAgentPoolScaleSets(ctx context.Context, nodes []*v1.Node) (*[]string, error) {
-	agentPoolScaleSets := &[]string{}
+func (ss *ScaleSet) getAgentPoolScaleSets(ctx context.Context, nodes []*v1.Node) ([]string, error) {
+	agentPoolScaleSets := []string{}
 	for nx := range nodes {
 		if isControlPlaneNode(nodes[nx]) {
 			continue
@@ -862,7 +866,7 @@ func (ss *ScaleSet) getAgentPoolScaleSets(ctx context.Context, nodes []*v1.Node)
 			continue
 		}
 
-		*agentPoolScaleSets = append(*agentPoolScaleSets, vm.VMSSName)
+		agentPoolScaleSets = append(agentPoolScaleSets, vm.VMSSName)
 	}
 
 	return agentPoolScaleSets, nil
@@ -871,13 +875,12 @@ func (ss *ScaleSet) getAgentPoolScaleSets(ctx context.Context, nodes []*v1.Node)
 // GetVMSetNames selects all possible scale sets for service load balancer. If the service has
 // no loadbalancer mode annotation returns the primary VMSet. If service annotation
 // for loadbalancer exists then return the eligible VMSet.
-func (ss *ScaleSet) GetVMSetNames(ctx context.Context, service *v1.Service, nodes []*v1.Node) (*[]string, error) {
+func (ss *ScaleSet) GetVMSetNames(ctx context.Context, service *v1.Service, nodes []*v1.Node) ([]*string, error) {
 	hasMode, isAuto, serviceVMSetName := ss.getServiceLoadBalancerMode(service)
 	if !hasMode || ss.UseStandardLoadBalancer() {
 		// no mode specified in service annotation or use single SLB mode
 		// default to PrimaryScaleSetName
-		scaleSetNames := &[]string{ss.Config.PrimaryScaleSetName}
-		return scaleSetNames, nil
+		return to.SliceOfPtrs(ss.Config.PrimaryScaleSetName), nil
 	}
 
 	scaleSetNames, err := ss.GetAgentPoolVMSetNames(ctx, nodes)
@@ -885,17 +888,17 @@ func (ss *ScaleSet) GetVMSetNames(ctx context.Context, service *v1.Service, node
 		klog.Errorf("ss.GetVMSetNames - GetAgentPoolVMSetNames failed err=(%v)", err)
 		return nil, err
 	}
-	if len(*scaleSetNames) == 0 {
+	if len(scaleSetNames) == 0 {
 		klog.Errorf("ss.GetVMSetNames - No scale sets found for nodes in the cluster, node count(%d)", len(nodes))
 		return nil, fmt.Errorf("no scale sets found for nodes, node count(%d)", len(nodes))
 	}
 
 	if !isAuto {
 		found := false
-		for asx := range *scaleSetNames {
-			if strings.EqualFold((*scaleSetNames)[asx], serviceVMSetName) {
+		for asx := range scaleSetNames {
+			if strings.EqualFold(*(scaleSetNames)[asx], serviceVMSetName) {
 				found = true
-				serviceVMSetName = (*scaleSetNames)[asx]
+				serviceVMSetName = *(scaleSetNames)[asx]
 				break
 			}
 		}
@@ -903,7 +906,7 @@ func (ss *ScaleSet) GetVMSetNames(ctx context.Context, service *v1.Service, node
 			klog.Errorf("ss.GetVMSetNames - scale set (%s) in service annotation not found", serviceVMSetName)
 			return nil, ErrScaleSetNotFound
 		}
-		return &[]string{serviceVMSetName}, nil
+		return to.SliceOfPtrs(serviceVMSetName), nil
 	}
 
 	return scaleSetNames, nil
@@ -920,11 +923,11 @@ func extractResourceGroupByVMSSNicID(nicID string) (string, error) {
 }
 
 // GetPrimaryInterface gets machine primary network interface by node name and vmSet.
-func (ss *ScaleSet) GetPrimaryInterface(ctx context.Context, nodeName string) (network.Interface, error) {
+func (ss *ScaleSet) GetPrimaryInterface(ctx context.Context, nodeName string) (*armnetwork.Interface, error) {
 	vmManagementType, err := ss.getVMManagementTypeByNodeName(ctx, nodeName, azcache.CacheReadTypeUnsafe)
 	if err != nil {
 		klog.Errorf("Failed to check VM management type: %v", err)
-		return network.Interface{}, err
+		return nil, err
 	}
 
 	if vmManagementType == ManagedByAvSet {
@@ -944,39 +947,39 @@ func (ss *ScaleSet) GetPrimaryInterface(ctx context.Context, nodeName string) (n
 		}
 
 		klog.Errorf("error: ss.GetPrimaryInterface(%s), ss.getVmssVM(ctx,%s), err=%v", nodeName, nodeName, err)
-		return network.Interface{}, err
+		return nil, err
 	}
 
 	primaryInterfaceID, err := ss.getPrimaryInterfaceID(vm)
 	if err != nil {
 		klog.Errorf("error: ss.GetPrimaryInterface(%s), ss.getPrimaryInterfaceID(), err=%v", nodeName, err)
-		return network.Interface{}, err
+		return nil, err
 	}
 
 	nicName, err := getLastSegment(primaryInterfaceID, "/")
 	if err != nil {
 		klog.Errorf("error: ss.GetPrimaryInterface(%s), getLastSegment(%s), err=%v", nodeName, primaryInterfaceID, err)
-		return network.Interface{}, err
+		return nil, err
 	}
 	resourceGroup, err := extractResourceGroupByVMSSNicID(primaryInterfaceID)
 	if err != nil {
-		return network.Interface{}, err
+		return nil, err
 	}
 
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
-	nic, rerr := ss.InterfacesClient.GetVirtualMachineScaleSetNetworkInterface(ctx, resourceGroup, vm.VMSSName,
+	nic, rerr := ss.NetworkClientFactory.GetInterfaceClient().GetVirtualMachineScaleSetNetworkInterface(ctx, resourceGroup, vm.VMSSName,
 		vm.InstanceID,
-		nicName, "")
+		nicName)
 	if rerr != nil {
 		exists, realErr := checkResourceExistsFromError(rerr)
 		if realErr != nil {
 			klog.Errorf("error: ss.GetPrimaryInterface(%s), ss.GetVirtualMachineScaleSetNetworkInterface.Get(%s, %s, %s), err=%v", nodeName, resourceGroup, vm.VMSSName, nicName, realErr)
-			return network.Interface{}, realErr.Error()
+			return nil, realErr
 		}
 
 		if !exists {
-			return network.Interface{}, cloudprovider.InstanceNotFound
+			return nil, cloudprovider.InstanceNotFound
 		}
 	}
 
@@ -990,14 +993,14 @@ func (ss *ScaleSet) GetPrimaryInterface(ctx context.Context, nodeName string) (n
 }
 
 // getPrimaryNetworkInterfaceConfiguration gets primary network interface configuration for VMSS VM or VMSS.
-func getPrimaryNetworkInterfaceConfiguration(networkConfigurations []compute.VirtualMachineScaleSetNetworkConfiguration, resource string) (*compute.VirtualMachineScaleSetNetworkConfiguration, error) {
+func getPrimaryNetworkInterfaceConfiguration(networkConfigurations []*armcompute.VirtualMachineScaleSetNetworkConfiguration, resource string) (*armcompute.VirtualMachineScaleSetNetworkConfiguration, error) {
 	if len(networkConfigurations) == 1 {
-		return &networkConfigurations[0], nil
+		return networkConfigurations[0], nil
 	}
 
 	for idx := range networkConfigurations {
-		networkConfig := &networkConfigurations[idx]
-		if networkConfig.Primary != nil && *networkConfig.Primary {
+		networkConfig := networkConfigurations[idx]
+		if networkConfig.Properties.Primary != nil && *networkConfig.Properties.Primary {
 			return networkConfig, nil
 		}
 	}
@@ -1005,19 +1008,19 @@ func getPrimaryNetworkInterfaceConfiguration(networkConfigurations []compute.Vir
 	return nil, fmt.Errorf("failed to find a primary network configuration for the VMSS VM or VMSS %q", resource)
 }
 
-func getPrimaryIPConfigFromVMSSNetworkConfig(config *compute.VirtualMachineScaleSetNetworkConfiguration, backendPoolID, resource string) (*compute.VirtualMachineScaleSetIPConfiguration, error) {
-	ipConfigurations := *config.IPConfigurations
+func getPrimaryIPConfigFromVMSSNetworkConfig(config *armcompute.VirtualMachineScaleSetNetworkConfiguration, backendPoolID, resource string) (*armcompute.VirtualMachineScaleSetIPConfiguration, error) {
+	ipConfigurations := config.Properties.IPConfigurations
 	isIPv6 := isBackendPoolIPv6(backendPoolID)
 
 	if !isIPv6 {
 		// There should be exactly one primary IP config.
 		// https://learn.microsoft.com/en-us/azure/virtual-network/ip-services/virtual-network-network-interface-addresses?tabs=nic-address-portal#ip-configurations
 		if len(ipConfigurations) == 1 {
-			return &ipConfigurations[0], nil
+			return ipConfigurations[0], nil
 		}
 		for idx := range ipConfigurations {
-			ipConfig := &ipConfigurations[idx]
-			if ipConfig.Primary != nil && *ipConfig.Primary {
+			ipConfig := ipConfigurations[idx]
+			if ipConfig.Properties.Primary != nil && *ipConfig.Properties.Primary {
 				return ipConfig, nil
 			}
 		}
@@ -1026,8 +1029,8 @@ func getPrimaryIPConfigFromVMSSNetworkConfig(config *compute.VirtualMachineScale
 		// IPv6 configuration is only supported as non-primary, so we need to fetch the ip configuration where the
 		// privateIPAddressVersion matches the clusterIP family
 		for idx := range ipConfigurations {
-			ipConfig := &ipConfigurations[idx]
-			if ipConfig.PrivateIPAddressVersion == compute.IPv6 {
+			ipConfig := ipConfigurations[idx]
+			if ipConfig.Properties != nil && ipConfig.Properties.PrivateIPAddressVersion != nil && *ipConfig.Properties.PrivateIPAddressVersion == armcompute.IPVersionIPv6 {
 				return ipConfig, nil
 			}
 		}
@@ -1038,7 +1041,7 @@ func getPrimaryIPConfigFromVMSSNetworkConfig(config *compute.VirtualMachineScale
 
 // EnsureHostInPool ensures the given VM's Primary NIC's Primary IP Configuration is
 // participating in the specified LoadBalancer Backend Pool, which returns (resourceGroup, vmasName, instanceID, vmssVM, error).
-func (ss *ScaleSet) EnsureHostInPool(ctx context.Context, _ *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetNameOfLB string) (string, string, string, *compute.VirtualMachineScaleSetVM, error) {
+func (ss *ScaleSet) EnsureHostInPool(ctx context.Context, _ *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetNameOfLB string) (string, string, string, *armcompute.VirtualMachineScaleSetVM, error) {
 	logger := klog.Background().WithName("EnsureHostInPool").
 		WithValues("nodeName", nodeName, "backendPoolID", backendPoolID, "vmSetNameOfLB", vmSetNameOfLB)
 	vmName := mapNodeNameToVMName(nodeName)
@@ -1086,7 +1089,7 @@ func (ss *ScaleSet) EnsureHostInPool(ctx context.Context, _ *v1.Service, nodeNam
 		return "", "", "", nil, nil
 	}
 
-	networkInterfaceConfigurations := *vm.VirtualMachineScaleSetVMProperties.NetworkProfileConfiguration.NetworkInterfaceConfigurations
+	networkInterfaceConfigurations := vm.VirtualMachineScaleSetVMProperties.NetworkProfileConfiguration.NetworkInterfaceConfigurations
 	primaryNetworkInterfaceConfiguration, err := getPrimaryNetworkInterfaceConfiguration(networkInterfaceConfigurations, vmName)
 	if err != nil {
 		return "", "", "", nil, err
@@ -1100,9 +1103,9 @@ func (ss *ScaleSet) EnsureHostInPool(ctx context.Context, _ *v1.Service, nodeNam
 
 	// Update primary IP configuration's LoadBalancerBackendAddressPools.
 	foundPool := false
-	newBackendPools := []compute.SubResource{}
-	if primaryIPConfiguration.LoadBalancerBackendAddressPools != nil {
-		newBackendPools = *primaryIPConfiguration.LoadBalancerBackendAddressPools
+	newBackendPools := []*armcompute.SubResource{}
+	if primaryIPConfiguration.Properties.LoadBalancerBackendAddressPools != nil {
+		newBackendPools = primaryIPConfiguration.Properties.LoadBalancerBackendAddressPools
 	}
 	for _, existingPool := range newBackendPools {
 		if strings.EqualFold(backendPoolID, *existingPool.ID) {
@@ -1139,16 +1142,16 @@ func (ss *ScaleSet) EnsureHostInPool(ctx context.Context, _ *v1.Service, nodeNam
 
 	// Compose a new vmssVM with added backendPoolID.
 	newBackendPools = append(newBackendPools,
-		compute.SubResource{
+		&armcompute.SubResource{
 			ID: ptr.To(backendPoolID),
 		})
-	primaryIPConfiguration.LoadBalancerBackendAddressPools = &newBackendPools
-	newVM := &compute.VirtualMachineScaleSetVM{
+	primaryIPConfiguration.Properties.LoadBalancerBackendAddressPools = newBackendPools
+	newVM := &armcompute.VirtualMachineScaleSetVM{
 		Location: &vm.Location,
-		VirtualMachineScaleSetVMProperties: &compute.VirtualMachineScaleSetVMProperties{
+		Properties: &armcompute.VirtualMachineScaleSetVMProperties{
 			HardwareProfile: vm.VirtualMachineScaleSetVMProperties.HardwareProfile,
-			NetworkProfileConfiguration: &compute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
-				NetworkInterfaceConfigurations: &networkInterfaceConfigurations,
+			NetworkProfileConfiguration: &armcompute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
+				NetworkInterfaceConfigurations: networkInterfaceConfigurations,
 			},
 		},
 	}
@@ -1239,12 +1242,12 @@ func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes [
 
 		// When vmss is being deleted, CreateOrUpdate API would report "the vmss is being deleted" error.
 		// Since it is being deleted, we shouldn't send more CreateOrUpdate requests for it.
-		if vmss.ProvisioningState != nil && strings.EqualFold(*vmss.ProvisioningState, consts.ProvisionStateDeleting) {
+		if vmss.Properties.ProvisioningState != nil && strings.EqualFold(*vmss.Properties.ProvisioningState, consts.ProvisionStateDeleting) {
 			klog.V(3).Infof("ensureVMSSInPool: found vmss %s being deleted, skipping", vmssName)
 			continue
 		}
 
-		if vmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations == nil {
+		if vmss.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations == nil {
 			klog.V(4).Infof("EnsureHostInPool: cannot obtain the primary network interface configuration of vmss %s", vmssName)
 			continue
 		}
@@ -1256,7 +1259,7 @@ func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes [
 			continue
 		}
 
-		vmssNIC := *vmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
+		vmssNIC := vmss.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
 		primaryNIC, err := getPrimaryNetworkInterfaceConfiguration(vmssNIC, vmssName)
 		if err != nil {
 			return err
@@ -1267,9 +1270,9 @@ func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes [
 			return err
 		}
 
-		loadBalancerBackendAddressPools := []compute.SubResource{}
-		if primaryIPConfig.LoadBalancerBackendAddressPools != nil {
-			loadBalancerBackendAddressPools = *primaryIPConfig.LoadBalancerBackendAddressPools
+		loadBalancerBackendAddressPools := []*armcompute.SubResource{}
+		if primaryIPConfig.Properties.LoadBalancerBackendAddressPools != nil {
+			loadBalancerBackendAddressPools = primaryIPConfig.Properties.LoadBalancerBackendAddressPools
 		}
 
 		var found bool
@@ -1306,16 +1309,16 @@ func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes [
 
 		// Compose a new vmss with added backendPoolID.
 		loadBalancerBackendAddressPools = append(loadBalancerBackendAddressPools,
-			compute.SubResource{
+			&armcompute.SubResource{
 				ID: ptr.To(backendPoolID),
 			})
-		primaryIPConfig.LoadBalancerBackendAddressPools = &loadBalancerBackendAddressPools
-		newVMSS := compute.VirtualMachineScaleSet{
+		primaryIPConfig.Properties.LoadBalancerBackendAddressPools = loadBalancerBackendAddressPools
+		newVMSS := armcompute.VirtualMachineScaleSet{
 			Location: vmss.Location,
-			VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
-				VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
-					NetworkProfile: &compute.VirtualMachineScaleSetNetworkProfile{
-						NetworkInterfaceConfigurations: &vmssNIC,
+			Properties: &armcompute.VirtualMachineScaleSetProperties{
+				VirtualMachineProfile: &armcompute.VirtualMachineScaleSetVMProfile{
+					NetworkProfile: &armcompute.VirtualMachineScaleSetNetworkProfile{
+						NetworkInterfaceConfigurations: vmssNIC,
 					},
 				},
 			},
@@ -1325,25 +1328,25 @@ func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes [
 		rerr := ss.CreateOrUpdateVMSS(ss.ResourceGroup, vmssName, newVMSS)
 		if rerr != nil {
 			klog.Errorf("ensureVMSSInPool CreateOrUpdateVMSS(%s) with new backendPoolID %s, err: %v", vmssName, backendPoolID, err)
-			return rerr.Error()
+			return rerr
 		}
 	}
 	return nil
 }
 
 // isWindows2019 checks if the ImageReference on the VMSS matches a Windows Server 2019 image.
-func isWindows2019(vmss *compute.VirtualMachineScaleSet) bool {
+func isWindows2019(vmss *armcompute.VirtualMachineScaleSet) bool {
 	if vmss == nil {
 		return false
 	}
 
-	if vmss.VirtualMachineProfile == nil || vmss.VirtualMachineProfile.StorageProfile == nil {
+	if vmss.Properties.VirtualMachineProfile == nil || vmss.Properties.VirtualMachineProfile.StorageProfile == nil {
 		return false
 	}
 
-	storageProfile := vmss.VirtualMachineProfile.StorageProfile
+	storageProfile := vmss.Properties.VirtualMachineProfile.StorageProfile
 
-	if storageProfile.OsDisk == nil || storageProfile.OsDisk.OsType != compute.OperatingSystemTypesWindows {
+	if storageProfile.OSDisk == nil || *storageProfile.OSDisk.OSType != armcompute.OperatingSystemTypesWindows {
 		return false
 	}
 
@@ -1386,7 +1389,7 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 	}
 
 	hostUpdates := make([]func() error, 0, len(nodes))
-	nodeUpdates := make(map[vmssMetaInfo]map[string]compute.VirtualMachineScaleSetVM)
+	nodeUpdates := make(map[vmssMetaInfo]map[string]armcompute.VirtualMachineScaleSetVM)
 	errors := make([]error, 0)
 	for _, node := range nodes {
 		localNodeName := node.Name
@@ -1422,7 +1425,7 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 		if v, ok := nodeUpdates[nodeVMSSMetaInfo]; ok {
 			v[nodeInstanceID] = *nodeVMSSVM
 		} else {
-			nodeUpdates[nodeVMSSMetaInfo] = map[string]compute.VirtualMachineScaleSetVM{
+			nodeUpdates[nodeVMSSMetaInfo] = map[string]armcompute.VirtualMachineScaleSetVM{
 				nodeInstanceID: *nodeVMSSVM,
 			}
 		}
@@ -1456,10 +1459,20 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 			}
 
 			klog.V(2).InfoS("Begin to update VMs for VMSS with new backendPoolID", logFields...)
-			rerr := ss.VirtualMachineScaleSetVMsClient.UpdateVMs(ctx, meta.resourceGroup, meta.vmssName, update, "network_update", batchSize)
+			grp, ctx := errgroup.WithContext(ctx)
+			grp.SetLimit(batchSize)
+			for instanceID, vm := range update {
+				instanceID := instanceID
+				vm := vm
+				grp.Go(func() error {
+					_, rerr := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().Update(ctx, meta.resourceGroup, meta.vmssName, instanceID, vm)
+					return rerr
+				})
+			}
+			rerr := grp.Wait()
 			if rerr != nil {
 				klog.ErrorS(err, "Failed to update VMs for VMSS", logFields...)
-				return rerr.Error()
+				return rerr
 			}
 
 			return nil
@@ -1558,7 +1571,7 @@ func (ss *ScaleSet) EnsureHostsInPool(ctx context.Context, service *v1.Service, 
 
 // ensureBackendPoolDeletedFromNode ensures the loadBalancer backendAddressPools deleted
 // from the specified node, which returns (resourceGroup, vmasName, instanceID, vmssVM, error).
-func (ss *ScaleSet) ensureBackendPoolDeletedFromNode(ctx context.Context, nodeName string, backendPoolIDs []string) (string, string, string, *compute.VirtualMachineScaleSetVM, error) {
+func (ss *ScaleSet) ensureBackendPoolDeletedFromNode(ctx context.Context, nodeName string, backendPoolIDs []string) (string, string, string, *armcompute.VirtualMachineScaleSetVM, error) {
 	logger := klog.Background().WithName("ensureBackendPoolDeletedFromNode").WithValues("nodeName", nodeName, "backendPoolIDs", backendPoolIDs)
 	vm, err := ss.getVmssVM(ctx, nodeName, azcache.CacheReadTypeDefault)
 	if err != nil {
@@ -1584,7 +1597,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromNode(ctx context.Context, nodeNa
 			"probably because the vm's being deleted", nodeName)
 		return "", "", "", nil, nil
 	}
-	networkInterfaceConfigurations := *vm.VirtualMachineScaleSetVMProperties.NetworkProfileConfiguration.NetworkInterfaceConfigurations
+	networkInterfaceConfigurations := vm.VirtualMachineScaleSetVMProperties.NetworkProfileConfiguration.NetworkInterfaceConfigurations
 	primaryNetworkInterfaceConfiguration, err := getPrimaryNetworkInterfaceConfiguration(networkInterfaceConfigurations, nodeName)
 	if err != nil {
 		return "", "", "", nil, err
@@ -1605,12 +1618,12 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromNode(ctx context.Context, nodeNa
 	}
 
 	// Compose a new vmssVM with added backendPoolID.
-	newVM := &compute.VirtualMachineScaleSetVM{
+	newVM := &armcompute.VirtualMachineScaleSetVM{
 		Location: &vm.Location,
-		VirtualMachineScaleSetVMProperties: &compute.VirtualMachineScaleSetVMProperties{
+		Properties: &armcompute.VirtualMachineScaleSetVMProperties{
 			HardwareProfile: vm.VirtualMachineScaleSetVMProperties.HardwareProfile,
-			NetworkProfileConfiguration: &compute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
-				NetworkInterfaceConfigurations: &networkInterfaceConfigurations,
+			NetworkProfileConfiguration: &armcompute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
+				NetworkInterfaceConfigurations: networkInterfaceConfigurations,
 			},
 		},
 	}
@@ -1655,8 +1668,8 @@ func (ss *ScaleSet) GetNodeNameByIPConfigurationID(ctx context.Context, ipConfig
 		return "", "", err
 	}
 
-	if vm.OsProfile != nil && vm.OsProfile.ComputerName != nil {
-		return strings.ToLower(*vm.OsProfile.ComputerName), scaleSetName, nil
+	if vm.Properties.OSProfile != nil && vm.Properties.OSProfile.ComputerName != nil {
+		return strings.ToLower(*vm.Properties.OSProfile.ComputerName), scaleSetName, nil
 	}
 
 	return "", "", nil
@@ -1705,7 +1718,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(ctx context.Context, backen
 		}
 		vmssFlexMap := cachedFlex.(*sync.Map)
 		vmssFlexMap.Range(func(_, value interface{}) bool {
-			vmssFlex := value.(*compute.VirtualMachineScaleSet)
+			vmssFlex := value.(*armcompute.VirtualMachineScaleSet)
 			if ptr.Deref(vmssFlex.Name, "") == vmSetName {
 				found = true
 				return false
@@ -1733,7 +1746,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(ctx context.Context, backen
 
 func (ss *ScaleSet) ensureBackendPoolDeletedFromVmssUniform(ctx context.Context, backendPoolIDs []string, vmSetName string) error {
 	vmssNamesMap := make(map[string]bool)
-	// the standard load balancer supports multiple vmss in its backend while the basic sku doesn't
+	// the standard load balancer supports multiple vmss in its backend while the basic SKU doesn't
 	if ss.UseStandardLoadBalancer() {
 		cachedUniform, err := ss.vmssCache.Get(ctx, consts.VMSSKey, azcache.CacheReadTypeDefault)
 		if err != nil {
@@ -1744,29 +1757,29 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVmssUniform(ctx context.Context,
 		vmssUniformMap := cachedUniform.(*sync.Map)
 		var errorList []error
 		walk := func(_, value interface{}) bool {
-			var vmss *compute.VirtualMachineScaleSet
+			var vmss *armcompute.VirtualMachineScaleSet
 			if vmssEntry, ok := value.(*VMSSEntry); ok {
 				vmss = vmssEntry.VMSS
-			} else if v, ok := value.(*compute.VirtualMachineScaleSet); ok {
+			} else if v, ok := value.(*armcompute.VirtualMachineScaleSet); ok {
 				vmss = v
 			}
 			klog.V(2).Infof("ensureBackendPoolDeletedFromVmssUniform: vmss %q, backendPoolIDs %q", ptr.Deref(vmss.Name, ""), backendPoolIDs)
 
 			// When vmss is being deleted, CreateOrUpdate API would report "the vmss is being deleted" error.
 			// Since it is being deleted, we shouldn't send more CreateOrUpdate requests for it.
-			if vmss.ProvisioningState != nil && strings.EqualFold(*vmss.ProvisioningState, consts.ProvisionStateDeleting) {
+			if vmss.Properties.ProvisioningState != nil && strings.EqualFold(*vmss.Properties.ProvisioningState, consts.ProvisionStateDeleting) {
 				klog.V(3).Infof("ensureBackendPoolDeletedFromVMSS: found vmss %s being deleted, skipping", ptr.Deref(vmss.Name, ""))
 				return true
 			}
-			if vmss.VirtualMachineProfile == nil {
+			if vmss.Properties.VirtualMachineProfile == nil {
 				klog.V(4).Infof("ensureBackendPoolDeletedFromVMSS: vmss %s has no VirtualMachineProfile, skipping", ptr.Deref(vmss.Name, ""))
 				return true
 			}
-			if vmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations == nil {
+			if vmss.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations == nil {
 				klog.V(4).Infof("ensureBackendPoolDeletedFromVMSS: cannot obtain the primary network interface configuration, of vmss %s", ptr.Deref(vmss.Name, ""))
 				return true
 			}
-			vmssNIC := *vmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
+			vmssNIC := vmss.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
 			primaryNIC, err := getPrimaryNetworkInterfaceConfiguration(vmssNIC, ptr.Deref(vmss.Name, ""))
 			if err != nil {
 				klog.Errorf("ensureBackendPoolDeletedFromVMSS: failed to get the primary network interface config of the VMSS %s: %v", ptr.Deref(vmss.Name, ""), err)
@@ -1781,9 +1794,9 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVmssUniform(ctx context.Context,
 					errorList = append(errorList, err)
 					return true
 				}
-				loadBalancerBackendAddressPools := make([]compute.SubResource, 0)
-				if primaryIPConfig.LoadBalancerBackendAddressPools != nil {
-					loadBalancerBackendAddressPools = *primaryIPConfig.LoadBalancerBackendAddressPools
+				loadBalancerBackendAddressPools := make([]*armcompute.SubResource, 0)
+				if primaryIPConfig.Properties.LoadBalancerBackendAddressPools != nil {
+					loadBalancerBackendAddressPools = primaryIPConfig.Properties.LoadBalancerBackendAddressPools
 				}
 				for _, loadBalancerBackendAddressPool := range loadBalancerBackendAddressPools {
 					klog.V(4).Infof("ensureBackendPoolDeletedFromVMSS: loadBalancerBackendAddressPool (%s) on vmss (%s)", ptr.Deref(loadBalancerBackendAddressPool.ID, ""), ptr.Deref(vmss.Name, ""))
@@ -1817,7 +1830,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVmssUniform(ctx context.Context,
 }
 
 // ensureBackendPoolDeleted ensures the loadBalancer backendAddressPools deleted from the specified nodes.
-func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Service, backendPoolIDs []string, vmSetName string, backendAddressPools *[]network.BackendAddressPool) (bool, error) {
+func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Service, backendPoolIDs []string, vmSetName string, backendAddressPools []*armnetwork.BackendAddressPool) (bool, error) {
 	// Returns nil if backend address pools already deleted.
 	if backendAddressPools == nil {
 		return false, nil
@@ -1830,10 +1843,10 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 	}()
 
 	ipConfigurationIDs := []string{}
-	for _, backendPool := range *backendAddressPools {
+	for _, backendPool := range backendAddressPools {
 		for _, backendPoolID := range backendPoolIDs {
-			if strings.EqualFold(*backendPool.ID, backendPoolID) && backendPool.BackendIPConfigurations != nil {
-				for _, ipConf := range *backendPool.BackendIPConfigurations {
+			if strings.EqualFold(*backendPool.ID, backendPoolID) && backendPool.Properties.BackendIPConfigurations != nil {
+				for _, ipConf := range backendPool.Properties.BackendIPConfigurations {
 					if ipConf.ID == nil {
 						continue
 					}
@@ -1846,7 +1859,7 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 
 	// Ensure the backendPoolID is deleted from the VMSS VMs.
 	hostUpdates := make([]func() error, 0, len(ipConfigurationIDs))
-	nodeUpdates := make(map[vmssMetaInfo]map[string]compute.VirtualMachineScaleSetVM)
+	nodeUpdates := make(map[vmssMetaInfo]map[string]armcompute.VirtualMachineScaleSetVM)
 	allErrs := make([]error, 0)
 	visitedIPConfigIDPrefix := map[string]bool{}
 	for i := range ipConfigurationIDs {
@@ -1901,7 +1914,7 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 		if v, ok := nodeUpdates[nodeVMSSMetaInfo]; ok {
 			v[nodeInstanceID] = *nodeVMSSVM
 		} else {
-			nodeUpdates[nodeVMSSMetaInfo] = map[string]compute.VirtualMachineScaleSetVM{
+			nodeUpdates[nodeVMSSMetaInfo] = map[string]armcompute.VirtualMachineScaleSetVM{
 				nodeInstanceID: *nodeVMSSVM,
 			}
 		}
@@ -1931,14 +1944,22 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 				klog.ErrorS(err, "Failed to get vmss batch size", logFields...)
 				return err
 			}
-
-			klog.V(2).InfoS("Begin to update VMs for VMSS with new backendPoolID", logFields...)
-			rerr := ss.VirtualMachineScaleSetVMsClient.UpdateVMs(ctx, meta.resourceGroup, meta.vmssName, update, "network_update", batchSize)
-			if rerr != nil {
-				klog.ErrorS(err, "Failed to update VMs for VMSS", logFields...)
-				return rerr.Error()
+			grp, ctx := errgroup.WithContext(ctx)
+			grp.SetLimit(batchSize)
+			for instanceID, vm := range update {
+				instanceID := instanceID
+				vm := vm
+				grp.Go(func() error {
+					klog.V(2).InfoS("Begin to update VMs for VMSS with new backendPoolID", logFields...)
+					_, rerr := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().Update(ctx, meta.resourceGroup, meta.vmssName, instanceID, vm)
+					return rerr
+				})
 			}
-
+			err = grp.Wait()
+			if err != nil {
+				klog.ErrorS(err, "Failed to update VMs for VMSS", logFields...)
+				return err
+			}
 			updatedVM.Store(true)
 			return nil
 		})
@@ -1958,20 +1979,20 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 }
 
 // EnsureBackendPoolDeleted ensures the loadBalancer backendAddressPools deleted from the specified nodes.
-func (ss *ScaleSet) EnsureBackendPoolDeleted(ctx context.Context, service *v1.Service, backendPoolIDs []string, vmSetName string, backendAddressPools *[]network.BackendAddressPool, deleteFromVMSet bool) (bool, error) {
+func (ss *ScaleSet) EnsureBackendPoolDeleted(ctx context.Context, service *v1.Service, backendPoolIDs []string, vmSetName string, backendAddressPools []*armnetwork.BackendAddressPool, deleteFromVMSet bool) (bool, error) {
 	if backendAddressPools == nil {
 		return false, nil
 	}
-	vmssUniformBackendIPConfigurationsMap := map[string][]network.InterfaceIPConfiguration{}
-	vmssFlexBackendIPConfigurationsMap := map[string][]network.InterfaceIPConfiguration{}
-	avSetBackendIPConfigurationsMap := map[string][]network.InterfaceIPConfiguration{}
+	vmssUniformBackendIPConfigurationsMap := map[string][]*armnetwork.InterfaceIPConfiguration{}
+	vmssFlexBackendIPConfigurationsMap := map[string][]*armnetwork.InterfaceIPConfiguration{}
+	avSetBackendIPConfigurationsMap := map[string][]*armnetwork.InterfaceIPConfiguration{}
 
-	for _, backendPool := range *backendAddressPools {
+	for _, backendPool := range backendAddressPools {
 		for _, backendPoolID := range backendPoolIDs {
 			if strings.EqualFold(*backendPool.ID, backendPoolID) &&
-				backendPool.BackendAddressPoolPropertiesFormat != nil &&
-				backendPool.BackendIPConfigurations != nil {
-				for _, ipConf := range *backendPool.BackendIPConfigurations {
+				backendPool.Properties != nil &&
+				backendPool.Properties.BackendIPConfigurations != nil {
+				for _, ipConf := range backendPool.Properties.BackendIPConfigurations {
 					if ipConf.ID == nil {
 						continue
 					}
@@ -2008,18 +2029,18 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(ctx context.Context, service *v1.Se
 	}
 
 	var updated bool
-	vmssUniformBackendPools := []network.BackendAddressPool{}
+	vmssUniformBackendPools := []*armnetwork.BackendAddressPool{}
 	for backendPoolID, vmssUniformBackendIPConfigurations := range vmssUniformBackendIPConfigurationsMap {
 		vmssUniformBackendIPConfigurations := vmssUniformBackendIPConfigurations
-		vmssUniformBackendPools = append(vmssUniformBackendPools, network.BackendAddressPool{
+		vmssUniformBackendPools = append(vmssUniformBackendPools, &armnetwork.BackendAddressPool{
 			ID: ptr.To(backendPoolID),
-			BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-				BackendIPConfigurations: &vmssUniformBackendIPConfigurations,
+			Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+				BackendIPConfigurations: vmssUniformBackendIPConfigurations,
 			},
 		})
 	}
 	if len(vmssUniformBackendPools) > 0 {
-		updatedVM, err := ss.ensureBackendPoolDeleted(ctx, service, backendPoolIDs, vmSetName, &vmssUniformBackendPools)
+		updatedVM, err := ss.ensureBackendPoolDeleted(ctx, service, backendPoolIDs, vmSetName, vmssUniformBackendPools)
 		if err != nil {
 			return false, err
 		}
@@ -2028,18 +2049,18 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(ctx context.Context, service *v1.Se
 		}
 	}
 
-	vmssFlexBackendPools := []network.BackendAddressPool{}
+	vmssFlexBackendPools := []*armnetwork.BackendAddressPool{}
 	for backendPoolID, vmssFlexBackendIPConfigurations := range vmssFlexBackendIPConfigurationsMap {
 		vmssFlexBackendIPConfigurations := vmssFlexBackendIPConfigurations
-		vmssFlexBackendPools = append(vmssFlexBackendPools, network.BackendAddressPool{
+		vmssFlexBackendPools = append(vmssFlexBackendPools, &armnetwork.BackendAddressPool{
 			ID: ptr.To(backendPoolID),
-			BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-				BackendIPConfigurations: &vmssFlexBackendIPConfigurations,
+			Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+				BackendIPConfigurations: vmssFlexBackendIPConfigurations,
 			},
 		})
 	}
 	if len(vmssFlexBackendPools) > 0 {
-		updatedNIC, err := ss.flexScaleSet.EnsureBackendPoolDeleted(ctx, service, backendPoolIDs, vmSetName, &vmssFlexBackendPools, false)
+		updatedNIC, err := ss.flexScaleSet.EnsureBackendPoolDeleted(ctx, service, backendPoolIDs, vmSetName, vmssFlexBackendPools, false)
 		if err != nil {
 			return false, err
 		}
@@ -2048,18 +2069,18 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(ctx context.Context, service *v1.Se
 		}
 	}
 
-	avSetBackendPools := []network.BackendAddressPool{}
+	avSetBackendPools := []*armnetwork.BackendAddressPool{}
 	for backendPoolID, avSetBackendIPConfigurations := range avSetBackendIPConfigurationsMap {
 		avSetBackendIPConfigurations := avSetBackendIPConfigurations
-		avSetBackendPools = append(avSetBackendPools, network.BackendAddressPool{
+		avSetBackendPools = append(avSetBackendPools, &armnetwork.BackendAddressPool{
 			ID: ptr.To(backendPoolID),
-			BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-				BackendIPConfigurations: &avSetBackendIPConfigurations,
+			Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+				BackendIPConfigurations: avSetBackendIPConfigurations,
 			},
 		})
 	}
 	if len(avSetBackendPools) > 0 {
-		updatedNIC, err := ss.availabilitySet.EnsureBackendPoolDeleted(ctx, service, backendPoolIDs, vmSetName, &avSetBackendPools, false)
+		updatedNIC, err := ss.availabilitySet.EnsureBackendPoolDeleted(ctx, service, backendPoolIDs, vmSetName, avSetBackendPools, false)
 		if err != nil {
 			return false, err
 		}
@@ -2116,19 +2137,19 @@ func (ss *ScaleSet) GetNodeCIDRMasksByProviderID(ctx context.Context, providerID
 }
 
 // deleteBackendPoolFromIPConfig deletes the backend pool from the IP config.
-func deleteBackendPoolFromIPConfig(msg, backendPoolID, resource string, primaryNIC *compute.VirtualMachineScaleSetNetworkConfiguration) (bool, error) {
+func deleteBackendPoolFromIPConfig(msg, backendPoolID, resource string, primaryNIC *armcompute.VirtualMachineScaleSetNetworkConfiguration) (bool, error) {
 	primaryIPConfig, err := getPrimaryIPConfigFromVMSSNetworkConfig(primaryNIC, backendPoolID, resource)
 	if err != nil {
 		klog.Errorf("%s: failed to get the primary IP config from the VMSS %q's network config: %v", msg, resource, err)
 		return false, err
 	}
-	loadBalancerBackendAddressPools := []compute.SubResource{}
-	if primaryIPConfig.LoadBalancerBackendAddressPools != nil {
-		loadBalancerBackendAddressPools = *primaryIPConfig.LoadBalancerBackendAddressPools
+	loadBalancerBackendAddressPools := []*armcompute.SubResource{}
+	if primaryIPConfig.Properties.LoadBalancerBackendAddressPools != nil {
+		loadBalancerBackendAddressPools = primaryIPConfig.Properties.LoadBalancerBackendAddressPools
 	}
 
 	var found bool
-	var newBackendPools []compute.SubResource
+	var newBackendPools []*armcompute.SubResource
 	for i := len(loadBalancerBackendAddressPools) - 1; i >= 0; i-- {
 		curPool := loadBalancerBackendAddressPools[i]
 		if strings.EqualFold(backendPoolID, *curPool.ID) {
@@ -2140,7 +2161,7 @@ func deleteBackendPoolFromIPConfig(msg, backendPoolID, resource string, primaryN
 	if !found {
 		return false, nil
 	}
-	primaryIPConfig.LoadBalancerBackendAddressPools = &newBackendPools
+	primaryIPConfig.Properties.LoadBalancerBackendAddressPools = newBackendPools
 	return true, nil
 }
 
@@ -2159,15 +2180,15 @@ func (ss *ScaleSet) EnsureBackendPoolDeletedFromVMSets(ctx context.Context, vmss
 
 		// When vmss is being deleted, CreateOrUpdate API would report "the vmss is being deleted" error.
 		// Since it is being deleted, we shouldn't send more CreateOrUpdate requests for it.
-		if vmss.ProvisioningState != nil && strings.EqualFold(*vmss.ProvisioningState, consts.ProvisionStateDeleting) {
+		if vmss.Properties.ProvisioningState != nil && strings.EqualFold(*vmss.Properties.ProvisioningState, consts.ProvisionStateDeleting) {
 			klog.V(3).Infof("EnsureBackendPoolDeletedFromVMSets: found vmss %s being deleted, skipping", vmssName)
 			continue
 		}
-		if vmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations == nil {
+		if vmss.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations == nil {
 			klog.V(4).Infof("EnsureBackendPoolDeletedFromVMSets: cannot obtain the primary network interface configuration, of vmss %s", vmssName)
 			continue
 		}
-		vmssNIC := *vmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
+		vmssNIC := vmss.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
 		primaryNIC, err := getPrimaryNetworkInterfaceConfiguration(vmssNIC, vmssName)
 		if err != nil {
 			klog.Errorf("EnsureBackendPoolDeletedFromVMSets: failed to get the primary network interface config of the VMSS %s: %v", vmssName, err)
@@ -2191,12 +2212,12 @@ func (ss *ScaleSet) EnsureBackendPoolDeletedFromVMSets(ctx context.Context, vmss
 
 		vmssUpdaters = append(vmssUpdaters, func() error {
 			// Compose a new vmss with added backendPoolID.
-			newVMSS := compute.VirtualMachineScaleSet{
+			newVMSS := armcompute.VirtualMachineScaleSet{
 				Location: vmss.Location,
-				VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
-					VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
-						NetworkProfile: &compute.VirtualMachineScaleSetNetworkProfile{
-							NetworkInterfaceConfigurations: &vmssNIC,
+				Properties: &armcompute.VirtualMachineScaleSetProperties{
+					VirtualMachineProfile: &armcompute.VirtualMachineScaleSetVMProfile{
+						NetworkProfile: &armcompute.VirtualMachineScaleSetNetworkProfile{
+							NetworkInterfaceConfigurations: vmssNIC,
 						},
 					},
 				},
@@ -2206,7 +2227,7 @@ func (ss *ScaleSet) EnsureBackendPoolDeletedFromVMSets(ctx context.Context, vmss
 			rerr := ss.CreateOrUpdateVMSS(ss.ResourceGroup, vmssName, newVMSS)
 			if rerr != nil {
 				klog.Errorf("EnsureBackendPoolDeletedFromVMSets CreateOrUpdateVMSS(%s) with new backendPoolIDs %q, err: %v", vmssName, backendPoolIDs, rerr)
-				return rerr.Error()
+				return rerr
 			}
 
 			return nil
@@ -2228,14 +2249,14 @@ func (ss *ScaleSet) EnsureBackendPoolDeletedFromVMSets(ctx context.Context, vmss
 // GetAgentPoolVMSetNames returns all VMSS/VMAS names according to the nodes.
 // We need to include the VMAS here because some of the cluster provisioning tools
 // like capz allows mixed instance type.
-func (ss *ScaleSet) GetAgentPoolVMSetNames(ctx context.Context, nodes []*v1.Node) (*[]string, error) {
-	vmSetNames := make([]string, 0)
+func (ss *ScaleSet) GetAgentPoolVMSetNames(ctx context.Context, nodes []*v1.Node) ([]*string, error) {
+	vmSetNames := make([]*string, 0)
 
 	vmssFlexVMNodes := make([]*v1.Node, 0)
 	avSetVMNodes := make([]*v1.Node, 0)
 
 	for _, node := range nodes {
-		var names *[]string
+		var names []string
 
 		vmManagementType, err := ss.getVMManagementTypeByNodeName(ctx, node.Name, azcache.CacheReadTypeDefault)
 		if err != nil {
@@ -2257,7 +2278,7 @@ func (ss *ScaleSet) GetAgentPoolVMSetNames(ctx context.Context, nodes []*v1.Node
 		if err != nil {
 			return nil, fmt.Errorf("GetAgentPoolVMSetNames: failed to execute getAgentPoolScaleSets: %w", err)
 		}
-		vmSetNames = append(vmSetNames, *names...)
+		vmSetNames = append(vmSetNames, to.SliceOfPtrs(names...)...)
 	}
 
 	if len(vmssFlexVMNodes) > 0 {
@@ -2265,7 +2286,7 @@ func (ss *ScaleSet) GetAgentPoolVMSetNames(ctx context.Context, nodes []*v1.Node
 		if err != nil {
 			return nil, fmt.Errorf("ss.flexScaleSet.GetAgentPoolVMSetNames: failed to execute : %w", err)
 		}
-		vmSetNames = append(vmSetNames, *vmssFlexVMnames...)
+		vmSetNames = append(vmSetNames, vmssFlexVMnames...)
 	}
 
 	if len(avSetVMNodes) > 0 {
@@ -2273,10 +2294,10 @@ func (ss *ScaleSet) GetAgentPoolVMSetNames(ctx context.Context, nodes []*v1.Node
 		if err != nil {
 			return nil, fmt.Errorf("ss.availabilitySet.GetAgentPoolVMSetNames: failed to execute : %w", err)
 		}
-		vmSetNames = append(vmSetNames, *avSetVMnames...)
+		vmSetNames = append(vmSetNames, avSetVMnames...)
 	}
 
-	return &vmSetNames, nil
+	return vmSetNames, nil
 }
 
 func (ss *ScaleSet) GetNodeVMSetName(ctx context.Context, node *v1.Node) (string, error) {
@@ -2308,7 +2329,7 @@ func (ss *ScaleSet) GetNodeVMSetName(ctx context.Context, node *v1.Node) (string
 
 // VMSSBatchSize returns the batch size for VMSS operations.
 func (ss *ScaleSet) VMSSBatchSize(ctx context.Context, vmssName string) (int, error) {
-	batchSize := 0
+	batchSize := 1
 	vmss, err := ss.getVMSS(ctx, vmssName, azcache.CacheReadTypeDefault)
 	if err != nil {
 		return 0, fmt.Errorf("get vmss batch size: %w", err)

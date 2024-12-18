@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -57,7 +57,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 	}}
 
 	BeforeEach(func() {
-		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.LoadBalancerSKUNameStandard)) {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSKUEnv), string(armnetwork.LoadBalancerSKUNameStandard)) {
 			Skip("private link service only works with standard load balancer")
 		}
 		var err error
@@ -119,7 +119,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		pls := getPrivateLinkServiceFromIP(tc, ip, "", "", "")
 		Expect(pls.Properties.IPConfigurations).NotTo(BeNil())
 		Expect(len(pls.Properties.IPConfigurations)).To(Equal(1))
-		Expect(*(pls.Properties.IPConfigurations)[0].Properties.PrivateIPAllocationMethod).To(Equal(network.IPAllocationMethodDynamic))
+		Expect(*(pls.Properties.IPConfigurations)[0].Properties.PrivateIPAllocationMethod).To(Equal(armnetwork.IPAllocationMethodDynamic))
 		Expect(len(pls.Properties.Fqdns) == 0).To(BeTrue())
 		Expect(pls.Properties.EnableProxyProtocol == nil || !*pls.Properties.EnableProxyProtocol).To(BeTrue())
 		Expect(pls.Properties.Visibility == nil || len(pls.Properties.Visibility.Subscriptions) == 0).To(BeTrue())
@@ -283,7 +283,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		err = wait.PollImmediate(10*time.Second, 5*time.Minute, func() (bool, error) {
 			pls := getPrivateLinkServiceFromIP(tc, ip, "", "", "")
 			return len(pls.Properties.IPConfigurations) == 1 &&
-				*(pls.Properties.IPConfigurations)[0].Properties.PrivateIPAllocationMethod == network.IPAllocationMethodStatic &&
+				*(pls.Properties.IPConfigurations)[0].Properties.PrivateIPAllocationMethod == armnetwork.IPAllocationMethodStatic &&
 				*(pls.Properties.IPConfigurations)[0].Properties.PrivateIPAddress == *selectedIP, nil
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -481,7 +481,7 @@ func updateServiceAnnotation(service *v1.Service, annotation map[string]string) 
 	return
 }
 
-func getPrivateLinkServiceFromIP(tc *utils.AzureTestClient, ip *string, plsResourceGroup, lbResourceGroup, plsName string) *network.PrivateLinkService {
+func getPrivateLinkServiceFromIP(tc *utils.AzureTestClient, ip *string, plsResourceGroup, lbResourceGroup, plsName string) *armnetwork.PrivateLinkService {
 	if lbResourceGroup == "" {
 		lbResourceGroup = tc.GetResourceGroup()
 	}
@@ -511,7 +511,7 @@ func getPrivateLinkServiceFromIP(tc *utils.AzureTestClient, ip *string, plsResou
 	}
 
 	utils.Logf("Getting private link service(%s) from rg(%s)", plsName, plsResourceGroup)
-	var pls *network.PrivateLinkService
+	var pls *armnetwork.PrivateLinkService
 	err = wait.PollImmediate(10*time.Second, 10*time.Minute, func() (bool, error) {
 		pls, err = tc.GetPrivateLinkService(plsResourceGroup, plsName)
 		if err != nil {

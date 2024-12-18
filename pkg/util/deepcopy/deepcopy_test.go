@@ -20,7 +20,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/stretchr/testify/assert"
 
 	"k8s.io/utils/ptr"
@@ -40,21 +41,21 @@ func (f fakeStruct) Get() string {
 
 // TestCopyBasic tests object with pointer, struct, map, slice, interface.
 func TestCopyBasic(t *testing.T) {
-	zones := []string{"zone0", "zone1"}
-	var vmOriginal *compute.VirtualMachine = &compute.VirtualMachine{
-		VirtualMachineProperties: &compute.VirtualMachineProperties{
+	zones := to.SliceOfPtrs("zone0", "zone1")
+	var vmOriginal *armcompute.VirtualMachine = &armcompute.VirtualMachine{
+		Properties: &armcompute.VirtualMachineProperties{
 			ProvisioningState: ptr.To("Failed"),
 		},
 		Name:  ptr.To("vmOriginal"),
-		Zones: &zones,
+		Zones: zones,
 		Tags: map[string]*string{
 			"tag0": ptr.To("tagVal0"),
 		},
 	}
-	vmCopied := Copy(vmOriginal).(*compute.VirtualMachine)
+	vmCopied := Copy(vmOriginal).(*armcompute.VirtualMachine)
 
-	psOriginal := vmOriginal.VirtualMachineProperties.ProvisioningState
-	psCopied := vmCopied.VirtualMachineProperties.ProvisioningState
+	psOriginal := vmOriginal.Properties.ProvisioningState
+	psCopied := vmCopied.Properties.ProvisioningState
 	assert.Equal(t, psOriginal, psCopied)
 	assert.Equal(t, vmOriginal.Name, vmCopied.Name)
 	assert.Equal(t, vmOriginal.Zones, vmCopied.Zones)
@@ -65,10 +66,10 @@ func TestCopyBasic(t *testing.T) {
 	assert.Equal(t, fakeOriginal.Get(), fakeCopied.Get())
 }
 
-// TestCopyVMInSyncMap tests object like compute.VirtualMachine in a sync.Map.
+// TestCopyVMInSyncMap tests object like armcompute.VirtualMachine in a sync.Map.
 func TestCopyVMInSyncMap(t *testing.T) {
-	var vmOriginal *compute.VirtualMachine = &compute.VirtualMachine{
-		VirtualMachineProperties: &compute.VirtualMachineProperties{
+	var vmOriginal *armcompute.VirtualMachine = &armcompute.VirtualMachine{
+		Properties: &armcompute.VirtualMachineProperties{
 			ProvisioningState: ptr.To("Failed"),
 		},
 		Name: ptr.To("vmOriginal"),
@@ -77,17 +78,17 @@ func TestCopyVMInSyncMap(t *testing.T) {
 	vmCacheOriginal.Store("vmOriginal", vmOriginal)
 	vmCacheCopied := Copy(vmCacheOriginal).(*sync.Map)
 
-	psOriginal := vmOriginal.VirtualMachineProperties.ProvisioningState
+	psOriginal := vmOriginal.Properties.ProvisioningState
 	vCopied, ok := vmCacheCopied.Load("vmOriginal")
 	assert.True(t, ok)
-	vmCopied := vCopied.(*compute.VirtualMachine)
-	psCopied := vmCopied.VirtualMachineProperties.ProvisioningState
+	vmCopied := vCopied.(*armcompute.VirtualMachine)
+	psCopied := vmCopied.Properties.ProvisioningState
 	assert.Equal(t, psOriginal, psCopied)
 	assert.Equal(t, vmOriginal.Name, vmCopied.Name)
 }
 
 type vmssEntry struct {
-	*compute.VirtualMachineScaleSet
+	*armcompute.VirtualMachineScaleSet
 	Name *string
 }
 
@@ -95,7 +96,7 @@ type vmssEntry struct {
 func TestCopyVMSSEntryInSyncMap(t *testing.T) {
 	vmssEntryOriginal := &vmssEntry{
 		Name: ptr.To("vmssEntryName"),
-		VirtualMachineScaleSet: &compute.VirtualMachineScaleSet{
+		VirtualMachineScaleSet: &armcompute.VirtualMachineScaleSet{
 			Name: ptr.To("vmssOriginal"),
 		},
 	}

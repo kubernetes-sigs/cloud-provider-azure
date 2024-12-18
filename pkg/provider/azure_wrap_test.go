@@ -21,22 +21,22 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 func TestExtractNotFound(t *testing.T) {
-	notFound := &retry.Error{HTTPStatusCode: http.StatusNotFound}
-	otherHTTP := &retry.Error{HTTPStatusCode: http.StatusForbidden}
-	otherErr := &retry.Error{HTTPStatusCode: http.StatusTooManyRequests}
+	notFound := &azcore.ResponseError{StatusCode: http.StatusNotFound}
+	otherHTTP := &azcore.ResponseError{StatusCode: http.StatusForbidden}
+	otherErr := &azcore.ResponseError{StatusCode: http.StatusTooManyRequests}
 
 	tests := []struct {
-		err         *retry.Error
-		expectedErr *retry.Error
+		err         error
+		expectedErr error
 		exists      bool
 	}{
 		{nil, nil, true},

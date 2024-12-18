@@ -107,7 +107,7 @@ func (az *Cloud) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.N
 	return az.addressGetter(ctx, name)
 }
 
-func (az *Cloud) getLocalInstanceNodeAddresses(netInterfaces []NetworkInterface, nodeName string) ([]v1.NodeAddress, error) {
+func (az *Cloud) getLocalInstanceNodeAddresses(netInterfaces []*NetworkInterface, nodeName string) ([]v1.NodeAddress, error) {
 	if len(netInterfaces) == 0 {
 		return nil, fmt.Errorf("no interface is found for the instance")
 	}

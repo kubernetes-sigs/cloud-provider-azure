@@ -24,8 +24,7 @@ import (
 	"strings"
 	"time"
 
-	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -168,8 +167,8 @@ func WaitServiceExposure(cs clientset.Interface, namespace string, name string, 
 	var externalIPs []*string
 
 	timeout := serviceTimeout
-	if skuEnv := os.Getenv(LoadBalancerSkuEnv); skuEnv != "" {
-		if strings.EqualFold(skuEnv, string(aznetwork.LoadBalancerSkuNameBasic)) {
+	if SKUEnv := os.Getenv(LoadBalancerSKUEnv); SKUEnv != "" {
+		if strings.EqualFold(SKUEnv, string(armnetwork.LoadBalancerSKUNameBasic)) {
 			timeout = serviceTimeoutBasicLB
 		}
 	}

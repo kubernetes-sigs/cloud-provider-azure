@@ -25,11 +25,10 @@ import (
 	"strings"
 	"time"
 
-	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
-	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -186,8 +185,8 @@ var _ = Describe("Azure node resources", Label(utils.TestSuiteLabelNode), func()
 		Expect(err).NotTo(HaveOccurred())
 
 		utils.Logf("getting all NICs of VMSSes")
-		var vmssAllNics []*network.Interface
-		vmssVMs := make([]*compute.VirtualMachineScaleSetVM, 0)
+		var vmssAllNics []*armnetwork.Interface
+		vmssVMs := make([]*armcompute.VirtualMachineScaleSetVM, 0)
 		for _, vmss := range vmsses {
 			vmssVMList, err := utils.ListVMSSVMs(tc, *vmss.Name)
 			Expect(err).NotTo(HaveOccurred())

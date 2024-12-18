@@ -23,10 +23,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
-	"github.com/Azure/go-autorest/autorest/azure"
-	autorestmocks "github.com/Azure/go-autorest/autorest/mocks"
 	"github.com/stretchr/testify/assert"
 
 	"go.uber.org/mock/gomock"
@@ -35,11 +33,10 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/ptr"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient/mockvmssvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient/mock_virtualmachineclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 func TestAttachDiskWithVMSS(t *testing.T) {
@@ -101,42 +98,41 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 		testCloud := ss.Cloud
 		testCloud.PrimaryScaleSetName = scaleSetName
 		expectedVMSS := buildTestVMSSWithLB(scaleSetName, "vmss00-vm-", []string{testLBBackendpoolID0}, false)
-		mockVMSSClient := testCloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
-		mockVMSSClient.EXPECT().List(gomock.Any(), testCloud.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
-		mockVMSSClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, scaleSetName).Return(expectedVMSS, nil).MaxTimes(1)
-		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(nil).MaxTimes(1)
-		mockVMClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
-		mockVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachine{}, nil).AnyTimes()
+		mockVMSSClient := testCloud.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+		mockVMSSClient.EXPECT().List(gomock.Any(), testCloud.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+		mockVMSSClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, scaleSetName, nil).Return(expectedVMSS, nil).MaxTimes(1)
+		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(nil, nil).MaxTimes(1)
+		mockVMClient := testCloud.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+		mockVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
 
 		expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(testCloud, scaleSetName, "", 0, test.vmssVMList, "succeeded", false)
 		for _, vmssvm := range expectedVMSSVMs {
-			vmssvm.StorageProfile = &compute.StorageProfile{
-				OsDisk: &compute.OSDisk{
-					Name: ptr.To("osdisk1"),
-					ManagedDisk: &compute.ManagedDiskParameters{
+			vmssvm.Properties.StorageProfile = &armcompute.StorageProfile{
+				OSDisk: &armcompute.OSDisk{
+					Name: ptr.To("OSDisk1"),
+					ManagedDisk: &armcompute.ManagedDiskParameters{
 						ID: ptr.To("ManagedID"),
-						DiskEncryptionSet: &compute.DiskEncryptionSetParameters{
+						DiskEncryptionSet: &armcompute.DiskEncryptionSetParameters{
 							ID: ptr.To("DiskEncryptionSetID"),
 						},
 					},
 				},
-				DataDisks: &[]compute.DataDisk{},
+				DataDisks: []*armcompute.DataDisk{},
 			}
 			if test.inconsistentLUN {
-				diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
+				diSKURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
 					testCloud.SubscriptionID, testCloud.ResourceGroup, diskname)
-				vmssvm.StorageProfile.DataDisks = &[]compute.DataDisk{
-					{Lun: ptr.To(int32(0)), Name: &diskname, ManagedDisk: &compute.ManagedDiskParameters{ID: &diskURI}},
+				vmssvm.Properties.StorageProfile.DataDisks = []*armcompute.DataDisk{
+					{Lun: ptr.To(int32(0)), Name: &diskname, ManagedDisk: &armcompute.ManagedDiskParameters{ID: &diSKURI}},
 				}
 			}
 		}
-		mockVMSSVMClient := testCloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
-		mockVMSSVMClient.EXPECT().List(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
+		mockVMSSVMClient := testCloud.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+		mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), testCloud.ResourceGroup, scaleSetName).Return(expectedVMSSVMs, nil).AnyTimes()
 		if scaleSetName == string(fakeStatusNotFoundVMSSName) {
-			mockVMSSVMClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
+			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any()).Return(nil, &azcore.ResponseError{StatusCode: http.StatusNotFound, ErrorCode: cloudprovider.InstanceNotFound.Error()}).AnyTimes()
 		} else {
-			mockVMSSVMClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
-			mockVMSSVMClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 		}
 
 		diskMap := map[string]*AttachDiskOptions{}
@@ -144,7 +140,7 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 			options := AttachDiskOptions{
 				Lun:                     int32(i),
 				DiskName:                diskName,
-				CachingMode:             compute.CachingTypesReadWrite,
+				CachingMode:             armcompute.CachingTypesReadWrite,
 				DiskEncryptionSetID:     "",
 				WriteAcceleratorEnabled: true,
 			}
@@ -152,9 +148,9 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 				options.Lun = 63
 			}
 
-			diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
+			diSKURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
 				testCloud.SubscriptionID, testCloud.ResourceGroup, diskName)
-			diskMap[diskURI] = &options
+			diskMap[diSKURI] = &options
 		}
 		err = ss.AttachDisk(ctx, test.vmssvmName, diskMap)
 		assert.Equal(t, test.expectedErr, err, "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErr, err)
@@ -179,7 +175,7 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 		disks          []string
 		forceDetach    bool
 		expectedErr    bool
-		expectedErrMsg error
+		expectedErrMsg string
 	}{
 		{
 			desc:           "an error shall be returned if it is invalid vmss name",
@@ -188,7 +184,7 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 			vmssvmName:     "vm1",
 			disks:          []string{diskName},
 			expectedErr:    true,
-			expectedErrMsg: fmt.Errorf("not a vmss instance"),
+			expectedErrMsg: "not a vmss instance",
 		},
 		{
 			desc:        "no error shall be returned if everything is good",
@@ -222,7 +218,7 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 			vmssvmName:     "vmss00-vm-000000",
 			disks:          []string{diskName},
 			expectedErr:    true,
-			expectedErrMsg: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 404, RawError: %w", fmt.Errorf("instance not found")),
+			expectedErrMsg: "instance not found",
 		},
 		{
 			desc:        "no error shall be returned if everything is good and the attaching disk does not match data disk",
@@ -241,25 +237,25 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 		testCloud := ss.Cloud
 		testCloud.PrimaryScaleSetName = scaleSetName
 		expectedVMSS := buildTestVMSSWithLB(scaleSetName, "vmss00-vm-", []string{testLBBackendpoolID0}, false)
-		mockVMSSClient := testCloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
-		mockVMSSClient.EXPECT().List(gomock.Any(), testCloud.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
-		mockVMSSClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, scaleSetName).Return(expectedVMSS, nil).MaxTimes(1)
-		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(nil).MaxTimes(1)
+		mockVMSSClient := testCloud.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+		mockVMSSClient.EXPECT().List(gomock.Any(), testCloud.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+		mockVMSSClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(expectedVMSS, nil).MaxTimes(1)
+		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(nil, nil).MaxTimes(1)
 
 		expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(testCloud, scaleSetName, "", 0, test.vmssVMList, "succeeded", false)
-		var updatedVMSSVM *compute.VirtualMachineScaleSetVM
+		var updatedVMSSVM *armcompute.VirtualMachineScaleSetVM
 		for itr, vmssvm := range expectedVMSSVMs {
-			vmssvm.StorageProfile = &compute.StorageProfile{
-				OsDisk: &compute.OSDisk{
-					Name: ptr.To("osdisk1"),
-					ManagedDisk: &compute.ManagedDiskParameters{
+			vmssvm.Properties.StorageProfile = &armcompute.StorageProfile{
+				OSDisk: &armcompute.OSDisk{
+					Name: ptr.To("OSDisk1"),
+					ManagedDisk: &armcompute.ManagedDiskParameters{
 						ID: ptr.To("ManagedID"),
-						DiskEncryptionSet: &compute.DiskEncryptionSetParameters{
+						DiskEncryptionSet: &armcompute.DiskEncryptionSetParameters{
 							ID: ptr.To("DiskEncryptionSetID"),
 						},
 					},
 				},
-				DataDisks: &[]compute.DataDisk{
+				DataDisks: []*armcompute.DataDisk{
 					{
 						Lun:  ptr.To(int32(0)),
 						Name: ptr.To(diskName),
@@ -275,31 +271,31 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 				},
 			}
 
-			if string(test.vmssvmName) == *vmssvm.VirtualMachineScaleSetVMProperties.OsProfile.ComputerName {
-				updatedVMSSVM = &expectedVMSSVMs[itr]
+			if string(test.vmssvmName) == *vmssvm.Properties.OSProfile.ComputerName {
+				updatedVMSSVM = expectedVMSSVMs[itr]
 			}
 		}
-		mockVMSSVMClient := testCloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
-		mockVMSSVMClient.EXPECT().List(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
+		mockVMSSVMClient := testCloud.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+		mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), testCloud.ResourceGroup, scaleSetName).Return(expectedVMSSVMs, nil).AnyTimes()
 		if scaleSetName == strings.ToLower(string(fakeStatusNotFoundVMSSName)) {
-			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any(), gomock.Any()).Return(updatedVMSSVM, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
+			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any()).Return(updatedVMSSVM, &azcore.ResponseError{StatusCode: http.StatusNotFound, ErrorCode: cloudprovider.InstanceNotFound.Error()}).AnyTimes()
 		} else {
-			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any(), gomock.Any()).Return(updatedVMSSVM, nil).AnyTimes()
+			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any()).Return(updatedVMSSVM, nil).AnyTimes()
 		}
 
-		mockVMClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
-		mockVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachine{}, nil).AnyTimes()
+		mockVMClient := testCloud.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+		mockVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
 
 		diskMap := map[string]string{}
 		for _, diskName := range test.disks {
-			diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
+			diSKURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
 				testCloud.SubscriptionID, testCloud.ResourceGroup, diskName)
-			diskMap[diskURI] = diskName
+			diskMap[diSKURI] = diskName
 		}
 		err = ss.DetachDisk(ctx, test.vmssvmName, diskMap, test.forceDetach)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, err: %v", i, test.desc, err)
 		if test.expectedErr {
-			assert.EqualError(t, test.expectedErrMsg, err.Error(), "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErrMsg, err)
+			assert.Contains(t, err.Error(), test.expectedErrMsg, "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErrMsg, err)
 		}
 
 		if !test.expectedErr {
@@ -324,25 +320,25 @@ func TestUpdateVMWithVMSS(t *testing.T) {
 		vmssVMList     []string
 		vmssName       types.NodeName
 		vmssvmName     types.NodeName
-		existedDisk    compute.Disk
+		existedDisk    armcompute.Disk
 		expectedErr    bool
-		expectedErrMsg error
+		expectedErrMsg string
 	}{
 		{
 			desc:           "an error shall be returned if it is invalid vmss name",
 			vmssVMList:     []string{"vmss-vm-000001"},
 			vmssName:       "vm1",
 			vmssvmName:     "vm1",
-			existedDisk:    compute.Disk{Name: ptr.To(diskName)},
+			existedDisk:    armcompute.Disk{Name: ptr.To(diskName)},
 			expectedErr:    true,
-			expectedErrMsg: fmt.Errorf("not a vmss instance"),
+			expectedErrMsg: "not a vmss instance",
 		},
 		{
 			desc:        "no error shall be returned if everything is good",
 			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
 			vmssName:    "vmss00",
 			vmssvmName:  "vmss00-vm-000000",
-			existedDisk: compute.Disk{Name: ptr.To(diskName)},
+			existedDisk: armcompute.Disk{Name: ptr.To(diskName)},
 			expectedErr: false,
 		},
 		{
@@ -350,16 +346,16 @@ func TestUpdateVMWithVMSS(t *testing.T) {
 			vmssVMList:     []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
 			vmssName:       fakeStatusNotFoundVMSSName,
 			vmssvmName:     "vmss00-vm-000000",
-			existedDisk:    compute.Disk{Name: ptr.To(diskName)},
+			existedDisk:    armcompute.Disk{Name: ptr.To(diskName)},
 			expectedErr:    true,
-			expectedErrMsg: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 404, RawError: %w", fmt.Errorf("instance not found")),
+			expectedErrMsg: "instance not found",
 		},
 		{
 			desc:        "no error shall be returned if everything is good and the attaching disk does not match data disk",
 			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
 			vmssName:    "vmss00",
 			vmssvmName:  "vmss00-vm-000000",
-			existedDisk: compute.Disk{Name: ptr.To("disk-name-err")},
+			existedDisk: armcompute.Disk{Name: ptr.To("disk-name-err")},
 			expectedErr: false,
 		},
 	}
@@ -371,58 +367,51 @@ func TestUpdateVMWithVMSS(t *testing.T) {
 		testCloud := ss.Cloud
 		testCloud.PrimaryScaleSetName = scaleSetName
 		expectedVMSS := buildTestVMSSWithLB(scaleSetName, "vmss00-vm-", []string{testLBBackendpoolID0}, false)
-		mockVMSSClient := testCloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
-		mockVMSSClient.EXPECT().List(gomock.Any(), testCloud.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
-		mockVMSSClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, scaleSetName).Return(expectedVMSS, nil).MaxTimes(1)
-		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(nil).MaxTimes(1)
+		mockVMSSClient := testCloud.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+		mockVMSSClient.EXPECT().List(gomock.Any(), testCloud.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+		mockVMSSClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(expectedVMSS, nil).MaxTimes(1)
+		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(nil, nil).MaxTimes(1)
 
 		expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(testCloud, scaleSetName, "", 0, test.vmssVMList, "succeeded", false)
-		var updatedVMSSVM *compute.VirtualMachineScaleSetVM
+		var updatedVMSSVM *armcompute.VirtualMachineScaleSetVM
 
 		for itr, vmssvm := range expectedVMSSVMs {
-			vmssvm.StorageProfile = &compute.StorageProfile{
-				OsDisk: &compute.OSDisk{
-					Name: ptr.To("osdisk1"),
-					ManagedDisk: &compute.ManagedDiskParameters{
+			vmssvm.Properties.StorageProfile = &armcompute.StorageProfile{
+				OSDisk: &armcompute.OSDisk{
+					Name: ptr.To("OSDisk1"),
+					ManagedDisk: &armcompute.ManagedDiskParameters{
 						ID: ptr.To("ManagedID"),
-						DiskEncryptionSet: &compute.DiskEncryptionSetParameters{
+						DiskEncryptionSet: &armcompute.DiskEncryptionSetParameters{
 							ID: ptr.To("DiskEncryptionSetID"),
 						},
 					},
 				},
-				DataDisks: &[]compute.DataDisk{{
+				DataDisks: []*armcompute.DataDisk{{
 					Lun:  ptr.To(int32(0)),
 					Name: ptr.To(diskName),
 				}},
 			}
 
-			if string(test.vmssvmName) == *vmssvm.VirtualMachineScaleSetVMProperties.OsProfile.ComputerName {
-				updatedVMSSVM = &expectedVMSSVMs[itr]
+			if string(test.vmssvmName) == *vmssvm.Properties.OSProfile.ComputerName {
+				updatedVMSSVM = expectedVMSSVMs[itr]
 			}
 		}
-		mockVMSSVMClient := testCloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
-		mockVMSSVMClient.EXPECT().List(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
-
-		r := autorestmocks.NewResponseWithStatus("200", 200)
-		r.Request.Method = http.MethodPut
-
-		future, err := azure.NewFutureFromResponse(r)
-
-		mockVMSSVMClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&future, err).AnyTimes()
+		mockVMSSVMClient := testCloud.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+		mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), testCloud.ResourceGroup, scaleSetName).Return(expectedVMSSVMs, nil).AnyTimes()
 
 		if scaleSetName == strings.ToLower(string(fakeStatusNotFoundVMSSName)) {
-			mockVMSSVMClient.EXPECT().WaitForUpdateResult(gomock.Any(), &future, testCloud.ResourceGroup, gomock.Any()).Return(updatedVMSSVM, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
+			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(updatedVMSSVM, &azcore.ResponseError{StatusCode: http.StatusNotFound, ErrorCode: cloudprovider.InstanceNotFound.Error()}).AnyTimes()
 		} else {
-			mockVMSSVMClient.EXPECT().WaitForUpdateResult(gomock.Any(), &future, testCloud.ResourceGroup, gomock.Any()).Return(updatedVMSSVM, nil).AnyTimes()
+			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(updatedVMSSVM, err).AnyTimes()
 		}
 
-		mockVMClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
-		mockVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachine{}, nil).AnyTimes()
+		mockVMClient := testCloud.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+		mockVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
 
 		err = ss.UpdateVM(ctx, test.vmssvmName)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, err: %v", i, test.desc, err)
 		if test.expectedErr {
-			assert.EqualError(t, test.expectedErrMsg, err.Error(), "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErrMsg, err)
+			assert.Contains(t, err.Error(), test.expectedErrMsg, "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErrMsg, err)
 		}
 
 		if !test.expectedErr {
@@ -493,26 +482,26 @@ func TestGetDataDisksWithVMSS(t *testing.T) {
 		testCloud := ss.Cloud
 		testCloud.PrimaryScaleSetName = scaleSetName
 		expectedVMSS := buildTestVMSSWithLB(scaleSetName, "vmss00-vm-", []string{testLBBackendpoolID0}, false)
-		mockVMSSClient := testCloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
-		mockVMSSClient.EXPECT().List(gomock.Any(), testCloud.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
-		mockVMSSClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, scaleSetName).Return(expectedVMSS, nil).MaxTimes(1)
-		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(nil).MaxTimes(1)
+		mockVMSSClient := testCloud.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+		mockVMSSClient.EXPECT().List(gomock.Any(), testCloud.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+		mockVMSSClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(expectedVMSS, nil).MaxTimes(1)
+		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(nil, nil).MaxTimes(1)
 
 		expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(testCloud, scaleSetName, "", 0, []string{"vmss00-vm-000000"}, "succeeded", false)
 		if !test.isDataDiskNull {
 			for _, vmssvm := range expectedVMSSVMs {
-				vmssvm.StorageProfile = &compute.StorageProfile{
-					DataDisks: &[]compute.DataDisk{{
+				vmssvm.Properties.StorageProfile = &armcompute.StorageProfile{
+					DataDisks: []*armcompute.DataDisk{{
 						Lun:  ptr.To(int32(0)),
 						Name: ptr.To("disk1"),
 					}},
 				}
 			}
 		}
-		updatedVMSSVM := &expectedVMSSVMs[0]
-		mockVMSSVMClient := testCloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
-		mockVMSSVMClient.EXPECT().List(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
-		mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any(), gomock.Any()).Return(updatedVMSSVM, nil).AnyTimes()
+		updatedVMSSVM := expectedVMSSVMs[0]
+		mockVMSSVMClient := testCloud.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+		mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), testCloud.ResourceGroup, scaleSetName).Return(expectedVMSSVMs, nil).AnyTimes()
+		mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any()).Return(updatedVMSSVM, nil).AnyTimes()
 		dataDisks, _, err := ss.GetDataDisks(context.TODO(), test.nodeName, test.crt)
 		assert.Equal(t, test.expectedDataDisks, dataDisks, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s", i, test.desc)

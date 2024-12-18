@@ -17,16 +17,15 @@ limitations under the License.
 package fixture
 
 import (
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"k8s.io/utils/ptr"
 )
 
 func (f *AzureFixture) LoadBalancer() *AzureLoadBalancerFixture {
 	return &AzureLoadBalancerFixture{
-		lb: &network.LoadBalancer{
-			Name:                         ptr.To("lb"),
-			LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+		lb: &armnetwork.LoadBalancer{
+			Name:       ptr.To("lb"),
+			Properties: &armnetwork.LoadBalancerPropertiesFormat{
 				// TODO
 			},
 		},
@@ -34,11 +33,11 @@ func (f *AzureFixture) LoadBalancer() *AzureLoadBalancerFixture {
 }
 
 type AzureLoadBalancerFixture struct {
-	lb *network.LoadBalancer
+	lb *armnetwork.LoadBalancer
 }
 
-func (f *AzureLoadBalancerFixture) Build() network.LoadBalancer {
-	return *f.lb
+func (f *AzureLoadBalancerFixture) Build() *armnetwork.LoadBalancer {
+	return f.lb
 }
 
 func (f *AzureLoadBalancerFixture) IPv4Addresses() []string {

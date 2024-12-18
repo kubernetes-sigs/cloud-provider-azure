@@ -18,17 +18,13 @@ package provider
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
-	"github.com/Azure/go-autorest/autorest"
-	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
 
 	v1 "k8s.io/api/core/v1"
@@ -49,31 +45,18 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
-	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/diskclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmasclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmsizeclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient"
+	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
-	"sigs.k8s.io/cloud-provider-azure/pkg/version"
-
-	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
-	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/taints"
+	"sigs.k8s.io/cloud-provider-azure/pkg/version"
 )
 
 var (
@@ -106,23 +89,13 @@ type Cloud struct {
 	azureconfig.Config
 	Environment azure.Environment
 
-	SubnetsClient                   subnetclient.Interface
-	InterfacesClient                interfaceclient.Interface
-	LoadBalancerClient              loadbalancerclient.Interface
-	PublicIPAddressesClient         publicipclient.Interface
-	VirtualMachinesClient           vmclient.Interface
-	DisksClient                     diskclient.Interface
-	VirtualMachineScaleSetsClient   vmssclient.Interface
-	VirtualMachineScaleSetVMsClient vmssvmclient.Interface
-	VirtualMachineSizesClient       vmsizeclient.Interface
-	AvailabilitySetsClient          vmasclient.Interface
-	ComputeClientFactory            azclient.ClientFactory
-	NetworkClientFactory            azclient.ClientFactory
-	AuthProvider                    *azclient.AuthProvider
-	ResourceRequestBackoff          wait.Backoff
-	Metadata                        *InstanceMetadataService
-	VMSet                           VMSet
-	LoadBalancerBackendPool         BackendPool
+	ComputeClientFactory    azclient.ClientFactory
+	NetworkClientFactory    azclient.ClientFactory
+	AuthProvider            *azclient.AuthProvider
+	ResourceRequestBackoff  wait.Backoff
+	Metadata                *InstanceMetadataService
+	VMSet                   VMSet
+	LoadBalancerBackendPool BackendPool
 
 	// ipv6DualStack allows overriding for unit testing.  It's normally initialized from featuregates
 	ipv6DualStackEnabled bool
@@ -276,7 +249,7 @@ func NewCloudFromSecret(ctx context.Context, clientBuilder cloudprovider.Control
 }
 
 // InitializeCloudFromConfig initializes the Cloud from config.
-func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.Config, fromSecret, callFromCCM bool) error {
+func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.Config, _, callFromCCM bool) error {
 	if config == nil {
 		// should not reach here
 		return fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config")
@@ -357,9 +330,10 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		return err
 	}
 
-	// Initialize rate limiting config options.
-	azureconfig.InitializeCloudProviderRateLimitConfig(&config.CloudProviderRateLimitConfig)
-
+	clientOps, _, err := azclient.GetAzCoreClientOption(&az.ARMClientConfig)
+	if err != nil {
+		return err
+	}
 	resourceRequestBackoff := az.setCloudProviderBackoffDefaults(config)
 
 	err = az.setLBDefaults(config)
@@ -407,15 +381,16 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 			return err
 		}
 	}
-	servicePrincipalToken, err := azureconfig.GetServicePrincipalToken(&config.AzureClientConfig, env, env.ServiceManagementEndpoint)
-	if errors.Is(err, azureconfig.ErrorNoAuth) {
-		// Only controller-manager would lazy-initialize from secret, and credentials are required for such case.
-		if fromSecret {
-			err := fmt.Errorf("no credentials provided for Azure cloud provider")
-			klog.Fatal(err)
+
+	if az.AuthProvider == nil {
+		var authProvider *azclient.AuthProvider
+		authProvider, err = azclient.NewAuthProvider(&az.ARMClientConfig, &az.AzureClientConfig.AzureAuthConfig)
+		if err != nil {
 			return err
 		}
-
+		az.AuthProvider = authProvider
+	}
+	if az.AuthProvider.GetAzIdentity() == nil {
 		// No credentials provided, useInstanceMetadata should be enabled for Kubelet.
 		// TODO(feiskyer): print different error message for Kubelet and controller-manager, as they're
 		// requiring different credential settings.
@@ -424,99 +399,79 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		}
 
 		klog.V(2).Infof("Azure cloud provider is starting without credentials")
-	} else if err != nil {
-		return err
-	}
-	// No credentials provided, InstanceMetadataService would be used for getting Azure resources.
-	// Note that this only applies to Kubelet, controller-manager should configure credentials for managing Azure resources.
-	if servicePrincipalToken == nil {
-		return nil
 	}
 
-	var authProvider *azclient.AuthProvider
-	authProvider, err = azclient.NewAuthProvider(&az.ARMClientConfig, &az.AzureClientConfig.AzureAuthConfig)
-	if err != nil {
-		return err
+	if az.ARMClientConfig.UserAgent == "" {
+		k8sVersion := version.Get().GitVersion
+		az.ARMClientConfig.UserAgent = fmt.Sprintf("kubernetes-cloudprovider/%s", k8sVersion)
 	}
-	az.AuthProvider = authProvider
-	// If uses network resources in different AAD Tenant, then prepare corresponding Service Principal Token for VM/VMSS client and network resources client
-	multiTenantServicePrincipalToken, networkResourceServicePrincipalToken, err := az.getAuthTokenInMultiTenantEnv(servicePrincipalToken, authProvider)
-	if err != nil {
-		return err
-	}
-	az.configAzureClients(servicePrincipalToken, multiTenantServicePrincipalToken, networkResourceServicePrincipalToken)
 
 	if az.ComputeClientFactory == nil {
-		if az.ARMClientConfig.UserAgent == "" {
-			k8sVersion := version.Get().GitVersion
-			az.ARMClientConfig.UserAgent = fmt.Sprintf("kubernetes-cloudprovider/%s", k8sVersion)
-		}
-
 		var cred azcore.TokenCredential
-		if authProvider.IsMultiTenantModeEnabled() {
-			multiTenantCred := authProvider.GetMultiTenantIdentity()
-			networkTenantCred := authProvider.GetNetworkAzIdentity()
+		if az.AuthProvider.IsMultiTenantModeEnabled() {
+			multiTenantCred := az.AuthProvider.GetMultiTenantIdentity()
+			networkTenantCred := az.AuthProvider.GetNetworkAzIdentity()
 			az.NetworkClientFactory, err = azclient.NewClientFactory(&azclient.ClientFactoryConfig{
 				SubscriptionID: az.NetworkResourceSubscriptionID,
-			}, &az.ARMClientConfig, networkTenantCred)
+			}, &az.ARMClientConfig, clientOps.Cloud, networkTenantCred)
 			if err != nil {
 				return err
 			}
 			cred = multiTenantCred
 		} else {
-			cred = authProvider.GetAzIdentity()
+			cred = az.AuthProvider.GetAzIdentity()
 		}
 		az.ComputeClientFactory, err = azclient.NewClientFactory(&azclient.ClientFactoryConfig{
 			SubscriptionID: az.SubscriptionID,
-		}, &az.ARMClientConfig, cred)
+		}, &az.ARMClientConfig, clientOps.Cloud, cred)
 		if err != nil {
 			return err
 		}
-
-		networkClientFactory := az.NetworkClientFactory
-		if networkClientFactory == nil {
-			networkClientFactory = az.ComputeClientFactory
+		if az.NetworkClientFactory == nil {
+			az.NetworkClientFactory = az.ComputeClientFactory
 		}
+	}
+
+	networkClientFactory := az.NetworkClientFactory
+
+	if az.nsgRepo == nil {
 		az.nsgRepo, err = securitygroup.NewSecurityGroupRepo(az.SecurityGroupResourceGroup, az.SecurityGroupName, az.NsgCacheTTLInSeconds, az.DisableAPICallCache, networkClientFactory.GetSecurityGroupClient())
 		if err != nil {
 			return err
 		}
+	}
 
+	if az.zoneRepo == nil {
 		az.zoneRepo, err = zone.NewRepo(az.ComputeClientFactory.GetProviderClient())
 		if err != nil {
 			return err
 		}
-
+	}
+	if az.plsRepo == nil {
 		az.plsRepo, err = privatelinkservice.NewRepo(az.ComputeClientFactory.GetPrivateLinkServiceClient(), time.Duration(az.PlsCacheTTLInSeconds)*time.Second, az.DisableAPICallCache)
 		if err != nil {
 			return err
 		}
+	}
 
+	if az.subnetRepo == nil {
 		az.subnetRepo, err = subnet.NewRepo(networkClientFactory.GetSubnetClient())
 		if err != nil {
 			return err
 		}
+	}
 
+	if az.routeTableRepo == nil {
 		az.routeTableRepo, err = routetable.NewRepo(networkClientFactory.GetRouteTableClient(), az.RouteTableResourceGroup, time.Duration(az.RouteTableCacheTTLInSeconds)*time.Second, az.DisableAPICallCache)
 		if err != nil {
 			return err
 		}
 	}
+
 	err = az.initCaches()
 	if err != nil {
 		return err
 	}
-
-	// Common controller contains the function
-	// needed by both blob disk and managed disk controllers
-	qps := float32(azureconfig.DefaultAtachDetachDiskQPS)
-	bucket := azureconfig.DefaultAtachDetachDiskBucket
-	if az.Config.AttachDetachDiskRateLimit != nil {
-		qps = az.Config.AttachDetachDiskRateLimit.CloudProviderRateLimitQPSWrite
-		bucket = az.Config.AttachDetachDiskRateLimit.CloudProviderRateLimitBucketWrite
-	}
-	klog.V(2).Infof("attach/detach disk operation rate limit QPS: %f, Bucket: %d", qps, bucket)
-
 	// updating routes and syncing zones only in CCM
 	if callFromCCM {
 		// start delayed route updater.
@@ -603,11 +558,11 @@ func (az *Cloud) initCaches() (err error) {
 }
 
 func (az *Cloud) setLBDefaults(config *azureconfig.Config) error {
-	if config.LoadBalancerSku == "" {
-		config.LoadBalancerSku = consts.LoadBalancerSkuStandard
+	if config.LoadBalancerSKU == "" {
+		config.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 	}
 
-	if strings.EqualFold(config.LoadBalancerSku, consts.LoadBalancerSkuStandard) {
+	if strings.EqualFold(config.LoadBalancerSKU, consts.LoadBalancerSKUStandard) {
 		// Do not add master nodes to standard LB by default.
 		if config.ExcludeMasterFromStandardLB == nil {
 			config.ExcludeMasterFromStandardLB = &defaultExcludeMasterFromStandardLB
@@ -619,27 +574,10 @@ func (az *Cloud) setLBDefaults(config *azureconfig.Config) error {
 		}
 	} else {
 		if config.DisableOutboundSNAT != nil && *config.DisableOutboundSNAT {
-			return fmt.Errorf("disableOutboundSNAT should only set when loadBalancerSku is standard")
+			return fmt.Errorf("disableOutboundSNAT should only set when loadBalancerSKU is standard")
 		}
 	}
 	return nil
-}
-
-func (az *Cloud) getAuthTokenInMultiTenantEnv(_ *adal.ServicePrincipalToken, authProvider *azclient.AuthProvider) (adal.MultitenantOAuthTokenProvider, adal.OAuthTokenProvider, error) {
-	var err error
-	var multiTenantOAuthToken adal.MultitenantOAuthTokenProvider
-	var networkResourceServicePrincipalToken adal.OAuthTokenProvider
-	if az.Config.UsesNetworkResourceInDifferentTenant() {
-		multiTenantOAuthToken, err = azureconfig.GetMultiTenantServicePrincipalToken(&az.Config.AzureClientConfig, &az.Environment, authProvider)
-		if err != nil {
-			return nil, nil, err
-		}
-		networkResourceServicePrincipalToken, err = azureconfig.GetNetworkResourceServicePrincipalToken(&az.Config.AzureClientConfig, &az.Environment, authProvider)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-	return multiTenantOAuthToken, networkResourceServicePrincipalToken, nil
 }
 
 func (az *Cloud) setCloudProviderBackoffDefaults(config *azureconfig.Config) wait.Backoff {
@@ -680,99 +618,6 @@ func (az *Cloud) setCloudProviderBackoffDefaults(config *azureconfig.Config) wai
 		config.CloudProviderBackoffDuration = consts.BackoffDurationDefault
 	}
 	return resourceRequestBackoff
-}
-
-func (az *Cloud) configAzureClients(
-	servicePrincipalToken *adal.ServicePrincipalToken,
-	multiTenantOAuthTokenProvider adal.MultitenantOAuthTokenProvider,
-	networkResourceServicePrincipalToken adal.OAuthTokenProvider,
-) {
-	azClientConfig := az.getAzureClientConfig(servicePrincipalToken)
-
-	// Prepare AzureClientConfig for all azure clients
-	interfaceClientConfig := azClientConfig.WithRateLimiter(az.Config.InterfaceRateLimit)
-	vmSizeClientConfig := azClientConfig.WithRateLimiter(az.Config.VirtualMachineSizeRateLimit)
-	diskClientConfig := azClientConfig.WithRateLimiter(az.Config.DiskRateLimit)
-	vmClientConfig := azClientConfig.WithRateLimiter(az.Config.VirtualMachineRateLimit)
-	vmssClientConfig := azClientConfig.WithRateLimiter(az.Config.VirtualMachineScaleSetRateLimit)
-	// Error "not an active Virtual Machine Scale Set VM" is not retriable for VMSS VM.
-	// But http.StatusNotFound is retriable because of ARM replication latency.
-	vmssVMClientConfig := azClientConfig.WithRateLimiter(az.Config.VirtualMachineScaleSetRateLimit)
-	vmssVMClientConfig.Backoff = vmssVMClientConfig.Backoff.WithNonRetriableErrors([]string{consts.VmssVMNotActiveErrorMessage}).WithRetriableHTTPStatusCodes([]int{http.StatusNotFound})
-	subnetClientConfig := azClientConfig.WithRateLimiter(az.Config.SubnetsRateLimit)
-	routeTableClientConfig := azClientConfig.WithRateLimiter(az.Config.RouteTableRateLimit)
-	loadBalancerClientConfig := azClientConfig.WithRateLimiter(az.Config.LoadBalancerRateLimit)
-	publicIPClientConfig := azClientConfig.WithRateLimiter(az.Config.PublicIPAddressRateLimit)
-	vmasClientConfig := azClientConfig.WithRateLimiter(az.Config.AvailabilitySetRateLimit)
-
-	// If uses network resources in different AAD Tenant, update Authorizer for VM/VMSS/VMAS client config
-	if multiTenantOAuthTokenProvider != nil {
-		multiTenantServicePrincipalTokenAuthorizer := autorest.NewMultiTenantServicePrincipalTokenAuthorizer(multiTenantOAuthTokenProvider)
-
-		vmClientConfig.Authorizer = multiTenantServicePrincipalTokenAuthorizer
-		vmssClientConfig.Authorizer = multiTenantServicePrincipalTokenAuthorizer
-		vmssVMClientConfig.Authorizer = multiTenantServicePrincipalTokenAuthorizer
-		vmasClientConfig.Authorizer = multiTenantServicePrincipalTokenAuthorizer
-	}
-
-	// If uses network resources in different AAD Tenant, update SubscriptionID and Authorizer for network resources client config
-	if networkResourceServicePrincipalToken != nil {
-		networkResourceServicePrincipalTokenAuthorizer := autorest.NewBearerAuthorizer(networkResourceServicePrincipalToken)
-		subnetClientConfig.Authorizer = networkResourceServicePrincipalTokenAuthorizer
-		routeTableClientConfig.Authorizer = networkResourceServicePrincipalTokenAuthorizer
-		loadBalancerClientConfig.Authorizer = networkResourceServicePrincipalTokenAuthorizer
-		publicIPClientConfig.Authorizer = networkResourceServicePrincipalTokenAuthorizer
-	}
-
-	if az.UsesNetworkResourceInDifferentSubscription() {
-		subnetClientConfig.SubscriptionID = az.Config.NetworkResourceSubscriptionID
-		routeTableClientConfig.SubscriptionID = az.Config.NetworkResourceSubscriptionID
-		loadBalancerClientConfig.SubscriptionID = az.Config.NetworkResourceSubscriptionID
-		publicIPClientConfig.SubscriptionID = az.Config.NetworkResourceSubscriptionID
-	}
-
-	// Initialize all azure clients based on client config
-	az.InterfacesClient = interfaceclient.New(interfaceClientConfig)
-	az.VirtualMachineSizesClient = vmsizeclient.New(vmSizeClientConfig)
-	az.DisksClient = diskclient.New(diskClientConfig)
-	az.VirtualMachinesClient = vmclient.New(vmClientConfig)
-	az.VirtualMachineScaleSetsClient = vmssclient.New(vmssClientConfig)
-	az.VirtualMachineScaleSetVMsClient = vmssvmclient.New(vmssVMClientConfig)
-	az.SubnetsClient = subnetclient.New(subnetClientConfig)
-	az.LoadBalancerClient = loadbalancerclient.New(loadBalancerClientConfig)
-	az.PublicIPAddressesClient = publicipclient.New(publicIPClientConfig)
-	az.AvailabilitySetsClient = vmasclient.New(vmasClientConfig)
-}
-
-func (az *Cloud) getAzureClientConfig(servicePrincipalToken *adal.ServicePrincipalToken) *azclients.ClientConfig {
-	azClientConfig := &azclients.ClientConfig{
-		CloudName:               az.Config.Cloud,
-		Location:                az.Config.Location,
-		SubscriptionID:          az.Config.SubscriptionID,
-		ResourceManagerEndpoint: az.Environment.ResourceManagerEndpoint,
-		Authorizer:              autorest.NewBearerAuthorizer(servicePrincipalToken),
-		Backoff:                 &retry.Backoff{Steps: 1},
-		DisableAzureStackCloud:  az.Config.DisableAzureStackCloud,
-		UserAgent:               az.Config.UserAgent,
-	}
-
-	if az.Config.CloudProviderBackoff {
-		azClientConfig.Backoff = &retry.Backoff{
-			Steps:    az.Config.CloudProviderBackoffRetries,
-			Factor:   az.Config.CloudProviderBackoffExponent,
-			Duration: time.Duration(az.Config.CloudProviderBackoffDuration) * time.Second,
-			Jitter:   az.Config.CloudProviderBackoffJitter,
-		}
-	}
-
-	if az.Config.HasExtendedLocation() {
-		azClientConfig.ExtendedLocation = &azclients.ExtendedLocation{
-			Name: az.Config.ExtendedLocationName,
-			Type: az.Config.ExtendedLocationType,
-		}
-	}
-
-	return azClientConfig
 }
 
 // Initialize passes a Kubernetes clientBuilder interface to the cloud provider

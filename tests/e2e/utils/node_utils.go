@@ -378,10 +378,10 @@ func LabelNode(cs clientset.Interface, node *v1.Node, label string, isDelete boo
 	return node, nil
 }
 
-func GetNodepoolNodeMap(nodes *[]v1.Node) map[string][]string {
+func GetNodepoolNodeMap(nodes []v1.Node) map[string][]string {
 	nodepoolNodeMap := make(map[string][]string)
-	for i := range *nodes {
-		node := (*nodes)[i]
+	for i := range nodes {
+		node := (nodes)[i]
 		labels := node.ObjectMeta.Labels
 		if IsSystemPoolNode(&node) {
 			continue

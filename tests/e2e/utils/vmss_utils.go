@@ -279,7 +279,7 @@ func ValidateClusterNodesMatchVMSSInstances(tc *AzureTestClient, expectedCap map
 				if cap != int64(originalNodeSet.Intersection(vmssInstanceSet).Len()) {
 					// For autoscaling cluster, simply comparing the capacity may not work since if the number of current nodes is lower than the "minCount", a new node may be created after scaling down.
 					// In this situation, we compare the expected capacity with the length of intersection between original nodes and current nodes.
-					Logf("VMSS %q sku capacity is expected to be %d, but actually %d", *vmss.Name, cap, *vmss.SKU.Capacity)
+					Logf("VMSS %q SKU capacity is expected to be %d, but actually %d", *vmss.Name, cap, *vmss.SKU.Capacity)
 					capMatch = false
 					break
 				}

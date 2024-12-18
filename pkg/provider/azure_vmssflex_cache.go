@@ -24,14 +24,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
-
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
 )
 
 func (fs *FlexScaleSet) newVmssFlexCache() (azcache.Resource, error) {
@@ -44,14 +45,14 @@ func (fs *FlexScaleSet) newVmssFlexCache() (azcache.Resource, error) {
 		}
 
 		for _, resourceGroup := range allResourceGroups.UnsortedList() {
-			allScaleSets, rerr := fs.VirtualMachineScaleSetsClient.List(ctx, resourceGroup)
+			allScaleSets, rerr := fs.ComputeClientFactory.GetVirtualMachineScaleSetClient().List(ctx, resourceGroup)
 			if rerr != nil {
-				if rerr.IsNotFound() {
+				if exists, err := errutils.CheckResourceExistsFromAzcoreError(rerr); !exists && err == nil {
 					klog.Warningf("Skip caching vmss for resource group %s due to error: %v", resourceGroup, rerr.Error())
 					continue
 				}
 				klog.Errorf("VirtualMachineScaleSetsClient.List failed: %v", rerr)
-				return nil, rerr.Error()
+				return nil, rerr
 			}
 
 			for i := range allScaleSets {
@@ -61,8 +62,8 @@ func (fs *FlexScaleSet) newVmssFlexCache() (azcache.Resource, error) {
 					continue
 				}
 
-				if scaleSet.OrchestrationMode == compute.Flexible {
-					localCache.Store(*scaleSet.ID, &scaleSet)
+				if *scaleSet.Properties.OrchestrationMode == armcompute.OrchestrationModeFlexible {
+					localCache.Store(*scaleSet.ID, scaleSet)
 				}
 			}
 		}
@@ -79,26 +80,29 @@ func (fs *FlexScaleSet) newVmssFlexCache() (azcache.Resource, error) {
 func (fs *FlexScaleSet) newVmssFlexVMCache() (azcache.Resource, error) {
 	getter := func(ctx context.Context, key string) (interface{}, error) {
 		localCache := &sync.Map{}
-
-		vms, rerr := fs.VirtualMachinesClient.ListVmssFlexVMsWithoutInstanceView(ctx, key)
+		armResource, err := arm.ParseResourceID("/" + key)
+		if err != nil {
+			return nil, err
+		}
+		vms, rerr := fs.ComputeClientFactory.GetVirtualMachineClient().ListVmssFlexVMsWithOutInstanceView(ctx, armResource.ResourceGroupName, key)
 		if rerr != nil {
-			klog.Errorf("ListVmssFlexVMsWithoutInstanceView failed: %v", rerr)
-			return nil, rerr.Error()
+			klog.Errorf("List failed: %v", rerr)
+			return nil, rerr
 		}
 
 		for i := range vms {
 			vm := vms[i]
-			if vm.OsProfile != nil && vm.OsProfile.ComputerName != nil {
-				localCache.Store(strings.ToLower(*vm.OsProfile.ComputerName), &vm)
-				fs.vmssFlexVMNameToVmssID.Store(strings.ToLower(*vm.OsProfile.ComputerName), key)
-				fs.vmssFlexVMNameToNodeName.Store(*vm.Name, strings.ToLower(*vm.OsProfile.ComputerName))
+			if vm.Properties.OSProfile != nil && vm.Properties.OSProfile.ComputerName != nil {
+				localCache.Store(strings.ToLower(*vm.Properties.OSProfile.ComputerName), vm)
+				fs.vmssFlexVMNameToVmssID.Store(strings.ToLower(*vm.Properties.OSProfile.ComputerName), key)
+				fs.vmssFlexVMNameToNodeName.Store(*vm.Name, strings.ToLower(*vm.Properties.OSProfile.ComputerName))
 			}
 		}
 
-		vms, rerr = fs.VirtualMachinesClient.ListVmssFlexVMsWithOnlyInstanceView(ctx, key)
+		vms, rerr = fs.ComputeClientFactory.GetVirtualMachineClient().ListVmssFlexVMsWithOnlyInstanceView(ctx, armResource.ResourceGroupName, key)
 		if rerr != nil {
-			klog.Errorf("ListVmssFlexVMsWithOnlyInstanceView failed: %v", rerr)
-			return nil, rerr.Error()
+			klog.Errorf("ListVMInstanceView failed: %v", rerr)
+			return nil, rerr
 		}
 
 		for i := range vms {
@@ -111,8 +115,8 @@ func (fs *FlexScaleSet) newVmssFlexVMCache() (azcache.Resource, error) {
 
 				cached, ok := localCache.Load(nodeName)
 				if ok {
-					cachedVM := cached.(*compute.VirtualMachine)
-					cachedVM.VirtualMachineProperties.InstanceView = vm.VirtualMachineProperties.InstanceView
+					cachedVM := cached.(*armcompute.VirtualMachine)
+					cachedVM.Properties.InstanceView = vm.Properties.InstanceView
 				}
 			}
 		}
@@ -185,12 +189,12 @@ func (fs *FlexScaleSet) getNodeVmssFlexID(ctx context.Context, nodeName string) 
 		var vmssFlexIDs []string
 		vmssFlexes.Range(func(key, value interface{}) bool {
 			vmssFlexID := key.(string)
-			vmssFlex := value.(*compute.VirtualMachineScaleSet)
+			vmssFlex := value.(*armcompute.VirtualMachineScaleSet)
 			vmssPrefix := ptr.Deref(vmssFlex.Name, "")
-			if vmssFlex.VirtualMachineProfile != nil &&
-				vmssFlex.VirtualMachineProfile.OsProfile != nil &&
-				vmssFlex.VirtualMachineProfile.OsProfile.ComputerNamePrefix != nil {
-				vmssPrefix = ptr.Deref(vmssFlex.VirtualMachineProfile.OsProfile.ComputerNamePrefix, "")
+			if vmssFlex.Properties.VirtualMachineProfile != nil &&
+				vmssFlex.Properties.VirtualMachineProfile.OSProfile != nil &&
+				vmssFlex.Properties.VirtualMachineProfile.OSProfile.ComputerNamePrefix != nil {
+				vmssPrefix = ptr.Deref(vmssFlex.Properties.VirtualMachineProfile.OSProfile.ComputerNamePrefix, "")
 			}
 			if strings.EqualFold(vmssPrefix, nodeName[:len(nodeName)-6]) {
 				// we should check this vmss first since nodeName and vmssFlex.Name or
@@ -224,7 +228,7 @@ func (fs *FlexScaleSet) getNodeVmssFlexID(ctx context.Context, nodeName string) 
 
 }
 
-func (fs *FlexScaleSet) getVmssFlexVM(ctx context.Context, nodeName string, crt azcache.AzureCacheReadType) (vm compute.VirtualMachine, err error) {
+func (fs *FlexScaleSet) getVmssFlexVM(ctx context.Context, nodeName string, crt azcache.AzureCacheReadType) (vm *armcompute.VirtualMachine, err error) {
 	vmssFlexID, err := fs.getNodeVmssFlexID(ctx, nodeName)
 	if err != nil {
 		return vm, err
@@ -241,17 +245,17 @@ func (fs *FlexScaleSet) getVmssFlexVM(ctx context.Context, nodeName string, crt 
 		return vm, cloudprovider.InstanceNotFound
 	}
 
-	return *(cachedVM.(*compute.VirtualMachine)), nil
+	return (cachedVM.(*armcompute.VirtualMachine)), nil
 }
 
-func (fs *FlexScaleSet) getVmssFlexByVmssFlexID(ctx context.Context, vmssFlexID string, crt azcache.AzureCacheReadType) (*compute.VirtualMachineScaleSet, error) {
+func (fs *FlexScaleSet) getVmssFlexByVmssFlexID(ctx context.Context, vmssFlexID string, crt azcache.AzureCacheReadType) (*armcompute.VirtualMachineScaleSet, error) {
 	cached, err := fs.vmssFlexCache.Get(ctx, consts.VmssFlexKey, crt)
 	if err != nil {
 		return nil, err
 	}
 	vmssFlexes := cached.(*sync.Map)
 	if vmssFlex, ok := vmssFlexes.Load(vmssFlexID); ok {
-		result := vmssFlex.(*compute.VirtualMachineScaleSet)
+		result := vmssFlex.(*armcompute.VirtualMachineScaleSet)
 		return result, nil
 	}
 
@@ -262,13 +266,13 @@ func (fs *FlexScaleSet) getVmssFlexByVmssFlexID(ctx context.Context, vmssFlexID 
 	}
 	vmssFlexes = cached.(*sync.Map)
 	if vmssFlex, ok := vmssFlexes.Load(vmssFlexID); ok {
-		result := vmssFlex.(*compute.VirtualMachineScaleSet)
+		result := vmssFlex.(*armcompute.VirtualMachineScaleSet)
 		return result, nil
 	}
 	return nil, cloudprovider.InstanceNotFound
 }
 
-func (fs *FlexScaleSet) getVmssFlexByNodeName(ctx context.Context, nodeName string, crt azcache.AzureCacheReadType) (*compute.VirtualMachineScaleSet, error) {
+func (fs *FlexScaleSet) getVmssFlexByNodeName(ctx context.Context, nodeName string, crt azcache.AzureCacheReadType) (*armcompute.VirtualMachineScaleSet, error) {
 	vmssFlexID, err := fs.getNodeVmssFlexID(ctx, nodeName)
 	if err != nil {
 		return nil, err
@@ -305,17 +309,17 @@ func (fs *FlexScaleSet) getVmssFlexIDByName(ctx context.Context, vmssFlexName st
 	return "", cloudprovider.InstanceNotFound
 }
 
-func (fs *FlexScaleSet) getVmssFlexByName(ctx context.Context, vmssFlexName string) (*compute.VirtualMachineScaleSet, error) {
+func (fs *FlexScaleSet) getVmssFlexByName(ctx context.Context, vmssFlexName string) (*armcompute.VirtualMachineScaleSet, error) {
 	cached, err := fs.vmssFlexCache.Get(ctx, consts.VmssFlexKey, azcache.CacheReadTypeDefault)
 	if err != nil {
 		return nil, err
 	}
 
-	var targetVmssFlex *compute.VirtualMachineScaleSet
+	var targetVmssFlex *armcompute.VirtualMachineScaleSet
 	vmssFlexes := cached.(*sync.Map)
 	vmssFlexes.Range(func(key, value interface{}) bool {
 		vmssFlexID := key.(string)
-		vmssFlex := value.(*compute.VirtualMachineScaleSet)
+		vmssFlex := value.(*armcompute.VirtualMachineScaleSet)
 		name, err := getLastSegment(vmssFlexID, "/")
 		if err != nil {
 			return true

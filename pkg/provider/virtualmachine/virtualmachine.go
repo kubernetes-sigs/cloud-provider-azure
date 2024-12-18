@@ -17,8 +17,7 @@ limitations under the License.
 package virtualmachine
 
 import (
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
-
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -50,8 +49,8 @@ func ByVMSS(vmssName string) ManageOption {
 
 type VirtualMachine struct {
 	Variant Variant
-	vm      *compute.VirtualMachine
-	vmssVM  *compute.VirtualMachineScaleSetVM
+	vm      *armcompute.VirtualMachine
+	vmssVM  *armcompute.VirtualMachineScaleSetVM
 
 	Manage   Manage
 	VMSSName string
@@ -62,22 +61,22 @@ type VirtualMachine struct {
 	Name      string
 	Location  string
 	Tags      map[string]string
-	Zones     []string
+	Zones     []*string
 	Type      string
-	Plan      *compute.Plan
-	Resources *[]compute.VirtualMachineExtension
+	Plan      *armcompute.Plan
+	Resources []*armcompute.VirtualMachineExtension
 
 	// fields of VirtualMachine
-	Identity                 *compute.VirtualMachineIdentity
-	VirtualMachineProperties *compute.VirtualMachineProperties
+	Identity                 *armcompute.VirtualMachineIdentity
+	VirtualMachineProperties *armcompute.VirtualMachineProperties
 
 	// fields of VirtualMachineScaleSetVM
 	InstanceID                         string
-	SKU                                *compute.Sku
-	VirtualMachineScaleSetVMProperties *compute.VirtualMachineScaleSetVMProperties
+	SKU                                *armcompute.SKU
+	VirtualMachineScaleSetVMProperties *armcompute.VirtualMachineScaleSetVMProperties
 }
 
-func FromVirtualMachine(vm *compute.VirtualMachine, opt ...ManageOption) *VirtualMachine {
+func FromVirtualMachine(vm *armcompute.VirtualMachine, opt ...ManageOption) *VirtualMachine {
 	v := &VirtualMachine{
 		vm:      vm,
 		Variant: VariantVirtualMachine,
@@ -87,12 +86,12 @@ func FromVirtualMachine(vm *compute.VirtualMachine, opt ...ManageOption) *Virtua
 		Type:      ptr.Deref(vm.Type, ""),
 		Location:  ptr.Deref(vm.Location, ""),
 		Tags:      stringMap(vm.Tags),
-		Zones:     stringSlice(vm.Zones),
+		Zones:     vm.Zones,
 		Plan:      vm.Plan,
 		Resources: vm.Resources,
 
 		Identity:                 vm.Identity,
-		VirtualMachineProperties: vm.VirtualMachineProperties,
+		VirtualMachineProperties: vm.Properties,
 	}
 
 	for _, opt := range opt {
@@ -102,7 +101,7 @@ func FromVirtualMachine(vm *compute.VirtualMachine, opt ...ManageOption) *Virtua
 	return v
 }
 
-func FromVirtualMachineScaleSetVM(vm *compute.VirtualMachineScaleSetVM, opt ManageOption) *VirtualMachine {
+func FromVirtualMachineScaleSetVM(vm *armcompute.VirtualMachineScaleSetVM, opt ManageOption) *VirtualMachine {
 	v := &VirtualMachine{
 		Variant: VariantVirtualMachineScaleSetVM,
 		vmssVM:  vm,
@@ -112,13 +111,13 @@ func FromVirtualMachineScaleSetVM(vm *compute.VirtualMachineScaleSetVM, opt Mana
 		Type:      ptr.Deref(vm.Type, ""),
 		Location:  ptr.Deref(vm.Location, ""),
 		Tags:      stringMap(vm.Tags),
-		Zones:     stringSlice(vm.Zones),
+		Zones:     vm.Zones,
 		Plan:      vm.Plan,
 		Resources: vm.Resources,
 
-		SKU:                                vm.Sku,
+		SKU:                                vm.SKU,
 		InstanceID:                         ptr.Deref(vm.InstanceID, ""),
-		VirtualMachineScaleSetVMProperties: vm.VirtualMachineScaleSetVMProperties,
+		VirtualMachineScaleSetVMProperties: vm.Properties,
 	}
 
 	// TODO: should validate manage option
@@ -140,40 +139,40 @@ func (vm *VirtualMachine) ManagedByVMSS() bool {
 	return vm.Manage == VMSS
 }
 
-func (vm *VirtualMachine) AsVirtualMachine() *compute.VirtualMachine {
+func (vm *VirtualMachine) AsVirtualMachine() *armcompute.VirtualMachine {
 	return vm.vm
 }
 
-func (vm *VirtualMachine) AsVirtualMachineScaleSetVM() *compute.VirtualMachineScaleSetVM {
+func (vm *VirtualMachine) AsVirtualMachineScaleSetVM() *armcompute.VirtualMachineScaleSetVM {
 	return vm.vmssVM
 }
 
-func (vm *VirtualMachine) GetInstanceViewStatus() *[]compute.InstanceViewStatus {
+func (vm *VirtualMachine) GetInstanceViewStatus() []*armcompute.InstanceViewStatus {
 	if vm.IsVirtualMachine() && vm.vm != nil &&
-		vm.vm.VirtualMachineProperties != nil &&
-		vm.vm.VirtualMachineProperties.InstanceView != nil {
-		return vm.vm.VirtualMachineProperties.InstanceView.Statuses
+		vm.vm.Properties != nil &&
+		vm.vm.Properties.InstanceView != nil {
+		return vm.vm.Properties.InstanceView.Statuses
 	}
 	if vm.IsVirtualMachineScaleSetVM() &&
 		vm.vmssVM != nil &&
-		vm.vmssVM.VirtualMachineScaleSetVMProperties != nil &&
-		vm.vmssVM.VirtualMachineScaleSetVMProperties.InstanceView != nil {
-		return vm.vmssVM.VirtualMachineScaleSetVMProperties.InstanceView.Statuses
+		vm.vmssVM.Properties != nil &&
+		vm.vmssVM.Properties.InstanceView != nil {
+		return vm.vmssVM.Properties.InstanceView.Statuses
 	}
 	return nil
 }
 
 func (vm *VirtualMachine) GetProvisioningState() string {
 	if vm.IsVirtualMachine() && vm.vm != nil &&
-		vm.vm.VirtualMachineProperties != nil &&
-		vm.vm.VirtualMachineProperties.ProvisioningState != nil {
-		return *vm.vm.VirtualMachineProperties.ProvisioningState
+		vm.vm.Properties != nil &&
+		vm.vm.Properties.ProvisioningState != nil {
+		return *vm.vm.Properties.ProvisioningState
 	}
 	if vm.IsVirtualMachineScaleSetVM() &&
 		vm.vmssVM != nil &&
-		vm.vmssVM.VirtualMachineScaleSetVMProperties != nil &&
-		vm.vmssVM.VirtualMachineScaleSetVMProperties.ProvisioningState != nil {
-		return *vm.vmssVM.VirtualMachineScaleSetVMProperties.ProvisioningState
+		vm.vmssVM.Properties != nil &&
+		vm.vmssVM.Properties.ProvisioningState != nil {
+		return *vm.vmssVM.Properties.ProvisioningState
 	}
 	return consts.ProvisioningStateUnknown
 }
@@ -190,13 +189,4 @@ func stringMap(msp map[string]*string) map[string]string {
 		}
 	}
 	return ms
-}
-
-// stringSlice returns a string slice value for the passed string slice pointer. It returns a nil
-// slice if the pointer is nil.
-func stringSlice(s *[]string) []string {
-	if s != nil {
-		return *s
-	}
-	return nil
 }

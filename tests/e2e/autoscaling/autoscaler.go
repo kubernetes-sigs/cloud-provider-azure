@@ -95,7 +95,7 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		}
 		utils.Logf("Initial schedulable nodes (%d): %q", initNodeCount, nodeNames)
 
-		initNodepoolNodeMap = utils.GetNodepoolNodeMap(&nodes)
+		initNodepoolNodeMap = utils.GetNodepoolNodeMap(nodes)
 		utils.Logf("found %d node pools", len(initNodepoolNodeMap))
 
 		// TODO:
@@ -262,7 +262,7 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		nodes, err = utils.GetAgentNodes(cs)
 		Expect(err).NotTo(HaveOccurred())
 
-		isBalance := checkNodeGroupsBalance(&nodes)
+		isBalance := checkNodeGroupsBalance(nodes)
 		Expect(isBalance).To(BeTrue())
 
 		waitForScaleDownToComplete(cs, ns, initNodeCount, scaleUpDeployment)
@@ -616,7 +616,7 @@ func calculateNewPodCountOnNode(cs clientset.Interface, node *v1.Node) int32 {
 	return podCountOnNode
 }
 
-func checkNodeGroupsBalance(nodes *[]v1.Node) bool {
+func checkNodeGroupsBalance(nodes []v1.Node) bool {
 	nodepoolSizeMap := utils.GetNodepoolNodeMap(nodes)
 	min, max := math.MaxInt32, math.MinInt32
 	for _, nodes := range nodepoolSizeMap {

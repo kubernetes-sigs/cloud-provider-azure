@@ -27,7 +27,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
@@ -45,16 +44,16 @@ func (az *Cloud) reconcilePrivateLinkService(
 	ctx context.Context,
 	clusterName string,
 	service *v1.Service,
-	fipConfig *network.FrontendIPConfiguration,
+	fipConfig *armnetwork.FrontendIPConfiguration,
 	wantPLS bool,
 ) error {
 	isinternal := requiresInternalLoadBalancer(service)
-	_, _, fipIPVersion := az.serviceOwnsFrontendIP(ctx, *fipConfig, service)
+	_, _, fipIPVersion := az.serviceOwnsFrontendIP(ctx, fipConfig, service)
 	serviceName := getServiceName(service)
 	var isIPv6 bool
 	var err error
-	if fipIPVersion != "" {
-		isIPv6 = fipIPVersion == network.IPv6
+	if fipIPVersion != nil {
+		isIPv6 = *fipIPVersion == armnetwork.IPVersionIPv6
 	} else {
 		if isIPv6, err = az.isFIPIPv6(service, fipConfig); err != nil {
 			klog.Errorf("reconcilePrivateLinkService for service(%s): failed to get FIP IP family: %v", serviceName, err)
@@ -266,7 +265,7 @@ func (az *Cloud) safeDeletePLS(ctx context.Context, pls *armnetwork.PrivateLinkS
 func (az *Cloud) getPrivateLinkServiceName(
 	existingPLS *armnetwork.PrivateLinkService,
 	service *v1.Service,
-	fipConfig *network.FrontendIPConfiguration,
+	fipConfig *armnetwork.FrontendIPConfiguration,
 ) (string, error) {
 	existingName := existingPLS.Name
 	serviceName := getServiceName(service)
@@ -299,7 +298,7 @@ func (az *Cloud) getExpectedPrivateLinkService(
 	plsName *string,
 	clusterName *string,
 	service *v1.Service,
-	fipConfig *network.FrontendIPConfiguration,
+	fipConfig *armnetwork.FrontendIPConfiguration,
 ) (dirtyPLS bool, err error) {
 	dirtyPLS = false
 

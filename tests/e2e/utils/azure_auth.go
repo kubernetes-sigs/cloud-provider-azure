@@ -31,7 +31,7 @@ const (
 	ServicePrincipleSecretEnv = "AZURE_CLIENT_SECRET" // #nosec G101
 	ClusterLocationEnv        = "AZURE_LOCATION"
 	ClusterEnvironment        = "AZURE_ENVIRONMENT"
-	LoadBalancerSkuEnv        = "AZURE_LOADBALANCER_SKU"
+	LoadBalancerSKUEnv        = "AZURE_LOADBALANCER_SKU"
 	managedIdentityClientID   = "AZURE_MANAGED_IDENTITY_CLIENT_ID"
 	federatedTokenFile        = "AZURE_FEDERATED_TOKEN_FILE"
 	managedIdentityType       = "E2E_MANAGED_IDENTITY_TYPE"

@@ -18,17 +18,12 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
 	"sync"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
@@ -391,7 +386,7 @@ func getResourceByIPFamily(resource string, isDualStack, isIPv6 bool) string {
 
 // isFIPIPv6 checks if the frontend IP configuration is of IPv6.
 // NOTICE: isFIPIPv6 assumes the FIP is owned by the Service and it is the primary Service.
-func (az *Cloud) isFIPIPv6(service *v1.Service, fip *network.FrontendIPConfiguration) (bool, error) {
+func (az *Cloud) isFIPIPv6(service *v1.Service, fip *armnetwork.FrontendIPConfiguration) (bool, error) {
 	isDualStack := isServiceDualStack(service)
 	if !isDualStack {
 		if len(service.Spec.IPFamilies) == 0 {
@@ -420,25 +415,25 @@ func getBackendPoolNameFromBackendPoolID(backendPoolID string) (string, error) {
 	return matches[2], nil
 }
 
-func countNICsOnBackendPool(backendPool network.BackendAddressPool) int {
-	if backendPool.BackendAddressPoolPropertiesFormat == nil ||
-		backendPool.BackendIPConfigurations == nil {
+func countNICsOnBackendPool(backendPool *armnetwork.BackendAddressPool) int {
+	if backendPool.Properties == nil ||
+		backendPool.Properties.BackendIPConfigurations == nil {
 		return 0
 	}
 
-	return len(*backendPool.BackendIPConfigurations)
+	return len(backendPool.Properties.BackendIPConfigurations)
 }
 
-func countIPsOnBackendPool(backendPool network.BackendAddressPool) int {
-	if backendPool.BackendAddressPoolPropertiesFormat == nil ||
-		backendPool.LoadBalancerBackendAddresses == nil {
+func countIPsOnBackendPool(backendPool *armnetwork.BackendAddressPool) int {
+	if backendPool.Properties == nil ||
+		backendPool.Properties.LoadBalancerBackendAddresses == nil {
 		return 0
 	}
 
 	var ipsCount int
-	for _, loadBalancerBackendAddress := range *backendPool.LoadBalancerBackendAddresses {
-		if loadBalancerBackendAddress.LoadBalancerBackendAddressPropertiesFormat != nil &&
-			ptr.Deref(loadBalancerBackendAddress.IPAddress, "") != "" {
+	for _, loadBalancerBackendAddress := range backendPool.Properties.LoadBalancerBackendAddresses {
+		if loadBalancerBackendAddress.Properties != nil &&
+			ptr.Deref(loadBalancerBackendAddress.Properties.IPAddress, "") != "" {
 			ipsCount++
 		}
 	}
@@ -497,7 +492,7 @@ func getResourceGroupAndNameFromNICID(ipConfigurationID string) (string, string,
 	return nicResourceGroup, nicName, nil
 }
 
-func isInternalLoadBalancer(lb *network.LoadBalancer) bool {
+func isInternalLoadBalancer(lb *armnetwork.LoadBalancer) bool {
 	return strings.HasSuffix(strings.ToLower(*lb.Name), consts.InternalLoadBalancerNameSuffix)
 }
 
@@ -511,25 +506,4 @@ func trimSuffixIgnoreCase(str, suf string) string {
 		return strings.TrimSuffix(str, suf)
 	}
 	return str
-}
-
-// ToArmcomputeDisk converts compute.DataDisk to armcompute.DataDisk
-// This is a workaround during track2 migration.
-// TODO: remove this function after compute api is migrated to track2
-func ToArmcomputeDisk(disks []compute.DataDisk) ([]*armcompute.DataDisk, error) {
-	var result []*armcompute.DataDisk
-	for _, disk := range disks {
-		content, err := json.Marshal(disk)
-		if err != nil {
-			return nil, err
-		}
-		var dataDisk armcompute.DataDisk
-		err = json.Unmarshal(content, &dataDisk)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, &dataDisk)
-	}
-
-	return result, nil
 }

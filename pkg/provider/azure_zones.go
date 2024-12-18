@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	cloudprovider "k8s.io/cloud-provider"
@@ -72,19 +73,19 @@ func (az *Cloud) updateRegionZonesMap(zones map[string][]string) {
 	}
 }
 
-func (az *Cloud) getRegionZonesBackoff(ctx context.Context, region string) ([]string, error) {
+func (az *Cloud) getRegionZonesBackoff(ctx context.Context, region string) ([]*string, error) {
 	if az.IsStackCloud() {
 		// Azure Stack does not support zone at the moment
 		// https://docs.microsoft.com/en-us/azure-stack/user/azure-stack-network-differences?view=azs-2102
 		klog.V(3).Infof("getRegionZonesMapWrapper: Azure Stack does not support Zones at the moment, skipping")
-		return az.regionZonesMap[region], nil
+		return to.SliceOfPtrs(az.regionZonesMap[region]...), nil
 	}
 
 	if len(az.regionZonesMap) != 0 {
 		az.refreshZonesLock.RLock()
 		defer az.refreshZonesLock.RUnlock()
 
-		return az.regionZonesMap[region], nil
+		return to.SliceOfPtrs(az.regionZonesMap[region]...), nil
 	}
 
 	klog.V(2).Infof("getRegionZonesMapWrapper: the region-zones map is not initialized successfully, retrying immediately")
@@ -104,7 +105,7 @@ func (az *Cloud) getRegionZonesBackoff(ctx context.Context, region string) ([]st
 	})
 
 	if wait.Interrupted(err) {
-		return []string{}, innerErr
+		return []*string{}, innerErr
 	}
 
 	az.updateRegionZonesMap(zones)
@@ -113,10 +114,10 @@ func (az *Cloud) getRegionZonesBackoff(ctx context.Context, region string) ([]st
 		az.refreshZonesLock.RLock()
 		defer az.refreshZonesLock.RUnlock()
 
-		return az.regionZonesMap[region], nil
+		return to.SliceOfPtrs(az.regionZonesMap[region]...), nil
 	}
 
-	return []string{}, nil
+	return []*string{}, nil
 }
 
 // makeZone returns the zone value in format of <region>-<zone-id>.

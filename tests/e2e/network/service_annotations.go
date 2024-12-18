@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
-	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -350,7 +350,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 	})
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-enable-high-availability-ports'", func() {
-		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.LoadBalancerSKUNameStandard)) {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSKUEnv), string(armnetwork.LoadBalancerSKUNameStandard)) {
 			Skip("azure-load-balancer-enable-high-availability-ports only work with Standard Load Balancer")
 		}
 
@@ -560,7 +560,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 	})
 
 	It("should support service annotation `service.beta.kubernetes.io/azure-pip-prefix-id`", func() {
-		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.LoadBalancerSKUNameStandard)) {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSKUEnv), string(armnetwork.LoadBalancerSKUNameStandard)) {
 			Skip("pip-prefix-id only work with Standard Load Balancer")
 		}
 
@@ -713,8 +713,8 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}
 		utils.Logf("PIP frontend config IDs %q", ids)
 
-		var lb *network.LoadBalancer
-		var targetProbes []*network.Probe
+		var lb *armnetwork.LoadBalancer
+		var targetProbes []*armnetwork.Probe
 		expectedTargetProbesCount := 1
 		if tc.IPFamily == utils.DualStack {
 			expectedTargetProbesCount = 2
@@ -722,7 +722,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		//wait for backend update
 		err := wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
 			lb = getAzureLoadBalancerFromPIP(tc, publicIPs[0], tc.GetResourceGroup(), "")
-			targetProbes = []*network.Probe{}
+			targetProbes = []*armnetwork.Probe{}
 			for i := range lb.Properties.Probes {
 				probe := (lb.Properties.Probes)[i]
 				utils.Logf("One probe of LB is %q", *probe.Name)
@@ -755,7 +755,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				Expect(*probe.Properties.IntervalInSeconds).To(Equal(int32(10)))
 			}
 			utils.Logf("Validating health probe config ProbeProtocolHTTP")
-			Expect(*probe.Properties.Protocol).To(Equal(network.ProbeProtocolHTTP))
+			Expect(*probe.Properties.Protocol).To(Equal(armnetwork.ProbeProtocolHTTP))
 		}
 	})
 
@@ -787,8 +787,8 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}
 		utils.Logf("PIP frontend config IDs %q", ids)
 
-		var lb *network.LoadBalancer
-		var targetProbes []*network.Probe
+		var lb *armnetwork.LoadBalancer
+		var targetProbes []*armnetwork.Probe
 		expectedTargetProbesCount := 1
 		if tc.IPFamily == utils.DualStack {
 			expectedTargetProbesCount = 2
@@ -796,7 +796,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		//wait for backend update
 		err := wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
 			lb = getAzureLoadBalancerFromPIP(tc, publicIPs[0], tc.GetResourceGroup(), "")
-			targetProbes = []*network.Probe{}
+			targetProbes = []*armnetwork.Probe{}
 			for i := range lb.Properties.Probes {
 				probe := (lb.Properties.Probes)[i]
 				utils.Logf("One probe of LB is %q", *probe.Name)
@@ -829,7 +829,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				Expect(*probe.Properties.IntervalInSeconds).To(Equal(int32(10)))
 			}
 			utils.Logf("Validating health probe config ProbeProtocolHTTP")
-			Expect(*probe.Properties.Protocol).To(Equal(network.ProbeProtocolHTTP))
+			Expect(*probe.Properties.Protocol).To(Equal(armnetwork.ProbeProtocolHTTP))
 		}
 
 		By("Changing ExternalTrafficPolicy of the service to Local")
@@ -866,7 +866,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 
 		err = wait.PollImmediate(5*time.Second, 300*time.Second, func() (bool, error) {
 			lb = getAzureLoadBalancerFromPIP(tc, publicIPs[0], tc.GetResourceGroup(), "")
-			targetProbes = []*network.Probe{}
+			targetProbes = []*armnetwork.Probe{}
 			for i := range lb.Properties.Probes {
 				probe := (lb.Properties.Probes)[i]
 				utils.Logf("One probe of LB is %q", *probe.Name)
@@ -898,7 +898,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 					return false, nil
 				}
 				utils.Logf("Validating health probe config ProbeProtocolHTTP")
-				if !strings.EqualFold(string(*probe.Properties.Protocol), string(network.ProbeProtocolHTTP)) {
+				if !strings.EqualFold(string(*probe.Properties.Protocol), string(armnetwork.ProbeProtocolHTTP)) {
 					return false, nil
 				}
 			}
@@ -939,8 +939,8 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			Expect(len(pipFrontendConfigIDSplit)).NotTo(Equal(0))
 		}
 
-		var lb *network.LoadBalancer
-		var targetProbes []*network.Probe
+		var lb *armnetwork.LoadBalancer
+		var targetProbes []*armnetwork.Probe
 		// There should be no other Services besides the one in this test or the check below will fail.
 		expectedTargetProbesCount := 1
 		if tc.IPFamily == utils.DualStack {
@@ -949,7 +949,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		//wait for backend update
 		err := wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
 			lb = getAzureLoadBalancerFromPIP(tc, publicIPs[0], tc.GetResourceGroup(), "")
-			targetProbes = []*network.Probe{}
+			targetProbes = []*armnetwork.Probe{}
 			for i := range lb.Properties.Probes {
 				probe := (lb.Properties.Probes)[i]
 				utils.Logf("One probe of LB is %q", *probe.Name)
@@ -977,7 +977,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		utils.Logf("Validating health probe config protocol")
 		Expect((len(targetProbes))).To(Equal(expectedTargetProbesCount))
 		for _, targetProbe := range targetProbes {
-			Expect(*targetProbe.Properties.Protocol).To(Equal(network.ProbeProtocolHTTP))
+			Expect(*targetProbe.Properties.Protocol).To(Equal(armnetwork.ProbeProtocolHTTP))
 		}
 	})
 
@@ -1129,7 +1129,7 @@ var _ = Describe("Multiple VMSS", Label(utils.TestSuiteLabelMultiNodePools, util
 	})
 
 	It("should support service annotation `service.beta.kubernetes.io/azure-load-balancer-mode`", func() {
-		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.LoadBalancerSKUNameStandard)) {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSKUEnv), string(armnetwork.LoadBalancerSKUNameStandard)) {
 			Skip("service.beta.kubernetes.io/azure-load-balancer-mode only works for basic load balancer")
 		}
 
@@ -1319,14 +1319,14 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 				ids = append(ids, pipFrontendConfigIDSplit[len(pipFrontendConfigIDSplit)-1])
 			}
 
-			var lb *network.LoadBalancer
-			var targetProbes []*network.Probe
+			var lb *armnetwork.LoadBalancer
+			var targetProbes []*armnetwork.Probe
 			expectedTargetProbesCount := 1
 			if tc.IPFamily == utils.DualStack {
 				expectedTargetProbesCount = 2
 			}
 			//wait for backend update
-			checkPort := func(port int32, targetProbes []*network.Probe) bool {
+			checkPort := func(port int32, targetProbes []*armnetwork.Probe) bool {
 				utils.Logf("Checking port %d", port)
 				match := true
 				for _, targetProbe := range targetProbes {
@@ -1340,7 +1340,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 			}
 			err = wait.PollImmediate(5*time.Second, 2*time.Minute, func() (bool, error) {
 				lb = getAzureLoadBalancerFromPIP(tc, publicIPs[0], tc.GetResourceGroup(), "")
-				targetProbes = []*network.Probe{}
+				targetProbes = []*armnetwork.Probe{}
 				for i := range lb.Properties.Probes {
 					probe := (lb.Properties.Probes)[i]
 					utils.Logf("One probe of LB is %q", *probe.Name)
@@ -1379,7 +1379,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 			}
 			err = wait.PollImmediate(5*time.Second, 2*time.Minute, func() (bool, error) {
 				lb := getAzureLoadBalancerFromPIP(tc, publicIPs[0], tc.GetResourceGroup(), "")
-				targetProbes = []*network.Probe{}
+				targetProbes = []*armnetwork.Probe{}
 				for i := range lb.Properties.Probes {
 					probe := (lb.Properties.Probes)[i]
 					utils.Logf("One probe of LB is %q", *probe.Name)
@@ -1393,7 +1393,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 					}
 				}
 				for _, targetProbe := range targetProbes {
-					if checkPort(nodeHealthCheckPort, []*network.Probe{targetProbe}) {
+					if checkPort(nodeHealthCheckPort, []*armnetwork.Probe{targetProbe}) {
 						return false, nil
 					}
 				}
@@ -1490,7 +1490,7 @@ func getFrontendConfigurationIDFromPIP(tc *utils.AzureTestClient, pip, pipResour
 	return pipFrontendConfigurationID
 }
 
-func getAzureLoadBalancerFromPIP(tc *utils.AzureTestClient, pip *string, pipResourceGroup, lbResourceGroup string) *network.LoadBalancer {
+func getAzureLoadBalancerFromPIP(tc *utils.AzureTestClient, pip *string, pipResourceGroup, lbResourceGroup string) *armnetwork.LoadBalancer {
 	pipFrontendConfigurationID := getPIPFrontendConfigurationID(tc, *pip, pipResourceGroup, true)
 	Expect(pipFrontendConfigurationID).NotTo(Equal(""))
 
@@ -1640,7 +1640,8 @@ func validateLoadBalancerBackendPools(tc *utils.AzureTestClient, vmssName string
 	Expect(lb.Properties.BackendAddressPools).NotTo(BeNil())
 	Expect(lb.Properties.LoadBalancingRules).NotTo(BeNil())
 
-	if lb.SKU != nil && *lb.SKU.Name == network.LoadBalancerSKUNameStandard {
+	if lb.SKU != nil && *lb.SKU.Name == armnetwork.
+		LoadBalancerSKUNameStandard {
 		Skip("azure-load-balancer-mode is not working for standard load balancer")
 	}
 
@@ -1711,7 +1712,7 @@ func testPIPTagAnnotationWithTags(
 	}
 	pips, err := tc.ListPublicIPs(tc.GetResourceGroup())
 	Expect(err).NotTo(HaveOccurred())
-	var targetPIPs []network.PublicIPAddress
+	var targetPIPs []armnetwork.PublicIPAddress
 	for _, pip := range pips {
 		for _, ip := range ips {
 			if strings.EqualFold(ptr.Deref(pip.Properties.IPAddress, ""), *ip) {
