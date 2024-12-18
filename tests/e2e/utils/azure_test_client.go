@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	v1 "k8s.io/api/core/v1"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
@@ -69,7 +70,7 @@ func CreateAzureTestClient() (*AzureTestClient, error) {
 	}
 	cred := authProvider.GetAzIdentity()
 
-	azFactory, err := azclient.NewClientFactory(clientFactoryConfig, armclientConfig, cred)
+	azFactory, err := azclient.NewClientFactory(clientFactoryConfig, armclientConfig, cloud.AzurePublic, cred)
 	if err != nil {
 		return nil, err
 	}

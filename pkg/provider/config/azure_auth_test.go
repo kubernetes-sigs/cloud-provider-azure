@@ -34,6 +34,15 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
+var AzurePublicCloud = &azclient.Environment{
+	Name:                       "AzurePublicCloud",
+	ServiceManagementEndpoint:  "https://management.core.windows.net/",
+	ResourceManagerEndpoint:    "https://management.azure.com/",
+	ActiveDirectoryEndpoint:    "https://login.microsoftonline.com/",
+	StorageEndpointSuffix:      "core.windows.net",
+	ContainerRegistryDNSSuffix: "azurecr.io",
+	TokenAudience:              "https://management.azure.com/",
+}
 var (
 	CrossTenantNetworkResourceNegativeConfig = []*AzureClientConfig{
 		{
@@ -164,7 +173,7 @@ func TestGetServicePrincipalToken(t *testing.T) {
 				_, cleanUp := setupLocalMSIServer(t)
 				defer cleanUp()
 
-				token, err := GetServicePrincipalToken(tt.Config, env, "")
+				token, err := GetServicePrincipalToken(tt.Config, AzurePublicCloud.ActiveDirectoryEndpoint, AzurePublicCloud.ServiceManagementEndpoint)
 				assert.NoError(t, err)
 
 				msiEndpoint, err := adal.GetMSIVMEndpoint()
@@ -219,7 +228,7 @@ func TestGetServicePrincipalToken(t *testing.T) {
 				_, cleanUp := setupLocalMSIServer(t)
 				defer cleanUp()
 
-				token, err := GetServicePrincipalToken(tt.Config, env, "")
+				token, err := GetServicePrincipalToken(tt.Config, AzurePublicCloud.ActiveDirectoryEndpoint, AzurePublicCloud.ServiceManagementEndpoint)
 				assert.NoError(t, err)
 
 				msiEndpoint, err := adal.GetMSIVMEndpoint()
@@ -246,7 +255,7 @@ func TestGetServicePrincipalToken(t *testing.T) {
 		}
 		env := &azure.PublicCloud
 
-		token, err := GetServicePrincipalToken(config, env, "")
+		token, err := GetServicePrincipalToken(config, AzurePublicCloud.ActiveDirectoryEndpoint, AzurePublicCloud.ServiceManagementEndpoint)
 		assert.NoError(t, err)
 		marshalToken, _ := token.MarshalJSON()
 
@@ -281,7 +290,7 @@ func TestGetServicePrincipalToken(t *testing.T) {
 		}
 		env := &azure.PublicCloud
 
-		token, err := GetServicePrincipalToken(config, env, "")
+		token, err := GetServicePrincipalToken(config, AzurePublicCloud.ActiveDirectoryEndpoint, AzurePublicCloud.ServiceManagementEndpoint)
 		assert.NoError(t, err)
 
 		oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.TenantID, nil)
@@ -305,7 +314,7 @@ func TestGetServicePrincipalToken(t *testing.T) {
 			},
 		}
 		env := &azure.PublicCloud
-		token, err := GetServicePrincipalToken(config, env, "")
+		token, err := GetServicePrincipalToken(config, AzurePublicCloud.ActiveDirectoryEndpoint, AzurePublicCloud.ServiceManagementEndpoint)
 		assert.NoError(t, err)
 
 		oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.TenantID, nil)
@@ -330,7 +339,7 @@ func TestGetServicePrincipalToken(t *testing.T) {
 			},
 		}
 		env := &azure.PublicCloud
-		token, err := GetServicePrincipalToken(config, env, "")
+		token, err := GetServicePrincipalToken(config, AzurePublicCloud.ActiveDirectoryEndpoint, AzurePublicCloud.ServiceManagementEndpoint)
 		assert.NoError(t, err)
 
 		oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.TenantID, nil)
@@ -355,7 +364,7 @@ func TestGetServicePrincipalToken(t *testing.T) {
 			},
 		}
 		env := &azure.PublicCloud
-		token, err := GetServicePrincipalToken(config, env, "")
+		token, err := GetServicePrincipalToken(config, AzurePublicCloud.ActiveDirectoryEndpoint, AzurePublicCloud.ServiceManagementEndpoint)
 		assert.NoError(t, err)
 
 		oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.TenantID, nil)
@@ -381,8 +390,7 @@ func TestGetServicePrincipalToken(t *testing.T) {
 				AADClientCertPath: "./testdata/testnopublickey.pem",
 			},
 		}
-		env := &azure.PublicCloud
-		_, err := GetServicePrincipalToken(config, env, "")
+		_, err := GetServicePrincipalToken(config, AzurePublicCloud.ActiveDirectoryEndpoint, AzurePublicCloud.ServiceManagementEndpoint)
 		assert.Error(t, err)
 	})
 }
@@ -400,15 +408,14 @@ func TestGetMultiTenantServicePrincipalToken(t *testing.T) {
 			},
 			NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
 		}
-		env := &azure.PublicCloud
 
-		multiTenantToken, err := GetMultiTenantServicePrincipalToken(config, env, nil)
+		multiTenantToken, err := GetMultiTenantServicePrincipalToken(config, AzurePublicCloud.ActiveDirectoryEndpoint, AzurePublicCloud.ServiceManagementEndpoint, nil)
 		assert.NoError(t, err)
 
-		multiTenantOAuthConfig, err := adal.NewMultiTenantOAuthConfig(env.ActiveDirectoryEndpoint, config.TenantID, []string{config.NetworkResourceTenantID}, adal.OAuthOptions{})
+		multiTenantOAuthConfig, err := adal.NewMultiTenantOAuthConfig(AzurePublicCloud.ActiveDirectoryEndpoint, config.TenantID, []string{config.NetworkResourceTenantID}, adal.OAuthOptions{})
 		assert.NoError(t, err)
 
-		spt, err := adal.NewMultiTenantServicePrincipalToken(multiTenantOAuthConfig, config.AADClientID, config.AADClientSecret, env.ServiceManagementEndpoint)
+		spt, err := adal.NewMultiTenantServicePrincipalToken(multiTenantOAuthConfig, config.AADClientID, config.AADClientSecret, AzurePublicCloud.ServiceManagementEndpoint)
 		assert.NoError(t, err)
 
 		assert.Equal(t, multiTenantToken, spt)
@@ -426,19 +433,18 @@ func TestGetMultiTenantServicePrincipalToken(t *testing.T) {
 			},
 			NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
 		}
-		env := &azure.PublicCloud
 
-		multiTenantToken, err := GetMultiTenantServicePrincipalToken(config, env, nil)
+		multiTenantToken, err := GetMultiTenantServicePrincipalToken(config, AzurePublicCloud.ActiveDirectoryEndpoint, AzurePublicCloud.ServiceManagementEndpoint, nil)
 		assert.NoError(t, err)
 
-		multiTenantOAuthConfig, err := adal.NewMultiTenantOAuthConfig(env.ActiveDirectoryEndpoint, config.TenantID, []string{config.NetworkResourceTenantID}, adal.OAuthOptions{})
+		multiTenantOAuthConfig, err := adal.NewMultiTenantOAuthConfig(AzurePublicCloud.ActiveDirectoryEndpoint, config.TenantID, []string{config.NetworkResourceTenantID}, adal.OAuthOptions{})
 		assert.NoError(t, err)
 
 		pfxContent, err := os.ReadFile("./testdata/testnopassword.pfx")
 		assert.NoError(t, err)
 		certificates, privateKey, err := azidentity.ParseCertificates(pfxContent, nil)
 		assert.NoError(t, err)
-		spt, err := adal.NewMultiTenantServicePrincipalTokenFromCertificate(multiTenantOAuthConfig, config.AADClientID, certificates[0], privateKey.(*rsa.PrivateKey), env.ServiceManagementEndpoint)
+		spt, err := adal.NewMultiTenantServicePrincipalTokenFromCertificate(multiTenantOAuthConfig, config.AADClientID, certificates[0], privateKey.(*rsa.PrivateKey), AzurePublicCloud.ServiceManagementEndpoint)
 		assert.NoError(t, err)
 
 		assert.Equal(t, multiTenantToken, spt)
@@ -456,8 +462,7 @@ func TestGetMultiTenantServicePrincipalToken(t *testing.T) {
 			},
 			NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
 		}
-		env := &azure.PublicCloud
-		_, err := GetMultiTenantServicePrincipalToken(config, env, nil)
+		_, err := GetMultiTenantServicePrincipalToken(config, AzurePublicCloud.ActiveDirectoryEndpoint, AzurePublicCloud.ServiceManagementEndpoint, nil)
 		assert.Error(t, err)
 	})
 
@@ -483,7 +488,7 @@ func TestGetMultiTenantServicePrincipalToken(t *testing.T) {
 			}
 		)
 
-		token, err := GetMultiTenantServicePrincipalToken(cfg, &azure.PublicCloud, authProvider)
+		token, err := GetMultiTenantServicePrincipalToken(cfg, AzurePublicCloud.ActiveDirectoryEndpoint, AzurePublicCloud.ServiceManagementEndpoint, authProvider)
 		assert.NoError(t, err)
 
 		assert.Equal(t, managedIdentityToken, token.PrimaryOAuthToken())
@@ -493,9 +498,8 @@ func TestGetMultiTenantServicePrincipalToken(t *testing.T) {
 	})
 
 	t.Run("invalid config", func(t *testing.T) {
-		env := &azure.PublicCloud
 		for _, config := range CrossTenantNetworkResourceNegativeConfig {
-			_, err := GetMultiTenantServicePrincipalToken(config, env, nil)
+			_, err := GetMultiTenantServicePrincipalToken(config, AzurePublicCloud.ActiveDirectoryEndpoint, AzurePublicCloud.ServiceManagementEndpoint, nil)
 			assert.Error(t, err)
 		}
 	})
@@ -517,7 +521,7 @@ func TestGetNetworkResourceServicePrincipalToken(t *testing.T) {
 		}
 		env := &azure.PublicCloud
 
-		token, err := GetNetworkResourceServicePrincipalToken(config, env, nil)
+		token, err := GetNetworkResourceServicePrincipalToken(config, AzurePublicCloud.ActiveDirectoryEndpoint, AzurePublicCloud.ServiceManagementEndpoint, nil)
 		assert.NoError(t, err)
 
 		oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.NetworkResourceTenantID, nil)
@@ -543,7 +547,7 @@ func TestGetNetworkResourceServicePrincipalToken(t *testing.T) {
 		}
 		env := &azure.PublicCloud
 
-		token, err := GetNetworkResourceServicePrincipalToken(config, env, nil)
+		token, err := GetNetworkResourceServicePrincipalToken(config, AzurePublicCloud.ActiveDirectoryEndpoint, AzurePublicCloud.ServiceManagementEndpoint, nil)
 		assert.NoError(t, err)
 
 		oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.NetworkResourceTenantID, nil)
@@ -571,9 +575,8 @@ func TestGetNetworkResourceServicePrincipalToken(t *testing.T) {
 			},
 			NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
 		}
-		env := &azure.PublicCloud
 
-		_, err := GetNetworkResourceServicePrincipalToken(config, env, nil)
+		_, err := GetNetworkResourceServicePrincipalToken(config, AzurePublicCloud.ActiveDirectoryEndpoint, AzurePublicCloud.ServiceManagementEndpoint, nil)
 		assert.Error(t, err)
 	})
 
@@ -599,15 +602,14 @@ func TestGetNetworkResourceServicePrincipalToken(t *testing.T) {
 			}
 		)
 
-		token, err := GetNetworkResourceServicePrincipalToken(cfg, &azure.PublicCloud, authProvider)
+		token, err := GetNetworkResourceServicePrincipalToken(cfg, AzurePublicCloud.ActiveDirectoryEndpoint, AzurePublicCloud.ServiceManagementEndpoint, authProvider)
 		assert.NoError(t, err)
 		assert.Equal(t, networkToken, token.OAuthToken())
 	})
 
 	t.Run("invalid config", func(t *testing.T) {
-		env := &azure.PublicCloud
 		for _, config := range CrossTenantNetworkResourceNegativeConfig {
-			_, err := GetNetworkResourceServicePrincipalToken(config, env, nil)
+			_, err := GetNetworkResourceServicePrincipalToken(config, AzurePublicCloud.ActiveDirectoryEndpoint, AzurePublicCloud.ServiceManagementEndpoint, nil)
 			assert.Error(t, err)
 		}
 	})
