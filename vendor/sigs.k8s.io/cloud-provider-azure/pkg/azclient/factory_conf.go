@@ -45,17 +45,13 @@ func init() {
 
 type ClientFactoryConfig struct {
 	ratelimit.CloudProviderRateLimitConfig
-
-	// Enable exponential backoff to manage resource request retries
-	CloudProviderBackoff bool `json:"cloudProviderBackoff,omitempty" yaml:"cloudProviderBackoff,omitempty"`
-
 	// The ID of the Azure Subscription that the cluster is deployed in
 	SubscriptionID string `json:"subscriptionId,omitempty" yaml:"subscriptionId,omitempty"`
 }
 
-func GetDefaultResourceClientOption(armConfig *ARMClientConfig, factoryConfig *ClientFactoryConfig) (*policy.ClientOptions, error) {
+func GetDefaultResourceClientOption(armConfig *ARMClientConfig) (*policy.ClientOptions, error) {
 	armClientOption := policy.ClientOptions{}
-	options, err := GetAzCoreClientOption(armConfig)
+	options, _, err := GetAzCoreClientOption(armConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -65,12 +61,6 @@ func GetDefaultResourceClientOption(armConfig *ARMClientConfig, factoryConfig *C
 		armClientOption.AuxiliaryTenants = []string{armConfig.NetworkResourceTenantID}
 	}
 
-	if factoryConfig != nil {
-		//Set retry
-		if !factoryConfig.CloudProviderBackoff {
-			options.Retry.MaxRetries = 0
-		}
-	}
 	armClientOption.ClientOptions.Transport = DefaultResourceClientTransport
 	return &armClientOption, err
 }
