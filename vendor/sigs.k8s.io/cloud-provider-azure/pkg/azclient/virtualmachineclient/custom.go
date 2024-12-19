@@ -58,3 +58,32 @@ func (client *Client) ListVMInstanceView(ctx context.Context, resourceGroupName 
 	}
 	return result, nil
 }
+
+func (client *Client) ListVmssFlexVMsWithOnlyInstanceView(ctx context.Context, resourceGroupName, vmssFlexID string) (result []*armcompute.VirtualMachine, rerr error) {
+	pager := client.VirtualMachinesClient.NewListPager(resourceGroupName, &armcompute.VirtualMachinesClientListOptions{
+		Expand: to.Ptr(armcompute.ExpandTypeForListVMsInstanceView),
+		Filter: to.Ptr("'virtualMachineScaleSet/id' eq '" + vmssFlexID + "'"),
+	})
+	for pager.More() {
+		nextResult, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, nextResult.Value...)
+	}
+	return result, nil
+}
+
+func (client *Client) ListVmssFlexVMsWithOutInstanceView(ctx context.Context, resourceGroupName, vmssFlexID string) (result []*armcompute.VirtualMachine, rerr error) {
+	pager := client.VirtualMachinesClient.NewListPager(resourceGroupName, &armcompute.VirtualMachinesClientListOptions{
+		Filter: to.Ptr("'virtualMachineScaleSet/id' eq '" + vmssFlexID + "'"),
+	})
+	for pager.More() {
+		nextResult, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, nextResult.Value...)
+	}
+	return result, nil
+}
