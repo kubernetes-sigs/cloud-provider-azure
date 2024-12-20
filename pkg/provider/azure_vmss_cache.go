@@ -288,6 +288,13 @@ func (ss *ScaleSet) DeleteCacheForNode(ctx context.Context, nodeName string) err
 }
 
 func (ss *ScaleSet) updateCache(ctx context.Context, nodeName, resourceGroupName, vmssName, instanceID string, updatedVM *armcompute.VirtualMachineScaleSetVM) error {
+	if nodeName == "" {
+		return fmt.Errorf("updateCache(%s, %s, %s) failed with empty nodeName", vmssName, resourceGroupName, nodeName)
+	}
+	if updatedVM == nil {
+		return fmt.Errorf("updateCache(%s, %s, %s) failed with nil updatedVM", vmssName, resourceGroupName, nodeName)
+	}
+
 	// lock the VMSS entry to ensure a consistent view of the VM map when there are concurrent updates.
 	cacheKey := getVMSSVMCacheKey(resourceGroupName, vmssName)
 	ss.lockMap.LockEntry(cacheKey)

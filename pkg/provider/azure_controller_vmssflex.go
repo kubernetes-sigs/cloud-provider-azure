@@ -120,12 +120,9 @@ func (fs *FlexScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName,
 	if err != nil {
 		return err
 	}
-	// clean node cache first and then update cache
 	_ = fs.DeleteCacheForNode(ctx, vmName)
-	if result != nil && result.Properties != nil {
-		if err := fs.updateCache(ctx, vmName, result); err != nil {
-			klog.Errorf("updateCache(%s) failed with error: %v", vmName, err)
-		}
+	if err := fs.updateCache(ctx, vmName, result); err != nil {
+		klog.Errorf("updateCache(%s) failed with error: %v", vmName, err)
 	}
 	return nil
 }
@@ -192,10 +189,7 @@ func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName,
 	var result *armcompute.VirtualMachine
 	defer func() {
 		_ = fs.DeleteCacheForNode(ctx, vmName)
-
-		// update the cache with the updated result only if its not nil
-		// and contains the.Properties
-		if err == nil && result != nil && result.Properties != nil {
+		if err == nil {
 			if err := fs.updateCache(ctx, vmName, result); err != nil {
 				klog.Errorf("updateCache(%s) failed with error: %v", vmName, err)
 			}
@@ -224,10 +218,8 @@ func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName,
 	}
 	// clean node cache first and then update cache
 	_ = fs.DeleteCacheForNode(ctx, vmName)
-	if result != nil && result.Properties != nil {
-		if err := fs.updateCache(ctx, vmName, result); err != nil {
-			klog.Errorf("updateCache(%s) failed with error: %v", vmName, err)
-		}
+	if err := fs.updateCache(ctx, vmName, result); err != nil {
+		klog.Errorf("updateCache(%s) failed with error: %v", vmName, err)
 	}
 	return nil
 }
@@ -254,6 +246,9 @@ func (fs *FlexScaleSet) UpdateVM(ctx context.Context, nodeName types.NodeName) e
 }
 
 func (fs *FlexScaleSet) updateCache(ctx context.Context, nodeName string, vm *armcompute.VirtualMachine) error {
+	if nodeName == "" {
+		return fmt.Errorf("nodeName is empty")
+	}
 	if vm == nil {
 		return fmt.Errorf("vm is nil")
 	}

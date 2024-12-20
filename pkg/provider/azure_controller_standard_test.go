@@ -212,7 +212,7 @@ func TestStandardDetachDisk(t *testing.T) {
 		assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
 		if !test.expectedError && len(test.disks) > 0 {
 			dataDisks, _, err := vmSet.GetDataDisks(context.TODO(), test.nodeName, azcache.CacheReadTypeDefault)
-			assert.Equal(t, true, len(dataDisks) == 3, "TestCase[%d]: %s, err: %v", i, test.desc, err)
+			assert.Equal(t, 3, len(dataDisks), "TestCase[%d]: %s, err: %v", i, test.desc, err)
 		}
 	}
 }

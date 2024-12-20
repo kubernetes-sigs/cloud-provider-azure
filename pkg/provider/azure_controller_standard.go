@@ -119,7 +119,6 @@ func (as *availabilitySet) AttachDisk(ctx context.Context, nodeName types.NodeNa
 
 	// clean node cache first and then update cache
 	_ = as.DeleteCacheForNode(ctx, vmName)
-	// if we have an updated result, we update the vmss vm cache
 	as.updateCache(vmName, result)
 	return nil
 }
@@ -198,12 +197,7 @@ func (as *availabilitySet) DetachDisk(ctx context.Context, nodeName types.NodeNa
 	defer func() {
 		// invalidate the cache right after updating
 		_ = as.DeleteCacheForNode(ctx, vmName)
-
-		// update the cache with the updated result only if its not nil
-		// and contains the.Properties
-		if err == nil && result != nil && result.Properties != nil {
-			as.updateCache(vmName, result)
-		}
+		as.updateCache(vmName, result)
 	}()
 
 	result, err = as.ComputeClientFactory.GetVirtualMachineClient().CreateOrUpdate(ctx, nodeResourceGroup, vmName, newVM)
@@ -219,10 +213,7 @@ func (as *availabilitySet) DetachDisk(ctx context.Context, nodeName types.NodeNa
 	}
 
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - detach disk list(%s) returned with %v", nodeResourceGroup, vmName, diskMap, err)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // UpdateVM updates a vm
@@ -234,8 +225,6 @@ func (as *availabilitySet) UpdateVM(ctx context.Context, nodeName types.NodeName
 	}
 
 	result, rerr := as.ComputeClientFactory.GetVirtualMachineClient().CreateOrUpdate(ctx, nodeResourceGroup, vmName, armcompute.VirtualMachine{})
-	// clean node cache first and then update cache
-	_ = as.DeleteCacheForNode(ctx, vmName)
 	if rerr != nil {
 		if exists, err := errutils.CheckResourceExistsFromAzcoreError(rerr); !exists && err == nil {
 			// if the VM does not exist, we should not update the cache
@@ -245,12 +234,19 @@ func (as *availabilitySet) UpdateVM(ctx context.Context, nodeName types.NodeName
 	}
 	// clean node cache first and then update cache
 	_ = as.DeleteCacheForNode(ctx, vmName)
-	// if we have an updated result, we update the vmss vm cache
 	as.updateCache(vmName, result)
 	return nil
 }
 
 func (as *availabilitySet) updateCache(nodeName string, vm *armcompute.VirtualMachine) {
+	if nodeName == "" {
+		klog.Errorf("updateCache(%s) failed with empty nodeName", nodeName)
+		return
+	}
+	if vm == nil || vm.Properties == nil {
+		klog.Errorf("updateCache(%s) failed with nil vm or vm.Properties", nodeName)
+		return
+	}
 	as.vmCache.Update(nodeName, vm)
 	klog.V(2).Infof("updateCache(%s) successfully", nodeName)
 }
@@ -262,7 +258,7 @@ func (as *availabilitySet) GetDataDisks(ctx context.Context, nodeName types.Node
 		return nil, nil, err
 	}
 
-	if vm.Properties.StorageProfile.DataDisks == nil {
+	if vm == nil || vm.Properties.StorageProfile.DataDisks == nil {
 		return nil, nil, nil
 	}
 	return vm.Properties.StorageProfile.DataDisks, vm.Properties.ProvisioningState, nil
