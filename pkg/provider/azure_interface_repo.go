@@ -19,19 +19,19 @@ package provider
 import (
 	"context"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 )
 
-// CreateOrUpdateInterface invokes az.InterfacesClient.CreateOrUpdate with exponential backoff retry
-func (az *Cloud) CreateOrUpdateInterface(ctx context.Context, service *v1.Service, nic network.Interface) error {
-	rerr := az.InterfacesClient.CreateOrUpdate(ctx, az.ResourceGroup, *nic.Name, nic)
+// CreateOrUpdateInterface invokes az.NetworkClientFactory.GetInterfaceClient().CreateOrUpdate with exponential backoff retry
+func (az *Cloud) CreateOrUpdateInterface(ctx context.Context, service *v1.Service, nic *armnetwork.Interface) error {
+	_, rerr := az.NetworkClientFactory.GetInterfaceClient().CreateOrUpdate(ctx, az.ResourceGroup, *nic.Name, *nic)
 	klog.V(10).Infof("InterfacesClient.CreateOrUpdate(%s): end", *nic.Name)
 	if rerr != nil {
-		klog.Errorf("InterfacesClient.CreateOrUpdate(%s) failed: %s", *nic.Name, rerr.Error().Error())
-		az.Event(service, v1.EventTypeWarning, "CreateOrUpdateInterface", rerr.Error().Error())
-		return rerr.Error()
+		klog.Errorf("InterfacesClient.CreateOrUpdate(%s) failed: %s", *nic.Name, rerr.Error())
+		az.Event(service, v1.EventTypeWarning, "CreateOrUpdateInterface", rerr.Error())
+		return rerr
 	}
 
 	return nil

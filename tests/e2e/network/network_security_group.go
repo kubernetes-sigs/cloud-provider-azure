@@ -23,11 +23,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	aznetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -160,7 +158,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 
 			By("Checking if the rule for allowing traffic from Internet exists", func() {
 				var (
-					expectedProtocol    = aznetwork.SecurityRuleProtocolTCP
+					expectedProtocol    = armnetwork.SecurityRuleProtocolTCP
 					expectedSrcPrefixes = []string{"Internet"}
 					expectedDstPorts    []string
 				)
@@ -289,7 +287,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 
 			By("Checking if the rule for allowing traffic from allowed-IPs exists", func() {
 				var (
-					expectedProtocol = aznetwork.SecurityRuleProtocolTCP
+					expectedProtocol = armnetwork.SecurityRuleProtocolTCP
 					expectedDstPorts = []string{strconv.FormatInt(int64(serverPort), 10)}
 				)
 
@@ -361,7 +359,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 
 			By("Checking if the rule for allowing traffic from allowed-IPs exists", func() {
 				var (
-					expectedProtocol = aznetwork.SecurityRuleProtocolTCP
+					expectedProtocol = armnetwork.SecurityRuleProtocolTCP
 					expectedDstPorts = []string{strconv.FormatInt(int64(serverPort), 10)}
 				)
 
@@ -434,7 +432,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 				Expect(validator.NotHasRuleForDestination(serviceIPv6s)).To(BeTrue())
 
 				var (
-					expectedProtocol    = aznetwork.SecurityRuleProtocolTCP
+					expectedProtocol    = armnetwork.SecurityRuleProtocolTCP
 					expectedSrcPrefixes = []string{"Internet"}
 					expectedDstPorts    = []string{strconv.FormatInt(int64(svcNodePort), 10)}
 				)
@@ -537,7 +535,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 				Expect(validator.NotHasRuleForDestination(svc1IPv6s)).To(BeTrue())
 
 				var (
-					expectedProtocol    = aznetwork.SecurityRuleProtocolTCP
+					expectedProtocol    = armnetwork.SecurityRuleProtocolTCP
 					expectedSrcPrefixes = []string{"Internet"}
 					expectedDstPorts    = []string{strconv.FormatInt(int64(app1NodePort), 10)}
 				)
@@ -550,7 +548,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 				Expect(validator.NotHasRuleForDestination(svc2IPv6s)).To(BeTrue())
 
 				var (
-					expectedProtocol    = aznetwork.SecurityRuleProtocolTCP
+					expectedProtocol    = armnetwork.SecurityRuleProtocolTCP
 					expectedSrcPrefixes = []string{"Internet"}
 					expectedDstPorts    = []string{strconv.FormatInt(int64(app2NodePort), 10)}
 				)
@@ -606,7 +604,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 
 			By("Checking if the rule for allowing traffic from Internet exists", func() {
 				var (
-					expectedProtocol                 = aznetwork.SecurityRuleProtocolTCP
+					expectedProtocol                 = armnetwork.SecurityRuleProtocolTCP
 					expectedSrcPrefixes              = []string{"Internet"}
 					expectedDstPorts                 = []string{strconv.FormatInt(int64(serverPort), 10)}
 					additionalIPv4s, additionalIPv6s = groupIPsByFamily(mustParseIPs(additionalPublicIPs))
@@ -691,7 +689,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 
 			By("Checking if the rule for allowing traffic from allowed-IPs exists", func() {
 				var (
-					expectedProtocol = aznetwork.SecurityRuleProtocolTCP
+					expectedProtocol = armnetwork.SecurityRuleProtocolTCP
 					expectedDstPorts = []string{strconv.FormatInt(int64(serverPort), 10)}
 				)
 
@@ -760,7 +758,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 
 			By("Checking if the rule for allowing traffic from allowed-service-tags exists", func() {
 				var (
-					expectedProtocol = aznetwork.SecurityRuleProtocolTCP
+					expectedProtocol = armnetwork.SecurityRuleProtocolTCP
 					expectedDstPorts = []string{strconv.FormatInt(int64(serverPort), 10)}
 				)
 
@@ -844,7 +842,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 
 			By("Checking if the rule for allowing traffic from allowed-service-tags exists", func() {
 				var (
-					expectedProtocol = aznetwork.SecurityRuleProtocolTCP
+					expectedProtocol = armnetwork.SecurityRuleProtocolTCP
 					expectedDstPorts = []string{strconv.FormatInt(int64(serverPort), 10)}
 				)
 
@@ -983,7 +981,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 
 			By("Checking if the rule for allowing traffic for app 01", func() {
 				var (
-					expectedProtocol = aznetwork.SecurityRuleProtocolTCP
+					expectedProtocol = armnetwork.SecurityRuleProtocolTCP
 					expectedDstPorts = []string{strconv.FormatInt(int64(app1Port), 10)}
 				)
 
@@ -1004,7 +1002,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 
 			By("Checking if the rule for allowing traffic for app 02", func() {
 				var (
-					expectedProtocol = aznetwork.SecurityRuleProtocolTCP
+					expectedProtocol = armnetwork.SecurityRuleProtocolTCP
 					expectedDstPorts = []string{strconv.FormatInt(int64(app2Port), 10)}
 				)
 				By("Checking if the rule for allowing traffic from Internet exists")
@@ -1142,7 +1140,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 
 			By("Checking if the rule for allowing traffic for app 01", func() {
 				var (
-					expectedProtocol = aznetwork.SecurityRuleProtocolTCP
+					expectedProtocol = armnetwork.SecurityRuleProtocolTCP
 					expectedDstPorts = []string{strconv.FormatInt(int64(app1Port), 10)}
 				)
 
@@ -1163,7 +1161,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 
 			By("Checking if the rule for allowing traffic for app 02", func() {
 				var (
-					expectedProtocol = aznetwork.SecurityRuleProtocolTCP
+					expectedProtocol = armnetwork.SecurityRuleProtocolTCP
 					expectedDstPorts = []string{strconv.FormatInt(int64(app2Port), 10)}
 				)
 				By("Checking if the rule for allowing traffic from Internet exists")
@@ -1184,10 +1182,10 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 })
 
 type SecurityGroupValidator struct {
-	nsgs []*aznetwork.SecurityGroup
+	nsgs []*armnetwork.SecurityGroup
 }
 
-func NewSecurityGroupValidator(nsgs []*aznetwork.SecurityGroup) *SecurityGroupValidator {
+func NewSecurityGroupValidator(nsgs []*armnetwork.SecurityGroup) *SecurityGroupValidator {
 	// FIXME: should get the exact Security Group by virtual network subnets instead of listing all
 	return &SecurityGroupValidator{
 		nsgs: nsgs,
@@ -1196,7 +1194,7 @@ func NewSecurityGroupValidator(nsgs []*aznetwork.SecurityGroup) *SecurityGroupVa
 
 // HasExactAllowRule checks if the security group has a rule that allows traffic from the given source prefixes to the given destination addresses and ports.
 func (v *SecurityGroupValidator) HasExactAllowRule(
-	protocol aznetwork.SecurityRuleProtocol,
+	protocol armnetwork.SecurityRuleProtocol,
 	srcPrefixes []string,
 	dstAddresses []netip.Addr,
 	dstPorts []string,
@@ -1229,7 +1227,7 @@ func (v *SecurityGroupValidator) HasDenyAllRuleForDestination(dstAddresses []net
 	return false
 }
 
-func SecurityGroupNotHasRuleForDestination(nsg *aznetwork.SecurityGroup, dstAddresses []netip.Addr) bool {
+func SecurityGroupNotHasRuleForDestination(nsg *armnetwork.SecurityGroup, dstAddresses []netip.Addr) bool {
 	logger := GinkgoLogr.WithName("SecurityGroupNotHasRuleForDestination").
 		WithValues("nsg-name", nsg.Name).
 		WithValues("dst-addresses", dstAddresses)
@@ -1261,8 +1259,8 @@ func SecurityGroupNotHasRuleForDestination(nsg *aznetwork.SecurityGroup, dstAddr
 }
 
 func SecurityGroupHasAllowRuleForDestination(
-	nsg *aznetwork.SecurityGroup,
-	protocol aznetwork.SecurityRuleProtocol,
+	nsg *armnetwork.SecurityGroup,
+	protocol armnetwork.SecurityRuleProtocol,
 	srcPrefixes []string,
 	dstAddresses []netip.Addr, dstPorts []string,
 ) bool {
@@ -1291,8 +1289,8 @@ func SecurityGroupHasAllowRuleForDestination(
 	}
 
 	for _, rule := range nsg.Properties.SecurityRules {
-		if *rule.Properties.Access != aznetwork.SecurityRuleAccessAllow ||
-			*rule.Properties.Direction != aznetwork.SecurityRuleDirectionInbound ||
+		if *rule.Properties.Access != armnetwork.SecurityRuleAccessAllow ||
+			*rule.Properties.Direction != armnetwork.SecurityRuleDirectionInbound ||
 			*rule.Properties.Protocol != protocol ||
 			ptr.Deref(rule.Properties.SourcePortRange, "") != "*" ||
 			len(rule.Properties.DestinationPortRanges) != len(dstPorts) {
@@ -1353,7 +1351,7 @@ func SecurityGroupHasAllowRuleForDestination(
 	return true
 }
 
-func SecurityGroupHasDenyAllRuleForDestination(nsg *aznetwork.SecurityGroup, dstAddresses []netip.Addr) bool {
+func SecurityGroupHasDenyAllRuleForDestination(nsg *armnetwork.SecurityGroup, dstAddresses []netip.Addr) bool {
 	logger := GinkgoLogr.WithName("HasDenyAllRuleForDestination").
 		WithValues("nsg-name", nsg.Name).
 		WithValues("expected-dst-addresses", dstAddresses)
@@ -1368,7 +1366,7 @@ func SecurityGroupHasDenyAllRuleForDestination(nsg *aznetwork.SecurityGroup, dst
 	}
 
 	for _, rule := range nsg.Properties.SecurityRules {
-		if *rule.Properties.Access != aznetwork.SecurityRuleAccessDeny ||
+		if *rule.Properties.Access != armnetwork.SecurityRuleAccessDeny ||
 			ptr.Deref(rule.Properties.SourceAddressPrefix, "") != "*" ||
 			ptr.Deref(rule.Properties.SourcePortRange, "") != "*" ||
 			ptr.Deref(rule.Properties.DestinationPortRange, "") != "*" {

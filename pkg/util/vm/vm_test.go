@@ -21,21 +21,21 @@ import (
 
 	"k8s.io/utils/ptr"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestGetVMPowerState(t *testing.T) {
 	type testCase struct {
 		name       string
-		vmStatuses *[]compute.InstanceViewStatus
+		vmStatuses []*armcompute.InstanceViewStatus
 		expected   string
 	}
 
 	tests := []testCase{
 		{
 			name: "should return power state when there is power state status",
-			vmStatuses: &[]compute.InstanceViewStatus{
+			vmStatuses: []*armcompute.InstanceViewStatus{
 				{Code: ptr.To("foo")},
 				{Code: ptr.To("PowerState/Running")},
 			},
@@ -43,7 +43,7 @@ func TestGetVMPowerState(t *testing.T) {
 		},
 		{
 			name: "should return unknown when there is no power state status",
-			vmStatuses: &[]compute.InstanceViewStatus{
+			vmStatuses: []*armcompute.InstanceViewStatus{
 				{Code: ptr.To("foo")},
 			},
 			expected: "unknown",
@@ -55,7 +55,7 @@ func TestGetVMPowerState(t *testing.T) {
 		},
 		{
 			name:       "should return unknown when vmStatuses is empty",
-			vmStatuses: &[]compute.InstanceViewStatus{},
+			vmStatuses: []*armcompute.InstanceViewStatus{},
 			expected:   "unknown",
 		},
 	}

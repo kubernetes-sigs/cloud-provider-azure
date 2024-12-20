@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
-	aznetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -168,7 +168,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		expectedTags := map[string]*string{
 			"foo": ptr.To("bar"),
 		}
-		pips := []*aznetwork.PublicIPAddress{}
+		pips := []*armnetwork.PublicIPAddress{}
 		targetIPs := []*string{}
 		ipNames := []string{}
 		deleteFuncs := []func(){}
@@ -681,7 +681,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		Expect(err).NotTo(HaveOccurred())
 		if os.Getenv(utils.AKSTestCCM) != "" {
 			// AKS
-			initNodepoolNodeMap := utils.GetNodepoolNodeMap(&nodes)
+			initNodepoolNodeMap := utils.GetNodepoolNodeMap(nodes)
 			if len(initNodepoolNodeMap) != 1 {
 				Skip("single node pool is needed in this scenario")
 			}
@@ -702,7 +702,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 
 		By("Checking the initial node number in the LB backend pool")
 		lb := getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
-		if lb.SKU != nil && *lb.SKU.Name == aznetwork.LoadBalancerSKUNameBasic {
+		if lb.SKU != nil && *lb.SKU.Name == armnetwork.LoadBalancerSKUNameBasic {
 			// For a basic lb, not autoscaling pipeline
 			idxes := getLBBackendPoolIndex(lb)
 			Expect(idxes).NotTo(BeZero())
@@ -890,7 +890,7 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 			consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe:  "8",
 		}
 
-		if strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(aznetwork.LoadBalancerSKUNameStandard)) &&
+		if strings.EqualFold(os.Getenv(utils.LoadBalancerSKUEnv), string(armnetwork.LoadBalancerSKUNameStandard)) &&
 			tc.IPFamily == utils.IPv4 {
 			// Routing preference is only supported in standard public IPs
 			annotation[consts.ServiceAnnotationIPTagsForPublicIP] = "RoutingPreference=Internet"
@@ -977,7 +977,7 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 	})
 
 	It("should respect service with BYO public IP prefix with various configurations", func() {
-		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(aznetwork.LoadBalancerSKUNameStandard)) {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSKUEnv), string(armnetwork.LoadBalancerSKUNameStandard)) {
 			Skip("pip-prefix-id only work with Standard Load Balancer")
 		}
 
@@ -1119,11 +1119,11 @@ func updateServiceAndCompareEtags(tc *utils.AzureTestClient, cs clientset.Interf
 	Expect(pipEtag).To(Equal(newPipEtag), "pip etag")
 }
 
-func createNewSubnet(tc *utils.AzureTestClient, subnetName string) (*aznetwork.Subnet, bool) {
+func createNewSubnet(tc *utils.AzureTestClient, subnetName string) (*armnetwork.Subnet, bool) {
 	vNet, err := tc.GetClusterVirtualNetwork()
 	Expect(err).NotTo(HaveOccurred())
 
-	var subnetToReturn *aznetwork.Subnet
+	var subnetToReturn *armnetwork.Subnet
 	isNew := false
 	for i := range vNet.Properties.Subnets {
 		existingSubnet := (vNet.Properties.Subnets)[i]
@@ -1182,7 +1182,7 @@ func getResourceEtags(tc *utils.AzureTestClient, ip *string, nsgRulePrefix strin
 	return
 }
 
-func getAzureInternalLoadBalancerFromPrivateIP(tc *utils.AzureTestClient, ip *string, lbResourceGroup string) *aznetwork.LoadBalancer {
+func getAzureInternalLoadBalancerFromPrivateIP(tc *utils.AzureTestClient, ip *string, lbResourceGroup string) *armnetwork.LoadBalancer {
 	if lbResourceGroup == "" {
 		lbResourceGroup = tc.GetResourceGroup()
 	}
@@ -1190,7 +1190,7 @@ func getAzureInternalLoadBalancerFromPrivateIP(tc *utils.AzureTestClient, ip *st
 	lbList, err := tc.ListLoadBalancers(lbResourceGroup)
 	Expect(err).NotTo(HaveOccurred())
 
-	var ilb *aznetwork.LoadBalancer
+	var ilb *armnetwork.LoadBalancer
 	utils.Logf("Looking for internal load balancer frontend config ID with private ip as frontend")
 	for i := range lbList {
 		lb := lbList[i]
@@ -1209,7 +1209,7 @@ func getAzureInternalLoadBalancerFromPrivateIP(tc *utils.AzureTestClient, ip *st
 func waitForNodesInLBBackendPool(tc *utils.AzureTestClient, ip *string, expectedNum int) error {
 	return wait.PollImmediate(10*time.Second, 10*time.Minute, func() (done bool, err error) {
 		lb := getAzureLoadBalancerFromPIP(tc, ip, tc.GetResourceGroup(), "")
-		if lb.SKU != nil && *lb.SKU.Name == aznetwork.LoadBalancerSKUNameBasic {
+		if lb.SKU != nil && *lb.SKU.Name == armnetwork.LoadBalancerSKUNameBasic {
 			// basic lb
 			idxes := getLBBackendPoolIndex(lb)
 			if len(idxes) == 0 {
@@ -1280,7 +1280,7 @@ func judgeInternal(service v1.Service) bool {
 	return service.Annotations[consts.ServiceAnnotationLoadBalancerInternal] == utils.TrueValue
 }
 
-func getLBBackendPoolIndex(lb *aznetwork.LoadBalancer) []int {
+func getLBBackendPoolIndex(lb *armnetwork.LoadBalancer) []int {
 	idxes := []int{}
 	for index, backendPool := range lb.Properties.BackendAddressPools {
 		if !strings.Contains(strings.ToLower(*backendPool.Name), "outboundbackendpool") {
@@ -1331,44 +1331,44 @@ func updateServicePIPNames(ipFamily utils.IPFamily, service *v1.Service, pipName
 	return service
 }
 
-func defaultPublicIPAddress(ipName string, isIPv6 bool) *aznetwork.PublicIPAddress {
+func defaultPublicIPAddress(ipName string, isIPv6 bool) *armnetwork.PublicIPAddress {
 	// The default sku for LoadBalancer and PublicIP is basic.
-	skuName := aznetwork.PublicIPAddressSKUNameBasic
-	if skuEnv := os.Getenv(utils.LoadBalancerSkuEnv); skuEnv != "" {
-		if strings.EqualFold(skuEnv, string(aznetwork.PublicIPAddressSKUNameStandard)) {
-			skuName = aznetwork.PublicIPAddressSKUNameStandard
+	skuName := armnetwork.PublicIPAddressSKUNameBasic
+	if skuEnv := os.Getenv(utils.LoadBalancerSKUEnv); skuEnv != "" {
+		if strings.EqualFold(skuEnv, string(armnetwork.PublicIPAddressSKUNameStandard)) {
+			skuName = armnetwork.PublicIPAddressSKUNameStandard
 		}
 	}
-	pip := &aznetwork.PublicIPAddress{
+	pip := &armnetwork.PublicIPAddress{
 		Name:     ptr.To(ipName),
 		Location: ptr.To(os.Getenv(utils.ClusterLocationEnv)),
-		SKU: &aznetwork.PublicIPAddressSKU{
+		SKU: &armnetwork.PublicIPAddressSKU{
 			Name: to.Ptr(skuName),
 		},
-		Properties: &aznetwork.PublicIPAddressPropertiesFormat{
-			PublicIPAllocationMethod: to.Ptr(aznetwork.IPAllocationMethodStatic),
+		Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+			PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 		},
 	}
 	if isIPv6 {
-		pip.Properties.PublicIPAddressVersion = to.Ptr(aznetwork.IPVersionIPv6)
+		pip.Properties.PublicIPAddressVersion = to.Ptr(armnetwork.IPVersionIPv6)
 	}
 	return pip
 }
 
-func defaultPublicIPPrefix(name string, isIPv6 bool) aznetwork.PublicIPPrefix {
-	pipAddrVersion := aznetwork.IPVersionIPv4
+func defaultPublicIPPrefix(name string, isIPv6 bool) armnetwork.PublicIPPrefix {
+	pipAddrVersion := armnetwork.IPVersionIPv4
 	var prefixLen int32 = 28
 	if isIPv6 {
-		pipAddrVersion = aznetwork.IPVersionIPv6
+		pipAddrVersion = armnetwork.IPVersionIPv6
 		prefixLen = 124
 	}
-	return aznetwork.PublicIPPrefix{
+	return armnetwork.PublicIPPrefix{
 		Name:     ptr.To(name),
 		Location: ptr.To(os.Getenv(utils.ClusterLocationEnv)),
-		SKU: &aznetwork.PublicIPPrefixSKU{
-			Name: to.Ptr(aznetwork.PublicIPPrefixSKUNameStandard),
+		SKU: &armnetwork.PublicIPPrefixSKU{
+			Name: to.Ptr(armnetwork.PublicIPPrefixSKUNameStandard),
 		},
-		Properties: &aznetwork.PublicIPPrefixPropertiesFormat{
+		Properties: &armnetwork.PublicIPPrefixPropertiesFormat{
 			PrefixLength:           ptr.To(prefixLen),
 			PublicIPAddressVersion: to.Ptr(pipAddrVersion),
 		},

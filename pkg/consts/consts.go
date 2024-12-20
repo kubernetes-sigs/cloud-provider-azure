@@ -232,10 +232,10 @@ const (
 	// ref: https://docs.microsoft.com/en-us/azure/azure-subscription-service-limits#load-balancer.
 	MaximumLoadBalancerRuleCount = 250
 
-	// LoadBalancerSkuBasic is the load balancer basic sku
-	LoadBalancerSkuBasic = "basic"
-	// LoadBalancerSkuStandard is the load balancer standard sku
-	LoadBalancerSkuStandard = "standard"
+	// LoadBalancerSKUBasic is the load balancer basic SKU
+	LoadBalancerSKUBasic = "basic"
+	// LoadBalancerSKUStandard is the load balancer standard SKU
+	LoadBalancerSKUStandard = "standard"
 
 	// ServiceAnnotationLoadBalancerInternal is the annotation used on the service
 	ServiceAnnotationLoadBalancerInternal = "service.beta.kubernetes.io/azure-load-balancer-internal"
@@ -246,7 +246,7 @@ const (
 
 	// ServiceAnnotationLoadBalancerMode is the annotation used on the service to specify
 	// which load balancer should be associated with the service. This is valid when using the basic
-	// sku load balancer, or it would be ignored.
+	// SKU load balancer, or it would be ignored.
 	// 1. Default mode - service has no annotation ("service.beta.kubernetes.io/azure-load-balancer-mode")
 	//	  In this case the Loadbalancer of the primary VMSS/VMAS is selected.
 	// 2. "__auto__" mode - service is annotated with __auto__ value, this when loadbalancer from any VMSS/VMAS

@@ -23,13 +23,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
-
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -37,12 +37,12 @@ type VMSSVirtualMachineEntry struct {
 	ResourceGroup  string
 	VMSSName       string
 	InstanceID     string
-	VirtualMachine *compute.VirtualMachineScaleSetVM
+	VirtualMachine *armcompute.VirtualMachineScaleSetVM
 	LastUpdate     time.Time
 }
 
 type VMSSEntry struct {
-	VMSS          *compute.VirtualMachineScaleSet
+	VMSS          *armcompute.VirtualMachineScaleSet
 	ResourceGroup string
 	LastUpdate    time.Time
 }
@@ -75,15 +75,15 @@ func (ss *ScaleSet) newVMSSCache() (azcache.Resource, error) {
 
 		resourceGroupNotFound := false
 		for _, resourceGroup := range allResourceGroups.UnsortedList() {
-			allScaleSets, rerr := ss.VirtualMachineScaleSetsClient.List(ctx, resourceGroup)
+			allScaleSets, rerr := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().List(ctx, resourceGroup)
 			if rerr != nil {
-				if rerr.IsNotFound() {
+				if exists, err := errutils.CheckResourceExistsFromAzcoreError(rerr); !exists && err == nil {
 					klog.Warningf("Skip caching vmss for resource group %s due to error: %v", resourceGroup, rerr.Error())
 					resourceGroupNotFound = true
 					continue
 				}
-				klog.Errorf("VirtualMachineScaleSetsClient.List failed: %v", rerr)
-				return nil, rerr.Error()
+				klog.Errorf("ComputeClientFactory.GetVirtualMachineScaleSetClient().List failed: %v", rerr)
+				return nil, rerr
 			}
 
 			for i := range allScaleSets {
@@ -92,9 +92,9 @@ func (ss *ScaleSet) newVMSSCache() (azcache.Resource, error) {
 					klog.Warning("failed to get the name of VMSS")
 					continue
 				}
-				if scaleSet.OrchestrationMode == "" || scaleSet.OrchestrationMode == compute.Uniform {
+				if scaleSet.Properties.OrchestrationMode == nil || *scaleSet.Properties.OrchestrationMode == armcompute.OrchestrationModeUniform {
 					localCache.Store(*scaleSet.Name, &VMSSEntry{
-						VMSS:          &scaleSet,
+						VMSS:          scaleSet,
 						ResourceGroup: resourceGroup,
 						LastUpdate:    time.Now().UTC(),
 					})
@@ -180,13 +180,13 @@ func (ss *ScaleSet) newVMSSVirtualMachinesCache() (azcache.Resource, error) {
 
 		for i := range vms {
 			vm := vms[i]
-			if vm.OsProfile == nil || vm.OsProfile.ComputerName == nil {
+			if vm.Properties.OSProfile == nil || vm.Properties.OSProfile.ComputerName == nil {
 				klog.Warningf("failed to get computerName for vmssVM (%q)", vmssName)
 				continue
 			}
 
-			computerName := strings.ToLower(*vm.OsProfile.ComputerName)
-			if vm.NetworkProfile == nil || vm.NetworkProfile.NetworkInterfaces == nil {
+			computerName := strings.ToLower(*vm.Properties.OSProfile.ComputerName)
+			if vm.Properties.NetworkProfile == nil || vm.Properties.NetworkProfile.NetworkInterfaces == nil {
 				klog.Warningf("skip caching vmssVM %s since its network profile hasn't initialized yet (probably still under creating)", computerName)
 				continue
 			}
@@ -195,12 +195,12 @@ func (ss *ScaleSet) newVMSSVirtualMachinesCache() (azcache.Resource, error) {
 				ResourceGroup:  resourceGroupName,
 				VMSSName:       vmssName,
 				InstanceID:     ptr.Deref(vm.InstanceID, ""),
-				VirtualMachine: &vm,
+				VirtualMachine: vm,
 				LastUpdate:     time.Now().UTC(),
 			}
 			// set cache entry to nil when the VM is under deleting.
-			if vm.VirtualMachineScaleSetVMProperties != nil &&
-				strings.EqualFold(ptr.Deref(vm.VirtualMachineScaleSetVMProperties.ProvisioningState, ""), string(consts.ProvisioningStateDeleting)) {
+			if vm.Properties != nil &&
+				strings.EqualFold(ptr.Deref(vm.Properties.ProvisioningState, ""), string(consts.ProvisioningStateDeleting)) {
 				klog.V(4).Infof("VMSS virtualMachine %q is under deleting, setting its cache to nil", computerName)
 				vmssVMCacheEntry.VirtualMachine = nil
 			}
@@ -287,7 +287,7 @@ func (ss *ScaleSet) DeleteCacheForNode(ctx context.Context, nodeName string) err
 	return nil
 }
 
-func (ss *ScaleSet) updateCache(ctx context.Context, nodeName, resourceGroupName, vmssName, instanceID string, updatedVM *compute.VirtualMachineScaleSetVM) error {
+func (ss *ScaleSet) updateCache(ctx context.Context, nodeName, resourceGroupName, vmssName, instanceID string, updatedVM *armcompute.VirtualMachineScaleSetVM) error {
 	// lock the VMSS entry to ensure a consistent view of the VM map when there are concurrent updates.
 	cacheKey := getVMSSVMCacheKey(resourceGroupName, vmssName)
 	ss.lockMap.LockEntry(cacheKey)
@@ -340,14 +340,14 @@ func (ss *ScaleSet) newNonVmssUniformNodesCache() (azcache.Resource, error) {
 				return nil, fmt.Errorf("getter function of nonVmssUniformNodesCache: failed to list vms in the resource group %s: %w", resourceGroup, err)
 			}
 			for _, vm := range vms {
-				if vm.OsProfile != nil && vm.OsProfile.ComputerName != nil {
-					if vm.VirtualMachineScaleSet != nil {
-						vmssFlexVMNodeNames.Insert(strings.ToLower(ptr.Deref(vm.OsProfile.ComputerName, "")))
+				if vm.Properties.OSProfile != nil && vm.Properties.OSProfile.ComputerName != nil {
+					if vm.Properties.VirtualMachineScaleSet != nil {
+						vmssFlexVMNodeNames.Insert(strings.ToLower(ptr.Deref(vm.Properties.OSProfile.ComputerName, "")))
 						if vm.ID != nil {
 							vmssFlexVMProviderIDs.Insert(ss.ProviderName() + "://" + ptr.Deref(vm.ID, ""))
 						}
 					} else {
-						avSetVMNodeNames.Insert(strings.ToLower(ptr.Deref(vm.OsProfile.ComputerName, "")))
+						avSetVMNodeNames.Insert(strings.ToLower(ptr.Deref(vm.Properties.OSProfile.ComputerName, "")))
 						if vm.ID != nil {
 							avSetVMProviderIDs.Insert(ss.ProviderName() + "://" + ptr.Deref(vm.ID, ""))
 						}
@@ -524,14 +524,14 @@ func (ss *ScaleSet) getVMManagementTypeByIPConfigurationID(ctx context.Context, 
 }
 
 func (az *Cloud) GetVMNameByIPConfigurationName(ctx context.Context, nicResourceGroup, nicName string) (string, error) {
-	nic, rerr := az.InterfacesClient.Get(ctx, nicResourceGroup, nicName, "")
+	nic, rerr := az.NetworkClientFactory.GetInterfaceClient().Get(ctx, nicResourceGroup, nicName, nil)
 	if rerr != nil {
-		return "", fmt.Errorf("failed to get interface of name %s: %w", nicName, rerr.Error())
+		return "", fmt.Errorf("failed to get interface of name %s: %w", nicName, rerr)
 	}
-	if nic.InterfacePropertiesFormat == nil || nic.InterfacePropertiesFormat.VirtualMachine == nil || nic.InterfacePropertiesFormat.VirtualMachine.ID == nil {
+	if nic.Properties == nil || nic.Properties.VirtualMachine == nil || nic.Properties.VirtualMachine.ID == nil {
 		return "", fmt.Errorf("failed to get vm ID of nic %s", ptr.Deref(nic.Name, ""))
 	}
-	vmID := ptr.Deref(nic.InterfacePropertiesFormat.VirtualMachine.ID, "")
+	vmID := ptr.Deref(nic.Properties.VirtualMachine.ID, "")
 	matches := vmIDRE.FindStringSubmatch(vmID)
 	if len(matches) != 2 {
 		return "", fmt.Errorf("invalid virtual machine ID %s", vmID)

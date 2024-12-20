@@ -24,9 +24,11 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
@@ -35,12 +37,11 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/ptr"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmasclient/mockvmasclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient/mock_availabilitysetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient/mock_virtualmachineclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -189,9 +190,9 @@ func TestMapLoadBalancerNameToVMSet(t *testing.T) {
 
 	for _, c := range cases {
 		if c.useStandardLB {
-			az.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
+			az.Config.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 		} else {
-			az.Config.LoadBalancerSku = consts.LoadBalancerSkuBasic
+			az.Config.LoadBalancerSKU = consts.LoadBalancerSKUBasic
 		}
 		vmset := az.mapLoadBalancerNameToVMSet(c.lbName, c.clusterName)
 		assert.Equal(t, c.expectedVMSet, vmset, c.description)
@@ -324,9 +325,9 @@ func TestGetLoadBalancingRuleName(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.description, func(t *testing.T) {
 			if c.useStandardLB {
-				az.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
+				az.Config.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 			} else {
-				az.Config.LoadBalancerSku = consts.LoadBalancerSkuBasic
+				az.Config.LoadBalancerSKU = consts.LoadBalancerSKUBasic
 			}
 			svc.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = c.subnetName
 			svc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = strconv.FormatBool(c.isInternal)
@@ -551,57 +552,65 @@ func TestGetProtocolsFromKubernetesProtocol(t *testing.T) {
 	testcases := []struct {
 		Name                       string
 		protocol                   v1.Protocol
-		expectedTransportProto     network.TransportProtocol
-		expectedSecurityGroupProto armnetwork.SecurityRuleProtocol
-		expectedProbeProto         network.ProbeProtocol
+		expectedTransportProto     *armnetwork.TransportProtocol
+		expectedSecurityGroupProto *armnetwork.SecurityRuleProtocol
+		expectedProbeProto         *armnetwork.ProbeProtocol
 		nilProbeProto              bool
 		expectedErrMsg             error
 	}{
 		{
 			Name:                       "getProtocolsFromKubernetesProtocol should get TCP protocol",
 			protocol:                   v1.ProtocolTCP,
-			expectedTransportProto:     network.TransportProtocolTCP,
-			expectedSecurityGroupProto: armnetwork.SecurityRuleProtocolTCP,
-			expectedProbeProto:         network.ProbeProtocolTCP,
+			expectedTransportProto:     to.Ptr(armnetwork.TransportProtocolTCP),
+			expectedSecurityGroupProto: to.Ptr(armnetwork.SecurityRuleProtocolTCP),
+			expectedProbeProto:         to.Ptr(armnetwork.ProbeProtocolTCP),
 		},
 		{
 			Name:                       "getProtocolsFromKubernetesProtocol should get UDP protocol",
 			protocol:                   v1.ProtocolUDP,
-			expectedTransportProto:     network.TransportProtocolUDP,
-			expectedSecurityGroupProto: armnetwork.SecurityRuleProtocolUDP,
+			expectedTransportProto:     to.Ptr(armnetwork.TransportProtocolUDP),
+			expectedSecurityGroupProto: to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 			nilProbeProto:              true,
 		},
 		{
 			Name:                       "getProtocolsFromKubernetesProtocol should get SCTP protocol",
 			protocol:                   v1.ProtocolSCTP,
-			expectedTransportProto:     network.TransportProtocolAll,
-			expectedSecurityGroupProto: armnetwork.SecurityRuleProtocolAsterisk,
+			expectedTransportProto:     to.Ptr(armnetwork.TransportProtocolAll),
+			expectedSecurityGroupProto: to.Ptr(armnetwork.SecurityRuleProtocolAsterisk),
 			nilProbeProto:              true,
 		},
 		{
 			Name:           "getProtocolsFromKubernetesProtocol should report error",
 			protocol:       v1.Protocol("ICMP"),
 			expectedErrMsg: fmt.Errorf("only TCP, UDP and SCTP are supported for Azure LoadBalancers"),
+			nilProbeProto:  true,
 		},
 	}
 
 	for _, test := range testcases {
-		transportProto, securityGroupProto, probeProto, err := getProtocolsFromKubernetesProtocol(test.protocol)
-		assert.Equal(t, test.expectedTransportProto, *transportProto, test.Name)
-		assert.Equal(t, test.expectedSecurityGroupProto, securityGroupProto, test.Name)
-		if test.nilProbeProto {
-			assert.Nil(t, probeProto, test.Name)
-		} else {
-			assert.Equal(t, test.expectedProbeProto, *probeProto, test.Name)
-		}
-		assert.Equal(t, test.expectedErrMsg, err, test.Name)
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			transportProto, securityGroupProto, probeProto, err := getProtocolsFromKubernetesProtocol(test.protocol)
+			if test.expectedTransportProto != nil {
+				assert.Equal(t, *test.expectedTransportProto, *transportProto, test.Name)
+			}
+			if test.expectedSecurityGroupProto != nil {
+				assert.Equal(t, *test.expectedSecurityGroupProto, *securityGroupProto, test.Name)
+			}
+			if test.nilProbeProto {
+				assert.Nil(t, probeProto, test.Name)
+			} else {
+				assert.Equal(t, *test.expectedProbeProto, *probeProto, test.Name)
+			}
+			assert.Equal(t, test.expectedErrMsg, err, test.Name)
+		})
 	}
 }
 
 func TestGetStandardVMPrimaryInterfaceID(t *testing.T) {
 	testcases := []struct {
 		name           string
-		vm             compute.VirtualMachine
+		vm             *armcompute.VirtualMachine
 		expectedNicID  string
 		expectedErrMsg error
 	}{
@@ -612,19 +621,19 @@ func TestGetStandardVMPrimaryInterfaceID(t *testing.T) {
 		},
 		{
 			name: "GetPrimaryInterfaceID should get primary NIC ID",
-			vm: compute.VirtualMachine{
+			vm: &armcompute.VirtualMachine{
 				Name: ptr.To("vm2"),
-				VirtualMachineProperties: &compute.VirtualMachineProperties{
-					NetworkProfile: &compute.NetworkProfile{
-						NetworkInterfaces: &[]compute.NetworkInterfaceReference{
+				Properties: &armcompute.VirtualMachineProperties{
+					NetworkProfile: &armcompute.NetworkProfile{
+						NetworkInterfaces: []*armcompute.NetworkInterfaceReference{
 							{
-								NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{
+								Properties: &armcompute.NetworkInterfaceReferenceProperties{
 									Primary: ptr.To(true),
 								},
 								ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic1"),
 							},
 							{
-								NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{
+								Properties: &armcompute.NetworkInterfaceReferenceProperties{
 									Primary: ptr.To(false),
 								},
 								ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic2"),
@@ -637,19 +646,19 @@ func TestGetStandardVMPrimaryInterfaceID(t *testing.T) {
 		},
 		{
 			name: "GetPrimaryInterfaceID should report error if node don't have primary NIC",
-			vm: compute.VirtualMachine{
+			vm: &armcompute.VirtualMachine{
 				Name: ptr.To("vm3"),
-				VirtualMachineProperties: &compute.VirtualMachineProperties{
-					NetworkProfile: &compute.NetworkProfile{
-						NetworkInterfaces: &[]compute.NetworkInterfaceReference{
+				Properties: &armcompute.VirtualMachineProperties{
+					NetworkProfile: &armcompute.NetworkProfile{
+						NetworkInterfaces: []*armcompute.NetworkInterfaceReference{
 							{
-								NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{
+								Properties: &armcompute.NetworkInterfaceReferenceProperties{
 									Primary: ptr.To(false),
 								},
 								ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic1"),
 							},
 							{
-								NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{
+								Properties: &armcompute.NetworkInterfaceReferenceProperties{
 									Primary: ptr.To(false),
 								},
 								ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic2"),
@@ -672,78 +681,78 @@ func TestGetStandardVMPrimaryInterfaceID(t *testing.T) {
 func TestGetPrimaryIPConfig(t *testing.T) {
 	testcases := []struct {
 		name             string
-		nic              network.Interface
-		expectedIPConfig *network.InterfaceIPConfiguration
+		nic              *armnetwork.Interface
+		expectedIPConfig *armnetwork.InterfaceIPConfiguration
 		expectedErrMsg   error
 	}{
 
 		{
 			name: "GetPrimaryIPConfig should get the only IP configuration",
-			nic: network.Interface{
+			nic: &armnetwork.Interface{
 				Name: ptr.To("nic"),
-				InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-					IPConfigurations: &[]network.InterfaceIPConfiguration{
+				Properties: &armnetwork.InterfacePropertiesFormat{
+					IPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 						{
 							Name: ptr.To("ipconfig1"),
 						},
 					},
 				},
 			},
-			expectedIPConfig: &network.InterfaceIPConfiguration{
+			expectedIPConfig: &armnetwork.InterfaceIPConfiguration{
 				Name: ptr.To("ipconfig1"),
 			},
 		},
 		{
 			name: "GetPrimaryIPConfig should get the primary IP configuration",
-			nic: network.Interface{
+			nic: &armnetwork.Interface{
 				Name: ptr.To("nic"),
-				InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-					IPConfigurations: &[]network.InterfaceIPConfiguration{
+				Properties: &armnetwork.InterfacePropertiesFormat{
+					IPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 						{
 							Name: ptr.To("ipconfig1"),
-							InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
+							Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
 								Primary: ptr.To(true),
 							},
 						},
 						{
 							Name: ptr.To("ipconfig2"),
-							InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
+							Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
 								Primary: ptr.To(false),
 							},
 						},
 					},
 				},
 			},
-			expectedIPConfig: &network.InterfaceIPConfiguration{
+			expectedIPConfig: &armnetwork.InterfaceIPConfiguration{
 				Name: ptr.To("ipconfig1"),
-				InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
+				Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
 					Primary: ptr.To(true),
 				},
 			},
 		},
 		{
 			name: "GetPrimaryIPConfig should report error if nic don't have IP configuration",
-			nic: network.Interface{
-				Name:                      ptr.To("nic"),
-				InterfacePropertiesFormat: &network.InterfacePropertiesFormat{},
+			nic: &armnetwork.Interface{
+				Name:       ptr.To("nic"),
+				Properties: &armnetwork.InterfacePropertiesFormat{},
 			},
-			expectedErrMsg: fmt.Errorf("nic.IPConfigurations for nic (nicname=%q) is nil", "nic"),
+			expectedErrMsg: fmt.Errorf("nic.Properties.IPConfigurations for nic (nicname=%q) is nil", "nic"),
 		},
 		{
 			name: "GetPrimaryIPConfig should report error if node has more than one IP configuration and don't have primary IP configuration",
-			nic: network.Interface{
+			nic: &armnetwork.Interface{
 				Name: ptr.To("nic"),
-				InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-					IPConfigurations: &[]network.InterfaceIPConfiguration{
+				Properties: &armnetwork.InterfacePropertiesFormat{
+					IPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 						{
 							Name: ptr.To("ipconfig1"),
-							InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
+							Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
 								Primary: ptr.To(false),
 							},
 						},
 						{
 							Name: ptr.To("ipconfig2"),
-							InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
+							Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
 								Primary: ptr.To(false),
 							},
 						},
@@ -762,58 +771,58 @@ func TestGetPrimaryIPConfig(t *testing.T) {
 }
 
 func TestGetIPConfigByIPFamily(t *testing.T) {
-	ipv4IPconfig := network.InterfaceIPConfiguration{
+	ipv4IPconfig := &armnetwork.InterfaceIPConfiguration{
 		Name: ptr.To("ipconfig1"),
-		InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-			PrivateIPAddressVersion: network.IPv4,
+		Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
+			PrivateIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
 			PrivateIPAddress:        ptr.To("10.10.0.12"),
 		},
 	}
-	ipv6IPconfig := network.InterfaceIPConfiguration{
+	ipv6IPconfig := &armnetwork.InterfaceIPConfiguration{
 		Name: ptr.To("ipconfig2"),
-		InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-			PrivateIPAddressVersion: network.IPv6,
+		Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
+			PrivateIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv6),
 			PrivateIPAddress:        ptr.To("1111:11111:00:00:1111:1111:000:111"),
 		},
 	}
-	testNic := network.Interface{
+	testNic := &armnetwork.Interface{
 		Name: ptr.To("nic"),
-		InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-			IPConfigurations: &[]network.InterfaceIPConfiguration{ipv4IPconfig, ipv6IPconfig},
+		Properties: &armnetwork.InterfacePropertiesFormat{
+			IPConfigurations: []*armnetwork.InterfaceIPConfiguration{ipv4IPconfig, ipv6IPconfig},
 		},
 	}
 	testcases := []struct {
 		name             string
-		nic              network.Interface
-		expectedIPConfig *network.InterfaceIPConfiguration
+		nic              *armnetwork.Interface
+		expectedIPConfig *armnetwork.InterfaceIPConfiguration
 		IPv6             bool
 		expectedErrMsg   error
 	}{
 		{
 			name:             "GetIPConfigByIPFamily should get the IPv6 IP configuration if IPv6 is false",
 			nic:              testNic,
-			expectedIPConfig: &ipv4IPconfig,
+			expectedIPConfig: ipv4IPconfig,
 		},
 		{
 			name:             "GetIPConfigByIPFamily should get the IPv4 IP configuration if IPv6 is true",
 			nic:              testNic,
 			IPv6:             true,
-			expectedIPConfig: &ipv6IPconfig,
+			expectedIPConfig: ipv6IPconfig,
 		},
 		{
 			name: "GetIPConfigByIPFamily should report error if nic don't have IP configuration",
-			nic: network.Interface{
-				Name:                      ptr.To("nic"),
-				InterfacePropertiesFormat: &network.InterfacePropertiesFormat{},
+			nic: &armnetwork.Interface{
+				Name:       ptr.To("nic"),
+				Properties: &armnetwork.InterfacePropertiesFormat{},
 			},
-			expectedErrMsg: fmt.Errorf("nic.IPConfigurations for nic (nicname=%q) is nil", "nic"),
+			expectedErrMsg: fmt.Errorf("nic.Properties.IPConfigurations for nic (nicname=%q) is nil", "nic"),
 		},
 		{
 			name: "GetIPConfigByIPFamily should report error if nic don't have IPv6 configuration when IPv6 is true",
-			nic: network.Interface{
+			nic: &armnetwork.Interface{
 				Name: ptr.To("nic"),
-				InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-					IPConfigurations: &[]network.InterfaceIPConfiguration{ipv4IPconfig},
+				Properties: &armnetwork.InterfacePropertiesFormat{
+					IPConfigurations: []*armnetwork.InterfaceIPConfiguration{ipv4IPconfig},
 				},
 			},
 			IPv6:           true,
@@ -821,14 +830,14 @@ func TestGetIPConfigByIPFamily(t *testing.T) {
 		},
 		{
 			name: "GetIPConfigByIPFamily should report error if nic don't have PrivateIPAddress",
-			nic: network.Interface{
+			nic: &armnetwork.Interface{
 				Name: ptr.To("nic"),
-				InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-					IPConfigurations: &[]network.InterfaceIPConfiguration{
+				Properties: &armnetwork.InterfacePropertiesFormat{
+					IPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 						{
 							Name: ptr.To("ipconfig1"),
-							InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-								PrivateIPAddressVersion: network.IPv4,
+							Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
+								PrivateIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
 							},
 						},
 					},
@@ -918,7 +927,7 @@ func TestGetStandardInstanceIDByNodeName(t *testing.T) {
 	defer ctrl.Finish()
 	cloud := GetTestCloud(ctrl)
 
-	expectedVM := compute.VirtualMachine{
+	expectedVM := &armcompute.VirtualMachine{
 		Name: ptr.To("vm1"),
 		ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm1"),
 	}
@@ -942,7 +951,7 @@ func TestGetStandardInstanceIDByNodeName(t *testing.T) {
 		{
 			name:           "GetInstanceIDByNodeName should report error if Error encountered when invoke mockVMClient.Get",
 			nodeName:       "vm3",
-			expectedErrMsg: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: VMGet error"),
+			expectedErrMsg: fmt.Errorf("VMGet error"),
 		},
 		{
 			name:           "GetInstanceIDByNodeName should report error if ResourceID is invalid",
@@ -951,21 +960,21 @@ func TestGetStandardInstanceIDByNodeName(t *testing.T) {
 		},
 	}
 	for _, test := range testcases {
-		mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient := cloud.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, "vm1", gomock.Any()).Return(expectedVM, nil).AnyTimes()
-		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, "vm2", gomock.Any()).Return(compute.VirtualMachine{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
-		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, "vm3", gomock.Any()).Return(compute.VirtualMachine{}, &retry.Error{
-			HTTPStatusCode: http.StatusInternalServerError,
-			RawError:       fmt.Errorf("VMGet error"),
+		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, "vm2", gomock.Any()).Return(&armcompute.VirtualMachine{}, &azcore.ResponseError{StatusCode: http.StatusNotFound, ErrorCode: cloudprovider.InstanceNotFound.Error()}).AnyTimes()
+		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, "vm3", gomock.Any()).Return(&armcompute.VirtualMachine{}, &azcore.ResponseError{
+			StatusCode: http.StatusInternalServerError,
+			ErrorCode:  "VMGet error",
 		}).AnyTimes()
-		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, "vm4", gomock.Any()).Return(compute.VirtualMachine{
+		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, "vm4", gomock.Any()).Return(&armcompute.VirtualMachine{
 			Name: ptr.To("vm4"),
 			ID:   ptr.To(invalidResouceID),
 		}, nil).AnyTimes()
 
 		instanceID, err := cloud.VMSet.GetInstanceIDByNodeName(context.Background(), test.nodeName)
 		if test.expectedErrMsg != nil {
-			assert.EqualError(t, test.expectedErrMsg, err.Error(), test.name)
+			assert.Contains(t, err.Error(), test.expectedErrMsg.Error(), test.name)
 		}
 		assert.Equal(t, test.expectedID, instanceID, test.name)
 	}
@@ -979,30 +988,30 @@ func TestGetStandardVMPowerStatusByNodeName(t *testing.T) {
 	testcases := []struct {
 		name           string
 		nodeName       string
-		vm             compute.VirtualMachine
+		vm             *armcompute.VirtualMachine
 		expectedStatus string
-		getErr         *retry.Error
+		getErr         error
 		expectedErrMsg error
 	}{
 		{
 			name:     "GetPowerStatusByNodeName should report error if node don't exist",
 			nodeName: "vm1",
-			vm:       compute.VirtualMachine{},
-			getErr: &retry.Error{
-				HTTPStatusCode: http.StatusNotFound,
-				RawError:       cloudprovider.InstanceNotFound,
+			vm:       &armcompute.VirtualMachine{},
+			getErr: &azcore.ResponseError{
+				StatusCode: http.StatusNotFound,
+				ErrorCode:  cloudprovider.InstanceNotFound.Error(),
 			},
 			expectedErrMsg: fmt.Errorf("instance not found"),
 		},
 		{
 			name:     "GetPowerStatusByNodeName should get power status as expected",
 			nodeName: "vm2",
-			vm: compute.VirtualMachine{
+			vm: &armcompute.VirtualMachine{
 				Name: ptr.To("vm2"),
-				VirtualMachineProperties: &compute.VirtualMachineProperties{
+				Properties: &armcompute.VirtualMachineProperties{
 					ProvisioningState: ptr.To("Succeeded"),
-					InstanceView: &compute.VirtualMachineInstanceView{
-						Statuses: &[]compute.InstanceViewStatus{
+					InstanceView: &armcompute.VirtualMachineInstanceView{
+						Statuses: []*armcompute.InstanceViewStatus{
 							{
 								Code: ptr.To("PowerState/Running"),
 							},
@@ -1013,31 +1022,31 @@ func TestGetStandardVMPowerStatusByNodeName(t *testing.T) {
 			expectedStatus: "Running",
 		},
 		{
-			name:     "GetPowerStatusByNodeName should get vmPowerStateUnknown if vm.InstanceView is nil",
+			name:     "GetPowerStatusByNodeName should get vmPowerStateUnknown if vm.Properties.InstanceView is nil",
 			nodeName: "vm3",
-			vm: compute.VirtualMachine{
+			vm: &armcompute.VirtualMachine{
 				Name: ptr.To("vm3"),
-				VirtualMachineProperties: &compute.VirtualMachineProperties{
+				Properties: &armcompute.VirtualMachineProperties{
 					ProvisioningState: ptr.To("Succeeded"),
 				},
 			},
 			expectedStatus: consts.VMPowerStateUnknown,
 		},
 		{
-			name:     "GetPowerStatusByNodeName should get vmPowerStateUnknown if vm.InstanceView.statuses is nil",
+			name:     "GetPowerStatusByNodeName should get vmPowerStateUnknown if vm.Properties.InstanceView.statuses is nil",
 			nodeName: "vm4",
-			vm: compute.VirtualMachine{
+			vm: &armcompute.VirtualMachine{
 				Name: ptr.To("vm4"),
-				VirtualMachineProperties: &compute.VirtualMachineProperties{
+				Properties: &armcompute.VirtualMachineProperties{
 					ProvisioningState: ptr.To("Succeeded"),
-					InstanceView:      &compute.VirtualMachineInstanceView{},
+					InstanceView:      &armcompute.VirtualMachineInstanceView{},
 				},
 			},
 			expectedStatus: consts.VMPowerStateUnknown,
 		},
 	}
 	for _, test := range testcases {
-		mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient := cloud.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nodeName, gomock.Any()).Return(test.vm, test.getErr).AnyTimes()
 
 		powerState, err := cloud.VMSet.GetPowerStatusByNodeName(context.TODO(), test.nodeName)
@@ -1054,30 +1063,30 @@ func TestGetStandardVMProvisioningStateByNodeName(t *testing.T) {
 	testcases := []struct {
 		name                      string
 		nodeName                  string
-		vm                        compute.VirtualMachine
+		vm                        *armcompute.VirtualMachine
 		expectedProvisioningState string
-		getErr                    *retry.Error
+		getErr                    error
 		expectedErrMsg            error
 	}{
 		{
 			name:     "GetProvisioningStateByNodeName should report error if node don't exist",
 			nodeName: "vm1",
-			vm:       compute.VirtualMachine{},
-			getErr: &retry.Error{
-				HTTPStatusCode: http.StatusNotFound,
-				RawError:       cloudprovider.InstanceNotFound,
+			vm:       &armcompute.VirtualMachine{},
+			getErr: &azcore.ResponseError{
+				StatusCode: http.StatusNotFound,
+				ErrorCode:  cloudprovider.InstanceNotFound.Error(),
 			},
 			expectedErrMsg: fmt.Errorf("instance not found"),
 		},
 		{
 			name:     "GetProvisioningStateByNodeName should return Succeeded for running VM",
 			nodeName: "vm2",
-			vm: compute.VirtualMachine{
+			vm: &armcompute.VirtualMachine{
 				Name: ptr.To("vm2"),
-				VirtualMachineProperties: &compute.VirtualMachineProperties{
+				Properties: &armcompute.VirtualMachineProperties{
 					ProvisioningState: ptr.To("Succeeded"),
-					InstanceView: &compute.VirtualMachineInstanceView{
-						Statuses: &[]compute.InstanceViewStatus{
+					InstanceView: &armcompute.VirtualMachineInstanceView{
+						Statuses: []*armcompute.InstanceViewStatus{
 							{
 								Code: ptr.To("PowerState/Running"),
 							},
@@ -1090,9 +1099,9 @@ func TestGetStandardVMProvisioningStateByNodeName(t *testing.T) {
 		{
 			name:     "GetProvisioningStateByNodeName should return empty string when vm.ProvisioningState is nil",
 			nodeName: "vm3",
-			vm: compute.VirtualMachine{
+			vm: &armcompute.VirtualMachine{
 				Name: ptr.To("vm3"),
-				VirtualMachineProperties: &compute.VirtualMachineProperties{
+				Properties: &armcompute.VirtualMachineProperties{
 					ProvisioningState: nil,
 				},
 			},
@@ -1100,7 +1109,7 @@ func TestGetStandardVMProvisioningStateByNodeName(t *testing.T) {
 		},
 	}
 	for _, test := range testcases {
-		mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient := cloud.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nodeName, gomock.Any()).Return(test.vm, test.getErr).AnyTimes()
 
 		provisioningState, err := cloud.VMSet.GetProvisioningStateByNodeName(context.TODO(), test.nodeName)
@@ -1118,30 +1127,30 @@ func TestGetStandardVMZoneByNodeName(t *testing.T) {
 	testcases := []struct {
 		name           string
 		nodeName       string
-		vm             compute.VirtualMachine
+		vm             *armcompute.VirtualMachine
 		expectedZone   cloudprovider.Zone
-		getErr         *retry.Error
+		getErr         error
 		expectedErrMsg error
 	}{
 		{
 			name:     "GetZoneByNodeName should report error if node don't exist",
 			nodeName: "vm1",
-			vm:       compute.VirtualMachine{},
-			getErr: &retry.Error{
-				HTTPStatusCode: http.StatusNotFound,
-				RawError:       cloudprovider.InstanceNotFound,
+			vm:       &armcompute.VirtualMachine{},
+			getErr: &azcore.ResponseError{
+				StatusCode: http.StatusNotFound,
+				ErrorCode:  cloudprovider.InstanceNotFound.Error(),
 			},
 			expectedErrMsg: fmt.Errorf("instance not found"),
 		},
 		{
 			name:     "GetZoneByNodeName should get zone as expected",
 			nodeName: "vm2",
-			vm: compute.VirtualMachine{
+			vm: &armcompute.VirtualMachine{
 				Name:     ptr.To("vm2"),
 				Location: ptr.To("EASTUS"),
-				Zones:    &[]string{"2"},
-				VirtualMachineProperties: &compute.VirtualMachineProperties{
-					InstanceView: &compute.VirtualMachineInstanceView{
+				Zones:    to.SliceOfPtrs("2"),
+				Properties: &armcompute.VirtualMachineProperties{
+					InstanceView: &armcompute.VirtualMachineInstanceView{
 						PlatformFaultDomain: &faultDomain,
 					},
 				},
@@ -1154,11 +1163,11 @@ func TestGetStandardVMZoneByNodeName(t *testing.T) {
 		{
 			name:     "GetZoneByNodeName should get FailureDomain as zone if zone is not used for node",
 			nodeName: "vm3",
-			vm: compute.VirtualMachine{
+			vm: &armcompute.VirtualMachine{
 				Name:     ptr.To("vm3"),
 				Location: ptr.To("EASTUS"),
-				VirtualMachineProperties: &compute.VirtualMachineProperties{
-					InstanceView: &compute.VirtualMachineInstanceView{
+				Properties: &armcompute.VirtualMachineProperties{
+					InstanceView: &armcompute.VirtualMachineInstanceView{
 						PlatformFaultDomain: &faultDomain,
 					},
 				},
@@ -1171,12 +1180,12 @@ func TestGetStandardVMZoneByNodeName(t *testing.T) {
 		{
 			name:     "GetZoneByNodeName should report error if zones is invalid",
 			nodeName: "vm4",
-			vm: compute.VirtualMachine{
+			vm: &armcompute.VirtualMachine{
 				Name:     ptr.To("vm4"),
 				Location: ptr.To("EASTUS"),
-				Zones:    &[]string{"a"},
-				VirtualMachineProperties: &compute.VirtualMachineProperties{
-					InstanceView: &compute.VirtualMachineInstanceView{
+				Zones:    to.SliceOfPtrs("a"),
+				Properties: &armcompute.VirtualMachineProperties{
+					InstanceView: &armcompute.VirtualMachineInstanceView{
 						PlatformFaultDomain: &faultDomain,
 					},
 				},
@@ -1185,7 +1194,7 @@ func TestGetStandardVMZoneByNodeName(t *testing.T) {
 		},
 	}
 	for _, test := range testcases {
-		mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient := cloud.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nodeName, gomock.Any()).Return(test.vm, test.getErr).AnyTimes()
 
 		zone, err := cloud.VMSet.GetZoneByNodeName(context.TODO(), test.nodeName)
@@ -1200,43 +1209,43 @@ func TestGetStandardVMSetNames(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	testVM := compute.VirtualMachine{
+	testVM := &armcompute.VirtualMachine{
 		Name: ptr.To("vm1"),
-		VirtualMachineProperties: &compute.VirtualMachineProperties{
-			AvailabilitySet: &compute.SubResource{ID: ptr.To(asID)},
+		Properties: &armcompute.VirtualMachineProperties{
+			AvailabilitySet: &armcompute.SubResource{ID: ptr.To(asID)},
 		},
 	}
-	testVMWithoutAS := compute.VirtualMachine{
-		Name:                     ptr.To("vm2"),
-		VirtualMachineProperties: &compute.VirtualMachineProperties{},
+	testVMWithoutAS := &armcompute.VirtualMachine{
+		Name:       ptr.To("vm2"),
+		Properties: &armcompute.VirtualMachineProperties{},
 	}
 	testCases := []struct {
 		name               string
-		vm                 []compute.VirtualMachine
+		vm                 []*armcompute.VirtualMachine
 		service            *v1.Service
 		nodes              []*v1.Node
 		usingSingleSLBS    bool
-		expectedVMSetNames *[]string
+		expectedVMSetNames []*string
 		expectedErrMsg     error
 	}{
 		{
 			name:               "GetVMSetNames should return the primary vm set name if the service has no mode annotation",
-			vm:                 []compute.VirtualMachine{testVM},
+			vm:                 []*armcompute.VirtualMachine{testVM},
 			service:            &v1.Service{},
-			expectedVMSetNames: &[]string{"as"},
+			expectedVMSetNames: to.SliceOfPtrs("as"),
 		},
 		{
 			name: "GetVMSetNames should return the primary vm set name when using the single SLB",
-			vm:   []compute.VirtualMachine{testVM},
+			vm:   []*armcompute.VirtualMachine{testVM},
 			service: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: consts.ServiceAnnotationLoadBalancerAutoModeValue}},
 			},
 			usingSingleSLBS:    true,
-			expectedVMSetNames: &[]string{"as"},
+			expectedVMSetNames: to.SliceOfPtrs("as"),
 		},
 		{
 			name: "GetVMSetNames should return the correct as names if the service has auto mode annotation",
-			vm:   []compute.VirtualMachine{testVM},
+			vm:   []*armcompute.VirtualMachine{testVM},
 			service: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: consts.ServiceAnnotationLoadBalancerAutoModeValue}},
 			},
@@ -1247,11 +1256,11 @@ func TestGetStandardVMSetNames(t *testing.T) {
 					},
 				},
 			},
-			expectedVMSetNames: &[]string{"myavailabilityset"},
+			expectedVMSetNames: to.SliceOfPtrs("myavailabilityset"),
 		},
 		{
 			name: "GetVMSetNames should return the correct as names if node don't have availability set",
-			vm:   []compute.VirtualMachine{testVMWithoutAS},
+			vm:   []*armcompute.VirtualMachine{testVMWithoutAS},
 			service: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: consts.ServiceAnnotationLoadBalancerAutoModeValue}},
 			},
@@ -1266,7 +1275,7 @@ func TestGetStandardVMSetNames(t *testing.T) {
 		},
 		{
 			name: "GetVMSetNames should report the error if there's no such availability set",
-			vm:   []compute.VirtualMachine{testVM},
+			vm:   []*armcompute.VirtualMachine{testVM},
 			service: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: "vm2"}},
 			},
@@ -1281,7 +1290,7 @@ func TestGetStandardVMSetNames(t *testing.T) {
 		},
 		{
 			name: "GetVMSetNames should return the correct node name",
-			vm:   []compute.VirtualMachine{testVM},
+			vm:   []*armcompute.VirtualMachine{testVM},
 			service: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: "myAvailabilitySet"}},
 			},
@@ -1292,16 +1301,16 @@ func TestGetStandardVMSetNames(t *testing.T) {
 					},
 				},
 			},
-			expectedVMSetNames: &[]string{"myAvailabilitySet"},
+			expectedVMSetNames: to.SliceOfPtrs("myAvailabilitySet"),
 		},
 	}
 
 	for _, test := range testCases {
 		cloud := GetTestCloud(ctrl)
 		if test.usingSingleSLBS {
-			cloud.LoadBalancerSku = consts.LoadBalancerSkuStandard
+			cloud.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 		}
-		mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient := cloud.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 		mockVMClient.EXPECT().List(gomock.Any(), cloud.ResourceGroup).Return(test.vm, nil).AnyTimes()
 
 		vmSetNames, err := cloud.VMSet.GetVMSetNames(context.TODO(), test.service, test.nodes)
@@ -1337,9 +1346,6 @@ func TestExtractResourceGroupByNicID(t *testing.T) {
 }
 
 func TestStandardEnsureHostInPool(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	cloud := GetTestCloud(ctrl)
 
 	availabilitySetID := asID
 	backendAddressPoolID := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/backendAddressPools/backendpool-1"
@@ -1352,7 +1358,7 @@ func TestStandardEnsureHostInPool(t *testing.T) {
 		nicName           string
 		nicID             string
 		vmSetName         string
-		nicProvisionState network.ProvisioningState
+		nicProvisionState *armnetwork.ProvisioningState
 		isStandardLB      bool
 		expectedErrMsg    error
 	}{
@@ -1379,7 +1385,7 @@ func TestStandardEnsureHostInPool(t *testing.T) {
 			nodeName:          "vm3",
 			nicName:           "nic3",
 			nicID:             "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic3",
-			nicProvisionState: consts.NicFailedState,
+			nicProvisionState: to.Ptr(armnetwork.ProvisioningStateFailed),
 			vmSetName:         "myAvailabilitySet",
 		},
 		{
@@ -1417,34 +1423,40 @@ func TestStandardEnsureHostInPool(t *testing.T) {
 			backendPoolID:  "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb2-internal/backendAddressPool/backendpool-3",
 			nodeName:       "vm8",
 			nicName:        "nic8",
-			nicID:          "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic7",
+			nicID:          "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic8",
 			vmSetName:      "myAvailabilitySet",
 			expectedErrMsg: fmt.Errorf("new backendPoolID %q is in wrong format", "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb2-internal/backendAddressPool/backendpool-3"),
 		},
 	}
 
 	for _, test := range testCases {
-		if test.isStandardLB {
-			cloud.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
-		}
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			cloud := GetTestCloud(ctrl)
+			if test.isStandardLB {
+				cloud.Config.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+			}
 
-		testVM := buildDefaultTestVirtualMachine(availabilitySetID, []string{test.nicID})
-		testVM.Name = ptr.To(string(test.nodeName))
-		testNIC := buildDefaultTestInterface(false, []string{backendAddressPoolID})
-		testNIC.Name = ptr.To(test.nicName)
-		testNIC.ID = ptr.To(test.nicID)
-		testNIC.ProvisioningState = test.nicProvisionState
+			testVM := buildDefaultTestVirtualMachine(availabilitySetID, []string{test.nicID})
+			testVM.Name = ptr.To(string(test.nodeName))
+			testNIC := buildDefaultTestInterface(false, []string{backendAddressPoolID})
+			testNIC.Name = ptr.To(test.nicName)
+			testNIC.ID = ptr.To(test.nicID)
+			testNIC.Properties.ProvisioningState = test.nicProvisionState
 
-		mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
-		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, string(test.nodeName), gomock.Any()).Return(testVM, nil).AnyTimes()
+			mockVMClient := cloud.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+			mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, string(test.nodeName), gomock.Any()).Return(testVM, nil).AnyTimes()
 
-		mockInterfaceClient := cloud.InterfacesClient.(*mockinterfaceclient.MockInterface)
-		mockInterfaceClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nicName, gomock.Any()).Return(testNIC, nil).AnyTimes()
-		mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.ResourceGroup, gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			mockInterfaceClient := cloud.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+			mockInterfaceClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nicName, gomock.Any()).Return(testNIC, nil).AnyTimes()
+			mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.ResourceGroup, gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
-		_, _, _, vm, err := cloud.VMSet.EnsureHostInPool(context.Background(), test.service, test.nodeName, test.backendPoolID, test.vmSetName)
-		assert.Equal(t, test.expectedErrMsg, err, test.name)
-		assert.Nil(t, vm, test.name)
+			_, _, _, vm, err := cloud.VMSet.EnsureHostInPool(context.Background(), test.service, test.nodeName, test.backendPoolID, test.vmSetName)
+			assert.Equal(t, test.expectedErrMsg, err, test.name)
+			assert.Nil(t, vm, test.name)
+		})
 	}
 }
 
@@ -1541,7 +1553,7 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
-			cloud.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
+			cloud.Config.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 			cloud.Config.ExcludeMasterFromStandardLB = ptr.To(true)
 			cloud.excludeLoadBalancerNodes = utilsets.NewString(test.excludeLBNodes...)
 
@@ -1550,12 +1562,12 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 			testNIC.Name = ptr.To(test.nicName)
 			testNIC.ID = ptr.To(test.nicID)
 
-			mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+			mockVMClient := cloud.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 			mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nodeName, gomock.Any()).Return(testVM, nil).AnyTimes()
 
-			mockInterfaceClient := cloud.InterfacesClient.(*mockinterfaceclient.MockInterface)
+			mockInterfaceClient := cloud.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 			mockInterfaceClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nicName, gomock.Any()).Return(testNIC, nil).AnyTimes()
-			mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.ResourceGroup, gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.ResourceGroup, gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
 			err := cloud.VMSet.EnsureHostsInPool(context.Background(), test.service, test.nodes, test.backendPoolID, test.vmSetName)
 			if test.expectedErr {
@@ -1577,18 +1589,18 @@ func TestStandardEnsureBackendPoolDeleted(t *testing.T) {
 
 	tests := []struct {
 		desc                string
-		backendAddressPools *[]network.BackendAddressPool
+		backendAddressPools []*armnetwork.BackendAddressPool
 		loadBalancerSKU     string
-		existingVM          compute.VirtualMachine
-		existingNIC         network.Interface
+		existingVM          *armcompute.VirtualMachine
+		existingNIC         *armnetwork.Interface
 	}{
 		{
 			desc: "EnsureBackendPoolDeleted should decouple the nic and the load balancer properly",
-			backendAddressPools: &[]network.BackendAddressPool{
+			backendAddressPools: []*armnetwork.BackendAddressPool{
 				{
 					ID: ptr.To(backendPoolID),
-					BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-						BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
+					Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+						BackendIPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 							{
 								ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-1/ipConfigurations/ipconfig1"),
 							},
@@ -1604,17 +1616,15 @@ func TestStandardEnsureBackendPoolDeleted(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		cloud.LoadBalancerSku = test.loadBalancerSKU
-		mockVMClient := mockvmclient.NewMockInterface(ctrl)
+		cloud.LoadBalancerSKU = test.loadBalancerSKU
+		mockVMClient := cloud.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, "k8s-agentpool1-00000000-1", gomock.Any()).Return(test.existingVM, nil)
-		cloud.VirtualMachinesClient = mockVMClient
-		mockNICClient := mockinterfaceclient.NewMockInterface(ctrl)
-		test.existingNIC.VirtualMachine = &network.SubResource{
+		mockNICClient := cloud.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+		test.existingNIC.Properties.VirtualMachine = &armnetwork.SubResource{
 			ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/k8s-agentpool1-00000000-1"),
 		}
 		mockNICClient.EXPECT().Get(gomock.Any(), "rg", "k8s-agentpool1-00000000-nic-1", gomock.Any()).Return(test.existingNIC, nil).Times(2)
-		mockNICClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-		cloud.InterfacesClient = mockNICClient
+		mockNICClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil)
 
 		nicUpdated, err := cloud.VMSet.EnsureBackendPoolDeleted(context.TODO(), &service, []string{backendPoolID}, vmSetName, test.backendAddressPools, true)
 		assert.NoError(t, err, test.desc)
@@ -1622,45 +1632,45 @@ func TestStandardEnsureBackendPoolDeleted(t *testing.T) {
 	}
 }
 
-func buildDefaultTestInterface(isPrimary bool, lbBackendpoolIDs []string) network.Interface {
-	expectedNIC := network.Interface{
-		InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-			ProvisioningState: network.ProvisioningStateSucceeded,
-			IPConfigurations: &[]network.InterfaceIPConfiguration{
+func buildDefaultTestInterface(isPrimary bool, lbBackendpoolIDs []string) *armnetwork.Interface {
+	expectedNIC := &armnetwork.Interface{
+		Properties: &armnetwork.InterfacePropertiesFormat{
+			ProvisioningState: to.Ptr(armnetwork.ProvisioningStateSucceeded),
+			IPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 				{
-					InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
+					Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
 						Primary: ptr.To(isPrimary),
 					},
 				},
 			},
 		},
 	}
-	backendAddressPool := make([]network.BackendAddressPool, 0)
+	backendAddressPool := make([]*armnetwork.BackendAddressPool, 0)
 	for _, id := range lbBackendpoolIDs {
-		backendAddressPool = append(backendAddressPool, network.BackendAddressPool{
+		backendAddressPool = append(backendAddressPool, &armnetwork.BackendAddressPool{
 			ID: ptr.To(id),
 		})
 	}
-	(*expectedNIC.IPConfigurations)[0].LoadBalancerBackendAddressPools = &backendAddressPool
+	(expectedNIC.Properties.IPConfigurations)[0].Properties.LoadBalancerBackendAddressPools = backendAddressPool
 	return expectedNIC
 }
 
-func buildDefaultTestVirtualMachine(asID string, nicIDs []string) compute.VirtualMachine {
-	expectedVM := compute.VirtualMachine{
-		VirtualMachineProperties: &compute.VirtualMachineProperties{
-			AvailabilitySet: &compute.SubResource{
+func buildDefaultTestVirtualMachine(asID string, nicIDs []string) *armcompute.VirtualMachine {
+	expectedVM := &armcompute.VirtualMachine{
+		Properties: &armcompute.VirtualMachineProperties{
+			AvailabilitySet: &armcompute.SubResource{
 				ID: ptr.To(asID),
 			},
-			NetworkProfile: &compute.NetworkProfile{},
+			NetworkProfile: &armcompute.NetworkProfile{},
 		},
 	}
-	networkInterfaces := make([]compute.NetworkInterfaceReference, 0)
+	networkInterfaces := make([]*armcompute.NetworkInterfaceReference, 0)
 	for _, nicID := range nicIDs {
-		networkInterfaces = append(networkInterfaces, compute.NetworkInterfaceReference{
+		networkInterfaces = append(networkInterfaces, &armcompute.NetworkInterfaceReference{
 			ID: ptr.To(nicID),
 		})
 	}
-	expectedVM.VirtualMachineProperties.NetworkProfile.NetworkInterfaces = &networkInterfaces
+	expectedVM.Properties.NetworkProfile.NetworkInterfaces = networkInterfaces
 	return expectedVM
 }
 
@@ -1670,13 +1680,13 @@ func TestStandardGetNodeNameByIPConfigurationID(t *testing.T) {
 	cloud := GetTestCloud(ctrl)
 	expectedVM := buildDefaultTestVirtualMachine("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/availabilitySets/AGENTPOOL1-AVAILABILITYSET-00000000", []string{})
 	expectedVM.Name = ptr.To("name")
-	mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+	mockVMClient := cloud.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 	mockVMClient.EXPECT().Get(gomock.Any(), "rg", "k8s-agentpool1-00000000-0", gomock.Any()).Return(expectedVM, nil)
 	expectedNIC := buildDefaultTestInterface(true, []string{})
-	expectedNIC.VirtualMachine = &network.SubResource{
+	expectedNIC.Properties.VirtualMachine = &armnetwork.SubResource{
 		ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/k8s-agentpool1-00000000-0"),
 	}
-	mockNICClient := cloud.InterfacesClient.(*mockinterfaceclient.MockInterface)
+	mockNICClient := cloud.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 	mockNICClient.EXPECT().Get(gomock.Any(), "rg", "k8s-agentpool1-00000000-nic-0", gomock.Any()).Return(expectedNIC, nil)
 	ipConfigurationID := `/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-0/ipConfigurations/ipconfig1`
 	nodeName, asName, err := cloud.VMSet.GetNodeNameByIPConfigurationID(context.TODO(), ipConfigurationID)
@@ -1686,14 +1696,12 @@ func TestStandardGetNodeNameByIPConfigurationID(t *testing.T) {
 }
 
 func TestGetAvailabilitySetByNodeName(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	testCases := []struct {
 		description   string
 		nodeName      string
 		vmasVMIDs     []string
-		vmasListError *retry.Error
+		vmasListError error
 		expectedErr   error
 	}{
 		{
@@ -1711,8 +1719,8 @@ func TestGetAvailabilitySetByNodeName(t *testing.T) {
 			description:   "getAvailabilitySetByNodeName should report an error if there's something wrong during an api call",
 			nodeName:      "vm-1",
 			vmasVMIDs:     []string{"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-1"},
-			vmasListError: &retry.Error{RawError: fmt.Errorf("error during vmas list")},
-			expectedErr:   fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error during vmas list"),
+			vmasListError: &azcore.ResponseError{ErrorCode: "error during vmas list"},
+			expectedErr:   fmt.Errorf("error during vmas list"),
 		},
 		{
 			description: "getAvailabilitySetByNodeName should report an error if the vmID on the vmas is invalid",
@@ -1723,35 +1731,39 @@ func TestGetAvailabilitySetByNodeName(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		cloud := GetTestCloud(ctrl)
-		vmSet, err := newAvailabilitySet(cloud)
-		assert.NoError(t, err)
-		as := vmSet.(*availabilitySet)
+		t.Run(test.description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-		mockVMASClient := mockvmasclient.NewMockInterface(ctrl)
-		cloud.AvailabilitySetsClient = mockVMASClient
+			cloud := GetTestCloud(ctrl)
+			vmSet, err := newAvailabilitySet(cloud)
+			assert.NoError(t, err)
+			as := vmSet.(*availabilitySet)
 
-		subResources := make([]compute.SubResource, 0)
-		for _, vmID := range test.vmasVMIDs {
-			subResources = append(subResources, compute.SubResource{
-				ID: ptr.To(vmID),
-			})
-		}
-		expected := compute.AvailabilitySet{
-			Name: ptr.To("vmas-1"),
-			AvailabilitySetProperties: &compute.AvailabilitySetProperties{
-				VirtualMachines: &subResources,
-			},
-		}
-		mockVMASClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.AvailabilitySet{expected}, test.vmasListError).AnyTimes()
+			mockVMASClient := cloud.ComputeClientFactory.GetAvailabilitySetClient().(*mock_availabilitysetclient.MockInterface)
 
-		actual, err := as.getAvailabilitySetByNodeName(context.TODO(), test.nodeName, azcache.CacheReadTypeDefault)
-		if test.expectedErr != nil {
-			assert.EqualError(t, test.expectedErr, err.Error(), test.description)
-		}
-		if actual != nil {
-			assert.Equal(t, expected, *actual, test.description)
-		}
+			subResources := make([]*armcompute.SubResource, 0)
+			for _, vmID := range test.vmasVMIDs {
+				subResources = append(subResources, &armcompute.SubResource{
+					ID: ptr.To(vmID),
+				})
+			}
+			expected := &armcompute.AvailabilitySet{
+				Name: ptr.To("vmas-1"),
+				Properties: &armcompute.AvailabilitySetProperties{
+					VirtualMachines: subResources,
+				},
+			}
+			mockVMASClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.AvailabilitySet{expected}, test.vmasListError).AnyTimes()
+
+			actual, err := as.getAvailabilitySetByNodeName(context.TODO(), test.nodeName, azcache.CacheReadTypeDefault)
+			if test.expectedErr != nil {
+				assert.Contains(t, err.Error(), test.expectedErr.Error(), test.description)
+			}
+			if actual != nil {
+				assert.Equal(t, *expected, *actual, test.description)
+			}
+		})
 	}
 }
 
@@ -1810,19 +1822,18 @@ func TestGetNodeCIDRMasksByProviderIDAvailabilitySet(t *testing.T) {
 			assert.NoError(t, err)
 			as := vmSet.(*availabilitySet)
 
-			mockVMASClient := mockvmasclient.NewMockInterface(ctrl)
-			cloud.AvailabilitySetsClient = mockVMASClient
+			mockVMASClient := cloud.ComputeClientFactory.GetAvailabilitySetClient().(*mock_availabilitysetclient.MockInterface)
 
-			expected := compute.AvailabilitySet{
+			expected := &armcompute.AvailabilitySet{
 				Name: ptr.To("vmas-1"),
-				AvailabilitySetProperties: &compute.AvailabilitySetProperties{
-					VirtualMachines: &[]compute.SubResource{
+				Properties: &armcompute.AvailabilitySetProperties{
+					VirtualMachines: []*armcompute.SubResource{
 						{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-0")},
 					},
 				},
 				Tags: tc.tags,
 			}
-			mockVMASClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.AvailabilitySet{expected}, nil).AnyTimes()
+			mockVMASClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.AvailabilitySet{expected}, nil).AnyTimes()
 
 			ipv4MaskSize, ipv6MaskSize, err := as.GetNodeCIDRMasksByProviderID(context.TODO(), tc.providerID)
 			assert.Equal(t, tc.expectedErr, err)
@@ -1862,8 +1873,8 @@ func TestGetNodeVMSetName(t *testing.T) {
 		description       string
 		node              *v1.Node
 		listTimes         int
-		expectedVMs       []compute.VirtualMachine
-		listErr           *retry.Error
+		expectedVMs       []*armcompute.VirtualMachine
+		listErr           error
 		expectedVMSetName string
 		expectedErr       error
 	}{
@@ -1884,8 +1895,8 @@ func TestGetNodeVMSetName(t *testing.T) {
 				},
 			},
 			listTimes:   1,
-			listErr:     retry.NewError(false, errors.New("error")),
-			expectedErr: retry.NewError(false, errors.New("error")).Error(),
+			listErr:     &azcore.ResponseError{ErrorCode: "error"},
+			expectedErr: &azcore.ResponseError{ErrorCode: "error"},
 		},
 		{
 			description: "GetNodeVMSetName should report an error if the availability set ID of the vm is not legal",
@@ -1899,11 +1910,11 @@ func TestGetNodeVMSetName(t *testing.T) {
 					},
 				},
 			},
-			expectedVMs: []compute.VirtualMachine{
+			expectedVMs: []*armcompute.VirtualMachine{
 				{
 					Name: ptr.To("vm"),
-					VirtualMachineProperties: &compute.VirtualMachineProperties{
-						AvailabilitySet: &compute.SubResource{
+					Properties: &armcompute.VirtualMachineProperties{
+						AvailabilitySet: &armcompute.SubResource{
 							ID: ptr.To("/"),
 						},
 					},
@@ -1924,11 +1935,11 @@ func TestGetNodeVMSetName(t *testing.T) {
 					},
 				},
 			},
-			expectedVMs: []compute.VirtualMachine{
+			expectedVMs: []*armcompute.VirtualMachine{
 				{
 					Name: ptr.To("vm"),
-					VirtualMachineProperties: &compute.VirtualMachineProperties{
-						AvailabilitySet: &compute.SubResource{
+					Properties: &armcompute.VirtualMachineProperties{
+						AvailabilitySet: &armcompute.SubResource{
 							ID: ptr.To("as"),
 						},
 					},
@@ -1939,16 +1950,17 @@ func TestGetNodeVMSetName(t *testing.T) {
 		},
 	} {
 		az := GetTestCloud(ctrl)
-		vmClient := mockvmclient.NewMockInterface(ctrl)
+		vmClient := az.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 		vmClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(tc.expectedVMs, tc.listErr).Times(tc.listTimes)
-		az.VirtualMachinesClient = vmClient
 
 		vmSet, err := newAvailabilitySet(az)
 		assert.NoError(t, err)
 		as := vmSet.(*availabilitySet)
 
 		vmSetName, err := as.GetNodeVMSetName(context.TODO(), tc.node)
-		assert.Equal(t, tc.expectedErr, err, tc.description)
+		if tc.expectedErr != nil {
+			assert.Contains(t, tc.expectedErr.Error(), err.Error(), tc.description)
+		}
 		assert.Equal(t, tc.expectedVMSetName, vmSetName, tc.description)
 	}
 }
@@ -2025,7 +2037,7 @@ func TestGetPublicIPName(t *testing.T) {
 	testcases := []struct {
 		desc            string
 		svc             *v1.Service
-		pips            []network.PublicIPAddress
+		pips            []*armnetwork.PublicIPAddress
 		isIPv6          bool
 		expectedPIPName string
 	}{

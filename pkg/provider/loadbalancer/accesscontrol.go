@@ -98,7 +98,7 @@ func NewAccessControl(logger logr.Logger, svc *v1.Service, sg *armnetwork.Securi
 	allowedServiceTags := AllowedServiceTags(svc)
 	securityRuleDestinationPortsByProtocol, err := SecurityRuleDestinationPortsByProtocol(svc)
 	if err != nil {
-		logger.Error(err, "Failed to parse service spec.Ports")
+		logger.Error(err, "Failed to parse service Spec.Ports")
 		return nil, err
 	}
 	if len(sourceRanges) > 0 && len(allowedIPRanges) > 0 {

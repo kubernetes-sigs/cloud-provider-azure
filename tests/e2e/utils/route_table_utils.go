@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	aznetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 
 	"k8s.io/utils/ptr"
 
@@ -28,7 +28,7 @@ import (
 )
 
 // ListRouteTables returns the list of all route tables in the resource group
-func ListRouteTables(tc *AzureTestClient) ([]*aznetwork.RouteTable, error) {
+func ListRouteTables(tc *AzureTestClient) ([]*armnetwork.RouteTable, error) {
 	routeTableClient := tc.createRouteTableClient()
 
 	list, err := routeTableClient.List(context.Background(), tc.GetResourceGroup())
@@ -39,7 +39,7 @@ func ListRouteTables(tc *AzureTestClient) ([]*aznetwork.RouteTable, error) {
 }
 
 // GetNodesInRouteTable returns all the nodes in the route table
-func GetNodesInRouteTable(routeTable aznetwork.RouteTable) (map[string]interface{}, error) {
+func GetNodesInRouteTable(routeTable armnetwork.RouteTable) (map[string]interface{}, error) {
 	if routeTable.Properties == nil || len(routeTable.Properties.Routes) == 0 {
 		return nil, fmt.Errorf("cannot obtained routes in route table %s", *routeTable.Name)
 	}

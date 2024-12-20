@@ -18,11 +18,11 @@ package provider
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/stretchr/testify/assert"
 
 	"go.uber.org/mock/gomock"
@@ -30,8 +30,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
 )
 
 func TestCreateOrUpdateInterface(t *testing.T) {
@@ -39,9 +38,9 @@ func TestCreateOrUpdateInterface(t *testing.T) {
 	defer ctrl.Finish()
 
 	az := GetTestCloud(ctrl)
-	mockInterfaceClient := az.InterfacesClient.(*mockinterfaceclient.MockInterface)
-	mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(&retry.Error{HTTPStatusCode: http.StatusInternalServerError})
+	mockInterfaceClient := az.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+	mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(nil, &azcore.ResponseError{StatusCode: http.StatusInternalServerError})
 
-	err := az.CreateOrUpdateInterface(context.TODO(), &v1.Service{}, network.Interface{Name: ptr.To("nic")})
-	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), err.Error())
+	err := az.CreateOrUpdateInterface(context.TODO(), &v1.Service{}, &armnetwork.Interface{Name: ptr.To("nic")})
+	assert.Contains(t, err.Error(), "UNAVAILABLE")
 }

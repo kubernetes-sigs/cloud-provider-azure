@@ -23,8 +23,10 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+
 	"github.com/stretchr/testify/assert"
 
 	"go.uber.org/mock/gomock"
@@ -32,13 +34,12 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/ptr"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient/mockvmssvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient/mock_virtualmachineclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 func TestVMSSVMCache(t *testing.T) {
@@ -52,32 +53,30 @@ func TestVMSSVMCache(t *testing.T) {
 	assert.NoError(t, err)
 	ss := vmSet.(*ScaleSet)
 
-	mockVMSSClient := mockvmssclient.NewMockInterface(ctrl)
-	mockVMSSVMClient := mockvmssvmclient.NewMockInterface(ctrl)
-	ss.VirtualMachineScaleSetsClient = mockVMSSClient
-	ss.VirtualMachineScaleSetVMsClient = mockVMSSVMClient
+	mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+	mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
 
 	expectedScaleSet := buildTestVMSS(testVMSSName, "vmssee6c2")
-	mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachineScaleSet{expectedScaleSet}, nil).AnyTimes()
+	mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachineScaleSet{expectedScaleSet}, nil).AnyTimes()
 
 	expectedVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, vmList, "", false)
-	mockVMSSVMClient.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).AnyTimes()
+	mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).AnyTimes()
 
 	// validate getting VMSS VM via cache.
 	for i := range expectedVMs {
 		vm := expectedVMs[i]
-		vmName := ptr.Deref(vm.OsProfile.ComputerName, "")
+		vmName := ptr.Deref(vm.Properties.OSProfile.ComputerName, "")
 		realVM, err := ss.getVmssVM(context.TODO(), vmName, azcache.CacheReadTypeDefault)
 		assert.NoError(t, err)
 		assert.NotNil(t, realVM)
 		assert.Equal(t, "vmss", realVM.VMSSName)
 		assert.Equal(t, ptr.Deref(vm.InstanceID, ""), realVM.InstanceID)
-		assert.Equal(t, &vm, realVM.AsVirtualMachineScaleSetVM())
+		assert.Equal(t, *vm, *realVM.AsVirtualMachineScaleSetVM())
 	}
 
 	// validate DeleteCacheForNode().
 	vm := expectedVMs[0]
-	vmName := ptr.Deref(vm.OsProfile.ComputerName, "")
+	vmName := ptr.Deref(vm.Properties.OSProfile.ComputerName, "")
 	err = ss.DeleteCacheForNode(context.TODO(), vmName)
 	assert.NoError(t, err)
 
@@ -86,7 +85,7 @@ func TestVMSSVMCache(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "vmss", realVM.VMSSName)
 	assert.Equal(t, ptr.Deref(vm.InstanceID, ""), realVM.InstanceID)
-	assert.Equal(t, &vm, realVM.AsVirtualMachineScaleSetVM())
+	assert.Equal(t, vm, realVM.AsVirtualMachineScaleSetVM())
 }
 
 func TestVMSSVMCacheWithDeletingNodes(t *testing.T) {
@@ -97,24 +96,22 @@ func TestVMSSVMCacheWithDeletingNodes(t *testing.T) {
 	ss, err := newTestScaleSetWithState(ctrl)
 	assert.NoError(t, err)
 
-	mockVMSSClient := mockvmssclient.NewMockInterface(ctrl)
-	mockVMSSVMClient := mockvmssvmclient.NewMockInterface(ctrl)
-	ss.VirtualMachineScaleSetsClient = mockVMSSClient
-	ss.VirtualMachineScaleSetVMsClient = mockVMSSVMClient
+	mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+	mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
 
-	expectedScaleSet := compute.VirtualMachineScaleSet{
-		Name:                             ptr.To(testVMSSName),
-		VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{},
+	expectedScaleSet := &armcompute.VirtualMachineScaleSet{
+		Name:       ptr.To(testVMSSName),
+		Properties: &armcompute.VirtualMachineScaleSetProperties{},
 	}
-	mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachineScaleSet{expectedScaleSet}, nil).AnyTimes()
+	mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachineScaleSet{expectedScaleSet}, nil).AnyTimes()
 
 	expectedVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, vmList, string(consts.ProvisioningStateDeleting), false)
-	mockVMSSVMClient.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).AnyTimes()
+	mockVMSSVMClient.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).AnyTimes()
 
 	for i := range expectedVMs {
 		vm := expectedVMs[i]
-		vmName := ptr.Deref(vm.OsProfile.ComputerName, "")
-		assert.Equal(t, vm.ProvisioningState, ptr.To(string(consts.ProvisioningStateDeleting)))
+		vmName := ptr.Deref(vm.Properties.OSProfile.ComputerName, "")
+		assert.Equal(t, *vm.Properties.ProvisioningState, string(consts.ProvisioningStateDeleting))
 
 		realVM, err := ss.getVmssVM(context.TODO(), vmName, azcache.CacheReadTypeDefault)
 		assert.Nil(t, realVM)
@@ -129,26 +126,23 @@ func TestVMSSVMCacheClearedWhenRGDeleted(t *testing.T) {
 	vmList := []string{"vmssee6c2000000", "vmssee6c2000001", "vmssee6c2000002"}
 	ss, err := NewTestScaleSet(ctrl)
 	assert.NoError(t, err)
-
-	mockVMSSClient := mockvmssclient.NewMockInterface(ctrl)
-	mockVMSSVMClient := mockvmssvmclient.NewMockInterface(ctrl)
-	ss.VirtualMachineScaleSetsClient = mockVMSSClient
-	ss.VirtualMachineScaleSetVMsClient = mockVMSSVMClient
+	mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+	mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
 
 	expectedScaleSet := buildTestVMSS(testVMSSName, "vmssee6c2")
-	mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachineScaleSet{expectedScaleSet}, nil).Times(1)
+	mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachineScaleSet{expectedScaleSet}, nil).Times(1)
 
 	expectedVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, vmList, "", false)
-	mockVMSSVMClient.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).Times(1)
+	mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).Times(1)
 
 	// validate getting VMSS VM via cache.
 	vm := expectedVMs[0]
-	vmName := ptr.Deref(vm.OsProfile.ComputerName, "")
+	vmName := ptr.Deref(vm.Properties.OSProfile.ComputerName, "")
 	realVM, err := ss.getVmssVM(context.TODO(), vmName, azcache.CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Equal(t, "vmss", realVM.VMSSName)
 	assert.Equal(t, ptr.Deref(vm.InstanceID, ""), realVM.InstanceID)
-	assert.Equal(t, &vm, realVM.AsVirtualMachineScaleSetVM())
+	assert.Equal(t, *vm, *realVM.AsVirtualMachineScaleSetVM())
 
 	// verify cache has test vmss.
 	cacheKey := getVMSSVMCacheKey("rg", testVMSSName)
@@ -156,8 +150,8 @@ func TestVMSSVMCacheClearedWhenRGDeleted(t *testing.T) {
 	assert.Nil(t, err)
 
 	// refresh the cache with error.
-	mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachineScaleSet{}, &retry.Error{HTTPStatusCode: http.StatusNotFound}).Times(2)
-	mockVMSSVMClient.EXPECT().List(gomock.Any(), "rg", testVMSSName, gomock.Any()).Return([]compute.VirtualMachineScaleSetVM{}, &retry.Error{HTTPStatusCode: http.StatusNotFound}).Times(1)
+	mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachineScaleSet{}, &azcore.ResponseError{StatusCode: http.StatusNotFound}).Times(2)
+	mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), "rg", testVMSSName).Return([]*armcompute.VirtualMachineScaleSetVM{}, &azcore.ResponseError{StatusCode: http.StatusNotFound}).Times(1)
 	realVM, err = ss.getVmssVM(context.TODO(), vmName, azcache.CacheReadTypeForceRefresh)
 	assert.Nil(t, realVM)
 	assert.Equal(t, cloudprovider.InstanceNotFound, err)
@@ -168,14 +162,12 @@ func TestVMSSVMCacheClearedWhenRGDeleted(t *testing.T) {
 }
 
 func TestGetVMManagementTypeByNodeName(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	testVM1 := generateVmssFlexTestVMWithoutInstanceView(testVM1Spec)
 	testVM2 := generateVmssFlexTestVMWithoutInstanceView(testVM2Spec)
-	testVM2.VirtualMachineScaleSet = nil
+	testVM2.Properties.VirtualMachineScaleSet = nil
 
-	testVMList := []compute.VirtualMachine{
+	testVMList := []*armcompute.VirtualMachine{
 		testVM1,
 		testVM2,
 	}
@@ -185,7 +177,7 @@ func TestGetVMManagementTypeByNodeName(t *testing.T) {
 		nodeName                    string
 		DisableAvailabilitySetNodes bool
 		EnableVmssFlexNodes         bool
-		vmListErr                   *retry.Error
+		vmListErr                   error
 		expectedVMManagementType    VMManagementType
 		expectedErr                 error
 	}{
@@ -222,40 +214,42 @@ func TestGetVMManagementTypeByNodeName(t *testing.T) {
 		{
 			description:              "getVMManagementTypeByNodeName should return ManagedByUnknownVMSet if error happens",
 			nodeName:                 "fakeName",
-			vmListErr:                &retry.Error{RawError: fmt.Errorf("failed to list VMs")},
+			vmListErr:                &azcore.ResponseError{ErrorCode: "failed to list VMs"},
 			expectedVMManagementType: ManagedByUnknownVMSet,
-			expectedErr:              fmt.Errorf("getter function of nonVmssUniformNodesCache: failed to list vms in the resource group rg: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to list VMs"),
+			expectedErr:              fmt.Errorf("failed to list VMs"),
 		},
 	}
 
 	for _, tc := range testCases {
-		ss, err := NewTestScaleSet(ctrl)
-		assert.NoError(t, err, tc.description)
+		tc := tc
+		t.Run(tc.description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			ss, err := NewTestScaleSet(ctrl)
+			assert.NoError(t, err, tc.description)
 
-		ss.DisableAvailabilitySetNodes = tc.DisableAvailabilitySetNodes
-		ss.EnableVmssFlexNodes = tc.EnableVmssFlexNodes
+			ss.DisableAvailabilitySetNodes = tc.DisableAvailabilitySetNodes
+			ss.EnableVmssFlexNodes = tc.EnableVmssFlexNodes
 
-		mockVMClient := ss.VirtualMachinesClient.(*mockvmclient.MockInterface)
-		mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVMList, tc.vmListErr).AnyTimes()
+			mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+			mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVMList, tc.vmListErr).AnyTimes()
 
-		vmManagementType, err := ss.getVMManagementTypeByNodeName(context.TODO(), tc.nodeName, azcache.CacheReadTypeDefault)
-		assert.Equal(t, tc.expectedVMManagementType, vmManagementType, tc.description)
-		if tc.expectedErr != nil {
-			assert.EqualError(t, err, tc.expectedErr.Error(), tc.description)
-		}
-
+			vmManagementType, err := ss.getVMManagementTypeByNodeName(context.TODO(), tc.nodeName, azcache.CacheReadTypeDefault)
+			assert.Equal(t, tc.expectedVMManagementType, vmManagementType, tc.description)
+			if tc.expectedErr != nil {
+				assert.Contains(t, err.Error(), tc.expectedErr.Error(), tc.description)
+			}
+		})
 	}
 }
 
 func TestGetVMManagementTypeByProviderID(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	testVM1 := generateVmssFlexTestVMWithoutInstanceView(testVM1Spec)
 	testVM2 := generateVmssFlexTestVMWithoutInstanceView(testVM2Spec)
-	testVM2.VirtualMachineScaleSet = nil
+	testVM2.Properties.VirtualMachineScaleSet = nil
 
-	testVMList := []compute.VirtualMachine{
+	testVMList := []*armcompute.VirtualMachine{
 		testVM1,
 		testVM2,
 	}
@@ -265,7 +259,7 @@ func TestGetVMManagementTypeByProviderID(t *testing.T) {
 		providerID                  string
 		DisableAvailabilitySetNodes bool
 		EnableVmssFlexNodes         bool
-		vmListErr                   *retry.Error
+		vmListErr                   error
 		expectedVMManagementType    VMManagementType
 		expectedErr                 error
 	}{
@@ -302,36 +296,40 @@ func TestGetVMManagementTypeByProviderID(t *testing.T) {
 		{
 			description:              "getVMManagementTypeByProviderID should return ManagedByUnknownVMSet if error happens",
 			providerID:               "fakeName",
-			vmListErr:                &retry.Error{RawError: fmt.Errorf("failed to list VMs")},
+			vmListErr:                &azcore.ResponseError{ErrorCode: "failed to list VMs"},
 			expectedVMManagementType: ManagedByUnknownVMSet,
-			expectedErr:              fmt.Errorf("getter function of nonVmssUniformNodesCache: failed to list vms in the resource group rg: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to list VMs"),
+			expectedErr:              fmt.Errorf("failed to list VMs"),
 		},
 	}
 
 	for _, tc := range testCases {
-		ss, err := NewTestScaleSet(ctrl)
-		assert.NoError(t, err, tc.description)
+		tc := tc
+		t.Run(tc.description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			ss, err := NewTestScaleSet(ctrl)
+			assert.NoError(t, err, tc.description)
 
-		ss.DisableAvailabilitySetNodes = tc.DisableAvailabilitySetNodes
-		ss.EnableVmssFlexNodes = tc.EnableVmssFlexNodes
+			ss.DisableAvailabilitySetNodes = tc.DisableAvailabilitySetNodes
+			ss.EnableVmssFlexNodes = tc.EnableVmssFlexNodes
 
-		mockVMClient := ss.VirtualMachinesClient.(*mockvmclient.MockInterface)
-		mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVMList, tc.vmListErr).AnyTimes()
+			mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+			mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVMList, tc.vmListErr).AnyTimes()
 
-		vmManagementType, err := ss.getVMManagementTypeByProviderID(context.TODO(), tc.providerID, azcache.CacheReadTypeDefault)
-		assert.Equal(t, tc.expectedVMManagementType, vmManagementType, tc.description)
-		if tc.expectedErr != nil {
-			assert.EqualError(t, err, tc.expectedErr.Error(), tc.description)
-		}
-
+			vmManagementType, err := ss.getVMManagementTypeByProviderID(context.TODO(), tc.providerID, azcache.CacheReadTypeDefault)
+			assert.Equal(t, tc.expectedVMManagementType, vmManagementType, tc.description)
+			if tc.expectedErr != nil {
+				assert.Contains(t, err.Error(), tc.expectedErr.Error(), tc.description)
+			}
+		})
 	}
 }
 
-func buildTestNICWithVMName(vmName string) network.Interface {
-	return network.Interface{
+func buildTestNICWithVMName(vmName string) *armnetwork.Interface {
+	return &armnetwork.Interface{
 		Name: &vmName,
-		InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-			VirtualMachine: &network.SubResource{
+		Properties: &armnetwork.InterfacePropertiesFormat{
+			VirtualMachine: &armnetwork.SubResource{
 				ID: ptr.To(fmt.Sprintf("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/%s", vmName)),
 			},
 		},
@@ -339,15 +337,13 @@ func buildTestNICWithVMName(vmName string) network.Interface {
 }
 
 func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	testVM1 := generateVmssFlexTestVMWithoutInstanceView(testVM1Spec)
 	testVM2 := generateVmssFlexTestVMWithoutInstanceView(testVM2Spec)
-	testVM2.VirtualMachineScaleSet = nil
-	testVM2.VirtualMachineProperties.OsProfile.ComputerName = ptr.To("testvm2")
+	testVM2.Properties.VirtualMachineScaleSet = nil
+	testVM2.Properties.OSProfile.ComputerName = ptr.To("testvm2")
 
-	testVMList := []compute.VirtualMachine{
+	testVMList := []*armcompute.VirtualMachine{
 		testVM1,
 		testVM2,
 	}
@@ -355,15 +351,15 @@ func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
 	testVM1NIC := buildTestNICWithVMName("testvm1")
 	testVM2NIC := buildTestNICWithVMName("testvm2")
 	testVM3NIC := buildTestNICWithVMName("testvm3")
-	testVM3NIC.VirtualMachine = nil
+	testVM3NIC.Properties.VirtualMachine = nil
 
 	testCases := []struct {
 		description                 string
 		ipConfigurationID           string
 		DisableAvailabilitySetNodes bool
 		EnableVmssFlexNodes         bool
-		vmListErr                   *retry.Error
-		nicGetErr                   *retry.Error
+		vmListErr                   error
+		nicGetErr                   error
 		expectedNIC                 string
 		expectedVMManagementType    VMManagementType
 		expectedErr                 error
@@ -396,9 +392,9 @@ func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
 			description:              "getVMManagementTypeByIPConfigurationID should return an error if failed to get nic",
 			ipConfigurationID:        "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm1-nic/ipConfigurations/pipConfig",
 			expectedNIC:              "testvm1",
-			nicGetErr:                &retry.Error{RawError: fmt.Errorf("failed to get nic")},
+			nicGetErr:                &azcore.ResponseError{ErrorCode: "failed to get nic"},
 			expectedVMManagementType: ManagedByUnknownVMSet,
-			expectedErr:              fmt.Errorf("failed to get vm name by ip config ID /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm1-nic/ipConfigurations/pipConfig: %w", errors.New("failed to get interface of name testvm1-nic: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to get nic")),
+			expectedErr:              fmt.Errorf("failed to get nic"),
 		},
 		{
 			description:              "getVMManagementTypeByIPConfigurationID should return ManagedByVmssUniform for vmss uniform node",
@@ -419,43 +415,48 @@ func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
 		{
 			description:              "getVMManagementTypeByIPConfigurationID should return ManagedByUnknownVMSet if error happens",
 			ipConfigurationID:        "fakeID",
-			vmListErr:                &retry.Error{RawError: fmt.Errorf("failed to list VMs")},
+			vmListErr:                &azcore.ResponseError{ErrorCode: "failed to list VMs"},
 			expectedVMManagementType: ManagedByUnknownVMSet,
-			expectedErr:              fmt.Errorf("getter function of nonVmssUniformNodesCache: failed to list vms in the resource group rg: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to list VMs"),
+			expectedErr:              fmt.Errorf("failed to list VMs"),
 		},
 	}
 
 	for _, tc := range testCases {
-		ss, err := NewTestScaleSet(ctrl)
-		assert.NoError(t, err, tc.description)
+		tc := tc
+		t.Run(tc.description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-		ss.DisableAvailabilitySetNodes = tc.DisableAvailabilitySetNodes
-		ss.EnableVmssFlexNodes = tc.EnableVmssFlexNodes
+			ss, err := NewTestScaleSet(ctrl)
+			assert.NoError(t, err, tc.description)
 
-		mockVMClient := ss.VirtualMachinesClient.(*mockvmclient.MockInterface)
-		mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVMList, tc.vmListErr).AnyTimes()
+			ss.DisableAvailabilitySetNodes = tc.DisableAvailabilitySetNodes
+			ss.EnableVmssFlexNodes = tc.EnableVmssFlexNodes
 
-		if tc.expectedNIC != "" {
-			mockNICClient := ss.InterfacesClient.(*mockinterfaceclient.MockInterface)
-			mockNICClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ string, _ string) (network.Interface, *retry.Error) {
-				switch tc.expectedNIC {
-				case "testvm1":
-					return testVM1NIC, tc.nicGetErr
-				case "testvm2":
-					return testVM2NIC, tc.nicGetErr
-				case "testvm3":
-					return testVM3NIC, tc.nicGetErr
-				default:
-					return network.Interface{}, retry.NewError(false, errors.New("failed to get nic"))
-				}
-			})
-		}
+			mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+			mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVMList, tc.vmListErr).AnyTimes()
 
-		vmManagementType, err := ss.getVMManagementTypeByIPConfigurationID(context.TODO(), tc.ipConfigurationID, azcache.CacheReadTypeDefault)
-		assert.Equal(t, tc.expectedVMManagementType, vmManagementType, tc.description)
-		if tc.expectedErr != nil {
-			assert.EqualError(t, err, tc.expectedErr.Error(), tc.description)
-		}
+			if tc.expectedNIC != "" {
+				mockNICClient := ss.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+				mockNICClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ string, _ *string) (*armnetwork.Interface, error) {
+					switch tc.expectedNIC {
+					case "testvm1":
+						return testVM1NIC, tc.nicGetErr
+					case "testvm2":
+						return testVM2NIC, tc.nicGetErr
+					case "testvm3":
+						return testVM3NIC, tc.nicGetErr
+					default:
+						return &armnetwork.Interface{}, &azcore.ResponseError{ErrorCode: "failed to get nic"}
+					}
+				})
+			}
 
+			vmManagementType, err := ss.getVMManagementTypeByIPConfigurationID(context.TODO(), tc.ipConfigurationID, azcache.CacheReadTypeDefault)
+			assert.Equal(t, tc.expectedVMManagementType, vmManagementType, tc.description)
+			if tc.expectedErr != nil {
+				assert.Contains(t, err.Error(), tc.expectedErr.Error(), tc.description)
+			}
+		})
 	}
 }

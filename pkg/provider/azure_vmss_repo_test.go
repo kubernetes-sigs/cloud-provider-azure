@@ -22,8 +22,10 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+
 	"github.com/stretchr/testify/assert"
 
 	"go.uber.org/mock/gomock"
@@ -32,39 +34,36 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/ptr"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient/mock_virtualmachineclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 func TestCreateOrUpdateVMSS(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	tests := []struct {
-		vmss        compute.VirtualMachineScaleSet
-		clientErr   *retry.Error
-		expectedErr *retry.Error
+		vmss        *armcompute.VirtualMachineScaleSet
+		clientErr   error
+		expectedErr error
 	}{
 		{
-			clientErr:   &retry.Error{HTTPStatusCode: http.StatusInternalServerError},
-			expectedErr: &retry.Error{HTTPStatusCode: http.StatusInternalServerError},
+			clientErr:   &azcore.ResponseError{StatusCode: http.StatusInternalServerError},
+			expectedErr: &azcore.ResponseError{StatusCode: http.StatusInternalServerError},
 		},
 		{
-			clientErr:   &retry.Error{HTTPStatusCode: http.StatusTooManyRequests},
-			expectedErr: &retry.Error{HTTPStatusCode: http.StatusTooManyRequests},
+			clientErr:   &azcore.ResponseError{StatusCode: http.StatusTooManyRequests},
+			expectedErr: &azcore.ResponseError{StatusCode: http.StatusTooManyRequests},
 		},
 		{
-			clientErr:   &retry.Error{RawError: fmt.Errorf("azure cloud provider rate limited(write) for operation CreateOrUpdate")},
-			expectedErr: &retry.Error{RawError: fmt.Errorf("azure cloud provider rate limited(write) for operation CreateOrUpdate")},
+			clientErr:   &azcore.ResponseError{ErrorCode: "azure cloud provider rate limited(write) for operation CreateOrUpdate"},
+			expectedErr: &azcore.ResponseError{ErrorCode: "azure cloud provider rate limited(write) for operation CreateOrUpdate"},
 		},
 		{
-			vmss: compute.VirtualMachineScaleSet{
-				VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
+			vmss: &armcompute.VirtualMachineScaleSet{
+				Properties: &armcompute.VirtualMachineScaleSetProperties{
 					ProvisioningState: ptr.To(consts.ProvisionStateDeleting),
 				},
 			},
@@ -72,44 +71,58 @@ func TestCreateOrUpdateVMSS(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		az := GetTestCloud(ctrl)
+		test := test
+		t.Run(fmt.Sprintf("TestCreateOrUpdateVMSS-%v", test.expectedErr), func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-		mockVMSSClient := az.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
-		mockVMSSClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, testVMSSName).Return(test.vmss, test.clientErr)
+			az := GetTestCloud(ctrl)
 
-		err := az.CreateOrUpdateVMSS(az.ResourceGroup, testVMSSName, compute.VirtualMachineScaleSet{})
-		assert.Equal(t, test.expectedErr, err)
+			mockVMSSClient := az.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+			mockVMSSClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, testVMSSName, nil).Return(test.vmss, test.clientErr)
+
+			err := az.CreateOrUpdateVMSS(az.ResourceGroup, testVMSSName, armcompute.VirtualMachineScaleSet{})
+			if test.expectedErr != nil {
+				assert.Contains(t, err.Error(), test.expectedErr.Error())
+			} else {
+				assert.Nil(t, err)
+			}
+		})
 	}
 }
 
 func TestGetVirtualMachineWithRetry(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	tests := []struct {
-		vmClientErr *retry.Error
+		vmClientErr error
 		expectedErr error
 	}{
 		{
-			vmClientErr: &retry.Error{HTTPStatusCode: http.StatusNotFound},
+			vmClientErr: &azcore.ResponseError{StatusCode: http.StatusNotFound},
 			expectedErr: cloudprovider.InstanceNotFound,
 		},
 		{
-			vmClientErr: &retry.Error{HTTPStatusCode: http.StatusInternalServerError},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)),
+			vmClientErr: &azcore.ResponseError{StatusCode: http.StatusInternalServerError},
+			expectedErr: fmt.Errorf("UNAVAILABLE"),
 		},
 	}
 
 	for _, test := range tests {
-		az := GetTestCloud(ctrl)
-		mockVMClient := az.VirtualMachinesClient.(*mockvmclient.MockInterface)
-		mockVMClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "vm", gomock.Any()).Return(compute.VirtualMachine{}, test.vmClientErr)
+		test := test
+		t.Run(fmt.Sprintf("TestGetVirtualMachineWithRetry-%v", test.expectedErr), func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-		vm, err := az.GetVirtualMachineWithRetry(context.TODO(), "vm", cache.CacheReadTypeDefault)
-		assert.Empty(t, vm)
-		if err != nil {
-			assert.EqualError(t, test.expectedErr, err.Error())
-		}
+			az := GetTestCloud(ctrl)
+			mockVMClient := az.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+			mockVMClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "vm", gomock.Any()).Return(&armcompute.VirtualMachine{}, test.vmClientErr)
+
+			vm, err := az.GetVirtualMachineWithRetry(context.TODO(), "vm", cache.CacheReadTypeDefault)
+			assert.Empty(t, vm)
+			if err != nil {
+				assert.Contains(t, err.Error(), test.expectedErr.Error())
+			}
+		})
 	}
 }
 
@@ -118,7 +131,7 @@ func TestGetPrivateIPsForMachine(t *testing.T) {
 	defer ctrl.Finish()
 
 	tests := []struct {
-		vmClientErr        *retry.Error
+		vmClientErr        error
 		expectedPrivateIPs []string
 		expectedErr        error
 	}{
@@ -126,24 +139,24 @@ func TestGetPrivateIPsForMachine(t *testing.T) {
 			expectedPrivateIPs: []string{"1.2.3.4"},
 		},
 		{
-			vmClientErr:        &retry.Error{HTTPStatusCode: http.StatusNotFound},
+			vmClientErr:        &azcore.ResponseError{StatusCode: http.StatusNotFound},
 			expectedErr:        cloudprovider.InstanceNotFound,
 			expectedPrivateIPs: []string{},
 		},
 		{
-			vmClientErr:        &retry.Error{HTTPStatusCode: http.StatusInternalServerError},
+			vmClientErr:        &azcore.ResponseError{StatusCode: http.StatusInternalServerError},
 			expectedErr:        wait.ErrWaitTimeout,
 			expectedPrivateIPs: []string{},
 		},
 	}
 
-	expectedVM := compute.VirtualMachine{
-		VirtualMachineProperties: &compute.VirtualMachineProperties{
-			AvailabilitySet: &compute.SubResource{ID: ptr.To("availability-set")},
-			NetworkProfile: &compute.NetworkProfile{
-				NetworkInterfaces: &[]compute.NetworkInterfaceReference{
+	expectedVM := &armcompute.VirtualMachine{
+		Properties: &armcompute.VirtualMachineProperties{
+			AvailabilitySet: &armcompute.SubResource{ID: ptr.To("availability-set")},
+			NetworkProfile: &armcompute.NetworkProfile{
+				NetworkInterfaces: []*armcompute.NetworkInterfaceReference{
 					{
-						NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{
+						Properties: &armcompute.NetworkInterfaceReferenceProperties{
 							Primary: ptr.To(true),
 						},
 						ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic"),
@@ -153,11 +166,11 @@ func TestGetPrivateIPsForMachine(t *testing.T) {
 		},
 	}
 
-	expectedInterface := network.Interface{
-		InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-			IPConfigurations: &[]network.InterfaceIPConfiguration{
+	expectedInterface := &armnetwork.Interface{
+		Properties: &armnetwork.InterfacePropertiesFormat{
+			IPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 				{
-					InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
+					Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
 						PrivateIPAddress: ptr.To("1.2.3.4"),
 					},
 				},
@@ -167,10 +180,10 @@ func TestGetPrivateIPsForMachine(t *testing.T) {
 
 	for _, test := range tests {
 		az := GetTestCloud(ctrl)
-		mockVMClient := az.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient := az.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 		mockVMClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "vm", gomock.Any()).Return(expectedVM, test.vmClientErr)
 
-		mockInterfaceClient := az.InterfacesClient.(*mockinterfaceclient.MockInterface)
+		mockInterfaceClient := az.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 		mockInterfaceClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(expectedInterface, nil).MaxTimes(1)
 
 		privateIPs, err := az.getPrivateIPsForMachine(context.Background(), "vm")
@@ -184,7 +197,7 @@ func TestGetIPForMachineWithRetry(t *testing.T) {
 	defer ctrl.Finish()
 
 	tests := []struct {
-		clientErr         *retry.Error
+		clientErr         error
 		expectedPrivateIP string
 		expectedPublicIP  string
 		expectedErr       error
@@ -194,18 +207,18 @@ func TestGetIPForMachineWithRetry(t *testing.T) {
 			expectedPublicIP:  "5.6.7.8",
 		},
 		{
-			clientErr:   &retry.Error{HTTPStatusCode: http.StatusNotFound},
+			clientErr:   &azcore.ResponseError{StatusCode: http.StatusNotFound},
 			expectedErr: wait.ErrWaitTimeout,
 		},
 	}
 
-	expectedVM := compute.VirtualMachine{
-		VirtualMachineProperties: &compute.VirtualMachineProperties{
-			AvailabilitySet: &compute.SubResource{ID: ptr.To("availability-set")},
-			NetworkProfile: &compute.NetworkProfile{
-				NetworkInterfaces: &[]compute.NetworkInterfaceReference{
+	expectedVM := &armcompute.VirtualMachine{
+		Properties: &armcompute.VirtualMachineProperties{
+			AvailabilitySet: &armcompute.SubResource{ID: ptr.To("availability-set")},
+			NetworkProfile: &armcompute.NetworkProfile{
+				NetworkInterfaces: []*armcompute.NetworkInterfaceReference{
 					{
-						NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{
+						Properties: &armcompute.NetworkInterfaceReferenceProperties{
 							Primary: ptr.To(true),
 						},
 						ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic"),
@@ -215,13 +228,13 @@ func TestGetIPForMachineWithRetry(t *testing.T) {
 		},
 	}
 
-	expectedInterface := network.Interface{
-		InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-			IPConfigurations: &[]network.InterfaceIPConfiguration{
+	expectedInterface := &armnetwork.Interface{
+		Properties: &armnetwork.InterfacePropertiesFormat{
+			IPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 				{
-					InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
+					Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
 						PrivateIPAddress: ptr.To("1.2.3.4"),
-						PublicIPAddress: &network.PublicIPAddress{
+						PublicIPAddress: &armnetwork.PublicIPAddress{
 							ID: ptr.To("test/pip"),
 						},
 					},
@@ -230,23 +243,23 @@ func TestGetIPForMachineWithRetry(t *testing.T) {
 		},
 	}
 
-	expectedPIP := network.PublicIPAddress{
+	expectedPIP := &armnetwork.PublicIPAddress{
 		Name: ptr.To("pip"),
-		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+		Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 			IPAddress: ptr.To("5.6.7.8"),
 		},
 	}
 
 	for _, test := range tests {
 		az := GetTestCloud(ctrl)
-		mockVMClient := az.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient := az.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 		mockVMClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "vm", gomock.Any()).Return(expectedVM, test.clientErr)
 
-		mockInterfaceClient := az.InterfacesClient.(*mockinterfaceclient.MockInterface)
+		mockInterfaceClient := az.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 		mockInterfaceClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(expectedInterface, nil).MaxTimes(1)
 
-		mockPIPClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-		mockPIPClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return([]network.PublicIPAddress{expectedPIP}, nil).MaxTimes(1)
+		mockPIPClient := az.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
+		mockPIPClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return([]*armnetwork.PublicIPAddress{expectedPIP}, nil).MaxTimes(1)
 
 		privateIP, publicIP, err := az.GetIPForMachineWithRetry(context.Background(), "vm")
 		assert.Equal(t, test.expectedErr, err)
