@@ -64,7 +64,9 @@ func init() {
 		})
 		ginkgo.When("invalid list requests are raised", func() {
 			ginkgo.It("should return error", func(ctx context.Context) {
-				resourceList, err := realClient.List(ctx, resourceGroupName+"notfound", accountName, to.Ptr("snapshots"))
+				resourceList, err := realClient.List(ctx, resourceGroupName+"notfound", accountName, &armstorage.FileSharesClientListOptions{
+					Expand: to.Ptr("snapshots"),
+				})
 				gomega.Expect(err).To(gomega.HaveOccurred())
 				gomega.Expect(resourceList).To(gomega.BeNil())
 			})

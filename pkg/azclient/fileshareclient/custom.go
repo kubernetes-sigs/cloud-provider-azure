@@ -54,14 +54,12 @@ func (client *Client) Delete(ctx context.Context, resourceGroupName string, pare
 const ListOperationName = "FileSharesClient.List"
 
 // List gets a list of FileShare in the resource group.
-func (client *Client) List(ctx context.Context, resourceGroupName string, accountName string, expand *string) (result []*armstorage.FileShareItem, err error) {
+func (client *Client) List(ctx context.Context, resourceGroupName string, accountName string, option *armstorage.FileSharesClientListOptions) (result []*armstorage.FileShareItem, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "FileShare", "list")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
-	pager := client.FileSharesClient.NewListPager(resourceGroupName, accountName, &armstorage.FileSharesClientListOptions{
-		Expand: expand,
-	})
+	pager := client.FileSharesClient.NewListPager(resourceGroupName, accountName, option)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
 		if err != nil {
