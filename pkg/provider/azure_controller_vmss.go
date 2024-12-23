@@ -137,10 +137,8 @@ func (ss *ScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName, dis
 			klog.Errorf("getVmssVM failed with error(%v) or nil pointer", err)
 		}
 
-		if vm.VMSSName != "" && instanceID != "" {
-			if err := ss.updateCache(ctx, vmName, nodeResourceGroup, vmssName, instanceID, result); err != nil {
-				klog.Errorf("updateCache(%s, %s, %s, %s) failed with error: %v", vmName, nodeResourceGroup, vmssName, instanceID, err)
-			}
+		if err := ss.updateCache(ctx, vmName, nodeResourceGroup, vmssName, instanceID, result); err != nil {
+			klog.Errorf("updateCache(%s, %s, %s, %s) failed with error: %v", vmName, nodeResourceGroup, vmssName, instanceID, err)
 		}
 	}
 	return rerr
@@ -214,10 +212,7 @@ func (ss *ScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName, dis
 
 	defer func() {
 		_ = ss.DeleteCacheForNode(ctx, vmName)
-
-		// Update the cache with the updated result only if its not nil
-		// and contains the.Properties
-		if rerr == nil && result != nil && result.Properties != nil {
+		if rerr == nil {
 			if err := ss.updateCache(ctx, vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, result); err != nil {
 				klog.Errorf("updateCache(%s, %s, %s, %s) failed with error: %v", vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, err)
 			}
@@ -237,10 +232,7 @@ func (ss *ScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName, dis
 	}
 
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - detach disk(%v) returned with %v", nodeResourceGroup, nodeName, diskMap, rerr)
-	if rerr != nil {
-		return rerr
-	}
-	return nil
+	return rerr
 }
 
 // UpdateVM updates a vm
