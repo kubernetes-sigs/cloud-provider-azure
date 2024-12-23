@@ -371,3 +371,81 @@ func (c *MockInterfaceListVMInstanceViewCall) DoAndReturn(f func(context.Context
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
+
+// ListVmssFlexVMsWithOnlyInstanceView mocks base method.
+func (m *MockInterface) ListVmssFlexVMsWithOnlyInstanceView(ctx context.Context, resourceGroupName, virtualMachineScaleSetID string) ([]*armcompute.VirtualMachine, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListVmssFlexVMsWithOnlyInstanceView", ctx, resourceGroupName, virtualMachineScaleSetID)
+	ret0, _ := ret[0].([]*armcompute.VirtualMachine)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListVmssFlexVMsWithOnlyInstanceView indicates an expected call of ListVmssFlexVMsWithOnlyInstanceView.
+func (mr *MockInterfaceMockRecorder) ListVmssFlexVMsWithOnlyInstanceView(ctx, resourceGroupName, virtualMachineScaleSetID any) *MockInterfaceListVmssFlexVMsWithOnlyInstanceViewCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListVmssFlexVMsWithOnlyInstanceView", reflect.TypeOf((*MockInterface)(nil).ListVmssFlexVMsWithOnlyInstanceView), ctx, resourceGroupName, virtualMachineScaleSetID)
+	return &MockInterfaceListVmssFlexVMsWithOnlyInstanceViewCall{Call: call}
+}
+
+// MockInterfaceListVmssFlexVMsWithOnlyInstanceViewCall wrap *gomock.Call
+type MockInterfaceListVmssFlexVMsWithOnlyInstanceViewCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockInterfaceListVmssFlexVMsWithOnlyInstanceViewCall) Return(result []*armcompute.VirtualMachine, rerr error) *MockInterfaceListVmssFlexVMsWithOnlyInstanceViewCall {
+	c.Call = c.Call.Return(result, rerr)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockInterfaceListVmssFlexVMsWithOnlyInstanceViewCall) Do(f func(context.Context, string, string) ([]*armcompute.VirtualMachine, error)) *MockInterfaceListVmssFlexVMsWithOnlyInstanceViewCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockInterfaceListVmssFlexVMsWithOnlyInstanceViewCall) DoAndReturn(f func(context.Context, string, string) ([]*armcompute.VirtualMachine, error)) *MockInterfaceListVmssFlexVMsWithOnlyInstanceViewCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// ListVmssFlexVMsWithOutInstanceView mocks base method.
+func (m *MockInterface) ListVmssFlexVMsWithOutInstanceView(ctx context.Context, resourceGroupName, virtualMachineScaleSetID string) ([]*armcompute.VirtualMachine, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListVmssFlexVMsWithOutInstanceView", ctx, resourceGroupName, virtualMachineScaleSetID)
+	ret0, _ := ret[0].([]*armcompute.VirtualMachine)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListVmssFlexVMsWithOutInstanceView indicates an expected call of ListVmssFlexVMsWithOutInstanceView.
+func (mr *MockInterfaceMockRecorder) ListVmssFlexVMsWithOutInstanceView(ctx, resourceGroupName, virtualMachineScaleSetID any) *MockInterfaceListVmssFlexVMsWithOutInstanceViewCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListVmssFlexVMsWithOutInstanceView", reflect.TypeOf((*MockInterface)(nil).ListVmssFlexVMsWithOutInstanceView), ctx, resourceGroupName, virtualMachineScaleSetID)
+	return &MockInterfaceListVmssFlexVMsWithOutInstanceViewCall{Call: call}
+}
+
+// MockInterfaceListVmssFlexVMsWithOutInstanceViewCall wrap *gomock.Call
+type MockInterfaceListVmssFlexVMsWithOutInstanceViewCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockInterfaceListVmssFlexVMsWithOutInstanceViewCall) Return(result []*armcompute.VirtualMachine, rerr error) *MockInterfaceListVmssFlexVMsWithOutInstanceViewCall {
+	c.Call = c.Call.Return(result, rerr)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockInterfaceListVmssFlexVMsWithOutInstanceViewCall) Do(f func(context.Context, string, string) ([]*armcompute.VirtualMachine, error)) *MockInterfaceListVmssFlexVMsWithOutInstanceViewCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockInterfaceListVmssFlexVMsWithOutInstanceViewCall) DoAndReturn(f func(context.Context, string, string) ([]*armcompute.VirtualMachine, error)) *MockInterfaceListVmssFlexVMsWithOutInstanceViewCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
