@@ -177,18 +177,18 @@ func (c *MockInterfaceGetCall) DoAndReturn(f func(context.Context, string, strin
 }
 
 // List mocks base method.
-func (m *MockInterface) List(ctx context.Context, resourceGroupName, accountName string, expand *string) ([]*armstorage.FileShareItem, error) {
+func (m *MockInterface) List(ctx context.Context, resourceGroupName, accountName string, option *armstorage.FileSharesClientListOptions) ([]*armstorage.FileShareItem, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "List", ctx, resourceGroupName, accountName, expand)
+	ret := m.ctrl.Call(m, "List", ctx, resourceGroupName, accountName, option)
 	ret0, _ := ret[0].([]*armstorage.FileShareItem)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // List indicates an expected call of List.
-func (mr *MockInterfaceMockRecorder) List(ctx, resourceGroupName, accountName, expand any) *MockInterfaceListCall {
+func (mr *MockInterfaceMockRecorder) List(ctx, resourceGroupName, accountName, option any) *MockInterfaceListCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockInterface)(nil).List), ctx, resourceGroupName, accountName, expand)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockInterface)(nil).List), ctx, resourceGroupName, accountName, option)
 	return &MockInterfaceListCall{Call: call}
 }
 
@@ -204,13 +204,13 @@ func (c *MockInterfaceListCall) Return(result []*armstorage.FileShareItem, err e
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockInterfaceListCall) Do(f func(context.Context, string, string, *string) ([]*armstorage.FileShareItem, error)) *MockInterfaceListCall {
+func (c *MockInterfaceListCall) Do(f func(context.Context, string, string, *armstorage.FileSharesClientListOptions) ([]*armstorage.FileShareItem, error)) *MockInterfaceListCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockInterfaceListCall) DoAndReturn(f func(context.Context, string, string, *string) ([]*armstorage.FileShareItem, error)) *MockInterfaceListCall {
+func (c *MockInterfaceListCall) DoAndReturn(f func(context.Context, string, string, *armstorage.FileSharesClientListOptions) ([]*armstorage.FileShareItem, error)) *MockInterfaceListCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
