@@ -47,7 +47,8 @@ import (
 // SkipMatchingTag skip account matching tag
 const SkipMatchingTag = "skip-matching"
 const LocationGlobal = "global"
-const privateDNSZoneNameFmt = "privatelink.%s.%s"
+const privateDNSZoneNameFmt = "%s.%s.%s"
+const defaultPrivateDNSZoneName = "privatelink"
 const DefaultTokenAudience = "api://AzureADTokenExchange" //nolint:gosec // G101 ignore this!
 
 type Type string
@@ -94,6 +95,8 @@ type AccountOptions struct {
 	PickRandomMatchingAccount bool
 	// provide the source account name in snapshot restore and volume clone scenarios
 	SourceAccountName string
+	// default is "privatelink"
+	PrivateDNSZoneName string
 }
 
 type accountWithLocation struct {
@@ -364,7 +367,10 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 		location = az.Location
 	}
 
-	var privateDNSZoneName string
+	privateDNSZoneName := defaultPrivateDNSZoneName
+	if accountOptions.PrivateDNSZoneName != "" {
+		privateDNSZoneName = accountOptions.PrivateDNSZoneName
+	}
 	if ptr.Deref(accountOptions.CreatePrivateEndpoint, false) {
 		if accountOptions.StorageType == "" {
 			klog.V(2).Info("set StorageType as file when not specified")
@@ -374,7 +380,7 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 		if len(accountOptions.StorageEndpointSuffix) == 0 && az.Environment != nil {
 			accountOptions.StorageEndpointSuffix = az.Environment.StorageEndpointSuffix
 		}
-		privateDNSZoneName = fmt.Sprintf(privateDNSZoneNameFmt, accountOptions.StorageType, accountOptions.StorageEndpointSuffix)
+		privateDNSZoneName = fmt.Sprintf(privateDNSZoneNameFmt, privateDNSZoneName, accountOptions.StorageType, accountOptions.StorageEndpointSuffix)
 	}
 
 	if len(accountOptions.Tags) == 0 {
