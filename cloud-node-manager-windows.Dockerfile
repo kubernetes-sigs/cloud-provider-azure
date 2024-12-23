@@ -17,7 +17,7 @@ ARG OSVERSION=1809
 ARG ARCH=amd64
 ARG LOCAL_BUILD=false
 
-# NOTE(mainred): BuildKit-based builder will skip the used stage depending on the value LOCAL_BUILD.
+# NOTE(mainred): BuildKit-based builder will skip the unused stage determined by  the value LOCAL_BUILD.
 
 # Build windows cloud node manager binary from golang build stage
 FROM --platform=linux/amd64 mcr.microsoft.com/oss/go/microsoft/golang:1.23@sha256:f4fc81062796c14e704559cad3748c5db70bf961ef24d5fac798afa18dff300e AS local-build-false
