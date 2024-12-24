@@ -30,7 +30,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 
 	"github.com/stretchr/testify/assert"
 
@@ -928,7 +927,7 @@ func TestInstanceMetadata(t *testing.T) {
 
 		expectedMetadata := cloudprovider.InstanceMetadata{
 			ProviderID:   "azure:///subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/VirtualMachines/vm",
-			InstanceType: string(compute.BasicA0),
+			InstanceType: string(armcompute.VirtualMachineSizeTypesBasicA0),
 			NodeAddresses: []v1.NodeAddress{
 				{
 					Type:    v1.NodeInternalIP,
