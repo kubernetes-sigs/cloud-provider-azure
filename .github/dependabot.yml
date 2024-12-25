@@ -22,6 +22,7 @@ updates:
         update-types:
         - "patch"
         - "minor"
+        - "major"
   - package-ecosystem: "gomod"
     directory: "/health-probe-proxy"
     open-pull-requests-limit: 1
@@ -44,6 +45,7 @@ updates:
         update-types:
         - "patch"
         - "minor"
+        - "major"
   - package-ecosystem: "gomod"
     directory: "/kubetest2-aks"
     open-pull-requests-limit: 1
@@ -66,6 +68,7 @@ updates:
         update-types:
         - "patch"
         - "minor"
+        - "major"
   - package-ecosystem: "gomod"
     directory: "/pkg/azclient"
     open-pull-requests-limit: 1
@@ -88,6 +91,7 @@ updates:
         update-types:
         - "patch"
         - "minor"
+        - "major"
   - package-ecosystem: "gomod"
     directory: "/pkg/azclient/cache"
     open-pull-requests-limit: 1
@@ -110,6 +114,7 @@ updates:
         update-types:
         - "patch"
         - "minor"
+        - "major"
   - package-ecosystem: gomod
     directory: /pkg/azclient/client-gen
     schedule:
@@ -131,6 +136,7 @@ updates:
         update-types:
         - "patch"
         - "minor"
+        - "major"
   - package-ecosystem: gomod
     directory: /pkg/azclient/configloader
     schedule:
@@ -152,6 +158,7 @@ updates:
         update-types:
         - "patch"
         - "minor"
+        - "major"
   - package-ecosystem: gomod
     directory: /pkg/azclient/trace
     schedule:
@@ -173,6 +180,7 @@ updates:
         update-types:
         - "patch"
         - "minor"
+        - "major"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -199,7 +207,6 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
-  
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -241,6 +248,7 @@ updates:
         update-types:
         - "patch"
         - "minor"
+        - "major"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -298,6 +306,7 @@ updates:
         update-types:
         - "patch"
         - "minor"
+        - "major"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -355,6 +364,7 @@ updates:
         update-types:
         - "patch"
         - "minor"
+        - "major"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
