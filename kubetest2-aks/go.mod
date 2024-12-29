@@ -8,7 +8,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v2 v2.4.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v1.2.0
-	github.com/go-git/go-git/v5 v5.12.0
+	github.com/go-git/go-git/v5 v5.13.0
 	github.com/octago/sflags v0.3.1
 	github.com/spf13/pflag v1.0.5
 	k8s.io/apimachinery v0.32.0
