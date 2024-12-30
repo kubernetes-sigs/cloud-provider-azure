@@ -59,7 +59,7 @@ type AzureTestClient struct {
 // CreateAzureTestClient makes a new AzureTestClient
 // Only consider PublicCloud Environment
 func CreateAzureTestClient() (*AzureTestClient, error) {
-	authConfig, armclientConfig, clientFactoryConfig, err := azureAuthConfigFromTestProfile()
+	authConfig, armclientConfig, clientFactoryConfig, cloud, err := azureAuthConfigFromTestProfile()
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func CreateAzureTestClient() (*AzureTestClient, error) {
 	}
 	cred := authProvider.GetAzIdentity()
 
-	azFactory, err := azclient.NewClientFactory(clientFactoryConfig, armclientConfig, cred)
+	azFactory, err := azclient.NewClientFactory(clientFactoryConfig, armclientConfig, cloud, cred)
 	if err != nil {
 		return nil, err
 	}
