@@ -138,18 +138,18 @@ func (c *MockInterfaceDeleteCall) DoAndReturn(f func(context.Context, string, st
 }
 
 // Get mocks base method.
-func (m *MockInterface) Get(ctx context.Context, resourceGroupName, parentResourceName, resourceName string) (*armstorage.FileShare, error) {
+func (m *MockInterface) Get(ctx context.Context, resourceGroupName, parentResourceName, resourceName string, expand *string) (*armstorage.FileShare, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", ctx, resourceGroupName, parentResourceName, resourceName)
+	ret := m.ctrl.Call(m, "Get", ctx, resourceGroupName, parentResourceName, resourceName, expand)
 	ret0, _ := ret[0].(*armstorage.FileShare)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockInterfaceMockRecorder) Get(ctx, resourceGroupName, parentResourceName, resourceName any) *MockInterfaceGetCall {
+func (mr *MockInterfaceMockRecorder) Get(ctx, resourceGroupName, parentResourceName, resourceName, expand any) *MockInterfaceGetCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockInterface)(nil).Get), ctx, resourceGroupName, parentResourceName, resourceName)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockInterface)(nil).Get), ctx, resourceGroupName, parentResourceName, resourceName, expand)
 	return &MockInterfaceGetCall{Call: call}
 }
 
@@ -165,13 +165,13 @@ func (c *MockInterfaceGetCall) Return(result *armstorage.FileShare, rerr error) 
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockInterfaceGetCall) Do(f func(context.Context, string, string, string) (*armstorage.FileShare, error)) *MockInterfaceGetCall {
+func (c *MockInterfaceGetCall) Do(f func(context.Context, string, string, string, *string) (*armstorage.FileShare, error)) *MockInterfaceGetCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockInterfaceGetCall) DoAndReturn(f func(context.Context, string, string, string) (*armstorage.FileShare, error)) *MockInterfaceGetCall {
+func (c *MockInterfaceGetCall) DoAndReturn(f func(context.Context, string, string, string, *string) (*armstorage.FileShare, error)) *MockInterfaceGetCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
