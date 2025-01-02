@@ -1,39 +1,32 @@
 # cel.dev/expr v0.18.0
 ## explicit; go 1.21.1
 cel.dev/expr
-# github.com/Azure/azure-kusto-go v0.16.1
-## explicit; go 1.19
-github.com/Azure/azure-kusto-go/kusto
-github.com/Azure/azure-kusto-go/kusto/data/errors
-github.com/Azure/azure-kusto-go/kusto/data/table
-github.com/Azure/azure-kusto-go/kusto/data/types
-github.com/Azure/azure-kusto-go/kusto/data/value
-github.com/Azure/azure-kusto-go/kusto/ingest
-github.com/Azure/azure-kusto-go/kusto/ingest/ingestoptions
-github.com/Azure/azure-kusto-go/kusto/ingest/internal/gzip
-github.com/Azure/azure-kusto-go/kusto/ingest/internal/properties
-github.com/Azure/azure-kusto-go/kusto/ingest/internal/queued
-github.com/Azure/azure-kusto-go/kusto/ingest/internal/resources
-github.com/Azure/azure-kusto-go/kusto/ingest/internal/status
-github.com/Azure/azure-kusto-go/kusto/ingest/internal/utils
-github.com/Azure/azure-kusto-go/kusto/internal/frames
-github.com/Azure/azure-kusto-go/kusto/internal/frames/unmarshal
-github.com/Azure/azure-kusto-go/kusto/internal/frames/unmarshal/json
-github.com/Azure/azure-kusto-go/kusto/internal/frames/v1
-github.com/Azure/azure-kusto-go/kusto/internal/frames/v2
-github.com/Azure/azure-kusto-go/kusto/internal/log
-github.com/Azure/azure-kusto-go/kusto/internal/response
-github.com/Azure/azure-kusto-go/kusto/internal/version
-github.com/Azure/azure-kusto-go/kusto/kql
-github.com/Azure/azure-kusto-go/kusto/trustedendpoints
-github.com/Azure/azure-kusto-go/kusto/unsafe
-github.com/Azure/azure-kusto-go/kusto/utils
-# github.com/Azure/azure-pipeline-go v0.2.3
-## explicit; go 1.14
-github.com/Azure/azure-pipeline-go/pipeline
+# github.com/Azure/azure-kusto-go/azkustodata v1.0.0-preview-5
+## explicit; go 1.22
+github.com/Azure/azure-kusto-go/azkustodata
+github.com/Azure/azure-kusto-go/azkustodata/errors
+github.com/Azure/azure-kusto-go/azkustodata/internal/response
+github.com/Azure/azure-kusto-go/azkustodata/internal/version
+github.com/Azure/azure-kusto-go/azkustodata/kql
+github.com/Azure/azure-kusto-go/azkustodata/query
+github.com/Azure/azure-kusto-go/azkustodata/query/v1
+github.com/Azure/azure-kusto-go/azkustodata/query/v2
+github.com/Azure/azure-kusto-go/azkustodata/trusted_endpoints
+github.com/Azure/azure-kusto-go/azkustodata/types
+github.com/Azure/azure-kusto-go/azkustodata/utils
+github.com/Azure/azure-kusto-go/azkustodata/value
+# github.com/Azure/azure-kusto-go/azkustoingest v1.0.0-preview-5
+## explicit; go 1.22
+github.com/Azure/azure-kusto-go/azkustoingest
+github.com/Azure/azure-kusto-go/azkustoingest/ingestoptions
+github.com/Azure/azure-kusto-go/azkustoingest/internal/gzip
+github.com/Azure/azure-kusto-go/azkustoingest/internal/properties
+github.com/Azure/azure-kusto-go/azkustoingest/internal/queued
+github.com/Azure/azure-kusto-go/azkustoingest/internal/resources
+github.com/Azure/azure-kusto-go/azkustoingest/internal/status
+github.com/Azure/azure-kusto-go/azkustoingest/internal/utils
 # github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
 ## explicit
-github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute
 github.com/Azure/azure-sdk-for-go/storage
 github.com/Azure/azure-sdk-for-go/version
 # github.com/Azure/azure-sdk-for-go/sdk/azcore v1.16.0
@@ -111,7 +104,7 @@ github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets
 # github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal v1.1.0
 ## explicit; go 1.18
 github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal
-# github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.1.0
+# github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.4.0
 ## explicit; go 1.18
 github.com/Azure/azure-sdk-for-go/sdk/storage/azblob
 github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/appendblob
@@ -126,9 +119,15 @@ github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/internal/shared
 github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/pageblob
 github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas
 github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/service
-# github.com/Azure/azure-storage-queue-go v0.0.0-20230531184854-c06a8eff66fe
-## explicit
-github.com/Azure/azure-storage-queue-go/azqueue
+# github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue v1.0.0
+## explicit; go 1.18
+github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue
+github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue/internal/base
+github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue/internal/exported
+github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue/internal/generated
+github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue/internal/shared
+github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue/queueerror
+github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue/sas
 # github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161
 ## explicit; go 1.16
 github.com/Azure/go-ansiterm
@@ -146,12 +145,6 @@ github.com/Azure/go-autorest/autorest/adal
 # github.com/Azure/go-autorest/autorest/date v0.3.0
 ## explicit; go 1.12
 github.com/Azure/go-autorest/autorest/date
-# github.com/Azure/go-autorest/autorest/to v0.4.0
-## explicit; go 1.12
-github.com/Azure/go-autorest/autorest/to
-# github.com/Azure/go-autorest/autorest/validation v0.3.1
-## explicit; go 1.12
-github.com/Azure/go-autorest/autorest/validation
 # github.com/Azure/go-autorest/logger v0.2.1
 ## explicit; go 1.12
 github.com/Azure/go-autorest/logger
@@ -357,9 +350,6 @@ github.com/kylelemons/godebug/pretty
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
-# github.com/mattn/go-ieproxy v0.0.11
-## explicit; go 1.17
-github.com/mattn/go-ieproxy
 # github.com/moby/term v0.5.0
 ## explicit; go 1.18
 github.com/moby/term
@@ -445,8 +435,8 @@ github.com/prometheus/procfs/internal/util
 github.com/samber/lo
 github.com/samber/lo/internal/constraints
 github.com/samber/lo/internal/rand
-# github.com/shopspring/decimal v1.3.1
-## explicit; go 1.13
+# github.com/shopspring/decimal v1.4.0
+## explicit; go 1.10
 github.com/shopspring/decimal
 # github.com/spf13/cobra v1.8.1
 ## explicit; go 1.15
@@ -603,7 +593,6 @@ golang.org/x/net/html
 golang.org/x/net/html/atom
 golang.org/x/net/html/charset
 golang.org/x/net/http/httpguts
-golang.org/x/net/http/httpproxy
 golang.org/x/net/http2
 golang.org/x/net/http2/hpack
 golang.org/x/net/idna

@@ -24,8 +24,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/Azure/azure-kusto-go/kusto"
-	"github.com/Azure/azure-kusto-go/kusto/ingest"
+	"github.com/Azure/azure-kusto-go/azkustodata"
+	"github.com/Azure/azure-kusto-go/azkustoingest"
+
 	"k8s.io/klog/v2"
 )
 
@@ -70,14 +71,8 @@ func KustoIngest(passed bool, labelFilter, clusterType, junitReportPath string) 
 		return err
 	}
 
-	kustoConnStrBuilder := kusto.NewConnectionStringBuilder(ingestionURI).WithAadAppKey(clientID, clientSecret, tenantID)
-	kustoClient, err := kusto.New(kustoConnStrBuilder)
-	if err != nil {
-		return fmt.Errorf("failed to new kusto connection string builder: %w", err)
-	}
-	defer kustoClient.Close()
-
-	in, err := ingest.New(kustoClient, database, table)
+	kustoConnStrBuilder := azkustodata.NewConnectionStringBuilder(ingestionURI).WithAadAppKey(clientID, clientSecret, tenantID)
+	in, err := azkustoingest.New(kustoConnStrBuilder, azkustoingest.WithDefaultDatabase(database), azkustoingest.WithDefaultTable(table))
 	if err != nil {
 		return fmt.Errorf("failed to new ingestion: %w", err)
 	}
