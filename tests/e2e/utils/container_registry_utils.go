@@ -84,7 +84,7 @@ func (tc *AzureTestClient) DeleteContainerRegistry(registryName string) (err err
 }
 
 func AZACRLogin() (err error) {
-	authConfig, armConfig, _, err := azureAuthConfigFromTestProfile()
+	authConfig, armConfig, _, _, err := azureAuthConfigFromTestProfile()
 	if err != nil {
 		return err
 	}
