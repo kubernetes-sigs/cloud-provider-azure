@@ -7,7 +7,7 @@ godebug winsymlink=0
 require (
 	github.com/Azure/azure-kusto-go/azkustodata v1.0.0-preview-5
 	github.com/Azure/azure-kusto-go/azkustoingest v1.0.0-preview-5
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.16.0
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.0
 	github.com/Azure/azure-sdk-for-go/sdk/containers/azcontainerregistry v0.2.2
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 v6.2.0
@@ -49,9 +49,9 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubelet v0.32.0
 	k8s.io/utils v0.0.0-20241104163129-6fe5fd82f078
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.4.5
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.2.0
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.3.2
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.4.7
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.3.0
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.3.3
 	sigs.k8s.io/yaml v1.4.0
 )
 
@@ -135,11 +135,11 @@ require (
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/crypto v0.31.0 // indirect
+	golang.org/x/crypto v0.32.0 // indirect
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
-	golang.org/x/net v0.33.0 // indirect
+	golang.org/x/net v0.34.0 // indirect
 	golang.org/x/oauth2 v0.24.0 // indirect
-	golang.org/x/term v0.27.0 // indirect
+	golang.org/x/term v0.28.0 // indirect
 	golang.org/x/time v0.9.0 // indirect
 	golang.org/x/tools v0.28.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240826202546-f6391c0de4c7 // indirect
