@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 )
 
@@ -40,12 +42,11 @@ const (
 )
 
 // azureAuthConfigFromTestProfile obtains azure config from Environment
-func azureAuthConfigFromTestProfile() (*azclient.AzureAuthConfig, *azclient.ARMClientConfig, *azclient.ClientFactoryConfig, error) {
+func azureAuthConfigFromTestProfile() (*azclient.AzureAuthConfig, *azclient.ARMClientConfig, *azclient.ClientFactoryConfig, cloud.Configuration, error) {
 	envStr := os.Getenv(ClusterEnvironment)
 	if len(envStr) == 0 {
 		envStr = "AZUREPUBLICCLOUD"
 	}
-
 	var azureAuthConfig azclient.AzureAuthConfig
 	aadClientIDEnv := os.Getenv(AADClientIDEnv)
 	servicePrincipleSecretEnv := os.Getenv(ServicePrincipleSecretEnv)
@@ -72,7 +73,14 @@ func azureAuthConfigFromTestProfile() (*azclient.AzureAuthConfig, *azclient.ARMC
 			AADClientID:                           aadClientIDEnv,
 		}
 	} else {
-		return nil, nil, nil, fmt.Errorf("failed to get Azure auth config from environment")
+		return nil, nil, nil, cloud.Configuration{}, fmt.Errorf("failed to get Azure auth config from environment")
+	}
+	cloudConfig, _, err := azclient.GetAzureCloudConfigAndEnvConfig(&azclient.ARMClientConfig{
+		Cloud:    envStr,
+		TenantID: os.Getenv(TenantIDEnv),
+	})
+	if err != nil {
+		return nil, nil, nil, cloud.Configuration{}, err
 	}
 
 	return &azureAuthConfig, &azclient.ARMClientConfig{
@@ -80,5 +88,5 @@ func azureAuthConfigFromTestProfile() (*azclient.AzureAuthConfig, *azclient.ARMC
 			TenantID: os.Getenv(TenantIDEnv),
 		}, &azclient.ClientFactoryConfig{
 			SubscriptionID: os.Getenv(SubscriptionEnv),
-		}, nil
+		}, cloudConfig, nil
 }

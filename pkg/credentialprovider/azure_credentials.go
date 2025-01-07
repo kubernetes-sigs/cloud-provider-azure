@@ -97,7 +97,7 @@ func NewAcrProviderFromConfig(configFile string, registryMirrorStr string) (Cred
 
 	var managedIdentityCredential azcore.TokenCredential
 
-	clientOption, err := azclient.GetAzCoreClientOption(&config.ARMClientConfig)
+	clientOption, _, err := azclient.GetAzCoreClientOption(&config.ARMClientConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +201,7 @@ func (a *acrProvider) GetCredentials(ctx context.Context, image string, _ []stri
 
 // getFromACR gets credentials from ACR.
 func (a *acrProvider) getFromACR(ctx context.Context, loginServer string) (string, string, error) {
-	config, err := azclient.GetAzureCloudConfig(&a.config.ARMClientConfig)
+	config, _, err := azclient.GetAzureCloudConfigAndEnvConfig(&a.config.ARMClientConfig)
 	if err != nil {
 		return "", "", err
 	}
