@@ -17,28 +17,16 @@ limitations under the License.
 package config
 
 import (
-	"errors"
 	"fmt"
-	"io"
 	"strings"
-
-	"k8s.io/klog/v2"
-	"sigs.k8s.io/yaml"
-
-	"github.com/Azure/go-autorest/autorest/azure"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"
-	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 var (
 	// ErrorNoAuth indicates that no credentials are provided.
 	ErrorNoAuth = fmt.Errorf("no credentials provided for Azure cloud provider")
-)
-
-const (
-	maxReadLength = 10 * 1 << 20 // 10MB
 )
 
 // AzureClientConfig holds azure client related part of cloud config
@@ -62,93 +50,9 @@ type AzureClientConfig struct {
 	NetworkResourceSubscriptionID string `json:"networkResourceSubscriptionID,omitempty" yaml:"networkResourceSubscriptionID,omitempty"`
 }
 
-// ParseAzureEnvironment returns the azure environment.
-// If 'resourceManagerEndpoint' is set, the environment is computed by querying the cloud's resource manager endpoint.
-// Otherwise, a pre-defined Environment is looked up by name.
-func ParseAzureEnvironment(cloudName, resourceManagerEndpoint, identitySystem string) (*azure.Environment, error) {
-	var env azure.Environment
-	var err error
-	if resourceManagerEndpoint != "" {
-		klog.V(4).Infof("Loading environment from resource manager endpoint: %s", resourceManagerEndpoint)
-		nameOverride := azure.OverrideProperty{Key: azure.EnvironmentName, Value: cloudName}
-		env, err = azure.EnvironmentFromURL(resourceManagerEndpoint, nameOverride)
-		if err == nil {
-			azureStackOverrides(&env, resourceManagerEndpoint, identitySystem)
-		}
-	} else if cloudName == "" {
-		klog.V(4).Info("Using public cloud environment")
-		env = azure.PublicCloud
-	} else {
-		klog.V(4).Infof("Using %s environment", cloudName)
-		env, err = azure.EnvironmentFromName(cloudName)
-	}
-	return &env, err
-}
-
-// ParseAzureAuthConfig returns a parsed configuration for an Azure cloudprovider config file
-func ParseAzureAuthConfig(configReader io.Reader) (*AzureClientConfig, *azure.Environment, error) {
-	var config AzureClientConfig
-
-	if configReader == nil {
-		return nil, nil, errors.New("nil config is provided")
-	}
-
-	limitedReader := &io.LimitedReader{R: configReader, N: maxReadLength}
-	configContents, err := io.ReadAll(limitedReader)
-	if err != nil {
-		return nil, nil, err
-	}
-	if limitedReader.N <= 0 {
-		return nil, nil, errors.New("the read limit is reached")
-	}
-	err = yaml.Unmarshal(configContents, &config)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	environment, err := ParseAzureEnvironment(config.Cloud, config.ResourceManagerEndpoint, config.IdentitySystem)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return &config, environment, nil
-}
-
-// UsesNetworkResourceInDifferentTenant determines whether the AzureAuthConfig indicates to use network resources in
-// different AAD Tenant than those for the cluster. Return true when NetworkResourceTenantID is specified  and not equal
-// to one defined in global configs
-func (config *AzureClientConfig) UsesNetworkResourceInDifferentTenant() bool {
-	return len(config.NetworkResourceTenantID) > 0 && !strings.EqualFold(config.NetworkResourceTenantID, config.TenantID)
-}
-
 // UsesNetworkResourceInDifferentSubscription determines whether the AzureAuthConfig indicates to use network resources
 // in different Subscription than those for the cluster. Return true when NetworkResourceSubscriptionID is specified
 // and not equal to one defined in global configs
 func (config *AzureClientConfig) UsesNetworkResourceInDifferentSubscription() bool {
 	return len(config.NetworkResourceSubscriptionID) > 0 && !strings.EqualFold(config.NetworkResourceSubscriptionID, config.SubscriptionID)
-}
-
-// azureStackOverrides ensures that the Environment matches what AKSe currently generates for Azure Stack
-func azureStackOverrides(env *azure.Environment, resourceManagerEndpoint, identitySystem string) {
-	env.ManagementPortalURL = strings.Replace(resourceManagerEndpoint, "https://management.", "https://portal.", -1)
-	env.ServiceManagementEndpoint = env.TokenAudience
-	env.ResourceManagerVMDNSSuffix = strings.Replace(resourceManagerEndpoint, "https://management.", "cloudapp.", -1)
-	env.ResourceManagerVMDNSSuffix = strings.TrimSuffix(env.ResourceManagerVMDNSSuffix, "/")
-	if strings.EqualFold(identitySystem, consts.ADFSIdentitySystem) {
-		env.ActiveDirectoryEndpoint = strings.TrimSuffix(env.ActiveDirectoryEndpoint, "/")
-		env.ActiveDirectoryEndpoint = strings.TrimSuffix(env.ActiveDirectoryEndpoint, "adfs")
-	}
-}
-
-// ValidateForMultiTenant checks configuration for the scenario of using network resource in different tenant
-func (config *AzureClientConfig) ValidateForMultiTenant() error {
-	if !config.UsesNetworkResourceInDifferentTenant() {
-		return fmt.Errorf("NetworkResourceTenantID must be configured")
-	}
-
-	if strings.EqualFold(config.IdentitySystem, consts.ADFSIdentitySystem) {
-		return fmt.Errorf("ADFS identity system is not supported")
-	}
-
-	return nil
 }

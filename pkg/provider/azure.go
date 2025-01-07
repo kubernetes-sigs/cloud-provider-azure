@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
-	"github.com/Azure/go-autorest/autorest/azure"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -87,7 +86,7 @@ var (
 // Cloud holds the config and clients
 type Cloud struct {
 	azureconfig.Config
-	Environment azure.Environment
+	Environment *azclient.Environment
 
 	ComputeClientFactory    azclient.ClientFactory
 	NetworkClientFactory    azclient.ClientFactory
@@ -325,12 +324,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		config.ClusterServiceSharedLoadBalancerHealthProbePath = consts.ClusterServiceLoadBalancerHealthProbeDefaultPath
 	}
 
-	env, err := azureconfig.ParseAzureEnvironment(config.Cloud, config.ResourceManagerEndpoint, config.IdentitySystem)
-	if err != nil {
-		return err
-	}
-
-	clientOps, _, err := azclient.GetAzCoreClientOption(&az.ARMClientConfig)
+	clientOps, env, err := azclient.GetAzCoreClientOption(&az.ARMClientConfig)
 	if err != nil {
 		return err
 	}
@@ -342,7 +336,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 	}
 
 	az.Config = *config
-	az.Environment = *env
+	az.Environment = env
 	az.ResourceRequestBackoff = resourceRequestBackoff
 	az.Metadata, err = NewInstanceMetadataService(consts.ImdsServer)
 	if err != nil {
