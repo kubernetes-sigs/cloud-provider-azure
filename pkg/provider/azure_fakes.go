@@ -111,6 +111,7 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 		nodePrivateIPs:           map[string]*utilsets.IgnoreCaseSet{},
 		routeCIDRs:               map[string]string{},
 		eventRecorder:            &record.FakeRecorder{},
+		Environment:              &azclient.Environment{},
 	}
 	clientFactory := mock_azclient.NewMockClientFactory(ctrl)
 	az.ComputeClientFactory = clientFactory
