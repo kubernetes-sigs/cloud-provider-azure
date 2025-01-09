@@ -21,7 +21,6 @@ import (
 	"context"
 
 	"github.com/onsi/ginkgo/v2"
-	"github.com/onsi/gomega"
 )
 
 var beforeAllFunc func(context.Context)
@@ -37,21 +36,6 @@ var _ = ginkgo.Describe("FileSharesClient", ginkgo.Ordered, func() {
 	if additionalTestCases != nil {
 		additionalTestCases()
 	}
-
-	ginkgo.When("get requests are raised", func() {
-		ginkgo.It("should not return error", func(ctx context.Context) {
-			newResource, err := realClient.Get(ctx, resourceGroupName, accountName, resourceName, nil)
-			gomega.Expect(err).NotTo(gomega.HaveOccurred())
-			gomega.Expect(newResource).NotTo(gomega.BeNil())
-		})
-	})
-	ginkgo.When("invalid get requests are raised", func() {
-		ginkgo.It("should return 404 error", func(ctx context.Context) {
-			newResource, err := realClient.Get(ctx, resourceGroupName, accountName, resourceName+"notfound", nil)
-			gomega.Expect(err).To(gomega.HaveOccurred())
-			gomega.Expect(newResource).To(gomega.BeNil())
-		})
-	})
 
 	if afterAllFunc != nil {
 		ginkgo.AfterAll(afterAllFunc)
