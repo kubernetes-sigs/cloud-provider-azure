@@ -247,7 +247,7 @@ func (factory *ClientFactoryImpl) create{{$resource}}Client(subscription string)
 	}
 	options.Cloud = factory.cloudConfig
 	{{if $client.AzureStackCloudAPIVersion}}
-	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) {
+	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) && !factory.armConfig.DisableAzureStackCloud{
 		options.ClientOptions.APIVersion = {{.PkgAlias}}.AzureStackCloudAPIVersion
 	}
 	{{- end }}
