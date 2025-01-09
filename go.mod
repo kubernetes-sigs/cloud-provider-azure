@@ -48,7 +48,7 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubelet v0.32.0
 	k8s.io/utils v0.0.0-20241104163129-6fe5fd82f078
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.4.7
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.4.9
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.3.0
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.3.3
 	sigs.k8s.io/yaml v1.4.0

@@ -69,3 +69,19 @@ func (client *Client) List(ctx context.Context, resourceGroupName string, accoun
 	}
 	return result, nil
 }
+
+const GetOperationName = "FileSharesClient.Get"
+
+// Get gets the FileShare
+func (client *Client) Get(ctx context.Context, resourceGroupName string, accountName string, fileshareName string, option *armstorage.FileSharesClientGetOptions) (result *armstorage.FileShare, err error) {
+	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "FileShare", "get")
+	defer func() { metricsCtx.Observe(ctx, err) }()
+	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
+	defer endSpan(err)
+	resp, err := client.FileSharesClient.Get(ctx, resourceGroupName, accountName, fileshareName, option)
+	if err != nil {
+		return nil, err
+	}
+	//handle statuscode
+	return &resp.FileShare, nil
+}
