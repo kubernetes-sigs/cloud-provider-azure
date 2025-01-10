@@ -684,3 +684,19 @@ func (az *Cloud) getBackendPoolNamesForEndpointSliceList(endpointSliceList []*di
 	}
 	return backendPoolNames
 }
+
+func isDualStackService(service *v1.Service) bool {
+	for _, ipFamily := range service.Spec.IPFamilies {
+		if ipFamily == v1.IPv6Protocol {
+			return true
+		}
+	}
+	return false
+}
+
+func (az *Cloud) getBackendPoolNameForCLBService(service *v1.Service) (string, error) {
+	if isDualStackService(service) {
+		return "", fmt.Errorf("dual-stack service is not supported for container load balancer")
+	}
+	return string(service.GetUID()), nil
+}

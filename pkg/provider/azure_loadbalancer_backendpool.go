@@ -996,67 +996,32 @@ func (bpi *backendPoolTypePodIP) GetBackendPrivateIPs(_ context.Context, _ strin
 	return backendPrivateIPv4s.UnsortedList(), backendPrivateIPv6s.UnsortedList()
 }
 
-func getLBRulesForService(lb *armnetwork.LoadBalancer, serviceUID string) []armnetwork.LoadBalancingRule {
-	matchingRules := make([]armnetwork.LoadBalancingRule, 0)
-	for _, rule := range lb.Properties.LoadBalancingRules {
-		if strings.HasPrefix(ptr.Deref(rule.Name, ""), serviceUID) {
-			matchingRules = append(matchingRules, *rule)
-		}
-	}
-	return matchingRules
-}
-
-func getBackendPoolNameFromID(id string) string {
-	parts := strings.Split(id, "/")
-	return parts[len(parts)-1]
-}
-
-func getBackendPoolNamesFromLBRules(lbRulesForService []armnetwork.LoadBalancingRule) []string {
-	var backendPools []string
-
-	for _, rule := range lbRulesForService {
-		if rule.Properties.BackendAddressPools != nil {
-			for _, pool := range rule.Properties.BackendAddressPools {
-				if pool.ID != nil {
-					backendPools = append(backendPools, getBackendPoolNameFromID(*pool.ID))
-				}
-			}
-		}
-	}
-	return backendPools
-}
-
 func (bpi *backendPoolTypePodIP) ReconcileBackendPools(ctx context.Context, _ string, service *v1.Service, lb *armnetwork.LoadBalancer) (bool, bool, *armnetwork.LoadBalancer, error) {
-	lbRulesForService := getLBRulesForService(lb, string(service.GetUID()))
-	serviceBackendPoolNames := utilsets.NewString()
-
-	for _, bp := range getBackendPoolNamesFromLBRules(lbRulesForService) {
-		serviceBackendPoolNames.Insert(bp)
+	var existingBackendPools []*armnetwork.BackendAddressPool
+	if lb.Properties != nil && lb.Properties.BackendAddressPools != nil {
+		existingBackendPools = lb.Properties.BackendAddressPools
 	}
 
-	var backendPoolsUpdated bool
-	foundBackendPools := utilsets.NewString()
-	serviceName := getServiceName(service)
-	endpointSliceList, err := bpi.getEndpointSliceListForService(service)
-
+	expectedBackendPoolName, err := bpi.getBackendPoolNameForCLBService(service)
 	if err != nil {
-		klog.Errorf("bpi.ReconcileBackendPools: failed to get endpoint slice list for service %q, error: %s", serviceName, err.Error())
 		return false, false, nil, err
 	}
 
-	expectedBackendPoolNames := bpi.getAllBackendPoolNamesForEndpointSliceList(endpointSliceList)
-	// bp is never preconfigured in case of pods
-	isBackendPoolPreConfigured := false
-
-	for _, bp := range expectedBackendPoolNames.UnsortedList() {
-		if foundBackendPools.Has(bp) {
-			continue
+	for _, bp := range existingBackendPools {
+		if ptr.Deref(bp.Name, "") == expectedBackendPoolName {
+			return false, false, lb, nil
 		}
-		isBackendPoolPreConfigured = newBackendPool(lb, isBackendPoolPreConfigured,
-			bpi.PreConfiguredBackendPoolLoadBalancerTypes, serviceName,
-			bp)
-		backendPoolsUpdated = true
 	}
+
+	serviceName := getServiceName(service)
+	backendPoolsUpdated := true
+	isBackendPoolPreConfigured := newBackendPool(
+		lb,
+		false,
+		bpi.PreConfiguredBackendPoolLoadBalancerTypes,
+		serviceName,
+		expectedBackendPoolName,
+	)
 
 	return isBackendPoolPreConfigured, backendPoolsUpdated, lb, nil
 }
