@@ -354,7 +354,7 @@ func (factory *ClientFactoryImpl) createAccountClient(subscription string) (acco
 	}
 	options.Cloud = factory.cloudConfig
 
-	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) {
+	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) && !factory.armConfig.DisableAzureStackCloud {
 		options.ClientOptions.APIVersion = accountclient.AzureStackCloudAPIVersion
 	}
 
@@ -401,7 +401,7 @@ func (factory *ClientFactoryImpl) createAvailabilitySetClient(subscription strin
 	}
 	options.Cloud = factory.cloudConfig
 
-	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) {
+	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) && !factory.armConfig.DisableAzureStackCloud {
 		options.ClientOptions.APIVersion = availabilitysetclient.AzureStackCloudAPIVersion
 	}
 
@@ -457,7 +457,7 @@ func (factory *ClientFactoryImpl) createBlobContainerClient(subscription string)
 	}
 	options.Cloud = factory.cloudConfig
 
-	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) {
+	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) && !factory.armConfig.DisableAzureStackCloud {
 		options.ClientOptions.APIVersion = blobcontainerclient.AzureStackCloudAPIVersion
 	}
 
@@ -498,7 +498,7 @@ func (factory *ClientFactoryImpl) createBlobServicePropertiesClient(subscription
 	}
 	options.Cloud = factory.cloudConfig
 
-	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) {
+	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) && !factory.armConfig.DisableAzureStackCloud {
 		options.ClientOptions.APIVersion = blobservicepropertiesclient.AzureStackCloudAPIVersion
 	}
 
@@ -565,7 +565,7 @@ func (factory *ClientFactoryImpl) createDiskClient(subscription string) (diskcli
 	}
 	options.Cloud = factory.cloudConfig
 
-	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) {
+	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) && !factory.armConfig.DisableAzureStackCloud {
 		options.ClientOptions.APIVersion = diskclient.AzureStackCloudAPIVersion
 	}
 
@@ -706,7 +706,7 @@ func (factory *ClientFactoryImpl) createInterfaceClient(subscription string) (in
 	}
 	options.Cloud = factory.cloudConfig
 
-	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) {
+	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) && !factory.armConfig.DisableAzureStackCloud {
 		options.ClientOptions.APIVersion = interfaceclient.AzureStackCloudAPIVersion
 	}
 
@@ -762,7 +762,7 @@ func (factory *ClientFactoryImpl) createLoadBalancerClient(subscription string) 
 	}
 	options.Cloud = factory.cloudConfig
 
-	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) {
+	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) && !factory.armConfig.DisableAzureStackCloud {
 		options.ClientOptions.APIVersion = loadbalancerclient.AzureStackCloudAPIVersion
 	}
 
@@ -864,7 +864,7 @@ func (factory *ClientFactoryImpl) createPrivateLinkServiceClient(subscription st
 	}
 	options.Cloud = factory.cloudConfig
 
-	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) {
+	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) && !factory.armConfig.DisableAzureStackCloud {
 		options.ClientOptions.APIVersion = privatelinkserviceclient.AzureStackCloudAPIVersion
 	}
 
@@ -894,7 +894,7 @@ func (factory *ClientFactoryImpl) createPrivateZoneClient(subscription string) (
 	}
 	options.Cloud = factory.cloudConfig
 
-	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) {
+	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) && !factory.armConfig.DisableAzureStackCloud {
 		options.ClientOptions.APIVersion = privatezoneclient.AzureStackCloudAPIVersion
 	}
 
@@ -944,7 +944,7 @@ func (factory *ClientFactoryImpl) createPublicIPAddressClient(subscription strin
 	}
 	options.Cloud = factory.cloudConfig
 
-	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) {
+	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) && !factory.armConfig.DisableAzureStackCloud {
 		options.ClientOptions.APIVersion = publicipaddressclient.AzureStackCloudAPIVersion
 	}
 
@@ -1054,7 +1054,7 @@ func (factory *ClientFactoryImpl) createRouteTableClient(subscription string) (r
 	}
 	options.Cloud = factory.cloudConfig
 
-	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) {
+	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) && !factory.armConfig.DisableAzureStackCloud {
 		options.ClientOptions.APIVersion = routetableclient.AzureStackCloudAPIVersion
 	}
 
@@ -1104,7 +1104,7 @@ func (factory *ClientFactoryImpl) createSecurityGroupClient(subscription string)
 	}
 	options.Cloud = factory.cloudConfig
 
-	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) {
+	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) && !factory.armConfig.DisableAzureStackCloud {
 		options.ClientOptions.APIVersion = securitygroupclient.AzureStackCloudAPIVersion
 	}
 
@@ -1134,7 +1134,7 @@ func (factory *ClientFactoryImpl) createSnapshotClient(subscription string) (sna
 	}
 	options.Cloud = factory.cloudConfig
 
-	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) {
+	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) && !factory.armConfig.DisableAzureStackCloud {
 		options.ClientOptions.APIVersion = snapshotclient.AzureStackCloudAPIVersion
 	}
 
@@ -1201,7 +1201,7 @@ func (factory *ClientFactoryImpl) createSubnetClient(subscription string) (subne
 	}
 	options.Cloud = factory.cloudConfig
 
-	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) {
+	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) && !factory.armConfig.DisableAzureStackCloud {
 		options.ClientOptions.APIVersion = subnetclient.AzureStackCloudAPIVersion
 	}
 
@@ -1251,7 +1251,7 @@ func (factory *ClientFactoryImpl) createVirtualMachineClient(subscription string
 	}
 	options.Cloud = factory.cloudConfig
 
-	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) {
+	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) && !factory.armConfig.DisableAzureStackCloud {
 		options.ClientOptions.APIVersion = virtualmachineclient.AzureStackCloudAPIVersion
 	}
 
@@ -1281,7 +1281,7 @@ func (factory *ClientFactoryImpl) createVirtualMachineScaleSetClient(subscriptio
 	}
 	options.Cloud = factory.cloudConfig
 
-	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) {
+	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) && !factory.armConfig.DisableAzureStackCloud {
 		options.ClientOptions.APIVersion = virtualmachinescalesetclient.AzureStackCloudAPIVersion
 	}
 
@@ -1311,7 +1311,7 @@ func (factory *ClientFactoryImpl) createVirtualMachineScaleSetVMClient(subscript
 	}
 	options.Cloud = factory.cloudConfig
 
-	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) {
+	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) && !factory.armConfig.DisableAzureStackCloud {
 		options.ClientOptions.APIVersion = virtualmachinescalesetvmclient.AzureStackCloudAPIVersion
 	}
 
