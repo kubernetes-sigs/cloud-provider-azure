@@ -189,10 +189,7 @@ type Config struct {
 	DisableAvailabilitySetNodes bool `json:"disableAvailabilitySetNodes,omitempty" yaml:"disableAvailabilitySetNodes,omitempty"`
 	// EnableVmssFlexNodes enables vmss flex nodes support when "VMType" is set to "vmss".
 	EnableVmssFlexNodes bool `json:"enableVmssFlexNodes,omitempty" yaml:"enableVmssFlexNodes,omitempty"`
-	// DisableAzureStackCloud disables AzureStackCloud support. It should be used
-	// when setting AzureAuthConfig.Cloud with "AZURESTACKCLOUD" to customize ARM endpoints
-	// while the cluster is not running on AzureStack.
-	DisableAzureStackCloud bool `json:"disableAzureStackCloud,omitempty" yaml:"disableAzureStackCloud,omitempty"`
+
 	// Enable exponential backoff to manage resource request retries
 	CloudProviderBackoff bool `json:"cloudProviderBackoff,omitempty" yaml:"cloudProviderBackoff,omitempty"`
 	// Use instance metadata service where possible
