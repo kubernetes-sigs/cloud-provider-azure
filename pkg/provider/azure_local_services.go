@@ -26,7 +26,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	v1 "k8s.io/api/core/v1"
 	discovery_v1 "k8s.io/api/discovery/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
@@ -616,73 +615,6 @@ func (az *Cloud) reconcileIPsInLocalServiceBackendPoolsAsync(
 			az.backendPoolUpdater.addOperation(getAddIPsToBackendPoolOperation(serviceName, lbName, bpName, expectedIPs))
 		}
 	}
-}
-
-func (az *Cloud) getEndpointSliceListForService(service *v1.Service) ([]*discovery_v1.EndpointSlice, error) {
-	var (
-		esList       []*discovery_v1.EndpointSlice
-		foundInCache bool
-	)
-
-	if service.Spec.Type != v1.ServiceTypeLoadBalancer {
-		return esList, nil
-	}
-
-	az.endpointSlicesCache.Range(func(key, value interface{}) bool {
-		endpointSlice := value.(*discovery_v1.EndpointSlice)
-		if strings.EqualFold(getServiceNameOfEndpointSlice(endpointSlice), service.Name) &&
-			strings.EqualFold(endpointSlice.Namespace, service.Namespace) {
-			esList = append(esList, endpointSlice)
-			foundInCache = true
-		}
-		return true
-	})
-
-	if len(esList) == 0 {
-		klog.Infof("EndpointSlice for service %s/%s not found, try to list EndpointSlices", service.Namespace, service.Name)
-		eps, err := az.KubeClient.DiscoveryV1().EndpointSlices(service.Namespace).List(context.Background(), metav1.ListOptions{})
-		if err != nil {
-			klog.Errorf("Failed to list EndpointSlices for service %s/%s: %s", service.Namespace, service.Name, err.Error())
-			return nil, err
-		}
-		for _, endpointSlice := range eps.Items {
-			endpointSlice := endpointSlice
-			if strings.EqualFold(getServiceNameOfEndpointSlice(&endpointSlice), service.Name) {
-				esList = append(esList, &endpointSlice)
-
-				if !foundInCache {
-					az.endpointSlicesCache.Store(strings.ToLower(fmt.Sprintf("%s/%s", endpointSlice.Namespace, endpointSlice.Name)), endpointSlice)
-				}
-			}
-		}
-	}
-	if len(esList) == 0 {
-		return nil, fmt.Errorf("failed to find EndpointSlice for service %s/%s", service.Namespace, service.Name)
-	}
-
-	return esList, nil
-}
-
-func (az *Cloud) getBackendPoolNameForEndpointSlice(endpointSlice *discovery_v1.EndpointSlice, isIPv6 bool) string {
-	if isIPv6 {
-		return fmt.Sprintf("%s-%s", endpointSlice.GetUID(), consts.IPVersionIPv6StringLower)
-	}
-	return string(endpointSlice.GetUID())
-}
-
-func (az *Cloud) getBackendPoolNamesForEndpointSliceList(endpointSliceList []*discovery_v1.EndpointSlice, isIPv6 bool) *utilsets.IgnoreCaseSet {
-	backendPoolNames := utilsets.NewString()
-
-	for _, endpointSlice := range endpointSliceList {
-		if endpointSlice.AddressType == discovery_v1.AddressTypeIPv6 && !isIPv6 {
-			continue
-		}
-		if endpointSlice.AddressType == discovery_v1.AddressTypeIPv4 && isIPv6 {
-			continue
-		}
-		backendPoolNames.Insert(az.getBackendPoolNameForEndpointSlice(endpointSlice, isIPv6))
-	}
-	return backendPoolNames
 }
 
 func isDualStackService(service *v1.Service) bool {
