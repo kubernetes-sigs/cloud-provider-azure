@@ -686,17 +686,20 @@ func (az *Cloud) getBackendPoolNamesForEndpointSliceList(endpointSliceList []*di
 }
 
 func isDualStackService(service *v1.Service) bool {
-	for _, ipFamily := range service.Spec.IPFamilies {
-		if ipFamily == v1.IPv6Protocol {
-			return true
-		}
-	}
-	return false
+	return len(service.Spec.IPFamilies) == 2
 }
 
 func (az *Cloud) getBackendPoolNameForCLBService(service *v1.Service) (string, error) {
 	if isDualStackService(service) {
 		return "", fmt.Errorf("dual-stack service is not supported for container load balancer")
 	}
-	return string(service.GetUID()), nil
+
+	switch service.Spec.IPFamilies[0] {
+	case v1.IPv4Protocol:
+		return string(service.GetUID()), nil
+	case v1.IPv6Protocol:
+		return fmt.Sprintf("%s-%s", service.GetUID(), consts.IPVersionIPv6StringLower), nil
+	default:
+		return "", fmt.Errorf("unknown IP family %s", service.Spec.IPFamilies[0])
+	}
 }
