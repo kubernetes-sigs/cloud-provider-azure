@@ -31,7 +31,7 @@ generate() {
   TO_TAG=$2
   BRANCH=$3
   FROM_COMMIT=$(git rev-list --no-merges ${FROM_TAG}..${TO_TAG} | tail -1) # exclude the ${FROM_TAG} commit
-  TO_COMMIT=$(git rev-parse ${TO_TAG})
+  TO_COMMIT=$(git rev-parse ${TO_TAG}^{commit})
 
   echo "Generating release notes for ${FROM_TAG}..${TO_TAG} (${FROM_COMMIT}..${TO_COMMIT}) on branch ${BRANCH}"
 
