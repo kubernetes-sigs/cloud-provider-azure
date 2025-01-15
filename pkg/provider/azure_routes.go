@@ -557,12 +557,6 @@ func (az *Cloud) ensureRouteTableTagged(rt *armnetwork.RouteTable) (map[string]*
 	if rt.Tags == nil {
 		rt.Tags = make(map[string]*string)
 	}
-	// filter the tags with value of 'Null' (caused by TrimSpace in parseTags)
-	for k, v := range tags {
-		if v != nil && strings.EqualFold(*v, "Null") {
-			delete(tags, k)
-		}
-	}
 	tags, changed := az.reconcileTags(rt.Tags, tags)
 	rt.Tags = tags
 
