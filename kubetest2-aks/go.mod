@@ -5,13 +5,13 @@ go 1.23.1
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.0
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.0
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.1
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v2 v2.4.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v1.2.0
 	github.com/go-git/go-git/v5 v5.13.1
 	github.com/octago/sflags v0.3.1
 	github.com/spf13/pflag v1.0.5
-	k8s.io/apimachinery v0.32.0
+	k8s.io/apimachinery v0.32.1
 	k8s.io/klog v1.0.0
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
 	sigs.k8s.io/kubetest2 v0.0.0-20241216131453-22d5b1410bef
