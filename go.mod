@@ -8,7 +8,7 @@ require (
 	github.com/Azure/azure-kusto-go v0.16.1
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.0
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.0
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.1
 	github.com/Azure/azure-sdk-for-go/sdk/containers/azcontainerregistry v0.2.2
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 v6.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerregistry/armcontainerregistry v1.2.0
@@ -42,14 +42,14 @@ require (
 	golang.org/x/text v0.21.0
 	k8s.io/api v0.32.0
 	k8s.io/apimachinery v0.32.0
-	k8s.io/apiserver v0.30.8
+	k8s.io/apiserver v0.30.9
 	k8s.io/client-go v0.32.0
-	k8s.io/cloud-provider v0.30.8
-	k8s.io/component-base v0.30.8
-	k8s.io/component-helpers v0.30.8
-	k8s.io/controller-manager v0.30.8
+	k8s.io/cloud-provider v0.30.9
+	k8s.io/component-base v0.30.9
+	k8s.io/component-helpers v0.30.9
+	k8s.io/controller-manager v0.30.9
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/kubelet v0.30.8
+	k8s.io/kubelet v0.30.9
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.4.9
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.3.3
@@ -72,7 +72,7 @@ require (
 	github.com/Azure/go-autorest/autorest/to v0.4.0 // indirect
 	github.com/Azure/go-autorest/autorest/validation v0.3.1 // indirect
 	github.com/Azure/go-autorest/logger v0.2.1 // indirect
-	github.com/AzureAD/microsoft-authentication-library-for-go v1.3.1 // indirect
+	github.com/AzureAD/microsoft-authentication-library-for-go v1.3.2 // indirect
 	github.com/NYTimes/gziphandler v1.1.1 // indirect
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230305170008-8188dc5388df // indirect
 	github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a // indirect
@@ -151,7 +151,7 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/kms v0.30.8 // indirect
+	k8s.io/kms v0.30.9 // indirect
 	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.29.0 // indirect
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
