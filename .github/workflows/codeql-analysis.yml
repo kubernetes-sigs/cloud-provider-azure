@@ -83,15 +83,15 @@ jobs:
     - name: Autobuild
       run: |
         make all
-        go test -covermode=count -coverprofile=profile.cov ./pkg/...
+        go test -covermode=count -coverprofile=cover.out.tmp ./pkg/...
+        cat cover.out.tmp | grep -v "mock" > profile.cov
 
     - name: Send coverage
       env:
         COVERALLS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         go install github.com/mattn/goveralls@latest
-        $(go env GOPATH)/bin/goveralls -coverprofile=profile.cov.tmp -service=github
-        cat cover.out.tmp | grep -v "mock" > profile.cov
+        $(go env GOPATH)/bin/goveralls -coverprofile=profile.cov -service=github
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@b6a472f63d85b9c78a3ac5e89422239fc15e9b3c # v3.28.1
