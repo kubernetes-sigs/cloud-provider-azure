@@ -3334,6 +3334,31 @@ func TestScaleSet_VMSSBatchSize(t *testing.T) {
 		assert.Equal(t, BatchSize, batchSize)
 	})
 
+	t.Run("vmss contains batch operation tag", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		ss, err := NewTestScaleSet(ctrl)
+		assert.NoError(t, err)
+		ss.Cloud.PutVMSSVMBatchSize = 0
+
+		scaleSet := &armcompute.VirtualMachineScaleSet{
+			Name: ptr.To("foo"),
+			Tags: map[string]*string{
+				consts.VMSSTagForBatchOperation: ptr.To(""),
+			},
+			Properties: &armcompute.VirtualMachineScaleSetProperties{
+				OrchestrationMode: to.Ptr(armcompute.OrchestrationModeUniform),
+			},
+		}
+		mockVMSSClient := ss.Cloud.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).
+			Return([]*armcompute.VirtualMachineScaleSet{scaleSet}, nil)
+
+		batchSize, err := ss.VMSSBatchSize(context.TODO(), ptr.Deref(scaleSet.Name, ""))
+		assert.NoError(t, err)
+		assert.Equal(t, 1, batchSize)
+	})
+
 	t.Run("vmss doesn't contain batch operation tag", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()

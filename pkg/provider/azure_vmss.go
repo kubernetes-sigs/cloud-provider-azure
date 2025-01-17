@@ -2337,6 +2337,9 @@ func (ss *ScaleSet) VMSSBatchSize(ctx context.Context, vmssName string) (int, er
 	if _, ok := vmss.Tags[consts.VMSSTagForBatchOperation]; ok {
 		batchSize = ss.GetPutVMSSVMBatchSize()
 	}
+	if batchSize < 1 {
+		batchSize = 1
+	}
 	klog.V(2).InfoS("Fetch VMSS batch size", "vmss", vmssName, "size", batchSize)
 	return batchSize, nil
 }
