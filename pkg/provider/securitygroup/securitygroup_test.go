@@ -99,7 +99,7 @@ func TestSecurityGroupHelper_AddRuleForAllowedIPRanges(t *testing.T) {
 				dstAddresses = fx.RandomIPv4Addresses(2)
 				dstPorts     = []int32{80, 443}
 			)
-			err := helper.AddRuleForAllowedIPRanges(srcIPRanges, protocol, dstAddresses, dstPorts)
+			err := helper.AddRuleForAllowedIPRanges(srcIPRanges, protocol, dstAddresses, nil, dstPorts)
 			assert.Error(t, err)
 			assert.ErrorIs(t, err, ErrSecurityRuleSourceAddressesNotFromSameIPFamily)
 		})
@@ -113,7 +113,7 @@ func TestSecurityGroupHelper_AddRuleForAllowedIPRanges(t *testing.T) {
 				dstAddresses = append(fx.RandomIPv4Addresses(2), fx.RandomIPv6Addresses(2)...)
 				dstPorts     = []int32{80, 443}
 			)
-			err := helper.AddRuleForAllowedIPRanges(srcIPRanges, protocol, dstAddresses, dstPorts)
+			err := helper.AddRuleForAllowedIPRanges(srcIPRanges, protocol, dstAddresses, nil, dstPorts)
 			assert.Error(t, err)
 			assert.ErrorIs(t, err, ErrSecurityRuleDestinationAddressesNotFromSameIPFamily)
 		})
@@ -127,7 +127,7 @@ func TestSecurityGroupHelper_AddRuleForAllowedIPRanges(t *testing.T) {
 				dstAddresses = fx.RandomIPv6Addresses(2)
 				dstPorts     = []int32{80, 443}
 			)
-			err := helper.AddRuleForAllowedIPRanges(srcIPRanges, protocol, dstAddresses, dstPorts)
+			err := helper.AddRuleForAllowedIPRanges(srcIPRanges, protocol, dstAddresses, nil, dstPorts)
 			assert.Error(t, err)
 			assert.ErrorIs(t, err, ErrSecurityRuleSourceAndDestinationNotFromSameIPFamily)
 		})
@@ -205,7 +205,7 @@ func TestSecurityGroupHelper_AddRuleForAllowedIPRanges(t *testing.T) {
 				helper = ExpectNewSecurityGroupHelper(t, sg)
 			)
 
-			err := helper.AddRuleForAllowedIPRanges(srcIPRanges, protocol, dstAddresses, dstPorts)
+			err := helper.AddRuleForAllowedIPRanges(srcIPRanges, protocol, dstAddresses, nil, dstPorts)
 			assert.NoError(t, err)
 
 			outputSG, updated, err := helper.SecurityGroup()
@@ -317,7 +317,7 @@ func TestSecurityGroupHelper_AddRuleForAllowedIPRanges(t *testing.T) {
 				helper          = ExpectNewSecurityGroupHelper(t, sg)
 			)
 
-			err := helper.AddRuleForAllowedIPRanges(srcIPRanges, protocol, dstAddresses, dstPorts)
+			err := helper.AddRuleForAllowedIPRanges(srcIPRanges, protocol, dstAddresses, nil, dstPorts)
 			assert.NoError(t, err)
 
 			outputSG, updated, err := helper.SecurityGroup()
@@ -432,7 +432,7 @@ func TestSecurityGroupHelper_AddRuleForAllowedIPRanges(t *testing.T) {
 				helper          = ExpectNewSecurityGroupHelper(t, sg)
 			)
 
-			err := helper.AddRuleForAllowedIPRanges(srcIPRanges, protocol, dstAddresses, dstPorts)
+			err := helper.AddRuleForAllowedIPRanges(srcIPRanges, protocol, dstAddresses, nil, dstPorts)
 			assert.NoError(t, err)
 
 			outputSG, updated, err := helper.SecurityGroup()
@@ -459,7 +459,7 @@ func TestSecurityGroupHelper_AddRuleForAllowedServiceTag(t *testing.T) {
 				dstAddresses = append(fx.RandomIPv4Addresses(2), fx.RandomIPv6Addresses(2)...)
 				dstPorts     = []int32{80, 443}
 			)
-			err := helper.AddRuleForAllowedServiceTag(serviceTag, protocol, dstAddresses, dstPorts)
+			err := helper.AddRuleForAllowedServiceTag(serviceTag, protocol, dstAddresses, nil, dstPorts)
 			assert.Error(t, err)
 			assert.ErrorIs(t, err, ErrSecurityRuleDestinationAddressesNotFromSameIPFamily)
 		})
@@ -537,7 +537,7 @@ func TestSecurityGroupHelper_AddRuleForAllowedServiceTag(t *testing.T) {
 				helper = ExpectNewSecurityGroupHelper(t, sg)
 			)
 
-			err := helper.AddRuleForAllowedServiceTag(srcServiceTag, protocol, dstAddresses, dstPorts)
+			err := helper.AddRuleForAllowedServiceTag(srcServiceTag, protocol, dstAddresses, nil, dstPorts)
 			assert.NoError(t, err)
 
 			outputSG, updated, err := helper.SecurityGroup()
@@ -649,7 +649,7 @@ func TestSecurityGroupHelper_AddRuleForAllowedServiceTag(t *testing.T) {
 				helper          = ExpectNewSecurityGroupHelper(t, sg)
 			)
 
-			err := helper.AddRuleForAllowedServiceTag(srcServiceTag, protocol, dstAddresses, dstPorts)
+			err := helper.AddRuleForAllowedServiceTag(srcServiceTag, protocol, dstAddresses, nil, dstPorts)
 			assert.NoError(t, err)
 
 			outputSG, updated, err := helper.SecurityGroup()
@@ -764,7 +764,7 @@ func TestSecurityGroupHelper_AddRuleForAllowedServiceTag(t *testing.T) {
 				helper          = ExpectNewSecurityGroupHelper(t, sg)
 			)
 
-			err := helper.AddRuleForAllowedServiceTag(srcServiceTag, protocol, dstAddresses, dstPorts)
+			err := helper.AddRuleForAllowedServiceTag(srcServiceTag, protocol, dstAddresses, nil, dstPorts)
 			assert.NoError(t, err)
 
 			outputSG, updated, err := helper.SecurityGroup()

@@ -207,17 +207,28 @@ func (helper *RuleHelper) AddRuleForAllowedServiceTag(
 	serviceTag string,
 	protocol armnetwork.SecurityRuleProtocol,
 	dstAddresses []netip.Addr,
+	dstAddressPrefix []netip.Prefix,
 	dstPorts []int32,
 ) error {
-	if !iputil.AreAddressesFromSameFamily(dstAddresses) {
-		return ErrSecurityRuleDestinationAddressesNotFromSameIPFamily
-	}
-
 	var (
-		ipFamily    = iputil.FamilyOfAddr(dstAddresses[0])
+		ipFamily    iputil.Family
 		srcPrefixes = []string{serviceTag}
-		dstPrefixes = fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
+		dstPrefixes []string
 	)
+
+	if len(dstAddressPrefix) > 0 {
+		ipFamily = iputil.FamilyOfAddr(dstAddressPrefix[0].Addr())
+		dstPrefixes = fnutil.Map(func(prefix netip.Prefix) string {
+			return fmt.Sprintf("%s/%d", prefix.Addr().String(), prefix.Bits())
+		}, dstAddressPrefix)
+	} else {
+		ipFamily = iputil.FamilyOfAddr(dstAddresses[0])
+		dstPrefixes = fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
+
+		if !iputil.AreAddressesFromSameFamily(dstAddresses) {
+			return ErrSecurityRuleDestinationAddressesNotFromSameIPFamily
+		}
+	}
 
 	helper.logger.V(4).Info("Patching a rule for allowed service tag", "ip-family", ipFamily)
 
@@ -229,22 +240,30 @@ func (helper *RuleHelper) AddRuleForAllowedIPRanges(
 	ipRanges []netip.Prefix,
 	protocol armnetwork.SecurityRuleProtocol,
 	dstAddresses []netip.Addr,
+	dstAddressPrefix []netip.Prefix,
 	dstPorts []int32,
 ) error {
-	if !iputil.ArePrefixesFromSameFamily(ipRanges) {
-		return ErrSecurityRuleSourceAddressesNotFromSameIPFamily
-	}
-	if !iputil.AreAddressesFromSameFamily(dstAddresses) {
-		return ErrSecurityRuleDestinationAddressesNotFromSameIPFamily
-	}
-	if ipRanges[0].Addr().Is4() != dstAddresses[0].Is4() {
-		return ErrSecurityRuleSourceAndDestinationNotFromSameIPFamily
+	var dstPrefixes []string
+	if len(dstAddressPrefix) != 0 {
+		dstPrefixes = fnutil.Map(func(prefix netip.Prefix) string {
+			return fmt.Sprintf("%s/%d", prefix.Addr().String(), prefix.Bits())
+		}, dstAddressPrefix)
+	} else {
+		if !iputil.ArePrefixesFromSameFamily(ipRanges) {
+			return ErrSecurityRuleSourceAddressesNotFromSameIPFamily
+		}
+		if !iputil.AreAddressesFromSameFamily(dstAddresses) {
+			return ErrSecurityRuleDestinationAddressesNotFromSameIPFamily
+		}
+		if ipRanges[0].Addr().Is4() != dstAddresses[0].Is4() {
+			return ErrSecurityRuleSourceAndDestinationNotFromSameIPFamily
+		}
+		dstPrefixes = fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
 	}
 
 	var (
 		ipFamily    = iputil.FamilyOfAddr(ipRanges[0].Addr())
 		srcPrefixes = fnutil.Map(func(ip netip.Prefix) string { return ip.String() }, ipRanges)
-		dstPrefixes = fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
 	)
 
 	helper.logger.V(4).Info("Patching a rule for allowed IP ranges", "ip-family", ipFamily)

@@ -165,6 +165,12 @@ type Config struct {
 	ClusterServiceSharedLoadBalancerHealthProbePort int32 `json:"clusterServiceSharedLoadBalancerHealthProbePort,omitempty" yaml:"clusterServiceSharedLoadBalancerHealthProbePort,omitempty"`
 	// ClusterServiceSharedLoadBalancerHealthProbePath defines the target path of the shared health probe. Default to `/healthz`.
 	ClusterServiceSharedLoadBalancerHealthProbePath string `json:"clusterServiceSharedLoadBalancerHealthProbePath,omitempty" yaml:"clusterServiceSharedLoadBalancerHealthProbePath,omitempty"`
+
+	// RetrievedClusterPodCidr indicates whether the cluster has set the pod subnet prefix within Network Security Group (NSG).
+	// The NSG for pod subnet is set a single time for the whole cluster.
+	// If the pod subnet prefix is not set, the value is false.
+	// If the pod subnet prefix is set, the value is true.
+	RetrievedClusterPodCidr bool `json:"retrievedClusterPodCidr" yaml:"retrievedClusterPodCidr"`
 }
 
 // HasExtendedLocation returns true if extendedlocation prop are specified.
@@ -178,6 +184,10 @@ func (az *Config) IsLBBackendPoolTypeNodeIPConfig() bool {
 
 func (az *Config) IsLBBackendPoolTypeNodeIP() bool {
 	return strings.EqualFold(az.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypeNodeIP)
+}
+
+func (az *Config) IsLBBackendPoolTypePodIP() bool {
+	return strings.EqualFold(az.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePodIP)
 }
 
 func (az *Config) GetPutVMSSVMBatchSize() int {
