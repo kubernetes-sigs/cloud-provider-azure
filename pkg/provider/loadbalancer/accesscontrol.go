@@ -195,7 +195,7 @@ func (ac *AccessControl) AllowedIPv6Ranges() []netip.Prefix {
 }
 
 // PatchSecurityGroup checks and adds rules for the given destination IP addresses.
-func (ac *AccessControl) PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses []netip.Addr) error {
+func (ac *AccessControl) PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses []netip.Addr, dstAddressPrefix []netip.Prefix) error {
 	logger := ac.logger.WithName("PatchSecurityGroup")
 
 	var (
@@ -233,16 +233,42 @@ func (ac *AccessControl) PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses [
 		if !found {
 			continue
 		}
+
+		if len(dstAddressPrefix) > 0 {
+			for _, tag := range allowedServiceTags {
+				err := ac.sgHelper.AddRuleForAllowedServiceTag(tag, protocol, nil, dstAddressPrefix, dstPorts)
+				if err != nil {
+					return fmt.Errorf("add rule for allowed service tag on prefix: %w", err)
+				}
+			}
+
+			if len(allowedIPv4Ranges) > 0 {
+				err := ac.sgHelper.AddRuleForAllowedIPRanges(allowedIPv4Ranges, protocol, nil, dstAddressPrefix, dstPorts)
+				if err != nil {
+					return fmt.Errorf("add rule for allowed IP ranges on prefix: %w", err)
+				}
+			}
+
+			if len(allowedIPv6Ranges) > 0 {
+				err := ac.sgHelper.AddRuleForAllowedIPRanges(allowedIPv6Ranges, protocol, nil, dstAddressPrefix, dstPorts)
+				if err != nil {
+					return fmt.Errorf("add rule for allowed IP ranges on prefix: %w", err)
+				}
+			}
+
+			continue
+		}
+
 		if len(dstIPv4Addresses) > 0 {
 			for _, tag := range allowedServiceTags {
-				err := ac.sgHelper.AddRuleForAllowedServiceTag(tag, protocol, dstIPv4Addresses, dstPorts)
+				err := ac.sgHelper.AddRuleForAllowedServiceTag(tag, protocol, dstIPv4Addresses, nil, dstPorts)
 				if err != nil {
 					return fmt.Errorf("add rule for allowed service tag on IPv4: %w", err)
 				}
 			}
 
 			if len(allowedIPv4Ranges) > 0 {
-				err := ac.sgHelper.AddRuleForAllowedIPRanges(allowedIPv4Ranges, protocol, dstIPv4Addresses, dstPorts)
+				err := ac.sgHelper.AddRuleForAllowedIPRanges(allowedIPv4Ranges, protocol, dstIPv4Addresses, nil, dstPorts)
 				if err != nil {
 					return fmt.Errorf("add rule for allowed IP ranges on IPv4: %w", err)
 				}
@@ -250,14 +276,14 @@ func (ac *AccessControl) PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses [
 		}
 		if len(dstIPv6Addresses) > 0 {
 			for _, tag := range allowedServiceTags {
-				err := ac.sgHelper.AddRuleForAllowedServiceTag(tag, protocol, dstIPv6Addresses, dstPorts)
+				err := ac.sgHelper.AddRuleForAllowedServiceTag(tag, protocol, dstIPv6Addresses, nil, dstPorts)
 				if err != nil {
 					return fmt.Errorf("add rule for allowed service tag on IPv6: %w", err)
 				}
 			}
 
 			if len(allowedIPv6Ranges) > 0 {
-				err := ac.sgHelper.AddRuleForAllowedIPRanges(allowedIPv6Ranges, protocol, dstIPv6Addresses, dstPorts)
+				err := ac.sgHelper.AddRuleForAllowedIPRanges(allowedIPv6Ranges, protocol, dstIPv6Addresses, nil, dstPorts)
 				if err != nil {
 					return fmt.Errorf("add rule for allowed IP ranges on IPv6: %w", err)
 				}
