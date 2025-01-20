@@ -58,7 +58,7 @@ func init() {
 		})
 		When("update requests are raised", func() {
 			It("should not return error", func(ctx context.Context) {
-				newResource, err := realClient.Update(ctx, resourceGroupName, virtualmachinescalesetName,"0", armcompute.VirtualMachineScaleSetVM{
+				newResource, err := realClient.Update(ctx, resourceGroupName, virtualmachinescalesetName, "0", armcompute.VirtualMachineScaleSetVM{
 					Tags: map[string]*string{
 						"key1": to.Ptr("value1"),
 					},
@@ -69,7 +69,7 @@ func init() {
 		})
 		When("update requests are raised with invalid etag", func() {
 			It("should return error", func(ctx context.Context) {
-				_, err := realClient.Update(ctx, resourceGroupName, virtualmachinescalesetName,"0", armcompute.VirtualMachineScaleSetVM{
+				_, err := realClient.Update(ctx, resourceGroupName, virtualmachinescalesetName, "0", armcompute.VirtualMachineScaleSetVM{
 					Tags: map[string]*string{
 						"key1": to.Ptr("value1"),
 					},
