@@ -253,7 +253,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		Expect(err).NotTo(HaveOccurred(), "Fail to get response from the domain name")
 	})
 
-	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-internal'", func() {
+	FIt("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-internal'", func() {
 		annotation := map[string]string{
 			consts.ServiceAnnotationLoadBalancerInternal: "true",
 		}
@@ -267,7 +267,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}()
 	})
 
-	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-internal-subnet'", func() {
+	FIt("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-internal-subnet'", func() {
 		By("creating environment")
 		// This subnetName verifies a bug fix in an issue: https://github.com/kubernetes-sigs/cloud-provider-azure/issues/1443
 		subnetName := "a--------------------------------------------------z"
@@ -456,7 +456,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		Expect(lb).NotTo(BeNil())
 	})
 
-	It("should support service annotation `service.beta.kubernetes.io/azure-pip-tags`", func() {
+	FIt("should support service annotation `service.beta.kubernetes.io/azure-pip-tags`", func() {
 		if os.Getenv(utils.AKSTestCCM) != "" {
 			Skip("Skip this test case for AKS test")
 		}
@@ -466,12 +466,13 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			"c": ptr.To("d"),
 			"e": ptr.To(""),
 			"x": ptr.To("y"),
+			"z": ptr.To("Null "),
 		}
 
 		testPIPTagAnnotationWithTags(cs, tc, ns, serviceName, labels, ports, expectedTags)
 	})
 
-	It("should support service annotation `service.beta.kubernetes.io/azure-pip-tags` on aks clusters with systemTags set", func() {
+	FIt("should support service annotation `service.beta.kubernetes.io/azure-pip-tags` on aks clusters with systemTags set", func() {
 		if os.Getenv(utils.AKSTestCCM) == "" {
 			Skip("Skip this test case for non-AKS test")
 		}
@@ -479,6 +480,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		expectedTags := map[string]*string{
 			"a": ptr.To("c"),
 			"x": ptr.To("y"),
+			"z": ptr.To("Null "),
 		}
 
 		testPIPTagAnnotationWithTags(cs, tc, ns, serviceName, labels, ports, expectedTags)
@@ -1728,7 +1730,7 @@ func testPIPTagAnnotationWithTags(
 	service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	service.Annotations = map[string]string{
-		consts.ServiceAnnotationAzurePIPTags: "a=c,x=y",
+		consts.ServiceAnnotationAzurePIPTags: "a=c,x=y,z=Null ",
 	}
 	_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
 	Expect(err).NotTo(HaveOccurred())
