@@ -472,7 +472,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		testPIPTagAnnotationWithTags(cs, tc, ns, serviceName, labels, ports, expectedTags)
 	})
 
-	FIt("should support service annotation `service.beta.kubernetes.io/azure-pip-tags` on aks clusters with systemTags set", func() {
+	It("should support service annotation `service.beta.kubernetes.io/azure-pip-tags` on aks clusters with systemTags set", func() {
 		if os.Getenv(utils.AKSTestCCM) == "" {
 			Skip("Skip this test case for non-AKS test")
 		}
