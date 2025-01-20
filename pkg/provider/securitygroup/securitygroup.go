@@ -243,15 +243,19 @@ func (helper *RuleHelper) AddRuleForAllowedIPRanges(
 	dstAddressPrefix []netip.Prefix,
 	dstPorts []int32,
 ) error {
+	if !iputil.ArePrefixesFromSameFamily(ipRanges) {
+		return ErrSecurityRuleSourceAddressesNotFromSameIPFamily
+	}
+
 	var dstPrefixes []string
 	if len(dstAddressPrefix) != 0 {
+		if ipRanges[0].Addr().Is4() != dstAddressPrefix[0].Addr().Is4() {
+			return ErrSecurityRuleSourceAndDestinationNotFromSameIPFamily
+		}
 		dstPrefixes = fnutil.Map(func(prefix netip.Prefix) string {
 			return fmt.Sprintf("%s/%d", prefix.Addr().String(), prefix.Bits())
 		}, dstAddressPrefix)
 	} else {
-		if !iputil.ArePrefixesFromSameFamily(ipRanges) {
-			return ErrSecurityRuleSourceAddressesNotFromSameIPFamily
-		}
 		if !iputil.AreAddressesFromSameFamily(dstAddresses) {
 			return ErrSecurityRuleDestinationAddressesNotFromSameIPFamily
 		}
@@ -275,15 +279,18 @@ func (helper *RuleHelper) AddRuleForAllowedIPRanges(
 // NOTE:
 // This rule is to limit the traffic inside the VNet.
 // The traffic out of the VNet is already limited by rule `DenyAllInBound`.
-func (helper *RuleHelper) AddRuleForDenyAll(dstAddresses []netip.Addr) error {
-	if !iputil.AreAddressesFromSameFamily(dstAddresses) {
-		return ErrSecurityRuleDestinationAddressesNotFromSameIPFamily
-	}
+func (helper *RuleHelper) AddRuleForDenyAll(dstAddresses []netip.Addr, dstAddressPrefix []netip.Prefix) error {
 
-	var (
+	var ipFamily iputil.Family
+	if len(dstAddressPrefix) != 0 {
+		ipFamily = iputil.FamilyOfAddr(dstAddressPrefix[0].Addr())
+	} else {
+		if !iputil.AreAddressesFromSameFamily(dstAddresses) {
+			return ErrSecurityRuleDestinationAddressesNotFromSameIPFamily
+		}
 		ipFamily = iputil.FamilyOfAddr(dstAddresses[0])
-		ruleName = GenerateDenyAllSecurityRuleName(ipFamily)
-	)
+	}
+	ruleName := GenerateDenyAllSecurityRuleName(ipFamily)
 
 	helper.logger.V(4).Info("Patching a rule for deny all", "ip-family", ipFamily)
 
@@ -301,7 +308,15 @@ func (helper *RuleHelper) AddRuleForDenyAll(dstAddresses []netip.Addr) error {
 	}
 	{
 		// Destination
-		addresses := fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
+		var addresses []string
+		if len(dstAddressPrefix) != 0 {
+			addresses = fnutil.Map(func(prefix netip.Prefix) string {
+				return fmt.Sprintf("%s/%d", prefix.Addr().String(), prefix.Bits())
+			}, dstAddressPrefix)
+		} else {
+			addresses = fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
+		}
+
 		addresses = append(addresses, ListDestinationPrefixes(rule)...)
 		SetDestinationPrefixes(rule, addresses)
 		rule.Properties.DestinationPortRange = ptr.To("*")

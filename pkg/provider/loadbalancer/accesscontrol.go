@@ -242,14 +242,14 @@ func (ac *AccessControl) PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses [
 				}
 			}
 
-			if len(allowedIPv4Ranges) > 0 {
+			if len(allowedIPv4Ranges) > 0 && iputil.FamilyOfAddr(dstAddressPrefix[0].Addr()) == iputil.IPv4 {
 				err := ac.sgHelper.AddRuleForAllowedIPRanges(allowedIPv4Ranges, protocol, nil, dstAddressPrefix, dstPorts)
 				if err != nil {
 					return fmt.Errorf("add rule for allowed IP ranges on prefix: %w", err)
 				}
 			}
 
-			if len(allowedIPv6Ranges) > 0 {
+			if len(allowedIPv6Ranges) > 0 && iputil.FamilyOfAddr(dstAddressPrefix[0].Addr()) == iputil.IPv6 {
 				err := ac.sgHelper.AddRuleForAllowedIPRanges(allowedIPv6Ranges, protocol, nil, dstAddressPrefix, dstPorts)
 				if err != nil {
 					return fmt.Errorf("add rule for allowed IP ranges on prefix: %w", err)
@@ -292,13 +292,18 @@ func (ac *AccessControl) PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses [
 	}
 
 	if ac.DenyAllExceptSourceRanges() {
+		if len(dstAddressPrefix) > 0 {
+			if err := ac.sgHelper.AddRuleForDenyAll(nil, dstAddressPrefix); err != nil {
+				return fmt.Errorf("add rule for deny all on prefix: %w", err)
+			}
+		}
 		if len(dstIPv4Addresses) > 0 {
-			if err := ac.sgHelper.AddRuleForDenyAll(dstIPv4Addresses); err != nil {
+			if err := ac.sgHelper.AddRuleForDenyAll(dstIPv4Addresses, nil); err != nil {
 				return fmt.Errorf("add rule for deny all on IPv4: %w", err)
 			}
 		}
 		if len(dstIPv6Addresses) > 0 {
-			if err := ac.sgHelper.AddRuleForDenyAll(dstIPv6Addresses); err != nil {
+			if err := ac.sgHelper.AddRuleForDenyAll(dstIPv6Addresses, nil); err != nil {
 				return fmt.Errorf("add rule for deny all on IPv6: %w", err)
 			}
 		}
