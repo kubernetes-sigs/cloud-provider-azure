@@ -71,7 +71,11 @@ func parseTags(tags string, tagsMap map[string]string) map[string]*string {
 				klog.Warningf("parseTags: error when parsing key-value pair %s, would ignore this one", kv)
 				continue
 			}
+			// Avoid "Null" string after TrimSpace, cause ARM error
 			k, v := strings.TrimSpace(res[0]), strings.TrimSpace(res[1])
+			if strings.EqualFold(v, "null") {
+				v = res[1]
+			}
 			if k == "" {
 				klog.Warning("parseTags: empty key, ignoring this key-value pair")
 				continue
@@ -81,8 +85,11 @@ func parseTags(tags string, tagsMap map[string]string) map[string]*string {
 	}
 
 	if len(tagsMap) > 0 {
-		for key, value := range tagsMap {
-			key, value := strings.TrimSpace(key), strings.TrimSpace(value)
+		for k, v := range tagsMap {
+			key, value := strings.TrimSpace(k), strings.TrimSpace(v)
+			if strings.EqualFold(value, "null") {
+				value = v
+			}
 			if key == "" {
 				klog.Warningf("parseTags: empty key, ignoring this key-value pair")
 				continue
