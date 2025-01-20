@@ -115,6 +115,22 @@ func TestReconcileTags(t *testing.T) {
 			},
 			expectedChanged: true,
 		},
+		{
+			description: "reconcileTags should keep the blank charater after or before string 'Null', eg. 'Null '",
+			currentTagsOnResource: map[string]*string{
+				"a": ptr.To("b"),
+			},
+			newTags: map[string]*string{
+				"b": ptr.To("Null "),
+				"c": ptr.To(" null"),
+			},
+			expectedTags: map[string]*string{
+				"a": ptr.To("c"),
+				"b": ptr.To("Null "),
+				"c": ptr.To(" null"),
+			},
+			expectedChanged: true,
+		},
 	} {
 		t.Run(testCase.description, func(t *testing.T) {
 			cloud := &Cloud{}
