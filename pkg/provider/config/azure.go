@@ -133,7 +133,7 @@ type Config struct {
 	// `podIP`: pod IPs will be attached to the inbound backend pool of the load balancer (not supported yet).
 	LoadBalancerBackendPoolConfigurationType string `json:"loadBalancerBackendPoolConfigurationType,omitempty" yaml:"loadBalancerBackendPoolConfigurationType,omitempty"`
 	// PutVMSSVMBatchSize defines how many requests the client send concurrently when putting the VMSS VMs.
-	// If it is smaller than or equal to zero, the request will be sent one by one in sequence (default).
+	// If it is smaller than or equal to one, the request will be sent one by one in sequence (default).
 	PutVMSSVMBatchSize int `json:"putVMSSVMBatchSize" yaml:"putVMSSVMBatchSize"`
 	// PrivateLinkServiceResourceGroup determines the specific resource group of the private link services user want to use
 	PrivateLinkServiceResourceGroup string `json:"privateLinkServiceResourceGroup,omitempty" yaml:"privateLinkServiceResourceGroup,omitempty"`
