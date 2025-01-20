@@ -47,6 +47,18 @@ func (f *AzureLoadBalancerFixture) IPv4Addresses() []string {
 	}
 }
 
+func (f *AzureLoadBalancerFixture) IPv4PrefixAddress() []string {
+	return []string{
+		"10.0.0.1/32",
+	}
+}
+
+func (f *AzureLoadBalancerFixture) IPv6PrefixAddress() []string {
+	return []string{
+		"2001:db8:ac10:fe01::1/128",
+	}
+}
+
 func (f *AzureLoadBalancerFixture) IPv6Addresses() []string {
 	return []string{
 		"2001:db8:ac10:fe01::",

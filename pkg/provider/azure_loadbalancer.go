@@ -3095,30 +3095,24 @@ func (az *Cloud) reconcileSecurityGroup(
 			additionalIPv4Addresses, additionalIPv6Addresses = iputil.GroupAddressesByFamily(additionalIPs)
 			backendIPv4Addresses, backendIPv6Addresses       []netip.Addr
 		)
-		{
-			// Get backend node IPs
-			lb, lbFound, err := az.getAzureLoadBalancer(ctx, lbName, azcache.CacheReadTypeDefault)
-			{
-				if err != nil {
-					return nil, err
-				}
-				if wantLb && !lbFound {
-					logger.Error(err, "Failed to get load balancer")
-					return nil, fmt.Errorf("unable to get lb %s", lbName)
-				}
-			}
-			var backendIPv4List, backendIPv6List []string
-			if lbFound {
-				backendIPv4List, backendIPv6List = az.LoadBalancerBackendPool.GetBackendPrivateIPs(ctx, clusterName, service, lb)
-			}
-			backendIPv4Addresses, _ = iputil.ParseAddresses(backendIPv4List)
-			backendIPv6Addresses, _ = iputil.ParseAddresses(backendIPv6List)
+		// Get backend node IPs
+		lb, lbFound, err := az.getAzureLoadBalancer(ctx, lbName, azcache.CacheReadTypeDefault)
+		if err != nil {
+			return nil, err
 		}
+		if wantLb && !lbFound {
+			logger.Error(err, "Failed to get load balancer")
+			return nil, fmt.Errorf("unable to get lb %s", lbName)
+		}
+		var backendIPv4List, backendIPv6List []string
+		if lbFound {
+			backendIPv4List, backendIPv6List = az.LoadBalancerBackendPool.GetBackendPrivateIPs(ctx, clusterName, service, lb)
+		}
+		backendIPv4Addresses, _ = iputil.ParseAddresses(backendIPv4List)
+		backendIPv6Addresses, _ = iputil.ParseAddresses(backendIPv6List)
 
-		var (
-			dstIPv4Addresses = additionalIPv4Addresses
-			dstIPv6Addresses = additionalIPv6Addresses
-		)
+		dstIPv4Addresses = additionalIPv4Addresses
+		dstIPv6Addresses = additionalIPv6Addresses
 
 		if disableFloatingIP {
 			// use the backend node IPs
@@ -3130,17 +3124,15 @@ func (az *Cloud) reconcileSecurityGroup(
 			dstIPv6Addresses = append(dstIPv6Addresses, lbIPv6Addresses...)
 		}
 
-		{
-			retainPortRanges, err := az.listSharedIPPortMapping(ctx, service, append(dstIPv4Addresses, dstIPv6Addresses...))
-			if err != nil {
-				logger.Error(err, "Failed to list retain port ranges")
-				return nil, err
-			}
+		retainPortRanges, err := az.listSharedIPPortMapping(ctx, service, append(dstIPv4Addresses, dstIPv6Addresses...))
+		if err != nil {
+			logger.Error(err, "Failed to list retain port ranges")
+			return nil, err
+		}
 
-			if err := accessControl.CleanSecurityGroup(dstIPv4Addresses, dstIPv6Addresses, retainPortRanges); err != nil {
-				logger.Error(err, "Failed to clean security group")
-				return nil, err
-			}
+		if err := accessControl.CleanSecurityGroup(dstIPv4Addresses, dstIPv6Addresses, retainPortRanges); err != nil {
+			logger.Error(err, "Failed to clean security group")
+			return nil, err
 		}
 	}
 
