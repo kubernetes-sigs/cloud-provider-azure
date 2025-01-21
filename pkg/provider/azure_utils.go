@@ -85,7 +85,9 @@ func parseTags(tags string, tagsMap map[string]string) map[string]*string {
 				klog.Warningf("parseTags: error when parsing key-value pair %s, would ignore this one", kv)
 				continue
 			}
-			// Avoid "Null" string after TrimSpace, cause ARM error
+			// Avoid generate `Null` string after TrimSpace operation, (e.g. " null", " Null " -> "null"/"Null")
+			// `Null` is a reserved tag value by ARM, so the leading/trailing spaces must be preserved.
+			// Refer to https://github.com/kubernetes-sigs/cloud-provider-azure/issues/7048.
 			k, v := strings.TrimSpace(res[0]), strings.TrimSpace(res[1])
 			if strings.EqualFold(v, "null") {
 				v = res[1]
