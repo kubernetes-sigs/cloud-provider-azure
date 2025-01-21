@@ -466,6 +466,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			"c": ptr.To("d"),
 			"e": ptr.To(""),
 			"x": ptr.To("y"),
+			"z": ptr.To("Null "),
 		}
 
 		testPIPTagAnnotationWithTags(cs, tc, ns, serviceName, labels, ports, expectedTags)
@@ -479,6 +480,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		expectedTags := map[string]*string{
 			"a": ptr.To("c"),
 			"x": ptr.To("y"),
+			"z": ptr.To("Null "),
 		}
 
 		testPIPTagAnnotationWithTags(cs, tc, ns, serviceName, labels, ports, expectedTags)
@@ -1728,7 +1730,7 @@ func testPIPTagAnnotationWithTags(
 	service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	service.Annotations = map[string]string{
-		consts.ServiceAnnotationAzurePIPTags: "a=c,x=y",
+		consts.ServiceAnnotationAzurePIPTags: "a=c,x=y,z=Null ",
 	}
 	_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
 	Expect(err).NotTo(HaveOccurred())
