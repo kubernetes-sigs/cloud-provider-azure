@@ -456,7 +456,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		Expect(lb).NotTo(BeNil())
 	})
 
-	FIt("should support service annotation `service.beta.kubernetes.io/azure-pip-tags`", func() {
+	It("should support service annotation `service.beta.kubernetes.io/azure-pip-tags`", func() {
 		if os.Getenv(utils.AKSTestCCM) != "" {
 			Skip("Skip this test case for AKS test")
 		}
