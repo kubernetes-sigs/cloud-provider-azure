@@ -65,6 +65,7 @@ type VirtualMachine struct {
 	Type      string
 	Plan      *armcompute.Plan
 	Resources []*armcompute.VirtualMachineExtension
+	Etag      *string
 
 	// fields of VirtualMachine
 	Identity                 *armcompute.VirtualMachineIdentity
@@ -114,6 +115,7 @@ func FromVirtualMachineScaleSetVM(vm *armcompute.VirtualMachineScaleSetVM, opt M
 		Zones:     vm.Zones,
 		Plan:      vm.Plan,
 		Resources: vm.Resources,
+		Etag:      vm.Etag,
 
 		SKU:                                vm.SKU,
 		InstanceID:                         ptr.Deref(vm.InstanceID, ""),
