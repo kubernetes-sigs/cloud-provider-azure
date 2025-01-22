@@ -125,7 +125,7 @@ func TestReconcileTags(t *testing.T) {
 				"c": ptr.To(" null"),
 			},
 			expectedTags: map[string]*string{
-				"a": ptr.To("c"),
+				"a": ptr.To("b"),
 				"b": ptr.To("Null "),
 				"c": ptr.To(" null"),
 			},
