@@ -1619,7 +1619,7 @@ sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworkclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworkclient/mock_virtualnetworkclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient/mock_virtualnetworklinkclient
-# sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.3.1
+# sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.3.2
 ## explicit; go 1.23.2
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache
 # sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.3.4
