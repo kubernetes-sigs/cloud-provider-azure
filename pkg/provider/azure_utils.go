@@ -99,7 +99,6 @@ func parseTags(tags string, tagsMap map[string]string) map[string]*string {
 	return formatted
 }
 
-
 func findKeyInMapCaseInsensitive(targetMap map[string]*string, key string) (bool, string) {
 	for k := range targetMap {
 		if strings.EqualFold(k, key) {
@@ -118,14 +117,12 @@ func findKeyInMapCaseInsensitive(targetMap map[string]*string, key string) (bool
 // allowing more flexible and efficient tag key matching.
 func findKeyInMapWithPrefix(targetMap map[string]*string, key string) (bool, string) {
 	for k := range targetMap {
-		if strings.EqualFold(k, key) {
-			return true, k
-		}
 		// use prefix-based key matching
 		// use case-insensitive comparison
-		if strings.HasPrefix(strings.ToLower(k), strings.ToLower(key)) {
+		if strings.HasPrefix(strings.ToLower(key), strings.ToLower(k)) {
 			return true, k
 		}
+	}
 	return false, ""
 }
 
