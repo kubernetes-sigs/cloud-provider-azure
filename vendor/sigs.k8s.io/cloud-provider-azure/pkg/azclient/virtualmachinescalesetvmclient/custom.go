@@ -18,8 +18,6 @@ package virtualmachinescalesetvmclient
 
 import (
 	"context"
-	"errors"
-	"sync"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
@@ -37,49 +35,6 @@ func (client *Client) Update(ctx context.Context, resourceGroupName string, VMSc
 		return &resp.VirtualMachineScaleSetVM, nil
 	}
 	return nil, nil
-}
-
-func UpdateVMsInBatch(ctx context.Context, client *Client, resourceGroupName string, VMScaleSetName string, instances map[string]armcompute.VirtualMachineScaleSetVM, batchSize int) error {
-	if batchSize <= 0 {
-		return errors.New("batchSize should be greater than 0")
-	}
-
-	if batchSize == 1 {
-		for instanceID, vm := range instances {
-			if _, err := client.Update(ctx, resourceGroupName, VMScaleSetName, instanceID, vm); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	cocurrentFence := make(chan struct{}, batchSize)
-	errChannel := make(chan error, len(instances))
-	var workerGroup sync.WaitGroup
-	var err error
-	for instanceID, vm := range instances {
-		select {
-		case cocurrentFence <- struct{}{}:
-			workerGroup.Add(1)
-			go func(instanceID string, vm armcompute.VirtualMachineScaleSetVM) {
-				defer workerGroup.Done()
-				defer func() { <-cocurrentFence }()
-				_, err := client.Update(ctx, resourceGroupName, VMScaleSetName, instanceID, vm)
-				if err != nil {
-					errChannel <- err
-					return
-				}
-			}(instanceID, vm)
-		case err = <-errChannel:
-			if err != nil {
-				break
-			}
-		}
-	}
-	workerGroup.Wait()
-	close(cocurrentFence)
-	close(errChannel)
-	return err
 }
 
 // List gets a list of VirtualMachineScaleSetVM in the resource group.
