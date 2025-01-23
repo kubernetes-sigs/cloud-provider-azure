@@ -25,13 +25,13 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/samber/lo"
-	"golang.org/x/sync/errgroup"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -1442,9 +1442,6 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 		meta := meta
 		update := update
 		hostUpdates = append(hostUpdates, func() error {
-			ctx, cancel := getContextWithCancel()
-			defer cancel()
-
 			logFields := []interface{}{
 				"operation", "EnsureHostsInPool UpdateVMSSVMs",
 				"vmssName", meta.vmssName,
@@ -1457,25 +1454,94 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 				klog.ErrorS(err, "Failed to get vmss batch size", logFields...)
 				return err
 			}
-
+			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
+			errChan := make(chan error, len(update))
+			pollerChannel := make(chan *runtime.Poller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse], len(update))
+			var pollerGroup sync.WaitGroup
+			pollerGroup.Add(1)
+			go func() {
+				defer pollerGroup.Done()
+				for {
+					select {
+					case poller, ok := <-pollerChannel:
+						if !ok {
+							// pollerChannel is closed
+							return
+						}
+						if poller == nil {
+							continue
+						}
+						pollerGroup.Add(1)
+						go func() {
+							defer pollerGroup.Done()
+							_, err := poller.PollUntilDone(ctx, &runtime.PollUntilDoneOptions{
+								Frequency: 10 * time.Second,
+							})
+							if err != nil {
+								klog.ErrorS(err, "Failed to update VMs for VMSS with new backendPoolID", logFields...)
+								errChan <- err
+							}
+						}()
+					case <-ctx.Done():
+						return
+					}
+				}
+			}()
 			klog.V(2).InfoS("Begin to update VMs for VMSS with new backendPoolID", logFields...)
-			grp, ctx := errgroup.WithContext(ctx)
-			grp.SetLimit(batchSize)
-			for instanceID, vm := range update {
-				instanceID := instanceID
-				vm := vm
-				grp.Go(func() error {
-					_, rerr := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().Update(ctx, meta.resourceGroup, meta.vmssName, instanceID, vm)
-					return rerr
-				})
+			if batchSize > 1 {
+				concurrentLock := make(chan struct{}, batchSize)
+				var requestGroup sync.WaitGroup
+				for instanceID, vm := range update {
+					instanceID := instanceID
+					vm := vm
+					concurrentLock <- struct{}{}
+					requestGroup.Add(1)
+					go func() {
+						defer func() {
+							requestGroup.Done()
+							<-concurrentLock
+						}()
+						poller, rerr := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().BeginUpdate(ctx, meta.resourceGroup, meta.vmssName, instanceID, vm, &armcompute.VirtualMachineScaleSetVMsClientBeginUpdateOptions{
+							IfMatch: vm.Etag,
+						})
+						if rerr != nil {
+							errChan <- rerr
+							return
+						}
+						if poller != nil {
+							pollerChannel <- poller
+						}
+					}()
+				}
+				requestGroup.Wait()
+				close(concurrentLock)
+			} else {
+				for instanceID, vm := range update {
+					instanceID := instanceID
+					vm := vm
+					poller, rerr := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().BeginUpdate(ctx, meta.resourceGroup, meta.vmssName, instanceID, vm, &armcompute.VirtualMachineScaleSetVMsClientBeginUpdateOptions{
+						IfMatch: vm.Etag,
+					})
+					if rerr != nil {
+						errChan <- rerr
+						continue
+					}
+					if poller != nil {
+						pollerChannel <- poller
+					}
+				}
 			}
-			rerr := grp.Wait()
-			if rerr != nil {
-				klog.ErrorS(err, "Failed to update VMs for VMSS", logFields...)
-				return rerr
+			close(pollerChannel)
+			pollerGroup.Wait()
+			close(errChan)
+			errs := make([]error, 0)
+			for err := range errChan {
+				if err != nil {
+					errs = append(errs, err)
+				}
 			}
-
-			return nil
+			return utilerrors.NewAggregate(errs)
 		})
 	}
 	errs := utilerrors.AggregateGoroutines(hostUpdates...)
@@ -1944,18 +2010,94 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 				klog.ErrorS(err, "Failed to get vmss batch size", logFields...)
 				return err
 			}
-			grp, ctx := errgroup.WithContext(ctx)
-			grp.SetLimit(batchSize)
-			for instanceID, vm := range update {
-				instanceID := instanceID
-				vm := vm
-				grp.Go(func() error {
-					klog.V(2).InfoS("Begin to update VMs for VMSS with new backendPoolID", logFields...)
-					_, rerr := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().Update(ctx, meta.resourceGroup, meta.vmssName, instanceID, vm)
-					return rerr
-				})
+			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
+			errChan := make(chan error, len(update))
+			pollerChannel := make(chan *runtime.Poller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse], len(update))
+			var pollerGroup sync.WaitGroup
+			pollerGroup.Add(1)
+			go func() {
+				defer pollerGroup.Done()
+				for {
+					select {
+					case poller, ok := <-pollerChannel:
+						if !ok {
+							// pollerChannel is closed
+							return
+						}
+						if poller == nil {
+							continue
+						}
+						pollerGroup.Add(1)
+						go func() {
+							defer pollerGroup.Done()
+							_, err := poller.PollUntilDone(ctx, &runtime.PollUntilDoneOptions{
+								Frequency: 10 * time.Second,
+							})
+							if err != nil {
+								klog.ErrorS(err, "Failed to update VMs for VMSS with new backendPoolID", logFields...)
+								errChan <- err
+							}
+						}()
+					case <-ctx.Done():
+						return
+					}
+				}
+			}()
+			klog.V(2).InfoS("Begin to update VMs for VMSS with new backendPoolID", logFields...)
+			if batchSize > 1 {
+				concurrentLock := make(chan struct{}, batchSize)
+				var requestGroup sync.WaitGroup
+				for instanceID, vm := range update {
+					instanceID := instanceID
+					vm := vm
+					concurrentLock <- struct{}{}
+					requestGroup.Add(1)
+					go func() {
+						defer func() {
+							requestGroup.Done()
+							<-concurrentLock
+						}()
+						poller, rerr := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().BeginUpdate(ctx, meta.resourceGroup, meta.vmssName, instanceID, vm, &armcompute.VirtualMachineScaleSetVMsClientBeginUpdateOptions{
+							IfMatch: vm.Etag,
+						})
+						if rerr != nil {
+							errChan <- rerr
+							return
+						}
+						if poller != nil {
+							pollerChannel <- poller
+						}
+					}()
+				}
+				requestGroup.Wait()
+				close(concurrentLock)
+			} else {
+				for instanceID, vm := range update {
+					instanceID := instanceID
+					vm := vm
+					poller, rerr := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().BeginUpdate(ctx, meta.resourceGroup, meta.vmssName, instanceID, vm, &armcompute.VirtualMachineScaleSetVMsClientBeginUpdateOptions{
+						IfMatch: vm.Etag,
+					})
+					if rerr != nil {
+						errChan <- rerr
+						continue
+					}
+					if poller != nil {
+						pollerChannel <- poller
+					}
+				}
 			}
-			err = grp.Wait()
+			close(pollerChannel)
+			pollerGroup.Wait()
+			close(errChan)
+			errs := make([]error, 0)
+			for err := range errChan {
+				if err != nil {
+					errs = append(errs, err)
+				}
+			}
+			err = utilerrors.NewAggregate(errs)
 			if err != nil {
 				klog.ErrorS(err, "Failed to update VMs for VMSS", logFields...)
 				return err

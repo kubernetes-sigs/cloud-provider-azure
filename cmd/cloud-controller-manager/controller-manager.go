@@ -24,6 +24,7 @@ import (
 	"os"
 	"time"
 
+	_ "go.uber.org/automaxprocs"
 	_ "k8s.io/component-base/metrics/prometheus/clientgo" // load all the prometheus client-go plugins
 
 	"sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app"
