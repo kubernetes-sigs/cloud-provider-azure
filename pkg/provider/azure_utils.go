@@ -122,9 +122,6 @@ func parseTags(tags string, tagsMap map[string]string) map[string]*string {
 	return formatted
 }
 
-func HasPrefixCaseInsensitive(s, prefix string) bool {
-	return len(s) >= len(prefix) && strings.EqualFold(s[0:len(prefix)], prefix)
-}
 
 func findKeyInMapCaseInsensitive(targetMap map[string]*string, key string) (bool, string) {
 	for k := range targetMap {
@@ -147,10 +144,11 @@ func findKeyInMapWithPrefix(targetMap map[string]*string, key string) (bool, str
 		if strings.EqualFold(k, key) {
 			return true, k
 		}
-		if HasPrefixCaseInsensitive(key, k) {
-			return true, key
+		// use prefix-based key matching
+		// use case-insensitive comparison
+		if strings.HasPrefix(strings.ToLower(k), strings.ToLower(key)) {
+			return true, k
 		}
-	}
 	return false, ""
 }
 

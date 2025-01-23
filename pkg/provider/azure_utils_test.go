@@ -157,7 +157,7 @@ func TestReconcileTags(t *testing.T) {
 			expectedChanged: false,
 		},
 		{
-			description: "reconcileTags should work with PR 11567285",
+			description: "reconcileTags should work with full length aks managed cluster tags",
 			currentTagsOnResource: map[string]*string{
 				"aks-managed-cluster-name": ptr.To("test-name"),
 				"aks-managed-cluster-rg":   ptr.To("test-rg"),
