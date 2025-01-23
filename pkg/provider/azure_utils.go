@@ -122,6 +122,10 @@ func parseTags(tags string, tagsMap map[string]string) map[string]*string {
 	return formatted
 }
 
+func HasPrefixCaseInsensitive(s, prefix string) bool {
+	return len(s) >= len(prefix) && strings.EqualFold(s[0:len(prefix)], prefix)
+}
+
 func findKeyInMapCaseInsensitive(targetMap map[string]*string, key string) (bool, string) {
 	for k := range targetMap {
 		if strings.EqualFold(k, key) {
@@ -129,6 +133,24 @@ func findKeyInMapCaseInsensitive(targetMap map[string]*string, key string) (bool
 		}
 	}
 
+	return false, ""
+}
+
+// This function extends the functionality of findKeyInMapCaseInsensitive by supporting both
+// exact case-insensitive key matching and prefix-based key matching in the given map.
+// 1. If the key is found in the map (case-insensitively), the function returns true and the matching key in the map.
+// 2. If the key's prefix is found in the map (case-insensitively), the function also returns true and the matching key in the map.
+// This function is designed to enable systemTags to support prefix-based tag keys,
+// allowing more flexible and efficient tag key matching.
+func findKeyInMapWithPrefix(targetMap map[string]*string, key string) (bool, string) {
+	for k := range targetMap {
+		if strings.EqualFold(k, key) {
+			return true, k
+		}
+		if HasPrefixCaseInsensitive(key, k) {
+			return true, key
+		}
+	}
 	return false, ""
 }
 
@@ -164,7 +186,7 @@ func (az *Cloud) reconcileTags(currentTagsOnResource, newTags map[string]*string
 	if len(systemTagsMap) > 0 {
 		for k := range currentTagsOnResource {
 			if _, ok := newTags[k]; !ok {
-				if found, _ := findKeyInMapCaseInsensitive(systemTagsMap, k); !found {
+				if found, _ := findKeyInMapWithPrefix(systemTagsMap, k); !found {
 					klog.V(2).Infof("reconcileTags: delete tag %s: %s", k, ptr.Deref(currentTagsOnResource[k], ""))
 					delete(currentTagsOnResource, k)
 					changed = true
