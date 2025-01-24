@@ -115,6 +115,69 @@ func TestReconcileTags(t *testing.T) {
 			},
 			expectedChanged: true,
 		},
+		{
+			description: "reconcileTags should support prefix matching in systemTags",
+			currentTagsOnResource: map[string]*string{
+				"prefix-a": ptr.To("b"),
+				"c":        ptr.To("d"),
+			},
+			systemTags: "prefix",
+			expectedTags: map[string]*string{
+				"prefix-a": ptr.To("b"),
+			},
+			expectedChanged: true,
+		},
+		{
+			description: "reconcileTags should support prefix matching in systemTags case insensitive",
+			currentTagsOnResource: map[string]*string{
+				"prefix-a": ptr.To("b"),
+				"c":        ptr.To("d"),
+			},
+			systemTags: "PrEFiX",
+			expectedTags: map[string]*string{
+				"prefix-a": ptr.To("b"),
+			},
+			expectedChanged: true,
+		},
+		{
+			description: "reconcileTags should support prefix matching in systemTags with multiple prefixes",
+			currentTagsOnResource: map[string]*string{
+				"prefix-a": ptr.To("b"),
+				"sys-b":    ptr.To("c"),
+			},
+			systemTags: "prefix, sys",
+			expectedTags: map[string]*string{
+				"prefix-a": ptr.To("b"),
+				"sys-b":    ptr.To("c"),
+			},
+			expectedChanged: false,
+		},
+		{
+			description: "reconcileTags should work with full length aks managed cluster tags",
+			currentTagsOnResource: map[string]*string{
+				"aks-managed-cluster-name": ptr.To("test-name"),
+				"aks-managed-cluster-rg":   ptr.To("test-rg"),
+			},
+			systemTags: "aks-managed-cluster-name, aks-managed-cluster-rg",
+			expectedTags: map[string]*string{
+				"aks-managed-cluster-name": ptr.To("test-name"),
+				"aks-managed-cluster-rg":   ptr.To("test-rg"),
+			},
+			expectedChanged: false,
+		},
+		{
+			description: "real case test for systemTags",
+			currentTagsOnResource: map[string]*string{
+				"aks-managed-cluster-name": ptr.To("test-name"),
+				"aks-managed-cluster-rg":   ptr.To("test-rg"),
+			},
+			systemTags: "aks-managed",
+			expectedTags: map[string]*string{
+				"aks-managed-cluster-name": ptr.To("test-name"),
+				"aks-managed-cluster-rg":   ptr.To("test-rg"),
+			},
+			expectedChanged: false,
+		},
 	} {
 		t.Run(testCase.description, func(t *testing.T) {
 			cloud := &Cloud{}
