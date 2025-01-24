@@ -18,10 +18,8 @@ package credentialprovider
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -83,21 +81,9 @@ func NewAcrProviderFromConfig(configFile string, registryMirrorStr string) (Cred
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	var envConfig azclient.Environment
-	envFilePath, ok := os.LookupEnv(azclient.EnvironmentFilepathName)
-	if ok {
-		content, err := os.ReadFile(envFilePath)
-		if err != nil {
-			return nil, err
-		}
-		if err = json.Unmarshal(content, &envConfig); err != nil {
-			return nil, err
-		}
-	}
-
 	var managedIdentityCredential azcore.TokenCredential
 
-	clientOption, _, err := azclient.GetAzCoreClientOption(&config.ARMClientConfig)
+	clientOption, env, err := azclient.GetAzCoreClientOption(&config.ARMClientConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -121,8 +107,8 @@ func NewAcrProviderFromConfig(configFile string, registryMirrorStr string) (Cred
 	return &acrProvider{
 		config:         config,
 		credential:     managedIdentityCredential,
-		environment:    &envConfig,
 		registryMirror: parseRegistryMirror(registryMirrorStr),
+		environment:    env,
 	}, nil
 }
 

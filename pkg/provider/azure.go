@@ -593,6 +593,11 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 	}
 
 	az.lockMap = lockmap.NewLockMap()
+	clientOps, _, err := azclient.GetAzCoreClientOption(&az.ARMClientConfig)
+	if err != nil {
+		return err
+	}
+
 	az.Config = *config
 	az.Environment = *env
 	az.ResourceRequestBackoff = resourceRequestBackoff
@@ -683,7 +688,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 			networkTenantCred := authProvider.GetNetworkAzIdentity()
 			az.NetworkClientFactory, err = azclient.NewClientFactory(&azclient.ClientFactoryConfig{
 				SubscriptionID: az.NetworkResourceSubscriptionID,
-			}, &az.ARMClientConfig, cloud, networkTenantCred)
+			}, &az.ARMClientConfig, clientOps.Cloud, networkTenantCred)
 			if err != nil {
 				return err
 			}
@@ -872,6 +877,9 @@ func (az *Cloud) setLBDefaults(config *Config) error {
 		if config.DisableOutboundSNAT != nil && *config.DisableOutboundSNAT {
 			return fmt.Errorf("disableOutboundSNAT should only set when loadBalancerSku is standard")
 		}
+	}
+	if config.DisableAPICallCache {
+		config.ARMClientConfig.DisableAzureStackCloud = config.DisableAPICallCache
 	}
 	return nil
 }
