@@ -68,8 +68,11 @@ func CreateAzureTestClient() (*AzureTestClient, error) {
 		return nil, err
 	}
 	cred := authProvider.GetAzIdentity()
-
-	azFactory, err := azclient.NewClientFactory(clientFactoryConfig, armclientConfig, cred)
+	clientOps, _, err := azclient.GetAzCoreClientOption(armclientConfig)
+	if err != nil {
+		return nil, err
+	}
+	azFactory, err := azclient.NewClientFactory(clientFactoryConfig, armclientConfig, clientOps.Cloud, cred)
 	if err != nil {
 		return nil, err
 	}
