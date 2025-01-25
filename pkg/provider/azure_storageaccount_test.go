@@ -2142,7 +2142,7 @@ func TestAreVNetRulesEqual(t *testing.T) {
 						NetworkRuleSet: &storage.NetworkRuleSet{
 							VirtualNetworkRules: &[]storage.VirtualNetworkRule{
 								{
-									VirtualNetworkResourceID: ptr.To("id"),
+									VirtualNetworkResourceID: pointer.StringPtr("id"),
 									Action:                   storage.ActionAllow,
 									State:                    "state",
 								},
@@ -2164,11 +2164,11 @@ func TestAreVNetRulesEqual(t *testing.T) {
 						NetworkRuleSet: &storage.NetworkRuleSet{
 							VirtualNetworkRules: &[]storage.VirtualNetworkRule{
 								{
-									VirtualNetworkResourceID: ptr.To("id1"),
+									VirtualNetworkResourceID: pointer.StringPtr("id1"),
 									Action:                   storage.ActionAllow,
 								},
 								{
-									VirtualNetworkResourceID: ptr.To("id2"),
+									VirtualNetworkResourceID: pointer.StringPtr("id2"),
 									Action:                   storage.ActionAllow,
 								},
 							},
@@ -2189,7 +2189,7 @@ func TestAreVNetRulesEqual(t *testing.T) {
 						NetworkRuleSet: &storage.NetworkRuleSet{
 							VirtualNetworkRules: &[]storage.VirtualNetworkRule{
 								{
-									VirtualNetworkResourceID: ptr.To("id1"),
+									VirtualNetworkResourceID: pointer.StringPtr("id1"),
 									Action:                   storage.ActionAllow,
 									State:                    "state",
 								},
