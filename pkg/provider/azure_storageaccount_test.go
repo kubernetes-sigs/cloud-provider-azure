@@ -394,14 +394,16 @@ func TestEnsureStorageAccount(t *testing.T) {
 	cloud.Location = location
 	cloud.SubscriptionID = "testSub"
 
-	name := "testStorageAccount"
 	sku := &storage.Sku{
 		Name: "testSku",
 		Tier: "testSkuTier",
 	}
 	testStorageAccounts :=
 		[]storage.Account{
-			{Name: &name, Kind: "kind", Location: &location, Sku: sku, AccountProperties: &storage.AccountProperties{NetworkRuleSet: &storage.NetworkRuleSet{}}}}
+			{Name: pointer.StringPtr("testStorageAccount"), Kind: "kind", Location: &location, Sku: sku, AccountProperties: &storage.AccountProperties{NetworkRuleSet: &storage.NetworkRuleSet{}}},
+			{Name: pointer.StringPtr("wantedAccount"), Kind: "kind", Location: &location, Sku: sku, AccountProperties: &storage.AccountProperties{NetworkRuleSet: &storage.NetworkRuleSet{}}},
+			{Name: pointer.StringPtr("otherAccount"), Kind: "kind", Location: &location, Sku: sku, AccountProperties: &storage.AccountProperties{NetworkRuleSet: &storage.NetworkRuleSet{}}},
+		}
 
 	value := "foo bar"
 	storageAccountListKeys := storage.AccountListKeysResult{
@@ -422,10 +424,12 @@ func TestEnsureStorageAccount(t *testing.T) {
 		storageType                     StorageType
 		requireInfrastructureEncryption *bool
 		keyVaultURL                     *string
+		sourceAccountName               string
 		accountName                     string
 		subscriptionID                  string
 		resourceGroup                   string
 		expectedErr                     string
+		expectedAccountName             string
 	}{
 		{
 			name:                            "[Success] EnsureStorageAccount with createPrivateEndpoint and storagetype blob",
@@ -453,6 +457,16 @@ func TestEnsureStorageAccount(t *testing.T) {
 			resourceGroup:                   "rg",
 			accessTier:                      "AccessTierHot",
 			accountName:                     "",
+			expectedErr:                     "",
+		},
+		{
+			name:                            "[Success] EnsureStorageAccount returns with source account",
+			mockStorageAccountsClient:       true,
+			setAccountOptions:               true,
+			requireInfrastructureEncryption: pointer.Bool(true),
+			resourceGroup:                   "rg",
+			sourceAccountName:               "wantedAccount",
+			accountName:                     "wantedAccount",
 			expectedErr:                     "",
 		},
 		{
@@ -536,6 +550,10 @@ func TestEnsureStorageAccount(t *testing.T) {
 			mockVirtualNetworkLinksClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
 		}
 
+		if test.sourceAccountName != "" {
+			mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storageAccountListKeys, nil).AnyTimes()
+		}
+
 		var testAccountOptions *AccountOptions
 		if test.setAccountOptions {
 			testAccountOptions = &AccountOptions{
@@ -550,10 +568,14 @@ func TestEnsureStorageAccount(t *testing.T) {
 				SoftDeleteBlobs:           7,
 				SoftDeleteContainers:      7,
 				PickRandomMatchingAccount: test.pickRandomMatchingAccount,
+				SourceAccountName:         test.sourceAccountName,
 			}
 		}
 
-		_, _, err := cloud.EnsureStorageAccount(ctx, testAccountOptions, "test")
+		accountName, _, err := cloud.EnsureStorageAccount(ctx, testAccountOptions, "test")
+		if test.expectedAccountName != "" {
+			assert.Equal(t, accountName, test.expectedAccountName, test.name)
+		}
 		assert.Equal(t, err == nil, test.expectedErr == "", fmt.Sprintf("returned error: %v", err), test.name)
 		if test.expectedErr != "" {
 			assert.Equal(t, err != nil, strings.Contains(err.Error(), test.expectedErr), err.Error(), test.name)
