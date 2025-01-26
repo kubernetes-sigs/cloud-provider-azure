@@ -217,6 +217,15 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
   - package-ecosystem: "docker"
     directory: "/health-probe-proxy"
     schedule:
@@ -230,6 +239,15 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -243,7 +261,15 @@ updates:
       - "kind/testing"
       - "lgtm"
       - "approved"
-
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
   - package-ecosystem: "gomod"
     directory: "/"
     open-pull-requests-limit: 1
@@ -287,6 +313,15 @@ updates:
       - "lgtm"
       - "approved"
       - "release-1.32"
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -302,6 +337,15 @@ updates:
       - "lgtm"
       - "approved"
       - "release-1.32"
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
   - package-ecosystem: "gomod"
     directory: "/"
     open-pull-requests-limit: 1
@@ -345,6 +389,15 @@ updates:
       - "lgtm"
       - "approved"
       - "release-1.30"
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -360,6 +413,15 @@ updates:
       - "lgtm"
       - "approved"
       - "release-1.30"
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
   - package-ecosystem: "gomod"
     directory: "/"
     open-pull-requests-limit: 1
@@ -403,6 +465,15 @@ updates:
       - "lgtm"
       - "approved"
       - "release-1.31"
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -418,6 +489,15 @@ updates:
       - "lgtm"
       - "approved"
       - "release-1.31"
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
   - package-ecosystem: "gomod"
     directory: "/"
     open-pull-requests-limit: 1
@@ -461,6 +541,15 @@ updates:
       - "lgtm"
       - "approved"
       - "release-1.29"
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -476,6 +565,15 @@ updates:
       - "lgtm"
       - "approved"
       - "release-1.29"
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
   - package-ecosystem: "gomod"
     directory: "/"
     open-pull-requests-limit: 1
@@ -519,6 +617,15 @@ updates:
       - "lgtm"
       - "approved"
       - "release-1.28"
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
