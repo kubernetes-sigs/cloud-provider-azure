@@ -44,7 +44,6 @@ func (az *Cloud) CreateOrUpdateVMSS(resourceGroupName string, VMScaleSetName str
 	}
 
 	_, err = az.ComputeClientFactory.GetVirtualMachineScaleSetClient().CreateOrUpdate(ctx, resourceGroupName, VMScaleSetName, parameters)
-	klog.V(10).Infof("UpdateVmssVMWithRetry: ComputeClientFactory.GetVirtualMachineScaleSetClient().CreateOrUpdate(%s): end", VMScaleSetName)
 	if err != nil {
 		klog.Errorf("CreateOrUpdateVMSS: error CreateOrUpdate vmss(%s): %v", VMScaleSetName, err)
 		return err
