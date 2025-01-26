@@ -430,11 +430,12 @@ github.com/prometheus/common/model
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
-# github.com/samber/lo v1.47.0
+# github.com/samber/lo v1.48.0
 ## explicit; go 1.18
 github.com/samber/lo
 github.com/samber/lo/internal/constraints
 github.com/samber/lo/internal/rand
+github.com/samber/lo/mutable
 # github.com/shopspring/decimal v1.4.0
 ## explicit; go 1.10
 github.com/shopspring/decimal
@@ -1534,7 +1535,7 @@ sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client/metrics
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/common/metrics
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/proto/client
-# sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.4.13
+# sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.4.14
 ## explicit; go 1.23.1
 sigs.k8s.io/cloud-provider-azure/pkg/azclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient

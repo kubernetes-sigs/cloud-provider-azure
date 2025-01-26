@@ -226,8 +226,8 @@ github.com/redis/go-redis/v9 v9.7.0/go.mod h1:f6zhXITC7JUJIlPEiBOTXxJgPLdZcA93Ge
 github.com/rogpeppe/go-internal v1.13.1 h1:KvO1DLK/DRN07sQ1LQKScxyZJuNnedQ5/wKSR38lUII=
 github.com/rogpeppe/go-internal v1.13.1/go.mod h1:uMEvuHeurkdAXX61udpOXGD/AzZDWNMNyH2VO9fmH0o=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
-github.com/samber/lo v1.47.0 h1:z7RynLwP5nbyRscyvcD043DWYoOcYRv3mV8lBeqOCLc=
-github.com/samber/lo v1.47.0/go.mod h1:RmDH9Ct32Qy3gduHQuKJ3gW1fMHAnE/fAzQuf6He5cU=
+github.com/samber/lo v1.48.0 h1:ELOfcaM7vdYPe0egBS2Nxa8LxkY4lR+9LBzj0l6cHJ0=
+github.com/samber/lo v1.48.0/go.mod h1:dO6KHFzUKXgP8LDhU0oI8d2hekjXnGOu0DB8Jecxd6o=
 github.com/shopspring/decimal v1.4.0 h1:bxl37RwXBklmTi0C79JfXCEBD1cqqHt0bbgBAGFp81k=
 github.com/shopspring/decimal v1.4.0/go.mod h1:gawqmDU56v4yIKSwfBSFip1HdCCXN8/+DMd9qYNcwME=
 github.com/sirupsen/logrus v1.9.3 h1:dueUQJ1C2q9oE3F7wvmSGAaVtTmUizReu6fjN8uqzbQ=
@@ -443,8 +443,8 @@ k8s.io/utils v0.0.0-20241104163129-6fe5fd82f078 h1:jGnCPejIetjiy2gqaJ5V0NLwTpF4w
 k8s.io/utils v0.0.0-20241104163129-6fe5fd82f078/go.mod h1:OLgZIPagt7ERELqWJFomSt595RzquPNLL48iOWgYOg0=
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.0 h1:CPT0ExVicCzcpeN4baWEV2ko2Z/AsiZgEdwgcfwLgMo=
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.0/go.mod h1:Ve9uj1L+deCXFrPOk1LpFXqTg7LCFzFso6PA48q/XZw=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.4.13 h1:lLHCbEFOa1yb3TztMr+0T/54p9l/8Yx+8hsKvsLMu7U=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.4.13/go.mod h1:SUEQT6YJvFcXCQB1DI2uJhAlc7VFrh+SkeUJz0lpk24=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.4.14 h1:Hjwpu3YiO8lt05MfqyTDU/UMXYcVzKLfGBRFTa+1qnI=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.4.14/go.mod h1:SUEQT6YJvFcXCQB1DI2uJhAlc7VFrh+SkeUJz0lpk24=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.3.2 h1:wy6klJXu2TFpRVy4qp0mr+hQbCxuHDcJMDAFLOrwqMo=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.3.2/go.mod h1:4kpayyg3LY1QlaoawuQ3TA7DktS4/LR9H9g6yIqLfcU=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.3.4 h1:jGYTor8ENTHr0eJeqlf9JE8FjXAR+9iOfUPGNzhTKxk=
