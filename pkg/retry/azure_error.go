@@ -66,6 +66,7 @@ type Error struct {
 
 // Error returns the error.
 // Note that Error doesn't implement error interface because (nil *Error) != (nil error).
+// noop
 func (err *Error) Error() error {
 	if err == nil {
 		return nil
