@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient/mock_diskclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/managedclusterclient/mock_managedclusterclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privateendpointclient/mock_privateendpointclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatelinkserviceclient/mock_privatelinkserviceclient"
@@ -134,6 +135,8 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	clientFactory.EXPECT().GetVirtualMachineScaleSetClient().Return(virtualMachineScaleSetsClient).AnyTimes()
 	virtualMachineScaleSetVMsClient := mock_virtualmachinescalesetvmclient.NewMockInterface(ctrl)
 	clientFactory.EXPECT().GetVirtualMachineScaleSetVMClient().Return(virtualMachineScaleSetVMsClient).AnyTimes()
+	managedClusterClient := mock_managedclusterclient.NewMockInterface(ctrl)
+	clientFactory.EXPECT().GetManagedClusterClient().Return(managedClusterClient).AnyTimes()
 
 	virtualMachinesClient := mock_virtualmachineclient.NewMockInterface(ctrl)
 	clientFactory.EXPECT().GetVirtualMachineClient().Return(virtualMachinesClient).AnyTimes()
