@@ -2448,6 +2448,20 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, az.Config.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration)
 	})
+	t.Run("loadBalancerBackendPoolConfigurationType is set to podIP", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		az := GetTestCloudWithContainerLoadBalancer(ctrl)
+		zoneMock := az.zoneRepo.(*zone.MockRepository)
+		zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
+
+		azureconfig := config.Config{
+			LoadBalancerBackendPoolConfigurationType: consts.LoadBalancerBackendPoolConfigurationTypePodIP,
+		}
+		err := az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, true)
+		assert.NoError(t, err)
+		assert.Equal(t, az.Config.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePodIP)
+	})
 }
 
 func TestSetLBDefaults(t *testing.T) {
