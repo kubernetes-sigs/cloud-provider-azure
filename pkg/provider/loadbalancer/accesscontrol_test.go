@@ -489,7 +489,7 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 	runTest := func(t *testing.T,
 		svc v1.Service,
 		originalRules []*armnetwork.SecurityRule,
-		dstIPv4Addresses, dstIPv6Addresses, dstAddressPrefix []string,
+		dstIPv4Addresses, dstIPv6Addresses, dstIpv4AddressPrefix, dstIpv6AddressPrefix []string,
 		expectedUpdated bool,
 		expectedRules []*armnetwork.SecurityRule,
 	) {
@@ -504,7 +504,8 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 		err = ac.PatchSecurityGroup(
 			fnutil.Map(func(s string) netip.Addr { return netip.MustParseAddr(s) }, dstIPv4Addresses),
 			fnutil.Map(func(s string) netip.Addr { return netip.MustParseAddr(s) }, dstIPv6Addresses),
-			fnutil.Map(func(s string) netip.Prefix { return netip.MustParsePrefix(s) }, dstAddressPrefix),
+			fnutil.Map(func(s string) netip.Prefix { return netip.MustParsePrefix(s) }, dstIpv4AddressPrefix),
+			fnutil.Map(func(s string) netip.Prefix { return netip.MustParsePrefix(s) }, dstIpv6AddressPrefix),
 		)
 		assert.NoError(t, err)
 
@@ -565,17 +566,20 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 				Build(),
 		)
 
-		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, nil, true, expectedRules)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, nil, nil, true, expectedRules)
 	})
 
 	t.Run("container load balancer - patch service without access control configuration", func(t *testing.T) {
 		var (
-			k8sFx            = fixture.NewFixture().Kubernetes()
-			svc              = k8sFx.Service().WithOnlyTCPPorts().Build()
-			originalRules    = azureFx.NoiseSecurityRules()
-			serviceTags      = []string{securitygroup.ServiceTagInternet}
-			dstAddressPrefix = []string{
+			k8sFx                = fixture.NewFixture().Kubernetes()
+			svc                  = k8sFx.Service().WithOnlyTCPPorts().Build()
+			originalRules        = azureFx.NoiseSecurityRules()
+			serviceTags          = []string{securitygroup.ServiceTagInternet}
+			dstIpv4AddressPrefix = []string{
 				"198.23.0.0/16",
+			}
+			dstIpv6AddressPrefix = []string{
+				"2001:db8::1428:57ab/64",
 			}
 			expectedRules = testutil.CloneInJSON(originalRules)
 		)
@@ -586,11 +590,19 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 					armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, serviceTags, k8sFx.Service().TCPPorts(),
 				).
 				WithPriority(500).
-				WithDestination(dstAddressPrefix...).
+				WithDestination(dstIpv4AddressPrefix...).
+				Build(),
+
+			azureFx.
+				AllowSecurityRule(
+					armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, serviceTags, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(501).
+				WithDestination(dstIpv6AddressPrefix...).
 				Build(),
 		)
 
-		runTest(t, svc, originalRules, nil, nil, dstAddressPrefix, true, expectedRules)
+		runTest(t, svc, originalRules, nil, nil, dstIpv4AddressPrefix, dstIpv6AddressPrefix, true, expectedRules)
 	})
 
 	t.Run("patch service with allowedServiceTag", func(t *testing.T) {
@@ -673,7 +685,7 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 				WithDestination(dstIPv6Addresses...).
 				Build(),
 		)
-		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, nil, true, expectedRules)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, nil, nil, true, expectedRules)
 	})
 
 	t.Run("container load balancer - patch service with allowedServiceTag", func(t *testing.T) {
@@ -683,9 +695,12 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 			serviceTags  = azureFx.ServiceTags(nServiceTags)
 			svc          = k8sFx.Service().WithOnlyTCPPorts().WithAllowedServiceTags(serviceTags...).
 					Build()
-			originalRules    = azureFx.NoiseSecurityRules()
-			dstAddressPrefix = []string{
+			originalRules        = azureFx.NoiseSecurityRules()
+			dstIpv4AddressPrefix = []string{
 				"198.23.0.0/16",
+			}
+			dstIpv6AddressPrefix = []string{
+				"2001:db8::1428:57ab/64",
 			}
 			expectedRules = testutil.CloneInJSON(originalRules)
 		)
@@ -696,17 +711,33 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 					armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{serviceTags[0]}, k8sFx.Service().TCPPorts(),
 				).
 				WithPriority(500).
-				WithDestination(dstAddressPrefix...).
+				WithDestination(dstIpv4AddressPrefix...).
 				Build(),
 			azureFx.
 				AllowSecurityRule(
 					armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{serviceTags[1]}, k8sFx.Service().TCPPorts(),
 				).
 				WithPriority(501).
-				WithDestination(dstAddressPrefix...).
+				WithDestination(dstIpv4AddressPrefix...).
+				Build(),
+
+			// TCP + IPv6 Prefix for 2 service tags
+			azureFx.
+				AllowSecurityRule(
+					armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, []string{serviceTags[0]}, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(502).
+				WithDestination(dstIpv6AddressPrefix...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, []string{serviceTags[1]}, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(503).
+				WithDestination(dstIpv6AddressPrefix...).
 				Build(),
 		)
-		runTest(t, svc, originalRules, nil, nil, dstAddressPrefix, true, expectedRules)
+		runTest(t, svc, originalRules, nil, nil, dstIpv4AddressPrefix, dstIpv6AddressPrefix, true, expectedRules)
 	})
 
 	t.Run("patch service with allowedIPRanges on IPv4", func(t *testing.T) {
@@ -746,7 +777,7 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 				WithDestination(dstIPv4Addresses...).
 				Build(),
 		)
-		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, nil, true, expectedRules)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, nil, nil, true, expectedRules)
 	})
 
 	t.Run("container load balancer - patch service with allowedIPRanges on IPv4", func(t *testing.T) {
@@ -756,10 +787,13 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 				"192.168.0.0/16",
 				"20.0.0.1/32",
 			}
-			svc              = k8sFx.Service().WithOnlyTCPPorts().WithAllowedIPRanges(allowedIPRanges...).Build()
-			originalRules    = azureFx.NoiseSecurityRules()
-			dstAddressPrefix = []string{
+			svc                  = k8sFx.Service().WithOnlyTCPPorts().WithAllowedIPRanges(allowedIPRanges...).Build()
+			originalRules        = azureFx.NoiseSecurityRules()
+			dstIpv4AddressPrefix = []string{
 				"198.23.0.0/16",
+			}
+			dstIpv6AddressPrefix = []string{
+				"2001:db8::1428:57ab/64",
 			}
 			expectedRules = testutil.CloneInJSON(originalRules)
 		)
@@ -770,10 +804,10 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 					armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPRanges, k8sFx.Service().TCPPorts(),
 				).
 				WithPriority(500).
-				WithDestination(dstAddressPrefix...).
+				WithDestination(dstIpv4AddressPrefix...).
 				Build(),
 		)
-		runTest(t, svc, originalRules, nil, nil, dstAddressPrefix, true, expectedRules)
+		runTest(t, svc, originalRules, nil, nil, dstIpv4AddressPrefix, dstIpv6AddressPrefix, true, expectedRules)
 	})
 
 	t.Run("patch service with allowedIPRanges on IPv6", func(t *testing.T) {
@@ -815,7 +849,7 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 				WithDestination(dstIPv6Addresses...).
 				Build(),
 		)
-		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, nil, true, expectedRules)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, nil, nil, true, expectedRules)
 	})
 
 	t.Run("container load balancer - patch service with allowedIPRanges on IPv6", func(t *testing.T) {
@@ -829,9 +863,12 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 				WithOnlyTCPPorts().
 				WithAllowedIPRanges(allowedIPRanges...).
 				Build()
-			originalRules    = azureFx.NoiseSecurityRules()
-			dstAddressPrefix = []string{
-				"fd12:3456:789a::/48",
+			originalRules        = azureFx.NoiseSecurityRules()
+			dstIpv4AddressPrefix = []string{
+				"198.23.0.0/16",
+			}
+			dstIpv6AddressPrefix = []string{
+				"2001:db8::1428:57ab/64",
 			}
 			expectedRules = testutil.CloneInJSON(originalRules)
 		)
@@ -842,10 +879,10 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 					armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, allowedIPRanges, k8sFx.Service().TCPPorts(),
 				).
 				WithPriority(500).
-				WithDestination(dstAddressPrefix...).
+				WithDestination(dstIpv6AddressPrefix...).
 				Build(),
 		)
-		runTest(t, svc, originalRules, nil, nil, dstAddressPrefix, true, expectedRules)
+		runTest(t, svc, originalRules, nil, nil, dstIpv4AddressPrefix, dstIpv6AddressPrefix, true, expectedRules)
 	})
 
 	t.Run("patch service with allowedIPRanges on IPv4 and IPv6", func(t *testing.T) {
@@ -907,10 +944,10 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 				WithDestination(dstIPv6Addresses...).
 				Build(),
 		)
-		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, nil, true, expectedRules)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, nil, nil, true, expectedRules)
 	})
 
-	t.Run("container load balancer - patch service with allowedIPRanges on IPv4", func(t *testing.T) {
+	t.Run("container load balancer - patch service with allowedIPRanges on IPv4 and IPv6", func(t *testing.T) {
 		var (
 			k8sFx             = fixture.NewFixture().Kubernetes()
 			allowedIPv4Ranges = []string{
@@ -922,26 +959,37 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 				"fe80:1234:abcd::1c2d:3e4f/128",
 			}
 			svc = k8sFx.Service().
-				WithOnlyUDPPorts().
+				WithOnlyTCPPorts().
 				WithAllowedIPRanges(append(allowedIPv4Ranges, allowedIPv6Ranges...)...).
 				Build()
-			originalRules    = azureFx.NoiseSecurityRules()
-			dstAddressPrefix = []string{
+			originalRules        = azureFx.NoiseSecurityRules()
+			dstIpv4AddressPrefix = []string{
 				"198.23.0.0/16",
+			}
+			dstIpv6AddressPrefix = []string{
+				"2001:db8::1428:57ab/64",
 			}
 			expectedRules = testutil.CloneInJSON(originalRules)
 		)
 		expectedRules = append(expectedRules,
-			// UDP + IPv4 Prefix
+			// TCP + IPv4
 			azureFx.
 				AllowSecurityRule(
-					armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().UDPPorts(),
+					armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts(),
 				).
 				WithPriority(500).
-				WithDestination(dstAddressPrefix...).
+				WithDestination(dstIpv4AddressPrefix...).
+				Build(),
+			// TCP + IPv6
+			azureFx.
+				AllowSecurityRule(
+					armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(501).
+				WithDestination(dstIpv6AddressPrefix...).
 				Build(),
 		)
-		runTest(t, svc, originalRules, nil, nil, dstAddressPrefix, true, expectedRules)
+		runTest(t, svc, originalRules, nil, nil, dstIpv4AddressPrefix, dstIpv6AddressPrefix, true, expectedRules)
 	})
 
 	t.Run("patch service with allowedIPRanges and allowedServiceTags", func(t *testing.T) {
@@ -1065,7 +1113,7 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 				WithDestination(dstIPv6Addresses...).
 				Build(),
 		)
-		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, nil, true, expectedRules)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, nil, nil, true, expectedRules)
 	})
 
 	t.Run("container load balancer - patch service with allowedIPRanges and allowedServiceTags", func(t *testing.T) {
@@ -1086,9 +1134,12 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 				WithAllowedIPRanges(append(allowedIPv4Ranges, allowedIPv6Ranges...)...).
 				WithAllowedServiceTags(allowedServiceTags...).
 				Build()
-			originalRules    = azureFx.NoiseSecurityRules()
-			dstAddressPrefix = []string{
+			originalRules        = azureFx.NoiseSecurityRules()
+			dstIpv4AddressPrefix = []string{
 				"198.23.0.0/16",
+			}
+			dstIpv6AddressPrefix = []string{
+				"2001:db8::1428:57ab/64",
 			}
 			expectedRules = testutil.CloneInJSON(originalRules)
 		)
@@ -1099,24 +1150,47 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 					armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{allowedServiceTags[0]}, k8sFx.Service().UDPPorts(),
 				).
 				WithPriority(500).
-				WithDestination(dstAddressPrefix...).
+				WithDestination(dstIpv4AddressPrefix...).
 				Build(),
 			azureFx.
 				AllowSecurityRule(
 					armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{allowedServiceTags[1]}, k8sFx.Service().UDPPorts(),
 				).
 				WithPriority(501).
-				WithDestination(dstAddressPrefix...).
+				WithDestination(dstIpv4AddressPrefix...).
 				Build(),
 			azureFx.
 				AllowSecurityRule(
 					armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().UDPPorts(),
 				).
 				WithPriority(502).
-				WithDestination(dstAddressPrefix...).
+				WithDestination(dstIpv4AddressPrefix...).
+				Build(),
+
+			// UDP + IPv6 for 2 service Tags + 1 IP Ranges
+			azureFx.
+				AllowSecurityRule(
+					armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, []string{allowedServiceTags[0]}, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(503).
+				WithDestination(dstIpv6AddressPrefix...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, []string{allowedServiceTags[1]}, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(504).
+				WithDestination(dstIpv6AddressPrefix...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(505).
+				WithDestination(dstIpv6AddressPrefix...).
 				Build(),
 		)
-		runTest(t, svc, originalRules, nil, nil, dstAddressPrefix, true, expectedRules)
+		runTest(t, svc, originalRules, nil, nil, dstIpv4AddressPrefix, dstIpv6AddressPrefix, true, expectedRules)
 	})
 
 	t.Run("patch service with allowedIPRanges and allowedServiceTags and deny vnet traffic", func(t *testing.T) {
@@ -1252,7 +1326,7 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 				WithDestination(dstIPv6Addresses...).
 				Build(),
 		)
-		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, nil, true, expectedRules)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, nil, nil, true, expectedRules)
 	})
 
 	t.Run("container load balancer - patch service with allowedIPRanges and allowedServiceTags and deny vnet traffic", func(t *testing.T) {
@@ -1274,9 +1348,12 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 				WithAllowedServiceTags(allowedServiceTags...).
 				WithDenyAllExceptLoadBalancerSourceRanges().
 				Build()
-			originalRules    = azureFx.NoiseSecurityRules()
-			dstAddressPrefix = []string{
-				"192.168.0.0/16",
+			originalRules        = azureFx.NoiseSecurityRules()
+			dstIpv4AddressPrefix = []string{
+				"198.23.0.0/16",
+			}
+			dstIpv6AddressPrefix = []string{
+				"2001:db8::1428:57ab/64",
 			}
 			expectedRules = testutil.CloneInJSON(originalRules)
 		)
@@ -1288,30 +1365,57 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 					armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTags[0]}, k8sFx.Service().TCPPorts(),
 				).
 				WithPriority(500).
-				WithDestination(dstAddressPrefix...).
+				WithDestination(dstIpv4AddressPrefix...).
 				Build(),
 			azureFx.
 				AllowSecurityRule(
 					armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTags[1]}, k8sFx.Service().TCPPorts(),
 				).
 				WithPriority(501).
-				WithDestination(dstAddressPrefix...).
+				WithDestination(dstIpv4AddressPrefix...).
 				Build(),
 			azureFx.
 				AllowSecurityRule(
 					armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts(),
 				).
 				WithPriority(502).
-				WithDestination(dstAddressPrefix...).
+				WithDestination(dstIpv4AddressPrefix...).
+				Build(),
+
+			// TCP + IPv6 for 2 service Tags + 1 IP Ranges
+			azureFx.
+				AllowSecurityRule(
+					armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, []string{allowedServiceTags[0]}, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(503).
+				WithDestination(dstIpv6AddressPrefix...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, []string{allowedServiceTags[1]}, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(504).
+				WithDestination(dstIpv6AddressPrefix...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(505).
+				WithDestination(dstIpv6AddressPrefix...).
 				Build(),
 
 			// Deny ALL
 			azureFx.
 				DenyAllSecurityRule(iputil.IPv4).WithPriority(4095).
-				WithDestination(dstAddressPrefix...).
+				WithDestination(dstIpv4AddressPrefix...).
+				Build(),
+			azureFx.
+				DenyAllSecurityRule(iputil.IPv6).WithPriority(4094).
+				WithDestination(dstIpv6AddressPrefix...).
 				Build(),
 		)
-		runTest(t, svc, originalRules, nil, nil, dstAddressPrefix, true, expectedRules)
+		runTest(t, svc, originalRules, nil, nil, dstIpv4AddressPrefix, dstIpv6AddressPrefix, true, expectedRules)
 	})
 
 	t.Run("patch service with invalid allowedIPRanges", func(t *testing.T) {
@@ -1392,7 +1496,7 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 				WithDestination(dstIPv6Addresses...).
 				Build(),
 		)
-		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, nil, true, expectedRules)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, nil, nil, true, expectedRules)
 	})
 }
 

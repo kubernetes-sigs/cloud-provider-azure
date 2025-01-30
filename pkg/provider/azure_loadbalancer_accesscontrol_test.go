@@ -107,7 +107,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			)
 			defer ctrl.Finish()
 
-			svc := k8sFx.Service().WithInternalEnabled().Build()
+			svc := k8sFx.Service().WithOnlyTCPPorts().WithInternalEnabled().Build()
 
 			securityGroupClient.EXPECT().
 				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
@@ -222,6 +222,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			defer ctrl.Finish()
 
 			svc := k8sFx.Service().WithInternalEnabled().
+				WithOnlyTCPPorts().
 				WithAllowedIPRanges("0.0.0.0/0").
 				WithOnlyTCPPorts().
 				Build()
@@ -242,13 +243,13 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, serviceTags, k8sFx.Service().TCPPorts()).
 							WithPriority(500).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 							Build(),
 
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{"0.0.0.0/0"}, k8sFx.Service().TCPPorts()).
 							WithPriority(501).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 							Build(),
 					}
 
@@ -383,13 +384,13 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{azureFx.ServiceTag()}, k8sFx.Service().TCPPorts()).
 							WithPriority(500).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 							Build(),
 
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{"0.0.0.0/0"}, k8sFx.Service().TCPPorts()).
 							WithPriority(501).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 							Build(),
 					}
 
@@ -511,7 +512,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					azureFx.
 						AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, serviceTags, k8sFx.Service().TCPPorts()).
 						WithPriority(500).
-						WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+						WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 						Build(),
 				}
 
@@ -640,7 +641,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, serviceTags, k8sFx.Service().UDPPorts()).
 							WithPriority(500).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 							Build(),
 					}
 
@@ -763,7 +764,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, serviceTags, k8sFx.Service().TCPNodePorts()). // use NodePort
 							WithPriority(500).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 							Build(),
 					}
 
@@ -903,7 +904,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).
 							WithPriority(500).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 							Build(),
 					}
 
@@ -1052,12 +1053,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTags[0]}, k8sFx.Service().TCPPorts()).
 							WithPriority(500).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 							Build(),
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTags[1]}, k8sFx.Service().TCPPorts()).
 							WithPriority(501).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 							Build(),
 					}
 
@@ -1197,7 +1198,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).
 							WithPriority(500).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 							Build(),
 					}
 
@@ -1343,12 +1344,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).
 							WithPriority(500).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 							Build(),
 						azureFx.
 							DenyAllSecurityRule(iputil.IPv4).
 							WithPriority(4095).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 							Build(),
 					}
 
@@ -1451,12 +1452,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, serviceTags, k8sFx.Service().TCPPorts()).
 					WithPriority(500).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 					Build(),
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, serviceTags, k8sFx.Service().UDPPorts()).
 					WithPriority(501).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 					Build(),
 			)
 			securityGroup := azureFx.SecurityGroup().WithRules(rules).Build()
@@ -1554,13 +1555,13 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, serviceTags, k8sFx.Service().TCPNodePorts()). // use NodePort
 					WithPriority(500).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 					Build(),
 
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, serviceTags, k8sFx.Service().UDPNodePorts()). // use NodePort
 					WithPriority(502).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 					Build(),
 			)
 			securityGroup := azureFx.SecurityGroup().WithRules(rules).Build()
@@ -1667,13 +1668,13 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).
 					WithPriority(500).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 					Build(),
 
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().UDPPorts()).
 					WithPriority(501).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 					Build(),
 			)
 			securityGroup := azureFx.SecurityGroup().WithRules(rules).Build()
@@ -1796,23 +1797,23 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTags[0]}, k8sFx.Service().TCPPorts()).
 					WithPriority(500).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 					Build(),
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTags[1]}, k8sFx.Service().TCPPorts()).
 					WithPriority(501).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 					Build(),
 				// UDP + IPv4
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{allowedServiceTags[0]}, k8sFx.Service().UDPPorts()).
 					WithPriority(502).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 					Build(),
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{allowedServiceTags[1]}, k8sFx.Service().UDPPorts()).
 					WithPriority(503).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 					Build(),
 			)
 			securityGroup := azureFx.SecurityGroup().WithRules(rules).Build()
@@ -1920,13 +1921,13 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).
 					WithPriority(500).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 					Build(),
 
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().UDPPorts()).
 					WithPriority(501).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 					Build(),
 			)
 
@@ -2048,19 +2049,19 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).
 					WithPriority(500).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 					Build(),
 
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().UDPPorts()).
 					WithPriority(502).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 					Build(),
 
 				azureFx.
 					DenyAllSecurityRule(iputil.IPv4).
 					WithPriority(4095).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 					Build(),
 			)
 			securityGroup := azureFx.SecurityGroup().WithRules(rules).Build()
@@ -2202,25 +2203,25 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					azureFx.
 						AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, k8sFx.Service().TCPPorts()).
 						WithPriority(505).
-						WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+						WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 						Build(),
 
 					azureFx.
 						AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).
 						WithPriority(507).
-						WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+						WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 						Build(),
 
 					azureFx.
 						AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{allowedServiceTag}, k8sFx.Service().UDPPorts()).
 						WithPriority(530).
-						WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+						WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 						Build(),
 
 					azureFx.
 						AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().UDPPorts()).
 						WithPriority(607).
-						WithDestination(*managedCluster.Properties.NetworkProfile.PodCidr).
+						WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
 						Build(),
 				}
 			)

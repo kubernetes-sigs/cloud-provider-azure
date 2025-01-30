@@ -3062,31 +3062,48 @@ func (az *Cloud) reconcileSecurityGroup(
 		}
 	}
 
-	var dstIPv4Addresses, dstIPv6Addresses []netip.Addr
-	var dstAddressPrefix []netip.Prefix
+	var (
+		dstIPv4Addresses, dstIPv6Addresses         []netip.Addr
+		dstIpv4AddressPrefix, dstIpv6AddressPrefix []netip.Prefix
+	)
 
-	if az.IsLBBackendPoolTypePodIP() && !az.RetrievedClusterPodCidr {
-		mcClient := az.NetworkClientFactory.GetManagedClusterClient()
-		managedCluster, err := mcClient.Get(ctx, az.ResourceGroup, clusterName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get managed cluster: %w", err)
+	if az.IsLBBackendPoolTypePodIP() {
+		if !az.RetrievedClusterPodCidr {
+			mcClient := az.NetworkClientFactory.GetManagedClusterClient()
+			managedCluster, err := mcClient.Get(ctx, az.ResourceGroup, clusterName)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get managed cluster: %w", err)
+			}
+
+			if managedCluster.Properties == nil || managedCluster.Properties.NetworkProfile == nil ||
+				managedCluster.Properties.NetworkProfile.PodCidrs == nil {
+				klog.Errorf("Failed to get PodCidrs for cluster %q", clusterName)
+				return nil, fmt.Errorf("failed to get PodCidrs for cluster %q", clusterName)
+			}
+			podCidrs := managedCluster.Properties.NetworkProfile.PodCidrs
+			if len(podCidrs) == 0 {
+				klog.Errorf("Failed to get PodCidrs for cluster %q", clusterName)
+				return nil, fmt.Errorf("failed to get PodCidrs for cluster %q", clusterName)
+			}
+			for _, podCidr := range podCidrs {
+				prefix, parseErr := netip.ParsePrefix(*podCidr)
+				if parseErr != nil {
+					klog.Errorf("Failed to parse PodCidr %q: %v", *podCidr, parseErr)
+					return nil, fmt.Errorf("failed to parse PodCidr %q: %w", *podCidr, parseErr)
+				}
+				if prefix.Addr().Is4() {
+					dstIpv4AddressPrefix = append(dstIpv4AddressPrefix, prefix)
+					az.PodCidrIPv4 = prefix
+				} else {
+					dstIpv6AddressPrefix = append(dstIpv6AddressPrefix, prefix)
+					az.PodCidrIPv6 = prefix
+				}
+			}
+			az.RetrievedClusterPodCidr = true
+		} else {
+			dstIpv4AddressPrefix = []netip.Prefix{az.PodCidrIPv4}
+			dstIpv6AddressPrefix = []netip.Prefix{az.PodCidrIPv6}
 		}
-
-		if managedCluster.Properties == nil || managedCluster.Properties.NetworkProfile == nil ||
-			managedCluster.Properties.NetworkProfile.PodCidr == nil {
-			klog.Errorf("Failed to get PodCidr for cluster %q", clusterName)
-			return nil, fmt.Errorf("failed to get PodCidr for cluster %q", clusterName)
-		}
-
-		podCidrString := ptr.Deref(managedCluster.Properties.NetworkProfile.PodCidr, "")
-		prefix, parseErr := netip.ParsePrefix(podCidrString)
-		if parseErr != nil {
-			klog.Errorf("Failed to parse PodCidr %q: %v", podCidrString, parseErr)
-			return nil, fmt.Errorf("failed to parse PodCidr %q: %w", podCidrString, parseErr)
-		}
-
-		dstAddressPrefix = append(dstAddressPrefix, prefix)
-		az.RetrievedClusterPodCidr = true
 	} else {
 		var (
 			disableFloatingIP                                = consts.IsK8sServiceDisableLoadBalancerFloatingIP(service)
@@ -3137,7 +3154,7 @@ func (az *Cloud) reconcileSecurityGroup(
 	}
 
 	if wantLb {
-		err := accessControl.PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses, dstAddressPrefix)
+		err := accessControl.PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses, dstIpv4AddressPrefix, dstIpv6AddressPrefix)
 		if err != nil {
 			logger.Error(err, "Failed to patch security group")
 			return nil, err
