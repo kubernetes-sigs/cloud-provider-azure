@@ -17,6 +17,7 @@ limitations under the License.
 package config
 
 import (
+	"net/netip"
 	"strings"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
@@ -166,11 +167,18 @@ type Config struct {
 	// ClusterServiceSharedLoadBalancerHealthProbePath defines the target path of the shared health probe. Default to `/healthz`.
 	ClusterServiceSharedLoadBalancerHealthProbePath string `json:"clusterServiceSharedLoadBalancerHealthProbePath,omitempty" yaml:"clusterServiceSharedLoadBalancerHealthProbePath,omitempty"`
 
-	// RetrievedClusterPodCidr indicates whether the cluster has set the pod subnet prefix within Network Security Group (NSG).
-	// The NSG for pod subnet is set a single time for the whole cluster.
+	// RetrievedClusterPodCidr tracks whether the pod subnet prefix for the cluster has been retrieved and set within the Network Security Group (NSG).
+	// The NSG for the pod subnet is configured once for the entire cluster.
 	// If the pod subnet prefix is not set, the value is false.
 	// If the pod subnet prefix is set, the value is true.
+	// Note: Multiple rules per subnet with different protocols and destination ports can exist.
 	RetrievedClusterPodCidr bool `json:"retrievedClusterPodCidr" yaml:"retrievedClusterPodCidr"`
+
+	// PodCidrIPv4 is the IPv4 pod subnet prefix for the cluster.
+	// PodCidrIPv6 is the IPv6 pod subnet prefix for the cluster.
+	// The pod subnet prefix is used to configure the NSG for the pod subnet.
+	PodCidrIPv4 netip.Prefix `json:"podCidrIPv4" yaml:"podCidrIPv4"`
+	PodCidrIPv6 netip.Prefix `json:"podCidrIPv6" yaml:"podCidrIPv6"`
 }
 
 // HasExtendedLocation returns true if extendedlocation prop are specified.
