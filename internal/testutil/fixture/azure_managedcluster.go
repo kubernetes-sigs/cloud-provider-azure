@@ -8,7 +8,7 @@ import (
 func (f *AzureFixture) ManagedCluster() *AzureManagedClusterFixture {
 	return &AzureManagedClusterFixture{
 		mc: &armcontainerservice.ManagedCluster{
-			Name: ptr.To("mangaedcluster"),
+			Name: ptr.To("managedcluster"),
 			Properties: &armcontainerservice.ManagedClusterProperties{
 				NetworkProfile: &armcontainerservice.NetworkProfile{
 					PodCidrs: []*string{ptr.To("192.1.0.0/16")},
