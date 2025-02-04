@@ -2802,7 +2802,7 @@ func (az *Cloud) getExpectedLBRules(
 	var expectedRules []*armnetwork.LoadBalancingRule
 	// If we are using Pod IP in the LB backend, we skip health probes, disable floating IP and use port.TargetPort.
 	if az.IsLBBackendPoolTypePodIP() {
-		// Check for multi-IP families in the service spec (not allowed for CLB).
+		// Check for multi-IP families in the service spec (not allowed for BackendPool of type PodIP).
 		if len(service.Spec.IPFamilies) > 1 {
 			return nil, nil, fmt.Errorf("dual-stack services are not supported when LB backend pool type is PodIP")
 		}
