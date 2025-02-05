@@ -2274,6 +2274,7 @@ func TestEnsureHostInPool(t *testing.T) {
 			expectedInstanceID:        "0",
 			expectedVMSSVM: &armcompute.VirtualMachineScaleSetVM{
 				Location: ptr.To("westus"),
+				Etag:     ptr.To("1"),
 				Properties: &armcompute.VirtualMachineScaleSetVMProperties{
 					NetworkProfileConfiguration: &armcompute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
 						NetworkInterfaceConfigurations: []*armcompute.VirtualMachineScaleSetNetworkConfiguration{
@@ -3128,6 +3129,7 @@ func TestEnsureBackendPoolDeletedFromNodeCommon(t *testing.T) {
 			expectedInstanceID:        "0",
 			expectedVMSSVM: &armcompute.VirtualMachineScaleSetVM{
 				Location: ptr.To("westus"),
+				Etag:     ptr.To("1"),
 				Properties: &armcompute.VirtualMachineScaleSetVMProperties{
 					NetworkProfileConfiguration: &armcompute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
 						NetworkInterfaceConfigurations: []*armcompute.VirtualMachineScaleSetNetworkConfiguration{
