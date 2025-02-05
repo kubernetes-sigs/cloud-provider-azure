@@ -18,15 +18,11 @@
 package fileshareclient
 
 import (
-	"context"
-
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/tracing"
 	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
@@ -51,21 +47,4 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 		subscriptionID:   subscriptionID,
 		tracer:           tr,
 	}, nil
-}
-
-const GetOperationName = "FileSharesClient.Get"
-
-// Get gets the FileShare
-func (client *Client) Get(ctx context.Context, resourceGroupName string, accountName string, fileshareName string) (result *armstorage.FileShare, err error) {
-
-	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "FileShare", "get")
-	defer func() { metricsCtx.Observe(ctx, err) }()
-	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
-	defer endSpan(err)
-	resp, err := client.FileSharesClient.Get(ctx, resourceGroupName, accountName, fileshareName, nil)
-	if err != nil {
-		return nil, err
-	}
-	//handle statuscode
-	return &resp.FileShare, nil
 }
