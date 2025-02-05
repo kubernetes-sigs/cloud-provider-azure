@@ -445,7 +445,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
 
-		//wait and get service's public IP Address
+		// wait and get service's public IP Address
 		By("Waiting service to expose...")
 		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, pips)
 		Expect(err).NotTo(HaveOccurred())
@@ -556,6 +556,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			"c": pointer.String("d"),
 			"e": pointer.String(""),
 			"x": pointer.String("y"),
+			"z": pointer.String("Null "),
 		}
 
 		testPIPTagAnnotationWithTags(cs, tc, ns, serviceName, labels, ports, expectedTags)
@@ -569,6 +570,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		expectedTags := map[string]*string{
 			"a": pointer.String("c"),
 			"x": pointer.String("y"),
+			"z": pointer.String("Null "),
 		}
 
 		testPIPTagAnnotationWithTags(cs, tc, ns, serviceName, labels, ports, expectedTags)
@@ -809,7 +811,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		if tc.IPFamily == utils.DualStack {
 			expectedTargetProbesCount = 2
 		}
-		//wait for backend update
+		// wait for backend update
 		err := wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
 			lb = getAzureLoadBalancerFromPIP(tc, publicIPs[0], tc.GetResourceGroup(), "")
 			targetProbes = []*network.Probe{}
@@ -883,7 +885,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		if tc.IPFamily == utils.DualStack {
 			expectedTargetProbesCount = 2
 		}
-		//wait for backend update
+		// wait for backend update
 		err := wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
 			lb = getAzureLoadBalancerFromPIP(tc, publicIPs[0], tc.GetResourceGroup(), "")
 			targetProbes = []*network.Probe{}
@@ -1036,7 +1038,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		if tc.IPFamily == utils.DualStack {
 			expectedTargetProbesCount = 2
 		}
-		//wait for backend update
+		// wait for backend update
 		err := wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
 			lb = getAzureLoadBalancerFromPIP(tc, publicIPs[0], tc.GetResourceGroup(), "")
 			targetProbes = []*network.Probe{}
@@ -1223,7 +1225,7 @@ var _ = Describe("Multiple VMSS", Label(utils.TestSuiteLabelMultiNodePools, util
 			Skip("service.beta.kubernetes.io/azure-load-balancer-mode only works for basic load balancer")
 		}
 
-		//get nodelist and providerID specific to an agentnodes
+		// get nodelist and providerID specific to an agentnodes
 		By("Getting agent nodes list")
 		nodes, err := utils.GetAgentNodes(cs)
 		Expect(err).NotTo(HaveOccurred())
@@ -1247,7 +1249,7 @@ var _ = Describe("Multiple VMSS", Label(utils.TestSuiteLabelMultiNodePools, util
 		Expect(resourceGroupName).NotTo(Equal(""))
 		utils.Logf("Got vmss names %v", vmssNames.List())
 
-		//Skip if there're less than two vmss
+		// Skip if there're less than two vmss
 		if len(vmssNames) < 2 {
 			Skip("azure-load-balancer-mode tests only works for cluster with multiple vmss agent pools")
 		}
@@ -1273,17 +1275,18 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 	labels := map[string]string{
 		"app": serviceName,
 	}
-	ports := []v1.ServicePort{{
-		AppProtocol: pointer.String("Tcp"),
-		Port:        serverPort,
-		Name:        "port1",
-		TargetPort:  intstr.FromInt(serverPort),
-	}, {
-		Port:        serverPort + 1,
-		Name:        "port2",
-		TargetPort:  intstr.FromInt(serverPort),
-		AppProtocol: pointer.String("Tcp"),
-	},
+	ports := []v1.ServicePort{
+		{
+			AppProtocol: pointer.String("Tcp"),
+			Port:        serverPort,
+			Name:        "port1",
+			TargetPort:  intstr.FromInt(serverPort),
+		}, {
+			Port:        serverPort + 1,
+			Name:        "port2",
+			TargetPort:  intstr.FromInt(serverPort),
+			AppProtocol: pointer.String("Tcp"),
+		},
 	}
 
 	BeforeEach(func() {
@@ -1351,7 +1354,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 			Expect(err).NotTo(HaveOccurred())
 			utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
 
-			//wait and get service's public IP Address
+			// wait and get service's public IP Address
 			utils.Logf("Waiting service to expose...")
 			publicIPs, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []string{})
 			Expect(err).NotTo(HaveOccurred())
@@ -1413,7 +1416,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 			if tc.IPFamily == utils.DualStack {
 				expectedTargetProbesCount = 2
 			}
-			//wait for backend update
+			// wait for backend update
 			checkPort := func(port int32, targetProbes []*network.Probe) bool {
 				utils.Logf("Checking port %d", port)
 				match := true
@@ -1445,7 +1448,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			var nodeHealthCheckPort = service.Spec.HealthCheckNodePort
+			nodeHealthCheckPort := service.Spec.HealthCheckNodePort
 			By("Changing ExternalTrafficPolicy of the service to Cluster")
 			utils.Logf("Updating service " + serviceName + " in namespace " + ns.Name)
 			retryErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -1460,7 +1463,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 			Expect(retryErr).NotTo(HaveOccurred())
 			utils.Logf("Successfully updated LoadBalancer service " + serviceName + " in namespace " + ns.Name)
 
-			//wait for backend update
+			// wait for backend update
 			expectedTargetProbesCount = 2
 			if tc.IPFamily == utils.DualStack {
 				expectedTargetProbesCount = 4
@@ -1611,7 +1614,7 @@ func createAndExposeDefaultServiceWithAnnotation(cs clientset.Interface, ipFamil
 	Expect(err).NotTo(HaveOccurred())
 	utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + nsName)
 
-	//wait and get service's IP Address
+	// wait and get service's IP Address
 	utils.Logf("Waiting service to expose...")
 	publicIPs, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ipFamily, nsName, serviceName, []string{})
 	Expect(err).NotTo(HaveOccurred())
@@ -1687,7 +1690,7 @@ func validateLoadBalancerBackendPools(tc *utils.AzureTestClient, vmssName string
 	Expect(err).NotTo(HaveOccurred())
 	utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns)
 
-	//wait and get service's public IP Address
+	// wait and get service's public IP Address
 	By("Waiting for service exposure")
 	publicIPs, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns, serviceName, []string{})
 	Expect(err).NotTo(HaveOccurred())
@@ -1713,7 +1716,7 @@ func validateLoadBalancerBackendPools(tc *utils.AzureTestClient, vmssName string
 	}
 	Expect(pipFrontendConfigurationID).NotTo(Equal(""))
 
-	//Get Azure loadBalancer Name
+	// Get Azure loadBalancer Name
 	By("Getting loadBalancer name from pipFrontendConfigurationID")
 	match := lbNameRE.FindStringSubmatch(pipFrontendConfigurationID)
 	Expect(len(match)).To(Equal(2))
@@ -1721,7 +1724,7 @@ func validateLoadBalancerBackendPools(tc *utils.AzureTestClient, vmssName string
 	Expect(loadBalancerName).NotTo(Equal(""))
 	utils.Logf("Got loadBalancerName %q", loadBalancerName)
 
-	//Get backendpools list
+	// Get backendpools list
 	By("Getting loadBalancer")
 	lb, err := tc.GetLoadBalancer(resourceGroupName, loadBalancerName)
 	Expect(err).NotTo(HaveOccurred())
@@ -1815,7 +1818,7 @@ func testPIPTagAnnotationWithTags(
 	service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	service.Annotations = map[string]string{
-		consts.ServiceAnnotationAzurePIPTags: "a=c,x=y",
+		consts.ServiceAnnotationAzurePIPTags: "a=c,x=y,z=Null ",
 	}
 	_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
 	Expect(err).NotTo(HaveOccurred())

@@ -1173,3 +1173,99 @@ func TestIsInternalLoadBalancer(t *testing.T) {
 		})
 	}
 }
+
+func TestParseTags(t *testing.T) {
+	for _, testCase := range []struct {
+		description, tags string
+		tagsMap           map[string]string
+		expectedTags      map[string]*string
+	}{
+		{
+			description: "parseTags should return a map of tags",
+			tags:        "a=b, c=d",
+			tagsMap: map[string]string{
+				"e": "f",
+				"g": "h",
+			},
+			expectedTags: map[string]*string{
+				"a": pointer.String("b"),
+				"c": pointer.String("d"),
+				"e": pointer.String("f"),
+				"g": pointer.String("h"),
+			},
+		},
+		{
+			description:  "parseTags should work when `tags` and `tagsMap` are all empty",
+			tags:         "",
+			tagsMap:      map[string]string{},
+			expectedTags: map[string]*string{},
+		},
+		{
+			description: "parseTags should let the tagsMap override the tags",
+			tags:        "a=e, c=f",
+			tagsMap: map[string]string{
+				"a": "b",
+				"c": "d",
+			},
+			expectedTags: map[string]*string{
+				"a": pointer.String("b"),
+				"c": pointer.String("d"),
+			},
+		},
+		{
+			description: "parseTags override should ignore the case of keys and values",
+			tags:        "A=e, C=f",
+			tagsMap: map[string]string{
+				"a": "b",
+				"c": "d",
+			},
+			expectedTags: map[string]*string{
+				"a": pointer.String("b"),
+				"c": pointer.String("d"),
+			},
+		},
+		{
+			description: "parseTags should keep the blank character after or before string 'Null', eg. 'Null '",
+			tags:        "a=b, c=Null , d= null",
+			expectedTags: map[string]*string{
+				"a": pointer.String("b"),
+				"c": pointer.String("Null "),
+				"d": pointer.String(" null"),
+			},
+		},
+		{
+			description: "parseTags should also keep blank character of values from tagsMap, case insensitive as well",
+			tags:        "",
+			tagsMap: map[string]string{
+				"a": "b",
+				"c": "Null ",
+				"d": " nuLl",
+			},
+			expectedTags: map[string]*string{
+				"a": pointer.String("b"),
+				"c": pointer.String("Null "),
+				"d": pointer.String(" nuLl"),
+			},
+		},
+		{
+			description: "parseTags should trim the blank character of values from tags other than 'Null'",
+			tags:        "a=b, c= d , d= e",
+			tagsMap: map[string]string{
+				"x": " y ",
+				"z": " z",
+			},
+			expectedTags: map[string]*string{
+				"a": pointer.String("b"),
+				"c": pointer.String("d"),
+				"d": pointer.String("e"),
+				"x": pointer.String("y"),
+				"z": pointer.String("z"),
+			},
+		},
+	} {
+		t.Run(testCase.description, func(t *testing.T) {
+			tags := parseTags(testCase.tags, testCase.tagsMap)
+			assert.Equal(t, testCase.expectedTags, tags)
+		})
+	}
+}
