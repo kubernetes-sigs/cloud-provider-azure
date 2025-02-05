@@ -23,8 +23,8 @@ require (
 	go.opentelemetry.io/otel/metric v1.34.0
 	go.uber.org/mock v0.5.0
 	golang.org/x/crypto v0.32.0
-	golang.org/x/sync v0.10.0
-	golang.org/x/time v0.9.0
+	golang.org/x/sync v0.11.0
+	golang.org/x/time v0.10.0
 	gopkg.in/dnaeon/go-vcr.v3 v3.2.0
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
 )
