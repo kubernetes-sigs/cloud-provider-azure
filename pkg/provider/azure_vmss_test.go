@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -46,6 +48,7 @@ import (
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/virtualmachine"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/deepcopy"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -72,6 +75,71 @@ const (
 	windows2022
 	ubuntu
 )
+
+type vmssInputMatcher struct {
+	Location   *string
+	Properties *armcompute.VirtualMachineScaleSetProperties
+	Etag       *string
+}
+
+func (mim vmssInputMatcher) Matches(arg interface{}) bool {
+
+	vmssVM, ok := arg.(armcompute.VirtualMachineScaleSet)
+	if !ok {
+		return false
+	}
+
+	if !reflect.DeepEqual(mim.Location, vmssVM.Location) {
+		return false
+	}
+	if !reflect.DeepEqual(mim.Etag, vmssVM.Etag) {
+		return false
+	}
+
+	if !reflect.DeepEqual(mim.Properties, vmssVM.Properties) {
+		return false
+	}
+
+	return true
+}
+
+func (mim vmssInputMatcher) String() string {
+	backendPools := []string{}
+	for _, backendPool := range mim.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations[0].Properties.IPConfigurations[0].Properties.LoadBalancerBackendAddressPools {
+		backendPools = append(backendPools, *backendPool.ID)
+	}
+	return fmt.Sprintf("Etag: %s, Location: %s, loadBalancerBackendAddressPools: %s", *mim.Etag, *mim.Location, backendPools)
+}
+
+type vmssVMInputMatcher struct {
+	Location   *string
+	Properties *armcompute.VirtualMachineScaleSetVMProperties
+	Etag       *string
+}
+
+func (vvim vmssVMInputMatcher) Matches(arg interface{}) bool {
+	vmssVM, ok := arg.(armcompute.VirtualMachineScaleSetVM)
+	if !ok {
+		return false
+	}
+	if !reflect.DeepEqual(vvim.Location, vmssVM.Location) {
+		return false
+	}
+	if !reflect.DeepEqual(vvim.Etag, vmssVM.Etag) {
+		return false
+	}
+	return reflect.DeepEqual(vvim.Properties, vmssVM.Properties)
+}
+
+func (vvim vmssVMInputMatcher) String() string {
+	backendPools := []string{}
+
+	for _, backendPool := range vvim.Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations[0].Properties.IPConfigurations[0].Properties.LoadBalancerBackendAddressPools {
+		backendPools = append(backendPools, *backendPool.ID)
+	}
+
+	return fmt.Sprintf("Etag: %s, Location: %s, loadBalancerBackendAddressPools: %s", *vvim.Etag, *vvim.Location, backendPools)
+}
 
 func buildTestOSSpecificVMSSWithLB(name, namePrefix string, lbBackendpoolIDs []string, os osVersion, ipv6 bool) *armcompute.VirtualMachineScaleSet {
 	vmss := buildTestVMSSWithLB(name, namePrefix, lbBackendpoolIDs, ipv6)
@@ -122,6 +190,7 @@ func buildTestVMSSWithLB(name, namePrefix string, lbBackendpoolIDs []string, ipv
 
 	expectedVMSS := &armcompute.VirtualMachineScaleSet{
 		Name: &name,
+		Etag: to.Ptr("1"),
 		Properties: &armcompute.VirtualMachineScaleSetProperties{
 			OrchestrationMode: to.Ptr(armcompute.OrchestrationModeUniform),
 			ProvisioningState: ptr.To("Running"),
@@ -213,6 +282,7 @@ func buildTestVirtualMachineEnv(ss *Cloud, scaleSetName, zone string, faultDomai
 		}
 
 		vmssVM := &armcompute.VirtualMachineScaleSetVM{
+			Etag: ptr.To("1"),
 			Properties: &armcompute.VirtualMachineScaleSetVMProperties{
 				ProvisioningState: ptr.To(state),
 				OSProfile: &armcompute.OSProfile{
@@ -2204,6 +2274,7 @@ func TestEnsureHostInPool(t *testing.T) {
 			expectedInstanceID:        "0",
 			expectedVMSSVM: &armcompute.VirtualMachineScaleSetVM{
 				Location: ptr.To("westus"),
+				Etag:     ptr.To("1"),
 				Properties: &armcompute.VirtualMachineScaleSetVMProperties{
 					NetworkProfileConfiguration: &armcompute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
 						NetworkInterfaceConfigurations: []*armcompute.VirtualMachineScaleSetNetworkConfiguration{
@@ -2706,6 +2777,321 @@ func TestEnsureHostsInPool(t *testing.T) {
 	}
 }
 
+func TestEnsureHostsInPoolEtagMismatch(t *testing.T) {
+	testCases := []struct {
+		description            string
+		nodes                  []*v1.Node
+		backendpoolID          string
+		vmssClientPutError     error
+		vmssvmClientPutError   error
+		vmSetName              string
+		expectedVMSSVMPutTimes int
+		expectedErr            bool
+	}{
+		{
+			description: "EnsureHostsInPool should raise error when vmss put hits EtagMismatch Error",
+			nodes: []*v1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "vmss-vm-000000",
+					},
+					Spec: v1.NodeSpec{
+						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+					},
+				},
+			},
+			backendpoolID:          testLBBackendpoolID1,
+			vmssClientPutError:     &azcore.ResponseError{StatusCode: http.StatusPreconditionFailed},
+			vmssvmClientPutError:   nil,
+			vmSetName:              "vmss",
+			expectedVMSSVMPutTimes: 0,
+			expectedErr:            true,
+		},
+		{
+			description: "EnsureHostsInPool should raise error when vmss vm put hits EtagMismatch Error",
+			nodes: []*v1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "vmss-vm-000000",
+					},
+					Spec: v1.NodeSpec{
+						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+					},
+				},
+			},
+			backendpoolID:          testLBBackendpoolID1,
+			vmssClientPutError:     nil,
+			vmssvmClientPutError:   &azcore.ResponseError{StatusCode: http.StatusPreconditionFailed},
+			vmSetName:              "vmss",
+			expectedVMSSVMPutTimes: 1,
+			expectedErr:            true,
+		},
+		{
+			description: "EnsureHostsInPool should raise not error when put vm and vmss raise no error",
+			nodes: []*v1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "vmss-vm-000000",
+					},
+					Spec: v1.NodeSpec{
+						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+					},
+				},
+			},
+			backendpoolID:          testLBBackendpoolID1,
+			vmssClientPutError:     nil,
+			vmssvmClientPutError:   nil,
+			vmSetName:              "vmss",
+			expectedVMSSVMPutTimes: 1,
+			expectedErr:            false,
+		},
+	}
+
+	for _, test := range testCases {
+		test := test
+		t.Run(test.description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			ss, err := NewTestScaleSet(ctrl)
+			assert.NoError(t, err, test.description)
+
+			ss.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+			ss.ExcludeMasterFromStandardLB = ptr.To(true)
+			expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
+			expectedVMSS.Location = &ss.Location
+			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+			mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName, nil).Return(expectedVMSS, nil).MaxTimes(1)
+
+			copiedVMSS := deepcopy.Copy(expectedVMSS).(*armcompute.VirtualMachineScaleSet)
+			networkInterfaceConfigurations := copiedVMSS.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
+			ipConfig := networkInterfaceConfigurations[0].Properties.IPConfigurations
+			ipConfig[0].Properties.LoadBalancerBackendAddressPools = append(ipConfig[0].Properties.LoadBalancerBackendAddressPools, &armcompute.SubResource{ID: ptr.To(test.backendpoolID)})
+			vmssMatcher := vmssInputMatcher{
+				Location: copiedVMSS.Location,
+				Properties: &armcompute.VirtualMachineScaleSetProperties{
+					VirtualMachineProfile: &armcompute.VirtualMachineScaleSetVMProfile{
+						NetworkProfile: &armcompute.VirtualMachineScaleSetNetworkProfile{
+							NetworkInterfaceConfigurations: networkInterfaceConfigurations,
+						},
+					},
+				},
+				Etag: copiedVMSS.Etag,
+			}
+
+			mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, vmssMatcher).Return(nil, test.vmssClientPutError).Times(1)
+			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000"}, "", false)
+			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+
+			expectedVMSSVM := expectedVMSSVMs[0]
+			copiedVMSSVM := deepcopy.Copy(expectedVMSSVM).(*armcompute.VirtualMachineScaleSetVM)
+
+			vmNetworkInterfaceConfigurations := copiedVMSSVM.Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations
+			vmssVMIPConfigs := vmNetworkInterfaceConfigurations[0].Properties.IPConfigurations
+			vmssVMIPConfigs[0].Properties.LoadBalancerBackendAddressPools = append((vmssVMIPConfigs)[0].Properties.LoadBalancerBackendAddressPools, &armcompute.SubResource{ID: ptr.To(testLBBackendpoolID1)})
+
+			vmssVMMatcher := vmssVMInputMatcher{
+				Location: copiedVMSSVM.Location,
+				Properties: &armcompute.VirtualMachineScaleSetVMProperties{
+					NetworkProfileConfiguration: &armcompute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
+						NetworkInterfaceConfigurations: vmNetworkInterfaceConfigurations,
+					},
+				},
+				Etag: copiedVMSSVM.Etag,
+			}
+			mockVMSSVMClient.EXPECT().Update(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), vmssVMMatcher).Return(nil, test.vmssvmClientPutError).Times(test.expectedVMSSVMPutTimes)
+
+			mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+			mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
+			err = ss.EnsureHostsInPool(context.Background(), &v1.Service{}, test.nodes, test.backendpoolID, test.vmSetName)
+			assert.Equal(t, test.expectedErr, err != nil, test.description+errMsgSuffix)
+		})
+	}
+}
+
+func TestEnsureBackendPoolDeletedEtagMismatch(t *testing.T) {
+	testCases := []struct {
+		description            string
+		nodes                  []*v1.Node
+		backendpoolID          string
+		backendAddressPools    []*armnetwork.BackendAddressPool
+		vmssClientPutError     error
+		vmssvmClientPutError   error
+		vmSetName              string
+		expectedVMSSVMPutTimes int
+		expectedErr            bool
+	}{
+		{
+			description: "EnsureBackendPoolDeleted should raise error when vmss put hits EtagMismatch Error",
+			nodes: []*v1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "vmss-vm-000000",
+					},
+					Spec: v1.NodeSpec{
+						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+					},
+				},
+			},
+			vmssClientPutError:   &azcore.ResponseError{StatusCode: http.StatusPreconditionFailed},
+			vmssvmClientPutError: nil,
+			backendpoolID:        testLBBackendpoolID0,
+			backendAddressPools: []*armnetwork.BackendAddressPool{
+				{
+					ID: ptr.To(testLBBackendpoolID0),
+					Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+						BackendIPConfigurations: []*armnetwork.InterfaceIPConfiguration{
+							{
+								Name: ptr.To("ip-1"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0/networkInterfaces/nic"),
+							},
+						},
+					},
+				},
+				{
+					ID: ptr.To(testLBBackendpoolID1),
+				},
+			},
+			vmSetName:              "vmss",
+			expectedVMSSVMPutTimes: 0,
+			expectedErr:            true,
+		},
+		{
+			description: "EnsureBackendPoolDeleted should raise error when vmss vm put hits EtagMismatch Error",
+			nodes: []*v1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "vmss-vm-000000",
+					},
+					Spec: v1.NodeSpec{
+						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+					},
+				},
+			},
+			vmssClientPutError:   nil,
+			vmssvmClientPutError: &azcore.ResponseError{StatusCode: http.StatusPreconditionFailed},
+			backendpoolID:        testLBBackendpoolID0,
+			backendAddressPools: []*armnetwork.BackendAddressPool{
+				{
+					ID: ptr.To(testLBBackendpoolID0),
+					Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+						BackendIPConfigurations: []*armnetwork.InterfaceIPConfiguration{
+							{
+								Name: ptr.To("ip-1"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0/networkInterfaces/nic"),
+							},
+						},
+					},
+				},
+				{
+					ID: ptr.To(testLBBackendpoolID1),
+				},
+			},
+			vmSetName:              "vmss",
+			expectedVMSSVMPutTimes: 1,
+			expectedErr:            true,
+		},
+		{
+			description: "EnsureBackendPoolDeleted should raise not error when put vm and vmss raise no error",
+			nodes: []*v1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "vmss-vm-000000",
+					},
+					Spec: v1.NodeSpec{
+						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+					},
+				},
+			},
+			vmssClientPutError:   nil,
+			vmssvmClientPutError: nil,
+			backendpoolID:        testLBBackendpoolID0,
+			backendAddressPools: []*armnetwork.BackendAddressPool{
+				{
+					ID: ptr.To(testLBBackendpoolID0),
+					Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+						BackendIPConfigurations: []*armnetwork.InterfaceIPConfiguration{
+							{
+								Name: ptr.To("ip-1"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0/networkInterfaces/nic"),
+							},
+						},
+					},
+				},
+				{
+					ID: ptr.To(testLBBackendpoolID1),
+				},
+			},
+			vmSetName:              "vmss",
+			expectedVMSSVMPutTimes: 1,
+			expectedErr:            false,
+		},
+	}
+	for _, test := range testCases {
+		test := test
+		t.Run(test.description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			ss, err := NewTestScaleSet(ctrl)
+			assert.NoError(t, err, test.description)
+
+			expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
+
+			copiedVMSS := deepcopy.Copy(expectedVMSS).(*armcompute.VirtualMachineScaleSet)
+			networkInterfaceConfigurations := copiedVMSS.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
+			ipConfig := networkInterfaceConfigurations[0].Properties.IPConfigurations
+			ipConfig[0].Properties.LoadBalancerBackendAddressPools = []*armcompute.SubResource{}
+			vmssMatcher := vmssInputMatcher{
+				Location: copiedVMSS.Location,
+				Properties: &armcompute.VirtualMachineScaleSetProperties{
+					VirtualMachineProfile: &armcompute.VirtualMachineScaleSetVMProfile{
+						NetworkProfile: &armcompute.VirtualMachineScaleSetNetworkProfile{
+							NetworkInterfaceConfigurations: networkInterfaceConfigurations,
+						},
+					},
+				},
+				Etag: copiedVMSS.Etag,
+			}
+			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+			mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName, nil).Return(expectedVMSS, nil).MaxTimes(1)
+			mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, vmssMatcher).Return(nil, test.vmssClientPutError).Times(1)
+
+			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000"}, "", false)
+			expectedVMSSVM := expectedVMSSVMs[0]
+			copiedVMSSVM := deepcopy.Copy(expectedVMSSVM).(*armcompute.VirtualMachineScaleSetVM)
+			vmNetworkInterfaceConfigurations := copiedVMSSVM.Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations
+			vmssVMIPConfigs := vmNetworkInterfaceConfigurations[0].Properties.IPConfigurations
+			vmssVMIPConfigs[0].Properties.LoadBalancerBackendAddressPools = []*armcompute.SubResource{}
+			vmssVMMatcher := vmssVMInputMatcher{
+				Location: copiedVMSSVM.Location,
+				Properties: &armcompute.VirtualMachineScaleSetVMProperties{
+					NetworkProfileConfiguration: &armcompute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
+						NetworkInterfaceConfigurations: vmNetworkInterfaceConfigurations,
+					},
+				},
+				Etag: copiedVMSSVM.Etag,
+			}
+			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+			mockVMSSVMClient.EXPECT().Update(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), vmssVMMatcher).Return(nil, test.vmssvmClientPutError).Times(test.expectedVMSSVMPutTimes)
+
+			mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+			mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
+
+			updated, err := ss.EnsureBackendPoolDeleted(context.TODO(), &v1.Service{}, []string{test.backendpoolID}, testVMSSName, test.backendAddressPools, true)
+			assert.Equal(t, test.expectedErr, err != nil, test.description+errMsgSuffix)
+			if !test.expectedErr && test.expectedVMSSVMPutTimes > 0 {
+				assert.True(t, updated, test.description)
+			}
+		})
+	}
+}
+
 func TestEnsureBackendPoolDeletedFromNodeCommon(t *testing.T) {
 
 	testCases := []struct {
@@ -2743,6 +3129,7 @@ func TestEnsureBackendPoolDeletedFromNodeCommon(t *testing.T) {
 			expectedInstanceID:        "0",
 			expectedVMSSVM: &armcompute.VirtualMachineScaleSetVM{
 				Location: ptr.To("westus"),
+				Etag:     ptr.To("1"),
 				Properties: &armcompute.VirtualMachineScaleSetVMProperties{
 					NetworkProfileConfiguration: &armcompute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
 						NetworkInterfaceConfigurations: []*armcompute.VirtualMachineScaleSetNetworkConfiguration{
