@@ -45,6 +45,10 @@ type ARMClientConfig struct {
 	CloudProviderBackoffRetries int32 `json:"cloudProviderBackoffRetries,omitempty" yaml:"cloudProviderBackoffRetries,omitempty"`
 	// Backoff duration
 	CloudProviderBackoffDuration int `json:"cloudProviderBackoffDuration,omitempty" yaml:"cloudProviderBackoffDuration,omitempty"`
+	// DisableAzureStackCloud disables AzureStackCloud support. It should be used
+	// when setting AzureAuthConfig.Cloud with "AZURESTACKCLOUD" to customize ARM endpoints
+	// while the cluster is not running on AzureStack.
+	DisableAzureStackCloud bool `json:"disableAzureStackCloud,omitempty" yaml:"disableAzureStackCloud,omitempty"`
 }
 
 func (config *ARMClientConfig) GetTenantID() string {
@@ -55,30 +59,30 @@ func (config *ARMClientConfig) GetTenantID() string {
 	return config.TenantID
 }
 
-func GetAzCoreClientOption(armConfig *ARMClientConfig) (*policy.ClientOptions, error) {
+func GetAzCoreClientOption(armConfig *ARMClientConfig) (*policy.ClientOptions, *Environment, error) {
+	var env *Environment
+	var err error
 	//Get default settings
-	azCoreClientConfig := utils.GetDefaultAzCoreClientOption()
+	clientConfig := utils.GetDefaultAzCoreClientOption()
 	if armConfig != nil {
 		//update user agent header
 		if userAgent := strings.TrimSpace(armConfig.UserAgent); userAgent != "" {
-			azCoreClientConfig.Telemetry.Disabled = true
-			azCoreClientConfig.PerCallPolicies = append(azCoreClientConfig.PerCallPolicies, useragent.NewCustomUserAgentPolicy(userAgent))
+			clientConfig.Telemetry.Disabled = true
+			clientConfig.PerCallPolicies = append(clientConfig.PerCallPolicies, useragent.NewCustomUserAgentPolicy(userAgent))
 		}
 		//set cloud
-		cloudConfig, err := GetAzureCloudConfig(armConfig)
+		clientConfig.Cloud, env, err = GetAzureCloudConfigAndEnvConfig(armConfig)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		azCoreClientConfig.Cloud = *cloudConfig
 		if armConfig.CloudProviderBackoff && armConfig.CloudProviderBackoffDuration > 0 {
-			azCoreClientConfig.Retry.RetryDelay = time.Duration(armConfig.CloudProviderBackoffDuration) * time.Second
+			clientConfig.Retry.RetryDelay = time.Duration(armConfig.CloudProviderBackoffDuration) * time.Second
 		}
 		if armConfig.CloudProviderBackoff && armConfig.CloudProviderBackoffRetries > 0 {
-			azCoreClientConfig.Retry.MaxRetries = armConfig.CloudProviderBackoffRetries
+			clientConfig.Retry.MaxRetries = armConfig.CloudProviderBackoffRetries
 		}
-
 	}
-	return &azCoreClientConfig, nil
+	return &clientConfig, env, nil
 }
 
 func IsMultiTenant(armConfig *ARMClientConfig) bool {
