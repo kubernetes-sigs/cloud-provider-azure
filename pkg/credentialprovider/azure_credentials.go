@@ -18,10 +18,8 @@ package credentialprovider
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -82,21 +80,9 @@ func NewAcrProviderFromConfig(configFile string) (CredentialProvider, error) {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	var envConfig azclient.Environment
-	envFilePath, ok := os.LookupEnv(azclient.EnvironmentFilepathName)
-	if ok {
-		content, err := os.ReadFile(envFilePath)
-		if err != nil {
-			return nil, err
-		}
-		if err = json.Unmarshal(content, &envConfig); err != nil {
-			return nil, err
-		}
-	}
-
 	var managedIdentityCredential azcore.TokenCredential
 
-	clientOption, err := azclient.GetAzCoreClientOption(&config.ARMClientConfig)
+	clientOption, env, err := azclient.GetAzCoreClientOption(&config.ARMClientConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +106,7 @@ func NewAcrProviderFromConfig(configFile string) (CredentialProvider, error) {
 	return &acrProvider{
 		config:      config,
 		credential:  managedIdentityCredential,
-		environment: &envConfig,
+		environment: env,
 	}, nil
 }
 
@@ -195,7 +181,7 @@ func (a *acrProvider) GetCredentials(ctx context.Context, image string, _ []stri
 
 // getFromACR gets credentials from ACR.
 func (a *acrProvider) getFromACR(ctx context.Context, loginServer string) (string, string, error) {
-	config, err := azclient.GetAzureCloudConfig(&a.config.ARMClientConfig)
+	config, _, err := azclient.GetAzureCloudConfigAndEnvConfig(&a.config.ARMClientConfig)
 	if err != nil {
 		return "", "", err
 	}
