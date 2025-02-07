@@ -20,6 +20,8 @@
   {{- $_ := set . "cloudProviderAzureVersion" "v1.30.7" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "31" -}}
   {{- $_ := set . "cloudProviderAzureVersion" "v1.31.1" }}
+{{- else if eq .Capabilities.KubeVersion.Minor "32" -}}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.32.0" }}
 {{- end -}}
 {{- if .Values.cloudControllerManager.enabled }}
 apiVersion: v1
