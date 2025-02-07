@@ -412,3 +412,286 @@ func TestBuildAnnotationKeyForPort(t *testing.T) {
 		})
 	}
 }
+
+func TestIsK8sServiceDisableLoadBalancerFloatingIP(t *testing.T) {
+	type args struct {
+		service *v1.Service
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "floating IP is disabled",
+			args: args{
+				service: &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Annotations: map[string]string{
+							ServiceAnnotationDisableLoadBalancerFloatingIP: "true",
+						},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "floating IP is not disabled",
+			args: args{
+				service: &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Annotations: map[string]string{},
+					},
+				},
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsK8sServiceDisableLoadBalancerFloatingIP(tt.args.service); got != tt.want {
+				t.Errorf("IsK8sServiceDisableLoadBalancerFloatingIP() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsHealthProbeRuleOnK8sServicePortDisabled(t *testing.T) {
+	type args struct {
+		annotations map[string]string
+		port        int32
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    bool
+		wantErr bool
+	}{
+		{
+			name: "health probe rule is disabled",
+			args: args{
+				annotations: map[string]string{
+					BuildAnnotationKeyForPort(80, PortAnnotationNoHealthProbeRule): "true",
+				},
+				port: 80,
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "health probe rule is not disabled",
+			args: args{
+				annotations: map[string]string{},
+				port:        80,
+			},
+			want:    false,
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := IsHealthProbeRuleOnK8sServicePortDisabled(tt.args.annotations, tt.args.port)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("IsHealthProbeRuleOnK8sServicePortDisabled() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("IsHealthProbeRuleOnK8sServicePortDisabled() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsLBRuleOnK8sServicePortDisabled(t *testing.T) {
+	type args struct {
+		annotations map[string]string
+		port        int32
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    bool
+		wantErr bool
+	}{
+		{
+			name: "LB rule is disabled",
+			args: args{
+				annotations: map[string]string{
+					BuildAnnotationKeyForPort(80, PortAnnotationNoLBRule): "true",
+				},
+				port: 80,
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "LB rule is not disabled",
+			args: args{
+				annotations: map[string]string{},
+				port:        80,
+			},
+			want:    false,
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := IsLBRuleOnK8sServicePortDisabled(tt.args.annotations, tt.args.port)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("IsLBRuleOnK8sServicePortDisabled() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("IsLBRuleOnK8sServicePortDisabled() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsPLSProxyProtocolEnabled(t *testing.T) {
+	type args struct {
+		annotations map[string]string
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "PLS proxy protocol is enabled",
+			args: args{
+				annotations: map[string]string{
+					ServiceAnnotationPLSProxyProtocol: "true",
+				},
+			},
+			want: true,
+		},
+		{
+			name: "PLS proxy protocol is not enabled",
+			args: args{
+				annotations: map[string]string{},
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsPLSProxyProtocolEnabled(tt.args.annotations); got != tt.want {
+				t.Errorf("IsPLSProxyProtocolEnabled() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsPLSEnabled(t *testing.T) {
+	type args struct {
+		annotations map[string]string
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "PLS is enabled",
+			args: args{
+				annotations: map[string]string{
+					ServiceAnnotationPLSCreation: "true",
+				},
+			},
+			want: true,
+		},
+		{
+			name: "PLS is not enabled",
+			args: args{
+				annotations: map[string]string{},
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsPLSEnabled(tt.args.annotations); got != tt.want {
+				t.Errorf("IsPLSEnabled() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsTCPResetDisabled(t *testing.T) {
+	type args struct {
+		annotations map[string]string
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "TCP reset is disabled",
+			args: args{
+				annotations: map[string]string{
+					ServiceAnnotationDisableTCPReset: "true",
+				},
+			},
+			want: true,
+		},
+		{
+			name: "TCP reset is not disabled",
+			args: args{
+				annotations: map[string]string{},
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsTCPResetDisabled(tt.args.annotations); got != tt.want {
+				t.Errorf("IsTCPResetDisabled() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetLoadBalancerConfigurationsNames(t *testing.T) {
+	type args struct {
+		service *v1.Service
+	}
+	tests := []struct {
+		name string
+		args args
+		want []string
+	}{
+		{
+			name: "load balancer configurations are present",
+			args: args{
+				service: &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Annotations: map[string]string{
+							ServiceAnnotationLoadBalancerConfigurations: "config1,config2",
+						},
+					},
+				},
+			},
+			want: []string{"config1", "config2"},
+		},
+		{
+			name: "load balancer configurations are not present",
+			args: args{
+				service: &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Annotations: map[string]string{},
+					},
+				},
+			},
+			want: []string{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := GetLoadBalancerConfigurationsNames(tt.args.service); !(len(got) == 0 && len(tt.want) == 0) && !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetLoadBalancerConfigurationsNames() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

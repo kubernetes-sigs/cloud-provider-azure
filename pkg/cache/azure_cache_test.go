@@ -311,3 +311,73 @@ func TestCacheForceRefresh(t *testing.T) {
 	assert.Equal(t, 2, dataSource.called)
 	assert.Equal(t, val, v, "should refetch unexpired data as forced refresh")
 }
+
+func TestCacheSet(t *testing.T) {
+	_, cache := newFakeCache(t)
+	val := &fakeDataObj{Data: "test"}
+	cache.Set(testKey, val)
+
+	v, err := cache.GetWithDeepCopy(context.TODO(), testKey, CacheReadTypeDefault)
+	assert.NoError(t, err)
+	assert.Equal(t, val, v, "cache should get correct data after set")
+}
+
+func TestCacheUpdate(t *testing.T) {
+	_, cache := newFakeCache(t)
+	val := &fakeDataObj{Data: "test"}
+	cache.Set(testKey, val)
+
+	updatedVal := &fakeDataObj{Data: "updated"}
+	cache.Update(testKey, updatedVal)
+
+	v, err := cache.GetWithDeepCopy(context.TODO(), testKey, CacheReadTypeDefault)
+	assert.NoError(t, err)
+	assert.Equal(t, updatedVal, v, "cache should get updated data")
+}
+
+func TestResourceProviderGet(t *testing.T) {
+	getter := func(_ context.Context, key string) (interface{}, error) {
+		return &fakeDataObj{Data: key}, nil
+	}
+	provider := &ResourceProvider{Getter: getter}
+
+	val, err := provider.Get(context.TODO(), testKey, CacheReadTypeDefault)
+	assert.NoError(t, err)
+	assert.Equal(t, &fakeDataObj{Data: testKey}, val, "provider should get correct data")
+}
+
+func TestResourceProviderGetWithDeepCopy(t *testing.T) {
+	getter := func(_ context.Context, key string) (interface{}, error) {
+		return &fakeDataObj{Data: key}, nil
+	}
+	provider := &ResourceProvider{Getter: getter}
+
+	val, err := provider.GetWithDeepCopy(context.TODO(), testKey, CacheReadTypeDefault)
+	assert.NoError(t, err)
+	assert.Equal(t, &fakeDataObj{Data: testKey}, val, "provider should get correct data with deep copy")
+}
+
+func TestResourceProviderDelete(t *testing.T) {
+	provider := &ResourceProvider{}
+	err := provider.Delete(testKey)
+	assert.NoError(t, err, "provider delete should not return error")
+}
+
+func TestResourceProviderSet(t *testing.T) {
+	provider := &ResourceProvider{}
+	provider.Set(testKey, &fakeDataObj{Data: "test"})
+	// No assertion needed as Set is a no-op
+}
+
+func TestResourceProviderUpdate(t *testing.T) {
+	provider := &ResourceProvider{}
+	provider.Update(testKey, &fakeDataObj{Data: "test"})
+	// No assertion needed as Update is a no-op
+}
+
+func TestResourceProviderLockUnlock(t *testing.T) {
+	provider := &ResourceProvider{}
+	provider.Lock()
+	provider.Unlock()
+	// No assertion needed as Lock and Unlock are no-ops
+}
