@@ -37,6 +37,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	cloudprovider "k8s.io/cloud-provider"
 	servicehelpers "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/klog/v2"
@@ -2808,6 +2809,9 @@ func (az *Cloud) getExpectedLBRules(
 		}
 		// Build rules for each service port but with floatingIP = false, no health probes.
 		for _, port := range service.Spec.Ports {
+			if port.TargetPort.Type == intstr.String {
+				return nil, nil, fmt.Errorf("named targetPort is not supported when LB backend pool type is PodIP: %s", port.TargetPort.StrVal)
+			}
 			ruleName := az.getLoadBalancerRuleName(service, port.Protocol, port.Port, isIPv6)
 			transportProto, _, _, err := getProtocolsFromKubernetesProtocol(port.Protocol)
 			if err != nil {
@@ -2820,7 +2824,7 @@ func (az *Cloud) getExpectedLBRules(
 			// Turn off floating IP and skip health probe attachments.
 			props.EnableFloatingIP = ptr.To(false)
 			props.Probe = nil
-			props.BackendPort = ptr.To(int32(port.TargetPort.IntValue()))
+			props.BackendPort = &port.TargetPort.IntVal
 			expectedRules = append(expectedRules, &armnetwork.LoadBalancingRule{
 				Name:       &ruleName,
 				Properties: props,
