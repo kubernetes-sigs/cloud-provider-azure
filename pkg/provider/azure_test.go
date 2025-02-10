@@ -36,6 +36,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	cloudprovider "k8s.io/cloud-provider"
@@ -1238,6 +1239,67 @@ func getTestServiceCommon(identifier string, proto v1.Protocol, annotations map[
 			Protocol: proto,
 			Port:     port,
 			NodePort: getBackendPort(port),
+		})
+	}
+
+	svc := v1.Service{
+		Spec: v1.ServiceSpec{
+			Type:  v1.ServiceTypeLoadBalancer,
+			Ports: ports,
+		},
+	}
+	svc.Name = identifier
+	svc.Namespace = "default"
+	svc.UID = types.UID(identifier)
+	if annotations == nil {
+		svc.Annotations = make(map[string]string)
+	} else {
+		svc.Annotations = annotations
+	}
+
+	return svc
+}
+
+func getTestServiceWithNamedTargetPorts(identifier string, proto v1.Protocol, annotations map[string]string, isIPv6 bool, servicePort int32, namedTargetPorts ...string) v1.Service {
+	targetPorts := []intstr.IntOrString{}
+	for _, port := range namedTargetPorts {
+		targetPorts = append(targetPorts, intstr.FromString(port))
+	}
+	svc := getTestServiceWithTargetPortsCommon(identifier, proto, annotations, servicePort, targetPorts...)
+	svc.Spec.ClusterIP = "10.0.0.2"
+	svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol}
+	if isIPv6 {
+		svc.Spec.ClusterIP = "fd00::1907"
+		svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
+	}
+
+	return svc
+}
+
+func getTestServiceWithIntTargetPorts(identifier string, proto v1.Protocol, annotations map[string]string, isIPv6 bool, servicePort int32, intTargetPorts ...int32) v1.Service {
+	targetPorts := []intstr.IntOrString{}
+	for _, port := range intTargetPorts {
+		targetPorts = append(targetPorts, intstr.FromInt(int(port)))
+	}
+	svc := getTestServiceWithTargetPortsCommon(identifier, proto, annotations, servicePort, targetPorts...)
+	svc.Spec.ClusterIP = "10.0.0.2"
+	svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol}
+	if isIPv6 {
+		svc.Spec.ClusterIP = "fd00::1907"
+		svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
+	}
+
+	return svc
+}
+
+func getTestServiceWithTargetPortsCommon(identifier string, proto v1.Protocol, annotations map[string]string, servicePort int32, targetPorts ...intstr.IntOrString) v1.Service {
+	ports := []v1.ServicePort{}
+	for _, port := range targetPorts {
+		ports = append(ports, v1.ServicePort{
+			Name:       "target-port",
+			Protocol:   proto,
+			TargetPort: port,
+			Port:       servicePort,
 		})
 	}
 
