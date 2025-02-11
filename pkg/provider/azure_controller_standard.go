@@ -98,6 +98,7 @@ func (as *availabilitySet) AttachDisk(ctx context.Context, nodeName types.NodeNa
 				DataDisks: disks,
 			},
 		},
+		Location: vm.Location,
 	}
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - attach disk list(%v)", nodeResourceGroup, vmName, diskMap)
 
@@ -190,6 +191,7 @@ func (as *availabilitySet) DetachDisk(ctx context.Context, nodeName types.NodeNa
 				DataDisks: disks,
 			},
 		},
+		Location: vm.Location,
 	}
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) node(%s)- detach disk list(%s)", nodeResourceGroup, vmName, nodeName, diskMap)
 
