@@ -273,6 +273,14 @@ func TestParseACRLoginServerFromImage(t *testing.T) {
 			image:    "foo.azurecr.io",
 			expected: "foo.azurecr.io",
 		},
+		{
+			image:    "foo.azurecr.io.azurecr.cn",
+			expected: "",
+		},
+		{
+			image:    "foo-azurecr-io.azurecr.cn",
+			expected: "",
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.image, func(t *testing.T) {
