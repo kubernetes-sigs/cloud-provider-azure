@@ -46,7 +46,8 @@ const (
 
 var (
 	containerRegistryUrls = []string{"*.azurecr.io", "*.azurecr.cn", "*.azurecr.de", "*.azurecr.us"}
-	acrRE                 = regexp.MustCompile(`^.+?\.(azurecr\.io|azurecr\.cn|azurecr\.de|azurecr\.us)`)
+	// a valid acr image starts with alphanumerics, followed by corresponding acr domain name.
+	acrRE = regexp.MustCompile(`^[a-zA-Z0-9]+\.(azurecr\.io|azurecr\.cn|azurecr\.de|azurecr\.us)`)
 )
 
 // CredentialProvider is an interface implemented by the kubelet credential provider plugin to fetch
@@ -217,9 +218,17 @@ func (a *acrProvider) getFromACR(ctx context.Context, loginServer string) (strin
 // Parameter `image` is expected in following format: foo.azurecr.io/bar/imageName:version
 // If the provided image is not an acr image, this function will return an empty string.
 func (a *acrProvider) parseACRLoginServerFromImage(image string) string {
-	match := acrRE.FindAllString(image, -1)
-	if len(match) == 1 {
-		return match[0]
+	registry := acrRE.FindString(image)
+	imageWithoutRegistry := strings.TrimPrefix(image, registry)
+	// for non customer cloud case, return registry only when:
+	//   - the acr pattern match
+	//   - the left string is empty or // credential provider authenticates the image pull request, but not validates the existence of the image
+	//   - the left string starts with a image repository, lead by "/"
+	// foo.azurecr.io/bar/image:version -> foo.azurecr.io
+	// foo.azurecr.io -> not match
+	// foo.azurecr.io.example -> not match
+	if len(registry) != 0 && (len(imageWithoutRegistry) == 0 || (len(imageWithoutRegistry) != 0 && strings.HasPrefix(imageWithoutRegistry, "/"))) {
+		return registry
 	}
 
 	// handle the custom cloud case
