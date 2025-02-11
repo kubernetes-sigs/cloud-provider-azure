@@ -2,7 +2,7 @@
 
 MIT License
 
-Copyright (c) 2022 Samuel Berthe
+Copyright (c) 2022-2025 Samuel Berthe
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,4 +22,4 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-= vendor/github.com/samber/lo/LICENSE d03eceaac1aa7865fabd5998245fa454
+= vendor/github.com/samber/lo/LICENSE 1cce9fea1bd9690afd75f9941813586f
