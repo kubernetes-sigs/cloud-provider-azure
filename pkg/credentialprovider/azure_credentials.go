@@ -226,7 +226,7 @@ func (a *acrProvider) getFromACR(ctx context.Context, loginServer string) (strin
 func (a *acrProvider) parseACRLoginServerFromImage(image string) (string, string) {
 	targetImage, sourceRegistry := a.processImageWithRegistryMirror(image)
 	targetRegistry := acrRE.FindString(targetImage)
-	imageWithoutRegistry := strings.Trim(targetImage, targetRegistry)
+	imageWithoutRegistry := strings.TrimPrefix(targetImage, targetRegistry)
 	// for non customer cloud case, return registry only when:
 	//   - the acr pattern match
 	//   - the left string is empty or // credential provider authenticates the image pull request, but not validates the existence of the image
