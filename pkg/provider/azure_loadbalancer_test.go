@@ -8429,6 +8429,87 @@ func TestReconcileMultipleStandardLoadBalancerNodes(t *testing.T) {
 			},
 		},
 		{
+			description: "should handle empty node selector",
+			existingLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
+						PrimaryVMSet: "vmss-1",
+						NodeSelector: &metav1.LabelSelector{},
+					},
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveNodes: utilsets.NewString("node1"),
+					},
+				},
+				{
+					Name: "lb2",
+					MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
+						PrimaryVMSet: "vmss-2",
+					},
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveNodes: utilsets.NewString("node2", "node3"),
+					},
+				},
+			},
+			existingNodes: []*v1.Node{
+				getTestNodeWithMetadata("node1", "vmss-1", nil, "10.1.0.1"),
+				getTestNodeWithMetadata("node2", "vmss-2", nil, "10.1.0.2"),
+				getTestNodeWithMetadata("node3", "vmss-2", nil, "10.1.0.3"),
+			},
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						BackendAddressPools: []*armnetwork.BackendAddressPool{
+							{
+								Name: ptr.To("kubernetes"),
+								Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+									LoadBalancerBackendAddresses: []*armnetwork.LoadBalancerBackendAddress{
+										{
+											Name: ptr.To("node1"),
+											Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{
+												IPAddress: ptr.To("10.1.0.1"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: ptr.To("lb2"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						BackendAddressPools: []*armnetwork.BackendAddressPool{
+							{
+								Name: ptr.To("kubernetes"),
+								Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+									LoadBalancerBackendAddresses: []*armnetwork.LoadBalancerBackendAddress{
+										{
+											Name: ptr.To("node2"),
+											Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{
+												IPAddress: ptr.To("10.1.0.2"),
+											},
+										},
+										{
+											Name: ptr.To("node3"),
+											Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{
+												IPAddress: ptr.To("10.1.0.3"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedLBToNodesMap: map[string]*utilsets.IgnoreCaseSet{
+				"lb1": utilsets.NewString("node1"),
+				"lb2": utilsets.NewString("node2", "node3"),
+			},
+		},
+		{
 			description: "should remove the node on the lb if it is no longer eligible",
 			existingLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
 				{
