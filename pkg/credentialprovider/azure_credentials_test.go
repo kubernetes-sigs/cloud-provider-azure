@@ -197,6 +197,26 @@ func TestParseACRLoginServerFromImage(t *testing.T) {
 			image:    "foo.azurecr.us/foo.azurecr.io/bar/image:version",
 			expected: "foo.azurecr.us",
 		},
+		{
+			image:    "foo.azurecr.io.example/bar/image:version",
+			expected: "",
+		},
+		{
+			image:    "docker/foo.azurecr.io/bar/image:version",
+			expected: "",
+		},
+		{
+			image:    "foo.azurecr.io",
+			expected: "foo.azurecr.io",
+		},
+		{
+			image:    "foo.azurecr.io.azurecr.cn",
+			expected: "",
+		},
+		{
+			image:    "foo-azurecr-io.azurecr.cn",
+			expected: "",
+		},
 	}
 	for _, test := range tests {
 		if loginServer := provider.parseACRLoginServerFromImage(test.image); loginServer != test.expected {
