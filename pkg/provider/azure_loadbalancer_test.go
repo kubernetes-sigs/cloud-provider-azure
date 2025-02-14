@@ -9156,7 +9156,7 @@ func TestReconcileMultipleStandardLoadBalancerConfigurations(t *testing.T) {
 			}
 
 			svc := getTestService("test", v1.ProtocolTCP, nil, false)
-			err := az.reconcileMultipleStandardLoadBalancerConfigurations(&existingLBs, &svc, "kubernetes", &existingLBs, tc.nodes)
+			err := az.reconcileMultipleStandardLoadBalancerConfigurations(context.TODO(), &existingLBs, &svc, "kubernetes", &existingLBs, tc.nodes)
 			assert.Equal(t, err, tc.expectedErr)
 
 			activeServices := make(map[string]*utilsets.IgnoreCaseSet)
@@ -9822,6 +9822,87 @@ func TestReconcileMultipleStandardLoadBalancerNodes(t *testing.T) {
 			},
 		},
 		{
+			description: "should handle empty node selector",
+			existingLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						PrimaryVMSet: "vmss-1",
+						NodeSelector: &metav1.LabelSelector{},
+					},
+					MultipleStandardLoadBalancerConfigurationStatus: MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveNodes: utilsets.NewString("node1"),
+					},
+				},
+				{
+					Name: "lb2",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						PrimaryVMSet: "vmss-2",
+					},
+					MultipleStandardLoadBalancerConfigurationStatus: MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveNodes: utilsets.NewString("node2", "node3"),
+					},
+				},
+			},
+			existingNodes: []*v1.Node{
+				getTestNodeWithMetadata("node1", "vmss-1", nil, "10.1.0.1"),
+				getTestNodeWithMetadata("node2", "vmss-2", nil, "10.1.0.2"),
+				getTestNodeWithMetadata("node3", "vmss-2", nil, "10.1.0.3"),
+			},
+			existingLBs: []network.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						BackendAddressPools: &[]network.BackendAddressPool{
+							{
+								Name: ptr.To("kubernetes"),
+								BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+									LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+										{
+											Name: ptr.To("node1"),
+											LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+												IPAddress: ptr.To("10.1.0.1"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: ptr.To("lb2"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						BackendAddressPools: &[]network.BackendAddressPool{
+							{
+								Name: ptr.To("kubernetes"),
+								BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+									LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+										{
+											Name: ptr.To("node2"),
+											LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+												IPAddress: ptr.To("10.1.0.2"),
+											},
+										},
+										{
+											Name: ptr.To("node3"),
+											LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+												IPAddress: ptr.To("10.1.0.3"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedLBToNodesMap: map[string]*utilsets.IgnoreCaseSet{
+				"lb1": utilsets.NewString("node1"),
+				"lb2": utilsets.NewString("node2", "node3"),
+			},
+		},
+		{
 			description: "should remove the node on the lb if it is no longer eligible",
 			existingLBConfigs: []MultipleStandardLoadBalancerConfiguration{
 				{
@@ -10071,7 +10152,7 @@ func TestReconcileMultipleStandardLoadBalancerNodes(t *testing.T) {
 			az.LoadBalancerBackendPool = newBackendPoolTypeNodeIP(az)
 			az.MultipleStandardLoadBalancerConfigurations = tc.existingLBConfigs
 			svc := getTestService("test", v1.ProtocolTCP, nil, false)
-			_ = az.reconcileMultipleStandardLoadBalancerBackendNodes("kubernetes", tc.lbName, &tc.existingLBs, &svc, tc.existingNodes, tc.init)
+			_ = az.reconcileMultipleStandardLoadBalancerBackendNodes(context.TODO(), "kubernetes", tc.lbName, &tc.existingLBs, &svc, tc.existingNodes, tc.init)
 
 			expectedLBToNodesMap := make(map[string]*utilsets.IgnoreCaseSet)
 			for _, multiSLBConfig := range az.MultipleStandardLoadBalancerConfigurations {
