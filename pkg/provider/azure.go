@@ -325,10 +325,14 @@ type MultipleStandardLoadBalancerConfigurationSpec struct {
 
 	// Services created in namespaces with the supplied label will be allowed to select that load balancer.
 	// If not supplied, services created in any namespaces can be created on that load balancer.
+	// A ServiceLabelSelector with empty matchLabels and matchExpressions will match all services, but
+	// only works if no non-empty ServiceLabelSelector has matched the service.
 	ServiceNamespaceSelector *metav1.LabelSelector `json:"serviceNamespaceSelector" yaml:"serviceNamespaceSelector"`
 
 	// Nodes matching this selector will be preferentially added to the load balancers that
 	// they match selectors for. NodeSelector does not override primaryAgentPool for node allocation.
+	// A NodeSelector with empty matchLabels and matchExpressions will match all nodes, but
+	// only works if no non-empty NodeSelector has matched the node.
 	NodeSelector *metav1.LabelSelector `json:"nodeSelector" yaml:"nodeSelector"`
 }
 
