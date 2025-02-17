@@ -8436,6 +8436,87 @@ func TestReconcileMultipleStandardLoadBalancerNodes(t *testing.T) {
 			},
 		},
 		{
+			description: "should handle empty node selector",
+			existingLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
+						PrimaryVMSet: "vmss-1",
+						NodeSelector: &metav1.LabelSelector{},
+					},
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveNodes: utilsets.NewString("node1"),
+					},
+				},
+				{
+					Name: "lb2",
+					MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
+						PrimaryVMSet: "vmss-2",
+					},
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveNodes: utilsets.NewString("node2", "node3"),
+					},
+				},
+			},
+			existingNodes: []*v1.Node{
+				getTestNodeWithMetadata("node1", "vmss-1", nil, "10.1.0.1"),
+				getTestNodeWithMetadata("node2", "vmss-2", nil, "10.1.0.2"),
+				getTestNodeWithMetadata("node3", "vmss-2", nil, "10.1.0.3"),
+			},
+			existingLBs: []network.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						BackendAddressPools: &[]network.BackendAddressPool{
+							{
+								Name: ptr.To("kubernetes"),
+								BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+									LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+										{
+											Name: ptr.To("node1"),
+											LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+												IPAddress: ptr.To("10.1.0.1"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: ptr.To("lb2"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						BackendAddressPools: &[]network.BackendAddressPool{
+							{
+								Name: ptr.To("kubernetes"),
+								BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+									LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+										{
+											Name: ptr.To("node2"),
+											LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+												IPAddress: ptr.To("10.1.0.2"),
+											},
+										},
+										{
+											Name: ptr.To("node3"),
+											LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+												IPAddress: ptr.To("10.1.0.3"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedLBToNodesMap: map[string]*utilsets.IgnoreCaseSet{
+				"lb1": utilsets.NewString("node1"),
+				"lb2": utilsets.NewString("node2", "node3"),
+			},
+		},
+		{
 			description: "should remove the node on the lb if it is no longer eligible",
 			existingLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
 				{
