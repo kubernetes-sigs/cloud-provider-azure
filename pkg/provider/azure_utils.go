@@ -26,6 +26,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/pointer"
@@ -646,4 +647,11 @@ func trimSuffixIgnoreCase(str, suf string) string {
 		return strings.TrimSuffix(str, suf)
 	}
 	return str
+}
+
+func isEmptyLabelSelector(selector *metav1.LabelSelector) bool {
+	if selector == nil {
+		return true
+	}
+	return len(selector.MatchLabels) == 0 && len(selector.MatchExpressions) == 0
 }
