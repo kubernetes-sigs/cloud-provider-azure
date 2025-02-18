@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
@@ -48,6 +49,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/armauth"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/blobclient"
@@ -387,10 +389,6 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 	}
 
 	az.lockMap = lockmap.NewLockMap()
-	clientOps, _, err := azclient.GetAzCoreClientOption(&az.ARMClientConfig)
-	if err != nil {
-		return err
-	}
 
 	az.Config = *config
 	az.Environment = *env
@@ -478,11 +476,14 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		}
 		var cred azcore.TokenCredential
 		if authProvider.IsMultiTenantModeEnabled() {
+			// It uses Service Principal as the multi-tenant credential.
+			// TODO: refactor `IsMultiTenantModeEnabled` to make it more clear.
 			multiTenantCred := authProvider.GetMultiTenantIdentity()
 			networkTenantCred := authProvider.GetNetworkAzIdentity()
+
 			az.NetworkClientFactory, err = azclient.NewClientFactory(&azclient.ClientFactoryConfig{
 				SubscriptionID: az.NetworkResourceSubscriptionID,
-			}, &az.ARMClientConfig, clientOps.Cloud, networkTenantCred)
+			}, &az.ARMClientConfig, cloud, networkTenantCred)
 			if err != nil {
 				return err
 			}
@@ -490,9 +491,30 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		} else {
 			cred = authProvider.GetAzIdentity()
 		}
+
+		var opts []func(option *arm.ClientOptions)
+		if az.AzureAuthConfig.AuxiliaryTokenProvider != nil && az.AzureAuthConfig.UseManagedIdentityExtension {
+			klog.InfoS("Using auxiliary token provider for ARM network credential")
+			// Multi-tenant mode with auxiliary token provider.
+			// It uses Managed Identity as the primary credential and auxiliary token provider as the auxiliary credential.
+			opts = append(opts, func(option *arm.ClientOptions) {
+				option.PerCallPolicies = append(option.PerCallPolicies, armauth.NewAuxiliaryAuthPolicy(
+					[]azcore.TokenCredential{az.AuthProvider.GetNetworkAzIdentity()},
+					az.AuthProvider.DefaultTokenScope(),
+				))
+			})
+
+			az.NetworkClientFactory, err = azclient.NewClientFactory(&azclient.ClientFactoryConfig{
+				SubscriptionID: az.NetworkResourceSubscriptionID,
+			}, &az.ARMClientConfig, cloud, az.AuthProvider.GetNetworkAzIdentity())
+			if err != nil {
+				return err
+			}
+		}
+
 		az.ComputeClientFactory, err = azclient.NewClientFactory(&azclient.ClientFactoryConfig{
 			SubscriptionID: az.SubscriptionID,
-		}, &az.ARMClientConfig, cloud, cred)
+		}, &az.ARMClientConfig, cloud, cred, opts...)
 		if err != nil {
 			return err
 		}
