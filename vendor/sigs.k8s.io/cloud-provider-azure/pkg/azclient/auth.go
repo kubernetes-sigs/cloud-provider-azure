@@ -17,6 +17,7 @@ limitations under the License.
 package azclient
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -25,6 +26,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/msi-dataplane/pkg/dataplane"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/armauth"
 )
@@ -87,6 +89,7 @@ func NewAuthProvider(armConfig *ARMClientConfig, config *AzureAuthConfig, client
 		}
 	}
 
+	// Client secret authentication
 	if computeCredential == nil && len(config.GetAADClientSecret()) > 0 {
 		credOptions := &azidentity.ClientSecretCredentialOptions{
 			ClientOptions: *clientOption,
@@ -147,6 +150,14 @@ func NewAuthProvider(armConfig *ARMClientConfig, config *AzureAuthConfig, client
 			if err != nil {
 				return nil, err
 			}
+		}
+	}
+
+	// UserAssignedIdentityCredentials authentication
+	if computeCredential == nil && len(config.AADMSIDataPlaneIdentityPath) > 0 {
+		computeCredential, err = dataplane.NewUserAssignedIdentityCredential(context.Background(), config.AADMSIDataPlaneIdentityPath, dataplane.WithClientOpts(azcore.ClientOptions{Cloud: clientOption.Cloud}))
+		if err != nil {
+			return nil, err
 		}
 	}
 
