@@ -1204,7 +1204,7 @@ func TestReconcileBackendPoolsPodIP(t *testing.T) {
 	bpi := newBackendPoolTypePodIP(az)
 
 	t.Run("should return error when getBackendPoolNameForCLBService fails", func(t *testing.T) {
-		expectedErr := errors.New("dual-stack service is not supported for container load balancer")
+		expectedErr := errors.New("dual-stack services are not supported when LB backend pool type is PodIP")
 		service := getTestServiceDualStack("svc-1", v1.ProtocolTCP, nil, 80)
 
 		_, _, _, err := bpi.ReconcileBackendPools(context.TODO(), "", &service, &armnetwork.LoadBalancer{})
