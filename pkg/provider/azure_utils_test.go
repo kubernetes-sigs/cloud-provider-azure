@@ -115,6 +115,69 @@ func TestReconcileTags(t *testing.T) {
 			},
 			expectedChanged: true,
 		},
+		{
+			description: "reconcileTags should support prefix matching in systemTags",
+			currentTagsOnResource: map[string]*string{
+				"prefix-a": ptr.To("b"),
+				"c":        ptr.To("d"),
+			},
+			systemTags: "prefix",
+			expectedTags: map[string]*string{
+				"prefix-a": ptr.To("b"),
+			},
+			expectedChanged: true,
+		},
+		{
+			description: "reconcileTags should support prefix matching in systemTags case insensitive",
+			currentTagsOnResource: map[string]*string{
+				"prefix-a": ptr.To("b"),
+				"c":        ptr.To("d"),
+			},
+			systemTags: "PrEFiX",
+			expectedTags: map[string]*string{
+				"prefix-a": ptr.To("b"),
+			},
+			expectedChanged: true,
+		},
+		{
+			description: "reconcileTags should support prefix matching in systemTags with multiple prefixes",
+			currentTagsOnResource: map[string]*string{
+				"prefix-a": ptr.To("b"),
+				"sys-b":    ptr.To("c"),
+			},
+			systemTags: "prefix, sys",
+			expectedTags: map[string]*string{
+				"prefix-a": ptr.To("b"),
+				"sys-b":    ptr.To("c"),
+			},
+			expectedChanged: false,
+		},
+		{
+			description: "reconcileTags should work with full length aks managed cluster tags",
+			currentTagsOnResource: map[string]*string{
+				"aks-managed-cluster-name": ptr.To("test-name"),
+				"aks-managed-cluster-rg":   ptr.To("test-rg"),
+			},
+			systemTags: "aks-managed-cluster-name, aks-managed-cluster-rg",
+			expectedTags: map[string]*string{
+				"aks-managed-cluster-name": ptr.To("test-name"),
+				"aks-managed-cluster-rg":   ptr.To("test-rg"),
+			},
+			expectedChanged: false,
+		},
+		{
+			description: "real case test for systemTags",
+			currentTagsOnResource: map[string]*string{
+				"aks-managed-cluster-name": ptr.To("test-name"),
+				"aks-managed-cluster-rg":   ptr.To("test-rg"),
+			},
+			systemTags: "aks-managed",
+			expectedTags: map[string]*string{
+				"aks-managed-cluster-name": ptr.To("test-name"),
+				"aks-managed-cluster-rg":   ptr.To("test-rg"),
+			},
+			expectedChanged: false,
+		},
 	} {
 		t.Run(testCase.description, func(t *testing.T) {
 			cloud := &Cloud{}
@@ -124,6 +187,102 @@ func TestReconcileTags(t *testing.T) {
 
 			tags, changed := cloud.reconcileTags(testCase.currentTagsOnResource, testCase.newTags)
 			assert.Equal(t, testCase.expectedChanged, changed)
+			assert.Equal(t, testCase.expectedTags, tags)
+		})
+	}
+}
+
+func TestParseTags(t *testing.T) {
+	for _, testCase := range []struct {
+		description, tags string
+		tagsMap           map[string]string
+		expectedTags      map[string]*string
+	}{
+		{
+			description: "parseTags should return a map of tags",
+			tags:        "a=b, c=d",
+			tagsMap: map[string]string{
+				"e": "f",
+				"g": "h",
+			},
+			expectedTags: map[string]*string{
+				"a": ptr.To("b"),
+				"c": ptr.To("d"),
+				"e": ptr.To("f"),
+				"g": ptr.To("h"),
+			},
+		},
+		{
+			description:  "parseTags should work when `tags` and `tagsMap` are all empty",
+			tags:         "",
+			tagsMap:      map[string]string{},
+			expectedTags: map[string]*string{},
+		},
+		{
+			description: "parseTags should let the tagsMap override the tags",
+			tags:        "a=e, c=f",
+			tagsMap: map[string]string{
+				"a": "b",
+				"c": "d",
+			},
+			expectedTags: map[string]*string{
+				"a": ptr.To("b"),
+				"c": ptr.To("d"),
+			},
+		},
+		{
+			description: "parseTags override should ignore the case of keys and values",
+			tags:        "A=e, C=f",
+			tagsMap: map[string]string{
+				"a": "b",
+				"c": "d",
+			},
+			expectedTags: map[string]*string{
+				"a": ptr.To("b"),
+				"c": ptr.To("d"),
+			},
+		},
+		{
+			description: "parseTags should keep the blank character after or before string 'Null', eg. 'Null '",
+			tags:        "a=b, c=Null , d= null",
+			expectedTags: map[string]*string{
+				"a": ptr.To("b"),
+				"c": ptr.To("Null "),
+				"d": ptr.To(" null"),
+			},
+		},
+		{
+			description: "parseTags should also keep blank character of values from tagsMap, case insensitive as well",
+			tags:        "",
+			tagsMap: map[string]string{
+				"a": "b",
+				"c": "Null ",
+				"d": " nuLl",
+			},
+			expectedTags: map[string]*string{
+				"a": ptr.To("b"),
+				"c": ptr.To("Null "),
+				"d": ptr.To(" nuLl"),
+			},
+		},
+		{
+			description: "parseTags should trim the blank character of values from tags other than 'Null'",
+			tags:        "a=b, c= d , d= e",
+			tagsMap: map[string]string{
+				"x": " y ",
+				"z": " z",
+			},
+			expectedTags: map[string]*string{
+				"a": ptr.To("b"),
+				"c": ptr.To("d"),
+				"d": ptr.To("e"),
+				"x": ptr.To("y"),
+				"z": ptr.To("z"),
+			},
+		},
+	} {
+		t.Run(testCase.description, func(t *testing.T) {
+			tags := parseTags(testCase.tags, testCase.tagsMap)
 			assert.Equal(t, testCase.expectedTags, tags)
 		})
 	}

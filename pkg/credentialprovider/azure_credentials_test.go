@@ -205,8 +205,8 @@ func TestProcessImageWithMirrorMapping(t *testing.T) {
 	for _, test := range testcases {
 		t.Run(test.description, func(t *testing.T) {
 			targetloginServer, sourceloginServer := acrProvider.parseACRLoginServerFromImage(test.image)
-			assert.Equal(t, targetloginServer, test.expectedLoginServer)
-			assert.Equal(t, sourceloginServer, test.expectedLoginServerMirror)
+			assert.Equal(t, test.expectedLoginServer, targetloginServer)
+			assert.Equal(t, test.expectedLoginServerMirror, sourceloginServer)
 		})
 	}
 }
@@ -261,11 +261,31 @@ func TestParseACRLoginServerFromImage(t *testing.T) {
 			image:    "foo.azurecr.us/foo.azurecr.io/bar/image:version",
 			expected: "foo.azurecr.us",
 		},
+		{
+			image:    "foo.azurecr.io.example/bar/image:version",
+			expected: "",
+		},
+		{
+			image:    "docker/foo.azurecr.io/bar/image:version",
+			expected: "",
+		},
+		{
+			image:    "foo.azurecr.io",
+			expected: "foo.azurecr.io",
+		},
+		{
+			image:    "foo.azurecr.io.azurecr.cn",
+			expected: "",
+		},
+		{
+			image:    "foo-azurecr-io.azurecr.cn",
+			expected: "",
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.image, func(t *testing.T) {
 			targetloginServer, _ := provider.parseACRLoginServerFromImage(test.image)
-			assert.Equal(t, targetloginServer, test.expected)
+			assert.Equal(t, test.expected, targetloginServer)
 		})
 	}
 }

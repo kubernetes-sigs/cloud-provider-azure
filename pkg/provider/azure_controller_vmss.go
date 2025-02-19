@@ -159,8 +159,8 @@ func (ss *ScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName, dis
 
 	var disks []*armcompute.DataDisk
 
-	if vm != nil && vm.VirtualMachineProperties != nil {
-		storageProfile := vm.VirtualMachineProperties.StorageProfile
+	if vm != nil && vm.VirtualMachineScaleSetVMProperties != nil {
+		storageProfile := vm.VirtualMachineScaleSetVMProperties.StorageProfile
 		if storageProfile != nil && storageProfile.DataDisks != nil {
 			disks = make([]*armcompute.DataDisk, len(storageProfile.DataDisks))
 			copy(disks, storageProfile.DataDisks)
