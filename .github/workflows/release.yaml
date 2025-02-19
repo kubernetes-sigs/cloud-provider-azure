@@ -68,8 +68,10 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
         with:
-          go-version-file: go.mod
-          cache: true
+          go-version-file: 'go.mod'
+          check-latest: true
+          cache-dependency-path: |
+            go.sum
       - name: Build binary for linux
         if: matrix.os == 'linux'
         run: |
@@ -120,7 +122,10 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
         with:
-          go-version-file: go.mod
+          go-version-file: 'go.mod'
+          check-latest: true
+          cache-dependency-path: |
+            go.sum
       - name: Build binary for linux
         if: matrix.os == 'linux'
         run: |
