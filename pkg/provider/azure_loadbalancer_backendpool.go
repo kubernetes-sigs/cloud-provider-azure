@@ -934,7 +934,7 @@ func newBackendPoolTypePodIP(c *Cloud) BackendPool {
 }
 
 func (bpi *backendPoolTypePodIP) CleanupVMSetFromBackendPoolByCondition(_ context.Context, _ *armnetwork.LoadBalancer, _ *v1.Service, _ []*v1.Node, _ string, _ func(string) bool) (*armnetwork.LoadBalancer, error) {
-	return nil, errors.New("CleanupVMSetFromBackendPoolByCondition is not applicable for pod IP backend pool")
+	return nil, nil
 }
 
 func (bpi *backendPoolTypePodIP) EnsureHostsInPool(_ context.Context, _ *v1.Service, _ []*v1.Node, _ string, _ string, _ string, _ string, _ *armnetwork.BackendAddressPool) error {
