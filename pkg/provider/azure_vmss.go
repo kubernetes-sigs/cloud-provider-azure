@@ -1154,6 +1154,7 @@ func (ss *ScaleSet) EnsureHostInPool(ctx context.Context, _ *v1.Service, nodeNam
 				NetworkInterfaceConfigurations: networkInterfaceConfigurations,
 			},
 		},
+		Etag: vm.Etag,
 	}
 
 	// Get the node resource group.
@@ -1322,12 +1323,21 @@ func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes [
 					},
 				},
 			},
+			Etag: vmss.Etag,
 		}
+
+		// NOTE(mainred): invalidate vmss cache for the vmss is updated.
+		// we invalidate the vmss cache anyway, because
+		//    - when the vmss is updated, the vmss cache invalid
+		//    - when the vmss update failed, we want to get fresh-new vmss in the next round of update, especially for EtagMismatch error
+		defer func() {
+			_ = ss.vmssCache.Delete(consts.VMSSKey)
+		}()
 
 		klog.V(2).Infof("ensureVMSSInPool begins to update vmss(%s) with new backendPoolID %s", vmssName, backendPoolID)
 		rerr := ss.CreateOrUpdateVMSS(ss.ResourceGroup, vmssName, newVMSS)
 		if rerr != nil {
-			klog.Errorf("ensureVMSSInPool CreateOrUpdateVMSS(%s) with new backendPoolID %s, err: %v", vmssName, backendPoolID, err)
+			klog.Errorf("ensureVMSSInPool CreateOrUpdateVMSS(%s) with new backendPoolID %s, err: %v", vmssName, backendPoolID, rerr)
 			return rerr
 		}
 	}
@@ -1626,6 +1636,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromNode(ctx context.Context, nodeNa
 				NetworkInterfaceConfigurations: networkInterfaceConfigurations,
 			},
 		},
+		Etag: vm.Etag,
 	}
 
 	// Get the node resource group.
@@ -2221,7 +2232,12 @@ func (ss *ScaleSet) EnsureBackendPoolDeletedFromVMSets(ctx context.Context, vmss
 						},
 					},
 				},
+				Etag: vmss.Etag,
 			}
+
+			defer func() {
+				_ = ss.vmssCache.Delete(consts.VMSSKey)
+			}()
 
 			klog.V(2).Infof("EnsureBackendPoolDeletedFromVMSets begins to update vmss(%s) with backendPoolIDs %q", vmssName, backendPoolIDs)
 			rerr := ss.CreateOrUpdateVMSS(ss.ResourceGroup, vmssName, newVMSS)
@@ -2336,6 +2352,9 @@ func (ss *ScaleSet) VMSSBatchSize(ctx context.Context, vmssName string) (int, er
 	}
 	if _, ok := vmss.Tags[consts.VMSSTagForBatchOperation]; ok {
 		batchSize = ss.GetPutVMSSVMBatchSize()
+	}
+	if batchSize < 1 {
+		batchSize = 1
 	}
 	klog.V(2).InfoS("Fetch VMSS batch size", "vmss", vmssName, "size", batchSize)
 	return batchSize, nil

@@ -56,6 +56,28 @@ func init() {
 				Expect(newResource).NotTo(BeNil())
 			})
 		})
+		When("update requests are raised", func() {
+			It("should not return error", func(ctx context.Context) {
+				newResource, err := realClient.Update(ctx, resourceGroupName, virtualmachinescalesetName,"0", armcompute.VirtualMachineScaleSetVM{
+					Tags: map[string]*string{
+						"key1": to.Ptr("value1"),
+					},
+				})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(newResource).NotTo(BeNil())
+			})
+		})
+		When("update requests are raised with invalid etag", func() {
+			It("should return error", func(ctx context.Context) {
+				_, err := realClient.Update(ctx, resourceGroupName, virtualmachinescalesetName,"0", armcompute.VirtualMachineScaleSetVM{
+					Tags: map[string]*string{
+						"key1": to.Ptr("value1"),
+					},
+					Etag: to.Ptr("invalid-etag"),
+				})
+				Expect(err).To(HaveOccurred())
+			})
+		})
 	}
 
 	beforeAllFunc = func(ctx context.Context) {

@@ -1435,7 +1435,6 @@ func getIPTagMap(ipTagString string) map[string]string {
 func sortIPTags(ipTags *[]*armnetwork.IPTag) {
 	if ipTags != nil {
 		sort.Slice(*ipTags, func(i, j int) bool {
-
 			return ptr.Deref((*ipTags)[i].IPTagType, "") < ptr.Deref((*ipTags)[j].IPTagType, "") ||
 				ptr.Deref((*ipTags)[i].Tag, "") < ptr.Deref((*ipTags)[j].Tag, "")
 		})
@@ -2069,6 +2068,7 @@ func (az *Cloud) removeNodeFromLBConfig(nodeNameToLBConfigIDXMap map[string]int,
 // removeDeletedNodesFromLoadBalancerConfigurations removes the deleted nodes
 // that do not exist in nodes list from the load balancer configurations
 func (az *Cloud) removeDeletedNodesFromLoadBalancerConfigurations(nodes []*v1.Node) map[string]int {
+	logger := klog.Background().WithName("removeDeletedNodesFromLoadBalancerConfigurations")
 	nodeNamesSet := utilsets.NewString()
 	for _, node := range nodes {
 		nodeNamesSet.Insert(node.Name)
@@ -2080,12 +2080,14 @@ func (az *Cloud) removeDeletedNodesFromLoadBalancerConfigurations(nodes []*v1.No
 	// Remove the nodes from the load balancer configurations if they are not in the node list.
 	nodeNameToLBConfigIDXMap := make(map[string]int)
 	for i, multiSLBConfig := range az.MultipleStandardLoadBalancerConfigurations {
+		logger.V(4).Info("checking load balancer configuration", "lb", multiSLBConfig.Name)
 		if multiSLBConfig.ActiveNodes != nil {
 			for _, nodeName := range multiSLBConfig.ActiveNodes.UnsortedList() {
 				if nodeNamesSet.Has(nodeName) {
+					logger.V(4).Info("found node in load balancer configuration", "node", nodeName, "lb", multiSLBConfig.Name)
 					nodeNameToLBConfigIDXMap[nodeName] = i
 				} else {
-					klog.V(4).Infof("reconcileMultipleStandardLoadBalancerBackendNodes: node(%s) is gone, remove it from lb(%s)", nodeName, multiSLBConfig.Name)
+					logger.V(4).Info("removing node which is not found in input node list from load balancer configuration", "node", nodeName, "lb", multiSLBConfig.Name)
 					az.MultipleStandardLoadBalancerConfigurations[i].ActiveNodes.Delete(nodeName)
 				}
 			}
@@ -2143,12 +2145,15 @@ func (az *Cloud) accommodateNodesByPrimaryVMSet(
 
 // accommodateNodesByNodeSelector decides which load balancer configuration the node should be added to by node selector
 func (az *Cloud) accommodateNodesByNodeSelector(
+	ctx context.Context,
 	lbName string,
 	lbs []*armnetwork.LoadBalancer,
 	service *v1.Service,
 	nodes []*v1.Node,
 	nodeNameToLBConfigIDXMap map[string]int,
 ) error {
+	logger := klog.FromContext(ctx).WithName("accommodateNodesByNodeSelector")
+
 	for _, node := range nodes {
 		// Skip nodes that have been matched with a load balancer
 		// by primary vmSet.
@@ -2156,22 +2161,23 @@ func (az *Cloud) accommodateNodesByNodeSelector(
 			continue
 		}
 
+		logger.V(4).Info("checking node", "node", node.Name)
+
 		// If the vmSet of the node does not match any load balancer,
 		// pick all load balancers whose node selector matches the node.
 		var eligibleLBsIDX []int
 		for i, multiSLBConfig := range az.MultipleStandardLoadBalancerConfigurations {
-			if multiSLBConfig.NodeSelector != nil &&
-				(len(multiSLBConfig.NodeSelector.MatchLabels) > 0 || len(multiSLBConfig.NodeSelector.MatchExpressions) > 0) {
+			if !isEmptyLabelSelector(multiSLBConfig.NodeSelector) {
 				nodeSelector, err := metav1.LabelSelectorAsSelector(multiSLBConfig.NodeSelector)
 				if err != nil {
-					klog.Errorf("accommodateNodesByNodeSelector: failed to parse nodeSelector for lb(%s): %s", multiSLBConfig.Name, err.Error())
+					logger.Error(err, "failed to parse nodeSelector", "lb", multiSLBConfig.Name)
 					return err
 				}
 				if nodeSelector.Matches(labels.Set(node.Labels)) {
-					klog.V(4).Infof("accommodateNodesByNodeSelector: lb(%s) matches node(%s) labels", multiSLBConfig.Name, node.Name)
+					logger.V(4).Info("node matches nodeSelector", "node", node.Name, "lb", multiSLBConfig.Name)
 					found := isLBInList(lbs, multiSLBConfig.Name)
 					if !found && !strings.EqualFold(trimSuffixIgnoreCase(lbName, consts.InternalLoadBalancerNameSuffix), multiSLBConfig.Name) {
-						klog.V(4).Infof("accommodateNodesByNodeSelector: but the lb is not found and will not be created this time, will ignore this load balancer")
+						logger.V(4).Info("but the lb is not found and will not be created this time, will ignore this load balancer", "lb", multiSLBConfig.Name)
 						continue
 					}
 					eligibleLBsIDX = append(eligibleLBsIDX, i)
@@ -2181,7 +2187,8 @@ func (az *Cloud) accommodateNodesByNodeSelector(
 		// If no load balancer is matched, all load balancers without node selector are eligible.
 		if len(eligibleLBsIDX) == 0 {
 			for i, multiSLBConfig := range az.MultipleStandardLoadBalancerConfigurations {
-				if multiSLBConfig.NodeSelector == nil {
+				logger.V(4).Info("checking the node selector of the lb", "lb", multiSLBConfig.Name, "nodeSelector", multiSLBConfig.NodeSelector)
+				if isEmptyLabelSelector(multiSLBConfig.NodeSelector) {
 					eligibleLBsIDX = append(eligibleLBsIDX, i)
 				}
 			}
@@ -2192,16 +2199,21 @@ func (az *Cloud) accommodateNodesByNodeSelector(
 			multiSLBConfig := az.MultipleStandardLoadBalancerConfigurations[eligibleLBsIDX[i]]
 			found := isLBInList(lbs, multiSLBConfig.Name)
 			if !found && !strings.EqualFold(trimSuffixIgnoreCase(lbName, consts.InternalLoadBalancerNameSuffix), multiSLBConfig.Name) {
-				klog.V(4).Infof("accommodateNodesByNodeSelector: the load balancer %s is a valid placement target for node %s, but the lb is not found and will not be created this time, ignore this load balancer", multiSLBConfig.Name, node.Name)
+				logger.V(4).Info(
+					"the load balancer is a valid placement target for node, but the lb is not found and will not be created this time, ignore this load balancer",
+					"lb", multiSLBConfig.Name, "node", node.Name,
+				)
 				eligibleLBsIDX = append(eligibleLBsIDX[:i], eligibleLBsIDX[i+1:]...)
 			}
 		}
 		if idx, ok := nodeNameToLBConfigIDXMap[node.Name]; ok {
 			if IntInSlice(idx, eligibleLBsIDX) {
-				klog.V(4).Infof("accommodateNodesByNodeSelector: node(%s) is already on the eligible lb(%s)", node.Name, az.MultipleStandardLoadBalancerConfigurations[idx].Name)
+				logger.V(4).Info("node is already on the eligible lb", "node", node.Name, "lb", az.MultipleStandardLoadBalancerConfigurations[idx].Name)
 				continue
 			}
 		}
+
+		logger.V(4).Info("showing eligible load balancer indices for the node", "node", node.Name, "lbs", eligibleLBsIDX)
 
 		// Pick one with the fewest nodes among all eligible load balancers.
 		minNodesIDX := -1
@@ -2210,10 +2222,12 @@ func (az *Cloud) accommodateNodesByNodeSelector(
 		for _, idx := range eligibleLBsIDX {
 			multiSLBConfig := az.MultipleStandardLoadBalancerConfigurations[idx]
 			if multiSLBConfig.ActiveNodes.Len() < minNodes {
+				logger.V(4).Info("found an lb with fewer nodes", "lb", multiSLBConfig.Name, "nodes", multiSLBConfig.ActiveNodes.Len())
 				minNodes = multiSLBConfig.ActiveNodes.Len()
 				minNodesIDX = idx
 			}
 		}
+		logger.V(4).Info("showing the lb with the fewest nodes", "lb index", minNodesIDX, "node count", minNodes)
 		az.multipleStandardLoadBalancersActiveNodesLock.Unlock()
 
 		if idx, ok := nodeNameToLBConfigIDXMap[node.Name]; ok && idx != minNodesIDX {
@@ -2272,7 +2286,8 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerBackendNodes(
 	nodes []*v1.Node,
 	init bool,
 ) error {
-	logger := klog.Background().WithName("reconcileMultipleStandardLoadBalancerBackendNodes").
+	logger := klog.FromContext(ctx).
+		WithName("reconcileMultipleStandardLoadBalancerBackendNodes").
 		WithValues(
 			"clusterName", clusterName,
 			"lbName", lbName,
@@ -2294,7 +2309,7 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerBackendNodes(
 		return err
 	}
 
-	err = az.accommodateNodesByNodeSelector(lbName, lbs, service, nodes, nodeNameToLBConfigIDXMap)
+	err = az.accommodateNodesByNodeSelector(ctx, lbName, lbs, service, nodes, nodeNameToLBConfigIDXMap)
 	if err != nil {
 		return err
 	}
