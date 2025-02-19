@@ -32,7 +32,7 @@ stages:
       steps:
         - task: GoTool@0
           inputs:
-            version: '1.21.5'
+            version: '1.24'
         - bash: |
             CLUSTER_TYPE="autoscaling-multipool"
             echo "##vso[task.setvariable variable=CLUSTER_TYPE]${CLUSTER_TYPE}"
