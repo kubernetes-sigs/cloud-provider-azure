@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm/policy"
 
@@ -39,6 +40,7 @@ func init() {
 				Transport: utils.DefaultTransport,
 				PoolSize:  100,
 			}),
+			Timeout: time.Minute,
 		}
 	})
 }
