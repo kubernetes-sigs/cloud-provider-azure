@@ -22,8 +22,11 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"golang.org/x/net/http2"
 )
 
+// DefaultTransport is the default transport used by the Azure SDK for Go.
 var DefaultTransport *http.Transport
 var once sync.Once
 
@@ -43,6 +46,12 @@ func init() {
 			TLSClientConfig: &tls.Config{
 				MinVersion: tls.VersionTLS12,
 			},
+		}
+
+		// Configure HTTP/2
+		if http2Transport, err := http2.ConfigureTransports(DefaultTransport); err == nil {
+			http2Transport.ReadIdleTimeout = 30 * time.Second
+			http2Transport.PingTimeout = 15 * time.Second
 		}
 	})
 }
