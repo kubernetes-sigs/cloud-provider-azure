@@ -25,6 +25,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
@@ -71,7 +72,13 @@ func parseTags(tags string, tagsMap map[string]string) map[string]*string {
 				klog.Warningf("parseTags: error when parsing key-value pair %s, would ignore this one", kv)
 				continue
 			}
+			// Avoid generate `Null` string after TrimSpace operation, (e.g. " null", " Null " -> "null"/"Null")
+			// `Null` is a reserved tag value by ARM, so the leading/trailing spaces must be preserved.
+			// Refer to https://github.com/kubernetes-sigs/cloud-provider-azure/issues/7048.
 			k, v := strings.TrimSpace(res[0]), strings.TrimSpace(res[1])
+			if strings.EqualFold(v, "null") {
+				v = res[1]
+			}
 			if k == "" {
 				klog.Warning("parseTags: empty key, ignoring this key-value pair")
 				continue
@@ -81,8 +88,11 @@ func parseTags(tags string, tagsMap map[string]string) map[string]*string {
 	}
 
 	if len(tagsMap) > 0 {
-		for key, value := range tagsMap {
-			key, value := strings.TrimSpace(key), strings.TrimSpace(value)
+		for k, v := range tagsMap {
+			key, value := strings.TrimSpace(k), strings.TrimSpace(v)
+			if strings.EqualFold(value, "null") {
+				value = v
+			}
 			if key == "" {
 				klog.Warningf("parseTags: empty key, ignoring this key-value pair")
 				continue
@@ -106,6 +116,23 @@ func findKeyInMapCaseInsensitive(targetMap map[string]*string, key string) (bool
 		}
 	}
 
+	return false, ""
+}
+
+// This function extends the functionality of findKeyInMapCaseInsensitive by supporting both
+// exact case-insensitive key matching and prefix-based key matching in the given map.
+// 1. If the key is found in the map (case-insensitively), the function returns true and the matching key in the map.
+// 2. If the key's prefix is found in the map (case-insensitively), the function also returns true and the matching key in the map.
+// This function is designed to enable systemTags to support prefix-based tag keys,
+// allowing more flexible and efficient tag key matching.
+func findKeyInMapWithPrefix(targetMap map[string]*string, key string) (bool, string) {
+	for k := range targetMap {
+		// use prefix-based key matching
+		// use case-insensitive comparison
+		if strings.HasPrefix(strings.ToLower(key), strings.ToLower(k)) {
+			return true, k
+		}
+	}
 	return false, ""
 }
 
@@ -141,7 +168,7 @@ func (az *Cloud) reconcileTags(currentTagsOnResource, newTags map[string]*string
 	if len(systemTagsMap) > 0 {
 		for k := range currentTagsOnResource {
 			if _, ok := newTags[k]; !ok {
-				if found, _ := findKeyInMapCaseInsensitive(systemTagsMap, k); !found {
+				if found, _ := findKeyInMapWithPrefix(systemTagsMap, k); !found {
 					klog.V(2).Infof("reconcileTags: delete tag %s: %s", k, ptr.Deref(currentTagsOnResource[k], ""))
 					delete(currentTagsOnResource, k)
 					changed = true
@@ -506,4 +533,11 @@ func trimSuffixIgnoreCase(str, suf string) string {
 		return strings.TrimSuffix(str, suf)
 	}
 	return str
+}
+
+func isEmptyLabelSelector(selector *metav1.LabelSelector) bool {
+	if selector == nil {
+		return true
+	}
+	return len(selector.MatchLabels) == 0 && len(selector.MatchExpressions) == 0
 }

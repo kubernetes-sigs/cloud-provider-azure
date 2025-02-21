@@ -86,6 +86,7 @@ type Config struct {
 	// SystemTags determines the tag keys managed by cloud provider. If it is not set, no tags would be deleted if
 	// the `Tags` is changed. However, the old tags would be deleted if they are neither included in `Tags` nor
 	// in `SystemTags` after the update of `Tags`.
+	// SystemTags now support prefix match, which means that if a key in `SystemTags` is a prefix of a key in `Tags`, that tag will not be deleted
 	SystemTags string `json:"systemTags,omitempty" yaml:"systemTags,omitempty"`
 	// Sku of Load Balancer and Public IP. Candidate values are: basic and standard.
 	// If not set, it will be default to basic.
@@ -108,10 +109,6 @@ type Config struct {
 	DisableAvailabilitySetNodes bool `json:"disableAvailabilitySetNodes,omitempty" yaml:"disableAvailabilitySetNodes,omitempty"`
 	// EnableVmssFlexNodes enables vmss flex nodes support when "VMType" is set to "vmss".
 	EnableVmssFlexNodes bool `json:"enableVmssFlexNodes,omitempty" yaml:"enableVmssFlexNodes,omitempty"`
-	// DisableAzureStackCloud disables AzureStackCloud support. It should be used
-	// when setting AzureAuthConfig.Cloud with "AZURESTACKCLOUD" to customize ARM endpoints
-	// while the cluster is not running on AzureStack.
-	DisableAzureStackCloud bool `json:"disableAzureStackCloud,omitempty" yaml:"disableAzureStackCloud,omitempty"`
 	// Use instance metadata service where possible
 	UseInstanceMetadata bool `json:"useInstanceMetadata,omitempty" yaml:"useInstanceMetadata,omitempty"`
 
@@ -137,7 +134,7 @@ type Config struct {
 	// `podIP`: pod IPs will be attached to the inbound backend pool of the load balancer (not supported yet).
 	LoadBalancerBackendPoolConfigurationType string `json:"loadBalancerBackendPoolConfigurationType,omitempty" yaml:"loadBalancerBackendPoolConfigurationType,omitempty"`
 	// PutVMSSVMBatchSize defines how many requests the client send concurrently when putting the VMSS VMs.
-	// If it is smaller than or equal to zero, the request will be sent one by one in sequence (default).
+	// If it is smaller than or equal to one, the request will be sent one by one in sequence (default).
 	PutVMSSVMBatchSize int `json:"putVMSSVMBatchSize" yaml:"putVMSSVMBatchSize"`
 	// PrivateLinkServiceResourceGroup determines the specific resource group of the private link services user want to use
 	PrivateLinkServiceResourceGroup string `json:"privateLinkServiceResourceGroup,omitempty" yaml:"privateLinkServiceResourceGroup,omitempty"`

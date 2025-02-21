@@ -7,7 +7,8 @@ timeout: 9000s
 options:
   substitution_option: ALLOW_LOOSE
 steps:
-  - name: "gcr.io/k8s-testimages/gcb-docker-gcloud:v20240523-a15ad90fc9"
+  # gcb-docker-gcloud is published at https://testgrid.k8s.io/sig-testing-image-pushes#gcb-docker-gcloud
+  - name: "gcr.io/k8s-staging-test-infra/gcb-docker-gcloud@sha256:4e830b673791d5595719bc6c4ca62dce3746b4e20d749e45004254bc6ef0a140" # v20250116-2a05ea7e3d
     entrypoint: make
     env:
       - TAG=${_GIT_TAG}

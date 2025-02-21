@@ -6274,7 +6274,7 @@ func TestCleanOrphanedLoadBalancerLBInUseByVMSS(t *testing.T) {
 
 		expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
 		mockVMSSClient := cloud.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-		mockVMSSClient.EXPECT().List(gomock.Any(), "rg").Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil)
+		mockVMSSClient.EXPECT().List(gomock.Any(), "rg").Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).MaxTimes(2)
 		mockVMSSClient.EXPECT().Get(gomock.Any(), "rg", testVMSSName, gomock.Any()).Return(expectedVMSS, nil)
 		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", testVMSSName, gomock.Any()).Return(nil, nil)
 
@@ -8471,6 +8471,87 @@ func TestReconcileMultipleStandardLoadBalancerNodes(t *testing.T) {
 				"lb2": utilsets.NewString("node3"),
 				"lb3": utilsets.NewString("node5"),
 				"lb4": utilsets.NewString("node2", "node6"),
+			},
+		},
+		{
+			description: "should handle empty node selector",
+			existingLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
+						PrimaryVMSet: "vmss-1",
+						NodeSelector: &metav1.LabelSelector{},
+					},
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveNodes: utilsets.NewString("node1"),
+					},
+				},
+				{
+					Name: "lb2",
+					MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
+						PrimaryVMSet: "vmss-2",
+					},
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveNodes: utilsets.NewString("node2", "node3"),
+					},
+				},
+			},
+			existingNodes: []*v1.Node{
+				getTestNodeWithMetadata("node1", "vmss-1", nil, "10.1.0.1"),
+				getTestNodeWithMetadata("node2", "vmss-2", nil, "10.1.0.2"),
+				getTestNodeWithMetadata("node3", "vmss-2", nil, "10.1.0.3"),
+			},
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						BackendAddressPools: []*armnetwork.BackendAddressPool{
+							{
+								Name: ptr.To("kubernetes"),
+								Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+									LoadBalancerBackendAddresses: []*armnetwork.LoadBalancerBackendAddress{
+										{
+											Name: ptr.To("node1"),
+											Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{
+												IPAddress: ptr.To("10.1.0.1"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: ptr.To("lb2"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						BackendAddressPools: []*armnetwork.BackendAddressPool{
+							{
+								Name: ptr.To("kubernetes"),
+								Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+									LoadBalancerBackendAddresses: []*armnetwork.LoadBalancerBackendAddress{
+										{
+											Name: ptr.To("node2"),
+											Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{
+												IPAddress: ptr.To("10.1.0.2"),
+											},
+										},
+										{
+											Name: ptr.To("node3"),
+											Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{
+												IPAddress: ptr.To("10.1.0.3"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedLBToNodesMap: map[string]*utilsets.IgnoreCaseSet{
+				"lb1": utilsets.NewString("node1"),
+				"lb2": utilsets.NewString("node2", "node3"),
 			},
 		},
 		{

@@ -101,6 +101,7 @@ func (fs *FlexScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName,
 				DataDisks: disks,
 			},
 		},
+		Location: vm.Location,
 	}
 
 	klog.V(2).Infof("azureDisk - update: rg(%s) vm(%s) - attach disk list(%+v)", nodeResourceGroup, vmName, diskMap)
@@ -184,6 +185,7 @@ func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName,
 				DataDisks: disks,
 			},
 		},
+		Location: vm.Location,
 	}
 
 	var result *armcompute.VirtualMachine

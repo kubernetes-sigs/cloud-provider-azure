@@ -35,6 +35,7 @@ var EnvironmentMapping = map[string]*cloud.Configuration{
 	"AZUREUSGOVERNMENTCLOUD": &cloud.AzureGovernment, //TODO: deprecate
 }
 
+const AzureStackCloudName = "AZURESTACKCLOUD"
 const (
 	// EnvironmentFilepathName captures the name of the environment variable containing the path to the file
 	// to be used while populating the Azure Environment.
@@ -117,7 +118,10 @@ func OverrideAzureCloudConfigAndEnvConfigFromMetadataService(endpoint, cloudName
 	return nil
 }
 
-func OverrideAzureCloudConfigFromEnv(config *cloud.Configuration, env *Environment) error {
+func OverrideAzureCloudConfigFromEnv(cloudName string, config *cloud.Configuration, env *Environment) error {
+	if !strings.EqualFold(cloudName, AzureStackCloudName) {
+		return nil
+	}
 	envFilePath, ok := os.LookupEnv(EnvironmentFilepathName)
 	if !ok {
 		return nil
@@ -156,7 +160,7 @@ func GetAzureCloudConfigAndEnvConfig(armConfig *ARMClientConfig) (cloud.Configur
 	if err != nil {
 		return *config, nil, err
 	}
-	err = OverrideAzureCloudConfigFromEnv(config, env)
+	err = OverrideAzureCloudConfigFromEnv(cloudName, config, env)
 	return *config, env, err
 }
 
