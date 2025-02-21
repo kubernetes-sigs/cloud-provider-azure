@@ -50,6 +50,7 @@ func GetDefaultOption() *arm.ClientOptions {
 			},
 			Transport: &http.Client{
 				Transport: DefaultTransport,
+				Timeout:   time.Minute,
 			},
 			TracingProvider: tracing.NewProvider(func(name, version string) tracing.Tracer {
 				return tracing.NewTracer(NewOtlpSpan, nil)

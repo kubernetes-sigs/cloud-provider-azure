@@ -19,6 +19,7 @@ package azclient
 import (
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm/policy"
 	"github.com/Azure/go-armbalancer"
@@ -37,6 +38,7 @@ func init() {
 				Transport: utils.DefaultTransport,
 				PoolSize:  100,
 			}),
+			Timeout: time.Minute,
 		}
 	})
 }
