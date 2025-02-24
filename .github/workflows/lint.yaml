@@ -29,7 +29,7 @@ jobs:
         uses: golangci/golangci-lint-action@e0ebdd245eea59746bb0b28ea6a9871d3e35fbc9 # v6.3.3
         with:
           # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
-          version: v1.60
+          version: v1.64
           args: -v
           install-mode: "goinstall"
 
