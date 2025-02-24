@@ -24,15 +24,15 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -2766,7 +2766,25 @@ func TestEnsureHostsInPool(t *testing.T) {
 			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000", "vmss-vm-000001", "vmss-vm-000002"}, "", false)
 			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
 			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
-			mockVMSSVMClient.EXPECT().Update(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), gomock.Any()).Return(nil, nil).Times(test.expectedVMSSVMPutTimes)
+
+			mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, _, _, _ string, _ armcompute.VirtualMachineScaleSetVM, _ *armcompute.VirtualMachineScaleSetVMsClientBeginUpdateOptions) (*runtime.Poller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse], error) {
+					poller, err := runtime.NewPoller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse](
+						&http.Response{
+							Header: http.Header{"Fake-Poller-Status": []string{"https://fake/operation"}},
+						},
+						runtime.Pipeline{},
+						&runtime.NewPollerOptions[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse]{
+							Handler: &vmssvmMockPutHandler{
+								resp: &http.Response{
+									StatusCode: http.StatusAccepted,
+								},
+							},
+						},
+					)
+					assert.NoError(t, err)
+					return poller, nil
+				}).Times(test.expectedVMSSVMPutTimes)
 
 			mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 			mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
@@ -2901,7 +2919,7 @@ func TestEnsureHostsInPoolEtagMismatch(t *testing.T) {
 				},
 				Etag: copiedVMSSVM.Etag,
 			}
-			mockVMSSVMClient.EXPECT().Update(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), vmssVMMatcher).Return(nil, test.vmssvmClientPutError).Times(test.expectedVMSSVMPutTimes)
+			mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), vmssVMMatcher, gomock.Any()).Return(nil, test.vmssvmClientPutError).Times(test.expectedVMSSVMPutTimes)
 
 			mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 			mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
@@ -3078,7 +3096,7 @@ func TestEnsureBackendPoolDeletedEtagMismatch(t *testing.T) {
 			}
 			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
 			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
-			mockVMSSVMClient.EXPECT().Update(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), vmssVMMatcher).Return(nil, test.vmssvmClientPutError).Times(test.expectedVMSSVMPutTimes)
+			mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), vmssVMMatcher, gomock.Any()).Return(nil, test.vmssvmClientPutError).Times(test.expectedVMSSVMPutTimes)
 
 			mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 			mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
@@ -3404,7 +3422,7 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000", "vmss-vm-000001", "vmss-vm-000002"}, "", false)
 			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
 			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
-			mockVMSSVMClient.EXPECT().Update(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), gomock.Any()).Return(nil, test.vmClientErr).Times(test.expectedVMSSVMPutTimes)
+			mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, test.vmClientErr).Times(test.expectedVMSSVMPutTimes)
 
 			mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 			mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
@@ -3416,6 +3434,150 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEnsureHostsInPoolInParallel(t *testing.T) {
+
+	testCases := []struct {
+		description            string
+		nodes                  []*v1.Node
+		backendpoolID          string
+		vmSetName              string
+		expectedVMSSVMPutTimes int
+		expectedErr            bool
+	}{
+		{
+			description: "EnsureHostsInPool should skip the invalid node and update the VMSS VM correctly",
+			nodes: []*v1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "vmss-vm-000000",
+						Labels: map[string]string{consts.NodeLabelRole: "master"},
+					},
+					Spec: v1.NodeSpec{
+						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "vmss-vm-000001",
+						Labels: map[string]string{consts.ManagedByAzureLabel: "false"},
+					},
+					Spec: v1.NodeSpec{
+						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/1",
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "vmss-vm-000002",
+					},
+					Spec: v1.NodeSpec{
+						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/2",
+					},
+				},
+			},
+			backendpoolID:          testLBBackendpoolID1,
+			vmSetName:              testVMSSName,
+			expectedVMSSVMPutTimes: 1,
+		},
+		{
+			description: "EnsureHostsInPool should skip not found nodes",
+			nodes: []*v1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "vmss-vm-000003",
+					},
+					Spec: v1.NodeSpec{
+						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/3",
+					},
+				},
+			},
+			backendpoolID:          testLBBackendpoolID1,
+			vmSetName:              testVMSSName,
+			expectedVMSSVMPutTimes: 0,
+			expectedErr:            false,
+		},
+	}
+
+	for _, test := range testCases {
+		test := test
+		t.Run(test.description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			ss, err := NewTestScaleSet(ctrl)
+			assert.NoError(t, err, test.description)
+
+			for _, node := range test.nodes {
+				if node.Labels[consts.ManagedByAzureLabel] == "false" {
+					ss.excludeLoadBalancerNodes = utilsets.NewString(node.Name)
+				}
+			}
+			ss.PutVMSSVMBatchSize = 2
+			ss.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+			ss.ExcludeMasterFromStandardLB = ptr.To(true)
+			expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
+			expectedVMSS.Tags = map[string]*string{
+				"aks-managed-coordination": to.Ptr("true"),
+			}
+			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+			mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName, nil).Return(expectedVMSS, nil).MaxTimes(1)
+			mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(nil, nil).MaxTimes(1)
+
+			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000", "vmss-vm-000001", "vmss-vm-000002"}, "", false)
+			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+
+			mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, _, _, _ string, _ armcompute.VirtualMachineScaleSetVM, _ *armcompute.VirtualMachineScaleSetVMsClientBeginUpdateOptions) (*runtime.Poller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse], error) {
+					poller, err := runtime.NewPoller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse](
+						&http.Response{
+							Header: http.Header{"Fake-Poller-Status": []string{"https://fake/operation"}},
+						},
+						runtime.Pipeline{},
+						&runtime.NewPollerOptions[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse]{
+							Handler: &vmssvmMockPutHandler{
+								resp: &http.Response{
+									StatusCode: http.StatusAccepted,
+								},
+							},
+						},
+					)
+					assert.NoError(t, err)
+					return poller, nil
+				}).Times(test.expectedVMSSVMPutTimes)
+
+			mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+			mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+			err = ss.EnsureHostsInPool(context.Background(), &v1.Service{}, test.nodes, test.backendpoolID, test.vmSetName)
+			assert.Equal(t, test.expectedErr, err != nil, test.description+errMsgSuffix)
+		})
+	}
+}
+
+type vmssvmMockPutHandler struct {
+	sleep int
+	resp  *http.Response
+}
+
+// Done returns true if the LRO has reached a terminal state.
+func (h *vmssvmMockPutHandler) Done() bool {
+	return true
+}
+
+// Poll fetches the latest state of the LRO.
+func (h *vmssvmMockPutHandler) Poll(context.Context) (*http.Response, error) {
+	if h.sleep != 0 {
+		time.Sleep(time.Duration(h.sleep) * time.Second)
+	}
+	return h.resp, nil
+}
+
+// Result is called once the LRO has reached a terminal state. It populates the out parameter
+// with the result of the operation.
+func (h *vmssvmMockPutHandler) Result(_ context.Context, _ *armcompute.VirtualMachineScaleSetVMsClientUpdateResponse) error {
+	return nil
 }
 
 func TestEnsureBackendPoolDeletedConcurrentlyLoop(t *testing.T) {
@@ -3493,7 +3655,45 @@ func TestEnsureBackendPoolDeletedConcurrently(t *testing.T) {
 	mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), "rg1", "vmss-0").Return(nil, nil).AnyTimes()
 	mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, "vmss-0").Return(expectedVMSSVMsOfVMSS0, nil).AnyTimes()
 	mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, "vmss-1").Return(expectedVMSSVMsOfVMSS1, nil).AnyTimes()
-	mockVMSSVMClient.EXPECT().Update(gomock.Any(), ss.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(2)
+	mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, "vmss-0", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _, _, _ string, _ armcompute.VirtualMachineScaleSetVM, _ *armcompute.VirtualMachineScaleSetVMsClientBeginUpdateOptions) (*runtime.Poller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse], error) {
+			poller, err := runtime.NewPoller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse](
+				&http.Response{
+					Header: http.Header{"Fake-Poller-Status": []string{"https://fake/operation"}},
+				},
+				runtime.Pipeline{},
+				&runtime.NewPollerOptions[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse]{
+					Handler: &vmssvmMockPutHandler{
+						resp: &http.Response{
+							StatusCode: http.StatusAccepted,
+						},
+					},
+				},
+			)
+			assert.NoError(t, err)
+			return poller, nil
+		},
+	).Times(1)
+
+	mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, "vmss-1", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _, _, _ string, _ armcompute.VirtualMachineScaleSetVM, _ *armcompute.VirtualMachineScaleSetVMsClientBeginUpdateOptions) (*runtime.Poller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse], error) {
+			poller, err := runtime.NewPoller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse](
+				&http.Response{
+					Header: http.Header{"Fake-Poller-Status": []string{"https://fake/operation"}},
+				},
+				runtime.Pipeline{},
+				&runtime.NewPollerOptions[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse]{
+					Handler: &vmssvmMockPutHandler{
+						resp: &http.Response{
+							StatusCode: http.StatusAccepted,
+						},
+					},
+				},
+			)
+			assert.NoError(t, err)
+			return poller, nil
+		},
+	).Times(1)
 
 	backendpoolAddressIDs := []string{testLBBackendpoolID0, testLBBackendpoolID1, testLBBackendpoolID2}
 	testVMSSNames := []string{"vmss-0", "vmss-1", "vmss-2"}
