@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -224,4 +225,13 @@ func getExpectedPIPFromListByIPAddress(pips []network.PublicIPAddress, ip string
 	}
 
 	return nil, fmt.Errorf("getExpectedPIPFromListByIPAddress: cannot find public IP with IP address %s", ip)
+}
+
+func getPIPRGFromID(pipIDLower string) (string, error) {
+	re := regexp.MustCompile(strings.ToLower(`/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Network/publicIPAddresses/(?:.*)`))
+	matches := re.FindStringSubmatch(pipIDLower)
+	if len(matches) != 2 {
+		return "", fmt.Errorf("failed to extract resource group name from public IP ID %s", pipIDLower)
+	}
+	return matches[1], nil
 }
