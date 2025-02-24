@@ -167,18 +167,13 @@ type Config struct {
 	// ClusterServiceSharedLoadBalancerHealthProbePath defines the target path of the shared health probe. Default to `/healthz`.
 	ClusterServiceSharedLoadBalancerHealthProbePath string `json:"clusterServiceSharedLoadBalancerHealthProbePath,omitempty" yaml:"clusterServiceSharedLoadBalancerHealthProbePath,omitempty"`
 
-	// RetrievedClusterPodCidr tracks whether the pod subnet prefix for the cluster has been retrieved and set within the Network Security Group (NSG).
-	// The NSG for the pod subnet is configured once for the entire cluster.
-	// If the pod subnet prefix is not set, the value is false.
-	// If the pod subnet prefix is set, the value is true.
-	// Note: Multiple rules per subnet with different protocols and destination ports can exist.
-	RetrievedClusterPodCidr bool `json:"retrievedClusterPodCidr" yaml:"retrievedClusterPodCidr"`
-
-	// PodCidrIPv4 is the IPv4 pod subnet prefix for the cluster.
-	// PodCidrIPv6 is the IPv6 pod subnet prefix for the cluster.
+	// PodCidrsIPv4 is a slice of IPv4 pod subnet prefixes for the cluster.
+	// PodCidrsIPv6 is a slice of IPv6 pod subnet prefixes for the cluster.
 	// The pod subnet prefix is used to configure the NSG for the pod subnet.
-	PodCidrIPv4 netip.Prefix `json:"podCidrIPv4" yaml:"podCidrIPv4"`
-	PodCidrIPv6 netip.Prefix `json:"podCidrIPv6" yaml:"podCidrIPv6"`
+	// Pod CIDR would be opened to internet by default
+	// TODO enechitoaia: improve security eventually
+	PodCidrsIPv4 []netip.Prefix `json:"podCidrIPv4" yaml:"podCidrIPv4"`
+	PodCidrsIPv6 []netip.Prefix `json:"podCidrIPv6" yaml:"podCidrIPv6"`
 }
 
 // HasExtendedLocation returns true if extendedlocation prop are specified.
@@ -195,7 +190,7 @@ func (az *Config) IsLBBackendPoolTypeNodeIP() bool {
 }
 
 func (az *Config) IsLBBackendPoolTypePodIP() bool {
-	return strings.EqualFold(az.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePodIP)
+	return strings.EqualFold(az.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePodIP) && az.UseStandardV2LoadBalancer()
 }
 
 func (az *Config) GetPutVMSSVMBatchSize() int {
@@ -204,6 +199,10 @@ func (az *Config) GetPutVMSSVMBatchSize() int {
 
 func (az *Config) UseStandardLoadBalancer() bool {
 	return strings.EqualFold(az.LoadBalancerSKU, consts.LoadBalancerSKUStandard)
+}
+
+func (az *Config) UseStandardV2LoadBalancer() bool {
+	return strings.EqualFold(az.LoadBalancerSKU, consts.LoadBalancerSKUStandardV2)
 }
 
 func (az *Config) ExcludeMasterNodesFromStandardLB() bool {

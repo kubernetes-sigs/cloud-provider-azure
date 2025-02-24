@@ -37,7 +37,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil"
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil/fixture"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/managedclusterclient/mock_managedclusterclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
@@ -97,13 +96,11 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 		t.Run("container load balancer - noop when no allow list specified", func(t *testing.T) {
 			var (
-				ctrl                 = gomock.NewController(t)
-				az                   = GetTestCloudWithContainerLoadBalancer(ctrl)
-				securityGroupClient  = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				managedClusterClient = az.NetworkClientFactory.GetManagedClusterClient().(*mock_managedclusterclient.MockInterface)
-				securityGroup        = azureFx.SecurityGroup().Build()
-				loadBalancer         = azureFx.LoadBalancer().Build()
-				managedCluster       = azureFx.ManagedCluster().Build()
+				ctrl                = gomock.NewController(t)
+				az                  = GetTestCloudWithContainerLoadBalancerAndPrefixCidr(ctrl, false)
+				securityGroupClient = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+				securityGroup       = azureFx.SecurityGroup().Build()
+				loadBalancer        = azureFx.LoadBalancer().Build()
 			)
 			defer ctrl.Finish()
 
@@ -112,11 +109,6 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			securityGroupClient.EXPECT().
 				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
 				Return(securityGroup, nil).
-				Times(1)
-
-			managedClusterClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, ClusterName).
-				Return(managedCluster, nil).
 				Times(1)
 
 			sg, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
@@ -211,13 +203,11 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 		t.Run("container load balancer - add Internet allow rules if allow all", func(t *testing.T) {
 			var (
-				ctrl                 = gomock.NewController(t)
-				az                   = GetTestCloudWithContainerLoadBalancer(ctrl)
-				securityGroupClient  = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				managedClusterClient = az.NetworkClientFactory.GetManagedClusterClient().(*mock_managedclusterclient.MockInterface)
-				securityGroup        = azureFx.SecurityGroup().Build()
-				loadBalancer         = azureFx.LoadBalancer().Build()
-				managedCluster       = azureFx.ManagedCluster().Build()
+				ctrl                = gomock.NewController(t)
+				az                  = GetTestCloudWithContainerLoadBalancerAndPrefixCidr(ctrl, false)
+				securityGroupClient = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+				securityGroup       = azureFx.SecurityGroup().Build()
+				loadBalancer        = azureFx.LoadBalancer().Build()
 			)
 			defer ctrl.Finish()
 
@@ -243,24 +233,19 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, serviceTags, k8sFx.Service().TCPPorts()).
 							WithPriority(500).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+							WithDestination(az.PodCidrsIPv4[0].String()).
 							Build(),
 
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{"0.0.0.0/0"}, k8sFx.Service().TCPPorts()).
 							WithPriority(501).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+							WithDestination(az.PodCidrsIPv4[0].String()).
 							Build(),
 					}
 
 					testutil.ExpectExactSecurityRules(t, &properties, rules)
 					return nil, nil
 				}).Times(1)
-
-			managedClusterClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, ClusterName).
-				Return(managedCluster, nil).
-				Times(1)
 
 			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
@@ -353,13 +338,11 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 		t.Run("container load balancer - add rules with a mix of settings", func(t *testing.T) {
 			var (
-				ctrl                 = gomock.NewController(t)
-				az                   = GetTestCloudWithContainerLoadBalancer(ctrl)
-				securityGroupClient  = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				managedClusterClient = az.NetworkClientFactory.GetManagedClusterClient().(*mock_managedclusterclient.MockInterface)
-				securityGroup        = azureFx.SecurityGroup().Build()
-				loadBalancer         = azureFx.LoadBalancer().Build()
-				managedCluster       = azureFx.ManagedCluster().Build()
+				ctrl                = gomock.NewController(t)
+				az                  = GetTestCloudWithContainerLoadBalancerAndPrefixCidr(ctrl, false)
+				securityGroupClient = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+				securityGroup       = azureFx.SecurityGroup().Build()
+				loadBalancer        = azureFx.LoadBalancer().Build()
 			)
 			defer ctrl.Finish()
 
@@ -384,23 +367,19 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{azureFx.ServiceTag()}, k8sFx.Service().TCPPorts()).
 							WithPriority(500).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+							WithDestination(az.PodCidrsIPv4[0].String()).
 							Build(),
 
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{"0.0.0.0/0"}, k8sFx.Service().TCPPorts()).
 							WithPriority(501).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+							WithDestination(az.PodCidrsIPv4[0].String()).
 							Build(),
 					}
 
 					testutil.ExpectExactSecurityRules(t, &properties, rules)
 					return nil, nil
 				}).Times(1)
-			managedClusterClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, ClusterName).
-				Return(managedCluster, nil).
-				Times(1)
 
 			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
@@ -483,14 +462,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 	t.Run("container load balancer - add Internet allow rules if no allow list specified", func(t *testing.T) {
 		var (
-			ctrl                 = gomock.NewController(t)
-			az                   = GetTestCloudWithContainerLoadBalancer(ctrl)
-			securityGroupClient  = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-			managedClusterClient = az.NetworkClientFactory.GetManagedClusterClient().(*mock_managedclusterclient.MockInterface)
-			svc                  = k8sFx.Service().WithOnlyTCPPorts().Build()
-			securityGroup        = azureFx.SecurityGroup().Build()
-			loadBalancer         = azureFx.LoadBalancer().Build()
-			managedCluster       = azureFx.ManagedCluster().Build()
+			ctrl                = gomock.NewController(t)
+			az                  = GetTestCloudWithContainerLoadBalancerAndPrefixCidr(ctrl, false)
+			securityGroupClient = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+			svc                 = k8sFx.Service().WithOnlyTCPPorts().Build()
+			securityGroup       = azureFx.SecurityGroup().Build()
+			loadBalancer        = azureFx.LoadBalancer().Build()
 		)
 		defer ctrl.Finish()
 
@@ -512,17 +489,13 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					azureFx.
 						AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, serviceTags, k8sFx.Service().TCPPorts()).
 						WithPriority(500).
-						WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+						WithDestination(az.PodCidrsIPv4[0].String()).
 						Build(),
 				}
 
 				testutil.ExpectExactSecurityRules(t, &properties, rules)
 				return nil, nil
 			}).Times(1)
-		managedClusterClient.EXPECT().
-			Get(gomock.Any(), az.ResourceGroup, ClusterName).
-			Return(managedCluster, nil).
-			Times(1)
 
 		_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 		assert.NoError(t, err)
@@ -610,14 +583,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 		t.Run("container load balancer - with `service.beta.kubernetes.io/azure-additional-public-ips` specified", func(t *testing.T) {
 			var (
-				ctrl                 = gomock.NewController(t)
-				az                   = GetTestCloudWithContainerLoadBalancer(ctrl)
-				securityGroupClient  = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				managedClusterClient = az.NetworkClientFactory.GetManagedClusterClient().(*mock_managedclusterclient.MockInterface)
-				svc                  = k8sFx.Service().WithOnlyUDPPorts().Build()
-				securityGroup        = azureFx.SecurityGroup().Build()
-				loadBalancer         = azureFx.LoadBalancer().Build()
-				managedCluster       = azureFx.ManagedCluster().Build()
+				ctrl                = gomock.NewController(t)
+				az                  = GetTestCloudWithContainerLoadBalancerAndPrefixCidr(ctrl, false)
+				securityGroupClient = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+				svc                 = k8sFx.Service().WithOnlyUDPPorts().Build()
+				securityGroup       = azureFx.SecurityGroup().Build()
+				loadBalancer        = azureFx.LoadBalancer().Build()
 			)
 			defer ctrl.Finish()
 
@@ -641,17 +612,13 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, serviceTags, k8sFx.Service().UDPPorts()).
 							WithPriority(500).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+							WithDestination(az.PodCidrsIPv4[0].String()).
 							Build(),
 					}
 
 					testutil.ExpectExactSecurityRules(t, &properties, rules)
 					return nil, nil
 				}).Times(1)
-			managedClusterClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, ClusterName).
-				Return(managedCluster, nil).
-				Times(1)
 
 			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
@@ -733,14 +700,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 		t.Run("container load balancer - with `service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip` specified", func(t *testing.T) {
 			var (
-				ctrl                 = gomock.NewController(t)
-				az                   = GetTestCloudWithContainerLoadBalancer(ctrl)
-				securityGroupClient  = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				managedClusterClient = az.NetworkClientFactory.GetManagedClusterClient().(*mock_managedclusterclient.MockInterface)
-				svc                  = k8sFx.Service().WithOnlyTCPPorts().Build()
-				securityGroup        = azureFx.SecurityGroup().Build()
-				loadBalancer         = azureFx.LoadBalancer().Build()
-				managedCluster       = azureFx.ManagedCluster().Build()
+				ctrl                = gomock.NewController(t)
+				az                  = GetTestCloudWithContainerLoadBalancerAndPrefixCidr(ctrl, false)
+				securityGroupClient = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+				svc                 = k8sFx.Service().WithOnlyTCPPorts().Build()
+				securityGroup       = azureFx.SecurityGroup().Build()
+				loadBalancer        = azureFx.LoadBalancer().Build()
 			)
 			defer ctrl.Finish()
 
@@ -764,17 +729,13 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, serviceTags, k8sFx.Service().TCPNodePorts()). // use NodePort
 							WithPriority(500).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+							WithDestination(az.PodCidrsIPv4[0].String()).
 							Build(),
 					}
 
 					testutil.ExpectExactSecurityRules(t, &properties, rules)
 					return nil, nil
 				}).Times(1)
-			managedClusterClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, ClusterName).
-				Return(managedCluster, nil).
-				Times(1)
 
 			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
@@ -865,14 +826,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 		t.Run("container load balancer - with `service.beta.kubernetes.io/azure-allowed-ip-ranges` specified", func(t *testing.T) {
 			var (
-				ctrl                 = gomock.NewController(t)
-				az                   = GetTestCloudWithContainerLoadBalancer(ctrl)
-				securityGroupClient  = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				managedClusterClient = az.NetworkClientFactory.GetManagedClusterClient().(*mock_managedclusterclient.MockInterface)
-				svc                  = k8sFx.Service().WithOnlyTCPPorts().Build()
-				securityGroup        = azureFx.SecurityGroup().Build()
-				loadBalancer         = azureFx.LoadBalancer().Build()
-				managedCluster       = azureFx.ManagedCluster().Build()
+				ctrl                = gomock.NewController(t)
+				az                  = GetTestCloudWithContainerLoadBalancerAndPrefixCidr(ctrl, false)
+				securityGroupClient = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+				svc                 = k8sFx.Service().WithOnlyTCPPorts().Build()
+				securityGroup       = azureFx.SecurityGroup().Build()
+				loadBalancer        = azureFx.LoadBalancer().Build()
 			)
 			defer ctrl.Finish()
 
@@ -904,7 +863,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).
 							WithPriority(500).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+							WithDestination(az.PodCidrsIPv4[0].String()).
 							Build(),
 					}
 
@@ -912,10 +871,6 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 					return nil, nil
 				}).Times(1)
-			managedClusterClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, ClusterName).
-				Return(managedCluster, nil).
-				Times(1)
 
 			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
@@ -1020,14 +975,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 		t.Run("container load balancer - with `service.beta.kubernetes.io/azure-allowed-service-tags` specified", func(t *testing.T) {
 			var (
-				ctrl                 = gomock.NewController(t)
-				az                   = GetTestCloudWithContainerLoadBalancer(ctrl)
-				securityGroupClient  = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				managedClusterClient = az.NetworkClientFactory.GetManagedClusterClient().(*mock_managedclusterclient.MockInterface)
-				svc                  = k8sFx.Service().WithOnlyTCPPorts().Build()
-				securityGroup        = azureFx.SecurityGroup().Build()
-				loadBalancer         = azureFx.LoadBalancer().Build()
-				managedCluster       = azureFx.ManagedCluster().Build()
+				ctrl                = gomock.NewController(t)
+				az                  = GetTestCloudWithContainerLoadBalancerAndPrefixCidr(ctrl, false)
+				securityGroupClient = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+				svc                 = k8sFx.Service().WithOnlyTCPPorts().Build()
+				securityGroup       = azureFx.SecurityGroup().Build()
+				loadBalancer        = azureFx.LoadBalancer().Build()
 			)
 			defer ctrl.Finish()
 
@@ -1053,12 +1006,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTags[0]}, k8sFx.Service().TCPPorts()).
 							WithPriority(500).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+							WithDestination(az.PodCidrsIPv4[0].String()).
 							Build(),
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTags[1]}, k8sFx.Service().TCPPorts()).
 							WithPriority(501).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+							WithDestination(az.PodCidrsIPv4[0].String()).
 							Build(),
 					}
 
@@ -1066,10 +1019,6 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 					return nil, nil
 				}).Times(1)
-			managedClusterClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, ClusterName).
-				Return(managedCluster, nil).
-				Times(1)
 
 			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
@@ -1159,14 +1108,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 		t.Run("container load balancer - with `spec.loadBalancerSourceRanges` specified", func(t *testing.T) {
 			var (
-				ctrl                 = gomock.NewController(t)
-				az                   = GetTestCloudWithContainerLoadBalancer(ctrl)
-				securityGroupClient  = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				managedClusterClient = az.NetworkClientFactory.GetManagedClusterClient().(*mock_managedclusterclient.MockInterface)
-				svc                  = k8sFx.Service().WithOnlyTCPPorts().Build()
-				securityGroup        = azureFx.SecurityGroup().Build()
-				loadBalancer         = azureFx.LoadBalancer().Build()
-				managedCluster       = azureFx.ManagedCluster().Build()
+				ctrl                = gomock.NewController(t)
+				az                  = GetTestCloudWithContainerLoadBalancerAndPrefixCidr(ctrl, false)
+				securityGroupClient = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+				svc                 = k8sFx.Service().WithOnlyTCPPorts().Build()
+				securityGroup       = azureFx.SecurityGroup().Build()
+				loadBalancer        = azureFx.LoadBalancer().Build()
 			)
 			defer ctrl.Finish()
 
@@ -1198,17 +1145,13 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).
 							WithPriority(500).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+							WithDestination(az.PodCidrsIPv4[0].String()).
 							Build(),
 					}
 
 					testutil.ExpectExactSecurityRules(t, &properties, rules)
 					return nil, nil
 				}).Times(1)
-			managedClusterClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, ClusterName).
-				Return(managedCluster, nil).
-				Times(1)
 
 			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
@@ -1308,14 +1251,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 		t.Run("container load balancer - with `service.beta.kubernetes.io/azure-deny-all-except-load-balancer-source-ranges` specified", func(t *testing.T) {
 			var (
-				ctrl                 = gomock.NewController(t)
-				az                   = GetTestCloudWithContainerLoadBalancer(ctrl)
-				securityGroupClient  = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				managedClusterClient = az.NetworkClientFactory.GetManagedClusterClient().(*mock_managedclusterclient.MockInterface)
-				svc                  = k8sFx.Service().WithOnlyTCPPorts().Build()
-				securityGroup        = azureFx.SecurityGroup().Build()
-				loadBalancer         = azureFx.LoadBalancer().Build()
-				managedCluster       = azureFx.ManagedCluster().Build()
+				ctrl                = gomock.NewController(t)
+				az                  = GetTestCloudWithContainerLoadBalancerAndPrefixCidr(ctrl, false)
+				securityGroupClient = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+				svc                 = k8sFx.Service().WithOnlyTCPPorts().Build()
+				securityGroup       = azureFx.SecurityGroup().Build()
+				loadBalancer        = azureFx.LoadBalancer().Build()
 			)
 			defer ctrl.Finish()
 
@@ -1344,12 +1285,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						azureFx.
 							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).
 							WithPriority(500).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+							WithDestination(az.PodCidrsIPv4[0].String()).
 							Build(),
 						azureFx.
 							DenyAllSecurityRule(iputil.IPv4).
 							WithPriority(4095).
-							WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+							WithDestination(az.PodCidrsIPv4[0].String()).
 							Build(),
 					}
 
@@ -1357,10 +1298,6 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 					return nil, nil
 				}).Times(1)
-			managedClusterClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, ClusterName).
-				Return(managedCluster, nil).
-				Times(1)
 
 			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
@@ -1435,13 +1372,11 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 		t.Run("container load balancer - with `service.beta.kubernetes.io/azure-additional-public-ips` specified", func(t *testing.T) {
 			var (
-				ctrl                 = gomock.NewController(t)
-				az                   = GetTestCloudWithContainerLoadBalancer(ctrl)
-				securityGroupClient  = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				managedClusterClient = az.NetworkClientFactory.GetManagedClusterClient().(*mock_managedclusterclient.MockInterface)
-				svc                  = k8sFx.Service().WithOnlyTCPPorts().Build()
-				loadBalancer         = azureFx.LoadBalancer().Build()
-				managedCluster       = azureFx.ManagedCluster().Build()
+				ctrl                = gomock.NewController(t)
+				az                  = GetTestCloudWithContainerLoadBalancerAndPrefixCidr(ctrl, false)
+				securityGroupClient = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+				svc                 = k8sFx.Service().WithOnlyTCPPorts().Build()
+				loadBalancer        = azureFx.LoadBalancer().Build()
 			)
 			defer ctrl.Finish()
 
@@ -1452,22 +1387,18 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, serviceTags, k8sFx.Service().TCPPorts()).
 					WithPriority(500).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+					WithDestination(az.PodCidrsIPv4[0].String()).
 					Build(),
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, serviceTags, k8sFx.Service().UDPPorts()).
 					WithPriority(501).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+					WithDestination(az.PodCidrsIPv4[0].String()).
 					Build(),
 			)
 			securityGroup := azureFx.SecurityGroup().WithRules(rules).Build()
 			securityGroupClient.EXPECT().
 				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
 				Return(securityGroup, nil).
-				Times(1)
-			managedClusterClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, ClusterName).
-				Return(managedCluster, nil).
 				Times(1)
 
 			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
@@ -1538,13 +1469,11 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 		t.Run("container load balancer - with `service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip` specified", func(t *testing.T) {
 			var (
-				ctrl                 = gomock.NewController(t)
-				az                   = GetTestCloudWithContainerLoadBalancer(ctrl)
-				securityGroupClient  = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				managedClusterClient = az.NetworkClientFactory.GetManagedClusterClient().(*mock_managedclusterclient.MockInterface)
-				svc                  = k8sFx.Service().WithOnlyTCPPorts().Build()
-				loadBalancer         = azureFx.LoadBalancer().Build()
-				managedCluster       = azureFx.ManagedCluster().Build()
+				ctrl                = gomock.NewController(t)
+				az                  = GetTestCloudWithContainerLoadBalancerAndPrefixCidr(ctrl, false)
+				securityGroupClient = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+				svc                 = k8sFx.Service().WithOnlyTCPPorts().Build()
+				loadBalancer        = azureFx.LoadBalancer().Build()
 			)
 			defer ctrl.Finish()
 
@@ -1555,13 +1484,13 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, serviceTags, k8sFx.Service().TCPNodePorts()). // use NodePort
 					WithPriority(500).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+					WithDestination(az.PodCidrsIPv4[0].String()).
 					Build(),
 
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, serviceTags, k8sFx.Service().UDPNodePorts()). // use NodePort
 					WithPriority(502).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+					WithDestination(az.PodCidrsIPv4[0].String()).
 					Build(),
 			)
 			securityGroup := azureFx.SecurityGroup().WithRules(rules).Build()
@@ -1569,10 +1498,6 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			securityGroupClient.EXPECT().
 				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
 				Return(securityGroup, nil).
-				Times(1)
-			managedClusterClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, ClusterName).
-				Return(managedCluster, nil).
 				Times(1)
 
 			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
@@ -1647,13 +1572,11 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 		t.Run("container load balancer - with `service.beta.kubernetes.io/azure-allowed-ip-ranges` specified", func(t *testing.T) {
 			var (
-				ctrl                 = gomock.NewController(t)
-				az                   = GetTestCloudWithContainerLoadBalancer(ctrl)
-				securityGroupClient  = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				managedClusterClient = az.NetworkClientFactory.GetManagedClusterClient().(*mock_managedclusterclient.MockInterface)
-				svc                  = k8sFx.Service().WithOnlyTCPPorts().Build()
-				loadBalancer         = azureFx.LoadBalancer().Build()
-				managedCluster       = azureFx.ManagedCluster().Build()
+				ctrl                = gomock.NewController(t)
+				az                  = GetTestCloudWithContainerLoadBalancerAndPrefixCidr(ctrl, false)
+				securityGroupClient = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+				svc                 = k8sFx.Service().WithOnlyTCPPorts().Build()
+				loadBalancer        = azureFx.LoadBalancer().Build()
 			)
 			defer ctrl.Finish()
 
@@ -1668,13 +1591,13 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).
 					WithPriority(500).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+					WithDestination(az.PodCidrsIPv4[0].String()).
 					Build(),
 
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().UDPPorts()).
 					WithPriority(501).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+					WithDestination(az.PodCidrsIPv4[0].String()).
 					Build(),
 			)
 			securityGroup := azureFx.SecurityGroup().WithRules(rules).Build()
@@ -1682,10 +1605,6 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			securityGroupClient.EXPECT().
 				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
 				Return(securityGroup, nil).
-				Times(1)
-			managedClusterClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, ClusterName).
-				Return(managedCluster, nil).
 				Times(1)
 
 			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
@@ -1778,13 +1697,11 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 		t.Run("container load balancer - with `service.beta.kubernetes.io/azure-allowed-service-tags` specified", func(t *testing.T) {
 			var (
-				ctrl                 = gomock.NewController(t)
-				az                   = GetTestCloudWithContainerLoadBalancer(ctrl)
-				securityGroupClient  = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				managedClusterClient = az.NetworkClientFactory.GetManagedClusterClient().(*mock_managedclusterclient.MockInterface)
-				svc                  = k8sFx.Service().WithOnlyTCPPorts().Build()
-				loadBalancer         = azureFx.LoadBalancer().Build()
-				managedCluster       = azureFx.ManagedCluster().Build()
+				ctrl                = gomock.NewController(t)
+				az                  = GetTestCloudWithContainerLoadBalancerAndPrefixCidr(ctrl, false)
+				securityGroupClient = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+				svc                 = k8sFx.Service().WithOnlyTCPPorts().Build()
+				loadBalancer        = azureFx.LoadBalancer().Build()
 			)
 			defer ctrl.Finish()
 
@@ -1797,23 +1714,23 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTags[0]}, k8sFx.Service().TCPPorts()).
 					WithPriority(500).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+					WithDestination(az.PodCidrsIPv4[0].String()).
 					Build(),
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTags[1]}, k8sFx.Service().TCPPorts()).
 					WithPriority(501).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+					WithDestination(az.PodCidrsIPv4[0].String()).
 					Build(),
 				// UDP + IPv4
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{allowedServiceTags[0]}, k8sFx.Service().UDPPorts()).
 					WithPriority(502).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+					WithDestination(az.PodCidrsIPv4[0].String()).
 					Build(),
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{allowedServiceTags[1]}, k8sFx.Service().UDPPorts()).
 					WithPriority(503).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+					WithDestination(az.PodCidrsIPv4[0].String()).
 					Build(),
 			)
 			securityGroup := azureFx.SecurityGroup().WithRules(rules).Build()
@@ -1821,10 +1738,6 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			securityGroupClient.EXPECT().
 				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
 				Return(securityGroup, nil).
-				Times(1)
-			managedClusterClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, ClusterName).
-				Return(managedCluster, nil).
 				Times(1)
 
 			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
@@ -1900,13 +1813,11 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 		t.Run("container load balancer - with `spec.loadBalancerSourceRanges` specified", func(t *testing.T) {
 			var (
-				ctrl                 = gomock.NewController(t)
-				az                   = GetTestCloudWithContainerLoadBalancer(ctrl)
-				securityGroupClient  = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				managedClusterClient = az.NetworkClientFactory.GetManagedClusterClient().(*mock_managedclusterclient.MockInterface)
-				svc                  = k8sFx.Service().WithOnlyTCPPorts().Build()
-				loadBalancer         = azureFx.LoadBalancer().Build()
-				managedCluster       = azureFx.ManagedCluster().Build()
+				ctrl                = gomock.NewController(t)
+				az                  = GetTestCloudWithContainerLoadBalancerAndPrefixCidr(ctrl, false)
+				securityGroupClient = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+				svc                 = k8sFx.Service().WithOnlyTCPPorts().Build()
+				loadBalancer        = azureFx.LoadBalancer().Build()
 			)
 			defer ctrl.Finish()
 
@@ -1921,13 +1832,13 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).
 					WithPriority(500).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+					WithDestination(az.PodCidrsIPv4[0].String()).
 					Build(),
 
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().UDPPorts()).
 					WithPriority(501).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+					WithDestination(az.PodCidrsIPv4[0].String()).
 					Build(),
 			)
 
@@ -1936,10 +1847,6 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			securityGroupClient.EXPECT().
 				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
 				Return(securityGroup, nil).
-				Times(1)
-			managedClusterClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, ClusterName).
-				Return(managedCluster, nil).
 				Times(1)
 
 			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
@@ -2027,13 +1934,11 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 		t.Run("container load balancer - with `service.beta.kubernetes.io/azure-deny-all-except-load-balancer-source-ranges` specified", func(t *testing.T) {
 			var (
-				ctrl                 = gomock.NewController(t)
-				az                   = GetTestCloudWithContainerLoadBalancer(ctrl)
-				securityGroupClient  = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				managedClusterClient = az.NetworkClientFactory.GetManagedClusterClient().(*mock_managedclusterclient.MockInterface)
-				svc                  = k8sFx.Service().WithOnlyTCPPorts().Build()
-				loadBalancer         = azureFx.LoadBalancer().Build()
-				managedCluster       = azureFx.ManagedCluster().Build()
+				ctrl                = gomock.NewController(t)
+				az                  = GetTestCloudWithContainerLoadBalancerAndPrefixCidr(ctrl, false)
+				securityGroupClient = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+				svc                 = k8sFx.Service().WithOnlyTCPPorts().Build()
+				loadBalancer        = azureFx.LoadBalancer().Build()
 			)
 			defer ctrl.Finish()
 
@@ -2049,19 +1954,19 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).
 					WithPriority(500).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+					WithDestination(az.PodCidrsIPv4[0].String()).
 					Build(),
 
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().UDPPorts()).
 					WithPriority(502).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+					WithDestination(az.PodCidrsIPv4[0].String()).
 					Build(),
 
 				azureFx.
 					DenyAllSecurityRule(iputil.IPv4).
 					WithPriority(4095).
-					WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+					WithDestination(az.PodCidrsIPv4[0].String()).
 					Build(),
 			)
 			securityGroup := azureFx.SecurityGroup().WithRules(rules).Build()
@@ -2069,10 +1974,6 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			securityGroupClient.EXPECT().
 				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
 				Return(securityGroup, nil).
-				Times(1)
-			managedClusterClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, ClusterName).
-				Return(managedCluster, nil).
 				Times(1)
 
 			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
@@ -2178,12 +2079,10 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 		t.Run("container load balancer - expected rules with random priority", func(t *testing.T) {
 			var (
-				ctrl                 = gomock.NewController(t)
-				az                   = GetTestCloudWithContainerLoadBalancer(ctrl)
-				securityGroupClient  = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-				managedClusterClient = az.NetworkClientFactory.GetManagedClusterClient().(*mock_managedclusterclient.MockInterface)
-				loadBalancer         = azureFx.LoadBalancer().Build()
-				managedCluster       = azureFx.ManagedCluster().Build()
+				ctrl                = gomock.NewController(t)
+				az                  = GetTestCloudWithContainerLoadBalancerAndPrefixCidr(ctrl, false)
+				securityGroupClient = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+				loadBalancer        = azureFx.LoadBalancer().Build()
 
 				allowedServiceTag = azureFx.ServiceTag()
 				allowedIPv4Ranges = fx.RandomIPv4PrefixStrings(3)
@@ -2203,25 +2102,25 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					azureFx.
 						AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, k8sFx.Service().TCPPorts()).
 						WithPriority(505).
-						WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+						WithDestination(az.PodCidrsIPv4[0].String()).
 						Build(),
 
 					azureFx.
 						AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).
 						WithPriority(507).
-						WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+						WithDestination(az.PodCidrsIPv4[0].String()).
 						Build(),
 
 					azureFx.
 						AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{allowedServiceTag}, k8sFx.Service().UDPPorts()).
 						WithPriority(530).
-						WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+						WithDestination(az.PodCidrsIPv4[0].String()).
 						Build(),
 
 					azureFx.
 						AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().UDPPorts()).
 						WithPriority(607).
-						WithDestination(*managedCluster.Properties.NetworkProfile.PodCidrs[0]).
+						WithDestination(az.PodCidrsIPv4[0].String()).
 						Build(),
 				}
 			)
@@ -2233,10 +2132,6 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			securityGroupClient.EXPECT().
 				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
 				Return(securityGroup, nil).
-				Times(1)
-			managedClusterClient.EXPECT().
-				Get(gomock.Any(), az.ResourceGroup, ClusterName).
-				Return(managedCluster, nil).
 				Times(1)
 
 			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)

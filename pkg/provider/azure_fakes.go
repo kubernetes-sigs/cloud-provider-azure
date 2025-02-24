@@ -17,6 +17,8 @@ limitations under the License.
 package provider
 
 import (
+	"net/netip"
+
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
@@ -193,5 +195,18 @@ func GetTestCloudWithExtendedLocation(ctrl *gomock.Controller) (az *Cloud) {
 func GetTestCloudWithContainerLoadBalancer(ctrl *gomock.Controller) (az *Cloud) {
 	az = GetTestCloud(ctrl)
 	az.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypePodIP
+	az.LoadBalancerSKU = consts.LoadBalancerSKUStandardV2
+	return az
+}
+
+func GetTestCloudWithContainerLoadBalancerAndPrefixCidr(ctrl *gomock.Controller, isIPv6 bool) (az *Cloud) {
+	az = GetTestCloudWithContainerLoadBalancer(ctrl)
+	if !isIPv6 {
+		prefix, _ := netip.ParsePrefix("10.0.0.1/32")
+		az.PodCidrsIPv4 = []netip.Prefix{prefix}
+	} else {
+		prefix, _ := netip.ParsePrefix("2001:db8::/64")
+		az.PodCidrsIPv6 = []netip.Prefix{prefix}
+	}
 	return az
 }
