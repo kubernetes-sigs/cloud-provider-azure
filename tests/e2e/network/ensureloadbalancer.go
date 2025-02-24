@@ -273,6 +273,90 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
+	It("should remove the unused managed IP when switching to a user-assigned public IP in a different resource group", func() {
+		v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
+		ipNameBase := basename + "-public-IP" + string(uuid.NewUUID())[0:4]
+		targetIPs := []*string{}
+
+		// Create a service with managed public IP first
+		By("Creating a service with managed public IP")
+		service := utils.CreateLoadBalancerServiceManifest(testServiceName, nil, labels, ns.Name, ports)
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.Background(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Waiting for the managed public IP to be ready")
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, targetIPs)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create a user-assigned public IP in a different resource group
+		By("Creating a user-assigned public IP in a different resource group")
+		rg, deleteRG := utils.CreateTestResourceGroup(tc)
+		otherRG := ptr.Deref(rg.Name, "")
+		Expect(rg).NotTo(BeNil())
+		defer deleteRG(otherRG)
+
+		var pipName, pipNameV6 string
+		if v4Enabled {
+			pipName = ipNameBase + "-v4"
+			pip := defaultPublicIPAddress(pipName, false)
+			createdPIP, err := utils.WaitCreatePIP(tc, pipName, otherRG, pip)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(createdPIP).NotTo(BeNil())
+			Expect(createdPIP.Properties.IPAddress).NotTo(BeNil())
+			defer func() {
+				_ = utils.DeletePIPWithRetry(tc, pipName, otherRG)
+			}()
+			targetIPs = append(targetIPs, createdPIP.Properties.IPAddress)
+		}
+		if v6Enabled {
+			pipNameV6 = ipNameBase + "-v6"
+			pipV6 := defaultPublicIPAddress(pipNameV6, true)
+			createdPIPV6, err := utils.WaitCreatePIP(tc, pipNameV6, otherRG, pipV6)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(createdPIPV6).NotTo(BeNil())
+			Expect(createdPIPV6.Properties.IPAddress).NotTo(BeNil())
+			defer func() {
+				_ = utils.DeletePIPWithRetry(tc, pipNameV6, otherRG)
+			}()
+			targetIPs = append(targetIPs, createdPIPV6.Properties.IPAddress)
+		}
+
+		// Update service to use the user-assigned public IP in the other resource group
+		By("Updating service to use the user-assigned public IP in the other resource group")
+		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		service.Annotations = map[string]string{
+			consts.ServiceAnnotationLoadBalancerResourceGroup: otherRG,
+		}
+		if v4Enabled {
+			service.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]] = pipName
+		}
+		if v6Enabled {
+			service.Annotations[consts.ServiceAnnotationPIPNameDualStack[true]] = pipNameV6
+		}
+		_, err = cs.CoreV1().Services(ns.Name).Update(context.Background(), service, metav1.UpdateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		defer func() {
+			By("Cleaning up Service")
+			err = utils.DeleteService(cs, ns.Name, testServiceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+
+		By("Waiting for the service to be updated with the user-assigned public IP")
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, targetIPs)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Verifying the managed public IP is deleted")
+		pips, err := tc.ListPublicIPs(tc.GetResourceGroup())
+		Expect(err).NotTo(HaveOccurred())
+		for _, pip := range pips {
+			if pip.Tags != nil && pip.Tags[consts.ServiceTagKey] != nil && *pip.Tags[consts.ServiceTagKey] == ns.Name+"/"+testServiceName {
+				Fail("Found managed public IP that should have been deleted")
+			}
+		}
+	})
+
 	// Internal w/ IP -> Internal w/ IP
 	It("should support updating internal IP when updating internal service", func() {
 		ips1, err := utils.SelectAvailablePrivateIPs(tc)
