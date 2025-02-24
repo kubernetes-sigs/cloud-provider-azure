@@ -1,0 +1,83 @@
+name: Static check scanner - azclient
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ master ]
+    paths:
+      - '.github/workflows/staticcheck-azclient.yaml'
+      - 'pkg/azclient/'
+  pull_request:
+    branches: [ master ]
+    paths:
+      - '.github/workflows/staticcheck-azclient.yaml'
+      - 'pkg/azclient/'
+  schedule:
+    - cron: '0 1 * * *'
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  build:
+    permissions:
+      security-events: write # for github/codeql-action/upload-sarif to upload SARIF results
+      pull-requests: write # for actions/dependency-review-action to comment on PRs
+      checks: write # for golangci/golangci-lint-action to annotate the code
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e # v2.10.4
+        with:
+          egress-policy: audit
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          sparse-checkout: pkg/azclient
+      - name: Setup Golang
+        uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
+        with:
+          go-version-file: ./pkg/azclient/go.mod
+          cache-dependency-path: ./pkg/azclient/go.sum
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@0adbc47a5910e47adb692df88187ec8c73c76778 # v6.4.0
+        with:
+          # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
+          version: v1.64
+          args: -v
+          install-mode: goinstall
+          working-directory: './pkg/azclient'
+      - name: 'Dependency Review'
+        uses: actions/dependency-review-action@3b139cfc5fae8b618d3eae3675e383bb1769c019 # v4.5.0
+        if: ${{ github.event_name == 'pull_request' }}
+        with:
+          show-openssf-scorecard: true
+          comment-summary-in-pr: always
+      - name: Run Trivy vulnerability scanner in repo mode
+        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # master
+        with:
+          scan-type: 'fs'
+          format: 'sarif'
+          output: 'aclient-results.sarif'
+          scan-ref: './pkg/azclient'
+        env:
+          TRIVY_SKIP_DB_UPDATE: true
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'aclient-results.sarif'
+      # Initializes the CodeQL tools for scanning.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
+        with:
+          languages: go
+          build-mode: manual
+          source-root: ./pkg/azclient
+
+      # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
+      # If this step fails, then you should remove it and run the build manually (see below)
+      - name: Autobuild
+        run: |
+          pushd `pwd`; cd pkg/azclient/; go test -covermode=count ./...; popd
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
