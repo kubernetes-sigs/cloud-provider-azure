@@ -3256,7 +3256,7 @@ func getTestLoadBalancer(name, rgName, clusterName, identifier *string, service 
 					ID: ptr.To("/subscriptions/subscription/resourceGroups/" + *rgName + "/providers/" +
 						"Microsoft.Network/loadBalancers/" + *name + "/frontendIPConfigurations/" + *identifier),
 					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-						PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-aservice1")},
+						PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/" + *rgName + "/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice1")},
 					},
 				},
 			},
@@ -3316,7 +3316,7 @@ func getTestLoadBalancerDualStack(name, rgName, clusterName, identifier *string,
 			"Microsoft.Network/loadBalancers/" + *name + "/frontendIPConfigurations/" + *identifier + ipv6Suffix),
 		FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
 			PublicIPAddress: &network.PublicIPAddress{
-				ID: ptr.To("testCluster-aservice1-IPv6"),
+				ID: ptr.To("/subscriptions/subscription/resourceGroups/" + *rgName + "/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice1-IPv6"),
 			},
 		},
 	})
@@ -3376,14 +3376,14 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 			Name: ptr.To("bservice1"),
 			ID:   ptr.To("bservice1"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-bservice1")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-bservice1")},
 			},
 		},
 		{
 			Name: ptr.To("bservice1-IPv6"),
 			ID:   ptr.To("bservice1-IPv6"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-bservice1-IPv6")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-bservice1-IPv6")},
 			},
 		},
 	}
@@ -3397,28 +3397,28 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 				Name: ptr.To("aservice1"),
 				ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/testCluster/frontendIPConfigurations/aservice1"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-					PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-aservice1")},
+					PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice1")},
 				},
 			},
 			{
 				Name: ptr.To("bservice1"),
 				ID:   ptr.To("bservice1"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-					PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-bservice1")},
+					PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-bservice1")},
 				},
 			},
 			{
 				Name: ptr.To("aservice1-IPv6"),
 				ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/testCluster/frontendIPConfigurations/aservice1-IPv6"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-					PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-aservice1-IPv6")},
+					PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice1-IPv6")},
 				},
 			},
 			{
 				Name: ptr.To("bservice1-IPv6"),
 				ID:   ptr.To("bservice1-IPv6"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-					PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-bservice1-IPv6")},
+					PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-bservice1-IPv6")},
 				},
 			},
 		}
@@ -3459,28 +3459,28 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 			Name: ptr.To("aservice1"),
 			ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/testCluster/frontendIPConfigurations/aservice1"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-aservice1")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice1")},
 			},
 		},
 		{
 			Name: ptr.To("bservice1"),
 			ID:   ptr.To("bservice1"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-bservice1")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-bservice1")},
 			},
 		},
 		{
 			Name: ptr.To("aservice1-IPv6"),
 			ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/testCluster/frontendIPConfigurations/aservice1-IPv6"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-aservice1-IPv6")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice1-IPv6")},
 			},
 		},
 		{
 			Name: ptr.To("bservice1-IPv6"),
 			ID:   ptr.To("bservice1-IPv6"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-bservice1-IPv6")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-bservice1-IPv6")},
 			},
 		},
 	}
@@ -3499,21 +3499,21 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 			Name: ptr.To("bservice1"),
 			ID:   ptr.To("bservice1"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-bservice1")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-bservice1")},
 			},
 		},
 		{
 			Name: ptr.To("aservice1-IPv6"),
 			ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/testCluster/frontendIPConfigurations/aservice1-IPv6"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-aservice1-IPv6")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice1-IPv6")},
 			},
 		},
 		{
 			Name: ptr.To("bservice1-IPv6"),
 			ID:   ptr.To("bservice1-IPv6"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-bservice1-IPv6")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-bservice1-IPv6")},
 			},
 		},
 	}
@@ -3557,31 +3557,31 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 	(*expectedSLb.LoadBalancerPropertiesFormat.LoadBalancingRules)[1].IdleTimeoutInMinutes = ptr.To(int32(4))
 	expectedSLb.FrontendIPConfigurations = &[]network.FrontendIPConfiguration{
 		{
-			Name: ptr.To("aservice1"),
-			ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/testCluster/frontendIPConfigurations/aservice1"),
-			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-aservice1")},
-			},
-		},
-		{
 			Name: ptr.To("bservice1"),
 			ID:   ptr.To("bservice1"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-bservice1")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-bservice1")},
 			},
 		},
 		{
 			Name: ptr.To("aservice1-IPv6"),
 			ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/testCluster/frontendIPConfigurations/aservice1-IPv6"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-aservice1-IPv6")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice1-IPv6")},
 			},
 		},
 		{
 			Name: ptr.To("bservice1-IPv6"),
 			ID:   ptr.To("bservice1-IPv6"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-bservice1-IPv6")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-bservice1-IPv6")},
+			},
+		},
+		{
+			Name: ptr.To("aservice1"),
+			ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/testCluster/frontendIPConfigurations/aservice1"),
+			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice1")},
 			},
 		},
 	}
@@ -3593,28 +3593,28 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 			Name: ptr.To("aservice1"),
 			ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/testCluster/frontendIPConfigurations/aservice1"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-aservice1")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice1")},
 			},
 		},
 		{
 			Name: ptr.To("bservice1"),
 			ID:   ptr.To("bservice1"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-bservice1")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-bservice1")},
 			},
 		},
 		{
 			Name: ptr.To("aservice1-IPv6"),
 			ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/testCluster/frontendIPConfigurations/aservice1-IPv6"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-aservice1-IPv6")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice1-IPv6")},
 			},
 		},
 		{
 			Name: ptr.To("bservice1-IPv6"),
 			ID:   ptr.To("bservice1-IPv6"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-bservice1-IPv6")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-bservice1-IPv6")},
 			},
 		},
 	}
@@ -3663,28 +3663,28 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 			Name: ptr.To("aservice1"),
 			ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/testCluster/frontendIPConfigurations/aservice1"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-aservice1")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice1")},
 			},
 		},
 		{
 			Name: ptr.To("bservice1"),
 			ID:   ptr.To("bservice1"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-bservice1")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-bservice1")},
 			},
 		},
 		{
 			Name: ptr.To("aservice1-IPv6"),
 			ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/testCluster/frontendIPConfigurations/aservice1-IPv6"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-aservice1-IPv6")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice1-IPv6")},
 			},
 		},
 		{
 			Name: ptr.To("bservice1-IPv6"),
 			ID:   ptr.To("bservice1-IPv6"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-bservice1-IPv6")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-bservice1-IPv6")},
 			},
 		},
 	}
@@ -3704,14 +3704,14 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 			Name: ptr.To("aservice1"),
 			ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/testCluster/frontendIPConfigurations/aservice1"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-aservice1")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice1")},
 			},
 		},
 		{
 			Name: ptr.To("aservice1-IPv6"),
 			ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/testCluster/frontendIPConfigurations/aservice1-IPv6"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-aservice1-IPv6")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice1-IPv6")},
 			},
 		},
 	}
@@ -3738,14 +3738,14 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 			Name: ptr.To("aservice1"),
 			ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/testCluster/frontendIPConfigurations/aservice1"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-aservice1")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice1")},
 			},
 		},
 		{
 			Name: ptr.To("aservice1-IPv6"),
 			ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/testCluster/frontendIPConfigurations/aservice1-IPv6"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-aservice1-IPv6")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice1-IPv6")},
 			},
 		},
 	}
@@ -3786,14 +3786,14 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 			Name: ptr.To("aservice1"),
 			ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/testCluster/frontendIPConfigurations/aservice1"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-aservice1")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice1")},
 			},
 		},
 		{
 			Name: ptr.To("aservice1-IPv6"),
 			ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/testCluster/frontendIPConfigurations/aservice1-IPv6"),
 			FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("testCluster-aservice1-IPv6")},
+				PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice1-IPv6")},
 			},
 		},
 	}
@@ -4006,6 +4006,9 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 				return false, false, lb, nil
 			}).AnyTimes()
 			mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+			mockPLSRepo := az.plsRepo.(*privatelinkservice.MockRepository)
+			mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
 
 			lb, rerr := az.reconcileLoadBalancer(context.TODO(), "testCluster", &service, clusterResources.nodes, test.wantLb)
 			assert.Equal(t, test.expectedError, rerr)
@@ -4276,6 +4279,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: ptr.To("pip1"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
 				},
 			},
 			expectedCreateOrUpdateCount: 0,
@@ -4287,6 +4291,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: ptr.To("pip1"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						IPAddress: ptr.To("1.2.3.4"),
@@ -4294,6 +4299,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				},
 				{
 					Name: ptr.To("pip1-IPv6"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1-IPv6"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						IPAddress: ptr.To("fd00::eef0"),
@@ -4317,10 +4323,12 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: ptr.To("pip1"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 				},
 				{
 					Name: ptr.To("pip2"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip2"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 				},
 			},
@@ -4338,6 +4346,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: ptr.To("pip1"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion: network.IPv4,
@@ -4346,6 +4355,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				},
 				{
 					Name: ptr.To("pip2"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip2"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion: network.IPv4,
@@ -4354,6 +4364,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				},
 				{
 					Name: ptr.To("testPIP"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion: network.IPv4,
@@ -4362,6 +4373,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				},
 				{
 					Name: ptr.To("testPIP-IPv6"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP-IPv6"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion:   network.IPv6,
@@ -4391,7 +4403,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 					},
 				},
 			},
-			expectedCreateOrUpdateCount: 0, // Before the fix, this was 1 because IPv4's IP Version was not set. Same for other tests.
+			expectedCreateOrUpdateCount: 0,
 			expectedDeleteCount:         2,
 		},
 		{
@@ -4404,6 +4416,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: ptr.To("pip1"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion: network.IPv4,
@@ -4412,6 +4425,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				},
 				{
 					Name: ptr.To("pip2"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip2"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1,default/test2")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion: network.IPv4,
@@ -4420,6 +4434,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				},
 				{
 					Name: ptr.To("pip1-IPv6"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1-IPv6"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion: network.IPv6,
@@ -4428,6 +4443,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				},
 				{
 					Name: ptr.To("pip2-IPv6"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip2-IPv6"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1,default/test2")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion: network.IPv6,
@@ -4436,6 +4452,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				},
 				{
 					Name: ptr.To("testPIP"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion: network.IPv4,
@@ -4444,6 +4461,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				},
 				{
 					Name: ptr.To("testPIP-IPv6"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP-IPv6"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion:   network.IPv6,
@@ -4487,6 +4505,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: ptr.To("pip1"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
 					Tags: map[string]*string{
 						consts.ServiceTagKey:       ptr.To("default/test1"),
 						consts.LegacyServiceTagKey: ptr.To("foo"), // It should be ignored when ServiceTagKey is present.
@@ -4498,6 +4517,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				},
 				{
 					Name: ptr.To("pip2"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip2"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion: network.IPv4,
@@ -4506,6 +4526,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				},
 				{
 					Name: ptr.To("testPIP"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion: network.IPv4,
@@ -4514,6 +4535,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				},
 				{
 					Name: ptr.To("testPIP-IPv6"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP-IPv6"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion:   network.IPv6,
@@ -4568,6 +4590,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: ptr.To("testPIP"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion:   network.IPv4,
@@ -4583,6 +4606,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				},
 				{
 					Name: ptr.To("testPIP-IPv6"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP-IPv6"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion:   network.IPv6,
@@ -4644,6 +4668,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: ptr.To("pip1"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion: network.IPv4,
 						IPAddress:              ptr.To("1.2.3.4"),
@@ -4651,6 +4676,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				},
 				{
 					Name: ptr.To("pip2"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip2"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion: network.IPv4,
@@ -4659,6 +4685,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				},
 				{
 					Name: ptr.To("testPIP"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP"),
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion: network.IPv4,
 						IPAddress:              ptr.To("1.2.3.4"),
@@ -4666,6 +4693,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				},
 				{
 					Name: ptr.To("pip2-IPv6"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip2-IPv6"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion:   network.IPv6,
@@ -4675,6 +4703,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				},
 				{
 					Name: ptr.To("testPIP-IPv6"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP-IPv6"),
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion:   network.IPv6,
 						PublicIPAllocationMethod: network.Dynamic,
@@ -4710,6 +4739,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: ptr.To("pip1"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1,default/test2")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						IPAddress:              ptr.To("1.2.3.4"),
@@ -4718,6 +4748,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				},
 				{
 					Name: ptr.To("pip1-IPv6"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1-IPv6"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1,default/test2")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						IPAddress:                ptr.To("fd00::eef0"),
@@ -4881,6 +4912,97 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				}
 			}
 			assert.Equal(t, test.expectedDeleteCount, deletedCount)
+		})
+	}
+
+}
+
+func TestReconcilePublicIPsDeleteUnwantedFromOtherRG(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testCases := []struct {
+		desc                string
+		annotations         map[string]string
+		existingPIPs        []network.PublicIPAddress
+		wantLb              bool
+		listFailed          bool
+		expectedError       bool
+		expectedDeleteCount int
+	}{
+		{
+			desc:   "shall delete managed pip when switching to user provided pip in another resource group",
+			wantLb: true,
+			annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerResourceGroup: "rg-b",
+				consts.ServiceAnnotationPIPNameDualStack[false]:   "pip1",
+			},
+			existingPIPs: []network.PublicIPAddress{
+				{
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg-a/providers/Microsoft.Network/publicIPAddresses/pip1"),
+					Name: ptr.To("pip1"),
+					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						IPAddress:              ptr.To("1.2.3.4"),
+						PublicIPAddressVersion: network.IPv4,
+					},
+				},
+				{
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip2"),
+					Name: ptr.To("pip2"),
+					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						IPAddress:              ptr.To("2.3.4.5"),
+						PublicIPAddressVersion: network.IPv4,
+					},
+				},
+			},
+			expectedDeleteCount: 1,
+		},
+		{
+			desc:   "shall return an error if failed to list pips in rg",
+			wantLb: true,
+			annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerResourceGroup: "rg-b",
+				consts.ServiceAnnotationPIPNameDualStack[false]:   "pip1",
+			},
+			existingPIPs:  []network.PublicIPAddress{{}},
+			listFailed:    true,
+			expectedError: true,
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.desc, func(t *testing.T) {
+			az := GetTestCloud(ctrl)
+			service := getTestService("test1", v1.ProtocolTCP, nil, false, 80)
+			service.Annotations = test.annotations
+
+			// Set up mock clients
+			mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+
+			// Set up mock List call to return the managed pip in rg-a
+			mockPIPsClient.EXPECT().List(gomock.Any(), "rg-b").Return(test.existingPIPs[:1], nil)
+			if test.listFailed {
+				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(nil, &retry.Error{RawError: errors.New("failed to list pips")})
+			} else {
+				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPIPs[1:], nil)
+				mockPIPsClient.EXPECT().Get(gomock.Any(), "rg-b", "pip1", gomock.Any()).Return(test.existingPIPs[0], nil)
+			}
+
+			// Set up mock Delete call for the managed pip
+			if test.expectedDeleteCount > 0 {
+				mockPIPsClient.EXPECT().Delete(gomock.Any(), "rg", "pip2").Return(nil).Times(test.expectedDeleteCount)
+			}
+
+			// No need to mock Get or CreateOrUpdate since we're using an existing pip
+
+			_, err := az.reconcilePublicIPs(context.TODO(), "testCluster", &service, "", test.wantLb)
+			if test.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }
