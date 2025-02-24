@@ -22,6 +22,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"k8s.io/klog/v2"
 
@@ -189,7 +190,7 @@ func (ims *InstanceMetadataService) getInstanceMetadata(key string) (*InstanceMe
 	q.Add("api-version", consts.ImdsInstanceAPIVersion)
 	req.URL.RawQuery = q.Encode()
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: time.Minute}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -227,7 +228,7 @@ func (ims *InstanceMetadataService) getLoadBalancerMetadata() (*LoadBalancerMeta
 	q.Add("api-version", consts.ImdsLoadBalancerAPIVersion)
 	req.URL.RawQuery = q.Encode()
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: time.Minute}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
