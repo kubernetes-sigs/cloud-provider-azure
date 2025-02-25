@@ -1,9 +1,7 @@
 run:
   timeout: 30m
-  go: '1.21'
   tests: true
-  skip-dirs:
-    - vendor
+  modules-download-mode: vendor
 linters:
   disable-all: true
   enable:
