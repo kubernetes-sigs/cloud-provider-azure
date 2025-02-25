@@ -2979,11 +2979,11 @@ func (az *Cloud) getExpectedLoadBalancingRulePropertiesForPort(
 	var lbIdleTimeout *int32
 	if lbIdleTimeout, err = consts.Getint32ValueFromK8sSvcAnnotation(service.Annotations, consts.ServiceAnnotationLoadBalancerIdleTimeout, func(val *int32) error {
 		const (
-			min = 4
-			max = 100
+			idleTimoutMin  = 4
+			idleTimeoutMax = 100
 		)
-		if *val < min || *val > max {
-			return fmt.Errorf("idle timeout value must be a whole number representing minutes between %d and %d, actual value: %d", min, max, *val)
+		if *val < idleTimoutMin || *val > idleTimeoutMax {
+			return fmt.Errorf("idle timeout value must be a whole number representing minutes between %d and %d, actual value: %d", idleTimoutMin, idleTimeoutMax, *val)
 		}
 		return nil
 	}); err != nil {
