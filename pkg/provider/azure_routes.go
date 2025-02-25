@@ -56,6 +56,7 @@ type delayedRouteOperation struct {
 	routeTableTags map[string]*string
 	operation      routeOperation
 	result         chan batchOperationResult
+	nodeName       string
 }
 
 // wait waits for the operation completion and returns the result.
@@ -179,6 +180,19 @@ func (d *delayedRouteUpdater) updateRoutes(ctx context.Context) {
 				break
 			}
 		}
+		// After removing the matched routes (if any), loop again to remove the outdated routes,
+		// whose name and IP addresses may not match but target the same node.
+		for i := len(routes) - 1; i >= 0; i-- {
+			existingRoute := routes[i]
+			// remove all routes that target the node when the operation is delete
+			if strings.HasPrefix(ptr.Deref(existingRoute.Name, ""), ptr.Deref(rt.route.Name, "")) {
+				if rt.operation == routeOperationDelete {
+					routes = append(routes[:i], routes[i+1:]...)
+					dirty = true
+					klog.V(2).Infof("updateRoutes: found outdated route %s targeting node %s, removing it", ptr.Deref(rt.route.Name, ""), rt.nodeName)
+				}
+			}
+		}
 		if rt.operation == routeOperationDelete && !dirty {
 			klog.Warningf("updateRoutes: route to be deleted %s does not match any of the existing route", ptr.Deref(rt.route.Name, ""))
 		}
@@ -239,17 +253,19 @@ func (d *delayedRouteUpdater) cleanupOutdatedRoutes(existingRoutes []*armnetwork
 	return existingRoutes, changed
 }
 
-func getAddRouteOperation(route *armnetwork.Route) batchOperation {
+func getAddRouteOperation(route *armnetwork.Route, nodeName string) batchOperation {
 	return &delayedRouteOperation{
 		route:     route,
+		nodeName:  nodeName,
 		operation: routeOperationAdd,
 		result:    make(chan batchOperationResult),
 	}
 }
 
-func getDeleteRouteOperation(route *armnetwork.Route) batchOperation {
+func getDeleteRouteOperation(route *armnetwork.Route, nodeName string) batchOperation {
 	return &delayedRouteOperation{
 		route:     route,
+		nodeName:  nodeName,
 		operation: routeOperationDelete,
 		result:    make(chan batchOperationResult),
 	}
@@ -421,7 +437,7 @@ func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, _ string, 
 	}
 
 	klog.V(2).Infof("CreateRoute: creating route for clusterName=%q instance=%q cidr=%q", clusterName, kubeRoute.TargetNode, kubeRoute.DestinationCIDR)
-	op := az.routeUpdater.addOperation(getAddRouteOperation(route))
+	op := az.routeUpdater.addOperation(getAddRouteOperation(route, string(kubeRoute.TargetNode)))
 
 	// Wait for operation complete.
 	err = op.wait().err
@@ -466,7 +482,7 @@ func (az *Cloud) DeleteRoute(_ context.Context, clusterName string, kubeRoute *c
 		Name:       ptr.To(routeName),
 		Properties: &armnetwork.RoutePropertiesFormat{},
 	}
-	op := az.routeUpdater.addOperation(getDeleteRouteOperation(route))
+	op := az.routeUpdater.addOperation(getDeleteRouteOperation(route, string(kubeRoute.TargetNode)))
 
 	// Wait for operation complete.
 	err = op.wait().err
@@ -483,7 +499,7 @@ func (az *Cloud) DeleteRoute(_ context.Context, clusterName string, kubeRoute *c
 			Name:       ptr.To(routeNameWithoutIPV6Suffix),
 			Properties: &armnetwork.RoutePropertiesFormat{},
 		}
-		op := az.routeUpdater.addOperation(getDeleteRouteOperation(route))
+		op := az.routeUpdater.addOperation(getDeleteRouteOperation(route, string(kubeRoute.TargetNode)))
 
 		// Wait for operation complete.
 		err = op.wait().err
