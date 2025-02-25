@@ -16,6 +16,7 @@ jobs:
     permissions:
       contents: read  # for actions/checkout to fetch code
       pull-requests: read  # for golangci/golangci-lint-action to fetch pull requests
+      checks: write
     runs-on: ubuntu-latest
     steps:
       - name: Harden Runner
@@ -33,5 +34,7 @@ jobs:
         uses: golangci/golangci-lint-action@051d91933864810ecd5e2ea2cfd98f6a5bca5347 # v6.3.2
         with:
           # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
-          version: v1.60
+          version: v1.64
           args: -v
+          install-mode: goinstall
+          verify: true
