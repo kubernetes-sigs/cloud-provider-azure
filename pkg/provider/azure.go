@@ -423,6 +423,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 
 		var opts []func(option *arm.ClientOptions)
 		if az.AzureAuthConfig.AuxiliaryTokenProvider != nil && az.AzureAuthConfig.UseManagedIdentityExtension {
+			klog.InfoS("Using auxiliary token provider for ARM network credential")
 			// Multi-tenant mode with auxiliary token provider.
 			// It uses Managed Identity as the primary credential and auxiliary token provider as the auxiliary credential.
 			opts = append(opts, func(option *arm.ClientOptions) {
@@ -431,6 +432,13 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 					az.AuthProvider.DefaultTokenScope(),
 				))
 			})
+
+			az.NetworkClientFactory, err = azclient.NewClientFactory(&azclient.ClientFactoryConfig{
+				SubscriptionID: az.NetworkResourceSubscriptionID,
+			}, &az.ARMClientConfig, clientOps.Cloud, az.AuthProvider.GetNetworkAzIdentity())
+			if err != nil {
+				return err
+			}
 		}
 
 		az.ComputeClientFactory, err = azclient.NewClientFactory(&azclient.ClientFactoryConfig{
