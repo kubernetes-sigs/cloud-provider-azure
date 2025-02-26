@@ -41,5 +41,5 @@ golang.org/x/tools v0.28.0 h1:WuB6qZ4RPCQo5aP3WdKZS7i595EdWqWR8vqJTlwTVK8=
 golang.org/x/tools v0.28.0/go.mod h1:dcIOrVd3mfQKTgrDVQHqCPMWy6lnhfhtX3hLXYVLfRw=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.1 h1:ZsD8s4Dlz5fSfdzb27UwXD06Ua79j248mvgMeDo8gOw=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.1/go.mod h1:hJBb8wrJacIpnViSbKvyA/5C9oAi2pM9bGjkI43+tYE=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.2 h1:w/GkZK6zrRVOp2KiCseJGYKLclvBwpnt8alLNnL/6Js=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.2/go.mod h1:v+L8fSlY6pMNfQlGLFlzEhnM6LCO1eRTMEq3egT+4eo=
