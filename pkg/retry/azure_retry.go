@@ -61,13 +61,13 @@ type Backoff struct {
 }
 
 // NewBackoff creates a new Backoff.
-func NewBackoff(duration time.Duration, factor float64, jitter float64, steps int, cap time.Duration) *Backoff {
+func NewBackoff(duration time.Duration, factor float64, jitter float64, steps int, capacity time.Duration) *Backoff {
 	return &Backoff{
 		Duration: duration,
 		Factor:   factor,
 		Jitter:   jitter,
 		Steps:    steps,
-		Cap:      cap,
+		Cap:      capacity,
 	}
 }
 
