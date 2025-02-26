@@ -331,8 +331,8 @@ golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9/go.mod h1:LzIPMQfyMNhhGPh
 golang.org/x/crypto v0.0.0-20210921155107-089bfa567519/go.mod h1:GvvjBRRGRdwPK5ydBHafDWAxML/pGHZbMvKqRZ5+Abc=
 golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa/go.mod h1:IxCIyHEi3zRg3s0A5j5BB6A9Jmi73HwBIUl50j+osU4=
 golang.org/x/crypto v0.17.0/go.mod h1:gCAAfMLgwOJRpTjQ2zCCt2OcSfYMTeZVSRtQlPC7Nq4=
-golang.org/x/crypto v0.33.0 h1:IOBPskki6Lysi0lo9qQvbxiQ+FvsCC/YWOecCHAixus=
-golang.org/x/crypto v0.33.0/go.mod h1:bVdXmD7IV/4GdElGPozy6U7lWdRXA4qyRVGJV57uQ5M=
+golang.org/x/crypto v0.34.0 h1:+/C6tk6rf/+t5DhUketUbD1aNGqiSX3j15Z6xuIDlBA=
+golang.org/x/crypto v0.34.0/go.mod h1:dy7dXNW32cAb/6/PRuTNsix8T+vJAqvuIy5Bli/x0YQ=
 golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 h1:2dVuKD2vS7b0QIHQbpyTISPd0LeHDbnYEryqj5Q1ug8=
 golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56/go.mod h1:M4RDyNAINzryxdtnbRXRL/OHtkFuWGRjvuhBJpk2IlY=
 golang.org/x/mod v0.2.0/go.mod h1:s0Qsj1ACt9ePp/hMypM3fl4fZqREWJwdYDEqhRiZZUA=
@@ -462,8 +462,8 @@ k8s.io/utils v0.0.0-20241210054802-24370beab758 h1:sdbE21q2nlQtFh65saZY+rRM6x6aJ
 k8s.io/utils v0.0.0-20241210054802-24370beab758/go.mod h1:OLgZIPagt7ERELqWJFomSt595RzquPNLL48iOWgYOg0=
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.28.0 h1:TgtAeesdhpm2SGwkQasmbeqDo8th5wOBA5h/AjTKA4I=
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.28.0/go.mod h1:VHVDI/KrK4fjnV61bE2g3sA7tiETLn8sooImelsCx3Y=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.1 h1:ZsD8s4Dlz5fSfdzb27UwXD06Ua79j248mvgMeDo8gOw=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.1/go.mod h1:hJBb8wrJacIpnViSbKvyA/5C9oAi2pM9bGjkI43+tYE=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.2 h1:w/GkZK6zrRVOp2KiCseJGYKLclvBwpnt8alLNnL/6Js=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.2/go.mod h1:v+L8fSlY6pMNfQlGLFlzEhnM6LCO1eRTMEq3egT+4eo=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.29 h1:AixTSBLVc89XycjD+GxbR26wMJyzcZGmyKE4Si5eIzY=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.29/go.mod h1:1OgjkvC3qbeJeFj7Ogl+17WQxE149kUDS3TLVJtfPDI=
 sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd h1:EDPBXCAspyGV4jQlpZSudPeMmr1bNJefnuqLsRAsHZo=
