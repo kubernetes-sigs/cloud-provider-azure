@@ -23,7 +23,7 @@ jobs:
             arch: arm64
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e # v2.10.4
+        uses: step-security/harden-runner@4d991eb9b905ef189e4c376166672c3f2f230481 # v2.11.0
         with:
           egress-policy: audit
       - name: Install arm build toolchains
@@ -41,7 +41,7 @@ jobs:
           rm -rf ./bin
           ARCH=${{ matrix.arch }} make bin/azure-cloud-controller-manager
           mv bin/azure-cloud-controller-manager bin/azure-cloud-controller-manager-${{ matrix.os }}-${{ matrix.arch }}
-      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+      - uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
           name: cloud-controller-manager-${{ matrix.os }}-${{ matrix.arch }}
           path: bin/azure-cloud-controller-manager-${{ matrix.os }}-${{ matrix.arch }}
@@ -62,7 +62,7 @@ jobs:
             arch: amd64
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e # v2.10.4
+        uses: step-security/harden-runner@4d991eb9b905ef189e4c376166672c3f2f230481 # v2.11.0
         with:
           egress-policy: audit
       - name: Install arm build toolchains
@@ -90,13 +90,13 @@ jobs:
           mv bin/azure-cloud-node-manager-${{ matrix.arch }}.exe bin/azure-cloud-node-manager-${{ matrix.os }}-${{ matrix.arch }}.exe
       - name: Upload artifact for linux
         if: matrix.os == 'linux'
-        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
           name: cloud-node-manager-${{ matrix.os }}-${{ matrix.arch }}
           path: bin/azure-cloud-node-manager-${{ matrix.os }}-${{ matrix.arch }}
       - name: Upload artifact for windows
         if: matrix.os == 'windows'
-        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
           name: cloud-node-manager-${{ matrix.os }}-${{ matrix.arch }}
           path: bin/azure-cloud-node-manager-${{ matrix.os }}-${{ matrix.arch }}.exe
@@ -117,7 +117,7 @@ jobs:
             arch: amd64
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e # v2.10.4
+        uses: step-security/harden-runner@4d991eb9b905ef189e4c376166672c3f2f230481 # v2.11.0
         with:
           egress-policy: audit
       - name: Install arm build toolchains
@@ -144,13 +144,13 @@ jobs:
           mv bin/azure-acr-credential-provider.exe bin/azure-acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}.exe
       - name: Upload artifact for linux
         if: matrix.os == 'linux'
-        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
           name: acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}
           path: bin/azure-acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}
       - name: Upload artifact for windows
         if: matrix.os == 'windows'
-        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
           name: acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}
           path: bin/azure-acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}.exe
@@ -167,7 +167,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e # v2.10.4
+        uses: step-security/harden-runner@4d991eb9b905ef189e4c376166672c3f2f230481 # v2.11.0
         with:
           egress-policy: audit
       - name: Install arm build toolchains
