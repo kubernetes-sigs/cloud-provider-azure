@@ -349,7 +349,7 @@ test-check: test-boilerplate test-helm ## Run all static checks.
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint against code.
-	$(LINTER) run -v -E exportloopref
+	$(LINTER) run -v
 
 .PHONY: test-boilerplate
 test-boilerplate: ## Run boilerplate test.
@@ -436,7 +436,7 @@ deploy-cluster:
 ##@ Tools
 
 LINTER = $(shell pwd)/bin/golangci-lint
-LINTER_VERSION = v1.60.2
+LINTER_VERSION = v1.64.5
 .PHONY: golangci-lint
 golangci-lint:  ## Download golangci-lint locally if necessary.
 	@echo "Installing golangci-lint"
