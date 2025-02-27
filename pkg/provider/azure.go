@@ -48,6 +48,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
@@ -158,6 +159,8 @@ type Cloud struct {
 	endpointSlicesCache                             sync.Map
 
 	azureResourceLocker *AzureResourceLocker
+
+	diffTracker *difftracker.DiffTrackerState
 }
 
 // NewCloud returns a Cloud with initialized clients
@@ -294,13 +297,13 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 
 	if config.LoadBalancerBackendPoolConfigurationType == "" ||
 		// TODO(nilo19): support pod IP mode in the future
-		strings.EqualFold(config.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePODIP) {
+		strings.EqualFold(config.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePodIP) {
 		config.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration
 	} else {
 		supportedLoadBalancerBackendPoolConfigurationTypes := utilsets.NewString(
 			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration),
 			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypeNodeIP),
-			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypePODIP))
+			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypePodIP))
 		if !supportedLoadBalancerBackendPoolConfigurationTypes.Has(strings.ToLower(config.LoadBalancerBackendPoolConfigurationType)) {
 			return fmt.Errorf("loadBalancerBackendPoolConfigurationType %s is not supported, supported values are %v", config.LoadBalancerBackendPoolConfigurationType, supportedLoadBalancerBackendPoolConfigurationTypes.UnsortedList())
 		}
@@ -495,7 +498,39 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		}
 	}
 
+	if az.IsLBBackendPoolTypePodIP() {
+		az.initializeDiffTracker()
+	}
+
 	return nil
+}
+
+func (az *Cloud) initializeDiffTracker() {
+	// TODO (enechitoaia): CONSTRUCT K8sState and NRPState from the current state of the cluster
+	K8sState := difftracker.K8sState{
+		Services: utilsets.NewString(),
+		Egresses: utilsets.NewString(),
+		Nodes:    make(map[string]difftracker.Node),
+	}
+	NRPState := difftracker.NRPState{
+		LoadBalancers: utilsets.NewString(),
+		NATGateways:   utilsets.NewString(),
+		NRPLocations:  make(map[string]difftracker.NRPLocation),
+	}
+
+	// Initialize the diff tracker state and get the necessary operations to sync the cluster with NRP
+	diffTrackerState, syncOperations := difftracker.InitializeDiffTrackerState(K8sState, NRPState)
+	az.diffTracker = diffTrackerState
+	// Print syncOps to surpress unused variable error
+	klog.V(2).Infof("Sync operations: %v", syncOperations)
+	// TODO (enechitoaia): call NRP APIs (including ServiceGateway) to update the state of the NRP
+
+	// if Load Balancers have been correctly updated:
+	az.diffTracker.UpdateNRPLoadBalancers()
+	// if NAT Gateways have been correctly updated:
+	az.diffTracker.UpdateNRPNATGateways()
+	// if Locations have been correctly updated:
+	az.diffTracker.UpdateNRPLocationsAddresses()
 }
 
 // Multiple standard load balancer mode only supports IP-based load balancers.

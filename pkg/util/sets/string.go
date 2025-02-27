@@ -27,6 +27,27 @@ type IgnoreCaseSet struct {
 	set sets.Set[string]
 }
 
+// Equals returns true if the two sets are equal.
+func (s1 *IgnoreCaseSet) Equals(s2 *IgnoreCaseSet) bool {
+	// Early exit if sizes are different
+	if len(s1.UnsortedList()) != len(s2.UnsortedList()) {
+		return false
+	}
+	// Check if all items in s1 are in s2
+	for _, item := range s1.UnsortedList() {
+		if !s2.Has(item) {
+			return false
+		}
+	}
+	// Check if all items in s2 are in s1
+	for _, item := range s2.UnsortedList() {
+		if !s1.Has(item) {
+			return false
+		}
+	}
+	return true
+}
+
 // NewString creates a new IgnoreCaseSet with the given items.
 func NewString(items ...string) *IgnoreCaseSet {
 	var lowerItems []string
