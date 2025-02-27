@@ -2137,6 +2137,7 @@ func (m ManagedClusterAgentPoolProfile) MarshalJSON() ([]byte, error) {
 	populate(objectMap, "linuxOSConfig", m.LinuxOSConfig)
 	populate(objectMap, "maxCount", m.MaxCount)
 	populate(objectMap, "maxPods", m.MaxPods)
+	populate(objectMap, "messageOfTheDay", m.MessageOfTheDay)
 	populate(objectMap, "minCount", m.MinCount)
 	populate(objectMap, "mode", m.Mode)
 	populate(objectMap, "name", m.Name)
@@ -2231,6 +2232,9 @@ func (m *ManagedClusterAgentPoolProfile) UnmarshalJSON(data []byte) error {
 			delete(rawMsg, key)
 		case "maxPods":
 			err = unpopulate(val, "MaxPods", &m.MaxPods)
+			delete(rawMsg, key)
+		case "messageOfTheDay":
+			err = unpopulate(val, "MessageOfTheDay", &m.MessageOfTheDay)
 			delete(rawMsg, key)
 		case "minCount":
 			err = unpopulate(val, "MinCount", &m.MinCount)
@@ -2348,6 +2352,7 @@ func (m ManagedClusterAgentPoolProfileProperties) MarshalJSON() ([]byte, error) 
 	populate(objectMap, "linuxOSConfig", m.LinuxOSConfig)
 	populate(objectMap, "maxCount", m.MaxCount)
 	populate(objectMap, "maxPods", m.MaxPods)
+	populate(objectMap, "messageOfTheDay", m.MessageOfTheDay)
 	populate(objectMap, "minCount", m.MinCount)
 	populate(objectMap, "mode", m.Mode)
 	populate(objectMap, "networkProfile", m.NetworkProfile)
@@ -2441,6 +2446,9 @@ func (m *ManagedClusterAgentPoolProfileProperties) UnmarshalJSON(data []byte) er
 			delete(rawMsg, key)
 		case "maxPods":
 			err = unpopulate(val, "MaxPods", &m.MaxPods)
+			delete(rawMsg, key)
+		case "messageOfTheDay":
+			err = unpopulate(val, "MessageOfTheDay", &m.MessageOfTheDay)
 			delete(rawMsg, key)
 		case "minCount":
 			err = unpopulate(val, "MinCount", &m.MinCount)
