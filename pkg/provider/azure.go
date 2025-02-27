@@ -498,7 +498,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 			// Multi-tenant mode with auxiliary token provider.
 			// It uses Managed Identity as the primary credential and auxiliary token provider as the auxiliary credential.
 			opts = append(opts, func(option *arm.ClientOptions) {
-				option.PerCallPolicies = append(option.PerCallPolicies, armauth.NewAuxiliaryAuthPolicy(
+				option.PerRetryPolicies = append(option.PerRetryPolicies, armauth.NewAuxiliaryAuthPolicy(
 					[]azcore.TokenCredential{az.AuthProvider.GetNetworkAzIdentity()},
 					az.AuthProvider.DefaultTokenScope(),
 				))
