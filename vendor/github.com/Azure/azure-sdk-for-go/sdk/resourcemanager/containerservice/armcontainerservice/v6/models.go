@@ -837,6 +837,11 @@ type ManagedClusterAgentPoolProfile struct {
 	// The maximum number of pods that can run on a node.
 	MaxPods *int32
 
+	// A base64-encoded string which will be written to /etc/motd after decoding. This allows customization of the message of
+	// the day for Linux nodes. It must not be specified for Windows nodes. It must be a
+	// static string (i.e., will be printed raw and not be executed as a script).
+	MessageOfTheDay *string
+
 	// The minimum number of nodes for auto-scaling
 	MinCount *int32
 
@@ -1009,6 +1014,11 @@ type ManagedClusterAgentPoolProfileProperties struct {
 
 	// The maximum number of pods that can run on a node.
 	MaxPods *int32
+
+	// A base64-encoded string which will be written to /etc/motd after decoding. This allows customization of the message of
+	// the day for Linux nodes. It must not be specified for Windows nodes. It must be a
+	// static string (i.e., will be printed raw and not be executed as a script).
+	MessageOfTheDay *string
 
 	// The minimum number of nodes for auto-scaling
 	MinCount *int32
