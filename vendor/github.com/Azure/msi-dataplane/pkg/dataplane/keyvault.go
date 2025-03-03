@@ -12,6 +12,18 @@ func ptrTo[o any](s o) *o {
 	return &s
 }
 
+// IdentifierForManagedIdentityCredentials creates a canonical identifier for a KeyVault item, labelling the
+// item as storing managed identity credentials.
+func IdentifierForManagedIdentityCredentials(identifier string) string {
+	return ManagedIdentityCredentialsStoragePrefix + identifier
+}
+
+// IdentifierForUserAssignedIdentityCredentials creates a canonical identifier for a KeyVault item, labelling the
+// item as storing user-assigned managed identity credentials.
+func IdentifierForUserAssignedIdentityCredentials(identifier string) string {
+	return UserAssignedIdentityCredentialsStoragePrefix + identifier
+}
+
 // FormatManagedIdentityCredentialsForStorage provides the canonical KeyVault secret parameters for storing
 // managed identity credentials, ensuring that appropriate times are recorded for the expiry and notBefore,
 // as well as that renewal times are recorded in tags.
@@ -32,6 +44,15 @@ func FormatManagedIdentityCredentialsForStorage(identifier string, credentials M
 		return "", azsecrets.SetSecretParameters{}, fmt.Errorf("assumption violated, found %d explicit identities, expected none, or one", len(credentials.ExplicitIdentities))
 	}
 
+	parameters, err := keyVaultParameters(credentials, rawNotAfter, rawNotBefore, rawRenewAfter, rawCannotRenewAfter)
+	if err != nil {
+		return "", azsecrets.SetSecretParameters{}, err
+	}
+
+	return IdentifierForManagedIdentityCredentials(identifier), parameters, nil
+}
+
+func keyVaultParameters(credentials any, rawNotAfter, rawNotBefore, rawRenewAfter, rawCannotRenewAfter *string) (azsecrets.SetSecretParameters, error) {
 	for key, value := range map[string]*string{
 		"NotAfter":         rawNotAfter,
 		"NotBefore":        rawNotBefore,
@@ -39,7 +60,7 @@ func FormatManagedIdentityCredentialsForStorage(identifier string, credentials M
 		"CannotRenewAfter": rawCannotRenewAfter,
 	} {
 		if value == nil {
-			return "", azsecrets.SetSecretParameters{}, fmt.Errorf("assumption violated, %q was nil", key)
+			return azsecrets.SetSecretParameters{}, fmt.Errorf("assumption violated, %q was nil", key)
 		}
 	}
 
@@ -50,17 +71,17 @@ func FormatManagedIdentityCredentialsForStorage(identifier string, credentials M
 	} {
 		value, err := time.Parse(time.RFC3339, *from)
 		if err != nil {
-			return "", azsecrets.SetSecretParameters{}, err
+			return azsecrets.SetSecretParameters{}, err
 		}
 		*to = value
 	}
 
 	raw, err := json.Marshal(credentials)
 	if err != nil {
-		return "", azsecrets.SetSecretParameters{}, fmt.Errorf("failed to marshal credentials: %v", err)
+		return azsecrets.SetSecretParameters{}, fmt.Errorf("failed to marshal credentials: %v", err)
 	}
 
-	return ManagedIdentityCredentialsStoragePrefix + identifier, azsecrets.SetSecretParameters{
+	return azsecrets.SetSecretParameters{
 		Value: ptrTo(string(raw)),
 		SecretAttributes: &azsecrets.SecretAttributes{
 			Enabled:   ptrTo(true),
@@ -72,4 +93,16 @@ func FormatManagedIdentityCredentialsForStorage(identifier string, credentials M
 			CannotRenewAfterKeyVaultTag: rawCannotRenewAfter,
 		},
 	}, nil
+}
+
+// FormatUserAssignedIdentityCredentialsForStorage provides the canonical KeyVault secret parameters for storing
+// user-assigned managed identity credentials, ensuring that appropriate times are recorded for the expiry and
+// notBefore, as well as that renewal times are recorded in tags.
+func FormatUserAssignedIdentityCredentialsForStorage(identifier string, credentials UserAssignedIdentityCredentials) (string, azsecrets.SetSecretParameters, error) {
+	parameters, err := keyVaultParameters(credentials, credentials.NotAfter, credentials.NotBefore, credentials.RenewAfter, credentials.CannotRenewAfter)
+	if err != nil {
+		return "", azsecrets.SetSecretParameters{}, err
+	}
+
+	return IdentifierForUserAssignedIdentityCredentials(identifier), parameters, nil
 }
