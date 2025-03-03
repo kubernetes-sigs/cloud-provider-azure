@@ -60,6 +60,7 @@ func TestDeleteRoute(t *testing.T) {
 		DestinationCIDR: "1.2.3.4/24",
 	}
 	routeName := mapNodeNameToRouteName(false, route.TargetNode, route.DestinationCIDR)
+	routeNameWithNodeNamePrefix := "node____bar"
 	routeTables := &armnetwork.RouteTable{
 		Name:     &cloud.RouteTableName,
 		Location: &cloud.Location,
@@ -67,6 +68,9 @@ func TestDeleteRoute(t *testing.T) {
 			Routes: []*armnetwork.Route{
 				{
 					Name: &routeName,
+				},
+				{
+					Name: &routeNameWithNodeNamePrefix,
 				},
 			},
 		},
