@@ -14,7 +14,7 @@
 
 # syntax=docker/dockerfile:1
 
-FROM --platform=linux/amd64 mcr.microsoft.com/oss/go/microsoft/golang:1.23-bullseye@sha256:8710894a3c9b282957bf0d25f1b90d5d468e76855f6d5c4c4a19ce2b2fbc4427 AS builder
+FROM --platform=linux/amd64 mcr.microsoft.com/oss/go/microsoft/golang:1.23-bullseye@sha256:44c2195022396364d403982482745892c2c8861568c05c778e40b8b0b698a029 AS builder
 
 ARG ENABLE_GIT_COMMAND=true
 ARG ARCH=amd64
