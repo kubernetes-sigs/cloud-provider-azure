@@ -5309,6 +5309,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 				},
 				Tags: map[string]*string{},
+				SKU: &armnetwork.PublicIPAddressSKU{
+					Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandard),
+				},
 			},
 			shouldPutPIP: true,
 		},
@@ -6763,12 +6766,18 @@ func TestReconcileFrontendIPConfigs(t *testing.T) {
 						PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 						IPAddress:                ptr.To("fe::1"),
 					},
+					SKU: &armnetwork.PublicIPAddressSKU{
+						Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandard),
+					},
 				},
 				{
 					Name: ptr.To("pipV4"),
 					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
 						IPAddress:              ptr.To("1.2.3.4"),
+					},
+					SKU: &armnetwork.PublicIPAddressSKU{
+						Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandard),
 					},
 				},
 			},
@@ -7106,7 +7115,7 @@ func TestSafeDeleteLoadBalancer(t *testing.T) {
 					BackendAddressPools: []*armnetwork.BackendAddressPool{},
 				},
 			}
-			err := cloud.safeDeleteLoadBalancer(context.TODO(), lb, "cluster", "vmss", &svc)
+			err := cloud.safeDeleteLoadBalancer(context.TODO(), lb, "vmss", &svc)
 			if tc.expectedErr != nil {
 				assert.Contains(t, err.Error(), tc.expectedErr.Error())
 			}
