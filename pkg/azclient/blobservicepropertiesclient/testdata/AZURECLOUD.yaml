@@ -22,8 +22,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-FileShare?api-version=2021-04-01
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-BlobServiceProperties?api-version=2021-04-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -31,14 +31,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 231
+        content_length: 255
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-FileShare","name":"aks-cit-FileShare","type":"Microsoft.Resources/resourceGroups","location":"eastus","properties":{"provisioningState":"Succeeded"}}'
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties","name":"aks-cit-BlobServiceProperties","type":"Microsoft.Resources/resourceGroups","location":"eastus","properties":{"provisioningState":"Succeeded"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "231"
+                - "255"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -77,8 +77,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - azsdk-go-armstorage/v1.6.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-FileShare/providers/Microsoft.Storage/storageAccounts/akscitacctsdktest?api-version=2023-05-01
+                - azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest?api-version=2024-01-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -99,7 +99,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Storage/locations/eastus/asyncoperations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&monitor=true&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Storage/locations/eastus/asyncoperations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&monitor=true&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -128,8 +128,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - azsdk-go-armstorage/v1.6.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Storage/locations/eastus/asyncoperations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&monitor=true&s=s&t=t
+                - azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Storage/locations/eastus/asyncoperations/00000000-0000-0000-0000-000000000000?api-version=2024-01-01&c=c&h=h&monitor=true&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -137,14 +137,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 1772
+        content_length: 1784
         uncompressed: false
-        body: '{"sku":{"name":"Standard_LRS","tier":"Standard"},"kind":"StorageV2","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-FileShare/providers/Microsoft.Storage/storageAccounts/akscitacctsdktest","name":"akscitacctsdktest","type":"Microsoft.Storage/storageAccounts","location":"eastus","tags":{},"properties":{"dnsEndpointType":"Standard","defaultToOAuthAuthentication":false,"publicNetworkAccess":"Disabled","keyCreationTime":{"key1":"2001-02-03T04:05:06Z","key2":"2001-02-03T04:05:06Z"},"allowCrossTenantReplication":false,"privateEndpointConnections":[],"isNfsV3Enabled":true,"isLocalUserEnabled":true,"isSftpEnabled":true,"minimumTlsVersion":"TLS1_2","allowBlobPublicAccess":false,"allowSharedKeyAccess":true,"largeFileSharesState":"Enabled","isHnsEnabled":true,"networkAcls":{"ipv6Rules":[],"bypass":"AzureServices","virtualNetworkRules":[],"ipRules":[],"defaultAction":"Deny"},"supportsHttpsTrafficOnly":true,"encryption":{"requireInfrastructureEncryption":false,"services":{"file":{"keyType":"Account","enabled":true,"lastEnabledTime":"2001-02-03T04:05:06Z"},"blob":{"keyType":"Account","enabled":true,"lastEnabledTime":"2001-02-03T04:05:06Z"}},"keySource":"Microsoft.Storage"},"accessTier":"Cool","provisioningState":"Succeeded","creationTime":"2001-02-03T04:05:06Z","primaryEndpoints":{"dfs":"https://akscitacctsdktest.dfs.core.windows.net/","web":"https://akscitacctsdktest.z13.web.core.windows.net/","blob":"https://akscitacctsdktest.blob.core.windows.net/","queue":"https://akscitacctsdktest.queue.core.windows.net/","table":"https://akscitacctsdktest.table.core.windows.net/","file":"https://akscitacctsdktest.file.core.windows.net/"},"primaryLocation":"eastus","statusOfPrimary":"available"}}'
+        body: '{"sku":{"name":"Standard_LRS","tier":"Standard"},"kind":"StorageV2","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest","name":"akscitblobsdktest","type":"Microsoft.Storage/storageAccounts","location":"eastus","tags":{},"properties":{"dnsEndpointType":"Standard","defaultToOAuthAuthentication":false,"publicNetworkAccess":"Disabled","keyCreationTime":{"key1":"2001-02-03T04:05:06Z","key2":"2001-02-03T04:05:06Z"},"allowCrossTenantReplication":false,"privateEndpointConnections":[],"isNfsV3Enabled":true,"isLocalUserEnabled":true,"isSftpEnabled":true,"minimumTlsVersion":"TLS1_2","allowBlobPublicAccess":false,"allowSharedKeyAccess":true,"largeFileSharesState":"Enabled","isHnsEnabled":true,"networkAcls":{"ipv6Rules":[],"bypass":"AzureServices","virtualNetworkRules":[],"ipRules":[],"defaultAction":"Deny"},"supportsHttpsTrafficOnly":true,"encryption":{"requireInfrastructureEncryption":false,"services":{"file":{"keyType":"Account","enabled":true,"lastEnabledTime":"2001-02-03T04:05:06Z"},"blob":{"keyType":"Account","enabled":true,"lastEnabledTime":"2001-02-03T04:05:06Z"}},"keySource":"Microsoft.Storage"},"accessTier":"Cool","provisioningState":"Succeeded","creationTime":"2001-02-03T04:05:06Z","primaryEndpoints":{"dfs":"https://akscitblobsdktest.dfs.core.windows.net/","web":"https://akscitblobsdktest.z13.web.core.windows.net/","blob":"https://akscitblobsdktest.blob.core.windows.net/","queue":"https://akscitblobsdktest.queue.core.windows.net/","table":"https://akscitblobsdktest.table.core.windows.net/","file":"https://akscitblobsdktest.file.core.windows.net/"},"primaryLocation":"eastus","statusOfPrimary":"available"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "1772"
+                - "1784"
             Content-Type:
                 - application/json
             Expires:
@@ -167,43 +167,37 @@ interactions:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 61
+        content_length: 0
         transfer_encoding: []
         trailer: {}
         host: management.azure.com
         remote_addr: ""
         request_uri: ""
-        body: '{"properties":{"accessTier":"Cool","enabledProtocols":"SMB"}}'
+        body: ""
         form: {}
         headers:
             Accept:
                 - application/json
-            Content-Length:
-                - "61"
-            Content-Type:
-                - application/json
             User-Agent:
-                - ccm-FileShare-client azsdk-go-armstorage/v1.6.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-FileShare/providers/Microsoft.Storage/storageAccounts/akscitacctsdktest/fileServices/default/shares/akscitaccountfilesharetest?api-version=2023-05-01
-        method: PUT
+                - ccm-BlobServicePropertie azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest/blobServices/default?api-version=2024-01-01
+        method: GET
       response:
         proto: HTTP/2.0
         proto_major: 2
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 369
+        content_length: 419
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-FileShare/providers/Microsoft.Storage/storageAccounts/akscitacctsdktest/fileServices/default/shares/akscitaccountfilesharetest","name":"akscitaccountfilesharetest","type":"Microsoft.Storage/storageAccounts/fileServices/shares","properties":{"accessTier":"Cool","enabledProtocols":"SMB"}}'
+        body: '{"sku":{"name":"Standard_LRS","tier":"Standard"},"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest/blobServices/default","name":"default","type":"Microsoft.Storage/storageAccounts/blobServices","properties":{"cors":{"corsRules":[]},"deleteRetentionPolicy":{"allowPermanentDelete":false,"enabled":false}}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "369"
+                - "419"
             Content-Type:
                 - application/json
-            Etag:
-                - '"0x8DD231453FB87F4"'
             Expires:
                 - "-1"
             Pragma:
@@ -214,10 +208,10 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
-                - "11999"
-        status: 201 Created
-        code: 201
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16499"
+        status: 200 OK
+        code: 200
         duration: 200ms
     - id: 4
       request:
@@ -236,8 +230,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-FileShare-client azsdk-go-armstorage/v1.6.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-FileShare/providers/Microsoft.Storage/storageAccounts/akscitacctsdktest/fileServices/default/shares?api-version=2023-05-01
+                - ccm-BlobServicePropertie azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestnotfound/blobServices/default?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -245,65 +239,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 586
+        content_length: 352
         uncompressed: false
-        body: '{"value":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-FileShare/providers/Microsoft.Storage/storageAccounts/akscitacctsdktest/fileServices/default/shares/akscitaccountfilesharetest","name":"akscitaccountfilesharetest","type":"Microsoft.Storage/storageAccounts/fileServices/shares","etag":"\"0x8DD231453FB87F4\"","properties":{"leaseStatus":"unlocked","leaseState":"available","accessTier":"Cool","accessTierChangeTime":"2001-02-03T04:05:06Z","lastModifiedTime":"2001-02-03T04:05:06Z","shareQuota":102400,"enabledProtocols":"SMB"}}]}'
+        body: '{"error":{"code":"ParentResourceNotFound","message":"Failed to perform ''read'' on resource(s) of type ''storageAccounts/blobServices'', because the parent resource ''/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestnotfound'' could not be found."}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "586"
-            Content-Type:
-                - application/json
-            Expires:
-                - "-1"
-            Pragma:
-                - no-cache
-            Strict-Transport-Security:
-                - max-age=31536000; includeSubDomains
-            X-Cache:
-                - CONFIG_NOCACHE
-            X-Content-Type-Options:
-                - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
-                - "16499"
-        status: 200 OK
-        code: 200
-        duration: 200ms
-    - id: 5
-      request:
-        proto: HTTP/1.1
-        proto_major: 1
-        proto_minor: 1
-        content_length: 0
-        transfer_encoding: []
-        trailer: {}
-        host: management.azure.com
-        remote_addr: ""
-        request_uri: ""
-        body: ""
-        form: {}
-        headers:
-            Accept:
-                - application/json
-            User-Agent:
-                - ccm-FileShare-client azsdk-go-armstorage/v1.6.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-FileSharenotfound/providers/Microsoft.Storage/storageAccounts/akscitacctsdktest/fileServices/default/shares?%24expand=snapshots&api-version=2023-05-01
-        method: GET
-      response:
-        proto: HTTP/2.0
-        proto_major: 2
-        proto_minor: 0
-        transfer_encoding: []
-        trailer: {}
-        content_length: 117
-        uncompressed: false
-        body: '{"error":{"code":"ResourceGroupNotFound","message":"Resource group ''aks-cit-FileSharenotfound'' could not be found."}}'
-        headers:
-            Cache-Control:
-                - no-cache
-            Content-Length:
-                - "117"
+                - "352"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -321,44 +264,46 @@ interactions:
         status: 404 Not Found
         code: 404
         duration: 200ms
-    - id: 6
+    - id: 5
       request:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 0
+        content_length: 66
         transfer_encoding: []
         trailer: {}
         host: management.azure.com
         remote_addr: ""
         request_uri: ""
-        body: ""
+        body: '{"properties":{"deleteRetentionPolicy":{"days":1,"enabled":true}}}'
         form: {}
         headers:
             Accept:
                 - application/json
+            Content-Length:
+                - "66"
+            Content-Type:
+                - application/json
             User-Agent:
-                - ccm-FileShare-client azsdk-go-armstorage/v1.6.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-FileShare/providers/Microsoft.Storage/storageAccounts/akscitacctsdktest/fileServices/default/shares/akscitaccountfilesharetest?api-version=2023-05-01
-        method: GET
+                - ccm-BlobServicePropertie azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest/blobServices/default?api-version=2024-01-01
+        method: PUT
       response:
         proto: HTTP/2.0
         proto_major: 2
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 572
+        content_length: 326
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-FileShare/providers/Microsoft.Storage/storageAccounts/akscitacctsdktest/fileServices/default/shares/akscitaccountfilesharetest","name":"akscitaccountfilesharetest","type":"Microsoft.Storage/storageAccounts/fileServices/shares","etag":"\"0x8DD231453FB87F4\"","properties":{"leaseStatus":"unlocked","leaseState":"available","signedIdentifiers":[],"accessTier":"Cool","accessTierChangeTime":"2001-02-03T04:05:06Z","lastModifiedTime":"2001-02-03T04:05:06Z","shareQuota":102400}}'
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest/blobServices/default","name":"default","type":"Microsoft.Storage/storageAccounts/blobServices","properties":{"deleteRetentionPolicy":{"enabled":true,"days":1}}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "572"
+                - "326"
             Content-Type:
                 - application/json
-            Etag:
-                - '"0x8DD231453FB87F4"'
             Expires:
                 - "-1"
             Pragma:
@@ -369,10 +314,65 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
-                - "16499"
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "11999"
         status: 200 OK
         code: 200
+        duration: 200ms
+    - id: 6
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 66
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: '{"properties":{"deleteRetentionPolicy":{"days":1,"enabled":true}}}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Length:
+                - "66"
+            Content-Type:
+                - application/json
+            User-Agent:
+                - ccm-BlobServicePropertie azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestnotfound/blobServices/default?api-version=2024-01-01
+        method: PUT
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 353
+        uncompressed: false
+        body: '{"error":{"code":"ParentResourceNotFound","message":"Failed to perform ''write'' on resource(s) of type ''storageAccounts/blobServices'', because the parent resource ''/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestnotfound'' could not be found."}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "353"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Failure-Cause:
+                - gateway
+        status: 404 Not Found
+        code: 404
         duration: 200ms
     - id: 7
       request:
@@ -388,111 +388,9 @@ interactions:
         body: ""
         form: {}
         headers:
-            Accept:
-                - application/json
             User-Agent:
-                - ccm-FileShare-client azsdk-go-armstorage/v1.6.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-FileShare/providers/Microsoft.Storage/storageAccounts/akscitacctsdktest/fileServices/default/shares/akscitaccountfilesharetestnotfound?api-version=2023-05-01
-        method: GET
-      response:
-        proto: HTTP/2.0
-        proto_major: 2
-        proto_minor: 0
-        transfer_encoding: []
-        trailer: {}
-        content_length: 165
-        uncompressed: false
-        body: '{"error":{"code":"ShareNotFound","message":"The specified share does not exist.\nRequestId:00000000-0000-0000-0000-000000000000\nTime:2001-02-03T04:05:06Z"}}'
-        headers:
-            Cache-Control:
-                - no-cache
-            Content-Length:
-                - "165"
-            Content-Type:
-                - application/json
-            Expires:
-                - "-1"
-            Pragma:
-                - no-cache
-            Strict-Transport-Security:
-                - max-age=31536000; includeSubDomains
-            X-Cache:
-                - CONFIG_NOCACHE
-            X-Content-Type-Options:
-                - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
-                - "16499"
-        status: 404 Not Found
-        code: 404
-        duration: 200ms
-    - id: 8
-      request:
-        proto: HTTP/1.1
-        proto_major: 1
-        proto_minor: 1
-        content_length: 0
-        transfer_encoding: []
-        trailer: {}
-        host: management.azure.com
-        remote_addr: ""
-        request_uri: ""
-        body: ""
-        form: {}
-        headers:
-            Accept:
-                - application/json
-            User-Agent:
-                - ccm-FileShare-client azsdk-go-armstorage/v1.6.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-FileShare/providers/Microsoft.Storage/storageAccounts/akscitacctsdktest/fileServices/default/shares/akscitaccountfilesharetest?api-version=2023-05-01
-        method: DELETE
-      response:
-        proto: HTTP/2.0
-        proto_major: 2
-        proto_minor: 0
-        transfer_encoding: []
-        trailer: {}
-        content_length: 0
-        uncompressed: false
-        body: ""
-        headers:
-            Cache-Control:
-                - no-cache
-            Content-Length:
-                - "0"
-            Content-Type:
-                - text/plain; charset=utf-8
-            Expires:
-                - "-1"
-            Pragma:
-                - no-cache
-            Strict-Transport-Security:
-                - max-age=31536000; includeSubDomains
-            X-Cache:
-                - CONFIG_NOCACHE
-            X-Content-Type-Options:
-                - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
-                - "11999"
-        status: 200 OK
-        code: 200
-        duration: 200ms
-    - id: 9
-      request:
-        proto: HTTP/1.1
-        proto_major: 1
-        proto_minor: 1
-        content_length: 0
-        transfer_encoding: []
-        trailer: {}
-        host: management.azure.com
-        remote_addr: ""
-        request_uri: ""
-        body: ""
-        form: {}
-        headers:
-            User-Agent:
-                - azsdk-go-armstorage/v1.6.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-FileShare/providers/Microsoft.Storage/storageAccounts/akscitacctsdktest?api-version=2023-05-01
+                - azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest?api-version=2024-01-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -525,7 +423,7 @@ interactions:
         status: 200 OK
         code: 200
         duration: 200ms
-    - id: 10
+    - id: 8
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -542,8 +440,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-FileShare?api-version=2021-04-01
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-BlobServiceProperties?api-version=2021-04-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -562,7 +460,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRGSUxFU0hBUkUtRUFTVFVTIiwiam9iTG9jYXRpb24iOiJlYXN0dXMifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRCTE9CU0VSVklDRVBST1BFUlRJRVMtRUFTVFVTIiwiam9iTG9jYXRpb24iOiJlYXN0dXMifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -576,7 +474,7 @@ interactions:
         status: 202 Accepted
         code: 202
         duration: 200ms
-    - id: 11
+    - id: 9
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -591,8 +489,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRGSUxFU0hBUkUtRUFTVFVTIiwiam9iTG9jYXRpb24iOiJlYXN0dXMifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRCTE9CU0VSVklDRVBST1BFUlRJRVMtRUFTVFVTIiwiam9iTG9jYXRpb24iOiJlYXN0dXMifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0

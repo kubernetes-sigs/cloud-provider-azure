@@ -32,7 +32,7 @@ func init() {
 			It("should not return error", func(ctx context.Context) {
 				resourceName = "akscitkeyvaulttestva"
 				newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName, resourceName, armkeyvault.VaultCreateOrUpdateParameters{
-					Location: to.Ptr("eastus"),
+					Location: to.Ptr(location),
 					Properties: &armkeyvault.VaultProperties{
 						EnabledForDeployment:         to.Ptr(true),
 						EnabledForDiskEncryption:     to.Ptr(true),
@@ -106,7 +106,7 @@ func init() {
 	afterAllFunc = func(ctx context.Context) {
 		err := realClient.Delete(ctx, resourceGroupName, resourceName)
 		Expect(err).NotTo(HaveOccurred())
-		err = realClient.PurgeDeleted(ctx, resourceName, "eastus")
+		err = realClient.PurgeDeleted(ctx, resourceName, location)
 		Expect(err).NotTo(HaveOccurred())
 	}
 }

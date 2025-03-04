@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns"
@@ -39,10 +38,10 @@ func init() {
 	}
 
 	beforeAllFunc = func(ctx context.Context) {
+		dnsClientOption := clientOption
+		dnsClientOption.Telemetry.ApplicationID = "ccm-dns-client"
 		privatednsClientFactory, err = armprivatedns.NewClientFactory(subscriptionID, recorder.TokenCredential(), &arm.ClientOptions{
-			ClientOptions: policy.ClientOptions{
-				Transport: recorder.HTTPClient(),
-			},
+			ClientOptions: dnsClientOption,
 		})
 		Expect(err).NotTo(HaveOccurred())
 		resourceName = "aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io"

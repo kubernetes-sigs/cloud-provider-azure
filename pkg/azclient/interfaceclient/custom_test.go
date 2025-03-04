@@ -21,7 +21,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
@@ -40,10 +39,10 @@ func init() {
 		subscriptionID = recorder.SubscriptionID()
 		Expect(err).NotTo(HaveOccurred())
 		cred := recorder.TokenCredential()
+		networkClientOption := clientOption
+		networkClientOption.Telemetry.ApplicationID = "ccm-network-client"
 		vnetClient, err = armnetwork.NewVirtualNetworksClient(subscriptionID, cred, &arm.ClientOptions{
-			ClientOptions: azcore.ClientOptions{
-				Transport: recorder.HTTPClient(),
-			},
+			ClientOptions: networkClientOption,
 		})
 
 		vnet := armnetwork.VirtualNetwork{

@@ -1,0 +1,648 @@
+---
+version: 2
+interactions:
+    - id: 0
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 25
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: '{"location":"chinaeast2"}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Length:
+                - "25"
+            Content-Type:
+                - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-PrivateZone?api-version=2021-04-01
+        method: PUT
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 239
+        uncompressed: false
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateZone","name":"aks-cit-PrivateZone","type":"Microsoft.Resources/resourceGroups","location":"chinaeast2","properties":{"provisioningState":"Succeeded"}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "239"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 201 Created
+        code: 201
+        duration: 200ms
+    - id: 1
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 21
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: '{"location":"global"}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Length:
+                - "21"
+            Content-Type:
+                - application/json
+            User-Agent:
+                - ccm-PrivateZone-client azsdk-go-armprivatedns/v1.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateZone/providers/Microsoft.Network/privateDnsZones/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io?api-version=2024-06-01
+        method: PUT
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 2
+        uncompressed: false
+        body: '{}'
+        headers:
+            Azure-Asyncoperation:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTszMTJhNGQ0MS04NGMyLTQ4MDgtOTVjNy04OWZlMjNjNDc1MDZfMmFhZGZjOTUtMWM0MC00NzgyLTk5NTgtMDdjMmU5OWZlMTk2?api-version=2024-06-01&c=c&h=h&s=s&t=t
+            Cache-Control:
+                - private
+            Content-Length:
+                - "2"
+            Content-Type:
+                - application/json; charset=utf-8
+            Location:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTszMTJhNGQ0MS04NGMyLTQ4MDgtOTVjNy04OWZlMjNjNDc1MDZfMmFhZGZjOTUtMWM0MC00NzgyLTk5NTgtMDdjMmU5OWZlMTk2?api-version=2024-06-01&c=c&h=h&s=s&t=t
+            Server:
+                - Microsoft-IIS/10.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Aspnet-Version:
+                - 4.0.30319
+            X-Content-Type-Options:
+                - nosniff
+            X-Powered-By:
+                - ASP.NET
+        status: 202 Accepted
+        code: 202
+        duration: 200ms
+    - id: 2
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-PrivateZone-client azsdk-go-armprivatedns/v1.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTszMTJhNGQ0MS04NGMyLTQ4MDgtOTVjNy04OWZlMjNjNDc1MDZfMmFhZGZjOTUtMWM0MC00NzgyLTk5NTgtMDdjMmU5OWZlMTk2?api-version=2024-06-01&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 22
+        uncompressed: false
+        body: '{"status":"Succeeded"}'
+        headers:
+            Cache-Control:
+                - private
+            Content-Length:
+                - "22"
+            Content-Type:
+                - application/json; charset=utf-8
+            Server:
+                - Microsoft-IIS/10.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Aspnet-Version:
+                - 4.0.30319
+            X-Content-Type-Options:
+                - nosniff
+            X-Powered-By:
+                - ASP.NET
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 3
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-PrivateZone-client azsdk-go-armprivatedns/v1.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateZone/providers/Microsoft.Network/privateDnsZones/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io?api-version=2024-06-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 751
+        uncompressed: false
+        body: '{"id":"\/subscriptions\/00000000-0000-0000-0000-000000000000\/resourceGroups\/aks-cit-privatezone\/providers\/Microsoft.Network\/privateDnsZones\/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","name":"aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","type":"Microsoft.Network\/privateDnsZones","etag":"00000000-0000-0000-0000-000000000000","location":"global","properties":{"internalId":"SW1tdXRhYmxlWm9uZUlkZW50aXR5O2JmY2ZiNGYzLTFkMDEtNGEyZS1hZTdjLTYxNWVkMTgyZTAxYTsw","maxNumberOfRecordSets":25000,"maxNumberOfVirtualNetworkLinks":1000,"maxNumberOfVirtualNetworkLinksWithRegistration":100,"numberOfRecordSets":1,"numberOfVirtualNetworkLinks":0,"numberOfVirtualNetworkLinksWithRegistration":0,"provisioningState":"Succeeded"}}'
+        headers:
+            Cache-Control:
+                - private
+            Content-Length:
+                - "751"
+            Content-Type:
+                - application/json; charset=utf-8
+            Etag:
+                - 00000000-0000-0000-0000-000000000000
+            Server:
+                - Microsoft-IIS/10.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Aspnet-Version:
+                - 4.0.30319
+            X-Content-Type-Options:
+                - nosniff
+            X-Powered-By:
+                - ASP.NET
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 4
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-PrivateZone-client azsdk-go-armprivatedns/v1.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateZone/providers/Microsoft.Network/privateDnsZones/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io?api-version=2024-06-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 751
+        uncompressed: false
+        body: '{"id":"\/subscriptions\/00000000-0000-0000-0000-000000000000\/resourceGroups\/aks-cit-privatezone\/providers\/Microsoft.Network\/privateDnsZones\/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","name":"aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","type":"Microsoft.Network\/privateDnsZones","etag":"00000000-0000-0000-0000-000000000000","location":"global","properties":{"internalId":"SW1tdXRhYmxlWm9uZUlkZW50aXR5O2JmY2ZiNGYzLTFkMDEtNGEyZS1hZTdjLTYxNWVkMTgyZTAxYTsw","maxNumberOfRecordSets":25000,"maxNumberOfVirtualNetworkLinks":1000,"maxNumberOfVirtualNetworkLinksWithRegistration":100,"numberOfRecordSets":1,"numberOfVirtualNetworkLinks":0,"numberOfVirtualNetworkLinksWithRegistration":0,"provisioningState":"Succeeded"}}'
+        headers:
+            Cache-Control:
+                - private
+            Content-Length:
+                - "751"
+            Content-Type:
+                - application/json; charset=utf-8
+            Etag:
+                - 00000000-0000-0000-0000-000000000000
+            Server:
+                - Microsoft-IIS/10.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Aspnet-Version:
+                - 4.0.30319
+            X-Content-Type-Options:
+                - nosniff
+            X-Powered-By:
+                - ASP.NET
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 5
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-PrivateZone-client azsdk-go-armprivatedns/v1.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateZone/providers/Microsoft.Network/privateDnsZones/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.ionotfound?api-version=2024-06-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 291
+        uncompressed: false
+        body: '{"error":{"code":"ResourceNotFound","message":"The Resource ''Microsoft.Network/privateDnsZones/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.ionotfound'' under resource group ''aks-cit-PrivateZone'' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix"}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "291"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Failure-Cause:
+                - gateway
+        status: 404 Not Found
+        code: 404
+        duration: 200ms
+    - id: 6
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 21
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: '{"location":"global"}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Length:
+                - "21"
+            Content-Type:
+                - application/json
+            User-Agent:
+                - ccm-PrivateZone-client azsdk-go-armprivatedns/v1.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateZone/providers/Microsoft.Network/privateDnsZones/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io?api-version=2024-06-01
+        method: PUT
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 2
+        uncompressed: false
+        body: '{}'
+        headers:
+            Azure-Asyncoperation:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTtkNThlNmE5Zi1mMzI2LTQyYzItOTgwNi1hNTEwNjRjMzk4NzBfMmFhZGZjOTUtMWM0MC00NzgyLTk5NTgtMDdjMmU5OWZlMTk2?api-version=2024-06-01&c=c&h=h&s=s&t=t
+            Cache-Control:
+                - private
+            Content-Length:
+                - "2"
+            Content-Type:
+                - application/json; charset=utf-8
+            Location:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTtkNThlNmE5Zi1mMzI2LTQyYzItOTgwNi1hNTEwNjRjMzk4NzBfMmFhZGZjOTUtMWM0MC00NzgyLTk5NTgtMDdjMmU5OWZlMTk2?api-version=2024-06-01&c=c&h=h&s=s&t=t
+            Server:
+                - Microsoft-IIS/10.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Aspnet-Version:
+                - 4.0.30319
+            X-Content-Type-Options:
+                - nosniff
+            X-Powered-By:
+                - ASP.NET
+        status: 202 Accepted
+        code: 202
+        duration: 200ms
+    - id: 7
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-PrivateZone-client azsdk-go-armprivatedns/v1.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTtkNThlNmE5Zi1mMzI2LTQyYzItOTgwNi1hNTEwNjRjMzk4NzBfMmFhZGZjOTUtMWM0MC00NzgyLTk5NTgtMDdjMmU5OWZlMTk2?api-version=2024-06-01&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 22
+        uncompressed: false
+        body: '{"status":"Succeeded"}'
+        headers:
+            Cache-Control:
+                - private
+            Content-Length:
+                - "22"
+            Content-Type:
+                - application/json; charset=utf-8
+            Server:
+                - Microsoft-IIS/10.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Aspnet-Version:
+                - 4.0.30319
+            X-Content-Type-Options:
+                - nosniff
+            X-Powered-By:
+                - ASP.NET
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 8
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-PrivateZone-client azsdk-go-armprivatedns/v1.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateZone/providers/Microsoft.Network/privateDnsZones/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io?api-version=2024-06-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 751
+        uncompressed: false
+        body: '{"id":"\/subscriptions\/00000000-0000-0000-0000-000000000000\/resourceGroups\/aks-cit-privatezone\/providers\/Microsoft.Network\/privateDnsZones\/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","name":"aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","type":"Microsoft.Network\/privateDnsZones","etag":"00000000-0000-0000-0000-000000000000","location":"global","properties":{"internalId":"SW1tdXRhYmxlWm9uZUlkZW50aXR5O2JmY2ZiNGYzLTFkMDEtNGEyZS1hZTdjLTYxNWVkMTgyZTAxYTsw","maxNumberOfRecordSets":25000,"maxNumberOfVirtualNetworkLinks":1000,"maxNumberOfVirtualNetworkLinksWithRegistration":100,"numberOfRecordSets":1,"numberOfVirtualNetworkLinks":0,"numberOfVirtualNetworkLinksWithRegistration":0,"provisioningState":"Succeeded"}}'
+        headers:
+            Cache-Control:
+                - private
+            Content-Length:
+                - "751"
+            Content-Type:
+                - application/json; charset=utf-8
+            Etag:
+                - 00000000-0000-0000-0000-000000000000
+            Server:
+                - Microsoft-IIS/10.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Aspnet-Version:
+                - 4.0.30319
+            X-Content-Type-Options:
+                - nosniff
+            X-Powered-By:
+                - ASP.NET
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 9
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-dns-client azsdk-go-armprivatedns/v1.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PrivateZone/providers/Microsoft.Network/privateDnsZones/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io?api-version=2024-06-01
+        method: DELETE
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 0
+        uncompressed: false
+        body: ""
+        headers:
+            Azure-Asyncoperation:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTsxNDE2Y2I5Yy05ZWRmLTRlMzAtOGRjOC03NDFkMGExYWMwYmNfMmFhZGZjOTUtMWM0MC00NzgyLTk5NTgtMDdjMmU5OWZlMTk2?api-version=2024-06-01&c=c&h=h&s=s&t=t
+            Cache-Control:
+                - private
+            Content-Length:
+                - "0"
+            Location:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTsxNDE2Y2I5Yy05ZWRmLTRlMzAtOGRjOC03NDFkMGExYWMwYmNfMmFhZGZjOTUtMWM0MC00NzgyLTk5NTgtMDdjMmU5OWZlMTk2?api-version=2024-06-01&c=c&h=h&s=s&t=t
+            Server:
+                - Microsoft-IIS/10.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Aspnet-Version:
+                - 4.0.30319
+            X-Content-Type-Options:
+                - nosniff
+            X-Powered-By:
+                - ASP.NET
+        status: 202 Accepted
+        code: 202
+        duration: 200ms
+    - id: 10
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-dns-client azsdk-go-armprivatedns/v1.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTsxNDE2Y2I5Yy05ZWRmLTRlMzAtOGRjOC03NDFkMGExYWMwYmNfMmFhZGZjOTUtMWM0MC00NzgyLTk5NTgtMDdjMmU5OWZlMTk2?api-version=2024-06-01&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 22
+        uncompressed: false
+        body: '{"status":"Succeeded"}'
+        headers:
+            Cache-Control:
+                - private
+            Content-Length:
+                - "22"
+            Content-Type:
+                - application/json; charset=utf-8
+            Server:
+                - Microsoft-IIS/10.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Aspnet-Version:
+                - 4.0.30319
+            X-Content-Type-Options:
+                - nosniff
+            X-Powered-By:
+                - ASP.NET
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 11
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-PrivateZone?api-version=2021-04-01
+        method: DELETE
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 0
+        uncompressed: false
+        body: ""
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "0"
+            Expires:
+                - "-1"
+            Location:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRQUklWQVRFWk9ORS1DSElOQUVBU1QyIiwiam9iTG9jYXRpb24iOiJjaGluYWVhc3QyIn0?api-version=2021-04-01&c=c&h=h&s=s&t=t
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 202 Accepted
+        code: 202
+        duration: 200ms
+    - id: 12
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRQUklWQVRFWk9ORS1DSElOQUVBU1QyIiwiam9iTG9jYXRpb24iOiJjaGluYWVhc3QyIn0?api-version=2021-04-01&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 0
+        uncompressed: false
+        body: ""
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "0"
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
