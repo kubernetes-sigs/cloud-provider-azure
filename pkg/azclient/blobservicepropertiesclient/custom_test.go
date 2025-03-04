@@ -21,12 +21,12 @@ import (
 	"context"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
@@ -55,12 +55,7 @@ func init() {
 		When("set requests are raised", func() {
 			It("should not return error", func(ctx context.Context) {
 				newResource, err := realClient.Set(ctx, resourceGroupName, resourceName, armstorage.BlobServiceProperties{
-					BlobServiceProperties: &armstorage.BlobServicePropertiesProperties{
-						DeleteRetentionPolicy: &armstorage.DeleteRetentionPolicy{
-							Enabled: to.Ptr(true),
-							Days:    to.Ptr(int32(1)),
-						},
-					},
+					BlobServiceProperties: &armstorage.BlobServicePropertiesProperties{},
 				})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(newResource).NotTo(BeNil())
@@ -83,10 +78,13 @@ func init() {
 	}
 
 	beforeAllFunc = func(ctx context.Context) {
+		storageClientOption := clientOption
+		storageClientOption.Telemetry.ApplicationID = "ccm-storage-client"
+		if location == "chinaeast2" {
+			storageClientOption.APIVersion = accountclient.MooncakeApiVersion
+		}
 		storageClientFactory, err = armstorage.NewClientFactory(subscriptionID, recorder.TokenCredential(), &arm.ClientOptions{
-			ClientOptions: policy.ClientOptions{
-				Transport: recorder.HTTPClient(),
-			},
+			ClientOptions: storageClientOption,
 		})
 		Expect(err).NotTo(HaveOccurred())
 		storageaccountClient = storageClientFactory.NewAccountsClient()

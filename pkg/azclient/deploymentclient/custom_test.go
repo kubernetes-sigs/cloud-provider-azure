@@ -74,9 +74,15 @@ func init() {
 	}
 
 	beforeAllFunc = func(ctx context.Context) {
-		template, err := readJson("testdata/template.json")
+		testTemplate := "testdata/template.json"
+		testParams := "testdata/parameter.json"
+		if location == "chinaeast2" {
+			testTemplate = "testdata/template_chinacloud.json"
+			testParams = "testdata/parameter_chinacloud.json"
+		}
+		template, err := readJson(testTemplate)
 		Expect(err).NotTo(HaveOccurred())
-		params, err := readJson("testdata/parameter.json")
+		params, err := readJson(testParams)
 		Expect(err).NotTo(HaveOccurred())
 		newResource = &armresources.Deployment{
 			Properties: &armresources.DeploymentProperties{

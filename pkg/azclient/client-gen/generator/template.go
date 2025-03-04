@@ -38,11 +38,15 @@ type ClientGenConfig struct {
 	CrossSubFactory           bool     `marker:"crossSubFactory,optional"`
 	Etag                      bool     `marker:"etag,optional"`
 	AzureStackCloudAPIVersion string   `marker:"azureStackCloudAPIVersion,optional"`
+	MooncakeApiVersion        string   `marker:"mooncakeApiVersion,optional"`
 }
 
 var ClientTemplate = template.Must(template.New("object-scaffolding-client-struct").Funcs(funcMap).Parse(`
 {{- with .AzureStackCloudAPIVersion}}
 const AzureStackCloudAPIVersion = "{{.}}"
+{{- end }}
+{{- with .MooncakeApiVersion}}
+const MooncakeApiVersion = "{{.}}"
 {{- end }}
 type Client struct{
 	*{{.PackageAlias}}.{{.ClientName}}
@@ -226,36 +230,43 @@ var resourceGroupName = "aks-cit-{{$resource}}"
 var resourceName = "testResource"
 {{if .SubResource}}var {{toLower .Resource}}Name = "testParentResource"{{- end }}
 var subscriptionID string
-var location = "eastus"
+var location string
 var resourceGroupClient *armresources.ResourceGroupsClient
 var err error
 var recorder *recording.Recorder
+var cloudConfig *cloud.Configuration
 var realClient Interface
+var clientOption azcore.ClientOptions 
 
 var _ = ginkgo.BeforeSuite(func(ctx context.Context) {
-	recorder, err = recording.NewRecorder("testdata/{{$resource}}")
+	recorder, cloudConfig, location, err = recording.NewRecorder()
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 	subscriptionID = recorder.SubscriptionID()
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	cred := recorder.TokenCredential()
-	resourceGroupClient, err = armresources.NewResourceGroupsClient(subscriptionID, cred, &arm.ClientOptions{
-		ClientOptions: azcore.ClientOptions{
-			Transport: recorder.HTTPClient(),
-			TracingProvider: utils.TracingProvider,
-			Telemetry: policy.TelemetryOptions{
-				ApplicationID: "ccm-resource-group-client",
-			},
+	clientOption = azcore.ClientOptions{
+		Transport:       recorder.HTTPClient(),
+		TracingProvider: utils.TracingProvider,
+		Telemetry: policy.TelemetryOptions{
+			ApplicationID: "ccm-resource-group-client",
 		},
+		Cloud: *cloudConfig,
+	}
+	rgClientOption := clientOption
+	rgClientOption.Telemetry.ApplicationID = "ccm-resource-group-client"
+	resourceGroupClient, err = armresources.NewResourceGroupsClient(subscriptionID, cred, &arm.ClientOptions{
+		ClientOptions: rgClientOption,
 	})
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	realClientOption := clientOption
+	realClientOption.Telemetry.ApplicationID = "ccm-{{$resource}}-client"
+{{- if .MooncakeApiVersion}}
+	if location == "chinaeast2" {
+		realClientOption.APIVersion = MooncakeApiVersion
+	}
+{{- end }}
 	realClient, err = New({{if not .OutOfSubscriptionScope}}subscriptionID, {{end}}recorder.TokenCredential(), &arm.ClientOptions{
-		ClientOptions: azcore.ClientOptions{
-			Transport: recorder.HTTPClient(),
-			TracingProvider: utils.TracingProvider,
-			Telemetry: policy.TelemetryOptions{
-				ApplicationID: "ccm-{{$resource}}-client",
-			},
-		},
+		ClientOptions: realClientOption,
 	})
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	_, err = resourceGroupClient.CreateOrUpdate(

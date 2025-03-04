@@ -21,7 +21,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
@@ -37,10 +36,10 @@ func init() {
 	}
 
 	beforeAllFunc = func(ctx context.Context) {
+		networkClientOption := clientOption
+		networkClientOption.Telemetry.ApplicationID = "ccm-network-client"
 		pipClient, err = armnetwork.NewPublicIPAddressesClient(recorder.SubscriptionID(), recorder.TokenCredential(), &arm.ClientOptions{
-			ClientOptions: azcore.ClientOptions{
-				Transport: recorder.HTTPClient(),
-			},
+			ClientOptions: networkClientOption,
 		})
 
 		poller, err := pipClient.BeginCreateOrUpdate(ctx, resourceGroupName, "pip1", armnetwork.PublicIPAddress{

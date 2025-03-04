@@ -26,9 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var newResource = &armcompute.SSHPublicKeyResource{
-	Location: to.Ptr(location),
-}
+var newResource *armcompute.SSHPublicKeyResource
 
 func init() {
 	additionalTestCases = func() {
@@ -49,6 +47,9 @@ func init() {
 	}
 
 	beforeAllFunc = func(ctx context.Context) {
+		newResource = &armcompute.SSHPublicKeyResource{
+			Location: to.Ptr(location),
+		}
 	}
 	afterAllFunc = func(ctx context.Context) {
 		err := realClient.Delete(ctx, resourceGroupName, resourceName)
