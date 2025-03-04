@@ -326,18 +326,18 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		config.ClusterServiceSharedLoadBalancerHealthProbePath = consts.ClusterServiceLoadBalancerHealthProbeDefaultPath
 	}
 
-	clientOps, env, err := azclient.GetAzCoreClientOption(&az.ARMClientConfig)
-	if err != nil {
-		return err
-	}
 	resourceRequestBackoff := az.setCloudProviderBackoffDefaults(config)
 
-	err = az.setLBDefaults(config)
+	err := az.setLBDefaults(config)
 	if err != nil {
 		return err
 	}
 
 	az.Config = *config
+	clientOps, env, err := azclient.GetAzCoreClientOption(&az.ARMClientConfig)
+	if err != nil {
+		return err
+	}
 	az.Environment = env
 	az.ResourceRequestBackoff = resourceRequestBackoff
 	az.Metadata, err = NewInstanceMetadataService(consts.ImdsServer)
