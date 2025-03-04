@@ -30,7 +30,7 @@ func init() {
 
 	beforeAllFunc = func(ctx context.Context) {
 		newResource = &armnetwork.VirtualNetwork{
-			Location: to.Ptr("westus"),
+			Location: to.Ptr(location),
 			Properties: &armnetwork.VirtualNetworkPropertiesFormat{
 				AddressSpace: &armnetwork.AddressSpace{
 					AddressPrefixes: []*string{

@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
@@ -60,16 +59,16 @@ func init() {
 	}
 
 	beforeAllFunc = func(ctx context.Context) {
+		networkClientOption := clientOption
+		networkClientOption.Telemetry.ApplicationID = "ccm-network-client"
 		networkClientFactory, err = armnetwork.NewClientFactory(subscriptionID, recorder.TokenCredential(), &arm.ClientOptions{
-			ClientOptions: policy.ClientOptions{
-				Transport: recorder.HTTPClient(),
-			},
+			ClientOptions: networkClientOption,
 		})
 		Expect(err).NotTo(HaveOccurred())
+		dnsClientOption := clientOption
+		dnsClientOption.Telemetry.ApplicationID = "ccm-network-client"
 		privateDNSFactory, err = armprivatedns.NewClientFactory(subscriptionID, recorder.TokenCredential(), &arm.ClientOptions{
-			ClientOptions: policy.ClientOptions{
-				Transport: recorder.HTTPClient(),
-			},
+			ClientOptions: dnsClientOption,
 		})
 		Expect(err).NotTo(HaveOccurred())
 		pipClient = networkClientFactory.NewPublicIPAddressesClient()

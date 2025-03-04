@@ -23,6 +23,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
@@ -42,36 +43,38 @@ var resourceGroupName = "aks-cit-Interface"
 var resourceName = "testResource"
 
 var subscriptionID string
-var location = "eastus"
+var location string
 var resourceGroupClient *armresources.ResourceGroupsClient
 var err error
 var recorder *recording.Recorder
+var cloudConfig *cloud.Configuration
 var realClient Interface
+var clientOption azcore.ClientOptions
 
 var _ = ginkgo.BeforeSuite(func(ctx context.Context) {
-	recorder, err = recording.NewRecorder("testdata/Interface")
+	recorder, cloudConfig, location, err = recording.NewRecorder()
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 	subscriptionID = recorder.SubscriptionID()
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	cred := recorder.TokenCredential()
-	resourceGroupClient, err = armresources.NewResourceGroupsClient(subscriptionID, cred, &arm.ClientOptions{
-		ClientOptions: azcore.ClientOptions{
-			Transport:       recorder.HTTPClient(),
-			TracingProvider: utils.TracingProvider,
-			Telemetry: policy.TelemetryOptions{
-				ApplicationID: "ccm-resource-group-client",
-			},
+	clientOption = azcore.ClientOptions{
+		Transport:       recorder.HTTPClient(),
+		TracingProvider: utils.TracingProvider,
+		Telemetry: policy.TelemetryOptions{
+			ApplicationID: "ccm-resource-group-client",
 		},
+		Cloud: *cloudConfig,
+	}
+	rgClientOption := clientOption
+	rgClientOption.Telemetry.ApplicationID = "ccm-resource-group-client"
+	resourceGroupClient, err = armresources.NewResourceGroupsClient(subscriptionID, cred, &arm.ClientOptions{
+		ClientOptions: rgClientOption,
 	})
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	realClientOption := clientOption
+	realClientOption.Telemetry.ApplicationID = "ccm-Interface-client"
 	realClient, err = New(subscriptionID, recorder.TokenCredential(), &arm.ClientOptions{
-		ClientOptions: azcore.ClientOptions{
-			Transport:       recorder.HTTPClient(),
-			TracingProvider: utils.TracingProvider,
-			Telemetry: policy.TelemetryOptions{
-				ApplicationID: "ccm-Interface-client",
-			},
-		},
+		ClientOptions: realClientOption,
 	})
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	_, err = resourceGroupClient.CreateOrUpdate(

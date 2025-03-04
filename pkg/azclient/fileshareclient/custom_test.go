@@ -21,12 +21,12 @@ import (
 	"context"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
@@ -88,10 +88,13 @@ func init() {
 	}
 
 	beforeAllFunc = func(ctx context.Context) {
+		storageClientOption := clientOption
+		storageClientOption.Telemetry.ApplicationID = "ccm-storage-client"
+		if location == "chinaeast2" {
+			storageClientOption.APIVersion = accountclient.MooncakeApiVersion
+		}
 		storageClientFactory, err = armstorage.NewClientFactory(subscriptionID, recorder.TokenCredential(), &arm.ClientOptions{
-			ClientOptions: policy.ClientOptions{
-				Transport: recorder.HTTPClient(),
-			},
+			ClientOptions: storageClientOption,
 		})
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		storageaccountClient = storageClientFactory.NewAccountsClient()
