@@ -25,15 +25,9 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
-)
 
-var EnvironmentMapping = map[string]*cloud.Configuration{
-	"AZURECHINACLOUD":        &cloud.AzureChina,
-	"AZURECLOUD":             &cloud.AzurePublic,
-	"AZUREPUBLICCLOUD":       &cloud.AzurePublic,
-	"AZUREUSGOVERNMENT":      &cloud.AzureGovernment,
-	"AZUREUSGOVERNMENTCLOUD": &cloud.AzureGovernment, //TODO: deprecate
-}
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
+)
 
 const AzureStackCloudName = "AZURESTACKCLOUD"
 const (
@@ -41,14 +35,6 @@ const (
 	// to be used while populating the Azure Environment.
 	EnvironmentFilepathName = "AZURE_ENVIRONMENT_FILEPATH"
 )
-
-func AzureCloudConfigFromName(cloudName string) *cloud.Configuration {
-	cloudName = strings.ToUpper(strings.TrimSpace(cloudName))
-	if cloudConfig, ok := EnvironmentMapping[cloudName]; ok {
-		return cloudConfig
-	}
-	return &cloud.AzurePublic
-}
 
 // OverrideAzureCloudConfigAndEnvConfigFromMetadataService returns cloud config and environment config from url
 // track2 sdk will add this one in the near future https://github.com/Azure/azure-sdk-for-go/issues/20959
@@ -151,7 +137,7 @@ func GetAzureCloudConfigAndEnvConfig(armConfig *ARMClientConfig) (cloud.Configur
 	if armConfig != nil {
 		cloudName = armConfig.Cloud
 	}
-	config := AzureCloudConfigFromName(cloudName)
+	config := utils.AzureCloudConfigFromName(cloudName)
 	if armConfig == nil {
 		return *config, nil, nil
 	}
