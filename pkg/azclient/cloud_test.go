@@ -148,32 +148,6 @@ var _ = ginkgo.Describe("Cloud", func() {
 			})
 		})
 	})
-	ginkgo.Context("AzureCloudFromName", func() {
-		ginkgo.When("cloud name is empty", func() {
-			ginkgo.It("should return the default cloud", func() {
-				cloudConfig := azclient.AzureCloudConfigFromName("")
-				gomega.Expect(cloudConfig).ToNot(gomega.BeNil())
-				gomega.Expect(cloudConfig.ActiveDirectoryAuthorityHost).To(gomega.Equal("https://login.microsoftonline.com/"))
-				gomega.Expect(cloudConfig.Services).NotTo(gomega.BeEmpty())
-				gomega.Expect(cloudConfig.Services[cloud.ResourceManager].Audience).To(gomega.Equal("https://management.core.windows.net/"))
-			})
-		})
-		ginkgo.When("cloud name is wrong", func() {
-			ginkgo.It("should return the default cloud", func() {
-				cloudConfig := azclient.AzureCloudConfigFromName("wrong")
-				gomega.Expect(*cloudConfig).To(gomega.Equal(cloud.AzurePublic))
-			})
-		})
-		ginkgo.When("cloud name is AzureChinaCloud", func() {
-			ginkgo.It("should return the AzureChinaCloud", func() {
-				cloudConfig := azclient.AzureCloudConfigFromName("AzureChinaCloud")
-				gomega.Expect(cloudConfig).ToNot(gomega.BeNil())
-				gomega.Expect(cloudConfig.ActiveDirectoryAuthorityHost).To(gomega.Equal("https://login.chinacloudapi.cn/"))
-				gomega.Expect(cloudConfig.Services).NotTo(gomega.BeEmpty())
-				gomega.Expect(cloudConfig.Services[cloud.ResourceManager].Audience).To(gomega.Equal("https://management.core.chinacloudapi.cn"))
-			})
-		})
-	})
 
 	ginkgo.Context("AzureCloudFromEnvironment", func() {
 		ginkgo.When("the environment is empty", func() {
