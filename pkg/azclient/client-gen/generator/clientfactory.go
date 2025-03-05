@@ -246,12 +246,18 @@ func (factory *ClientFactoryImpl) create{{$resource}}Client(subscription string)
 		return nil, err
 	}
 	options.Cloud = factory.cloudConfig
-	{{if $client.AzureStackCloudAPIVersion}}
+	{{- if $client.AzureStackCloudAPIVersion}}
 	if factory.armConfig != nil && strings.EqualFold(factory.armConfig.Cloud, utils.AzureStackCloudName) && !factory.armConfig.DisableAzureStackCloud{
 		options.ClientOptions.APIVersion = {{.PkgAlias}}.AzureStackCloudAPIVersion
 	}
 	{{- end }}
-	{{with $client.RateLimitKey}}
+	{{- if $client.MooncakeApiVersion}}
+	{{- if $client.AzureStackCloudAPIVersion}}else{{else}}
+	{{end}} if !strings.EqualFold(options.Cloud.ActiveDirectoryAuthorityHost, cloud.AzurePublic.ActiveDirectoryAuthorityHost) {
+		options.ClientOptions.APIVersion = {{.PkgAlias}}.MooncakeApiVersion
+	}
+	{{- end }}
+	{{- with $client.RateLimitKey}}
 	//add ratelimit policy
 	ratelimitOption := factory.factoryConfig.GetRateLimitConfig("{{.}}")
 	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
