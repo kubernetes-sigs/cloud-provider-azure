@@ -381,9 +381,8 @@ const (
 	LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration = "nodeIPConfiguration"
 	// LoadBalancerBackendPoolConfigurationTypeNodeIP is the lb backend pool config type node ip
 	LoadBalancerBackendPoolConfigurationTypeNodeIP = "nodeIP"
-	// LoadBalancerBackendPoolConfigurationTypePODIP is the lb backend pool config type pod ip
-	// TODO (nilo19): support pod IP in the future
-	LoadBalancerBackendPoolConfigurationTypePODIP = "podIP"
+	// LoadBalancerBackendPoolConfigurationTypePodIP is the lb backend pool config type pod ip
+	LoadBalancerBackendPoolConfigurationTypePodIP = "podIP"
 )
 
 // error messages

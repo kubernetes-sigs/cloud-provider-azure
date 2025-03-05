@@ -448,6 +448,17 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 	}
 }
 
+func TestEnsureHostsInPoolPodIP(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	az := GetTestCloudWithContainerLoadBalancer(ctrl)
+	bi := newBackendPoolTypePodIP(az)
+
+	err := bi.EnsureHostsInPool(nil, nil, nil, "", "", "", "", nil)
+	assert.NoError(t, err)
+}
+
 func TestIsLBBackendPoolsExisting(t *testing.T) {
 	testcases := []struct {
 		desc               string
@@ -582,6 +593,17 @@ func TestCleanupVMSetFromBackendPoolByConditionNodeIP(t *testing.T) {
 	cleanedLB, err := bi.CleanupVMSetFromBackendPoolByCondition(context.TODO(), lb, &service, nodes, clusterName, shouldRemoveVMSetFromSLB)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedLB, cleanedLB)
+}
+
+func TestCleanupVMSetFromBackendPoolByConditionPodIP(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cloud := GetTestCloudWithContainerLoadBalancer(ctrl)
+	bpi := newBackendPoolTypePodIP(cloud)
+
+	_, err := bpi.CleanupVMSetFromBackendPoolByCondition(nil, nil, nil, nil, "", nil)
+	assert.Error(t, err)
 }
 
 func TestCleanupVMSetFromBackendPoolForInstanceNotFound(t *testing.T) {
@@ -1172,5 +1194,140 @@ func TestGetBackendIPConfigurationsToBeDeleted(t *testing.T) {
 			actual[*ipConfig.ID] = true
 		}
 		assert.Equal(t, tc.expected, actual)
+	}
+}
+func TestReconcileBackendPoolsPodIP(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	az := GetTestCloud(ctrl)
+	bpi := newBackendPoolTypePodIP(az)
+
+	t.Run("should return error when getBackendPoolNameForCLBService fails", func(t *testing.T) {
+		expectedErr := errors.New("dual-stack services are not supported when LB backend pool type is PodIP")
+		service := getTestServiceDualStack("svc-1", v1.ProtocolTCP, nil, 80)
+
+		_, _, _, err := bpi.ReconcileBackendPools(context.TODO(), "", &service, &armnetwork.LoadBalancer{})
+
+		assert.Equal(t, expectedErr, err)
+	})
+
+	t.Run("should skip creating new pool if it already exists", func(t *testing.T) {
+		backendPoolName := "existingBackendPool"
+		lb := &armnetwork.LoadBalancer{
+			Properties: &armnetwork.LoadBalancerPropertiesFormat{
+				BackendAddressPools: []*armnetwork.BackendAddressPool{
+					{Name: ptr.To(backendPoolName)},
+				},
+			},
+		}
+		service := getTestService("existingBackendPool", v1.ProtocolTCP, nil, false)
+
+		isPreConfigured, updated, newLB, err := bpi.ReconcileBackendPools(context.TODO(), "", &service, lb)
+
+		assert.NoError(t, err)
+		assert.False(t, isPreConfigured)
+		assert.False(t, updated)
+		assert.Equal(t, lb, newLB)
+	})
+
+	t.Run("should create a new pool if not found", func(t *testing.T) {
+		backendPoolName := "UID"
+		lb := &armnetwork.LoadBalancer{
+			Properties: &armnetwork.LoadBalancerPropertiesFormat{
+				BackendAddressPools: []*armnetwork.BackendAddressPool{},
+			},
+		}
+		service := getTestService("UID", v1.ProtocolTCP, nil, false)
+
+		isPreConfigured, updated, newLB, err := bpi.ReconcileBackendPools(context.TODO(), "", &service, lb)
+
+		assert.NoError(t, err)
+		assert.False(t, isPreConfigured)
+		assert.True(t, updated)
+		assert.Len(t, newLB.Properties.BackendAddressPools, 1)
+		assert.Equal(t, backendPoolName, ptr.Deref(newLB.Properties.BackendAddressPools[0].Name, ""))
+	})
+}
+func TestGetBackendPrivateIPsPodIP(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	makeLB := func(name string, addresses []string) *armnetwork.LoadBalancer {
+		bps := make([]*armnetwork.BackendAddressPool, 1)
+		loadBalancerAddresses := make([]*armnetwork.LoadBalancerBackendAddress, 0)
+		for _, ip := range addresses {
+			loadBalancerAddresses = append(loadBalancerAddresses, &armnetwork.LoadBalancerBackendAddress{
+				Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{
+					IPAddress: ptr.To(ip),
+				},
+			})
+		}
+		bps[0] = &armnetwork.BackendAddressPool{
+			Name: ptr.To(name),
+			Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+				LoadBalancerBackendAddresses: loadBalancerAddresses,
+			},
+		}
+		return &armnetwork.LoadBalancer{
+			Properties: &armnetwork.LoadBalancerPropertiesFormat{
+				BackendAddressPools: bps,
+			},
+		}
+	}
+
+	tests := []struct {
+		desc         string
+		lb           *armnetwork.LoadBalancer
+		service      v1.Service
+		expectedIPv4 []string
+		expectedIPv6 []string
+	}{
+		{
+			desc: "load balancer has no address pools",
+			lb: &armnetwork.LoadBalancer{
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					BackendAddressPools: nil,
+				},
+			},
+			service:      getTestService("UID", v1.ProtocolTCP, nil, false),
+			expectedIPv4: nil,
+			expectedIPv6: nil,
+		},
+		{
+			desc:         "dual-stack service is not supported",
+			lb:           makeLB("UID", []string{"1.2.3.4", "2.3.4.5"}),
+			service:      getTestServiceDualStack("UID", v1.ProtocolTCP, nil, 80),
+			expectedIPv4: nil,
+			expectedIPv6: nil,
+		},
+		{
+			desc:         "found IPv4 addresses",
+			lb:           makeLB("UID", []string{"1.2.3.4", "2.3.4.5"}),
+			service:      getTestService("UID", v1.ProtocolTCP, nil, false),
+			expectedIPv4: []string{"1.2.3.4", "2.3.4.5"},
+			expectedIPv6: nil,
+		},
+		{
+			desc:         "found IPv6 addresses",
+			lb:           makeLB("UID-ipv6", []string{"fe80::1", "2345:0425:2ca1:0000:0000:0567:5673:23b5"}),
+			service:      getTestService("UID-ipv6", v1.ProtocolTCP, nil, false),
+			expectedIPv4: nil,
+			expectedIPv6: []string{"fe80::1", "2345:0425:2ca1:0000:0000:0567:5673:23b5"},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.desc, func(t *testing.T) {
+			az := GetTestCloudWithContainerLoadBalancer(ctrl)
+			bpi := newBackendPoolTypePodIP(az)
+
+			gotIPv4, gotIPv6 := bpi.GetBackendPrivateIPs(context.TODO(), "", &tt.service, tt.lb)
+
+			assert.Equal(t, tt.expectedIPv4, gotIPv4)
+			assert.Equal(t, tt.expectedIPv6, gotIPv6)
+
+		})
 	}
 }
