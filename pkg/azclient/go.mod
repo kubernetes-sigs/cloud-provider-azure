@@ -24,7 +24,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.34.0
 	go.uber.org/mock v0.5.0
 	golang.org/x/crypto v0.35.0
-	golang.org/x/net v0.35.0
+	golang.org/x/net v0.36.0
 	golang.org/x/sync v0.11.0
 	golang.org/x/time v0.10.0
 	gopkg.in/dnaeon/go-vcr.v3 v3.2.0
