@@ -23,10 +23,10 @@ require (
 	go.opentelemetry.io/otel v1.34.0
 	go.opentelemetry.io/otel/metric v1.34.0
 	go.uber.org/mock v0.5.0
-	golang.org/x/crypto v0.35.0
+	golang.org/x/crypto v0.36.0
 	golang.org/x/net v0.36.0
-	golang.org/x/sync v0.11.0
-	golang.org/x/time v0.10.0
+	golang.org/x/sync v0.12.0
+	golang.org/x/time v0.11.0
 	gopkg.in/dnaeon/go-vcr.v3 v3.2.0
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
 )
@@ -46,8 +46,8 @@ require (
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/rogpeppe/go-internal v1.13.1 // indirect
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
-	golang.org/x/sys v0.30.0 // indirect
-	golang.org/x/text v0.22.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
 	golang.org/x/tools v0.28.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
