@@ -1,0 +1,1529 @@
+---
+version: 2
+interactions:
+    - id: 0
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 21
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: '{"location":"eastus"}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Length:
+                - "21"
+            Content-Type:
+                - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ManagedCluster?api-version=2021-04-01
+        method: PUT
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 241
+        uncompressed: false
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster","name":"aks-cit-ManagedCluster","type":"Microsoft.Resources/resourceGroups","location":"eastus","properties":{"provisioningState":"Succeeded"}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "241"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "11999"
+        status: 201 Created
+        code: 201
+        duration: 200ms
+    - id: 1
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 583
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: '{"identity":{"type":"SystemAssigned"},"location":"eastus","properties":{"agentPoolProfiles":[{"count":3,"mode":"System","name":"agentpool1","vmSize":"Standard_D2s_v3"}],"dnsPrefix":"aks-cit-ManagedClustertestResourcednsPrefix","enableRBAC":true,"linuxProfile":{"adminUsername":"azureuser","ssh":{"publicKeys":[{"keyData":"ssh-rsa {KEY}\n"}]}}},"sku":{"name":"Base","tier":"Standard"}}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Length:
+                - "583"
+            Content-Type:
+                - application/json
+            User-Agent:
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-10-01
+        method: PUT
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 3324
+        uncompressed: false
+        body: |-
+            {
+             "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource",
+             "location": "eastus",
+             "name": "testResource",
+             "type": "Microsoft.ContainerService/ManagedClusters",
+             "properties": {
+              "provisioningState": "Creating",
+              "powerState": {
+               "code": "Running"
+              },
+              "kubernetesVersion": "1.30",
+              "currentKubernetesVersion": "1.30.9",
+              "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-vzxlvpxr.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-vzxlvpxr.portal.hcp.eastus.azmk8s.io",
+              "agentPoolProfiles": [
+               {
+                "name": "agentpool1",
+                "count": 3,
+                "vmSize": "Standard_D2s_v3",
+                "osDiskSizeGB": 128,
+                "osDiskType": "Managed",
+                "kubeletDiskType": "OS",
+                "maxPods": 250,
+                "type": "VirtualMachineScaleSets",
+                "scaleDownMode": "Delete",
+                "provisioningState": "Creating",
+                "powerState": {
+                 "code": "Running"
+                },
+                "orchestratorVersion": "1.30",
+                "currentOrchestratorVersion": "1.30.9",
+                "enableNodePublicIP": false,
+                "nodeLabels": {},
+                "mode": "System",
+                "osType": "Linux",
+                "osSKU": "Ubuntu",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202502.09.0",
+                "upgradeSettings": {
+                 "maxSurge": "10%"
+                },
+                "enableFIPS": false,
+                "securityProfile": {
+                 "enableVTPM": false,
+                 "enableSecureBoot": false
+                }
+               }
+              ],
+              "linuxProfile": {
+               "adminUsername": "azureuser",
+               "ssh": {
+                "publicKeys": [
+                 {
+                  "keyData": "ssh-rsa {KEY}\n"
+                 }
+                ]
+               }
+              },
+              "servicePrincipalProfile": {
+               "clientId": "msi"
+              },
+              "nodeResourceGroup": "MC_aks-cit-ManagedCluster_testResource_eastus",
+              "enableRBAC": true,
+              "supportPlan": "KubernetesOfficial",
+              "networkProfile": {
+               "networkPlugin": "azure",
+               "networkPluginMode": "overlay",
+               "networkPolicy": "none",
+               "networkDataplane": "azure",
+               "loadBalancerSku": "standard",
+               "loadBalancerProfile": {
+                "managedOutboundIPs": {
+                 "count": 1
+                },
+                "backendPoolType": "nodeIPConfiguration"
+               },
+               "podCidr": "10.244.0.0/16",
+               "serviceCidr": "10.0.0.0/16",
+               "dnsServiceIP": "10.0.0.10",
+               "outboundType": "loadBalancer",
+               "podCidrs": [
+                "10.244.0.0/16"
+               ],
+               "serviceCidrs": [
+                "10.0.0.0/16"
+               ],
+               "ipFamilies": [
+                "IPv4"
+               ]
+              },
+              "maxAgentPools": 100,
+              "autoUpgradeProfile": {
+               "nodeOSUpgradeChannel": "NodeImage"
+              },
+              "securityProfile": {},
+              "storageProfile": {
+               "diskCSIDriver": {
+                "enabled": true
+               },
+               "fileCSIDriver": {
+                "enabled": true
+               },
+               "snapshotController": {
+                "enabled": true
+               }
+              },
+              "oidcIssuerProfile": {
+               "enabled": false
+              },
+              "workloadAutoScalerProfile": {},
+              "resourceUID": "67c570d3f5306600015c42fa",
+              "metricsProfile": {
+               "costAnalysis": {
+                "enabled": false
+               }
+              }
+             },
+             "identity": {
+              "type": "SystemAssigned",
+              "principalId": "00000000-0000-0000-0000-000000000000",
+              "tenantId": "tenantid"
+             },
+             "sku": {
+              "name": "Base",
+              "tier": "Standard"
+             }
+            }
+        headers:
+            Azure-Asyncoperation:
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&c=c&h=h&s=s&t=t
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "3324"
+            Content-Type:
+                - application/json
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "12000"
+        status: 201 Created
+        code: 201
+        duration: 200ms
+    - id: 2
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 164
+        uncompressed: false
+        body: |-
+            {
+             "name": "00000000-0000-0000-0000-000000000000",
+             "status": "Succeeded",
+             "startTime": "2001-02-03T04:05:06Z",
+             "endTime": "2001-02-03T04:05:06Z"
+            }
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "164"
+            Content-Type:
+                - application/json
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16499"
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 3
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-10-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 3949
+        uncompressed: false
+        body: |-
+            {
+             "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource",
+             "location": "eastus",
+             "name": "testResource",
+             "type": "Microsoft.ContainerService/ManagedClusters",
+             "properties": {
+              "provisioningState": "Succeeded",
+              "powerState": {
+               "code": "Running"
+              },
+              "kubernetesVersion": "1.30",
+              "currentKubernetesVersion": "1.30.9",
+              "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-vzxlvpxr.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-vzxlvpxr.portal.hcp.eastus.azmk8s.io",
+              "agentPoolProfiles": [
+               {
+                "name": "agentpool1",
+                "count": 3,
+                "vmSize": "Standard_D2s_v3",
+                "osDiskSizeGB": 128,
+                "osDiskType": "Managed",
+                "kubeletDiskType": "OS",
+                "maxPods": 250,
+                "type": "VirtualMachineScaleSets",
+                "scaleDownMode": "Delete",
+                "provisioningState": "Succeeded",
+                "powerState": {
+                 "code": "Running"
+                },
+                "orchestratorVersion": "1.30",
+                "currentOrchestratorVersion": "1.30.9",
+                "enableNodePublicIP": false,
+                "mode": "System",
+                "osType": "Linux",
+                "osSKU": "Ubuntu",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202502.09.0",
+                "upgradeSettings": {
+                 "maxSurge": "10%"
+                },
+                "enableFIPS": false,
+                "securityProfile": {
+                 "enableVTPM": false,
+                 "enableSecureBoot": false
+                }
+               }
+              ],
+              "linuxProfile": {
+               "adminUsername": "azureuser",
+               "ssh": {
+                "publicKeys": [
+                 {
+                  "keyData": "ssh-rsa {KEY}\n"
+                 }
+                ]
+               }
+              },
+              "servicePrincipalProfile": {
+               "clientId": "msi"
+              },
+              "nodeResourceGroup": "MC_aks-cit-ManagedCluster_testResource_eastus",
+              "enableRBAC": true,
+              "supportPlan": "KubernetesOfficial",
+              "networkProfile": {
+               "networkPlugin": "azure",
+               "networkPluginMode": "overlay",
+               "networkPolicy": "none",
+               "networkDataplane": "azure",
+               "loadBalancerSku": "standard",
+               "loadBalancerProfile": {
+                "managedOutboundIPs": {
+                 "count": 1
+                },
+                "effectiveOutboundIPs": [
+                 {
+                  "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.Network/publicIPAddresses/00000000-0000-0000-0000-000000000000"
+                 }
+                ],
+                "backendPoolType": "nodeIPConfiguration"
+               },
+               "podCidr": "10.244.0.0/16",
+               "serviceCidr": "10.0.0.0/16",
+               "dnsServiceIP": "10.0.0.10",
+               "outboundType": "loadBalancer",
+               "podCidrs": [
+                "10.244.0.0/16"
+               ],
+               "serviceCidrs": [
+                "10.0.0.0/16"
+               ],
+               "ipFamilies": [
+                "IPv4"
+               ]
+              },
+              "maxAgentPools": 100,
+              "identityProfile": {
+               "kubeletidentity": {
+                "resourceId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResource-agentpool",
+                "clientId": "00000000-0000-0000-0000-000000000000",
+                "objectId": "00000000-0000-0000-0000-000000000000"
+               }
+              },
+              "autoUpgradeProfile": {
+               "nodeOSUpgradeChannel": "NodeImage"
+              },
+              "securityProfile": {},
+              "storageProfile": {
+               "diskCSIDriver": {
+                "enabled": true
+               },
+               "fileCSIDriver": {
+                "enabled": true
+               },
+               "snapshotController": {
+                "enabled": true
+               }
+              },
+              "oidcIssuerProfile": {
+               "enabled": false
+              },
+              "workloadAutoScalerProfile": {},
+              "resourceUID": "67c570d3f5306600015c42fa",
+              "metricsProfile": {
+               "costAnalysis": {
+                "enabled": false
+               }
+              }
+             },
+             "identity": {
+              "type": "SystemAssigned",
+              "principalId": "00000000-0000-0000-0000-000000000000",
+              "tenantId": "tenantid"
+             },
+             "sku": {
+              "name": "Base",
+              "tier": "Standard"
+             }
+            }
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "3949"
+            Content-Type:
+                - application/json
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16499"
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 4
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-10-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 3949
+        uncompressed: false
+        body: |-
+            {
+             "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource",
+             "location": "eastus",
+             "name": "testResource",
+             "type": "Microsoft.ContainerService/ManagedClusters",
+             "properties": {
+              "provisioningState": "Succeeded",
+              "powerState": {
+               "code": "Running"
+              },
+              "kubernetesVersion": "1.30",
+              "currentKubernetesVersion": "1.30.9",
+              "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-vzxlvpxr.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-vzxlvpxr.portal.hcp.eastus.azmk8s.io",
+              "agentPoolProfiles": [
+               {
+                "name": "agentpool1",
+                "count": 3,
+                "vmSize": "Standard_D2s_v3",
+                "osDiskSizeGB": 128,
+                "osDiskType": "Managed",
+                "kubeletDiskType": "OS",
+                "maxPods": 250,
+                "type": "VirtualMachineScaleSets",
+                "scaleDownMode": "Delete",
+                "provisioningState": "Succeeded",
+                "powerState": {
+                 "code": "Running"
+                },
+                "orchestratorVersion": "1.30",
+                "currentOrchestratorVersion": "1.30.9",
+                "enableNodePublicIP": false,
+                "mode": "System",
+                "osType": "Linux",
+                "osSKU": "Ubuntu",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202502.09.0",
+                "upgradeSettings": {
+                 "maxSurge": "10%"
+                },
+                "enableFIPS": false,
+                "securityProfile": {
+                 "enableVTPM": false,
+                 "enableSecureBoot": false
+                }
+               }
+              ],
+              "linuxProfile": {
+               "adminUsername": "azureuser",
+               "ssh": {
+                "publicKeys": [
+                 {
+                  "keyData": "ssh-rsa {KEY}\n"
+                 }
+                ]
+               }
+              },
+              "servicePrincipalProfile": {
+               "clientId": "msi"
+              },
+              "nodeResourceGroup": "MC_aks-cit-ManagedCluster_testResource_eastus",
+              "enableRBAC": true,
+              "supportPlan": "KubernetesOfficial",
+              "networkProfile": {
+               "networkPlugin": "azure",
+               "networkPluginMode": "overlay",
+               "networkPolicy": "none",
+               "networkDataplane": "azure",
+               "loadBalancerSku": "standard",
+               "loadBalancerProfile": {
+                "managedOutboundIPs": {
+                 "count": 1
+                },
+                "effectiveOutboundIPs": [
+                 {
+                  "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.Network/publicIPAddresses/00000000-0000-0000-0000-000000000000"
+                 }
+                ],
+                "backendPoolType": "nodeIPConfiguration"
+               },
+               "podCidr": "10.244.0.0/16",
+               "serviceCidr": "10.0.0.0/16",
+               "dnsServiceIP": "10.0.0.10",
+               "outboundType": "loadBalancer",
+               "podCidrs": [
+                "10.244.0.0/16"
+               ],
+               "serviceCidrs": [
+                "10.0.0.0/16"
+               ],
+               "ipFamilies": [
+                "IPv4"
+               ]
+              },
+              "maxAgentPools": 100,
+              "identityProfile": {
+               "kubeletidentity": {
+                "resourceId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResource-agentpool",
+                "clientId": "00000000-0000-0000-0000-000000000000",
+                "objectId": "00000000-0000-0000-0000-000000000000"
+               }
+              },
+              "autoUpgradeProfile": {
+               "nodeOSUpgradeChannel": "NodeImage"
+              },
+              "securityProfile": {},
+              "storageProfile": {
+               "diskCSIDriver": {
+                "enabled": true
+               },
+               "fileCSIDriver": {
+                "enabled": true
+               },
+               "snapshotController": {
+                "enabled": true
+               }
+              },
+              "oidcIssuerProfile": {
+               "enabled": false
+              },
+              "workloadAutoScalerProfile": {},
+              "resourceUID": "67c570d3f5306600015c42fa",
+              "metricsProfile": {
+               "costAnalysis": {
+                "enabled": false
+               }
+              }
+             },
+             "identity": {
+              "type": "SystemAssigned",
+              "principalId": "00000000-0000-0000-0000-000000000000",
+              "tenantId": "tenantid"
+             },
+             "sku": {
+              "name": "Base",
+              "tier": "Standard"
+             }
+            }
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "3949"
+            Content-Type:
+                - application/json
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16499"
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 5
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResourcenotfound?api-version=2024-10-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 257
+        uncompressed: false
+        body: '{"error":{"code":"ResourceNotFound","message":"The Resource ''Microsoft.ContainerService/managedClusters/testResourcenotfound'' under resource group ''aks-cit-ManagedCluster'' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix"}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "257"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Failure-Cause:
+                - gateway
+        status: 404 Not Found
+        code: 404
+        duration: 200ms
+    - id: 6
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 583
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: '{"identity":{"type":"SystemAssigned"},"location":"eastus","properties":{"agentPoolProfiles":[{"count":3,"mode":"System","name":"agentpool1","vmSize":"Standard_D2s_v3"}],"dnsPrefix":"aks-cit-ManagedClustertestResourcednsPrefix","enableRBAC":true,"linuxProfile":{"adminUsername":"azureuser","ssh":{"publicKeys":[{"keyData":"ssh-rsa {KEY}\n"}]}}},"sku":{"name":"Base","tier":"Standard"}}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Length:
+                - "583"
+            Content-Type:
+                - application/json
+            User-Agent:
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-10-01
+        method: PUT
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 4001
+        uncompressed: false
+        body: |-
+            {
+             "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource",
+             "location": "eastus",
+             "name": "testResource",
+             "type": "Microsoft.ContainerService/ManagedClusters",
+             "properties": {
+              "provisioningState": "Updating",
+              "powerState": {
+               "code": "Running"
+              },
+              "kubernetesVersion": "1.30",
+              "currentKubernetesVersion": "1.30.9",
+              "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-vzxlvpxr.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-vzxlvpxr.portal.hcp.eastus.azmk8s.io",
+              "agentPoolProfiles": [
+               {
+                "name": "agentpool1",
+                "count": 3,
+                "vmSize": "Standard_D2s_v3",
+                "osDiskSizeGB": 128,
+                "osDiskType": "Managed",
+                "kubeletDiskType": "OS",
+                "maxPods": 250,
+                "type": "VirtualMachineScaleSets",
+                "enableAutoScaling": false,
+                "scaleDownMode": "Delete",
+                "provisioningState": "Updating",
+                "powerState": {
+                 "code": "Running"
+                },
+                "orchestratorVersion": "1.30",
+                "currentOrchestratorVersion": "1.30.9",
+                "enableNodePublicIP": false,
+                "nodeLabels": {},
+                "mode": "System",
+                "osType": "Linux",
+                "osSKU": "Ubuntu",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202502.09.0",
+                "upgradeSettings": {
+                 "maxSurge": "10%"
+                },
+                "enableFIPS": false,
+                "securityProfile": {
+                 "enableVTPM": false,
+                 "enableSecureBoot": false
+                }
+               }
+              ],
+              "linuxProfile": {
+               "adminUsername": "azureuser",
+               "ssh": {
+                "publicKeys": [
+                 {
+                  "keyData": "ssh-rsa {KEY}\n"
+                 }
+                ]
+               }
+              },
+              "servicePrincipalProfile": {
+               "clientId": "msi"
+              },
+              "nodeResourceGroup": "MC_aks-cit-ManagedCluster_testResource_eastus",
+              "enableRBAC": true,
+              "supportPlan": "KubernetesOfficial",
+              "networkProfile": {
+               "networkPlugin": "azure",
+               "networkPluginMode": "overlay",
+               "networkPolicy": "none",
+               "networkDataplane": "azure",
+               "loadBalancerSku": "standard",
+               "loadBalancerProfile": {
+                "managedOutboundIPs": {
+                 "count": 1
+                },
+                "effectiveOutboundIPs": [
+                 {
+                  "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.Network/publicIPAddresses/00000000-0000-0000-0000-000000000000"
+                 }
+                ],
+                "backendPoolType": "nodeIPConfiguration"
+               },
+               "podCidr": "10.244.0.0/16",
+               "serviceCidr": "10.0.0.0/16",
+               "dnsServiceIP": "10.0.0.10",
+               "outboundType": "loadBalancer",
+               "podCidrs": [
+                "10.244.0.0/16"
+               ],
+               "serviceCidrs": [
+                "10.0.0.0/16"
+               ],
+               "ipFamilies": [
+                "IPv4"
+               ]
+              },
+              "maxAgentPools": 100,
+              "identityProfile": {
+               "kubeletidentity": {
+                "resourceId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResource-agentpool",
+                "clientId": "00000000-0000-0000-0000-000000000000",
+                "objectId": "00000000-0000-0000-0000-000000000000"
+               }
+              },
+              "autoUpgradeProfile": {
+               "nodeOSUpgradeChannel": "NodeImage"
+              },
+              "securityProfile": {},
+              "storageProfile": {
+               "diskCSIDriver": {
+                "enabled": true
+               },
+               "fileCSIDriver": {
+                "enabled": true
+               },
+               "snapshotController": {
+                "enabled": true
+               }
+              },
+              "oidcIssuerProfile": {
+               "enabled": false
+              },
+              "workloadAutoScalerProfile": {},
+              "resourceUID": "67c570d3f5306600015c42fa",
+              "metricsProfile": {
+               "costAnalysis": {
+                "enabled": false
+               }
+              }
+             },
+             "identity": {
+              "type": "SystemAssigned",
+              "principalId": "00000000-0000-0000-0000-000000000000",
+              "tenantId": "tenantid"
+             },
+             "sku": {
+              "name": "Base",
+              "tier": "Standard"
+             }
+            }
+        headers:
+            Azure-Asyncoperation:
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&c=c&h=h&s=s&t=t
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "4001"
+            Content-Type:
+                - application/json
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "12000"
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 7
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 165
+        uncompressed: false
+        body: |-
+            {
+             "name": "00000000-0000-0000-0000-000000000000",
+             "status": "Succeeded",
+             "startTime": "2001-02-03T04:05:06Z",
+             "endTime": "2001-02-03T04:05:06Z"
+            }
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "165"
+            Content-Type:
+                - application/json
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16499"
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 8
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-10-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 3981
+        uncompressed: false
+        body: |-
+            {
+             "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource",
+             "location": "eastus",
+             "name": "testResource",
+             "type": "Microsoft.ContainerService/ManagedClusters",
+             "properties": {
+              "provisioningState": "Succeeded",
+              "powerState": {
+               "code": "Running"
+              },
+              "kubernetesVersion": "1.30",
+              "currentKubernetesVersion": "1.30.9",
+              "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-vzxlvpxr.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-vzxlvpxr.portal.hcp.eastus.azmk8s.io",
+              "agentPoolProfiles": [
+               {
+                "name": "agentpool1",
+                "count": 3,
+                "vmSize": "Standard_D2s_v3",
+                "osDiskSizeGB": 128,
+                "osDiskType": "Managed",
+                "kubeletDiskType": "OS",
+                "maxPods": 250,
+                "type": "VirtualMachineScaleSets",
+                "enableAutoScaling": false,
+                "scaleDownMode": "Delete",
+                "provisioningState": "Succeeded",
+                "powerState": {
+                 "code": "Running"
+                },
+                "orchestratorVersion": "1.30",
+                "currentOrchestratorVersion": "1.30.9",
+                "enableNodePublicIP": false,
+                "mode": "System",
+                "osType": "Linux",
+                "osSKU": "Ubuntu",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202502.09.0",
+                "upgradeSettings": {
+                 "maxSurge": "10%"
+                },
+                "enableFIPS": false,
+                "securityProfile": {
+                 "enableVTPM": false,
+                 "enableSecureBoot": false
+                }
+               }
+              ],
+              "linuxProfile": {
+               "adminUsername": "azureuser",
+               "ssh": {
+                "publicKeys": [
+                 {
+                  "keyData": "ssh-rsa {KEY}\n"
+                 }
+                ]
+               }
+              },
+              "servicePrincipalProfile": {
+               "clientId": "msi"
+              },
+              "nodeResourceGroup": "MC_aks-cit-ManagedCluster_testResource_eastus",
+              "enableRBAC": true,
+              "supportPlan": "KubernetesOfficial",
+              "networkProfile": {
+               "networkPlugin": "azure",
+               "networkPluginMode": "overlay",
+               "networkPolicy": "none",
+               "networkDataplane": "azure",
+               "loadBalancerSku": "standard",
+               "loadBalancerProfile": {
+                "managedOutboundIPs": {
+                 "count": 1
+                },
+                "effectiveOutboundIPs": [
+                 {
+                  "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.Network/publicIPAddresses/00000000-0000-0000-0000-000000000000"
+                 }
+                ],
+                "backendPoolType": "nodeIPConfiguration"
+               },
+               "podCidr": "10.244.0.0/16",
+               "serviceCidr": "10.0.0.0/16",
+               "dnsServiceIP": "10.0.0.10",
+               "outboundType": "loadBalancer",
+               "podCidrs": [
+                "10.244.0.0/16"
+               ],
+               "serviceCidrs": [
+                "10.0.0.0/16"
+               ],
+               "ipFamilies": [
+                "IPv4"
+               ]
+              },
+              "maxAgentPools": 100,
+              "identityProfile": {
+               "kubeletidentity": {
+                "resourceId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResource-agentpool",
+                "clientId": "00000000-0000-0000-0000-000000000000",
+                "objectId": "00000000-0000-0000-0000-000000000000"
+               }
+              },
+              "autoUpgradeProfile": {
+               "nodeOSUpgradeChannel": "NodeImage"
+              },
+              "securityProfile": {},
+              "storageProfile": {
+               "diskCSIDriver": {
+                "enabled": true
+               },
+               "fileCSIDriver": {
+                "enabled": true
+               },
+               "snapshotController": {
+                "enabled": true
+               }
+              },
+              "oidcIssuerProfile": {
+               "enabled": false
+              },
+              "workloadAutoScalerProfile": {},
+              "resourceUID": "67c570d3f5306600015c42fa",
+              "metricsProfile": {
+               "costAnalysis": {
+                "enabled": false
+               }
+              }
+             },
+             "identity": {
+              "type": "SystemAssigned",
+              "principalId": "00000000-0000-0000-0000-000000000000",
+              "tenantId": "tenantid"
+             },
+             "sku": {
+              "name": "Base",
+              "tier": "Standard"
+             }
+            }
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "3981"
+            Content-Type:
+                - application/json
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16499"
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 9
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?api-version=2024-10-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 3888
+        uncompressed: false
+        body: '{"value":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource","location":"eastus","name":"testResource","type":"Microsoft.ContainerService/ManagedClusters","properties":{"provisioningState":"Succeeded","powerState":{"code":"Running"},"kubernetesVersion":"1.30","currentKubernetesVersion":"1.30.9","dnsPrefix":"aks-cit-ManagedClustertestResourcednsPrefix","fqdn":"aks-cit-managedclustertestresourcednsprefix-vzxlvpxr.hcp.eastus.azmk8s.io","azurePortalFQDN":"aks-cit-managedclustertestresourcednsprefix-vzxlvpxr.portal.hcp.eastus.azmk8s.io","agentPoolProfiles":[{"name":"agentpool1","count":3,"vmSize":"Standard_D2s_v3","osDiskSizeGB":128,"osDiskType":"Managed","kubeletDiskType":"OS","maxPods":250,"type":"VirtualMachineScaleSets","enableAutoScaling":false,"scaleDownMode":"Delete","provisioningState":"Succeeded","powerState":{"code":"Running"},"orchestratorVersion":"1.30","currentOrchestratorVersion":"1.30.9","enableNodePublicIP":false,"mode":"System","osType":"Linux","osSKU":"Ubuntu","nodeImageVersion":"AKSUbuntu-2204gen2containerd-202502.09.0","upgradeSettings":{"maxSurge":"10%"},"enableFIPS":false,"securityProfile":{"enableVTPM":false,"enableSecureBoot":false}}],"linuxProfile":{"adminUsername":"azureuser","ssh":{"publicKeys":[{"keyData":"ssh-rsa {KEY}\n"}]}},"servicePrincipalProfile":{"clientId":"msi"},"nodeResourceGroup":"MC_aks-cit-ManagedCluster_testResource_eastus","enableRBAC":true,"supportPlan":"KubernetesOfficial","networkProfile":{"networkPlugin":"azure","networkPluginMode":"overlay","networkPolicy":"none","networkDataplane":"azure","loadBalancerSku":"standard","loadBalancerProfile":{"managedOutboundIPs":{"count":1},"effectiveOutboundIPs":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.Network/publicIPAddresses/00000000-0000-0000-0000-000000000000"}],"backendPoolType":"nodeIPConfiguration"},"podCidr":"10.244.0.0/16","serviceCidr":"10.0.0.0/16","dnsServiceIP":"10.0.0.10","outboundType":"loadBalancer","podCidrs":["10.244.0.0/16"],"serviceCidrs":["10.0.0.0/16"],"ipFamilies":["IPv4"]},"maxAgentPools":100,"identityProfile":{"kubeletidentity":{"resourceId":"/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResource-agentpool","clientId":"00000000-0000-0000-0000-000000000000","objectId":"00000000-0000-0000-0000-000000000000"}},"autoUpgradeProfile":{"nodeOSUpgradeChannel":"NodeImage"},"securityProfile":{},"storageProfile":{"diskCSIDriver":{"enabled":true},"fileCSIDriver":{"enabled":true},"snapshotController":{"enabled":true}},"oidcIssuerProfile":{"enabled":false},"workloadAutoScalerProfile":{},"resourceUID":"67c570d3f5306600015c42fa","metricsProfile":{"costAnalysis":{"enabled":false}}},"identity":{"type":"SystemAssigned","principalId":"00000000-0000-0000-0000-000000000000","tenantId":"tenantid"},"sku":{"name":"Base","tier":"Standard"}}],"nextLink":"https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?api-version=2024-10-01&%24skiptoken=5ZBBasMwEEXvImhWkWW7IrENoZhQuqk3dXqAiTR2hGvJzMimNPTuNWm76hG6%2ffz%2f%2bLyr8Pgen50fWFRX8Vi3p9dWVOIS48SVUiN46HFEHxP4mAkTE0bF85kNuSm64FkVaMB2ppQ2g3upEbQ8F1rL1JZdsUdt96ZQhBxmMvhEYZ5YwcDSuCibG94e32aOSGqisDiLxKpxhgKHLibH4CM4j9QiLc7gz6XfDT%2fc5ZoHN53CgP6QpbuizHf5BiYnl5W0Xjzkaa5llso02%2fxtis%2btABrrvifsIaK9gVYF9Usjtjc9DdCAtEbfeqr%2fJOcL"}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "3888"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Original-Request-Ids:
+                - 00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16499"
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 10
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skiptoken=5ZBBasMwEEXvImhWkWW7IrENoZhQuqk3dXqAiTR2hGvJzMimNPTuNWm76hG6%2Ffz%2F%2BLyr8Pgen50fWFRX8Vi3p9dWVOIS48SVUiN46HFEHxP4mAkTE0bF85kNuSm64FkVaMB2ppQ2g3upEbQ8F1rL1JZdsUdt96ZQhBxmMvhEYZ5YwcDSuCibG94e32aOSGqisDiLxKpxhgKHLibH4CM4j9QiLc7gz6XfDT%2Fc5ZoHN53CgP6QpbuizHf5BiYnl5W0Xjzkaa5llso02%2Fxtis%2BtABrrvifsIaK9gVYF9Usjtjc9DdCAtEbfeqr%2FJOcL&api-version=2024-10-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 12
+        uncompressed: false
+        body: '{"value":[]}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "12"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Original-Request-Ids:
+                - 00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16499"
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 11
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedClusternotfound/providers/Microsoft.ContainerService/managedClusters?api-version=2024-10-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 122
+        uncompressed: false
+        body: '{"error":{"code":"ResourceGroupNotFound","message":"Resource group ''aks-cit-ManagedClusternotfound'' could not be found."}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "122"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Failure-Cause:
+                - gateway
+        status: 404 Not Found
+        code: 404
+        duration: 200ms
+    - id: 12
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-10-01
+        method: DELETE
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 0
+        uncompressed: false
+        body: ""
+        headers:
+            Azure-Asyncoperation:
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&c=c&h=h&s=s&t=t
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "0"
+            Expires:
+                - "-1"
+            Location:
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operationresults/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&c=c&h=h&s=s&t=t
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
+                - "11999"
+        status: 202 Accepted
+        code: 202
+        duration: 200ms
+    - id: 13
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 399
+        uncompressed: false
+        body: |-
+            {
+             "name": "00000000-0000-0000-0000-000000000000",
+             "status": "Succeeded",
+             "startTime": "2001-02-03T04:05:06Z",
+             "endTime": "2001-02-03T04:05:06Z",
+             "error": {
+              "code": "NotLatestOperation",
+              "message": "Expected goal state for managed cluster not saved yet. This means saving goal state to database was slow or failed. This type of failed operations can usually be retried."
+             }
+            }
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "399"
+            Content-Type:
+                - application/json
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16499"
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 14
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ManagedCluster?api-version=2021-04-01
+        method: DELETE
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 0
+        uncompressed: false
+        body: ""
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "0"
+            Expires:
+                - "-1"
+            Location:
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRNQU5BR0VEQ0xVU1RFUi1FQVNUVVMiLCJqb2JMb2NhdGlvbiI6ImVhc3R1cyJ9?api-version=2021-04-01&c=c&h=h&s=s&t=t
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
+                - "11999"
+        status: 202 Accepted
+        code: 202
+        duration: 200ms
+    - id: 15
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.4; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRNQU5BR0VEQ0xVU1RFUi1FQVNUVVMiLCJqb2JMb2NhdGlvbiI6ImVhc3R1cyJ9?api-version=2021-04-01&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 0
+        uncompressed: false
+        body: ""
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "0"
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "16499"
+        status: 200 OK
+        code: 200
+        duration: 200ms

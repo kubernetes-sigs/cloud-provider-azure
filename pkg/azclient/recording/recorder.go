@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/google/uuid"
@@ -160,7 +161,13 @@ func (d DummyTokenCredential) GetToken(ctx context.Context, opts policy.TokenReq
 	return d(ctx, opts)
 }
 
-func NewRecorder(cassetteName string) (*Recorder, error) {
+func NewRecorder() (*Recorder, *cloud.Configuration, string, error) {
+	cloud := os.Getenv("AZURE_CLOUD")
+	if cloud == "" {
+		cloud = "AZURECLOUD"
+	}
+	cloudConfig := utils.AzureCloudConfigFromName(cloud)
+	cassetteName := "testdata/" + cloud
 	var tokenCredential azcore.TokenCredential
 	var subscriptionID string
 	var tenantID string
@@ -172,21 +179,27 @@ func NewRecorder(cassetteName string) (*Recorder, error) {
 	}
 	rec, err := gorecorder.NewWithOptions(recOpstions)
 	if err != nil {
-		return nil, err
+		return nil, nil, "", err
 	}
 	if rec.IsNewCassette() {
 		subscriptionID = os.Getenv("AZURE_SUBSCRIPTION_ID")
 		if subscriptionID == "" {
-			return nil, errors.New("required environment variable AZURE_SUBSCRIPTION_ID was not supplied")
-		}
-		tokenCredential, err = azidentity.NewDefaultAzureCredential(nil)
-		if err != nil {
-			return nil, err
+			return nil, nil, "", errors.New("required environment variable AZURE_SUBSCRIPTION_ID was not supplied")
 		}
 		tenantID = os.Getenv(utils.AzureTenantID)
 		if tenantID == "" {
-			return nil, errors.New("required environment variable AZURE_TENANT_ID was not supplied")
+			return nil, nil, "", errors.New("required environment variable AZURE_TENANT_ID was not supplied")
 		}
+		tokenCredential, err = azidentity.NewDefaultAzureCredential(&azidentity.DefaultAzureCredentialOptions{
+			ClientOptions: azcore.ClientOptions{
+				Cloud: *cloudConfig,
+			},
+			TenantID: tenantID,
+		})
+		if err != nil {
+			return nil, nil, "", err
+		}
+
 	} else {
 		// if we are replaying, we won't need auth
 		// and we use a dummy subscription ID
@@ -326,12 +339,16 @@ func NewRecorder(cassetteName string) (*Recorder, error) {
 			return cassette.DefaultMatcher(r, i)
 		})
 	}
+	location := "eastus2"
+	if strings.ToUpper(cloud) == "AZURECHINACLOUD" {
+		location = "chinaeast2"
+	}
 	return &Recorder{
 		credential:     tokenCredential,
 		rec:            rec,
 		subscriptionID: subscriptionID,
 		tenantID:       tenantID,
-	}, nil
+	}, cloudConfig, location, nil
 }
 
 func (r *Recorder) HTTPClient() *http.Client {

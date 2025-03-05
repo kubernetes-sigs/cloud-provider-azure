@@ -42,12 +42,16 @@ func init() {
 		})
 		When("import image from public repo", func() {
 			It("should return without error", func() {
+				imageHost := "registry.hub.docker.com"
+				if location == "chinaeast2" {
+					imageHost = "dockerhub.azk8s.cn"
+				}
 				err := realClient.ImportImage(context.Background(), resourceGroupName, resourceName, armcontainerregistry.ImportImageParameters{
 					Source: &armcontainerregistry.ImportSource{
-						RegistryURI: to.Ptr("registry.hub.docker.com"),
-						SourceImage: to.Ptr("library/nginx"),
+						RegistryURI: to.Ptr(imageHost),
+						SourceImage: to.Ptr("tensorflow/tensorflow:latest-gpu"),
 					},
-					TargetTags: []*string{to.Ptr("test:latest")},
+					TargetTags: []*string{to.Ptr("tensorflow:latest-gpu")},
 				})
 				Expect(err).NotTo(HaveOccurred())
 			})

@@ -21,7 +21,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
@@ -58,7 +57,7 @@ func init() {
 		})
 		When("update requests are raised", func() {
 			It("should not return error", func(ctx context.Context) {
-				newResource, err := realClient.Update(ctx, resourceGroupName, virtualmachinescalesetName,"0", armcompute.VirtualMachineScaleSetVM{
+				newResource, err := realClient.Update(ctx, resourceGroupName, virtualmachinescalesetName, "0", armcompute.VirtualMachineScaleSetVM{
 					Tags: map[string]*string{
 						"key1": to.Ptr("value1"),
 					},
@@ -69,7 +68,7 @@ func init() {
 		})
 		When("update requests are raised with invalid etag", func() {
 			It("should return error", func(ctx context.Context) {
-				_, err := realClient.Update(ctx, resourceGroupName, virtualmachinescalesetName,"0", armcompute.VirtualMachineScaleSetVM{
+				_, err := realClient.Update(ctx, resourceGroupName, virtualmachinescalesetName, "0", armcompute.VirtualMachineScaleSetVM{
 					Tags: map[string]*string{
 						"key1": to.Ptr("value1"),
 					},
@@ -81,10 +80,10 @@ func init() {
 	}
 
 	beforeAllFunc = func(ctx context.Context) {
+		networkClientOption := clientOption
+		networkClientOption.Telemetry.ApplicationID = "ccm-network-client"
 		networkClientFactory, err := armnetwork.NewClientFactory(recorder.SubscriptionID(), recorder.TokenCredential(), &arm.ClientOptions{
-			ClientOptions: azcore.ClientOptions{
-				Transport: recorder.HTTPClient(),
-			},
+			ClientOptions: networkClientOption,
 		})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -114,11 +113,10 @@ func init() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 		vNet = &vnetresp.VirtualNetwork
-
+		computeClientOption := clientOption
+		computeClientOption.Telemetry.ApplicationID = "ccm-computeClientOption-client"
 		computeClientFactory, err := armcompute.NewClientFactory(recorder.SubscriptionID(), recorder.TokenCredential(), &arm.ClientOptions{
-			ClientOptions: azcore.ClientOptions{
-				Transport: recorder.HTTPClient(),
-			},
+			ClientOptions: computeClientOption,
 		})
 		Expect(err).NotTo(HaveOccurred())
 		vmssClient = computeClientFactory.NewVirtualMachineScaleSetsClient()

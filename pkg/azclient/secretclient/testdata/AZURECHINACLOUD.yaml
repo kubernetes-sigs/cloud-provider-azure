@@ -6,24 +6,24 @@ interactions:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 21
+        content_length: 25
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
-        body: '{"location":"eastus"}'
+        body: '{"location":"chinaeast2"}'
         form: {}
         headers:
             Accept:
                 - application/json
             Content-Length:
-                - "21"
+                - "25"
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Secret?api-version=2021-04-01
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Secret?api-version=2021-04-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -31,14 +31,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 225
+        content_length: 229
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret","name":"aks-cit-Secret","type":"Microsoft.Resources/resourceGroups","location":"eastus","properties":{"provisioningState":"Succeeded"}}'
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret","name":"aks-cit-Secret","type":"Microsoft.Resources/resourceGroups","location":"chinaeast2","properties":{"provisioningState":"Succeeded"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "225"
+                - "229"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -47,12 +47,8 @@ interactions:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
-                - "11999"
         status: 201 Created
         code: 201
         duration: 200ms
@@ -61,24 +57,24 @@ interactions:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 793
+        content_length: 797
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
-        body: '{"location":"eastus","properties":{"accessPolicies":[{"objectId":"00000000-0000-0000-0000-000000000000","permissions":{"certificates":["get","list","delete","create","import","update","managecontacts","getissuers","listissuers","setissuers","deleteissuers","manageissuers","recover","purge"],"keys":["encrypt","decrypt","wrapKey","unwrapKey","sign","verify","get","list","create","update","import","delete","backup","restore","recover","purge"],"secrets":["get","list","set","delete","backup","restore","recover","purge"]},"tenantId":"tenantid"}],"enabledForDeployment":true,"enabledForDiskEncryption":true,"enabledForTemplateDeployment":true,"publicNetworkAccess":"Enabled","sku":{"family":"A","name":"standard"},"tenantId":"tenantid"}}'
+        body: '{"location":"chinaeast2","properties":{"accessPolicies":[{"objectId":"00000000-0000-0000-0000-000000000000","permissions":{"certificates":["get","list","delete","create","import","update","managecontacts","getissuers","listissuers","setissuers","deleteissuers","manageissuers","recover","purge"],"keys":["encrypt","decrypt","wrapKey","unwrapKey","sign","verify","get","list","create","update","import","delete","backup","restore","recover","purge"],"secrets":["get","list","set","delete","backup","restore","recover","purge"]},"tenantId":"tenantid"}],"enabledForDeployment":true,"enabledForDiskEncryption":true,"enabledForTemplateDeployment":true,"publicNetworkAccess":"Enabled","sku":{"family":"A","name":"standard"},"tenantId":"tenantid"}}'
         form: {}
         headers:
             Accept:
                 - application/json
             Content-Length:
-                - "793"
+                - "797"
             Content-Type:
                 - application/json
             User-Agent:
-                - azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault?api-version=2023-07-01
+                - ccm-vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault?api-version=2023-07-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -86,32 +82,30 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 1391
+        content_length: 1414
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault","name":"akscitsecretparevault","type":"Microsoft.KeyVault/vaults","location":"eastus","tags":{},"systemData":{"createdBy":"{EMAIL}","createdByType":"User","createdAt":"2001-02-03T04:05:06Z","lastModifiedBy":"{EMAIL}","lastModifiedByType":"User","lastModifiedAt":"2001-02-03T04:05:06Z"},"properties":{"sku":{"family":"A","name":"standard"},"tenantId":"tenantid","accessPolicies":[{"tenantId":"tenantid","objectId":"00000000-0000-0000-0000-000000000000","permissions":{"certificates":["get","list","delete","create","import","update","managecontacts","getissuers","listissuers","setissuers","deleteissuers","manageissuers","recover","purge"],"keys":["encrypt","decrypt","wrapKey","unwrapKey","sign","verify","get","list","create","update","import","delete","backup","restore","recover","purge"],"secrets":["get","list","set","delete","backup","restore","recover","purge"]}}],"enabledForDeployment":true,"enabledForDiskEncryption":true,"enabledForTemplateDeployment":true,"enableSoftDelete":true,"softDeleteRetentionInDays":90,"vaultUri":"https://akscitsecretparevault.vault.azure.net","provisioningState":"RegisteringDns","publicNetworkAccess":"Enabled"}}'
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault","name":"akscitsecretparevault","type":"Microsoft.KeyVault/vaults","location":"chinaeast2","tags":{},"systemData":{"createdBy":"{EMAIL}","createdByType":"User","createdAt":"2001-02-03T04:05:06Z","lastModifiedBy":"{EMAIL}","lastModifiedByType":"User","lastModifiedAt":"2001-02-03T04:05:06Z"},"properties":{"sku":{"family":"A","name":"standard"},"tenantId":"tenantid","accessPolicies":[{"tenantId":"tenantid","objectId":"00000000-0000-0000-0000-000000000000","permissions":{"certificates":["get","list","delete","create","import","update","managecontacts","getissuers","listissuers","setissuers","deleteissuers","manageissuers","recover","purge"],"keys":["encrypt","decrypt","wrapKey","unwrapKey","sign","verify","get","list","create","update","import","delete","backup","restore","recover","purge"],"secrets":["get","list","set","delete","backup","restore","recover","purge"]}}],"enabledForDeployment":true,"enabledForDiskEncryption":true,"enabledForTemplateDeployment":true,"enableSoftDelete":true,"softDeleteRetentionInDays":90,"vaultUri":"https://akscitsecretparevault.vault.azure.cn","provisioningState":"RegisteringDns","publicNetworkAccess":"Enabled"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "1391"
+                - "1414"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
+            Server:
+                - Microsoft-IIS/10.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
                 - 4.0.30319
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1416.0
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
-                - "12000"
+                - 1.5.1491.0
         status: 200 OK
         code: 200
         duration: 200ms
@@ -123,15 +117,15 @@ interactions:
         content_length: 0
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
         body: ""
         form: {}
         headers:
             User-Agent:
-                - azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault?api-version=2023-07-01
+                - ccm-vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault?api-version=2023-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -139,32 +133,30 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 1392
+        content_length: 1415
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault","name":"akscitsecretparevault","type":"Microsoft.KeyVault/vaults","location":"eastus","tags":{},"systemData":{"createdBy":"{EMAIL}","createdByType":"User","createdAt":"2001-02-03T04:05:06Z","lastModifiedBy":"{EMAIL}","lastModifiedByType":"User","lastModifiedAt":"2001-02-03T04:05:06Z"},"properties":{"sku":{"family":"A","name":"standard"},"tenantId":"tenantid","accessPolicies":[{"tenantId":"tenantid","objectId":"00000000-0000-0000-0000-000000000000","permissions":{"certificates":["get","list","delete","create","import","update","managecontacts","getissuers","listissuers","setissuers","deleteissuers","manageissuers","recover","purge"],"keys":["encrypt","decrypt","wrapKey","unwrapKey","sign","verify","get","list","create","update","import","delete","backup","restore","recover","purge"],"secrets":["get","list","set","delete","backup","restore","recover","purge"]}}],"enabledForDeployment":true,"enabledForDiskEncryption":true,"enabledForTemplateDeployment":true,"enableSoftDelete":true,"softDeleteRetentionInDays":90,"vaultUri":"https://akscitsecretparevault.vault.azure.net/","provisioningState":"RegisteringDns","publicNetworkAccess":"Enabled"}}'
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault","name":"akscitsecretparevault","type":"Microsoft.KeyVault/vaults","location":"chinaeast2","tags":{},"systemData":{"createdBy":"{EMAIL}","createdByType":"User","createdAt":"2001-02-03T04:05:06Z","lastModifiedBy":"{EMAIL}","lastModifiedByType":"User","lastModifiedAt":"2001-02-03T04:05:06Z"},"properties":{"sku":{"family":"A","name":"standard"},"tenantId":"tenantid","accessPolicies":[{"tenantId":"tenantid","objectId":"00000000-0000-0000-0000-000000000000","permissions":{"certificates":["get","list","delete","create","import","update","managecontacts","getissuers","listissuers","setissuers","deleteissuers","manageissuers","recover","purge"],"keys":["encrypt","decrypt","wrapKey","unwrapKey","sign","verify","get","list","create","update","import","delete","backup","restore","recover","purge"],"secrets":["get","list","set","delete","backup","restore","recover","purge"]}}],"enabledForDeployment":true,"enabledForDiskEncryption":true,"enabledForTemplateDeployment":true,"enableSoftDelete":true,"softDeleteRetentionInDays":90,"vaultUri":"https://akscitsecretparevault.vault.azure.cn/","provisioningState":"RegisteringDns","publicNetworkAccess":"Enabled"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "1392"
+                - "1415"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
+            Server:
+                - Microsoft-IIS/10.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
                 - 4.0.30319
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1416.0
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
-                - "16499"
+                - 1.5.1491.0
         status: 200 OK
         code: 200
         duration: 200ms
@@ -176,15 +168,15 @@ interactions:
         content_length: 0
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
         body: ""
         form: {}
         headers:
             User-Agent:
-                - azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault?api-version=2023-07-01
+                - ccm-vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault?api-version=2023-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -192,32 +184,30 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 1387
+        content_length: 1410
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault","name":"akscitsecretparevault","type":"Microsoft.KeyVault/vaults","location":"eastus","tags":{},"systemData":{"createdBy":"{EMAIL}","createdByType":"User","createdAt":"2001-02-03T04:05:06Z","lastModifiedBy":"{EMAIL}","lastModifiedByType":"User","lastModifiedAt":"2001-02-03T04:05:06Z"},"properties":{"sku":{"family":"A","name":"standard"},"tenantId":"tenantid","accessPolicies":[{"tenantId":"tenantid","objectId":"00000000-0000-0000-0000-000000000000","permissions":{"certificates":["get","list","delete","create","import","update","managecontacts","getissuers","listissuers","setissuers","deleteissuers","manageissuers","recover","purge"],"keys":["encrypt","decrypt","wrapKey","unwrapKey","sign","verify","get","list","create","update","import","delete","backup","restore","recover","purge"],"secrets":["get","list","set","delete","backup","restore","recover","purge"]}}],"enabledForDeployment":true,"enabledForDiskEncryption":true,"enabledForTemplateDeployment":true,"enableSoftDelete":true,"softDeleteRetentionInDays":90,"vaultUri":"https://akscitsecretparevault.vault.azure.net/","provisioningState":"Succeeded","publicNetworkAccess":"Enabled"}}'
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault","name":"akscitsecretparevault","type":"Microsoft.KeyVault/vaults","location":"chinaeast2","tags":{},"systemData":{"createdBy":"{EMAIL}","createdByType":"User","createdAt":"2001-02-03T04:05:06Z","lastModifiedBy":"{EMAIL}","lastModifiedByType":"User","lastModifiedAt":"2001-02-03T04:05:06Z"},"properties":{"sku":{"family":"A","name":"standard"},"tenantId":"tenantid","accessPolicies":[{"tenantId":"tenantid","objectId":"00000000-0000-0000-0000-000000000000","permissions":{"certificates":["get","list","delete","create","import","update","managecontacts","getissuers","listissuers","setissuers","deleteissuers","manageissuers","recover","purge"],"keys":["encrypt","decrypt","wrapKey","unwrapKey","sign","verify","get","list","create","update","import","delete","backup","restore","recover","purge"],"secrets":["get","list","set","delete","backup","restore","recover","purge"]}}],"enabledForDeployment":true,"enabledForDiskEncryption":true,"enabledForTemplateDeployment":true,"enableSoftDelete":true,"softDeleteRetentionInDays":90,"vaultUri":"https://akscitsecretparevault.vault.azure.cn/","provisioningState":"Succeeded","publicNetworkAccess":"Enabled"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "1387"
+                - "1410"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
+            Server:
+                - Microsoft-IIS/10.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
                 - 4.0.30319
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1416.0
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
-                - "16499"
+                - 1.5.1491.0
         status: 200 OK
         code: 200
         duration: 200ms
@@ -229,7 +219,7 @@ interactions:
         content_length: 31
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
         body: '{"properties":{"value":"test"}}'
@@ -242,8 +232,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-Secret-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault/secrets/akscitkeyvaulttest?api-version=2023-07-01
+                - ccm-Secret-client azsdk-go-armkeyvault/v1.4.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault/secrets/akscitkeyvaulttest?api-version=2023-07-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -251,32 +241,30 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 571
+        content_length: 561
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault/secrets/akscitkeyvaulttest","name":"akscitkeyvaulttest","type":"Microsoft.KeyVault/vaults/secrets","location":"eastus","properties":{"attributes":{"enabled":true,"created":1734501105,"updated":1734501105},"secretUri":"https://akscitsecretparevault.vault.azure.net/secrets/akscitkeyvaulttest","secretUriWithVersion":"https://akscitsecretparevault.vault.azure.net/secrets/akscitkeyvaulttest/cfe162cab6f64bc5be0cff48b02cc21b"}}'
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault/secrets/akscitkeyvaulttest","name":"akscitkeyvaulttest","type":"Microsoft.KeyVault/vaults/secrets","location":"chinaeast2","properties":{"attributes":{"enabled":true,"created":1741075687,"updated":1741075687},"secretUri":"https://akscitsecretparevault.vault.azure.cn/secrets/akscitkeyvaulttest","secretUriWithVersion":"https://akscitsecretparevault.vault.azure.cn/secrets/akscitkeyvaulttest/93adabdc869f4f1aa73851560222f711"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "571"
+                - "561"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
+            Server:
+                - Microsoft-IIS/10.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
                 - 4.0.30319
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1416.0
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
-                - "11999"
+                - 1.5.1491.0
         status: 200 OK
         code: 200
         duration: 200ms
@@ -288,7 +276,7 @@ interactions:
         content_length: 0
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
         body: ""
@@ -297,8 +285,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-Secret-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault/secrets/akscitkeyvaulttest?api-version=2023-07-01
+                - ccm-Secret-client azsdk-go-armkeyvault/v1.4.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault/secrets/akscitkeyvaulttest?api-version=2023-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -306,32 +294,30 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 571
+        content_length: 561
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault/secrets/akscitkeyvaulttest","name":"akscitkeyvaulttest","type":"Microsoft.KeyVault/vaults/secrets","location":"eastus","properties":{"attributes":{"enabled":true,"created":1734501105,"updated":1734501105},"secretUri":"https://akscitsecretparevault.vault.azure.net/secrets/akscitkeyvaulttest","secretUriWithVersion":"https://akscitsecretparevault.vault.azure.net/secrets/akscitkeyvaulttest/cfe162cab6f64bc5be0cff48b02cc21b"}}'
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault/secrets/akscitkeyvaulttest","name":"akscitkeyvaulttest","type":"Microsoft.KeyVault/vaults/secrets","location":"chinaeast2","properties":{"attributes":{"enabled":true,"created":1741075687,"updated":1741075687},"secretUri":"https://akscitsecretparevault.vault.azure.cn/secrets/akscitkeyvaulttest","secretUriWithVersion":"https://akscitsecretparevault.vault.azure.cn/secrets/akscitkeyvaulttest/93adabdc869f4f1aa73851560222f711"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "571"
+                - "561"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
+            Server:
+                - Microsoft-IIS/10.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
                 - 4.0.30319
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1416.0
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
-                - "16498"
+                - 1.5.1491.0
         status: 200 OK
         code: 200
         duration: 200ms
@@ -343,7 +329,7 @@ interactions:
         content_length: 0
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
         body: ""
@@ -352,8 +338,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-Secret-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault/secrets/akscitkeyvaulttestnotfound?api-version=2023-07-01
+                - ccm-Secret-client azsdk-go-armkeyvault/v1.4.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault/secrets/akscitkeyvaulttestnotfound?api-version=2023-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -375,18 +361,16 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
+            Server:
+                - Microsoft-IIS/10.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
                 - 4.0.30319
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1416.0
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
-                - "16499"
+                - 1.5.1491.0
         status: 404 Not Found
         code: 404
         duration: 200ms
@@ -398,7 +382,7 @@ interactions:
         content_length: 0
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
         body: ""
@@ -407,8 +391,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-Secret-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault/secrets?api-version=2023-07-01
+                - ccm-Secret-client azsdk-go-armkeyvault/v1.4.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault/secrets?api-version=2023-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -416,32 +400,30 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 583
+        content_length: 573
         uncompressed: false
-        body: '{"value":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault/secrets/akscitkeyvaulttest","name":"akscitkeyvaulttest","type":"Microsoft.KeyVault/vaults/secrets","location":"eastus","properties":{"attributes":{"enabled":true,"created":1734501105,"updated":1734501105},"secretUri":"https://akscitsecretparevault.vault.azure.net/secrets/akscitkeyvaulttest","secretUriWithVersion":"https://akscitsecretparevault.vault.azure.net/secrets/akscitkeyvaulttest/cfe162cab6f64bc5be0cff48b02cc21b"}}]}'
+        body: '{"value":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault/secrets/akscitkeyvaulttest","name":"akscitkeyvaulttest","type":"Microsoft.KeyVault/vaults/secrets","location":"chinaeast2","properties":{"attributes":{"enabled":true,"created":1741075687,"updated":1741075687},"secretUri":"https://akscitsecretparevault.vault.azure.cn/secrets/akscitkeyvaulttest","secretUriWithVersion":"https://akscitsecretparevault.vault.azure.cn/secrets/akscitkeyvaulttest/93adabdc869f4f1aa73851560222f711"}}]}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "583"
+                - "573"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
+            Server:
+                - Microsoft-IIS/10.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
                 - 4.0.30319
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1416.0
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
-                - "16498"
+                - 1.5.1491.0
         status: 200 OK
         code: 200
         duration: 200ms
@@ -453,7 +435,7 @@ interactions:
         content_length: 0
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
         body: ""
@@ -462,8 +444,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-Secret-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secretnotfound/providers/Microsoft.KeyVault/vaults/akscitsecretparevault/secrets?api-version=2023-07-01
+                - ccm-Secret-client azsdk-go-armkeyvault/v1.4.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secretnotfound/providers/Microsoft.KeyVault/vaults/akscitsecretparevault/secrets?api-version=2023-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -487,8 +469,6 @@ interactions:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Failure-Cause:
@@ -504,7 +484,7 @@ interactions:
         content_length: 0
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
         body: ""
@@ -513,8 +493,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault?api-version=2023-07-01
+                - ccm-vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Secret/providers/Microsoft.KeyVault/vaults/akscitsecretparevault?api-version=2023-07-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -534,18 +514,16 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
+            Server:
+                - Microsoft-IIS/10.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
                 - 4.0.30319
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1416.0
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
-                - "12000"
+                - 1.5.1491.0
         status: 200 OK
         code: 200
         duration: 200ms
@@ -557,7 +535,7 @@ interactions:
         content_length: 0
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
         body: ""
@@ -566,8 +544,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus/deletedVaults/akscitsecretparevault/purge?api-version=2023-07-01
+                - ccm-vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/chinaeast2/deletedVaults/akscitsecretparevault/purge?api-version=2023-07-01
         method: POST
       response:
         proto: HTTP/2.0
@@ -586,21 +564,19 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus/operationResults/VVR8MDYzODcwMDk3OTIyMjY3MjQ5MHw2QUI3QUIzOTNFRkU0QzM4QjBCMTVEOTQxRUZGRTZCOA?api-version=2023-07-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/chinaeast2/operationResults/VVR8MDYzODc2NjcyNDkwMjAxNTYxNXw0REE0RkYxOTUxNzU0NDIwQUFFMjZCRjk0MzhEMjRFRg?api-version=2023-07-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
+            Server:
+                - Microsoft-IIS/10.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
                 - 4.0.30319
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Keyvault-Service-Version:
-                - 1.5.1416.0
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
-                - "11999"
+                - 1.5.1491.0
         status: 202 Accepted
         code: 202
         duration: 200ms
@@ -612,7 +588,7 @@ interactions:
         content_length: 0
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
         body: ""
@@ -621,8 +597,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Secret?api-version=2021-04-01
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-Secret?api-version=2021-04-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -641,17 +617,13 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRTRUNSRVQtRUFTVFVTIiwiam9iTG9jYXRpb24iOiJlYXN0dXMifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRTRUNSRVQtQ0hJTkFFQVNUMiIsImpvYkxvY2F0aW9uIjoiY2hpbmFlYXN0MiJ9?api-version=2021-04-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
-                - "11999"
         status: 202 Accepted
         code: 202
         duration: 200ms
@@ -663,15 +635,15 @@ interactions:
         content_length: 0
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
         body: ""
         form: {}
         headers:
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRTRUNSRVQtRUFTVFVTIiwiam9iTG9jYXRpb24iOiJlYXN0dXMifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRTRUNSRVQtQ0hJTkFFQVNUMiIsImpvYkxvY2F0aW9uIjoiY2hpbmFlYXN0MiJ9?api-version=2021-04-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -693,12 +665,8 @@ interactions:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
-                - "16499"
         status: 200 OK
         code: 200
         duration: 200ms

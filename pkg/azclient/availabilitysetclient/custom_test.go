@@ -21,7 +21,6 @@ import (
 	"context"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	. "github.com/onsi/gomega"
@@ -35,10 +34,10 @@ func init() {
 	}
 
 	beforeAllFunc = func(ctx context.Context) {
+		computeClientOption := clientOption
+		computeClientOption.Telemetry.ApplicationID = "ccm-compute-client"
 		computeClientFactory, err = armcompute.NewClientFactory(subscriptionID, recorder.TokenCredential(), &arm.ClientOptions{
-			ClientOptions: policy.ClientOptions{
-				Transport: recorder.HTTPClient(),
-			},
+			ClientOptions: computeClientOption,
 		})
 		Expect(err).NotTo(HaveOccurred())
 		availabilitySetsClient = computeClientFactory.NewAvailabilitySetsClient()

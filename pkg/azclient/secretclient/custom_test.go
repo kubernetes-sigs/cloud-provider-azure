@@ -21,7 +21,6 @@ import (
 	"context"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	armkeyvault "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault"
 
@@ -52,16 +51,16 @@ func init() {
 	}
 
 	beforeAllFunc = func(ctx context.Context) {
+		vaultClientOption := clientOption
+		vaultClientOption.Telemetry.ApplicationID = "ccm-vault-client"
 		vaultClientFactory, err := armkeyvault.NewClientFactory(subscriptionID, recorder.TokenCredential(), &arm.ClientOptions{
-			ClientOptions: policy.ClientOptions{
-				Transport: recorder.HTTPClient(),
-			},
+			ClientOptions: vaultClientOption,
 		})
 		Expect(err).NotTo(HaveOccurred())
 		vaultClient = vaultClientFactory.NewVaultsClient()
 		vaultName = "akscitsecretparevault"
 		resp, err := utils.NewPollerWrapper(vaultClient.BeginCreateOrUpdate(ctx, resourceGroupName, vaultName, armkeyvault.VaultCreateOrUpdateParameters{
-			Location: to.Ptr("eastus"),
+			Location: to.Ptr(location),
 			Properties: &armkeyvault.VaultProperties{
 				EnabledForDeployment:         to.Ptr(true),
 				EnabledForDiskEncryption:     to.Ptr(true),
@@ -130,7 +129,7 @@ func init() {
 	afterAllFunc = func(ctx context.Context) {
 		_, err = vaultClient.Delete(ctx, resourceGroupName, *parentResource.Name, nil)
 		Expect(err).NotTo(HaveOccurred())
-		_, err := vaultClient.BeginPurgeDeleted(ctx, *parentResource.Name, "eastus", nil)
+		_, err := vaultClient.BeginPurgeDeleted(ctx, *parentResource.Name, location, nil)
 		Expect(err).NotTo(HaveOccurred())
 	}
 }
