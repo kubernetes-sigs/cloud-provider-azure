@@ -22,7 +22,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
-	github.com/prometheus/client_golang v1.21.0
+	github.com/prometheus/client_golang v1.21.1
 	github.com/samber/lo v1.49.1
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
@@ -48,7 +48,7 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubelet v0.32.2
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.3
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.5
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.4.0
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.4.0
 	sigs.k8s.io/yaml v1.4.0
@@ -73,7 +73,7 @@ require (
 	github.com/Azure/go-autorest/autorest/date v0.3.0 // indirect
 	github.com/Azure/go-autorest/logger v0.2.1 // indirect
 	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
-	github.com/Azure/msi-dataplane v0.4.1 // indirect
+	github.com/Azure/msi-dataplane v0.4.2 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.4.0 // indirect
 	github.com/NYTimes/gziphandler v1.1.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
