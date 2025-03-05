@@ -214,10 +214,9 @@ func setMockPublicIP(az *Cloud, mockPIPsClient *mock_publicipaddressclient.MockI
 			SKU: &armnetwork.PublicIPAddressSKU{
 				Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandard),
 			},
-			ID: ptr.To("testCluster-aservice1"),
+			ID: ptr.To(fmt.Sprintf("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice%d%s", i, suffix)),
 		}
 		expectedPIP.Name = ptr.To(fmt.Sprintf("testCluster-aservice%d%s", i, suffix))
-		expectedPIP.ID = ptr.To(fmt.Sprintf("testCluster-aservice%d%s", i, suffix))
 		expectedPIP.Properties = &armnetwork.PublicIPAddressPropertiesFormat{
 			PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 			PublicIPAddressVersion:   ipVer,
@@ -228,12 +227,12 @@ func setMockPublicIP(az *Cloud, mockPIPsClient *mock_publicipaddressclient.MockI
 		mockPIPsClient.EXPECT().Delete(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%d%s", i, suffix)).Return(nil).AnyTimes()
 		expectedPIPs = append(expectedPIPs, expectedPIP)
 		expectedPIP = &armnetwork.PublicIPAddress{
-			Name:     ptr.To("testCluster-aservicea"),
+			Name:     ptr.To(fmt.Sprintf("testCluster-aservice%c%s", a, suffix)),
 			Location: &az.Location,
 			Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 				PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 				PublicIPAddressVersion:   ipVer,
-				IPAddress:                ptr.To(ipAddr1),
+				IPAddress:                ptr.To(ipAddra),
 			},
 			Tags: map[string]*string{
 				consts.ServiceTagKey:  ptr.To("default/servicea"),
@@ -242,21 +241,7 @@ func setMockPublicIP(az *Cloud, mockPIPsClient *mock_publicipaddressclient.MockI
 			SKU: &armnetwork.PublicIPAddressSKU{
 				Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandard),
 			},
-			ID: ptr.To("testCluster-aservice1"),
-		}
-		expectedPIP.Name = ptr.To(fmt.Sprintf("testCluster-aservice%d%s", i, suffix))
-		expectedPIP.ID = ptr.To(fmt.Sprintf("testCluster-aservice%d%s", i, suffix))
-		expectedPIP.Properties = &armnetwork.PublicIPAddressPropertiesFormat{
-			PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
-			PublicIPAddressVersion:   ipVer,
-			IPAddress:                ptr.To(ipAddr1),
-		}
-		expectedPIP.Name = ptr.To(fmt.Sprintf("testCluster-aservice%c%s", a, suffix))
-		expectedPIP.ID = ptr.To(fmt.Sprintf("testCluster-aservice%c%s", a, suffix))
-		expectedPIP.Properties = &armnetwork.PublicIPAddressPropertiesFormat{
-			PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
-			PublicIPAddressVersion:   ipVer,
-			IPAddress:                ptr.To(ipAddra),
+			ID: ptr.To(fmt.Sprintf("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice%d%s", i, suffix)),
 		}
 		expectedPIP.Tags[consts.ServiceTagKey] = ptr.To(fmt.Sprintf("default/service%c", a))
 		mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%c%s", a, suffix), gomock.Any()).Return(expectedPIP, nil).AnyTimes()
@@ -543,6 +528,9 @@ func TestReconcileLoadBalancerAddServicesOnMultipleSubnets(t *testing.T) {
 	}).AnyTimes()
 	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
+	mockPLSRepo := az.plsRepo.(*privatelinkservice.MockRepository)
+	mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil)
+
 	// svc1 is using LB without "-internal" suffix
 	lb, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc1, clusterResources.nodes, true /* wantLb */)
 	if err != nil {
@@ -713,6 +701,9 @@ func TestReconcileLoadBalancerRemoveAllPortsRemovesFrontendConfig(t *testing.T) 
 		return false, false, lb, nil
 	}).AnyTimes()
 	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	mockPLSRepo := az.plsRepo.(*privatelinkservice.MockRepository)
+	mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
 
 	lb, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	assert.Nil(t, err)

@@ -3267,12 +3267,28 @@ func (az *Cloud) ensurePIPTagged(service *v1.Service, pip *armnetwork.PublicIPAd
 
 // reconcilePublicIPs reconciles the PublicIP resources similar to how the LB is reconciled.
 func (az *Cloud) reconcilePublicIPs(ctx context.Context, clusterName string, service *v1.Service, lbName string, wantLb bool) ([]*armnetwork.PublicIPAddress, error) {
+	logger := klog.FromContext(ctx).WithName("reconcilePublicIPs").
+		WithValues("loadBalancer", lbName)
+
 	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
 
-	reconciledPIPs := []*armnetwork.PublicIPAddress{}
-	pips, err := az.listPIP(ctx, pipResourceGroup, azcache.CacheReadTypeDefault)
+	reconciledPIPs := make([]*armnetwork.PublicIPAddress, 0)
+
+	var (
+		pips []*armnetwork.PublicIPAddress
+		err  error
+	)
+	pips, err = az.listPIP(ctx, pipResourceGroup, azcache.CacheReadTypeDefault)
 	if err != nil {
 		return nil, err
+	}
+	if !strings.EqualFold(az.ResourceGroup, pipResourceGroup) {
+		pipsFromClusterRG, err := az.listPIP(ctx, az.ResourceGroup, azcache.CacheReadTypeDefault)
+		if err != nil {
+			logger.Error(err, "Failed to list public IPs from cluster resource group", "resourceGroup", az.ResourceGroup)
+			return nil, err
+		}
+		pips = append(pips, pipsFromClusterRG...)
 	}
 
 	pipsV4, pipsV6 := []*armnetwork.PublicIPAddress{}, []*armnetwork.PublicIPAddress{}
@@ -3309,6 +3325,7 @@ func (az *Cloud) reconcilePublicIPs(ctx context.Context, clusterName string, ser
 
 // reconcilePublicIP reconciles the PublicIP resources similar to how the LB is reconciled with the specified IP family.
 func (az *Cloud) reconcilePublicIP(ctx context.Context, pips []*armnetwork.PublicIPAddress, clusterName string, service *v1.Service, lbName string, wantLb, isIPv6 bool) (*armnetwork.PublicIPAddress, error) {
+	logger := klog.FromContext(ctx).WithName("reconcilePublicIP")
 	isInternal := requiresInternalLoadBalancer(service)
 	serviceName := getServiceName(service)
 	serviceIPTagRequest := getServiceIPTagRequestForPublicIP(service)
@@ -3345,7 +3362,7 @@ func (az *Cloud) reconcilePublicIP(ctx context.Context, pips []*armnetwork.Publi
 	for _, pip := range pipsToBeUpdated {
 		pipCopy := *pip
 		updateFuncs = append(updateFuncs, func() error {
-			klog.V(2).Infof("reconcilePublicIP for service(%s): pip(%s), isIPv6(%v) - updating", serviceName, *pip.Name, isIPv6)
+			logger.V(2).Info("reconcilePublicIP for service", "service", serviceName, "pip", *pip.Name, "isIPv6", isIPv6, "action", "updating")
 			return az.CreateOrUpdatePIP(service, pipResourceGroup, &pipCopy)
 		})
 	}
@@ -3357,8 +3374,16 @@ func (az *Cloud) reconcilePublicIP(ctx context.Context, pips []*armnetwork.Publi
 	for _, pip := range pipsToBeDeleted {
 		pipCopy := *pip
 		deleteFuncs = append(deleteFuncs, func() error {
-			klog.V(2).Infof("reconcilePublicIP for service(%s): pip(%s), isIPv6(%v) - deleting", serviceName, *pip.Name, isIPv6)
-			return az.safeDeletePublicIP(ctx, service, pipResourceGroup, &pipCopy, lb)
+			pipID := strings.ToLower((ptr.Deref(pipCopy.ID, "")))
+			rg, err := getPIPRGFromID(pipID)
+			if err != nil {
+				logger.Error(err, "Failed to get resource group from PIP ID", "pip-id", pipID)
+				return err
+			}
+			logger.V(2).Info("reconcilePublicIP for service",
+				"service", serviceName, "pip", *pip.Name, "rg", rg, "isIPv6", isIPv6, "action", "deleting",
+			)
+			return az.safeDeletePublicIP(ctx, service, rg, &pipCopy, lb)
 		})
 	}
 	errs = utilerrors.AggregateGoroutines(deleteFuncs...)
