@@ -402,7 +402,10 @@ test-e2e: ## Run k8s e2e tests.
 test-e2e-capz: ## Run k8s e2e tests with capz
 	hack/test_k8s_e2e_capz.sh $(TEST_E2E_ARGS)
 
-test-ccm-e2e: ## Run cloud provider e2e tests.
+ensure-azcli:
+	hack/ensure-azcli.sh
+
+test-ccm-e2e: ensure-azcli ## Run cloud provider e2e tests.
 	hack/test-ccm-e2e.sh
 
 .PHONY: clean
