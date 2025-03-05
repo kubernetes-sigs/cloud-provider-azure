@@ -231,8 +231,8 @@ github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINE
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRIccs7FGNTlIRMkT8wgtp5eCXdBlqhYGL6U=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
-github.com/prometheus/client_golang v1.21.0 h1:DIsaGmiaBkSangBgMtWdNfxbMNdku5IK6iNhrEqWvdA=
-github.com/prometheus/client_golang v1.21.0/go.mod h1:U9NM32ykUErtVBxdvD3zfi+EuFkkaBvMb09mIfe0Zgg=
+github.com/prometheus/client_golang v1.21.1 h1:DOvXXTqVzvkIewV/CDPFdejpMCGeMcbGCQ8YOmu+Ibk=
+github.com/prometheus/client_golang v1.21.1/go.mod h1:U9NM32ykUErtVBxdvD3zfi+EuFkkaBvMb09mIfe0Zgg=
 github.com/prometheus/client_model v0.6.1 h1:ZKSh/rekM+n3CeS952MLRAdFwIKqeY8b62p8ais2e9E=
 github.com/prometheus/client_model v0.6.1/go.mod h1:OrxVMOVHjw3lKMa8+x6HeMGkHMQyHDk9E3jmP2AmGiY=
 github.com/prometheus/common v0.62.0 h1:xasJaQlnWAeyHdUBeGjXmutelfJHWMRr+Fg4QszZ2Io=
@@ -463,8 +463,8 @@ k8s.io/utils v0.0.0-20241210054802-24370beab758 h1:sdbE21q2nlQtFh65saZY+rRM6x6aJ
 k8s.io/utils v0.0.0-20241210054802-24370beab758/go.mod h1:OLgZIPagt7ERELqWJFomSt595RzquPNLL48iOWgYOg0=
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.29.0 h1:/U5vjBbQn3RChhv7P11uhYvCSm5G2GaIi5AIGBS6r4c=
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.29.0/go.mod h1:z7+wmGM2dfIiLRfrC6jb5kV2Mq/sK1ZP303cxzkV5Y4=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.4 h1:qxBak/m6Rj2xYo7faBKsCdU4xbPXsa+MwnX4ymTxEhQ=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.4/go.mod h1:EiBF+gLie9K19GaYbmGEIpT4s+WCpMFXLmjlu3hGEmY=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.5 h1:PwONXTKWJdhXdMbaZBaqbCpDAzqOOs9+XNkktC4P14g=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.5/go.mod h1:EiBF+gLie9K19GaYbmGEIpT4s+WCpMFXLmjlu3hGEmY=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.4.0 h1:n6NEFrYsUKuoaujmyddxS2ztXrIsbMwwcU9W3xbhjf4=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.4.0/go.mod h1:8ajMCBBJb9AjA2UCsDk8QyvWcuXDW8KEjJpKJHibLKc=
 sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 h1:/Rv+M11QRah1itp8VhT6HoVx1Ray9eB4DBr+K+/sCJ8=
