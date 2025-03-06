@@ -26,6 +26,7 @@ import (
 	"github.com/onsi/gomega"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
 var _ = ginkgo.Describe("Cloud", func() {
@@ -148,13 +149,36 @@ var _ = ginkgo.Describe("Cloud", func() {
 			})
 		})
 	})
-
+	ginkgo.Context("EnvironmentFromName", func() {
+		ginkgo.When("cloud name is empty", func() {
+			ginkgo.It("should return the default cloud", func() {
+				env := azclient.EnvironmentFromName("")
+				gomega.Expect(env).ToNot(gomega.BeNil())
+				gomega.Expect(env.ActiveDirectoryEndpoint).To(gomega.Equal("https://login.microsoftonline.com/"))
+				gomega.Expect(env.TokenAudience).To(gomega.Equal("https://management.azure.com/"))
+			})
+		})
+		ginkgo.When("cloud name is wrong", func() {
+			ginkgo.It("should return the default cloud", func() {
+				env := azclient.EnvironmentFromName("wrong")
+				gomega.Expect(*env).To(gomega.Equal(*azclient.PublicCloud))
+			})
+		})
+		ginkgo.When("cloud name is AzureChinaCloud", func() {
+			ginkgo.It("should return the AzureChinaCloud", func() {
+				env := azclient.EnvironmentFromName("AzureChinaCloud")
+				gomega.Expect(env).ToNot(gomega.BeNil())
+				gomega.Expect(env.ActiveDirectoryEndpoint).To(gomega.Equal("https://login.chinacloudapi.cn/"))
+				gomega.Expect(env.TokenAudience).To(gomega.Equal("https://management.chinacloudapi.cn/"))
+			})
+		})
+	})
 	ginkgo.Context("AzureCloudFromEnvironment", func() {
 		ginkgo.When("the environment is empty", func() {
 			ginkgo.It("should return the default cloud", func() {
 				env := &azclient.Environment{}
 				cloudConfig := &cloud.AzurePublic
-				err := azclient.OverrideAzureCloudConfigFromEnv(azclient.AzureStackCloudName, cloudConfig, env)
+				err := azclient.OverrideAzureCloudConfigFromEnv(utils.AzureStackCloudName, cloudConfig, env)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 				gomega.Expect(cloudConfig).ToNot(gomega.BeNil())
 				gomega.Expect(cloudConfig.ActiveDirectoryAuthorityHost).To(gomega.Equal("https://login.microsoftonline.com/"))
@@ -168,7 +192,7 @@ var _ = ginkgo.Describe("Cloud", func() {
 				os.Setenv(azclient.EnvironmentFilepathName, "notfound")
 				env := &azclient.Environment{}
 				cloudConfig := &cloud.AzurePublic
-				err := azclient.OverrideAzureCloudConfigFromEnv(azclient.AzureStackCloudName, cloudConfig, env)
+				err := azclient.OverrideAzureCloudConfigFromEnv(utils.AzureStackCloudName, cloudConfig, env)
 				gomega.Expect(err).To(gomega.HaveOccurred())
 				os.Unsetenv(azclient.EnvironmentFilepathName)
 			})
@@ -178,7 +202,7 @@ var _ = ginkgo.Describe("Cloud", func() {
 				os.Setenv(azclient.EnvironmentFilepathName, "notfound")
 				env := &azclient.Environment{}
 				cloudConfig := &cloud.AzurePublic
-				err := azclient.OverrideAzureCloudConfigFromEnv(azclient.AzureStackCloudName, cloudConfig, env)
+				err := azclient.OverrideAzureCloudConfigFromEnv(utils.AzureStackCloudName, cloudConfig, env)
 				gomega.Expect(err).To(gomega.HaveOccurred())
 				os.Unsetenv(azclient.EnvironmentFilepathName)
 			})
@@ -199,7 +223,7 @@ var _ = ginkgo.Describe("Cloud", func() {
 				os.Setenv(azclient.EnvironmentFilepathName, configFile.Name())
 				env := &azclient.Environment{}
 				cloudConfig := &cloud.AzureGovernment
-				err = azclient.OverrideAzureCloudConfigFromEnv(azclient.AzureStackCloudName, cloudConfig, env)
+				err = azclient.OverrideAzureCloudConfigFromEnv(utils.AzureStackCloudName, cloudConfig, env)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 				gomega.Expect(cloudConfig).ToNot(gomega.BeNil())
 				gomega.Expect(cloudConfig.ActiveDirectoryAuthorityHost).To(gomega.Equal("https://login.chinacloudapi.cn"))
@@ -237,5 +261,6 @@ var _ = ginkgo.Describe("Cloud", func() {
 				os.Unsetenv(azclient.EnvironmentFilepathName)
 			})
 		})
+
 	})
 })
