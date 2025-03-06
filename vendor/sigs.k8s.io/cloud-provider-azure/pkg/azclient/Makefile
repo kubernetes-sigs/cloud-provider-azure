@@ -70,6 +70,7 @@ build: ## Build manager binary.
 .PHONY: test
 test: ## Run tests.
 	go test -v ./...
+	echo "Mooncake test ***************************************"; AZURE_CLOUD=AZURECHINACLOUD go test -v ./...
 
 .PHONY: generate
 generate: install-dependencies build generatecode generateimpl generateclientfactory generatemock fmt vet-all test
