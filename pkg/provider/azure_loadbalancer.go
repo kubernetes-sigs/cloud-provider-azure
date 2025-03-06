@@ -3266,9 +3266,21 @@ func (az *Cloud) reconcilePublicIPs(clusterName string, service *v1.Service, lbN
 	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
 
 	reconciledPIPs := []*network.PublicIPAddress{}
-	pips, err := az.listPIP(pipResourceGroup, azcache.CacheReadTypeDefault)
+	var (
+		pips []network.PublicIPAddress
+		err  error
+	)
+	pips, err = az.listPIP(pipResourceGroup, azcache.CacheReadTypeDefault)
 	if err != nil {
 		return nil, err
+	}
+	if !strings.EqualFold(az.ResourceGroup, pipResourceGroup) {
+		pipsFromClusterRG, err := az.listPIP(az.ResourceGroup, azcache.CacheReadTypeDefault)
+		if err != nil {
+			klog.Error(err, "Failed to list public IPs from cluster resource group", "resourceGroup", az.ResourceGroup)
+			return nil, err
+		}
+		pips = append(pips, pipsFromClusterRG...)
 	}
 
 	pipsV4, pipsV6 := []network.PublicIPAddress{}, []network.PublicIPAddress{}
@@ -3341,7 +3353,7 @@ func (az *Cloud) reconcilePublicIP(pips []network.PublicIPAddress, clusterName s
 	for _, pip := range pipsToBeUpdated {
 		pipCopy := *pip
 		updateFuncs = append(updateFuncs, func() error {
-			klog.V(2).Infof("reconcilePublicIP for service(%s): pip(%s), isIPv6(%v) - updating", serviceName, *pip.Name, isIPv6)
+			klog.V(2).Info("reconcilePublicIP for service", "service", serviceName, "pip", *pip.Name, "isIPv6", isIPv6, "action", "updating")
 			return az.CreateOrUpdatePIP(service, pipResourceGroup, pipCopy)
 		})
 	}
@@ -3353,8 +3365,16 @@ func (az *Cloud) reconcilePublicIP(pips []network.PublicIPAddress, clusterName s
 	for _, pip := range pipsToBeDeleted {
 		pipCopy := *pip
 		deleteFuncs = append(deleteFuncs, func() error {
-			klog.V(2).Infof("reconcilePublicIP for service(%s): pip(%s), isIPv6(%v) - deleting", serviceName, *pip.Name, isIPv6)
-			return az.safeDeletePublicIP(service, pipResourceGroup, &pipCopy, lb)
+			pipID := strings.ToLower((ptr.Deref(pipCopy.ID, "")))
+			rg, err := getPIPRGFromID(pipID)
+			if err != nil {
+				klog.Error(err, "Failed to get resource group from PIP ID", "pip-id", pipID)
+				return err
+			}
+			klog.V(2).Info("reconcilePublicIP for service",
+				"service", serviceName, "pip", *pip.Name, "rg", rg, "isIPv6", isIPv6, "action", "deleting",
+			)
+			return az.safeDeletePublicIP(service, rg, &pipCopy, lb)
 		})
 	}
 	errs = utilerrors.AggregateGoroutines(deleteFuncs...)
