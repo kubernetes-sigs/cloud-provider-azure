@@ -55,3 +55,5 @@ Normally we don't support special characters such as `=` or `,` in key-value pai
 ```
 
 `tags` and `tagsMap` will be merged, and similarly, they are case-insensitive.
+
+> Do not tag any resource with the following key `aks-managed*, k8s-azure*, service, cluster-name`, as they are reserved for internal use.
