@@ -281,7 +281,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		// Create a service with managed public IP first
 		By("Creating a service with managed public IP")
 		service := utils.CreateLoadBalancerServiceManifest(testServiceName, nil, labels, ns.Name, ports)
-		service, err := cs.CoreV1().Services(ns.Name).Create(context.Background(), service, metav1.CreateOptions{})
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.Background(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for the managed public IP to be ready")
@@ -303,7 +303,9 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(createdPIP).NotTo(BeNil())
 			Expect(createdPIP.Properties.IPAddress).NotTo(BeNil())
-			defer utils.DeletePIPWithRetry(tc, pipName, otherRG)
+			defer func() {
+				_ = utils.DeletePIPWithRetry(tc, pipName, otherRG)
+			}()
 			targetIPs = append(targetIPs, createdPIP.Properties.IPAddress)
 		}
 		if v6Enabled {
@@ -313,13 +315,16 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(createdPIPV6).NotTo(BeNil())
 			Expect(createdPIPV6.Properties.IPAddress).NotTo(BeNil())
-			defer utils.DeletePIPWithRetry(tc, pipNameV6, otherRG)
+			defer func() {
+				_ = utils.DeletePIPWithRetry(tc, pipNameV6, otherRG)
+			}()
 			targetIPs = append(targetIPs, createdPIPV6.Properties.IPAddress)
 		}
 
 		// Update service to use the user-assigned public IP in the other resource group
 		By("Updating service to use the user-assigned public IP in the other resource group")
 		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
 		service.Annotations = map[string]string{
 			consts.ServiceAnnotationLoadBalancerResourceGroup: otherRG,
 		}
@@ -329,7 +334,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		if v6Enabled {
 			service.Annotations[consts.ServiceAnnotationPIPNameDualStack[true]] = pipNameV6
 		}
-		service, err = cs.CoreV1().Services(ns.Name).Update(context.Background(), service, metav1.UpdateOptions{})
+		_, err = cs.CoreV1().Services(ns.Name).Update(context.Background(), service, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		defer func() {
