@@ -20,13 +20,10 @@ package identityclient
 import (
 	"context"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi"
 	"github.com/onsi/gomega"
-
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
 var msiClient *armmsi.UserAssignedIdentitiesClient
@@ -38,11 +35,10 @@ func init() {
 
 	beforeAllFunc = func(ctx context.Context) {
 		var err error
+		msiClientOption := clientOption
+		msiClientOption.Telemetry.ApplicationID = "ccm-msi-client"
 		msiClient, err = armmsi.NewUserAssignedIdentitiesClient(subscriptionID, recorder.TokenCredential(), &arm.ClientOptions{
-			ClientOptions: azcore.ClientOptions{
-				Transport:       recorder.HTTPClient(),
-				TracingProvider: utils.TracingProvider,
-			},
+			ClientOptions: msiClientOption,
 		})
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 

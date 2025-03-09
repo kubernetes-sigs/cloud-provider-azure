@@ -1,0 +1,760 @@
+---
+version: 2
+interactions:
+    - id: 0
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 25
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: '{"location":"chinaeast2"}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Length:
+                - "25"
+            Content-Type:
+                - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-RouteTable?api-version=2021-04-01
+        method: PUT
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 237
+        uncompressed: false
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-RouteTable","name":"aks-cit-RouteTable","type":"Microsoft.Resources/resourceGroups","location":"chinaeast2","properties":{"provisioningState":"Succeeded"}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "237"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 201 Created
+        code: 201
+        duration: 200ms
+    - id: 1
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 25
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: '{"location":"chinaeast2"}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Length:
+                - "25"
+            Content-Type:
+                - application/json
+            User-Agent:
+                - ccm-RouteTable-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-RouteTable/providers/Microsoft.Network/routeTables/testResource?api-version=2024-05-01
+        method: PUT
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 431
+        uncompressed: false
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-RouteTable/providers/Microsoft.Network/routeTables/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/routeTables","location":"chinaeast2","properties":{"provisioningState":"Updating","resourceGuid":"00000000-0000-0000-0000-000000000000","disableBgpRoutePropagation":false,"routes":[]}}'
+        headers:
+            Azure-Asyncoperation:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "431"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 201 Created
+        code: 201
+        duration: 200ms
+    - id: 2
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-RouteTable-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 22
+        uncompressed: false
+        body: '{"status":"Succeeded"}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "22"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 3
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-RouteTable-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-RouteTable/providers/Microsoft.Network/routeTables/testResource?api-version=2024-05-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 432
+        uncompressed: false
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-RouteTable/providers/Microsoft.Network/routeTables/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/routeTables","location":"chinaeast2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","disableBgpRoutePropagation":false,"routes":[]}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "432"
+            Content-Type:
+                - application/json; charset=utf-8
+            Etag:
+                - W/"00000000-0000-0000-0000-000000000000"
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 4
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-RouteTable-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-RouteTable/providers/Microsoft.Network/routeTables/testResource?api-version=2024-05-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 432
+        uncompressed: false
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-RouteTable/providers/Microsoft.Network/routeTables/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/routeTables","location":"chinaeast2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","disableBgpRoutePropagation":false,"routes":[]}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "432"
+            Content-Type:
+                - application/json; charset=utf-8
+            Etag:
+                - W/"00000000-0000-0000-0000-000000000000"
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 5
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-RouteTable-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-RouteTable/providers/Microsoft.Network/routeTables/testResourcenotfound?api-version=2024-05-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 240
+        uncompressed: false
+        body: '{"error":{"code":"ResourceNotFound","message":"The Resource ''Microsoft.Network/routeTables/testResourcenotfound'' under resource group ''aks-cit-RouteTable'' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix"}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "240"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Failure-Cause:
+                - gateway
+        status: 404 Not Found
+        code: 404
+        duration: 200ms
+    - id: 6
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 25
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: '{"location":"chinaeast2"}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Length:
+                - "25"
+            Content-Type:
+                - application/json
+            User-Agent:
+                - ccm-RouteTable-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-RouteTable/providers/Microsoft.Network/routeTables/testResource?api-version=2024-05-01
+        method: PUT
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 432
+        uncompressed: false
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-RouteTable/providers/Microsoft.Network/routeTables/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/routeTables","location":"chinaeast2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","disableBgpRoutePropagation":false,"routes":[]}}'
+        headers:
+            Azure-Asyncoperation:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "432"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 7
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-RouteTable-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-RouteTable/providers/Microsoft.Network/routeTables/testResource?api-version=2024-05-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 432
+        uncompressed: false
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-RouteTable/providers/Microsoft.Network/routeTables/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/routeTables","location":"chinaeast2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","disableBgpRoutePropagation":false,"routes":[]}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "432"
+            Content-Type:
+                - application/json; charset=utf-8
+            Etag:
+                - W/"00000000-0000-0000-0000-000000000000"
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 8
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 42
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: '{"etag":"invalid","location":"chinaeast2"}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Length:
+                - "42"
+            Content-Type:
+                - application/json
+            If-Match:
+                - invalid
+            User-Agent:
+                - ccm-RouteTable-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-RouteTable/providers/Microsoft.Network/routeTables/testResource?api-version=2024-05-01
+        method: PUT
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 418
+        uncompressed: false
+        body: '{"error":{"code":"PreconditionFailed","message":"Precondition failed.","details":[{"code":"PreconditionFailedEtagMismatch","message":"Etag provided in if-match header W/\"invalid\" does not match etag W/\"00000000-0000-0000-0000-000000000000\" of resource /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-RouteTable/providers/Microsoft.Network/routeTables/testResource in NRP data store."}]}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "418"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 412 Precondition Failed
+        code: 412
+        duration: 200ms
+    - id: 9
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-RouteTable-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-RouteTable/providers/Microsoft.Network/routeTables?api-version=2024-05-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 444
+        uncompressed: false
+        body: '{"value":[{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-RouteTable/providers/Microsoft.Network/routeTables/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/routeTables","location":"chinaeast2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","disableBgpRoutePropagation":false,"routes":[]}}]}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "444"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 10
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-RouteTable-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-RouteTablenotfound/providers/Microsoft.Network/routeTables?api-version=2024-05-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 118
+        uncompressed: false
+        body: '{"error":{"code":"ResourceGroupNotFound","message":"Resource group ''aks-cit-RouteTablenotfound'' could not be found."}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "118"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Failure-Cause:
+                - gateway
+        status: 404 Not Found
+        code: 404
+        duration: 200ms
+    - id: 11
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-RouteTable-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-RouteTable/providers/Microsoft.Network/routeTables/testResource?api-version=2024-05-01
+        method: DELETE
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 0
+        uncompressed: false
+        body: ""
+        headers:
+            Azure-Asyncoperation:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "0"
+            Expires:
+                - "-1"
+            Location:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 202 Accepted
+        code: 202
+        duration: 200ms
+    - id: 12
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-RouteTable-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 22
+        uncompressed: false
+        body: '{"status":"Succeeded"}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "22"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 13
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-RouteTable?api-version=2021-04-01
+        method: DELETE
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 0
+        uncompressed: false
+        body: ""
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "0"
+            Expires:
+                - "-1"
+            Location:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRST1VURVRBQkxFLUNISU5BRUFTVDIiLCJqb2JMb2NhdGlvbiI6ImNoaW5hZWFzdDIifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 202 Accepted
+        code: 202
+        duration: 200ms
+    - id: 14
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRST1VURVRBQkxFLUNISU5BRUFTVDIiLCJqb2JMb2NhdGlvbiI6ImNoaW5hZWFzdDIifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 0
+        uncompressed: false
+        body: ""
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "0"
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms

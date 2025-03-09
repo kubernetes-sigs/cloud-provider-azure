@@ -20,7 +20,6 @@ import (
 	"context"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/onsi/gomega"
@@ -40,10 +39,10 @@ func init() {
 	}
 
 	beforeAllFunc = func(ctx context.Context) {
+		networkClientOption := clientOption
+		networkClientOption.Telemetry.ApplicationID = "ccm-network-client"
 		networkClientFactory, err = armnetwork.NewClientFactory(subscriptionID, recorder.TokenCredential(), &arm.ClientOptions{
-			ClientOptions: policy.ClientOptions{
-				Transport: recorder.HTTPClient(),
-			},
+			ClientOptions: networkClientOption,
 		})
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		publicIPClient = networkClientFactory.NewPublicIPAddressesClient()

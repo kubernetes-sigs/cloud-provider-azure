@@ -6,24 +6,24 @@ interactions:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 21
+        content_length: 25
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
-        body: '{"location":"eastus"}'
+        body: '{"location":"chinaeast2"}'
         form: {}
         headers:
             Accept:
                 - application/json
             Content-Length:
-                - "21"
+                - "25"
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-BlobServiceProperties?api-version=2021-04-01
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-BlobServiceProperties?api-version=2021-04-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -31,14 +31,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 255
+        content_length: 259
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties","name":"aks-cit-BlobServiceProperties","type":"Microsoft.Resources/resourceGroups","location":"eastus","properties":{"provisioningState":"Succeeded"}}'
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties","name":"aks-cit-BlobServiceProperties","type":"Microsoft.Resources/resourceGroups","location":"chinaeast2","properties":{"provisioningState":"Succeeded"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "255"
+                - "259"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -47,12 +47,8 @@ interactions:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
-                - "11999"
         status: 201 Created
         code: 201
         duration: 200ms
@@ -61,24 +57,24 @@ interactions:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 764
+        content_length: 768
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
-        body: '{"kind":"StorageV2","location":"eastus","properties":{"accessTier":"Cool","allowBlobPublicAccess":false,"allowCrossTenantReplication":false,"allowSharedKeyAccess":true,"defaultToOAuthAuthentication":false,"dnsEndpointType":"Standard","encryption":{"keySource":"Microsoft.Storage","requireInfrastructureEncryption":false,"services":{"blob":{"enabled":true,"keyType":"Account"},"file":{"enabled":true,"keyType":"Account"}}},"isHnsEnabled":true,"isLocalUserEnabled":true,"isNfsV3Enabled":true,"isSftpEnabled":true,"largeFileSharesState":"Enabled","minimumTlsVersion":"TLS1_2","networkAcls":{"bypass":"AzureServices","defaultAction":"Deny","ipRules":[]},"publicNetworkAccess":"Disabled","supportsHttpsTrafficOnly":true},"sku":{"name":"Standard_LRS","tier":"Standard"}}'
+        body: '{"kind":"StorageV2","location":"chinaeast2","properties":{"accessTier":"Cool","allowBlobPublicAccess":false,"allowCrossTenantReplication":false,"allowSharedKeyAccess":true,"defaultToOAuthAuthentication":false,"dnsEndpointType":"Standard","encryption":{"keySource":"Microsoft.Storage","requireInfrastructureEncryption":false,"services":{"blob":{"enabled":true,"keyType":"Account"},"file":{"enabled":true,"keyType":"Account"}}},"isHnsEnabled":true,"isLocalUserEnabled":true,"isNfsV3Enabled":true,"isSftpEnabled":true,"largeFileSharesState":"Enabled","minimumTlsVersion":"TLS1_2","networkAcls":{"bypass":"AzureServices","defaultAction":"Deny","ipRules":[]},"publicNetworkAccess":"Disabled","supportsHttpsTrafficOnly":true},"sku":{"name":"Standard_LRS","tier":"Standard"}}'
         form: {}
         headers:
             Accept:
                 - application/json
             Content-Length:
-                - "764"
+                - "768"
             Content-Type:
                 - application/json
             User-Agent:
-                - azsdk-go-armstorage/v1.6.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest?api-version=2023-05-01
+                - ccm-storage-client azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest?api-version=2023-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -99,17 +95,15 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Storage/locations/eastus/asyncoperations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&monitor=true&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Storage/locations/chinaeast2/asyncoperations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&monitor=true&s=s&t=t
             Pragma:
                 - no-cache
+            Server:
+                - Microsoft-Azure-Storage-Resource-Provider/1.0,Microsoft-HTTPAPI/2.0 Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
-                - "11999"
         status: 202 Accepted
         code: 202
         duration: 200ms
@@ -121,15 +115,15 @@ interactions:
         content_length: 0
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
         body: ""
         form: {}
         headers:
             User-Agent:
-                - azsdk-go-armstorage/v1.6.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Storage/locations/eastus/asyncoperations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&monitor=true&s=s&t=t
+                - ccm-storage-client azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Storage/locations/chinaeast2/asyncoperations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&monitor=true&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -137,28 +131,26 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 1784
+        content_length: 1821
         uncompressed: false
-        body: '{"sku":{"name":"Standard_LRS","tier":"Standard"},"kind":"StorageV2","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest","name":"akscitblobsdktest","type":"Microsoft.Storage/storageAccounts","location":"eastus","tags":{},"properties":{"dnsEndpointType":"Standard","defaultToOAuthAuthentication":false,"publicNetworkAccess":"Disabled","keyCreationTime":{"key1":"2001-02-03T04:05:06Z","key2":"2001-02-03T04:05:06Z"},"allowCrossTenantReplication":false,"privateEndpointConnections":[],"isNfsV3Enabled":true,"isLocalUserEnabled":true,"isSftpEnabled":true,"minimumTlsVersion":"TLS1_2","allowBlobPublicAccess":false,"allowSharedKeyAccess":true,"largeFileSharesState":"Enabled","isHnsEnabled":true,"networkAcls":{"ipv6Rules":[],"bypass":"AzureServices","virtualNetworkRules":[],"ipRules":[],"defaultAction":"Deny"},"supportsHttpsTrafficOnly":true,"encryption":{"requireInfrastructureEncryption":false,"services":{"file":{"keyType":"Account","enabled":true,"lastEnabledTime":"2001-02-03T04:05:06Z"},"blob":{"keyType":"Account","enabled":true,"lastEnabledTime":"2001-02-03T04:05:06Z"}},"keySource":"Microsoft.Storage"},"accessTier":"Cool","provisioningState":"Succeeded","creationTime":"2001-02-03T04:05:06Z","primaryEndpoints":{"dfs":"https://akscitblobsdktest.dfs.core.windows.net/","web":"https://akscitblobsdktest.z13.web.core.windows.net/","blob":"https://akscitblobsdktest.blob.core.windows.net/","queue":"https://akscitblobsdktest.queue.core.windows.net/","table":"https://akscitblobsdktest.table.core.windows.net/","file":"https://akscitblobsdktest.file.core.windows.net/"},"primaryLocation":"eastus","statusOfPrimary":"available"}}'
+        body: '{"sku":{"name":"Standard_LRS","tier":"Standard"},"kind":"StorageV2","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest","name":"akscitblobsdktest","type":"Microsoft.Storage/storageAccounts","location":"chinaeast2","tags":{},"properties":{"dnsEndpointType":"Standard","defaultToOAuthAuthentication":false,"publicNetworkAccess":"Disabled","keyCreationTime":{"key1":"2001-02-03T04:05:06Z","key2":"2001-02-03T04:05:06Z"},"allowCrossTenantReplication":false,"privateEndpointConnections":[],"isNfsV3Enabled":true,"isLocalUserEnabled":true,"isSftpEnabled":true,"minimumTlsVersion":"TLS1_2","allowBlobPublicAccess":false,"allowSharedKeyAccess":true,"largeFileSharesState":"Enabled","isHnsEnabled":true,"networkAcls":{"ipv6Rules":[],"bypass":"AzureServices","virtualNetworkRules":[],"ipRules":[],"defaultAction":"Deny"},"supportsHttpsTrafficOnly":true,"encryption":{"requireInfrastructureEncryption":false,"services":{"file":{"keyType":"Account","enabled":true,"lastEnabledTime":"2001-02-03T04:05:06Z"},"blob":{"keyType":"Account","enabled":true,"lastEnabledTime":"2001-02-03T04:05:06Z"}},"keySource":"Microsoft.Storage"},"accessTier":"Cool","provisioningState":"Succeeded","creationTime":"2001-02-03T04:05:06Z","primaryEndpoints":{"dfs":"https://akscitblobsdktest.dfs.core.chinacloudapi.cn/","web":"https://akscitblobsdktest.z4.web.core.chinacloudapi.cn/","blob":"https://akscitblobsdktest.blob.core.chinacloudapi.cn/","queue":"https://akscitblobsdktest.queue.core.chinacloudapi.cn/","table":"https://akscitblobsdktest.table.core.chinacloudapi.cn/","file":"https://akscitblobsdktest.file.core.chinacloudapi.cn/"},"primaryLocation":"chinaeast2","statusOfPrimary":"available"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "1784"
+                - "1821"
             Content-Type:
                 - application/json
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
+            Server:
+                - Microsoft-Azure-Storage-Resource-Provider/1.0,Microsoft-HTTPAPI/2.0 Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
-                - "16499"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -170,7 +162,7 @@ interactions:
         content_length: 0
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
         body: ""
@@ -179,8 +171,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-BlobServicePropertie azsdk-go-armstorage/v1.6.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest/blobServices/default?api-version=2023-05-01
+                - ccm-BlobServicePropertie azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest/blobServices/default?api-version=2023-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -202,14 +194,12 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
+            Server:
+                - Microsoft-Azure-Storage-Resource-Provider/1.0,Microsoft-HTTPAPI/2.0 Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
-                - "16499"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -221,7 +211,7 @@ interactions:
         content_length: 0
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
         body: ""
@@ -230,8 +220,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-BlobServicePropertie azsdk-go-armstorage/v1.6.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestnotfound/blobServices/default?api-version=2023-05-01
+                - ccm-BlobServicePropertie azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestnotfound/blobServices/default?api-version=2023-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -255,8 +245,6 @@ interactions:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Failure-Cause:
@@ -269,24 +257,24 @@ interactions:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 66
+        content_length: 17
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
-        body: '{"properties":{"deleteRetentionPolicy":{"days":1,"enabled":true}}}'
+        body: '{"properties":{}}'
         form: {}
         headers:
             Accept:
                 - application/json
             Content-Length:
-                - "66"
+                - "17"
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-BlobServicePropertie azsdk-go-armstorage/v1.6.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest/blobServices/default?api-version=2023-05-01
+                - ccm-BlobServicePropertie azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest/blobServices/default?api-version=2023-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -294,28 +282,26 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 326
+        content_length: 277
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest/blobServices/default","name":"default","type":"Microsoft.Storage/storageAccounts/blobServices","properties":{"deleteRetentionPolicy":{"enabled":true,"days":1}}}'
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest/blobServices/default","name":"default","type":"Microsoft.Storage/storageAccounts/blobServices","properties":{}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "326"
+                - "277"
             Content-Type:
                 - application/json
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
+            Server:
+                - Microsoft-Azure-Storage-Resource-Provider/1.0,Microsoft-HTTPAPI/2.0 Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
-                - "11999"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -327,7 +313,7 @@ interactions:
         content_length: 66
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
         body: '{"properties":{"deleteRetentionPolicy":{"days":1,"enabled":true}}}'
@@ -340,8 +326,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-BlobServicePropertie azsdk-go-armstorage/v1.6.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestnotfound/blobServices/default?api-version=2023-05-01
+                - ccm-BlobServicePropertie azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestnotfound/blobServices/default?api-version=2023-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -365,8 +351,6 @@ interactions:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Failure-Cause:
@@ -382,15 +366,15 @@ interactions:
         content_length: 0
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
         body: ""
         form: {}
         headers:
             User-Agent:
-                - azsdk-go-armstorage/v1.6.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest?api-version=2023-05-01
+                - ccm-storage-client azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobServiceProperties/providers/Microsoft.Storage/storageAccounts/akscitblobsdktest?api-version=2023-05-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -412,14 +396,12 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
+            Server:
+                - Microsoft-Azure-Storage-Resource-Provider/1.0,Microsoft-HTTPAPI/2.0 Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
-                - "12000"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -431,7 +413,7 @@ interactions:
         content_length: 0
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
         body: ""
@@ -440,8 +422,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-BlobServiceProperties?api-version=2021-04-01
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-BlobServiceProperties?api-version=2021-04-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -460,17 +442,13 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRCTE9CU0VSVklDRVBST1BFUlRJRVMtRUFTVFVTIiwiam9iTG9jYXRpb24iOiJlYXN0dXMifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRCTE9CU0VSVklDRVBST1BFUlRJRVMtQ0hJTkFFQVNUMiIsImpvYkxvY2F0aW9uIjoiY2hpbmFlYXN0MiJ9?api-version=2021-04-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
-                - "11999"
         status: 202 Accepted
         code: 202
         duration: 200ms
@@ -482,15 +460,15 @@ interactions:
         content_length: 0
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com
+        host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
         body: ""
         form: {}
         headers:
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRCTE9CU0VSVklDRVBST1BFUlRJRVMtRUFTVFVTIiwiam9iTG9jYXRpb24iOiJlYXN0dXMifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.4; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRCTE9CU0VSVklDRVBST1BFUlRJRVMtQ0hJTkFFQVNUMiIsImpvYkxvY2F0aW9uIjoiY2hpbmFlYXN0MiJ9?api-version=2021-04-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -512,12 +490,8 @@ interactions:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            X-Cache:
-                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
-                - "16499"
         status: 200 OK
         code: 200
         duration: 200ms

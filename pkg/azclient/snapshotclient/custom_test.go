@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
@@ -44,10 +43,10 @@ func init() {
 	}
 
 	beforeAllFunc = func(ctx context.Context) {
+		storageClientOption := clientOption
+		storageClientOption.Telemetry.ApplicationID = "ccm-storage-client"
 		computeClientFactory, err = armcompute.NewClientFactory(subscriptionID, recorder.TokenCredential(), &arm.ClientOptions{
-			ClientOptions: policy.ClientOptions{
-				Transport: recorder.HTTPClient(),
-			},
+			ClientOptions: storageClientOption,
 		})
 		Expect(err).NotTo(HaveOccurred())
 		diskClient = computeClientFactory.NewDisksClient()

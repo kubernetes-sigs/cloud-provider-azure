@@ -33,7 +33,7 @@ func init() {
 		When("creation requests are raised", func() {
 			It("should not return error", func(ctx context.Context) {
 				resourceName = "akscitaccountsdktest"
-				newResource, err := realClient.Create(ctx, resourceGroupName, resourceName, &armstorage.AccountCreateParameters{
+				body := &armstorage.AccountCreateParameters{
 					Location: to.Ptr(location),
 					Kind:     to.Ptr(armstorage.KindStorage),
 					Properties: &armstorage.AccountPropertiesCreateParameters{
@@ -59,12 +59,15 @@ func init() {
 						KeyPolicy: &armstorage.KeyPolicy{
 							KeyExpirationPeriodInDays: to.Ptr[int32](20),
 						},
-						MinimumTLSVersion: to.Ptr(armstorage.MinimumTLSVersionTLS12),
 					},
 					SKU: &armstorage.SKU{
 						Name: to.Ptr(armstorage.SKUNameStandardGRS),
 					},
-				})
+				}
+				if location != "chinaeast2" {
+					body.Properties.MinimumTLSVersion = to.Ptr(armstorage.MinimumTLSVersionTLS12)
+				}
+				newResource, err := realClient.Create(ctx, resourceGroupName, resourceName, body)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(newResource).NotTo(BeNil())
 				Expect(*newResource.Name).To(Equal(resourceName))
