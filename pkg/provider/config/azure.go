@@ -180,6 +180,10 @@ func (az *Config) IsLBBackendPoolTypeNodeIP() bool {
 	return strings.EqualFold(az.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypeNodeIP)
 }
 
+func (az *Config) IsLBBackendPoolTypePodIP() bool {
+	return strings.EqualFold(az.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePodIP)
+}
+
 func (az *Config) GetPutVMSSVMBatchSize() int {
 	return az.PutVMSSVMBatchSize
 }
