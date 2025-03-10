@@ -1,0 +1,1165 @@
+---
+version: 2
+interactions:
+    - id: 0
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 25
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: '{"location":"chinaeast2"}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Length:
+                - "25"
+            Content-Type:
+                - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-BackendAddressPool?api-version=2021-04-01
+        method: PUT
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 253
+        uncompressed: false
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool","name":"aks-cit-BackendAddressPool","type":"Microsoft.Resources/resourceGroups","location":"chinaeast2","properties":{"provisioningState":"Succeeded"}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "253"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 201 Created
+        code: 201
+        duration: 200ms
+    - id: 1
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 152
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: '{"location":"chinaeast2","properties":{"publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static"},"sku":{"name":"Standard","tier":"Regional"}}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Length:
+                - "152"
+            Content-Type:
+                - application/json
+            User-Agent:
+                - ccm-network-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/publicIPAddresses/publicip?api-version=2024-05-01
+        method: PUT
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 605
+        uncompressed: false
+        body: '{"name":"publicip","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/publicIPAddresses/publicip","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"chinaeast2","properties":{"provisioningState":"Updating","resourceGuid":"00000000-0000-0000-0000-000000000000","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","idleTimeoutInMinutes":4,"ipTags":[],"ddosSettings":{"protectionMode":"VirtualNetworkInherited"}},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Standard","tier":"Regional"}}'
+        headers:
+            Azure-Asyncoperation:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "605"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 201 Created
+        code: 201
+        duration: 200ms
+    - id: 2
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-network-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 22
+        uncompressed: false
+        body: '{"status":"Succeeded"}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "22"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 3
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-network-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/publicIPAddresses/publicip?api-version=2024-05-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 633
+        uncompressed: false
+        body: '{"name":"publicip","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/publicIPAddresses/publicip","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"chinaeast2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","ipAddress":"52.130.75.15","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","idleTimeoutInMinutes":4,"ipTags":[],"ddosSettings":{"protectionMode":"VirtualNetworkInherited"}},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Standard","tier":"Regional"}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "633"
+            Content-Type:
+                - application/json; charset=utf-8
+            Etag:
+                - W/"00000000-0000-0000-0000-000000000000"
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 4
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 339
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: '{"location":"chinaeast2","properties":{"frontendIPConfigurations":[{"name":"frontendIPConfiguration","properties":{"publicIPAddress":{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/publicIPAddresses/publicip"}}}]},"sku":{"name":"Standard","tier":"Regional"}}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Length:
+                - "339"
+            Content-Type:
+                - application/json
+            User-Agent:
+                - ccm-network-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource?api-version=2024-05-01
+        method: PUT
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 1229
+        uncompressed: false
+        body: '{"name":"testParentResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/loadBalancers","location":"chinaeast2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","frontendIPConfigurations":[{"name":"frontendIPConfiguration","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/frontendIPConfigurations/frontendIPConfiguration","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/loadBalancers/frontendIPConfigurations","properties":{"provisioningState":"Succeeded","privateIPAllocationMethod":"Dynamic","publicIPAddress":{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/publicIPAddresses/publicip"}}}],"backendAddressPools":[],"loadBalancingRules":[],"probes":[],"inboundNatRules":[],"outboundRules":[],"inboundNatPools":[]},"sku":{"name":"Standard","tier":"Regional"}}'
+        headers:
+            Azure-Asyncoperation:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "1229"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 201 Created
+        code: 201
+        duration: 200ms
+    - id: 5
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-network-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource?api-version=2024-05-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 1229
+        uncompressed: false
+        body: '{"name":"testParentResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/loadBalancers","location":"chinaeast2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","frontendIPConfigurations":[{"name":"frontendIPConfiguration","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/frontendIPConfigurations/frontendIPConfiguration","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/loadBalancers/frontendIPConfigurations","properties":{"provisioningState":"Succeeded","privateIPAllocationMethod":"Dynamic","publicIPAddress":{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/publicIPAddresses/publicip"}}}],"backendAddressPools":[],"loadBalancingRules":[],"probes":[],"inboundNatRules":[],"outboundRules":[],"inboundNatPools":[]},"sku":{"name":"Standard","tier":"Regional"}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "1229"
+            Content-Type:
+                - application/json; charset=utf-8
+            Etag:
+                - W/"00000000-0000-0000-0000-000000000000"
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 6
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 39
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: '{"name":"testResource","properties":{}}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Length:
+                - "39"
+            Content-Type:
+                - application/json
+            User-Agent:
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource?api-version=2024-05-01
+        method: PUT
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 411
+        uncompressed: false
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Updating","loadBalancerBackendAddresses":[]},"type":"Microsoft.Network/loadBalancers/backendAddressPools"}'
+        headers:
+            Azure-Asyncoperation:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "411"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 201 Created
+        code: 201
+        duration: 200ms
+    - id: 7
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 22
+        uncompressed: false
+        body: '{"status":"Succeeded"}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "22"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 8
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource?api-version=2024-05-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 412
+        uncompressed: false
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","loadBalancerBackendAddresses":[]},"type":"Microsoft.Network/loadBalancers/backendAddressPools"}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "412"
+            Content-Type:
+                - application/json; charset=utf-8
+            Etag:
+                - W/"00000000-0000-0000-0000-000000000000"
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 9
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource?api-version=2024-05-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 412
+        uncompressed: false
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","loadBalancerBackendAddresses":[]},"type":"Microsoft.Network/loadBalancers/backendAddressPools"}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "412"
+            Content-Type:
+                - application/json; charset=utf-8
+            Etag:
+                - W/"00000000-0000-0000-0000-000000000000"
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 10
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResourcenotfound?api-version=2024-05-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 270
+        uncompressed: false
+        body: '{"error":{"code":"NotFound","message":"Resource /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResourcenotfound not found.","details":[]}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "270"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 404 Not Found
+        code: 404
+        duration: 200ms
+    - id: 11
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 39
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: '{"name":"testResource","properties":{}}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Length:
+                - "39"
+            Content-Type:
+                - application/json
+            User-Agent:
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource?api-version=2024-05-01
+        method: PUT
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 412
+        uncompressed: false
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","loadBalancerBackendAddresses":[]},"type":"Microsoft.Network/loadBalancers/backendAddressPools"}'
+        headers:
+            Azure-Asyncoperation:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "412"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 12
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource?api-version=2024-05-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 412
+        uncompressed: false
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","loadBalancerBackendAddresses":[]},"type":"Microsoft.Network/loadBalancers/backendAddressPools"}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "412"
+            Content-Type:
+                - application/json; charset=utf-8
+            Etag:
+                - W/"00000000-0000-0000-0000-000000000000"
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 13
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools?api-version=2024-05-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 424
+        uncompressed: false
+        body: '{"value":[{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","loadBalancerBackendAddresses":[]},"type":"Microsoft.Network/loadBalancers/backendAddressPools"}]}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "424"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 14
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPoolnotfound/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools?api-version=2024-05-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 126
+        uncompressed: false
+        body: '{"error":{"code":"ResourceGroupNotFound","message":"Resource group ''aks-cit-BackendAddressPoolnotfound'' could not be found."}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "126"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Failure-Cause:
+                - gateway
+        status: 404 Not Found
+        code: 404
+        duration: 200ms
+    - id: 15
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource?api-version=2024-05-01
+        method: DELETE
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 0
+        uncompressed: false
+        body: ""
+        headers:
+            Azure-Asyncoperation:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "0"
+            Expires:
+                - "-1"
+            Location:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 202 Accepted
+        code: 202
+        duration: 200ms
+    - id: 16
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 22
+        uncompressed: false
+        body: '{"status":"Succeeded"}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "22"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 17
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-network-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource?api-version=2024-05-01
+        method: DELETE
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 0
+        uncompressed: false
+        body: ""
+        headers:
+            Azure-Asyncoperation:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "0"
+            Expires:
+                - "-1"
+            Location:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 202 Accepted
+        code: 202
+        duration: 200ms
+    - id: 18
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-network-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 22
+        uncompressed: false
+        body: '{"status":"Succeeded"}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "22"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 19
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-network-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/publicIPAddresses/publicip?api-version=2024-05-01
+        method: DELETE
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 0
+        uncompressed: false
+        body: ""
+        headers:
+            Azure-Asyncoperation:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "0"
+            Expires:
+                - "-1"
+            Location:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 202 Accepted
+        code: 202
+        duration: 200ms
+    - id: 20
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-network-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 22
+        uncompressed: false
+        body: '{"status":"Succeeded"}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "22"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 21
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-BackendAddressPool?api-version=2021-04-01
+        method: DELETE
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 0
+        uncompressed: false
+        body: ""
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "0"
+            Expires:
+                - "-1"
+            Location:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRCQUNLRU5EQUREUkVTU1BPT0wtQ0hJTkFFQVNUMiIsImpvYkxvY2F0aW9uIjoiY2hpbmFlYXN0MiJ9?api-version=2021-04-01&c=c&h=h&s=s&t=t
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 202 Accepted
+        code: 202
+        duration: 200ms
+    - id: 22
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRCQUNLRU5EQUREUkVTU1BPT0wtQ0hJTkFFQVNUMiIsImpvYkxvY2F0aW9uIjoiY2hpbmFlYXN0MiJ9?api-version=2021-04-01&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 0
+        uncompressed: false
+        body: ""
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "0"
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms

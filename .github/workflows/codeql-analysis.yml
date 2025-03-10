@@ -22,6 +22,7 @@ on:
       - 'go.*'
       - 'hack/verify-updates.sh'
       - '!vendor/**'
+      - '!pkg/azclient/**'
   pull_request:
     # The branches below must be a subset of the branches above
     branches: [ master, 'release-**' ]
@@ -32,6 +33,7 @@ on:
       - 'go.*'
       - 'hack/verify-updates.sh'
       - '!vendor/**'
+      - '!pkg/azclient/**'
   schedule:
     - cron: '0 */4 * * *'
 permissions:
