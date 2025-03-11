@@ -39,7 +39,7 @@ func init() {
 
 	beforeAllFunc = func(ctx context.Context) {
 		var generatedSSHKey string
-		privateKey, err := rsa.GenerateKey(rand.Reader, 1024)
+		privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 		Expect(err).NotTo(HaveOccurred())
 
 		// generate and write private key as PEM
