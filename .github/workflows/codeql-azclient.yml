@@ -17,13 +17,11 @@ on:
     branches: [ master ]
     paths:
       - 'pkg/azclient/**'
-      - '!pkg/azclient/trace/**'
   pull_request:
     # The branches below must be a subset of the branches above
     branches: [ master ]
     paths:
       - 'pkg/azclient/**'
-      - '!pkg/azclient/trace/**'
 permissions:
   contents: read
 
@@ -58,8 +56,6 @@ jobs:
         check-latest: true
         cache-dependency-path: |
           pkg/azclient/go.sum
-          pkg/azclient/client-gen/go.sum
-          pkg/azclient/configloader/go.sum
       id: go
 
     # Initializes the CodeQL tools for scanning.
@@ -77,7 +73,7 @@ jobs:
     - name: Autobuild
       run: |
         cd pkg/azclient
-        make generate
+        make generate test
         echo "fail if files changed"
         git add . && git diff --quiet && git diff --cached --quiet 
     - name: Perform CodeQL Analysis

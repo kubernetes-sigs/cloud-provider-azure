@@ -1,7 +1,7 @@
 module sigs.k8s.io/cloud-provider-azure/kubetest2-aks
 
 // Bump GoTool golang version in .pipelines if you change this
-go 1.23.1
+go 1.24
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.0

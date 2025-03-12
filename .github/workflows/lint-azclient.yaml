@@ -1,27 +1,15 @@
-name: Code Lint
+name: Code Lint - azclient
 
 on: 
   push:
     branches: [ master, 'release-**' ]
     paths:
-      - 'pkg/**.go'
-      - 'cmd/**.go'
-      - 'tests/**.go'
-      - 'go.*'
-      - 'hack/verify-updates.sh'
-      - '!vendor/**'
-      - '!pkg/azclient/**'
+      - 'pkg/azclient/**'
   pull_request:
     # The branches below must be a subset of the branches above
     branches: [ master, 'release-**' ]
     paths:
-      - 'pkg/**.go'
-      - 'cmd/**.go'
-      - 'tests/**.go'
-      - 'go.*'
-      - 'hack/verify-updates.sh'
-      - '!vendor/**'
-      - '!pkg/azclient/**'
+      - 'pkg/azclient/**'
   workflow_dispatch:
 
 permissions:
@@ -44,15 +32,14 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
         with:
-          go-version-file: 'go.mod'
+          go-version-file: 'pkg/azclient/go.mod'
           check-latest: true
           cache-dependency-path: |
-            go.sum
+            pkg/azclient/go.sum
       - name: golangci-lint
         uses: golangci/golangci-lint-action@2226d7cb06a077cd73e56eedd38eecad18e5d837 # v6.5.0
         with:
           # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
           version: v1.64
           args: -v
-          install-mode: goinstall
           verify: true

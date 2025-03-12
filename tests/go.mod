@@ -1,6 +1,6 @@
 module sigs.k8s.io/cloud-provider-azure/tests
 
-go 1.23.2
+go 1.24
 
 require (
 	github.com/Azure/azure-kusto-go/azkustodata v1.0.0-preview-5
