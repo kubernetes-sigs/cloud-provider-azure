@@ -11,7 +11,7 @@ require (
 	github.com/go-git/go-git/v5 v5.14.0
 	github.com/octago/sflags v0.3.1
 	github.com/spf13/pflag v1.0.6
-	k8s.io/apimachinery v0.32.2
+	k8s.io/apimachinery v0.32.3
 	k8s.io/klog v1.0.0
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
 	sigs.k8s.io/kubetest2 v0.0.0-20241216131453-22d5b1410bef
