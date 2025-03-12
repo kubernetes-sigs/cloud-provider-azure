@@ -929,7 +929,7 @@ k8s.io/apimachinery/pkg/version
 k8s.io/apimachinery/pkg/watch
 k8s.io/apimachinery/third_party/forked/golang/json
 k8s.io/apimachinery/third_party/forked/golang/reflect
-# k8s.io/apiserver v0.31.6
+# k8s.io/apiserver v0.31.7
 ## explicit; go 1.22.0
 k8s.io/apiserver/pkg/admission
 k8s.io/apiserver/pkg/admission/configuration
@@ -1413,7 +1413,7 @@ k8s.io/client-go/util/keyutil
 k8s.io/client-go/util/retry
 k8s.io/client-go/util/watchlist
 k8s.io/client-go/util/workqueue
-# k8s.io/cloud-provider v0.31.6
+# k8s.io/cloud-provider v0.31.7
 ## explicit; go 1.22.0
 k8s.io/cloud-provider
 k8s.io/cloud-provider/api
@@ -1433,7 +1433,7 @@ k8s.io/cloud-provider/names
 k8s.io/cloud-provider/node/helpers
 k8s.io/cloud-provider/options
 k8s.io/cloud-provider/service/helpers
-# k8s.io/component-base v0.31.6
+# k8s.io/component-base v0.31.7
 ## explicit; go 1.22.0
 k8s.io/component-base/cli/flag
 k8s.io/component-base/cli/globalflag
@@ -1462,10 +1462,10 @@ k8s.io/component-base/term
 k8s.io/component-base/tracing
 k8s.io/component-base/tracing/api/v1
 k8s.io/component-base/version
-# k8s.io/component-helpers v0.31.6
+# k8s.io/component-helpers v0.31.7
 ## explicit; go 1.22.0
 k8s.io/component-helpers/node/util
-# k8s.io/controller-manager v0.31.6
+# k8s.io/controller-manager v0.31.7
 ## explicit; go 1.22.0
 k8s.io/controller-manager/app
 k8s.io/controller-manager/config
@@ -1519,7 +1519,7 @@ k8s.io/kube-openapi/pkg/validation/errors
 k8s.io/kube-openapi/pkg/validation/spec
 k8s.io/kube-openapi/pkg/validation/strfmt
 k8s.io/kube-openapi/pkg/validation/strfmt/bson
-# k8s.io/kubelet v0.31.6
+# k8s.io/kubelet v0.31.7
 ## explicit; go 1.22.0
 k8s.io/kubelet/pkg/apis/credentialprovider
 k8s.io/kubelet/pkg/apis/credentialprovider/install
@@ -1547,8 +1547,8 @@ sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client/metrics
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/common/metrics
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/proto/client
-# sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.12
-## explicit; go 1.23.1
+# sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.13
+## explicit; go 1.23.0
 sigs.k8s.io/cloud-provider-azure/pkg/azclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient/mock_accountclient
@@ -1632,8 +1632,8 @@ sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworkclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworkclient/mock_virtualnetworkclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient/mock_virtualnetworklinkclient
-# sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.4.1
-## explicit; go 1.23.1
+# sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.4.2
+## explicit; go 1.23.0
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader
 # sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3
 ## explicit; go 1.21
