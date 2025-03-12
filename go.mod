@@ -44,16 +44,16 @@ require (
 	golang.org/x/text v0.23.0
 	k8s.io/api v0.31.1
 	k8s.io/apimachinery v0.31.1
-	k8s.io/apiserver v0.29.14
+	k8s.io/apiserver v0.29.15
 	k8s.io/client-go v0.31.1
-	k8s.io/cloud-provider v0.29.14
-	k8s.io/component-base v0.29.14
-	k8s.io/component-helpers v0.29.14
-	k8s.io/controller-manager v0.29.14
+	k8s.io/cloud-provider v0.29.15
+	k8s.io/component-base v0.29.15
+	k8s.io/component-helpers v0.29.15
+	k8s.io/controller-manager v0.29.15
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/kubelet v0.29.14
+	k8s.io/kubelet v0.29.15
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.9
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.13
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.29
 	sigs.k8s.io/yaml v1.4.0
 )
@@ -74,7 +74,7 @@ require (
 	github.com/Azure/go-autorest/autorest/to v0.4.0 // indirect
 	github.com/Azure/go-autorest/autorest/validation v0.3.1 // indirect
 	github.com/Azure/go-autorest/logger v0.2.1 // indirect
-	github.com/Azure/msi-dataplane v0.4.2 // indirect
+	github.com/Azure/msi-dataplane v0.4.3 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.4.0 // indirect
 	github.com/NYTimes/gziphandler v1.1.1 // indirect
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230305170008-8188dc5388df // indirect
@@ -154,7 +154,7 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/kms v0.29.14 // indirect
+	k8s.io/kms v0.29.15 // indirect
 	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.28.0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
