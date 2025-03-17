@@ -323,7 +323,10 @@ func StartHTTPServer(ctx context.Context, c *cloudcontrollerconfig.CompletedConf
 	if c.SecureServing != nil {
 		unsecuredMux := genericcontrollermanager.NewBaseHandler(&c.ComponentConfig.Generic.Debugging, healthzHandler)
 
-		unsecuredMux.Handle("/metrics/v2", traceProvider.MetricsHTTPHandler()) // Add metricsv2 endpoint
+		const MetricsPath = "/metrics"
+		unsecuredMux.Unregister(MetricsPath) // Unregisterer handler of legacy registerer
+		unsecuredMux.Handle(MetricsPath, traceProvider.MetricsHTTPHandler())
+		unsecuredMux.Handle("/metrics/v2", traceProvider.MetricsHTTPHandler()) // Will remove in the future after migration
 
 		handler := genericcontrollermanager.BuildHandlerChain(unsecuredMux, &c.Authorization, &c.Authentication)
 		// TODO: handle stoppedCh returned by c.SecureServing.Serve
