@@ -14,6 +14,6 @@
 
 # syntax=docker/dockerfile:1
 
-FROM gcr.io/distroless/base:latest@sha256:74ddbf52d93fafbdd21b399271b0b4aac1babf8fa98cab59e5692e01169a1348
+FROM gcr.io/distroless/base:latest@sha256:125eb09bbd8e818da4f9eac0dfc373892ca75bec4630aa642d315ecf35c1afb7
 COPY bin/health-probe-proxy /usr/local/bin/health-probe-proxy
 ENTRYPOINT [ "/usr/local/bin/health-probe-proxy" ]
