@@ -271,6 +271,11 @@ func (a *acrProvider) processImageWithRegistryMirror(image string) (string, stri
 func parseRegistryMirror(registryMirrorStr string) map[string]string {
 	registryMirror := map[string]string{}
 
+	registryMirrorStr = strings.TrimSpace(registryMirrorStr)
+	if len(registryMirrorStr) == 0 {
+		return registryMirror
+	}
+
 	registryMirrorStr = strings.ReplaceAll(registryMirrorStr, " ", "")
 	for _, mapping := range strings.Split(registryMirrorStr, ",") {
 		parts := strings.Split(mapping, ":")

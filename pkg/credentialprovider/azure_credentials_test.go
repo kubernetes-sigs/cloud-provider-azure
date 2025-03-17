@@ -297,6 +297,11 @@ func TestProcessMirrorMapping(t *testing.T) {
 		expected         map[string]string
 	}{
 		{
+			"empty",
+			"",
+			map[string]string{},
+		},
+		{
 			"multiple",
 			"aaa:bbb,ccc:ddd",
 			map[string]string{
