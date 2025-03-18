@@ -1057,6 +1057,12 @@ func (ss *ScaleSet) EnsureHostInPool(ctx context.Context, _ *v1.Service, nodeNam
 			return "", "", "", nil, err
 		}
 	}
+	// In some cases (e.g., BYO nodes), we may get an ErrorNotVmssInstance error,
+	// but it has been ignored above, so a nil check is needed here to prevent panic.
+	if vm == nil {
+		logger.Info("vmss vm not found, skip adding to backend pool", "vmName", vmName)
+		return "", "", "", nil, nil
+	}
 	statuses := vm.GetInstanceViewStatus()
 	vmPowerState := vmutil.GetVMPowerState(vm.Name, statuses)
 	provisioningState := vm.GetProvisioningState()
