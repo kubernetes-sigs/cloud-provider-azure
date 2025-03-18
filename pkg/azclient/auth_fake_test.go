@@ -18,7 +18,10 @@ package azclient
 
 import (
 	"context"
+	"fmt"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
@@ -26,17 +29,22 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+var (
+	incCounter = atomic.Int64{}
+)
+
 type fakeTokenCredential struct {
 	ID string
 }
 
-func NewFakeTokenCredential(id string) *fakeTokenCredential {
+func newFakeTokenCredential() *fakeTokenCredential {
+	id := fmt.Sprintf("fake-token-credential-%d-%d", incCounter.Add(1), time.Now().UnixNano())
 	return &fakeTokenCredential{ID: id}
 }
 
 func (f *fakeTokenCredential) GetToken(
-	ctx context.Context,
-	options policy.TokenRequestOptions,
+	_ context.Context,
+	_ policy.TokenRequestOptions,
 ) (azcore.AccessToken, error) {
 	panic("not implemented")
 }
@@ -51,7 +59,7 @@ func ApplyAssertions(t testing.TB, authProvider *AuthProvider, assertions []Auth
 	}
 }
 
-func AssertComputeTokenCredential(expectedID string) AuthProviderAssertions {
+func AssertComputeTokenCredential(tokenCredential *fakeTokenCredential) AuthProviderAssertions {
 	return func(t testing.TB, authProvider *AuthProvider) {
 		t.Helper()
 
@@ -59,11 +67,11 @@ func AssertComputeTokenCredential(expectedID string) AuthProviderAssertions {
 
 		cred, ok := authProvider.ComputeCredential.(*fakeTokenCredential)
 		assert.True(t, ok, "expected a fake token credential")
-		assert.Equal(t, expectedID, cred.ID)
+		assert.Equal(t, tokenCredential.ID, cred.ID)
 	}
 }
 
-func AssertNetworkTokenCredential(expectedID string) AuthProviderAssertions {
+func AssertNetworkTokenCredential(tokenCredential *fakeTokenCredential) AuthProviderAssertions {
 	return func(t testing.TB, authProvider *AuthProvider) {
 		t.Helper()
 
@@ -71,7 +79,7 @@ func AssertNetworkTokenCredential(expectedID string) AuthProviderAssertions {
 
 		cred, ok := authProvider.NetworkCredential.(*fakeTokenCredential)
 		assert.True(t, ok, "expected a fake token credential")
-		assert.Equal(t, expectedID, cred.ID)
+		assert.Equal(t, tokenCredential.ID, cred.ID)
 	}
 }
 

@@ -36,19 +36,18 @@ func TestNewAuthProvider(t *testing.T) {
 	t.Parallel()
 
 	var (
-		testTenantID                     = faker.UUIDHyphenated()
-		testNetworkTenantID              = faker.UUIDHyphenated()
-		testAADClientID                  = faker.UUIDHyphenated()
-		testAADClientSecret              = faker.Password()
-		testAADClientCertPath            = "/path/to/cert.pem"
-		testIdentityPath                 = "/var/run/identity.json"
-		testFederatedTokenPath           = "/var/run/secrets/token"
-		testCloudConfig                  = cloud.AzurePublic
-		testFakeComputeTokenCredentialID = "fake-compute-token-credential"
-		testFakeComputeTokenCredential   = NewFakeTokenCredential(testFakeComputeTokenCredentialID)
-		testFakeNetworkTokenCredentialID = "fake-network-token-credential"
-		testFakeNetworkTokenCredential   = NewFakeTokenCredential(testFakeNetworkTokenCredentialID)
-		testErr                          = errors.New("test error")
+		testTenantID                   = faker.UUIDHyphenated()
+		testNetworkTenantID            = faker.UUIDHyphenated()
+		testAADClientID                = faker.UUIDHyphenated()
+		testAADClientSecret            = faker.Password()
+		testAADClientCertPath          = faker.Word()
+		testAADClientCertPassword      = faker.Password()
+		testIdentityPath               = faker.Word()
+		testFederatedTokenPath         = faker.Word()
+		testCloudConfig                = cloud.AzurePublic
+		testFakeComputeTokenCredential = newFakeTokenCredential()
+		testFakeNetworkTokenCredential = newFakeTokenCredential()
+		testErr                        = errors.New("test error")
 	)
 
 	testARMConfig := &ARMClientConfig{
@@ -92,13 +91,13 @@ func TestNewAuthProvider(t *testing.T) {
 			},
 			Options: []AuthProviderOption{
 				func(option *authProviderOptions) {
-					option.NewWorkloadIdentityCredentialFn = func(options *azidentity.WorkloadIdentityCredentialOptions) (azcore.TokenCredential, error) {
+					option.NewWorkloadIdentityCredentialFn = func(_ *azidentity.WorkloadIdentityCredentialOptions) (azcore.TokenCredential, error) {
 						return testFakeComputeTokenCredential, nil
 					}
 				},
 			},
 			Assertions: []AuthProviderAssertions{
-				AssertComputeTokenCredential(testFakeComputeTokenCredentialID),
+				AssertComputeTokenCredential(testFakeComputeTokenCredential),
 				AssertNilNetworkTokenCredential(),
 				AssertEmptyAdditionalComputeClientOptions(),
 				AssertCloudConfig(testCloudConfig),
@@ -112,13 +111,13 @@ func TestNewAuthProvider(t *testing.T) {
 			},
 			Options: []AuthProviderOption{
 				func(option *authProviderOptions) {
-					option.NewManagedIdentityCredentialFn = func(options *azidentity.ManagedIdentityCredentialOptions) (azcore.TokenCredential, error) {
+					option.NewManagedIdentityCredentialFn = func(_ *azidentity.ManagedIdentityCredentialOptions) (azcore.TokenCredential, error) {
 						return testFakeComputeTokenCredential, nil
 					}
 				},
 			},
 			Assertions: []AuthProviderAssertions{
-				AssertComputeTokenCredential(testFakeComputeTokenCredentialID),
+				AssertComputeTokenCredential(testFakeComputeTokenCredential),
 				AssertNilNetworkTokenCredential(),
 				AssertEmptyAdditionalComputeClientOptions(),
 				AssertCloudConfig(testCloudConfig),
@@ -132,7 +131,7 @@ func TestNewAuthProvider(t *testing.T) {
 			},
 			Options: []AuthProviderOption{
 				func(option *authProviderOptions) {
-					option.NewManagedIdentityCredentialFn = func(options *azidentity.ManagedIdentityCredentialOptions) (azcore.TokenCredential, error) {
+					option.NewManagedIdentityCredentialFn = func(_ *azidentity.ManagedIdentityCredentialOptions) (azcore.TokenCredential, error) {
 						return nil, testErr
 					}
 				},
@@ -149,12 +148,16 @@ func TestNewAuthProvider(t *testing.T) {
 			Options: []AuthProviderOption{
 				func(option *authProviderOptions) {
 					option.NewClientSecretCredentialFn = func(tenantID, clientID, clientSecret string, options *azidentity.ClientSecretCredentialOptions) (azcore.TokenCredential, error) {
+						assert.Equal(t, testTenantID, tenantID)
+						assert.Equal(t, testAADClientID, clientID)
+						assert.Equal(t, testAADClientSecret, clientSecret)
+						assert.Equal(t, testCloudConfig, options.ClientOptions.Cloud)
 						return testFakeComputeTokenCredential, nil
 					}
 				},
 			},
 			Assertions: []AuthProviderAssertions{
-				AssertComputeTokenCredential(testFakeComputeTokenCredentialID),
+				AssertComputeTokenCredential(testFakeComputeTokenCredential),
 				AssertNilNetworkTokenCredential(),
 				AssertEmptyAdditionalComputeClientOptions(),
 				AssertCloudConfig(testCloudConfig),
@@ -164,24 +167,32 @@ func TestNewAuthProvider(t *testing.T) {
 			Name:      "success with service principal client certificate",
 			ARMConfig: testARMConfig,
 			AuthConfig: &AzureAuthConfig{
-				AADClientID:       testAADClientID,
-				AADClientCertPath: testAADClientCertPath,
+				AADClientID:           testAADClientID,
+				AADClientCertPath:     testAADClientCertPath,
+				AADClientCertPassword: testAADClientCertPassword,
 			},
 			Options: []AuthProviderOption{
 				func(option *authProviderOptions) {
+					testCertData := []byte(faker.Word())
 					option.ReadFileFn = func(name string) ([]byte, error) {
-						return []byte("test-cert-data"), nil
+						assert.Equal(t, testAADClientCertPath, name)
+						return testCertData, nil
 					}
 					option.ParseCertificatesFn = func(certData []byte, password []byte) ([]*x509.Certificate, crypto.PrivateKey, error) {
+						assert.Equal(t, testCertData, certData)
+						assert.Equal(t, []byte(testAADClientCertPassword), password)
 						return []*x509.Certificate{{}}, struct{ crypto.PrivateKey }{}, nil
 					}
-					option.NewClientCertificateCredentialFn = func(tenantID string, clientID string, certs []*x509.Certificate, key crypto.PrivateKey, options *azidentity.ClientCertificateCredentialOptions) (azcore.TokenCredential, error) {
+					option.NewClientCertificateCredentialFn = func(tenantID, clientID string, _ []*x509.Certificate, _ crypto.PrivateKey, options *azidentity.ClientCertificateCredentialOptions) (azcore.TokenCredential, error) {
+						assert.Equal(t, testTenantID, tenantID)
+						assert.Equal(t, testAADClientID, clientID)
+						assert.Equal(t, testCloudConfig, options.ClientOptions.Cloud)
 						return testFakeComputeTokenCredential, nil
 					}
 				},
 			},
 			Assertions: []AuthProviderAssertions{
-				AssertComputeTokenCredential(testFakeComputeTokenCredentialID),
+				AssertComputeTokenCredential(testFakeComputeTokenCredential),
 				AssertNilNetworkTokenCredential(),
 				AssertEmptyAdditionalComputeClientOptions(),
 				AssertCloudConfig(testCloudConfig),
@@ -195,13 +206,14 @@ func TestNewAuthProvider(t *testing.T) {
 			},
 			Options: []AuthProviderOption{
 				func(option *authProviderOptions) {
-					option.NewUserAssignedIdentityCredentialFn = func(ctx context.Context, credentialPath string, opts ...dataplane.Option) (azcore.TokenCredential, error) {
+					option.NewUserAssignedIdentityCredentialFn = func(_ context.Context, credentialPath string, _ ...dataplane.Option) (azcore.TokenCredential, error) {
+						assert.Equal(t, testIdentityPath, credentialPath)
 						return testFakeComputeTokenCredential, nil
 					}
 				},
 			},
 			Assertions: []AuthProviderAssertions{
-				AssertComputeTokenCredential(testFakeComputeTokenCredentialID),
+				AssertComputeTokenCredential(testFakeComputeTokenCredential),
 				AssertNilNetworkTokenCredential(),
 				AssertEmptyAdditionalComputeClientOptions(),
 				AssertCloudConfig(testCloudConfig),
@@ -217,6 +229,10 @@ func TestNewAuthProvider(t *testing.T) {
 			Options: []AuthProviderOption{
 				func(option *authProviderOptions) {
 					option.NewClientSecretCredentialFn = func(tenantID, clientID, clientSecret string, options *azidentity.ClientSecretCredentialOptions) (azcore.TokenCredential, error) {
+						assert.Equal(t, testTenantID, tenantID)
+						assert.Equal(t, testAADClientID, clientID)
+						assert.Equal(t, testAADClientSecret, clientSecret)
+						assert.Equal(t, testCloudConfig, options.ClientOptions.Cloud)
 						return testFakeComputeTokenCredential, nil
 					}
 				},
@@ -226,7 +242,7 @@ func TestNewAuthProvider(t *testing.T) {
 				}),
 			},
 			Assertions: []AuthProviderAssertions{
-				AssertComputeTokenCredential(testFakeComputeTokenCredentialID),
+				AssertComputeTokenCredential(testFakeComputeTokenCredential),
 				AssertNilNetworkTokenCredential(),
 				AssertEmptyAdditionalComputeClientOptions(),
 				AssertCloudConfig(testCloudConfig),
@@ -243,15 +259,24 @@ func TestNewAuthProvider(t *testing.T) {
 				func(option *authProviderOptions) {
 					option.NewClientSecretCredentialFn = func(tenantID, clientID, clientSecret string, options *azidentity.ClientSecretCredentialOptions) (azcore.TokenCredential, error) {
 						if tenantID == testNetworkTenantID {
+							assert.Equal(t, testNetworkTenantID, tenantID)
+							assert.Equal(t, testAADClientID, clientID)
+							assert.Equal(t, testAADClientSecret, clientSecret)
+							assert.Equal(t, testCloudConfig, options.ClientOptions.Cloud)
 							return testFakeNetworkTokenCredential, nil
 						}
+
+						assert.Equal(t, testTenantID, tenantID)
+						assert.Equal(t, testAADClientID, clientID)
+						assert.Equal(t, testAADClientSecret, clientSecret)
+						assert.Equal(t, testCloudConfig, options.ClientOptions.Cloud)
 						return testFakeComputeTokenCredential, nil
 					}
 				},
 			},
 			Assertions: []AuthProviderAssertions{
-				AssertComputeTokenCredential(testFakeComputeTokenCredentialID),
-				AssertNetworkTokenCredential(testFakeNetworkTokenCredentialID),
+				AssertComputeTokenCredential(testFakeComputeTokenCredential),
+				AssertNetworkTokenCredential(testFakeNetworkTokenCredential),
 				AssertEmptyAdditionalComputeClientOptions(),
 				AssertCloudConfig(testCloudConfig),
 			},
