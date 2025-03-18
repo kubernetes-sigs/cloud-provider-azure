@@ -124,6 +124,8 @@ func newAuthProviderWithManagedIdentity(
 	return rv, nil
 }
 
+// newAuthProviderWithServicePrincipalClientSecret creates a new AuthProvider with service principal client secret.
+// When multi-tenant is enabled, it creates a compute credential with additional allowed tenants for cross-tenant access.
 func newAuthProviderWithServicePrincipalClientSecret(
 	armConfig *ARMClientConfig,
 	config *AzureAuthConfig,
@@ -199,6 +201,8 @@ func newAuthProviderWithServicePrincipalClientSecret(
 	}, nil
 }
 
+// newAuthProviderWithServicePrincipalClientCertificate creates a new AuthProvider with service principal client certificate.
+// When multi-tenant is enabled, it creates a compute credential with additional allowed tenants for cross-tenant access.
 func newAuthProviderWithServicePrincipalClientCertificate(
 	armConfig *ARMClientConfig,
 	config *AzureAuthConfig,
