@@ -1,67 +1,80 @@
 package status
 
 import (
+	"context"
+	"encoding/json"
 	"github.com/Azure/azure-kusto-go/azkustoingest/internal/resources"
-	"github.com/Azure/azure-sdk-for-go/storage"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/data/aztables"
 	"github.com/google/uuid"
+	"time"
 )
 
 const (
-	defaultTimeoutMsec = 10000
-	fullMetadata       = "application/json;odata=fullmetadata"
+	defaultTimeoutSeconds = 10
+	fullMetadata          = aztables.MetadataFormatFull
 )
 
 // TableClient allows reading and writing to azure tables.
 type TableClient struct {
 	tableURI resources.URI
-	client   storage.Client
-	service  storage.TableServiceClient
-	table    *storage.Table
+	client   *aztables.Client
 }
 
 // NewTableClient Creates an azure table client.
-func NewTableClient(uri resources.URI) (*TableClient, error) {
-	c, err := storage.NewAccountSASClientFromEndpointToken(uri.URL().String(), uri.SAS().Encode())
+func NewTableClient(client policy.Transporter, uri resources.URI) (*TableClient, error) {
+	tableClient, err := aztables.NewClientWithNoCredential(uri.String(), &aztables.ClientOptions{
+		ClientOptions: azcore.ClientOptions{
+			Transport: client,
+		},
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	ts := c.GetTableService()
 
 	return &TableClient{
 		tableURI: uri,
-		client:   c,
-		service:  ts,
-		table:    ts.GetTableReference(uri.ObjectName()),
+		client:   tableClient,
 	}, nil
 }
 
-// Read reads a table record cotaining ingestion status.
-func (c *TableClient) Read(ingestionSourceID string) (map[string]interface{}, error) {
+// Read reads a table record containing ingestion status.
+func (c *TableClient) Read(ctx context.Context, ingestionSourceID string) (map[string]interface{}, error) {
 	var emptyID = uuid.Nil.String()
-	entity := c.table.GetEntityReference(ingestionSourceID, emptyID)
-
-	err := entity.Get(defaultTimeoutMsec, fullMetadata, nil)
+	entity, err := c.client.GetEntity(ctx, ingestionSourceID, emptyID, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return entity.Properties, nil
+	bytes := entity.Value
+	m := make(map[string]interface{})
+	err = json.Unmarshal(bytes, &m)
+	if err != nil {
+		return nil, err
+	}
+
+	return m, nil
 }
 
-// Write reads a table record cotaining ingestion status.
-func (c *TableClient) Write(ingestionSourceID string, data map[string]interface{}) error {
-	var emptyID = uuid.Nil.String()
-	entity := c.table.GetEntityReference(ingestionSourceID, emptyID)
-	entity.Properties = data
+// Write reads a table record containing ingestion status.
+func (c *TableClient) Write(ctx context.Context, ingestionSourceID string, data map[string]interface{}) error {
+	ctx, cancel := context.WithTimeout(ctx, defaultTimeoutSeconds*time.Second)
+	defer cancel()
 
-	options := &storage.EntityOptions{}
-	options.Timeout = defaultTimeoutMsec
+	data["PartitionKey"] = ingestionSourceID
+	data["RowKey"] = uuid.Nil.String()
 
-	err := entity.Insert(fullMetadata, options)
+	bytes, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}
 
-	return nil
+	format := fullMetadata
+
+	_, err = c.client.AddEntity(ctx, bytes, &aztables.AddEntityOptions{
+		Format: &format,
+	})
+
+	return err
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/Azure/azure-kusto-go/azkustodata/kql"
 	"github.com/Azure/azure-kusto-go/azkustodata/query"
+	"github.com/Azure/azure-kusto-go/azkustodata/value"
 	v1 "github.com/Azure/azure-kusto-go/azkustodata/query/v1"
 	queryv2 "github.com/Azure/azure-kusto-go/azkustodata/query/v2"
 	"io"
@@ -242,6 +243,8 @@ func setQueryOptions(ctx context.Context, op errors.Op, query Statement, queryTy
 	return opt, nil
 }
 
+var nower = time.Now
+
 func CalculateTimeout(ctx context.Context, opt *queryOptions, queryType int) {
 	// If the user has specified a timeout, use that.
 	if val, ok := opt.requestProperties.Options[NoRequestTimeoutValue]; ok && val.(bool) {
@@ -253,7 +256,7 @@ func CalculateTimeout(ctx context.Context, opt *queryOptions, queryType int) {
 
 	// Otherwise use the context deadline, if it exists. If it doesn't, use the default timeout.
 	if deadline, ok := ctx.Deadline(); ok {
-		opt.requestProperties.Options[ServerTimeoutValue] = deadline.Sub(time.Now())
+		opt.requestProperties.Options[ServerTimeoutValue] = value.TimespanString(deadline.Sub(nower()))
 		return
 	}
 
@@ -264,7 +267,7 @@ func CalculateTimeout(ctx context.Context, opt *queryOptions, queryType int) {
 	case mgmtCall:
 		timeout = defaultMgmtTimeout
 	}
-	opt.requestProperties.Options[ServerTimeoutValue] = timeout + clientServerDelta
+	opt.requestProperties.Options[ServerTimeoutValue] = value.TimespanString(timeout)
 }
 
 func (c *Client) getConn(callType callType, options connOptions) (queryer, error) {
