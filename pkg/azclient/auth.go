@@ -17,19 +17,17 @@ limitations under the License.
 package azclient
 
 import (
-	"context"
+	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/Azure/msi-dataplane/pkg/dataplane"
+)
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/armauth"
+var (
+	ErrNoValidAuthMethodFound = errors.New("no valid authentication method found")
 )
 
 type AuthProvider struct {
@@ -42,209 +40,36 @@ type AuthProvider struct {
 func NewAuthProvider(
 	armConfig *ARMClientConfig,
 	config *AzureAuthConfig,
-	clientOptionsMutFn ...func(option *policy.ClientOptions),
+	options ...AuthProviderOption,
 ) (*AuthProvider, error) {
+	opts := defaultAuthProviderOptions()
+	for _, opt := range options {
+		opt(opts)
+	}
+
 	clientOption, _, err := GetAzCoreClientOption(armConfig)
 	if err != nil {
 		return nil, err
 	}
-	for _, fn := range clientOptionsMutFn {
+	for _, fn := range opts.ClientOptionsMutFn {
 		fn(clientOption)
 	}
-	var (
-		computeCredential              azcore.TokenCredential
-		networkCredential              azcore.TokenCredential
-		additionalComputeClientOptions []func(option *arm.ClientOptions)
-	)
 
-	// federatedIdentityCredential is used for workload identity federation
-	if aadFederatedTokenFile, enabled := config.GetAzureFederatedTokenFile(); enabled {
-		computeCredential, err = azidentity.NewWorkloadIdentityCredential(&azidentity.WorkloadIdentityCredentialOptions{
-			ClientOptions: *clientOption,
-			ClientID:      config.GetAADClientID(),
-			TenantID:      armConfig.GetTenantID(),
-			TokenFilePath: aadFederatedTokenFile,
-		})
-		if err != nil {
-			return nil, err
-		}
+	aadFederatedTokenFile, federatedTokenEnabled := config.GetAzureFederatedTokenFile()
+	switch {
+	case federatedTokenEnabled:
+		return newAuthProviderWithWorkloadIdentity(aadFederatedTokenFile, armConfig, config, clientOption, opts)
+	case config.UseManagedIdentityExtension:
+		return newAuthProviderWithManagedIdentity(armConfig, config, clientOption, opts)
+	case len(config.GetAADClientSecret()) > 0:
+		return newAuthProviderWithServicePrincipalClientSecret(armConfig, config, clientOption, opts)
+	case len(config.AADClientCertPath) > 0:
+		return newAuthProviderWithServicePrincipalClientCertificate(armConfig, config, clientOption, opts)
+	case len(config.AADMSIDataPlaneIdentityPath) > 0:
+		return newAuthProviderWithUserAssignedIdentity(config, clientOption, opts)
+	default:
+		return nil, ErrNoValidAuthMethodFound
 	}
-
-	// managedIdentityCredential is used for managed identity extension
-	if computeCredential == nil && config.UseManagedIdentityExtension {
-		credOptions := &azidentity.ManagedIdentityCredentialOptions{
-			ClientOptions: *clientOption,
-		}
-		if len(config.UserAssignedIdentityID) > 0 {
-			if strings.Contains(strings.ToUpper(config.UserAssignedIdentityID), "/SUBSCRIPTIONS/") {
-				credOptions.ID = azidentity.ResourceID(config.UserAssignedIdentityID)
-			} else {
-				credOptions.ID = azidentity.ClientID(config.UserAssignedIdentityID)
-			}
-		}
-		computeCredential, err = azidentity.NewManagedIdentityCredential(credOptions)
-		if err != nil {
-			return nil, err
-		}
-		if config.AuxiliaryTokenProvider != nil && IsMultiTenant(armConfig) {
-			// Use AuxiliaryTokenProvider as the network credential
-			networkCredential, err = armauth.NewKeyVaultCredential(
-				computeCredential,
-				config.AuxiliaryTokenProvider.SecretResourceID(),
-			)
-			if err != nil {
-				return nil, fmt.Errorf("create KeyVaultCredential for auxiliary token provider: %w", err)
-			}
-
-			// Additionally, we need to add the auxiliary token to the HTTP header when making requests to the compute resources
-			additionalComputeClientOptions = append(additionalComputeClientOptions, func(option *arm.ClientOptions) {
-				option.PerRetryPolicies = append(option.PerRetryPolicies, armauth.NewAuxiliaryAuthPolicy(
-					[]azcore.TokenCredential{networkCredential},
-					DefaultTokenScopeFor(clientOption.Cloud),
-				))
-			})
-		}
-	}
-
-	// Client secret authentication
-	if computeCredential == nil && len(config.GetAADClientSecret()) > 0 {
-		if IsMultiTenant(armConfig) {
-
-			// Network credential for network resource access
-			{
-				credOptions := &azidentity.ClientSecretCredentialOptions{
-					ClientOptions: *clientOption,
-				}
-				networkCredential, err = azidentity.NewClientSecretCredential(
-					armConfig.NetworkResourceTenantID,
-					config.GetAADClientID(),
-					config.GetAADClientSecret(),
-					credOptions,
-				)
-				if err != nil {
-					return nil, err
-				}
-			}
-
-			// Compute credential with additional allowed tenants for cross-tenant access
-			{
-				credOptions := &azidentity.ClientSecretCredentialOptions{
-					ClientOptions:              *clientOption,
-					AdditionallyAllowedTenants: []string{armConfig.NetworkResourceTenantID},
-				}
-				computeCredential, err = azidentity.NewClientSecretCredential(
-					armConfig.GetTenantID(),
-					config.GetAADClientID(),
-					config.GetAADClientSecret(),
-					credOptions,
-				)
-				if err != nil {
-					return nil, err
-				}
-			}
-		} else {
-			// Single tenant
-			credOptions := &azidentity.ClientSecretCredentialOptions{
-				ClientOptions: *clientOption,
-			}
-			computeCredential, err = azidentity.NewClientSecretCredential(
-				armConfig.GetTenantID(),
-				config.GetAADClientID(),
-				config.GetAADClientSecret(),
-				credOptions,
-			)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	// ClientCertificateCredential is used for client certificate
-	if computeCredential == nil && len(config.AADClientCertPath) > 0 {
-		certData, err := os.ReadFile(config.AADClientCertPath)
-		if err != nil {
-			return nil, fmt.Errorf("reading the client certificate from file %s: %w", config.AADClientCertPath, err)
-		}
-		certificate, privateKey, err := azidentity.ParseCertificates(certData, []byte(config.AADClientCertPassword))
-		if err != nil {
-			return nil, fmt.Errorf("decoding the client certificate: %w", err)
-		}
-
-		if IsMultiTenant(armConfig) {
-
-			// Network credential for network resource access
-			{
-				credOptions := &azidentity.ClientCertificateCredentialOptions{
-					ClientOptions:        *clientOption,
-					SendCertificateChain: true,
-				}
-				networkCredential, err = azidentity.NewClientCertificateCredential(
-					armConfig.NetworkResourceTenantID,
-					config.GetAADClientID(),
-					certificate,
-					privateKey,
-					credOptions,
-				)
-				if err != nil {
-					return nil, err
-				}
-			}
-
-			// Compute credential with additional allowed tenants for cross-tenant access
-			{
-				credOptions := &azidentity.ClientCertificateCredentialOptions{
-					ClientOptions:              *clientOption,
-					AdditionallyAllowedTenants: []string{armConfig.NetworkResourceTenantID},
-					SendCertificateChain:       true,
-				}
-				computeCredential, err = azidentity.NewClientCertificateCredential(
-					armConfig.GetTenantID(),
-					config.GetAADClientID(),
-					certificate,
-					privateKey,
-					credOptions,
-				)
-				if err != nil {
-					return nil, err
-				}
-			}
-		} else {
-			// Single tenant
-			credOptions := &azidentity.ClientCertificateCredentialOptions{
-				ClientOptions:        *clientOption,
-				SendCertificateChain: true,
-			}
-			computeCredential, err = azidentity.NewClientCertificateCredential(
-				armConfig.GetTenantID(),
-				config.GetAADClientID(),
-				certificate,
-				privateKey,
-				credOptions,
-			)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	// UserAssignedIdentityCredentials authentication
-	if computeCredential == nil && len(config.AADMSIDataPlaneIdentityPath) > 0 {
-		computeCredential, err = dataplane.NewUserAssignedIdentityCredential(
-			context.Background(),
-			config.AADMSIDataPlaneIdentityPath,
-			dataplane.WithClientOpts(azcore.ClientOptions{Cloud: clientOption.Cloud}),
-		)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return &AuthProvider{
-		ComputeCredential:              computeCredential,
-		AdditionalComputeClientOptions: additionalComputeClientOptions,
-		NetworkCredential:              networkCredential,
-		CloudConfig:                    clientOption.Cloud,
-	}, nil
 }
 
 func (factory *AuthProvider) GetAzIdentity() azcore.TokenCredential {
