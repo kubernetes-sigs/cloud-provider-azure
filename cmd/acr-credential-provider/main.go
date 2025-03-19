@@ -29,6 +29,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/credentialprovider"
+	"sigs.k8s.io/cloud-provider-azure/pkg/version"
 )
 
 func main() {
@@ -37,10 +38,11 @@ func main() {
 	var RegistryMirrorStr string
 
 	command := &cobra.Command{
-		Use:   "acr-credential-provider configFile",
-		Short: "Acr credential provider for Kubelet",
-		Long:  `The acr credential provider is responsible for providing ACR credentials for kubelet`,
-		Args:  cobra.MinimumNArgs(1),
+		Use:     "acr-credential-provider configFile",
+		Short:   "Acr credential provider for Kubelet",
+		Long:    `The acr credential provider is responsible for providing ACR credentials for kubelet`,
+		Args:    cobra.MinimumNArgs(1),
+		Version: version.Get().GitVersion,
 		Run: func(_ *cobra.Command, args []string) {
 			if len(args) != 1 {
 				klog.Errorf("Config file is not specified")
@@ -67,6 +69,7 @@ func main() {
 	command.Flags().StringVarP(&RegistryMirrorStr, "registry-mirror", "r", "",
 		"Mirror a source registry host to a target registry host, and image pull credential will be requested to the target registry host when the image is from source registry host")
 
+	logs.AddFlags(command.Flags())
 	if err := command.Execute(); err != nil {
 		os.Exit(1)
 	}
