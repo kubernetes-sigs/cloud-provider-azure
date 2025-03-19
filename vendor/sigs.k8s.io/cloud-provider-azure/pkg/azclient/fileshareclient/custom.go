@@ -25,7 +25,16 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/metrics"
 )
 
+const CreateOperationName = "FileSharesClient.Create"
+const DeleteOperationName = "FileSharesClient.Delete"
+const UpdateOperationName = "FileSharesClient.Update"
+
 func (client *Client) Create(ctx context.Context, resourceGroupName string, resourceName string, parentResourceName string, resource armstorage.FileShare, expand *string) (*armstorage.FileShare, error) {
+	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "FileShare", "create")
+	defer func() { metricsCtx.Observe(ctx, nil) }()
+	ctx, endSpan := runtime.StartSpan(ctx, CreateOperationName, client.tracer, nil)
+	defer endSpan(nil)
+
 	resp, err := client.FileSharesClient.Create(ctx, resourceGroupName, resourceName, parentResourceName, resource, &armstorage.FileSharesClientCreateOptions{
 		Expand: expand,
 	})
@@ -36,6 +45,11 @@ func (client *Client) Create(ctx context.Context, resourceGroupName string, reso
 }
 
 func (client *Client) Update(ctx context.Context, resourceGroupName string, resourceName string, parentResourceName string, resource armstorage.FileShare) (*armstorage.FileShare, error) {
+	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "FileShare", "update")
+	defer func() { metricsCtx.Observe(ctx, nil) }()
+	ctx, endSpan := runtime.StartSpan(ctx, UpdateOperationName, client.tracer, nil)
+	defer endSpan(nil)
+
 	resp, err := client.FileSharesClient.Update(ctx, resourceGroupName, resourceName, parentResourceName, resource, nil)
 	if err != nil {
 		return nil, err
@@ -45,6 +59,11 @@ func (client *Client) Update(ctx context.Context, resourceGroupName string, reso
 
 // Delete deletes a FileShare by name.
 func (client *Client) Delete(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string, expand *string) error {
+	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "FileShare", "delete")
+	defer func() { metricsCtx.Observe(ctx, nil) }()
+	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
+	defer endSpan(nil)
+
 	_, err := client.FileSharesClient.Delete(ctx, resourceGroupName, parentResourceName, resourceName, &armstorage.FileSharesClientDeleteOptions{
 		Include: expand,
 	})
