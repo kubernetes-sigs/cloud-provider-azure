@@ -172,7 +172,7 @@ func (i *Ingestion) fromFile(ctx context.Context, fPath string, options []FileOp
 		return nil, err
 	}
 
-	result.putQueued(i.mgr)
+	result.putQueued(ctx, i)
 	return result, nil
 }
 
@@ -196,7 +196,7 @@ func (i *Ingestion) fromReader(ctx context.Context, reader io.Reader, options []
 	}
 
 	result.record.IngestionSourcePath = path
-	result.putQueued(i.mgr)
+	result.putQueued(ctx, i)
 	return result, nil
 }
 
