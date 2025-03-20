@@ -2,6 +2,27 @@ apiVersion: v1
 entries:
   cloud-provider-azure:
   - apiVersion: v1
+    created: "2025-03-14T11:32:13.063447-06:00"
+    description: A Helm chart for installing kubernetes-sigs/cloud-provider-azure
+      components
+    digest: f6813c939f878c8183d0fffb8bd3b58b733c842017ef7c8cba71ba01ac1c94ea
+    home: https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-azure/master/helm/cloud-provider-azure/README.md
+    keywords:
+    - cloud-provider-azure
+    - kubernetes-sigs
+    - kubernetes
+    maintainers:
+    - email: jackfrancis@gmail.com
+      name: Jack Francis
+    - email: zhechengli1995@outlook.com
+      name: Zhecheng Li
+    name: cloud-provider-azure
+    sources:
+    - https://github.com/kubernetes-sigs/cloud-provider-azure
+    urls:
+    - cloud-provider-azure-1.32.3.tgz
+    version: 1.32.3
+  - apiVersion: v1
     created: "2025-02-06T10:51:20.953081-07:00"
     description: A Helm chart for installing kubernetes-sigs/cloud-provider-azure
       components
@@ -715,4 +736,4 @@ entries:
     urls:
     - cloud-provider-azure-1.23.8.tgz
     version: 1.23.8
-generated: "2025-02-06T10:51:20.952527-07:00"
+generated: "2025-03-14T11:32:13.06295-06:00"
