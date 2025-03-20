@@ -4,6 +4,7 @@ import (
 	"github.com/Azure/azure-kusto-go/azkustodata/value"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
+	"sort"
 	"strings"
 	"time"
 )
@@ -84,15 +85,19 @@ func (q *Parameters) ToDeclarationString() string {
 
 	build.WriteString(declare)
 
-	comma := len(q.parameters)
-	for key, paramVals := range q.parameters {
+	keys := make([]string, 0, len(q.parameters))
+	for k := range q.parameters {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for i, key := range keys {
 		build.WriteString(key)
 		build.WriteString(":")
-		build.WriteString(string(paramVals.GetType()))
-		if comma > 1 {
+		build.WriteString(string(q.parameters[key].GetType()))
+		if i < len(keys)-1 {
 			build.WriteString(", ")
 		}
-		comma--
 	}
 	build.WriteString(closeStmt)
 	return build.String()

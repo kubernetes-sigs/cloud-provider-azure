@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 	"sync"
 )
 
@@ -65,10 +64,11 @@ func GetMetadata(kustoUri string, httpClient *http.Client) (CloudInfo, error) {
 		if err != nil {
 			return CloudInfo{}, err
 		}
-		if !strings.HasPrefix(u.Path, "/") {
-			u.Path = "/" + u.Path
-		}
-		u = u.JoinPath(metadataPath)
+
+		// Auth metadata is always at the root of the cluster
+		u.Path = metadataPath
+		u.RawQuery = ""
+
 		// TODO should we make this timeout configurable.
 		req, err := http.NewRequest("GET", u.String(), nil)
 

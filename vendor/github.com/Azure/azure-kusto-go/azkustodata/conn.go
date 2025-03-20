@@ -233,7 +233,7 @@ func (c *Conn) getHeaders(properties requestProperties) http.Header {
 	header.Add("Accept-Encoding", "gzip, deflate")
 	header.Add("Content-Type", "application/json; charset=utf-8")
 	header.Add("Connection", "Keep-Alive")
-	header.Add("x-ms-version", "2019-02-13")
+	header.Add("x-ms-version", "2024-12-12")
 
 	if properties.ClientRequestID != "" {
 		header.Add(ClientRequestIdHeader, properties.ClientRequestID)

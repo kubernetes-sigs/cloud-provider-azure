@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/Azure/azure-kusto-go/azkustoingest/internal/properties"
-	"github.com/Azure/azure-kusto-go/azkustoingest/internal/resources"
 	"github.com/Azure/azure-kusto-go/azkustoingest/internal/status"
 )
 
@@ -33,7 +32,7 @@ func (r *Result) putProps(props properties.All) {
 }
 
 // putQueued sets the initial success status depending on status reporting state
-func (r *Result) putQueued(mgr *resources.Manager) {
+func (r *Result) putQueued(ctx context.Context, i *Ingestion) {
 	// If not checking status, just return queued
 	if !r.reportToTable {
 		r.record.Status = Queued
@@ -41,7 +40,7 @@ func (r *Result) putQueued(mgr *resources.Manager) {
 	}
 
 	// Get table URI
-	tableResources, err := mgr.GetTables()
+	tableResources, err := i.mgr.GetTables()
 	if err != nil {
 		r.record.Status = StatusRetrievalFailed
 		r.record.FailureStatus = Permanent
@@ -57,7 +56,7 @@ func (r *Result) putQueued(mgr *resources.Manager) {
 	}
 
 	// create a table client
-	client, err := status.NewTableClient(*tableResources[0])
+	client, err := status.NewTableClient(i.client.HttpClient(), *tableResources[0])
 	if err != nil {
 		r.record.Status = StatusRetrievalFailed
 		r.record.FailureStatus = Permanent
@@ -67,7 +66,7 @@ func (r *Result) putQueued(mgr *resources.Manager) {
 
 	// StreamIngest initial record
 	r.record.Status = Pending
-	err = client.Write(r.record.IngestionSourceID.String(), r.record.ToMap())
+	err = client.Write(ctx, r.record.IngestionSourceID.String(), r.record.ToMap())
 	if err != nil {
 		r.record.Status = StatusRetrievalFailed
 		r.record.FailureStatus = Permanent
@@ -119,7 +118,7 @@ func (r *Result) poll(ctx context.Context) {
 				return
 
 			case <-timer.C:
-				smap, err := r.tableClient.Read(r.record.IngestionSourceID.String())
+				smap, err := r.tableClient.Read(ctx, r.record.IngestionSourceID.String())
 				if err != nil {
 					if attempts == 0 {
 						r.record.Status = StatusRetrievalFailed

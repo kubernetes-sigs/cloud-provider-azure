@@ -2,4 +2,4 @@
 package version
 
 // Kusto is the version of this client package that is communicated to the server.
-const Kusto = "1.0.0-preview-5"
+const Kusto = "1.0.1"

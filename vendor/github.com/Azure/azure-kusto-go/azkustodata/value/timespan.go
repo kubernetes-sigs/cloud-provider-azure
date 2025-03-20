@@ -10,6 +10,7 @@ import (
 )
 
 const tick = 100 * time.Nanosecond
+const day = 24 * time.Hour
 
 // Timespan represents a Kusto timespan type.  Timespan implements Kusto.
 type Timespan struct {
@@ -33,14 +34,10 @@ func TimespanFromString(s string) (*Timespan, error) {
 	return t, nil
 }
 
-// Marshal marshals the Timespan into a Kusto compatible string. The string is the contant invariant(c)
-// format. See https://docs.microsoft.com/en-us/dotnet/standard/base-types/standard-timespan-format-strings .
+// Marshal marshals the Timespan into a Kusto compatible string. The string is the constant invariant (c)
+// format. See https://learn.microsoft.com/en-us/dotnet/standard/base-types/standard-timespan-format-strings#the-constant-c-format-specifier .
 func (t *Timespan) Marshal() string {
-	const (
-		day = 24 * time.Hour
-	)
-
-	if t.value == nil {
+	if t == nil || t.value == nil || *t.value/tick == 0 {
 		return "00:00:00"
 	}
 
@@ -50,45 +47,32 @@ func (t *Timespan) Marshal() string {
 	// as that is the lowest precision in our string representation.
 	val := *t.value
 
-	sb := strings.Builder{}
+	var sb strings.Builder
 
 	// Add a - sign if we have a negative value. Convert our value to positive for easier processing.
 	if val < 0 {
 		sb.WriteString("-")
-		val = val * -1
+		val = -val
 	}
 
 	// Only include the day if the duration is 1+ days.
 	days := val / day
-	val = val - (days * day)
 	if days > 0 {
-		sb.WriteString(fmt.Sprintf("%d.", int(days)))
+		sb.WriteString(fmt.Sprintf("%d.", days))
 	}
 
-	// Add our hours:minutes:seconds section.
-	hours := val / time.Hour
-	val = val - (hours * time.Hour)
-	minutes := val / time.Minute
-	val = val - (minutes * time.Minute)
-	seconds := val / time.Second
-	val = val - (seconds * time.Second)
-	sb.WriteString(fmt.Sprintf("%02d:%02d:%02d", int(hours), int(minutes), int(seconds)))
+	hours := (val % day) / time.Hour
+	minutes := (val % time.Hour) / time.Minute
+	seconds := (val % time.Minute) / time.Second
+	ticks := (val % time.Second) / tick
 
-	// Add our sub-second string representation that is proceeded with a ".".
-	milliseconds := val / time.Millisecond
-	val = val - (milliseconds * time.Millisecond)
-	ticks := val / tick
-	if milliseconds > 0 || ticks > 0 {
-		sb.WriteString(fmt.Sprintf(".%03d%d", milliseconds, ticks))
+	sb.WriteString(fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds))
+
+	if ticks > 0 {
+		sb.WriteString(fmt.Sprintf(".%07d", ticks))
 	}
 
-	// Remove any trailing 0's.
-	str := strings.TrimRight(sb.String(), "0")
-	if strings.HasSuffix(str, ":") {
-		str = str + "00"
-	}
-
-	return str
+	return sb.String()
 }
 
 // Unmarshal unmarshals i into Timespan. i must be a string representing a Values timespan or nil.
@@ -150,8 +134,6 @@ func (t *Timespan) Unmarshal(i interface{}) error {
 	t.value = &sum
 	return nil
 }
-
-var day = 24 * time.Hour
 
 func (t *Timespan) unmarshalDaysHours(s string) (time.Duration, error) {
 	sp := strings.Split(s, ".")
