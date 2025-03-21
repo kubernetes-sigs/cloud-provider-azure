@@ -79,7 +79,8 @@ func (f *Fixture) RandomIPv4Prefixes(n int) []netip.Prefix {
 	)
 
 	for _, ip := range ips {
-		bits := int(f.RandomUint64(24)) + 8
+		const MinBits = 16
+		bits := int(f.RandomUint64(32-MinBits)) + MinBits
 		p, err := ip.Prefix(bits)
 		if err != nil {
 			panic("unreachable: it should always be a valid IP prefix")
@@ -118,7 +119,8 @@ func (f *Fixture) RandomIPv6Prefixes(n int) []netip.Prefix {
 	)
 
 	for _, ip := range ips {
-		bits := int(f.RandomUint64(120)) + 8
+		const MinBits = 32
+		bits := int(f.RandomUint64(128-MinBits)) + MinBits
 		p, err := ip.Prefix(bits)
 		if err != nil {
 			panic("unreachable: it should always be a valid IP prefix")
