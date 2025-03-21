@@ -20,7 +20,7 @@ require (
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/go-logr/logr v1.4.2
 	github.com/google/uuid v1.6.0
-	github.com/onsi/ginkgo/v2 v2.23.1
+	github.com/onsi/ginkgo/v2 v2.23.2
 	github.com/onsi/gomega v1.36.2
 	github.com/prometheus/client_golang v1.21.1
 	github.com/samber/lo v1.49.1
@@ -48,7 +48,7 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubelet v0.32.3
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.14
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.16
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.4.3
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.4.5
 	sigs.k8s.io/yaml v1.4.0
