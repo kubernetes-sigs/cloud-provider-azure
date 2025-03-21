@@ -58,6 +58,7 @@ import (
 	"unicode"
 
 	utilnet "k8s.io/apimachinery/pkg/util/net"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -172,6 +173,12 @@ func performTokenExchange(
 	var exchange *http.Response
 	if exchange, err = client.Do(r); err != nil {
 		return "", fmt.Errorf("Www-Authenticate: failed to reach auth url %s", authEndpoint)
+	}
+
+	if exchange.Header != nil {
+		if correlationID, ok := exchange.Header["X-Ms-Correlation-Request-Id"]; ok {
+			klog.V(4).Infof("correlationID: %s", correlationID)
+		}
 	}
 
 	defer exchange.Body.Close()
