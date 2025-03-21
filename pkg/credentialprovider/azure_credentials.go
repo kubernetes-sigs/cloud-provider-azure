@@ -32,7 +32,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/Azure/azure-sdk-for-go/sdk/containers/azcontainerregistry"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	v1 "k8s.io/kubelet/pkg/apis/credentialprovider/v1"
@@ -43,6 +42,8 @@ import (
 const (
 	maxReadLength   = 10 * 1 << 20 // 10MB
 	defaultCacheTTL = 5 * time.Minute
+
+	AcrAudience = "https://containerregistry.azure.net"
 )
 
 var (
@@ -195,7 +196,7 @@ func (a *acrProvider) getFromACR(ctx context.Context, loginServer string) (strin
 	var err error
 	if armAccessToken, err = a.credential.GetToken(ctx, policy.TokenRequestOptions{
 		Scopes: []string{
-			strings.TrimRight(a.cloudConfig.Services[azcontainerregistry.ServiceName].Audience, "/") + "/.default",
+			fmt.Sprintf("%s/%s", AcrAudience, ".default"),
 		},
 	}); err != nil {
 		klog.Errorf("Failed to ensure fresh service principal token: %v", err)
