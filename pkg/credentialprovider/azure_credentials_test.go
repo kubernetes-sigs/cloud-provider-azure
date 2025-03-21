@@ -297,7 +297,12 @@ func TestProcessMirrorMapping(t *testing.T) {
 		expected         map[string]string
 	}{
 		{
-			"multiple",
+			"empty registry mirrors",
+			"",
+			map[string]string{},
+		},
+		{
+			"multiple registry mirrors",
 			"aaa:bbb,ccc:ddd",
 			map[string]string{
 				"aaa": "bbb",
@@ -305,7 +310,7 @@ func TestProcessMirrorMapping(t *testing.T) {
 			},
 		},
 		{
-			"multiple with some spaces",
+			"multiple registry mirrors joined with comma and extra spaces",
 			"aaa: bbb, ccc:ddd",
 			map[string]string{
 				"aaa": "bbb",
@@ -313,7 +318,7 @@ func TestProcessMirrorMapping(t *testing.T) {
 			},
 		},
 		{
-			"single",
+			"single registry mirror",
 			"aaa:bbb",
 			map[string]string{
 				"aaa": "bbb",
