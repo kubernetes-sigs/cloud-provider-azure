@@ -7,7 +7,7 @@ godebug winsymlink=0
 require (
 	github.com/Azure/azure-kusto-go/azkustodata v1.0.1
 	github.com/Azure/azure-kusto-go/azkustoingest v1.0.1
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.0
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.1
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.2
 	github.com/Azure/azure-sdk-for-go/sdk/containers/azcontainerregistry v0.2.2
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 v6.3.0
@@ -20,8 +20,8 @@ require (
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/go-logr/logr v1.4.2
 	github.com/google/uuid v1.6.0
-	github.com/onsi/ginkgo/v2 v2.23.1
-	github.com/onsi/gomega v1.36.2
+	github.com/onsi/ginkgo/v2 v2.23.3
+	github.com/onsi/gomega v1.36.3
 	github.com/prometheus/client_golang v1.21.1
 	github.com/samber/lo v1.49.1
 	github.com/spf13/cobra v1.9.1
@@ -48,9 +48,9 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubelet v0.32.3
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.14
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.19
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.4.3
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.4.5
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.4.6
 	sigs.k8s.io/yaml v1.4.0
 )
 
@@ -90,7 +90,7 @@ require (
 	github.com/gofrs/uuid v4.4.0+incompatible // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.1 // indirect
-	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
+	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/btree v1.0.1 // indirect
 	github.com/google/cel-go v0.22.0 // indirect
