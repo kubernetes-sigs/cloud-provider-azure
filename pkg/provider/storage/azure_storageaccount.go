@@ -105,6 +105,7 @@ type accountWithLocation struct {
 type AccountRepo struct {
 	azureconfig.Config
 	Environment          *azclient.Environment
+	AuthProvider         *azclient.AuthProvider
 	ComputeClientFactory azclient.ClientFactory
 	NetworkClientFactory azclient.ClientFactory
 	subnetRepo           subnet.Repository
@@ -113,7 +114,7 @@ type AccountRepo struct {
 	lockMap              *lockmap.LockMap
 }
 
-func NewRepository(config azureconfig.Config, env *azclient.Environment, computeClientFactory azclient.ClientFactory, networkClientFactory azclient.ClientFactory) (*AccountRepo, error) {
+func NewRepository(config azureconfig.Config, env *azclient.Environment, authProvider *azclient.AuthProvider, computeClientFactory azclient.ClientFactory, networkClientFactory azclient.ClientFactory) (*AccountRepo, error) {
 	getter := func(_ context.Context, _ string) (*armstorage.Account, error) { return nil, nil }
 	storageAccountCache, err := cache.NewTimedCache(time.Minute, getter, config.DisableAPICallCache)
 	if err != nil {
@@ -131,6 +132,7 @@ func NewRepository(config azureconfig.Config, env *azclient.Environment, compute
 		Config:               config,
 		Environment:          env,
 		fileServiceRepo:      fileserviceRepo,
+		AuthProvider:         authProvider,
 		ComputeClientFactory: computeClientFactory,
 		NetworkClientFactory: networkClientFactory,
 		subnetRepo:           subnetRepo,
