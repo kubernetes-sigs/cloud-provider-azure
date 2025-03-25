@@ -69,17 +69,12 @@ func TestNewAuthProvider(t *testing.T) {
 		ErrorContains string
 	}{
 		{
-			Name:          "error when GetAzCoreClientOption fails",
-			ARMConfig:     &ARMClientConfig{}, // This will cause validation failure
-			AuthConfig:    &AzureAuthConfig{},
-			ExpectErr:     ErrNoValidAuthMethodFound, // The error won't be this, but we expect an error
-			ErrorContains: "invalid ARM client config",
-		},
-		{
-			Name:       "error when no valid auth method found",
+			Name:       "return default auth provider when no valid auth method found",
 			ARMConfig:  testARMConfig,
 			AuthConfig: &AzureAuthConfig{},
-			ExpectErr:  ErrNoValidAuthMethodFound,
+			Assertions: []AuthProviderAssertions{
+				AssertCloudConfig(testCloudConfig),
+			},
 		},
 		{
 			Name:      "success with workload identity",

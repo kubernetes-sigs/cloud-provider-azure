@@ -68,7 +68,9 @@ func NewAuthProvider(
 	case len(config.AADMSIDataPlaneIdentityPath) > 0:
 		return newAuthProviderWithUserAssignedIdentity(config, clientOption, opts)
 	default:
-		return nil, ErrNoValidAuthMethodFound
+		return &AuthProvider{
+			CloudConfig: clientOption.Cloud,
+		}, nil
 	}
 }
 
