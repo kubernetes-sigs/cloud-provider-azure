@@ -44,5 +44,5 @@ jobs:
           # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
           verify: true
           working-directory: pkg/azclient
-          args: --config=pkg/azclient/.golangci.yml -v
+          args: --config=.golangci.yml -v
 
