@@ -35,6 +35,11 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
+// Define a simple config struct for testing
+type testConfig struct {
+	UseSharedLBRuleHealthProbeMode *bool
+}
+
 // getTestProbes returns dualStack probes.
 func getTestProbes(protocol, path string, interval, servicePort, probePort, numOfProbe *int32) map[bool][]*armnetwork.Probe {
 	return map[bool][]*armnetwork.Probe{
@@ -208,12 +213,14 @@ func TestFindProbe(t *testing.T) {
 
 func TestShouldKeepSharedProbe(t *testing.T) {
 	testCases := []struct {
-		desc        string
-		service     *v1.Service
-		lb          armnetwork.LoadBalancer
-		wantLB      bool
-		expected    bool
-		expectedErr error
+		desc             string
+		service          *v1.Service
+		lb               armnetwork.LoadBalancer
+		wantLB           bool
+		expected         bool
+		expectedErr      error
+		expectedProbeMod bool // indicates if we expect the probe to be modified/removed
+		azConfig         testConfig
 	}{
 		{
 			desc:     "When the lb.Properties.Probes is nil",
@@ -365,16 +372,169 @@ func TestShouldKeepSharedProbe(t *testing.T) {
 			expected:    false,
 			expectedErr: fmt.Errorf("resource name was missing from identifier"),
 		},
+		{
+			desc: "When service switches from Cluster to Local with exactly one rule referencing the shared probe",
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					UID: types.UID("uid"),
+				},
+				Spec: v1.ServiceSpec{
+					ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
+				},
+			},
+			lb: armnetwork.LoadBalancer{
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					Probes: []*armnetwork.Probe{
+						{
+							Name: ptr.To(consts.SharedProbeName),
+							ID:   ptr.To("id"),
+							Properties: &armnetwork.ProbePropertiesFormat{
+								LoadBalancingRules: []*armnetwork.SubResource{
+									{
+										ID: ptr.To("auid"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected:         false,
+			expectedProbeMod: true,
+		},
+		{
+			desc: "When service is Local but not owner of the rule - should not remove probe",
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					UID: types.UID("uid"),
+				},
+				Spec: v1.ServiceSpec{
+					ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
+				},
+			},
+			lb: armnetwork.LoadBalancer{
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					Probes: []*armnetwork.Probe{
+						{
+							Name: ptr.To(consts.SharedProbeName),
+							ID:   ptr.To("id"),
+							Properties: &armnetwork.ProbePropertiesFormat{
+								LoadBalancingRules: []*armnetwork.SubResource{
+									{
+										ID: ptr.To("otherService"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected:         false,
+			expectedProbeMod: false,
+		},
+		{
+			desc: "When service is Cluster with a single rule - should not remove probe",
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					UID: types.UID("uid"),
+				},
+				Spec: v1.ServiceSpec{
+					ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+				},
+			},
+			lb: armnetwork.LoadBalancer{
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					Probes: []*armnetwork.Probe{
+						{
+							Name: ptr.To(consts.SharedProbeName),
+							ID:   ptr.To("id"),
+							Properties: &armnetwork.ProbePropertiesFormat{
+								LoadBalancingRules: []*armnetwork.SubResource{
+									{
+										ID: ptr.To("auid"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected:         false,
+			expectedProbeMod: false,
+		},
+		{
+			desc: "Error case: When service is Local with a single rule that causes parse error",
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					UID: types.UID("uid"),
+				},
+				Spec: v1.ServiceSpec{
+					ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
+				},
+			},
+			lb: armnetwork.LoadBalancer{
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					Probes: []*armnetwork.Probe{
+						{
+							Name: ptr.To(consts.SharedProbeName),
+							ID:   ptr.To("id"),
+							Properties: &armnetwork.ProbePropertiesFormat{
+								LoadBalancingRules: []*armnetwork.SubResource{
+									{
+										ID: ptr.To(""),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected:         false,
+			expectedProbeMod: false,
+			expectedErr:      fmt.Errorf("resource name was missing from identifier"),
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			az := GetTestCloud(gomock.NewController(t))
+			ctrl := gomock.NewController(t)
+			az := GetTestCloud(ctrl)
+
+			// Set up test config if needed
+			if tc.azConfig.UseSharedLBRuleHealthProbeMode != nil {
+				// Set the cluster service load balancer health probe mode
+				if *tc.azConfig.UseSharedLBRuleHealthProbeMode {
+					az.ClusterServiceLoadBalancerHealthProbeMode = consts.ClusterServiceLoadBalancerHealthProbeModeShared
+				} else {
+					az.ClusterServiceLoadBalancerHealthProbeMode = consts.ClusterServiceLoadBalancerHealthProbeModeServiceNodePort
+				}
+			}
+
 			var expectedProbes []*armnetwork.Probe
+
+			// Make a copy of the original probe for checking modifications
+			originalProbes := []*armnetwork.Probe{}
+			if tc.lb.Properties != nil && tc.lb.Properties.Probes != nil {
+				originalProbes = append(originalProbes, tc.lb.Properties.Probes...)
+			}
+
 			result, err := az.keepSharedProbe(tc.service, tc.lb, expectedProbes, tc.wantLB)
 			assert.Equal(t, tc.expectedErr, err)
 			if tc.expected {
 				assert.Equal(t, 1, len(result))
+			}
+
+			// Check if the probe was modified/removed as expected
+			if tc.expectedProbeMod {
+				// Check if the original probe was actually modified/removed
+				if tc.lb.Properties != nil && tc.lb.Properties.Probes != nil {
+					assert.NotEqual(t, len(originalProbes), len(tc.lb.Properties.Probes),
+						"Expected probe to be modified/removed but it was not")
+				}
+			} else if len(originalProbes) > 0 && tc.lb.Properties != nil && tc.lb.Properties.Probes != nil {
+				// If not expecting modification, probe count should remain the same
+				assert.Equal(t, len(originalProbes), len(tc.lb.Properties.Probes),
+					"Probe was unexpectedly modified/removed")
 			}
 		})
 	}
