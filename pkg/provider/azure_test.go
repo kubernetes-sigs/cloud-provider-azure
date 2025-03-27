@@ -27,6 +27,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
@@ -2846,6 +2849,157 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 	err = az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, true)
 	assert.NoError(t, err)
 	assert.Equal(t, az.Config.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration)
+
+	t.Run("should setup network client factory with network subscription ID - same network sub in same tenant", func(t *testing.T) {
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		az := GetTestCloud(ctrl)
+
+		const (
+			tenantID       = "tenant-id"
+			subscriptionID = "subscription-id"
+		)
+
+		az.ComputeClientFactory = nil
+		az.NetworkClientFactory = nil
+
+		azureconfig := config.Config{}
+		azureconfig.ARMClientConfig.TenantID = tenantID
+		azureconfig.SubscriptionID = subscriptionID
+
+		nCall := 0
+		newARMClientFactory = func(
+			config *azclient.ClientFactoryConfig,
+			armConfig *azclient.ARMClientConfig,
+			cloud cloud.Configuration,
+			cred azcore.TokenCredential,
+			clientOptionsMutFn ...func(option *arm.ClientOptions),
+		) (azclient.ClientFactory, error) {
+			switch nCall {
+			case 0:
+				// It should create network client factory
+				assert.Equal(t, subscriptionID, config.SubscriptionID)
+			case 1:
+				// It should create compute client factory
+				assert.Equal(t, subscriptionID, config.SubscriptionID)
+			default:
+				panic("unexpected call")
+			}
+			nCall++
+			return azclient.NewClientFactory(config, armConfig, cloud, cred, clientOptionsMutFn...)
+		}
+		defer func() {
+			newARMClientFactory = azclient.NewClientFactory
+		}()
+
+		err := az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, true)
+		assert.NoError(t, err)
+	})
+
+	t.Run("should setup network client factory with network subscription ID - different network sub in same tenant", func(t *testing.T) {
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		az := GetTestCloud(ctrl)
+
+		const (
+			tenantID              = "tenant-id"
+			networkSubscriptionID = "network-subscription-id"
+			computeSubscriptionID = "compute-subscription-id"
+		)
+
+		az.ComputeClientFactory = nil
+		az.NetworkClientFactory = nil
+
+		azureconfig := config.Config{}
+		azureconfig.ARMClientConfig.TenantID = tenantID
+		azureconfig.ARMClientConfig.NetworkResourceTenantID = tenantID
+		azureconfig.NetworkResourceSubscriptionID = networkSubscriptionID
+		azureconfig.SubscriptionID = computeSubscriptionID
+
+		nCall := 0
+		newARMClientFactory = func(
+			config *azclient.ClientFactoryConfig,
+			armConfig *azclient.ARMClientConfig,
+			cloud cloud.Configuration,
+			cred azcore.TokenCredential,
+			clientOptionsMutFn ...func(option *arm.ClientOptions),
+		) (azclient.ClientFactory, error) {
+			switch nCall {
+			case 0:
+				// It should create network client factory
+				assert.Equal(t, networkSubscriptionID, config.SubscriptionID)
+			case 1:
+				// It should create compute client factory
+				assert.Equal(t, computeSubscriptionID, config.SubscriptionID)
+			default:
+				panic("unexpected call")
+			}
+			nCall++
+			return azclient.NewClientFactory(config, armConfig, cloud, cred, clientOptionsMutFn...)
+		}
+		defer func() {
+			newARMClientFactory = azclient.NewClientFactory
+		}()
+
+		err := az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, true)
+		assert.NoError(t, err)
+	})
+
+	t.Run("should setup network client factory with network subscription ID - different network sub in different tenant", func(t *testing.T) {
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		az := GetTestCloud(ctrl)
+
+		const (
+			tenantID              = "tenant-id"
+			networkTenantID       = "network-tenant-id"
+			networkSubscriptionID = "network-subscription-id"
+			computeSubscriptionID = "compute-subscription-id"
+		)
+
+		az.ComputeClientFactory = nil
+		az.NetworkClientFactory = nil
+
+		azureconfig := config.Config{}
+		azureconfig.ARMClientConfig.TenantID = tenantID
+		azureconfig.ARMClientConfig.NetworkResourceTenantID = networkTenantID
+		azureconfig.NetworkResourceSubscriptionID = networkSubscriptionID
+		azureconfig.SubscriptionID = computeSubscriptionID
+
+		nCall := 0
+		newARMClientFactory = func(
+			config *azclient.ClientFactoryConfig,
+			armConfig *azclient.ARMClientConfig,
+			cloud cloud.Configuration,
+			cred azcore.TokenCredential,
+			clientOptionsMutFn ...func(option *arm.ClientOptions),
+		) (azclient.ClientFactory, error) {
+			switch nCall {
+			case 0:
+				// It should create network client factory
+				assert.Equal(t, networkSubscriptionID, config.SubscriptionID)
+			case 1:
+				// It should create compute client factory
+				assert.Equal(t, computeSubscriptionID, config.SubscriptionID)
+			default:
+				panic("unexpected call")
+			}
+			nCall++
+			return azclient.NewClientFactory(config, armConfig, cloud, cred, clientOptionsMutFn...)
+		}
+		defer func() {
+			newARMClientFactory = azclient.NewClientFactory
+		}()
+
+		err := az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, true)
+		assert.NoError(t, err)
+	})
 }
 
 func TestSetLBDefaults(t *testing.T) {
