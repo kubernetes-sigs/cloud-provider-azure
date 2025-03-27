@@ -686,6 +686,9 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 
 	if az.ComputeClientFactory == nil && az.AuthProvider != nil {
 		cloud, _, err := azclient.GetAzureCloudConfigAndEnvConfig(&az.ARMClientConfig)
+		if err != nil {
+			return err
+		}
 		var (
 			computeCred = az.AuthProvider.GetAzIdentity()
 			networkCred = az.AuthProvider.GetNetworkAzIdentity() // It would fallback to compute credential if network credential is not set
