@@ -1,6 +1,6 @@
 = vendor/github.com/Azure/azure-sdk-for-go/sdk/azcore licensed under: =
 
-The MIT License (MIT)
+MIT License
 
 Copyright (c) Microsoft Corporation.
 
@@ -20,6 +20,6 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+SOFTWARE
 
-= vendor/github.com/Azure/azure-sdk-for-go/LICENSE.txt 4f7454c9bcbb0acee6d9a971001befe2
+= vendor/github.com/Azure/azure-sdk-for-go/sdk/azcore/LICENSE.txt a93cb0863fda8e7f177e09f6943951b4
