@@ -11,14 +11,6 @@ const (
 	ResourceTypeEgress  = "Egress"
 )
 
-func (dt *DiffTrackerState) UpdateK8service(input UpdateK8sResource) error {
-	return updateK8Resource(input, dt.K8s.Services, ResourceTypeService)
-}
-
-func (dt *DiffTrackerState) UpdateK8sEgress(input UpdateK8sResource) error {
-	return updateK8Resource(input, dt.K8s.Egresses, ResourceTypeEgress)
-}
-
 func updateK8Resource(input UpdateK8sResource, set *utilsets.IgnoreCaseSet, resourceType string) error {
 	if input.ID == "" {
 		return fmt.Errorf("%s: empty ID not allowed", resourceType)
@@ -35,24 +27,33 @@ func updateK8Resource(input UpdateK8sResource, set *utilsets.IgnoreCaseSet, reso
 	return nil
 }
 
-func (dt *DiffTrackerState) UpdateK8sEndpoints(input UpdateK8sEndpointsInputType) []error {
+func (dt *DiffTracker) UpdateK8service(input UpdateK8sResource) error {
+	return updateK8Resource(input, dt.K8sResources.Services, ResourceTypeService)
+}
+
+func (dt *DiffTracker) UpdateK8sEgress(input UpdateK8sResource) error {
+	return updateK8Resource(input, dt.K8sResources.Egresses, ResourceTypeEgress)
+}
+
+func (dt *DiffTracker) UpdateK8sEndpoints(input UpdateK8sEndpointsInputType) []error {
 	var errs []error
 	for address, location := range input.NewAddresses {
+
+		if location == "" {
+			errs = append(errs, fmt.Errorf("error UpdateK8sEndpoints, address=%s does not have a node associated", address))
+			continue
+		}
 
 		if _, exists := input.OldAddresses[address]; exists {
 			continue
 		}
 
-		if location == "" {
-			errs = append(errs, fmt.Errorf("error UpdateK8sEndpoints, address=%s does not have a node associated", address))
-		}
-
-		nodeState, exists := dt.K8s.Nodes[location]
+		nodeState, exists := dt.K8sResources.Nodes[location]
 		if !exists {
 			nodeState = Node{
 				Pods: make(map[string]Pod),
 			}
-			dt.K8s.Nodes[location] = nodeState
+			dt.K8sResources.Nodes[location] = nodeState
 		}
 
 		pod, exists := nodeState.Pods[address]
@@ -74,7 +75,7 @@ func (dt *DiffTrackerState) UpdateK8sEndpoints(input UpdateK8sEndpointsInputType
 			errs = append(errs, fmt.Errorf("error UpdateK8sEndpoints, address=%s does not have a node associated", address))
 		}
 
-		node, nodeExists := dt.K8s.Nodes[location]
+		node, nodeExists := dt.K8sResources.Nodes[location]
 		if !nodeExists {
 			continue
 		}
@@ -89,7 +90,7 @@ func (dt *DiffTrackerState) UpdateK8sEndpoints(input UpdateK8sEndpointsInputType
 		if !pod.HasIdentities() {
 			delete(node.Pods, address)
 			if !node.HasPods() {
-				delete(dt.K8s.Nodes, location)
+				delete(dt.K8sResources.Nodes, location)
 			}
 		}
 	}
@@ -97,23 +98,11 @@ func (dt *DiffTrackerState) UpdateK8sEndpoints(input UpdateK8sEndpointsInputType
 	return errs
 }
 
-func (dt *DiffTrackerState) UpdateK8sPod(input UpdatePodInputType) error {
-	switch input.PodOperation {
-	case ADD, UPDATE:
-		return dt.addOrUpdatePod(input)
-	case REMOVE:
-		return dt.removePod(input)
-	default:
-		return fmt.Errorf("invalid pod operation: %s for pod at %s:%s",
-			input.PodOperation, input.Location, input.Address)
-	}
-}
-
-func (dt *DiffTrackerState) addOrUpdatePod(input UpdatePodInputType) error {
-	node, exists := dt.K8s.Nodes[input.Location]
+func (dt *DiffTracker) addOrUpdatePod(input UpdatePodInputType) error {
+	node, exists := dt.K8sResources.Nodes[input.Location]
 	if !exists {
 		node = Node{Pods: make(map[string]Pod)}
-		dt.K8s.Nodes[input.Location] = node
+		dt.K8sResources.Nodes[input.Location] = node
 	}
 
 	pod, exists := node.Pods[input.Address]
@@ -128,16 +117,28 @@ func (dt *DiffTrackerState) addOrUpdatePod(input UpdatePodInputType) error {
 	return nil
 }
 
-func (dt *DiffTrackerState) removePod(input UpdatePodInputType) error {
-	node, exists := dt.K8s.Nodes[input.Location]
+func (dt *DiffTracker) removePod(input UpdatePodInputType) error {
+	node, exists := dt.K8sResources.Nodes[input.Location]
 	if !exists {
 		return nil
 	}
 
 	delete(node.Pods, input.Address)
 	if !node.HasPods() {
-		delete(dt.K8s.Nodes, input.Location)
+		delete(dt.K8sResources.Nodes, input.Location)
 	}
 
 	return nil
+}
+
+func (dt *DiffTracker) UpdateK8sPod(input UpdatePodInputType) error {
+	switch input.PodOperation {
+	case ADD, UPDATE:
+		return dt.addOrUpdatePod(input)
+	case REMOVE:
+		return dt.removePod(input)
+	default:
+		return fmt.Errorf("invalid pod operation: %s for pod at %s:%s",
+			input.PodOperation, input.Location, input.Address)
+	}
 }

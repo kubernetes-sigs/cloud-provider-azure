@@ -7,85 +7,94 @@ import (
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
-func (dt *DiffTrackerState) UpdateNRPLoadBalancers() {
-	for _, service := range dt.K8s.Services.UnsortedList() {
-		if dt.NRP.LoadBalancers.Has(service) {
+func (dt *DiffTracker) UpdateNRPLoadBalancers() {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
+	for _, service := range dt.K8sResources.Services.UnsortedList() {
+		if dt.NRPResources.LoadBalancers.Has(service) {
 			continue
 		}
-		dt.NRP.LoadBalancers.Insert(service)
+		dt.NRPResources.LoadBalancers.Insert(service)
 		klog.V(2).Infof("Added service %s to NRP LoadBalancers", service)
 	}
 
-	for _, service := range dt.NRP.LoadBalancers.UnsortedList() {
-		if dt.K8s.Services.Has(service) {
+	for _, service := range dt.NRPResources.LoadBalancers.UnsortedList() {
+		if dt.K8sResources.Services.Has(service) {
 			continue
 		}
-		dt.NRP.LoadBalancers.Delete(service)
+		dt.NRPResources.LoadBalancers.Delete(service)
 		klog.V(2).Infof("Removed service %s from NRP LoadBalancers", service)
 	}
 }
 
-func (dt *DiffTrackerState) UpdateNRPNATGateways() {
-	for _, egress := range dt.K8s.Egresses.UnsortedList() {
-		if dt.NRP.NATGateways.Has(egress) {
+func (dt *DiffTracker) UpdateNRPNATGateways() {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
+	for _, egress := range dt.K8sResources.Egresses.UnsortedList() {
+		if dt.NRPResources.NATGateways.Has(egress) {
 			continue
 		}
-		dt.NRP.NATGateways.Insert(egress)
+		dt.NRPResources.NATGateways.Insert(egress)
 		fmt.Printf("Added egress %s to NRP NATGateways\n", egress)
 	}
 
-	for _, egress := range dt.NRP.NATGateways.UnsortedList() {
-		if dt.K8s.Egresses.Has(egress) {
+	for _, egress := range dt.NRPResources.NATGateways.UnsortedList() {
+		if dt.K8sResources.Egresses.Has(egress) {
 			continue
 		}
-		dt.NRP.NATGateways.Delete(egress)
+		dt.NRPResources.NATGateways.Delete(egress)
 		fmt.Printf("Removed egress %s from NRP NATGateways\n", egress)
 	}
 }
 
-func (dt *DiffTrackerState) UpdateNRPLocationsAddresses() {
-	// Update DiffTracker.NRPState
-	for nodeIp, node := range dt.K8s.Nodes {
-		nrpLocation, exists := dt.NRP.NRPLocations[nodeIp]
+func (dt *DiffTracker) UpdateLocationsAddresses() {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
+	// Update DiffTracker.NRP
+	for nodeIp, node := range dt.K8sResources.Nodes {
+		nrpLocation, exists := dt.NRPResources.Locations[nodeIp]
 		if !exists {
 			nrpLocation = NRPLocation{
-				NRPAddresses: make(map[string]NRPAddress),
+				Addresses: make(map[string]NRPAddress),
 			}
-			dt.NRP.NRPLocations[nodeIp] = nrpLocation
+			dt.NRPResources.Locations[nodeIp] = nrpLocation
 		}
 		for address, pod := range node.Pods {
 			nrpAddress := NRPAddress{
-				NRPServices: utilsets.NewString(),
+				Services: utilsets.NewString(),
 			}
-			nrpLocation.NRPAddresses[address] = nrpAddress
+			nrpLocation.Addresses[address] = nrpAddress
 
 			for _, identity := range pod.InboundIdentities.UnsortedList() {
-				nrpAddress.NRPServices.Insert(identity)
+				nrpAddress.Services.Insert(identity)
 			}
 			if pod.PublicOutboundIdentity != "" {
-				nrpAddress.NRPServices.Insert(pod.PublicOutboundIdentity)
+				nrpAddress.Services.Insert(pod.PublicOutboundIdentity)
 			}
 			if pod.PrivateOutboundIdentity != "" {
-				nrpAddress.NRPServices.Insert(pod.PrivateOutboundIdentity)
+				nrpAddress.Services.Insert(pod.PrivateOutboundIdentity)
 			}
 		}
 	}
 
-	for location, nrpLocation := range dt.NRP.NRPLocations {
-		node, exists := dt.K8s.Nodes[location]
+	for location, nrpLocation := range dt.NRPResources.Locations {
+		node, exists := dt.K8sResources.Nodes[location]
 		if !exists {
-			delete(dt.NRP.NRPLocations, location)
+			delete(dt.NRPResources.Locations, location)
 			continue
 		}
-		for address := range nrpLocation.NRPAddresses {
+		for address := range nrpLocation.Addresses {
 			_, exists := node.Pods[address]
 			if !exists {
-				delete(nrpLocation.NRPAddresses, address)
+				delete(nrpLocation.Addresses, address)
 			}
 
 		}
-		if len(nrpLocation.NRPAddresses) == 0 {
-			delete(dt.NRP.NRPLocations, location)
+		if len(nrpLocation.Addresses) == 0 {
+			delete(dt.NRPResources.Locations, location)
 		}
 	}
 }

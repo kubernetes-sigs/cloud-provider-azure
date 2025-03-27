@@ -5,30 +5,22 @@ import (
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
-func (dt *DiffTrackerState) GetSyncLoadBalancerNRPServices() SyncNRPServicesReturnType {
-	return syncServices(dt.K8s.Services, dt.NRP.LoadBalancers)
-}
-
-func (dt *DiffTrackerState) GetSyncNRPNATGateways() SyncNRPServicesReturnType {
-	return syncServices(dt.K8s.Egresses, dt.NRP.NATGateways)
-}
-
 // SyncServices handles the synchronization of services between K8s and NRP
-func syncServices(k8sServices, nrpServices *utilsets.IgnoreCaseSet) SyncNRPServicesReturnType {
-	syncServices := SyncNRPServicesReturnType{
+func syncServices(k8sServices, Services *utilsets.IgnoreCaseSet) SyncServicesReturnType {
+	syncServices := SyncServicesReturnType{
 		Additions: utilsets.NewString(),
 		Removals:  utilsets.NewString(),
 	}
 
 	for _, service := range k8sServices.UnsortedList() {
-		if nrpServices.Has(service) {
+		if Services.Has(service) {
 			continue
 		}
 		syncServices.Additions.Insert(service)
 		klog.V(2).Infof("Added service %s to syncing object\n", service)
 	}
 
-	for _, service := range nrpServices.UnsortedList() {
+	for _, service := range Services.UnsortedList() {
 		if k8sServices.Has(service) {
 			continue
 		}
@@ -39,24 +31,32 @@ func syncServices(k8sServices, nrpServices *utilsets.IgnoreCaseSet) SyncNRPServi
 	return syncServices
 }
 
+func (dt *DiffTracker) GetSyncLoadBalancerServices() SyncServicesReturnType {
+	return syncServices(dt.K8sResources.Services, dt.NRPResources.LoadBalancers)
+}
+
+func (dt *DiffTracker) GetSyncNRPNATGateways() SyncServicesReturnType {
+	return syncServices(dt.K8sResources.Egresses, dt.NRPResources.NATGateways)
+}
+
 //==============================================================================
 
-func (dt *DiffTrackerState) GetSyncNRPLocationsAddresses() LocationData {
+func (dt *DiffTracker) GetSyncLocationsAddresses() LocationData {
 	result := LocationData{
 		Action:    PartialUpdate,
 		Locations: make(map[string]Location),
 	}
 
 	// Iterate over all nodes in the K8s state
-	for nodeIp, node := range dt.K8s.Nodes {
-		nrpLocation, exists := dt.NRP.NRPLocations[nodeIp]
+	for nodeIp, node := range dt.K8sResources.Nodes {
+		nrpLocation, exists := dt.NRPResources.Locations[nodeIp]
 		location := initializeLocation(exists)
 
 		for address, pod := range node.Pods {
 			serviceRef := createServiceRef(pod)
 			addressData := Address{ServiceRef: serviceRef}
 
-			if !exists || !serviceRef.Equals(nrpLocation.NRPAddresses[address].NRPServices) {
+			if !exists || !serviceRef.Equals(nrpLocation.Addresses[address].Services) {
 				location.Addresses[address] = addressData
 			}
 		}
@@ -65,8 +65,8 @@ func (dt *DiffTrackerState) GetSyncNRPLocationsAddresses() LocationData {
 	}
 
 	// Iterate over all locations in the NRP state
-	for location, nrpLocation := range dt.NRP.NRPLocations {
-		node, exists := dt.K8s.Nodes[location]
+	for location, nrpLocation := range dt.NRPResources.Locations {
+		node, exists := dt.K8sResources.Nodes[location]
 		if !exists {
 			result.Locations[location] = Location{
 				AddressUpdateAction: PartialUpdate,
@@ -77,7 +77,7 @@ func (dt *DiffTrackerState) GetSyncNRPLocationsAddresses() LocationData {
 			if locationData == nil {
 				continue
 			}
-			for address := range nrpLocation.NRPAddresses {
+			for address := range nrpLocation.Addresses {
 				if _, exists := node.Pods[address]; !exists {
 					addressData := Address{ServiceRef: utilsets.NewString()}
 					locationData.Addresses[address] = addressData
@@ -131,15 +131,18 @@ func findLocationData(result LocationData, location string) *Location {
 
 //==============================================================================
 
-func (dt *DiffTrackerState) GetSyncDiffTrackerState() *SyncDiffTrackerStateReturnType {
+func (dt *DiffTracker) GetSyncOperations() *SyncDiffTrackerReturnType {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
 	if dt.DeepEqual() {
-		return &SyncDiffTrackerStateReturnType{SyncStatus: ALREADY_IN_SYNC}
+		return &SyncDiffTrackerReturnType{SyncStatus: ALREADY_IN_SYNC}
 	}
 
-	return &SyncDiffTrackerStateReturnType{
+	return &SyncDiffTrackerReturnType{
 		SyncStatus:          SUCCESS,
-		LoadBalancerUpdates: dt.GetSyncLoadBalancerNRPServices(),
+		LoadBalancerUpdates: dt.GetSyncLoadBalancerServices(),
 		NATGatewayUpdates:   dt.GetSyncNRPNATGateways(),
-		LocationData:        dt.GetSyncNRPLocationsAddresses(),
+		LocationData:        dt.GetSyncLocationsAddresses(),
 	}
 }

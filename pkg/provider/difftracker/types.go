@@ -1,6 +1,10 @@
 package difftracker
 
-import utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
+import (
+	"sync"
+
+	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
+)
 
 // ================================================================================================
 // ENUMS
@@ -28,20 +32,20 @@ const (
 )
 
 // --------------------------------------------------------------------------------
-// DiffTrackerState keeps track of the state of the K8s cluster and NRP
+// DiffTracker keeps track of the state of the K8s cluster and NRP
 // --------------------------------------------------------------------------------
 type NRPAddress struct {
-	NRPServices *utilsets.IgnoreCaseSet // all inbound and outbound identities
+	Services *utilsets.IgnoreCaseSet // all inbound and outbound identities
 }
 
 type NRPLocation struct {
-	NRPAddresses map[string]NRPAddress
+	Addresses map[string]NRPAddress
 }
 
-type NRPState struct {
+type NRP struct {
 	LoadBalancers *utilsets.IgnoreCaseSet
 	NATGateways   *utilsets.IgnoreCaseSet
-	NRPLocations  map[string]NRPLocation
+	Locations     map[string]NRPLocation
 }
 
 type Pod struct {
@@ -54,16 +58,17 @@ type Node struct {
 	Pods map[string]Pod
 }
 
-type K8sState struct {
+type K8s struct {
 	Services *utilsets.IgnoreCaseSet
 	Egresses *utilsets.IgnoreCaseSet
 	Nodes    map[string]Node
 }
 
-// DiffTrackerState is the main struct that contains the state of the K8s and NRP services
-type DiffTrackerState struct {
-	K8s K8sState
-	NRP NRPState
+// DiffTracker is the main struct that contains the state of the K8s and NRP services
+type DiffTracker struct {
+	mu           sync.Mutex // Protects concurrent access to DiffTracker
+	K8sResources K8s
+	NRPResources NRP
 }
 
 // --------------------------------------------------------------------------------
@@ -110,15 +115,15 @@ type LocationData struct {
 	Locations map[string]Location // key is Location.Location
 }
 
-type SyncNRPServicesReturnType struct {
+type SyncServicesReturnType struct {
 	Additions *utilsets.IgnoreCaseSet
 	Removals  *utilsets.IgnoreCaseSet
 }
 
-type SyncDiffTrackerStateReturnType struct {
+type SyncDiffTrackerReturnType struct {
 	SyncStatus          SyncStatus
-	LoadBalancerUpdates SyncNRPServicesReturnType
-	NATGatewayUpdates   SyncNRPServicesReturnType
+	LoadBalancerUpdates SyncServicesReturnType
+	NATGatewayUpdates   SyncServicesReturnType
 	LocationData        LocationData
 }
 
@@ -143,4 +148,28 @@ type LocationDTO struct {
 type LocationDataDTO struct {
 	Action    UpdateAction  `json:"Action"`
 	Locations []LocationDTO `json:"Locations"`
+}
+
+// ================================================================================================
+// Data Transfer Objects (DTOs) for ServiceData (following the ServiceGateway API documentation)
+// ================================================================================================
+
+type LoadBalancerBackendPoolDTO struct {
+	Id string `json:"Id"`
+}
+
+type NatGatewayDTO struct {
+	Id string `json:"Id"`
+}
+
+type ServiceDTO struct {
+	Service                  string                       `json:"Service"`
+	LoadBalancerBackendPools []LoadBalancerBackendPoolDTO `json:"LoadBalancerBackendPools"`
+	PublicNatGateway         NatGatewayDTO                `json:"PublicNatGateway"`
+	isDelete                 bool
+}
+
+type ServiceDataDTO struct {
+	Action   UpdateAction `json:"Action"`
+	Services []ServiceDTO `json:"Services"`
 }

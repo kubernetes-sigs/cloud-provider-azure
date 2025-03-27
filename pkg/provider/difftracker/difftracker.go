@@ -4,31 +4,31 @@ import (
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
-func InitializeDiffTrackerState(k8sState K8sState, nrpState NRPState) (*DiffTrackerState, *SyncDiffTrackerStateReturnType) {
+func InitializeDiffTracker(K8s K8s, NRP NRP) *DiffTracker {
 	// If any field is nil, initialize it
-	if k8sState.Services == nil {
-		k8sState.Services = utilsets.NewString()
+	if K8s.Services == nil {
+		K8s.Services = utilsets.NewString()
 	}
-	if k8sState.Egresses == nil {
-		k8sState.Egresses = utilsets.NewString()
+	if K8s.Egresses == nil {
+		K8s.Egresses = utilsets.NewString()
 	}
-	if k8sState.Nodes == nil {
-		k8sState.Nodes = make(map[string]Node)
+	if K8s.Nodes == nil {
+		K8s.Nodes = make(map[string]Node)
 	}
-	if nrpState.LoadBalancers == nil {
-		nrpState.LoadBalancers = utilsets.NewString()
+	if NRP.LoadBalancers == nil {
+		NRP.LoadBalancers = utilsets.NewString()
 	}
-	if nrpState.NATGateways == nil {
-		nrpState.NATGateways = utilsets.NewString()
+	if NRP.NATGateways == nil {
+		NRP.NATGateways = utilsets.NewString()
 	}
-	if nrpState.NRPLocations == nil {
-		nrpState.NRPLocations = make(map[string]NRPLocation)
+	if NRP.Locations == nil {
+		NRP.Locations = make(map[string]NRPLocation)
 	}
 
-	diffTrackerState := &DiffTrackerState{
-		K8s: k8sState,
-		NRP: nrpState,
+	diffTracker := &DiffTracker{
+		K8sResources: K8s,
+		NRPResources: NRP,
 	}
-	syncOperations := diffTrackerState.GetSyncDiffTrackerState()
-	return diffTrackerState, syncOperations
+
+	return diffTracker
 }

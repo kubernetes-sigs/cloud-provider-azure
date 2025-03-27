@@ -56,68 +56,68 @@ func (pod *Pod) HasIdentities() bool {
 }
 
 // DeepEqual compares the K8s and NRP states to check if they are in sync
-func (dt *DiffTrackerState) DeepEqual() bool {
+func (dt *DiffTracker) DeepEqual() bool {
 	// Compare Services with LoadBalancers
-	if dt.K8s.Services.Len() != dt.NRP.LoadBalancers.Len() {
+	if dt.K8sResources.Services.Len() != dt.NRPResources.LoadBalancers.Len() {
 		klog.Errorf("Services and LoadBalancers length mismatch")
 		return false
 	}
-	for _, service := range dt.K8s.Services.UnsortedList() {
-		if !dt.NRP.LoadBalancers.Has(service) {
+	for _, service := range dt.K8sResources.Services.UnsortedList() {
+		if !dt.NRPResources.LoadBalancers.Has(service) {
 			klog.Errorf("Service %s not found in LoadBalancers\n", service)
 			return false
 		}
 	}
-	for _, service := range dt.NRP.LoadBalancers.UnsortedList() {
-		if !dt.K8s.Services.Has(service) {
+	for _, service := range dt.NRPResources.LoadBalancers.UnsortedList() {
+		if !dt.K8sResources.Services.Has(service) {
 			klog.Errorf("Service %s not found in Services\n", service)
 			return false
 		}
 	}
 
 	// Compare Egresses with NATGateways
-	if dt.K8s.Egresses.Len() != dt.NRP.NATGateways.Len() {
+	if dt.K8sResources.Egresses.Len() != dt.NRPResources.NATGateways.Len() {
 		klog.Errorf("Egresses and NATGateways length mismatch")
 		return false
 	}
-	for _, egress := range dt.K8s.Egresses.UnsortedList() {
-		if !dt.NRP.NATGateways.Has(egress) {
+	for _, egress := range dt.K8sResources.Egresses.UnsortedList() {
+		if !dt.NRPResources.NATGateways.Has(egress) {
 			klog.Errorf("Egress %s not found in NATGateways\n", egress)
 			return false
 		}
 	}
-	for _, egress := range dt.NRP.NATGateways.UnsortedList() {
-		if !dt.K8s.Egresses.Has(egress) {
+	for _, egress := range dt.NRPResources.NATGateways.UnsortedList() {
+		if !dt.K8sResources.Egresses.Has(egress) {
 			klog.Errorf("Egress %s not found in Egresses\n", egress)
 			return false
 		}
 	}
 
-	// Compare Nodes with NRPLocations
-	if len(dt.K8s.Nodes) != len(dt.NRP.NRPLocations) {
-		klog.Errorf("Nodes and NRPLocations length mismatch")
+	// Compare Nodes with Locations
+	if len(dt.K8sResources.Nodes) != len(dt.NRPResources.Locations) {
+		klog.Errorf("Nodes and Locations length mismatch")
 		return false
 	}
-	for nodeKey, node := range dt.K8s.Nodes {
-		nrpLocation, exists := dt.NRP.NRPLocations[nodeKey]
+	for nodeKey, node := range dt.K8sResources.Nodes {
+		nrpLocation, exists := dt.NRPResources.Locations[nodeKey]
 		if !exists {
-			klog.Errorf("Node %s not found in NRPLocations\n", nodeKey)
+			klog.Errorf("Node %s not found in Locations\n", nodeKey)
 			return false
 		}
 
-		// Compare Pods with NRPAddresses
-		if len(node.Pods) != len(nrpLocation.NRPAddresses) {
-			klog.Errorf("Pods and NRPAddresses length mismatch for node %s\n", nodeKey)
+		// Compare Pods with Addresses
+		if len(node.Pods) != len(nrpLocation.Addresses) {
+			klog.Errorf("Pods and Addresses length mismatch for node %s\n", nodeKey)
 			return false
 		}
 		for podKey, pod := range node.Pods {
-			nrpAddress, exists := nrpLocation.NRPAddresses[podKey]
+			nrpAddress, exists := nrpLocation.Addresses[podKey]
 			if !exists {
-				klog.Errorf("Pod %s not found in NRPAddresses for node %s\n", podKey, nodeKey)
+				klog.Errorf("Pod %s not found in Addresses for node %s\n", podKey, nodeKey)
 				return false
 			}
 
-			// Compare [...InboundIdentities, PublicOutboundIdentity, PrivateOutboundIdentity] with NRPServices
+			// Compare [...InboundIdentities, PublicOutboundIdentity, PrivateOutboundIdentity] with Services
 			combinedIdentities := []string{}
 			combinedIdentities = append(combinedIdentities, pod.InboundIdentities.UnsortedList()...)
 			if pod.PublicOutboundIdentity != "" {
@@ -127,14 +127,14 @@ func (dt *DiffTrackerState) DeepEqual() bool {
 				combinedIdentities = append(combinedIdentities, pod.PrivateOutboundIdentity)
 			}
 
-			if len(combinedIdentities) != nrpAddress.NRPServices.Len() {
+			if len(combinedIdentities) != nrpAddress.Services.Len() {
 				klog.Errorf("Combined identities length mismatch for pod %s in node %s\n", podKey, nodeKey)
 				return false
 			}
 
 			for _, identity := range combinedIdentities {
-				if !nrpAddress.NRPServices.Has(identity) {
-					klog.Errorf("Identity %s not found in NRPServices for pod %s in node %s\n", identity, podKey, nodeKey)
+				if !nrpAddress.Services.Has(identity) {
+					klog.Errorf("Identity %s not found in Services for pod %s in node %s\n", identity, podKey, nodeKey)
 					return false
 				}
 			}
@@ -144,8 +144,8 @@ func (dt *DiffTrackerState) DeepEqual() bool {
 	return true
 }
 
-func (syncNRPServicesReturnType *SyncNRPServicesReturnType) Equals(other *SyncNRPServicesReturnType) bool {
-	return syncNRPServicesReturnType.Additions.Equals(other.Additions) && syncNRPServicesReturnType.Removals.Equals(other.Removals)
+func (syncServicesReturnType *SyncServicesReturnType) Equals(other *SyncServicesReturnType) bool {
+	return syncServicesReturnType.Additions.Equals(other.Additions) && syncServicesReturnType.Removals.Equals(other.Removals)
 }
 
 // Equals compares two LocationData objects for equality
@@ -190,8 +190,8 @@ func (ld *LocationData) Equals(other *LocationData) bool {
 	return true
 }
 
-// Equals compares two SyncDiffTrackerStateReturnType objects for equality
-func (sdts *SyncDiffTrackerStateReturnType) Equals(other *SyncDiffTrackerStateReturnType) bool {
+// Equals compares two SyncDiffTrackerReturnType objects for equality
+func (sdts *SyncDiffTrackerReturnType) Equals(other *SyncDiffTrackerReturnType) bool {
 	if sdts.SyncStatus != other.SyncStatus {
 		return false
 	}
@@ -219,22 +219,28 @@ func (sdts *SyncDiffTrackerStateReturnType) Equals(other *SyncDiffTrackerStateRe
 	return true
 }
 
-// Equals compares two DiffTrackerState objects for equality
-func (dt *DiffTrackerState) Equals(other *DiffTrackerState) bool {
-	if !dt.K8s.Services.Equals(other.K8s.Services) {
+// Equals compares two DiffTracker objects for equality
+func (dt *DiffTracker) Equals(other *DiffTracker) bool {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
+	other.mu.Lock()
+	defer other.mu.Unlock()
+
+	if !dt.K8sResources.Services.Equals(other.K8sResources.Services) {
 		return false
 	}
 
-	if !dt.K8s.Egresses.Equals(other.K8s.Egresses) {
+	if !dt.K8sResources.Egresses.Equals(other.K8sResources.Egresses) {
 		return false
 	}
 
-	if len(dt.K8s.Nodes) != len(other.K8s.Nodes) {
+	if len(dt.K8sResources.Nodes) != len(other.K8sResources.Nodes) {
 		return false
 	}
 
-	for nodeKey, node := range dt.K8s.Nodes {
-		otherNode, exists := other.K8s.Nodes[nodeKey]
+	for nodeKey, node := range dt.K8sResources.Nodes {
+		otherNode, exists := other.K8sResources.Nodes[nodeKey]
 		if !exists {
 			return false
 		}
@@ -264,35 +270,35 @@ func (dt *DiffTrackerState) Equals(other *DiffTrackerState) bool {
 	}
 
 	// Compare NRP state
-	if !dt.NRP.LoadBalancers.Equals(other.NRP.LoadBalancers) {
+	if !dt.NRPResources.LoadBalancers.Equals(other.NRPResources.LoadBalancers) {
 		return false
 	}
 
-	if !dt.NRP.NATGateways.Equals(other.NRP.NATGateways) {
+	if !dt.NRPResources.NATGateways.Equals(other.NRPResources.NATGateways) {
 		return false
 	}
 
-	if len(dt.NRP.NRPLocations) != len(other.NRP.NRPLocations) {
+	if len(dt.NRPResources.Locations) != len(other.NRPResources.Locations) {
 		return false
 	}
 
-	for location, nrpLocation := range dt.NRP.NRPLocations {
-		otherNrpLocation, exists := other.NRP.NRPLocations[location]
+	for location, nrpLocation := range dt.NRPResources.Locations {
+		otherNrpLocation, exists := other.NRPResources.Locations[location]
 		if !exists {
 			return false
 		}
 
-		if len(nrpLocation.NRPAddresses) != len(otherNrpLocation.NRPAddresses) {
+		if len(nrpLocation.Addresses) != len(otherNrpLocation.Addresses) {
 			return false
 		}
 
-		for address, nrpAddress := range nrpLocation.NRPAddresses {
-			otherNrpAddress, exists := otherNrpLocation.NRPAddresses[address]
+		for address, nrpAddress := range nrpLocation.Addresses {
+			otherNrpAddress, exists := otherNrpLocation.Addresses[address]
 			if !exists {
 				return false
 			}
 
-			if !nrpAddress.NRPServices.Equals(otherNrpAddress.NRPServices) {
+			if !nrpAddress.Services.Equals(otherNrpAddress.Services) {
 				return false
 			}
 		}
@@ -302,7 +308,7 @@ func (dt *DiffTrackerState) Equals(other *DiffTrackerState) bool {
 }
 
 // Map LocationData to LocationDataDTO to be used as payload in ServiceGateway API calls
-func mapLocationDataToDTO(locationData LocationData) LocationDataDTO {
+func MapLocationDataToDTO(locationData LocationData) LocationDataDTO {
 	var locationDataDTO LocationDataDTO
 	locationDataDTO.Action = locationData.Action
 	locationDataDTO.Locations = []LocationDTO{}
@@ -323,4 +329,54 @@ func mapLocationDataToDTO(locationData LocationData) LocationDataDTO {
 	}
 
 	return locationDataDTO
+}
+
+// Map LoadBalancerUpdates to ServiceDataDTO to be used as payload in ServiceGateway API calls
+func MapLoadBalancerUpdatesToServiceDataDTO(loadBalancerUpdates SyncServicesReturnType) ServiceDataDTO {
+	var serviceDataDTO ServiceDataDTO
+	serviceDataDTO.Action = PartialUpdate
+	serviceDataDTO.Services = []ServiceDTO{}
+	for _, service := range loadBalancerUpdates.Additions.UnsortedList() {
+		serviceDTO := ServiceDTO{
+			Service: service,
+			LoadBalancerBackendPools: []LoadBalancerBackendPoolDTO{
+				{
+					Id: fmt.Sprintf("%s-backendpool", service),
+				},
+			},
+		}
+		serviceDataDTO.Services = append(serviceDataDTO.Services, serviceDTO)
+	}
+	for _, service := range loadBalancerUpdates.Removals.UnsortedList() {
+		serviceDTO := ServiceDTO{
+			Service:  service,
+			isDelete: true,
+		}
+		serviceDataDTO.Services = append(serviceDataDTO.Services, serviceDTO)
+	}
+	return serviceDataDTO
+}
+
+// Map NATGatewayUpdates to ServiceDataDTO to be used as payload in ServiceGateway API calls
+func MapNATGatewayUpdatesToServiceDataDTO(natGatewayUpdates SyncServicesReturnType) ServiceDataDTO {
+	var serviceDataDTO ServiceDataDTO
+	serviceDataDTO.Action = PartialUpdate
+	serviceDataDTO.Services = []ServiceDTO{}
+	for _, service := range natGatewayUpdates.Additions.UnsortedList() {
+		serviceDTO := ServiceDTO{
+			Service: service,
+			PublicNatGateway: NatGatewayDTO{
+				Id: fmt.Sprintf("%s-natgateway", service),
+			},
+		}
+		serviceDataDTO.Services = append(serviceDataDTO.Services, serviceDTO)
+	}
+	for _, service := range natGatewayUpdates.Removals.UnsortedList() {
+		serviceDTO := ServiceDTO{
+			Service:  service,
+			isDelete: true,
+		}
+		serviceDataDTO.Services = append(serviceDataDTO.Services, serviceDTO)
+	}
+	return serviceDataDTO
 }

@@ -160,7 +160,7 @@ type Cloud struct {
 
 	azureResourceLocker *AzureResourceLocker
 
-	diffTracker *difftracker.DiffTrackerState
+	diffTracker *difftracker.DiffTracker
 }
 
 // NewCloud returns a Cloud with initialized clients
@@ -499,38 +499,65 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 	}
 
 	if az.IsLBBackendPoolTypePodIP() {
-		az.initializeDiffTracker()
+		err = az.initializeDiffTracker()
+		if err != nil {
+			klog.Errorf("InitializeCloudFromConfig: failed to initialize difftracker: %s", err.Error())
+		}
 	}
 
 	return nil
 }
 
-func (az *Cloud) initializeDiffTracker() {
-	// TODO (enechitoaia): CONSTRUCT K8sState and NRPState from the current state of the cluster
-	K8sState := difftracker.K8sState{
+func (az *Cloud) initializeDiffTracker() error {
+	// TODO (enechitoaia): CONSTRUCT K8s and NRP from the current state of the cluster
+	K8s := difftracker.K8s{
 		Services: utilsets.NewString(),
 		Egresses: utilsets.NewString(),
 		Nodes:    make(map[string]difftracker.Node),
 	}
-	NRPState := difftracker.NRPState{
+	NRP := difftracker.NRP{
 		LoadBalancers: utilsets.NewString(),
 		NATGateways:   utilsets.NewString(),
-		NRPLocations:  make(map[string]difftracker.NRPLocation),
+		Locations:     make(map[string]difftracker.NRPLocation),
 	}
 
 	// Initialize the diff tracker state and get the necessary operations to sync the cluster with NRP
-	diffTrackerState, syncOperations := difftracker.InitializeDiffTrackerState(K8sState, NRPState)
-	az.diffTracker = diffTrackerState
-	// Print syncOps to surpress unused variable error
-	klog.V(2).Infof("Sync operations: %v", syncOperations)
-	// TODO (enechitoaia): call NRP APIs (including ServiceGateway) to update the state of the NRP
+	az.diffTracker = difftracker.InitializeDiffTracker(K8s, NRP)
 
+	// Get the operations to sync the cluster with NRP
+	// syncOperations := az.diffTracker.GetSyncOperations()
+
+	// Get LocationDataDTO for Updating/Creating/Deleting Locations in ServiceGateway API
+	// locationDataDTO := difftracker.MapLocationDataToDTO(syncOperations.LocationData)
+
+	// Get ServiceDataDTO for Updating/Creating/Deleting Services in ServiceGateway API
+	// loadBalancerServicesDTO := difftracker.MapLoadBalancerUpdatesToServiceDataDTO(syncOperations.LoadBalancerUpdates)
+	// natGatewayServicesDTO := difftracker.MapNATGatewayUpdatesToServiceDataDTO(syncOperations.NATGatewayUpdates)
+	// servicesDTO := difftracker.ServiceDataDTO{
+	// 	Action:   difftracker.PartialUpdate,
+	// 	Services: append(loadBalancerServicesDTO.Services, natGatewayServicesDTO.Services...),
+	// }
+
+	// TODO (enechitoaia): Implement the logic for ServiceGatewayClient
+	// Call ServiceGate APIs (including ServiceGateway) to update the state of the NRP
+	// locationDataResponseDTO, err := az.ServiceGatewayClient.UpdateLocations(locationDataDTO)
+	// if err != nil {
+	// 	klog.Errorf("Failed to update locations in ServiceGateway API: %s", err.Error())
+	// 	return err
+	// }
+	// serviceDataResponseDTO, err := az.ServiceGatewayClient.UpdateServices(servicesDTO)
+	// if err != nil {
+	// 	klog.Errorf("Failed to update services in ServiceGateway API: %s", err.Error())
+	// 	return err
+	// }
 	// if Load Balancers have been correctly updated:
 	az.diffTracker.UpdateNRPLoadBalancers()
 	// if NAT Gateways have been correctly updated:
 	az.diffTracker.UpdateNRPNATGateways()
 	// if Locations have been correctly updated:
-	az.diffTracker.UpdateNRPLocationsAddresses()
+	az.diffTracker.UpdateLocationsAddresses()
+
+	return nil
 }
 
 // Multiple standard load balancer mode only supports IP-based load balancers.

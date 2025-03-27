@@ -1,25 +1,37 @@
 package difftracker
 
-func (dt *DiffTrackerState) handleService(input UpdateK8sResource) SyncNRPServicesReturnType {
+func (dt *DiffTracker) handleService(input UpdateK8sResource) SyncServicesReturnType {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
 	dt.UpdateK8service(input)
-	SyncDiffTrackerStateReturnType := dt.GetSyncLoadBalancerNRPServices()
-	return SyncDiffTrackerStateReturnType
+	SyncDiffTrackerReturnType := dt.GetSyncLoadBalancerServices()
+	return SyncDiffTrackerReturnType
 }
 
-func (dt *DiffTrackerState) handleEgress(input UpdateK8sResource) SyncNRPServicesReturnType {
+func (dt *DiffTracker) handleEgress(input UpdateK8sResource) SyncServicesReturnType {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
 	dt.UpdateK8sEgress(input)
-	SyncDiffTrackerStateReturnType := dt.GetSyncNRPNATGateways()
-	return SyncDiffTrackerStateReturnType
+	SyncDiffTrackerReturnType := dt.GetSyncNRPNATGateways()
+	return SyncDiffTrackerReturnType
 }
 
-func (dt *DiffTrackerState) handleEndpoints(input UpdateK8sEndpointsInputType) LocationData {
+func (dt *DiffTracker) handleEndpoints(input UpdateK8sEndpointsInputType) LocationData {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
 	dt.UpdateK8sEndpoints(input)
-	locationData := dt.GetSyncNRPLocationsAddresses()
+	locationData := dt.GetSyncLocationsAddresses()
 	return locationData
 }
 
-func (dt *DiffTrackerState) handleEgressAssignment(input UpdatePodInputType) LocationData {
+func (dt *DiffTracker) handleEgressAssignment(input UpdatePodInputType) LocationData {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
 	dt.UpdateK8sPod(input)
-	locationData := dt.GetSyncNRPLocationsAddresses()
+	locationData := dt.GetSyncLocationsAddresses()
 	return locationData
 }
