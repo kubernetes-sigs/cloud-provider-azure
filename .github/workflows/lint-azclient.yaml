@@ -45,4 +45,5 @@ jobs:
           args: -v
           verify: true
           working-directory: pkg/azclient
+          args: --config=pkg/azclient/.golangci.yml
 
