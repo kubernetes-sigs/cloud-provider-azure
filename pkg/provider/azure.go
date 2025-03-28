@@ -46,6 +46,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
@@ -156,6 +157,8 @@ type Cloud struct {
 	endpointSlicesCache                             sync.Map
 
 	azureResourceLocker *AzureResourceLocker
+
+	diffTracker *difftracker.DiffTracker
 }
 
 // NewCloud returns a Cloud with initialized clients
@@ -299,13 +302,13 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 
 	if config.LoadBalancerBackendPoolConfigurationType == "" ||
 		// TODO(nilo19): support pod IP mode in the future
-		strings.EqualFold(config.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePODIP) {
+		strings.EqualFold(config.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePodIP) {
 		config.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration
 	} else {
 		supportedLoadBalancerBackendPoolConfigurationTypes := utilsets.NewString(
 			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration),
 			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypeNodeIP),
-			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypePODIP))
+			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypePodIP))
 		if !supportedLoadBalancerBackendPoolConfigurationTypes.Has(strings.ToLower(config.LoadBalancerBackendPoolConfigurationType)) {
 			return fmt.Errorf("loadBalancerBackendPoolConfigurationType %s is not supported, supported values are %v", config.LoadBalancerBackendPoolConfigurationType, supportedLoadBalancerBackendPoolConfigurationTypes.UnsortedList())
 		}
@@ -503,6 +506,65 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 			go az.refreshZones(ctx, az.syncRegionZonesMap)
 		}
 	}
+
+	if az.IsLBBackendPoolTypePodIP() {
+		err = az.initializeDiffTracker()
+		if err != nil {
+			klog.Errorf("InitializeCloudFromConfig: failed to initialize difftracker: %s", err.Error())
+		}
+	}
+
+	return nil
+}
+
+func (az *Cloud) initializeDiffTracker() error {
+	// TODO (enechitoaia): CONSTRUCT K8s and NRP from the current state of the cluster
+	K8s := difftracker.K8s{
+		Services: utilsets.NewString(),
+		Egresses: utilsets.NewString(),
+		Nodes:    make(map[string]difftracker.Node),
+	}
+	NRP := difftracker.NRP{
+		LoadBalancers: utilsets.NewString(),
+		NATGateways:   utilsets.NewString(),
+		Locations:     make(map[string]difftracker.NRPLocation),
+	}
+
+	// Initialize the diff tracker state and get the necessary operations to sync the cluster with NRP
+	az.diffTracker = difftracker.InitializeDiffTracker(K8s, NRP)
+
+	// Get the operations to sync the cluster with NRP
+	// syncOperations := az.diffTracker.GetSyncOperations()
+
+	// Get LocationDataDTO for Updating/Creating/Deleting Locations in ServiceGateway API
+	// locationDataDTO := difftracker.MapLocationDataToDTO(syncOperations.LocationData)
+
+	// Get ServiceDataDTO for Updating/Creating/Deleting Services in ServiceGateway API
+	// loadBalancerServicesDTO := difftracker.MapLoadBalancerUpdatesToServiceDataDTO(syncOperations.LoadBalancerUpdates)
+	// natGatewayServicesDTO := difftracker.MapNATGatewayUpdatesToServiceDataDTO(syncOperations.NATGatewayUpdates)
+	// servicesDTO := difftracker.ServiceDataDTO{
+	// 	Action:   difftracker.PartialUpdate,
+	// 	Services: append(loadBalancerServicesDTO.Services, natGatewayServicesDTO.Services...),
+	// }
+
+	// TODO (enechitoaia): Implement the logic for ServiceGatewayClient
+	// Call ServiceGate APIs (including ServiceGateway) to update the state of the NRP
+	// locationDataResponseDTO, err := az.ServiceGatewayClient.UpdateLocations(locationDataDTO)
+	// if err != nil {
+	// 	klog.Errorf("Failed to update locations in ServiceGateway API: %s", err.Error())
+	// 	return err
+	// }
+	// serviceDataResponseDTO, err := az.ServiceGatewayClient.UpdateServices(servicesDTO)
+	// if err != nil {
+	// 	klog.Errorf("Failed to update services in ServiceGateway API: %s", err.Error())
+	// 	return err
+	// }
+	// if Load Balancers have been correctly updated:
+	az.diffTracker.UpdateNRPLoadBalancers()
+	// if NAT Gateways have been correctly updated:
+	az.diffTracker.UpdateNRPNATGateways()
+	// if Locations have been correctly updated:
+	az.diffTracker.UpdateLocationsAddresses()
 
 	return nil
 }
