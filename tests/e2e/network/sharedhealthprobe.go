@@ -205,4 +205,130 @@ var _ = Describe("Shared Health Probe", Label(utils.TestSuiteLabelSharedHealthPr
 		})
 		Expect(err).NotTo(HaveOccurred())
 	})
+
+	It("should properly handle services switching from cluster to local traffic policy", func() {
+		const (
+			service1Name = "svc1-cluster-local-test"
+			service2Name = "svc2-cluster-local-test"
+		)
+
+		// Step 1: Create 1st cluster service, check connectivity
+		By("Creating and waiting for the exposure of the first cluster service")
+		svc1 := utils.CreateLoadBalancerServiceManifest(service1Name, serviceAnnotationLoadBalancerInternalTrue, labels, ns.Name, ports)
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc1, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, service1Name, []*string{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Step 2: Check SLB probe, should be 1 shared probe
+		By("Checking the health probe for the first cluster service")
+		ctxWithTimeout, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		err = wait.PollUntilContextCancel(ctxWithTimeout, 5*time.Second, false, func(ctx context.Context) (bool, error) {
+			lb := getAzureInternalLoadBalancerFromPrivateIP(tc, ips[0], "")
+			probes := lb.Properties.Probes
+			if len(probes) != 1 || !strings.EqualFold(ptr.Deref(probes[0].Name, ""), "cluster-service-shared-health-probe") {
+				return false, nil
+			}
+			return true, nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Step 3: Create 2nd cluster service, check connectivity
+		By("Creating and waiting for the exposure of the second cluster service")
+		svc2 := utils.CreateLoadBalancerServiceManifest(service2Name, serviceAnnotationLoadBalancerInternalTrue, labels, ns.Name, ports)
+		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc2, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, service2Name, []*string{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Step 4: Check SLB probe, should be 1 shared probe
+		By("Checking the health probe after creating the second cluster service")
+		ctxWithTimeout, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		err = wait.PollUntilContextCancel(ctxWithTimeout, 5*time.Second, false, func(ctx context.Context) (bool, error) {
+			lb := getAzureInternalLoadBalancerFromPrivateIP(tc, ips[0], "")
+			probes := lb.Properties.Probes
+			if len(probes) != 1 || !strings.EqualFold(ptr.Deref(probes[0].Name, ""), "cluster-service-shared-health-probe") {
+				return false, nil
+			}
+			return true, nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Step 5: Change 1st service to local
+		By("Changing the first service from cluster to local traffic policy")
+		svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), service1Name, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		svc1.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
+		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify connectivity after changing to local
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, service1Name, []*string{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Step 6: Check SLB probe, should be 1 shared probe and 1 other probe
+		By("Checking the health probe after changing the first service to local traffic policy")
+		ctxWithTimeout, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		err = wait.PollUntilContextCancel(ctxWithTimeout, 5*time.Second, false, func(ctx context.Context) (bool, error) {
+			lb := getAzureInternalLoadBalancerFromPrivateIP(tc, ips[0], "")
+			probes := lb.Properties.Probes
+			if len(probes) != 2 {
+				return false, nil
+			}
+
+			var foundSharedProbe bool
+			for _, probe := range probes {
+				if strings.EqualFold(ptr.Deref(probe.Name, ""), "cluster-service-shared-health-probe") {
+					foundSharedProbe = true
+					break
+				}
+			}
+			if !foundSharedProbe {
+				return false, nil
+			}
+			return true, nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Step 7: Change 2nd service to local
+		By("Changing the second service from cluster to local traffic policy")
+		svc2, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), service2Name, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		svc2.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
+		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc2, metav1.UpdateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify connectivity after changing to local
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, service2Name, []*string{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Step 8: Check SLB probe, should be 2 other probes (no shared probe)
+		By("Checking the health probe after changing the second service to local traffic policy")
+		ctxWithTimeout, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		err = wait.PollUntilContextCancel(ctxWithTimeout, 5*time.Second, false, func(ctx context.Context) (bool, error) {
+			lb := getAzureInternalLoadBalancerFromPrivateIP(tc, ips[0], "")
+			probes := lb.Properties.Probes
+
+			// Should be exactly 2 probes
+			if len(probes) != 2 {
+				return false, nil
+			}
+
+			// None of them should be the shared probe
+			for _, probe := range probes {
+				if strings.EqualFold(ptr.Deref(probe.Name, ""), "cluster-service-shared-health-probe") {
+					return false, nil
+				}
+			}
+
+			return true, nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
 })
