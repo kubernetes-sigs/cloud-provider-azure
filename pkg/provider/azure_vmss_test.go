@@ -2134,6 +2134,7 @@ func TestEnsureHostInPool(t *testing.T) {
 		isNilVMNetworkConfigs     bool
 		isVMBeingDeleted          bool
 		isVMNotActive             bool
+		isVMNotFound              bool
 		expectedNodeResourceGroup string
 		expectedVMSSName          string
 		expectedInstanceID        string
@@ -2172,6 +2173,11 @@ func TestEnsureHostInPool(t *testing.T) {
 			description:      "EnsureHostInPool should skip the current node if it is being deleted",
 			nodeName:         "vmss-vm-000000",
 			isVMBeingDeleted: true,
+		},
+		{
+			description:  "EnsureHostInPool should skip the current node if the vm is not found",
+			nodeName:     "vmss-vm-000000",
+			isVMNotFound: true,
 		},
 		{
 			description:               "EnsureHostInPool should add a new backend pool to the vm",
@@ -2256,6 +2262,9 @@ func TestEnsureHostInPool(t *testing.T) {
 			(*expectedVMSSVMs[0].InstanceView.Statuses)[0] = compute.InstanceViewStatus{
 				Code: ptr.To("PowerState/deallocated"),
 			}
+		}
+		if test.isVMNotFound {
+			expectedVMSSVMs = nil
 		}
 		mockVMSSVMClient := ss.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
 		mockVMSSVMClient.EXPECT().List(
