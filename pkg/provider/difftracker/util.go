@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 func (operation Operation) String() string {
@@ -332,7 +333,7 @@ func MapLocationDataToDTO(locationData LocationData) LocationDataDTO {
 }
 
 // Map LoadBalancerUpdates to ServiceDataDTO to be used as payload in ServiceGateway API calls
-func MapLoadBalancerUpdatesToServiceDataDTO(loadBalancerUpdates SyncServicesReturnType) ServiceDataDTO {
+func MapLoadBalancerUpdatesToServiceDataDTO(loadBalancerUpdates SyncServicesReturnType, subscriptionID string, resourceGroup string) ServiceDataDTO {
 	var serviceDataDTO ServiceDataDTO
 	serviceDataDTO.Action = PartialUpdate
 	serviceDataDTO.Services = []ServiceDTO{}
@@ -341,7 +342,13 @@ func MapLoadBalancerUpdatesToServiceDataDTO(loadBalancerUpdates SyncServicesRetu
 			Service: service,
 			LoadBalancerBackendPools: []LoadBalancerBackendPoolDTO{
 				{
-					Id: fmt.Sprintf("%s-backendpool", service),
+					Id: fmt.Sprintf(
+						consts.BackendPoolIDTemplate,
+						subscriptionID,
+						resourceGroup,
+						service,
+						fmt.Sprintf("%s-backendpool", service),
+					),
 				},
 			},
 		}
@@ -358,7 +365,7 @@ func MapLoadBalancerUpdatesToServiceDataDTO(loadBalancerUpdates SyncServicesRetu
 }
 
 // Map NATGatewayUpdates to ServiceDataDTO to be used as payload in ServiceGateway API calls
-func MapNATGatewayUpdatesToServiceDataDTO(natGatewayUpdates SyncServicesReturnType) ServiceDataDTO {
+func MapNATGatewayUpdatesToServiceDataDTO(natGatewayUpdates SyncServicesReturnType, subscriptionID string, resourceGroup string) ServiceDataDTO {
 	var serviceDataDTO ServiceDataDTO
 	serviceDataDTO.Action = PartialUpdate
 	serviceDataDTO.Services = []ServiceDTO{}
@@ -366,7 +373,12 @@ func MapNATGatewayUpdatesToServiceDataDTO(natGatewayUpdates SyncServicesReturnTy
 		serviceDTO := ServiceDTO{
 			Service: service,
 			PublicNatGateway: NatGatewayDTO{
-				Id: fmt.Sprintf("%s-natgateway", service),
+				Id: fmt.Sprintf(
+					consts.NatGatewayIDTemplate,
+					subscriptionID,
+					resourceGroup,
+					service,
+				),
 			},
 		}
 		serviceDataDTO.Services = append(serviceDataDTO.Services, serviceDTO)

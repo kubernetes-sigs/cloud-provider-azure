@@ -366,6 +366,8 @@ const (
 	BackendPoolIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s"
 	// LoadBalancerProbeIDTemplate is the template of the load balancer probe
 	LoadBalancerProbeIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/probes/%s"
+	// NatGatewayIDTemplate is the template of the nat gateway
+	NatGatewayIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/natGateways/%s"
 
 	// InternalLoadBalancerNameSuffix is load balancer suffix
 	InternalLoadBalancerNameSuffix = "-internal"

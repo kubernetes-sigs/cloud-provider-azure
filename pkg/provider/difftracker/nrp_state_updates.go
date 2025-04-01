@@ -1,100 +1,107 @@
 package difftracker
 
 import (
-	"fmt"
-
 	"k8s.io/klog/v2"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
-func (dt *DiffTracker) UpdateNRPLoadBalancers() {
+func (dt *DiffTracker) UpdateNRPLoadBalancers(syncServicesReturnType SyncServicesReturnType) {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
-	for _, service := range dt.K8sResources.Services.UnsortedList() {
-		if dt.NRPResources.LoadBalancers.Has(service) {
-			continue
-		}
+	for _, service := range syncServicesReturnType.Additions.UnsortedList() {
 		dt.NRPResources.LoadBalancers.Insert(service)
-		klog.V(2).Infof("Added service %s to NRP LoadBalancers", service)
+		klog.V(2).Infof("Added service %s to NRP LoadBalancers\n", service)
 	}
 
-	for _, service := range dt.NRPResources.LoadBalancers.UnsortedList() {
-		if dt.K8sResources.Services.Has(service) {
-			continue
-		}
+	for _, service := range syncServicesReturnType.Removals.UnsortedList() {
 		dt.NRPResources.LoadBalancers.Delete(service)
-		klog.V(2).Infof("Removed service %s from NRP LoadBalancers", service)
+		klog.V(2).Infof("Removed service %s from NRP LoadBalancers\n", service)
 	}
 }
 
-func (dt *DiffTracker) UpdateNRPNATGateways() {
+func (dt *DiffTracker) UpdateNRPNATGateways(syncServicesReturnType SyncServicesReturnType) {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
-	for _, egress := range dt.K8sResources.Egresses.UnsortedList() {
-		if dt.NRPResources.NATGateways.Has(egress) {
-			continue
-		}
-		dt.NRPResources.NATGateways.Insert(egress)
-		fmt.Printf("Added egress %s to NRP NATGateways\n", egress)
+	for _, service := range syncServicesReturnType.Additions.UnsortedList() {
+		dt.NRPResources.NATGateways.Insert(service)
+		klog.V(2).Infof("Added service %s to NRP NATGateways\n", service)
 	}
 
-	for _, egress := range dt.NRPResources.NATGateways.UnsortedList() {
-		if dt.K8sResources.Egresses.Has(egress) {
-			continue
-		}
-		dt.NRPResources.NATGateways.Delete(egress)
-		fmt.Printf("Removed egress %s from NRP NATGateways\n", egress)
+	for _, service := range syncServicesReturnType.Removals.UnsortedList() {
+		dt.NRPResources.NATGateways.Delete(service)
+		klog.V(2).Infof("Removed service %s from NRP NATGateways\n", service)
 	}
 }
 
-func (dt *DiffTracker) UpdateLocationsAddresses() {
+func (dt *DiffTracker) UpdateLocationsAddresses(locationData LocationData) {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
-	// Update DiffTracker.NRP
-	for nodeIp, node := range dt.K8sResources.Nodes {
-		nrpLocation, exists := dt.NRPResources.Locations[nodeIp]
-		if !exists {
+	for locationKey, locationValue := range locationData.Locations {
+		// Remove empty locations
+		if len(locationValue.Addresses) == 0 {
+			delete(dt.NRPResources.Locations, locationKey)
+			continue
+		}
+
+		// Get or create location
+		nrpLocation, exists := dt.NRPResources.Locations[locationKey]
+		isFullUpdate := !exists || locationValue.AddressUpdateAction == FullUpdate
+
+		// For full updates, start with a fresh location
+		if isFullUpdate {
 			nrpLocation = NRPLocation{
 				Addresses: make(map[string]NRPAddress),
 			}
-			dt.NRPResources.Locations[nodeIp] = nrpLocation
 		}
-		for address, pod := range node.Pods {
-			nrpAddress := NRPAddress{
-				Services: utilsets.NewString(),
-			}
-			nrpLocation.Addresses[address] = nrpAddress
 
-			for _, identity := range pod.InboundIdentities.UnsortedList() {
-				nrpAddress.Services.Insert(identity)
+		// Process address updates
+		for addressKey, addressValue := range locationValue.Addresses {
+			// Remove empty addresses
+			if addressValue.ServiceRef.Len() == 0 {
+				delete(nrpLocation.Addresses, addressKey)
+				continue
 			}
-			if pod.PublicOutboundIdentity != "" {
-				nrpAddress.Services.Insert(pod.PublicOutboundIdentity)
+
+			// Create new service references set
+			serviceRefs := createServiceRefsFromAddress(addressValue)
+
+			// For full update or when address doesn't exist, add new address
+			if isFullUpdate || !addressExists(nrpLocation, addressKey) {
+				nrpLocation.Addresses[addressKey] = NRPAddress{Services: serviceRefs}
+				continue
 			}
-			if pod.PrivateOutboundIdentity != "" {
-				nrpAddress.Services.Insert(pod.PrivateOutboundIdentity)
+
+			// For partial updates with existing address
+			existingAddress := nrpLocation.Addresses[addressKey]
+			if !serviceRefs.Equals(existingAddress.Services) {
+				existingAddress.Services = serviceRefs
+				nrpLocation.Addresses[addressKey] = existingAddress
 			}
+		}
+
+		// Save location if it has addresses, otherwise delete it
+		if len(nrpLocation.Addresses) > 0 {
+			dt.NRPResources.Locations[locationKey] = nrpLocation
+		} else {
+			delete(dt.NRPResources.Locations, locationKey)
 		}
 	}
+}
 
-	for location, nrpLocation := range dt.NRPResources.Locations {
-		node, exists := dt.K8sResources.Nodes[location]
-		if !exists {
-			delete(dt.NRPResources.Locations, location)
-			continue
-		}
-		for address := range nrpLocation.Addresses {
-			_, exists := node.Pods[address]
-			if !exists {
-				delete(nrpLocation.Addresses, address)
-			}
+// Helper function to check if address exists in a location
+func addressExists(location NRPLocation, addressKey string) bool {
+	_, exists := location.Addresses[addressKey]
+	return exists
+}
 
-		}
-		if len(nrpLocation.Addresses) == 0 {
-			delete(dt.NRPResources.Locations, location)
-		}
+// Helper function to create service references from an address
+func createServiceRefsFromAddress(addressValue Address) *utilsets.IgnoreCaseSet {
+	serviceRefs := utilsets.NewString()
+	for _, service := range addressValue.ServiceRef.UnsortedList() {
+		serviceRefs.Insert(service)
 	}
+	return serviceRefs
 }

@@ -22,20 +22,29 @@ func updateK8Resource(input UpdateK8sResource, set *utilsets.IgnoreCaseSet, reso
 	case REMOVE:
 		set.Delete(input.ID)
 	default:
-		return fmt.Errorf("error Update%s, Operation=%s and ID=%s", resourceType, input.Operation, input.ID)
+		return fmt.Errorf("error - ResourceType=%s, Operation=%s and ID=%s", resourceType, input.Operation, input.ID)
 	}
 	return nil
 }
 
-func (dt *DiffTracker) UpdateK8service(input UpdateK8sResource) error {
+func (dt *DiffTracker) UpdateK8sService(input UpdateK8sResource) error {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
 	return updateK8Resource(input, dt.K8sResources.Services, ResourceTypeService)
 }
 
 func (dt *DiffTracker) UpdateK8sEgress(input UpdateK8sResource) error {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
 	return updateK8Resource(input, dt.K8sResources.Egresses, ResourceTypeEgress)
 }
 
 func (dt *DiffTracker) UpdateK8sEndpoints(input UpdateK8sEndpointsInputType) []error {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
 	var errs []error
 	for address, location := range input.NewAddresses {
 
@@ -132,6 +141,9 @@ func (dt *DiffTracker) removePod(input UpdatePodInputType) error {
 }
 
 func (dt *DiffTracker) UpdateK8sPod(input UpdatePodInputType) error {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
 	switch input.PodOperation {
 	case ADD, UPDATE:
 		return dt.addOrUpdatePod(input)

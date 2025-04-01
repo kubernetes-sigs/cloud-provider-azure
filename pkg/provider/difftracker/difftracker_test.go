@@ -10,6 +10,11 @@ import (
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
+var (
+	subscriptionID    = "test-subscription-id"
+	resourceGroupName = "test-resource-group-name"
+)
+
 func TestDiffTracker_DeepEqual(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -74,7 +79,7 @@ func TestDiffTracker_DeepEqual(t *testing.T) {
 	}
 }
 
-func TestUpdateK8service(t *testing.T) {
+func TestUpdateK8sService(t *testing.T) {
 	dt := &DiffTracker{
 		K8sResources: K8s{
 			Services: utilsets.NewString(),
@@ -82,7 +87,7 @@ func TestUpdateK8service(t *testing.T) {
 	}
 
 	// Test ADD operation
-	err := dt.UpdateK8service(UpdateK8sResource{
+	err := dt.UpdateK8sService(UpdateK8sResource{
 		Operation: ADD,
 		ID:        "service1",
 	})
@@ -90,7 +95,7 @@ func TestUpdateK8service(t *testing.T) {
 	assert.True(t, dt.K8sResources.Services.Has("service1"))
 
 	// Test REMOVE operation
-	err = dt.UpdateK8service(UpdateK8sResource{
+	err = dt.UpdateK8sService(UpdateK8sResource{
 		Operation: REMOVE,
 		ID:        "service1",
 	})
@@ -98,7 +103,7 @@ func TestUpdateK8service(t *testing.T) {
 	assert.False(t, dt.K8sResources.Services.Has("service1"))
 
 	// Test invalid operation
-	err = dt.UpdateK8service(UpdateK8sResource{
+	err = dt.UpdateK8sService(UpdateK8sResource{
 		Operation: UPDATE,
 		ID:        "service1",
 	})
@@ -309,8 +314,9 @@ func TestUpdateNRPLoadBalancers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			syncServices := tt.initialState.GetSyncLoadBalancerServices()
 			// Execute the update
-			tt.initialState.UpdateNRPLoadBalancers()
+			tt.initialState.UpdateNRPLoadBalancers(syncServices)
 
 			// Verify the NRP state was updated correctly
 			assert.True(t, tt.expectedNRP.Equals(tt.initialState.NRPResources.LoadBalancers),
@@ -349,7 +355,7 @@ func TestUpdateK8sEgress(t *testing.T) {
 		ID:        "egress1",
 	})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "error UpdateEgress")
+	assert.Contains(t, err.Error(), "error - ResourceType=Egress, Operation=UPDATE and ID=egress1")
 }
 func TestGetSyncNRPNATGateways(t *testing.T) {
 	tests := []struct {
@@ -487,8 +493,9 @@ func TestUpdateNRPNATGateways(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			syncServices := tt.initialState.GetSyncNRPNATGateways()
 			// Execute the update
-			tt.initialState.UpdateNRPNATGateways()
+			tt.initialState.UpdateNRPNATGateways(syncServices)
 
 			// Verify the NRP state was updated correctly
 			assert.True(t, tt.expectedNRP.Equals(tt.initialState.NRPResources.NATGateways),
@@ -707,8 +714,11 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Get necessary sync operations
+			locationData := tt.initialState.GetSyncLocationsAddresses()
+
 			// Execute the update
-			tt.initialState.UpdateLocationsAddresses()
+			tt.initialState.UpdateLocationsAddresses(locationData)
 
 			// Verify the NRP state was updated correctly
 			// First check if the number of locations matches
@@ -748,125 +758,6 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestHandleService(t *testing.T) {
-	dt := createTestDiffTracker()
-
-	// Test handleService
-	serviceResult := dt.handleService(UpdateK8sResource{
-		Operation: ADD,
-		ID:        "newService",
-	})
-	assert.True(t, serviceResult.Additions.Has("newService"))
-	assert.Equal(t, 1, serviceResult.Additions.Len())
-	assert.Equal(t, 0, serviceResult.Removals.Len())
-
-	dt.UpdateNRPLoadBalancers()
-	// Test removal operation
-	serviceResult = dt.handleService(UpdateK8sResource{
-		Operation: REMOVE,
-		ID:        "newService",
-	})
-	assert.True(t, serviceResult.Removals.Has("newService"))
-	assert.Equal(t, 0, serviceResult.Additions.Len())
-	assert.Equal(t, 1, serviceResult.Removals.Len())
-}
-
-func TestHandleEgress(t *testing.T) {
-	dt := createTestDiffTracker()
-
-	// Test handleEgress with ADD operation
-	egressResult := dt.handleEgress(UpdateK8sResource{
-		Operation: ADD,
-		ID:        "newEgress",
-	})
-	assert.True(t, egressResult.Additions.Has("newEgress"))
-	assert.Equal(t, 1, egressResult.Additions.Len())
-	assert.Equal(t, 0, egressResult.Removals.Len())
-
-	dt.UpdateNRPNATGateways()
-	// Test with REMOVE operation
-	egressResult = dt.handleEgress(UpdateK8sResource{
-		Operation: REMOVE,
-		ID:        "newEgress",
-	})
-	assert.True(t, egressResult.Removals.Has("newEgress"))
-	assert.Equal(t, 0, egressResult.Additions.Len())
-	assert.Equal(t, 1, egressResult.Removals.Len())
-}
-
-func TestHandleEndpoints(t *testing.T) {
-	dt := createTestDiffTracker()
-
-	// Test adding new endpoint
-	endpointsResult := dt.handleEndpoints(UpdateK8sEndpointsInputType{
-		InboundIdentity: "newService",
-		OldAddresses:    map[string]string{},
-		NewAddresses:    map[string]string{"10.0.0.1": "node1", "10.0.0.2": "node1"},
-	})
-	assert.Equal(t, 1, len(endpointsResult.Locations))
-	loc, exists := endpointsResult.Locations["node1"]
-	assert.True(t, exists)
-	assert.Equal(t, PartialUpdate, endpointsResult.Locations["node1"].AddressUpdateAction)
-	assert.Equal(t, 2, len(loc.Addresses))
-	assert.True(t, loc.Addresses["10.0.0.2"].ServiceRef.Has("newService"))
-	assert.True(t, loc.Addresses["10.0.0.1"].ServiceRef.Has("newService"))
-
-	// Sync NRP state
-	dt.UpdateLocationsAddresses()
-
-	// Test updating existing endpoint
-	endpointsResult = dt.handleEndpoints(UpdateK8sEndpointsInputType{
-		InboundIdentity: "existingService",
-		OldAddresses:    map[string]string{"10.0.0.1": "node1"},
-		NewAddresses:    map[string]string{"10.0.0.1": "node1", "10.0.0.3": "node1"},
-	})
-	assert.Equal(t, 1, len(endpointsResult.Locations))
-	loc, exists = endpointsResult.Locations["node1"]
-	assert.True(t, exists)
-	assert.Equal(t, 1, len(loc.Addresses))
-	assert.True(t, loc.Addresses["10.0.0.3"].ServiceRef.Has("existingService"))
-}
-
-func TestHandleEgressAssignment(t *testing.T) {
-	dt := createTestDiffTracker()
-
-	// Test adding egress assignment
-	egressAssignmentResult := dt.handleEgressAssignment(UpdatePodInputType{
-		PodOperation:            ADD,
-		PublicOutboundIdentity:  "existingPublicOutboundIdentity",
-		PrivateOutboundIdentity: "newPrivateOutboundIdentity",
-		Location:                "node1",
-		Address:                 "10.0.0.1",
-	})
-	assert.Equal(t, 1, len(egressAssignmentResult.Locations))
-	locationInfo, exists := egressAssignmentResult.Locations["node1"]
-	assert.True(t, exists)
-	assert.Equal(t, 1, len(locationInfo.Addresses))
-	address, exists := locationInfo.Addresses["10.0.0.1"]
-	assert.True(t, exists)
-	assert.True(t, address.ServiceRef.Has("existingService"))
-	assert.True(t, address.ServiceRef.Has("existingPublicOutboundIdentity"))
-	assert.True(t, address.ServiceRef.Has("newPrivateOutboundIdentity"))
-
-	// Sync NRP state
-	dt.UpdateLocationsAddresses()
-
-	// Test removing egress assignment
-	egressAssignmentResult = dt.handleEgressAssignment(UpdatePodInputType{
-		PodOperation:            UPDATE,
-		PublicOutboundIdentity:  "",
-		PrivateOutboundIdentity: "newPrivateOutboundIdentity",
-		Location:                "node1",
-		Address:                 "10.0.0.1",
-	})
-	assert.Equal(t, 1, len(egressAssignmentResult.Locations))
-	locationInfo = egressAssignmentResult.Locations["node1"]
-	assert.NotNil(t, locationInfo)
-	assert.True(t, locationInfo.Addresses["10.0.0.1"].ServiceRef.Has("newPrivateOutboundIdentity"))
-	assert.True(t, locationInfo.Addresses["10.0.0.1"].ServiceRef.Has("existingService"))
-	assert.False(t, locationInfo.Addresses["10.0.0.1"].ServiceRef.Has("existingPublicOutboundIdentity"))
 }
 
 func createTestDiffTracker() *DiffTracker {
@@ -1258,9 +1149,9 @@ func TestInitializeDiffTracker(t *testing.T) {
 	diffTracker := InitializeDiffTracker(K8sResources, NRPResources)
 	syncOperations := diffTracker.GetSyncOperations()
 	// It follows a call to ServiceGateway API and if it is successful we can proceed with syncing difftracker.NRP
-	diffTracker.UpdateNRPLoadBalancers()
-	diffTracker.UpdateNRPNATGateways()
-	diffTracker.UpdateLocationsAddresses()
+	diffTracker.UpdateNRPLoadBalancers(syncOperations.LoadBalancerUpdates)
+	diffTracker.UpdateNRPNATGateways(syncOperations.NATGatewayUpdates)
+	diffTracker.UpdateLocationsAddresses(syncOperations.LocationData)
 
 	assert.True(t, syncOperations.Equals(expectedSyncOperations),
 		"Sync operations do not match expected values")
@@ -1449,7 +1340,7 @@ func TestMapLoadBalancerUpdatesToServiceDataDTO_EmptyUpdates(t *testing.T) {
 		Removals:  sets.NewString(),
 	}
 
-	actual := MapLoadBalancerUpdatesToServiceDataDTO(updates)
+	actual := MapLoadBalancerUpdatesToServiceDataDTO(updates, subscriptionID, resourceGroupName)
 
 	expected := ServiceDataDTO{
 		Action:   PartialUpdate,
@@ -1465,7 +1356,7 @@ func TestMapLoadBalancerUpdatesToServiceDataDTO_OnlyAdditions(t *testing.T) {
 		Removals:  sets.NewString(),
 	}
 
-	actual := MapLoadBalancerUpdatesToServiceDataDTO(updates)
+	actual := MapLoadBalancerUpdatesToServiceDataDTO(updates, subscriptionID, resourceGroupName)
 
 	expected := ServiceDataDTO{
 		Action: PartialUpdate,
@@ -1475,7 +1366,7 @@ func TestMapLoadBalancerUpdatesToServiceDataDTO_OnlyAdditions(t *testing.T) {
 				isDelete: false,
 				LoadBalancerBackendPools: []LoadBalancerBackendPoolDTO{
 					{
-						Id: "service-1-backendpool",
+						Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/loadBalancers/service-1/backendAddressPools/service-1-backendpool",
 					},
 				},
 			},
@@ -1484,7 +1375,7 @@ func TestMapLoadBalancerUpdatesToServiceDataDTO_OnlyAdditions(t *testing.T) {
 				isDelete: false,
 				LoadBalancerBackendPools: []LoadBalancerBackendPoolDTO{
 					{
-						Id: "service-2-backendpool",
+						Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/loadBalancers/service-2/backendAddressPools/service-2-backendpool",
 					},
 				},
 			},
@@ -1504,7 +1395,7 @@ func TestMapLoadBalancerUpdatesToServiceDataDTO_OnlyRemovals(t *testing.T) {
 		Removals:  sets.NewString("service-3", "service-4"),
 	}
 
-	actual := MapLoadBalancerUpdatesToServiceDataDTO(updates)
+	actual := MapLoadBalancerUpdatesToServiceDataDTO(updates, subscriptionID, resourceGroupName)
 
 	expected := ServiceDataDTO{
 		Action: PartialUpdate,
@@ -1533,7 +1424,7 @@ func TestMapLoadBalancerUpdatesToServiceDataDTO_AdditionsAndRemovals(t *testing.
 		Removals:  sets.NewString("service-remove-1", "service-remove-2"),
 	}
 
-	actual := MapLoadBalancerUpdatesToServiceDataDTO(updates)
+	actual := MapLoadBalancerUpdatesToServiceDataDTO(updates, subscriptionID, resourceGroupName)
 
 	expected := ServiceDataDTO{
 		Action: PartialUpdate,
@@ -1543,7 +1434,7 @@ func TestMapLoadBalancerUpdatesToServiceDataDTO_AdditionsAndRemovals(t *testing.
 				isDelete: false,
 				LoadBalancerBackendPools: []LoadBalancerBackendPoolDTO{
 					{
-						Id: "service-add-1-backendpool",
+						Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/loadBalancers/service-add-1/backendAddressPools/service-add-1-backendpool",
 					},
 				},
 			},
@@ -1552,7 +1443,7 @@ func TestMapLoadBalancerUpdatesToServiceDataDTO_AdditionsAndRemovals(t *testing.
 				isDelete: false,
 				LoadBalancerBackendPools: []LoadBalancerBackendPoolDTO{
 					{
-						Id: "service-add-2-backendpool",
+						Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/loadBalancers/service-add-2/backendAddressPools/service-add-2-backendpool",
 					},
 				},
 			},
@@ -1586,7 +1477,7 @@ func TestMapNATGatewayUpdatesToServiceDataDTO_EmptyUpdates(t *testing.T) {
 		Removals:  sets.NewString(),
 	}
 
-	actual := MapNATGatewayUpdatesToServiceDataDTO(updates)
+	actual := MapNATGatewayUpdatesToServiceDataDTO(updates, subscriptionID, resourceGroupName)
 
 	expected := ServiceDataDTO{
 		Action:   PartialUpdate,
@@ -1602,7 +1493,7 @@ func TestMapNATGatewayUpdatesToServiceDataDTO_OnlyAdditions(t *testing.T) {
 		Removals:  sets.NewString(),
 	}
 
-	actual := MapNATGatewayUpdatesToServiceDataDTO(updates)
+	actual := MapNATGatewayUpdatesToServiceDataDTO(updates, subscriptionID, resourceGroupName)
 
 	expected := ServiceDataDTO{
 		Action: PartialUpdate,
@@ -1611,14 +1502,14 @@ func TestMapNATGatewayUpdatesToServiceDataDTO_OnlyAdditions(t *testing.T) {
 				Service:  "natgw-1",
 				isDelete: false,
 				PublicNatGateway: NatGatewayDTO{
-					Id: "natgw-1-natgateway",
+					Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/natGateways/natgw-1",
 				},
 			},
 			{
 				Service:  "natgw-2",
 				isDelete: false,
 				PublicNatGateway: NatGatewayDTO{
-					Id: "natgw-2-natgateway",
+					Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/natGateways/natgw-2",
 				},
 			},
 		},
@@ -1637,7 +1528,7 @@ func TestMapNATGatewayUpdatesToServiceDataDTO_OnlyRemovals(t *testing.T) {
 		Removals:  sets.NewString("natgw-3", "natgw-4"),
 	}
 
-	actual := MapNATGatewayUpdatesToServiceDataDTO(updates)
+	actual := MapNATGatewayUpdatesToServiceDataDTO(updates, subscriptionID, resourceGroupName)
 
 	expected := ServiceDataDTO{
 		Action: PartialUpdate,
@@ -1666,7 +1557,7 @@ func TestMapNATGatewayUpdatesToServiceDataDTO_AdditionsAndRemovals(t *testing.T)
 		Removals:  sets.NewString("natgw-remove-1", "natgw-remove-2"),
 	}
 
-	actual := MapNATGatewayUpdatesToServiceDataDTO(updates)
+	actual := MapNATGatewayUpdatesToServiceDataDTO(updates, subscriptionID, resourceGroupName)
 
 	expected := ServiceDataDTO{
 		Action: PartialUpdate,
@@ -1675,14 +1566,14 @@ func TestMapNATGatewayUpdatesToServiceDataDTO_AdditionsAndRemovals(t *testing.T)
 				Service:  "natgw-add-1",
 				isDelete: false,
 				PublicNatGateway: NatGatewayDTO{
-					Id: "natgw-add-1-natgateway",
+					Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/natGateways/natgw-add-1",
 				},
 			},
 			{
 				Service:  "natgw-add-2",
 				isDelete: false,
 				PublicNatGateway: NatGatewayDTO{
-					Id: "natgw-add-2-natgateway",
+					Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/natGateways/natgw-add-2",
 				},
 			},
 			{

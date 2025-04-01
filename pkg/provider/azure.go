@@ -510,33 +510,39 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 
 func (az *Cloud) initializeDiffTracker() error {
 	// TODO (enechitoaia): CONSTRUCT K8s and NRP from the current state of the cluster
-	K8s := difftracker.K8s{
+	k8s := difftracker.K8s{
 		Services: utilsets.NewString(),
 		Egresses: utilsets.NewString(),
 		Nodes:    make(map[string]difftracker.Node),
 	}
-	NRP := difftracker.NRP{
+	nrp := difftracker.NRP{
 		LoadBalancers: utilsets.NewString(),
 		NATGateways:   utilsets.NewString(),
 		Locations:     make(map[string]difftracker.NRPLocation),
 	}
 
 	// Initialize the diff tracker state and get the necessary operations to sync the cluster with NRP
-	az.diffTracker = difftracker.InitializeDiffTracker(K8s, NRP)
+	az.diffTracker = difftracker.InitializeDiffTracker(k8s, nrp)
 
 	// Get the operations to sync the cluster with NRP
-	// syncOperations := az.diffTracker.GetSyncOperations()
+	syncOperations := az.diffTracker.GetSyncOperations()
 
 	// Get LocationDataDTO for Updating/Creating/Deleting Locations in ServiceGateway API
 	// locationDataDTO := difftracker.MapLocationDataToDTO(syncOperations.LocationData)
 
 	// Get ServiceDataDTO for Updating/Creating/Deleting Services in ServiceGateway API
-	// loadBalancerServicesDTO := difftracker.MapLoadBalancerUpdatesToServiceDataDTO(syncOperations.LoadBalancerUpdates)
-	// natGatewayServicesDTO := difftracker.MapNATGatewayUpdatesToServiceDataDTO(syncOperations.NATGatewayUpdates)
+	// loadBalancerServicesDTO := difftracker.MapLoadBalancerUpdatesToServiceDataDTO(syncOperations.LoadBalancerUpdates, az.SubscriptionID, az.ResourceGroup)
+	// natGatewayServicesDTO := difftracker.MapNATGatewayUpdatesToServiceDataDTO(syncOperations.NATGatewayUpdates, az.SubscriptionID, az.ResourceGroup)
 	// servicesDTO := difftracker.ServiceDataDTO{
 	// 	Action:   difftracker.PartialUpdate,
 	// 	Services: append(loadBalancerServicesDTO.Services, natGatewayServicesDTO.Services...),
 	// }
+
+	// TODO (enechitoaia)
+	// Create LBs
+	// Create NAT Gateways
+	// Create LB rules
+	// ...
 
 	// TODO (enechitoaia): Implement the logic for ServiceGatewayClient
 	// Call ServiceGate APIs (including ServiceGateway) to update the state of the NRP
@@ -551,11 +557,11 @@ func (az *Cloud) initializeDiffTracker() error {
 	// 	return err
 	// }
 	// if Load Balancers have been correctly updated:
-	az.diffTracker.UpdateNRPLoadBalancers()
+	az.diffTracker.UpdateNRPLoadBalancers(syncOperations.LoadBalancerUpdates)
 	// if NAT Gateways have been correctly updated:
-	az.diffTracker.UpdateNRPNATGateways()
+	az.diffTracker.UpdateNRPNATGateways(syncOperations.NATGatewayUpdates)
 	// if Locations have been correctly updated:
-	az.diffTracker.UpdateLocationsAddresses()
+	az.diffTracker.UpdateLocationsAddresses(syncOperations.LocationData)
 
 	return nil
 }

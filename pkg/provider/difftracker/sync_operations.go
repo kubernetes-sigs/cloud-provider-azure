@@ -32,16 +32,25 @@ func syncServices(k8sServices, Services *utilsets.IgnoreCaseSet) SyncServicesRet
 }
 
 func (dt *DiffTracker) GetSyncLoadBalancerServices() SyncServicesReturnType {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
 	return syncServices(dt.K8sResources.Services, dt.NRPResources.LoadBalancers)
 }
 
 func (dt *DiffTracker) GetSyncNRPNATGateways() SyncServicesReturnType {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
 	return syncServices(dt.K8sResources.Egresses, dt.NRPResources.NATGateways)
 }
 
 //==============================================================================
 
 func (dt *DiffTracker) GetSyncLocationsAddresses() LocationData {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
 	result := LocationData{
 		Action:    PartialUpdate,
 		Locations: make(map[string]Location),
@@ -49,19 +58,23 @@ func (dt *DiffTracker) GetSyncLocationsAddresses() LocationData {
 
 	// Iterate over all nodes in the K8s state
 	for nodeIp, node := range dt.K8sResources.Nodes {
-		nrpLocation, exists := dt.NRPResources.Locations[nodeIp]
-		location := initializeLocation(exists)
+		nrpLocation, locationExists := dt.NRPResources.Locations[nodeIp]
+		location := initializeLocation(locationExists)
+		locationUpdated := false
 
 		for address, pod := range node.Pods {
 			serviceRef := createServiceRef(pod)
 			addressData := Address{ServiceRef: serviceRef}
 
-			if !exists || !serviceRef.Equals(nrpLocation.Addresses[address].Services) {
+			_, addressExists := nrpLocation.Addresses[address]
+			if !locationExists || !addressExists || !serviceRef.Equals(nrpLocation.Addresses[address].Services) {
 				location.Addresses[address] = addressData
+				locationUpdated = true
 			}
 		}
-
-		result.Locations[nodeIp] = location
+		if locationUpdated {
+			result.Locations[nodeIp] = location
+		}
 	}
 
 	// Iterate over all locations in the NRP state
@@ -75,7 +88,10 @@ func (dt *DiffTracker) GetSyncLocationsAddresses() LocationData {
 		} else {
 			locationData := findLocationData(result, location)
 			if locationData == nil {
-				continue
+				locationData = &Location{
+					AddressUpdateAction: PartialUpdate,
+					Addresses:           make(map[string]Address),
+				}
 			}
 			for address := range nrpLocation.Addresses {
 				if _, exists := node.Pods[address]; !exists {
@@ -132,9 +148,6 @@ func findLocationData(result LocationData, location string) *Location {
 //==============================================================================
 
 func (dt *DiffTracker) GetSyncOperations() *SyncDiffTrackerReturnType {
-	dt.mu.Lock()
-	defer dt.mu.Unlock()
-
 	if dt.DeepEqual() {
 		return &SyncDiffTrackerReturnType{SyncStatus: ALREADY_IN_SYNC}
 	}
