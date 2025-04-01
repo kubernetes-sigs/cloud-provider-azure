@@ -667,13 +667,12 @@ func (az *Cloud) cleanOrphanedLoadBalancer(ctx context.Context, lb *armnetwork.L
 		klog.V(2).Infof("cleanOrphanedLoadBalancer(%s, %s, %s): deleting the LB since there are no remaining frontendIPConfigurations", lbName, serviceName, clusterName)
 
 		// Remove backend pools from vmSets. This is required for virtual machine scale sets before removing the LB.
-		vmSetName := az.mapLoadBalancerNameToVMSet(lbName, clusterName)
 		if _, ok := az.VMSet.(*availabilitySet); ok {
 			// do nothing for availability set
 			lb.Properties.BackendAddressPools = nil
 		}
 
-		if deleteErr := az.safeDeleteLoadBalancer(ctx, *lb, clusterName, vmSetName, service); deleteErr != nil {
+		if deleteErr := az.safeDeleteLoadBalancer(ctx, *lb, clusterName, service); deleteErr != nil {
 			klog.Warningf("cleanOrphanedLoadBalancer(%s, %s, %s): failed to DeleteLB: %v", lbName, serviceName, clusterName, deleteErr)
 
 			rgName, vmssName, parseErr := errutils.GetVMSSMetadataByRawError(deleteErr)
@@ -713,7 +712,8 @@ func (az *Cloud) cleanOrphanedLoadBalancer(ctx context.Context, lb *armnetwork.L
 }
 
 // safeDeleteLoadBalancer deletes the load balancer after decoupling it from the vmSet
-func (az *Cloud) safeDeleteLoadBalancer(ctx context.Context, lb armnetwork.LoadBalancer, _, vmSetName string, service *v1.Service) error {
+func (az *Cloud) safeDeleteLoadBalancer(ctx context.Context, lb armnetwork.LoadBalancer, clusterName string, service *v1.Service) error {
+	vmSetName := az.mapLoadBalancerNameToVMSet(ptr.Deref(lb.Name, ""), clusterName)
 	lbBackendPoolIDsToDelete := []string{}
 	if lb.Properties != nil && lb.Properties.BackendAddressPools != nil {
 		for _, bp := range lb.Properties.BackendAddressPools {
@@ -1139,6 +1139,18 @@ func (az *Cloud) ensurePublicIPExists(ctx context.Context, service *v1.Service, 
 
 		if pip.Tags == nil {
 			pip.Tags = make(map[string]*string)
+		}
+
+		if az.UseStandardLoadBalancer() {
+			if pip.SKU == nil {
+				pip.SKU = &armnetwork.PublicIPAddressSKU{
+					Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandard),
+				}
+				changed = true
+			} else if !strings.EqualFold(string(*pip.SKU.Name), string(armnetwork.PublicIPAddressSKUNameStandard)) {
+				pip.SKU.Name = ptr.To(armnetwork.PublicIPAddressSKUNameStandard)
+				changed = true
+			}
 		}
 
 		// return if pip exist and dns label is the same
@@ -1774,6 +1786,11 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 	existingLBs, err := az.ListManagedLBs(ctx, service, nodes, clusterName)
 	if err != nil {
 		return nil, fmt.Errorf("reconcileLoadBalancer: failed to list managed LB: %w", err)
+	}
+
+	if existingLBs, err = az.cleanupBasicLoadBalancer(ctx, clusterName, service, existingLBs); err != nil {
+		klog.ErrorS(err, "reconcileLoadBalancer: failed to check and remove outdated basic load balancers", "service", serviceName)
+		return nil, err
 	}
 
 	// Delete backend pools for local service if:
@@ -2612,6 +2629,10 @@ func (az *Cloud) reconcileFrontendIPConfigs(
 					configProperties.PrivateIPAddress = &loadBalancerIP
 				} else if status != nil && len(status.Ingress) > 0 && ingressIPInSubnet(status.Ingress) {
 					klog.V(4).Infof("reconcileFrontendIPConfigs for service (%s): keep the original private IP %s", serviceName, privateIP)
+					configProperties.PrivateIPAllocationMethod = to.Ptr(armnetwork.IPAllocationMethodStatic)
+					configProperties.PrivateIPAddress = ptr.To(privateIP)
+				} else if len(service.Status.LoadBalancer.Ingress) > 0 && ingressIPInSubnet(service.Status.LoadBalancer.Ingress) {
+					klog.V(4).Infof("reconcileFrontendIPConfigs for service (%s): keep the original private IP %s from service.status.loadbalacner.ingress", serviceName, privateIP)
 					configProperties.PrivateIPAllocationMethod = to.Ptr(armnetwork.IPAllocationMethodStatic)
 					configProperties.PrivateIPAddress = ptr.To(privateIP)
 				} else {
