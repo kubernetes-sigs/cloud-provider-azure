@@ -551,7 +551,7 @@ func TestIsNICPool(t *testing.T) {
 	}
 }
 
-func TestCheckRemoveOutdatedBasicLoadBalancers(t *testing.T) {
+func TestCleanupBasicLoadBalancer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -706,7 +706,7 @@ func TestCheckRemoveOutdatedBasicLoadBalancers(t *testing.T) {
 			}
 
 			// Call the function under test
-			result, err := az.checkRemoveOutdatedBasicLoadBalancers(ctx, clusterName, service, tc.existingLBs)
+			result, err := az.cleanupBasicLoadBalancer(ctx, clusterName, service, tc.existingLBs)
 
 			// Debugging output
 			t.Logf("Original LBs: %d, Result LBs: %d", len(tc.existingLBs), len(result))

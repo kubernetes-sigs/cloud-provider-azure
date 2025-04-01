@@ -1788,7 +1788,7 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 		return nil, fmt.Errorf("reconcileLoadBalancer: failed to list managed LB: %w", err)
 	}
 
-	if existingLBs, err = az.checkRemoveOutdatedBasicLoadBalancers(ctx, clusterName, service, existingLBs); err != nil {
+	if existingLBs, err = az.cleanupBasicLoadBalancer(ctx, clusterName, service, existingLBs); err != nil {
 		klog.ErrorS(err, "reconcileLoadBalancer: failed to check and remove outdated basic load balancers", "service", serviceName)
 		return nil, err
 	}
