@@ -2,11 +2,11 @@ module sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache
 
 go 1.23.0
 
-toolchain go1.24.0
+toolchain go1.24.1
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.1
-	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 v6.3.0
+	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 v6.4.0
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/sync v0.12.0
 	k8s.io/client-go v0.32.3
