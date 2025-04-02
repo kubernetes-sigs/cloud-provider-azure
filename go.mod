@@ -1,6 +1,7 @@
 module sigs.k8s.io/cloud-provider-azure
 
 go 1.23.2
+toolchain go1.24.1
 
 godebug winsymlink=0
 
@@ -48,8 +49,8 @@ require (
 	k8s.io/kubelet v0.32.3
 	k8s.io/utils v0.0.0-20250321185631-1f6e0b77f77e
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.20
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.4.3
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.4.5
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.5.0
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.4.7
 	sigs.k8s.io/yaml v1.4.0
 )
 
