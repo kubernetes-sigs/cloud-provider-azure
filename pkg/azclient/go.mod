@@ -2,16 +2,16 @@ module sigs.k8s.io/cloud-provider-azure/pkg/azclient
 
 go 1.23.0
 
-toolchain go1.24.0
+toolchain go1.24.1
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.1
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.2
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/authorization/armauthorization/v2 v2.2.0
-	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 v6.3.0
+	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 v6.4.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerregistry/armcontainerregistry v1.2.0
-	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v6 v6.4.0
-	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault v1.4.0
+	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v6 v6.5.0
+	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault v1.5.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi v1.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6 v6.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns v1.3.0
@@ -28,7 +28,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.35.0
 	go.uber.org/mock v0.5.0
 	golang.org/x/crypto v0.36.0
-	golang.org/x/net v0.37.0
+	golang.org/x/net v0.38.0
 	golang.org/x/sync v0.12.0
 	golang.org/x/time v0.11.0
 	gopkg.in/dnaeon/go-vcr.v3 v3.2.0
@@ -38,7 +38,7 @@ require (
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal v1.1.1 // indirect
-	github.com/AzureAD/microsoft-authentication-library-for-go v1.4.0 // indirect
+	github.com/AzureAD/microsoft-authentication-library-for-go v1.4.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
