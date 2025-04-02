@@ -5328,6 +5328,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					PublicIPAllocationMethod: network.Static,
 				},
 				Tags: map[string]*string{},
+				Sku: &network.PublicIPAddressSku{
+					Name: network.PublicIPAddressSkuNameStandard,
+				},
 			},
 			shouldPutPIP: true,
 		},
@@ -6783,12 +6786,18 @@ func TestReconcileFrontendIPConfigs(t *testing.T) {
 						PublicIPAllocationMethod: network.Static,
 						IPAddress:                pointer.String("fe::1"),
 					},
+					Sku: &network.PublicIPAddressSku{
+						Name: network.PublicIPAddressSkuNameStandard,
+					},
 				},
 				{
 					Name: pointer.String("pipV4"),
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion: network.IPv4,
 						IPAddress:              pointer.String("1.2.3.4"),
+					},
+					Sku: &network.PublicIPAddressSku{
+						Name: network.PublicIPAddressSkuNameStandard,
 					},
 				},
 			},
@@ -7128,7 +7137,7 @@ func TestSafeDeleteLoadBalancer(t *testing.T) {
 					BackendAddressPools: &[]network.BackendAddressPool{},
 				},
 			}
-			err := cloud.safeDeleteLoadBalancer(lb, "cluster", "vmss", &svc)
+			err := cloud.safeDeleteLoadBalancer(lb, "cluster", &svc)
 			assert.Equal(t, tc.expectedErr, err)
 			if len(tc.multiSLBConfigs) > 0 {
 				assert.Equal(t, tc.expectedMultiSLBConfigs, cloud.MultipleStandardLoadBalancerConfigurations)
