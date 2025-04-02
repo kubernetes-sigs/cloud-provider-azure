@@ -1,6 +1,7 @@
 module sigs.k8s.io/cloud-provider-azure
 
 go 1.23.1
+toolchain go1.24.1
 
 godebug winsymlink=0
 
@@ -24,7 +25,7 @@ require (
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/go-logr/logr v1.4.2
 	github.com/onsi/ginkgo/v2 v2.23.3
-	github.com/onsi/gomega v1.36.3
+	github.com/onsi/gomega v1.37.0
 	github.com/prometheus/client_golang v1.21.1
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
