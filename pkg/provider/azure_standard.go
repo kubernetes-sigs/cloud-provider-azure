@@ -122,7 +122,7 @@ func (az *Cloud) getNetworkResourceSubscriptionID() string {
 	return az.SubscriptionID
 }
 
-func (az *Cloud) mapLoadBalancerNameToVMSet(lbName string, clusterName string) (vmSetName string) {
+func (az *Cloud) mapLoadBalancerNameToVMSet(lbName, clusterName string) (vmSetName string) {
 	vmSetName = trimSuffixIgnoreCase(lbName, consts.InternalLoadBalancerNameSuffix)
 	if strings.EqualFold(clusterName, vmSetName) {
 		vmSetName = az.VMSet.GetPrimaryVMSetName()
