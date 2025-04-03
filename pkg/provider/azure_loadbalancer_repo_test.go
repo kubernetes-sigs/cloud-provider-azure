@@ -550,3 +550,200 @@ func TestIsNICPool(t *testing.T) {
 		})
 	}
 }
+
+func TestCleanupBasicLoadBalancer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testCases := []struct {
+		desc                 string
+		useStandardLB        bool
+		existingLBs          []*armnetwork.LoadBalancer
+		expectedErr          bool
+		expectedDeleteCalled bool
+	}{
+		{
+			desc:                 "UseStandardLoadBalancer=false should skip deletion",
+			useStandardLB:        false,
+			existingLBs:          []*armnetwork.LoadBalancer{},
+			expectedErr:          false,
+			expectedDeleteCalled: false,
+		},
+		{
+			desc:          "Basic LB should be deleted when UseStandardLoadBalancer=true",
+			useStandardLB: true,
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: to.Ptr("test-lb"),
+					SKU: &armnetwork.LoadBalancerSKU{
+						Name: to.Ptr(armnetwork.LoadBalancerSKUNameBasic),
+					},
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						BackendAddressPools: []*armnetwork.BackendAddressPool{
+							{
+								ID: to.Ptr("pool-id-1"),
+							},
+						},
+					},
+				},
+			},
+			expectedErr:          false,
+			expectedDeleteCalled: true,
+		},
+		{
+			desc:          "Internal basic LB should be deleted but not reinitialize pip cache",
+			useStandardLB: true,
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: to.Ptr("test-lb-" + consts.InternalLoadBalancerNameSuffix),
+					SKU: &armnetwork.LoadBalancerSKU{
+						Name: to.Ptr(armnetwork.LoadBalancerSKUNameBasic),
+					},
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						BackendAddressPools: []*armnetwork.BackendAddressPool{
+							{
+								ID: to.Ptr("pool-id-1"),
+							},
+						},
+					},
+				},
+			},
+			expectedErr:          false,
+			expectedDeleteCalled: true,
+		},
+		{
+			desc:          "Standard LB should not be deleted",
+			useStandardLB: true,
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: to.Ptr("test-lb"),
+					SKU: &armnetwork.LoadBalancerSKU{
+						Name: to.Ptr(armnetwork.LoadBalancerSKUNameStandard),
+					},
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{},
+				},
+			},
+			expectedErr:          false,
+			expectedDeleteCalled: false,
+		},
+		{
+			desc:          "Mix of basic and standard LBs should only delete basic",
+			useStandardLB: true,
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: to.Ptr("test-lb-standard"),
+					SKU: &armnetwork.LoadBalancerSKU{
+						Name: to.Ptr(armnetwork.LoadBalancerSKUNameStandard),
+					},
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{},
+				},
+				{
+					Name: to.Ptr("test-lb-basic"),
+					SKU: &armnetwork.LoadBalancerSKU{
+						Name: to.Ptr(armnetwork.LoadBalancerSKUNameBasic),
+					},
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						BackendAddressPools: []*armnetwork.BackendAddressPool{
+							{
+								ID: to.Ptr("pool-id-1"),
+							},
+						},
+					},
+				},
+			},
+			expectedErr:          false,
+			expectedDeleteCalled: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			// Print initial test case info
+			t.Logf("Test case: %s", tc.desc)
+			t.Logf("Initial LBs:")
+			for i, lb := range tc.existingLBs {
+				t.Logf("  LB[%d]: Name=%s, SKU=%s", i, *lb.Name, *lb.SKU.Name)
+			}
+
+			az := GetTestCloud(ctrl)
+			az.Config.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+
+			if !tc.useStandardLB {
+				az.Config.LoadBalancerSKU = consts.LoadBalancerSKUBasic
+			}
+
+			service := &v1.Service{}
+			clusterName := "testCluster"
+			ctx := context.Background()
+
+			// Setup mocks
+			mockVMSet := NewMockVMSet(ctrl)
+			az.VMSet = mockVMSet
+			mockLBClient := az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+
+			// Set up mocks for safeDeleteLoadBalancer if we expect it to be called
+			if tc.expectedDeleteCalled {
+				for _, lb := range tc.existingLBs {
+					if lb.SKU != nil && lb.SKU.Name != nil && *lb.SKU.Name == armnetwork.LoadBalancerSKUNameBasic {
+						// Mock the EnsureBackendPoolDeleted call
+						mockVMSet.EXPECT().EnsureBackendPoolDeleted(
+							gomock.Any(), // context
+							gomock.Any(), // service
+							gomock.Any(), // backendPoolIDs
+							gomock.Any(), // vmSetName
+							gomock.Any(), // backendAddressPools
+							true,         // deleteEmptyPool
+						).Return(true, nil).AnyTimes()
+
+						// Mock the DeleteLB call
+						mockLBClient.EXPECT().Delete(
+							gomock.Any(), // context
+							az.ResourceGroup,
+							*lb.Name,
+						).Return(nil).AnyTimes()
+					}
+				}
+			}
+
+			// Call the function under test
+			result, err := az.cleanupBasicLoadBalancer(ctx, clusterName, service, tc.existingLBs)
+
+			// Debugging output
+			t.Logf("Original LBs: %d, Result LBs: %d", len(tc.existingLBs), len(result))
+			for i, lb := range tc.existingLBs {
+				t.Logf("Original LB[%d]: Name=%s, SKU=%s", i, *lb.Name, *lb.SKU.Name)
+			}
+			for i, lb := range result {
+				t.Logf("Result LB[%d]: Name=%s, SKU=%s", i, *lb.Name, *lb.SKU.Name)
+			}
+
+			// Check for errors if we're expecting them
+			if tc.expectedErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+
+			// Verify the number of remaining LBs
+			expectedLBCount := 0
+			if !tc.expectedDeleteCalled {
+				expectedLBCount = len(tc.existingLBs)
+			} else {
+				// Count standard LBs (which should not be deleted)
+				for _, lb := range tc.existingLBs {
+					if lb.SKU != nil && lb.SKU.Name != nil && *lb.SKU.Name == armnetwork.LoadBalancerSKUNameStandard {
+						expectedLBCount++
+					}
+				}
+			}
+			assert.Equal(t, expectedLBCount, len(result), "Expected %d load balancers after deletion, got %d", expectedLBCount, len(result))
+
+			// If we expect LBs to remain, verify they are not basic
+			if len(result) > 0 {
+				for _, lb := range result {
+					assert.NotEqual(t, armnetwork.LoadBalancerSKUNameBasic, *lb.SKU.Name, "Found a basic load balancer that should have been deleted")
+				}
+			}
+		})
+	}
+}
