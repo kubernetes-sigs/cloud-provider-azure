@@ -1192,6 +1192,22 @@ func TestGetStandardVMZoneByNodeName(t *testing.T) {
 			},
 			expectedErrMsg: fmt.Errorf("failed to parse zone %q: strconv.Atoi: parsing %q: invalid syntax", []string{"a"}, "a"),
 		},
+		{
+			name:     "GetZoneByNodeName should set failuredomain to 0 if no zones are found",
+			nodeName: "vm5",
+			vm: &armcompute.VirtualMachine{
+				Name:     ptr.To("vm5"),
+				Location: ptr.To("HybridEnvironment"),
+				Zones:    []*string{},
+				Properties: &armcompute.VirtualMachineProperties{
+					InstanceView: nil, // can be nil on Azure Stack
+				},
+			},
+			expectedZone: cloudprovider.Zone{
+				FailureDomain: "0",
+				Region:        "hybridenvironment",
+			},
+		},
 	}
 	for _, test := range testcases {
 		mockVMClient := cloud.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
