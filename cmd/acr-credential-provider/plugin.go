@@ -85,7 +85,7 @@ func (e *ExecPlugin) runPlugin(ctx context.Context, r io.Reader, w io.Writer, ar
 		return errors.New("image in plugin request was empty")
 	}
 
-	response, err := e.plugin.GetCredentials(ctx, request.Image, args)
+	response, err := e.plugin.GetCredentials(ctx, request, args)
 	if err != nil {
 		return err
 	}

@@ -45,26 +45,19 @@ SOFTWARE
 package credentialprovider
 
 import (
-	"bytes"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
 
 	utilnet "k8s.io/apimachinery/pkg/util/net"
-	"k8s.io/klog/v2"
 )
 
 const (
-	userAgentHeader              = "User-Agent"
-	userAgent                    = "kubernetes-credentialprovider-acr"
-	dockerTokenLoginUsernameGUID = "00000000-0000-0000-0000-000000000000"
+	userAgentHeader = "User-Agent"
+	userAgent       = "kubernetes-credentialprovider-acr"
 )
 
 var client = &http.Client{
@@ -138,70 +131,6 @@ func receiveChallengeFromLoginServer(serverAddress, scheme string) (*authDirecti
 		service: (*authParams)["service"],
 		realm:   (*authParams)["realm"],
 	}, nil
-}
-
-func performTokenExchange(
-	_ string,
-	directive *authDirective,
-	tenant string,
-	accessToken string) (string, error) {
-	var err error
-	data := url.Values{
-		"service":       []string{directive.service},
-		"grant_type":    []string{"access_token_refresh_token"},
-		"access_token":  []string{accessToken},
-		"refresh_token": []string{accessToken},
-		"tenant":        []string{tenant},
-	}
-
-	var realmURL *url.URL
-	if realmURL, err = url.Parse(directive.realm); err != nil {
-		return "", fmt.Errorf("Www-Authenticate: invalid realm %s", directive.realm)
-	}
-	authEndpoint := fmt.Sprintf("%s://%s/oauth2/exchange", realmURL.Scheme, realmURL.Host)
-
-	datac := data.Encode()
-	var r *http.Request
-	r, err = http.NewRequest("POST", authEndpoint, bytes.NewBufferString(datac))
-	if err != nil {
-		return "", fmt.Errorf("failed to construct request, got %w", err)
-	}
-	r.Header.Add(userAgentHeader, userAgent)
-	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	r.Header.Add("Content-Length", strconv.Itoa(len(datac)))
-
-	var exchange *http.Response
-	if exchange, err = client.Do(r); err != nil {
-		return "", fmt.Errorf("Www-Authenticate: failed to reach auth url %s", authEndpoint)
-	}
-
-	if exchange.Header != nil {
-		if correlationID, ok := exchange.Header["X-Ms-Correlation-Request-Id"]; ok {
-			klog.V(4).Infof("correlationID: %s", correlationID)
-		}
-	}
-
-	defer exchange.Body.Close()
-	if exchange.StatusCode != 200 {
-		return "", fmt.Errorf("Www-Authenticate: auth url %s responded with status code %d", authEndpoint, exchange.StatusCode)
-	}
-
-	var content []byte
-	limitedReader := &io.LimitedReader{R: exchange.Body, N: maxReadLength}
-	if content, err = io.ReadAll(limitedReader); err != nil {
-		return "", fmt.Errorf("Www-Authenticate: error reading response from %s", authEndpoint)
-	}
-
-	if limitedReader.N <= 0 {
-		return "", errors.New("the read limit is reached")
-	}
-
-	var authResp acrAuthResponse
-	if err = json.Unmarshal(content, &authResp); err != nil {
-		return "", fmt.Errorf("Www-Authenticate: unable to read response %s", content)
-	}
-
-	return authResp.RefreshToken, nil
 }
 
 // Try and parse a string of assignments in the form of:
