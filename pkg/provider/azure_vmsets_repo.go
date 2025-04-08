@@ -185,5 +185,11 @@ func (az *Cloud) getRouteTable(ctx context.Context, crt azcache.AzureCacheReadTy
 		return routeTable, false, nil
 	}
 
-	return *(cachedRt.(*network.RouteTable)), true, nil
+	res, ok := cachedRt.(*network.RouteTable)
+	if !ok {
+		return routeTable, false, fmt.Errorf("unexpected type for RouteTable: got %T, want *network.RouteTable", cachedRt)
+	}
+	routeTable = *res
+
+	return routeTable, true, nil
 }
