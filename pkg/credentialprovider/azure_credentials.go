@@ -20,21 +20,26 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
-	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
-
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/containers/azcontainerregistry"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	v1 "k8s.io/kubelet/pkg/apis/credentialprovider/v1"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
+	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 )
 
 // Refer: https://github.com/kubernetes/kubernetes/blob/master/pkg/credentialprovider/azure/azure_credentials.go
@@ -43,7 +48,11 @@ const (
 	maxReadLength   = 10 * 1 << 20 // 10MB
 	defaultCacheTTL = 5 * time.Minute
 
-	AcrAudience = "https://containerregistry.azure.net"
+	// ACR audience scopes the AAD token for registration authentication to ACR only
+	acrAudience = "https://containerregistry.azure.net"
+
+	// The null GUID tells the container registry that this is an ACR refresh token during the login flow
+	acrRefreshDockerLoginUsernameGUID = "00000000-0000-0000-0000-000000000000"
 )
 
 var (
@@ -55,7 +64,7 @@ var (
 // CredentialProvider is an interface implemented by the kubelet credential provider plugin to fetch
 // the username/password based on the provided image name.
 type CredentialProvider interface {
-	GetCredentials(ctx context.Context, image string, args []string) (response *v1.CredentialProviderResponse, err error)
+	GetCredentials(ctx context.Context, request *v1.CredentialProviderRequest, args []string) (response *v1.CredentialProviderResponse, err error)
 }
 
 // acrProvider implements the credential provider interface for Azure Container Registry.
@@ -82,7 +91,7 @@ func NewAcrProviderFromConfig(configFile string, registryMirrorStr string) (Cred
 	}
 	config, err := configloader.Load[providerconfig.AzureClientConfig](context.Background(), nil, &configloader.FileLoaderConfig{FilePath: configFile})
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
+		return nil, fmt.Errorf("Failed to load config: %w", err)
 	}
 
 	var managedIdentityCredential azcore.TokenCredential
@@ -103,9 +112,6 @@ func NewAcrProviderFromConfig(configFile string, registryMirrorStr string) (Cred
 			}
 		}
 		managedIdentityCredential, err = azidentity.NewManagedIdentityCredential(credOptions)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return &acrProvider{
@@ -117,10 +123,13 @@ func NewAcrProviderFromConfig(configFile string, registryMirrorStr string) (Cred
 	}, nil
 }
 
-func (a *acrProvider) GetCredentials(ctx context.Context, image string, _ []string) (*v1.CredentialProviderResponse, error) {
-	targetloginServer, sourceloginServer := a.parseACRLoginServerFromImage(image)
-	if targetloginServer == "" {
-		klog.V(2).Infof("image(%s) is not from ACR, return empty authentication", image)
+func (a *acrProvider) GetCredentials(ctx context.Context, request *v1.CredentialProviderRequest, _ []string) (*v1.CredentialProviderResponse, error) {
+	if len(request.Image) == 0 {
+		return nil, errors.New("image in plugin request is empty")
+	}
+	targetLoginServer, sourceLoginServer := a.parseACRLoginServerFromImage(request.Image)
+	if targetLoginServer == "" {
+		klog.V(2).Infof("Image(%s) is not from ACR, return empty authentication", request.Image)
 		return &v1.CredentialProviderResponse{
 			CacheKeyType:  v1.RegistryPluginCacheKeyType,
 			CacheDuration: &metav1.Duration{Duration: 0},
@@ -141,9 +150,19 @@ func (a *acrProvider) GetCredentials(ctx context.Context, image string, _ []stri
 	}
 
 	if a.config.UseManagedIdentityExtension {
-		username, password, err := a.getFromACR(ctx, targetloginServer)
+
+		// Validations for service account token
+		if len(request.ServiceAccountToken) != 0 {
+			clientAssertCredential, err := getServiceAccountTokenCredential(request, targetLoginServer)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get client assertion credential, %s", err)
+			}
+			a.credential = clientAssertCredential
+		}
+
+		username, password, err := a.getRefreshTokenFromACR(ctx, targetLoginServer)
 		if err != nil {
-			klog.Errorf("error getting credentials from ACR for %s: %s", targetloginServer, err)
+			klog.Errorf("Failed to get refresh token from ACR for %s: %s", targetLoginServer, err)
 			return nil, err
 		}
 
@@ -151,9 +170,9 @@ func (a *acrProvider) GetCredentials(ctx context.Context, image string, _ []stri
 			Username: username,
 			Password: password,
 		}
-		response.Auth[targetloginServer] = authConfig
-		if sourceloginServer != "" {
-			response.Auth[sourceloginServer] = authConfig
+		response.Auth[targetLoginServer] = authConfig
+		if sourceLoginServer != "" {
+			response.Auth[sourceLoginServer] = authConfig
 		}
 	} else {
 		// Add our entry for each of the supported container registry URLs
@@ -190,35 +209,64 @@ func (a *acrProvider) GetCredentials(ctx context.Context, image string, _ []stri
 	return response, nil
 }
 
-// getFromACR gets credentials from ACR.
-func (a *acrProvider) getFromACR(ctx context.Context, loginServer string) (string, string, error) {
-	var armAccessToken azcore.AccessToken
-	var err error
-	if armAccessToken, err = a.credential.GetToken(ctx, policy.TokenRequestOptions{
+// Custom policy to add User-Agent
+type userAgentPolicy struct {
+	userAgent string
+}
+
+func (p *userAgentPolicy) Do(req *policy.Request) (*http.Response, error) {
+	// Prepend your custom User-Agent before the default one
+	ua := fmt.Sprintf("%s %s", p.userAgent, req.Raw().Header.Get("User-Agent"))
+	req.Raw().Header.Set("User-Agent", ua)
+	return req.Next()
+}
+
+// getRefreshTokenFromACR gets credentials from ACR.
+func (a *acrProvider) getRefreshTokenFromACR(ctx context.Context, loginServer string) (string, string, error) {
+	// 1. Get an AAD ACR audience token
+	acrAudienceToken, err := a.credential.GetToken(ctx, policy.TokenRequestOptions{
 		Scopes: []string{
-			fmt.Sprintf("%s/%s", AcrAudience, ".default"),
+			fmt.Sprintf("%s/%s", acrAudience, ".default"),
 		},
-	}); err != nil {
-		klog.Errorf("Failed to ensure fresh service principal token: %v", err)
-		return "", "", err
-	}
-
-	klog.V(4).Infof("discovering auth redirects for: %s", loginServer)
-	directive, err := receiveChallengeFromLoginServer(loginServer, "https")
+	})
 	if err != nil {
-		klog.Errorf("failed to receive challenge: %s", err)
+		klog.Errorf("Failed to get AAD ACR audience token: %v", err)
 		return "", "", err
 	}
 
-	klog.V(4).Infof("exchanging an acr refresh_token")
-	registryRefreshToken, err := performTokenExchange(
-		loginServer, directive, a.config.TenantID, armAccessToken.Token)
+	uaPolicy := &userAgentPolicy{userAgent: userAgent}
+	acrAuthenticationClient, err := azcontainerregistry.NewAuthenticationClient(loginServer, &azcontainerregistry.AuthenticationClientOptions{
+		ClientOptions: azcore.ClientOptions{
+			PerCallPolicies: []policy.Policy{uaPolicy},
+		},
+	})
 	if err != nil {
-		klog.Errorf("failed to perform token exchange: %s", err)
+		log.Fatalf("Failed to create token client: %v", err)
 		return "", "", err
 	}
 
-	return dockerTokenLoginUsernameGUID, registryRefreshToken, nil
+	// 2. Exchange AAD access token for ACR refresh token
+	// TODO(mainred): log correlation id
+	// TODO(mainred): can we replace the loginserver with directive.service?
+	// Exchange AAD token for ACR refresh token
+	exchangeResp, err := acrAuthenticationClient.ExchangeAADAccessTokenForACRRefreshToken(ctx,
+		azcontainerregistry.PostContentSchemaGrantTypeAccessTokenRefreshToken,
+		loginServer,
+		&azcontainerregistry.AuthenticationClientExchangeAADAccessTokenForACRRefreshTokenOptions{
+			Tenant:      to.Ptr(a.config.TenantID),
+			AccessToken: to.Ptr(acrAudienceToken.Token),
+		},
+	)
+	if err != nil {
+		log.Fatalf("Failed to exchange AAD token for ACR refresh token: %v", err)
+		return "", "", err
+	}
+
+	if exchangeResp.RefreshToken == nil {
+		log.Fatalf("ACR refresh token is nil")
+	}
+
+	return acrRefreshDockerLoginUsernameGUID, *exchangeResp.RefreshToken, nil
 }
 
 // parseACRLoginServerFromImage inputs an image URL and outputs login servers of target registry and source registry if --registry-mirror is set.
@@ -287,4 +335,44 @@ func parseRegistryMirror(registryMirrorStr string) map[string]string {
 		registryMirror[parts[0]] = parts[1]
 	}
 	return registryMirror
+}
+
+func getServiceAccountTokenCredential(request *v1.CredentialProviderRequest, loginServer string) (azcore.TokenCredential, error) {
+	if len(request.ServiceAccountToken) == 0 {
+		return nil, nil
+	}
+	klog.V(2).Infof("Kubernetes service account token is set")
+
+	// check required annotations
+	clientIDAnnotation := "azure.workload.identity/client-id"
+	clientID, ok := request.ServiceAccountAnnotations[clientIDAnnotation]
+	if !ok || len(clientID) == 0 {
+		return nil, fmt.Errorf("client id annotation %s is not found or the value is empty", clientIDAnnotation)
+	}
+
+	tenantIDAnnotation := "azure.workload.identity/tenant-id"
+	tenantID, ok := request.ServiceAccountAnnotations[tenantIDAnnotation]
+	if !ok || len(tenantID) == 0 {
+		return nil, fmt.Errorf("client id annotation %s is not found or the value is empty", tenantIDAnnotation)
+	}
+
+	// discover token authority, which varies among different clouds
+	klog.V(4).Infof("discovering auth redirects for: %s", loginServer)
+	directive, err := receiveChallengeFromLoginServer(loginServer, "https")
+	if err != nil {
+		klog.Errorf("failed to receive challenge: %s", err)
+		return nil, err
+	}
+	var realmURL *url.URL
+	if realmURL, err = url.Parse(directive.realm); err != nil {
+		return nil, fmt.Errorf("Www-Authenticate: invalid realm %s", directive.realm)
+	}
+
+	clientAssertCredential, err := NewClientAssertionCredential(tenantID, clientID, realmURL.Host, request.ServiceAccountToken, nil)
+
+	if err != nil {
+		klog.Fatal("Failed to initialize client assertion credential: %s", err.Error())
+		return nil, err
+	}
+	return clientAssertCredential, nil
 }

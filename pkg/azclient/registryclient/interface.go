@@ -32,4 +32,5 @@ type Interface interface {
 	utils.DeleteFunc[armcontainerregistry.Registry]
 	utils.ListFunc[armcontainerregistry.Registry]
 	ImportImage(ctx context.Context, resourceGroup string, resourceName string, param armcontainerregistry.ImportImageParameters) error
+	ExchangeAADAccessTokenForACRRefreshToken(ctx context.Context, grantType armcontainerregistry.PostContentSchemaGrantType, service string, options *armcontainerregistry.AuthenticationClientExchangeAADAccessTokenForACRRefreshTokenOptions) (armcontainerregistry.AuthenticationClientExchangeAADAccessTokenForACRRefreshTokenResponse, error)
 }
