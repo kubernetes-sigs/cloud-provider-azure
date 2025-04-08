@@ -33,6 +33,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routetableclient/mockroutetableclient"
+	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
@@ -837,4 +838,103 @@ func TestEnsureRouteTableTagged(t *testing.T) {
 	tags, changed = cloud.ensureRouteTableTagged(rt)
 	assert.Nil(t, tags)
 	assert.False(t, changed)
+}
+
+func TestGetRouteTable(t *testing.T) {
+	tests := []struct {
+		name           string
+		routeTableName string
+		rtExists       bool
+		rtError        *retry.Error
+		mockRT         network.RouteTable
+		expectedRT     network.RouteTable
+		expectedExists bool
+		expectedErr    bool
+		expectedErrMsg string
+	}{
+		{
+			name:           "RouteTable name not configured",
+			routeTableName: "",
+			rtExists:       false,
+			rtError:        nil,
+			mockRT:         network.RouteTable{},
+			expectedRT:     network.RouteTable{},
+			expectedExists: false,
+			expectedErr:    true,
+			expectedErrMsg: "route table name is not configured",
+		},
+		{
+			name:           "RouteTableClient.Get returns error",
+			routeTableName: "rt-test",
+			rtExists:       false,
+			rtError:        &retry.Error{RawError: fmt.Errorf("client error")},
+			mockRT:         network.RouteTable{},
+			expectedRT:     network.RouteTable{},
+			expectedExists: false,
+			expectedErr:    true,
+			expectedErrMsg: "client error",
+		},
+		{
+			name:           "RouteTable not found",
+			routeTableName: "rt-test",
+			rtExists:       false,
+			rtError:        &retry.Error{RawError: fmt.Errorf("NotFound"), HTTPStatusCode: http.StatusNotFound},
+			mockRT:         network.RouteTable{},
+			expectedRT:     network.RouteTable{},
+			expectedExists: false,
+			expectedErr:    false,
+			expectedErrMsg: "",
+		},
+		{
+			name:           "Successful case",
+			routeTableName: "rt-test",
+			rtExists:       true,
+			rtError:        nil,
+			mockRT:         network.RouteTable{Name: pointer.String("rt-test")},
+			expectedRT:     network.RouteTable{Name: pointer.String("rt-test")},
+			expectedExists: true,
+			expectedErr:    false,
+			expectedErrMsg: "",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			routeTableClient := mockroutetableclient.NewMockInterface(ctrl)
+			cloud := &Cloud{
+				Config: Config{
+					RouteTableName:          test.routeTableName,
+					RouteTableResourceGroup: "rg",
+				},
+				RouteTablesClient: routeTableClient,
+			}
+
+			cache, _ := cloud.newRouteTableCache()
+			cloud.rtCache = cache
+
+			if test.routeTableName != "" {
+				routeTableClient.EXPECT().Get(gomock.Any(), cloud.RouteTableResourceGroup, test.routeTableName, "").Return(test.mockRT, test.rtError)
+			}
+
+			crt := azcache.CacheReadTypeDefault
+			rt, exists, err := cloud.getRouteTable(crt)
+
+			if test.expectedErr {
+				assert.Error(t, err)
+				if test.expectedErrMsg != "" {
+					assert.Contains(t, err.Error(), test.expectedErrMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+
+			assert.Equal(t, test.expectedExists, exists)
+			if test.expectedExists {
+				assert.Equal(t, test.expectedRT, rt)
+			}
+		})
+	}
 }
