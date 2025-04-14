@@ -118,14 +118,14 @@ func (fs *FlexScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName,
 	}
 
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - attach disk list(%+v) returned with %v", nodeResourceGroup, vmName, diskMap, rerr)
-	if err != nil {
-		return err
-	}
+
 	_ = fs.DeleteCacheForNode(ctx, vmName)
-	if err := fs.updateCache(ctx, vmName, result); err != nil {
-		klog.Errorf("updateCache(%s) failed with error: %v", vmName, err)
+	if err == nil && result != nil {
+		if rerr := fs.updateCache(ctx, vmName, result); err != nil {
+			klog.Errorf("updateCache(%s) failed with error: %v", vmName, rerr)
+		}
 	}
-	return nil
+	return err
 }
 
 // DetachDisk detaches a disk from VM
@@ -188,19 +188,9 @@ func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName,
 		Location: vm.Location,
 	}
 
-	var result *armcompute.VirtualMachine
-	defer func() {
-		_ = fs.DeleteCacheForNode(ctx, vmName)
-		if err == nil {
-			if err := fs.updateCache(ctx, vmName, result); err != nil {
-				klog.Errorf("updateCache(%s) failed with error: %v", vmName, err)
-			}
-		}
-	}()
-
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) node(%s)- detach disk list(%s)", nodeResourceGroup, vmName, nodeName, diskMap)
 
-	result, err = fs.ComputeClientFactory.GetVirtualMachineClient().CreateOrUpdate(ctx, nodeResourceGroup, *vm.Name, newVM)
+	result, err := fs.ComputeClientFactory.GetVirtualMachineClient().CreateOrUpdate(ctx, nodeResourceGroup, *vm.Name, newVM)
 	if err != nil {
 		klog.Errorf("azureDisk - detach disk list(%s) on rg(%s) vm(%s) failed, err: %v", diskMap, nodeResourceGroup, vmName, err)
 		var rerr *azcore.ResponseError
@@ -215,15 +205,14 @@ func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName,
 	}
 
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - detach disk list(%s) returned with %v", nodeResourceGroup, vmName, diskMap, err)
-	if err != nil {
-		return err
-	}
-	// clean node cache first and then update cache
+
 	_ = fs.DeleteCacheForNode(ctx, vmName)
-	if err := fs.updateCache(ctx, vmName, result); err != nil {
-		klog.Errorf("updateCache(%s) failed with error: %v", vmName, err)
+	if err == nil && result != nil {
+		if rerr := fs.updateCache(ctx, vmName, result); rerr != nil {
+			klog.Errorf("updateCache(%s) failed with error: %v", vmName, rerr)
+		}
 	}
-	return nil
+	return err
 }
 
 // UpdateVM updates a vm
@@ -240,11 +229,8 @@ func (fs *FlexScaleSet) UpdateVM(ctx context.Context, nodeName types.NodeName) e
 		return err
 	}
 
-	_, rerr := fs.ComputeClientFactory.GetVirtualMachineClient().CreateOrUpdate(ctx, nodeResourceGroup, *vm.Name, armcompute.VirtualMachine{})
-	if rerr != nil {
-		return rerr
-	}
-	return nil
+	_, err = fs.ComputeClientFactory.GetVirtualMachineClient().CreateOrUpdate(ctx, nodeResourceGroup, *vm.Name, armcompute.VirtualMachine{})
+	return err
 }
 
 func (fs *FlexScaleSet) updateCache(ctx context.Context, nodeName string, vm *armcompute.VirtualMachine) error {

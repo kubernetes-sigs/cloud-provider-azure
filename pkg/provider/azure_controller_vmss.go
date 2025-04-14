@@ -49,7 +49,6 @@ func (ss *ScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName, dis
 	var disks []*armcompute.DataDisk
 
 	storageProfile := vm.AsVirtualMachineScaleSetVM().Properties.StorageProfile
-
 	if storageProfile != nil && storageProfile.DataDisks != nil {
 		disks = make([]*armcompute.DataDisk, len(storageProfile.DataDisks))
 		copy(disks, storageProfile.DataDisks)
@@ -118,15 +117,10 @@ func (ss *ScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName, dis
 		}
 	}
 
-	klog.V(2).Infof("azureDisk - update: rg(%s) vm(%s) - attach disk list(%+v) returned with %v", nodeResourceGroup, nodeName, diskMap, rerr)
-	if rerr != nil {
-		return rerr
-	}
+	klog.V(2).Infof("azureDisk - update: rg(%s) vm(%s) - attach disk list(%+v) returned with %v", nodeResourceGroup, nodeName, diskMap, err)
 
-	// clean node cache first and then update cache
 	_ = ss.DeleteCacheForNode(ctx, vmName)
-
-	if result != nil && result.Properties != nil {
+	if rerr == nil && result != nil && result.Properties != nil {
 		if err := ss.updateCache(ctx, vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, result); err != nil {
 			klog.Errorf("updateCache(%s, %s, %s, %s) failed with error: %v", vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, err)
 		}
@@ -197,22 +191,10 @@ func (ss *ScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName, dis
 		},
 	}
 
-	var result *armcompute.VirtualMachineScaleSetVM
-	var rerr error
-
-	defer func() {
-		_ = ss.DeleteCacheForNode(ctx, vmName)
-		if rerr == nil {
-			if err := ss.updateCache(ctx, vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, result); err != nil {
-				klog.Errorf("updateCache(%s, %s, %s, %s) failed with error: %v", vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, err)
-			}
-		}
-	}()
-
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - detach disk list(%s)", nodeResourceGroup, nodeName, diskMap)
-	result, rerr = ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().Update(ctx, nodeResourceGroup, vm.VMSSName, vm.InstanceID, *newVM)
+	result, rerr := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().Update(ctx, nodeResourceGroup, vm.VMSSName, vm.InstanceID, *newVM)
 	if rerr != nil {
-		klog.Errorf("azureDisk - detach disk list(%s) on rg(%s) vm(%s) failed, err: %v", diskMap, nodeResourceGroup, nodeName, rerr)
+		klog.Errorf("azureDisk - detach disk list(%+v) on rg(%s) vm(%s) failed, err: %v", diskMap, nodeResourceGroup, nodeName, rerr)
 		if exists, err := errutils.CheckResourceExistsFromAzcoreError(rerr); !exists && !strings.Contains(rerr.Error(), consts.ParentResourceNotFoundMessageCode) && err == nil {
 			klog.Errorf("azureDisk - begin to filterNonExistingDisks(%v) on rg(%s) vm(%s)", diskMap, nodeResourceGroup, nodeName)
 			disks := FilterNonExistingDisks(ctx, ss.ComputeClientFactory, newVM.Properties.StorageProfile.DataDisks)
@@ -221,7 +203,14 @@ func (ss *ScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName, dis
 		}
 	}
 
-	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - detach disk(%v) returned with %v", nodeResourceGroup, nodeName, diskMap, rerr)
+	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - detach disk(%v) returned with %v", nodeResourceGroup, nodeName, diskMap, err)
+
+	_ = ss.DeleteCacheForNode(ctx, vmName)
+	if rerr == nil && result != nil && result.Properties != nil {
+		if err := ss.updateCache(ctx, vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, result); err != nil {
+			klog.Errorf("updateCache(%s, %s, %s, %s) failed with error: %v", vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, err)
+		}
+	}
 	return rerr
 }
 
@@ -238,11 +227,8 @@ func (ss *ScaleSet) UpdateVM(ctx context.Context, nodeName types.NodeName) error
 		return err
 	}
 
-	_, rerr := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().Update(ctx, nodeResourceGroup, vm.VMSSName, vm.InstanceID, armcompute.VirtualMachineScaleSetVM{})
-	if rerr != nil {
-		return rerr
-	}
-	return nil
+	_, err = ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().Update(ctx, nodeResourceGroup, vm.VMSSName, vm.InstanceID, armcompute.VirtualMachineScaleSetVM{})
+	return err
 }
 
 // GetDataDisks gets a list of data disks attached to the node.
