@@ -51,24 +51,24 @@ func (as *availabilitySet) AttachDisk(ctx context.Context, nodeName types.NodeNa
 	copy(disks, vm.Properties.StorageProfile.DataDisks)
 
 	for k, v := range diskMap {
-		diSKURI := k
+		diskURI := k
 		opt := v
 		attached := false
 		for _, disk := range vm.Properties.StorageProfile.DataDisks {
-			if disk.ManagedDisk != nil && strings.EqualFold(*disk.ManagedDisk.ID, diSKURI) && disk.Lun != nil {
+			if disk.ManagedDisk != nil && strings.EqualFold(*disk.ManagedDisk.ID, diskURI) && disk.Lun != nil {
 				if *disk.Lun == opt.Lun {
 					attached = true
 					break
 				}
-				return fmt.Errorf("disk(%s) already attached to node(%s) on LUN(%d), but target LUN is %d", diSKURI, nodeName, *disk.Lun, opt.Lun)
+				return fmt.Errorf("disk(%s) already attached to node(%s) on LUN(%d), but target LUN is %d", diskURI, nodeName, *disk.Lun, opt.Lun)
 			}
 		}
 		if attached {
-			klog.V(2).Infof("azureDisk - disk(%s) already attached to node(%s) on LUN(%d)", diSKURI, nodeName, opt.Lun)
+			klog.V(2).Infof("azureDisk - disk(%s) already attached to node(%s) on LUN(%d)", diskURI, nodeName, opt.Lun)
 			continue
 		}
 
-		managedDisk := &armcompute.ManagedDiskParameters{ID: &diSKURI}
+		managedDisk := &armcompute.ManagedDiskParameters{ID: &diskURI}
 		if opt.DiskEncryptionSetID == "" {
 			if vm.Properties.StorageProfile.OSDisk != nil &&
 				vm.Properties.StorageProfile.OSDisk.ManagedDisk != nil &&
@@ -154,12 +154,12 @@ func (as *availabilitySet) DetachDisk(ctx context.Context, nodeName types.NodeNa
 
 	bFoundDisk := false
 	for i, disk := range disks {
-		for diSKURI, diskName := range diskMap {
+		for diskURI, diskName := range diskMap {
 			if disk.Lun != nil && (disk.Name != nil && diskName != "" && strings.EqualFold(*disk.Name, diskName)) ||
-				(disk.Vhd != nil && disk.Vhd.URI != nil && diSKURI != "" && strings.EqualFold(*disk.Vhd.URI, diSKURI)) ||
-				(disk.ManagedDisk != nil && diSKURI != "" && strings.EqualFold(*disk.ManagedDisk.ID, diSKURI)) {
+				(disk.Vhd != nil && disk.Vhd.URI != nil && diskURI != "" && strings.EqualFold(*disk.Vhd.URI, diskURI)) ||
+				(disk.ManagedDisk != nil && diskURI != "" && strings.EqualFold(*disk.ManagedDisk.ID, diskURI)) {
 				// found the disk
-				klog.V(2).Infof("azureDisk - detach disk: name %s uri %s", diskName, diSKURI)
+				klog.V(2).Infof("azureDisk - detach disk: name %s uri %s", diskName, diskURI)
 				disks[i].ToBeDetached = ptr.To(true)
 				if forceDetach {
 					disks[i].DetachOption = to.Ptr(armcompute.DiskDetachOptionTypesForceDetach)
