@@ -329,6 +329,13 @@ func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, ser
 		}
 	}()
 
+	// Node additions and removals to VMSS (Virtual Machine Scale Sets) do not require reconcileLB operations.
+	// The changes will be propagated via Location Update API upon endpoint-slice events and backendpool will be updated by NRP.
+	if az.IsLBBackendPoolTypePodIP() && az.UseStandardV2LoadBalancer() {
+		isOperationSucceeded = true
+		return nil
+	}
+
 	// In case UpdateLoadBalancer gets stale service spec, retrieve the latest from lister
 	service, serviceExists, err := az.getLatestService(svcName, true)
 	if err != nil {
@@ -473,6 +480,25 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 	_, err = az.reconcileSecurityGroup(ctx, clusterName, service, ptr.Deref(lb.Name, ""), lbIPsPrimaryPIPs, false /* wantLb */)
 	if err != nil {
 		return err
+	}
+
+	serviceUID := getServiceUID(service)
+	if _, loaded := az.localServiceNameToNRPServiceMap.Load(serviceUID); loaded {
+		// Remove the serviceName from the K8S state to be synced into NRP during batch sync update flow.
+		az.diffTracker.UpdateK8sService(
+			UpdateK8sResource{
+				Operation: REMOVE,
+				Resource:  serviceUID,
+			},
+		)
+		az.localServiceNameToNRPServiceMap.Delete(serviceUID)
+		select {
+		case az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger <- true:
+			// trigger batch update
+		default:
+			// channel is full, do nothing
+			klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+		}
 	}
 
 	_, err = az.reconcileLoadBalancer(ctx, clusterName, service, nil, false /* wantLb */)
@@ -1976,6 +2002,28 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 		if az.UseMultipleStandardLoadBalancers() {
 			lbToReconcile = existingLBs
 		}
+
+		if az.IsLBBackendPoolTypePodIP() && az.UseStandardV2LoadBalancer() && strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyTypeLocal)) {
+			serviceUID := getServiceUID(service)
+			if _, loaded := az.localServiceNameToNRPServiceMap.Load(serviceUID); !loaded {
+				// Add the serviceName to the K8S state to be synced into NRP during batch sync update flow.
+				az.diffTracker.UpdateK8sService(
+					UpdateK8sResource{
+						Operation: ADD,
+						Resource:  serviceUID,
+					},
+				)
+				az.localServiceNameToNRPServiceMap.Store(serviceUID, struct{}{})
+				select {
+				case az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger <- true:
+					// trigger batch update
+				default:
+					// channel is full, do nothing
+					klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+				}
+			}
+		}
+
 		lb, err = az.reconcileBackendPoolHosts(ctx, lb, lbToReconcile, service, nodes, clusterName, vmSetName, lbBackendPoolIDs)
 		if err != nil {
 			return nil, err

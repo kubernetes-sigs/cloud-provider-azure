@@ -325,6 +325,11 @@ func getServiceName(service *v1.Service) string {
 	return fmt.Sprintf("%s/%s", service.Namespace, service.Name)
 }
 
+// This returns a unique identifier for the Service used to tag some resources.
+func getServiceUID(service *v1.Service) string {
+	return string(service.UID)
+}
+
 // This returns a prefix for loadbalancer/security rules.
 func (az *Cloud) getRulePrefix(service *v1.Service) string {
 	return az.GetLoadBalancerName(context.TODO(), "", service)

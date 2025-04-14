@@ -130,6 +130,8 @@ type Cloud struct {
 	eventRecorder      record.EventRecorder
 	routeUpdater       batchProcessor
 	backendPoolUpdater batchProcessor
+	// TBD (enechitoaia): Do we want to use the save interface: batchProcessor? even though we are not using interval based updater?
+	locationAndNRPServiceBatchUpdater locationAndNRPServiceBatchUpdater
 
 	vmCache        azcache.Resource
 	lbCache        azcache.Resource
@@ -155,6 +157,7 @@ type Cloud struct {
 	multipleStandardLoadBalancersActiveServicesLock sync.Mutex
 	multipleStandardLoadBalancersActiveNodesLock    sync.Mutex
 	localServiceNameToServiceInfoMap                sync.Map
+	localServiceNameToNRPServiceMap                 sync.Map
 	endpointSlicesCache                             sync.Map
 
 	azureResourceLocker *AzureResourceLocker
@@ -294,13 +297,13 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 
 	if config.LoadBalancerBackendPoolConfigurationType == "" ||
 		// TODO(nilo19): support pod IP mode in the future
-		strings.EqualFold(config.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePODIP) {
+		strings.EqualFold(config.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePodIP) {
 		config.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration
 	} else {
 		supportedLoadBalancerBackendPoolConfigurationTypes := utilsets.NewString(
 			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration),
 			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypeNodeIP),
-			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypePODIP))
+			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypePodIP))
 		if !supportedLoadBalancerBackendPoolConfigurationTypes.Has(strings.ToLower(config.LoadBalancerBackendPoolConfigurationType)) {
 			return fmt.Errorf("loadBalancerBackendPoolConfigurationType %s is not supported, supported values are %v", config.LoadBalancerBackendPoolConfigurationType, supportedLoadBalancerBackendPoolConfigurationTypes.UnsortedList())
 		}
@@ -481,6 +484,11 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 			go az.backendPoolUpdater.run(ctx)
 		}
 
+		// start NRP location and service batch updater.
+		if az.IsLBBackendPoolTypePodIP() {
+			az.locationAndNRPServiceBatchUpdater = newLocationAndNRPServiceBatchUpdater(az)
+			go az.locationAndNRPServiceBatchUpdater.run(ctx)
+		}
 		// Azure Stack does not support zone at the moment
 		// https://docs.microsoft.com/en-us/azure-stack/user/azure-stack-network-differences?view=azs-2102
 		if !az.IsStackCloud() {
