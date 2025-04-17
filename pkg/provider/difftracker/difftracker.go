@@ -4,7 +4,7 @@ import (
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
-func InitializeDiffTracker(K8s K8s, NRP NRP) *DiffTracker {
+func InitializeDiffTracker(K8s K8s_State, NRP NRP_State) *DiffTracker {
 	// If any field is nil, initialize it
 	if K8s.Services == nil {
 		K8s.Services = utilsets.NewString()

@@ -60,61 +60,61 @@ func (pod *Pod) HasIdentities() bool {
 func (dt *DiffTracker) DeepEqual() bool {
 	// Compare Services with LoadBalancers
 	if dt.K8sResources.Services.Len() != dt.NRPResources.LoadBalancers.Len() {
-		klog.Errorf("Services and LoadBalancers length mismatch")
+		klog.V(2).Infof("DiffTracker.DeepEqual: Services and LoadBalancers length mismatch")
 		return false
 	}
 	for _, service := range dt.K8sResources.Services.UnsortedList() {
 		if !dt.NRPResources.LoadBalancers.Has(service) {
-			klog.Errorf("Service %s not found in LoadBalancers\n", service)
+			klog.V(2).Infof("DiffTracker.DeepEqual: Service %s not found in LoadBalancers\n", service)
 			return false
 		}
 	}
 	for _, service := range dt.NRPResources.LoadBalancers.UnsortedList() {
 		if !dt.K8sResources.Services.Has(service) {
-			klog.Errorf("Service %s not found in Services\n", service)
+			klog.V(2).Infof("DiffTracker.DeepEqual: Service %s not found in Services\n", service)
 			return false
 		}
 	}
 
 	// Compare Egresses with NATGateways
 	if dt.K8sResources.Egresses.Len() != dt.NRPResources.NATGateways.Len() {
-		klog.Errorf("Egresses and NATGateways length mismatch")
+		klog.V(2).Infof("DiffTracker.DeepEqual: Egresses and NATGateways length mismatch")
 		return false
 	}
 	for _, egress := range dt.K8sResources.Egresses.UnsortedList() {
 		if !dt.NRPResources.NATGateways.Has(egress) {
-			klog.Errorf("Egress %s not found in NATGateways\n", egress)
+			klog.V(2).Infof("DiffTracker.DeepEqual: Egress %s not found in NATGateways\n", egress)
 			return false
 		}
 	}
 	for _, egress := range dt.NRPResources.NATGateways.UnsortedList() {
 		if !dt.K8sResources.Egresses.Has(egress) {
-			klog.Errorf("Egress %s not found in Egresses\n", egress)
+			klog.V(2).Infof("DiffTracker.DeepEqual: Egress %s not found in Egresses\n", egress)
 			return false
 		}
 	}
 
 	// Compare Nodes with Locations
 	if len(dt.K8sResources.Nodes) != len(dt.NRPResources.Locations) {
-		klog.Errorf("Nodes and Locations length mismatch")
+		klog.V(2).Infof("DiffTracker.DeepEqual: Nodes and Locations length mismatch")
 		return false
 	}
 	for nodeKey, node := range dt.K8sResources.Nodes {
 		nrpLocation, exists := dt.NRPResources.Locations[nodeKey]
 		if !exists {
-			klog.Errorf("Node %s not found in Locations\n", nodeKey)
+			klog.V(2).Infof("DiffTracker.DeepEqual: Node %s not found in Locations\n", nodeKey)
 			return false
 		}
 
 		// Compare Pods with Addresses
 		if len(node.Pods) != len(nrpLocation.Addresses) {
-			klog.Errorf("Pods and Addresses length mismatch for node %s\n", nodeKey)
+			klog.V(2).Infof("DiffTracker.DeepEqual: Pods and Addresses length mismatch for node %s\n", nodeKey)
 			return false
 		}
 		for podKey, pod := range node.Pods {
 			nrpAddress, exists := nrpLocation.Addresses[podKey]
 			if !exists {
-				klog.Errorf("Pod %s not found in Addresses for node %s\n", podKey, nodeKey)
+				klog.V(2).Infof("DiffTracker.DeepEqual: Pod %s not found in Addresses for node %s\n", podKey, nodeKey)
 				return false
 			}
 
@@ -129,13 +129,13 @@ func (dt *DiffTracker) DeepEqual() bool {
 			}
 
 			if len(combinedIdentities) != nrpAddress.Services.Len() {
-				klog.Errorf("Combined identities length mismatch for pod %s in node %s\n", podKey, nodeKey)
+				klog.V(2).Infof("DiffTracker.DeepEqual: Combined identities length mismatch for pod %s in node %s\n", podKey, nodeKey)
 				return false
 			}
 
 			for _, identity := range combinedIdentities {
 				if !nrpAddress.Services.Has(identity) {
-					klog.Errorf("Identity %s not found in Services for pod %s in node %s\n", identity, podKey, nodeKey)
+					klog.V(2).Infof("DiffTracker.DeepEqual: Identity %s not found in Services for pod %s in node %s\n", identity, podKey, nodeKey)
 					return false
 				}
 			}
@@ -308,11 +308,11 @@ func (dt *DiffTracker) Equals(other *DiffTracker) bool {
 	return true
 }
 
-// Map LocationData to LocationDataDTO to be used as payload in ServiceGateway API calls
-func MapLocationDataToDTO(locationData LocationData) LocationDataDTO {
-	var locationDataDTO LocationDataDTO
-	locationDataDTO.Action = locationData.Action
-	locationDataDTO.Locations = []LocationDTO{}
+// Map LocationData to LocationsDataDTO to be used as payload in ServiceGateway API calls
+func MapLocationDataToDTO(locationData LocationData) LocationsDataDTO {
+	var LocationsDataDTO LocationsDataDTO
+	LocationsDataDTO.Action = locationData.Action
+	LocationsDataDTO.Locations = []LocationDTO{}
 	for locKey, loc := range locationData.Locations {
 		var locationDTO LocationDTO
 		locationDTO.Location = locKey
@@ -326,20 +326,21 @@ func MapLocationDataToDTO(locationData LocationData) LocationDataDTO {
 			locationDTO.Addresses = append(locationDTO.Addresses, addressDTO)
 		}
 
-		locationDataDTO.Locations = append(locationDataDTO.Locations, locationDTO)
+		LocationsDataDTO.Locations = append(LocationsDataDTO.Locations, locationDTO)
 	}
 
-	return locationDataDTO
+	return LocationsDataDTO
 }
 
-// Map LoadBalancerUpdates to ServiceDataDTO to be used as payload in ServiceGateway API calls
-func MapLoadBalancerUpdatesToServiceDataDTO(loadBalancerUpdates SyncServicesReturnType, subscriptionID string, resourceGroup string) ServiceDataDTO {
-	var serviceDataDTO ServiceDataDTO
-	serviceDataDTO.Action = PartialUpdate
-	serviceDataDTO.Services = []ServiceDTO{}
+// Map LoadBalancerUpdates to ServicesDataDTO to be used as payload in ServiceGateway API calls
+func MapLoadBalancerUpdatesToServicesDataDTO(loadBalancerUpdates SyncServicesReturnType, subscriptionID string, resourceGroup string) ServicesDataDTO {
+	var ServicesDataDTO ServicesDataDTO
+	ServicesDataDTO.Action = PartialUpdate
+	ServicesDataDTO.Services = []ServiceDTO{}
 	for _, service := range loadBalancerUpdates.Additions.UnsortedList() {
 		serviceDTO := ServiceDTO{
-			Service: service,
+			Service:     service,
+			ServiceType: Inbound,
 			LoadBalancerBackendPools: []LoadBalancerBackendPoolDTO{
 				{
 					Id: fmt.Sprintf(
@@ -352,26 +353,27 @@ func MapLoadBalancerUpdatesToServiceDataDTO(loadBalancerUpdates SyncServicesRetu
 				},
 			},
 		}
-		serviceDataDTO.Services = append(serviceDataDTO.Services, serviceDTO)
+		ServicesDataDTO.Services = append(ServicesDataDTO.Services, serviceDTO)
 	}
 	for _, service := range loadBalancerUpdates.Removals.UnsortedList() {
 		serviceDTO := ServiceDTO{
 			Service:  service,
 			isDelete: true,
 		}
-		serviceDataDTO.Services = append(serviceDataDTO.Services, serviceDTO)
+		ServicesDataDTO.Services = append(ServicesDataDTO.Services, serviceDTO)
 	}
-	return serviceDataDTO
+	return ServicesDataDTO
 }
 
-// Map NATGatewayUpdates to ServiceDataDTO to be used as payload in ServiceGateway API calls
-func MapNATGatewayUpdatesToServiceDataDTO(natGatewayUpdates SyncServicesReturnType, subscriptionID string, resourceGroup string) ServiceDataDTO {
-	var serviceDataDTO ServiceDataDTO
-	serviceDataDTO.Action = PartialUpdate
-	serviceDataDTO.Services = []ServiceDTO{}
+// Map NATGatewayUpdates to ServicesDataDTO to be used as payload in ServiceGateway API calls
+func MapNATGatewayUpdatesToServicesDataDTO(natGatewayUpdates SyncServicesReturnType, subscriptionID string, resourceGroup string) ServicesDataDTO {
+	var ServicesDataDTO ServicesDataDTO
+	ServicesDataDTO.Action = PartialUpdate
+	ServicesDataDTO.Services = []ServiceDTO{}
 	for _, service := range natGatewayUpdates.Additions.UnsortedList() {
 		serviceDTO := ServiceDTO{
-			Service: service,
+			Service:     service,
+			ServiceType: Outbound,
 			PublicNatGateway: NatGatewayDTO{
 				Id: fmt.Sprintf(
 					consts.NatGatewayIDTemplate,
@@ -381,14 +383,14 @@ func MapNATGatewayUpdatesToServiceDataDTO(natGatewayUpdates SyncServicesReturnTy
 				),
 			},
 		}
-		serviceDataDTO.Services = append(serviceDataDTO.Services, serviceDTO)
+		ServicesDataDTO.Services = append(ServicesDataDTO.Services, serviceDTO)
 	}
 	for _, service := range natGatewayUpdates.Removals.UnsortedList() {
 		serviceDTO := ServiceDTO{
 			Service:  service,
 			isDelete: true,
 		}
-		serviceDataDTO.Services = append(serviceDataDTO.Services, serviceDTO)
+		ServicesDataDTO.Services = append(ServicesDataDTO.Services, serviceDTO)
 	}
-	return serviceDataDTO
+	return ServicesDataDTO
 }

@@ -42,7 +42,7 @@ type NRPLocation struct {
 	Addresses map[string]NRPAddress
 }
 
-type NRP struct {
+type NRP_State struct {
 	LoadBalancers *utilsets.IgnoreCaseSet
 	NATGateways   *utilsets.IgnoreCaseSet
 	Locations     map[string]NRPLocation
@@ -58,7 +58,7 @@ type Node struct {
 	Pods map[string]Pod
 }
 
-type K8s struct {
+type K8s_State struct {
 	Services *utilsets.IgnoreCaseSet
 	Egresses *utilsets.IgnoreCaseSet
 	Nodes    map[string]Node
@@ -67,8 +67,8 @@ type K8s struct {
 // DiffTracker is the main struct that contains the state of the K8s and NRP services
 type DiffTracker struct {
 	mu           sync.Mutex // Protects concurrent access to DiffTracker
-	K8sResources K8s
-	NRPResources NRP
+	K8sResources K8s_State
+	NRPResources NRP_State
 }
 
 // --------------------------------------------------------------------------------
@@ -144,8 +144,8 @@ type LocationDTO struct {
 	Addresses           []AddressDTO `json:"Addresses"`
 }
 
-// LocationDataDTO represents the DTO for LocationData
-type LocationDataDTO struct {
+// LocationsDataDTO represents the DTO for LocationData
+type LocationsDataDTO struct {
 	Action    UpdateAction  `json:"Action"`
 	Locations []LocationDTO `json:"Locations"`
 }
@@ -153,6 +153,13 @@ type LocationDataDTO struct {
 // ================================================================================================
 // Data Transfer Objects (DTOs) for ServiceData (following the ServiceGateway API documentation)
 // ================================================================================================
+
+type ServiceType string
+
+const (
+	Inbound  ServiceType = "Inbound"
+	Outbound ServiceType = "Outbound"
+)
 
 type LoadBalancerBackendPoolDTO struct {
 	Id string `json:"Id"`
@@ -164,12 +171,13 @@ type NatGatewayDTO struct {
 
 type ServiceDTO struct {
 	Service                  string                       `json:"Service"`
+	ServiceType              ServiceType                  `json:"ServiceType"`
 	LoadBalancerBackendPools []LoadBalancerBackendPoolDTO `json:"LoadBalancerBackendPools"`
 	PublicNatGateway         NatGatewayDTO                `json:"PublicNatGateway"`
 	isDelete                 bool
 }
 
-type ServiceDataDTO struct {
+type ServicesDataDTO struct {
 	Action   UpdateAction `json:"Action"`
 	Services []ServiceDTO `json:"Services"`
 }

@@ -510,12 +510,12 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 
 func (az *Cloud) initializeDiffTracker() error {
 	// TODO (enechitoaia): CONSTRUCT K8s and NRP from the current state of the cluster
-	k8s := difftracker.K8s{
+	k8s := difftracker.K8s_State{
 		Services: utilsets.NewString(),
 		Egresses: utilsets.NewString(),
 		Nodes:    make(map[string]difftracker.Node),
 	}
-	nrp := difftracker.NRP{
+	nrp := difftracker.NRP_State{
 		LoadBalancers: utilsets.NewString(),
 		NATGateways:   utilsets.NewString(),
 		Locations:     make(map[string]difftracker.NRPLocation),

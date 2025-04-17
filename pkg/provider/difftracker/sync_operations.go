@@ -6,7 +6,7 @@ import (
 )
 
 // SyncServices handles the synchronization of services between K8s and NRP
-func syncServices(k8sServices, Services *utilsets.IgnoreCaseSet) SyncServicesReturnType {
+func GetServicesToSync(k8sServices, Services *utilsets.IgnoreCaseSet) SyncServicesReturnType {
 	syncServices := SyncServicesReturnType{
 		Additions: utilsets.NewString(),
 		Removals:  utilsets.NewString(),
@@ -35,14 +35,14 @@ func (dt *DiffTracker) GetSyncLoadBalancerServices() SyncServicesReturnType {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
-	return syncServices(dt.K8sResources.Services, dt.NRPResources.LoadBalancers)
+	return GetServicesToSync(dt.K8sResources.Services, dt.NRPResources.LoadBalancers)
 }
 
 func (dt *DiffTracker) GetSyncNRPNATGateways() SyncServicesReturnType {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
-	return syncServices(dt.K8sResources.Egresses, dt.NRPResources.NATGateways)
+	return GetServicesToSync(dt.K8sResources.Egresses, dt.NRPResources.NATGateways)
 }
 
 //==============================================================================

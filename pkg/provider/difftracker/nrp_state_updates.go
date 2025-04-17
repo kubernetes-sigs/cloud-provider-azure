@@ -77,8 +77,9 @@ func (dt *DiffTracker) UpdateLocationsAddresses(locationData LocationData) {
 			// For partial updates with existing address
 			existingAddress := nrpLocation.Addresses[addressKey]
 			if !serviceRefs.Equals(existingAddress.Services) {
-				existingAddress.Services = serviceRefs
-				nrpLocation.Addresses[addressKey] = existingAddress
+				nrpLocation.Addresses[addressKey] = NRPAddress{
+					Services: serviceRefs,
+				}
 			}
 		}
 
