@@ -131,7 +131,7 @@ $(BIN_DIR)/azure-acr-credential-provider.exe: $(PKG_CONFIG) $(wildcard cmd/acr-c
 ## --------------------------------------
 ##@ Images
 ## --------------------------------------
-
+.PHONY: buildx-setup
 buildx-setup:
 	$(DOCKER_BUILDX) inspect img-builder > /dev/null 2>&1 || $(DOCKER_BUILDX) create --name img-builder --use
 	# enable qemu for arm64 build
