@@ -115,9 +115,10 @@ func (as *availabilitySet) AttachDisk(ctx context.Context, nodeName types.NodeNa
 
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - attach disk list(%v) returned with %v", nodeResourceGroup, vmName, diskMap, err)
 
-	_ = as.DeleteCacheForNode(ctx, vmName)
 	if rerr == nil && result != nil {
 		as.updateCache(vmName, result)
+	} else {
+		_ = as.DeleteCacheForNode(ctx, vmName)
 	}
 	return rerr
 }
@@ -207,9 +208,10 @@ func (as *availabilitySet) DetachDisk(ctx context.Context, nodeName types.NodeNa
 
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - detach disk list(%s) returned with %v", nodeResourceGroup, vmName, diskMap, err)
 
-	_ = as.DeleteCacheForNode(ctx, vmName)
 	if err == nil && result != nil {
 		as.updateCache(vmName, result)
+	} else {
+		_ = as.DeleteCacheForNode(ctx, vmName)
 	}
 	return err
 }
@@ -230,9 +232,10 @@ func (as *availabilitySet) UpdateVM(ctx context.Context, nodeName types.NodeName
 		}
 	}
 
-	_ = as.DeleteCacheForNode(ctx, vmName)
 	if rerr == nil && result != nil {
 		as.updateCache(vmName, result)
+	} else {
+		_ = as.DeleteCacheForNode(ctx, vmName)
 	}
 	return rerr
 }
