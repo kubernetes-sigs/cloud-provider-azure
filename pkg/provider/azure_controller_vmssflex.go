@@ -119,11 +119,12 @@ func (fs *FlexScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName,
 
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - attach disk list(%+v) returned with %v", nodeResourceGroup, vmName, diskMap, rerr)
 
-	_ = fs.DeleteCacheForNode(ctx, vmName)
 	if err == nil && result != nil {
 		if rerr := fs.updateCache(ctx, vmName, result); err != nil {
 			klog.Errorf("updateCache(%s) failed with error: %v", vmName, rerr)
 		}
+	} else {
+		_ = fs.DeleteCacheForNode(ctx, vmName)
 	}
 	return err
 }
@@ -206,11 +207,12 @@ func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName,
 
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - detach disk list(%s) returned with %v", nodeResourceGroup, vmName, diskMap, err)
 
-	_ = fs.DeleteCacheForNode(ctx, vmName)
 	if err == nil && result != nil {
 		if rerr := fs.updateCache(ctx, vmName, result); rerr != nil {
 			klog.Errorf("updateCache(%s) failed with error: %v", vmName, rerr)
 		}
+	} else {
+		_ = fs.DeleteCacheForNode(ctx, vmName)
 	}
 	return err
 }
