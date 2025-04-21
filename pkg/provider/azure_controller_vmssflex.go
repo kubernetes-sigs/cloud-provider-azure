@@ -34,7 +34,6 @@ import (
 	"k8s.io/utils/ptr"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
-	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 // AttachDisk attaches a disk to vm
@@ -167,7 +166,7 @@ func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName,
 		// only log here, next action is to update VM status with original meta data
 		klog.Warningf("detach azure disk on node(%s): disk list(%s) not found", nodeName, diskMap)
 	} else {
-		if strings.EqualFold(fs.Environment.Name, consts.AzureStackCloudName) && !fs.Config.DisableAzureStackCloud {
+		if fs.IsStackCloud() {
 			// Azure stack does not support ToBeDetached flag, use original way to detach disk
 			newDisks := []*armcompute.DataDisk{}
 			for _, disk := range disks {
