@@ -522,7 +522,7 @@ func (az *Cloud) shouldChangeLoadBalancer(service *v1.Service, currLBName, clust
 	// 1. Using multiple standard load balancers.
 	// 2. Migrate from multiple standard load balancers to single standard load balancer.
 	if az.UseStandardLoadBalancer() {
-		if currLBName != expectedLBName {
+		if !strings.EqualFold(currLBName, expectedLBName) {
 			klog.V(2).Infof("shouldChangeLoadBalancer(%s, %s, %s): change the LB to another one %s", service.Name, currLBName, clusterName, expectedLBName)
 			return true
 		}
