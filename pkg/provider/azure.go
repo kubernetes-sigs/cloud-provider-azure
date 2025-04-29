@@ -125,13 +125,12 @@ type Cloud struct {
 	regionZonesMap   map[string][]string
 	refreshZonesLock sync.RWMutex
 
-	KubeClient         clientset.Interface
-	eventBroadcaster   record.EventBroadcaster
-	eventRecorder      record.EventRecorder
-	routeUpdater       batchProcessor
-	backendPoolUpdater batchProcessor
-	// TBD (enechitoaia): Do we want to use the save interface: batchProcessor? even though we are not using interval based updater?
-	locationAndNRPServiceBatchUpdater locationAndNRPServiceBatchUpdater
+	KubeClient                        clientset.Interface
+	eventBroadcaster                  record.EventBroadcaster
+	eventRecorder                     record.EventRecorder
+	routeUpdater                      batchProcessor
+	backendPoolUpdater                batchProcessor
+	locationAndNRPServiceBatchUpdater batchProcessor
 
 	vmCache        azcache.Resource
 	lbCache        azcache.Resource

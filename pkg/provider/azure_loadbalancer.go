@@ -302,6 +302,15 @@ func (az *Cloud) getLatestService(serviceName string, deepcopy bool) (*v1.Servic
 // parameters as read-only and not modify them.
 // Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
 func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
+	if az.IsLBBackendPoolTypePodIP() && !strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyTypeLocal)) {
+		return errors.New("podIP backend pool type only supports ExternalTrafficPolicy=Local")
+	}
+	// Node additions and removals to VMSS (Virtual Machine Scale Sets) do not require reconcileLB operations.
+	// The changes will be propagated via Location Update API upon endpoint-slice events and backendpool will be updated by NRP.
+	if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+		return nil
+	}
+
 	const Operation = "UpdateLoadBalancer"
 
 	var err error
@@ -328,13 +337,6 @@ func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, ser
 			logger.V(5).Info("Finished", "service-spec", log.ValueAsMap(service))
 		}
 	}()
-
-	// Node additions and removals to VMSS (Virtual Machine Scale Sets) do not require reconcileLB operations.
-	// The changes will be propagated via Location Update API upon endpoint-slice events and backendpool will be updated by NRP.
-	if az.IsLBBackendPoolTypePodIP() && az.UseStandardV2LoadBalancer() {
-		isOperationSucceeded = true
-		return nil
-	}
 
 	// In case UpdateLoadBalancer gets stale service spec, retrieve the latest from lister
 	service, serviceExists, err := az.getLatestService(svcName, true)
@@ -484,6 +486,8 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 
 	serviceUID := getServiceUID(service)
 	if _, loaded := az.localServiceNameToNRPServiceMap.Load(serviceUID); loaded {
+		az.localServiceNameToNRPServiceMap.Delete(serviceUID)
+
 		// Remove the serviceName from the K8S state to be synced into NRP during batch sync update flow.
 		az.diffTracker.UpdateK8sService(
 			UpdateK8sResource{
@@ -491,9 +495,9 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 				Resource:  serviceUID,
 			},
 		)
-		az.localServiceNameToNRPServiceMap.Delete(serviceUID)
+
 		select {
-		case az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger <- true:
+		case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
 			// trigger batch update
 		default:
 			// channel is full, do nothing
@@ -2003,7 +2007,11 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 			lbToReconcile = existingLBs
 		}
 
-		if az.IsLBBackendPoolTypePodIP() && az.UseStandardV2LoadBalancer() && strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyTypeLocal)) {
+		if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+			if !strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyTypeLocal)) {
+				return nil, fmt.Errorf("service %s/%s is using podIP backend pool type but externalTrafficPolicy is not set to Local", service.Namespace, service.Name)
+			}
+
 			serviceUID := getServiceUID(service)
 			if _, loaded := az.localServiceNameToNRPServiceMap.Load(serviceUID); !loaded {
 				// Add the serviceName to the K8S state to be synced into NRP during batch sync update flow.
@@ -2013,9 +2021,10 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 						Resource:  serviceUID,
 					},
 				)
-				az.localServiceNameToNRPServiceMap.Store(serviceUID, struct{}{})
+				// TO BE REMOVED (enechitoaia) as per https://github.com/kubernetes-sigs/cloud-provider-azure/pull/8872#discussion_r2048350395:
+				// az.localServiceNameToNRPServiceMap.Store(serviceUID, struct{}{})
 				select {
-				case az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger <- true:
+				case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
 					// trigger batch update
 				default:
 					// channel is full, do nothing

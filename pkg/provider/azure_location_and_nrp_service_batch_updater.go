@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"strings"
-	"sync"
 
 	discovery_v1 "k8s.io/api/discovery/v1"
 	"k8s.io/klog/v2"
@@ -13,10 +12,9 @@ import (
 type locationAndNRPServiceBatchUpdater struct {
 	az                   *Cloud
 	channelUpdateTrigger chan bool
-	lock                 sync.Mutex
 }
 
-func newLocationAndNRPServiceBatchUpdater(az *Cloud) *locationAndNRPServiceBatchUpdater {
+func newLocationAndNRPServiceBatchUpdater(az *Cloud) batchProcessor {
 	return &locationAndNRPServiceBatchUpdater{
 		az:                   az,
 		channelUpdateTrigger: make(chan bool, 1),
@@ -37,19 +35,19 @@ func (updater *locationAndNRPServiceBatchUpdater) run(ctx context.Context) {
 }
 
 func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
-	updater.lock.Lock()
-	defer updater.lock.Unlock()
-
 	serviceLoadBalancerList := updater.az.difftracker.GetSyncLoadBalancerServices()
 
 	// Add services
 	createServicesRequestDTO := MapLoadBalancerUpdatesToServiceDataDTO(serviceLoadBalancerList.Additions, updater.az.SubscriptionID, updater.az.ResourceGroup)
-	createServicesResponseDTO := NRPAPIClient.UpdateNRPServices(ctx, createServicesRequestDTO)
+	if len(createServicesRequestDTO) > 0 {
+		createServicesResponseDTO := NRPAPIClient.UpdateNRPServices(ctx, createServicesRequestDTO)
 
-	if createServicesResponseDTO.Error == nil {
-		az.difftracker.UpdateNRPLoadBalancers(serviceLoadBalancerList.Additions)
-	} else {
-		// discuss action upon failure
+		if createServicesResponseDTO.Error == nil {
+			az.difftracker.UpdateNRPLoadBalancers(serviceLoadBalancerList.Additions)
+		} else {
+			klog.Errorf("locationAndNRPServiceBatchUpdater.process: failed to create services: %v", createServicesResponseDTO.Error)
+			return
+		}
 	}
 
 	// Update locations and addresses for the added and deleted services
@@ -74,7 +72,8 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 	}
 
 	for _, serviceName := range serviceLoadBalancerList.Deletions {
-		updater.az.localServiceNameToNRPServiceMap.Delete(serviceName)
+		// TO BE REMOVED (enechitoaia) as per https://github.com/kubernetes-sigs/cloud-provider-azure/pull/8872#discussion_r2048392406
+		// updater.az.localServiceNameToNRPServiceMap.Delete(serviceName)
 
 		updateK8sEndpointsInputType := UpdateK8sEndpointsInputType{
 			inboundIdentity: serviceName,
@@ -95,23 +94,29 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 
 	// Update all locations and addresses
 	locationData := updater.az.difftracker.GetSyncLocationsAddresses()
-	locationDataRequestDTO := MapLocationDataToDTO(locationData)
-	locationDataResponseDTO := NRPAPIClient.UpdateNRPLocations(ctx, locationDataRequestDTO)
+	if len(locationData) > 0 {
+		locationDataRequestDTO := MapLocationDataToDTO(locationData)
+		locationDataResponseDTO := NRPAPIClient.UpdateNRPLocations(ctx, locationDataRequestDTO)
 
-	if locationDataResponseDTO.Error == nil {
-		az.difftracker.UpdateLocationsAddresses(locationData)
-	} else {
-		// discuss action upon failure
+		if locationDataResponseDTO.Error == nil {
+			az.difftracker.UpdateLocationsAddresses(locationData)
+		} else {
+			klog.Errorf("locationAndNRPServiceBatchUpdater.process: failed to update locations and addresses: %v", locationDataResponseDTO.Error)
+			return
+		}
 	}
 
 	// Remove services
 	removeServicesRequestDTO := MapLoadBalancerUpdatesToServiceDataDTO(serviceLoadBalancerList.Removals, updater.az.SubscriptionID, updater.az.ResourceGroup)
-	removeServicesResponseDTO := NRPAPIClient.UpdateNRPServices(ctx, removeServicesRequestDTO)
+	if len(removeServicesRequestDTO) > 0 {
+		removeServicesResponseDTO := NRPAPIClient.UpdateNRPServices(ctx, removeServicesRequestDTO)
 
-	if removeServicesResponseDTO.Error == nil {
-		az.difftracker.UpdateNRPLoadBalancers(serviceLoadBalancerList.Additions)
-	} else {
-		// discuss action upon failure
+		if removeServicesResponseDTO.Error == nil {
+			az.difftracker.UpdateNRPLoadBalancers(serviceLoadBalancerList.Additions)
+		} else {
+			klog.Errorf("locationAndNRPServiceBatchUpdater.process: failed to remove services: %v", removeServicesResponseDTO.Error)
+			return
+		}
 	}
 }
 
@@ -123,4 +128,14 @@ func mergeMaps[K comparable, V any](maps ...map[K]V) map[K]V {
 		}
 	}
 	return result
+}
+
+func (updater *locationAndNRPServiceBatchUpdater) addOperation(operation batchOperation) batchOperation {
+	// This is a no-op function. The actual processing is done in the run method.
+	return operation
+}
+
+func (updater *locationAndNRPServiceBatchUpdater) removeOperation(name string) {
+	// This is a no-op function. The actual processing is done in the run method.
+	return
 }

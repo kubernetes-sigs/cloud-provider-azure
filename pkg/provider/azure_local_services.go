@@ -290,7 +290,7 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 				es := obj.(*discovery_v1.EndpointSlice)
 				az.endpointSlicesCache.Store(strings.ToLower(fmt.Sprintf("%s/%s", es.Namespace, es.Name)), es)
 
-				if az.IsLBBackendPoolTypePodIP() && az.UseStandardV2LoadBalancer() {
+				if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
 					serviceUID, loaded := getServiceUIDOfEndpointSlice(es)
 					if !loaded {
 						klog.Errorf("EndpointSlice %s/%s does not have service UID, skip updating load balancer backend pool", es.Namespace, es.Name)
@@ -304,15 +304,6 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 						}
 						az.difftracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
 					}
-
-					// TO BE DISCUSSED (enechitoaia): do we want to trigger the batch updater here too?
-					// select {
-					// case az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger <- true:
-					// 	// trigger batch update
-					// default:
-					// 	// channel is full, do nothing
-					// 	klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
-					// }
 				}
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
@@ -375,7 +366,7 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 					az.applyIPChangesAmongLocalServiceBackendPoolsByIPFamily(lbName, key, currentIPsInBackendPools, currentIPs)
 				}
 
-				if az.IsLBBackendPoolTypePodIP() && az.UseStandardV2LoadBalancer() {
+				if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
 					serviceUID, loaded := getServiceUIDOfEndpointSlice(newES)
 					if !loaded {
 						klog.Errorf("EndpointSlice %s/%s does not have service UID, skip updating load balancer backend pool", newES.Namespace, newES.Name)
@@ -421,7 +412,7 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 
 				az.endpointSlicesCache.Delete(strings.ToLower(fmt.Sprintf("%s/%s", es.Namespace, es.Name)))
 
-				if az.IsLBBackendPoolTypePodIP() && az.UseStandardV2LoadBalancer() {
+				if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
 					serviceUID, loaded := getServiceUIDOfEndpointSlice(es)
 					if !loaded {
 						klog.Errorf("EndpointSlice %s/%s does not have service UID, skip updating load balancer backend pool", es.Namespace, es.Name)
