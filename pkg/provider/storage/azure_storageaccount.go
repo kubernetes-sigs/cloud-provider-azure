@@ -97,6 +97,9 @@ type AccountOptions struct {
 	SourceAccountName string
 	// default is "privatelink"
 	PrivateDNSZoneName string
+	// default is vnetName + "-vnetlink"
+	VNetLinkName        string
+	PublicNetworkAccess string
 }
 
 type accountWithLocation struct {
@@ -485,6 +488,9 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 
 		// Create virtual link to the private DNS zone
 		vNetLinkName := vnetName + "-vnetlink"
+		if accountOptions.VNetLinkName != "" {
+			vNetLinkName = accountOptions.VNetLinkName
+		}
 		if _, err := clientFactory.GetVirtualNetworkLinkClient().Get(ctx, vnetResourceGroup, privateDNSZoneName, vNetLinkName); err != nil {
 			if strings.Contains(err.Error(), consts.ResourceNotFoundMessageCode) {
 				if err := az.createVNetLink(ctx, vNetLinkName, vnetResourceGroup, vnetName, privateDNSZoneName); err != nil {
@@ -532,6 +538,13 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 		}
 		tags := convertMapToMapPointer(accountOptions.Tags)
 
+		var publicNetworkAccess *armstorage.PublicNetworkAccess
+		if accountOptions.PublicNetworkAccess != "" {
+			klog.V(2).Infof("set PublicNetworkAccess(%s) on account(%s), subscription(%s), resource group(%s)", accountOptions.PublicNetworkAccess, accountName, subsID, resourceGroup)
+			access := armstorage.PublicNetworkAccess(accountOptions.PublicNetworkAccess)
+			publicNetworkAccess = &access
+		}
+
 		klog.V(2).Infof("azure - no matching account found, begin to create a new account %s in resource group %s, location: %s, accountType: %s, accountKind: %s, tags: %+v",
 			accountName, resourceGroup, location, accountType, kind, accountOptions.Tags)
 
@@ -544,6 +557,7 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 				IsHnsEnabled:           accountOptions.IsHnsEnabled,
 				EnableNfsV3:            accountOptions.EnableNfsV3,
 				MinimumTLSVersion:      to.Ptr(armstorage.MinimumTLSVersionTLS12),
+				PublicNetworkAccess:    publicNetworkAccess,
 			},
 			Tags:     tags,
 			Location: &location}

@@ -373,7 +373,6 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 }
 
 func TestEnsureStorageAccount(t *testing.T) {
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -415,6 +414,8 @@ func TestEnsureStorageAccount(t *testing.T) {
 		name                            string
 		createAccount                   bool
 		createPrivateEndpoint           *bool
+		vNetLinkName                    string
+		publicNetworkAccess             string
 		SubnetPropertiesFormatNil       bool
 		mockStorageAccountsClient       bool
 		setAccountOptions               bool
@@ -449,6 +450,8 @@ func TestEnsureStorageAccount(t *testing.T) {
 			name:                            "[Success] EnsureStorageAccount with createPrivateEndpoint",
 			createAccount:                   true,
 			createPrivateEndpoint:           ptr.To(true),
+			vNetLinkName:                    "vnetLinkName",
+			publicNetworkAccess:             string(armstorage.PublicNetworkAccessDisabled),
 			mockStorageAccountsClient:       true,
 			setAccountOptions:               true,
 			requireInfrastructureEncryption: ptr.To(true),
@@ -564,6 +567,8 @@ func TestEnsureStorageAccount(t *testing.T) {
 				testAccountOptions = &AccountOptions{
 					ResourceGroup:             test.resourceGroup,
 					CreatePrivateEndpoint:     test.createPrivateEndpoint,
+					VNetLinkName:              test.vNetLinkName,
+					PublicNetworkAccess:       test.publicNetworkAccess,
 					Name:                      test.accountName,
 					CreateAccount:             test.createAccount,
 					SubscriptionID:            test.subscriptionID,
