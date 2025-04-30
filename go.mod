@@ -35,14 +35,14 @@ require (
 	go.opentelemetry.io/otel/sdk v1.35.0
 	go.opentelemetry.io/otel/sdk/metric v1.35.0
 	go.opentelemetry.io/otel/trace v1.35.0
-	go.uber.org/mock v0.5.1
+	go.uber.org/mock v0.5.2
 	golang.org/x/sync v0.13.0
 	golang.org/x/sys v0.32.0
 	golang.org/x/text v0.24.0
-	k8s.io/api v0.32.3
-	k8s.io/apimachinery v0.32.3
+	k8s.io/api v0.32.4
+	k8s.io/apimachinery v0.32.4
 	k8s.io/apiserver v0.30.12
-	k8s.io/client-go v0.32.3
+	k8s.io/client-go v0.32.4
 	k8s.io/cloud-provider v0.30.12
 	k8s.io/component-base v0.30.12
 	k8s.io/component-helpers v0.30.12
@@ -51,7 +51,7 @@ require (
 	k8s.io/kubelet v0.30.12
 	k8s.io/utils v0.0.0-20250321185631-1f6e0b77f77e
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.6.2
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.5.2
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.5.3
 	sigs.k8s.io/yaml v1.4.0
 )
 
