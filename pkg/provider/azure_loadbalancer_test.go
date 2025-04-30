@@ -2019,6 +2019,45 @@ func TestGetServiceLoadBalancerCommon(t *testing.T) {
 			expectedExists: false,
 			expectedError:  false,
 		},
+		{
+			desc: "getServiceLoadBalancer should not change LB when names are the same but with different case with standard LB",
+			SKU:  consts.LoadBalancerSKUStandard,
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("TestCluster"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("aservice1"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &armnetwork.PublicIPAddress{
+										ID: ptr.To("TestCluster-aservice1"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			service: getTestService("service1", v1.ProtocolTCP, nil, false, 80),
+			wantLB:  true,
+			expectedLB: &armnetwork.LoadBalancer{
+				Name: ptr.To("TestCluster"),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+						{
+							Name: ptr.To("aservice1"),
+							Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+								PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("TestCluster-aservice1")},
+							},
+						},
+					},
+				},
+			},
+			expectedStatus: &v1.LoadBalancerStatus{Ingress: []v1.LoadBalancerIngress{{IP: "1.2.3.4", Hostname: ""}}},
+			expectedExists: true,
+			expectedError:  false,
+		},
 	}
 
 	for _, test := range testCases {
