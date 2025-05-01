@@ -1,7 +1,7 @@
 # cel.dev/expr v0.18.0
 ## explicit; go 1.21.1
 cel.dev/expr
-# github.com/Azure/azure-kusto-go/azkustodata v1.0.1
+# github.com/Azure/azure-kusto-go/azkustodata v1.0.2
 ## explicit; go 1.22
 github.com/Azure/azure-kusto-go/azkustodata
 github.com/Azure/azure-kusto-go/azkustodata/errors
@@ -16,7 +16,7 @@ github.com/Azure/azure-kusto-go/azkustodata/trusted_endpoints
 github.com/Azure/azure-kusto-go/azkustodata/types
 github.com/Azure/azure-kusto-go/azkustodata/utils
 github.com/Azure/azure-kusto-go/azkustodata/value
-# github.com/Azure/azure-kusto-go/azkustoingest v1.0.1
+# github.com/Azure/azure-kusto-go/azkustoingest v1.0.2
 ## explicit; go 1.22
 github.com/Azure/azure-kusto-go/azkustoingest
 github.com/Azure/azure-kusto-go/azkustoingest/ingestoptions
@@ -406,7 +406,7 @@ github.com/prometheus/common/model
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
-# github.com/samber/lo v1.49.1
+# github.com/samber/lo v1.50.0
 ## explicit; go 1.18
 github.com/samber/lo
 github.com/samber/lo/internal/constraints
@@ -537,8 +537,8 @@ go.uber.org/automaxprocs
 go.uber.org/automaxprocs/internal/cgroups
 go.uber.org/automaxprocs/internal/runtime
 go.uber.org/automaxprocs/maxprocs
-# go.uber.org/mock v0.5.1
-## explicit; go 1.22
+# go.uber.org/mock v0.5.2
+## explicit; go 1.23
 go.uber.org/mock/gomock
 # go.uber.org/multierr v1.11.0
 ## explicit; go 1.19

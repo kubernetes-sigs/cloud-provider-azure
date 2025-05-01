@@ -278,6 +278,16 @@ type Ingestion struct {
 	ClientVersionForTracing string `json:",omitempty"`
 }
 
+type TagsList []string
+
+func (t TagsList) MarshalJSON() ([]byte, error) {
+	j, err := json.Marshal([]string(t))
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(string(j))
+}
+
 // Additional is additional properites.
 type Additional struct {
 	// AuthContext is the authorization string that we get from resources.Manager.AuthContext().
@@ -296,7 +306,7 @@ type Additional struct {
 	Format            DataFormat `json:"format,omitempty"`
 	IgnoreFirstRecord bool       `json:"ignoreFirstRecord"`
 	// Tags is a list of tags to associated with the ingested data.
-	Tags []string `json:"tags,omitempty"`
+	Tags TagsList `json:"tags,omitempty"`
 	// IngestIfNotExists is a string value that, if specified, prevents ingestion from succeeding if the table already
 	// has data tagged with an ingest-by: tag with the same value. This ensures idempotent data ingestion.
 	IngestIfNotExists string `json:"ingestIfNotExists,omitempty"`
