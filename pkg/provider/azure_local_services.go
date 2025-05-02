@@ -304,6 +304,14 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 						}
 						az.difftracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
 					}
+
+					select {
+					case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
+						// trigger batch update
+					default:
+						// channel is full, do nothing
+						klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+					}
 				}
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
@@ -382,14 +390,13 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 						az.difftracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
 					}
 
-					// TO BE DISCUSSED (enechitoaia): do we want to trigger the batch updater here too?
-					// select {
-					// case az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger <- true:
-					// 	// trigger batch update
-					// default:
-					// 	// channel is full, do nothing
-					// 	klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
-					// }
+					select {
+					case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
+						// trigger batch update
+					default:
+						// channel is full, do nothing
+						klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+					}
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
@@ -428,14 +435,13 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 						az.difftracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
 					}
 
-					// TO BE DISCUSSED (enechitoaia): do we want to trigger the batch updater here too?
-					// select {
-					// case az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger <- true:
-					// 	// trigger batch update
-					// default:
-					// 	// channel is full, do nothing
-					// 	klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
-					// }
+					select {
+					case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
+						// trigger batch update
+					default:
+						// channel is full, do nothing
+						klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+					}
 				}
 			},
 		})

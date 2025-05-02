@@ -131,11 +131,11 @@ func mergeMaps[K comparable, V any](maps ...map[K]V) map[K]V {
 }
 
 func (updater *locationAndNRPServiceBatchUpdater) addOperation(operation batchOperation) batchOperation {
-	// This is a no-op function. The actual processing is done in the run method.
+	// This is a no-op function. Add operation is handled via the DiffTracker APIs.
 	return operation
 }
 
 func (updater *locationAndNRPServiceBatchUpdater) removeOperation(name string) {
-	// This is a no-op function. The actual processing is done in the run method.
+	// This is a no-op function. Remove operation is handled via the DiffTracker APIs.
 	return
 }

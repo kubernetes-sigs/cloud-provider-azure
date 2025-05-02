@@ -487,22 +487,7 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 	serviceUID := getServiceUID(service)
 	if _, loaded := az.localServiceNameToNRPServiceMap.Load(serviceUID); loaded {
 		az.localServiceNameToNRPServiceMap.Delete(serviceUID)
-
-		// Remove the serviceName from the K8S state to be synced into NRP during batch sync update flow.
-		az.diffTracker.UpdateK8sService(
-			UpdateK8sResource{
-				Operation: REMOVE,
-				Resource:  serviceUID,
-			},
-		)
-
-		select {
-		case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
-			// trigger batch update
-		default:
-			// channel is full, do nothing
-			klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
-		}
+		// DELETE Service from Difftracker.K8S -> call NRP API TO DELETE THE SERVICE -> Update Difftracker.NRP
 	}
 
 	_, err = az.reconcileLoadBalancer(ctx, clusterName, service, nil, false /* wantLb */)
@@ -1725,6 +1710,10 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurations(
 		return nil
 	}
 
+	if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+		return fmt.Errorf("multiple standard load balancers are enabled but the backend pool type is set to podIP")
+	}
+
 	if az.multipleStandardLoadBalancerConfigurationsSynced {
 		return nil
 	}
@@ -1798,6 +1787,10 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurations(
 // This entails adding rules/probes for expected Ports and removing stale rules/ports.
 // nodes only used if wantLb is true
 func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node, wantLb bool) (*armnetwork.LoadBalancer, error) {
+	if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() && !strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyTypeLocal)) {
+		return nil, fmt.Errorf("service %s/%s is using podIP backend pool type but externalTrafficPolicy is not set to Local", service.Namespace, service.Name)
+	}
+
 	isBackendPoolPreConfigured := az.isBackendPoolPreConfigured(service)
 	serviceName := getServiceName(service)
 	klog.V(2).Infof("reconcileLoadBalancer for service(%s) - wantLb(%t): started", serviceName, wantLb)
@@ -2008,10 +2001,6 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 		}
 
 		if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
-			if !strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyTypeLocal)) {
-				return nil, fmt.Errorf("service %s/%s is using podIP backend pool type but externalTrafficPolicy is not set to Local", service.Namespace, service.Name)
-			}
-
 			serviceUID := getServiceUID(service)
 			if _, loaded := az.localServiceNameToNRPServiceMap.Load(serviceUID); !loaded {
 				// Add the serviceName to the K8S state to be synced into NRP during batch sync update flow.
