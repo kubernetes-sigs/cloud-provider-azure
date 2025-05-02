@@ -2025,6 +2025,45 @@ func TestGetServiceLoadBalancerCommon(t *testing.T) {
 			expectedExists: false,
 			expectedError:  false,
 		},
+		{
+			desc: "getServiceLoadBalancer should not change LB when names are the same but with different case with standard LB",
+			sku:  "standard",
+			existingLBs: []network.LoadBalancer{
+				{
+					Name: ptr.To("TestCluster"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: &[]network.FrontendIPConfiguration{
+							{
+								Name: ptr.To("aservice1"),
+								FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &network.PublicIPAddress{
+										ID: ptr.To("TestCluster-aservice1"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			service: getTestService("service1", v1.ProtocolTCP, nil, false, 80),
+			wantLB:  true,
+			expectedLB: &network.LoadBalancer{
+				Name: ptr.To("TestCluster"),
+				LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+					FrontendIPConfigurations: &[]network.FrontendIPConfiguration{
+						{
+							Name: ptr.To("aservice1"),
+							FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+								PublicIPAddress: &network.PublicIPAddress{ID: ptr.To("TestCluster-aservice1")},
+							},
+						},
+					},
+				},
+			},
+			expectedStatus: &v1.LoadBalancerStatus{Ingress: []v1.LoadBalancerIngress{{IP: "1.2.3.4", Hostname: ""}}},
+			expectedExists: true,
+			expectedError:  false,
+		},
 	}
 
 	ctrl := gomock.NewController(t)
