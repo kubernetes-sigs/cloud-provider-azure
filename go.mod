@@ -5,8 +5,8 @@ go 1.23.2
 godebug winsymlink=0
 
 require (
-	github.com/Azure/azure-kusto-go/azkustodata v1.0.1
-	github.com/Azure/azure-kusto-go/azkustoingest v1.0.1
+	github.com/Azure/azure-kusto-go/azkustodata v1.0.2
+	github.com/Azure/azure-kusto-go/azkustoingest v1.0.2
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.18.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.9.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 v6.4.0
@@ -22,7 +22,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.37.0
 	github.com/prometheus/client_golang v1.22.0
-	github.com/samber/lo v1.49.1
+	github.com/samber/lo v1.50.0
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
@@ -32,9 +32,9 @@ require (
 	go.opentelemetry.io/otel/sdk v1.35.0
 	go.opentelemetry.io/otel/sdk/metric v1.35.0
 	go.opentelemetry.io/otel/trace v1.35.0
-	go.uber.org/mock v0.5.1
-	golang.org/x/sync v0.13.0
-	golang.org/x/sys v0.32.0
+	go.uber.org/mock v0.5.2
+	golang.org/x/sync v0.14.0
+	golang.org/x/sys v0.33.0
 	golang.org/x/text v0.24.0
 	k8s.io/api v0.32.4
 	k8s.io/apimachinery v0.32.4

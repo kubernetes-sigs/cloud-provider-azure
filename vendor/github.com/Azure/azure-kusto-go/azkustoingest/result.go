@@ -79,7 +79,7 @@ func (r *Result) putQueued(ctx context.Context, i *Ingestion) {
 
 // Wait returns a channel that can be checked for ingestion results.
 // In order to check actual status please use the ReportResultToTable option when ingesting data.
-func (r *Result) Wait(ctx context.Context) chan error {
+func (r *Result) Wait(ctx context.Context) <-chan error {
 	ch := make(chan error, 1)
 
 	if r.record.Status.IsFinal() || !r.reportToTable {
