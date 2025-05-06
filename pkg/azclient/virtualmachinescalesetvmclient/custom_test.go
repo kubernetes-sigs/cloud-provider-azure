@@ -48,13 +48,23 @@ func init() {
 				Expect(newResource).NotTo(BeNil())
 			})
 		})
+
 		When("list requests are raised", func() {
-			It("should return 404 error", func(ctx context.Context) {
-				newResource, err := realClient.ListVMInstanceView(ctx, resourceGroupName, virtualmachinescalesetName)
+			It("should not return error", func(ctx context.Context) {
+				resourceList, err := realClient.List(ctx, resourceGroupName, virtualmachinescalesetName)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(newResource).NotTo(BeNil())
+				Expect(resourceList).NotTo(BeNil())
+				Expect(len(resourceList)).To(Equal(1))
 			})
 		})
+		When("invalid list requests are raised", func() {
+			It("should return error", func(ctx context.Context) {
+				resourceList, err := realClient.List(ctx, resourceGroupName+"notfound", virtualmachinescalesetName)
+				Expect(err).To(HaveOccurred())
+				Expect(resourceList).To(BeNil())
+			})
+		})
+
 		When("update requests are raised", func() {
 			It("should not return error", func(ctx context.Context) {
 				newResource, err := realClient.Update(ctx, resourceGroupName, virtualmachinescalesetName, "0", armcompute.VirtualMachineScaleSetVM{
