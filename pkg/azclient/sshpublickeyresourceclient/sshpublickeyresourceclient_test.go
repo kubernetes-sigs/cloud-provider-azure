@@ -19,6 +19,7 @@ package sshpublickeyresourceclient
 
 import (
 	"context"
+	"strings"
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
@@ -59,7 +60,7 @@ var _ = ginkgo.Describe("SSHPublicKeysClient", ginkgo.Ordered, func() {
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(resourceList).NotTo(gomega.BeNil())
 			gomega.Expect(len(resourceList)).To(gomega.Equal(1))
-			gomega.Expect(*resourceList[0].Name).To(gomega.Equal(resourceName))
+			gomega.Expect(strings.EqualFold(*resourceList[0].Name, resourceName)).To(gomega.BeTrue())
 		})
 	})
 	ginkgo.When("invalid list requests are raised", func() {

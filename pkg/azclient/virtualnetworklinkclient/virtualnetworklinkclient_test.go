@@ -73,6 +73,23 @@ var _ = ginkgo.Describe("VirtualNetworkLinksClient", ginkgo.Ordered, func() {
 		})
 	})
 
+	ginkgo.When("list requests are raised", func() {
+		ginkgo.It("should not return error", func(ctx context.Context) {
+			resourceList, err := realClient.List(ctx, resourceGroupName, privatezoneName)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(resourceList).NotTo(gomega.BeNil())
+			gomega.Expect(len(resourceList)).To(gomega.Equal(1))
+			gomega.Expect(strings.EqualFold(*resourceList[0].Name, resourceName)).To(gomega.BeTrue())
+		})
+	})
+	ginkgo.When("invalid list requests are raised", func() {
+		ginkgo.It("should return error", func(ctx context.Context) {
+			resourceList, err := realClient.List(ctx, resourceGroupName+"notfound", privatezoneName)
+			gomega.Expect(err).To(gomega.HaveOccurred())
+			gomega.Expect(resourceList).To(gomega.BeNil())
+		})
+	})
+
 	ginkgo.When("deletion requests are raised", func() {
 		ginkgo.It("should not return error", func(ctx context.Context) {
 			err = realClient.Delete(ctx, resourceGroupName, privatezoneName, resourceName)

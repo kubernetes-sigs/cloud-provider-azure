@@ -97,6 +97,7 @@ func (g Generator) generateTestCase(ctx *genall.GenerationContext, root *loader.
 		importList["github.com/onsi/gomega"] = map[string]struct{}{}
 	}
 	importList["context"] = make(map[string]struct{})
+	importList["strings"] = make(map[string]struct{})
 	importList["github.com/onsi/ginkgo/v2"] = map[string]struct{}{}
 	if markerConf.Etag {
 		importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/to"] = make(map[string]struct{})
