@@ -6,13 +6,21 @@ description: >
     Implement new Load Balancer sku - StandardV2
 ---
 
+# Container Load Balancer Design Document
+
 ## Background
 
 > The following `User` stands for human users, or any cluster provisioning tools (e.g., AKS).
 
 This design document describes the user-facing design and workflow of the Standard V2 LoadBalancer - Container Based Backendpool.
 
-## Design
+## Comparison to Node Based Load Balancer
+
+- In its current form, the **Software Load Balancer (SLB)** only supports load balancing to nodes. In a container cluster environment, there are multiple processing units or pods on a single node. To ensure that a user's request reaches an application within a pod, the request is first sent to the SLB, which determines the most suitable node. At the node level, the traffic is further balanced among the multiple pods. This process may involve multiple hops between pods until the correct node is found, especially when externalTrafficPolicy=Cluster is set. Consequently, the traffic is load balanced multiple times before reaching the desired pod.
+
+- In contrast, the **Container Load Balancer (CLB)** offers a fundamentally improved approach. The goal is to create an IP subnet overlay for all the pods that are part of a specific application. This means that when a user sends a request to the SLB, the SLB can directly route the traffic to the desired pod. This approach significantly reduces latency and provides a platform for new features, such as adding rule-based identities. In this context, the middleware capabilities of the cloud provider are utilized to construct and synchronize the Kubernetes cluster structure and its corresponding subnet overlay.
+
+## Azure Resource Config
 
 1. Current users do not need to take any action, and the ongoing changes will not affect them.
 
@@ -23,6 +31,22 @@ This design document describes the user-facing design and workflow of the Standa
 4. After that, no further action is needed, as all networking resources will be automatically provisioned when new pods, LoadBalancer services, and egresses are created.
 
 ## Workflow
+
+### How to use
+
+- Apart from selecting the correct SKU in Azure, no additional steps are required.
+- Within the Kubernetes cluster, the pod, service, and all other resource manifests remain unchanged. T
+- The actual work occur during the processing of these resources as they are provisioned. The cloud provider monitors updates within the resources and their mappings, processing them accordingly.
+
+### High Level DataPath
+
+- Above is the current datapath of SLB - Node based - Multiple networking hops.
+
+- Bottom is the new proposal of SLB - Container based - Single networking hop.
+
+![SLB-CLB-DATAPATH](./slb-clb-datapath.png)
+
+### Control Plane Batch Processing
 
 1. Introduces DiffTracker API to keep track of the synchronization between the Kubernetes (K8s) cluster and its NRP resources structure.
 
@@ -35,3 +59,4 @@ This design document describes the user-facing design and workflow of the Standa
 5. The LocationAndNRPServiceBatchUpdater run method waits to consume booleans from the channel. When a value is consumed, it uses all the updates stored in DiffTracker to update NRP using the NRP API. Eventually, all successful NRP API calls are stored back into DiffTracker to assert the equivalence of the two structures (K8s cluster and Azure).
 
 6. DiffTracker also functions as a batch operations aggregator. When a cluster undergoes multiple rapid updates, DiffTracker's state will continuously be updated. Meanwhile, the LocationAndNRPServiceBatchUpdater, running on a single thread, will consume updates from the channel. As a result, multiple updates can accumulate and be ready to be sent to the NRP in a single batch.
+
