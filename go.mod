@@ -1,8 +1,7 @@
 module sigs.k8s.io/cloud-provider-azure
 
-go 1.24.0
-
-godebug default=go1.24
+go 1.24
+toolchain go1.24.1
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.18.0
@@ -29,7 +28,7 @@ require (
 	go.uber.org/mock v0.5.2
 	golang.org/x/sync v0.14.0
 	golang.org/x/sys v0.33.0
-	golang.org/x/text v0.24.0
+	golang.org/x/text v0.25.0
 	k8s.io/api v0.33.0
 	k8s.io/apimachinery v0.33.0
 	k8s.io/apiserver v0.33.0
@@ -40,10 +39,10 @@ require (
 	k8s.io/controller-manager v0.33.0
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubelet v0.33.0
-	k8s.io/utils v0.0.0-20241210054802-24370beab758
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.6.2
+	k8s.io/utils v0.0.0-20250321185631-1f6e0b77f77e
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.7.0
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.6.1
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.5.3
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.6.1
 	sigs.k8s.io/yaml v1.4.0
 )
 
