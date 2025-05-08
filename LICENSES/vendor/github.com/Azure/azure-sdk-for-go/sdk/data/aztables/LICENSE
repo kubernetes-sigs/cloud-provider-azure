@@ -1,4 +1,4 @@
-= vendor/github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets licensed under: =
+= vendor/github.com/Azure/azure-sdk-for-go/sdk/data/aztables licensed under: =
 
     MIT License
 
@@ -21,4 +21,4 @@
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE
-= vendor/github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets/LICENSE.txt 261d8686a7cf1ce9570cdc99746659f8
+= vendor/github.com/Azure/azure-sdk-for-go/sdk/data/aztables/LICENSE.txt 261d8686a7cf1ce9570cdc99746659f8
