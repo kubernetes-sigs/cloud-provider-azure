@@ -23,7 +23,10 @@ jobs:
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
           egress-policy: audit
-
+      - name: Install arm build toolchains
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu
       - name: Checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - name: Discover Go modules
@@ -62,7 +65,10 @@ jobs:
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
           egress-policy: audit
-
+      - name: Install arm build toolchains
+        run: |
+          sudo apt-get update
+          sudo apt-get install gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu
       - name: Checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - name: Discover Go modules
@@ -118,7 +124,10 @@ jobs:
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
           egress-policy: audit
-
+      - name: Install arm build toolchains
+        run: |
+          sudo apt-get update
+          sudo apt-get install gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu
       - name: Checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - name: Discover Go modules
