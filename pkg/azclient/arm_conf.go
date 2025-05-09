@@ -85,7 +85,7 @@ func GetAzCoreClientOption(armConfig *ARMClientConfig) (*policy.ClientOptions, *
 			clientConfig.Retry.MaxRetries = armConfig.CloudProviderBackoffRetries
 		}
 		if armConfig.EnableMinimumRetryAfter {
-			// Add the minimum retry-after policy to enforce a a minimum retry-after value configured in clientConfig.Retry.RetryDelay (default 5s)
+			// Add the minimum retry-after policy to enforce a minimum retry-after value configured in clientConfig.Retry.RetryDelay (default 5s)
 			clientConfig.PerRetryPolicies = append(clientConfig.PerRetryPolicies, retryaftermin.NewRetryAfterMinPolicy(clientConfig.Retry.RetryDelay))
 		}
 	}

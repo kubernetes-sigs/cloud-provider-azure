@@ -26,25 +26,25 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// RetryAfterMinPolicy is a policy that enforces a minimum retry-after value
-type RetryAfterMinPolicy struct {
+// Policy is a policy that enforces a minimum retry-after value
+type Policy struct {
 	minRetryAfter time.Duration
 }
 
-// NewRetryAfterMinPolicy creates a new RetryAfterMinPolicy with the specified minimum retry-after value
+// NewRetryAfterMinPolicy creates a new Policy with the specified minimum retry-after value
 func NewRetryAfterMinPolicy(minRetryAfter time.Duration) policy.Policy {
-	return &RetryAfterMinPolicy{
+	return &Policy{
 		minRetryAfter: minRetryAfter,
 	}
 }
 
 // GetMinRetryAfter returns the minimum retry-after value
-func (p *RetryAfterMinPolicy) GetMinRetryAfter() time.Duration {
+func (p *Policy) GetMinRetryAfter() time.Duration {
 	return p.minRetryAfter
 }
 
 // Do implements the policy.Policy interface
-func (p *RetryAfterMinPolicy) Do(req *policy.Request) (*http.Response, error) {
+func (p *Policy) Do(req *policy.Request) (*http.Response, error) {
 	resp, err := req.Next()
 	// If the request failed or the status code is >= 300, return
 	if err != nil || resp == nil || resp.StatusCode >= 300 {
