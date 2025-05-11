@@ -28,6 +28,7 @@ The latest release of azure-cloud-controller-manager and azure-cloud-node-manage
 |--------------------|------------------------|-----------------------|
 | master             | N/A                    | master                |
 | v1.y.x             | v1.y.z                 | release-1.y           |
+| v1.33.x            | v1.33.z                | release-1.33          |
 | v1.32.x            | v1.32.z                | release-1.32          |
 | v1.31.x            | v1.31.z                | release-1.31          |
 | v1.30.x            | v1.30.z                | release-1.30          |
@@ -40,11 +41,12 @@ The table below shows the cloud-controller-manager and cloud-node-manager versio
 
 | AKS version                 | cloud-controller-manager version | cloud-node-manager version |
 |-----------------------------|----------------------------------|----------------------------|
-| v1.32.x                     | v1.32.4                          | v1.32.3                    |
-| v1.31.x                     | v1.31.5                          | v1.31.4                    |
-| v1.30.x                     | v1.30.11                          | v1.30.10                    |
-| v1.29.x                     | v1.29.14                          | v1.29.13                    |
-| v1.28.x                     | v1.28.13                         | v1.28.14                    |
+| v1.33.x                     | v1.33.0                          | v1.33.0                    |
+| v1.32.x                     | v1.32.5                          | v1.32.5                    |
+| v1.31.x                     | v1.31.6                          | v1.31.6                    |
+| v1.30.x                     | v1.30.12                          | v1.30.12                    |
+| v1.29.x                     | v1.29.15                          | v1.29.15                    |
+| v1.28.x                     | v1.28.14                         | v1.28.14                    |
 | v1.27.x                     | v1.27.21                         | v1.27.20                   |
 
 ## Build
