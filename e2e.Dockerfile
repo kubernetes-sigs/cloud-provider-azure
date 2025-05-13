@@ -20,6 +20,6 @@ WORKDIR /go/src/sigs.k8s.io/cloud-provider-azure
 
 COPY . .
 
-RUN go get github.com/onsi/ginkgo/ginkgo \
+RUN curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash  && go get github.com/onsi/ginkgo/ginkgo \
   && go get github.com/onsi/gomega/... \
   && go mod tidy
