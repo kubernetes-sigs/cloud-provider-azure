@@ -1,5 +1,5 @@
 ---
-title: "StandardV2 Load Balancer - Container Based Backendpool"
+title: "StandardV2 Load Balancer - Pod Based Backendpool"
 linkTitle: "StandardV2 Load Balancer - Container Based Backendpool"
 type: docs
 description: >
