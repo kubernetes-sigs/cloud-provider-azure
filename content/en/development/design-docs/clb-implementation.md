@@ -3,7 +3,7 @@ title: "StandardV2 Load Balancer - Pod Based Backendpool"
 linkTitle: "StandardV2 Load Balancer - Container Based Backendpool"
 type: docs
 description: >
-    Implement new Load Balancer sku - StandardV2
+    Implement new Backend pool type - Pod Based Backendpool
 ---
 
 # Container Load Balancer Design Document
