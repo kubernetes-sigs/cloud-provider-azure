@@ -10,7 +10,7 @@ description: >
 
 ## Background
 
-> The following `User` stands for human users, or any cluster provisioning tools (e.g., AKS).
+> The following `User` stands for human users, or any cluster provisioning tools (e.g.: AKS, CAPZ).
 
 This design document describes the user-facing design and workflow of the Standard V2 LoadBalancer - Container Based Backendpool.
 
