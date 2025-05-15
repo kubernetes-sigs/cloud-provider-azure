@@ -18,25 +18,23 @@ This design document describes the user-facing design and workflow of the Standa
 
 - Today, traffic to Services of type LoadBalancer is sent to cluster nodes where it is load balanced again to be either forwarded to the Pod on said Node, or forwarded to another Node where the destination Pod lives.
 
-- In contrast, Pod based backendpool offers a fundamentally improved approach. Traffic destined to a Service of type LoadBalancer reaches the Pod directly, without additional DNAT and without additional hop through another Node. This approach significantly reduces data path (less hops) and control plane (smaller backendpool updates) latencies, as well as removes Service count limitations that are currently present. 
+- In contrast, Pod based backendpool offers a fundamentally improved approach. Traffic destined to a Service of type LoadBalancer reaches the Pod directly, without additional DNAT and without additional hop through another Node. This approach significantly reduces data path (less hops) and control plane (smaller backendpool updates) latencies, as well as removes Service count limitations that are currently present.
 - In this context, the middleware capabilities of the Cloud Provider are utilized to construct and synchronize the relevant Kubernetes resources with the state in Azure Resource Manager.
 
 ## Azure Resource Config
 
 1. Current users do not need to take any action, and the ongoing changes will not affect them.
 
-2. New Users must create a Container Based Cluster.
+2. New Users must create an Azure Kubernetes Service Cluster and configure it to use Container Load Balancer (CLB).
 
-3. Then, they must create a `Standard V2` sku Load Balancer
-
-4. After that, no further action is needed, as all networking resources will be automatically provisioned when new pods, LoadBalancer services, and egresses are created.
+3. After that, no further action is needed, as all networking resources will be automatically provisioned when new pods, LoadBalancer services, and egresses are created.
 
 ## Workflow
 
 ### How to use
 
 - Apart from selecting the correct SKU in Azure, no additional steps are required.
-- Within the Kubernetes cluster, the pod, service, and all other resource manifests remain unchanged. T
+- Within the Kubernetes cluster, the pod, service, and all other resource manifests remain unchanged.
 - The actual work occur during the processing of these resources as they are provisioned. The cloud provider monitors updates within the resources and their mappings, processing them accordingly.
 
 ### High Level DataPath
