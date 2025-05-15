@@ -16,7 +16,7 @@ This design document describes the user-facing design and workflow of the Standa
 
 ## Comparison to Node Based Load Balancer
 
-- In its current form, the **Software Load Balancer (SLB)** only supports load balancing to nodes. In a container cluster environment, there are multiple processing units or pods on a single node. To ensure that a user's request reaches an application within a pod, the request is first sent to the SLB, which determines the most suitable node. At the node level, the traffic is further balanced among the multiple pods. This process may involve multiple hops between pods until the correct node is found, especially when externalTrafficPolicy=Cluster is set. Consequently, the traffic is load balanced multiple times before reaching the desired pod.
+- Today, traffic to Services of type LoadBalancer is sent to cluster nodes where it is load balanced again to be either forwarded to the Pod on said Node, or forwarded to another Node where the destination Pod lives.
 
 - In contrast, Pod based backendpool offers a fundamentally improved approach. Traffic destined to a Service of type LoadBalancer reaches the Pod directly, without additional DNAT and without additional hop through another Node. This approach significantly reduces data path (less hops) and control plane (smaller backendpool updates) latencies, as well as removes Service count limitations that are currently present. 
 - In this context, the middleware capabilities of the Cloud Provider are utilized to construct and synchronize the relevant Kubernetes resources with the state in Azure Resource Manager.
