@@ -124,11 +124,12 @@ type Cloud struct {
 	regionZonesMap   map[string][]string
 	refreshZonesLock sync.RWMutex
 
-	KubeClient         clientset.Interface
-	eventBroadcaster   record.EventBroadcaster
-	eventRecorder      record.EventRecorder
-	routeUpdater       batchProcessor
-	backendPoolUpdater batchProcessor
+	KubeClient                        clientset.Interface
+	eventBroadcaster                  record.EventBroadcaster
+	eventRecorder                     record.EventRecorder
+	routeUpdater                      batchProcessor
+	backendPoolUpdater                batchProcessor
+	locationAndNRPServiceBatchUpdater batchProcessor
 
 	vmCache        azcache.Resource
 	lbCache        azcache.Resource
@@ -154,6 +155,7 @@ type Cloud struct {
 	multipleStandardLoadBalancersActiveServicesLock sync.Mutex
 	multipleStandardLoadBalancersActiveNodesLock    sync.Mutex
 	localServiceNameToServiceInfoMap                sync.Map
+	localServiceNameToNRPServiceMap                 sync.Map
 	endpointSlicesCache                             sync.Map
 
 	azureResourceLocker *AzureResourceLocker
@@ -493,6 +495,11 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 			go az.backendPoolUpdater.run(ctx)
 		}
 
+		// start NRP location and service batch updater.
+		if az.IsLBBackendPoolTypePodIP() {
+			az.locationAndNRPServiceBatchUpdater = newLocationAndNRPServiceBatchUpdater(az)
+			go az.locationAndNRPServiceBatchUpdater.run(ctx)
+		}
 		// Azure Stack does not support zone at the moment
 		// https://docs.microsoft.com/en-us/azure-stack/user/azure-stack-network-differences?view=azs-2102
 		if !az.IsStackCloud() {
