@@ -303,14 +303,13 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 							newAddresses:    az.getPodIPToNodeIPMapFromEndpointSlice(es, false),
 						}
 						az.difftracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
-					}
-
-					select {
-					case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
-						// trigger batch update
-					default:
-						// channel is full, do nothing
-						klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+						select {
+						case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
+							// trigger batch update
+						default:
+							// channel is full, do nothing
+							klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+						}
 					}
 				}
 			},
@@ -388,14 +387,13 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 							newAddresses:    az.getPodIPToNodeIPMapFromEndpointSlice(newES, false),
 						}
 						az.difftracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
-					}
-
-					select {
-					case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
-						// trigger batch update
-					default:
-						// channel is full, do nothing
-						klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+						select {
+						case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
+							// trigger batch update
+						default:
+							// channel is full, do nothing
+							klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+						}
 					}
 				}
 			},
@@ -433,14 +431,13 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 							newAddresses:    nil,
 						}
 						az.difftracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
-					}
-
-					select {
-					case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
-						// trigger batch update
-					default:
-						// channel is full, do nothing
-						klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+						select {
+						case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
+							// trigger batch update
+						default:
+							// channel is full, do nothing
+							klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+						}
 					}
 				}
 			},

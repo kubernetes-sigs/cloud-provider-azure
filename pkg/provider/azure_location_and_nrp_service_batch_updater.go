@@ -72,9 +72,6 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 	}
 
 	for _, serviceName := range serviceLoadBalancerList.Deletions {
-		// TO BE REMOVED (enechitoaia) as per https://github.com/kubernetes-sigs/cloud-provider-azure/pull/8872#discussion_r2048392406
-		// updater.az.localServiceNameToNRPServiceMap.Delete(serviceName)
-
 		updateK8sEndpointsInputType := UpdateK8sEndpointsInputType{
 			inboundIdentity: serviceName,
 			oldAddresses:    map[string]string{},

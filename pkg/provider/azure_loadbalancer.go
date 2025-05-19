@@ -2010,8 +2010,6 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 						Resource:  serviceUID,
 					},
 				)
-				// TO BE REMOVED (enechitoaia) as per https://github.com/kubernetes-sigs/cloud-provider-azure/pull/8872#discussion_r2048350395:
-				// az.localServiceNameToNRPServiceMap.Store(serviceUID, struct{}{})
 				select {
 				case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
 					// trigger batch update
