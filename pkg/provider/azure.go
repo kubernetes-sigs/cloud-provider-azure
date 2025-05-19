@@ -376,7 +376,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIPConfig(az)
 	} else if az.IsLBBackendPoolTypeNodeIP() {
 		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIP(az)
-	} else if az.IsLBBackendPoolTypePodIP() {
+	} else if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
 		az.LoadBalancerBackendPool = newBackendPoolTypePodIP(az)
 	}
 
@@ -496,7 +496,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		}
 
 		// start NRP location and service batch updater.
-		if az.IsLBBackendPoolTypePodIP() {
+		if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
 			az.locationAndNRPServiceBatchUpdater = newLocationAndNRPServiceBatchUpdater(az)
 			go az.locationAndNRPServiceBatchUpdater.run(ctx)
 		}
@@ -514,7 +514,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		}
 	}
 
-	if az.IsLBBackendPoolTypePodIP() {
+	if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
 		err = az.initializeDiffTracker()
 		if err != nil {
 			klog.Errorf("InitializeCloudFromConfig: failed to initialize difftracker: %s", err.Error())

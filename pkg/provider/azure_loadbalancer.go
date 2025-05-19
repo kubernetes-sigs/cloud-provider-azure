@@ -303,7 +303,7 @@ func (az *Cloud) getLatestService(serviceName string, deepcopy bool) (*v1.Servic
 // parameters as read-only and not modify them.
 // Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
 func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
-	if az.IsLBBackendPoolTypePodIP() && !strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyTypeLocal)) {
+	if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() && !strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyTypeLocal)) {
 		return errors.New("podIP backend pool type only supports ExternalTrafficPolicy=Local")
 	}
 	// Node additions and removals to VMSS (Virtual Machine Scale Sets) do not require reconcileLB operations.
@@ -2882,7 +2882,7 @@ func (az *Cloud) getExpectedLBRules(
 ) ([]*armnetwork.Probe, []*armnetwork.LoadBalancingRule, error) {
 	var expectedRules []*armnetwork.LoadBalancingRule
 	// If we are using Pod IP in the LB backend, we skip health probes, disable floating IP and use port.TargetPort.
-	if az.IsLBBackendPoolTypePodIP() {
+	if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
 		expectedRules, err := getExpectedLoadBalancingRuleforBackendPoolTypePodIP(service, az, isIPv6, lbFrontendIPConfigID, lbBackendPoolID, expectedRules)
 		if err != nil {
 			return nil, nil, err
@@ -3189,7 +3189,7 @@ func (az *Cloud) reconcileSecurityGroup(
 		dstIpv4AddressPrefix, dstIpv6AddressPrefix []netip.Prefix
 	)
 
-	if az.IsLBBackendPoolTypePodIP() {
+	if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
 		dstIpv4AddressPrefix = az.PodCidrsIPv4
 		dstIpv6AddressPrefix = az.PodCidrsIPv6
 	} else {
