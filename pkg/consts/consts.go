@@ -383,7 +383,7 @@ const (
 	LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration = "nodeIPConfiguration"
 	// LoadBalancerBackendPoolConfigurationTypeNodeIP is the lb backend pool config type node ip
 	LoadBalancerBackendPoolConfigurationTypeNodeIP = "nodeIP"
-	// LoadBalancerBackendPoolConfigurationTypePODIP is the lb backend pool config type pod ip
+	// LoadBalancerBackendPoolConfigurationTypePodIP is the lb backend pool config type pod ip
 	LoadBalancerBackendPoolConfigurationTypePodIP = "podIP"
 )
 

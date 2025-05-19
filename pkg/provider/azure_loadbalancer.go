@@ -3141,23 +3141,29 @@ func (az *Cloud) reconcileSecurityGroup(
 	}
 
 	var (
-		disableFloatingIP                                = consts.IsK8sServiceDisableLoadBalancerFloatingIP(service)
-		lbIPAddresses, _                                 = iputil.ParseAddresses(lbIPs)
-		lbIPv4Addresses, lbIPv6Addresses                 = iputil.GroupAddressesByFamily(lbIPAddresses)
-		additionalIPv4Addresses, additionalIPv6Addresses = iputil.GroupAddressesByFamily(additionalIPs)
-		backendIPv4Addresses, backendIPv6Addresses       []netip.Addr
+		dstIPv4Addresses, dstIPv6Addresses         []netip.Addr
+		dstIpv4AddressPrefix, dstIpv6AddressPrefix []netip.Prefix
 	)
-	{
+
+	if az.IsLBBackendPoolTypePodIP() {
+		dstIpv4AddressPrefix = az.PodCidrsIPv4
+		dstIpv6AddressPrefix = az.PodCidrsIPv6
+	} else {
+		var (
+			disableFloatingIP                                = consts.IsK8sServiceDisableLoadBalancerFloatingIP(service)
+			lbIPAddresses, _                                 = iputil.ParseAddresses(lbIPs)
+			lbIPv4Addresses, lbIPv6Addresses                 = iputil.GroupAddressesByFamily(lbIPAddresses)
+			additionalIPv4Addresses, additionalIPv6Addresses = iputil.GroupAddressesByFamily(additionalIPs)
+			backendIPv4Addresses, backendIPv6Addresses       []netip.Addr
+		)
 		// Get backend node IPs
 		lb, lbFound, err := az.getAzureLoadBalancer(ctx, lbName, azcache.CacheReadTypeDefault)
-		{
-			if err != nil {
-				return nil, err
-			}
-			if wantLb && !lbFound {
-				logger.Error(err, "Failed to get load balancer")
-				return nil, fmt.Errorf("unable to get lb %s", lbName)
-			}
+		if err != nil {
+			return nil, err
+		}
+		if wantLb && !lbFound {
+			logger.Error(err, "Failed to get load balancer")
+			return nil, fmt.Errorf("unable to get lb %s", lbName)
 		}
 		var backendIPv4List, backendIPv6List []string
 		if lbFound {
@@ -3165,24 +3171,20 @@ func (az *Cloud) reconcileSecurityGroup(
 		}
 		backendIPv4Addresses, _ = iputil.ParseAddresses(backendIPv4List)
 		backendIPv6Addresses, _ = iputil.ParseAddresses(backendIPv6List)
-	}
 
-	var (
 		dstIPv4Addresses = additionalIPv4Addresses
 		dstIPv6Addresses = additionalIPv6Addresses
-	)
 
-	if disableFloatingIP {
-		// use the backend node IPs
-		dstIPv4Addresses = append(dstIPv4Addresses, backendIPv4Addresses...)
-		dstIPv6Addresses = append(dstIPv6Addresses, backendIPv6Addresses...)
-	} else {
-		// use the LoadBalancer IPs
-		dstIPv4Addresses = append(dstIPv4Addresses, lbIPv4Addresses...)
-		dstIPv6Addresses = append(dstIPv6Addresses, lbIPv6Addresses...)
-	}
+		if disableFloatingIP {
+			// use the backend node IPs
+			dstIPv4Addresses = append(dstIPv4Addresses, backendIPv4Addresses...)
+			dstIPv6Addresses = append(dstIPv6Addresses, backendIPv6Addresses...)
+		} else {
+			// use the LoadBalancer IPs
+			dstIPv4Addresses = append(dstIPv4Addresses, lbIPv4Addresses...)
+			dstIPv6Addresses = append(dstIPv6Addresses, lbIPv6Addresses...)
+		}
 
-	{
 		retainPortRanges, err := az.listSharedIPPortMapping(ctx, service, append(dstIPv4Addresses, dstIPv6Addresses...))
 		if err != nil {
 			logger.Error(err, "Failed to list retain port ranges")
@@ -3196,7 +3198,7 @@ func (az *Cloud) reconcileSecurityGroup(
 	}
 
 	if wantLb {
-		err := accessControl.PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses)
+		err := accessControl.PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses, dstIpv4AddressPrefix, dstIpv6AddressPrefix)
 		if err != nil {
 			logger.Error(err, "Failed to patch security group")
 			return nil, err
