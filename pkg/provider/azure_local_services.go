@@ -631,3 +631,22 @@ func (az *Cloud) reconcileIPsInLocalServiceBackendPoolsAsync(
 		}
 	}
 }
+
+func isDualStackService(service *v1.Service) bool {
+	return len(service.Spec.IPFamilies) == 2
+}
+
+func (az *Cloud) getBackendPoolNameForCLBService(service *v1.Service) (string, error) {
+	if isDualStackService(service) {
+		return "", fmt.Errorf("dual-stack services are not supported when LB backend pool type is PodIP")
+	}
+
+	switch service.Spec.IPFamilies[0] {
+	case v1.IPv4Protocol:
+		return string(service.GetUID()), nil
+	case v1.IPv6Protocol:
+		return fmt.Sprintf("%s-%s", service.GetUID(), consts.IPVersionIPv6StringLower), nil
+	default:
+		return "", fmt.Errorf("unknown IP family %s", service.Spec.IPFamilies[0])
+	}
+}

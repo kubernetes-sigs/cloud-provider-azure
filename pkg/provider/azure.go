@@ -297,15 +297,13 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		}
 	}
 
-	if config.LoadBalancerBackendPoolConfigurationType == "" ||
-		// TODO(nilo19): support pod IP mode in the future
-		strings.EqualFold(config.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePODIP) {
+	if config.LoadBalancerBackendPoolConfigurationType == "" {
 		config.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration
 	} else {
 		supportedLoadBalancerBackendPoolConfigurationTypes := utilsets.NewString(
 			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration),
 			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypeNodeIP),
-			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypePODIP))
+			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypePodIP))
 		if !supportedLoadBalancerBackendPoolConfigurationTypes.Has(strings.ToLower(config.LoadBalancerBackendPoolConfigurationType)) {
 			return fmt.Errorf("loadBalancerBackendPoolConfigurationType %s is not supported, supported values are %v", config.LoadBalancerBackendPoolConfigurationType, supportedLoadBalancerBackendPoolConfigurationTypes.UnsortedList())
 		}
@@ -373,6 +371,8 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIPConfig(az)
 	} else if az.IsLBBackendPoolTypeNodeIP() {
 		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIP(az)
+	} else if az.IsLBBackendPoolTypePodIP() {
+		az.LoadBalancerBackendPool = newBackendPoolTypePodIP(az)
 	}
 
 	if az.UseMultipleStandardLoadBalancers() {

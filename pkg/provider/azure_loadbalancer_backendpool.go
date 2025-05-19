@@ -381,6 +381,36 @@ func (bc *backendPoolTypeNodeIPConfig) GetBackendPrivateIPs(ctx context.Context,
 	return backendPrivateIPv4s.UnsortedList(), backendPrivateIPv6s.UnsortedList()
 }
 
+// Helper function for common backend pool IP processing
+func getBackendPoolIPs(serviceName string, backendPools []*armnetwork.BackendAddressPool, isBackendPoolMatch func(string) bool) *utilsets.IgnoreCaseSet {
+	backendPrivateIPs := utilsets.NewString()
+
+	for _, bp := range backendPools {
+		if bp.Name == nil {
+			continue
+		}
+
+		found := isBackendPoolMatch(*bp.Name)
+		if found {
+			klog.V(10).Infof("GetBackendPrivateIPs for service (%s): found wanted backendpool %s", serviceName, *bp.Name)
+			if bp.Properties != nil && bp.Properties.LoadBalancerBackendAddresses != nil {
+				for _, backendAddress := range bp.Properties.LoadBalancerBackendAddresses {
+					ipAddress := backendAddress.Properties.IPAddress
+					if ipAddress != nil {
+						klog.V(2).Infof("GetBackendPrivateIPs for service (%s): lb backendpool - found private IP %q", serviceName, *ipAddress)
+						backendPrivateIPs.Insert(*ipAddress)
+					} else {
+						klog.V(4).Infof("GetBackendPrivateIPs for service (%s): lb backendpool - found null private IP", serviceName)
+					}
+				}
+			}
+		} else {
+			klog.V(10).Infof("GetBackendPrivateIPs for service (%s): found unmanaged backendpool %s", serviceName, *bp.Name)
+		}
+	}
+	return backendPrivateIPs
+}
+
 type backendPoolTypeNodeIP struct {
 	*Cloud
 }
@@ -746,36 +776,27 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(ctx context.Context, clus
 }
 
 func (bi *backendPoolTypeNodeIP) GetBackendPrivateIPs(_ context.Context, clusterName string, service *v1.Service, lb *armnetwork.LoadBalancer) ([]string, []string) {
-	serviceName := getServiceName(service)
-	lbBackendPoolNames := bi.getBackendPoolNamesForService(service, clusterName)
 	if lb.Properties == nil || lb.Properties.BackendAddressPools == nil {
 		return nil, nil
 	}
 
+	serviceName := getServiceName(service)
+	lbBackendPoolNames := bi.getBackendPoolNamesForService(service, clusterName)
+
+	backendPrivateIPs := getBackendPoolIPs(serviceName, lb.Properties.BackendAddressPools, func(name string) bool {
+		found, _ := isLBBackendPoolsExisting(lbBackendPoolNames, &name)
+		return found
+	})
+
 	backendPrivateIPv4s, backendPrivateIPv6s := utilsets.NewString(), utilsets.NewString()
-	for _, bp := range lb.Properties.BackendAddressPools {
-		found, _ := isLBBackendPoolsExisting(lbBackendPoolNames, bp.Name)
-		if found {
-			klog.V(10).Infof("bi.GetBackendPrivateIPs for service (%s): found wanted backendpool %s", serviceName, ptr.Deref(bp.Name, ""))
-			if bp.Properties != nil && bp.Properties.LoadBalancerBackendAddresses != nil {
-				for _, backendAddress := range bp.Properties.LoadBalancerBackendAddresses {
-					ipAddress := backendAddress.Properties.IPAddress
-					if ipAddress != nil {
-						klog.V(2).Infof("bi.GetBackendPrivateIPs for service (%s): lb backendpool - found private IP %q", serviceName, *ipAddress)
-						if utilnet.IsIPv4String(*ipAddress) {
-							backendPrivateIPv4s.Insert(*ipAddress)
-						} else if utilnet.IsIPv6String(*ipAddress) {
-							backendPrivateIPv6s.Insert(*ipAddress)
-						}
-					} else {
-						klog.V(4).Infof("bi.GetBackendPrivateIPs for service (%s): lb backendpool - found null private IP", serviceName)
-					}
-				}
-			}
-		} else {
-			klog.V(10).Infof("bi.GetBackendPrivateIPs for service (%s): found unmanaged backendpool %s", serviceName, ptr.Deref(bp.Name, ""))
+	for _, ip := range backendPrivateIPs.UnsortedList() {
+		if utilnet.IsIPv4String(ip) {
+			backendPrivateIPv4s.Insert(ip)
+		} else if utilnet.IsIPv6String(ip) {
+			backendPrivateIPv6s.Insert(ip)
 		}
 	}
+
 	return backendPrivateIPv4s.UnsortedList(), backendPrivateIPv6s.UnsortedList()
 }
 
@@ -923,4 +944,72 @@ func removeNodeIPAddressesFromBackendPool(
 	}
 
 	return changed
+}
+
+type backendPoolTypePodIP struct {
+	*Cloud
+}
+
+func newBackendPoolTypePodIP(c *Cloud) BackendPool {
+	return &backendPoolTypePodIP{c}
+}
+
+func (bpi *backendPoolTypePodIP) CleanupVMSetFromBackendPoolByCondition(_ context.Context, _ *armnetwork.LoadBalancer, _ *v1.Service, _ []*v1.Node, _ string, _ func(string) bool) (*armnetwork.LoadBalancer, error) {
+	return nil, nil
+}
+
+func (bpi *backendPoolTypePodIP) EnsureHostsInPool(_ context.Context, _ *v1.Service, _ []*v1.Node, _ string, _ string, _ string, _ string, _ *armnetwork.BackendAddressPool) error {
+	return nil
+}
+
+func (bpi *backendPoolTypePodIP) GetBackendPrivateIPs(_ context.Context, _ string, service *v1.Service, lb *armnetwork.LoadBalancer) ([]string, []string) {
+	if lb.Properties == nil || lb.Properties.BackendAddressPools == nil {
+		return nil, nil
+	}
+
+	serviceName := getServiceName(service)
+	lbBackendPoolName, err := bpi.getBackendPoolNameForCLBService(service)
+	if err != nil {
+		klog.Errorf("bpi.GetBackendPrivateIPs: failed to get backend pool name for service %q, error: %s", service.Name, err.Error())
+		return nil, nil
+	}
+
+	backendPrivateIPs := getBackendPoolIPs(serviceName, lb.Properties.BackendAddressPools, func(name string) bool {
+		return lbBackendPoolName == name
+	})
+
+	if strings.HasSuffix(lbBackendPoolName, fmt.Sprintf("-%s", consts.IPVersionIPv6StringLower)) {
+		return nil, backendPrivateIPs.UnsortedList()
+	}
+	return backendPrivateIPs.UnsortedList(), nil
+}
+
+func (bpi *backendPoolTypePodIP) ReconcileBackendPools(ctx context.Context, _ string, service *v1.Service, lb *armnetwork.LoadBalancer) (bool, bool, *armnetwork.LoadBalancer, error) {
+	var existingBackendPools []*armnetwork.BackendAddressPool
+	if lb.Properties != nil && lb.Properties.BackendAddressPools != nil {
+		existingBackendPools = lb.Properties.BackendAddressPools
+	}
+
+	expectedBackendPoolName, err := bpi.getBackendPoolNameForCLBService(service)
+	if err != nil {
+		return false, false, nil, err
+	}
+
+	for _, bp := range existingBackendPools {
+		if ptr.Deref(bp.Name, "") == expectedBackendPoolName {
+			return false, false, lb, nil
+		}
+	}
+
+	serviceName := getServiceName(service)
+	backendPoolsUpdated := true
+	isBackendPoolPreConfigured := newBackendPool(
+		lb,
+		false,
+		bpi.PreConfiguredBackendPoolLoadBalancerTypes,
+		serviceName,
+		expectedBackendPoolName,
+	)
+
+	return isBackendPoolPreConfigured, backendPoolsUpdated, lb, nil
 }
