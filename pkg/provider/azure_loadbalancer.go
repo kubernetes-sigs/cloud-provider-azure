@@ -37,6 +37,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	cloudprovider "k8s.io/cloud-provider"
 	servicehelpers "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/klog/v2"
@@ -2836,6 +2837,16 @@ func (az *Cloud) getExpectedLBRules(
 	isIPv6 bool,
 ) ([]*armnetwork.Probe, []*armnetwork.LoadBalancingRule, error) {
 	var expectedRules []*armnetwork.LoadBalancingRule
+	// If we are using Pod IP in the LB backend, we skip health probes, disable floating IP and use port.TargetPort.
+	if az.IsLBBackendPoolTypePodIP() {
+		expectedRules, err := getExpectedLoadBalancingRuleforBackendPoolTypePodIP(service, az, isIPv6, lbFrontendIPConfigID, lbBackendPoolID, expectedRules)
+		if err != nil {
+			return nil, nil, err
+		}
+		return nil, expectedRules, nil
+	}
+
+	// Otherwise, the existing flow remains unchanged
 	var expectedProbes []*armnetwork.Probe
 
 	// support podPresence health check when External Traffic Policy is local
@@ -2982,6 +2993,37 @@ func (az *Cloud) getExpectedLBRules(
 	}
 
 	return expectedProbes, expectedRules, nil
+}
+
+func getExpectedLoadBalancingRuleforBackendPoolTypePodIP(service *v1.Service, az *Cloud, isIPv6 bool, lbFrontendIPConfigID string, lbBackendPoolID string, expectedRules []*armnetwork.LoadBalancingRule) ([]*armnetwork.LoadBalancingRule, error) {
+	// Check for multi-IP families in the service spec (not allowed for BackendPool of type PodIP).
+	if len(service.Spec.IPFamilies) > 1 {
+		return nil, fmt.Errorf("dual-stack services are not supported when LB backend pool type is PodIP")
+	}
+	// Build rules for each service port but with floatingIP = false, no health probes.
+	for _, port := range service.Spec.Ports {
+		if port.TargetPort.Type == intstr.String {
+			return nil, fmt.Errorf("named targetPort is not supported when LB backend pool type is PodIP: %s", port.TargetPort.StrVal)
+		}
+		ruleName := az.getLoadBalancerRuleName(service, port.Protocol, port.Port, isIPv6)
+		transportProto, _, _, err := getProtocolsFromKubernetesProtocol(port.Protocol)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse transport protocol: %w", err)
+		}
+		props, err := az.getExpectedLoadBalancingRulePropertiesForPort(service, lbFrontendIPConfigID, lbBackendPoolID, port, transportProto)
+		if err != nil {
+			return nil, fmt.Errorf("error generating LB rule: %w", err)
+		}
+		// Turn off floating IP and skip health probe attachments.
+		props.EnableFloatingIP = ptr.To(false)
+		props.Probe = nil
+		props.BackendPort = &port.TargetPort.IntVal
+		expectedRules = append(expectedRules, &armnetwork.LoadBalancingRule{
+			Name:       &ruleName,
+			Properties: props,
+		})
+	}
+	return expectedRules, nil
 }
 
 // getDefaultLoadBalancingRulePropertiesFormat returns the loadbalancing rule for one port

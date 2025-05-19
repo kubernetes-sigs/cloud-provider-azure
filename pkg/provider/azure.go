@@ -297,7 +297,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		}
 	}
 
-	if config.LoadBalancerBackendPoolConfigurationType == "" {
+	if config.LoadBalancerBackendPoolConfigurationType == "" || strings.EqualFold(config.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePodIP) {
 		config.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration
 	} else {
 		supportedLoadBalancerBackendPoolConfigurationTypes := utilsets.NewString(
