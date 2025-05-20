@@ -48,6 +48,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
 	"sigs.k8s.io/cloud-provider-azure/pkg/trace"
 	"sigs.k8s.io/cloud-provider-azure/pkg/trace/attributes"
@@ -2019,21 +2020,19 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 
 		if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
 			serviceUID := getServiceUID(service)
-			if _, loaded := az.localServiceNameToNRPServiceMap.Load(serviceUID); !loaded {
-				// Add the serviceName to the K8S state to be synced into NRP during batch sync update flow.
-				az.diffTracker.UpdateK8sService(
-					UpdateK8sResource{
-						Operation: ADD,
-						Resource:  serviceUID,
-					},
-				)
-				select {
-				case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
-					// trigger batch update
-				default:
-					// channel is full, do nothing
-					klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
-				}
+			// Add the serviceName to the K8S state to be synced into NRP during batch sync update flow.
+			az.diffTracker.UpdateK8sService(
+				difftracker.UpdateK8sResource{
+					Operation: difftracker.ADD,
+					ID:        serviceUID,
+				},
+			)
+			select {
+			case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
+				// trigger batch update
+			default:
+				// channel is full, do nothing
+				klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
 			}
 		}
 

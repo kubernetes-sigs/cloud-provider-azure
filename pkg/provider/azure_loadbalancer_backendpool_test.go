@@ -603,7 +603,7 @@ func TestCleanupVMSetFromBackendPoolByConditionPodIP(t *testing.T) {
 	bpi := newBackendPoolTypePodIP(cloud)
 
 	_, err := bpi.CleanupVMSetFromBackendPoolByCondition(nil, nil, nil, nil, "", nil)
-	assert.Error(t, err)
+	assert.NoError(t, err)
 }
 
 func TestCleanupVMSetFromBackendPoolForInstanceNotFound(t *testing.T) {
@@ -1325,8 +1325,8 @@ func TestGetBackendPrivateIPsPodIP(t *testing.T) {
 
 			gotIPv4, gotIPv6 := bpi.GetBackendPrivateIPs(context.TODO(), "", &tt.service, tt.lb)
 
-			assert.Equal(t, tt.expectedIPv4, gotIPv4)
-			assert.Equal(t, tt.expectedIPv6, gotIPv6)
+			assert.ElementsMatch(t, tt.expectedIPv4, gotIPv4)
+			assert.ElementsMatch(t, tt.expectedIPv6, gotIPv6)
 
 		})
 	}

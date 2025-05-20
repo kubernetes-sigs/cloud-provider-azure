@@ -36,6 +36,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
@@ -312,12 +313,12 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 						return
 					}
 					if _, loaded := az.localServiceNameToNRPServiceMap.LoadOrStore(serviceUID, struct{}{}); loaded {
-						updateK8sEndpointsInputType := UpdateK8sEndpointsInputType{
-							inboundIdentity: serviceUID,
-							oldAddresses:    nil,
-							newAddresses:    az.getPodIPToNodeIPMapFromEndpointSlice(es, false),
+						updateK8sEndpointsInputType := difftracker.UpdateK8sEndpointsInputType{
+							InboundIdentity: serviceUID,
+							OldAddresses:    nil,
+							NewAddresses:    az.getPodIPToNodeIPMapFromEndpointSlice(es, false),
 						}
-						az.difftracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
+						az.diffTracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
 						select {
 						case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
 							// trigger batch update
@@ -396,12 +397,12 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 					}
 
 					if _, loaded := az.localServiceNameToNRPServiceMap.LoadOrStore(serviceUID, serviceUID); loaded {
-						updateK8sEndpointsInputType := UpdateK8sEndpointsInputType{
-							inboundIdentity: serviceUID,
-							oldAddresses:    az.getPodIPToNodeIPMapFromEndpointSlice(previousES, false),
-							newAddresses:    az.getPodIPToNodeIPMapFromEndpointSlice(newES, false),
+						updateK8sEndpointsInputType := difftracker.UpdateK8sEndpointsInputType{
+							InboundIdentity: serviceUID,
+							OldAddresses:    az.getPodIPToNodeIPMapFromEndpointSlice(previousES, false),
+							NewAddresses:    az.getPodIPToNodeIPMapFromEndpointSlice(newES, false),
 						}
-						az.difftracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
+						az.diffTracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
 						select {
 						case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
 							// trigger batch update
@@ -440,12 +441,12 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 					}
 
 					if _, loaded := az.localServiceNameToNRPServiceMap.LoadOrStore(serviceUID, serviceUID); loaded {
-						updateK8sEndpointsInputType := UpdateK8sEndpointsInputType{
-							inboundIdentity: serviceUID,
-							oldAddresses:    az.getPodIPToNodeIPMapFromEndpointSlice(es, false),
-							newAddresses:    nil,
+						updateK8sEndpointsInputType := difftracker.UpdateK8sEndpointsInputType{
+							InboundIdentity: serviceUID,
+							OldAddresses:    az.getPodIPToNodeIPMapFromEndpointSlice(es, false),
+							NewAddresses:    nil,
 						}
-						az.difftracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
+						az.diffTracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
 						select {
 						case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
 							// trigger batch update

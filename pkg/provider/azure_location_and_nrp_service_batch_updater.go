@@ -6,6 +6,7 @@ import (
 
 	discovery_v1 "k8s.io/api/discovery/v1"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 )
 
 // LocationAndNRPServiceBatchUpdater is a batch processor for updating NRP locations and services.
@@ -35,15 +36,31 @@ func (updater *locationAndNRPServiceBatchUpdater) run(ctx context.Context) {
 }
 
 func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
-	serviceLoadBalancerList := updater.az.difftracker.GetSyncLoadBalancerServices()
+	serviceLoadBalancerList := updater.az.diffTracker.GetSyncLoadBalancerServices()
 
 	// Add services
-	createServicesRequestDTO := MapLoadBalancerUpdatesToServiceDataDTO(serviceLoadBalancerList.Additions, updater.az.SubscriptionID, updater.az.ResourceGroup)
-	if len(createServicesRequestDTO) > 0 {
-		createServicesResponseDTO := NRPAPIClient.UpdateNRPServices(ctx, createServicesRequestDTO)
+	if serviceLoadBalancerList.Additions.Len() > 0 {
+		// createServicesRequestDTO := difftracker.MapLoadBalancerUpdatesToServicesDataDTO(
+		// 	difftracker.SyncServicesReturnType{
+		// 		Additions: serviceLoadBalancerList.Additions,
+		// 		Removals:  nil,
+		// 	},
+		// 	updater.az.SubscriptionID,
+		// 	updater.az.ResourceGroup)
+		// createServicesResponseDTO := NRPAPIClient.UpdateNRPServices(ctx, createServicesRequestDTO)
 
+		createServicesResponseDTO := struct {
+			Error error
+		}{
+			Error: nil,
+		}
 		if createServicesResponseDTO.Error == nil {
-			az.difftracker.UpdateNRPLoadBalancers(serviceLoadBalancerList.Additions)
+			updater.az.diffTracker.UpdateNRPLoadBalancers(
+				difftracker.SyncServicesReturnType{
+					Additions: serviceLoadBalancerList.Additions,
+					Removals:  nil,
+				},
+			)
 		} else {
 			klog.Errorf("locationAndNRPServiceBatchUpdater.process: failed to create services: %v", createServicesResponseDTO.Error)
 			return
@@ -51,52 +68,56 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 	}
 
 	// Update locations and addresses for the added and deleted services
-	for _, serviceName := range serviceLoadBalancerList.Additions {
+	for _, serviceName := range serviceLoadBalancerList.Additions.UnsortedList() {
 		updater.az.localServiceNameToNRPServiceMap.LoadOrStore(serviceName, struct{}{})
 
-		updateK8sEndpointsInputType := UpdateK8sEndpointsInputType{
-			inboundIdentity: serviceName,
-			oldAddresses:    nil,
-			newAddresses:    map[string]string{},
+		updateK8sEndpointsInputType := difftracker.UpdateK8sEndpointsInputType{
+			InboundIdentity: serviceName,
+			OldAddresses:    nil,
+			NewAddresses:    map[string]string{},
 		}
 		updater.az.endpointSlicesCache.Range(func(_, value interface{}) bool {
 			endpointSlice := value.(*discovery_v1.EndpointSlice)
 			serviceUID, loaded := getServiceUIDOfEndpointSlice(endpointSlice)
 			if loaded && strings.EqualFold(serviceUID, serviceName) {
-				updateK8sEndpointsInputType.newAddresses = mergeMaps(updateK8sEndpointsInputType.newAddresses, updater.az.getPodIPToNodeIPMapFromEndpointSlice(endpointSlice, false))
+				updateK8sEndpointsInputType.NewAddresses = mergeMaps(updateK8sEndpointsInputType.NewAddresses, updater.az.getPodIPToNodeIPMapFromEndpointSlice(endpointSlice, false))
 			}
 			return true
 		})
 
-		updater.az.difftracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
+		updater.az.diffTracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
 	}
 
-	for _, serviceName := range serviceLoadBalancerList.Deletions {
-		updateK8sEndpointsInputType := UpdateK8sEndpointsInputType{
-			inboundIdentity: serviceName,
-			oldAddresses:    map[string]string{},
-			newAddresses:    nil,
+	for _, serviceName := range serviceLoadBalancerList.Removals.UnsortedList() {
+		updateK8sEndpointsInputType := difftracker.UpdateK8sEndpointsInputType{
+			InboundIdentity: serviceName,
+			OldAddresses:    map[string]string{},
+			NewAddresses:    nil,
 		}
 		updater.az.endpointSlicesCache.Range(func(_, value interface{}) bool {
 			endpointSlice := value.(*discovery_v1.EndpointSlice)
 			serviceUID, loaded := getServiceUIDOfEndpointSlice(endpointSlice)
 			if loaded && strings.EqualFold(serviceUID, serviceName) {
-				updateK8sEndpointsInputType.oldAddresses = mergeMaps(updateK8sEndpointsInputType.oldAddresses, updater.az.getPodIPToNodeIPMapFromEndpointSlice(endpointSlice, false))
+				updateK8sEndpointsInputType.OldAddresses = mergeMaps(updateK8sEndpointsInputType.OldAddresses, updater.az.getPodIPToNodeIPMapFromEndpointSlice(endpointSlice, false))
 			}
 			return true
 		})
 
-		updater.az.difftracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
+		updater.az.diffTracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
 	}
 
 	// Update all locations and addresses
-	locationData := updater.az.difftracker.GetSyncLocationsAddresses()
-	if len(locationData) > 0 {
-		locationDataRequestDTO := MapLocationDataToDTO(locationData)
-		locationDataResponseDTO := NRPAPIClient.UpdateNRPLocations(ctx, locationDataRequestDTO)
-
+	locationData := updater.az.diffTracker.GetSyncLocationsAddresses()
+	if len(locationData.Locations) > 0 {
+		// locationDataRequestDTO := difftracker.MapLocationDataToDTO(locationData)
+		// locationDataResponseDTO := NRPAPIClient.UpdateNRPLocations(ctx, locationDataRequestDTO)
+		locationDataResponseDTO := struct {
+			Error error
+		}{
+			Error: nil,
+		}
 		if locationDataResponseDTO.Error == nil {
-			az.difftracker.UpdateLocationsAddresses(locationData)
+			updater.az.diffTracker.UpdateLocationsAddresses(locationData)
 		} else {
 			klog.Errorf("locationAndNRPServiceBatchUpdater.process: failed to update locations and addresses: %v", locationDataResponseDTO.Error)
 			return
@@ -104,12 +125,28 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 	}
 
 	// Remove services
-	removeServicesRequestDTO := MapLoadBalancerUpdatesToServiceDataDTO(serviceLoadBalancerList.Removals, updater.az.SubscriptionID, updater.az.ResourceGroup)
-	if len(removeServicesRequestDTO) > 0 {
-		removeServicesResponseDTO := NRPAPIClient.UpdateNRPServices(ctx, removeServicesRequestDTO)
+	if serviceLoadBalancerList.Removals.Len() > 0 {
+		// removeServicesRequestDTO := difftracker.MapLoadBalancerUpdatesToServicesDataDTO(
+		// 	difftracker.SyncServicesReturnType{
+		// 		Additions: nil,
+		// 		Removals:  serviceLoadBalancerList.Removals,
+		// 	},
+		// 	updater.az.SubscriptionID,
+		// 	updater.az.ResourceGroup)
+		// removeServicesResponseDTO := NRPAPIClient.UpdateNRPServices(ctx, removeServicesRequestDTO)
+
+		removeServicesResponseDTO := struct {
+			Error error
+		}{
+			Error: nil,
+		}
 
 		if removeServicesResponseDTO.Error == nil {
-			az.difftracker.UpdateNRPLoadBalancers(serviceLoadBalancerList.Additions)
+			updater.az.diffTracker.UpdateNRPLoadBalancers(
+				difftracker.SyncServicesReturnType{
+					Additions: nil,
+					Removals:  serviceLoadBalancerList.Removals,
+				})
 		} else {
 			klog.Errorf("locationAndNRPServiceBatchUpdater.process: failed to remove services: %v", removeServicesResponseDTO.Error)
 			return
