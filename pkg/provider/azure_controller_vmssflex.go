@@ -119,7 +119,7 @@ func (fs *FlexScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName,
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - attach disk list(%+v) returned with %v", nodeResourceGroup, vmName, diskMap, rerr)
 
 	if err == nil && result != nil {
-		if rerr := fs.updateCache(ctx, vmName, result); err != nil {
+		if rerr := fs.updateCache(ctx, vmName, result); rerr != nil {
 			klog.Errorf("updateCache(%s) failed with error: %v", vmName, rerr)
 		}
 	} else {
