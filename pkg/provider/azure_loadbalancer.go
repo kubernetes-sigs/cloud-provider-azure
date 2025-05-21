@@ -37,6 +37,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	cloudprovider "k8s.io/cloud-provider"
 	servicehelpers "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/klog/v2"
@@ -47,6 +48,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
 	"sigs.k8s.io/cloud-provider-azure/pkg/trace"
 	"sigs.k8s.io/cloud-provider-azure/pkg/trace/attributes"
@@ -302,6 +304,15 @@ func (az *Cloud) getLatestService(serviceName string, deepcopy bool) (*v1.Servic
 // parameters as read-only and not modify them.
 // Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
 func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
+	if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() && !strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyTypeLocal)) {
+		return errors.New("podIP backend pool type only supports ExternalTrafficPolicy=Local")
+	}
+	// Node additions and removals to VMSS (Virtual Machine Scale Sets) do not require reconcileLB operations.
+	// The changes will be propagated via Location Update API upon endpoint-slice events and backendpool will be updated by NRP.
+	if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+		return nil
+	}
+
 	const Operation = "UpdateLoadBalancer"
 
 	var err error
@@ -473,6 +484,36 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 	_, err = az.reconcileSecurityGroup(ctx, clusterName, service, ptr.Deref(lb.Name, ""), lbIPsPrimaryPIPs, false /* wantLb */)
 	if err != nil {
 		return err
+	}
+
+	serviceUID := getServiceUID(service)
+	if _, loaded := az.localServiceNameToNRPServiceMap.Load(serviceUID); loaded {
+		az.localServiceNameToNRPServiceMap.Delete(serviceUID)
+		// DELETE Service from Difftracker.K8S -> call NRP API TO DELETE THE SERVICE -> Update Difftracker.NRP
+		az.diffTracker.UpdateK8sService(
+			difftracker.UpdateK8sResource{
+				Operation: difftracker.REMOVE,
+				ID:        serviceUID,
+			},
+		)
+		removeServicesRequestDTO := difftracker.MapLoadBalancerUpdatesToServicesDataDTO(
+			difftracker.SyncServicesReturnType{
+				Additions: nil,
+				Removals:  utilsets.NewString(serviceUID),
+			},
+			az.SubscriptionID,
+			az.ResourceGroup)
+		removeServicesResponseDTO := NRPAPIClientUpdateNRPServices(ctx, removeServicesRequestDTO)
+		if removeServicesResponseDTO == nil {
+			az.diffTracker.UpdateNRPLoadBalancers(
+				difftracker.SyncServicesReturnType{
+					Additions: nil,
+					Removals:  utilsets.NewString(serviceUID),
+				})
+		} else {
+			klog.Errorf("locationAndNRPServiceBatchUpdater.process: failed to remove services: %v", removeServicesResponseDTO)
+			return
+		}
 	}
 
 	_, err = az.reconcileLoadBalancer(ctx, clusterName, service, nil, false /* wantLb */)
@@ -1706,6 +1747,10 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurations(
 		return nil
 	}
 
+	if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+		return fmt.Errorf("multiple standard load balancers are enabled but the backend pool type is set to podIP")
+	}
+
 	if az.multipleStandardLoadBalancerConfigurationsSynced {
 		return nil
 	}
@@ -1779,6 +1824,10 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurations(
 // This entails adding rules/probes for expected Ports and removing stale rules/ports.
 // nodes only used if wantLb is true
 func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node, wantLb bool) (*armnetwork.LoadBalancer, error) {
+	if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() && !strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyTypeLocal)) {
+		return nil, fmt.Errorf("service %s/%s is using podIP backend pool type but externalTrafficPolicy is not set to Local", service.Namespace, service.Name)
+	}
+
 	isBackendPoolPreConfigured := az.isBackendPoolPreConfigured(service)
 	serviceName := getServiceName(service)
 	klog.V(2).Infof("reconcileLoadBalancer for service(%s) - wantLb(%t): started", serviceName, wantLb)
@@ -1992,6 +2041,25 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 		if az.UseMultipleStandardLoadBalancers() {
 			lbToReconcile = existingLBs
 		}
+		// TO BE DISCUSSED (enechitoaia): Should I call NRP API + update difftracker's NRP here too? As you proposed in the EnsureLoadBalancerDeleted?
+		if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+			serviceUID := getServiceUID(service)
+			// Add the serviceName to the K8S state to be synced into NRP during batch sync update flow.
+			az.diffTracker.UpdateK8sService(
+				difftracker.UpdateK8sResource{
+					Operation: difftracker.ADD,
+					ID:        serviceUID,
+				},
+			)
+			select {
+			case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
+				// trigger batch update
+			default:
+				// channel is full, do nothing
+				klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+			}
+		}
+
 		lb, err = az.reconcileBackendPoolHosts(ctx, lb, lbToReconcile, service, nodes, clusterName, vmSetName, lbBackendPoolIDs)
 		if err != nil {
 			return nil, err
@@ -2836,6 +2904,16 @@ func (az *Cloud) getExpectedLBRules(
 	isIPv6 bool,
 ) ([]*armnetwork.Probe, []*armnetwork.LoadBalancingRule, error) {
 	var expectedRules []*armnetwork.LoadBalancingRule
+	// If we are using Pod IP in the LB backend, we skip health probes, disable floating IP and use port.TargetPort.
+	if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+		expectedRules, err := getExpectedLoadBalancingRuleforBackendPoolTypePodIP(service, az, isIPv6, lbFrontendIPConfigID, lbBackendPoolID, expectedRules)
+		if err != nil {
+			return nil, nil, err
+		}
+		return nil, expectedRules, nil
+	}
+
+	// Otherwise, the existing flow remains unchanged
 	var expectedProbes []*armnetwork.Probe
 
 	// support podPresence health check when External Traffic Policy is local
@@ -2984,6 +3062,37 @@ func (az *Cloud) getExpectedLBRules(
 	return expectedProbes, expectedRules, nil
 }
 
+func getExpectedLoadBalancingRuleforBackendPoolTypePodIP(service *v1.Service, az *Cloud, isIPv6 bool, lbFrontendIPConfigID string, lbBackendPoolID string, expectedRules []*armnetwork.LoadBalancingRule) ([]*armnetwork.LoadBalancingRule, error) {
+	// Check for multi-IP families in the service spec (not allowed for BackendPool of type PodIP).
+	if len(service.Spec.IPFamilies) > 1 {
+		return nil, fmt.Errorf("dual-stack services are not supported when LB backend pool type is PodIP")
+	}
+	// Build rules for each service port but with floatingIP = false, no health probes.
+	for _, port := range service.Spec.Ports {
+		if port.TargetPort.Type == intstr.String {
+			return nil, fmt.Errorf("named targetPort is not supported when LB backend pool type is PodIP: %s", port.TargetPort.StrVal)
+		}
+		ruleName := az.getLoadBalancerRuleName(service, port.Protocol, port.Port, isIPv6)
+		transportProto, _, _, err := getProtocolsFromKubernetesProtocol(port.Protocol)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse transport protocol: %w", err)
+		}
+		props, err := az.getExpectedLoadBalancingRulePropertiesForPort(service, lbFrontendIPConfigID, lbBackendPoolID, port, transportProto)
+		if err != nil {
+			return nil, fmt.Errorf("error generating LB rule: %w", err)
+		}
+		// Turn off floating IP and skip health probe attachments.
+		props.EnableFloatingIP = ptr.To(false)
+		props.Probe = nil
+		props.BackendPort = &port.TargetPort.IntVal
+		expectedRules = append(expectedRules, &armnetwork.LoadBalancingRule{
+			Name:       &ruleName,
+			Properties: props,
+		})
+	}
+	return expectedRules, nil
+}
+
 // getDefaultLoadBalancingRulePropertiesFormat returns the loadbalancing rule for one port
 func (az *Cloud) getExpectedLoadBalancingRulePropertiesForPort(
 	service *v1.Service,
@@ -3099,23 +3208,29 @@ func (az *Cloud) reconcileSecurityGroup(
 	}
 
 	var (
-		disableFloatingIP                                = consts.IsK8sServiceDisableLoadBalancerFloatingIP(service)
-		lbIPAddresses, _                                 = iputil.ParseAddresses(lbIPs)
-		lbIPv4Addresses, lbIPv6Addresses                 = iputil.GroupAddressesByFamily(lbIPAddresses)
-		additionalIPv4Addresses, additionalIPv6Addresses = iputil.GroupAddressesByFamily(additionalIPs)
-		backendIPv4Addresses, backendIPv6Addresses       []netip.Addr
+		dstIPv4Addresses, dstIPv6Addresses         []netip.Addr
+		dstIpv4AddressPrefix, dstIpv6AddressPrefix []netip.Prefix
 	)
-	{
+
+	if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+		dstIpv4AddressPrefix = az.PodCidrsIPv4
+		dstIpv6AddressPrefix = az.PodCidrsIPv6
+	} else {
+		var (
+			disableFloatingIP                                = consts.IsK8sServiceDisableLoadBalancerFloatingIP(service)
+			lbIPAddresses, _                                 = iputil.ParseAddresses(lbIPs)
+			lbIPv4Addresses, lbIPv6Addresses                 = iputil.GroupAddressesByFamily(lbIPAddresses)
+			additionalIPv4Addresses, additionalIPv6Addresses = iputil.GroupAddressesByFamily(additionalIPs)
+			backendIPv4Addresses, backendIPv6Addresses       []netip.Addr
+		)
 		// Get backend node IPs
 		lb, lbFound, err := az.getAzureLoadBalancer(ctx, lbName, azcache.CacheReadTypeDefault)
-		{
-			if err != nil {
-				return nil, err
-			}
-			if wantLb && !lbFound {
-				logger.Error(err, "Failed to get load balancer")
-				return nil, fmt.Errorf("unable to get lb %s", lbName)
-			}
+		if err != nil {
+			return nil, err
+		}
+		if wantLb && !lbFound {
+			logger.Error(err, "Failed to get load balancer")
+			return nil, fmt.Errorf("unable to get lb %s", lbName)
 		}
 		var backendIPv4List, backendIPv6List []string
 		if lbFound {
@@ -3123,24 +3238,20 @@ func (az *Cloud) reconcileSecurityGroup(
 		}
 		backendIPv4Addresses, _ = iputil.ParseAddresses(backendIPv4List)
 		backendIPv6Addresses, _ = iputil.ParseAddresses(backendIPv6List)
-	}
 
-	var (
 		dstIPv4Addresses = additionalIPv4Addresses
 		dstIPv6Addresses = additionalIPv6Addresses
-	)
 
-	if disableFloatingIP {
-		// use the backend node IPs
-		dstIPv4Addresses = append(dstIPv4Addresses, backendIPv4Addresses...)
-		dstIPv6Addresses = append(dstIPv6Addresses, backendIPv6Addresses...)
-	} else {
-		// use the LoadBalancer IPs
-		dstIPv4Addresses = append(dstIPv4Addresses, lbIPv4Addresses...)
-		dstIPv6Addresses = append(dstIPv6Addresses, lbIPv6Addresses...)
-	}
+		if disableFloatingIP {
+			// use the backend node IPs
+			dstIPv4Addresses = append(dstIPv4Addresses, backendIPv4Addresses...)
+			dstIPv6Addresses = append(dstIPv6Addresses, backendIPv6Addresses...)
+		} else {
+			// use the LoadBalancer IPs
+			dstIPv4Addresses = append(dstIPv4Addresses, lbIPv4Addresses...)
+			dstIPv6Addresses = append(dstIPv6Addresses, lbIPv6Addresses...)
+		}
 
-	{
 		retainPortRanges, err := az.listSharedIPPortMapping(ctx, service, append(dstIPv4Addresses, dstIPv6Addresses...))
 		if err != nil {
 			logger.Error(err, "Failed to list retain port ranges")
@@ -3154,7 +3265,7 @@ func (az *Cloud) reconcileSecurityGroup(
 	}
 
 	if wantLb {
-		err := accessControl.PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses)
+		err := accessControl.PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses, dstIpv4AddressPrefix, dstIpv6AddressPrefix)
 		if err != nil {
 			logger.Error(err, "Failed to patch security group")
 			return nil, err
