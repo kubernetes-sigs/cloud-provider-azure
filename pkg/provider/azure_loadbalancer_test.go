@@ -52,6 +52,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
@@ -788,6 +789,200 @@ func TestEnsureLoadBalancerDeleted(t *testing.T) {
 			expectedLBs = make([]*armnetwork.LoadBalancer, 0)
 			setMockLBs(az, &expectedLBs, "service", 1, i+1, c.isInternalSvc)
 
+			err = az.EnsureLoadBalancerDeleted(context.TODO(), testClusterName, &service)
+			assert.Nil(t, err, "TestCase[%d]: %s", i, c.desc)
+		})
+	}
+}
+
+func TestEnsureLoadBalancerContainerLoadBalancer(t *testing.T) {
+	const vmCount = 8
+	const availabilitySetCount = 4
+
+	tests := []struct {
+		desc          string
+		service       v1.Service
+		isInternalSvc bool
+	}{
+		{
+			desc:    "external service then flipped to internal should be created and deleted successfully",
+			service: getTestService("service1", v1.ProtocolTCP, nil, false, 80),
+		},
+		{
+			desc:          "internal service then flipped to external should be created and deleted successfully",
+			service:       getInternalTestService("service2", 80),
+			isInternalSvc: true,
+		},
+		{
+			desc:    "external service should be created and deleted successfully",
+			service: getTestService("service3", v1.ProtocolTCP, nil, false, 80),
+		},
+		{
+			desc:          "internal service should be created and deleted successfully",
+			service:       getInternalTestService("service4", 80),
+			isInternalSvc: true,
+		},
+		{
+			desc:    "annotated service with same resourceGroup should be created and deleted successfully",
+			service: getResourceGroupTestService("service5", "rg", "", 80),
+		},
+	}
+
+	for i, c := range tests {
+		i := i
+		c := c
+		t.Run(c.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			az := GetTestCloudWithContainerLoadBalancer(ctrl)
+
+			k8s := difftracker.K8s_State{
+				Services: utilsets.NewString(),
+				Egresses: utilsets.NewString(),
+				Nodes:    make(map[string]difftracker.Node),
+			}
+			nrp := difftracker.NRP_State{
+				LoadBalancers: utilsets.NewString(),
+				NATGateways:   utilsets.NewString(),
+				Locations:     make(map[string]difftracker.NRPLocation),
+			}
+			az.diffTracker = difftracker.InitializeDiffTracker(k8s, nrp)
+
+			az.locationAndNRPServiceBatchUpdater = newLocationAndNRPServiceBatchUpdater(az)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go az.locationAndNRPServiceBatchUpdater.run(ctx)
+
+			mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+			mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ *v1.Service, lb *armnetwork.LoadBalancer) (bool, bool, *armnetwork.LoadBalancer, error) {
+				return false, false, lb, nil
+			}).AnyTimes()
+			mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			mockLBBackendPool.EXPECT().GetBackendPrivateIPs(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
+			clusterResources, expectedInterfaces, expectedVirtualMachines := getClusterResources(az, vmCount, availabilitySetCount)
+			setMockEnv(az, expectedInterfaces, expectedVirtualMachines, 5)
+
+			service := c.service
+			service.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
+			if c.service.Annotations[consts.ServiceAnnotationLoadBalancerInternal] == "true" {
+				validateTestSubnet(t, az, &service)
+			}
+
+			expectedLBs := make([]*armnetwork.LoadBalancer, 0)
+			setMockLBs(az, &expectedLBs, "service", 1, i+1, c.isInternalSvc)
+
+			mockPLSRepo := privatelinkservice.NewMockRepository(ctrl)
+			mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
+			az.plsRepo = mockPLSRepo
+
+			lbStatus, err := az.EnsureLoadBalancer(context.TODO(), testClusterName, &service, clusterResources.nodes)
+			assert.Nil(t, err, "TestCase[%d]: %s", i, c.desc)
+			assert.NotNil(t, lbStatus, "TestCase[%d]: %s", i, c.desc)
+			result, rerr := az.NetworkClientFactory.GetLoadBalancerClient().List(context.TODO(), az.Config.ResourceGroup)
+			assert.Nil(t, rerr, "TestCase[%d]: %s", i, c.desc)
+			assert.Equal(t, 1, len(result), "TestCase[%d]: %s", i, c.desc)
+			assert.Equal(t, 1, len(result[0].Properties.LoadBalancingRules), "TestCase[%d]: %s", i, c.desc)
+		})
+	}
+}
+
+func TestEnsureLoadBalancerDeleteContainerLoadBalancer(t *testing.T) {
+	const vmCount = 8
+	const availabilitySetCount = 4
+
+	tests := []struct {
+		desc          string
+		service       v1.Service
+		isInternalSvc bool
+	}{
+		{
+			desc:    "external service then flipped to internal should be created and deleted successfully",
+			service: getTestService("service1", v1.ProtocolTCP, nil, false, 80),
+		},
+		{
+			desc:          "internal service then flipped to external should be created and deleted successfully",
+			service:       getInternalTestService("service2", 80),
+			isInternalSvc: true,
+		},
+		{
+			desc:    "external service should be created and deleted successfully",
+			service: getTestService("service3", v1.ProtocolTCP, nil, false, 80),
+		},
+		{
+			desc:          "internal service should be created and deleted successfully",
+			service:       getInternalTestService("service4", 80),
+			isInternalSvc: true,
+		},
+		{
+			desc:    "annotated service with same resourceGroup should be created and deleted successfully",
+			service: getResourceGroupTestService("service5", "rg", "", 80),
+		},
+	}
+
+	for i, c := range tests {
+		i := i
+		c := c
+		t.Run(c.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			az := GetTestCloudWithContainerLoadBalancer(ctrl)
+
+			k8s := difftracker.K8s_State{
+				Services: utilsets.NewString(),
+				Egresses: utilsets.NewString(),
+				Nodes:    make(map[string]difftracker.Node),
+			}
+			nrp := difftracker.NRP_State{
+				LoadBalancers: utilsets.NewString(),
+				NATGateways:   utilsets.NewString(),
+				Locations:     make(map[string]difftracker.NRPLocation),
+			}
+			az.diffTracker = difftracker.InitializeDiffTracker(k8s, nrp)
+
+			az.locationAndNRPServiceBatchUpdater = newLocationAndNRPServiceBatchUpdater(az)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go az.locationAndNRPServiceBatchUpdater.run(ctx)
+
+			mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+			mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ *v1.Service, lb *armnetwork.LoadBalancer) (bool, bool, *armnetwork.LoadBalancer, error) {
+				return false, false, lb, nil
+			}).AnyTimes()
+			mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			mockLBBackendPool.EXPECT().GetBackendPrivateIPs(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
+			clusterResources, expectedInterfaces, expectedVirtualMachines := getClusterResources(az, vmCount, availabilitySetCount)
+			setMockEnv(az, expectedInterfaces, expectedVirtualMachines, 5)
+
+			service := c.service
+			service.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
+			if c.service.Annotations[consts.ServiceAnnotationLoadBalancerInternal] == "true" {
+				validateTestSubnet(t, az, &service)
+			}
+
+			expectedLBs := make([]*armnetwork.LoadBalancer, 0)
+			setMockLBs(az, &expectedLBs, "service", 1, i+1, c.isInternalSvc)
+
+			mockPLSRepo := privatelinkservice.NewMockRepository(ctrl)
+			mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
+			az.plsRepo = mockPLSRepo
+
+			// create the service first.
+			lbStatus, err := az.EnsureLoadBalancer(context.TODO(), testClusterName, &service, clusterResources.nodes)
+			assert.Nil(t, err, "TestCase[%d]: %s", i, c.desc)
+			assert.NotNil(t, lbStatus, "TestCase[%d]: %s", i, c.desc)
+			result, rerr := az.NetworkClientFactory.GetLoadBalancerClient().List(context.TODO(), az.Config.ResourceGroup)
+			assert.Nil(t, rerr, "TestCase[%d]: %s", i, c.desc)
+			assert.Equal(t, 1, len(result), "TestCase[%d]: %s", i, c.desc)
+			assert.Equal(t, 1, len(result[0].Properties.LoadBalancingRules), "TestCase[%d]: %s", i, c.desc)
+
+			expectedLBs = make([]*armnetwork.LoadBalancer, 0)
+			setMockLBs(az, &expectedLBs, "service", 1, i+1, c.isInternalSvc)
+
+			// Delete the service
 			err = az.EnsureLoadBalancerDeleted(context.TODO(), testClusterName, &service)
 			assert.Nil(t, err, "TestCase[%d]: %s", i, c.desc)
 		})

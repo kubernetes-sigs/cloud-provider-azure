@@ -490,6 +490,30 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 	if _, loaded := az.localServiceNameToNRPServiceMap.Load(serviceUID); loaded {
 		az.localServiceNameToNRPServiceMap.Delete(serviceUID)
 		// DELETE Service from Difftracker.K8S -> call NRP API TO DELETE THE SERVICE -> Update Difftracker.NRP
+		az.diffTracker.UpdateK8sService(
+			difftracker.UpdateK8sResource{
+				Operation: difftracker.REMOVE,
+				ID:        serviceUID,
+			},
+		)
+		removeServicesRequestDTO := difftracker.MapLoadBalancerUpdatesToServicesDataDTO(
+			difftracker.SyncServicesReturnType{
+				Additions: nil,
+				Removals:  utilsets.NewString(serviceUID),
+			},
+			az.SubscriptionID,
+			az.ResourceGroup)
+		removeServicesResponseDTO := NRPAPIClientUpdateNRPServices(ctx, removeServicesRequestDTO)
+		if removeServicesResponseDTO == nil {
+			az.diffTracker.UpdateNRPLoadBalancers(
+				difftracker.SyncServicesReturnType{
+					Additions: nil,
+					Removals:  utilsets.NewString(serviceUID),
+				})
+		} else {
+			klog.Errorf("locationAndNRPServiceBatchUpdater.process: failed to remove services: %v", removeServicesResponseDTO)
+			return
+		}
 	}
 
 	_, err = az.reconcileLoadBalancer(ctx, clusterName, service, nil, false /* wantLb */)
@@ -2017,7 +2041,7 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 		if az.UseMultipleStandardLoadBalancers() {
 			lbToReconcile = existingLBs
 		}
-
+		// TO BE DISCUSSED (enechitoaia): Should I call NRP API + update difftracker's NRP here too? As you proposed in the EnsureLoadBalancerDeleted?
 		if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
 			serviceUID := getServiceUID(service)
 			// Add the serviceName to the K8S state to be synced into NRP during batch sync update flow.
