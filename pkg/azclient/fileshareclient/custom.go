@@ -58,7 +58,7 @@ func (client *Client) Update(ctx context.Context, resourceGroupName string, reso
 }
 
 // Delete deletes a FileShare by name.
-func (client *Client) Delete(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string, option *armstorage.FileSharesClientDeleteOptions) err error {
+func (client *Client) Delete(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string, option *armstorage.FileSharesClientDeleteOptions) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "FileShare", "delete")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)

@@ -82,7 +82,7 @@ func (client *Client) GetProperties(ctx context.Context, resourceGroupName strin
 }
 
 // Delete deletes a Interface by name.
-func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) err error {
+func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "Account", "delete")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)

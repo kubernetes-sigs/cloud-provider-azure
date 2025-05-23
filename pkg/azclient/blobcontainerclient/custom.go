@@ -61,7 +61,7 @@ func (client *Client) CreateContainer(ctx context.Context, resourceGroupName, ac
 	return &resp.BlobContainer, nil
 }
 
-func (client *Client) DeleteContainer(ctx context.Context, resourceGroupName, accountName, containerName string) err error {
+func (client *Client) DeleteContainer(ctx context.Context, resourceGroupName, accountName, containerName string) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "BlobContainer", "delete")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
