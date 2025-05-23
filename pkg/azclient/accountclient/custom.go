@@ -60,7 +60,7 @@ func (client *Client) Update(ctx context.Context, resourceGroupName string, reso
 	if parameters == nil {
 		parameters = &armstorage.AccountUpdateParameters{}
 	}
-	resp, err = client.AccountsClient.Update(ctx, resourceGroupName, resourceName, *parameters, nil)
+	resp, err := client.AccountsClient.Update(ctx, resourceGroupName, resourceName, *parameters, nil)
 	if err != nil {
 		return nil, err
 	}
