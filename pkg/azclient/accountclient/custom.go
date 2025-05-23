@@ -41,7 +41,7 @@ func (client *Client) Create(ctx context.Context, resourceGroupName string, reso
 	if resource == nil {
 		resource = &armstorage.AccountCreateParameters{}
 	}
-	resp, err := utils.NewPollerWrapper(client.AccountsClient.BeginCreate(ctx, resourceGroupName, resourceName, *resource, nil)).WaitforPollerResp(ctx)
+	resp, err = utils.NewPollerWrapper(client.AccountsClient.BeginCreate(ctx, resourceGroupName, resourceName, *resource, nil)).WaitforPollerResp(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -51,29 +51,29 @@ func (client *Client) Create(ctx context.Context, resourceGroupName string, reso
 	return nil, nil
 }
 
-func (client *Client) Update(ctx context.Context, resourceGroupName string, resourceName string, parameters *armstorage.AccountUpdateParameters) (*armstorage.Account, error) {
+func (client *Client) Update(ctx context.Context, resourceGroupName string, resourceName string, parameters *armstorage.AccountUpdateParameters) (result *armstorage.Account, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "Account", "update")
-	defer func() { metricsCtx.Observe(ctx, nil) }()
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, UpdateOperationName, client.tracer, nil)
-	defer endSpan(nil)
+	defer endSpan(err)
 
 	if parameters == nil {
 		parameters = &armstorage.AccountUpdateParameters{}
 	}
-	resp, err := client.AccountsClient.Update(ctx, resourceGroupName, resourceName, *parameters, nil)
+	resp, err = client.AccountsClient.Update(ctx, resourceGroupName, resourceName, *parameters, nil)
 	if err != nil {
 		return nil, err
 	}
 	return &resp.Account, nil
 }
 
-func (client *Client) GetProperties(ctx context.Context, resourceGroupName string, accountName string, options *armstorage.AccountsClientGetPropertiesOptions) (*armstorage.Account, error) {
+func (client *Client) GetProperties(ctx context.Context, resourceGroupName string, accountName string, options *armstorage.AccountsClientGetPropertiesOptions) (result *armstorage.Account, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "Account", "getProperties")
-	defer func() { metricsCtx.Observe(ctx, nil) }()
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetPropertiesOperationName, client.tracer, nil)
-	defer endSpan(nil)
+	defer endSpan(err)
 
-	resp, err := client.AccountsClient.GetProperties(ctx, resourceGroupName, accountName, options)
+	resp, err = client.AccountsClient.GetProperties(ctx, resourceGroupName, accountName, options)
 	if err != nil {
 		return nil, err
 	}
@@ -82,23 +82,23 @@ func (client *Client) GetProperties(ctx context.Context, resourceGroupName strin
 }
 
 // Delete deletes a Interface by name.
-func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) error {
+func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) err error {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "Account", "delete")
-	defer func() { metricsCtx.Observe(ctx, nil) }()
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
-	defer endSpan(nil)
+	defer endSpan(err)
 
-	_, err := client.AccountsClient.Delete(ctx, resourceGroupName, resourceName, nil)
+	_, err = client.AccountsClient.Delete(ctx, resourceGroupName, resourceName, nil)
 	return err
 }
 
-func (client *Client) ListKeys(ctx context.Context, resourceGroupName string, accountName string) ([]*armstorage.AccountKey, error) {
+func (client *Client) ListKeys(ctx context.Context, resourceGroupName string, accountName string) (result []*armstorage.AccountKey, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "Account", "listKeys")
-	defer func() { metricsCtx.Observe(ctx, nil) }()
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListKeysOperationName, client.tracer, nil)
-	defer endSpan(nil)
+	defer endSpan(err)
 
-	resp, err := client.AccountsClient.ListKeys(ctx, resourceGroupName, accountName, nil)
+	resp, err = client.AccountsClient.ListKeys(ctx, resourceGroupName, accountName, nil)
 	if err != nil {
 		return nil, err
 	}

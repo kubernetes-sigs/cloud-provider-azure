@@ -40,32 +40,33 @@ func (client *Client) List(ctx context.Context, resourceGroupName string, parent
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
 		if err != nil {
-			return nil, err
+			rerr = err
+			return nil, rerr
 		}
 		result = append(result, nextResult.Value...)
 	}
 	return result, nil
 }
 
-func (client *Client) CreateContainer(ctx context.Context, resourceGroupName, accountName, containerName string, parameters armstorage.BlobContainer) (*armstorage.BlobContainer, error) {
+func (client *Client) CreateContainer(ctx context.Context, resourceGroupName, accountName, containerName string, parameters armstorage.BlobContainer) (result *armstorage.BlobContainer, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "BlobContainer", "create")
-	defer func() { metricsCtx.Observe(ctx, nil) }()
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOperationName, client.tracer, nil)
-	defer endSpan(nil)
+	defer endSpan(err)
 
-	resp, err := client.BlobContainersClient.Create(ctx, resourceGroupName, accountName, containerName, parameters, nil)
+	resp, err = client.BlobContainersClient.Create(ctx, resourceGroupName, accountName, containerName, parameters, nil)
 	if err != nil {
 		return nil, err
 	}
 	return &resp.BlobContainer, nil
 }
 
-func (client *Client) DeleteContainer(ctx context.Context, resourceGroupName, accountName, containerName string) error {
+func (client *Client) DeleteContainer(ctx context.Context, resourceGroupName, accountName, containerName string) err error {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "BlobContainer", "delete")
-	defer func() { metricsCtx.Observe(ctx, nil) }()
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
-	defer endSpan(nil)
+	defer endSpan(err)
 
-	_, err := client.BlobContainersClient.Delete(ctx, resourceGroupName, accountName, containerName, nil)
+	_, err = client.BlobContainersClient.Delete(ctx, resourceGroupName, accountName, containerName, nil)
 	return err
 }
