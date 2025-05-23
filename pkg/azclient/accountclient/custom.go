@@ -41,7 +41,7 @@ func (client *Client) Create(ctx context.Context, resourceGroupName string, reso
 	if resource == nil {
 		resource = &armstorage.AccountCreateParameters{}
 	}
-	resp, err = utils.NewPollerWrapper(client.AccountsClient.BeginCreate(ctx, resourceGroupName, resourceName, *resource, nil)).WaitforPollerResp(ctx)
+	resp, err := utils.NewPollerWrapper(client.AccountsClient.BeginCreate(ctx, resourceGroupName, resourceName, *resource, nil)).WaitforPollerResp(ctx)
 	if err != nil {
 		return nil, err
 	}
