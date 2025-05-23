@@ -73,7 +73,7 @@ func (client *Client) GetProperties(ctx context.Context, resourceGroupName strin
 	ctx, endSpan := runtime.StartSpan(ctx, GetPropertiesOperationName, client.tracer, nil)
 	defer endSpan(err)
 
-	resp, err = client.AccountsClient.GetProperties(ctx, resourceGroupName, accountName, options)
+	resp, err := client.AccountsClient.GetProperties(ctx, resourceGroupName, accountName, options)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func (client *Client) ListKeys(ctx context.Context, resourceGroupName string, ac
 	ctx, endSpan := runtime.StartSpan(ctx, ListKeysOperationName, client.tracer, nil)
 	defer endSpan(err)
 
-	resp, err = client.AccountsClient.ListKeys(ctx, resourceGroupName, accountName, nil)
+	resp, err := client.AccountsClient.ListKeys(ctx, resourceGroupName, accountName, nil)
 	if err != nil {
 		return nil, err
 	}

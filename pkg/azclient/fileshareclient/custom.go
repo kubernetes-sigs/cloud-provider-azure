@@ -35,7 +35,7 @@ func (client *Client) Create(ctx context.Context, resourceGroupName string, reso
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOperationName, client.tracer, nil)
 	defer endSpan(err)
 
-	resp, err = client.FileSharesClient.Create(ctx, resourceGroupName, resourceName, parentResourceName, resource, &armstorage.FileSharesClientCreateOptions{
+	resp, err := client.FileSharesClient.Create(ctx, resourceGroupName, resourceName, parentResourceName, resource, &armstorage.FileSharesClientCreateOptions{
 		Expand: expand,
 	})
 	if err != nil {
@@ -50,7 +50,7 @@ func (client *Client) Update(ctx context.Context, resourceGroupName string, reso
 	ctx, endSpan := runtime.StartSpan(ctx, UpdateOperationName, client.tracer, nil)
 	defer endSpan(err)
 
-	resp, err = client.FileSharesClient.Update(ctx, resourceGroupName, resourceName, parentResourceName, resource, nil)
+	resp, err := client.FileSharesClient.Update(ctx, resourceGroupName, resourceName, parentResourceName, resource, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +76,7 @@ func (client *Client) List(ctx context.Context, resourceGroupName string, accoun
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
-	
+
 	pager := client.FileSharesClient.NewListPager(resourceGroupName, accountName, option)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
@@ -97,7 +97,7 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, account
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
 
-	resp, err = client.FileSharesClient.Get(ctx, resourceGroupName, accountName, fileshareName, option)
+	resp, err := client.FileSharesClient.Get(ctx, resourceGroupName, accountName, fileshareName, option)
 	if err != nil {
 		return nil, err
 	}

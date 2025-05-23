@@ -53,7 +53,7 @@ func (client *Client) CreateContainer(ctx context.Context, resourceGroupName, ac
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOperationName, client.tracer, nil)
 	defer endSpan(err)
 
-	resp, err = client.BlobContainersClient.Create(ctx, resourceGroupName, accountName, containerName, parameters, nil)
+	resp, err := client.BlobContainersClient.Create(ctx, resourceGroupName, accountName, containerName, parameters, nil)
 	if err != nil {
 		return nil, err
 	}
