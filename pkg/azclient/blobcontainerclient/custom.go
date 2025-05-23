@@ -30,18 +30,17 @@ const CreateOperationName = "BlobContainersClient.Create"
 const DeleteOperationName = "BlobContainersClient.Delete"
 
 // List gets a list of BlobContainer in the resource group.
-func (client *Client) List(ctx context.Context, resourceGroupName string, parentResourceName string) (result []*armstorage.ListContainerItem, rerr error) {
+func (client *Client) List(ctx context.Context, resourceGroupName string, parentResourceName string) (result []*armstorage.ListContainerItem, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "BlobContainer", "list")
-	defer func() { metricsCtx.Observe(ctx, rerr) }()
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
-	defer endSpan(rerr)
+	defer endSpan(err)
 
 	pager := client.BlobContainersClient.NewListPager(resourceGroupName, parentResourceName, nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
 		if err != nil {
-			rerr = err
-			return nil, rerr
+			return nil, err
 		}
 		result = append(result, nextResult.Value...)
 	}

@@ -79,9 +79,8 @@ func (client *Client) List(ctx context.Context, resourceGroupName string, accoun
 	
 	pager := client.FileSharesClient.NewListPager(resourceGroupName, accountName, option)
 	for pager.More() {
-		nextResult, e := pager.NextPage(ctx)
-		if e != nil {
-			err = e
+		nextResult, err := pager.NextPage(ctx)
+		if err != nil {
 			return nil, err
 		}
 		result = append(result, nextResult.Value...)
