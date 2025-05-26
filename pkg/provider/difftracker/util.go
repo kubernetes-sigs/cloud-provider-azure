@@ -332,6 +332,21 @@ func MapLocationDataToDTO(locationData LocationData) LocationsDataDTO {
 	return LocationsDataDTO
 }
 
+func RemoveBackendPoolReferenceFromServicesDTO(loadBalancerUpdates SyncServicesReturnType, subscriptionID string, resourceGroup string) ServicesDataDTO {
+	var ServicesDataDTO ServicesDataDTO
+	ServicesDataDTO.Action = PartialUpdate
+	ServicesDataDTO.Services = []ServiceDTO{}
+	for _, service := range loadBalancerUpdates.Removals.UnsortedList() {
+		serviceDTO := ServiceDTO{
+			Service:                  service,
+			ServiceType:              Inbound,
+			LoadBalancerBackendPools: []LoadBalancerBackendPoolDTO{},
+		}
+		ServicesDataDTO.Services = append(ServicesDataDTO.Services, serviceDTO)
+	}
+	return ServicesDataDTO
+}
+
 // Map LoadBalancerUpdates to ServicesDataDTO to be used as payload in ServiceGateway API calls
 func MapLoadBalancerUpdatesToServicesDataDTO(loadBalancerUpdates SyncServicesReturnType, subscriptionID string, resourceGroup string) ServicesDataDTO {
 	var ServicesDataDTO ServicesDataDTO

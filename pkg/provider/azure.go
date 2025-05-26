@@ -541,7 +541,7 @@ func (az *Cloud) initializeDiffTracker() error {
 	az.diffTracker = difftracker.InitializeDiffTracker(k8s, nrp)
 
 	// Get the operations to sync the cluster with NRP
-	syncOperations := az.diffTracker.GetSyncOperations()
+	// syncOperations := az.diffTracker.GetSyncOperations()
 
 	// Get LocationDataDTO for Updating/Creating/Deleting Locations in ServiceGateway API
 	// locationDataDTO := difftracker.MapLocationDataToDTO(syncOperations.LocationData)
@@ -573,11 +573,11 @@ func (az *Cloud) initializeDiffTracker() error {
 	// 	return err
 	// }
 	// if Load Balancers have been correctly updated:
-	az.diffTracker.UpdateNRPLoadBalancers(syncOperations.LoadBalancerUpdates)
+	// az.diffTracker.UpdateNRPLoadBalancers(syncOperations.LoadBalancerUpdates)
 	// if NAT Gateways have been correctly updated:
-	az.diffTracker.UpdateNRPNATGateways(syncOperations.NATGatewayUpdates)
+	// az.diffTracker.UpdateNRPNATGateways(syncOperations.NATGatewayUpdates)
 	// if Locations have been correctly updated:
-	az.diffTracker.UpdateLocationsAddresses(syncOperations.LocationData)
+	// az.diffTracker.UpdateLocationsAddresses(syncOperations.LocationData)
 
 	return nil
 }
