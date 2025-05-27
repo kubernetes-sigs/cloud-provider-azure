@@ -18,14 +18,11 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-# Store an Azure CLI version of choice
-AZ_VER=2.69.0
-
-echo "installing Azure CLI $AZ_VER"
+echo "installing Azure CLI"
 apt-get update && apt-get install -y ca-certificates curl apt-transport-https lsb-release gnupg
 curl --retry 3 -sL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | tee /etc/apt/trusted.gpg.d/microsoft.gpg > /dev/null
 AZ_DIST=$(lsb_release -cs)
 echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ ${AZ_DIST} main" | tee /etc/apt/sources.list.d/azure-cli.list
 apt-get update 
 # Install a specific version
-apt-get install azure-cli=${AZ_VER}-1~${AZ_DIST} -y --allow-downgrades
+apt-get install azure-cli -y 
