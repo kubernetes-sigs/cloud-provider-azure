@@ -36,6 +36,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
@@ -304,6 +305,29 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 			AddFunc: func(obj interface{}) {
 				es := obj.(*discovery_v1.EndpointSlice)
 				az.endpointSlicesCache.Store(strings.ToLower(fmt.Sprintf("%s/%s", es.Namespace, es.Name)), es)
+
+				if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+					serviceUID, loaded := getServiceUIDOfEndpointSlice(es)
+					if !loaded {
+						klog.Errorf("EndpointSlice %s/%s does not have service UID, skip updating load balancer backend pool", es.Namespace, es.Name)
+						return
+					}
+					if _, loaded := az.localServiceNameToNRPServiceMap.LoadOrStore(serviceUID, struct{}{}); loaded {
+						updateK8sEndpointsInputType := difftracker.UpdateK8sEndpointsInputType{
+							InboundIdentity: serviceUID,
+							OldAddresses:    nil,
+							NewAddresses:    az.getPodIPToNodeIPMapFromEndpointSlice(es, false),
+						}
+						az.diffTracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
+						select {
+						case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
+							// trigger batch update
+						default:
+							// channel is full, do nothing
+							klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+						}
+					}
+				}
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
 				previousES := oldObj.(*discovery_v1.EndpointSlice)
@@ -364,6 +388,30 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 					}
 					az.applyIPChangesAmongLocalServiceBackendPoolsByIPFamily(lbName, key, currentIPsInBackendPools, currentIPs)
 				}
+
+				if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+					serviceUID, loaded := getServiceUIDOfEndpointSlice(newES)
+					if !loaded {
+						klog.Errorf("EndpointSlice %s/%s does not have service UID, skip updating load balancer backend pool", newES.Namespace, newES.Name)
+						return
+					}
+
+					if _, loaded := az.localServiceNameToNRPServiceMap.LoadOrStore(serviceUID, serviceUID); loaded {
+						updateK8sEndpointsInputType := difftracker.UpdateK8sEndpointsInputType{
+							InboundIdentity: serviceUID,
+							OldAddresses:    az.getPodIPToNodeIPMapFromEndpointSlice(previousES, false),
+							NewAddresses:    az.getPodIPToNodeIPMapFromEndpointSlice(newES, false),
+						}
+						az.diffTracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
+						select {
+						case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
+							// trigger batch update
+						default:
+							// channel is full, do nothing
+							klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+						}
+					}
+				}
 			},
 			DeleteFunc: func(obj interface{}) {
 				var es *discovery_v1.EndpointSlice
@@ -384,6 +432,30 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 				}
 
 				az.endpointSlicesCache.Delete(strings.ToLower(fmt.Sprintf("%s/%s", es.Namespace, es.Name)))
+
+				if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+					serviceUID, loaded := getServiceUIDOfEndpointSlice(es)
+					if !loaded {
+						klog.Errorf("EndpointSlice %s/%s does not have service UID, skip updating load balancer backend pool", es.Namespace, es.Name)
+						return
+					}
+
+					if _, loaded := az.localServiceNameToNRPServiceMap.LoadOrStore(serviceUID, serviceUID); loaded {
+						updateK8sEndpointsInputType := difftracker.UpdateK8sEndpointsInputType{
+							InboundIdentity: serviceUID,
+							OldAddresses:    az.getPodIPToNodeIPMapFromEndpointSlice(es, false),
+							NewAddresses:    nil,
+						}
+						az.diffTracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
+						select {
+						case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
+							// trigger batch update
+						default:
+							// channel is full, do nothing
+							klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+						}
+					}
+				}
 			},
 		})
 }
@@ -413,6 +485,58 @@ func getServiceNameOfEndpointSlice(es *discovery_v1.EndpointSlice) string {
 		return es.Labels[consts.ServiceNameLabel]
 	}
 	return ""
+}
+
+// getServiceUIDOfEndpointSlice gets the service UID of an EndpointSlice.
+func getServiceUIDOfEndpointSlice(es *discovery_v1.EndpointSlice) (uid string, loaded bool) {
+	for _, owner := range es.ObjectMeta.OwnerReferences {
+		if owner.Kind == "Service" {
+			return string(owner.UID), true
+		}
+	}
+	return "", false
+}
+
+// getPodIPToNodeIPMapFromEndpointSlice returns a mapping from pod IP addresses to node IP addresses
+// matching the specified IP family (IPv6 when ipv6=true, IPv4 when ipv6=false)
+func (az *Cloud) getPodIPToNodeIPMapFromEndpointSlice(es *discovery_v1.EndpointSlice, ipv6 bool) map[string]string {
+	podIPToNodeIPMap := make(map[string]string)
+
+	for _, ep := range es.Endpoints {
+		// Skip endpoints without a node name
+		nodeName := ptr.Deref(ep.NodeName, "")
+		if nodeName == "" {
+			continue
+		}
+
+		// Get node IPs
+		nodeName = strings.ToLower(nodeName)
+		nodeIPsSet := az.nodePrivateIPs[nodeName]
+		if nodeIPsSet == nil {
+			continue
+		}
+
+		// Find the first node IP matching the requested IP family
+		var matchingNodeIP string
+		for _, nodeIP := range nodeIPsSet.UnsortedList() {
+			if utilnet.IsIPv6String(nodeIP) == ipv6 {
+				matchingNodeIP = nodeIP
+				break
+			}
+		}
+
+		// Skip if no matching IP found for this node
+		if matchingNodeIP == "" {
+			continue
+		}
+
+		// Map each pod IP address to the node IP
+		for _, podIP := range ep.Addresses {
+			podIPToNodeIPMap[podIP] = matchingNodeIP
+		}
+	}
+
+	return podIPToNodeIPMap
 }
 
 // compareNodeIPs compares the previous and current node IPs and returns the IPs to be deleted.
@@ -629,5 +753,24 @@ func (az *Cloud) reconcileIPsInLocalServiceBackendPoolsAsync(
 		if len(expectedIPs) > 0 {
 			az.backendPoolUpdater.addOperation(getAddIPsToBackendPoolOperation(serviceName, lbName, bpName, expectedIPs))
 		}
+	}
+}
+
+func isDualStackService(service *v1.Service) bool {
+	return len(service.Spec.IPFamilies) == 2
+}
+
+func (az *Cloud) getBackendPoolNameForCLBService(service *v1.Service) (string, error) {
+	if isDualStackService(service) {
+		return "", fmt.Errorf("dual-stack services are not supported when LB backend pool type is PodIP")
+	}
+
+	switch service.Spec.IPFamilies[0] {
+	case v1.IPv4Protocol:
+		return string(service.GetUID()), nil
+	case v1.IPv6Protocol:
+		return fmt.Sprintf("%s-%s", service.GetUID(), consts.IPVersionIPv6StringLower), nil
+	default:
+		return "", fmt.Errorf("unknown IP family %s", service.Spec.IPFamilies[0])
 	}
 }

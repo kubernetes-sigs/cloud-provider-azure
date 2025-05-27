@@ -33,6 +33,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	discovery_v1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/utils/ptr"
@@ -40,6 +41,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/backendaddresspoolclient/mock_backendaddresspoolclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -376,6 +378,34 @@ func getTestEndpointSlice(name, namespace, svcName string, nodeNames ...string) 
 	}
 }
 
+func getTestEndpointSliceWithAddressesAndServiceOwnerReference(
+	name, namespace, svcName string,
+	svcUID types.UID,
+	addresses []string,
+	nodeNames ...string,
+) *discovery_v1.EndpointSlice {
+	if len(nodeNames) != len(addresses) {
+		panic("nodeNames and addresses must have the same length")
+	}
+
+	endpointSlice := getTestEndpointSlice(name, namespace, svcName, nodeNames...)
+
+	// Set addresses for each endpoint
+	for i := range endpointSlice.Endpoints {
+		endpointSlice.Endpoints[i].Addresses = []string{addresses[i]}
+	}
+
+	endpointSlice.OwnerReferences = []metav1.OwnerReference{
+		{
+			Kind: "Service",
+			Name: svcName,
+			UID:  svcUID,
+		},
+	}
+
+	return endpointSlice
+}
+
 func TestEndpointSlicesInformer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -446,6 +476,107 @@ func TestEndpointSlicesInformer(t *testing.T) {
 			defer cancel()
 			cloud.backendPoolUpdater = u
 			go cloud.backendPoolUpdater.run(ctx)
+
+			cloud.setUpEndpointSlicesInformer(informerFactory)
+			stopChan := make(chan struct{})
+			defer func() {
+				stopChan <- struct{}{}
+			}()
+			informerFactory.Start(stopChan)
+			time.Sleep(100 * time.Millisecond)
+
+			_, err := client.DiscoveryV1().EndpointSlices("test").Update(context.Background(), tc.updatedEPS, metav1.UpdateOptions{})
+			assert.NoError(t, err)
+			time.Sleep(2 * time.Second)
+		})
+	}
+}
+
+func TestEndpointSlicesInformerContainerLoadBalancer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	existingAddresses := []string{"1.1.1.1"}
+	updatedAddresses := []string{"2.2.2.2", "3.3.3.3"}
+
+	for _, tc := range []struct {
+		name                        string
+		existingEPS                 *discovery_v1.EndpointSlice
+		updatedEPS                  *discovery_v1.EndpointSlice
+		notLocal                    bool
+		expectedGetBackendPoolCount int
+		expectedPutBackendPoolCount int
+	}{
+		{
+			name:                        "remove unwanted ips and add wanted ones",
+			existingEPS:                 getTestEndpointSliceWithAddressesAndServiceOwnerReference("eps1", "test", "svc1", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", existingAddresses, "node1"),
+			updatedEPS:                  getTestEndpointSliceWithAddressesAndServiceOwnerReference("eps1", "test", "svc1", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", updatedAddresses, "node2", "node1"),
+			expectedGetBackendPoolCount: 1,
+			expectedPutBackendPoolCount: 1,
+		},
+		// {
+		// 	name:        "skip non-local services",
+		// 	existingEPS: getTestEndpointSliceWithAddressesAndServiceOwnerReference("eps1", "test", "svc2", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", existingAddresses, "node1"),
+		// 	updatedEPS:  getTestEndpointSliceWithAddressesAndServiceOwnerReference("eps1", "test", "svc2", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", updatedAddresses, "node2", "node1"),
+		// },
+		// {
+		// 	name:        "skip an endpoint slice that don't belong to a service",
+		// 	existingEPS: getTestEndpointSliceWithAddressesAndServiceOwnerReference("eps1", "test", "", "", existingAddresses, "node1"),
+		// 	updatedEPS:  getTestEndpointSliceWithAddressesAndServiceOwnerReference("eps1", "test", "", "", updatedAddresses, "node2", "node1"),
+		// },
+		// {
+		// 	name:        "not a local service",
+		// 	existingEPS: getTestEndpointSliceWithAddressesAndServiceOwnerReference("eps1", "test", "", "", existingAddresses, "node1"),
+		// 	updatedEPS:  getTestEndpointSliceWithAddressesAndServiceOwnerReference("eps1", "test", "", "", updatedAddresses, "node2", "node1"),
+		// 	notLocal:    true,
+		// },
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud := GetTestCloudWithContainerLoadBalancer(ctrl)
+
+			k8s := difftracker.K8s_State{
+				Services: utilsets.NewString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+				Egresses: utilsets.NewString(),
+				Nodes:    make(map[string]difftracker.Node),
+			}
+			nrp := difftracker.NRP_State{
+				LoadBalancers: utilsets.NewString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+				NATGateways:   utilsets.NewString(),
+				Locations:     make(map[string]difftracker.NRPLocation),
+				// map[string]difftracker.NRPLocation{
+				// 	"10.0.0.1": {
+				// 		Addresses: map[string]difftracker.NRPAddress{
+				// 			"1.1.1.1": {
+				// 				Services: utilsets.NewString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+				// 			},
+				// 		},
+				// 	},
+				// },
+			}
+
+			cloud.diffTracker = difftracker.InitializeDiffTracker(k8s, nrp)
+
+			cloud.localServiceNameToServiceInfoMap = sync.Map{}
+			if !tc.notLocal {
+				cloud.localServiceNameToServiceInfoMap.Store("test/svc1", &serviceInfo{lbName: "lb1"})
+			}
+			svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+			client := fake.NewSimpleClientset(&svc, tc.existingEPS)
+			informerFactory := informers.NewSharedInformerFactory(client, 0)
+			cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+			cloud.localServiceNameToServiceInfoMap.Store("test/svc1", newServiceInfo(consts.IPVersionIPv4String, "lb1"))
+			cloud.nodePrivateIPs = map[string]*utilsets.IgnoreCaseSet{
+				"node1": utilsets.NewString("10.0.0.1"),
+				"node2": utilsets.NewString("10.0.0.2"),
+			}
+			cloud.localServiceNameToNRPServiceMap = sync.Map{}
+			cloud.localServiceNameToNRPServiceMap.Store("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", struct{}{})
+
+			u := newLocationAndNRPServiceBatchUpdater(cloud)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			cloud.locationAndNRPServiceBatchUpdater = u
+			go cloud.locationAndNRPServiceBatchUpdater.run(ctx)
 
 			cloud.setUpEndpointSlicesInformer(informerFactory)
 			stopChan := make(chan struct{})
