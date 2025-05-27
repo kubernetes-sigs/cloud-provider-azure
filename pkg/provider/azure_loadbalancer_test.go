@@ -3066,9 +3066,43 @@ func TestReconcileLoadBalancerRuleCommon(t *testing.T) {
 		expectedProbes:  probes,
 		expectedRules:   rules1DualStack,
 	})
+
+	testCases = append(testCases, []struct {
+		desc            string
+		service         v1.Service
+		loadBalancerSKU string
+		probeProtocol   string
+		probePath       string
+		expectedProbes  map[bool][]*armnetwork.Probe
+		expectedRules   map[bool][]*armnetwork.LoadBalancingRule
+		expectedErr     bool
+	}{
+		{
+			desc:            "LB backend pool of type PodIP - getExpectedLBRules should return error when the service is dual-stack",
+			service:         getTestServiceDualStack("test", v1.ProtocolTCP, nil, 80),
+			loadBalancerSKU: "standardV2",
+			expectedErr:     true,
+		},
+		{
+			desc:            "LB backend pool of type PodIP - getExpectedLBRules should return error when the service port is named",
+			service:         getTestServiceWithNamedTargetPorts("test", v1.ProtocolTCP, nil, false, 8080, "http-web-svc"),
+			loadBalancerSKU: "standardV2",
+			expectedErr:     true,
+		},
+		{
+			desc:            "LB backend pool of type PodIP - getExpectedLBRules should return expected rules and probes",
+			service:         getTestServiceWithIntTargetPorts("test1", v1.ProtocolTCP, nil, false, 8080, 1234),
+			loadBalancerSKU: "standardV2",
+			expectedRules:   getTestRuleCLB(false, 8080, 1234, false),
+			expectedProbes:  nil,
+		},
+	}...)
 	for _, test := range testCases {
 		t.Run(test.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
+			if test.loadBalancerSKU == "standardV2" {
+				az.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypePodIP
+			}
 			az.Config.LoadBalancerSKU = test.loadBalancerSKU
 			service := test.service
 			firstPort := service.Spec.Ports[0]
@@ -3166,6 +3200,17 @@ func getTCPResetTestRules(enableTCPReset bool) map[bool][]*armnetwork.LoadBalanc
 	return map[bool][]*armnetwork.LoadBalancingRule{
 		consts.IPVersionIPv4: {IPv4Rule},
 		consts.IPVersionIPv6: {IPv6Rule},
+	}
+}
+
+func getTestRuleCLB(enableTCPReset bool, servicePort int32, targetPort int32, isIPv6 bool) map[bool][]*armnetwork.LoadBalancingRule {
+	rule := getTestRule(enableTCPReset, servicePort, isIPv6)
+	rule.Properties.EnableFloatingIP = to.Ptr(false)
+	rule.Properties.Probe = nil
+	rule.Properties.BackendPort = &targetPort
+
+	return map[bool][]*armnetwork.LoadBalancingRule{
+		false: {rule},
 	}
 }
 
