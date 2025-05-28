@@ -560,9 +560,65 @@ func TestGetIPFamiliesEnabled(t *testing.T) {
 			false,
 		},
 		{
+			"IPv6",
+			&v1.Service{
+				Spec: v1.ServiceSpec{IPFamilies: []v1.IPFamily{v1.IPv6Protocol}},
+			},
+			false,
+			true,
+		},
+		{
 			"DualStack",
 			&v1.Service{
 				Spec: v1.ServiceSpec{IPFamilies: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}},
+			},
+			true,
+			true,
+		},
+		{
+			"DualStack IPv6 first",
+			&v1.Service{
+				Spec: v1.ServiceSpec{IPFamilies: []v1.IPFamily{v1.IPv6Protocol, v1.IPv4Protocol}},
+			},
+			true,
+			true,
+		},
+		{
+			"Empty IPFamilies - defaults to IPv4",
+			&v1.Service{
+				Spec: v1.ServiceSpec{IPFamilies: []v1.IPFamily{}},
+			},
+			true,
+			false,
+		},
+		{
+			"No IPFamilies field - defaults to IPv4",
+			&v1.Service{
+				Spec: v1.ServiceSpec{},
+			},
+			true,
+			false,
+		},
+		{
+			"Multiple IPv4 entries",
+			&v1.Service{
+				Spec: v1.ServiceSpec{IPFamilies: []v1.IPFamily{v1.IPv4Protocol, v1.IPv4Protocol}},
+			},
+			true,
+			false,
+		},
+		{
+			"Multiple IPv6 entries",
+			&v1.Service{
+				Spec: v1.ServiceSpec{IPFamilies: []v1.IPFamily{v1.IPv6Protocol, v1.IPv6Protocol}},
+			},
+			false,
+			true,
+		},
+		{
+			"Mixed multiple entries",
+			&v1.Service{
+				Spec: v1.ServiceSpec{IPFamilies: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol, v1.IPv4Protocol}},
 			},
 			true,
 			true,
