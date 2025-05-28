@@ -303,6 +303,9 @@ func getIPFamiliesEnabled(svc *v1.Service) (v4Enabled bool, v6Enabled bool) {
 			v6Enabled = true
 		}
 	}
+	if !v4Enabled && !v6Enabled {
+		v4Enabled = true
+	}
 	return
 }
 
