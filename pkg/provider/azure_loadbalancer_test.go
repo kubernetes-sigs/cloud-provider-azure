@@ -1902,7 +1902,7 @@ func TestGetServiceLoadBalancerMultiSLB(t *testing.T) {
 				tc.service.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyLocal
 			}
 
-			lb, lbs, _, _, _, err := cloud.getServiceLoadBalancer(context.TODO(), &tc.service, testClusterName,
+			lb, lbs, _, _, _, _, err := cloud.getServiceLoadBalancer(context.TODO(), &tc.service, testClusterName,
 				[]*v1.Node{}, true, tc.existingLBs)
 			assert.Equal(t, tc.expectedError, err)
 			assert.Equal(t, tc.expectedLB, lb)
@@ -2082,7 +2082,7 @@ func TestGetServiceLoadBalancerCommon(t *testing.T) {
 			}
 			az.LoadBalancerSKU = test.SKU
 			service := test.service
-			lb, _, status, _, exists, err := az.getServiceLoadBalancer(context.TODO(), &service, testClusterName,
+			lb, _, status, _, exists, _, err := az.getServiceLoadBalancer(context.TODO(), &service, testClusterName,
 				clusterResources.nodes, test.wantLB, []*armnetwork.LoadBalancer{})
 			assert.Equal(t, test.expectedLB, lb)
 			if test.expectedStatus != nil {
@@ -2118,7 +2118,7 @@ func TestGetServiceLoadBalancerWithExtendedLocation(t *testing.T) {
 	mockLBsClient := az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
 	mockLBsClient.EXPECT().List(gomock.Any(), "rg").Return(nil, nil)
 
-	lb, _, status, _, exists, err := az.getServiceLoadBalancer(context.TODO(), &service, testClusterName,
+	lb, _, status, _, exists, _, err := az.getServiceLoadBalancer(context.TODO(), &service, testClusterName,
 		clusterResources.nodes, false, []*armnetwork.LoadBalancer{})
 	assert.Equal(t, expectedLB, lb, "GetServiceLoadBalancer shall return a default LB with expected location.")
 	assert.Nil(t, status, "GetServiceLoadBalancer: Status should be nil for default LB.")
@@ -2141,7 +2141,7 @@ func TestGetServiceLoadBalancerWithExtendedLocation(t *testing.T) {
 	mockLBsClient = az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
 	mockLBsClient.EXPECT().List(gomock.Any(), "rg").Return(nil, nil)
 
-	lb, _, status, _, exists, err = az.getServiceLoadBalancer(context.TODO(), &service, testClusterName,
+	lb, _, status, _, exists, _, err = az.getServiceLoadBalancer(context.TODO(), &service, testClusterName,
 		clusterResources.nodes, true, []*armnetwork.LoadBalancer{})
 	assert.Equal(t, *expectedLB, *lb, "GetServiceLoadBalancer shall return a new LB with expected location.")
 	assert.Nil(t, status, "GetServiceLoadBalancer: Status should be nil for new LB.")
@@ -4043,7 +4043,7 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 			mockPLSRepo := az.plsRepo.(*privatelinkservice.MockRepository)
 			mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
 
-			lb, rerr := az.reconcileLoadBalancer(context.TODO(), "testCluster", &service, clusterResources.nodes, test.wantLb)
+			lb, _, rerr := az.reconcileLoadBalancer(context.TODO(), "testCluster", &service, clusterResources.nodes, test.wantLb)
 			if test.expectedError != nil {
 				assert.EqualError(t, rerr, test.expectedError.Error())
 			} else {
@@ -6340,7 +6340,7 @@ func TestRemoveFrontendIPConfigurationFromLoadBalancerDelete(t *testing.T) {
 		mockPLSRepo := cloud.plsRepo.(*privatelinkservice.MockRepository)
 		mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil)
 		existingLBs := []*armnetwork.LoadBalancer{{Name: ptr.To("lb")}}
-		_, err := cloud.removeFrontendIPConfigurationFromLoadBalancer(context.TODO(), lb, existingLBs, []*armnetwork.FrontendIPConfiguration{fip}, "testCluster", &service)
+		_, _, err := cloud.removeFrontendIPConfigurationFromLoadBalancer(context.TODO(), lb, existingLBs, []*armnetwork.FrontendIPConfiguration{fip}, "testCluster", &service)
 		assert.NoError(t, err)
 	})
 }
@@ -6371,7 +6371,7 @@ func TestRemoveFrontendIPConfigurationFromLoadBalancerUpdate(t *testing.T) {
 		mockLBClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "lb", gomock.Any()).Return(nil, nil)
 		mockPLSRepo := cloud.plsRepo.(*privatelinkservice.MockRepository)
 		mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil)
-		_, err := cloud.removeFrontendIPConfigurationFromLoadBalancer(context.TODO(), lb, []*armnetwork.LoadBalancer{}, []*armnetwork.FrontendIPConfiguration{fip}, "testCluster", &service)
+		_, _, err := cloud.removeFrontendIPConfigurationFromLoadBalancer(context.TODO(), lb, []*armnetwork.LoadBalancer{}, []*armnetwork.FrontendIPConfiguration{fip}, "testCluster", &service)
 		assert.NoError(t, err)
 	})
 }
