@@ -291,6 +291,7 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 				consts.ServiceAnnotationLoadBalancerInternal: "true",
 				consts.ServiceAnnotationPLSName:              "testpls",
 			},
+			wantPLS:         false,
 			expectedPLSList: true,
 			existingPLSList: []*armnetwork.PrivateLinkService{
 				{
@@ -302,12 +303,13 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			},
 		},
 		{
-			desc: "reconcilePrivateLinkService should delete pls when frontend is deleted",
+			desc: "reconcilePrivateLinkService should delete pls when frontend is deleted and return intentional error for ETag retry",
 			annotations: map[string]string{
 				consts.ServiceAnnotationPLSCreation:          "true",
 				consts.ServiceAnnotationLoadBalancerInternal: "true",
 				consts.ServiceAnnotationPLSName:              "testpls",
 			},
+			wantPLS:         false,
 			expectedPLSList: true,
 			existingPLSList: []*armnetwork.PrivateLinkService{
 				{
@@ -318,6 +320,7 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 				},
 			},
 			expectedPLSDelete: true,
+			expectedError:     true, // This should be true because the function returns an intentional error for ETag retry
 		},
 	}
 	for _, test := range testCases {
@@ -364,6 +367,11 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			}
 			err := az.reconcilePrivateLinkService(context.TODO(), clusterName, &service, fipConfig, test.wantPLS)
 			assert.Equal(t, test.expectedError, err != nil, "error: %v", err)
+
+			// For the PLS deletion test case, verify the specific error message about ETag retry
+			if test.expectedPLSDelete && test.expectedError {
+				assert.Contains(t, err.Error(), consts.PLSDeletionSuccessfulIntentionalRetryErrorMessage)
+			}
 		})
 	}
 }

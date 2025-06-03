@@ -1928,6 +1928,9 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 				fipConfigToDel := toDeleteConfigs[i]
 				err := az.reconcilePrivateLinkService(ctx, clusterName, service, fipConfigToDel, false /* wantPLS */)
 				if err != nil {
+					if strings.Contains(err.Error(), consts.PLSDeletionSuccessfulIntentionalRetryErrorMessage) {
+						return nil, err
+					}
 					klog.Errorf(
 						"reconcileLoadBalancer for service(%s): lb(%s) - failed to clean up PrivateLinkService for frontEnd(%s): %v",
 						serviceName,

@@ -178,7 +178,15 @@ func (az *Cloud) reconcilePrivateLinkService(
 				klog.Errorf("reconcilePrivateLinkService for service(%s): deletePLS for frontEnd(%s) failed: %v", serviceName, ptr.Deref(fipConfigID, ""), err)
 				return deleteErr
 			}
+
+			isOperationSucceeded = true
+			klog.V(2).Infof("reconcilePrivateLinkService for service(%s) finished", serviceName)
+			return fmt.Errorf(
+				"reconcilePrivateLinkService for service(%s) and frontend(%s): %s",
+				serviceName, ptr.Deref(fipConfigID, ""), consts.PLSDeletionSuccessfulIntentionalRetryErrorMessage,
+			)
 		}
+		klog.V(2).Infof("reconcilePrivateLinkService for service(%s): no private link service of frontend IP configuration (%s) to delete", serviceName, ptr.Deref(fipConfigID, ""))
 	}
 
 	isOperationSucceeded = true

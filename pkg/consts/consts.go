@@ -408,6 +408,10 @@ const (
 	CannotUpdateVMBeingDeletedMessageSuffix = "since it is marked for deletion"
 	// OperationPreemptedErrorMessage is the error message returned for vm operation preempted errors
 	OperationPreemptedErrorMessage = "Operation execution has been preempted by a more recent operation"
+	// PLSDeletionSuccessfulIntentionalRetryErrorMessage is the error message returned when PLS deletion is successful but we need to retry due to ETag mismatch
+	PLSDeletionSuccessfulIntentionalRetryErrorMessage = "successfully deleted the Private Link Service attached to the frontend IP configuration, " +
+		"this error is used to trigger a retry as the deletion will change the ETag of the Load Balancer, and we need to fetch the latest LB to proceed. " +
+		"Please ignore this error if the retry is successful. It is not expected if this error keeps happening"
 )
 
 // node ipam controller
