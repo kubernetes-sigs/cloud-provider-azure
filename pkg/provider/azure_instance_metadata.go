@@ -108,6 +108,23 @@ type InstanceMetadataService struct {
 	imsCache   azcache.Resource
 }
 
+type Event struct {
+	Description       string   `json:"Description,omitempty"`
+	DurationInSeconds int      `json:"DurationInSeconds,omitempty"`
+	EventID           string   `json:"EventId,omitempty"`
+	EventSource       string   `json:"EventSource,omitempty"`
+	EventStatus       string   `json:"EventStatus,omitempty"`
+	EventType         string   `json:"EventType,omitempty"`
+	NotBefore         string   `json:"NotBefore,omitempty"`
+	ResourceType      string   `json:"ResourceType,omitempty"`
+	Resources         []string `json:"Resources,omitempty"`
+}
+
+type EventResponse struct {
+	DocumentIncarnation int     `json:"DocumentIncarnation"`
+	Events              []Event `json:"Events"`
+}
+
 // NewInstanceMetadataService creates an instance of the InstanceMetadataService accessor object.
 func NewInstanceMetadataService(imdsServer string) (*InstanceMetadataService, error) {
 	ims := &InstanceMetadataService{
@@ -253,6 +270,42 @@ func (ims *InstanceMetadataService) getLoadBalancerMetadata() (*LoadBalancerMeta
 	}
 
 	return &obj, nil
+}
+
+func (ims *InstanceMetadataService) GetScheduledEvents() (*EventResponse, error) {
+	req, err := http.NewRequest("GET", ims.imdsServer+consts.ImdsScheduledEventsURI, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Metadata", "True")
+	req.Header.Add("User-Agent", "golang/kubernetes-cloud-provider")
+	q := req.URL.Query()
+	q.Add("format", "json")
+	q.Add("api-version", consts.ImdsScheduledEventsAPIVersion)
+	req.URL.RawQuery = q.Encode()
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failure of getting scheduled events with response %q", resp.Status)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	er := EventResponse{}
+	if err := json.Unmarshal(data, &er); err != nil {
+		return nil, err
+	}
+	return &er, nil
+
 }
 
 // GetMetadata gets instance metadata from cache.

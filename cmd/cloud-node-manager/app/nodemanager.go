@@ -34,8 +34,10 @@ import (
 
 	cloudnodeconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-node-manager/app/config"
 	"sigs.k8s.io/cloud-provider-azure/cmd/cloud-node-manager/app/options"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	nodeprovider "sigs.k8s.io/cloud-provider-azure/pkg/node"
 	"sigs.k8s.io/cloud-provider-azure/pkg/nodemanager"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider"
 	"sigs.k8s.io/cloud-provider-azure/pkg/version"
 	"sigs.k8s.io/cloud-provider-azure/pkg/version/verflag"
 )
@@ -136,6 +138,19 @@ func startControllers(ctx context.Context, c *cloudnodeconfig.Config, healthzHan
 		c.EnableDeprecatedBetaTopologyLabels)
 
 	go nodeController.Run(ctx)
+	if c.EnableNodeEventChecker {
+		imdsService, err := provider.NewInstanceMetadataService(consts.ImdsServer)
+		if err != nil {
+			return fmt.Errorf("failed to create instance metadata service: %w", err)
+		}
+		eventChecker := nodemanager.NewEventChecker(
+			c.NodeName,
+			c.Client,
+			imdsService,
+			2*time.Second,
+		)
+		go eventChecker.Run(ctx)
+	}
 
 	check := controllerhealthz.NamedPingChecker(c.NodeName)
 	healthzHandler.AddHealthChecker(check)

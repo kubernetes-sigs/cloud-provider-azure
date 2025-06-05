@@ -83,6 +83,8 @@ type CloudNodeManagerOptions struct {
 
 	UseInstanceMetadata bool
 
+	EnableNodeEventChecker bool
+
 	// WindowsService should be set to true if cloud-node-manager is running as a service on Windows.
 	// Its corresponding flag only gets registered in Windows builds
 	WindowsService bool
@@ -135,6 +137,7 @@ func (o *CloudNodeManagerOptions) Flags() cliflag.NamedFlagSets {
 	fs.Int32Var(&o.ClientConnection.Burst, "kube-api-burst", 30, "Burst to use while talking with kubernetes apiserver.")
 	fs.BoolVar(&o.WaitForRoutes, "wait-routes", false, "Whether the nodes should wait for routes created on Azure route table. It should be set to true when using kubenet plugin.")
 	fs.BoolVar(&o.UseInstanceMetadata, "use-instance-metadata", true, "Should use Instance Metadata Service for fetching node information; if false will use ARM instead.")
+	fs.BoolVar(&o.EnableNodeEventChecker, "enable-node-event-checker", true, "Should enable the NodeEventChecker to check for Azure scheduled events. Can only be set to true if --use-instance-metadata is also true. If false, the NodeEventChecker will not run and no events will be recorded in the node status.")
 	fs.StringVar(&o.CloudConfigFilePath, "cloud-config", o.CloudConfigFilePath, "The path to the cloud config file to be used when using ARM to fetch node information.")
 	fs.BoolVar(&o.EnableDeprecatedBetaTopologyLabels, "enable-deprecated-beta-topology-labels", o.EnableDeprecatedBetaTopologyLabels, "DEPRECATED: This flag will be removed in a future release. If true, the node will apply beta topology labels.")
 	return fss
@@ -195,6 +198,7 @@ func (o *CloudNodeManagerOptions) ApplyTo(c *cloudnodeconfig.Config, userAgent s
 	}))
 	c.NodeStatusUpdateFrequency = o.NodeStatusUpdateFrequency
 	c.UseInstanceMetadata = o.UseInstanceMetadata
+	c.EnableNodeEventChecker = c.UseInstanceMetadata && o.EnableNodeEventChecker
 	c.CloudConfigFilePath = o.CloudConfigFilePath
 
 	c.WindowsService = o.WindowsService

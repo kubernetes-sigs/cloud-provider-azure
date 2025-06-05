@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
@@ -133,7 +134,7 @@ type Config struct {
 	// `nodeIP`: vm private IPs will be attached to the inbound backend pool of the load balancer;
 	// `podIP`: pod IPs will be attached to the inbound backend pool of the load balancer (not supported yet).
 	LoadBalancerBackendPoolConfigurationType string `json:"loadBalancerBackendPoolConfigurationType,omitempty" yaml:"loadBalancerBackendPoolConfigurationType,omitempty"`
-	// PutVMSSVMBatchSize defines how many requests the client send concurrently when putting the VMSS VMs.
+	// PutVMSSVMBatchSize defines how many reque hssts the client send concurrently when putting the VMSS VMs.
 	// If it is smaller than or equal to one, the request will be sent one by one in sequence (default).
 	PutVMSSVMBatchSize int `json:"putVMSSVMBatchSize" yaml:"putVMSSVMBatchSize"`
 	// PrivateLinkServiceResourceGroup determines the specific resource group of the private link services user want to use
