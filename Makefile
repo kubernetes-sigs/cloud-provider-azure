@@ -434,9 +434,9 @@ cloud-build-prerequisites:
 .PHONY: release-staging
 release-staging: ## Release the cloud provider images.
 ifeq ($(CLOUD_BUILD_IMAGE),ccm)
-	ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) $(MAKE) build-all-ccm-images push-multi-arch-controller-manager-image
+	OUTPUT_TYPE=registry ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) $(MAKE) build-all-ccm-images push-multi-arch-controller-manager-image
 else
-	ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) $(MAKE) cloud-build-prerequisites build-all-node-images push-multi-arch-node-manager-image
+	OUTPUT_TYPE=registry ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) $(MAKE) cloud-build-prerequisites build-all-node-images push-multi-arch-node-manager-image
 endif
 
 ## --------------------------------------
