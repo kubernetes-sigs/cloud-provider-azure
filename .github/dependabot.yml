@@ -4,7 +4,7 @@ updates:
     directory: "/"
     open-pull-requests-limit: 1
     schedule:
-      interval: daily
+      interval: weekly
       time: "01:00"
       timezone: "Asia/Shanghai"
     labels:
@@ -14,6 +14,8 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
+    ignore:
+      - dependency-name: "go"
     groups:
       all:
         applies-to: version-updates
@@ -27,7 +29,7 @@ updates:
     directory: "/tests"
     open-pull-requests-limit: 1
     schedule:
-      interval: daily
+      interval: weekly
       time: "20:00"
       timezone: "Asia/Shanghai"
     labels:
@@ -37,6 +39,8 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
+    ignore:
+      - dependency-name: "go"
     groups:
       all:
         applies-to: version-updates
@@ -50,7 +54,7 @@ updates:
     directory: "/health-probe-proxy"
     open-pull-requests-limit: 1
     schedule:
-      interval: daily
+      interval: weekly
       time: "01:00"
       timezone: "Asia/Shanghai"
     labels:
@@ -60,6 +64,8 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
+    ignore:
+      - dependency-name: "go"
     groups:
       all:
         applies-to: version-updates
@@ -73,7 +79,7 @@ updates:
     directory: "/kubetest2-aks"
     open-pull-requests-limit: 1
     schedule:
-      interval: daily
+      interval: weekly
       time: "01:00"
       timezone: "Asia/Shanghai"
     labels:
@@ -83,6 +89,8 @@ updates:
       - "kind/testing"
       - "lgtm"
       - "approved"
+    ignore:
+      - dependency-name: "go"
     groups:
       all:
         applies-to: version-updates
@@ -96,7 +104,7 @@ updates:
     directory: "/pkg/azclient"
     open-pull-requests-limit: 1
     schedule:
-      interval: daily
+      interval: weekly
       time: "01:00"
       timezone: "Asia/Shanghai"
     labels:
@@ -106,6 +114,8 @@ updates:
       - "kind/testing"
       - "lgtm"
       - "approved"
+    ignore:
+      - dependency-name: "go"
     groups:
       all:
         applies-to: version-updates
@@ -119,7 +129,7 @@ updates:
     directory: "/pkg/azclient/cache"
     open-pull-requests-limit: 1
     schedule:
-      interval: daily
+      interval: weekly
       time: "01:00"
       timezone: "Asia/Shanghai"
     labels:
@@ -129,6 +139,8 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
+    ignore:
+      - dependency-name: "go"
     groups:
       all:
         applies-to: version-updates
@@ -141,7 +153,7 @@ updates:
   - package-ecosystem: gomod
     directory: /pkg/azclient/client-gen
     schedule:
-      interval: daily
+      interval: weekly
       time: "01:00"
       timezone: "Asia/Shanghai"
     labels:
@@ -151,6 +163,8 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
+    ignore:
+      - dependency-name: "go"
     groups:
       all:
         applies-to: version-updates
@@ -163,7 +177,7 @@ updates:
   - package-ecosystem: gomod
     directory: /pkg/azclient/configloader
     schedule:
-      interval: daily
+      interval: weekly
       time: "01:00"
       timezone: "Asia/Shanghai"
     labels:
@@ -173,6 +187,8 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
+    ignore:
+      - dependency-name: "go"
     groups:
       all:
         applies-to: version-updates
@@ -185,7 +201,7 @@ updates:
   - package-ecosystem: gomod
     directory: /pkg/azclient/trace
     schedule:
-      interval: daily
+      interval: weekly
       time: "01:00"
       timezone: "Asia/Shanghai"
     labels:
@@ -195,6 +211,8 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
+    ignore:
+      - dependency-name: "go"
     groups:
       all:
         applies-to: version-updates
@@ -207,7 +225,7 @@ updates:
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
       time: "01:00"
       timezone: "Asia/Shanghai"
     labels:
@@ -229,7 +247,7 @@ updates:
   - package-ecosystem: "docker"
     directory: "/health-probe-proxy"
     schedule:
-      interval: "daily"
+      interval: "weekly"
       time: "01:00"
       timezone: "Asia/Shanghai"
     labels:
@@ -251,7 +269,7 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: daily
+      interval: weekly
       time: "01:00"
       timezone: "Asia/Shanghai"
     labels:
@@ -275,7 +293,7 @@ updates:
     directory: "/"
     open-pull-requests-limit: 1
     schedule:
-      interval: daily
+      interval: weekly
       time: "01:00"
       timezone: "Asia/Shanghai"
     labels:
@@ -290,6 +308,7 @@ updates:
     ignore:
       - dependency-name: "k8s.io/*"
         versions: [">=0.34.0"]
+      - dependency-name: "go"
     groups:
       all:
         applies-to: version-updates
@@ -302,7 +321,7 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: daily
+      interval: weekly
       time: "01:00"
       timezone: "Asia/Shanghai"
     target-branch: "release-1.33"
@@ -326,7 +345,7 @@ updates:
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
       time: "01:00"
       timezone: "Asia/Shanghai"
     target-branch: "release-1.33"
@@ -351,7 +370,7 @@ updates:
     directory: "/"
     open-pull-requests-limit: 1
     schedule:
-      interval: daily
+      interval: weekly
       time: "01:00"
       timezone: "Asia/Shanghai"
     labels:
@@ -366,6 +385,7 @@ updates:
     ignore:
       - dependency-name: "k8s.io/*"
         versions: [">=0.33.0"]
+      - dependency-name: "go"
     groups:
       all:
         applies-to: version-updates
@@ -378,7 +398,7 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: daily
+      interval: weekly
       time: "01:00"
       timezone: "Asia/Shanghai"
     target-branch: "release-1.32"
@@ -402,7 +422,7 @@ updates:
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
       time: "01:00"
       timezone: "Asia/Shanghai"
     target-branch: "release-1.32"
@@ -427,7 +447,7 @@ updates:
     directory: "/"
     open-pull-requests-limit: 1
     schedule:
-      interval: daily
+      interval: weekly
       time: "01:00"
       timezone: "Asia/Shanghai"
     labels:
@@ -442,6 +462,7 @@ updates:
     ignore:
       - dependency-name: "k8s.io/*"
         versions: [">=0.31.0"]
+      - dependency-name: "go"
     groups:
       all:
         applies-to: version-updates
@@ -454,7 +475,7 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: daily
+      interval: weekly
       time: "01:00"
       timezone: "Asia/Shanghai"
     target-branch: "release-1.30"
@@ -478,7 +499,7 @@ updates:
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
       time: "01:00"
       timezone: "Asia/Shanghai"
     target-branch: "release-1.30"
@@ -503,7 +524,7 @@ updates:
     directory: "/"
     open-pull-requests-limit: 1
     schedule:
-      interval: daily
+      interval: weekly
       time: "01:00"
       timezone: "Asia/Shanghai"
     labels:
@@ -518,6 +539,7 @@ updates:
     ignore:
       - dependency-name: "k8s.io/*"
         versions: [">=0.32.0"]
+      - dependency-name: "go"
     groups:
       all:
         applies-to: version-updates
@@ -530,7 +552,7 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: daily
+      interval: weekly
       time: "01:00"
       timezone: "Asia/Shanghai"
     target-branch: "release-1.31"
@@ -554,7 +576,7 @@ updates:
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
       time: "01:00"
       timezone: "Asia/Shanghai"
     target-branch: "release-1.31"
@@ -575,108 +597,3 @@ updates:
         - "patch"
         - "minor"
         - "major"
-  - package-ecosystem: "gomod"
-    directory: "/"
-    open-pull-requests-limit: 1
-    schedule:
-      interval: daily
-      time: "01:00"
-      timezone: "Asia/Shanghai"
-    labels:
-      - "area/dependency"
-      - "release-note-none"
-      - "ok-to-test"
-      - "kind/cleanup"
-      - "lgtm"
-      - "approved"
-      - "release-1.29"
-    target-branch: "release-1.29"
-    ignore:
-      - dependency-name: "k8s.io/*"
-        versions: [">=0.30.0"]
-    groups:
-      all:
-        applies-to: version-updates
-        patterns:
-        - "*"
-        update-types:
-        - "patch"
-        - "minor"
-        - "major"
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: daily
-      time: "01:00"
-      timezone: "Asia/Shanghai"
-    target-branch: "release-1.29"
-    labels:
-      - "area/dependency"
-      - "release-note-none"
-      - "ok-to-test"
-      - "kind/testing"
-      - "lgtm"
-      - "approved"
-      - "release-1.29"
-    groups:
-      all:
-        applies-to: version-updates
-        patterns:
-        - "*"
-        update-types:
-        - "patch"
-        - "minor"
-        - "major"
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "daily"
-      time: "01:00"
-      timezone: "Asia/Shanghai"
-    target-branch: "release-1.29"
-    labels:
-      - "area/dependency"
-      - "release-note-none"
-      - "ok-to-test"
-      - "kind/cleanup"
-      - "lgtm"
-      - "approved"
-      - "release-1.29"
-    groups:
-      all:
-        applies-to: version-updates
-        patterns:
-        - "*"
-        update-types:
-        - "patch"
-        - "minor"
-        - "major"
-  - package-ecosystem: gomod
-    directory: /
-    schedule:
-      interval: daily
-      time: "01:00"
-      timezone: "Asia/Shanghai"
-    target-branch: "documentation"
-    labels:
-      - "area/dependency"
-      - "release-note-none"
-      - "ok-to-test"
-      - "kind/cleanup"
-      - "lgtm"
-      - "approved"
-
-  - package-ecosystem: npm
-    directory: /
-    schedule:
-      interval: daily
-      time: "01:00"
-      timezone: "Asia/Shanghai"
-    target-branch: "documentation"
-    labels:
-      - "area/dependency"
-      - "release-note-none"
-      - "ok-to-test"
-      - "kind/cleanup"
-      - "lgtm"
-      - "approved"
