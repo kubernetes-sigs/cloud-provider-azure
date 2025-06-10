@@ -29,11 +29,11 @@ const GetOperationName = "FileServicesClient.GetServiceProperties"
 const SetOperationName = "FileServicesClient.SetServiceProperties"
 
 // Get gets the FileServiceProperties
-func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (*armstorage.FileServiceProperties, error) {
+func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armstorage.FileServiceProperties, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "FileService", "getServiceProperties")
-	defer func() { metricsCtx.Observe(ctx, nil) }()
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
-	defer endSpan(nil)
+	defer endSpan(err)
 
 	resp, err := client.FileServicesClient.GetServiceProperties(ctx, resourceGroupName, resourceName, nil)
 	if err != nil {
@@ -43,11 +43,11 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 	return &resp.FileServiceProperties, nil
 }
 
-func (client *Client) Set(ctx context.Context, resourceGroupName string, resourceName string, parameters armstorage.FileServiceProperties) (*armstorage.FileServiceProperties, error) {
+func (client *Client) Set(ctx context.Context, resourceGroupName string, resourceName string, parameters armstorage.FileServiceProperties) (result *armstorage.FileServiceProperties, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "FileService", "setServiceProperties")
-	defer func() { metricsCtx.Observe(ctx, nil) }()
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, SetOperationName, client.tracer, nil)
-	defer endSpan(nil)
+	defer endSpan(err)
 
 	resp, err := client.FileServicesClient.SetServiceProperties(ctx, resourceGroupName, resourceName, parameters, nil)
 	if err != nil {
