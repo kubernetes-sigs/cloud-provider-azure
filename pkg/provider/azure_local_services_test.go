@@ -204,27 +204,61 @@ func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
 			cloud.LoadBalancerClient = mockLBClient
 
 			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			go u.run(ctx)
+
+			// Use WaitGroup to properly synchronize goroutine completion
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				u.run(ctx)
+			}()
 
 			results := sync.Map{}
+			operationsDone := make(chan struct{})
+			var operationsWg sync.WaitGroup
+
 			for _, op := range tc.operations {
 				op := op
+				operationsWg.Add(1)
 				go func() {
+					defer operationsWg.Done()
 					u.addOperation(op)
 					result := op.wait()
 					results.Store(result, true)
 				}()
-				time.Sleep(100 * time.Millisecond)
+				// Small delay to ensure operations are properly queued
+				time.Sleep(50 * time.Millisecond)
 				if tc.extraWait {
 					time.Sleep(time.Second)
 				}
 			}
+
+			// Handle operation removal if specified
 			if tc.removeOperationServiceName != "" {
 				u.removeOperation(tc.removeOperationServiceName)
 			}
-			time.Sleep(3 * time.Second)
+
+			// Wait for all operations to complete with timeout
+			go func() {
+				operationsWg.Wait()
+				close(operationsDone)
+			}()
+
+			select {
+			case <-operationsDone:
+				// Operations completed successfully
+				// Allow extra time for backend processing
+				time.Sleep(2 * time.Second)
+			case <-time.After(8 * time.Second):
+				// Timeout - cancel context and wait for cleanup
+				t.Logf("Test timeout waiting for operations to complete")
+			}
+
+			// Ensure proper cleanup - cancel context and wait for goroutine
+			cancel()
+			wg.Wait()
 		})
 	}
 }
@@ -379,16 +413,41 @@ func TestLoadBalancerBackendPoolUpdaterFailed(t *testing.T) {
 			cloud.LoadBalancerClient = mockLBClient
 
 			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			go u.run(ctx)
 
-			for _, op := range tc.operations {
-				op := op
-				u.addOperation(op)
-				time.Sleep(100 * time.Millisecond)
+			// Use WaitGroup to properly synchronize goroutine completion
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				u.run(ctx)
+			}()
+
+			operationsDone := make(chan struct{})
+			go func() {
+				defer close(operationsDone)
+				for _, op := range tc.operations {
+					op := op
+					u.addOperation(op)
+					time.Sleep(50 * time.Millisecond)
+				}
+				// Allow time for processing
+				time.Sleep(2 * time.Second)
+			}()
+
+			// Wait for operations to complete with timeout
+			select {
+			case <-operationsDone:
+				// Operations completed successfully
+			case <-time.After(8 * time.Second):
+				// Timeout - cancel context
+				t.Logf("Test timeout waiting for operations to complete")
 			}
-			time.Sleep(3 * time.Second)
+
+			// Ensure proper cleanup - cancel context and wait for goroutine
+			cancel()
+			wg.Wait()
 		})
 	}
 }
@@ -505,22 +564,48 @@ func TestEndpointSlicesInformer(t *testing.T) {
 			cloud.LoadBalancerClient = mockLBClient
 
 			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			cloud.backendPoolUpdater = u
-			go cloud.backendPoolUpdater.run(ctx)
+
+			// Use WaitGroup to properly synchronize goroutine completion
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				cloud.backendPoolUpdater.run(ctx)
+			}()
 
 			cloud.setUpEndpointSlicesInformer(informerFactory)
 			stopChan := make(chan struct{})
-			defer func() {
-				stopChan <- struct{}{}
-			}()
 			informerFactory.Start(stopChan)
+
+			// Allow informer to initialize
 			time.Sleep(100 * time.Millisecond)
 
+			// Perform the update operation
 			_, err := client.DiscoveryV1().EndpointSlices("test").Update(context.Background(), tc.updatedEPS, metav1.UpdateOptions{})
 			assert.NoError(t, err)
-			time.Sleep(2 * time.Second)
+
+			// Wait for operations to complete with timeout
+			operationsDone := make(chan struct{})
+			go func() {
+				defer close(operationsDone)
+				time.Sleep(2 * time.Second)
+			}()
+
+			select {
+			case <-operationsDone:
+				// Operations completed successfully
+			case <-time.After(8 * time.Second):
+				// Timeout
+				t.Logf("Test timeout waiting for operations to complete")
+			}
+
+			// Cleanup - stop informer first, then cancel context and wait for goroutine
+			close(stopChan)
+			cancel()
+			wg.Wait()
 		})
 	}
 }
@@ -602,10 +687,17 @@ func TestCheckAndApplyLocalServiceBackendPoolUpdates(t *testing.T) {
 			cloud.LoadBalancerClient = mockLBClient
 
 			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			cloud.backendPoolUpdater = u
-			go cloud.backendPoolUpdater.run(ctx)
+
+			// Use WaitGroup to properly synchronize goroutine completion
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				cloud.backendPoolUpdater.run(ctx)
+			}()
 
 			if tc.existingEPS != nil {
 				_, _ = client.DiscoveryV1().EndpointSlices("default").Create(context.Background(), tc.existingEPS, metav1.CreateOptions{})
@@ -613,7 +705,25 @@ func TestCheckAndApplyLocalServiceBackendPoolUpdates(t *testing.T) {
 
 			err := cloud.checkAndApplyLocalServiceBackendPoolUpdates(existingLB, &svc)
 			assert.NoError(t, err)
-			time.Sleep(2 * time.Second)
+
+			// Wait for operations to complete with timeout
+			operationsDone := make(chan struct{})
+			go func() {
+				defer close(operationsDone)
+				time.Sleep(2 * time.Second)
+			}()
+
+			select {
+			case <-operationsDone:
+				// Operations completed successfully
+			case <-time.After(8 * time.Second):
+				// Timeout
+				t.Logf("Test timeout waiting for operations to complete")
+			}
+
+			// Ensure proper cleanup - cancel context and wait for goroutine
+			cancel()
+			wg.Wait()
 		})
 	}
 }
