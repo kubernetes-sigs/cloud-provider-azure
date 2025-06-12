@@ -107,13 +107,11 @@ spec:
     initConfiguration:
       nodeRegistration:
         kubeletExtraArgs:
-          cloud-config: /etc/kubernetes/azure.json
           cloud-provider: external
         name: '{{ ds.meta_data["local_hostname"] }}'
     joinConfiguration:
       nodeRegistration:
         kubeletExtraArgs:
-          cloud-config: /etc/kubernetes/azure.json
           cloud-provider: external
         name: '{{ ds.meta_data["local_hostname"] }}'
     mounts:
@@ -214,7 +212,6 @@ spec:
       name: '{{ ds.meta_data["local_hostname"] }}'
       kubeletExtraArgs:
         cloud-provider: external
-        cloud-config: /etc/kubernetes/azure.json
   files:
   - contentFrom:
       secret:
@@ -288,7 +285,6 @@ spec:
       name: '{{ ds.meta_data["local_hostname"] }}'
       kubeletExtraArgs:
         cloud-provider: external
-        cloud-config: /etc/kubernetes/azure.json
   files:
   - contentFrom:
       secret:
