@@ -195,7 +195,6 @@ spec:
     initConfiguration:
       nodeRegistration:
         kubeletExtraArgs:
-          cloud-config: /etc/kubernetes/azure.json
           cloud-provider: external
           image-credential-provider-bin-dir: /var/lib/kubelet/credential-provider
           image-credential-provider-config: /var/lib/kubelet/credential-provider-config.yaml
@@ -203,7 +202,6 @@ spec:
     joinConfiguration:
       nodeRegistration:
         kubeletExtraArgs:
-          cloud-config: /etc/kubernetes/azure.json
           cloud-provider: external
           image-credential-provider-bin-dir: /var/lib/kubelet/credential-provider
           image-credential-provider-config: /var/lib/kubelet/credential-provider-config.yaml
@@ -403,7 +401,6 @@ spec:
   joinConfiguration:
     nodeRegistration:
       kubeletExtraArgs:
-        cloud-config: /etc/kubernetes/azure.json
         cloud-provider: external
         image-credential-provider-bin-dir: /var/lib/kubelet/credential-provider
         image-credential-provider-config: /var/lib/kubelet/credential-provider-config.yaml
@@ -530,7 +527,6 @@ spec:
     nodeRegistration:
       criSocket: npipe:////./pipe/containerd-containerd
       kubeletExtraArgs:
-        cloud-config: c:/k/azure.json
         cloud-provider: external
         image-credential-provider-bin-dir: /var/lib/kubelet/credential-provider
         image-credential-provider-config: /var/lib/kubelet/credential-provider-config.yaml
