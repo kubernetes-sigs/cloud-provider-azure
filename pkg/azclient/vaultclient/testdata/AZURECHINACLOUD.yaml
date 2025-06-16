@@ -74,7 +74,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.4; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2023-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2024-11-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -125,7 +125,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.4; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2023-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -176,7 +176,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.4; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2023-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -229,7 +229,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.4; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2023-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -282,7 +282,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.4; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestvanotfound?api-version=2023-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestvanotfound?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -331,7 +331,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.4; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -341,7 +341,7 @@ interactions:
         trailer: {}
         content_length: 1658
         uncompressed: false
-        body: '{"value":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva","name":"akscitkeyvaulttestva","type":"Microsoft.KeyVault/vaults","location":"chinaeast2","tags":{},"systemData":{"createdBy":"{EMAIL}","createdByType":"User","createdAt":"2001-02-03T04:05:06Z","lastModifiedBy":"{EMAIL}","lastModifiedByType":"User","lastModifiedAt":"2001-02-03T04:05:06Z"},"properties":{"sku":{"family":"A","name":"standard"},"tenantId":"tenantid","accessPolicies":[{"tenantId":"tenantid","objectId":"00000000-0000-0000-0000-000000000000","permissions":{"certificates":["get","list","delete","create","import","update","managecontacts","getissuers","listissuers","setissuers","deleteissuers","manageissuers","recover","purge"],"keys":["encrypt","decrypt","wrapKey","unwrapKey","sign","verify","get","list","create","update","import","delete","backup","restore","recover","purge"],"secrets":["get","list","set","delete","backup","restore","recover","purge"]}}],"enabledForDeployment":true,"enabledForDiskEncryption":true,"enabledForTemplateDeployment":true,"enableSoftDelete":true,"softDeleteRetentionInDays":90,"vaultUri":"https://akscitkeyvaulttestva.vault.azure.cn/","provisioningState":"Succeeded","publicNetworkAccess":"Enabled"}}],"nextLink":"https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01&$skiptoken=YWtzY2l0a2V5dmF1bHR0ZXN0dmM="}'
+        body: '{"value":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva","name":"akscitkeyvaulttestva","type":"Microsoft.KeyVault/vaults","location":"chinaeast2","tags":{},"systemData":{"createdBy":"{EMAIL}","createdByType":"User","createdAt":"2001-02-03T04:05:06Z","lastModifiedBy":"{EMAIL}","lastModifiedByType":"User","lastModifiedAt":"2001-02-03T04:05:06Z"},"properties":{"sku":{"family":"A","name":"standard"},"tenantId":"tenantid","accessPolicies":[{"tenantId":"tenantid","objectId":"00000000-0000-0000-0000-000000000000","permissions":{"certificates":["get","list","delete","create","import","update","managecontacts","getissuers","listissuers","setissuers","deleteissuers","manageissuers","recover","purge"],"keys":["encrypt","decrypt","wrapKey","unwrapKey","sign","verify","get","list","create","update","import","delete","backup","restore","recover","purge"],"secrets":["get","list","set","delete","backup","restore","recover","purge"]}}],"enabledForDeployment":true,"enabledForDiskEncryption":true,"enabledForTemplateDeployment":true,"enableSoftDelete":true,"softDeleteRetentionInDays":90,"vaultUri":"https://akscitkeyvaulttestva.vault.azure.cn/","provisioningState":"Succeeded","publicNetworkAccess":"Enabled"}}],"nextLink":"https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults?api-version=2024-11-01&$skiptoken=YWtzY2l0a2V5dmF1bHR0ZXN0dmM="}'
         headers:
             Cache-Control:
                 - no-cache
@@ -382,7 +382,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.4; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults?%24skiptoken=YWtzY2l0a2V5dmF1bHR0ZXN0dmM%3D&api-version=2023-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults?%24skiptoken=YWtzY2l0a2V5dmF1bHR0ZXN0dmM%3D&api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -435,7 +435,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.4; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vaultnotfound/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vaultnotfound/providers/Microsoft.KeyVault/vaults?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -484,7 +484,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.4; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2023-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2024-11-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -535,7 +535,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.4; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/chinaeast2/deletedVaults/akscitkeyvaulttestva/purge?api-version=2023-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/chinaeast2/deletedVaults/akscitkeyvaulttestva/purge?api-version=2024-11-01
         method: POST
       response:
         proto: HTTP/2.0
@@ -554,7 +554,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/chinaeast2/operationResults/VVR8MDYzODc2Njc0NDE0OTcwNzk4OHxDRkE1NzFCNDI0OTQ0OTkwOUQyMDY2RDYyOTkwMDdBMw?api-version=2023-07-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/chinaeast2/operationResults/VVR8MDYzODc2Njc0NDE0OTcwNzk4OHxDRkE1NzFCNDI0OTQ0OTkwOUQyMDY2RDYyOTkwMDdBMw?api-version=2024-11-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Server:
@@ -586,7 +586,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.4; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/chinaeast2/operationResults/VVR8MDYzODc2Njc0NDE0OTcwNzk4OHxDRkE1NzFCNDI0OTQ0OTkwOUQyMDY2RDYyOTkwMDdBMw?api-version=2023-07-01&c=c&h=h&s=s&t=t
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/chinaeast2/operationResults/VVR8MDYzODc2Njc0NDE0OTcwNzk4OHxDRkE1NzFCNDI0OTQ0OTkwOUQyMDY2RDYyOTkwMDdBMw?api-version=2024-11-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0

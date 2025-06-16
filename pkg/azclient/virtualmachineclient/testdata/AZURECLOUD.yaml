@@ -288,7 +288,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-VirtualMachine-clien azsdk-go-armcompute/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource/instanceView?api-version=2024-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource/instanceView?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -339,7 +339,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-VirtualMachine-clien azsdk-go-armcompute/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines?%24expand=instanceView&api-version=2024-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines?%24expand=instanceView&api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -390,7 +390,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-VirtualMachine-clien azsdk-go-armcompute/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines?%24expand=instanceView&%24filter=%27virtualMachineScaleSet%2Fid%27+eq+%27notexists%27&api-version=2024-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines?%24expand=instanceView&%24filter=%27virtualMachineScaleSet%2Fid%27+eq+%27notexists%27&api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -441,7 +441,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-VirtualMachine-clien azsdk-go-armcompute/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines?%24filter=%27virtualMachineScaleSet%2Fid%27+eq+%27notexists%27&api-version=2024-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines?%24filter=%27virtualMachineScaleSet%2Fid%27+eq+%27notexists%27&api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -496,7 +496,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-VirtualMachine-clien azsdk-go-armcompute/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2024-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2024-11-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -511,7 +511,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-07-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -553,7 +553,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-VirtualMachine-clien azsdk-go-armcompute/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-07-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -604,7 +604,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-VirtualMachine-clien azsdk-go-armcompute/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2024-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -663,7 +663,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-VirtualMachine-clien azsdk-go-armcompute/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2024-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2024-11-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -716,7 +716,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-VirtualMachine-clien azsdk-go-armcompute/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2024-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -777,7 +777,7 @@ interactions:
                 - invalid
             User-Agent:
                 - ccm-VirtualMachine-clien azsdk-go-armcompute/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2024-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2024-11-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -830,7 +830,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-VirtualMachine-clien azsdk-go-armcompute/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -883,7 +883,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-VirtualMachine-clien azsdk-go-armcompute/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachinenotfound/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachinenotfound/providers/Microsoft.Compute/virtualMachines?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -934,7 +934,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-VirtualMachine-clien azsdk-go-armcompute/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2024-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2024-11-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -949,7 +949,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-07-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -957,7 +957,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-07-01&c=c&h=h&monitor=true&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&monitor=true&p=00000000-0000-0000-0000-000000000000&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -989,7 +989,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-VirtualMachine-clien azsdk-go-armcompute/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-07-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0

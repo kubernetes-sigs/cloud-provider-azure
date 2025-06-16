@@ -78,7 +78,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2023-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2024-11-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -131,7 +131,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2023-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -184,7 +184,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2023-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -239,7 +239,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2023-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -294,7 +294,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestvanotfound?api-version=2023-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestvanotfound?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -345,7 +345,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -355,7 +355,7 @@ interactions:
         trailer: {}
         content_length: 1616
         uncompressed: false
-        body: '{"value":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva","name":"akscitkeyvaulttestva","type":"Microsoft.KeyVault/vaults","location":"eastus","tags":{},"systemData":{"createdBy":"{EMAIL}","createdByType":"User","createdAt":"2001-02-03T04:05:06Z","lastModifiedBy":"{EMAIL}","lastModifiedByType":"User","lastModifiedAt":"2001-02-03T04:05:06Z"},"properties":{"sku":{"family":"A","name":"standard"},"tenantId":"tenantid","accessPolicies":[{"tenantId":"tenantid","objectId":"00000000-0000-0000-0000-000000000000","permissions":{"certificates":["get","list","delete","create","import","update","managecontacts","getissuers","listissuers","setissuers","deleteissuers","manageissuers","recover","purge"],"keys":["encrypt","decrypt","wrapKey","unwrapKey","sign","verify","get","list","create","update","import","delete","backup","restore","recover","purge"],"secrets":["get","list","set","delete","backup","restore","recover","purge"]}}],"enabledForDeployment":true,"enabledForDiskEncryption":true,"enabledForTemplateDeployment":true,"enableSoftDelete":true,"softDeleteRetentionInDays":90,"vaultUri":"https://akscitkeyvaulttestva.vault.azure.net/","provisioningState":"Succeeded","publicNetworkAccess":"Enabled"}}],"nextLink":"https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01&$skiptoken=YWtzY2l0a2V5dmF1bHR0ZXN0dmE="}'
+        body: '{"value":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva","name":"akscitkeyvaulttestva","type":"Microsoft.KeyVault/vaults","location":"eastus","tags":{},"systemData":{"createdBy":"{EMAIL}","createdByType":"User","createdAt":"2001-02-03T04:05:06Z","lastModifiedBy":"{EMAIL}","lastModifiedByType":"User","lastModifiedAt":"2001-02-03T04:05:06Z"},"properties":{"sku":{"family":"A","name":"standard"},"tenantId":"tenantid","accessPolicies":[{"tenantId":"tenantid","objectId":"00000000-0000-0000-0000-000000000000","permissions":{"certificates":["get","list","delete","create","import","update","managecontacts","getissuers","listissuers","setissuers","deleteissuers","manageissuers","recover","purge"],"keys":["encrypt","decrypt","wrapKey","unwrapKey","sign","verify","get","list","create","update","import","delete","backup","restore","recover","purge"],"secrets":["get","list","set","delete","backup","restore","recover","purge"]}}],"enabledForDeployment":true,"enabledForDiskEncryption":true,"enabledForTemplateDeployment":true,"enableSoftDelete":true,"softDeleteRetentionInDays":90,"vaultUri":"https://akscitkeyvaulttestva.vault.azure.net/","provisioningState":"Succeeded","publicNetworkAccess":"Enabled"}}],"nextLink":"https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults?api-version=2024-11-01&$skiptoken=YWtzY2l0a2V5dmF1bHR0ZXN0dmE="}'
         headers:
             Cache-Control:
                 - no-cache
@@ -398,7 +398,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults?%24skiptoken=YWtzY2l0a2V5dmF1bHR0ZXN0dmE%3D&api-version=2023-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults?%24skiptoken=YWtzY2l0a2V5dmF1bHR0ZXN0dmE%3D&api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -453,7 +453,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vaultnotfound/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vaultnotfound/providers/Microsoft.KeyVault/vaults?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -504,7 +504,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2023-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva?api-version=2024-11-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -557,7 +557,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus2/deletedVaults/akscitkeyvaulttestva/purge?api-version=2023-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus2/deletedVaults/akscitkeyvaulttestva/purge?api-version=2024-11-01
         method: POST
       response:
         proto: HTTP/2.0
@@ -576,7 +576,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus2/operationResults/VVR8MDYzODcwMDk3OTQzNjI4Njk0M3w3MDk3RTI3RDVBNUI0NThCQTE4Rjg2RTgzNzJERDE4Mw?api-version=2023-07-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus2/operationResults/VVR8MDYzODcwMDk3OTQzNjI4Njk0M3w3MDk3RTI3RDVBNUI0NThCQTE4Rjg2RTgzNzJERDE4Mw?api-version=2024-11-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -610,7 +610,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus2/operationResults/VVR8MDYzODcwMDk3OTQzNjI4Njk0M3w3MDk3RTI3RDVBNUI0NThCQTE4Rjg2RTgzNzJERDE4Mw?api-version=2023-07-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus2/operationResults/VVR8MDYzODcwMDk3OTQzNjI4Njk0M3w3MDk3RTI3RDVBNUI0NThCQTE4Rjg2RTgzNzJERDE4Mw?api-version=2024-11-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -659,7 +659,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-Vault-client azsdk-go-armkeyvault/v1.4.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus2/operationResults/VVR8MDYzODcwMDk3OTQzNjI4Njk0M3w3MDk3RTI3RDVBNUI0NThCQTE4Rjg2RTgzNzJERDE4Mw?api-version=2023-07-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus2/operationResults/VVR8MDYzODcwMDk3OTQzNjI4Njk0M3w3MDk3RTI3RDVBNUI0NThCQTE4Rjg2RTgzNzJERDE4Mw?api-version=2024-11-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
