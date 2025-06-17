@@ -198,7 +198,7 @@ jobs:
         with:
           path: ./artifacts
       - name: Publish release
-        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
+        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
         with:
           body_path: release-notes.md
           draft: true
@@ -224,6 +224,6 @@ jobs:
           # - https://git-scm.com/docs/git-add#Documentation/git-add.txt-ltpathspecgt82308203
           # - https://git-scm.com/docs/gitglossary#Documentation/gitglossary.txt-aiddefpathspecapathspec
           file_pattern: './content/en/blog/releases/*.md'
-          
+
           # Optional. Create given branch name in local and remote repository.
           create_branch: true
