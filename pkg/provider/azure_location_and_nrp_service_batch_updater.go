@@ -1,9 +1,13 @@
 package provider
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"strings"
+	"time"
 
 	discovery_v1 "k8s.io/api/discovery/v1"
 	"k8s.io/klog/v2"
@@ -58,7 +62,7 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 			updater.az.ResourceGroup)
 		klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: createServicesRequestDTO:\n")
 		logObject(createServicesRequestDTO)
-		createServicesResponseDTO := NRPAPIClientUpdateNRPServices(ctx, createServicesRequestDTO)
+		createServicesResponseDTO := NRPAPIClientUpdateNRPServices(ctx, createServicesRequestDTO, updater.az.SubscriptionID, updater.az.ResourceGroup)
 		klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: createServicesResponseDTO:\n")
 		logObject(createServicesResponseDTO)
 		if createServicesResponseDTO == nil {
@@ -128,7 +132,7 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 		locationDataRequestDTO := difftracker.MapLocationDataToDTO(locationData)
 		klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: locationDataRequestDTO:\n")
 		logObject(locationDataRequestDTO)
-		locationDataResponseDTO := NRPAPIClientUpdateNRPLocations(ctx, locationDataRequestDTO)
+		locationDataResponseDTO := NRPAPIClientUpdateNRPLocations(ctx, locationDataRequestDTO, updater.az.SubscriptionID, updater.az.ResourceGroup)
 		klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: locationDataResponseDTO:\n")
 		logObject(locationDataResponseDTO)
 		if locationDataResponseDTO == nil {
@@ -150,7 +154,8 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 			updater.az.SubscriptionID,
 			updater.az.ResourceGroup)
 		klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: removeServicesRequestDTO: %+v\n", removeServicesRequestDTO)
-		removeServicesResponseDTO := NRPAPIClientUpdateNRPServices(ctx, removeServicesRequestDTO)
+		// TODO (enechitoaia): discuss about ServiceGatewayName (VnetName?)
+		removeServicesResponseDTO := NRPAPIClientUpdateNRPServices(ctx, removeServicesRequestDTO, updater.az.SubscriptionID, updater.az.ResourceGroup)
 		klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: removeServicesResponseDTO: %+v\n", removeServicesResponseDTO)
 		if removeServicesResponseDTO == nil {
 			updater.az.diffTracker.UpdateNRPLoadBalancers(
@@ -189,55 +194,83 @@ func logObject(data interface{}) {
 	klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: object: %s", string(bytes))
 }
 
-func NRPAPIClientUpdateNRPLocations(ctx context.Context, locationDataRequestDTO difftracker.LocationsDataDTO) error {
-	// TODO (enechitoaia): Implement the actual API call to update NRP locations.
-	// Print the request DTO for debugging purposes.
-	klog.V(2).Infof("NRPAPIClientUpdateNRPLocations: request DTO: %+v\n", locationDataRequestDTO)
+func NRPAPIClientUpdateNRPLocations(
+	ctx context.Context,
+	locationDataRequestDTO difftracker.LocationsDataDTO,
+	subscriptionId string,
+	resourceGroupName string,
+) error {
+	klog.V(2).Infof("NRPAPIClientUpdateNRPLocations: request DTO: %+v", locationDataRequestDTO)
+
+	// Marshal the DTO to JSON
+	payload, err := json.Marshal(locationDataRequestDTO)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request DTO: %w", err)
+	}
+
+	// Construct the in-cluster service URL
+	url := fmt.Sprintf("http://nrp-bypass/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/serviceGateways/ServiceGateway/UpdateLocations",
+		subscriptionId, resourceGroupName)
+
+	// Create the HTTP request
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(payload))
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send the request
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send HTTP request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check for non-2xx status codes
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("received non-success status code: %d", resp.StatusCode)
+	}
+
+	klog.V(2).Infof("NRPAPIClientUpdateNRPLocations: successfully updated locations")
 	return nil
 }
 
-// func NRPAPIClientUpdateNRPServices(ctx context.Context, createServicesRequestDTO difftracker.ServicesDataDTO, subscriptionId string, resourceGroupName string, serviceGatewayName string) error {
-// 	klog.V(2).Infof("NRPAPIClientUpdateNRPServices: request DTO: %+v", createServicesRequestDTO)
-
-// 	// Marshal the DTO to JSON
-// 	payload, err := json.Marshal(createServicesRequestDTO)
-// 	if err != nil {
-// 		return fmt.Errorf("failed to marshal request DTO: %w", err)
-// 	}
-
-// 	// Construct the in-cluster service URL
-// 	// Replace with actual values or inject them via config/env
-// 	url := fmt.Sprintf("http://nrp-bypass/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/serviceGateways/%s/UpdateServices",
-// 		subscriptionId, resourceGroupName, serviceGatewayName)
-
-// 	// Create the HTTP request
-// 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(payload))
-// 	if err != nil {
-// 		return fmt.Errorf("failed to create HTTP request: %w", err)
-// 	}
-// 	req.Header.Set("Content-Type", "application/json")
-
-// 	// Send the request
-// 	client := &http.Client{Timeout: 10 * time.Second}
-// 	resp, err := client.Do(req)
-// 	if err != nil {
-// 		return fmt.Errorf("failed to send HTTP request: %w", err)
-// 	}
-// 	defer resp.Body.Close()
-
-// 	// Check for non-2xx status codes
-// 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-// 		return fmt.Errorf("received non-success status code: %d", resp.StatusCode)
-// 	}
-
-// 	klog.V(2).Infof("NRPAPIClientUpdateNRPServices: successfully updated services")
-// 	return nil
-// }
-
-func NRPAPIClientUpdateNRPServices(ctx context.Context, createServicesRequestDTO difftracker.ServicesDataDTO) error {
-	// TODO (enechitoaia): Implement the actual API call to update NRP services.
-	// Print the  request DTO for debugging purposes.
+func NRPAPIClientUpdateNRPServices(ctx context.Context, createServicesRequestDTO difftracker.ServicesDataDTO, subscriptionId string, resourceGroupName string) error {
 	klog.V(2).Infof("NRPAPIClientUpdateNRPServices: request DTO: %+v", createServicesRequestDTO)
+
+	// Marshal the DTO to JSON
+	payload, err := json.Marshal(createServicesRequestDTO)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request DTO: %w", err)
+	}
+
+	// Construct the in-cluster service URL
+	// Replace with actual values or inject them via config/env
+	url := fmt.Sprintf("http://nrp-bypass/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/serviceGateways/ServiceGateway/UpdateServices",
+		subscriptionId, resourceGroupName)
+
+	// Create the HTTP request
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(payload))
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send the request
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send HTTP request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check for non-2xx status codes
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("received non-success status code: %d", resp.StatusCode)
+	}
+
+	klog.V(2).Infof("NRPAPIClientUpdateNRPServices: successfully updated services")
 	return nil
 }
 
