@@ -18,5 +18,4 @@ package credentialprovider
 
 const (
 	clientIDAnnotation = "azure.workload.identity/client-id"
-	tenantIDAnnotation = "azure.workload.identity/tenant-id"
 )

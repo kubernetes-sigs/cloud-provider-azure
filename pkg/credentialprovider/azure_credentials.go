@@ -160,10 +160,7 @@ func getServiceAccountTokenCredential(req *v1.CredentialProviderRequest, config 
 		return nil, fmt.Errorf("client id annotation %s is not found or the value is empty", clientIDAnnotation)
 	}
 
-	tenantID, ok := req.ServiceAccountAnnotations[tenantIDAnnotation]
-	if !ok || len(tenantID) == 0 {
-		return nil, fmt.Errorf("client id annotation %s is not found or the value is empty", tenantIDAnnotation)
-	}
+	tenantID := config.TenantID
 
 	clientAssertCredential, err := NewClientAssertionCredential(tenantID, clientID, env.ActiveDirectoryEndpoint, req.ServiceAccountToken, nil)
 
