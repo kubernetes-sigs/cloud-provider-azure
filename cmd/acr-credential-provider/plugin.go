@@ -88,10 +88,14 @@ func (e *ExecPlugin) runPlugin(ctx context.Context, r io.Reader, w io.Writer, ar
 		return errors.New("image in plugin request was empty")
 	}
 
-	e.plugin, err = credentialprovider.NewAcrProvider(request, args, e.RegistryMirrorStr)
-	if err != nil {
-		return err
+	if e.plugin == nil {
+		// acr provider plugin are decided at runtime by the request information.
+		e.plugin, err = credentialprovider.NewAcrProvider(request, args, e.RegistryMirrorStr)
+		if err != nil {
+			return err
+		}
 	}
+
 	response, err := e.plugin.GetCredentials(ctx, request.Image, args)
 	if err != nil {
 		return err
