@@ -94,7 +94,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			testutil.ExpectEqualInJSON(t, azureFx.SecurityGroup().Build(), sg)
 		})
 
-		t.Run("add Internet allow rules if allow all", func(t *testing.T) {
+		t.Run("do not add Internet allow rules if allow all", func(t *testing.T) {
 			var (
 				ctrl                    = gomock.NewController(t)
 				az                      = GetTestCloud(ctrl)
@@ -121,42 +121,17 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					_, _ string,
 					properties armnetwork.SecurityGroup,
 				) (*armnetwork.SecurityGroup, error) {
-					serviceTags := []string{securitygroup.ServiceTagInternet}
 					rules := []*armnetwork.SecurityRule{
 						azureFx.
-							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, serviceTags, k8sFx.Service().TCPPorts()).
+							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{"0.0.0.0/0"}, k8sFx.Service().TCPPorts()).
 							WithPriority(500).
 							WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).
 							Build(),
 
 						azureFx.
-							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{"0.0.0.0/0"}, k8sFx.Service().TCPPorts()).
+							AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{"0.0.0.0/0"}, k8sFx.Service().UDPPorts()).
 							WithPriority(501).
 							WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).
-							Build(),
-
-						azureFx.
-							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, serviceTags, k8sFx.Service().TCPPorts()).
-							WithPriority(502).
-							WithDestination(azureFx.LoadBalancer().IPv6Addresses()...).
-							Build(),
-
-						azureFx.
-							AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, serviceTags, k8sFx.Service().UDPPorts()).
-							WithPriority(503).
-							WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).
-							Build(),
-
-						azureFx.
-							AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{"0.0.0.0/0"}, k8sFx.Service().UDPPorts()).
-							WithPriority(504).
-							WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).
-							Build(),
-
-						azureFx.
-							AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, serviceTags, k8sFx.Service().UDPPorts()).
-							WithPriority(505).
-							WithDestination(azureFx.LoadBalancer().IPv6Addresses()...).
 							Build(),
 					}
 
