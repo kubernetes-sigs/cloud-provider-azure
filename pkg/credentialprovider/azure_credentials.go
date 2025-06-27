@@ -114,7 +114,7 @@ func NewAcrProvider(req *v1.CredentialProviderRequest, args []string, registryMi
 }
 
 // getManagedIdentityCredential creates a new instance of the ACR provider.
-func getManagedIdentityCredential(req *v1.CredentialProviderRequest, config *providerconfig.AzureClientConfig) (azcore.TokenCredential, error) {
+func getManagedIdentityCredential(_ *v1.CredentialProviderRequest, config *providerconfig.AzureClientConfig) (azcore.TokenCredential, error) {
 
 	var managedIdentityCredential azcore.TokenCredential
 

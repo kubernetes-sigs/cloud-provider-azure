@@ -25,12 +25,8 @@ type ClientAssertionCredentialOptions struct {
 func NewClientAssertionCredential(tenantID, clientID, authorityHost, assertion string, options *ClientAssertionCredentialOptions) (*ClientAssertionCredential, error) {
 	c := &ClientAssertionCredential{assertion: assertion}
 
-	if options == nil {
-		options = &ClientAssertionCredentialOptions{}
-	}
-
 	cred := confidential.NewCredFromAssertionCallback(
-		func(ctx context.Context, _ confidential.AssertionRequestOptions) (string, error) {
+		func(_ context.Context, _ confidential.AssertionRequestOptions) (string, error) {
 			return c.assertion, nil
 		},
 	)
