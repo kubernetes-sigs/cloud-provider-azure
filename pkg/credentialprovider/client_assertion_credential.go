@@ -22,7 +22,7 @@ type ClientAssertionCredentialOptions struct {
 }
 
 // NewClientAssertionCredential constructs a clientAssertionCredential. Pass nil for options to accept defaults.
-func NewClientAssertionCredential(tenantID, clientID, authorityHost, assertion string, options *ClientAssertionCredentialOptions) (*ClientAssertionCredential, error) {
+func NewClientAssertionCredential(tenantID, clientID, authorityHost, assertion string) (*ClientAssertionCredential, error) {
 	c := &ClientAssertionCredential{assertion: assertion}
 
 	cred := confidential.NewCredFromAssertionCallback(

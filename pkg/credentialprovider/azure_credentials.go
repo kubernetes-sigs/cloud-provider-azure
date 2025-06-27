@@ -162,7 +162,7 @@ func getServiceAccountTokenCredential(req *v1.CredentialProviderRequest, config 
 
 	tenantID := config.TenantID
 
-	clientAssertCredential, err := NewClientAssertionCredential(tenantID, clientID, env.ActiveDirectoryEndpoint, req.ServiceAccountToken, nil)
+	clientAssertCredential, err := NewClientAssertionCredential(tenantID, clientID, env.ActiveDirectoryEndpoint, req.ServiceAccountToken)
 
 	if err != nil {
 		klog.Error("Failed to initialize client assertion credential: %w", err)
