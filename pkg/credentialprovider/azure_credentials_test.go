@@ -63,8 +63,10 @@ func TestGetCredentials(t *testing.T) {
 		&v1.CredentialProviderRequest{
 			Image: "foo.azurecr.io/nginx:v1",
 		},
+		"",
+		configFile.Name(),
 		[]string{configFile.Name()},
-		"")
+	)
 
 	if err != nil {
 		t.Fatalf("Unexpected error when creating acr provider: %v", err)
@@ -163,8 +165,10 @@ func TestGetCredentialsConfig(t *testing.T) {
 			&v1.CredentialProviderRequest{
 				Image: "foo.azurecr.io/nginx:v1",
 			},
+			"",
+			configFile.Name(),
 			[]string{configFile.Name()},
-			"")
+		)
 		if err != nil && !test.expectError {
 			t.Fatalf("Unexpected error when creating new acr provider: %v", err)
 		}
@@ -204,8 +208,10 @@ func TestProcessImageWithMirrorMapping(t *testing.T) {
 		&v1.CredentialProviderRequest{
 			Image: "foo.azurecr.io/nginx:v1",
 		},
-		[]string{configFile.Name()},
-		"mcr.microsoft.com:abc.azurecr.io")
+		"mcr.microsoft.com:abc.azurecr.io",
+		configFile.Name(),
+		[]string{configFile.Name(), "--registry-mirror=mcr.microsoft.com:abc.azurecr.io"},
+	)
 
 	assert.Nilf(t, err, "Unexpected error when creating new acr provider")
 	acrProvider := provider.(*acrProvider)
@@ -259,8 +265,10 @@ func TestParseACRLoginServerFromImage(t *testing.T) {
 		&v1.CredentialProviderRequest{
 			Image: "foo.azurecr.io/nginx:v1",
 		},
-		[]string{configFile.Name()},
-		"mcr.microsoft.com:abc.azurecr.io")
+		"mcr.microsoft.com:abc.azurecr.io",
+		configFile.Name(),
+		[]string{configFile.Name(), "--registry-mirror=mcr.microsoft.com:abc.azurecr.io"},
+	)
 	if err != nil {
 		t.Fatalf("Unexpected error when creating new acr provider: %v", err)
 	}
