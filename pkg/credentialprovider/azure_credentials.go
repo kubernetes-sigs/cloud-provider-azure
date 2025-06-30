@@ -18,7 +18,6 @@ package credentialprovider
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -69,11 +68,7 @@ type acrProvider struct {
 
 type getTokenCredentialFunc func(req *v1.CredentialProviderRequest, config *providerconfig.AzureClientConfig) (azcore.TokenCredential, error)
 
-func NewAcrProvider(req *v1.CredentialProviderRequest, args []string, registryMirrorStr string) (CredentialProvider, error) {
-	if len(args) != 1 {
-		return nil, errors.New("config file is not specified")
-	}
-	configFile := args[0]
+func NewAcrProvider(req *v1.CredentialProviderRequest, registryMirrorStr string, configFile string, args []string) (CredentialProvider, error) {
 	config, err := configloader.Load[providerconfig.AzureClientConfig](context.Background(), nil, &configloader.FileLoaderConfig{FilePath: configFile})
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
