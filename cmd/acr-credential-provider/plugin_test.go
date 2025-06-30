@@ -94,11 +94,11 @@ func Test_runPlugin(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Unexpected error when writing to temp file: %v", err)
 			}
-			p := NewCredentialProvider("")
+			p := NewCredentialProvider(configFile.Name(), "mcr.microsoft.com:fakeacrname.azurecr.io")
 			p.plugin = &fakePlugin{}
 			out := &bytes.Buffer{}
 
-			err = p.runPlugin(context.TODO(), testcase.in, out, []string{configFile.Name()})
+			err = p.runPlugin(context.TODO(), testcase.in, out, []string{configFile.Name(), "--registry-mirror=mcr.microsoft.com:fakeacrname.azurecr.io"})
 			if err != nil && !testcase.expectErr {
 				t.Fatal(err)
 			}
