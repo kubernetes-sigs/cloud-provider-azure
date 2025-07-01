@@ -203,7 +203,12 @@ func (ac *AccessControl) PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses [
 		allowedServiceTags = ac.AllowedServiceTags
 	)
 	if ac.IsAllowFromInternet() {
-		allowedServiceTags = append(allowedServiceTags, securitygroup.ServiceTagInternet)
+		allowedFromIPRanges := iputil.IsPrefixesAllowAll(ac.AllowedIPRanges)
+		allowedFromSourceRanges := iputil.IsPrefixesAllowAll(ac.SourceRanges)
+		if !allowedFromIPRanges && !allowedFromSourceRanges {
+			// If it's allowed from IP Ranges or Source Ranges, skip adding the internet service tag.
+			allowedServiceTags = append(allowedServiceTags, securitygroup.ServiceTagInternet)
+		}
 	}
 
 	{
