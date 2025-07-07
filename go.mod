@@ -10,7 +10,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 v6.4.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6 v6.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns v1.3.0
-	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage v1.8.0
+	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage v1.8.1
 	github.com/evanphx/json-patch v5.9.11+incompatible
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-logr/logr v1.4.3
@@ -41,9 +41,9 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubelet v0.33.2
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.8.3
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.8.4
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.7.3
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.7.1
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.7.2
 	sigs.k8s.io/yaml v1.5.0
 )
 
