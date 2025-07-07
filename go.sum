@@ -34,8 +34,8 @@ github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns v
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns v1.3.0/go.mod h1:GE4m0rnnfwLGX0Y9A9A25Zx5N/90jneT5ABevqzhuFQ=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v1.2.0 h1:Dd+RhdJn0OTtVGaeDLZpcumkIVCtA/3/Fo42+eoYvVM=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v1.2.0/go.mod h1:5kakwfW5CjC9KK+Q4wjXAg+ShuIm2mBMua0ZFj2C8PE=
-github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage v1.8.0 h1:LR0kAX9ykz8G4YgLCaRDVJ3+n43R8MneB5dTy2konZo=
-github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage v1.8.0/go.mod h1:DWAciXemNf++PQJLeXUB4HHH5OpsAh12HZnu2wXE1jA=
+github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage v1.8.1 h1:/Zt+cDPnpC3OVDm/JKLOs7M2DKmLRIIp3XIx9pHHiig=
+github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage v1.8.1/go.mod h1:Ng3urmn6dYe8gnbCMoHHVl5APYz2txho3koEkV2o2HA=
 github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets v1.4.0 h1:/g8S6wk65vfC6m3FIxJ+i5QDyN9JWwXI8Hb0Img10hU=
 github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets v1.4.0/go.mod h1:gpl+q95AzZlKVI3xSoseF9QPrypk0hQqBiJYeB/cR/I=
 github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal v1.2.0 h1:nCYfgcSyHZXJI8J0IWE5MsCGlb2xp9fJiXyxWgmOFg4=
@@ -374,8 +374,8 @@ k8s.io/utils v0.0.0-20241210054802-24370beab758 h1:sdbE21q2nlQtFh65saZY+rRM6x6aJ
 k8s.io/utils v0.0.0-20241210054802-24370beab758/go.mod h1:OLgZIPagt7ERELqWJFomSt595RzquPNLL48iOWgYOg0=
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.2 h1:jpcvIRr3GLoUoEKRkHKSmGjxb6lWwrBlJsXc+eUYQHM=
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.2/go.mod h1:Ve9uj1L+deCXFrPOk1LpFXqTg7LCFzFso6PA48q/XZw=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.8.4 h1:OJUTH2EYD4tXL3rc9JgZMh0joQX9MEHooZv68mA+k14=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.8.4/go.mod h1:RzF4KeJQXjHpHJ2gq2t5KqRrTDf5y5+vrHUTLCBunzo=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.8.5 h1:FXlu6D2crZ7PXkKT8T/5TVsRlPolT+UfEqJEbPgqHGg=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.8.5/go.mod h1:xStkacaPRfxYyVE4Mlfcx19BVwtMiZKRb1IB4RISagQ=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.7.3 h1:zTvlSDuS7oTx4dJJ1n/yt168NzdX4BFT0OpzSz5+YO0=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.7.3/go.mod h1:TFiBWKtV3AE5wgW1jiJtJEwVHDyVDEhBaE8hnI/HnCY=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.7.2 h1:KwkEnyG9Ej9keeO8RoJBpOaZSIpkYM8d4kzKaIHeehs=
