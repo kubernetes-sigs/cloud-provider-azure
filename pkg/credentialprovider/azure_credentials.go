@@ -68,7 +68,7 @@ type acrProvider struct {
 
 type getTokenCredentialFunc func(req *v1.CredentialProviderRequest, config *providerconfig.AzureClientConfig) (azcore.TokenCredential, error)
 
-func NewAcrProvider(req *v1.CredentialProviderRequest, registryMirrorStr string, configFile string, args []string) (CredentialProvider, error) {
+func NewAcrProvider(req *v1.CredentialProviderRequest, registryMirrorStr string, configFile string) (CredentialProvider, error) {
 	config, err := configloader.Load[providerconfig.AzureClientConfig](context.Background(), nil, &configloader.FileLoaderConfig{FilePath: configFile})
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)

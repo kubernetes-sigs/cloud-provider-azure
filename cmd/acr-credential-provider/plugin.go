@@ -92,7 +92,7 @@ func (e *ExecPlugin) runPlugin(ctx context.Context, r io.Reader, w io.Writer, ar
 
 	if e.plugin == nil {
 		// acr provider plugin are decided at runtime by the request information.
-		e.plugin, err = credentialprovider.NewAcrProvider(request, e.RegistryMirrorStr, e.configFile, args)
+		e.plugin, err = credentialprovider.NewAcrProvider(request, e.RegistryMirrorStr, e.configFile)
 		if err != nil {
 			return err
 		}
