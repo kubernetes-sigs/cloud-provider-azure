@@ -683,7 +683,7 @@ func TestGetPrimaryInterfaceVmssFlex(t *testing.T) {
 	}
 }
 
-// TestGetPrimaryInterfaceVmssFlexRefactoring tests that VmssFlex GetPrimaryInterface uses ComputeClientFactory 
+// TestGetPrimaryInterfaceVmssFlexRefactoring tests that VmssFlex GetPrimaryInterface uses ComputeClientFactory
 // instead of NetworkClientFactory after the client factory refactoring
 func TestGetPrimaryInterfaceVmssFlexRefactoring(t *testing.T) {
 	testCases := []struct {
@@ -734,7 +734,7 @@ func TestGetPrimaryInterfaceVmssFlexRefactoring(t *testing.T) {
 
 			// CRITICAL: Test that ComputeClientFactory.GetInterfaceClient() is called exactly the expected number of times
 			mockInterfaceClient := fs.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
-			
+
 			if test.expectSuccess {
 				mockInterfaceClient.EXPECT().Get(
 					gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
