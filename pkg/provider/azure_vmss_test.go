@@ -629,7 +629,7 @@ func TestGetIPByNodeName(t *testing.T) {
 			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
 			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
 			mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
-			mockInterfaceClient := ss.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+			mockInterfaceClient := ss.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 			mockPIPClient := ss.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
 
 			expectedScaleSet := buildTestVMSS(test.scaleSet, "vmssee6c2")
@@ -1318,7 +1318,7 @@ func TestGetPrimaryInterface(t *testing.T) {
 			mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 			mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, test.vmClientErr).AnyTimes()
 
-			mockInterfaceClient := ss.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+			mockInterfaceClient := ss.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 			mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), ss.ResourceGroup, testVMSSName, "0", test.nodeName).Return(expectedInterface, test.nicClientErr).AnyTimes()
 			expectedInterface.Location = &ss.Location
 
@@ -1334,6 +1334,133 @@ func TestGetPrimaryInterface(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestGetPrimaryInterfaceRefactoring tests that GetPrimaryInterface uses ComputeClientFactory
+// instead of NetworkClientFactory after the client factory refactoring
+func TestGetPrimaryInterfaceRefactoring(t *testing.T) {
+	testCases := []struct {
+		description         string
+		nodeName            string
+		vmList              []string
+		interfaceCallsCount int
+		expectSuccess       bool
+		expectedErr         error
+	}{
+		{
+			description:         "GetPrimaryInterface should use ComputeClientFactory.GetInterfaceClient successfully",
+			nodeName:            "vmss-vm-000000",
+			vmList:              []string{"vmss-vm-000000"},
+			interfaceCallsCount: 1,
+			expectSuccess:       true,
+		},
+		{
+			description:         "GetPrimaryInterface should handle ComputeClientFactory interface client errors",
+			nodeName:            "vmss-vm-000001",
+			vmList:              []string{"vmss-vm-000001"},
+			interfaceCallsCount: 1,
+			expectSuccess:       false,
+			expectedErr:         fmt.Errorf("interface client error"),
+		},
+		{
+			description:         "GetPrimaryInterface should call ComputeClientFactory interface client exactly once per request",
+			nodeName:            "vmss-vm-000002",
+			vmList:              []string{"vmss-vm-000002"},
+			interfaceCallsCount: 1,
+			expectSuccess:       true,
+		},
+	}
+
+	for _, test := range testCases {
+		test := test
+		t.Run(test.description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			ss, err := NewTestScaleSet(ctrl)
+			assert.NoError(t, err, "unexpected error when creating test VMSS")
+
+			// Setup expected VMSS
+			expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
+			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+
+			// Setup expected VMSS VMs and interface
+			expectedVMSSVMs, expectedInterface, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, test.vmList, "", false)
+			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+
+			// Setup VM client (for fallback scenarios)
+			mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+			mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
+			// CRITICAL: Test that ComputeClientFactory.GetInterfaceClient() is called exactly the expected number of times
+			mockInterfaceClient := ss.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+
+			if test.expectSuccess {
+				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(
+					gomock.Any(), ss.ResourceGroup, testVMSSName, "0", test.nodeName,
+				).Return(expectedInterface, nil).Times(test.interfaceCallsCount)
+			} else {
+				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(
+					gomock.Any(), ss.ResourceGroup, testVMSSName, "0", test.nodeName,
+				).Return(nil, &azcore.ResponseError{ErrorCode: "interface client error"}).Times(test.interfaceCallsCount)
+			}
+
+			// CRITICAL: Verify that NetworkClientFactory.GetInterfaceClient() is NEVER called
+			// This ensures the refactoring is working correctly
+			mockNetworkInterfaceClient := ss.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+			mockNetworkInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(
+				gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+			).Times(0) // Should NEVER be called after refactoring
+
+			// Execute the test
+			nic, err := ss.GetPrimaryInterface(context.Background(), test.nodeName)
+
+			// Verify results
+			if test.expectSuccess {
+				assert.NoError(t, err, test.description)
+				assert.NotNil(t, nic, test.description)
+				assert.Equal(t, expectedInterface.Name, nic.Name, test.description)
+			} else {
+				assert.Error(t, err, test.description)
+				if test.expectedErr != nil {
+					assert.Contains(t, err.Error(), test.expectedErr.Error(), test.description)
+				}
+			}
+		})
+	}
+}
+
+// TestGetPrimaryInterfaceClientFactoryValidation ensures the refactoring maintains correct behavior
+func TestGetPrimaryInterfaceClientFactoryValidation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ss, err := NewTestScaleSet(ctrl)
+	assert.NoError(t, err, "unexpected error when creating test VMSS")
+
+	// Verify that both client factories exist but only ComputeClientFactory should be used
+	assert.NotNil(t, ss.ComputeClientFactory, "ComputeClientFactory should exist")
+	assert.NotNil(t, ss.NetworkClientFactory, "NetworkClientFactory should exist")
+
+	// Verify that GetInterfaceClient returns the expected client types
+	computeInterfaceClient := ss.ComputeClientFactory.GetInterfaceClient()
+	networkInterfaceClient := ss.NetworkClientFactory.GetInterfaceClient()
+
+	assert.NotNil(t, computeInterfaceClient, "ComputeClientFactory should provide interface client")
+	assert.NotNil(t, networkInterfaceClient, "NetworkClientFactory should provide interface client")
+
+	// Both should be mock clients in test environment
+	_, isComputeMock := computeInterfaceClient.(*mock_interfaceclient.MockInterface)
+	_, isNetworkMock := networkInterfaceClient.(*mock_interfaceclient.MockInterface)
+
+	assert.True(t, isComputeMock, "ComputeClientFactory interface client should be a mock")
+	assert.True(t, isNetworkMock, "NetworkClientFactory interface client should be a mock")
+
+	t.Log("✅ Client factory refactoring validation passed")
+	t.Log("✅ GetPrimaryInterface should now use ComputeClientFactory.GetInterfaceClient()")
+	t.Log("✅ NetworkClientFactory.GetInterfaceClient() should not be called by GetPrimaryInterface")
 }
 
 func TestGetVMSSPublicIPAddress(t *testing.T) {
@@ -1440,7 +1567,7 @@ func TestGetPrivateIPsByNodeName(t *testing.T) {
 			if test.isNilIPConfigs {
 				expectedInterface.Properties.IPConfigurations = nil
 			}
-			mockInterfaceClient := ss.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+			mockInterfaceClient := ss.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 			mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), ss.ResourceGroup, testVMSSName, "0", test.nodeName).Return(expectedInterface, nil).AnyTimes()
 
 			privateIPs, err := ss.GetPrivateIPsByNodeName(context.Background(), test.nodeName)

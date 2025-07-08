@@ -667,7 +667,7 @@ func TestGetPrimaryInterfaceVmssFlex(t *testing.T) {
 			mockVMClient.EXPECT().ListVmssFlexVMsWithOutInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 			mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
 
-			mockInterfacesClient := fs.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+			mockInterfacesClient := fs.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 			mockInterfacesClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.nic, tc.nicGetErr).AnyTimes()
 
 			nic, err := fs.GetPrimaryInterface(context.Background(), tc.nodeName)
@@ -679,6 +679,93 @@ func TestGetPrimaryInterfaceVmssFlex(t *testing.T) {
 				assert.Equal(t, *tc.expectedNeworkInterface, *nic, tc.description)
 			}
 
+		})
+	}
+}
+
+// TestGetPrimaryInterfaceVmssFlexRefactoring tests that VmssFlex GetPrimaryInterface uses ComputeClientFactory 
+// instead of NetworkClientFactory after the client factory refactoring
+func TestGetPrimaryInterfaceVmssFlexRefactoring(t *testing.T) {
+	testCases := []struct {
+		description         string
+		nodeName            string
+		interfaceCallsCount int
+		expectSuccess       bool
+		expectedErr         error
+	}{
+		{
+			description:         "VmssFlex GetPrimaryInterface should use ComputeClientFactory.GetInterfaceClient successfully",
+			nodeName:            testNodeName1,
+			interfaceCallsCount: 1,
+			expectSuccess:       true,
+		},
+		{
+			description:         "VmssFlex GetPrimaryInterface should handle ComputeClientFactory interface client errors",
+			nodeName:            testNodeName1,
+			interfaceCallsCount: 1,
+			expectSuccess:       false,
+			expectedErr:         fmt.Errorf("interface client error"),
+		},
+		{
+			description:         "VmssFlex GetPrimaryInterface should call ComputeClientFactory interface client exactly once per request",
+			nodeName:            testNodeName1,
+			interfaceCallsCount: 1,
+			expectSuccess:       true,
+		},
+	}
+
+	for _, test := range testCases {
+		test := test
+		t.Run(test.description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			fs, err := NewTestFlexScaleSet(ctrl)
+			assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
+
+			// Setup expected VMSS Flex
+			mockVMSSClient := fs.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+			mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
+
+			// Setup expected VMs
+			mockVMClient := fs.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+			mockVMClient.EXPECT().ListVmssFlexVMsWithOutInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(testVMListWithoutInstanceView, nil).AnyTimes()
+			mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(testVMListWithOnlyInstanceView, nil).AnyTimes()
+
+			// CRITICAL: Test that ComputeClientFactory.GetInterfaceClient() is called exactly the expected number of times
+			mockInterfaceClient := fs.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+			
+			if test.expectSuccess {
+				mockInterfaceClient.EXPECT().Get(
+					gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+				).Return(testNic1, nil).Times(test.interfaceCallsCount)
+			} else {
+				mockInterfaceClient.EXPECT().Get(
+					gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+				).Return(nil, &azcore.ResponseError{ErrorCode: "interface client error"}).Times(test.interfaceCallsCount)
+			}
+
+			// CRITICAL: Verify that NetworkClientFactory.GetInterfaceClient() is NEVER called
+			// This ensures the refactoring is working correctly for VmssFlex as well
+			mockNetworkInterfaceClient := fs.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+			mockNetworkInterfaceClient.EXPECT().Get(
+				gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+			).Times(0) // Should NEVER be called after refactoring
+
+			// Execute the test
+			nic, err := fs.GetPrimaryInterface(context.Background(), test.nodeName)
+
+			// Verify results
+			if test.expectSuccess {
+				assert.NoError(t, err, test.description)
+				assert.NotNil(t, nic, test.description)
+				assert.Equal(t, testNic1.Name, nic.Name, test.description)
+			} else {
+				assert.Error(t, err, test.description)
+				if test.expectedErr != nil {
+					assert.Contains(t, err.Error(), test.expectedErr.Error(), test.description)
+				}
+			}
 		})
 	}
 }
@@ -724,7 +811,7 @@ func TestGetIPByNodeNameVmssFlex(t *testing.T) {
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOutInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
 
-		mockInterfacesClient := fs.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+		mockInterfacesClient := fs.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 		mockInterfacesClient.EXPECT().Get(gomock.Any(), gomock.Any(), "testvm1-nic", gomock.Any()).Return(tc.nic, tc.nicGetErr).AnyTimes()
 
 		privateIP, publicIP, err := fs.GetIPByNodeName(context.Background(), tc.nodeName)
@@ -785,7 +872,7 @@ func TestGetPrivateIPsByNodeNameVmssFlex(t *testing.T) {
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOutInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
 
-		mockInterfacesClient := fs.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+		mockInterfacesClient := fs.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 		mockInterfacesClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.nic, tc.nicGetErr).AnyTimes()
 
 		ips, err := fs.GetPrivateIPsByNodeName(context.Background(), tc.nodeName)
@@ -855,7 +942,7 @@ func TestGetNodeNameByIPConfigurationIDVmssFlex(t *testing.T) {
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOutInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
 
-		mockInterfacesClient := fs.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+		mockInterfacesClient := fs.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 		mockInterfacesClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.nic, nil).AnyTimes()
 
 		nodeName, vmSetName, err := fs.GetNodeNameByIPConfigurationID(context.TODO(), tc.ipConfigurationID)
@@ -1140,7 +1227,7 @@ func TestEnsureHostInPoolVmssFlex(t *testing.T) {
 			mockVMClient.EXPECT().ListVmssFlexVMsWithOutInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 			mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
 
-			mockInterfacesClient := fs.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+			mockInterfacesClient := fs.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 			mockInterfacesClient.EXPECT().Get(gomock.Any(), gomock.Any(), "testvm1-nic", gomock.Any()).Return(tc.nic, tc.nicGetErr).AnyTimes()
 			mockInterfacesClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, tc.nicPutErr).AnyTimes()
 
@@ -1406,7 +1493,7 @@ func TestEnsureHostsInPoolVmssFlex(t *testing.T) {
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOutInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
 
-		mockInterfacesClient := fs.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+		mockInterfacesClient := fs.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 		mockInterfacesClient.EXPECT().Get(gomock.Any(), gomock.Any(), "testvm1-nic", gomock.Any()).Return(tc.nic, tc.nicGetErr).AnyTimes()
 		mockInterfacesClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
@@ -1632,7 +1719,7 @@ func TestEnsureBackendPoolDeletedFromNodeVmssFlex(t *testing.T) {
 			fs, err := NewTestFlexScaleSet(ctrl)
 			assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 
-			mockInterfacesClient := fs.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+			mockInterfacesClient := fs.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 			for i := range tc.nics {
 				nic := tc.nics[i]
 				mockInterfacesClient.EXPECT().Get(gomock.Any(), gomock.Any(), *nic.Name, gomock.Any()).Return(nic, tc.nicGetErr).AnyTimes()
@@ -1745,7 +1832,7 @@ func TestEnsureBackendPoolDeletedVmssFlex(t *testing.T) {
 			mockVMClient.EXPECT().ListVmssFlexVMsWithOutInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 			mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
 
-			mockInterfacesClient := fs.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+			mockInterfacesClient := fs.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 			mockInterfacesClient.EXPECT().Get(gomock.Any(), gomock.Any(), "testvm1-nic", gomock.Any()).Return(tc.nic, tc.nicGetErr).AnyTimes()
 			mockInterfacesClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, tc.nicPutErr).AnyTimes()
 

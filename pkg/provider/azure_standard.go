@@ -850,7 +850,7 @@ func (as *availabilitySet) getPrimaryInterfaceWithVMSet(ctx context.Context, nod
 
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
-	nic, rerr := as.NetworkClientFactory.GetInterfaceClient().Get(ctx, nicResourceGroup, nicName, nil)
+	nic, rerr := as.ComputeClientFactory.GetInterfaceClient().Get(ctx, nicResourceGroup, nicName, nil)
 	if rerr != nil {
 		return nil, "", rerr
 	}
@@ -1105,7 +1105,7 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(ctx context.Context, service
 		nic.Properties.IPConfigurations = newIPConfigs
 		nicUpdaters = append(nicUpdaters, func() error {
 			klog.V(2).Infof("EnsureBackendPoolDeleted begins to CreateOrUpdate for NIC(%s, %s) with backendPoolIDs %q", as.ResourceGroup, ptr.Deref(nic.Name, ""), backendPoolIDs)
-			_, rerr := as.NetworkClientFactory.GetInterfaceClient().CreateOrUpdate(ctx, as.ResourceGroup, ptr.Deref(nic.Name, ""), *nic)
+			_, rerr := as.ComputeClientFactory.GetInterfaceClient().CreateOrUpdate(ctx, as.ResourceGroup, ptr.Deref(nic.Name, ""), *nic)
 			if rerr != nil {
 				klog.Errorf("EnsureBackendPoolDeleted CreateOrUpdate for NIC(%s, %s) failed with error %v", as.ResourceGroup, ptr.Deref(nic.Name, ""), rerr.Error())
 				return rerr
@@ -1153,7 +1153,7 @@ func (as *availabilitySet) GetNodeNameByIPConfigurationID(ctx context.Context, i
 	if nicResourceGroup == "" || nicName == "" {
 		return "", "", fmt.Errorf("invalid ip config ID %s", ipConfigurationID)
 	}
-	nic, rerr := as.NetworkClientFactory.GetInterfaceClient().Get(ctx, nicResourceGroup, nicName, nil)
+	nic, rerr := as.ComputeClientFactory.GetInterfaceClient().Get(ctx, nicResourceGroup, nicName, nil)
 	if rerr != nil {
 		return "", "", fmt.Errorf("GetNodeNameByIPConfigurationID(%s): failed to get interface of name %s: %w", ipConfigurationID, nicName, rerr)
 	}
