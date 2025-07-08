@@ -658,7 +658,7 @@ func TestNodeAddresses(t *testing.T) {
 		pipClient := cloud.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
 		pipClient.EXPECT().List(gomock.Any(), cloud.ResourceGroup).Return([]*armnetwork.PublicIPAddress{expectedPIP}, nil).AnyTimes()
 
-		mockInterfaceClient := cloud.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+		mockInterfaceClient := cloud.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 		mockInterfaceClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, "nic", gomock.Any()).Return(expectedInterface, nil).AnyTimes()
 
 		ipAddresses, err := cloud.NodeAddresses(context.Background(), types.NodeName(test.nodeName))
@@ -914,7 +914,7 @@ func TestInstanceMetadata(t *testing.T) {
 				IPAddress: ptr.To("5.6.7.8"),
 			},
 		}
-		mockNICClient := cloud.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+		mockNICClient := cloud.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 		mockNICClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, "k8s-agentpool1-00000000-nic-1", gomock.Any()).Return(expectedNIC, nil)
 		expectedPIP := &armnetwork.PublicIPAddress{
 			Name: ptr.To("pip"),
