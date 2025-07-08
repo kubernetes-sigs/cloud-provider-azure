@@ -130,7 +130,7 @@ func TestAddPort(t *testing.T) {
 }
 
 func setMockEnvDualStack(az *Cloud, expectedInterfaces []*armnetwork.Interface, expectedVirtualMachines []*armcompute.VirtualMachine, serviceCount int, services ...v1.Service) {
-	mockInterfacesClient := az.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+	mockInterfacesClient := az.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 	for i := range expectedInterfaces {
 		mockInterfacesClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, fmt.Sprintf("vm-%d", i), gomock.Any()).Return(expectedInterfaces[i], nil).AnyTimes()
 		mockInterfacesClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, fmt.Sprintf("vm-%d", i), gomock.Any()).Return(nil, nil).AnyTimes()
@@ -149,7 +149,7 @@ func setMockEnvDualStack(az *Cloud, expectedInterfaces []*armnetwork.Interface, 
 }
 
 func setMockEnv(az *Cloud, expectedInterfaces []*armnetwork.Interface, expectedVirtualMachines []*armcompute.VirtualMachine, serviceCount int, services ...v1.Service) {
-	mockInterfacesClient := az.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+	mockInterfacesClient := az.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 	for i := range expectedInterfaces {
 		mockInterfacesClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, fmt.Sprintf("vm-%d", i), gomock.Any()).Return(expectedInterfaces[i], nil).AnyTimes()
 		mockInterfacesClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, fmt.Sprintf("vm-%d", i), gomock.Any()).Return(nil, nil).AnyTimes()

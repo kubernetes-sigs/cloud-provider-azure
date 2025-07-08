@@ -968,7 +968,7 @@ func (ss *ScaleSet) GetPrimaryInterface(ctx context.Context, nodeName string) (*
 
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
-	nic, rerr := ss.NetworkClientFactory.GetInterfaceClient().GetVirtualMachineScaleSetNetworkInterface(ctx, resourceGroup, vm.VMSSName,
+	nic, rerr := ss.ComputeClientFactory.GetInterfaceClient().GetVirtualMachineScaleSetNetworkInterface(ctx, resourceGroup, vm.VMSSName,
 		vm.InstanceID,
 		nicName)
 	if rerr != nil {
