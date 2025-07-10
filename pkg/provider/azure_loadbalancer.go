@@ -4353,6 +4353,12 @@ func (az *Cloud) serviceOwnsFrontendIP(ctx context.Context, fip *armnetwork.Fron
 
 func (az *Cloud) getFrontendIPConfigNames(service *v1.Service) map[bool]string {
 	isDualStack := isServiceDualStack(service)
+	if l, ok := service.Annotations[consts.ServiceAnnotationLoadBalancerFrontendIPConfigName]; ok && l != "" {
+		return map[bool]string{
+			consts.IPVersionIPv4: getResourceByIPFamily(l, isDualStack, consts.IPVersionIPv4),
+			consts.IPVersionIPv6: getResourceByIPFamily(l, isDualStack, consts.IPVersionIPv6),
+		}
+	}
 	defaultLBFrontendIPConfigName := az.getDefaultFrontendIPConfigName(service)
 	return map[bool]string{
 		consts.IPVersionIPv4: getResourceByIPFamily(defaultLBFrontendIPConfigName, isDualStack, consts.IPVersionIPv4),

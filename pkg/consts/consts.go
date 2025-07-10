@@ -244,6 +244,10 @@ const (
 	// to specify what subnet it is exposed on
 	ServiceAnnotationLoadBalancerInternalSubnet = "service.beta.kubernetes.io/azure-load-balancer-internal-subnet"
 
+	// ServiceAnnotationLoadBalancerFrontendIPConfigName is the annotation used on the service
+	// to specify the frontend IP configuration name for the service.
+	ServiceAnnotationLoadBalancerFrontendIPConfigName = "service.beta.kubernetes.io/azure-load-balancer-frontend-ip-config-name"
+
 	// ServiceAnnotationLoadBalancerMode is the annotation used on the service to specify
 	// which load balancer should be associated with the service. This is valid when using the basic
 	// SKU load balancer, or it would be ignored.

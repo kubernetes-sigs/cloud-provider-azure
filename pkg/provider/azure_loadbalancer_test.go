@@ -8055,14 +8055,28 @@ func TestGetFrontendIPConfigNames(t *testing.T) {
 		useStandardLB bool
 		expectedV4    string
 		expectedV6    string
+		useCustomName bool
+		customName    string
 	}{
 		{
 			description:   "internal lb should have subnet name on the frontend ip configuration name",
 			subnetName:    "shortsubnet",
 			isInternal:    true,
 			useStandardLB: true,
+			useCustomName: false,
+			customName:    "",
 			expectedV4:    "a257b965551374ad2b091ef3f07043ad-shortsubnet",
 			expectedV6:    "a257b965551374ad2b091ef3f07043ad-shortsubnet-IPv6",
+		},
+		{
+			description:   "should use custom name if provided",
+			subnetName:    "shortsubnet",
+			isInternal:    true,
+			useStandardLB: true,
+			useCustomName: true,
+			customName:    "mycustomname",
+			expectedV4:    "mycustomname",
+			expectedV6:    "mycustomname-IPv6",
 		},
 	}
 
@@ -8076,6 +8090,9 @@ func TestGetFrontendIPConfigNames(t *testing.T) {
 			}
 			svc.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = c.subnetName
 			svc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = strconv.FormatBool(c.isInternal)
+			if c.useCustomName {
+				svc.Annotations[consts.ServiceAnnotationLoadBalancerFrontendIPConfigName] = c.customName
+			}
 
 			ipconfigNames := az.getFrontendIPConfigNames(svc)
 			assert.Equal(t, c.expectedV4, ipconfigNames[false])
