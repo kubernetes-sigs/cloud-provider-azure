@@ -183,7 +183,7 @@ func TestGetPrivateIPsForMachine(t *testing.T) {
 		mockVMClient := az.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 		mockVMClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "vm", gomock.Any()).Return(expectedVM, test.vmClientErr)
 
-		mockInterfaceClient := az.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+		mockInterfaceClient := az.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 		mockInterfaceClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(expectedInterface, nil).MaxTimes(1)
 
 		privateIPs, err := az.getPrivateIPsForMachine(context.Background(), "vm")
@@ -255,7 +255,7 @@ func TestGetIPForMachineWithRetry(t *testing.T) {
 		mockVMClient := az.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 		mockVMClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "vm", gomock.Any()).Return(expectedVM, test.clientErr)
 
-		mockInterfaceClient := az.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+		mockInterfaceClient := az.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 		mockInterfaceClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(expectedInterface, nil).MaxTimes(1)
 
 		mockPIPClient := az.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
