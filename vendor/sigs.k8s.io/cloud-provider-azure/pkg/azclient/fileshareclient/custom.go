@@ -29,11 +29,11 @@ const CreateOperationName = "FileSharesClient.Create"
 const DeleteOperationName = "FileSharesClient.Delete"
 const UpdateOperationName = "FileSharesClient.Update"
 
-func (client *Client) Create(ctx context.Context, resourceGroupName string, resourceName string, parentResourceName string, resource armstorage.FileShare, expand *string) (*armstorage.FileShare, error) {
+func (client *Client) Create(ctx context.Context, resourceGroupName string, resourceName string, parentResourceName string, resource armstorage.FileShare, expand *string) (result *armstorage.FileShare, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "FileShare", "create")
-	defer func() { metricsCtx.Observe(ctx, nil) }()
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOperationName, client.tracer, nil)
-	defer endSpan(nil)
+	defer endSpan(err)
 
 	resp, err := client.FileSharesClient.Create(ctx, resourceGroupName, resourceName, parentResourceName, resource, &armstorage.FileSharesClientCreateOptions{
 		Expand: expand,
@@ -44,11 +44,11 @@ func (client *Client) Create(ctx context.Context, resourceGroupName string, reso
 	return &resp.FileShare, nil
 }
 
-func (client *Client) Update(ctx context.Context, resourceGroupName string, resourceName string, parentResourceName string, resource armstorage.FileShare) (*armstorage.FileShare, error) {
+func (client *Client) Update(ctx context.Context, resourceGroupName string, resourceName string, parentResourceName string, resource armstorage.FileShare) (result *armstorage.FileShare, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "FileShare", "update")
-	defer func() { metricsCtx.Observe(ctx, nil) }()
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, UpdateOperationName, client.tracer, nil)
-	defer endSpan(nil)
+	defer endSpan(err)
 
 	resp, err := client.FileSharesClient.Update(ctx, resourceGroupName, resourceName, parentResourceName, resource, nil)
 	if err != nil {
@@ -58,15 +58,13 @@ func (client *Client) Update(ctx context.Context, resourceGroupName string, reso
 }
 
 // Delete deletes a FileShare by name.
-func (client *Client) Delete(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string, expand *string) error {
+func (client *Client) Delete(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string, option *armstorage.FileSharesClientDeleteOptions) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "FileShare", "delete")
-	defer func() { metricsCtx.Observe(ctx, nil) }()
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
-	defer endSpan(nil)
+	defer endSpan(err)
 
-	_, err := client.FileSharesClient.Delete(ctx, resourceGroupName, parentResourceName, resourceName, &armstorage.FileSharesClientDeleteOptions{
-		Include: expand,
-	})
+	_, err = client.FileSharesClient.Delete(ctx, resourceGroupName, parentResourceName, resourceName, option)
 	return err
 }
 
@@ -78,6 +76,7 @@ func (client *Client) List(ctx context.Context, resourceGroupName string, accoun
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
+
 	pager := client.FileSharesClient.NewListPager(resourceGroupName, accountName, option)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
@@ -97,6 +96,7 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, account
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
+
 	resp, err := client.FileSharesClient.Get(ctx, resourceGroupName, accountName, fileshareName, option)
 	if err != nil {
 		return nil, err
