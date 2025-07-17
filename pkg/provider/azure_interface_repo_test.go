@@ -38,7 +38,7 @@ func TestCreateOrUpdateInterface(t *testing.T) {
 	defer ctrl.Finish()
 
 	az := GetTestCloud(ctrl)
-	mockInterfaceClient := az.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+	mockInterfaceClient := az.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 	mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(nil, &azcore.ResponseError{StatusCode: http.StatusInternalServerError})
 
 	err := az.CreateOrUpdateInterface(context.TODO(), &v1.Service{}, &armnetwork.Interface{Name: ptr.To("nic")})
