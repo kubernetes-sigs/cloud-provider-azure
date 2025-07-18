@@ -60,6 +60,9 @@ type Config struct {
 	SharedInformers informers.SharedInformerFactory
 
 	DynamicReloadingConfig DynamicReloadingConfig
+
+	// Node filtering configuration
+	NodeFilteringConfig NodeFilteringConfig
 }
 
 type DynamicReloadingConfig struct {
@@ -67,6 +70,13 @@ type DynamicReloadingConfig struct {
 	CloudConfigSecretName      string
 	CloudConfigSecretNamespace string
 	CloudConfigKey             string
+}
+
+// NodeFilteringConfig contains node filtering configuration
+type NodeFilteringConfig struct {
+	EnableNodeFiltering bool
+	NodeLabelSelector   string
+	NodeExcludeLabels   string
 }
 
 type completedConfig struct {

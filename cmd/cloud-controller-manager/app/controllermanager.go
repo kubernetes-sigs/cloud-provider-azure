@@ -488,7 +488,16 @@ func newControllerInitializers() map[string]initFunc {
 // the shared-informers client and token controller.
 func CreateControllerContext(s *cloudcontrollerconfig.CompletedConfig, clientBuilder clientbuilder.ControllerClientBuilder, stop <-chan struct{}) (genericcontrollermanager.ControllerContext, error) {
 	versionedClient := clientBuilder.ClientOrDie("shared-informers")
-	sharedInformers := informers.NewSharedInformerFactory(versionedClient, ResyncPeriod(s)())
+
+	// Use filtered informers if node filtering is enabled
+	var sharedInformers informers.SharedInformerFactory
+	nodeFilterConfig := s.NodeFilteringConfig
+	if nodeFilterConfig.EnableNodeFiltering || nodeFilterConfig.NodeExcludeLabels != "" {
+		// Create filtered informer factory with same filtering logic as completedConfig
+		sharedInformers = options.CreateFilteredInformerFactory(versionedClient, ResyncPeriod(s)(), nodeFilterConfig.NodeLabelSelector, nodeFilterConfig.NodeExcludeLabels)
+	} else {
+		sharedInformers = informers.NewSharedInformerFactory(versionedClient, ResyncPeriod(s)())
+	}
 
 	metadataClient := metadata.NewForConfigOrDie(clientBuilder.ConfigOrDie("metadata-informers"))
 	metadataInformers := metadatainformer.NewSharedInformerFactory(metadataClient, ResyncPeriod(s)())
