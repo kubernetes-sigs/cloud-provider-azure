@@ -425,13 +425,15 @@ const (
 	// ImdsInstanceAPIVersion is the imds instance api version
 	ImdsInstanceAPIVersion = "2021-10-01"
 	// ImdsLoadBalancerAPIVersion is the imds load balancer api version
-	ImdsLoadBalancerAPIVersion = "2020-10-01"
+	ImdsLoadBalancerAPIVersion    = "2020-10-01"
+	ImdsScheduledEventsAPIVersion = "2020-07-01"
 	// ImdsServer is the imds server endpoint
 	ImdsServer = "http://169.254.169.254"
 	// ImdsInstanceURI is the imds instance uri
 	ImdsInstanceURI = "/metadata/instance"
 	// ImdsLoadBalancerURI is the imds load balancer uri
-	ImdsLoadBalancerURI = "/metadata/loadbalancer"
+	ImdsLoadBalancerURI    = "/metadata/loadbalancer"
+	ImdsScheduledEventsURI = "/metadata/scheduledevents"
 )
 
 // routes
