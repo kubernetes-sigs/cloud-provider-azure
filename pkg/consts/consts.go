@@ -239,6 +239,9 @@ const (
 	// LoadBalancerSKUStandardV2 is the load balancer standardV2 SKU
 	LoadBalancerSKUStandardV2 = "standardV2"
 
+	// PodLabelServiceEgressGateway is the label used on the pod
+	PodLabelServiceEgressGateway = "kubernetes.azure.com/service-egress-gateway"
+
 	// ServiceAnnotationLoadBalancerInternal is the annotation used on the service
 	ServiceAnnotationLoadBalancerInternal = "service.beta.kubernetes.io/azure-load-balancer-internal"
 

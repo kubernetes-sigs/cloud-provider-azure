@@ -174,6 +174,9 @@ type Config struct {
 	// TODO enechitoaia: improve security eventually
 	PodCidrsIPv4 []netip.Prefix `json:"podCidrIPv4" yaml:"podCidrIPv4"`
 	PodCidrsIPv6 []netip.Prefix `json:"podCidrIPv6" yaml:"podCidrIPv6"`
+
+	// ServiceGatewayEnabled indicates whether the service gateway is enabled for the cluster.
+	ServiceGatewayEnabled bool `json:"serviceGatewayEnabled,omitempty" yaml:"serviceGatewayEnabled,omitempty"`
 }
 
 // HasExtendedLocation returns true if extendedlocation prop are specified.
