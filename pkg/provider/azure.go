@@ -509,6 +509,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 
 		if az.ServiceGatewayEnabled || az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
 			az.podEgressResourceUpdater = newPodEgressResourceUpdater(az)
+			go az.podEgressResourceUpdater.run(ctx)
 		}
 		// Azure Stack does not support zone at the moment
 		// https://docs.microsoft.com/en-us/azure-stack/user/azure-stack-network-differences?view=azs-2102
