@@ -34,6 +34,7 @@ import (
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/workqueue"
 	cloudprovider "k8s.io/cloud-provider"
 	cloudproviderapi "k8s.io/cloud-provider/api"
 	cloudnodeutil "k8s.io/cloud-provider/node/helpers"
@@ -130,6 +131,7 @@ type Cloud struct {
 	routeUpdater                      batchProcessor
 	backendPoolUpdater                batchProcessor
 	locationAndNRPServiceBatchUpdater batchProcessor
+	podEgressResourceUpdater          batchProcessor
 
 	vmCache        azcache.Resource
 	lbCache        azcache.Resource
@@ -144,6 +146,8 @@ type Cloud struct {
 	pipCache azcache.Resource
 	// Add service lister to always get latest service
 	serviceLister corelisters.ServiceLister
+	// Add pod lister to always get latest pod
+	podLister corelisters.PodLister
 	// node-sync-loop routine and service-reconcile routine should not update LoadBalancer at the same time
 	serviceReconcileLock sync.Mutex
 
@@ -161,6 +165,8 @@ type Cloud struct {
 	azureResourceLocker *AzureResourceLocker
 
 	diffTracker *difftracker.DiffTracker
+
+	podEgressQueue workqueue.TypedRateLimitingInterface[PodCrudEvent]
 }
 
 // NewCloud returns a Cloud with initialized clients
@@ -500,6 +506,10 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 			az.locationAndNRPServiceBatchUpdater = newLocationAndNRPServiceBatchUpdater(az)
 			go az.locationAndNRPServiceBatchUpdater.run(ctx)
 		}
+
+		if az.ServiceGatewayEnabled || az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+			az.podEgressResourceUpdater = newPodEgressResourceUpdater(az)
+		}
 		// Azure Stack does not support zone at the moment
 		// https://docs.microsoft.com/en-us/azure-stack/user/azure-stack-network-differences?view=azs-2102
 		if !az.IsStackCloud() {
@@ -799,6 +809,11 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 	az.serviceLister = informerFactory.Core().V1().Services().Lister()
 
 	az.setUpEndpointSlicesInformer(informerFactory)
+
+	if az.ServiceGatewayEnabled || az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+		az.podLister = informerFactory.Core().V1().Pods().Lister()
+		az.setUpPodInformerForEgress()
+	}
 }
 
 // updateNodeCaches updates local cache for node's zones and external resource groups.

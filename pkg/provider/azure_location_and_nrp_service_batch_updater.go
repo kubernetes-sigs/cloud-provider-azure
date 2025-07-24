@@ -3,14 +3,21 @@ package provider
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/http"
 	"strings"
 	"time"
 
+	v1 "k8s.io/api/core/v1"
 	discovery_v1 "k8s.io/api/discovery/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 )
 
@@ -290,6 +297,380 @@ func (updater *locationAndNRPServiceBatchUpdater) addOperation(operation batchOp
 }
 
 func (updater *locationAndNRPServiceBatchUpdater) removeOperation(name string) {
+	// This is a no-op function. Remove operation is handled via the DiffTracker APIs.
+	return
+}
+
+type PodCrudEvent struct {
+	Key       string // <Pod Namespace/Pod Name>
+	EventType string // "Add", "Update", or "Delete"
+}
+
+func (az *Cloud) setUpPodInformerForEgress() {
+	podInformerFactory := informers.NewSharedInformerFactoryWithOptions(
+		az.KubeClient,
+		ResyncPeriod(1*time.Second)(),
+		informers.WithTweakListOptions(func(options *metav1.ListOptions) {
+			options.LabelSelector = consts.PodLabelServiceEgressGateway
+		}),
+	)
+	podInformer := podInformerFactory.Core().V1().Pods()
+	_, _ = podInformer.Informer().AddEventHandler(
+		cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				pod := obj.(*v1.Pod)
+
+				if pod.Labels == nil || pod.Labels[consts.PodLabelServiceEgressGateway] == "" {
+					klog.Errorf("Pod %s/%s has no labels or staticGatewayConfiguration label. Cannot process add event.",
+						pod.Namespace, pod.Name)
+					return
+				}
+
+				staticGatewayConfigurationName := pod.Labels[consts.PodLabelServiceEgressGateway]
+				counter, ok := az.localServiceNameToNRPServiceMap.Load(staticGatewayConfigurationName)
+				if ok {
+					klog.Infof("Pod %s/%s has static gateway configuration annotation. Found in localServiceNameToNRPServiceMap.",
+						pod.Namespace, pod.Name)
+					az.diffTracker.UpdateK8sPod(
+						difftracker.UpdatePodInputType{
+							PodOperation:           difftracker.ADD,
+							PublicOutboundIdentity: staticGatewayConfigurationName,
+							Location:               pod.Status.HostIP,
+							Address:                pod.Status.PodIP,
+						},
+					)
+					select {
+					case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
+						// trigger batch update
+					default:
+						// channel is full, do nothing
+						klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+					}
+					az.localServiceNameToNRPServiceMap.Store(staticGatewayConfigurationName, counter.(int)+1)
+				} else {
+					klog.Infof("Pod %s/%s has static gateway configuration annotation. Not found in localServiceNameToNRPServiceMap.",
+						pod.Namespace, pod.Name)
+					key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+					if err != nil {
+						klog.Errorf("Failed to get key for pod %s/%s: %v", pod.Namespace, pod.Name, err)
+						return
+					}
+					az.podEgressQueue.Add(PodCrudEvent{
+						Key:       key,
+						EventType: "Add",
+					})
+				}
+			},
+			UpdateFunc: func(oldObj, newObj interface{}) {
+				oldPod := oldObj.(*v1.Pod)
+				newPod := newObj.(*v1.Pod)
+				var (
+					prevEgressGatewayName string
+					currEgressGatewayName string
+				)
+				if oldPod.Labels == nil || oldPod.Labels[consts.PodLabelServiceEgressGateway] == "" {
+					prevEgressGatewayName = ""
+				} else {
+					prevEgressGatewayName = oldPod.Labels[consts.PodLabelServiceEgressGateway]
+				}
+				if newPod.Labels == nil || newPod.Labels[consts.PodLabelServiceEgressGateway] == "" {
+					currEgressGatewayName = ""
+				} else {
+					currEgressGatewayName = newPod.Labels[consts.PodLabelServiceEgressGateway]
+				}
+
+				if prevEgressGatewayName == currEgressGatewayName {
+					klog.Infof("Pod %s/%s has no change in static gateway configuration. No action needed.",
+						newPod.Namespace, newPod.Name)
+					return
+				}
+
+				if prevEgressGatewayName != "" {
+					counter, ok := az.localServiceNameToNRPServiceMap.Load(prevEgressGatewayName)
+					if ok {
+						if counter.(int) > 1 {
+							az.diffTracker.UpdateK8sPod(
+								difftracker.UpdatePodInputType{
+									PodOperation:           difftracker.REMOVE,
+									PublicOutboundIdentity: prevEgressGatewayName,
+									Location:               oldPod.Status.HostIP,
+									Address:                oldPod.Status.PodIP,
+								},
+							)
+							select {
+							case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
+								// trigger batch update
+							default:
+								// channel is full, do nothing
+								klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+							}
+							az.localServiceNameToNRPServiceMap.Store(prevEgressGatewayName, counter.(int)-1) // TBD (enechitoaia): Not present in LLD. Check if this is correct
+						} else {
+							key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(oldPod)
+							if err != nil {
+								klog.Errorf("Failed to get key for pod %s/%s: %v", oldPod.Namespace, oldPod.Name, err)
+								return
+							}
+							az.podEgressQueue.Add(PodCrudEvent{
+								Key:       key,
+								EventType: "Delete",
+							})
+						}
+					} else {
+						// error
+						klog.Errorf("Pod %s/%s has static gateway configuration %s, but it is not found in localServiceNameToNRPServiceMap. Cannot decrement its counter.",
+							oldPod.Namespace, oldPod.Name, prevEgressGatewayName)
+						return
+					}
+				}
+
+				if currEgressGatewayName != "" {
+					counter, ok := az.localServiceNameToNRPServiceMap.Load(currEgressGatewayName)
+					if ok {
+						klog.Infof("Pod %s/%s has static gateway configuration annotation. Found in localServiceNameToNRPServiceMap.",
+							newPod.Namespace, newPod.Name)
+						az.diffTracker.UpdateK8sPod(
+							difftracker.UpdatePodInputType{
+								PodOperation:           difftracker.ADD,
+								PublicOutboundIdentity: currEgressGatewayName,
+								Location:               newPod.Status.HostIP,
+								Address:                newPod.Status.PodIP,
+							},
+						)
+						select {
+						case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
+							// trigger batch update
+						default:
+							// channel is full, do nothing
+							klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+						}
+						az.localServiceNameToNRPServiceMap.Store(currEgressGatewayName, counter.(int)+1)
+					} else {
+						klog.Infof("Pod %s/%s has static gateway configuration annotation. Not found in localServiceNameToNRPServiceMap.",
+							newPod.Namespace, newPod.Name)
+						key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(newPod)
+						if err != nil {
+							klog.Errorf("Failed to get key for pod %s/%s: %v", newPod.Namespace, newPod.Name, err)
+							return
+						}
+						az.podEgressQueue.Add(PodCrudEvent{
+							Key:       key,
+							EventType: "Add",
+						})
+					}
+				}
+			},
+			DeleteFunc: func(obj interface{}) {
+				pod := obj.(*v1.Pod)
+				if pod.Labels == nil || pod.Labels[consts.PodLabelServiceEgressGateway] == "" {
+					klog.Errorf("Pod %s/%s has no labels. Cannot process delete event.",
+						pod.Namespace, pod.Name)
+					return
+				}
+
+				staticGatewayConfigurationName := pod.Labels[consts.PodLabelServiceEgressGateway]
+				counter, ok := az.localServiceNameToNRPServiceMap.Load(staticGatewayConfigurationName)
+				if ok {
+					if counter.(int) > 1 {
+						az.diffTracker.UpdateK8sPod(
+							difftracker.UpdatePodInputType{
+								PodOperation:           difftracker.REMOVE,
+								PublicOutboundIdentity: staticGatewayConfigurationName,
+								Location:               pod.Status.HostIP,
+								Address:                pod.Status.PodIP,
+							},
+						)
+						select {
+						case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
+							// trigger batch update
+						default:
+							// channel is full, do nothing
+							klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+						}
+						az.localServiceNameToNRPServiceMap.Store(staticGatewayConfigurationName, counter.(int)-1) // TBD (enechitoaia): Not present in LLD. Check if this is correct
+					} else {
+						key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(pod)
+						if err != nil {
+							klog.Errorf("Failed to get key for pod %s/%s: %v", pod.Namespace, pod.Name, err)
+							return
+						}
+						az.podEgressQueue.Add(PodCrudEvent{
+							Key:       key,
+							EventType: "Delete",
+						})
+					}
+				} else {
+					// error
+					klog.Errorf("Pod %s/%s has static gateway configuration %s, but it is not found in localServiceNameToNRPServiceMap. Cannot decrement its counter.",
+						pod.Namespace, pod.Name, staticGatewayConfigurationName)
+				}
+			},
+		})
+}
+
+// ResyncPeriod returns a function that generates a randomized resync duration
+// to prevent controllers from syncing in lock-step and overloading the API server.
+func ResyncPeriod(base time.Duration) func() time.Duration {
+	return func() time.Duration {
+		n, _ := rand.Int(rand.Reader, big.NewInt(1000))
+		factor := float64(n.Int64())/1000.0 + 1.0
+		return time.Duration(float64(base.Nanoseconds()) * factor)
+	}
+}
+
+type podEgressResourceUpdater struct {
+	az *Cloud
+}
+
+func newPodEgressResourceUpdater(az *Cloud) *podEgressResourceUpdater {
+	return &podEgressResourceUpdater{
+		az: az,
+	}
+}
+
+func (updater *podEgressResourceUpdater) run(ctx context.Context) {
+	klog.V(2).Info("podEgressResourceUpdater.run: started")
+	for {
+		select {
+		case <-ctx.Done():
+			klog.Infof("podEgressResourceUpdater.run: stopped due to context cancellation")
+			return
+		default:
+			updater.process(ctx)
+		}
+	}
+}
+
+func (updater *podEgressResourceUpdater) process(ctx context.Context) {
+	klog.Infof("podEgressResourceUpdater.process BEGIN: processing pod egress updates")
+
+	for {
+		item, shutdown := updater.az.podEgressQueue.Get()
+		if shutdown {
+			klog.Infof("podEgressResourceUpdater.process: queue is shutting down")
+			return
+		}
+
+		event := item
+
+		klog.Infof("Processing event: %s for pod: %s", event.EventType, event.Key)
+
+		namespace, name, err := cache.SplitMetaNamespaceKey(event.Key)
+		if err != nil {
+			klog.Errorf("Failed to split key %s: %v", event.Key, err)
+			updater.az.podEgressQueue.Done(item)
+			continue
+		}
+
+		pod, err := updater.az.podLister.Pods(namespace).Get(name)
+		if err != nil {
+			klog.Errorf("Pod %s/%s not found, skipping event processing: %v", namespace, name, err)
+			updater.az.podEgressQueue.Done(item)
+			continue
+		}
+
+		location := pod.Status.HostIP
+		address := pod.Status.PodIP
+		service := pod.Labels[consts.PodLabelServiceEgressGateway]
+
+		switch event.EventType {
+		case "Add":
+		case "Update":
+			counter, ok := updater.az.localServiceNameToNRPServiceMap.Load(service)
+			if ok {
+				updater.az.localServiceNameToNRPServiceMap.Store(service, counter.(int)+1)
+				updater.az.diffTracker.UpdateK8sPod(difftracker.UpdatePodInputType{
+					PodOperation:           difftracker.ADD,
+					PublicOutboundIdentity: service,
+					Location:               location,
+					Address:                address,
+				})
+				select {
+				case updater.az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
+					// trigger batch update
+				default:
+					// channel is full, do nothing
+					klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+				}
+			} else {
+				// TODO(enechitoaia): createOrUpdatePip()
+				// TODO(enechitoaia): createOrUpdateNatGateway(NGW, ServiceName, SGW)
+				updater.az.diffTracker.UpdateK8sEgress(difftracker.UpdateK8sResource{
+					Operation: difftracker.ADD,
+					ID:        service,
+				})
+				updater.az.localServiceNameToNRPServiceMap.Store(service, 1)
+				updater.az.diffTracker.UpdateK8sPod(difftracker.UpdatePodInputType{
+					PodOperation:           difftracker.ADD,
+					PublicOutboundIdentity: service,
+					Location:               location,
+					Address:                address,
+				})
+				select {
+				case updater.az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
+					// trigger batch update
+				default:
+					// channel is full, do nothing
+					klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+				}
+			}
+		case "Delete":
+			counter, ok := updater.az.localServiceNameToNRPServiceMap.Load(service)
+			if ok {
+				counterValue := counter.(int)
+				counterValue--
+				if counterValue == 0 {
+					// TODO(enechitoaia): createOrUpdateService(Service, null)
+					// TODO(enechitoaia): deleteNatGateway()
+					//  TODO(enechitoaia): deletePip()
+					updater.az.diffTracker.UpdateK8sEgress(difftracker.UpdateK8sResource{
+						Operation: difftracker.REMOVE,
+						ID:        service,
+					})
+					updater.az.diffTracker.UpdateK8sPod(difftracker.UpdatePodInputType{
+						PodOperation:           difftracker.REMOVE,
+						PublicOutboundIdentity: service,
+						Location:               location,
+						Address:                address,
+					})
+					select {
+					case updater.az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
+						// trigger batch update
+					default:
+						// channel is full, do nothing
+						klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+					}
+				} else {
+					updater.az.diffTracker.UpdateK8sPod(difftracker.UpdatePodInputType{
+						PodOperation:           difftracker.REMOVE,
+						PublicOutboundIdentity: service,
+						Location:               location,
+						Address:                address,
+					})
+					select {
+					case updater.az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
+						// trigger batch update
+					default:
+						// channel is full, do nothing
+						klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+					}
+				}
+				updater.az.localServiceNameToNRPServiceMap.Store(service, counterValue)
+			}
+		default:
+			klog.Warningf("Unknown event type: %s for pod: %s", event.EventType, event.Key)
+		}
+
+		updater.az.podEgressQueue.Done(item)
+	}
+}
+
+func (updater *podEgressResourceUpdater) addOperation(operation batchOperation) batchOperation {
+	// This is a no-op function. Add operation is handled via the DiffTracker APIs.
+	return operation
+}
+
+func (updater *podEgressResourceUpdater) removeOperation(name string) {
 	// This is a no-op function. Remove operation is handled via the DiffTracker APIs.
 	return
 }
