@@ -178,6 +178,10 @@ spec:
       tier: control-plane
       component: cloud-controller-manager
   replicas: {{ .Values.cloudControllerManager.replicas }}
+  {{- if .Values.cloudControllerManager.updateStrategy }}
+  strategy:
+  {{- toYaml .Values.cloudControllerManager.updateStrategy | nindent 4 }}
+  {{- end }}
   template:
     metadata:
       labels:

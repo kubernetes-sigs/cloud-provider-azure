@@ -32,6 +32,7 @@ cloudControllerManager:
   # minResyncPeriod: "100m"
   # nodeStatusUpdateFrequency: "10m"
   replicas: 1
+  updateStrategy: {}
   # profiling: "false"
   routeReconciliationPeriod: "10s"
   securePort: 10268
