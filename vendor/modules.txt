@@ -224,6 +224,9 @@ github.com/google/go-cmp/cmp/internal/value
 # github.com/google/uuid v1.6.0
 ## explicit
 github.com/google/uuid
+# github.com/grafana/regexp v0.0.0-20240518133315-a468a5bfb3bc
+## explicit; go 1.21
+github.com/grafana/regexp
 # github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 ## explicit
 github.com/grpc-ecosystem/go-grpc-prometheus
@@ -291,7 +294,10 @@ github.com/prometheus/client_model/go
 ## explicit; go 1.23.0
 github.com/prometheus/common/expfmt
 github.com/prometheus/common/model
-# github.com/prometheus/procfs v0.16.1
+# github.com/prometheus/otlptranslator v0.0.0-20250717125610-8549f4ab4f8f
+## explicit; go 1.23.0
+github.com/prometheus/otlptranslator
+# github.com/prometheus/procfs v0.17.0
 ## explicit; go 1.23.0
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
@@ -382,7 +388,7 @@ go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc/internal
 go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc/internal/envconfig
 go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc/internal/otlpconfig
 go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc/internal/retry
-# go.opentelemetry.io/otel/exporters/prometheus v0.59.0
+# go.opentelemetry.io/otel/exporters/prometheus v0.59.1
 ## explicit; go 1.23.0
 go.opentelemetry.io/otel/exporters/prometheus
 # go.opentelemetry.io/otel/metric v1.37.0
@@ -1510,7 +1516,7 @@ sigs.k8s.io/structured-merge-diff/v4/merge
 sigs.k8s.io/structured-merge-diff/v4/schema
 sigs.k8s.io/structured-merge-diff/v4/typed
 sigs.k8s.io/structured-merge-diff/v4/value
-# sigs.k8s.io/yaml v1.5.0
+# sigs.k8s.io/yaml v1.6.0
 ## explicit; go 1.22
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
