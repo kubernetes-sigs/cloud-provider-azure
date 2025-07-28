@@ -18,14 +18,10 @@
 package azclient
 
 import (
-	"strings"
-	"sync"
-
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/backendaddresspoolclient"
@@ -40,6 +36,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/ipgroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/managedclusterclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/natgatewayclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatednszonegroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privateendpointclient"
@@ -64,6 +61,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworkclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient"
+	"strings"
+	"sync"
 )
 
 type ClientFactoryImpl struct {
@@ -86,6 +85,7 @@ type ClientFactoryImpl struct {
 	ipgroupclientInterface                  ipgroupclient.Interface
 	loadbalancerclientInterface             loadbalancerclient.Interface
 	managedclusterclientInterface           managedclusterclient.Interface
+	natgatewayclientInterface               natgatewayclient.Interface
 	privatednszonegroupclientInterface      privatednszonegroupclient.Interface
 	privateendpointclientInterface          privateendpointclient.Interface
 	privatelinkserviceclientInterface       privatelinkserviceclient.Interface
@@ -208,6 +208,12 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 
 	//initialize managedclusterclient
 	factory.managedclusterclientInterface, err = factory.createManagedClusterClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize natgatewayclient
+	factory.natgatewayclientInterface, err = factory.createNatGatewayClient(config.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
@@ -802,6 +808,31 @@ func (factory *ClientFactoryImpl) createManagedClusterClient(subscription string
 
 func (factory *ClientFactoryImpl) GetManagedClusterClient() managedclusterclient.Interface {
 	return factory.managedclusterclientInterface
+}
+
+func (factory *ClientFactoryImpl) createNatGatewayClient(subscription string) (natgatewayclient.Interface, error) {
+	//initialize natgatewayclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig)
+	if err != nil {
+		return nil, err
+	}
+	options.Cloud = factory.cloudConfig
+	//add ratelimit policy
+	ratelimitOption := factory.factoryConfig.GetRateLimitConfig("natGatewayRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return natgatewayclient.New(subscription, factory.cred, options)
+}
+
+func (factory *ClientFactoryImpl) GetNatGatewayClient() natgatewayclient.Interface {
+	return factory.natgatewayclientInterface
 }
 
 func (factory *ClientFactoryImpl) createPrivateDNSZoneGroupClient(subscription string) (privatednszonegroupclient.Interface, error) {
