@@ -569,8 +569,8 @@ func TestEndpointSlicesInformerContainerLoadBalancer(t *testing.T) {
 				"node1": utilsets.NewString("10.0.0.1"),
 				"node2": utilsets.NewString("10.0.0.2"),
 			}
-			cloud.localServiceNameToNRPServiceMap = sync.Map{}
-			cloud.localServiceNameToNRPServiceMap.Store("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", struct{}{})
+			cloud.diffTracker.LocalServiceNameToNRPServiceMap = sync.Map{}
+			cloud.diffTracker.LocalServiceNameToNRPServiceMap.Store("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", struct{}{})
 
 			u := newLocationAndNRPServiceBatchUpdater(cloud)
 			ctx, cancel := context.WithCancel(context.Background())

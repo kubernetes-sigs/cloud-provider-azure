@@ -306,26 +306,20 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 				es := obj.(*discovery_v1.EndpointSlice)
 				az.endpointSlicesCache.Store(strings.ToLower(fmt.Sprintf("%s/%s", es.Namespace, es.Name)), es)
 
-				if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+				if az.ServiceGatewayEnabled {
 					serviceUID, loaded := getServiceUIDOfEndpointSlice(es)
 					if !loaded {
 						klog.Errorf("EndpointSlice %s/%s does not have service UID, skip updating load balancer backend pool", es.Namespace, es.Name)
 						return
 					}
-					if _, loaded := az.localServiceNameToNRPServiceMap.LoadOrStore(serviceUID, struct{}{}); loaded {
+					if _, loaded := az.diffTracker.LocalServiceNameToNRPServiceMap.LoadOrStore(serviceUID, struct{}{}); loaded {
 						updateK8sEndpointsInputType := difftracker.UpdateK8sEndpointsInputType{
 							InboundIdentity: serviceUID,
 							OldAddresses:    nil,
 							NewAddresses:    az.getPodIPToNodeIPMapFromEndpointSlice(es, false),
 						}
 						az.diffTracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
-						select {
-						case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
-							// trigger batch update
-						default:
-							// channel is full, do nothing
-							klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
-						}
+						az.TriggerLocationAndNRPServiceBatchUpdate()
 					}
 				}
 			},
@@ -389,27 +383,21 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 					az.applyIPChangesAmongLocalServiceBackendPoolsByIPFamily(lbName, key, currentIPsInBackendPools, currentIPs)
 				}
 
-				if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+				if az.ServiceGatewayEnabled {
 					serviceUID, loaded := getServiceUIDOfEndpointSlice(newES)
 					if !loaded {
 						klog.Errorf("EndpointSlice %s/%s does not have service UID, skip updating load balancer backend pool", newES.Namespace, newES.Name)
 						return
 					}
 
-					if _, loaded := az.localServiceNameToNRPServiceMap.LoadOrStore(serviceUID, serviceUID); loaded {
+					if _, loaded := az.diffTracker.LocalServiceNameToNRPServiceMap.LoadOrStore(serviceUID, serviceUID); loaded {
 						updateK8sEndpointsInputType := difftracker.UpdateK8sEndpointsInputType{
 							InboundIdentity: serviceUID,
 							OldAddresses:    az.getPodIPToNodeIPMapFromEndpointSlice(previousES, false),
 							NewAddresses:    az.getPodIPToNodeIPMapFromEndpointSlice(newES, false),
 						}
 						az.diffTracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
-						select {
-						case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
-							// trigger batch update
-						default:
-							// channel is full, do nothing
-							klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
-						}
+						az.TriggerLocationAndNRPServiceBatchUpdate()
 					}
 				}
 			},
@@ -433,27 +421,21 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 
 				az.endpointSlicesCache.Delete(strings.ToLower(fmt.Sprintf("%s/%s", es.Namespace, es.Name)))
 
-				if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+				if az.ServiceGatewayEnabled {
 					serviceUID, loaded := getServiceUIDOfEndpointSlice(es)
 					if !loaded {
 						klog.Errorf("EndpointSlice %s/%s does not have service UID, skip updating load balancer backend pool", es.Namespace, es.Name)
 						return
 					}
 
-					if _, loaded := az.localServiceNameToNRPServiceMap.LoadOrStore(serviceUID, serviceUID); loaded {
+					if _, loaded := az.diffTracker.LocalServiceNameToNRPServiceMap.LoadOrStore(serviceUID, serviceUID); loaded {
 						updateK8sEndpointsInputType := difftracker.UpdateK8sEndpointsInputType{
 							InboundIdentity: serviceUID,
 							OldAddresses:    az.getPodIPToNodeIPMapFromEndpointSlice(es, false),
 							NewAddresses:    nil,
 						}
 						az.diffTracker.UpdateK8sEndpoints(updateK8sEndpointsInputType)
-						select {
-						case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
-							// trigger batch update
-						default:
-							// channel is full, do nothing
-							klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
-						}
+						az.TriggerLocationAndNRPServiceBatchUpdate()
 					}
 				}
 			},

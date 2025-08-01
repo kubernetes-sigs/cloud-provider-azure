@@ -146,8 +146,24 @@ func (dt *DiffTracker) UpdateK8sPod(input UpdatePodInputType) error {
 
 	switch input.PodOperation {
 	case ADD, UPDATE:
+		counter := 0
+		if val, ok := dt.LocalServiceNameToNRPServiceMap.Load(input.PublicOutboundIdentity); ok {
+			counter = val.(int)
+		}
+		dt.LocalServiceNameToNRPServiceMap.Store(input.PublicOutboundIdentity, counter+1)
 		return dt.addOrUpdatePod(input)
 	case REMOVE:
+		if val, ok := dt.LocalServiceNameToNRPServiceMap.Load(input.PublicOutboundIdentity); ok {
+			counter := val.(int)
+			if counter <= 0 {
+				return fmt.Errorf("error - PublicOutboundIdentity %s has a negative count: %d", input.PublicOutboundIdentity, counter)
+			}
+			if counter == 1 {
+				dt.LocalServiceNameToNRPServiceMap.Delete(input.PublicOutboundIdentity)
+			} else {
+				dt.LocalServiceNameToNRPServiceMap.Store(input.PublicOutboundIdentity, counter-1)
+			}
+		}
 		return dt.removePod(input)
 	default:
 		return fmt.Errorf("invalid pod operation: %s for pod at %s:%s",

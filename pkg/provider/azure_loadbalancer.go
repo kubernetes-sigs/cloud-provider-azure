@@ -304,12 +304,12 @@ func (az *Cloud) getLatestService(serviceName string, deepcopy bool) (*v1.Servic
 // parameters as read-only and not modify them.
 // Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
 func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
-	if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() && !strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyTypeLocal)) {
+	if az.ServiceGatewayEnabled && !strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyTypeLocal)) {
 		return errors.New("podIP backend pool type only supports ExternalTrafficPolicy=Local")
 	}
 	// Node additions and removals to VMSS (Virtual Machine Scale Sets) do not require reconcileLB operations.
 	// The changes will be propagated via Location Update API upon endpoint-slice events and backendpool will be updated by NRP.
-	if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+	if az.ServiceGatewayEnabled {
 		return nil
 	}
 
@@ -487,40 +487,36 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 		return err
 	}
 
-	serviceUID := getServiceUID(service)
-	if _, loaded := az.localServiceNameToNRPServiceMap.Load(serviceUID); loaded {
-		klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: serviceUID %s is a local service, removing backend pool reference\n", serviceUID)
+	if az.ServiceGatewayEnabled {
+		serviceUID := getServiceUID(service)
+		if _, loaded := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(serviceUID); loaded {
+			klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: serviceUID %s is a local service, removing backend pool reference\n", serviceUID)
 
-		// DELETE THE BACKENDPOOL REFERENCE HERE
-		removeBackendPoolRequestDTO := difftracker.RemoveBackendPoolReferenceFromServicesDTO(
-			difftracker.SyncServicesReturnType{
-				Additions: nil,
-				Removals:  utilsets.NewString(serviceUID),
-			},
-			az.SubscriptionID,
-			az.ResourceGroup)
-		klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: removeBackendPoolRequestDTO %v\n", removeBackendPoolRequestDTO)
-		removeBackendPoolResponseDTO := NRPAPIClientUpdateNRPServices(ctx, removeBackendPoolRequestDTO, az.SubscriptionID, az.ResourceGroup)
-		klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: removeBackendPoolResponseDTO %v\n", removeBackendPoolResponseDTO)
-		if removeBackendPoolResponseDTO != nil {
-			klog.Errorf("locationAndNRPServiceBatchUpdater.process: failed to remove backend pool: %v", removeBackendPoolResponseDTO)
-			return fmt.Errorf("failed to remove backend pool: %v", removeBackendPoolResponseDTO)
-		}
-		klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: successfully removed backend pool reference for serviceUID %s\n", serviceUID)
-		az.localServiceNameToNRPServiceMap.Delete(serviceUID)
-		az.diffTracker.UpdateK8sService(
-			difftracker.UpdateK8sResource{
-				Operation: difftracker.REMOVE,
-				ID:        serviceUID,
-			},
-		)
-		klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: successfully updated diff tracker for serviceUID %s. Triggering batchProcessor\n", serviceUID)
-		select {
-		case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
-			// trigger batch update
-		default:
-			// channel is full, do nothing
-			klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+			// DELETE THE BACKENDPOOL REFERENCE HERE
+			removeBackendPoolRequestDTO := difftracker.RemoveBackendPoolReferenceFromServicesDTO(
+				difftracker.SyncServicesReturnType{
+					Additions: nil,
+					Removals:  utilsets.NewString(serviceUID),
+				},
+				az.SubscriptionID,
+				az.ResourceGroup)
+			klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: removeBackendPoolRequestDTO %v\n", removeBackendPoolRequestDTO)
+			removeBackendPoolResponseDTO := NRPAPIClientUpdateNRPServices(ctx, removeBackendPoolRequestDTO, az.SubscriptionID, az.ResourceGroup)
+			klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: removeBackendPoolResponseDTO %v\n", removeBackendPoolResponseDTO)
+			if removeBackendPoolResponseDTO != nil {
+				klog.Errorf("locationAndNRPServiceBatchUpdater.process: failed to remove backend pool: %v", removeBackendPoolResponseDTO)
+				return fmt.Errorf("failed to remove backend pool: %v", removeBackendPoolResponseDTO)
+			}
+			klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: successfully removed backend pool reference for serviceUID %s\n", serviceUID)
+			az.diffTracker.LocalServiceNameToNRPServiceMap.Delete(serviceUID)
+			az.diffTracker.UpdateK8sService(
+				difftracker.UpdateK8sResource{
+					Operation: difftracker.REMOVE,
+					ID:        serviceUID,
+				},
+			)
+			klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: successfully updated diff tracker for serviceUID %s. Triggering batchProcessor\n", serviceUID)
+			az.TriggerLocationAndNRPServiceBatchUpdate()
 		}
 	}
 
@@ -1755,7 +1751,7 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurations(
 		return nil
 	}
 
-	if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+	if az.ServiceGatewayEnabled {
 		return fmt.Errorf("multiple standard load balancers are enabled but the backend pool type is set to podIP")
 	}
 
@@ -1833,7 +1829,7 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurations(
 // nodes only used if wantLb is true
 func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node, wantLb bool) (*armnetwork.LoadBalancer, error) {
 	klog.Infof("CLB-ENECHITOAIA-reconcileLoadBalancer: service(%s) - wantLb(%t)\n", getServiceName(service), wantLb)
-	if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() && !strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyTypeLocal)) {
+	if az.ServiceGatewayEnabled && !strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyTypeLocal)) {
 		return nil, fmt.Errorf("service %s/%s is using podIP backend pool type but externalTrafficPolicy is not set to Local", service.Namespace, service.Name)
 	}
 
@@ -2051,7 +2047,7 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 			lbToReconcile = existingLBs
 		}
 		klog.Infof("CLB-ENECHITOAIA-reconcileLoadBalancer: reconcile backend pool hosts for service(%s) - lb(%s). CHECKING FOR CLB NOW\n", serviceName, lbName)
-		if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+		if az.ServiceGatewayEnabled {
 			serviceUID := getServiceUID(service)
 			klog.Infof("CLB-ENECHITOAIA-reconcileLoadBalancer: service(%s) - lb(%s) - adding serviceUID(%s) to diff tracker\n", serviceName, lbName, serviceUID)
 			// Add the serviceName to the K8S state to be synced into NRP during batch sync update flow.
@@ -2062,13 +2058,7 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 				},
 			)
 			klog.Infof("CLB-ENECHITOAIA-reconcileLoadBalancer: service(%s) - lb(%s) - adding serviceUID(%s) to diff tracker - DONE. TRIGGERING BATCH PROCESSOR:\n", serviceName, lbName, serviceUID)
-			select {
-			case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
-				// trigger batch update
-			default:
-				// channel is full, do nothing
-				klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
-			}
+			az.TriggerLocationAndNRPServiceBatchUpdate()
 		}
 
 		lb, err = az.reconcileBackendPoolHosts(ctx, lb, lbToReconcile, service, nodes, clusterName, vmSetName, lbBackendPoolIDs)
@@ -2916,7 +2906,7 @@ func (az *Cloud) getExpectedLBRules(
 ) ([]*armnetwork.Probe, []*armnetwork.LoadBalancingRule, error) {
 	var expectedRules []*armnetwork.LoadBalancingRule
 	// If we are using Pod IP in the LB backend, we skip health probes, disable floating IP and use port.TargetPort.
-	if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+	if az.ServiceGatewayEnabled {
 		expectedRules, err := getExpectedLoadBalancingRuleforBackendPoolTypePodIP(service, az, isIPv6, lbFrontendIPConfigID, lbBackendPoolID, expectedRules)
 		if err != nil {
 			return nil, nil, err
@@ -3223,7 +3213,7 @@ func (az *Cloud) reconcileSecurityGroup(
 		dstIpv4AddressPrefix, dstIpv6AddressPrefix []netip.Prefix
 	)
 
-	if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+	if az.ServiceGatewayEnabled {
 		dstIpv4AddressPrefix = az.PodCidrsIPv4
 		dstIpv6AddressPrefix = az.PodCidrsIPv6
 	} else {

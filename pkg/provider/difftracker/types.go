@@ -3,6 +3,7 @@ package difftracker
 import (
 	"sync"
 
+	"k8s.io/client-go/util/workqueue"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -64,11 +65,20 @@ type K8s_State struct {
 	Nodes    map[string]Node
 }
 
+type PodCrudEvent struct {
+	Key       string // <Pod Namespace/Pod Name>
+	EventType string // "Add", "Update", or "Delete"
+}
+
 // DiffTracker is the main struct that contains the state of the K8s and NRP services
 type DiffTracker struct {
-	mu           sync.Mutex // Protects concurrent access to DiffTracker
+	mu sync.Mutex // Protects concurrent access to DiffTracker
+
 	K8sResources K8s_State
 	NRPResources NRP_State
+
+	PodEgressQueue                  workqueue.TypedRateLimitingInterface[PodCrudEvent]
+	LocalServiceNameToNRPServiceMap sync.Map
 }
 
 // --------------------------------------------------------------------------------

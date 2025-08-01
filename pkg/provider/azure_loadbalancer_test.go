@@ -877,7 +877,7 @@ func TestEnsureLoadBalancerContainerLoadBalancer(t *testing.T) {
 			mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
 			az.plsRepo = mockPLSRepo
 			fmt.Printf("------BEFORE----------\n")
-			printSyncMap(&az.localServiceNameToNRPServiceMap)
+			printSyncMap(&az.diffTracker.LocalServiceNameToNRPServiceMap)
 			lbStatus, err := az.EnsureLoadBalancer(context.TODO(), testClusterName, &service, clusterResources.nodes)
 			assert.Nil(t, err, "TestCase[%d]: %s", i, c.desc)
 			assert.NotNil(t, lbStatus, "TestCase[%d]: %s", i, c.desc)
@@ -886,7 +886,7 @@ func TestEnsureLoadBalancerContainerLoadBalancer(t *testing.T) {
 			assert.Equal(t, 1, len(result), "TestCase[%d]: %s", i, c.desc)
 			assert.Equal(t, 1, len(result[0].Properties.LoadBalancingRules), "TestCase[%d]: %s", i, c.desc)
 			fmt.Printf("------AFTER----------\n")
-			printSyncMap(&az.localServiceNameToNRPServiceMap)
+			printSyncMap(&az.diffTracker.LocalServiceNameToNRPServiceMap)
 			fmt.Printf("------END---------\n")
 		})
 	}

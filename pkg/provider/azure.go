@@ -34,7 +34,6 @@ import (
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/client-go/util/workqueue"
 	cloudprovider "k8s.io/cloud-provider"
 	cloudproviderapi "k8s.io/cloud-provider/api"
 	cloudnodeutil "k8s.io/cloud-provider/node/helpers"
@@ -159,14 +158,11 @@ type Cloud struct {
 	multipleStandardLoadBalancersActiveServicesLock sync.Mutex
 	multipleStandardLoadBalancersActiveNodesLock    sync.Mutex
 	localServiceNameToServiceInfoMap                sync.Map
-	localServiceNameToNRPServiceMap                 sync.Map
 	endpointSlicesCache                             sync.Map
 
 	azureResourceLocker *AzureResourceLocker
 
 	diffTracker *difftracker.DiffTracker
-
-	podEgressQueue workqueue.TypedRateLimitingInterface[PodCrudEvent]
 }
 
 // NewCloud returns a Cloud with initialized clients
@@ -382,7 +378,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIPConfig(az)
 	} else if az.IsLBBackendPoolTypeNodeIP() {
 		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIP(az)
-	} else if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+	} else if az.ServiceGatewayEnabled {
 		az.LoadBalancerBackendPool = newBackendPoolTypePodIP(az)
 	}
 
@@ -486,6 +482,18 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 	if err != nil {
 		return err
 	}
+
+	// Use a single flag to determine if the service gateway is enabled.
+	// All 3 conditions must be true:
+	// 1. ServiceGatewayEnabled is true
+	// 2. lb sku is standardV2
+	// 3. backendPoolType is PodIP
+	if az.ServiceGatewayEnabled && az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+		az.ServiceGatewayEnabled = true
+	} else {
+		az.ServiceGatewayEnabled = false
+	}
+
 	// updating routes and syncing zones only in CCM
 	if callFromCCM {
 		// start delayed route updater.
@@ -502,12 +510,10 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		}
 
 		// start NRP location and service batch updater.
-		if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+		if az.ServiceGatewayEnabled {
 			az.locationAndNRPServiceBatchUpdater = newLocationAndNRPServiceBatchUpdater(az)
 			go az.locationAndNRPServiceBatchUpdater.run(ctx)
-		}
 
-		if az.ServiceGatewayEnabled || az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
 			az.podEgressResourceUpdater = newPodEgressResourceUpdater(az)
 			go az.podEgressResourceUpdater.run(ctx)
 		}
@@ -525,7 +531,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		}
 	}
 
-	if az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+	if az.ServiceGatewayEnabled {
 		err = az.initializeDiffTracker()
 		if err != nil {
 			klog.Errorf("InitializeCloudFromConfig: failed to initialize difftracker: %s", err.Error())
@@ -533,6 +539,16 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 	}
 
 	return nil
+}
+
+func (az *Cloud) TriggerLocationAndNRPServiceBatchUpdate() {
+	select {
+	case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
+		// trigger batch update
+	default:
+		// channel is full, do nothing
+		klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
+	}
 }
 
 func (az *Cloud) initializeDiffTracker() error {
@@ -811,8 +827,7 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 
 	az.setUpEndpointSlicesInformer(informerFactory)
 
-	if az.ServiceGatewayEnabled || az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
-		az.podLister = informerFactory.Core().V1().Pods().Lister()
+	if az.ServiceGatewayEnabled {
 		az.setUpPodInformerForEgress()
 	}
 }
