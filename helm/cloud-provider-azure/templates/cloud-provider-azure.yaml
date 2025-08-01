@@ -193,6 +193,10 @@ spec:
       nodeSelector: {{ toYaml .Values.cloudControllerManager.nodeSelector | nindent 8 }}
       serviceAccountName: cloud-controller-manager
       tolerations: {{ toYaml .Values.cloudControllerManager.tolerations | nindent 8 }}
+      {{- with .Values.cloudControllerManager.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
