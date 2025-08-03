@@ -76,7 +76,6 @@ spec:
           cloud-config: /etc/kubernetes/azure.json
           cloud-provider: external
           cluster-name: ${CLUSTER_NAME}
-          feature-gates: HPAContainerMetrics=true
           v: "2"
         extraVolumes:
         - hostPath: /etc/kubernetes/azure.json
@@ -478,7 +477,6 @@ spec:
       kubeletExtraArgs:
         azure-container-registry-config: c:/k/azure.json
         cloud-provider: external
-        feature-gates: WindowsHostProcessContainers=true
         pod-infra-container-image: mcr.microsoft.com/oss/kubernetes/pause:3.4.1
       name: '{{ ds.meta_data["local_hostname"] }}'
   postKubeadmCommands:

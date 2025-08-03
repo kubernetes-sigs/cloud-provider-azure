@@ -76,7 +76,7 @@ spec:
           cloud-config: /etc/kubernetes/azure.json
           cloud-provider: external
           cluster-name: ${CLUSTER_NAME}
-          feature-gates: HPAContainerMetrics=true,ServiceTrafficDistribution=true
+          feature-gates: ServiceTrafficDistribution=true
           v: "4"
         extraVolumes:
         - hostPath: /etc/kubernetes/azure.json
@@ -530,7 +530,6 @@ spec:
         cloud-provider: external
         image-credential-provider-bin-dir: /var/lib/kubelet/credential-provider
         image-credential-provider-config: /var/lib/kubelet/credential-provider-config.yaml
-        feature-gates: WindowsHostProcessContainers=true
         pod-infra-container-image: mcr.microsoft.com/oss/kubernetes/pause:3.4.1
       name: '{{ ds.meta_data["local_hostname"] }}'
   postKubeadmCommands:
