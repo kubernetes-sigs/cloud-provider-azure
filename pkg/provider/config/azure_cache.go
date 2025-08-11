@@ -26,8 +26,8 @@ type CloudProviderCacheConfig struct {
 	VmssCacheTTLInSeconds int `json:"vmssCacheTTLInSeconds,omitempty" yaml:"vmssCacheTTLInSeconds,omitempty"`
 	// VmssVirtualMachinesCacheTTLInSeconds sets the cache TTL for vmssVirtualMachines
 	VmssVirtualMachinesCacheTTLInSeconds int `json:"vmssVirtualMachinesCacheTTLInSeconds,omitempty" yaml:"vmssVirtualMachinesCacheTTLInSeconds,omitempty"`
-	//VmssVirtualMachineCacheInstanceView sets the cache with instance view for vmssVirtualMachines
-	VmssVirtualMachineCacheInstanceView bool `json:"vmssVirtualMachineCacheInstanceView,omitempty" yaml:"vmssVirtualMachineCacheInstanceView,omitempty"`
+	//VmssVirtualMachineCacheWithoutInstanceView sets the cache without instance view for vmssVirtualMachines
+	VmssVirtualMachineCacheWithoutInstanceView bool `json:"vmssVirtualMachineCacheWithoutInstanceView,omitempty" yaml:"vmssVirtualMachineCacheWithoutInstanceView,omitempty"`
 
 	// VmssFlexCacheTTLInSeconds sets the cache TTL for VMSS Flex
 	VmssFlexCacheTTLInSeconds int `json:"vmssFlexCacheTTLInSeconds,omitempty" yaml:"vmssFlexCacheTTLInSeconds,omitempty"`
