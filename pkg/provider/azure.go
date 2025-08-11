@@ -266,6 +266,20 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		return fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config")
 	}
 
+	// Use a single flag to determine if the service gateway is enabled.
+	// All 3 conditions must be true:
+	// 1. ServiceGatewayEnabled is true
+	// 2. lb sku is standardV2
+	// 3. backendPoolType is PodIP
+	if az.ServiceGatewayEnabled && az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+		klog.V(2).Info("Service Gateway is enabled, using PodIP backend pool type with Standard V2 Load Balancer")
+		az.ServiceGatewayEnabled = true
+	} else {
+		klog.V(2).Info("CLB-ENECHITOAIA-Service Gateway is not enabled")
+		klog.V(2).Infof("CLB-ENECHITOAIA-ServiceGatewayEnabled=%t, LoadBalancerSKU=%s, LoadBalancerBackendPoolConfigurationType=%s", az.ServiceGatewayEnabled, az.LoadBalancerSKU, az.LoadBalancerBackendPoolConfigurationType)
+		az.ServiceGatewayEnabled = false
+	}
+
 	if config.RouteTableResourceGroup == "" {
 		config.RouteTableResourceGroup = config.ResourceGroup
 	}
@@ -378,7 +392,8 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIPConfig(az)
 	} else if az.IsLBBackendPoolTypeNodeIP() {
 		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIP(az)
-	} else if az.ServiceGatewayEnabled {
+	} else if az.IsLBBackendPoolTypePodIP() {
+		klog.V(2).Info("CLB-ENECHITOAIA-Service Gateway is enabled, using PodIP backend pool type with Standard V2 Load Balancer")
 		az.LoadBalancerBackendPool = newBackendPoolTypePodIP(az)
 	}
 
@@ -483,17 +498,6 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		return err
 	}
 
-	// Use a single flag to determine if the service gateway is enabled.
-	// All 3 conditions must be true:
-	// 1. ServiceGatewayEnabled is true
-	// 2. lb sku is standardV2
-	// 3. backendPoolType is PodIP
-	if az.ServiceGatewayEnabled && az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
-		az.ServiceGatewayEnabled = true
-	} else {
-		az.ServiceGatewayEnabled = false
-	}
-
 	// updating routes and syncing zones only in CCM
 	if callFromCCM {
 		// start delayed route updater.
@@ -511,6 +515,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 
 		// start NRP location and service batch updater.
 		if az.ServiceGatewayEnabled {
+			klog.V(2).Info("CLB-ENECHITOAIA-Service Gateway is enabled, starting NRP location and service batch updater")
 			az.locationAndNRPServiceBatchUpdater = newLocationAndNRPServiceBatchUpdater(az)
 			go az.locationAndNRPServiceBatchUpdater.run(ctx)
 
@@ -532,6 +537,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 	}
 
 	if az.ServiceGatewayEnabled {
+		klog.V(2).Info("CLB-ENECHITOAIA-Service Gateway is enabled")
 		err = az.initializeDiffTracker()
 		if err != nil {
 			klog.Errorf("InitializeCloudFromConfig: failed to initialize difftracker: %s", err.Error())
