@@ -515,10 +515,18 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 
 		// start NRP location and service batch updater.
 		if az.ServiceGatewayEnabled {
-			klog.V(2).Info("CLB-ENECHITOAIA-Service Gateway is enabled, starting NRP location and service batch updater")
+			klog.V(2).Info("CLB-ENECHITOAIA-Service Gateway is enabled")
+			klog.V(2).Info("CLB-ENECHITOAIA-initializing diff tracker")
+			err = az.initializeDiffTracker()
+			if err != nil {
+				klog.Errorf("InitializeCloudFromConfig: failed to initialize difftracker: %s", err.Error())
+			}
+
+			klog.V(2).Info("CLB-ENECHITOAIA-starting NRP location and service batch updater")
 			az.locationAndNRPServiceBatchUpdater = newLocationAndNRPServiceBatchUpdater(az)
 			go az.locationAndNRPServiceBatchUpdater.run(ctx)
 
+			klog.V(2).Info("CLB-ENECHITOAIA-starting pod egress resource updater")
 			az.podEgressResourceUpdater = newPodEgressResourceUpdater(az)
 			go az.podEgressResourceUpdater.run(ctx)
 		}
@@ -533,14 +541,6 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 			}
 
 			go az.refreshZones(ctx, az.syncRegionZonesMap)
-		}
-	}
-
-	if az.ServiceGatewayEnabled {
-		klog.V(2).Info("CLB-ENECHITOAIA-Service Gateway is enabled")
-		err = az.initializeDiffTracker()
-		if err != nil {
-			klog.Errorf("InitializeCloudFromConfig: failed to initialize difftracker: %s", err.Error())
 		}
 	}
 

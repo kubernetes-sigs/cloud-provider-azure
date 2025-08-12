@@ -1,6 +1,7 @@
 package difftracker
 
 import (
+	"k8s.io/client-go/util/workqueue"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -28,6 +29,10 @@ func InitializeDiffTracker(K8s K8s_State, NRP NRP_State) *DiffTracker {
 	diffTracker := &DiffTracker{
 		K8sResources: K8s,
 		NRPResources: NRP,
+		PodEgressQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.DefaultTypedControllerRateLimiter[PodCrudEvent](),
+			workqueue.TypedRateLimitingQueueConfig[PodCrudEvent]{Name: "PodEgress"},
+		),
 	}
 
 	return diffTracker
