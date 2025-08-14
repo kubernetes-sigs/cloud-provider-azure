@@ -827,11 +827,11 @@ func (ss *ScaleSet) listScaleSetVMs(scaleSetName, resourceGroup string) ([]*armc
 
 	var allVMs []*armcompute.VirtualMachineScaleSetVM
 	var rerr error
-	if ss.Config.VmssVirtualMachineCacheWithoutInstanceView {
-		klog.V(4).Info("listScaleSetVMs called for scaleSetName: ", scaleSetName, " resourceGroup: ", resourceGroup)
+	if ss.Config.ListVmssVirtualMachinesWithoutInstanceView {
+		klog.V(6).Info("listScaleSetVMs called for scaleSetName: ", scaleSetName, " resourceGroup: ", resourceGroup)
 		allVMs, rerr = ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().List(ctx, resourceGroup, scaleSetName)
 	} else {
-		klog.V(4).Info("listScaleSetVMs called for scaleSetName with instanceView: ", scaleSetName, " resourceGroup: ", resourceGroup)
+		klog.V(6).Info("listScaleSetVMs called for scaleSetName with instanceView: ", scaleSetName, " resourceGroup: ", resourceGroup)
 		allVMs, rerr = ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().ListVMInstanceView(ctx, resourceGroup, scaleSetName)
 	}
 	if rerr != nil {
