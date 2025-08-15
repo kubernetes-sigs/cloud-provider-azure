@@ -825,7 +825,15 @@ func (ss *ScaleSet) listScaleSetVMs(scaleSetName, resourceGroup string) ([]*armc
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 
-	allVMs, rerr := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().ListVMInstanceView(ctx, resourceGroup, scaleSetName)
+	var allVMs []*armcompute.VirtualMachineScaleSetVM
+	var rerr error
+	if ss.Config.ListVmssVirtualMachinesWithoutInstanceView {
+		klog.V(6).Info("listScaleSetVMs called for scaleSetName: ", scaleSetName, " resourceGroup: ", resourceGroup)
+		allVMs, rerr = ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().List(ctx, resourceGroup, scaleSetName)
+	} else {
+		klog.V(6).Info("listScaleSetVMs called for scaleSetName with instanceView: ", scaleSetName, " resourceGroup: ", resourceGroup)
+		allVMs, rerr = ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().ListVMInstanceView(ctx, resourceGroup, scaleSetName)
+	}
 	if rerr != nil {
 		klog.Errorf("ComputeClientFactory.GetVirtualMachineScaleSetVMClient().List(%s, %s) failed: %v", resourceGroup, scaleSetName, rerr)
 		if exists, err := errutils.CheckResourceExistsFromAzcoreError(rerr); !exists && err == nil {
