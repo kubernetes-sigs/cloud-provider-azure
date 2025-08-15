@@ -49,6 +49,7 @@ cloudControllerManager:
     effect: NoSchedule
   - key: node-role.kubernetes.io/etcd
     effect: NoExecute
+  affinity: {}
   nodeSelector:
     node-role.kubernetes.io/control-plane: ""
   federatedTokenPath: "/var/run/secrets/azure/tokens"
