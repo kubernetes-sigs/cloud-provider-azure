@@ -123,6 +123,13 @@ var _ = ginkgo.Describe("Factory", func() {
 			client := factory.GetManagedClusterClient()
 			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
+		ginkgo.It("should create factory instance without painc - NatGateway", func() {
+			factory, err := NewClientFactory(nil, nil, cloud.AzurePublic, nil)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
+			client := factory.GetNatGatewayClient()
+			gomega.Expect(client).NotTo(gomega.BeNil())
+		})
 		ginkgo.It("should create factory instance without painc - PrivateDNSZoneGroup", func() {
 			factory, err := NewClientFactory(nil, nil, cloud.AzurePublic, nil)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
