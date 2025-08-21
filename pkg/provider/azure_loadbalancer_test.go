@@ -5124,9 +5124,14 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 		expectedError           bool
 	}{
 		{
-			desc:         "shall return existed IPv4 PIP if there is any",
-			pipName:      "pip1",
-			existingPIPs: []*armnetwork.PublicIPAddress{{Name: ptr.To("pip1")}},
+			desc:    "shall return existed IPv4 PIP if there is any",
+			pipName: "pip1",
+			existingPIPs: []*armnetwork.PublicIPAddress{{
+				Name: ptr.To("pip1"),
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
+			}},
 			expectedPIP: &armnetwork.PublicIPAddress{
 				Name: ptr.To("pip1"),
 				ID:   ptr.To(expectedPIPID),
@@ -5134,14 +5139,21 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 				},
-				Tags: map[string]*string{},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			},
 			shouldPutPIP: true,
 		},
 		{
-			desc:         "shall return existed IPv6 PIP if there is any",
-			pipName:      "pip1-IPv6",
-			existingPIPs: []*armnetwork.PublicIPAddress{{Name: ptr.To("pip1-IPv6")}},
+			desc:    "shall return existed IPv6 PIP if there is any",
+			pipName: "pip1-IPv6",
+			existingPIPs: []*armnetwork.PublicIPAddress{{
+				Name: ptr.To("pip1-IPv6"),
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
+			}},
 			expectedPIP: &armnetwork.PublicIPAddress{
 				Name: ptr.To("pip1-IPv6"),
 				ID: ptr.To(rgprefix +
@@ -5150,7 +5162,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv6),
 					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
 				},
-				Tags: map[string]*string{},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			},
 			isIPv6:       true,
 			shouldPutPIP: true,
@@ -5170,6 +5184,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			existingPIPs: []*armnetwork.PublicIPAddress{{
 				Name:       ptr.To("pip1"),
 				Properties: &armnetwork.PublicIPAddressPropertiesFormat{},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			}},
 			expectedPIP: &armnetwork.PublicIPAddress{
 				Name: ptr.To("pip1"),
@@ -5180,7 +5197,10 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					},
 					PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
 				},
-				Tags: map[string]*string{consts.ServiceUsingDNSKey: ptr.To("default/test1")},
+				Tags: map[string]*string{
+					consts.ServiceUsingDNSKey: ptr.To("default/test1"),
+					consts.ServiceTagKey:      ptr.To("default/test1"),
+				},
 			},
 			shouldPutPIP: true,
 		},
@@ -5195,6 +5215,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 						DomainNameLabel: ptr.To("previousdns"),
 					},
 				},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			}},
 			expectedPIP: &armnetwork.PublicIPAddress{
 				Name: ptr.To("pip1"),
@@ -5203,7 +5226,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					DNSSettings:            nil,
 					PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
 				},
-				Tags: map[string]*string{},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			},
 			shouldPutPIP: true,
 		},
@@ -5218,6 +5243,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 						DomainNameLabel: ptr.To("previousdns"),
 					},
 				},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			}},
 			expectedPIP: &armnetwork.PublicIPAddress{
 				Name: ptr.To("pip1"),
@@ -5228,10 +5256,13 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					},
 					PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
 				},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			},
 		},
 		{
-			desc:                    "shall update existed PIP's dns label for IPv6",
+			desc:                    "shall create existed PIP's dns label for IPv6",
 			pipName:                 "pip1",
 			inputDNSLabel:           "newdns",
 			foundDNSLabelAnnotation: true,
@@ -5239,6 +5270,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			existingPIPs: []*armnetwork.PublicIPAddress{{
 				Name:       ptr.To("pip1"),
 				Properties: &armnetwork.PublicIPAddressPropertiesFormat{},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			}},
 			expectedPIP: &armnetwork.PublicIPAddress{
 				Name: ptr.To("pip1"),
@@ -5250,7 +5284,10 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
 					PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv6),
 				},
-				Tags: map[string]*string{consts.ServiceUsingDNSKey: ptr.To("default/test1")},
+				Tags: map[string]*string{
+					consts.ServiceUsingDNSKey: ptr.To("default/test1"),
+					consts.ServiceTagKey:      ptr.To("default/test1"),
+				},
 			},
 			shouldPutPIP: true,
 		},
@@ -5267,6 +5304,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 						DomainNameLabel: ptr.To("previousdns"),
 					},
 				},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			}},
 			expectedPIP: &armnetwork.PublicIPAddress{
 				Name: ptr.To("pip1"),
@@ -5280,6 +5320,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 				},
 				Tags: map[string]*string{
 					"k8s-azure-dns-label-service": ptr.To("default/test1"),
+					consts.ServiceTagKey:          ptr.To("default/test1"),
 				},
 			},
 			shouldPutPIP: true,
@@ -5299,6 +5340,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
 					PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 				},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			}},
 			expectedPIP: &armnetwork.PublicIPAddress{
 				Name: ptr.To("pip1"),
@@ -5312,6 +5356,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 				},
 				Tags: map[string]*string{
 					"k8s-azure-dns-label-service": ptr.To("default/test1"),
+					consts.ServiceTagKey:          ptr.To("default/test1"),
 				},
 			},
 			shouldPutPIP: true,
@@ -5373,7 +5418,12 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			desc:    "shall tag the service name to the pip correctly",
 			pipName: "pip1",
 			existingPIPs: []*armnetwork.PublicIPAddress{
-				{Name: ptr.To("pip1")},
+				{
+					Name: ptr.To("pip1"),
+					Tags: map[string]*string{
+						consts.ServiceTagKey: ptr.To("default/test1"),
+					},
+				},
 			},
 			expectedPIP: &armnetwork.PublicIPAddress{
 				Name: ptr.To("pip1"),
@@ -5382,7 +5432,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 				},
-				Tags: map[string]*string{},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			},
 			shouldPutPIP: true,
 		},
@@ -5398,6 +5450,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 						PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv6),
 						PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 					},
+					Tags: map[string]*string{
+						consts.ServiceTagKey: ptr.To("default/test1"),
+					},
 				},
 			},
 			expectedPIP: &armnetwork.PublicIPAddress{
@@ -5407,7 +5462,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv6),
 					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 				},
-				Tags: map[string]*string{},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 				SKU: &armnetwork.PublicIPAddressSKU{
 					Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandard),
 				},
@@ -5415,13 +5472,22 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			shouldPutPIP: true,
 		},
 		{
-			desc:         "shall update pip tags if there is any change",
-			pipName:      "pip1",
-			existingPIPs: []*armnetwork.PublicIPAddress{{Name: ptr.To("pip1"), Tags: map[string]*string{"a": ptr.To("b")}}},
+			desc:    "shall update pip tags if there is any change",
+			pipName: "pip1",
+			existingPIPs: []*armnetwork.PublicIPAddress{{
+				Name: ptr.To("pip1"),
+				Tags: map[string]*string{
+					"a":                  ptr.To("b"),
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
+			}},
 			expectedPIP: &armnetwork.PublicIPAddress{
 				Name: ptr.To("pip1"),
-				Tags: map[string]*string{"a": ptr.To("c")},
-				ID:   ptr.To(expectedPIPID),
+				Tags: map[string]*string{
+					"a":                  ptr.To("c"),
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
+				ID: ptr.To(expectedPIPID),
 				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 					PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
