@@ -7473,7 +7473,7 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 				},
 			},
 			expectedLBs: []string{},
-			expectedErr: errors.New("values: Invalid value: []string(nil): for 'in', 'notin' operators, values set can't be empty"),
+			expectedErr: errors.New("values: Invalid value: null: for 'in', 'notin' operators, values set can't be empty"),
 		},
 		{
 			description: "should report an error if failed to convert namespace selector as a selector",
@@ -7495,7 +7495,7 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 				},
 			},
 			expectedLBs: []string{},
-			expectedErr: errors.New("values: Invalid value: []string(nil): for 'in', 'notin' operators, values set can't be empty"),
+			expectedErr: errors.New("values: Invalid value: null: for 'in', 'notin' operators, values set can't be empty"),
 		},
 		{
 			description: "should respect allowServicePlacement flag",
