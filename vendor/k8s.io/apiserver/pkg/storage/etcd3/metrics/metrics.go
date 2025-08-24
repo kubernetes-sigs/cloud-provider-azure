@@ -72,9 +72,10 @@ var (
 	)
 	objectCounts = compbasemetrics.NewGaugeVec(
 		&compbasemetrics.GaugeOpts{
-			Name:           "apiserver_storage_objects",
-			Help:           "[DEPRECATED, consider using apiserver_resource_objects instead] Number of stored objects at the time of last check split by kind. In case of a fetching error, the value will be -1.",
-			StabilityLevel: compbasemetrics.STABLE,
+			Name:              "apiserver_storage_objects",
+			Help:              "Number of stored objects at the time of last check split by kind. In case of a fetching error, the value will be -1.",
+			StabilityLevel:    compbasemetrics.STABLE,
+			DeprecatedVersion: "1.34.0",
 		},
 		[]string{"resource"},
 	)
@@ -223,8 +224,8 @@ func UpdateStoreStats(groupResource schema.GroupResource, stats storage.Stats, e
 
 // DeleteStoreStats delete the stats metrics.
 func DeleteStoreStats(groupResource schema.GroupResource) {
-	objectCounts.Delete(map[string]string{"resource": groupResource.String()})
-	newObjectCounts.Delete(map[string]string{"group": groupResource.Group, "resource": groupResource.Resource})
+	objectCounts.DeleteLabelValues(groupResource.String())
+	newObjectCounts.DeleteLabelValues(groupResource.Group, groupResource.Resource)
 	if utilfeature.DefaultFeatureGate.Enabled(features.SizeBasedListCostEstimate) {
 		resourceSizeEstimate.DeleteLabelValues(groupResource.Group, groupResource.Resource)
 	}
