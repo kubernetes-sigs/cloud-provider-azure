@@ -25,9 +25,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/kubelet/pkg/apis/credentialprovider/v1"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 )
 
 const (
@@ -44,13 +44,32 @@ func TestGetCredentials(t *testing.T) {
 		"*.azurecr.de",
 		"*.azurecr.us",
 	}
+	configFile, err := os.CreateTemp(".", "config.json")
+	if err != nil {
+		t.Fatalf("Unexpected error when creating temp file: %v", err)
+	}
+	defer os.Remove(configFile.Name())
 
-	provider := NewAcrProvider(&config.AzureClientConfig{
-		AzureAuthConfig: azclient.AzureAuthConfig{
-			AADClientID:     "foo",
-			AADClientSecret: "bar",
+	_, err = configFile.WriteString(`
+    {
+        "aadClientId": "foo",
+        "aadClientSecret": "bar"
+    }`)
+	if err != nil {
+		t.Fatalf("Unexpected error when writing to temp file: %v", err)
+	}
+
+	provider, err := NewAcrProvider(
+		&v1.CredentialProviderRequest{
+			Image: "foo.azurecr.io/nginx:v1",
 		},
-	}, nil, nil)
+		"",
+		configFile.Name(),
+	)
+
+	if err != nil {
+		t.Fatalf("Unexpected error when creating acr provider: %v", err)
+	}
 
 	credResponse, err := provider.GetCredentials(context.TODO(), "foo.azurecr.io/nginx:v1", nil)
 	if err != nil {
@@ -130,6 +149,8 @@ func TestGetCredentialsConfig(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Unexpected error when creating temp file: %v", err)
 		}
+		defer os.Remove(configFile.Name())
+
 		_, err = configFile.WriteString(test.configStr)
 		if err != nil {
 			t.Fatalf("Unexpected error when writing to temp file: %v", err)
@@ -138,7 +159,14 @@ func TestGetCredentialsConfig(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Unexpected error when closing temp file: %v", err)
 		}
-		provider, err := NewAcrProviderFromConfig(configFile.Name(), "")
+
+		provider, err := NewAcrProvider(
+			&v1.CredentialProviderRequest{
+				Image: "foo.azurecr.io/nginx:v1",
+			},
+			"",
+			configFile.Name(),
+		)
 		if err != nil && !test.expectError {
 			t.Fatalf("Unexpected error when creating new acr provider: %v", err)
 		}
@@ -148,10 +176,6 @@ func TestGetCredentialsConfig(t *testing.T) {
 				t.Fatalf("Unexpected error when writing to temp file: %v", err)
 			}
 			continue
-		}
-		err = os.Remove(configFile.Name())
-		if err != nil {
-			t.Fatalf("Unexpected error when writing to temp file: %v", err)
 		}
 
 		credResponse, err := provider.GetCredentials(context.Background(), test.image, nil)
@@ -178,7 +202,14 @@ func TestProcessImageWithMirrorMapping(t *testing.T) {
 	assert.Nilf(t, err, "Unexpected error when writing to temp file")
 	assert.Nilf(t, configFile.Close(), "Unexpected error when closing temp file")
 
-	provider, err := NewAcrProviderFromConfig(configFile.Name(), "mcr.microsoft.com:abc.azurecr.io")
+	provider, err := NewAcrProvider(
+		&v1.CredentialProviderRequest{
+			Image: "foo.azurecr.io/nginx:v1",
+		},
+		"mcr.microsoft.com:abc.azurecr.io",
+		configFile.Name(),
+	)
+
 	assert.Nilf(t, err, "Unexpected error when creating new acr provider")
 	acrProvider := provider.(*acrProvider)
 
@@ -212,13 +243,31 @@ func TestProcessImageWithMirrorMapping(t *testing.T) {
 }
 
 func TestParseACRLoginServerFromImage(t *testing.T) {
+	configFile, err := os.CreateTemp(".", "config.json")
+	if err != nil {
+		t.Fatalf("Unexpected error when creating temp file: %v", err)
+	}
+	defer os.Remove(configFile.Name())
 
-	providerInterface := NewAcrProvider(&config.AzureClientConfig{
-		AzureAuthConfig: azclient.AzureAuthConfig{
-			AADClientID:     "foo",
-			AADClientSecret: "bar",
+	_, err = configFile.WriteString(`
+    {
+        "aadClientId": "foo",
+        "aadClientSecret": "bar"
+    }`)
+	if err != nil {
+		t.Fatalf("Unexpected error when writing to temp file: %v", err)
+	}
+
+	providerInterface, err := NewAcrProvider(
+		&v1.CredentialProviderRequest{
+			Image: "foo.azurecr.io/nginx:v1",
 		},
-	}, nil, nil)
+		"mcr.microsoft.com:abc.azurecr.io",
+		configFile.Name(),
+	)
+	if err != nil {
+		t.Fatalf("Unexpected error when creating new acr provider: %v", err)
+	}
 
 	provider := providerInterface.(*acrProvider)
 
