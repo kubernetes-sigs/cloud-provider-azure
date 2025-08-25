@@ -19,6 +19,8 @@ package natgatewayclient
 
 import (
 	"context"
+	"testing"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
@@ -27,9 +29,9 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/recording"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
-	"testing"
 )
 
 func TestClient(t *testing.T) {

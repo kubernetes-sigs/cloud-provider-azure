@@ -483,32 +483,40 @@ func TestGetInstanceIDByNodeName(t *testing.T) {
 
 	for _, test := range testCases {
 		test := test
-		t.Run(test.description, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-			ss, err := NewTestScaleSet(ctrl)
-			assert.NoError(t, err, test.description)
-
-			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-
-			expectedScaleSet := buildTestVMSS(test.scaleSet, "vmssee6c2")
-			mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachineScaleSet{expectedScaleSet}, nil).AnyTimes()
-
-			expectedVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, test.scaleSet, "", 0, test.vmList, "", false)
-			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).AnyTimes()
-
-			mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
-			mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
-
-			realValue, err := ss.GetInstanceIDByNodeName(context.Background(), test.nodeName)
-			if test.expectError {
-				assert.Error(t, err, test.description)
-			} else {
+		// Test for each case of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+				ss, err := NewTestScaleSet(ctrl)
 				assert.NoError(t, err, test.description)
-				assert.Equal(t, test.expected, realValue, test.description)
-			}
-		})
+
+				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+
+				expectedScaleSet := buildTestVMSS(test.scaleSet, "vmssee6c2")
+				mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachineScaleSet{expectedScaleSet}, nil).AnyTimes()
+
+				expectedVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, test.scaleSet, "", 0, test.vmList, "", false)
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).AnyTimes()
+				}
+
+				mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+				mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
+
+				realValue, err := ss.GetInstanceIDByNodeName(context.Background(), test.nodeName)
+				if test.expectError {
+					assert.Error(t, err, test.description)
+				} else {
+					assert.NoError(t, err, test.description)
+					assert.Equal(t, test.expected, realValue, test.description)
+				}
+			})
+		}
 	}
 }
 
@@ -562,34 +570,42 @@ func TestGetZoneByNodeName(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ctrl := gomock.NewController(t)
-		cloud := GetTestCloud(ctrl)
-		if test.location != "" {
-			cloud.Location = test.location
+		// Test for each case of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			ctrl := gomock.NewController(t)
+			cloud := GetTestCloud(ctrl)
+			if test.location != "" {
+				cloud.Location = test.location
+			}
+			ss, err := NewTestScaleSet(ctrl)
+			assert.NoError(t, err, test.description)
+
+			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+			mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+			expectedScaleSet := buildTestVMSS(test.scaleSet, "vmssee6c2")
+			mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachineScaleSet{expectedScaleSet}, nil).AnyTimes()
+
+			expectedVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, test.scaleSet, test.zone, test.faultDomain, test.vmList, "", false)
+			ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+			if ss.ListVmssVirtualMachinesWithoutInstanceView {
+				mockVMSSVMClient.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).AnyTimes()
+			} else {
+				mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).AnyTimes()
+			}
+			mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
+
+			realValue, err := ss.GetZoneByNodeName(context.TODO(), test.nodeName)
+			if test.expectError {
+				assert.Error(t, err, test.description)
+				continue
+			}
+
+			assert.NoError(t, err, test.description)
+			assert.Equal(t, test.expected, realValue.FailureDomain, test.description)
+			assert.Equal(t, strings.ToLower(cloud.Location), realValue.Region, test.description)
+			ctrl.Finish()
 		}
-		ss, err := NewTestScaleSet(ctrl)
-		assert.NoError(t, err, test.description)
-
-		mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-		mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-		mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
-		expectedScaleSet := buildTestVMSS(test.scaleSet, "vmssee6c2")
-		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachineScaleSet{expectedScaleSet}, nil).AnyTimes()
-
-		expectedVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, test.scaleSet, test.zone, test.faultDomain, test.vmList, "", false)
-		mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).AnyTimes()
-		mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
-
-		realValue, err := ss.GetZoneByNodeName(context.TODO(), test.nodeName)
-		if test.expectError {
-			assert.Error(t, err, test.description)
-			continue
-		}
-
-		assert.NoError(t, err, test.description)
-		assert.Equal(t, test.expected, realValue.FailureDomain, test.description)
-		assert.Equal(t, strings.ToLower(cloud.Location), realValue.Region, test.description)
-		ctrl.Finish()
 	}
 }
 
@@ -620,44 +636,50 @@ func TestGetIPByNodeName(t *testing.T) {
 
 	for _, test := range testCases {
 		test := test
-		t.Run(test.description, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-			ss, err := NewTestScaleSet(ctrl)
-			assert.NoError(t, err, test.description)
+		// Test for each case of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+				ss, err := NewTestScaleSet(ctrl)
+				assert.NoError(t, err, test.description)
 
-			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
-			mockInterfaceClient := ss.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
-			mockPIPClient := ss.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
+				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+				mockInterfaceClient := ss.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+				mockPIPClient := ss.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
 
-			expectedScaleSet := buildTestVMSS(test.scaleSet, "vmssee6c2")
-			mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachineScaleSet{expectedScaleSet}, nil).AnyTimes()
+				expectedScaleSet := buildTestVMSS(test.scaleSet, "vmssee6c2")
+				mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachineScaleSet{expectedScaleSet}, nil).AnyTimes()
 
-			expectedVMs, expectedInterface, expectedPIP := buildTestVirtualMachineEnv(ss.Cloud, test.scaleSet, "", 0, test.vmList, "", false)
-			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).AnyTimes()
-			mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedInterface, nil).AnyTimes()
-			mockPIPClient.EXPECT().GetVirtualMachineScaleSetPublicIPAddress(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(
-				armnetwork.PublicIPAddressesClientGetVirtualMachineScaleSetPublicIPAddressResponse{PublicIPAddress: *expectedPIP}, nil).AnyTimes()
-			mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
+				expectedVMs, expectedInterface, expectedPIP := buildTestVirtualMachineEnv(ss.Cloud, test.scaleSet, "", 0, test.vmList, "", false)
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).AnyTimes()
+				}
+				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedInterface, nil).AnyTimes()
+				mockPIPClient.EXPECT().GetVirtualMachineScaleSetPublicIPAddress(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(
+					armnetwork.PublicIPAddressesClientGetVirtualMachineScaleSetPublicIPAddressResponse{PublicIPAddress: *expectedPIP}, nil).AnyTimes()
+				mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
 
-			privateIP, publicIP, err := ss.GetIPByNodeName(context.Background(), test.nodeName)
-			if test.expectError {
-				assert.Error(t, err, test.description)
-				return
-			}
+				privateIP, publicIP, err := ss.GetIPByNodeName(context.Background(), test.nodeName)
+				if test.expectError {
+					assert.Error(t, err, test.description)
+					return
+				}
 
-			assert.NoError(t, err, test.description)
-			assert.Equal(t, test.expected, []string{privateIP, publicIP}, test.description)
-		})
+				assert.NoError(t, err, test.description)
+				assert.Equal(t, test.expected, []string{privateIP, publicIP}, test.description)
+			})
+		}
 	}
 }
 
 func TestGetNodeNameByIPConfigurationID(t *testing.T) {
-
 	ipConfigurationIDTemplate := "/subscriptions/script/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/%s/virtualMachines/%s/networkInterfaces/%s/ipConfigurations/ipconfig1"
-
 	testCases := []struct {
 		description          string
 		scaleSet             string
@@ -693,33 +715,40 @@ func TestGetNodeNameByIPConfigurationID(t *testing.T) {
 
 	for _, test := range testCases {
 		test := test
-		t.Run(test.description, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-			ss, err := NewTestScaleSet(ctrl)
-			assert.NoError(t, err, test.description)
+		// Test for each case of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+				ss, err := NewTestScaleSet(ctrl)
+				assert.NoError(t, err, test.description)
 
-			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
-			expectedScaleSet := buildTestVMSS(test.scaleSet, "vmssee6c2")
-			mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachineScaleSet{expectedScaleSet}, nil).AnyTimes()
+				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+				expectedScaleSet := buildTestVMSS(test.scaleSet, "vmssee6c2")
+				mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachineScaleSet{expectedScaleSet}, nil).AnyTimes()
 
-			expectedVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, test.scaleSet, "", 0, test.vmList, "", false)
-			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).AnyTimes()
+				expectedVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, test.scaleSet, "", 0, test.vmList, "", false)
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).AnyTimes()
+				}
+				mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
 
-			mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
+				nodeName, scalesetName, err := ss.GetNodeNameByIPConfigurationID(context.TODO(), test.ipConfigurationID)
+				if test.expectError {
+					assert.Error(t, err, test.description)
+					return
+				}
 
-			nodeName, scalesetName, err := ss.GetNodeNameByIPConfigurationID(context.TODO(), test.ipConfigurationID)
-			if test.expectError {
-				assert.Error(t, err, test.description)
-				return
-			}
-
-			assert.NoError(t, err, test.description)
-			assert.Equal(t, test.expectedNodeName, nodeName, test.description)
-			assert.Equal(t, test.expectedScaleSetName, scalesetName, test.description)
-		})
+				assert.NoError(t, err, test.description)
+				assert.Equal(t, test.expectedNodeName, nodeName, test.description)
+				assert.Equal(t, test.expectedScaleSetName, scalesetName, test.description)
+			})
+		}
 	}
 }
 
@@ -817,7 +846,6 @@ func TestGetVMSS(t *testing.T) {
 }
 
 func TestGetVmssVM(t *testing.T) {
-
 	testCases := []struct {
 		description      string
 		nodeName         string
@@ -841,38 +869,45 @@ func TestGetVmssVM(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		t.Run(test.description, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-			ss, err := NewTestScaleSet(ctrl)
-			assert.NoError(t, err, test.description)
+		// Test for each case of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+				ss, err := NewTestScaleSet(ctrl)
+				assert.NoError(t, err, test.description)
 
-			expectedVMSS := buildTestVMSS(test.existedVMSSName, "vmss-vm-")
-			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+				expectedVMSS := buildTestVMSS(test.existedVMSSName, "vmss-vm-")
+				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
 
-			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, test.existedVMSSName, "", 0, test.existedNodeNames, "", false)
-			var expectedVMSSVM armcompute.VirtualMachineScaleSetVM
-			for _, expected := range expectedVMSSVMs {
-				if strings.EqualFold(*expected.Properties.OSProfile.ComputerName, test.nodeName) {
-					expectedVMSSVM = *expected
+				expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, test.existedVMSSName, "", 0, test.existedNodeNames, "", false)
+				var expectedVMSSVM armcompute.VirtualMachineScaleSetVM
+				for _, expected := range expectedVMSSVMs {
+					if strings.EqualFold(*expected.Properties.OSProfile.ComputerName, test.nodeName) {
+						expectedVMSSVM = *expected
+					}
 				}
-			}
 
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, test.existedVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, test.existedVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, test.existedVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				}
 
-			vmssVM, err := ss.getVmssVM(context.TODO(), test.nodeName, azcache.CacheReadTypeDefault)
-			if vmssVM != nil {
-				assert.Equal(t, expectedVMSSVM, *vmssVM.AsVirtualMachineScaleSetVM(), test.description)
-			}
-			assert.Equal(t, test.expectedError, err, test.description)
-		})
+				vmssVM, err := ss.getVmssVM(context.TODO(), test.nodeName, azcache.CacheReadTypeDefault)
+				if vmssVM != nil {
+					assert.Equal(t, expectedVMSSVM, *vmssVM.AsVirtualMachineScaleSetVM(), test.description)
+				}
+				assert.Equal(t, test.expectedError, err, test.description)
+			})
+		}
 	}
 }
 
 func TestGetPowerStatusByNodeName(t *testing.T) {
-
 	testCases := []struct {
 		description        string
 		vmList             []string
@@ -895,31 +930,39 @@ func TestGetPowerStatusByNodeName(t *testing.T) {
 
 	for _, test := range testCases {
 		test := test
-		t.Run(test.description, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+		// Test for each case of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
 
-			ss, err := NewTestScaleSet(ctrl)
-			assert.NoError(t, err, "unexpected error when creating test VMSS")
+				ss, err := NewTestScaleSet(ctrl)
+				assert.NoError(t, err, "unexpected error when creating test VMSS")
 
-			expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
-			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+				expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
+				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
 
-			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, test.vmList, "", false)
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-			if test.nilStatus {
-				expectedVMSSVMs[0].Properties.InstanceView.Statuses = nil
-			}
-			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, test.vmList, "", false)
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				if test.nilStatus {
+					expectedVMSSVMs[0].Properties.InstanceView.Statuses = nil
+				}
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				}
 
-			mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
-			mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
+				mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+				mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
 
-			powerState, err := ss.GetPowerStatusByNodeName(context.TODO(), "vmss-vm-000001")
-			assert.Equal(t, test.expectedErr, err, test.description+errMsgSuffix)
-			assert.Equal(t, test.expectedPowerState, powerState, test.description)
-		})
+				powerState, err := ss.GetPowerStatusByNodeName(context.TODO(), "vmss-vm-000001")
+				assert.Equal(t, test.expectedErr, err, test.description+errMsgSuffix)
+				assert.Equal(t, test.expectedPowerState, powerState, test.description)
+			})
+		}
 	}
 }
 
@@ -949,28 +992,36 @@ func TestGetProvisioningStateByNodeName(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := NewTestScaleSet(ctrl)
-		assert.NoError(t, err, "unexpected error when creating test VMSS")
+		// Test for each case of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			ss, err := NewTestScaleSet(ctrl)
+			assert.NoError(t, err, "unexpected error when creating test VMSS")
 
-		expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
-		mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-		mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+			expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
+			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
 
-		expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, test.vmList, "", false)
-		mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-		if test.provisioningState != "" {
-			expectedVMSSVMs[0].Properties.ProvisioningState = ptr.To(test.provisioningState)
-		} else {
-			expectedVMSSVMs[0].Properties.ProvisioningState = nil
+			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, test.vmList, "", false)
+			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+			if test.provisioningState != "" {
+				expectedVMSSVMs[0].Properties.ProvisioningState = ptr.To(test.provisioningState)
+			} else {
+				expectedVMSSVMs[0].Properties.ProvisioningState = nil
+			}
+			ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+			if ss.ListVmssVirtualMachinesWithoutInstanceView {
+				mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+			} else {
+				mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+			}
+
+			mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+			mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
+
+			provisioningState, err := ss.GetProvisioningStateByNodeName(context.TODO(), "vmss-vm-000001")
+			assert.Equal(t, test.expectedErr, err, test.description+errMsgSuffix)
+			assert.Equal(t, test.expectedProvisioningState, provisioningState, test.description)
 		}
-		mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
-
-		mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
-		mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
-
-		provisioningState, err := ss.GetProvisioningStateByNodeName(context.TODO(), "vmss-vm-000001")
-		assert.Equal(t, test.expectedErr, err, test.description+errMsgSuffix)
-		assert.Equal(t, test.expectedProvisioningState, provisioningState, test.description)
 	}
 }
 
@@ -991,29 +1042,37 @@ func TestGetVmssVMByInstanceID(t *testing.T) {
 
 	for _, test := range testCases {
 		test := test
-		t.Run(test.description, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-			ss, err := NewTestScaleSet(ctrl)
-			assert.NoError(t, err, "unexpected error when creating test VMSS")
+		// Test for each case of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+				ss, err := NewTestScaleSet(ctrl)
+				assert.NoError(t, err, "unexpected error when creating test VMSS")
 
-			expectedVMSS := &armcompute.VirtualMachineScaleSet{
-				Name: ptr.To(testVMSSName),
-				Properties: &armcompute.VirtualMachineScaleSetProperties{
-					VirtualMachineProfile: &armcompute.VirtualMachineScaleSetVMProfile{},
-				},
-			}
-			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+				expectedVMSS := &armcompute.VirtualMachineScaleSet{
+					Name: ptr.To(testVMSSName),
+					Properties: &armcompute.VirtualMachineScaleSetProperties{
+						VirtualMachineProfile: &armcompute.VirtualMachineScaleSetVMProfile{},
+					},
+				}
+				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
 
-			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, test.vmList, "", false)
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, test.vmList, "", false)
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				}
 
-			vm, err := ss.getVmssVMByInstanceID(context.TODO(), ss.ResourceGroup, testVMSSName, test.instanceID, azcache.CacheReadTypeDefault)
-			assert.Equal(t, test.expectedErr, err, test.description+errMsgSuffix)
-			assert.Equal(t, *expectedVMSSVMs[0], *vm, test.description)
-		})
+				vm, err := ss.getVmssVMByInstanceID(context.TODO(), ss.ResourceGroup, testVMSSName, test.instanceID, azcache.CacheReadTypeDefault)
+				assert.Equal(t, test.expectedErr, err, test.description+errMsgSuffix)
+				assert.Equal(t, *expectedVMSSVMs[0], *vm, test.description)
+			})
+		}
 	}
 }
 
@@ -1042,57 +1101,65 @@ func TestGetVmssVMByNodeIdentity(t *testing.T) {
 
 	for _, test := range testCases {
 		test := test
-		t.Run(test.description, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-			ss, err := NewTestScaleSet(ctrl)
-			assert.NoError(t, err, "unexpected error when creating test VMSS")
+		// Test for each case of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+				ss, err := NewTestScaleSet(ctrl)
+				assert.NoError(t, err, "unexpected error when creating test VMSS")
 
-			expectedVMSS := &armcompute.VirtualMachineScaleSet{
-				Name: ptr.To(testVMSSName),
-				Properties: &armcompute.VirtualMachineScaleSetProperties{
-					VirtualMachineProfile: &armcompute.VirtualMachineScaleSetVMProfile{},
-				},
-			}
-			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
-
-			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, test.vmList, "", false)
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
-
-			cacheKey := getVMSSVMCacheKey(ss.ResourceGroup, testVMSSName)
-			virtualMachines, err := ss.getVMSSVMsFromCache(context.TODO(), ss.ResourceGroup, testVMSSName, azcache.CacheReadTypeDefault)
-			assert.Nil(t, err)
-			for _, vm := range test.goneVMList {
-				entry := VMSSVirtualMachineEntry{
-					ResourceGroup: ss.ResourceGroup,
-					VMSSName:      testVMSSName,
+				expectedVMSS := &armcompute.VirtualMachineScaleSet{
+					Name: ptr.To(testVMSSName),
+					Properties: &armcompute.VirtualMachineScaleSetProperties{
+						VirtualMachineProfile: &armcompute.VirtualMachineScaleSetVMProfile{},
+					},
 				}
-				virtualMachines.Store(vm, &entry)
-			}
-			ss.vmssVMCache.Update(cacheKey, virtualMachines)
+				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
 
-			for i := 0; i < len(test.vmList); i++ {
-				node := nodeIdentity{ss.ResourceGroup, testVMSSName, test.vmList[i]}
-				vm, err := ss.getVmssVMByNodeIdentity(context.TODO(), &node, azcache.CacheReadTypeDefault)
-				assert.Equal(t, test.expectedErr, err)
-				assert.Equal(t, *virtualmachine.FromVirtualMachineScaleSetVM(expectedVMSSVMs[i], virtualmachine.ByVMSS(testVMSSName)), *vm)
-			}
-			for i := 0; i < len(test.goneVMList); i++ {
-				node := nodeIdentity{ss.ResourceGroup, testVMSSName, test.goneVMList[i]}
-				_, err := ss.getVmssVMByNodeIdentity(context.TODO(), &node, azcache.CacheReadTypeDefault)
-				assert.Equal(t, test.goneVMExpectedErr, err)
-			}
+				expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, test.vmList, "", false)
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				}
 
-			virtualMachines, err = ss.getVMSSVMsFromCache(context.TODO(), ss.ResourceGroup, testVMSSName, azcache.CacheReadTypeDefault)
-			assert.Nil(t, err)
+				cacheKey := getVMSSVMCacheKey(ss.ResourceGroup, testVMSSName)
+				virtualMachines, err := ss.getVMSSVMsFromCache(context.TODO(), ss.ResourceGroup, testVMSSName, azcache.CacheReadTypeDefault)
+				assert.Nil(t, err)
+				for _, vm := range test.goneVMList {
+					entry := VMSSVirtualMachineEntry{
+						ResourceGroup: ss.ResourceGroup,
+						VMSSName:      testVMSSName,
+					}
+					virtualMachines.Store(vm, &entry)
+				}
+				ss.vmssVMCache.Update(cacheKey, virtualMachines)
 
-			for _, vm := range test.goneVMList {
-				_, ok := virtualMachines.Load(vm)
-				assert.True(t, ok)
-			}
-		})
+				for i := 0; i < len(test.vmList); i++ {
+					node := nodeIdentity{ss.ResourceGroup, testVMSSName, test.vmList[i]}
+					vm, err := ss.getVmssVMByNodeIdentity(context.TODO(), &node, azcache.CacheReadTypeDefault)
+					assert.Equal(t, test.expectedErr, err)
+					assert.Equal(t, *virtualmachine.FromVirtualMachineScaleSetVM(expectedVMSSVMs[i], virtualmachine.ByVMSS(testVMSSName)), *vm)
+				}
+				for i := 0; i < len(test.goneVMList); i++ {
+					node := nodeIdentity{ss.ResourceGroup, testVMSSName, test.goneVMList[i]}
+					_, err := ss.getVmssVMByNodeIdentity(context.TODO(), &node, azcache.CacheReadTypeDefault)
+					assert.Equal(t, test.goneVMExpectedErr, err)
+				}
+
+				virtualMachines, err = ss.getVMSSVMsFromCache(context.TODO(), ss.ResourceGroup, testVMSSName, azcache.CacheReadTypeDefault)
+				assert.Nil(t, err)
+
+				for _, vm := range test.goneVMList {
+					_, ok := virtualMachines.Load(vm)
+					assert.True(t, ok)
+				}
+			})
+		}
 	}
 }
 
@@ -1121,29 +1188,37 @@ func TestGetInstanceTypeByNodeName(t *testing.T) {
 
 	for _, test := range testCases {
 		test := test
-		t.Run(test.description, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-			ss, err := NewTestScaleSet(ctrl)
-			assert.NoError(t, err, "unexpected error when creating test VMSS")
+		// Test for each case of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+				ss, err := NewTestScaleSet(ctrl)
+				assert.NoError(t, err, "unexpected error when creating test VMSS")
 
-			expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
-			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+				expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
+				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
 
-			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, test.vmList, "", false)
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, test.vmList, "", false)
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				}
 
-			mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
-			mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, test.vmClientErr).AnyTimes()
+				mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+				mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, test.vmClientErr).AnyTimes()
 
-			SKU, err := ss.GetInstanceTypeByNodeName(context.Background(), "vmss-vm-000000")
-			if test.expectedErr != nil {
-				assert.Contains(t, err.Error(), test.expectedErr.Error(), test.description)
-			}
-			assert.Equal(t, test.expectedType, SKU, test.description)
-		})
+				SKU, err := ss.GetInstanceTypeByNodeName(context.Background(), "vmss-vm-000000")
+				if test.expectedErr != nil {
+					assert.Contains(t, err.Error(), test.expectedErr.Error(), test.description)
+				}
+				assert.Equal(t, test.expectedType, SKU, test.description)
+			})
+		}
 	}
 }
 
@@ -1219,7 +1294,6 @@ func TestGetPrimaryInterfaceID(t *testing.T) {
 }
 
 func TestGetPrimaryInterface(t *testing.T) {
-
 	testCases := []struct {
 		description         string
 		nodeName            string
@@ -1288,52 +1362,195 @@ func TestGetPrimaryInterface(t *testing.T) {
 
 	for _, test := range testCases {
 		test := test
-		t.Run(test.description, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-			ss, err := NewTestScaleSet(ctrl)
-			assert.NoError(t, err, "unexpected error when creating test VMSS")
+		// Test for each case of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+				ss, err := NewTestScaleSet(ctrl)
+				assert.NoError(t, err, "unexpected error when creating test VMSS")
 
-			expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
-			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, test.vmssClientErr).AnyTimes()
+				expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
+				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, test.vmssClientErr).AnyTimes()
 
-			expectedVMSSVMs, expectedInterface, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, test.vmList, "", false)
-			if !test.hasPrimaryInterface {
-				networkInterfaces := expectedVMSSVMs[0].Properties.NetworkProfile.NetworkInterfaces
-				networkInterfaces[0].Properties.Primary = ptr.To(false)
-				networkInterfaces = append(networkInterfaces, &armcompute.NetworkInterfaceReference{
-					Properties: &armcompute.NetworkInterfaceReferenceProperties{Primary: ptr.To(false)},
-				})
-				expectedVMSSVMs[0].Properties.NetworkProfile.NetworkInterfaces = networkInterfaces
-			}
-			if test.isInvalidNICID {
-				networkInterfaces := expectedVMSSVMs[0].Properties.NetworkProfile.NetworkInterfaces
-				networkInterfaces[0].ID = ptr.To("invalid/id/")
-				expectedVMSSVMs[0].Properties.NetworkProfile.NetworkInterfaces = networkInterfaces
-			}
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				expectedVMSSVMs, expectedInterface, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, test.vmList, "", false)
+				if !test.hasPrimaryInterface {
+					networkInterfaces := expectedVMSSVMs[0].Properties.NetworkProfile.NetworkInterfaces
+					networkInterfaces[0].Properties.Primary = ptr.To(false)
+					networkInterfaces = append(networkInterfaces, &armcompute.NetworkInterfaceReference{
+						Properties: &armcompute.NetworkInterfaceReferenceProperties{Primary: ptr.To(false)},
+					})
+					expectedVMSSVMs[0].Properties.NetworkProfile.NetworkInterfaces = networkInterfaces
+				}
+				if test.isInvalidNICID {
+					networkInterfaces := expectedVMSSVMs[0].Properties.NetworkProfile.NetworkInterfaces
+					networkInterfaces[0].ID = ptr.To("invalid/id/")
+					expectedVMSSVMs[0].Properties.NetworkProfile.NetworkInterfaces = networkInterfaces
+				}
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				}
 
-			mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
-			mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, test.vmClientErr).AnyTimes()
+				mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+				mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, test.vmClientErr).AnyTimes()
 
-			mockInterfaceClient := ss.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
-			mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), ss.ResourceGroup, testVMSSName, "0", test.nodeName).Return(expectedInterface, test.nicClientErr).AnyTimes()
-			expectedInterface.Location = &ss.Location
+				mockInterfaceClient := ss.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), ss.ResourceGroup, testVMSSName, "0", test.nodeName).Return(expectedInterface, test.nicClientErr).AnyTimes()
+				expectedInterface.Location = &ss.Location
 
-			if test.vmClientErr != nil || test.vmssClientErr != nil || test.nicClientErr != nil || !test.hasPrimaryInterface || test.isInvalidNICID {
-				expectedInterface = &armnetwork.Interface{}
-			}
+				if test.vmClientErr != nil || test.vmssClientErr != nil || test.nicClientErr != nil || !test.hasPrimaryInterface || test.isInvalidNICID {
+					expectedInterface = &armnetwork.Interface{}
+				}
 
-			nic, err := ss.GetPrimaryInterface(context.Background(), test.nodeName)
-			if test.expectedErr != nil {
-				assert.Contains(t, err.Error(), test.expectedErr.Error(), test.description)
-			} else {
-				assert.Equal(t, expectedInterface, nic, test.description)
-			}
-		})
+				nic, err := ss.GetPrimaryInterface(context.Background(), test.nodeName)
+				if test.expectedErr != nil {
+					assert.Contains(t, err.Error(), test.expectedErr.Error(), test.description)
+				} else {
+					assert.Equal(t, expectedInterface, nic, test.description)
+				}
+			})
+		}
 	}
+}
+
+// TestGetPrimaryInterfaceRefactoring tests that GetPrimaryInterface uses ComputeClientFactory
+// instead of NetworkClientFactory after the client factory refactoring
+func TestGetPrimaryInterfaceRefactoring(t *testing.T) {
+	testCases := []struct {
+		description         string
+		nodeName            string
+		vmList              []string
+		interfaceCallsCount int
+		expectSuccess       bool
+		expectedErr         error
+	}{
+		{
+			description:         "GetPrimaryInterface should use ComputeClientFactory.GetInterfaceClient successfully",
+			nodeName:            "vmss-vm-000000",
+			vmList:              []string{"vmss-vm-000000"},
+			interfaceCallsCount: 1,
+			expectSuccess:       true,
+		},
+		{
+			description:         "GetPrimaryInterface should handle ComputeClientFactory interface client errors",
+			nodeName:            "vmss-vm-000001",
+			vmList:              []string{"vmss-vm-000001"},
+			interfaceCallsCount: 1,
+			expectSuccess:       false,
+			expectedErr:         fmt.Errorf("interface client error"),
+		},
+		{
+			description:         "GetPrimaryInterface should call ComputeClientFactory interface client exactly once per request",
+			nodeName:            "vmss-vm-000002",
+			vmList:              []string{"vmss-vm-000002"},
+			interfaceCallsCount: 1,
+			expectSuccess:       true,
+		},
+	}
+
+	for _, test := range testCases {
+		test := test
+		// Test for each case of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+
+				ss, err := NewTestScaleSet(ctrl)
+				assert.NoError(t, err, "unexpected error when creating test VMSS")
+
+				// Setup expected VMSS
+				expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
+				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+
+				// Setup expected VMSS VMs and interface
+				expectedVMSSVMs, expectedInterface, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, test.vmList, "", false)
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				}
+
+				// Setup VM client (for fallback scenarios)
+				mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+				mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
+				// CRITICAL: Test that ComputeClientFactory.GetInterfaceClient() is called exactly the expected number of times
+				mockInterfaceClient := ss.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+
+				if test.expectSuccess {
+					mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(
+						gomock.Any(), ss.ResourceGroup, testVMSSName, "0", test.nodeName,
+					).Return(expectedInterface, nil).Times(test.interfaceCallsCount)
+				} else {
+					mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(
+						gomock.Any(), ss.ResourceGroup, testVMSSName, "0", test.nodeName,
+					).Return(nil, &azcore.ResponseError{ErrorCode: "interface client error"}).Times(test.interfaceCallsCount)
+				}
+
+				// CRITICAL: Verify that NetworkClientFactory.GetInterfaceClient() is NEVER called
+				// This ensures the refactoring is working correctly
+				mockNetworkInterfaceClient := ss.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+				mockNetworkInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(
+					gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+				).Times(0) // Should NEVER be called after refactoring
+
+				// Execute the test
+				nic, err := ss.GetPrimaryInterface(context.Background(), test.nodeName)
+
+				// Verify results
+				if test.expectSuccess {
+					assert.NoError(t, err, test.description)
+					assert.NotNil(t, nic, test.description)
+					assert.Equal(t, expectedInterface.Name, nic.Name, test.description)
+				} else {
+					assert.Error(t, err, test.description)
+					if test.expectedErr != nil {
+						assert.Contains(t, err.Error(), test.expectedErr.Error(), test.description)
+					}
+				}
+			})
+		}
+	}
+}
+
+// TestGetPrimaryInterfaceClientFactoryValidation ensures the refactoring maintains correct behavior
+func TestGetPrimaryInterfaceClientFactoryValidation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ss, err := NewTestScaleSet(ctrl)
+	assert.NoError(t, err, "unexpected error when creating test VMSS")
+
+	// Verify that both client factories exist but only ComputeClientFactory should be used
+	assert.NotNil(t, ss.ComputeClientFactory, "ComputeClientFactory should exist")
+	assert.NotNil(t, ss.NetworkClientFactory, "NetworkClientFactory should exist")
+
+	// Verify that GetInterfaceClient returns the expected client types
+	computeInterfaceClient := ss.ComputeClientFactory.GetInterfaceClient()
+	networkInterfaceClient := ss.NetworkClientFactory.GetInterfaceClient()
+
+	assert.NotNil(t, computeInterfaceClient, "ComputeClientFactory should provide interface client")
+	assert.NotNil(t, networkInterfaceClient, "NetworkClientFactory should provide interface client")
+
+	// Both should be mock clients in test environment
+	_, isComputeMock := computeInterfaceClient.(*mock_interfaceclient.MockInterface)
+	_, isNetworkMock := networkInterfaceClient.(*mock_interfaceclient.MockInterface)
+
+	assert.True(t, isComputeMock, "ComputeClientFactory interface client should be a mock")
+	assert.True(t, isNetworkMock, "NetworkClientFactory interface client should be a mock")
+
+	t.Log("✅ Client factory refactoring validation passed")
+	t.Log("✅ GetPrimaryInterface should now use ComputeClientFactory.GetInterfaceClient()")
+	t.Log("✅ NetworkClientFactory.GetInterfaceClient() should not be called by GetPrimaryInterface")
 }
 
 func TestGetVMSSPublicIPAddress(t *testing.T) {
@@ -1419,36 +1636,44 @@ func TestGetPrivateIPsByNodeName(t *testing.T) {
 
 	for _, test := range testCases {
 		test := test
-		t.Run(test.description, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-			ss, err := NewTestScaleSet(ctrl)
-			assert.NoError(t, err, "unexpected error when creating test VMSS")
+		// Test for each case of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+				ss, err := NewTestScaleSet(ctrl)
+				assert.NoError(t, err, "unexpected error when creating test VMSS")
 
-			expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
-			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+				expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
+				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
 
-			expectedVMSSVMs, expectedInterface, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, test.vmList, "", false)
+				expectedVMSSVMs, expectedInterface, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, test.vmList, "", false)
 
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				}
 
-			mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
-			mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, test.vmClientErr).AnyTimes()
+				mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+				mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, test.vmClientErr).AnyTimes()
 
-			if test.isNilIPConfigs {
-				expectedInterface.Properties.IPConfigurations = nil
-			}
-			mockInterfaceClient := ss.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
-			mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), ss.ResourceGroup, testVMSSName, "0", test.nodeName).Return(expectedInterface, nil).AnyTimes()
+				if test.isNilIPConfigs {
+					expectedInterface.Properties.IPConfigurations = nil
+				}
+				mockInterfaceClient := ss.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), ss.ResourceGroup, testVMSSName, "0", test.nodeName).Return(expectedInterface, nil).AnyTimes()
 
-			privateIPs, err := ss.GetPrivateIPsByNodeName(context.Background(), test.nodeName)
-			if test.expectedErr != nil {
-				assert.Contains(t, err.Error(), test.expectedErr.Error(), test.description)
-			}
-			assert.Equal(t, test.expectedPrivateIPs, privateIPs, test.description)
-		})
+				privateIPs, err := ss.GetPrivateIPsByNodeName(context.Background(), test.nodeName)
+				if test.expectedErr != nil {
+					assert.Contains(t, err.Error(), test.expectedErr.Error(), test.description)
+				}
+				assert.Equal(t, test.expectedPrivateIPs, privateIPs, test.description)
+			})
+		}
 	}
 }
 
@@ -1500,24 +1725,32 @@ func TestListScaleSetVMs(t *testing.T) {
 
 	for _, test := range testCases {
 		test := test
-		t.Run(test.description, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+		// Test for each case of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
 
-			ss, err := NewTestScaleSet(ctrl)
-			assert.NoError(t, err, "unexpected error when creating test VMSS")
+				ss, err := NewTestScaleSet(ctrl)
+				assert.NoError(t, err, "unexpected error when creating test VMSS")
 
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(test.existedVMSSVMs, test.vmssVMClientErr).AnyTimes()
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(test.existedVMSSVMs, test.vmssVMClientErr).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(test.existedVMSSVMs, test.vmssVMClientErr).AnyTimes()
+				}
 
-			expectedVMSSVMs := test.existedVMSSVMs
+				expectedVMSSVMs := test.existedVMSSVMs
 
-			vmssVMs, err := ss.listScaleSetVMs(testVMSSName, ss.ResourceGroup)
-			if test.expectedErr != nil {
-				assert.Contains(t, err.Error(), test.expectedErr.Error(), test.description+errMsgSuffix)
-			}
-			assert.Equal(t, expectedVMSSVMs, vmssVMs, test.description)
-		})
+				vmssVMs, err := ss.listScaleSetVMs(testVMSSName, ss.ResourceGroup)
+				if test.expectedErr != nil {
+					assert.Contains(t, err.Error(), test.expectedErr.Error(), test.description+errMsgSuffix)
+				}
+				assert.Equal(t, expectedVMSSVMs, vmssVMs, test.description)
+			})
+		}
 	}
 }
 
@@ -1576,53 +1809,61 @@ func TestGetAgentPoolScaleSets(t *testing.T) {
 
 	for _, test := range testCases {
 		test := test
-		t.Run(test.description, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-			ss, err := NewTestScaleSet(ctrl)
-			assert.NoError(t, err, "unexpected error when creating test VMSS")
-			ss.excludeLoadBalancerNodes = utilsets.NewString(test.excludeLBNodes...)
+		// Test for each case of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+				ss, err := NewTestScaleSet(ctrl)
+				assert.NoError(t, err, "unexpected error when creating test VMSS")
+				ss.excludeLoadBalancerNodes = utilsets.NewString(test.excludeLBNodes...)
 
-			expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
-			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+				expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
+				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
 
-			expectedVMSSVMs := []*armcompute.VirtualMachineScaleSetVM{
-				{
-					Properties: &armcompute.VirtualMachineScaleSetVMProperties{
-						OSProfile: &armcompute.OSProfile{ComputerName: ptr.To("vmss-vm-000000")},
-						NetworkProfile: &armcompute.NetworkProfile{
-							NetworkInterfaces: []*armcompute.NetworkInterfaceReference{},
+				expectedVMSSVMs := []*armcompute.VirtualMachineScaleSetVM{
+					{
+						Properties: &armcompute.VirtualMachineScaleSetVMProperties{
+							OSProfile: &armcompute.OSProfile{ComputerName: ptr.To("vmss-vm-000000")},
+							NetworkProfile: &armcompute.NetworkProfile{
+								NetworkInterfaces: []*armcompute.NetworkInterfaceReference{},
+							},
 						},
 					},
-				},
-				{
-					Properties: &armcompute.VirtualMachineScaleSetVMProperties{
-						OSProfile: &armcompute.OSProfile{ComputerName: ptr.To("vmss-vm-000001")},
-						NetworkProfile: &armcompute.NetworkProfile{
-							NetworkInterfaces: []*armcompute.NetworkInterfaceReference{},
+					{
+						Properties: &armcompute.VirtualMachineScaleSetVMProperties{
+							OSProfile: &armcompute.OSProfile{ComputerName: ptr.To("vmss-vm-000001")},
+							NetworkProfile: &armcompute.NetworkProfile{
+								NetworkInterfaces: []*armcompute.NetworkInterfaceReference{},
+							},
 						},
 					},
-				},
-				{
-					Properties: &armcompute.VirtualMachineScaleSetVMProperties{
-						OSProfile: &armcompute.OSProfile{ComputerName: ptr.To("vmss-vm-000002")},
-						NetworkProfile: &armcompute.NetworkProfile{
-							NetworkInterfaces: []*armcompute.NetworkInterfaceReference{},
+					{
+						Properties: &armcompute.VirtualMachineScaleSetVMProperties{
+							OSProfile: &armcompute.OSProfile{ComputerName: ptr.To("vmss-vm-000002")},
+							NetworkProfile: &armcompute.NetworkProfile{
+								NetworkInterfaces: []*armcompute.NetworkInterfaceReference{},
+							},
 						},
 					},
-				},
-			}
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				}
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				}
 
-			mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
-			mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+				mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+				mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
-			vmssNames, err := ss.getAgentPoolScaleSets(context.TODO(), test.nodes)
-			assert.Equal(t, test.expectedErr, err, test.description+errMsgSuffix)
-			assert.Equal(t, test.expectedVMSSNames, vmssNames)
-		})
+				vmssNames, err := ss.getAgentPoolScaleSets(context.TODO(), test.nodes)
+				assert.Equal(t, test.expectedErr, err, test.description+errMsgSuffix)
+				assert.Equal(t, test.expectedVMSSNames, vmssNames)
+			})
+		}
 	}
 }
 
@@ -1642,130 +1883,104 @@ func TestGetVMSetNames(t *testing.T) {
 			expectedVMSetNames: to.SliceOfPtrs("vmss"),
 		},
 		{
-			description: "GetVMSetNames should return the primary vm set name when using the single SLB",
-			service: &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: consts.ServiceAnnotationLoadBalancerAutoModeValue}},
-			},
+			description:        "GetVMSetNames should return the primary vm set name when using the single SLB",
+			service:            &v1.Service{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: consts.ServiceAnnotationLoadBalancerAutoModeValue}}},
 			useSingleSLB:       true,
 			expectedVMSetNames: to.SliceOfPtrs("vmss"),
 		},
 		{
-			description: "GetVMSetNames should return all scale sets if the service has auto mode annotation",
-			service: &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: consts.ServiceAnnotationLoadBalancerAutoModeValue}},
-			},
-			nodes: []*v1.Node{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "vmss-vm-000002",
-					},
-				},
-			},
+			description:        "GetVMSetNames should return all scale sets if the service has auto mode annotation",
+			service:            &v1.Service{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: consts.ServiceAnnotationLoadBalancerAutoModeValue}}},
+			nodes:              []*v1.Node{{ObjectMeta: metav1.ObjectMeta{Name: "vmss-vm-000002"}}},
 			expectedVMSetNames: to.SliceOfPtrs("vmss"),
 		},
 		{
 			description: "GetVMSetNames should report the error if there's no such vmss",
-			service: &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: "vmss-1"}},
-			},
-			nodes: []*v1.Node{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "vmss-vm-000002",
-					},
-				},
-			},
+			service:     &v1.Service{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: "vmss-1"}}},
+			nodes:       []*v1.Node{{ObjectMeta: metav1.ObjectMeta{Name: "vmss-vm-000002"}}},
 			expectedErr: ErrScaleSetNotFound,
 		},
 		{
 			description: "GetVMSetNames should report an error if vm's network profile is nil",
-			service: &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: "vmss"}},
-			},
-			nodes: []*v1.Node{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "vmss-vm-000003",
-					},
-				},
-			},
+			service:     &v1.Service{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: "vmss"}}},
+			nodes:       []*v1.Node{{ObjectMeta: metav1.ObjectMeta{Name: "vmss-vm-000003"}}},
 			expectedErr: cloudprovider.InstanceNotFound,
 		},
 		{
-			description: "GetVMSetNames should return the correct vmss names",
-			service: &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: "vmss"}},
-			},
-			nodes: []*v1.Node{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "vmss-vm-000002",
-					},
-				},
-			},
+			description:        "GetVMSetNames should return the correct vmss names",
+			service:            &v1.Service{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: "vmss"}}},
+			nodes:              []*v1.Node{{ObjectMeta: metav1.ObjectMeta{Name: "vmss-vm-000002"}}},
 			expectedVMSetNames: to.SliceOfPtrs("vmss"),
 		},
 	}
 
 	for _, test := range testCases {
 		test := test
-		t.Run(test.description, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-			ss, err := NewTestScaleSet(ctrl)
-			assert.NoError(t, err, "unexpected error when creating test VMSS")
+		// Test for each case of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+				ss, err := NewTestScaleSet(ctrl)
+				assert.NoError(t, err, "unexpected error when creating test VMSS")
 
-			if test.useSingleSLB {
-				ss.LoadBalancerSKU = consts.LoadBalancerSKUStandard
-			}
+				if test.useSingleSLB {
+					ss.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+				}
 
-			expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
-			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+				expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
+				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
 
-			expectedVMSSVMs := []*armcompute.VirtualMachineScaleSetVM{
-				{
-					Properties: &armcompute.VirtualMachineScaleSetVMProperties{
-						OSProfile: &armcompute.OSProfile{ComputerName: ptr.To("vmss-vm-000000")},
-						NetworkProfile: &armcompute.NetworkProfile{
-							NetworkInterfaces: []*armcompute.NetworkInterfaceReference{},
+				expectedVMSSVMs := []*armcompute.VirtualMachineScaleSetVM{
+					{
+						Properties: &armcompute.VirtualMachineScaleSetVMProperties{
+							OSProfile: &armcompute.OSProfile{ComputerName: ptr.To("vmss-vm-000000")},
+							NetworkProfile: &armcompute.NetworkProfile{
+								NetworkInterfaces: []*armcompute.NetworkInterfaceReference{},
+							},
 						},
 					},
-				},
-				{
-					Properties: &armcompute.VirtualMachineScaleSetVMProperties{
-						OSProfile: &armcompute.OSProfile{ComputerName: ptr.To("vmss-vm-000001")},
-						NetworkProfile: &armcompute.NetworkProfile{
-							NetworkInterfaces: []*armcompute.NetworkInterfaceReference{},
+					{
+						Properties: &armcompute.VirtualMachineScaleSetVMProperties{
+							OSProfile: &armcompute.OSProfile{ComputerName: ptr.To("vmss-vm-000001")},
+							NetworkProfile: &armcompute.NetworkProfile{
+								NetworkInterfaces: []*armcompute.NetworkInterfaceReference{},
+							},
 						},
 					},
-				},
-				{
-					Properties: &armcompute.VirtualMachineScaleSetVMProperties{
-						OSProfile: &armcompute.OSProfile{ComputerName: ptr.To("vmss-vm-000002")},
-						NetworkProfile: &armcompute.NetworkProfile{
-							NetworkInterfaces: []*armcompute.NetworkInterfaceReference{},
+					{
+						Properties: &armcompute.VirtualMachineScaleSetVMProperties{
+							OSProfile: &armcompute.OSProfile{ComputerName: ptr.To("vmss-vm-000002")},
+							NetworkProfile: &armcompute.NetworkProfile{
+								NetworkInterfaces: []*armcompute.NetworkInterfaceReference{},
+							},
 						},
 					},
-				},
-				{
-					Properties: &armcompute.VirtualMachineScaleSetVMProperties{
-						OSProfile: &armcompute.OSProfile{ComputerName: ptr.To("vmss-vm-000003")},
+					{
+						Properties: &armcompute.VirtualMachineScaleSetVMProperties{
+							OSProfile: &armcompute.OSProfile{ComputerName: ptr.To("vmss-vm-000003")},
+						},
 					},
-				},
-			}
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				}
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				}
 
-			mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
-			mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+				mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+				mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
-			vmSetNames, err := ss.GetVMSetNames(context.TODO(), test.service, test.nodes)
-			if test.expectedErr != nil {
-				assert.True(t, errors.Is(err, test.expectedErr), "expected error %v, got %v", test.expectedErr, err)
-			}
-			assert.Equal(t, test.expectedVMSetNames, vmSetNames, test.description)
-		})
+				vmSetNames, err := ss.GetVMSetNames(context.TODO(), test.service, test.nodes)
+				if test.expectedErr != nil {
+					assert.True(t, errors.Is(err, test.expectedErr), "expected error %v, got %v", test.expectedErr, err)
+				}
+				assert.Equal(t, test.expectedVMSetNames, vmSetNames, test.description)
+			})
+		}
 	}
 }
 
@@ -2212,7 +2427,6 @@ func TestDeleteBackendPoolFromIPConfig(t *testing.T) {
 }
 
 func TestEnsureHostInPool(t *testing.T) {
-
 	testCases := []struct {
 		description               string
 		service                   *v1.Service
@@ -2321,58 +2535,62 @@ func TestEnsureHostInPool(t *testing.T) {
 
 	for _, test := range testCases {
 		test := test
-		t.Run(test.description, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-			ss, err := NewTestScaleSet(ctrl)
-			assert.NoError(t, err, test.description)
+		// Test for each case of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+				ss, err := NewTestScaleSet(ctrl)
+				assert.NoError(t, err, test.description)
 
-			if !test.isBasicLB {
-				ss.LoadBalancerSKU = consts.LoadBalancerSKUStandard
-			}
-
-			expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
-			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
-
-			provisionState := ""
-			if test.isVMBeingDeleted {
-				provisionState = "Deleting"
-			}
-			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(
-				ss.Cloud,
-				testVMSSName,
-				"",
-				0,
-				[]string{string(test.nodeName)},
-				provisionState,
-				false,
-			)
-			if test.isNilVMNetworkConfigs {
-				expectedVMSSVMs[0].Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations = nil
-			}
-			if test.isVMNotActive {
-				(expectedVMSSVMs[0].Properties.InstanceView.Statuses)[0] = &armcompute.InstanceViewStatus{
-					Code: ptr.To("PowerState/deallocated"),
+				if !test.isBasicLB {
+					ss.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 				}
-			}
-			if test.isVMNotFound {
-				expectedVMSSVMs = nil
-			}
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMSSVMClient.EXPECT().ListVMInstanceView(
-				gomock.Any(),
-				ss.ResourceGroup,
-				testVMSSName,
-			).Return(expectedVMSSVMs, test.vmssVMListError).AnyTimes()
 
-			nodeResourceGroup, ssName, instanceID, vm, err := ss.EnsureHostInPool(context.Background(), test.service, test.nodeName, test.backendPoolID, test.vmSetName)
-			assert.Equal(t, test.expectedErr, err, test.description+errMsgSuffix)
-			assert.Equal(t, test.expectedNodeResourceGroup, nodeResourceGroup, test.description)
-			assert.Equal(t, test.expectedVMSSName, ssName, test.description)
-			assert.Equal(t, test.expectedInstanceID, instanceID, test.description)
-			assert.Equal(t, test.expectedVMSSVM, vm, test.description)
-		})
+				expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
+				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+
+				provisionState := ""
+				if test.isVMBeingDeleted {
+					provisionState = "Deleting"
+				}
+				expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(
+					ss.Cloud,
+					testVMSSName,
+					"",
+					0,
+					[]string{string(test.nodeName)},
+					provisionState,
+					false,
+				)
+				if test.isNilVMNetworkConfigs {
+					expectedVMSSVMs[0].Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations = nil
+				}
+				if test.isVMNotActive {
+					(expectedVMSSVMs[0].Properties.InstanceView.Statuses)[0] = &armcompute.InstanceViewStatus{
+						Code: ptr.To("PowerState/deallocated"),
+					}
+				}
+				if test.isVMNotFound {
+					expectedVMSSVMs = nil
+				}
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, test.vmssVMListError).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, test.vmssVMListError).AnyTimes()
+				}
+
+				nodeResourceGroup, ssName, instanceID, vm, err := ss.EnsureHostInPool(context.Background(), test.service, test.nodeName, test.backendPoolID, test.vmSetName)
+				assert.Equal(t, test.expectedErr, err, test.description+errMsgSuffix)
+				assert.Equal(t, test.expectedNodeResourceGroup, nodeResourceGroup, test.description)
+				assert.Equal(t, test.expectedVMSSName, ssName, test.description)
+				assert.Equal(t, test.expectedInstanceID, instanceID, test.description)
+				assert.Equal(t, test.expectedVMSSVM, vm, test.description)
+			})
+		}
 	}
 }
 
@@ -2752,55 +2970,62 @@ func TestEnsureHostsInPool(t *testing.T) {
 
 	for _, test := range testCases {
 		test := test
-		t.Run(test.description, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+		// Test for each case of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
 
-			ss, err := NewTestScaleSet(ctrl)
-			assert.NoError(t, err, test.description)
+				ss, err := NewTestScaleSet(ctrl)
+				assert.NoError(t, err, test.description)
 
-			for _, node := range test.nodes {
-				if node.Labels[consts.ManagedByAzureLabel] == "false" {
-					ss.excludeLoadBalancerNodes = utilsets.NewString(node.Name)
+				for _, node := range test.nodes {
+					if node.Labels[consts.ManagedByAzureLabel] == "false" {
+						ss.excludeLoadBalancerNodes = utilsets.NewString(node.Name)
+					}
 				}
-			}
-			ss.LoadBalancerSKU = consts.LoadBalancerSKUStandard
-			ss.ExcludeMasterFromStandardLB = ptr.To(true)
-			expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
-			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
-			mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName, nil).Return(expectedVMSS, nil).MaxTimes(1)
-			mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(nil, nil).MaxTimes(1)
+				ss.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+				ss.ExcludeMasterFromStandardLB = ptr.To(true)
+				expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
+				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+				mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName, nil).Return(expectedVMSS, nil).MaxTimes(1)
+				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(nil, nil).MaxTimes(1)
 
-			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000", "vmss-vm-000001", "vmss-vm-000002"}, "", false)
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
-
-			mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ context.Context, _, _, _ string, _ armcompute.VirtualMachineScaleSetVM, _ *armcompute.VirtualMachineScaleSetVMsClientBeginUpdateOptions) (*runtime.Poller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse], error) {
-					poller, err := runtime.NewPoller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse](
-						&http.Response{
-							Header: http.Header{"Fake-Poller-Status": []string{"https://fake/operation"}},
-						},
-						runtime.Pipeline{},
-						&runtime.NewPollerOptions[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse]{
-							Handler: &vmssvmMockPutHandler{
-								resp: &http.Response{
-									StatusCode: http.StatusAccepted,
+				expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000", "vmss-vm-000001", "vmss-vm-000002"}, "", false)
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				}
+				mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, _, _, _ string, _ armcompute.VirtualMachineScaleSetVM, _ *armcompute.VirtualMachineScaleSetVMsClientBeginUpdateOptions) (*runtime.Poller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse], error) {
+						poller, err := runtime.NewPoller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse](
+							&http.Response{
+								Header: http.Header{"Fake-Poller-Status": []string{"https://fake/operation"}},
+							},
+							runtime.Pipeline{},
+							&runtime.NewPollerOptions[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse]{
+								Handler: &vmssvmMockPutHandler{
+									resp: &http.Response{
+										StatusCode: http.StatusAccepted,
+									},
 								},
 							},
-						},
-					)
-					assert.NoError(t, err)
-					return poller, nil
-				}).Times(test.expectedVMSSVMPutTimes)
+						)
+						assert.NoError(t, err)
+						return poller, nil
+					}).Times(test.expectedVMSSVMPutTimes)
 
-			mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
-			mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+				mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+				mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
-			err = ss.EnsureHostsInPool(context.Background(), &v1.Service{}, test.nodes, test.backendpoolID, test.vmSetName)
-			assert.Equal(t, test.expectedErr, err != nil, test.description+errMsgSuffix)
-		})
+				err = ss.EnsureHostsInPool(context.Background(), &v1.Service{}, test.nodes, test.backendpoolID, test.vmSetName)
+				assert.Equal(t, test.expectedErr, err != nil, test.description+errMsgSuffix)
+			})
+		}
 	}
 }
 
@@ -2876,66 +3101,74 @@ func TestEnsureHostsInPoolEtagMismatch(t *testing.T) {
 
 	for _, test := range testCases {
 		test := test
-		t.Run(test.description, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+		// Test for each case of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
 
-			ss, err := NewTestScaleSet(ctrl)
-			assert.NoError(t, err, test.description)
+				ss, err := NewTestScaleSet(ctrl)
+				assert.NoError(t, err, test.description)
 
-			ss.LoadBalancerSKU = consts.LoadBalancerSKUStandard
-			ss.ExcludeMasterFromStandardLB = ptr.To(true)
-			expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
-			expectedVMSS.Location = &ss.Location
-			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
-			mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName, nil).Return(expectedVMSS, nil).MaxTimes(1)
+				ss.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+				ss.ExcludeMasterFromStandardLB = ptr.To(true)
+				expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
+				expectedVMSS.Location = &ss.Location
+				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+				mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName, nil).Return(expectedVMSS, nil).MaxTimes(1)
 
-			copiedVMSS := deepcopy.Copy(expectedVMSS).(*armcompute.VirtualMachineScaleSet)
-			networkInterfaceConfigurations := copiedVMSS.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
-			ipConfig := networkInterfaceConfigurations[0].Properties.IPConfigurations
-			ipConfig[0].Properties.LoadBalancerBackendAddressPools = append(ipConfig[0].Properties.LoadBalancerBackendAddressPools, &armcompute.SubResource{ID: ptr.To(test.backendpoolID)})
-			vmssMatcher := vmssInputMatcher{
-				Location: copiedVMSS.Location,
-				Properties: &armcompute.VirtualMachineScaleSetProperties{
-					VirtualMachineProfile: &armcompute.VirtualMachineScaleSetVMProfile{
-						NetworkProfile: &armcompute.VirtualMachineScaleSetNetworkProfile{
-							NetworkInterfaceConfigurations: networkInterfaceConfigurations,
+				copiedVMSS := deepcopy.Copy(expectedVMSS).(*armcompute.VirtualMachineScaleSet)
+				networkInterfaceConfigurations := copiedVMSS.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
+				ipConfig := networkInterfaceConfigurations[0].Properties.IPConfigurations
+				ipConfig[0].Properties.LoadBalancerBackendAddressPools = append(ipConfig[0].Properties.LoadBalancerBackendAddressPools, &armcompute.SubResource{ID: ptr.To(test.backendpoolID)})
+				vmssMatcher := vmssInputMatcher{
+					Location: copiedVMSS.Location,
+					Properties: &armcompute.VirtualMachineScaleSetProperties{
+						VirtualMachineProfile: &armcompute.VirtualMachineScaleSetVMProfile{
+							NetworkProfile: &armcompute.VirtualMachineScaleSetNetworkProfile{
+								NetworkInterfaceConfigurations: networkInterfaceConfigurations,
+							},
 						},
 					},
-				},
-				Etag: copiedVMSS.Etag,
-			}
+					Etag: copiedVMSS.Etag,
+				}
 
-			mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, vmssMatcher).Return(nil, test.vmssClientPutError).Times(1)
-			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000"}, "", false)
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, vmssMatcher).Return(nil, test.vmssClientPutError).Times(1)
+				expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000"}, "", false)
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				}
 
-			expectedVMSSVM := expectedVMSSVMs[0]
-			copiedVMSSVM := deepcopy.Copy(expectedVMSSVM).(*armcompute.VirtualMachineScaleSetVM)
+				expectedVMSSVM := expectedVMSSVMs[0]
+				copiedVMSSVM := deepcopy.Copy(expectedVMSSVM).(*armcompute.VirtualMachineScaleSetVM)
 
-			vmNetworkInterfaceConfigurations := copiedVMSSVM.Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations
-			vmssVMIPConfigs := vmNetworkInterfaceConfigurations[0].Properties.IPConfigurations
-			vmssVMIPConfigs[0].Properties.LoadBalancerBackendAddressPools = append((vmssVMIPConfigs)[0].Properties.LoadBalancerBackendAddressPools, &armcompute.SubResource{ID: ptr.To(testLBBackendpoolID1)})
+				vmNetworkInterfaceConfigurations := copiedVMSSVM.Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations
+				vmssVMIPConfigs := vmNetworkInterfaceConfigurations[0].Properties.IPConfigurations
+				vmssVMIPConfigs[0].Properties.LoadBalancerBackendAddressPools = append((vmssVMIPConfigs)[0].Properties.LoadBalancerBackendAddressPools, &armcompute.SubResource{ID: ptr.To(testLBBackendpoolID1)})
 
-			vmssVMMatcher := vmssVMInputMatcher{
-				Location: copiedVMSSVM.Location,
-				Properties: &armcompute.VirtualMachineScaleSetVMProperties{
-					NetworkProfileConfiguration: &armcompute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
-						NetworkInterfaceConfigurations: vmNetworkInterfaceConfigurations,
+				vmssVMMatcher := vmssVMInputMatcher{
+					Location: copiedVMSSVM.Location,
+					Properties: &armcompute.VirtualMachineScaleSetVMProperties{
+						NetworkProfileConfiguration: &armcompute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
+							NetworkInterfaceConfigurations: vmNetworkInterfaceConfigurations,
+						},
 					},
-				},
-				Etag: copiedVMSSVM.Etag,
-			}
-			mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), vmssVMMatcher, gomock.Any()).Return(nil, test.vmssvmClientPutError).Times(test.expectedVMSSVMPutTimes)
+					Etag: copiedVMSSVM.Etag,
+				}
+				mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), vmssVMMatcher, gomock.Any()).Return(nil, test.vmssvmClientPutError).Times(test.expectedVMSSVMPutTimes)
 
-			mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
-			mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+				mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+				mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
-			err = ss.EnsureHostsInPool(context.Background(), &v1.Service{}, test.nodes, test.backendpoolID, test.vmSetName)
-			assert.Equal(t, test.expectedErr, err != nil, test.description+errMsgSuffix)
-		})
+				err = ss.EnsureHostsInPool(context.Background(), &v1.Service{}, test.nodes, test.backendpoolID, test.vmSetName)
+				assert.Equal(t, test.expectedErr, err != nil, test.description+errMsgSuffix)
+			})
+		}
 	}
 }
 
@@ -3059,63 +3292,71 @@ func TestEnsureBackendPoolDeletedEtagMismatch(t *testing.T) {
 	}
 	for _, test := range testCases {
 		test := test
-		t.Run(test.description, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+		// Test for each case of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
 
-			ss, err := NewTestScaleSet(ctrl)
-			assert.NoError(t, err, test.description)
+				ss, err := NewTestScaleSet(ctrl)
+				assert.NoError(t, err, test.description)
 
-			expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
+				expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
 
-			copiedVMSS := deepcopy.Copy(expectedVMSS).(*armcompute.VirtualMachineScaleSet)
-			networkInterfaceConfigurations := copiedVMSS.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
-			ipConfig := networkInterfaceConfigurations[0].Properties.IPConfigurations
-			ipConfig[0].Properties.LoadBalancerBackendAddressPools = []*armcompute.SubResource{}
-			vmssMatcher := vmssInputMatcher{
-				Location: copiedVMSS.Location,
-				Properties: &armcompute.VirtualMachineScaleSetProperties{
-					VirtualMachineProfile: &armcompute.VirtualMachineScaleSetVMProfile{
-						NetworkProfile: &armcompute.VirtualMachineScaleSetNetworkProfile{
-							NetworkInterfaceConfigurations: networkInterfaceConfigurations,
+				copiedVMSS := deepcopy.Copy(expectedVMSS).(*armcompute.VirtualMachineScaleSet)
+				networkInterfaceConfigurations := copiedVMSS.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
+				ipConfig := networkInterfaceConfigurations[0].Properties.IPConfigurations
+				ipConfig[0].Properties.LoadBalancerBackendAddressPools = []*armcompute.SubResource{}
+				vmssMatcher := vmssInputMatcher{
+					Location: copiedVMSS.Location,
+					Properties: &armcompute.VirtualMachineScaleSetProperties{
+						VirtualMachineProfile: &armcompute.VirtualMachineScaleSetVMProfile{
+							NetworkProfile: &armcompute.VirtualMachineScaleSetNetworkProfile{
+								NetworkInterfaceConfigurations: networkInterfaceConfigurations,
+							},
 						},
 					},
-				},
-				Etag: copiedVMSS.Etag,
-			}
-			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
-			mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName, nil).Return(expectedVMSS, nil).MaxTimes(1)
-			mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, vmssMatcher).Return(nil, test.vmssClientPutError).Times(1)
+					Etag: copiedVMSS.Etag,
+				}
+				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+				mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName, nil).Return(expectedVMSS, nil).MaxTimes(1)
+				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, vmssMatcher).Return(nil, test.vmssClientPutError).Times(1)
 
-			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000"}, "", false)
-			expectedVMSSVM := expectedVMSSVMs[0]
-			copiedVMSSVM := deepcopy.Copy(expectedVMSSVM).(*armcompute.VirtualMachineScaleSetVM)
-			vmNetworkInterfaceConfigurations := copiedVMSSVM.Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations
-			vmssVMIPConfigs := vmNetworkInterfaceConfigurations[0].Properties.IPConfigurations
-			vmssVMIPConfigs[0].Properties.LoadBalancerBackendAddressPools = []*armcompute.SubResource{}
-			vmssVMMatcher := vmssVMInputMatcher{
-				Location: copiedVMSSVM.Location,
-				Properties: &armcompute.VirtualMachineScaleSetVMProperties{
-					NetworkProfileConfiguration: &armcompute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
-						NetworkInterfaceConfigurations: vmNetworkInterfaceConfigurations,
+				expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000"}, "", false)
+				expectedVMSSVM := expectedVMSSVMs[0]
+				copiedVMSSVM := deepcopy.Copy(expectedVMSSVM).(*armcompute.VirtualMachineScaleSetVM)
+				vmNetworkInterfaceConfigurations := copiedVMSSVM.Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations
+				vmssVMIPConfigs := vmNetworkInterfaceConfigurations[0].Properties.IPConfigurations
+				vmssVMIPConfigs[0].Properties.LoadBalancerBackendAddressPools = []*armcompute.SubResource{}
+				vmssVMMatcher := vmssVMInputMatcher{
+					Location: copiedVMSSVM.Location,
+					Properties: &armcompute.VirtualMachineScaleSetVMProperties{
+						NetworkProfileConfiguration: &armcompute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
+							NetworkInterfaceConfigurations: vmNetworkInterfaceConfigurations,
+						},
 					},
-				},
-				Etag: copiedVMSSVM.Etag,
-			}
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
-			mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), vmssVMMatcher, gomock.Any()).Return(nil, test.vmssvmClientPutError).Times(test.expectedVMSSVMPutTimes)
+					Etag: copiedVMSSVM.Etag,
+				}
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				}
+				mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), vmssVMMatcher, gomock.Any()).Return(nil, test.vmssvmClientPutError).Times(test.expectedVMSSVMPutTimes)
 
-			mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
-			mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
+				mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+				mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
 
-			updated, err := ss.EnsureBackendPoolDeleted(context.TODO(), &v1.Service{}, []string{test.backendpoolID}, testVMSSName, test.backendAddressPools, true)
-			assert.Equal(t, test.expectedErr, err != nil, test.description+errMsgSuffix)
-			if !test.expectedErr && test.expectedVMSSVMPutTimes > 0 {
-				assert.True(t, updated, test.description)
-			}
-		})
+				updated, err := ss.EnsureBackendPoolDeleted(context.TODO(), &v1.Service{}, []string{test.backendpoolID}, testVMSSName, test.backendAddressPools, true)
+				assert.Equal(t, test.expectedErr, err != nil, test.description+errMsgSuffix)
+				if !test.expectedErr && test.expectedVMSSVMPutTimes > 0 {
+					assert.True(t, updated, test.description)
+				}
+			})
+		}
 	}
 }
 
@@ -3197,37 +3438,45 @@ func TestEnsureBackendPoolDeletedFromNodeCommon(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		test := test
-		t.Run(test.description, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-			ss, err := NewTestScaleSet(ctrl)
-			assert.NoError(t, err, test.description)
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			test := test
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+				ss, err := NewTestScaleSet(ctrl)
+				assert.NoError(t, err, test.description)
 
-			expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
-			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+				expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
+				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
 
-			// isIPv6 true means it is a DualStack or IPv6 only cluster.
-			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000"}, "", true)
-			if test.isNilVMNetworkConfigs {
-				expectedVMSSVMs[0].Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations = nil
-			}
-			if test.isVMNotActive {
-				(expectedVMSSVMs[0].Properties.InstanceView.Statuses)[0] = &armcompute.InstanceViewStatus{
-					Code: ptr.To("PowerState/deallocated"),
+				// isIPv6 true means it is a DualStack or IPv6 only cluster.
+				expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000"}, "", true)
+				if test.isNilVMNetworkConfigs {
+					expectedVMSSVMs[0].Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations = nil
 				}
-			}
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				if test.isVMNotActive {
+					(expectedVMSSVMs[0].Properties.InstanceView.Statuses)[0] = &armcompute.InstanceViewStatus{
+						Code: ptr.To("PowerState/deallocated"),
+					}
+				}
 
-			nodeResourceGroup, ssName, instanceID, vm, err := ss.ensureBackendPoolDeletedFromNode(context.TODO(), test.nodeName, test.backendpoolIDs)
-			assert.Equal(t, test.expectedErr, err)
-			assert.Equal(t, test.expectedNodeResourceGroup, nodeResourceGroup)
-			assert.Equal(t, test.expectedVMSSName, ssName)
-			assert.Equal(t, test.expectedInstanceID, instanceID)
-			assert.Equal(t, test.expectedVMSSVM, vm)
-		})
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				}
+
+				nodeResourceGroup, ssName, instanceID, vm, err := ss.ensureBackendPoolDeletedFromNode(context.TODO(), test.nodeName, test.backendpoolIDs)
+				assert.Equal(t, test.expectedErr, err)
+				assert.Equal(t, test.expectedNodeResourceGroup, nodeResourceGroup)
+				assert.Equal(t, test.expectedVMSSName, ssName)
+				assert.Equal(t, test.expectedInstanceID, instanceID)
+				assert.Equal(t, test.expectedVMSSVM, vm)
+			})
+		}
 	}
 }
 
@@ -3290,48 +3539,55 @@ func TestEnsureBackendPoolDeletedFromVMSS(t *testing.T) {
 
 	for _, test := range testCases {
 		test := test
-		t.Run(test.description, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+		// Test both cases of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
 
-			ss, err := NewTestScaleSet(ctrl)
-			assert.NoError(t, err, test.description)
+				ss, err := NewTestScaleSet(ctrl)
+				assert.NoError(t, err, test.description)
 
-			ss.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+				ss.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 
-			expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
-			if test.isVMSSDeallocating {
-				expectedVMSS.Properties.ProvisioningState = ptr.To(consts.ProvisionStateDeleting)
-			}
-			if test.isVMSSNilNICConfig {
-				expectedVMSS.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations = nil
-			}
-			if test.isVMSSNilVirtualMachineProfile {
-				expectedVMSS.Properties.VirtualMachineProfile = nil
-			}
-			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes().MinTimes(1)
-			vmssPutTimes := 0
-			if test.expectedPutVMSS {
-				vmssPutTimes = 1
-				mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName, nil).Return(expectedVMSS, nil)
-			}
-			mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(nil, test.vmssClientErr).Times(vmssPutTimes)
+				expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
+				if test.isVMSSDeallocating {
+					expectedVMSS.Properties.ProvisioningState = ptr.To(consts.ProvisionStateDeleting)
+				}
+				if test.isVMSSNilNICConfig {
+					expectedVMSS.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations = nil
+				}
+				if test.isVMSSNilVirtualMachineProfile {
+					expectedVMSS.Properties.VirtualMachineProfile = nil
+				}
+				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes().MinTimes(1)
+				vmssPutTimes := 0
+				if test.expectedPutVMSS {
+					vmssPutTimes = 1
+					mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName, nil).Return(expectedVMSS, nil)
+				}
+				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(nil, test.vmssClientErr).Times(vmssPutTimes)
 
-			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000"}, "", false)
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000"}, "", false)
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				}
 
-			err = ss.ensureBackendPoolDeletedFromVMSS(context.TODO(), []string{test.backendPoolID}, testVMSSName)
-			if test.expectedErr != nil {
-				assert.Contains(t, err.Error(), test.expectedErr.Error(), test.description+errMsgSuffix)
-			}
-		})
+				err = ss.ensureBackendPoolDeletedFromVMSS(context.TODO(), []string{test.backendPoolID}, testVMSSName)
+				if test.expectedErr != nil {
+					assert.Contains(t, err.Error(), test.expectedErr.Error(), test.description+errMsgSuffix)
+				}
+			})
+		}
 	}
 }
 
 func TestEnsureBackendPoolDeleted(t *testing.T) {
-
 	testCases := []struct {
 		description            string
 		backendpoolID          string
@@ -3415,33 +3671,41 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 
 	for _, test := range testCases {
 		test := test
-		t.Run(test.description, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+		// Test both cases of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
 
-			ss, err := NewTestScaleSet(ctrl)
-			assert.NoError(t, err, test.description)
+				ss, err := NewTestScaleSet(ctrl)
+				assert.NoError(t, err, test.description)
 
-			expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
-			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
-			mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName, nil).Return(expectedVMSS, nil).MaxTimes(1)
-			mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(nil, nil).Times(1)
+				expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
+				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+				mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName, nil).Return(expectedVMSS, nil).MaxTimes(1)
+				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(nil, nil).Times(1)
 
-			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000", "vmss-vm-000001", "vmss-vm-000002"}, "", false)
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
-			mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, test.vmClientErr).Times(test.expectedVMSSVMPutTimes)
+				expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000", "vmss-vm-000001", "vmss-vm-000002"}, "", false)
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				}
+				mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, test.vmClientErr).Times(test.expectedVMSSVMPutTimes)
 
-			mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
-			mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
+				mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+				mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
 
-			updated, err := ss.EnsureBackendPoolDeleted(context.TODO(), &v1.Service{}, []string{test.backendpoolID}, testVMSSName, test.backendAddressPools, true)
-			assert.Equal(t, test.expectedErr, err != nil, test.description+errMsgSuffix)
-			if !test.expectedErr && test.expectedVMSSVMPutTimes > 0 {
-				assert.True(t, updated, test.description)
-			}
-		})
+				updated, err := ss.EnsureBackendPoolDeleted(context.TODO(), &v1.Service{}, []string{test.backendpoolID}, testVMSSName, test.backendAddressPools, true)
+				assert.Equal(t, test.expectedErr, err != nil, test.description+errMsgSuffix)
+				if !test.expectedErr && test.expectedVMSSVMPutTimes > 0 {
+					assert.True(t, updated, test.description)
+				}
+			})
+		}
 	}
 }
 
@@ -3510,58 +3774,66 @@ func TestEnsureHostsInPoolInParallel(t *testing.T) {
 
 	for _, test := range testCases {
 		test := test
-		t.Run(test.description, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+		// Test both cases of listVMSSVMsWithoutInstanceView
+		for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+			t.Run(test.description, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
 
-			ss, err := NewTestScaleSet(ctrl)
-			assert.NoError(t, err, test.description)
+				ss, err := NewTestScaleSet(ctrl)
+				assert.NoError(t, err, test.description)
 
-			for _, node := range test.nodes {
-				if node.Labels[consts.ManagedByAzureLabel] == "false" {
-					ss.excludeLoadBalancerNodes = utilsets.NewString(node.Name)
+				for _, node := range test.nodes {
+					if node.Labels[consts.ManagedByAzureLabel] == "false" {
+						ss.excludeLoadBalancerNodes = utilsets.NewString(node.Name)
+					}
 				}
-			}
-			ss.PutVMSSVMBatchSize = 2
-			ss.LoadBalancerSKU = consts.LoadBalancerSKUStandard
-			ss.ExcludeMasterFromStandardLB = ptr.To(true)
-			expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
-			expectedVMSS.Tags = map[string]*string{
-				"aks-managed-coordination": to.Ptr("true"),
-			}
-			mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
-			mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName, nil).Return(expectedVMSS, nil).MaxTimes(1)
-			mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(nil, nil).MaxTimes(1)
+				ss.PutVMSSVMBatchSize = 2
+				ss.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+				ss.ExcludeMasterFromStandardLB = ptr.To(true)
+				expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
+				expectedVMSS.Tags = map[string]*string{
+					"aks-managed-coordination": to.Ptr("true"),
+				}
+				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+				mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName, nil).Return(expectedVMSS, nil).MaxTimes(1)
+				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(nil, nil).MaxTimes(1)
 
-			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000", "vmss-vm-000001", "vmss-vm-000002"}, "", false)
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000", "vmss-vm-000001", "vmss-vm-000002"}, "", false)
+				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+				if ss.ListVmssVirtualMachinesWithoutInstanceView {
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				} else {
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+				}
 
-			mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ context.Context, _, _, _ string, _ armcompute.VirtualMachineScaleSetVM, _ *armcompute.VirtualMachineScaleSetVMsClientBeginUpdateOptions) (*runtime.Poller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse], error) {
-					poller, err := runtime.NewPoller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse](
-						&http.Response{
-							Header: http.Header{"Fake-Poller-Status": []string{"https://fake/operation"}},
-						},
-						runtime.Pipeline{},
-						&runtime.NewPollerOptions[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse]{
-							Handler: &vmssvmMockPutHandler{
-								resp: &http.Response{
-									StatusCode: http.StatusAccepted,
+				mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, _, _, _ string, _ armcompute.VirtualMachineScaleSetVM, _ *armcompute.VirtualMachineScaleSetVMsClientBeginUpdateOptions) (*runtime.Poller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse], error) {
+						poller, err := runtime.NewPoller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse](
+							&http.Response{
+								Header: http.Header{"Fake-Poller-Status": []string{"https://fake/operation"}},
+							},
+							runtime.Pipeline{},
+							&runtime.NewPollerOptions[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse]{
+								Handler: &vmssvmMockPutHandler{
+									resp: &http.Response{
+										StatusCode: http.StatusAccepted,
+									},
 								},
 							},
-						},
-					)
-					assert.NoError(t, err)
-					return poller, nil
-				}).Times(test.expectedVMSSVMPutTimes)
+						)
+						assert.NoError(t, err)
+						return poller, nil
+					}).Times(test.expectedVMSSVMPutTimes)
 
-			mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
-			mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
-			err = ss.EnsureHostsInPool(context.Background(), &v1.Service{}, test.nodes, test.backendpoolID, test.vmSetName)
-			assert.Equal(t, test.expectedErr, err != nil, test.description+errMsgSuffix)
-		})
+				mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+				mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+				err = ss.EnsureHostsInPool(context.Background(), &v1.Service{}, test.nodes, test.backendpoolID, test.vmSetName)
+				assert.Equal(t, test.expectedErr, err != nil, test.description+errMsgSuffix)
+			})
+		}
 	}
 }
 
@@ -3597,127 +3869,137 @@ func TestEnsureBackendPoolDeletedConcurrentlyLoop(t *testing.T) {
 }
 
 func TestEnsureBackendPoolDeletedConcurrently(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
 
-	ss, err := NewTestScaleSet(ctrl)
-	assert.NoError(t, err)
+		ss, err := NewTestScaleSet(ctrl)
+		assert.NoError(t, err)
 
-	backendAddressPools := []*armnetwork.BackendAddressPool{
-		{
-			ID: ptr.To(testLBBackendpoolID0),
-			Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
-				BackendIPConfigurations: []*armnetwork.InterfaceIPConfiguration{
-					{
-						Name: ptr.To("ip-1"),
-						ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss-0/virtualMachines/0/networkInterfaces/nic"),
-					},
-				},
-			},
-		},
-		{
-			ID: ptr.To(testLBBackendpoolID1),
-			Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
-				BackendIPConfigurations: []*armnetwork.InterfaceIPConfiguration{
-					{
-						Name: ptr.To("ip-1"),
-						ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss-1/virtualMachines/0/networkInterfaces/nic"),
-					},
-				},
-			},
-		},
-		{
-			ID: ptr.To(testLBBackendpoolID2),
-			Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
-				BackendIPConfigurations: []*armnetwork.InterfaceIPConfiguration{
-					{
-						Name: ptr.To("ip-1"),
-						ID:   ptr.To("/subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachineScaleSets/vmss-0/virtualMachines/0/networkInterfaces/nic"),
-					},
-				},
-			},
-		},
-	}
-
-	vmss0 := buildTestVMSSWithLB("vmss-0", "vmss-0-vm-", []string{testLBBackendpoolID0, testLBBackendpoolID1}, false)
-	vmss1 := buildTestVMSSWithLB("vmss-1", "vmss-1-vm-", []string{testLBBackendpoolID0, testLBBackendpoolID1}, false)
-
-	expectedVMSSVMsOfVMSS0, _, _ := buildTestVirtualMachineEnv(ss.Cloud, "vmss-0", "", 0, []string{"vmss-0-vm-000000"}, "succeeded", false)
-	expectedVMSSVMsOfVMSS1, _, _ := buildTestVirtualMachineEnv(ss.Cloud, "vmss-1", "", 0, []string{"vmss-1-vm-000001"}, "succeeded", false)
-	for _, expectedVMSSVMs := range [][]*armcompute.VirtualMachineScaleSetVM{expectedVMSSVMsOfVMSS0, expectedVMSSVMsOfVMSS1} {
-		vmssVMNetworkConfigs := expectedVMSSVMs[0].Properties.NetworkProfileConfiguration
-		vmssVMIPConfigs := (vmssVMNetworkConfigs.NetworkInterfaceConfigurations)[0].Properties.IPConfigurations
-		(vmssVMIPConfigs)[0].Properties.LoadBalancerBackendAddressPools = append((vmssVMIPConfigs)[0].Properties.LoadBalancerBackendAddressPools, &armcompute.SubResource{ID: ptr.To(testLBBackendpoolID1)})
-	}
-
-	mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
-	mockVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
-
-	mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-	mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{vmss0, vmss1}, nil).AnyTimes()
-	mockVMSSClient.EXPECT().List(gomock.Any(), "rg1").Return(nil, nil).AnyTimes()
-	mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, "vmss-0", nil).Return(vmss0, nil).MaxTimes(2)
-	mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, "vmss-1", nil).Return(vmss1, nil).MaxTimes(2)
-	mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, gomock.Any(), gomock.Any()).Return(nil, nil).Times(2)
-
-	mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-	mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), "rg1", "vmss-0").Return(nil, nil).AnyTimes()
-	mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, "vmss-0").Return(expectedVMSSVMsOfVMSS0, nil).AnyTimes()
-	mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, "vmss-1").Return(expectedVMSSVMsOfVMSS1, nil).AnyTimes()
-	mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, "vmss-0", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, _, _, _ string, _ armcompute.VirtualMachineScaleSetVM, _ *armcompute.VirtualMachineScaleSetVMsClientBeginUpdateOptions) (*runtime.Poller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse], error) {
-			poller, err := runtime.NewPoller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse](
-				&http.Response{
-					Header: http.Header{"Fake-Poller-Status": []string{"https://fake/operation"}},
-				},
-				runtime.Pipeline{},
-				&runtime.NewPollerOptions[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse]{
-					Handler: &vmssvmMockPutHandler{
-						resp: &http.Response{
-							StatusCode: http.StatusAccepted,
+		backendAddressPools := []*armnetwork.BackendAddressPool{
+			{
+				ID: ptr.To(testLBBackendpoolID0),
+				Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+					BackendIPConfigurations: []*armnetwork.InterfaceIPConfiguration{
+						{
+							Name: ptr.To("ip-1"),
+							ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss-0/virtualMachines/0/networkInterfaces/nic"),
 						},
 					},
 				},
-			)
-			assert.NoError(t, err)
-			return poller, nil
-		},
-	).Times(1)
-
-	mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, "vmss-1", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, _, _, _ string, _ armcompute.VirtualMachineScaleSetVM, _ *armcompute.VirtualMachineScaleSetVMsClientBeginUpdateOptions) (*runtime.Poller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse], error) {
-			poller, err := runtime.NewPoller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse](
-				&http.Response{
-					Header: http.Header{"Fake-Poller-Status": []string{"https://fake/operation"}},
-				},
-				runtime.Pipeline{},
-				&runtime.NewPollerOptions[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse]{
-					Handler: &vmssvmMockPutHandler{
-						resp: &http.Response{
-							StatusCode: http.StatusAccepted,
+			},
+			{
+				ID: ptr.To(testLBBackendpoolID1),
+				Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+					BackendIPConfigurations: []*armnetwork.InterfaceIPConfiguration{
+						{
+							Name: ptr.To("ip-1"),
+							ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss-1/virtualMachines/0/networkInterfaces/nic"),
 						},
 					},
 				},
-			)
-			assert.NoError(t, err)
-			return poller, nil
-		},
-	).Times(1)
+			},
+			{
+				ID: ptr.To(testLBBackendpoolID2),
+				Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+					BackendIPConfigurations: []*armnetwork.InterfaceIPConfiguration{
+						{
+							Name: ptr.To("ip-1"),
+							ID:   ptr.To("/subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachineScaleSets/vmss-0/virtualMachines/0/networkInterfaces/nic"),
+						},
+					},
+				},
+			},
+		}
 
-	backendpoolAddressIDs := []string{testLBBackendpoolID0, testLBBackendpoolID1, testLBBackendpoolID2}
-	testVMSSNames := []string{"vmss-0", "vmss-1", "vmss-2"}
-	testFunc := make([]func() error, 0)
-	for i, id := range backendpoolAddressIDs {
-		i := i
-		id := id
-		testFunc = append(testFunc, func() error {
-			_, err := ss.EnsureBackendPoolDeleted(context.TODO(), &v1.Service{}, []string{id}, testVMSSNames[i], backendAddressPools, true)
-			return err
-		})
+		vmss0 := buildTestVMSSWithLB("vmss-0", "vmss-0-vm-", []string{testLBBackendpoolID0, testLBBackendpoolID1}, false)
+		vmss1 := buildTestVMSSWithLB("vmss-1", "vmss-1-vm-", []string{testLBBackendpoolID0, testLBBackendpoolID1}, false)
+
+		expectedVMSSVMsOfVMSS0, _, _ := buildTestVirtualMachineEnv(ss.Cloud, "vmss-0", "", 0, []string{"vmss-0-vm-000000"}, "succeeded", false)
+		expectedVMSSVMsOfVMSS1, _, _ := buildTestVirtualMachineEnv(ss.Cloud, "vmss-1", "", 0, []string{"vmss-1-vm-000001"}, "succeeded", false)
+		for _, expectedVMSSVMs := range [][]*armcompute.VirtualMachineScaleSetVM{expectedVMSSVMsOfVMSS0, expectedVMSSVMsOfVMSS1} {
+			vmssVMNetworkConfigs := expectedVMSSVMs[0].Properties.NetworkProfileConfiguration
+			vmssVMIPConfigs := (vmssVMNetworkConfigs.NetworkInterfaceConfigurations)[0].Properties.IPConfigurations
+			(vmssVMIPConfigs)[0].Properties.LoadBalancerBackendAddressPools = append((vmssVMIPConfigs)[0].Properties.LoadBalancerBackendAddressPools, &armcompute.SubResource{ID: ptr.To(testLBBackendpoolID1)})
+		}
+
+		mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+		mockVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
+
+		mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+		mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{vmss0, vmss1}, nil).AnyTimes()
+		mockVMSSClient.EXPECT().List(gomock.Any(), "rg1").Return(nil, nil).AnyTimes()
+		mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, "vmss-0", nil).Return(vmss0, nil).MaxTimes(2)
+		mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, "vmss-1", nil).Return(vmss1, nil).MaxTimes(2)
+		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, gomock.Any(), gomock.Any()).Return(nil, nil).Times(2)
+
+		mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+		ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+		if ss.ListVmssVirtualMachinesWithoutInstanceView {
+			mockVMSSVMClient.EXPECT().List(gomock.Any(), "rg1", "vmss-0").Return(nil, nil).AnyTimes()
+			mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, "vmss-0").Return(expectedVMSSVMsOfVMSS0, nil).AnyTimes()
+			mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, "vmss-1").Return(expectedVMSSVMsOfVMSS1, nil).AnyTimes()
+		} else {
+			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), "rg1", "vmss-0").Return(nil, nil).AnyTimes()
+			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, "vmss-0").Return(expectedVMSSVMsOfVMSS0, nil).AnyTimes()
+			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, "vmss-1").Return(expectedVMSSVMsOfVMSS1, nil).AnyTimes()
+
+		}
+		mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, "vmss-0", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, _, _, _ string, _ armcompute.VirtualMachineScaleSetVM, _ *armcompute.VirtualMachineScaleSetVMsClientBeginUpdateOptions) (*runtime.Poller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse], error) {
+				poller, err := runtime.NewPoller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse](
+					&http.Response{
+						Header: http.Header{"Fake-Poller-Status": []string{"https://fake/operation"}},
+					},
+					runtime.Pipeline{},
+					&runtime.NewPollerOptions[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse]{
+						Handler: &vmssvmMockPutHandler{
+							resp: &http.Response{
+								StatusCode: http.StatusAccepted,
+							},
+						},
+					},
+				)
+				assert.NoError(t, err)
+				return poller, nil
+			},
+		).Times(1)
+
+		mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, "vmss-1", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, _, _, _ string, _ armcompute.VirtualMachineScaleSetVM, _ *armcompute.VirtualMachineScaleSetVMsClientBeginUpdateOptions) (*runtime.Poller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse], error) {
+				poller, err := runtime.NewPoller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse](
+					&http.Response{
+						Header: http.Header{"Fake-Poller-Status": []string{"https://fake/operation"}},
+					},
+					runtime.Pipeline{},
+					&runtime.NewPollerOptions[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse]{
+						Handler: &vmssvmMockPutHandler{
+							resp: &http.Response{
+								StatusCode: http.StatusAccepted,
+							},
+						},
+					},
+				)
+				assert.NoError(t, err)
+				return poller, nil
+			},
+		).Times(1)
+
+		backendpoolAddressIDs := []string{testLBBackendpoolID0, testLBBackendpoolID1, testLBBackendpoolID2}
+		testVMSSNames := []string{"vmss-0", "vmss-1", "vmss-2"}
+		testFunc := make([]func() error, 0)
+		for i, id := range backendpoolAddressIDs {
+			i := i
+			id := id
+			testFunc = append(testFunc, func() error {
+				_, err := ss.EnsureBackendPoolDeleted(context.TODO(), &v1.Service{}, []string{id}, testVMSSNames[i], backendAddressPools, true)
+				return err
+			})
+		}
+		errs := utilerrors.AggregateGoroutines(testFunc...)
+		assert.Equal(t, 1, len(errs.Errors()))
+		assert.Equal(t, "instance not found", errs.Error())
 	}
-	errs := utilerrors.AggregateGoroutines(testFunc...)
-	assert.Equal(t, 1, len(errs.Errors()))
-	assert.Equal(t, "instance not found", errs.Error())
 }
 
 func TestGetNodeCIDRMasksByProviderID(t *testing.T) {
@@ -3789,65 +4071,72 @@ func TestGetNodeCIDRMasksByProviderID(t *testing.T) {
 }
 
 func TestGetAgentPoolVMSetNamesMixedInstances(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	for _, listVMSSVMsWithoutInstanceView := range []bool{false, true} {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
 
-	ss, err := NewTestScaleSet(ctrl)
-	assert.NoError(t, err)
+		ss, err := NewTestScaleSet(ctrl)
+		assert.NoError(t, err)
 
-	existingVMs := []*armcompute.VirtualMachine{
-		{
-			Name: ptr.To("vm-0"),
-			Properties: &armcompute.VirtualMachineProperties{
-				OSProfile: &armcompute.OSProfile{
-					ComputerName: ptr.To("vm-0"),
-				},
-				AvailabilitySet: &armcompute.SubResource{
-					ID: ptr.To("vmas-0"),
+		existingVMs := []*armcompute.VirtualMachine{
+			{
+				Name: ptr.To("vm-0"),
+				Properties: &armcompute.VirtualMachineProperties{
+					OSProfile: &armcompute.OSProfile{
+						ComputerName: ptr.To("vm-0"),
+					},
+					AvailabilitySet: &armcompute.SubResource{
+						ID: ptr.To("vmas-0"),
+					},
 				},
 			},
-		},
-		{
-			Name: ptr.To("vm-1"),
-			Properties: &armcompute.VirtualMachineProperties{
-				OSProfile: &armcompute.OSProfile{
-					ComputerName: ptr.To("vm-1"),
-				},
-				AvailabilitySet: &armcompute.SubResource{
-					ID: ptr.To("vmas-1"),
+			{
+				Name: ptr.To("vm-1"),
+				Properties: &armcompute.VirtualMachineProperties{
+					OSProfile: &armcompute.OSProfile{
+						ComputerName: ptr.To("vm-1"),
+					},
+					AvailabilitySet: &armcompute.SubResource{
+						ID: ptr.To("vmas-1"),
+					},
 				},
 			},
-		},
+		}
+		expectedScaleSet := buildTestVMSS(testVMSSName, "vmssee6c2")
+		vmList := []string{"vmssee6c2000000", "vmssee6c2000001", "vmssee6c2000002"}
+		existingVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, vmList, "", false)
+
+		mockVMClient := ss.Cloud.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+		mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(existingVMs, nil).AnyTimes()
+
+		mockVMSSClient := ss.Cloud.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachineScaleSet{expectedScaleSet}, nil)
+
+		mockVMSSVMClient := ss.Cloud.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+		ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
+		if ss.ListVmssVirtualMachinesWithoutInstanceView {
+			mockVMSSVMClient.EXPECT().List(gomock.Any(), gomock.Any(), testVMSSName).Return(existingVMSSVMs, nil)
+		} else {
+			mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), gomock.Any(), testVMSSName).Return(existingVMSSVMs, nil)
+		}
+
+		nodes := []*v1.Node{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "vmssee6c2000000",
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "vm-0",
+				},
+			},
+		}
+		expectedVMSetNames := []*string{to.Ptr(testVMSSName), to.Ptr("vmas-0")}
+		vmSetNames, err := ss.GetAgentPoolVMSetNames(context.TODO(), nodes)
+		assert.NoError(t, err)
+		assert.Equal(t, expectedVMSetNames, vmSetNames)
 	}
-	expectedScaleSet := buildTestVMSS(testVMSSName, "vmssee6c2")
-	vmList := []string{"vmssee6c2000000", "vmssee6c2000001", "vmssee6c2000002"}
-	existingVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, vmList, "", false)
-
-	mockVMClient := ss.Cloud.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
-	mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(existingVMs, nil).AnyTimes()
-
-	mockVMSSClient := ss.Cloud.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
-	mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachineScaleSet{expectedScaleSet}, nil)
-
-	mockVMSSVMClient := ss.Cloud.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-	mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), gomock.Any(), testVMSSName).Return(existingVMSSVMs, nil)
-
-	nodes := []*v1.Node{
-		{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "vmssee6c2000000",
-			},
-		},
-		{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "vm-0",
-			},
-		},
-	}
-	expectedVMSetNames := []*string{to.Ptr(testVMSSName), to.Ptr("vmas-0")}
-	vmSetNames, err := ss.GetAgentPoolVMSetNames(context.TODO(), nodes)
-	assert.NoError(t, err)
-	assert.Equal(t, expectedVMSetNames, vmSetNames)
 }
 
 func TestGetNodeVMSetNameVMSS(t *testing.T) {

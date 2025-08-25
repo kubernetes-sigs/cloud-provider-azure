@@ -57,9 +57,7 @@ spec:
   kubeadmConfigSpec:
     clusterConfiguration:
       apiServer:
-        extraArgs:
-          cloud-config: /etc/kubernetes/azure.json
-          cloud-provider: external
+        extraArgs: {}
         extraVolumes:
         - hostPath: /etc/kubernetes/azure.json
           mountPath: /etc/kubernetes/azure.json
@@ -112,14 +110,12 @@ spec:
       nodeRegistration:
         kubeletExtraArgs:
           azure-container-registry-config: /etc/kubernetes/azure.json
-          cloud-config: /etc/kubernetes/azure.json
           cloud-provider: external
         name: '{{ ds.meta_data["local_hostname"] }}'
     joinConfiguration:
       nodeRegistration:
         kubeletExtraArgs:
           azure-container-registry-config: /etc/kubernetes/azure.json
-          cloud-config: /etc/kubernetes/azure.json
           cloud-provider: external
         name: '{{ ds.meta_data["local_hostname"] }}'
     mounts:
@@ -221,7 +217,6 @@ spec:
     nodeRegistration:
       kubeletExtraArgs:
         azure-container-registry-config: /etc/kubernetes/azure.json
-        cloud-config: /etc/kubernetes/azure.json
         cloud-provider: external
       name: '{{ ds.meta_data["local_hostname"] }}'
 ---
@@ -290,7 +285,6 @@ spec:
     nodeRegistration:
       kubeletExtraArgs:
         azure-container-registry-config: /etc/kubernetes/azure.json
-        cloud-config: /etc/kubernetes/azure.json
         cloud-provider: external
       name: '{{ ds.meta_data["local_hostname"] }}'
 ---

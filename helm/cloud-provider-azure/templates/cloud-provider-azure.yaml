@@ -17,13 +17,13 @@
 {{- else if eq .Capabilities.KubeVersion.Minor "29" -}}
   {{- $_ := set . "cloudProviderAzureVersion" "v1.29.15" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "30" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.30.12" }}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.30.14" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "31" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.31.6" }}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.31.8" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "32" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.32.5" }}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.32.7" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "33" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.33.0" }}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.33.2" }}
 {{- end -}}
 {{- if .Values.cloudControllerManager.enabled }}
 apiVersion: v1
@@ -178,6 +178,10 @@ spec:
       tier: control-plane
       component: cloud-controller-manager
   replicas: {{ .Values.cloudControllerManager.replicas }}
+  {{- if .Values.cloudControllerManager.updateStrategy }}
+  strategy:
+  {{- toYaml .Values.cloudControllerManager.updateStrategy | nindent 4 }}
+  {{- end }}
   template:
     metadata:
       labels:

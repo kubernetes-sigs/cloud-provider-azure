@@ -19,10 +19,11 @@ package natgatewayclient
 
 import (
 	"context"
+	"strings"
+
 	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
-	"strings"
 )
 
 var beforeAllFunc func(context.Context)

@@ -69,8 +69,6 @@ spec:
       apiServer:
         extraArgs:
           bind-address: '::'
-          cloud-config: /etc/kubernetes/azure.json
-          cloud-provider: external
         extraVolumes:
         - hostPath: /etc/kubernetes/azure.json
           mountPath: /etc/kubernetes/azure.json
@@ -132,7 +130,6 @@ spec:
       nodeRegistration:
         kubeletExtraArgs:
           azure-container-registry-config: /etc/kubernetes/azure.json
-          cloud-config: /etc/kubernetes/azure.json
           cloud-provider: external
           cluster-dns: fd00::10
           node-ip: '::'
@@ -145,7 +142,6 @@ spec:
       nodeRegistration:
         kubeletExtraArgs:
           azure-container-registry-config: /etc/kubernetes/azure.json
-          cloud-config: /etc/kubernetes/azure.json
           cloud-provider: external
           cluster-dns: fd00::10
           node-ip: '::'
@@ -275,7 +271,6 @@ spec:
         nodeRegistration:
           kubeletExtraArgs:
             azure-container-registry-config: /etc/kubernetes/azure.json
-            cloud-config: /etc/kubernetes/azure.json
             cloud-provider: external
             cluster-dns: '[fd00::10]'
             node-ip: '::'

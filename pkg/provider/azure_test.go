@@ -119,7 +119,7 @@ func TestAddPort(t *testing.T) {
 
 	mockPLSRepo := az.plsRepo.(*privatelinkservice.MockRepository)
 	mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
-	lb, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
+	lb, _, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	assert.Nil(t, err)
 
 	// ensure we got a frontend ip configuration
@@ -131,7 +131,7 @@ func TestAddPort(t *testing.T) {
 }
 
 func setMockEnvDualStack(az *Cloud, expectedInterfaces []*armnetwork.Interface, expectedVirtualMachines []*armcompute.VirtualMachine, serviceCount int, services ...v1.Service) {
-	mockInterfacesClient := az.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+	mockInterfacesClient := az.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 	for i := range expectedInterfaces {
 		mockInterfacesClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, fmt.Sprintf("vm-%d", i), gomock.Any()).Return(expectedInterfaces[i], nil).AnyTimes()
 		mockInterfacesClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, fmt.Sprintf("vm-%d", i), gomock.Any()).Return(nil, nil).AnyTimes()
@@ -150,7 +150,7 @@ func setMockEnvDualStack(az *Cloud, expectedInterfaces []*armnetwork.Interface, 
 }
 
 func setMockEnv(az *Cloud, expectedInterfaces []*armnetwork.Interface, expectedVirtualMachines []*armcompute.VirtualMachine, serviceCount int, services ...v1.Service) {
-	mockInterfacesClient := az.NetworkClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+	mockInterfacesClient := az.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
 	for i := range expectedInterfaces {
 		mockInterfacesClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, fmt.Sprintf("vm-%d", i), gomock.Any()).Return(expectedInterfaces[i], nil).AnyTimes()
 		mockInterfacesClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, fmt.Sprintf("vm-%d", i), gomock.Any()).Return(nil, nil).AnyTimes()
@@ -502,7 +502,7 @@ func TestReconcileLoadBalancerAddServiceOnInternalSubnet(t *testing.T) {
 	}).AnyTimes()
 	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-	lb, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
+	lb, _, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	assert.Nil(t, err)
 
 	// ensure we got 2 frontend ip configurations
@@ -535,7 +535,7 @@ func TestReconcileLoadBalancerAddServicesOnMultipleSubnets(t *testing.T) {
 	mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil)
 
 	// svc1 is using LB without "-internal" suffix
-	lb, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc1, clusterResources.nodes, true /* wantLb */)
+	lb, _, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc1, clusterResources.nodes, true /* wantLb */)
 	if err != nil {
 		t.Errorf("Unexpected error reconciling svc1: %q", err)
 	}
@@ -552,7 +552,7 @@ func TestReconcileLoadBalancerAddServicesOnMultipleSubnets(t *testing.T) {
 	setMockLBsDualStack(az, &expectedLBs, "service", 1, 2, true)
 
 	// svc2 is using LB with "-internal" suffix
-	lb, err = az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc2, clusterResources.nodes, true /* wantLb */)
+	lb, _, err = az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc2, clusterResources.nodes, true /* wantLb */)
 	if err != nil {
 		t.Errorf("Unexpected error reconciling svc2: %q", err)
 	}
@@ -588,7 +588,7 @@ func TestReconcileLoadBalancerEditServiceSubnet(t *testing.T) {
 	mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
 	az.plsRepo = mockPLSRepo
 
-	lb, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
+	lb, _, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	if err != nil {
 		t.Errorf("Unexpected error reconciling initial svc: %q", err)
 	}
@@ -601,7 +601,7 @@ func TestReconcileLoadBalancerEditServiceSubnet(t *testing.T) {
 	expectedLBs = make([]*armnetwork.LoadBalancer, 0)
 	setMockLBsDualStack(az, &expectedLBs, "service", 1, 1, true)
 
-	lb, err = az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
+	lb, _, err = az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	if err != nil {
 		t.Errorf("Unexpected error reconciling edits to svc: %q", err)
 	}
@@ -636,7 +636,7 @@ func TestReconcileLoadBalancerNodeHealth(t *testing.T) {
 	mockPLSRepo := az.plsRepo.(*privatelinkservice.MockRepository)
 	mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
 
-	lb, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
+	lb, _, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	assert.Nil(t, err)
 
 	// ensure we got a frontend ip configuration
@@ -667,7 +667,7 @@ func TestReconcileLoadBalancerRemoveService(t *testing.T) {
 	mockPLSRepo := az.plsRepo.(*privatelinkservice.MockRepository)
 	mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
 
-	_, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
+	_, _, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	assert.Nil(t, err)
 
 	expectedLBs[0].Properties.FrontendIPConfigurations = []*armnetwork.FrontendIPConfiguration{}
@@ -676,7 +676,7 @@ func TestReconcileLoadBalancerRemoveService(t *testing.T) {
 	mockLBsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, expectedLBs[0].Name, gomock.Any()).Return(expectedLBs[0], nil).MaxTimes(2)
 	mockLBsClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(expectedLBs, nil).MaxTimes(3)
 
-	lb, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, false /* wantLb */)
+	lb, _, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, false /* wantLb */)
 	assert.Nil(t, err)
 
 	// ensure we abandoned the frontend ip configuration
@@ -708,7 +708,7 @@ func TestReconcileLoadBalancerRemoveAllPortsRemovesFrontendConfig(t *testing.T) 
 	mockPLSRepo := az.plsRepo.(*privatelinkservice.MockRepository)
 	mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
 
-	lb, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
+	lb, _, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	assert.Nil(t, err)
 	validateLoadBalancer(t, az, lb, svc)
 
@@ -720,7 +720,7 @@ func TestReconcileLoadBalancerRemoveAllPortsRemovesFrontendConfig(t *testing.T) 
 	mockLBsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, expectedLBs[0].Name, gomock.Any()).Return(expectedLBs[0], nil).MaxTimes(2)
 	mockLBsClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(expectedLBs, nil).MaxTimes(3)
 
-	lb, err = az.reconcileLoadBalancer(context.TODO(), testClusterName, &svcUpdated, clusterResources.nodes, false /* wantLb*/)
+	lb, _, err = az.reconcileLoadBalancer(context.TODO(), testClusterName, &svcUpdated, clusterResources.nodes, false /* wantLb*/)
 	assert.Nil(t, err)
 
 	// ensure we abandoned the frontend ip configuration
@@ -748,13 +748,13 @@ func TestReconcileLoadBalancerRemovesPort(t *testing.T) {
 	expectedLBs := make([]*armnetwork.LoadBalancer, 0)
 	setMockLBsDualStack(az, &expectedLBs, "service", 1, 1, false)
 	svc := getTestServiceDualStack("service1", v1.ProtocolTCP, nil, 80, 443)
-	_, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
+	_, _, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	assert.Nil(t, err)
 
 	expectedLBs = make([]*armnetwork.LoadBalancer, 0)
 	setMockLBsDualStack(az, &expectedLBs, "service", 1, 1, false)
 	svcUpdated := getTestServiceDualStack("service1", v1.ProtocolTCP, nil, 80)
-	lb, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svcUpdated, clusterResources.nodes, true /* wantLb */)
+	lb, _, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svcUpdated, clusterResources.nodes, true /* wantLb */)
 	assert.Nil(t, err)
 
 	validateLoadBalancer(t, az, lb, svcUpdated)
@@ -784,12 +784,12 @@ func TestReconcileLoadBalancerMultipleServices(t *testing.T) {
 	mockPLSRepo := az.plsRepo.(*privatelinkservice.MockRepository)
 	mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
 
-	_, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc1, clusterResources.nodes, true /* wantLb */)
+	_, _, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc1, clusterResources.nodes, true /* wantLb */)
 	assert.Nil(t, err)
 
 	setMockLBsDualStack(az, &expectedLBs, "service", 1, 2, false)
 
-	updatedLoadBalancer, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc2, clusterResources.nodes, true /* wantLb */)
+	updatedLoadBalancer, _, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc2, clusterResources.nodes, true /* wantLb */)
 	assert.Nil(t, err)
 
 	validateLoadBalancer(t, az, updatedLoadBalancer, svc1, svc2)
@@ -846,7 +846,7 @@ func TestServiceDefaultsToNoSessionPersistence(t *testing.T) {
 	}).AnyTimes()
 	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-	lb, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
+	lb, _, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	if err != nil {
 		t.Errorf("Unexpected error reconciling svc1: %q", err)
 	}
@@ -906,7 +906,7 @@ func TestServiceRespectsNoSessionAffinity(t *testing.T) {
 	}).AnyTimes()
 	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-	lb, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
+	lb, _, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	if err != nil {
 		t.Errorf("Unexpected error reconciling svc1: %q", err)
 	}
@@ -967,7 +967,7 @@ func TestServiceRespectsClientIPSessionAffinity(t *testing.T) {
 	}).AnyTimes()
 	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-	lb, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
+	lb, _, err := az.reconcileLoadBalancer(context.TODO(), testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	if err != nil {
 		t.Errorf("Unexpected error reconciling svc1: %q", err)
 	}

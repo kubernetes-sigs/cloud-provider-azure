@@ -74,7 +74,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-10-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2025-02-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -299,7 +299,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-10-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2025-02-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -484,7 +484,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-10-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2025-02-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -669,7 +669,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResourcenotfound?api-version=2024-10-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResourcenotfound?api-version=2025-02-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -722,7 +722,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-10-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2025-02-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -960,7 +960,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-10-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2025-02-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -1146,7 +1146,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?api-version=2024-10-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?api-version=2025-02-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -1299,7 +1299,7 @@ interactions:
                }
               }
              ],
-             "nextLink": "https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=1893773\u0026api-version=2024-10-01\u0026skipToken=1893773"
+             "nextLink": "https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=1893773\u0026api-version=2025-02-01\u0026skipToken=1893773"
             }
         headers:
             Cache-Control:
@@ -1335,7 +1335,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=1893773&api-version=2024-10-01&skipToken=1893773
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=1893773&api-version=2025-02-01&skipToken=1893773
         method: GET
       response:
         proto: HTTP/2.0
@@ -1385,7 +1385,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedClusternotfound/providers/Microsoft.ContainerService/managedClusters?api-version=2024-10-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedClusternotfound/providers/Microsoft.ContainerService/managedClusters?api-version=2025-02-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -1434,7 +1434,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-ManagedCluster-clien azsdk-go-armcontainerservice/v6.4.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-10-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2025-02-01
         method: DELETE
       response:
         proto: HTTP/2.0

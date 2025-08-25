@@ -53,6 +53,7 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 		expectedPLS       *armnetwork.PrivateLinkService
 		expectedPLSDelete bool
 		expectedError     bool
+		expectedDeleted   bool // new field to test the deleted PLS return value
 	}{
 		{
 			desc:    "reconcilePrivateLinkService should do nothing if service does not create any PLS",
@@ -318,6 +319,42 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 				},
 			},
 			expectedPLSDelete: true,
+			expectedDeleted:   true, // PLS should be successfully deleted
+		},
+		{
+			desc: "reconcilePrivateLinkService should delete existing PLS when wantPLS is false",
+			annotations: map[string]string{
+				consts.ServiceAnnotationPLSCreation:          "true",
+				consts.ServiceAnnotationLoadBalancerInternal: "true",
+				consts.ServiceAnnotationPLSName:              "testpls",
+			},
+			wantPLS:         false, // This is the key - we don't want PLS anymore
+			expectedPLSList: true,
+			existingPLSList: []*armnetwork.PrivateLinkService{
+				{
+					Name: ptr.To("testpls"),
+					Properties: &armnetwork.PrivateLinkServiceProperties{
+						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: ptr.To("fipConfigID")}},
+					},
+					Tags: map[string]*string{
+						consts.ClusterNameTagKey:  ptr.To(testClusterName),
+						consts.OwnerServiceTagKey: ptr.To("default/test"),
+					},
+				},
+			},
+			expectedPLSDelete: true,
+			expectedDeleted:   true, // PLS should be successfully deleted and return true
+		},
+		{
+			desc: "reconcilePrivateLinkService should return false when wantPLS is false but no PLS exists",
+			annotations: map[string]string{
+				consts.ServiceAnnotationPLSCreation:          "true",
+				consts.ServiceAnnotationLoadBalancerInternal: "true",
+			},
+			wantPLS:         false, // We don't want PLS
+			expectedPLSList: true,
+			existingPLSList: []*armnetwork.PrivateLinkService{}, // No existing PLS
+			expectedDeleted: false,                              // Should return false since nothing was deleted
 		},
 	}
 	for _, test := range testCases {
@@ -362,8 +399,9 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			if test.expectedPLSDelete {
 				mockPLSRepo.EXPECT().Delete(gomock.Any(), "rg", "testpls", *fipConfig.ID).Return(nil).Times(1)
 			}
-			err := az.reconcilePrivateLinkService(context.TODO(), clusterName, &service, fipConfig, test.wantPLS)
+			deleted, err := az.reconcilePrivateLinkService(context.TODO(), clusterName, &service, fipConfig, test.wantPLS)
 			assert.Equal(t, test.expectedError, err != nil, "error: %v", err)
+			assert.Equal(t, test.expectedDeleted, deleted, "expected deleted PLS return value mismatch")
 		})
 	}
 }

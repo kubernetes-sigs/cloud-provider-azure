@@ -78,7 +78,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-SSHPublicKeyResource azsdk-go-armcompute/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource?api-version=2024-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource?api-version=2024-11-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -131,7 +131,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-SSHPublicKeyResource azsdk-go-armcompute/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource/generateKeyPair?api-version=2024-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource/generateKeyPair?api-version=2024-11-01
         method: POST
       response:
         proto: HTTP/2.0
@@ -184,7 +184,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-SSHPublicKeyResource azsdk-go-armcompute/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource?api-version=2024-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -237,7 +237,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-SSHPublicKeyResource azsdk-go-armcompute/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResourcenotfound?api-version=2024-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResourcenotfound?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -288,7 +288,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-SSHPublicKeyResource azsdk-go-armcompute/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys?api-version=2024-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -341,7 +341,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-SSHPublicKeyResource azsdk-go-armcompute/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResourcenotfound/providers/Microsoft.Compute/sshPublicKeys?api-version=2024-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResourcenotfound/providers/Microsoft.Compute/sshPublicKeys?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -392,7 +392,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-SSHPublicKeyResource azsdk-go-armcompute/v6.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource?api-version=2024-07-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource?api-version=2024-11-01
         method: DELETE
       response:
         proto: HTTP/2.0

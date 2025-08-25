@@ -232,7 +232,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-computeClientOption- azsdk-go-armcompute/v6.3.0 (go1.24.2; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource?api-version=2024-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource?api-version=2024-11-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -245,7 +245,7 @@ interactions:
         body: "{\r\n  \"name\": \"testParentResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource\",\r\n  \"type\": \"Microsoft.Compute/virtualMachineScaleSets\",\r\n  \"location\": \"chinaeast2\",\r\n  \"sku\": {\r\n    \"name\": \"Standard_D2s_v3\",\r\n    \"tier\": \"Standard\",\r\n    \"capacity\": 1\r\n  },\r\n  \"etag\": \"\\\"1\\\"\",\r\n  \"properties\": {\r\n    \"singlePlacementGroup\": true,\r\n    \"orchestrationMode\": \"Uniform\",\r\n    \"upgradePolicy\": {\r\n      \"mode\": \"Manual\",\r\n      \"automaticOSUpgradePolicy\": {\r\n        \"enableAutomaticOSUpgrade\": false,\r\n        \"useRollingUpgradePolicy\": false,\r\n        \"disableAutomaticRollback\": false\r\n      }\r\n    },\r\n    \"virtualMachineProfile\": {\r\n      \"osProfile\": {\r\n        \"computerNamePrefix\": \"vmss\",\r\n        \"adminUsername\": \"sample-user\",\r\n        \"windowsConfiguration\": {\r\n          \"provisionVMAgent\": true,\r\n          \"enableAutomaticUpdates\": true\r\n        },\r\n        \"secrets\": [],\r\n        \"allowExtensionOperations\": true,\r\n        \"requireGuestProvisionSignal\": true\r\n      },\r\n      \"storageProfile\": {\r\n        \"osDisk\": {\r\n          \"osType\": \"Windows\",\r\n          \"createOption\": \"FromImage\",\r\n          \"caching\": \"None\",\r\n          \"managedDisk\": {\r\n            \"storageAccountType\": \"Premium_LRS\"\r\n          },\r\n          \"diskSizeGB\": 127\r\n        },\r\n        \"imageReference\": {\r\n          \"publisher\": \"MicrosoftWindowsServer\",\r\n          \"offer\": \"WindowsServer\",\r\n          \"sku\": \"2019-Datacenter\",\r\n          \"version\": \"latest\"\r\n        }\r\n      },\r\n      \"networkProfile\": {\"networkInterfaceConfigurations\":[{\"name\":\"vmss1\",\"properties\":{\"primary\":true,\"enableAcceleratedNetworking\":false,\"disableTcpStateTracking\":false,\"dnsSettings\":{\"dnsServers\":[]},\"enableIPForwarding\":true,\"ipConfigurations\":[{\"name\":\"vmss1\",\"properties\":{\"subnet\":{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1\"},\"privateIPAddressVersion\":\"IPv4\"}}]}}]},\r\n      \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n    },\r\n    \"provisioningState\": \"Creating\",\r\n    \"overprovision\": false,\r\n    \"doNotRunExtensionsOnOverprovisionedVMs\": false,\r\n    \"uniqueId\": \"00000000-0000-0000-0000-000000000000\",\r\n    \"platformFaultDomainCount\": 5,\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n  }\r\n}"
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-07-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -290,7 +290,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-computeClientOption- azsdk-go-armcompute/v6.3.0 (go1.24.2; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-07-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -342,7 +342,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-computeClientOption- azsdk-go-armcompute/v6.3.0 (go1.24.2; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource?api-version=2024-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -396,7 +396,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.2; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0/instanceView?api-version=2024-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0/instanceView?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -452,7 +452,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.2; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines?api-version=2024-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -508,7 +508,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.2; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVMnotfound/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines?api-version=2024-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVMnotfound/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -561,7 +561,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.2; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0?api-version=2024-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0?api-version=2024-11-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -574,7 +574,7 @@ interactions:
         body: "{\r\n  \"name\": \"testParentResource_0\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0\",\r\n  \"type\": \"Microsoft.Compute/virtualMachineScaleSets/virtualMachines\",\r\n  \"location\": \"chinaeast2\",\r\n  \"instanceId\": \"0\",\r\n  \"sku\": {\r\n    \"name\": \"Standard_D2s_v3\",\r\n    \"tier\": \"Standard\"\r\n  },\r\n  \"properties\": {\r\n    \"latestModelApplied\": true,\r\n    \"modelDefinitionApplied\": \"VirtualMachineScaleSet\",\r\n    \"networkProfileConfiguration\": {\"networkInterfaceConfigurations\":[{\"name\":\"vmss1\",\"properties\":{\"primary\":true,\"enableAcceleratedNetworking\":false,\"disableTcpStateTracking\":false,\"dnsSettings\":{\"dnsServers\":[]},\"enableIPForwarding\":true,\"ipConfigurations\":[{\"name\":\"vmss1\",\"properties\":{\"subnet\":{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1\"},\"privateIPAddressVersion\":\"IPv4\"}}]}}]},\r\n    \"provisioningState\": \"Updating\",\r\n    \"hardwareProfile\": {\r\n      \"vmSize\": \"Standard_D2s_v3\"\r\n    },\r\n    \"resilientVMDeletionStatus\": \"Disabled\",\r\n    \"vmId\": \"00000000-0000-0000-0000-000000000000\",\r\n    \"storageProfile\": {\r\n      \"imageReference\": {\r\n        \"publisher\": \"MicrosoftWindowsServer\",\r\n        \"offer\": \"WindowsServer\",\r\n        \"sku\": \"2019-Datacenter\",\r\n        \"version\": \"latest\",\r\n        \"exactVersion\": \"17763.7240.250409\"\r\n      },\r\n      \"osDisk\": {\r\n        \"osType\": \"Windows\",\r\n        \"name\": \"testParentResource_testParentResource_0_OS__1_d11434ba8ff24ca9b77de055ceeae5fb\",\r\n        \"createOption\": \"FromImage\",\r\n        \"caching\": \"None\",\r\n        \"managedDisk\": {\r\n          \"storageAccountType\": \"Premium_LRS\",\r\n          \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/disks/testParentResource_testParentResource_0_OS__1_d11434ba8ff24ca9b77de055ceeae5fb\"\r\n        },\r\n        \"diskSizeGB\": 127\r\n      },\r\n      \"dataDisks\": []\r\n    },\r\n    \"osProfile\": {\r\n      \"computerName\": \"vmss000000\",\r\n      \"adminUsername\": \"sample-user\",\r\n      \"windowsConfiguration\": {\r\n        \"provisionVMAgent\": true,\r\n        \"enableAutomaticUpdates\": true\r\n      },\r\n      \"secrets\": [],\r\n      \"allowExtensionOperations\": true,\r\n      \"requireGuestProvisionSignal\": true\r\n    },\r\n    \"networkProfile\": {\"networkInterfaces\":[{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0/networkInterfaces/vmss1\"}]},\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n  },\r\n  \"etag\": \"\\\"1\\\"\"\r\n}"
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-07-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -619,7 +619,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.2; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-07-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -671,7 +671,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.2; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0?api-version=2024-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -735,7 +735,7 @@ interactions:
                 - invalid-etag
             User-Agent:
                 - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.2; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0?api-version=2024-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0?api-version=2024-11-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -789,7 +789,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.2; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0?api-version=2024-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -847,7 +847,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.2; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0notfound?api-version=2024-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0notfound?api-version=2024-11-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -903,7 +903,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.2; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0?api-version=2024-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource/virtualMachines/0?api-version=2024-11-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -916,7 +916,7 @@ interactions:
         body: ""
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-07-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -924,7 +924,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-07-01&c=c&h=h&monitor=true&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&monitor=true&p=00000000-0000-0000-0000-000000000000&s=s&t=t
             Pragma:
                 - no-cache
             Server:
@@ -959,7 +959,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.2; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-07-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -1013,7 +1013,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-computeClientOption- azsdk-go-armcompute/v6.3.0 (go1.24.2; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource?api-version=2024-07-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetVM/providers/Microsoft.Compute/virtualMachineScaleSets/testParentResource?api-version=2024-11-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -1026,7 +1026,7 @@ interactions:
         body: ""
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-07-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -1034,7 +1034,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-07-01&c=c&h=h&monitor=true&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&monitor=true&p=00000000-0000-0000-0000-000000000000&s=s&t=t
             Pragma:
                 - no-cache
             Server:
@@ -1069,7 +1069,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-computeClientOption- azsdk-go-armcompute/v6.3.0 (go1.24.2; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-07-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0

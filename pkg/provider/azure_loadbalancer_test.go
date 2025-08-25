@@ -1334,6 +1334,66 @@ func TestServiceOwnsPublicIP(t *testing.T) {
 			serviceLBName: "pip1",
 			expectedOwns:  true,
 		},
+		{
+			desc: "should return true for failed PIPs with empty IP but matching service tags",
+			pip: &armnetwork.PublicIPAddress{
+				Name: ptr.To("failed-pip"),
+				Tags: map[string]*string{
+					consts.ServiceTagKey:  ptr.To("default/nginx"),
+					consts.ClusterNameKey: ptr.To("kubernetes"),
+				},
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					IPAddress: ptr.To(""), // Empty IP address like failed PIPs
+				},
+			},
+			clusterName:  "kubernetes",
+			serviceName:  "nginx",
+			expectedOwns: true, // Should be true for cleanup, but currently returns false
+		},
+		{
+			desc: "should return false for failed PIPs with empty IP and non-matching service tags",
+			pip: &armnetwork.PublicIPAddress{
+				Name: ptr.To("failed-pip"),
+				Tags: map[string]*string{
+					consts.ServiceTagKey:  ptr.To("default/other-service"),
+					consts.ClusterNameKey: ptr.To("kubernetes"),
+				},
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					IPAddress: ptr.To(""), // Empty IP address like failed PIPs
+				},
+			},
+			clusterName:  "kubernetes",
+			serviceName:  "nginx",
+			expectedOwns: false,
+		},
+		{
+			desc: "should return false for user-assigned PIPs with empty IP address and no service tags",
+			pip: &armnetwork.PublicIPAddress{
+				Name: ptr.To("user-pip"),
+				Tags: map[string]*string{}, // No service tags, indicating user-created
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					IPAddress: ptr.To(""), // Empty IP address
+				},
+			},
+			clusterName:             "kubernetes",
+			serviceName:             "nginx",
+			expectedOwns:            false, // Can't match without IP
+			expectedUserAssignedPIP: true,  // Should still be identified as user-assigned
+		},
+		{
+			desc: "should return true for system PIPs with nil Properties but matching service tags",
+			pip: &armnetwork.PublicIPAddress{
+				Name: ptr.To("system-pip"),
+				Tags: map[string]*string{
+					consts.ServiceTagKey:  ptr.To("default/nginx"),
+					consts.ClusterNameKey: ptr.To("kubernetes"),
+				},
+				Properties: nil, // Nil properties like some failed PIPs
+			},
+			clusterName:  "kubernetes",
+			serviceName:  "nginx",
+			expectedOwns: true, // Should be owned based on tags
+		},
 	}
 
 	for i, c := range tests {
@@ -2108,7 +2168,7 @@ func TestGetServiceLoadBalancerMultiSLB(t *testing.T) {
 				tc.service.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyLocal
 			}
 
-			lb, lbs, _, _, _, err := cloud.getServiceLoadBalancer(context.TODO(), &tc.service, testClusterName,
+			lb, lbs, _, _, _, _, err := cloud.getServiceLoadBalancer(context.TODO(), &tc.service, testClusterName,
 				[]*v1.Node{}, true, tc.existingLBs)
 			assert.Equal(t, tc.expectedError, err)
 			assert.Equal(t, tc.expectedLB, lb)
@@ -2288,7 +2348,7 @@ func TestGetServiceLoadBalancerCommon(t *testing.T) {
 			}
 			az.LoadBalancerSKU = test.SKU
 			service := test.service
-			lb, _, status, _, exists, err := az.getServiceLoadBalancer(context.TODO(), &service, testClusterName,
+			lb, _, status, _, exists, _, err := az.getServiceLoadBalancer(context.TODO(), &service, testClusterName,
 				clusterResources.nodes, test.wantLB, []*armnetwork.LoadBalancer{})
 			assert.Equal(t, test.expectedLB, lb)
 			if test.expectedStatus != nil {
@@ -2324,7 +2384,7 @@ func TestGetServiceLoadBalancerWithExtendedLocation(t *testing.T) {
 	mockLBsClient := az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
 	mockLBsClient.EXPECT().List(gomock.Any(), "rg").Return(nil, nil)
 
-	lb, _, status, _, exists, err := az.getServiceLoadBalancer(context.TODO(), &service, testClusterName,
+	lb, _, status, _, exists, _, err := az.getServiceLoadBalancer(context.TODO(), &service, testClusterName,
 		clusterResources.nodes, false, []*armnetwork.LoadBalancer{})
 	assert.Equal(t, expectedLB, lb, "GetServiceLoadBalancer shall return a default LB with expected location.")
 	assert.Nil(t, status, "GetServiceLoadBalancer: Status should be nil for default LB.")
@@ -2347,7 +2407,7 @@ func TestGetServiceLoadBalancerWithExtendedLocation(t *testing.T) {
 	mockLBsClient = az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
 	mockLBsClient.EXPECT().List(gomock.Any(), "rg").Return(nil, nil)
 
-	lb, _, status, _, exists, err = az.getServiceLoadBalancer(context.TODO(), &service, testClusterName,
+	lb, _, status, _, exists, _, err = az.getServiceLoadBalancer(context.TODO(), &service, testClusterName,
 		clusterResources.nodes, true, []*armnetwork.LoadBalancer{})
 	assert.Equal(t, *expectedLB, *lb, "GetServiceLoadBalancer shall return a new LB with expected location.")
 	assert.Nil(t, status, "GetServiceLoadBalancer: Status should be nil for new LB.")
@@ -4294,7 +4354,7 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 			mockPLSRepo := az.plsRepo.(*privatelinkservice.MockRepository)
 			mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
 
-			lb, rerr := az.reconcileLoadBalancer(context.TODO(), "testCluster", &service, clusterResources.nodes, test.wantLb)
+			lb, _, rerr := az.reconcileLoadBalancer(context.TODO(), "testCluster", &service, clusterResources.nodes, test.wantLb)
 			if test.expectedError != nil {
 				assert.EqualError(t, rerr, test.expectedError.Error())
 			} else {
@@ -5315,9 +5375,14 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 		expectedError           bool
 	}{
 		{
-			desc:         "shall return existed IPv4 PIP if there is any",
-			pipName:      "pip1",
-			existingPIPs: []*armnetwork.PublicIPAddress{{Name: ptr.To("pip1")}},
+			desc:    "shall return existed IPv4 PIP if there is any",
+			pipName: "pip1",
+			existingPIPs: []*armnetwork.PublicIPAddress{{
+				Name: ptr.To("pip1"),
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
+			}},
 			expectedPIP: &armnetwork.PublicIPAddress{
 				Name: ptr.To("pip1"),
 				ID:   ptr.To(expectedPIPID),
@@ -5325,14 +5390,21 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 				},
-				Tags: map[string]*string{},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			},
 			shouldPutPIP: true,
 		},
 		{
-			desc:         "shall return existed IPv6 PIP if there is any",
-			pipName:      "pip1-IPv6",
-			existingPIPs: []*armnetwork.PublicIPAddress{{Name: ptr.To("pip1-IPv6")}},
+			desc:    "shall return existed IPv6 PIP if there is any",
+			pipName: "pip1-IPv6",
+			existingPIPs: []*armnetwork.PublicIPAddress{{
+				Name: ptr.To("pip1-IPv6"),
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
+			}},
 			expectedPIP: &armnetwork.PublicIPAddress{
 				Name: ptr.To("pip1-IPv6"),
 				ID: ptr.To(rgprefix +
@@ -5341,7 +5413,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv6),
 					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
 				},
-				Tags: map[string]*string{},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			},
 			isIPv6:       true,
 			shouldPutPIP: true,
@@ -5361,6 +5435,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			existingPIPs: []*armnetwork.PublicIPAddress{{
 				Name:       ptr.To("pip1"),
 				Properties: &armnetwork.PublicIPAddressPropertiesFormat{},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			}},
 			expectedPIP: &armnetwork.PublicIPAddress{
 				Name: ptr.To("pip1"),
@@ -5371,7 +5448,10 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					},
 					PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
 				},
-				Tags: map[string]*string{consts.ServiceUsingDNSKey: ptr.To("default/test1")},
+				Tags: map[string]*string{
+					consts.ServiceUsingDNSKey: ptr.To("default/test1"),
+					consts.ServiceTagKey:      ptr.To("default/test1"),
+				},
 			},
 			shouldPutPIP: true,
 		},
@@ -5386,6 +5466,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 						DomainNameLabel: ptr.To("previousdns"),
 					},
 				},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			}},
 			expectedPIP: &armnetwork.PublicIPAddress{
 				Name: ptr.To("pip1"),
@@ -5394,7 +5477,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					DNSSettings:            nil,
 					PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
 				},
-				Tags: map[string]*string{},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			},
 			shouldPutPIP: true,
 		},
@@ -5409,6 +5494,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 						DomainNameLabel: ptr.To("previousdns"),
 					},
 				},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			}},
 			expectedPIP: &armnetwork.PublicIPAddress{
 				Name: ptr.To("pip1"),
@@ -5419,10 +5507,13 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					},
 					PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
 				},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			},
 		},
 		{
-			desc:                    "shall update existed PIP's dns label for IPv6",
+			desc:                    "shall create existed PIP's dns label for IPv6",
 			pipName:                 "pip1",
 			inputDNSLabel:           "newdns",
 			foundDNSLabelAnnotation: true,
@@ -5430,6 +5521,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			existingPIPs: []*armnetwork.PublicIPAddress{{
 				Name:       ptr.To("pip1"),
 				Properties: &armnetwork.PublicIPAddressPropertiesFormat{},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			}},
 			expectedPIP: &armnetwork.PublicIPAddress{
 				Name: ptr.To("pip1"),
@@ -5441,7 +5535,10 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
 					PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv6),
 				},
-				Tags: map[string]*string{consts.ServiceUsingDNSKey: ptr.To("default/test1")},
+				Tags: map[string]*string{
+					consts.ServiceUsingDNSKey: ptr.To("default/test1"),
+					consts.ServiceTagKey:      ptr.To("default/test1"),
+				},
 			},
 			shouldPutPIP: true,
 		},
@@ -5458,6 +5555,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 						DomainNameLabel: ptr.To("previousdns"),
 					},
 				},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			}},
 			expectedPIP: &armnetwork.PublicIPAddress{
 				Name: ptr.To("pip1"),
@@ -5471,6 +5571,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 				},
 				Tags: map[string]*string{
 					"k8s-azure-dns-label-service": ptr.To("default/test1"),
+					consts.ServiceTagKey:          ptr.To("default/test1"),
 				},
 			},
 			shouldPutPIP: true,
@@ -5490,6 +5591,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
 					PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 				},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			}},
 			expectedPIP: &armnetwork.PublicIPAddress{
 				Name: ptr.To("pip1"),
@@ -5503,6 +5607,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 				},
 				Tags: map[string]*string{
 					"k8s-azure-dns-label-service": ptr.To("default/test1"),
+					consts.ServiceTagKey:          ptr.To("default/test1"),
 				},
 			},
 			shouldPutPIP: true,
@@ -5564,7 +5669,12 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			desc:    "shall tag the service name to the pip correctly",
 			pipName: "pip1",
 			existingPIPs: []*armnetwork.PublicIPAddress{
-				{Name: ptr.To("pip1")},
+				{
+					Name: ptr.To("pip1"),
+					Tags: map[string]*string{
+						consts.ServiceTagKey: ptr.To("default/test1"),
+					},
+				},
 			},
 			expectedPIP: &armnetwork.PublicIPAddress{
 				Name: ptr.To("pip1"),
@@ -5573,7 +5683,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 				},
-				Tags: map[string]*string{},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 			},
 			shouldPutPIP: true,
 		},
@@ -5589,6 +5701,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 						PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv6),
 						PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 					},
+					Tags: map[string]*string{
+						consts.ServiceTagKey: ptr.To("default/test1"),
+					},
 				},
 			},
 			expectedPIP: &armnetwork.PublicIPAddress{
@@ -5598,7 +5713,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv6),
 					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 				},
-				Tags: map[string]*string{},
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
 				SKU: &armnetwork.PublicIPAddressSKU{
 					Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandard),
 				},
@@ -5606,13 +5723,22 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			shouldPutPIP: true,
 		},
 		{
-			desc:         "shall update pip tags if there is any change",
-			pipName:      "pip1",
-			existingPIPs: []*armnetwork.PublicIPAddress{{Name: ptr.To("pip1"), Tags: map[string]*string{"a": ptr.To("b")}}},
+			desc:    "shall update pip tags if there is any change",
+			pipName: "pip1",
+			existingPIPs: []*armnetwork.PublicIPAddress{{
+				Name: ptr.To("pip1"),
+				Tags: map[string]*string{
+					"a":                  ptr.To("b"),
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
+			}},
 			expectedPIP: &armnetwork.PublicIPAddress{
 				Name: ptr.To("pip1"),
-				Tags: map[string]*string{"a": ptr.To("c")},
-				ID:   ptr.To(expectedPIPID),
+				Tags: map[string]*string{
+					"a":                  ptr.To("c"),
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
+				ID: ptr.To(expectedPIPID),
 				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 					PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
@@ -6591,7 +6717,7 @@ func TestRemoveFrontendIPConfigurationFromLoadBalancerDelete(t *testing.T) {
 		mockPLSRepo := cloud.plsRepo.(*privatelinkservice.MockRepository)
 		mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil)
 		existingLBs := []*armnetwork.LoadBalancer{{Name: ptr.To("lb")}}
-		_, err := cloud.removeFrontendIPConfigurationFromLoadBalancer(context.TODO(), lb, existingLBs, []*armnetwork.FrontendIPConfiguration{fip}, "testCluster", &service)
+		_, _, err := cloud.removeFrontendIPConfigurationFromLoadBalancer(context.TODO(), lb, existingLBs, []*armnetwork.FrontendIPConfiguration{fip}, "testCluster", &service)
 		assert.NoError(t, err)
 	})
 }
@@ -6622,7 +6748,7 @@ func TestRemoveFrontendIPConfigurationFromLoadBalancerUpdate(t *testing.T) {
 		mockLBClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "lb", gomock.Any()).Return(nil, nil)
 		mockPLSRepo := cloud.plsRepo.(*privatelinkservice.MockRepository)
 		mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil)
-		_, err := cloud.removeFrontendIPConfigurationFromLoadBalancer(context.TODO(), lb, []*armnetwork.LoadBalancer{}, []*armnetwork.FrontendIPConfiguration{fip}, "testCluster", &service)
+		_, _, err := cloud.removeFrontendIPConfigurationFromLoadBalancer(context.TODO(), lb, []*armnetwork.LoadBalancer{}, []*armnetwork.FrontendIPConfiguration{fip}, "testCluster", &service)
 		assert.NoError(t, err)
 	})
 }
@@ -7724,7 +7850,7 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 				},
 			},
 			expectedLBs: []string{},
-			expectedErr: errors.New("values: Invalid value: []string(nil): for 'in', 'notin' operators, values set can't be empty"),
+			expectedErr: errors.New("values: Invalid value: null: for 'in', 'notin' operators, values set can't be empty"),
 		},
 		{
 			description: "should report an error if failed to convert namespace selector as a selector",
@@ -7746,7 +7872,7 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 				},
 			},
 			expectedLBs: []string{},
-			expectedErr: errors.New("values: Invalid value: []string(nil): for 'in', 'notin' operators, values set can't be empty"),
+			expectedErr: errors.New("values: Invalid value: null: for 'in', 'notin' operators, values set can't be empty"),
 		},
 		{
 			description: "should respect allowServicePlacement flag",

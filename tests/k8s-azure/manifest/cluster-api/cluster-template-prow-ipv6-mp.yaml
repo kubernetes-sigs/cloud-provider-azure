@@ -74,7 +74,6 @@ spec:
       apiServer:
         extraArgs:
           bind-address: '::'
-          cloud-provider: external
           feature-gates: ${K8S_FEATURE_GATES:-""}
         timeoutForControlPlane: 20m
       controllerManager:
@@ -85,7 +84,6 @@ spec:
           cluster-cidr: 2001:1234:5678:9a40::/58
           cluster-name: ${CLUSTER_NAME}
           configure-cloud-routes: "true"
-          feature-gates: HPAContainerMetrics=true
           v: "4"
       etcd:
         local:
