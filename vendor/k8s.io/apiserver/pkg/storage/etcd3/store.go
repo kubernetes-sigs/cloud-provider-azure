@@ -634,14 +634,7 @@ func (s *store) Stats(ctx context.Context) (stats storage.Stats, err error) {
 		return s.stats.Stats(ctx)
 	}
 	startTime := time.Now()
-	prefix, err := s.prepareKey(s.resourcePrefix)
-	if err != nil {
-		return storage.Stats{}, err
-	}
-	if !strings.HasSuffix(prefix, "/") {
-		prefix += "/"
-	}
-	count, err := s.client.Kubernetes.Count(ctx, prefix, kubernetes.CountOptions{})
+	count, err := s.client.Kubernetes.Count(ctx, s.pathPrefix, kubernetes.CountOptions{})
 	metrics.RecordEtcdRequest("listWithCount", s.groupResource, err, startTime)
 	if err != nil {
 		return storage.Stats{}, err
@@ -659,14 +652,7 @@ func (s *store) SetKeysFunc(keys storage.KeysFunc) {
 
 func (s *store) getKeys(ctx context.Context) ([]string, error) {
 	startTime := time.Now()
-	prefix, err := s.prepareKey(s.resourcePrefix)
-	if err != nil {
-		return nil, err
-	}
-	if !strings.HasSuffix(prefix, "/") {
-		prefix += "/"
-	}
-	resp, err := s.client.KV.Get(ctx, prefix, clientv3.WithPrefix(), clientv3.WithKeysOnly())
+	resp, err := s.client.KV.Get(ctx, s.pathPrefix, clientv3.WithPrefix(), clientv3.WithKeysOnly())
 	metrics.RecordEtcdRequest("listOnlyKeys", s.groupResource, err, startTime)
 	if err != nil {
 		return nil, err
