@@ -20,14 +20,12 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"strings"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/selection"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
@@ -83,10 +81,8 @@ type CloudControllerManagerOptions struct {
 
 	DynamicReloading *DynamicReloadingOptions
 
-	// Node filtering options
-	EnableNodeFiltering bool
-	NodeLabelSelector   string
-	NodeExcludeLabels   string
+	// Node filtering requirement
+	NodeFilterRequirements string
 }
 
 // NewCloudControllerManagerOptions creates a new ExternalCMServer with a default config.
@@ -160,9 +156,7 @@ func (o *CloudControllerManagerOptions) Flags(allControllers, disabledByDefaultC
 
 	// Node filtering flags
 	nodeFilterFs := fss.FlagSet("node filtering")
-	nodeFilterFs.BoolVar(&o.EnableNodeFiltering, "enable-node-filtering", o.EnableNodeFiltering, "Enable node filtering for CCM controllers")
-	nodeFilterFs.StringVar(&o.NodeLabelSelector, "node-label-selector", o.NodeLabelSelector, "Label selector for nodes to be managed by CCM (e.g., 'kubernetes.azure.com/managed=true')")
-	nodeFilterFs.StringVar(&o.NodeExcludeLabels, "node-exclude-labels", o.NodeExcludeLabels, "Label selector for nodes to exclude from CCM management (e.g., 'kubernetes.azure.com/managed=false')")
+	nodeFilterFs.StringVar(&o.NodeFilterRequirements, "node-filter-requirements", o.NodeFilterRequirements, "Label selector for nodes to be managed by CCM (e.g., 'foo=bar' or 'foo in (bar,baz)')")
 
 	utilfeature.DefaultMutableFeatureGate.AddFlag(fss.FlagSet("generic"))
 
@@ -196,9 +190,7 @@ func (o *CloudControllerManagerOptions) ApplyTo(
 	}
 
 	// Apply node filtering configuration
-	c.NodeFilteringConfig.EnableNodeFiltering = o.EnableNodeFiltering
-	c.NodeFilteringConfig.NodeLabelSelector = o.NodeLabelSelector
-	c.NodeFilteringConfig.NodeExcludeLabels = o.NodeExcludeLabels
+	c.NodeFilterRequirements = o.NodeFilterRequirements
 
 	if o.SecureServing.BindPort != 0 || o.SecureServing.Listener != nil {
 		o.Authentication.RemoteKubeConfigFile = o.Kubeconfig
@@ -242,10 +234,9 @@ func (o *CloudControllerManagerOptions) ApplyTo(
 	}
 	c.VersionedClient = rootClientBuilder.ClientOrDie("shared-informers")
 	// Create filtered informers if node filtering is enabled
-	if o.EnableNodeFiltering || o.NodeExcludeLabels != "" {
-		c.SharedInformers = CreateFilteredInformerFactory(c.VersionedClient, ResyncPeriod(c)(), o.NodeLabelSelector, o.NodeExcludeLabels)
-	} else {
-		c.SharedInformers = informers.NewSharedInformerFactory(c.VersionedClient, ResyncPeriod(c)())
+	c.SharedInformers, err = CreateFilteredInformerFactory(c.VersionedClient, ResyncPeriod(c)(), o.NodeFilterRequirements)
+	if err != nil {
+		return err
 	}
 
 	// sync back to component config
@@ -322,82 +313,19 @@ func createRecorder(kubeClient clientset.Interface, userAgent string) record.Eve
 }
 
 // CreateFilteredInformerFactory creates a filtered informer factory with node filtering
-func CreateFilteredInformerFactory(client clientset.Interface, resyncPeriod time.Duration, nodeLabelSelector, nodeExcludeLabels string) informers.SharedInformerFactory {
-	// Create label selector
-	selector := labels.Everything()
-
+func CreateFilteredInformerFactory(client clientset.Interface, resyncPeriod time.Duration, nodeFilterRequirements string) (informers.SharedInformerFactory, error) {
 	// Parse node label selector
-	if nodeLabelSelector != "" {
-		// Parse key=value pairs separated by commas
-		selectorParts := strings.Split(nodeLabelSelector, ",")
-		requirements := make([]labels.Requirement, 0, len(selectorParts))
-
-		for _, part := range selectorParts {
-			part = strings.TrimSpace(part)
-			if part == "" {
-				continue
-			}
-
-			// Split by = to get key and value
-			keyValue := strings.SplitN(part, "=", 2)
-			if len(keyValue) != 2 {
-				klog.Warningf("Invalid label selector format: %s, expected key=value", part)
-				continue
-			}
-
-			key := strings.TrimSpace(keyValue[0])
-			value := strings.TrimSpace(keyValue[1])
-
-			requirement, err := labels.NewRequirement(key, selection.Equals, []string{value})
-			if err != nil {
-				klog.Errorf("Invalid label requirement: %v", err)
-				continue
-			}
-			requirements = append(requirements, *requirement)
+	if nodeFilterRequirements != "" {
+		selector, err := labels.Parse(nodeFilterRequirements)
+		if err != nil {
+			klog.Errorf("Invalid label filter requirement input: %v", err)
+			return nil, err
 		}
-
-		if len(requirements) > 0 {
-			selector = labels.NewSelector().Add(requirements...)
-		}
+		// Create filtered informer factory
+		return informers.NewFilteredSharedInformerFactory(client, resyncPeriod, metav1.NamespaceAll, func(options *metav1.ListOptions) {
+			options.LabelSelector = selector.String()
+		}), nil
 	}
 
-	// Parse node exclude labels
-	if nodeExcludeLabels != "" {
-		// Parse key=value pairs separated by commas
-		excludeParts := strings.Split(nodeExcludeLabels, ",")
-		requirements := make([]labels.Requirement, 0, len(excludeParts))
-
-		for _, part := range excludeParts {
-			part = strings.TrimSpace(part)
-			if part == "" {
-				continue
-			}
-
-			// Split by = to get key and value
-			keyValue := strings.SplitN(part, "=", 2)
-			if len(keyValue) != 2 {
-				klog.Warningf("Invalid exclude label format: %s, expected key=value", part)
-				continue
-			}
-
-			key := strings.TrimSpace(keyValue[0])
-			value := strings.TrimSpace(keyValue[1])
-
-			requirement, err := labels.NewRequirement(key, selection.NotEquals, []string{value})
-			if err != nil {
-				klog.Errorf("Invalid exclude label requirement: %v", err)
-				continue
-			}
-			requirements = append(requirements, *requirement)
-		}
-
-		if len(requirements) > 0 {
-			selector = selector.Add(requirements...)
-		}
-	}
-
-	// Create filtered informer factory
-	return informers.NewFilteredSharedInformerFactory(client, resyncPeriod, metav1.NamespaceAll, func(options *metav1.ListOptions) {
-		options.LabelSelector = selector.String()
-	})
+	return informers.NewSharedInformerFactory(client, resyncPeriod), nil
 }
