@@ -147,6 +147,7 @@ func TestDefaultFlags(t *testing.T) {
 			CloudConfigSecretNamespace: "kube-system",
 			CloudConfigKey:             "",
 		},
+		NodeFilterRequirements: "",
 	}
 	if !reflect.DeepEqual(expected, s) {
 		t.Errorf("Got different run options than expected.\nDifference detected on:\n%s", diff.ObjectReflectDiff(expected, s))
@@ -402,7 +403,7 @@ func TestNodeFilterRequirementsIncludeCondition(t *testing.T) {
 	var mutex sync.RWMutex
 
 	nodeInformer := factory.Core().V1().Nodes()
-	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	_, err = nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			node := obj.(*v1.Node)
 			mutex.Lock()
@@ -410,6 +411,9 @@ func TestNodeFilterRequirementsIncludeCondition(t *testing.T) {
 			mutex.Unlock()
 		},
 	})
+	if err != nil {
+		t.Errorf("Expected no error adding event handler, got %v", err)
+	}
 	factory.Start(ctx.Done())
 
 	factory.WaitForCacheSync(ctx.Done())
@@ -459,7 +463,7 @@ func TestNodeFilterRequirementsExcludeCondition(t *testing.T) {
 	}
 
 	client := fake.NewSimpleClientset(managedNode, managedNode2, unmanagedNode)
-	factory, err := CreateFilteredInformerFactory(client, time.Minute, "environment notin (test)")
+	factory, err := CreateFilteredInformerFactory(client, time.Minute, "environment!=test")
 	if err != nil {
 		t.Errorf("Expected no error creating factory, got %v", err)
 	}
@@ -471,7 +475,7 @@ func TestNodeFilterRequirementsExcludeCondition(t *testing.T) {
 	var mutex sync.RWMutex
 
 	nodeInformer := factory.Core().V1().Nodes()
-	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	_, err = nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			node := obj.(*v1.Node)
 			mutex.Lock()
@@ -479,6 +483,9 @@ func TestNodeFilterRequirementsExcludeCondition(t *testing.T) {
 			mutex.Unlock()
 		},
 	})
+	if err != nil {
+		t.Errorf("Expected no error adding event handler, got %v", err)
+	}
 	factory.Start(ctx.Done())
 
 	factory.WaitForCacheSync(ctx.Done())
@@ -509,9 +516,9 @@ func TestNodeFilterRequirementsMixCondition(t *testing.T) {
 		},
 	}
 
-	unmanagedNode := &v1.Node{
+	managedNode2 := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "unmanaged-node",
+			Name: "managed-node-2",
 			Labels: map[string]string{
 				"environment": "production",
 				"batch":       "2",
@@ -519,9 +526,9 @@ func TestNodeFilterRequirementsMixCondition(t *testing.T) {
 		},
 	}
 
-	unmanagedNode2 := &v1.Node{
+	unmanagedNode := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "unmanaged-node-2",
+			Name: "unmanaged-node",
 			Labels: map[string]string{
 				"environment": "production",
 				"batch":       "3",
@@ -530,9 +537,9 @@ func TestNodeFilterRequirementsMixCondition(t *testing.T) {
 	}
 
 	// Create fake client with both nodes
-	client := fake.NewSimpleClientset(managedNode, unmanagedNode, unmanagedNode2)
+	client := fake.NewSimpleClientset(managedNode, managedNode2, unmanagedNode)
 	// Create filtered factory that only selects production nodes
-	factory, err := CreateFilteredInformerFactory(client, time.Minute, "environment==production, batch notin (2, 3)")
+	factory, err := CreateFilteredInformerFactory(client, time.Minute, "environment==production, batch!=3")
 	if err != nil {
 		t.Errorf("Expected no error creating factory, got %v", err)
 	}
@@ -544,7 +551,7 @@ func TestNodeFilterRequirementsMixCondition(t *testing.T) {
 	var mutex sync.RWMutex
 
 	nodeInformer := factory.Core().V1().Nodes()
-	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	_, err = nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			node := obj.(*v1.Node)
 			mutex.Lock()
@@ -552,6 +559,9 @@ func TestNodeFilterRequirementsMixCondition(t *testing.T) {
 			mutex.Unlock()
 		},
 	})
+	if err != nil {
+		t.Errorf("Expected no error adding event handler, got %v", err)
+	}
 	factory.Start(ctx.Done())
 
 	factory.WaitForCacheSync(ctx.Done())
@@ -561,11 +571,12 @@ func TestNodeFilterRequirementsMixCondition(t *testing.T) {
 	mutex.RLock()
 	nodeCount := len(receivedNodes)
 	hasManagedNode := receivedNodes["managed-node"] != nil
+	hasManagedNode2 := receivedNodes["managed-node-2"] != nil
 	mutex.RUnlock()
-	if nodeCount != 1 {
-		t.Errorf("Expected 1 nodes, got %d", nodeCount)
+	if nodeCount != 2 {
+		t.Errorf("Expected 2 nodes, got %d", nodeCount)
 	}
-	if !hasManagedNode {
-		t.Errorf("Expected managed-node to be present")
+	if !hasManagedNode || !hasManagedNode2 {
+		t.Errorf("Expected managed-node and managed-node-2 to be present")
 	}
 }

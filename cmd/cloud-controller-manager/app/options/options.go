@@ -318,7 +318,7 @@ func CreateFilteredInformerFactory(client clientset.Interface, resyncPeriod time
 	if nodeFilterRequirements != "" {
 		selector, err := labels.Parse(nodeFilterRequirements)
 		if err != nil {
-			klog.Errorf("Invalid label filter requirement input: %v", err)
+			klog.Errorf("Invalid label filter requirement %s, error: %v", nodeFilterRequirements, err)
 			return nil, err
 		}
 		// Create filtered informer factory
