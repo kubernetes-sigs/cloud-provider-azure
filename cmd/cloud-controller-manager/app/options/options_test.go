@@ -20,6 +20,7 @@ import (
 	"context"
 	"net"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -398,12 +399,15 @@ func TestNodeFilterRequirementsIncludeCondition(t *testing.T) {
 	defer cancel()
 
 	receivedNodes := make(map[string]*v1.Node)
+	var mutex sync.RWMutex
 
 	nodeInformer := factory.Core().V1().Nodes()
 	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			node := obj.(*v1.Node)
+			mutex.Lock()
 			receivedNodes[node.Name] = node
+			mutex.Unlock()
 		},
 	})
 	factory.Start(ctx.Done())
@@ -412,10 +416,18 @@ func TestNodeFilterRequirementsIncludeCondition(t *testing.T) {
 
 	// Add a small delay to ensure cache is fully populated
 	time.Sleep(100 * time.Millisecond)
-
-	if len(receivedNodes) != 2 {
-		t.Errorf("Expected 2 node, got %d", len(receivedNodes))
+	mutex.RLock()
+	nodeCount := len(receivedNodes)
+	hasManagedNode := receivedNodes["managed-node"] != nil
+	hasManagedNode2 := receivedNodes["managed-node-2"] != nil
+	mutex.RUnlock()
+	if nodeCount != 2 {
+		t.Errorf("Expected 2 nodes, got %d", nodeCount)
 	}
+	if !hasManagedNode || !hasManagedNode2 {
+		t.Errorf("Expected managed-node and managed-node-2 to be present")
+	}
+
 }
 
 func TestNodeFilterRequirementsExcludeCondition(t *testing.T) {
@@ -456,13 +468,15 @@ func TestNodeFilterRequirementsExcludeCondition(t *testing.T) {
 	defer cancel()
 
 	receivedNodes := make(map[string]*v1.Node)
+	var mutex sync.RWMutex
 
 	nodeInformer := factory.Core().V1().Nodes()
-	// Add event handler to track what nodes the informer sees
 	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			node := obj.(*v1.Node)
+			mutex.Lock()
 			receivedNodes[node.Name] = node
+			mutex.Unlock()
 		},
 	})
 	factory.Start(ctx.Done())
@@ -471,9 +485,16 @@ func TestNodeFilterRequirementsExcludeCondition(t *testing.T) {
 
 	// Add a small delay to ensure cache is fully populated
 	time.Sleep(100 * time.Millisecond)
-
-	if len(receivedNodes) != 2 {
-		t.Errorf("Expected 2 node, got %d", len(receivedNodes))
+	mutex.RLock()
+	nodeCount := len(receivedNodes)
+	hasManagedNode := receivedNodes["managed-node"] != nil
+	hasManagedNode2 := receivedNodes["managed-node-2"] != nil
+	mutex.RUnlock()
+	if nodeCount != 2 {
+		t.Errorf("Expected 2 nodes, got %d", nodeCount)
+	}
+	if !hasManagedNode || !hasManagedNode2 {
+		t.Errorf("Expected managed-node and managed-node-2 to be present")
 	}
 }
 
@@ -520,13 +541,15 @@ func TestNodeFilterRequirementsMixCondition(t *testing.T) {
 	defer cancel()
 
 	receivedNodes := make(map[string]*v1.Node)
+	var mutex sync.RWMutex
 
 	nodeInformer := factory.Core().V1().Nodes()
-	// Add event handler to track what nodes the informer sees
 	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			node := obj.(*v1.Node)
+			mutex.Lock()
 			receivedNodes[node.Name] = node
+			mutex.Unlock()
 		},
 	})
 	factory.Start(ctx.Done())
@@ -535,8 +558,14 @@ func TestNodeFilterRequirementsMixCondition(t *testing.T) {
 
 	// Add a small delay to ensure cache is fully populated
 	time.Sleep(100 * time.Millisecond)
-
-	if len(receivedNodes) != 1 {
-		t.Errorf("Expected 1 node, got %d", len(receivedNodes))
+	mutex.RLock()
+	nodeCount := len(receivedNodes)
+	hasManagedNode := receivedNodes["managed-node"] != nil
+	mutex.RUnlock()
+	if nodeCount != 1 {
+		t.Errorf("Expected 1 nodes, got %d", nodeCount)
+	}
+	if !hasManagedNode {
+		t.Errorf("Expected managed-node to be present")
 	}
 }
