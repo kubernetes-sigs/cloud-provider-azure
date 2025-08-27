@@ -1,8 +1,8 @@
 module sigs.k8s.io/cloud-provider-azure/pkg/azclient/client-gen
 
-go 1.24.0
+go 1.24.6
 
-toolchain go1.24.1
+toolchain go1.24.6
 
 require (
 	github.com/spf13/cobra v1.9.1
