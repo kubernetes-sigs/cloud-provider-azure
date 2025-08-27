@@ -1,8 +1,6 @@
 module sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace
 
-go 1.23.1
-
-toolchain go1.24.1
+go 1.24.6
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.19.0

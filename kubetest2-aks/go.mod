@@ -1,9 +1,9 @@
 module sigs.k8s.io/cloud-provider-azure/kubetest2-aks
 
 // Bump GoTool golang version in .pipelines if you change this
-go 1.24.0
+go 1.24.6
 
-toolchain go1.24.1
+toolchain go1.24.6
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.19.0
