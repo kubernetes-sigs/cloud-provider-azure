@@ -10,7 +10,7 @@ permissions:
 jobs:
   cleanup:
     permissions: 
-      actions: write
+      actions: write  # Required to delete GitHub Actions caches
     runs-on: ubuntu-latest
     steps:
       - name: Harden Runner
