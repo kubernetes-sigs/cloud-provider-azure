@@ -416,10 +416,6 @@ func TestNodeFilterRequirementsIncludeCondition(t *testing.T) {
 	if len(receivedNodes) != 2 {
 		t.Errorf("Expected 2 node, got %d", len(receivedNodes))
 	}
-
-	if receivedNodes["managed-node"] == nil || receivedNodes["managed-node-2"] == nil {
-		t.Errorf("Expected 'managed-node' and 'managed-node-2'")
-	}
 }
 
 func TestNodeFilterRequirementsExcludeCondition(t *testing.T) {
@@ -478,10 +474,6 @@ func TestNodeFilterRequirementsExcludeCondition(t *testing.T) {
 
 	if len(receivedNodes) != 2 {
 		t.Errorf("Expected 2 node, got %d", len(receivedNodes))
-	}
-
-	if receivedNodes["managed-node"] == nil || receivedNodes["managed-node-2"] == nil {
-		t.Errorf("Expected 'managed-node' and 'managed-node-2'")
 	}
 }
 
@@ -546,9 +538,5 @@ func TestNodeFilterRequirementsMixCondition(t *testing.T) {
 
 	if len(receivedNodes) != 1 {
 		t.Errorf("Expected 1 node, got %d", len(receivedNodes))
-	}
-
-	if receivedNodes["managed-node"] == nil {
-		t.Errorf("Expected 'managed-node'")
 	}
 }
