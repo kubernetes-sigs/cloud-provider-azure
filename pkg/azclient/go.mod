@@ -2,8 +2,6 @@ module sigs.k8s.io/cloud-provider-azure/pkg/azclient
 
 go 1.24.6
 
-toolchain go1.24.6
-
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.18.1
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.10.1
