@@ -34,7 +34,7 @@ jobs:
     permissions:
       contents: read  # for actions/checkout to fetch code
       pull-requests: read  # for golangci/golangci-lint-action to fetch pull requests
-      checks: write
+      checks: write  # for golangci/golangci-lint-action to create check runs
     runs-on: ubuntu-latest
     steps:
       - name: Harden Runner
