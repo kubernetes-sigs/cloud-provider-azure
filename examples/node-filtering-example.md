@@ -35,9 +35,6 @@ The flag accepts standard Kubernetes label selector syntax. For complete syntax 
 # Set-based matching
 --node-filter-requirements="environment in (production,staging)"
 
-# Exclude multiple values
---node-filter-requirements="tier notin (cache,temp)"
-
 # Complex combinations
 --node-filter-requirements="app=web,environment in (prod,staging),!maintenance"
 ```
