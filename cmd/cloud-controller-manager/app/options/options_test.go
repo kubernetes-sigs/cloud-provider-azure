@@ -17,6 +17,7 @@ limitations under the License.
 package options
 
 import (
+	"context"
 	"net"
 	"reflect"
 	"testing"
@@ -24,11 +25,14 @@ import (
 
 	"github.com/spf13/pflag"
 
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/apis/apiserver"
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
+	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/cache"
 	cpconfig "k8s.io/cloud-provider/config"
 	serviceconfig "k8s.io/cloud-provider/controllers/service/config"
 	"k8s.io/cloud-provider/names"
@@ -353,5 +357,198 @@ func TestValidate(t *testing.T) {
 				t.Errorf("Expected error '%s' but got error '%s'", tc.expected, err)
 			}
 		})
+	}
+}
+
+func TestNodeFilterRequirementsIncludeCondition(t *testing.T) {
+	managedNode := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "managed-node",
+			Labels: map[string]string{
+				"environment": "production",
+			},
+		},
+	}
+
+	managedNode2 := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "managed-node-2",
+			Labels: map[string]string{
+				"environment": "production",
+			},
+		},
+	}
+
+	unmanagedNode := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "unmanaged-node",
+			Labels: map[string]string{
+				"environment": "test",
+			},
+		},
+	}
+
+	client := fake.NewSimpleClientset(managedNode, managedNode2, unmanagedNode)
+	factory, err := CreateFilteredInformerFactory(client, time.Minute, "environment=production")
+	if err != nil {
+		t.Errorf("Expected no error creating factory, got %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	receivedNodes := make(map[string]*v1.Node)
+
+	nodeInformer := factory.Core().V1().Nodes()
+	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			node := obj.(*v1.Node)
+			receivedNodes[node.Name] = node
+		},
+	})
+	factory.Start(ctx.Done())
+
+	factory.WaitForCacheSync(ctx.Done())
+
+	// Add a small delay to ensure cache is fully populated
+	time.Sleep(100 * time.Millisecond)
+
+	if len(receivedNodes) != 2 {
+		t.Errorf("Expected 2 node, got %d", len(receivedNodes))
+	}
+
+	if receivedNodes["managed-node"] == nil || receivedNodes["managed-node-2"] == nil {
+		t.Errorf("Expected 'managed-node' and 'managed-node-2'")
+	}
+}
+
+func TestNodeFilterRequirementsExcludeCondition(t *testing.T) {
+	managedNode := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "managed-node",
+			Labels: map[string]string{
+				"environment": "production",
+			},
+		},
+	}
+
+	managedNode2 := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "managed-node-2",
+			Labels: map[string]string{
+				"environment": "staging",
+			},
+		},
+	}
+
+	unmanagedNode := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "unmanaged-node",
+			Labels: map[string]string{
+				"environment": "test",
+			},
+		},
+	}
+
+	client := fake.NewSimpleClientset(managedNode, managedNode2, unmanagedNode)
+	factory, err := CreateFilteredInformerFactory(client, time.Minute, "environment notin (test)")
+	if err != nil {
+		t.Errorf("Expected no error creating factory, got %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	receivedNodes := make(map[string]*v1.Node)
+
+	nodeInformer := factory.Core().V1().Nodes()
+	// Add event handler to track what nodes the informer sees
+	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			node := obj.(*v1.Node)
+			receivedNodes[node.Name] = node
+		},
+	})
+	factory.Start(ctx.Done())
+
+	factory.WaitForCacheSync(ctx.Done())
+
+	// Add a small delay to ensure cache is fully populated
+	time.Sleep(100 * time.Millisecond)
+
+	if len(receivedNodes) != 2 {
+		t.Errorf("Expected 2 node, got %d", len(receivedNodes))
+	}
+
+	if receivedNodes["managed-node"] == nil || receivedNodes["managed-node-2"] == nil {
+		t.Errorf("Expected 'managed-node' and 'managed-node-2'")
+	}
+}
+
+func TestNodeFilterRequirementsMixCondition(t *testing.T) {
+	managedNode := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "managed-node",
+			Labels: map[string]string{
+				"environment": "production",
+				"batch":       "1",
+			},
+		},
+	}
+
+	unmanagedNode := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "unmanaged-node",
+			Labels: map[string]string{
+				"environment": "production",
+				"batch":       "2",
+			},
+		},
+	}
+
+	unmanagedNode2 := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "unmanaged-node-2",
+			Labels: map[string]string{
+				"environment": "production",
+				"batch":       "3",
+			},
+		},
+	}
+
+	// Create fake client with both nodes
+	client := fake.NewSimpleClientset(managedNode, unmanagedNode, unmanagedNode2)
+	// Create filtered factory that only selects production nodes
+	factory, err := CreateFilteredInformerFactory(client, time.Minute, "environment==production, batch notin (2, 3)")
+	if err != nil {
+		t.Errorf("Expected no error creating factory, got %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	receivedNodes := make(map[string]*v1.Node)
+
+	nodeInformer := factory.Core().V1().Nodes()
+	// Add event handler to track what nodes the informer sees
+	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			node := obj.(*v1.Node)
+			receivedNodes[node.Name] = node
+		},
+	})
+	factory.Start(ctx.Done())
+
+	factory.WaitForCacheSync(ctx.Done())
+
+	// Add a small delay to ensure cache is fully populated
+	time.Sleep(100 * time.Millisecond)
+
+	if len(receivedNodes) != 1 {
+		t.Errorf("Expected 1 node, got %d", len(receivedNodes))
+	}
+
+	if receivedNodes["managed-node"] == nil {
+		t.Errorf("Expected 'managed-node'")
 	}
 }
