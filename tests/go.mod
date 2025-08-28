@@ -13,10 +13,10 @@ require (
 	github.com/onsi/ginkgo/v2 v2.25.1
 	github.com/onsi/gomega v1.38.2
 	github.com/stretchr/testify v1.11.0
-	k8s.io/api v0.35.0-alpha.0
-	k8s.io/apimachinery v0.35.0-alpha.0
-	k8s.io/client-go v0.35.0-alpha.0
-	k8s.io/cloud-provider v0.35.0-alpha.0
+	k8s.io/api v0.34.0
+	k8s.io/apimachinery v0.34.0
+	k8s.io/client-go v0.34.0
+	k8s.io/cloud-provider v0.34.0
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
 	sigs.k8s.io/cloud-provider-azure v0.0.0-00010101000000-000000000000
@@ -109,8 +109,8 @@ require (
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/component-base v0.35.0-alpha.0 // indirect
-	k8s.io/component-helpers v0.35.0-alpha.0 // indirect
+	k8s.io/component-base v0.34.0 // indirect
+	k8s.io/component-helpers v0.34.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b // indirect
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.8.2 // indirect
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
