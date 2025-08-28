@@ -60,6 +60,9 @@ type Config struct {
 	SharedInformers informers.SharedInformerFactory
 
 	DynamicReloadingConfig DynamicReloadingConfig
+
+	// Node filtering configuration
+	NodeFilterRequirements string
 }
 
 type DynamicReloadingConfig struct {

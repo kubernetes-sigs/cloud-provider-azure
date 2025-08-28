@@ -17,18 +17,23 @@ limitations under the License.
 package options
 
 import (
+	"context"
 	"net"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/spf13/pflag"
 
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/apis/apiserver"
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
+	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/cache"
 	cpconfig "k8s.io/cloud-provider/config"
 	serviceconfig "k8s.io/cloud-provider/controllers/service/config"
 	"k8s.io/cloud-provider/names"
@@ -142,6 +147,7 @@ func TestDefaultFlags(t *testing.T) {
 			CloudConfigSecretNamespace: "kube-system",
 			CloudConfigKey:             "",
 		},
+		NodeFilterRequirements: "",
 	}
 	if !reflect.DeepEqual(expected, s) {
 		t.Errorf("Got different run options than expected.\nDifference detected on:\n%s", diff.Diff(expected, s))
@@ -353,5 +359,224 @@ func TestValidate(t *testing.T) {
 				t.Errorf("Expected error '%s' but got error '%s'", tc.expected, err)
 			}
 		})
+	}
+}
+
+func TestNodeFilterRequirementsIncludeCondition(t *testing.T) {
+	managedNode := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "managed-node",
+			Labels: map[string]string{
+				"environment": "production",
+			},
+		},
+	}
+
+	managedNode2 := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "managed-node-2",
+			Labels: map[string]string{
+				"environment": "production",
+			},
+		},
+	}
+
+	unmanagedNode := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "unmanaged-node",
+			Labels: map[string]string{
+				"environment": "test",
+			},
+		},
+	}
+
+	client := fake.NewSimpleClientset(managedNode, managedNode2, unmanagedNode)
+	factory, err := CreateFilteredInformerFactory(client, time.Minute, "environment=production")
+	if err != nil {
+		t.Errorf("Expected no error creating factory, got %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	receivedNodes := make(map[string]*v1.Node)
+	var mutex sync.RWMutex
+
+	nodeInformer := factory.Core().V1().Nodes()
+	_, err = nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			node := obj.(*v1.Node)
+			mutex.Lock()
+			receivedNodes[node.Name] = node
+			mutex.Unlock()
+		},
+	})
+	if err != nil {
+		t.Errorf("Expected no error adding event handler, got %v", err)
+	}
+	factory.Start(ctx.Done())
+
+	factory.WaitForCacheSync(ctx.Done())
+
+	// Add a small delay to ensure cache is fully populated
+	time.Sleep(100 * time.Millisecond)
+	mutex.RLock()
+	nodeCount := len(receivedNodes)
+	hasManagedNode := receivedNodes["managed-node"] != nil
+	hasManagedNode2 := receivedNodes["managed-node-2"] != nil
+	mutex.RUnlock()
+	if nodeCount != 2 {
+		t.Errorf("Expected 2 nodes, got %d", nodeCount)
+	}
+	if !hasManagedNode || !hasManagedNode2 {
+		t.Errorf("Expected managed-node and managed-node-2 to be present")
+	}
+
+}
+
+func TestNodeFilterRequirementsExcludeCondition(t *testing.T) {
+	managedNode := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "managed-node",
+			Labels: map[string]string{
+				"environment": "production",
+			},
+		},
+	}
+
+	managedNode2 := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "managed-node-2",
+			Labels: map[string]string{
+				"environment": "staging",
+			},
+		},
+	}
+
+	unmanagedNode := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "unmanaged-node",
+			Labels: map[string]string{
+				"environment": "test",
+			},
+		},
+	}
+
+	client := fake.NewSimpleClientset(managedNode, managedNode2, unmanagedNode)
+	factory, err := CreateFilteredInformerFactory(client, time.Minute, "environment!=test")
+	if err != nil {
+		t.Errorf("Expected no error creating factory, got %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	receivedNodes := make(map[string]*v1.Node)
+	var mutex sync.RWMutex
+
+	nodeInformer := factory.Core().V1().Nodes()
+	_, err = nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			node := obj.(*v1.Node)
+			mutex.Lock()
+			receivedNodes[node.Name] = node
+			mutex.Unlock()
+		},
+	})
+	if err != nil {
+		t.Errorf("Expected no error adding event handler, got %v", err)
+	}
+	factory.Start(ctx.Done())
+
+	factory.WaitForCacheSync(ctx.Done())
+
+	// Add a small delay to ensure cache is fully populated
+	time.Sleep(100 * time.Millisecond)
+	mutex.RLock()
+	nodeCount := len(receivedNodes)
+	hasManagedNode := receivedNodes["managed-node"] != nil
+	hasManagedNode2 := receivedNodes["managed-node-2"] != nil
+	mutex.RUnlock()
+	if nodeCount != 2 {
+		t.Errorf("Expected 2 nodes, got %d", nodeCount)
+	}
+	if !hasManagedNode || !hasManagedNode2 {
+		t.Errorf("Expected managed-node and managed-node-2 to be present")
+	}
+}
+
+func TestNodeFilterRequirementsMixCondition(t *testing.T) {
+	managedNode := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "managed-node",
+			Labels: map[string]string{
+				"environment": "production",
+				"batch":       "1",
+			},
+		},
+	}
+
+	managedNode2 := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "managed-node-2",
+			Labels: map[string]string{
+				"environment": "production",
+				"batch":       "2",
+			},
+		},
+	}
+
+	unmanagedNode := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "unmanaged-node",
+			Labels: map[string]string{
+				"environment": "production",
+				"batch":       "3",
+			},
+		},
+	}
+
+	// Create fake client with both nodes
+	client := fake.NewSimpleClientset(managedNode, managedNode2, unmanagedNode)
+	// Create filtered factory that only selects production nodes
+	factory, err := CreateFilteredInformerFactory(client, time.Minute, "environment==production, batch!=3")
+	if err != nil {
+		t.Errorf("Expected no error creating factory, got %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	receivedNodes := make(map[string]*v1.Node)
+	var mutex sync.RWMutex
+
+	nodeInformer := factory.Core().V1().Nodes()
+	_, err = nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			node := obj.(*v1.Node)
+			mutex.Lock()
+			receivedNodes[node.Name] = node
+			mutex.Unlock()
+		},
+	})
+	if err != nil {
+		t.Errorf("Expected no error adding event handler, got %v", err)
+	}
+	factory.Start(ctx.Done())
+
+	factory.WaitForCacheSync(ctx.Done())
+
+	// Add a small delay to ensure cache is fully populated
+	time.Sleep(100 * time.Millisecond)
+	mutex.RLock()
+	nodeCount := len(receivedNodes)
+	hasManagedNode := receivedNodes["managed-node"] != nil
+	hasManagedNode2 := receivedNodes["managed-node-2"] != nil
+	mutex.RUnlock()
+	if nodeCount != 2 {
+		t.Errorf("Expected 2 nodes, got %d", nodeCount)
+	}
+	if !hasManagedNode || !hasManagedNode2 {
+		t.Errorf("Expected managed-node and managed-node-2 to be present")
 	}
 }
