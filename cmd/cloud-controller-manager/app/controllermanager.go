@@ -129,7 +129,6 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 				klog.Errorf("Run: railed to start HTTP server: %v", err)
 				os.Exit(1)
 			}
-			var leaderElectionName string
 
 			if c.ComponentConfig.Generic.LeaderElection.LeaderElect {
 				// Identity used to distinguish between multiple cloud controller manager instances
@@ -174,7 +173,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 						},
 					},
 					WatchDog: electionChecker,
-					Name:     leaderElectionName,
+					Name:     "cloud-controller-manager",
 				})
 
 				panic("unreachable")
