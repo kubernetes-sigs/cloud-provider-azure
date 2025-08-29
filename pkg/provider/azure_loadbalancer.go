@@ -3794,20 +3794,23 @@ func serviceOwnsPublicIP(service *v1.Service, pip *network.PublicIPAddress, clus
 		return false, false
 	}
 
-	if pip.PublicIPAddressPropertiesFormat == nil || ptr.Deref(pip.IPAddress, "") == "" {
-		klog.Warningf("serviceOwnsPublicIP: empty pip.IPAddress")
-		return false, false
-	}
-
 	serviceName := getServiceName(service)
 
-	isIPv6 := pip.PublicIPAddressVersion == network.IPv6
+	var isIPv6 bool
+	if pip.PublicIPAddressPropertiesFormat != nil {
+		isIPv6 = pip.PublicIPAddressVersion == network.IPv6
+	}
 	if pip.Tags != nil {
 		serviceTag := getServiceFromPIPServiceTags(pip.Tags)
 		clusterTag := getClusterFromPIPClusterTags(pip.Tags)
 
 		// if there is no service tag on the pip, it is user-created pip
 		if serviceTag == "" {
+			// For user-created PIPs, we need a valid IP address to match against
+			if pip.PublicIPAddressPropertiesFormat == nil || ptr.Deref(pip.IPAddress, "") == "" {
+				klog.V(4).Infof("serviceOwnsPublicIP: empty pip.IPAddress for user-created PIP")
+				return false, true
+			}
 			return isServiceSelectPIP(service, pip, isIPv6), true
 		}
 
@@ -3825,10 +3828,20 @@ func serviceOwnsPublicIP(service *v1.Service, pip *network.PublicIPAddress, clus
 
 		// if the service is not included in the tags of the system-created pip, check the ip address
 		// or pip name, this could happen for secondary services
+		// For secondary services, we need a valid IP address to match against
+		if pip.PublicIPAddressPropertiesFormat == nil || ptr.Deref(pip.IPAddress, "") == "" {
+			klog.V(4).Infof("serviceOwnsPublicIP: empty pip.IPAddress for secondary service check")
+			return false, false
+		}
 		return isServiceSelectPIP(service, pip, isIPv6), false
 	}
 
 	// if the pip has no tags, it should be user-created
+	// For user-created PIPs, we need a valid IP address to match against
+	if pip.PublicIPAddressPropertiesFormat == nil || ptr.Deref(pip.IPAddress, "") == "" {
+		klog.V(4).Infof("serviceOwnsPublicIP: empty pip.IPAddress for untagged PIP")
+		return false, true
+	}
 	return isServiceSelectPIP(service, pip, isIPv6), true
 }
 

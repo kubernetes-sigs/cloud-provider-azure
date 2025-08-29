@@ -1131,6 +1131,66 @@ func TestServiceOwnsPublicIP(t *testing.T) {
 			serviceLBName: "pip1",
 			expectedOwns:  true,
 		},
+		{
+			desc: "should return true for failed PIPs with empty IP but matching service tags",
+			pip: &network.PublicIPAddress{
+				Name: ptr.To("failed-pip"),
+				Tags: map[string]*string{
+					consts.ServiceTagKey:  ptr.To("default/nginx"),
+					consts.ClusterNameKey: ptr.To("kubernetes"),
+				},
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+					IPAddress: ptr.To(""), // Empty IP address like failed PIPs
+				},
+			},
+			clusterName:  "kubernetes",
+			serviceName:  "nginx",
+			expectedOwns: true, // Should be true for cleanup, but currently returns false
+		},
+		{
+			desc: "should return false for failed PIPs with empty IP and non-matching service tags",
+			pip: &network.PublicIPAddress{
+				Name: ptr.To("failed-pip"),
+				Tags: map[string]*string{
+					consts.ServiceTagKey:  ptr.To("default/other-service"),
+					consts.ClusterNameKey: ptr.To("kubernetes"),
+				},
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+					IPAddress: ptr.To(""), // Empty IP address like failed PIPs
+				},
+			},
+			clusterName:  "kubernetes",
+			serviceName:  "nginx",
+			expectedOwns: false,
+		},
+		{
+			desc: "should return false for user-assigned PIPs with empty IP address and no service tags",
+			pip: &network.PublicIPAddress{
+				Name: ptr.To("user-pip"),
+				Tags: map[string]*string{}, // No service tags, indicating user-created
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+					IPAddress: ptr.To(""), // Empty IP address
+				},
+			},
+			clusterName:             "kubernetes",
+			serviceName:             "nginx",
+			expectedOwns:            false, // Can't match without IP
+			expectedUserAssignedPIP: true,  // Should still be identified as user-assigned
+		},
+		{
+			desc: "should return true for system PIPs with nil Properties but matching service tags",
+			pip: &network.PublicIPAddress{
+				Name: ptr.To("system-pip"),
+				Tags: map[string]*string{
+					consts.ServiceTagKey:  ptr.To("default/nginx"),
+					consts.ClusterNameKey: ptr.To("kubernetes"),
+				},
+				PublicIPAddressPropertiesFormat: nil, // Nil properties like some failed PIPs
+			},
+			clusterName:  "kubernetes",
+			serviceName:  "nginx",
+			expectedOwns: true, // Should be owned based on tags
+		},
 	}
 
 	for i, c := range tests {
