@@ -5176,6 +5176,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			foundDNSLabelAnnotation: true,
 			existingPIPs: []network.PublicIPAddress{{
 				Name:                            ptr.To("pip1"),
+				Tags:                            map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{},
 			}},
 			expectedPIP: &network.PublicIPAddress{
@@ -5187,7 +5188,10 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					},
 					PublicIPAddressVersion: network.IPv4,
 				},
-				Tags: map[string]*string{consts.ServiceUsingDNSKey: ptr.To("default/test1")},
+				Tags: map[string]*string{
+					consts.ServiceUsingDNSKey: ptr.To("default/test1"),
+					consts.ServiceTagKey:      ptr.To("default/test1"),
+				},
 			},
 			shouldPutPIP: true,
 		},
@@ -5245,6 +5249,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			isIPv6:                  true,
 			existingPIPs: []network.PublicIPAddress{{
 				Name:                            ptr.To("pip1"),
+				Tags:                            map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{},
 			}},
 			expectedPIP: &network.PublicIPAddress{
@@ -5257,7 +5262,10 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					PublicIPAllocationMethod: network.Dynamic,
 					PublicIPAddressVersion:   network.IPv6,
 				},
-				Tags: map[string]*string{consts.ServiceUsingDNSKey: ptr.To("default/test1")},
+				Tags: map[string]*string{
+					consts.ServiceUsingDNSKey: ptr.To("default/test1"),
+					consts.ServiceTagKey:      ptr.To("default/test1"),
+				},
 			},
 			shouldPutPIP: true,
 		},
@@ -5269,6 +5277,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			isIPv6:                  true,
 			existingPIPs: []network.PublicIPAddress{{
 				Name: ptr.To("pip1"),
+				Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					DNSSettings: &network.PublicIPAddressDNSSettings{
 						DomainNameLabel: ptr.To("previousdns"),
@@ -5287,6 +5296,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 				},
 				Tags: map[string]*string{
 					"k8s-azure-dns-label-service": ptr.To("default/test1"),
+					consts.ServiceTagKey:          ptr.To("default/test1"),
 				},
 			},
 			shouldPutPIP: true,
@@ -5299,6 +5309,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			isIPv6:                  false,
 			existingPIPs: []network.PublicIPAddress{{
 				Name: ptr.To("pip1"),
+				Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					DNSSettings: &network.PublicIPAddressDNSSettings{
 						DomainNameLabel: ptr.To("previousdns"),
@@ -5319,6 +5330,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 				},
 				Tags: map[string]*string{
 					"k8s-azure-dns-label-service": ptr.To("default/test1"),
+					consts.ServiceTagKey:          ptr.To("default/test1"),
 				},
 			},
 			shouldPutPIP: true,
@@ -5422,13 +5434,22 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			shouldPutPIP: true,
 		},
 		{
-			desc:         "shall update pip tags if there is any change",
-			pipName:      "pip1",
-			existingPIPs: []network.PublicIPAddress{{Name: ptr.To("pip1"), Tags: map[string]*string{"a": ptr.To("b")}}},
+			desc:    "shall update pip tags if there is any change",
+			pipName: "pip1",
+			existingPIPs: []network.PublicIPAddress{{
+				Name: ptr.To("pip1"),
+				Tags: map[string]*string{
+					"a":                  ptr.To("b"),
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
+			}},
 			expectedPIP: &network.PublicIPAddress{
 				Name: ptr.To("pip1"),
-				Tags: map[string]*string{"a": ptr.To("c")},
-				ID:   ptr.To(expectedPIPID),
+				Tags: map[string]*string{
+					"a":                  ptr.To("c"),
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
+				ID: ptr.To(expectedPIPID),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					PublicIPAddressVersion:   network.IPv4,
 					PublicIPAllocationMethod: network.Static,
