@@ -3802,20 +3802,23 @@ func serviceOwnsPublicIP(service *v1.Service, pip *armnetwork.PublicIPAddress, c
 		return false, false
 	}
 
-	if pip.Properties == nil || ptr.Deref(pip.Properties.IPAddress, "") == "" {
-		klog.Warningf("serviceOwnsPublicIP: empty pip.Properties.IPAddress")
-		return false, false
-	}
-
 	serviceName := getServiceName(service)
 
-	isIPv6 := ptr.Deref(pip.Properties.PublicIPAddressVersion, "") == armnetwork.IPVersionIPv6
+	var isIPv6 bool
+	if pip.Properties != nil {
+		isIPv6 = ptr.Deref(pip.Properties.PublicIPAddressVersion, "") == armnetwork.IPVersionIPv6
+	}
 	if pip.Tags != nil {
 		serviceTag := getServiceFromPIPServiceTags(pip.Tags)
 		clusterTag := getClusterFromPIPClusterTags(pip.Tags)
 
 		// if there is no service tag on the pip, it is user-created pip
 		if serviceTag == "" {
+			// For user-created PIPs, we need a valid IP address to match against
+			if pip.Properties == nil || ptr.Deref(pip.Properties.IPAddress, "") == "" {
+				klog.V(4).Infof("serviceOwnsPublicIP: empty pip.Properties.IPAddress for user-created PIP")
+				return false, true
+			}
 			return isServiceSelectPIP(service, pip, isIPv6), true
 		}
 
@@ -3833,10 +3836,20 @@ func serviceOwnsPublicIP(service *v1.Service, pip *armnetwork.PublicIPAddress, c
 
 		// if the service is not included in the tags of the system-created pip, check the ip address
 		// or pip name, this could happen for secondary services
+		// For secondary services, we need a valid IP address to match against
+		if pip.Properties == nil || ptr.Deref(pip.Properties.IPAddress, "") == "" {
+			klog.V(4).Infof("serviceOwnsPublicIP: empty pip.Properties.IPAddress for secondary service check")
+			return false, false
+		}
 		return isServiceSelectPIP(service, pip, isIPv6), false
 	}
 
 	// if the pip has no tags, it should be user-created
+	// For user-created PIPs, we need a valid IP address to match against
+	if pip.Properties == nil || ptr.Deref(pip.Properties.IPAddress, "") == "" {
+		klog.V(4).Infof("serviceOwnsPublicIP: empty pip.Properties.IPAddress for untagged PIP")
+		return false, true
+	}
 	return isServiceSelectPIP(service, pip, isIPv6), true
 }
 
