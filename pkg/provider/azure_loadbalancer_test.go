@@ -5425,10 +5425,19 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 		{
 			desc:         "shall update pip tags if there is any change",
 			pipName:      "pip1",
-			existingPIPs: []network.PublicIPAddress{{Name: pointer.String("pip1"), Tags: map[string]*string{"a": pointer.String("b")}}},
+			existingPIPs: []network.PublicIPAddress{{
+				Name: pointer.String("pip1"), 
+				Tags: map[string]*string{
+					"a": pointer.String("b"),
+					consts.ServiceTagKey: pointer.String("default/test1"),
+				},
+			}},
 			expectedPIP: &network.PublicIPAddress{
 				Name: pointer.String("pip1"),
-				Tags: map[string]*string{"a": pointer.String("c")},
+				Tags: map[string]*string{
+					"a": pointer.String("c"),
+					consts.ServiceTagKey: pointer.String("default/test1"),
+				},
 				ID:   pointer.String(expectedPIPID),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					PublicIPAddressVersion:   network.IPv4,
