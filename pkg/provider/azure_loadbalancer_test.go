@@ -5176,6 +5176,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			foundDNSLabelAnnotation: true,
 			existingPIPs: []network.PublicIPAddress{{
 				Name:                            pointer.String("pip1"),
+				Tags:                            map[string]*string{consts.ServiceTagKey: pointer.String("default/test1")},
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{},
 			}},
 			expectedPIP: &network.PublicIPAddress{
@@ -5187,7 +5188,10 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					},
 					PublicIPAddressVersion: network.IPv4,
 				},
-				Tags: map[string]*string{consts.ServiceUsingDNSKey: pointer.String("default/test1")},
+				Tags: map[string]*string{
+					consts.ServiceUsingDNSKey: pointer.String("default/test1"),
+					consts.ServiceTagKey:      pointer.String("default/test1"),
+				},
 			},
 			shouldPutPIP: true,
 		},
@@ -5245,6 +5249,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			isIPv6:                  true,
 			existingPIPs: []network.PublicIPAddress{{
 				Name:                            pointer.String("pip1"),
+				Tags:                            map[string]*string{consts.ServiceTagKey: pointer.String("default/test1")},
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{},
 			}},
 			expectedPIP: &network.PublicIPAddress{
@@ -5257,7 +5262,10 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					PublicIPAllocationMethod: network.Dynamic,
 					PublicIPAddressVersion:   network.IPv6,
 				},
-				Tags: map[string]*string{consts.ServiceUsingDNSKey: pointer.String("default/test1")},
+				Tags: map[string]*string{
+					consts.ServiceUsingDNSKey: pointer.String("default/test1"),
+					consts.ServiceTagKey:      pointer.String("default/test1"),
+				},
 			},
 			shouldPutPIP: true,
 		},
@@ -5269,6 +5277,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			isIPv6:                  true,
 			existingPIPs: []network.PublicIPAddress{{
 				Name: pointer.String("pip1"),
+				Tags: map[string]*string{consts.ServiceTagKey: pointer.String("default/test1")},
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					DNSSettings: &network.PublicIPAddressDNSSettings{
 						DomainNameLabel: pointer.String("previousdns"),
@@ -5287,6 +5296,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 				},
 				Tags: map[string]*string{
 					"k8s-azure-dns-label-service": pointer.String("default/test1"),
+					consts.ServiceTagKey:          pointer.String("default/test1"),
 				},
 			},
 			shouldPutPIP: true,
@@ -5298,8 +5308,8 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			foundDNSLabelAnnotation: true,
 			isIPv6:                  false,
 			existingPIPs: []network.PublicIPAddress{{
-
 				Name: pointer.String("pip1"),
+				Tags: map[string]*string{consts.ServiceTagKey: pointer.String("default/test1")},
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					DNSSettings: &network.PublicIPAddressDNSSettings{
 						DomainNameLabel: pointer.String("previousdns"),
@@ -5320,6 +5330,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 				},
 				Tags: map[string]*string{
 					"k8s-azure-dns-label-service": pointer.String("default/test1"),
+					consts.ServiceTagKey:          pointer.String("default/test1"),
 				},
 			},
 			shouldPutPIP: true,
@@ -5423,22 +5434,22 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			shouldPutPIP: true,
 		},
 		{
-			desc:         "shall update pip tags if there is any change",
-			pipName:      "pip1",
+			desc:    "shall update pip tags if there is any change",
+			pipName: "pip1",
 			existingPIPs: []network.PublicIPAddress{{
-				Name: pointer.String("pip1"), 
+				Name: pointer.String("pip1"),
 				Tags: map[string]*string{
-					"a": pointer.String("b"),
+					"a":                  pointer.String("b"),
 					consts.ServiceTagKey: pointer.String("default/test1"),
 				},
 			}},
 			expectedPIP: &network.PublicIPAddress{
 				Name: pointer.String("pip1"),
 				Tags: map[string]*string{
-					"a": pointer.String("c"),
+					"a":                  pointer.String("c"),
 					consts.ServiceTagKey: pointer.String("default/test1"),
 				},
-				ID:   pointer.String(expectedPIPID),
+				ID: pointer.String(expectedPIPID),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					PublicIPAddressVersion:   network.IPv4,
 					PublicIPAllocationMethod: network.Static,
