@@ -24,6 +24,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
@@ -79,6 +80,9 @@ type CloudControllerManagerOptions struct {
 	NodeStatusUpdateFrequency metav1.Duration
 
 	DynamicReloading *DynamicReloadingOptions
+
+	// Node filtering requirement
+	NodeFilterRequirements string
 }
 
 // NewCloudControllerManagerOptions creates a new ExternalCMServer with a default config.
@@ -150,6 +154,10 @@ func (o *CloudControllerManagerOptions) Flags(allControllers, disabledByDefaultC
 	fs.StringVar(&o.Kubeconfig, "kubeconfig", o.Kubeconfig, "Path to kubeconfig file with authorization and master location information.")
 	fs.DurationVar(&o.NodeStatusUpdateFrequency.Duration, "node-status-update-frequency", o.NodeStatusUpdateFrequency.Duration, "Specifies how often the controller updates nodes' status.")
 
+	// Node filtering flags
+	nodeFilterFs := fss.FlagSet("node filtering")
+	nodeFilterFs.StringVar(&o.NodeFilterRequirements, "node-filter-requirements", o.NodeFilterRequirements, "Label selector for nodes to be managed by CCM (e.g., 'foo=bar' or 'foo in (bar,baz)')")
+
 	utilfeature.DefaultMutableFeatureGate.AddFlag(fss.FlagSet("generic"))
 
 	return fss
@@ -180,6 +188,10 @@ func (o *CloudControllerManagerOptions) ApplyTo(
 	if err = o.DynamicReloading.ApplyTo(&c.DynamicReloadingConfig); err != nil {
 		return err
 	}
+
+	// Apply node filtering configuration
+	c.NodeFilterRequirements = o.NodeFilterRequirements
+
 	if o.SecureServing.BindPort != 0 || o.SecureServing.Listener != nil {
 		o.Authentication.RemoteKubeConfigFile = o.Kubeconfig
 		o.Authorization.RemoteKubeConfigFile = o.Kubeconfig
@@ -221,7 +233,11 @@ func (o *CloudControllerManagerOptions) ApplyTo(
 		c.ClientBuilder = rootClientBuilder
 	}
 	c.VersionedClient = rootClientBuilder.ClientOrDie("shared-informers")
-	c.SharedInformers = informers.NewSharedInformerFactory(c.VersionedClient, ResyncPeriod(c)())
+	// Create filtered informers if node filtering is enabled
+	c.SharedInformers, err = CreateFilteredInformerFactory(c.VersionedClient, ResyncPeriod(c)(), o.NodeFilterRequirements)
+	if err != nil {
+		return err
+	}
 
 	// sync back to component config
 	// TODO: find more elegant way than syncing back the values.
@@ -294,4 +310,22 @@ func createRecorder(kubeClient clientset.Interface, userAgent string) record.Eve
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
 	// TODO: remove dependence on the legacyscheme
 	return eventBroadcaster.NewRecorder(runtime.NewScheme(), v1.EventSource{Component: userAgent})
+}
+
+// CreateFilteredInformerFactory creates a filtered informer factory with node filtering
+func CreateFilteredInformerFactory(client clientset.Interface, resyncPeriod time.Duration, nodeFilterRequirements string) (informers.SharedInformerFactory, error) {
+	// Parse node label selector
+	if nodeFilterRequirements != "" {
+		selector, err := labels.Parse(nodeFilterRequirements)
+		if err != nil {
+			klog.Errorf("Invalid label filter requirement %s, error: %v", nodeFilterRequirements, err)
+			return nil, err
+		}
+		// Create filtered informer factory
+		return informers.NewFilteredSharedInformerFactory(client, resyncPeriod, metav1.NamespaceAll, func(options *metav1.ListOptions) {
+			options.LabelSelector = selector.String()
+		}), nil
+	}
+
+	return informers.NewSharedInformerFactory(client, resyncPeriod), nil
 }
