@@ -161,7 +161,7 @@ func getServiceAccountTokenCredential(req *v1.CredentialProviderRequest, config 
 	}
 
 	// Create getAssertion callback that returns the service account token
-	getAssertion := func(ctx context.Context) (string, error) {
+	getAssertion := func(_ context.Context) (string, error) {
 		return req.ServiceAccountToken, nil
 	}
 
