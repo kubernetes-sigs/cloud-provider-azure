@@ -1858,7 +1858,7 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurations(
 func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node, wantLb bool) (*armnetwork.LoadBalancer, bool /*needRetry*/, error) {
 	klog.Infof("CLB-ENECHITOAIA-reconcileLoadBalancer: service(%s) - wantLb(%t)\n", getServiceName(service), wantLb)
 	if az.ServiceGatewayEnabled && !strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyTypeLocal)) {
-		return nil, fmt.Errorf("service %s/%s is using podIP backend pool type but externalTrafficPolicy is not set to Local", service.Namespace, service.Name)
+		return nil, false, fmt.Errorf("service %s/%s is using podIP backend pool type but externalTrafficPolicy is not set to Local", service.Namespace, service.Name)
 	}
 
 	isBackendPoolPreConfigured := az.isBackendPoolPreConfigured(service)

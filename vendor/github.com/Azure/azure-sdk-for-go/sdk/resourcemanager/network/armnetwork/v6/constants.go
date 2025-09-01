@@ -2670,13 +2670,15 @@ func PossibleManagedRuleEnabledStateValues() []ManagedRuleEnabledState {
 type NatGatewaySKUName string
 
 const (
-	NatGatewaySKUNameStandard NatGatewaySKUName = "Standard"
+	NatGatewaySKUNameStandard   NatGatewaySKUName = "Standard"
+	NatGatewaySKUNameStandardV2 NatGatewaySKUName = "StandardV2"
 )
 
 // PossibleNatGatewaySKUNameValues returns the possible values for the NatGatewaySKUName const type.
 func PossibleNatGatewaySKUNameValues() []NatGatewaySKUName {
 	return []NatGatewaySKUName{
 		NatGatewaySKUNameStandard,
+		NatGatewaySKUNameStandardV2,
 	}
 }
 

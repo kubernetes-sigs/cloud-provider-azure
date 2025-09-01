@@ -74,6 +74,39 @@ func (az *Cloud) CreateOrUpdatePIP(service *v1.Service, pipResourceGroup string,
 	return rerr
 }
 
+func (az *Cloud) CreateOrUpdatePIPOutbound(pip *armnetwork.PublicIPAddress) error {
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
+	rgName := az.ResourceGroup
+	_, rerr := az.NetworkClientFactory.GetPublicIPAddressClient().CreateOrUpdate(ctx, rgName, ptr.Deref(pip.Name, ""), *pip)
+	if rerr == nil {
+		_ = az.pipCache.Delete(rgName)
+		return nil
+	}
+
+	pipJSON, _ := json.Marshal(pip)
+	klog.Warningf("NetworkClientFactory.GetPublicIPAddressClient().CreateOrUpdate(%s, %s) failed: %s, PublicIP request: %s", rgName, ptr.Deref(pip.Name, ""), rerr.Error(), string(pipJSON))
+
+	// Invalidate the cache because of the error
+	var respError *azcore.ResponseError
+	if errors.As(rerr, &respError) && respError != nil {
+		if respError.StatusCode == http.StatusPreconditionFailed {
+			klog.V(3).Infof("PublicIP cache for (%s, %s) is cleanup because of http.StatusPreconditionFailed", rgName, ptr.Deref(pip.Name, ""))
+			_ = az.pipCache.Delete(rgName)
+		}
+	}
+
+	retryErrorMessage := rerr.Error()
+	// Invalidate the cache because another new operation has canceled the current request.
+	if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceledErrorMessage) {
+		klog.V(3).Infof("PublicIP cache for (%s, %s) is cleanup because CreateOrUpdate is canceled by another operation", rgName, ptr.Deref(pip.Name, ""))
+		_ = az.pipCache.Delete(rgName)
+	}
+
+	return rerr
+}
+
 // DeletePublicIP invokes az.NetworkClientFactory.GetPublicIPAddressClient().Delete with exponential backoff retry
 func (az *Cloud) DeletePublicIP(service *v1.Service, pipResourceGroup string, pipName string) error {
 	ctx, cancel := getContextWithCancel()
@@ -94,6 +127,15 @@ func (az *Cloud) DeletePublicIP(service *v1.Service, pipResourceGroup string, pi
 	// Invalidate the cache right after deleting
 	_ = az.pipCache.Delete(pipResourceGroup)
 	return nil
+}
+
+func (az *Cloud) DeletePublicIPOutbound(pipName string) error {
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
+	rgName := az.ResourceGroup
+	rerr := az.NetworkClientFactory.GetPublicIPAddressClient().Delete(ctx, rgName, pipName)
+	return rerr
 }
 
 func (az *Cloud) newPIPCache() (azcache.Resource, error) {

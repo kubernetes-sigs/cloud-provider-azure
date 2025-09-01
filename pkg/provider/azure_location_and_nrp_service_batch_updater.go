@@ -11,6 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+
 	v1 "k8s.io/api/core/v1"
 	discovery_v1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,6 +22,7 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
+	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 // LocationAndNRPServiceBatchUpdater is a batch processor for updating NRP locations and services.
@@ -563,8 +567,35 @@ func (updater *podEgressResourceUpdater) process(ctx context.Context) {
 				})
 				updater.az.TriggerLocationAndNRPServiceBatchUpdate()
 			} else {
-				// TODO(enechitoaia): createOrUpdatePip()
-				// TODO(enechitoaia): createOrUpdateNatGateway(NGW, ServiceName, SGW)
+				pipResource := armnetwork.PublicIPAddress{
+					ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
+						updater.az.SubscriptionID, updater.az.ResourceGroup, service)),
+					SKU: &armnetwork.PublicIPAddressSKU{
+						Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandard),
+					},
+					Location: to.Ptr(updater.az.Location),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{ // TODO (enechitoaia): What properties should we use for the Public IP
+						PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
+					},
+				}
+				updater.az.CreateOrUpdatePIPOutbound(&pipResource)
+
+				natGatewayResource := armnetwork.NatGateway{
+					ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/natGateways/%s",
+						updater.az.SubscriptionID, updater.az.ResourceGroup, service)),
+					SKU: &armnetwork.NatGatewaySKU{
+						Name: to.Ptr(armnetwork.NatGatewaySKUNameStandardV2)},
+					Location: to.Ptr(updater.az.Location),
+					Properties: &armnetwork.NatGatewayPropertiesFormat{ // TODO (enechitoaia): What properties should we use for the Nat Gateway
+						PublicIPAddresses: []*armnetwork.SubResource{
+							{
+								ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
+									updater.az.SubscriptionID, updater.az.ResourceGroup, service)),
+							},
+						},
+					},
+				}
+				updater.az.createOrUpdateNatGateway(ctx, updater.az.ResourceGroup, natGatewayResource)
 				updater.az.diffTracker.UpdateK8sEgress(difftracker.UpdateK8sResource{
 					Operation: difftracker.ADD,
 					ID:        service,
@@ -578,9 +609,33 @@ func (updater *podEgressResourceUpdater) process(ctx context.Context) {
 				updater.az.TriggerLocationAndNRPServiceBatchUpdate()
 			}
 		case "Delete":
-			// TODO(enechitoaia): createOrUpdateService(Service, null)
-			// TODO(enechitoaia): deleteNatGateway()
-			//  TODO(enechitoaia): deletePip()
+			// WIP(enechitoaia): 	createOrUpdateService(Service, null)
+			removeNATGatewayRequestDTO := difftracker.MapNATGatewayUpdatesToServicesDataDTO(
+				difftracker.SyncServicesReturnType{
+					Additions: nil,
+					Removals:  utilsets.NewString(service),
+				},
+				updater.az.SubscriptionID,
+				updater.az.ResourceGroup,
+			)
+			err := NRPAPIClientUpdateNRPServices(ctx, removeNATGatewayRequestDTO, updater.az.SubscriptionID, updater.az.ResourceGroup)
+			klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: removeNATGatewayResponseDTO:\n")
+
+			if err == nil {
+				klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: removeNATGatewayResponseDTO is nil")
+				updater.az.diffTracker.UpdateK8sEgress(difftracker.UpdateK8sResource{
+					Operation: difftracker.REMOVE,
+					ID:        service,
+				})
+				updater.az.deleteNatGateway(ctx, updater.az.ResourceGroup, service)
+				updater.az.DeletePublicIPOutbound(service)
+				updater.az.diffTracker.UpdateK8sPod(difftracker.UpdatePodInputType{
+					PodOperation:           difftracker.REMOVE,
+					PublicOutboundIdentity: service,
+					Location:               location,
+					Address:                address,
+				})
+			}
 		default:
 			klog.Warningf("Unknown event type: %s for pod: %s", event.EventType, event.Key)
 		}
