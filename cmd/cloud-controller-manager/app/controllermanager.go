@@ -32,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/server/healthz"
 	cacheddiscovery "k8s.io/client-go/discovery/cached/memory"
-	"k8s.io/client-go/informers"
 	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/metadata/metadatainformer"
 	"k8s.io/client-go/restmapper"
@@ -485,7 +484,12 @@ func newControllerInitializers() map[string]initFunc {
 // the shared-informers client and token controller.
 func CreateControllerContext(s *cloudcontrollerconfig.CompletedConfig, clientBuilder clientbuilder.ControllerClientBuilder, stop <-chan struct{}) (genericcontrollermanager.ControllerContext, error) {
 	versionedClient := clientBuilder.ClientOrDie("shared-informers")
-	sharedInformers := informers.NewSharedInformerFactory(versionedClient, ResyncPeriod(s)())
+
+	// Use filtered informers if node filtering is enabled
+	sharedInformers, err := options.CreateFilteredInformerFactory(versionedClient, ResyncPeriod(s)(), s.NodeFilterRequirements)
+	if err != nil {
+		return genericcontrollermanager.ControllerContext{}, fmt.Errorf("failed to create filtered informer factory based on requirements: %w", err)
+	}
 
 	metadataClient := metadata.NewForConfigOrDie(clientBuilder.ConfigOrDie("metadata-informers"))
 	metadataInformers := metadatainformer.NewSharedInformerFactory(metadataClient, ResyncPeriod(s)())
