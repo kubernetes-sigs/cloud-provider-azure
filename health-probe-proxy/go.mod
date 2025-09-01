@@ -1,6 +1,6 @@
 module health-probe-proxy
 
-go 1.24
+go 1.24.6
 
 require (
 	github.com/pires/go-proxyproto v0.8.0
