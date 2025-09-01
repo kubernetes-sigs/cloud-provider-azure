@@ -27,9 +27,18 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	v1 "k8s.io/api/core/v1"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	fnutil "sigs.k8s.io/cloud-provider-azure/pkg/util/collectionutil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/iputil"
 )
+
+func IsManagedSecurityRule(r *armnetwork.SecurityRule) bool {
+	if r == nil || r.Name == nil || r.Properties == nil || r.Properties.Priority == nil {
+		return false
+	}
+	priority := *r.Properties.Priority
+	return strings.HasPrefix(*r.Name, SecurityRuleNamePrefix) && consts.LoadBalancerMinimumPriority <= priority && priority <= consts.LoadBalancerMaximumPriority
+}
 
 // GenerateAllowSecurityRuleName returns the AllowInbound rule name based on the given rule properties.
 func GenerateAllowSecurityRuleName(
@@ -139,6 +148,17 @@ func ListDestinationPortRanges(r *armnetwork.SecurityRule) ([]int32, error) {
 	}
 
 	return rv, nil
+}
+
+func SetDestinationPortRanges(r *armnetwork.SecurityRule, ports []int32) {
+	ps := NormalizeDestinationPortRanges(ports)
+	r.Properties.DestinationPortRange = nil
+	r.Properties.DestinationPortRanges = to.SliceOfPtrs(ps...)
+}
+
+func SetAsteriskDestinationPortRange(r *armnetwork.SecurityRule) {
+	r.Properties.DestinationPortRange = to.Ptr("*")
+	r.Properties.DestinationPortRanges = nil
 }
 
 func ProtocolFromKubernetes(p v1.Protocol) (armnetwork.SecurityRuleProtocol, error) {
