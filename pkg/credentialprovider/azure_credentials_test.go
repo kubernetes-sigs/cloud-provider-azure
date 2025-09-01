@@ -382,3 +382,196 @@ func TestProcessMirrorMapping(t *testing.T) {
 		})
 	}
 }
+
+func TestNewAcrProvider_WithEmptyServiceAccountToken(t *testing.T) {
+	// Test case when ServiceAccountToken is empty - should use managed identity credential
+	configFile, err := os.CreateTemp(".", "config.json")
+	assert.NoError(t, err)
+	defer os.Remove(configFile.Name())
+
+	configStr := `{
+		"useManagedIdentityExtension": true,
+		"userAssignedIdentityID": "test-client-id"
+	}`
+	_, err = configFile.WriteString(configStr)
+	assert.NoError(t, err)
+	assert.NoError(t, configFile.Close())
+
+	req := &v1.CredentialProviderRequest{
+		Image:               "test.azurecr.io/test:latest",
+		ServiceAccountToken: "", // Empty token
+	}
+
+	provider, err := NewAcrProvider(req, "", configFile.Name())
+	assert.NoError(t, err)
+	assert.NotNil(t, provider)
+
+	acrProv := provider.(*acrProvider)
+	assert.NotNil(t, acrProv.credential)
+	assert.Equal(t, true, acrProv.config.UseManagedIdentityExtension)
+}
+
+func TestNewAcrProvider_WithServiceAccountToken(t *testing.T) {
+	// Test case when ServiceAccountToken is provided - should use service account credential
+	configFile, err := os.CreateTemp(".", "config.json")
+	assert.NoError(t, err)
+	defer os.Remove(configFile.Name())
+
+	configStr := `{
+		"tenantID": "test-tenant-id"
+	}`
+	_, err = configFile.WriteString(configStr)
+	assert.NoError(t, err)
+	assert.NoError(t, configFile.Close())
+
+	req := &v1.CredentialProviderRequest{
+		Image:               "test.azurecr.io/test:latest",
+		ServiceAccountToken: "test-service-account-token",
+		ServiceAccountAnnotations: map[string]string{
+			"kubernetes.azure.com/acr-client-id": "test-client-id",
+			"kubernetes.azure.com/acr-tenant-id": "test-tenant-id",
+		},
+	}
+
+	provider, err := NewAcrProvider(req, "", configFile.Name())
+	assert.NoError(t, err)
+	assert.NotNil(t, provider)
+
+	acrProv := provider.(*acrProvider)
+	assert.NotNil(t, acrProv.credential)
+}
+
+func TestNewAcrProvider_WithServiceAccountToken_MissingClientIDAnnotation(t *testing.T) {
+	// Test case when ServiceAccountToken is provided but client ID annotation is missing
+	configFile, err := os.CreateTemp(".", "config.json")
+	assert.NoError(t, err)
+	defer os.Remove(configFile.Name())
+
+	configStr := `{
+		"tenantID": "test-tenant-id"
+	}`
+	_, err = configFile.WriteString(configStr)
+	assert.NoError(t, err)
+	assert.NoError(t, configFile.Close())
+
+	req := &v1.CredentialProviderRequest{
+		Image:               "test.azurecr.io/test:latest",
+		ServiceAccountToken: "test-service-account-token",
+		ServiceAccountAnnotations: map[string]string{
+			"kubernetes.azure.com/acr-tenant-id": "test-tenant-id",
+			// kubernetes.azure.com/acr-client-id is missing
+		},
+	}
+
+	provider, err := NewAcrProvider(req, "", configFile.Name())
+	assert.Error(t, err)
+	assert.Nil(t, provider)
+	assert.Contains(t, err.Error(), "client id annotation")
+}
+
+func TestNewAcrProvider_WithServiceAccountToken_MissingTenantIDAnnotation(t *testing.T) {
+	// Test case when ServiceAccountToken is provided but tenant ID annotation is missing
+	configFile, err := os.CreateTemp(".", "config.json")
+	assert.NoError(t, err)
+	defer os.Remove(configFile.Name())
+
+	configStr := `{
+		"tenantID": "test-tenant-id"
+	}`
+	_, err = configFile.WriteString(configStr)
+	assert.NoError(t, err)
+	assert.NoError(t, configFile.Close())
+
+	req := &v1.CredentialProviderRequest{
+		Image:               "test.azurecr.io/test:latest",
+		ServiceAccountToken: "test-service-account-token",
+		ServiceAccountAnnotations: map[string]string{
+			"kubernetes.azure.com/acr-client-id": "test-client-id",
+			// kubernetes.azure.com/acr-tenant-id is missing
+		},
+	}
+
+	provider, err := NewAcrProvider(req, "", configFile.Name())
+	assert.Error(t, err)
+	assert.Nil(t, provider)
+	assert.Contains(t, err.Error(), "tenant id annotation")
+}
+
+func TestNewAcrProvider_WithServiceAccountToken_EmptyClientID(t *testing.T) {
+	// Test case when ServiceAccountToken is provided but client ID annotation is empty
+	configFile, err := os.CreateTemp(".", "config.json")
+	assert.NoError(t, err)
+	defer os.Remove(configFile.Name())
+
+	configStr := `{
+		"tenantID": "test-tenant-id"
+	}`
+	_, err = configFile.WriteString(configStr)
+	assert.NoError(t, err)
+	assert.NoError(t, configFile.Close())
+
+	req := &v1.CredentialProviderRequest{
+		Image:               "test.azurecr.io/test:latest",
+		ServiceAccountToken: "test-service-account-token",
+		ServiceAccountAnnotations: map[string]string{
+			"kubernetes.azure.com/acr-client-id": "", // Empty client ID
+			"kubernetes.azure.com/acr-tenant-id": "test-tenant-id",
+		},
+	}
+
+	provider, err := NewAcrProvider(req, "", configFile.Name())
+	assert.Error(t, err)
+	assert.Nil(t, provider)
+	assert.Contains(t, err.Error(), "client id annotation")
+}
+
+func TestNewAcrProvider_WithServiceAccountToken_EmptyTenantID(t *testing.T) {
+	// Test case when ServiceAccountToken is provided but tenant ID annotation is empty
+	configFile, err := os.CreateTemp(".", "config.json")
+	assert.NoError(t, err)
+	defer os.Remove(configFile.Name())
+
+	configStr := `{
+		"tenantID": "test-tenant-id"
+	}`
+	_, err = configFile.WriteString(configStr)
+	assert.NoError(t, err)
+	assert.NoError(t, configFile.Close())
+
+	req := &v1.CredentialProviderRequest{
+		Image:               "test.azurecr.io/test:latest",
+		ServiceAccountToken: "test-service-account-token",
+		ServiceAccountAnnotations: map[string]string{
+			"kubernetes.azure.com/acr-client-id": "test-client-id",
+			"kubernetes.azure.com/acr-tenant-id": "", // Empty tenant ID
+		},
+	}
+
+	provider, err := NewAcrProvider(req, "", configFile.Name())
+	assert.Error(t, err)
+	assert.Nil(t, provider)
+	assert.Contains(t, err.Error(), "tenant id annotation")
+}
+
+func TestNewAcrProvider_InvalidConfig(t *testing.T) {
+	// Test case when config file is invalid
+	configFile, err := os.CreateTemp(".", "config.json")
+	assert.NoError(t, err)
+	defer os.Remove(configFile.Name())
+
+	// Invalid JSON
+	invalidConfigStr := `{invalid json`
+	_, err = configFile.WriteString(invalidConfigStr)
+	assert.NoError(t, err)
+	assert.NoError(t, configFile.Close())
+
+	req := &v1.CredentialProviderRequest{
+		Image:               "test.azurecr.io/test:latest",
+		ServiceAccountToken: "",
+	}
+
+	provider, err := NewAcrProvider(req, "", configFile.Name())
+	assert.Error(t, err)
+	assert.Nil(t, provider)
+	assert.Contains(t, err.Error(), "failed to load config")
+}

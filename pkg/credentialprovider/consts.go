@@ -17,5 +17,6 @@ limitations under the License.
 package credentialprovider
 
 const (
-	clientIDAnnotation = "azure.workload.identity/client-id"
+	clientIDAnnotation = "kubernetes.azure.com/acr-client-id"
+	tenantIDAnnotation = "kubernetes.azure.com/acr-tenant-id"
 )

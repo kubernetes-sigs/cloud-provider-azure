@@ -88,15 +88,15 @@ func NewAcrProvider(req *v1.CredentialProviderRequest, registryMirrorStr string,
 	// kubelet is responsible for checking the service account token emptiness when service account token is enabled, and only when service account token provide is enabled,
 	// service account token is set in the request, so we can safely check the service account token emptiness to decide which credential to use.
 	if len(req.ServiceAccountToken) != 0 {
-		klog.V(2).Infof("Using service account token to authenticate ACR")
+		klog.V(2).Infof("Using service account token to authenticate ACR for image %s", req.Image)
 		getTokenCredential = getServiceAccountTokenCredential
 	} else {
-		klog.V(2).Infof("Using managed identity to authenticate ACR")
+		klog.V(2).Infof("Using managed identity to authenticate ACR for image %s", req.Image)
 		getTokenCredential = getManagedIdentityCredential
 	}
 	credential, err := getTokenCredential(req, config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get token credential: %w", err)
+		return nil, fmt.Errorf("failed to get token credential for image %s: %w", req.Image, err)
 	}
 
 	return &acrProvider{
@@ -139,15 +139,14 @@ func getManagedIdentityCredential(_ *v1.CredentialProviderRequest, config *provi
 
 func getServiceAccountTokenCredential(req *v1.CredentialProviderRequest, config *providerconfig.AzureClientConfig) (azcore.TokenCredential, error) {
 	if len(req.ServiceAccountToken) == 0 {
-		return nil, fmt.Errorf("Service account token is not provided in the request")
+		return nil, fmt.Errorf("kubernetes Service account token is not provided for image %s", req.Image)
 	}
+	klog.V(2).Infof("Kubernetes Service account token is provided for image %s", req.Image)
 
-	_, env, err := azclient.GetAzCoreClientOption(&config.ARMClientConfig)
+	clientOption, _, err := azclient.GetAzCoreClientOption(&config.ARMClientConfig)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get Azure cloud environment: %w", err)
+		return nil, fmt.Errorf("Failed to get Azure client options for image %s: %w", req.Image, err)
 	}
-
-	klog.V(2).Infof("Kubernetes service account token is set")
 
 	// check required annotations
 	clientID, ok := req.ServiceAccountAnnotations[clientIDAnnotation]
@@ -155,13 +154,23 @@ func getServiceAccountTokenCredential(req *v1.CredentialProviderRequest, config 
 		return nil, fmt.Errorf("client id annotation %s is not found or the value is empty", clientIDAnnotation)
 	}
 
-	tenantID := config.TenantID
+	// check required annotations
+	tenantID, ok := req.ServiceAccountAnnotations[tenantIDAnnotation]
+	if !ok || len(tenantID) == 0 {
+		return nil, fmt.Errorf("tenant id annotation %s is not found or the value is empty", tenantIDAnnotation)
+	}
 
-	clientAssertCredential, err := NewClientAssertionCredential(tenantID, clientID, env.ActiveDirectoryEndpoint, req.ServiceAccountToken)
+	// Create getAssertion callback that returns the service account token
+	getAssertion := func(ctx context.Context) (string, error) {
+		return req.ServiceAccountToken, nil
+	}
+
+	clientAssertCredential, err := azidentity.NewClientAssertionCredential(tenantID, clientID, getAssertion, &azidentity.ClientAssertionCredentialOptions{
+		ClientOptions: *clientOption,
+	})
 
 	if err != nil {
-		klog.Error("Failed to initialize client assertion credential: %w", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to initialize client assertion credential: %w", err)
 	}
 	return clientAssertCredential, nil
 }
