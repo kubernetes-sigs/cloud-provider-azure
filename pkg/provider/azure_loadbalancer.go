@@ -3193,6 +3193,25 @@ func (az *Cloud) reconcileSecurityGroup(
 		}
 	}
 
+	{
+		// Retain all destinations that are managed by cloud-provider.
+		managedDestinations, err := az.listAvailableSecurityGroupDestinations(ctx)
+		if err != nil {
+			logger.Error(err, "Failed to list available security group destinations")
+			return nil, err
+		}
+
+		managedDestinations = append(managedDestinations, lbIPAddresses...)
+		managedDestinations = append(managedDestinations, additionalIPs...)
+		logger.Info("Retaining security group", "managed-destinations", managedDestinations)
+
+		ipv4Addresses, ipv6Addresses := iputil.GroupAddressesByFamily(managedDestinations)
+		if err := accessControl.RetainSecurityGroup(ipv4Addresses, ipv6Addresses); err != nil {
+			logger.Error(err, "Failed to retain security group")
+			return nil, err
+		}
+	}
+
 	rv, updated, err := accessControl.SecurityGroup()
 	if err != nil {
 		err = fmt.Errorf("unable to apply access control configuration to security group: %w", err)
