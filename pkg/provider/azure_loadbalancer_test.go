@@ -1131,6 +1131,66 @@ func TestServiceOwnsPublicIP(t *testing.T) {
 			serviceLBName: "pip1",
 			expectedOwns:  true,
 		},
+		{
+			desc: "should return true for failed PIPs with empty IP but matching service tags",
+			pip: &network.PublicIPAddress{
+				Name: ptr.To("failed-pip"),
+				Tags: map[string]*string{
+					consts.ServiceTagKey:  ptr.To("default/nginx"),
+					consts.ClusterNameKey: ptr.To("kubernetes"),
+				},
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+					IPAddress: ptr.To(""), // Empty IP address like failed PIPs
+				},
+			},
+			clusterName:  "kubernetes",
+			serviceName:  "nginx",
+			expectedOwns: true, // Should be true for cleanup, but currently returns false
+		},
+		{
+			desc: "should return false for failed PIPs with empty IP and non-matching service tags",
+			pip: &network.PublicIPAddress{
+				Name: ptr.To("failed-pip"),
+				Tags: map[string]*string{
+					consts.ServiceTagKey:  ptr.To("default/other-service"),
+					consts.ClusterNameKey: ptr.To("kubernetes"),
+				},
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+					IPAddress: ptr.To(""), // Empty IP address like failed PIPs
+				},
+			},
+			clusterName:  "kubernetes",
+			serviceName:  "nginx",
+			expectedOwns: false,
+		},
+		{
+			desc: "should return false for user-assigned PIPs with empty IP address and no service tags",
+			pip: &network.PublicIPAddress{
+				Name: ptr.To("user-pip"),
+				Tags: map[string]*string{}, // No service tags, indicating user-created
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+					IPAddress: ptr.To(""), // Empty IP address
+				},
+			},
+			clusterName:             "kubernetes",
+			serviceName:             "nginx",
+			expectedOwns:            false, // Can't match without IP
+			expectedUserAssignedPIP: true,  // Should still be identified as user-assigned
+		},
+		{
+			desc: "should return true for system PIPs with nil Properties but matching service tags",
+			pip: &network.PublicIPAddress{
+				Name: ptr.To("system-pip"),
+				Tags: map[string]*string{
+					consts.ServiceTagKey:  ptr.To("default/nginx"),
+					consts.ClusterNameKey: ptr.To("kubernetes"),
+				},
+				PublicIPAddressPropertiesFormat: nil, // Nil properties like some failed PIPs
+			},
+			clusterName:  "kubernetes",
+			serviceName:  "nginx",
+			expectedOwns: true, // Should be owned based on tags
+		},
 	}
 
 	for i, c := range tests {
@@ -5116,6 +5176,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			foundDNSLabelAnnotation: true,
 			existingPIPs: []network.PublicIPAddress{{
 				Name:                            pointer.String("pip1"),
+				Tags:                            map[string]*string{consts.ServiceTagKey: pointer.String("default/test1")},
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{},
 			}},
 			expectedPIP: &network.PublicIPAddress{
@@ -5127,7 +5188,10 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					},
 					PublicIPAddressVersion: network.IPv4,
 				},
-				Tags: map[string]*string{consts.ServiceUsingDNSKey: pointer.String("default/test1")},
+				Tags: map[string]*string{
+					consts.ServiceUsingDNSKey: pointer.String("default/test1"),
+					consts.ServiceTagKey:      pointer.String("default/test1"),
+				},
 			},
 			shouldPutPIP: true,
 		},
@@ -5185,6 +5249,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			isIPv6:                  true,
 			existingPIPs: []network.PublicIPAddress{{
 				Name:                            pointer.String("pip1"),
+				Tags:                            map[string]*string{consts.ServiceTagKey: pointer.String("default/test1")},
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{},
 			}},
 			expectedPIP: &network.PublicIPAddress{
@@ -5197,7 +5262,10 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					PublicIPAllocationMethod: network.Dynamic,
 					PublicIPAddressVersion:   network.IPv6,
 				},
-				Tags: map[string]*string{consts.ServiceUsingDNSKey: pointer.String("default/test1")},
+				Tags: map[string]*string{
+					consts.ServiceUsingDNSKey: pointer.String("default/test1"),
+					consts.ServiceTagKey:      pointer.String("default/test1"),
+				},
 			},
 			shouldPutPIP: true,
 		},
@@ -5209,6 +5277,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			isIPv6:                  true,
 			existingPIPs: []network.PublicIPAddress{{
 				Name: pointer.String("pip1"),
+				Tags: map[string]*string{consts.ServiceTagKey: pointer.String("default/test1")},
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					DNSSettings: &network.PublicIPAddressDNSSettings{
 						DomainNameLabel: pointer.String("previousdns"),
@@ -5227,6 +5296,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 				},
 				Tags: map[string]*string{
 					"k8s-azure-dns-label-service": pointer.String("default/test1"),
+					consts.ServiceTagKey:          pointer.String("default/test1"),
 				},
 			},
 			shouldPutPIP: true,
@@ -5238,8 +5308,8 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			foundDNSLabelAnnotation: true,
 			isIPv6:                  false,
 			existingPIPs: []network.PublicIPAddress{{
-
 				Name: pointer.String("pip1"),
+				Tags: map[string]*string{consts.ServiceTagKey: pointer.String("default/test1")},
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					DNSSettings: &network.PublicIPAddressDNSSettings{
 						DomainNameLabel: pointer.String("previousdns"),
@@ -5260,6 +5330,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 				},
 				Tags: map[string]*string{
 					"k8s-azure-dns-label-service": pointer.String("default/test1"),
+					consts.ServiceTagKey:          pointer.String("default/test1"),
 				},
 			},
 			shouldPutPIP: true,
@@ -5363,13 +5434,22 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			shouldPutPIP: true,
 		},
 		{
-			desc:         "shall update pip tags if there is any change",
-			pipName:      "pip1",
-			existingPIPs: []network.PublicIPAddress{{Name: pointer.String("pip1"), Tags: map[string]*string{"a": pointer.String("b")}}},
+			desc:    "shall update pip tags if there is any change",
+			pipName: "pip1",
+			existingPIPs: []network.PublicIPAddress{{
+				Name: pointer.String("pip1"),
+				Tags: map[string]*string{
+					"a":                  pointer.String("b"),
+					consts.ServiceTagKey: pointer.String("default/test1"),
+				},
+			}},
 			expectedPIP: &network.PublicIPAddress{
 				Name: pointer.String("pip1"),
-				Tags: map[string]*string{"a": pointer.String("c")},
-				ID:   pointer.String(expectedPIPID),
+				Tags: map[string]*string{
+					"a":                  pointer.String("c"),
+					consts.ServiceTagKey: pointer.String("default/test1"),
+				},
+				ID: pointer.String(expectedPIPID),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					PublicIPAddressVersion:   network.IPv4,
 					PublicIPAllocationMethod: network.Static,
