@@ -142,6 +142,7 @@ type Cloud struct {
 	pipCache azcache.Resource
 	// Add service lister to always get latest service
 	serviceLister corelisters.ServiceLister
+	nodeLister    corelisters.NodeLister
 	// node-sync-loop routine and service-reconcile routine should not update LoadBalancer at the same time
 	serviceReconcileLock sync.Mutex
 
@@ -722,6 +723,7 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 	az.nodeInformerSynced = nodeInformer.HasSynced
 
 	az.serviceLister = informerFactory.Core().V1().Services().Lister()
+	az.nodeLister = informerFactory.Core().V1().Nodes().Lister()
 
 	az.setUpEndpointSlicesInformer(informerFactory)
 }
