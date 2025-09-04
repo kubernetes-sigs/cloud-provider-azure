@@ -1136,6 +1136,187 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 	})
 }
 
+func TestAccessControl_RetainSecurityGroup(t *testing.T) {
+	var (
+		azureFx = fixture.NewFixture().Azure()
+	)
+
+	runTest := func(t *testing.T,
+		svc v1.Service,
+		originalRules []*armnetwork.SecurityRule,
+		dstIPv4Addresses, dstIPv6Addresses []string,
+		expectedUpdated bool,
+		expectedRules []*armnetwork.SecurityRule,
+	) {
+		t.Helper()
+
+		var (
+			sg      = azureFx.SecurityGroup().WithRules(originalRules).Build()
+			ac, err = NewAccessControl(log.Noop(), &svc, sg)
+		)
+		assert.NoError(t, err)
+
+		err = ac.RetainSecurityGroup(
+			fnutil.Map(func(s string) netip.Addr { return netip.MustParseAddr(s) }, dstIPv4Addresses),
+			fnutil.Map(func(s string) netip.Addr { return netip.MustParseAddr(s) }, dstIPv6Addresses),
+		)
+		assert.NoError(t, err)
+
+		actualSG, updated, err := ac.SecurityGroup()
+		assert.NoError(t, err)
+		assert.Equal(t, expectedUpdated, updated)
+		testutil.ExpectHasSecurityRules(t, actualSG, expectedRules)
+	}
+
+	t.Run("retain destinations from security group rules", func(t *testing.T) {
+		var (
+			k8sFx         = fixture.NewFixture().Kubernetes()
+			svc           = k8sFx.Service().Build()
+			originalRules = []*armnetwork.SecurityRule{
+				{
+					Name: ptr.To("k8s-azure-lb-test-rule-0"),
+					Properties: &armnetwork.SecurityRulePropertiesFormat{
+						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
+						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
+						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
+						SourceAddressPrefixes:      to.SliceOfPtrs("src_foo", "src_bar"),
+						SourcePortRange:            ptr.To("*"),
+						DestinationAddressPrefixes: to.SliceOfPtrs("10.0.0.1", "10.0.0.2", "192.168.0.1", "192.168.0.2"),
+						DestinationPortRanges:      to.SliceOfPtrs("80", "443"),
+						Priority:                   ptr.To(int32(500)),
+					},
+				},
+				{
+					Name: ptr.To("k8s-azure-lb-test-rule-1"),
+					Properties: &armnetwork.SecurityRulePropertiesFormat{
+						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
+						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
+						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
+						SourceAddressPrefixes:      to.SliceOfPtrs("src_baz"),
+						SourcePortRange:            ptr.To("*"),
+						DestinationAddressPrefixes: to.SliceOfPtrs("20.0.0.1", "192.168.0.1", "30.0.0.1"),
+						DestinationPortRanges:      to.SliceOfPtrs("53"),
+						Priority:                   ptr.To(int32(501)),
+					},
+				},
+			}
+			dstIPv4Addresses = []string{
+				"10.0.0.1",
+				"192.168.0.1",
+			}
+			dstIPv6Addresses = []string{}
+			expectedRules    = []*armnetwork.SecurityRule{
+				{
+					Name: ptr.To("k8s-azure-lb-test-rule-0"),
+					Properties: &armnetwork.SecurityRulePropertiesFormat{
+						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
+						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
+						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
+						SourceAddressPrefixes:      to.SliceOfPtrs("src_foo", "src_bar"),
+						SourcePortRange:            ptr.To("*"),
+						DestinationAddressPrefixes: to.SliceOfPtrs("10.0.0.1", "192.168.0.1"),
+						DestinationPortRanges:      to.SliceOfPtrs("80", "443"),
+						Priority:                   ptr.To(int32(500)),
+					},
+				},
+				{
+					Name: ptr.To("k8s-azure-lb-test-rule-1"),
+					Properties: &armnetwork.SecurityRulePropertiesFormat{
+						Protocol:                 to.Ptr(armnetwork.SecurityRuleProtocolUDP),
+						Access:                   to.Ptr(armnetwork.SecurityRuleAccessAllow),
+						Direction:                to.Ptr(armnetwork.SecurityRuleDirectionInbound),
+						SourceAddressPrefixes:    to.SliceOfPtrs("src_baz"),
+						SourcePortRange:          ptr.To("*"),
+						DestinationAddressPrefix: to.Ptr("192.168.0.1"),
+						DestinationPortRanges:    to.SliceOfPtrs("53"),
+						Priority:                 ptr.To(int32(501)),
+					},
+				},
+			}
+		)
+
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
+	})
+
+	t.Run("retain IPv6 destinations from security group rules", func(t *testing.T) {
+		var (
+			k8sFx         = fixture.NewFixture().Kubernetes()
+			svc           = k8sFx.Service().Build()
+			originalRules = []*armnetwork.SecurityRule{
+				{
+					Name: ptr.To("k8s-azure-lb-test-rule-0"),
+					Properties: &armnetwork.SecurityRulePropertiesFormat{
+						Protocol:              to.Ptr(armnetwork.SecurityRuleProtocolTCP),
+						Access:                to.Ptr(armnetwork.SecurityRuleAccessAllow),
+						Direction:             to.Ptr(armnetwork.SecurityRuleDirectionInbound),
+						SourceAddressPrefixes: to.SliceOfPtrs("src_foo"),
+						SourcePortRange:       ptr.To("*"),
+						DestinationAddressPrefixes: to.SliceOfPtrs(
+							"2001:db8::1",
+							"2001:db8::2",
+							"2002:fb8::1",
+						),
+						DestinationPortRanges: to.SliceOfPtrs("80"),
+						Priority:              ptr.To(int32(500)),
+					},
+				},
+			}
+			dstIPv4Addresses = []string{}
+			dstIPv6Addresses = []string{
+				"2001:db8::1",
+			}
+			expectedRules = []*armnetwork.SecurityRule{
+				{
+					Name: ptr.To("k8s-azure-lb-test-rule-0"),
+					Properties: &armnetwork.SecurityRulePropertiesFormat{
+						Protocol:                 to.Ptr(armnetwork.SecurityRuleProtocolTCP),
+						Access:                   to.Ptr(armnetwork.SecurityRuleAccessAllow),
+						Direction:                to.Ptr(armnetwork.SecurityRuleDirectionInbound),
+						SourceAddressPrefixes:    to.SliceOfPtrs("src_foo"),
+						SourcePortRange:          ptr.To("*"),
+						DestinationAddressPrefix: to.Ptr("2001:db8::1"),
+						DestinationPortRanges:    to.SliceOfPtrs("80"),
+						Priority:                 ptr.To(int32(500)),
+					},
+				},
+			}
+		)
+
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
+	})
+
+	t.Run("no change when all destinations already retained", func(t *testing.T) {
+		var (
+			k8sFx         = fixture.NewFixture().Kubernetes()
+			svc           = k8sFx.Service().Build()
+			originalRules = []*armnetwork.SecurityRule{
+				{
+					Name: ptr.To("k8s-azure-lb-test-rule-0"),
+					Properties: &armnetwork.SecurityRulePropertiesFormat{
+						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
+						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
+						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
+						SourceAddressPrefixes:      to.SliceOfPtrs("src_foo"),
+						SourcePortRange:            ptr.To("*"),
+						DestinationAddressPrefixes: to.SliceOfPtrs("10.0.0.1", "10.0.0.2"),
+						DestinationPortRanges:      to.SliceOfPtrs("80"),
+						Priority:                   ptr.To(int32(500)),
+					},
+				},
+			}
+			dstIPv4Addresses = []string{
+				"10.0.0.1",
+				"10.0.0.2",
+				"10.0.0.3", // This one is not in the rule, so no change expected
+			}
+			dstIPv6Addresses = []string{}
+			expectedRules    = originalRules
+		)
+
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, false, expectedRules)
+	})
+}
+
 func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 
 	var (
@@ -1161,7 +1342,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 		var (
 			rules = []*armnetwork.SecurityRule{
 				{
-					Name: ptr.To("test-rule-0"),
+					Name: ptr.To("k8s-azure-lb-test-rule-0"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
@@ -1174,7 +1355,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 					},
 				},
 				{
-					Name: ptr.To("test-rule-1"),
+					Name: ptr.To("k8s-azure-lb-test-rule-1"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
@@ -1208,7 +1389,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 		var (
 			rules = []*armnetwork.SecurityRule{
 				{
-					Name: ptr.To("test-rule-0"),
+					Name: ptr.To("k8s-azure-lb-test-rule-0"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
@@ -1221,7 +1402,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 					},
 				},
 				{
-					Name: ptr.To("test-rule-1"),
+					Name: ptr.To("k8s-azure-lb-test-rule-1"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
@@ -1234,7 +1415,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 					},
 				},
 				{
-					Name: ptr.To("test-rule-2"),
+					Name: ptr.To("k8s-azure-lb-test-rule-2"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolAsterisk),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
@@ -1265,7 +1446,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 
 		testutil.ExpectEqualInJSON(t, []*armnetwork.SecurityRule{
 			{
-				Name: ptr.To("test-rule-0"),
+				Name: ptr.To("k8s-azure-lb-test-rule-0"),
 				Properties: &armnetwork.SecurityRulePropertiesFormat{
 					Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
 					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
@@ -1278,7 +1459,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 				},
 			},
 			{
-				Name: ptr.To("test-rule-1"),
+				Name: ptr.To("k8s-azure-lb-test-rule-1"),
 				Properties: &armnetwork.SecurityRulePropertiesFormat{
 					Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
@@ -1291,7 +1472,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 				},
 			},
 			{
-				Name: ptr.To("test-rule-2"),
+				Name: ptr.To("k8s-azure-lb-test-rule-2"),
 				Properties: &armnetwork.SecurityRulePropertiesFormat{
 					Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolAsterisk),
 					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
@@ -1310,7 +1491,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 		var (
 			rules = []*armnetwork.SecurityRule{
 				{
-					Name: ptr.To("test-rule-0"),
+					Name: ptr.To("k8s-azure-lb-test-rule-0"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
@@ -1323,7 +1504,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 					},
 				},
 				{
-					Name: ptr.To("test-rule-1"),
+					Name: ptr.To("k8s-azure-lb-test-rule-1"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
@@ -1336,7 +1517,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 					},
 				},
 				{
-					Name: ptr.To("test-rule-2"),
+					Name: ptr.To("k8s-azure-lb-test-rule-2"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolAsterisk),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
@@ -1349,7 +1530,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 					},
 				},
 				{
-					Name: ptr.To("test-rule-3"),
+					Name: ptr.To("k8s-azure-lb-test-rule-3"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                 to.Ptr(armnetwork.SecurityRuleProtocolAsterisk),
 						Access:                   to.Ptr(armnetwork.SecurityRuleAccessAllow),
@@ -1380,7 +1561,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 		assert.True(t, updated)
 		testutil.ExpectEqualInJSON(t, []*armnetwork.SecurityRule{
 			{
-				Name: ptr.To("test-rule-0"),
+				Name: ptr.To("k8s-azure-lb-test-rule-0"),
 				Properties: &armnetwork.SecurityRulePropertiesFormat{
 					Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
 					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
@@ -1393,7 +1574,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 				},
 			},
 			{
-				Name: ptr.To("test-rule-2"),
+				Name: ptr.To("k8s-azure-lb-test-rule-2"),
 				Properties: &armnetwork.SecurityRulePropertiesFormat{
 					Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolAsterisk),
 					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
@@ -1412,7 +1593,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 		var (
 			rules = []*armnetwork.SecurityRule{
 				{
-					Name: ptr.To("test-rule-0"),
+					Name: ptr.To("k8s-azure-lb-test-rule-0"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
@@ -1425,7 +1606,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 					},
 				},
 				{
-					Name: ptr.To("test-rule-1"),
+					Name: ptr.To("k8s-azure-lb-test-rule-1"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
@@ -1438,7 +1619,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 					},
 				},
 				{
-					Name: ptr.To("test-rule-2"),
+					Name: ptr.To("k8s-azure-lb-test-rule-2"),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
 						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolAsterisk),
 						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
@@ -1471,7 +1652,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 
 		testutil.ExpectEqualInJSON(t, []*armnetwork.SecurityRule{
 			{
-				Name: ptr.To("test-rule-0"),
+				Name: ptr.To("k8s-azure-lb-test-rule-0"),
 				Properties: &armnetwork.SecurityRulePropertiesFormat{
 					Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
 					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
@@ -1484,7 +1665,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 				},
 			},
 			{
-				Name: ptr.To("test-rule-1"),
+				Name: ptr.To("k8s-azure-lb-test-rule-1"),
 				Properties: &armnetwork.SecurityRulePropertiesFormat{
 					Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
 					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
@@ -1497,7 +1678,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 				},
 			},
 			{
-				Name: ptr.To("test-rule-2"),
+				Name: ptr.To("k8s-azure-lb-test-rule-2"),
 				Properties: &armnetwork.SecurityRulePropertiesFormat{
 					Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolAsterisk),
 					Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
