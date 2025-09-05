@@ -28,7 +28,6 @@ import (
 	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/credentialprovider"
 	"sigs.k8s.io/cloud-provider-azure/pkg/version"
 )
 
@@ -44,18 +43,14 @@ func main() {
 		Args:    cobra.MinimumNArgs(1),
 		Version: version.Get().GitVersion,
 		Run: func(_ *cobra.Command, args []string) {
+			// Though all args will be passed to the credential plugin, we handle these args here for cobra.command is good at parsing args,
+			// and these args like config file and registry mirror so far are global settings, not specific to a plugin.
 			if len(args) != 1 {
 				klog.Errorf("Config file is not specified")
 				os.Exit(1)
 			}
 
-			acrProvider, err := credentialprovider.NewAcrProviderFromConfig(args[0], RegistryMirrorStr)
-			if err != nil {
-				klog.Errorf("Failed to initialize ACR provider: %v", err)
-				os.Exit(1)
-			}
-
-			if err := NewCredentialProvider(acrProvider).Run(context.TODO()); err != nil {
+			if err := NewCredentialProvider(args[0], RegistryMirrorStr).Run(context.TODO()); err != nil {
 				klog.Errorf("Error running acr credential provider: %v", err)
 				os.Exit(1)
 			}
