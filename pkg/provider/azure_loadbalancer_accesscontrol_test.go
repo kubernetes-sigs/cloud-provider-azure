@@ -18,6 +18,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -29,6 +30,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
@@ -56,6 +59,23 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		k8sFx   = fx.Kubernetes()
 		azureFx = fx.Azure()
 		ctx     = log.NewContext(context.Background(), log.Noop())
+	)
+
+	var (
+		makeNodesByIPs = func(ips []string) []runtime.Object {
+			rv := make([]runtime.Object, len(ips))
+			for i, ip := range ips {
+				rv[i] = &v1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf("node-%d", i),
+					},
+					Status: v1.NodeStatus{
+						Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: ip}},
+					},
+				}
+			}
+			return rv
+		}
 	)
 
 	t.Run("internal Load Balancer", func(t *testing.T) {
@@ -406,6 +426,17 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				loadBalancer            = azureFx.LoadBalancer().Build()
 			)
 			defer ctrl.Finish()
+
+			{
+				kubeClient := fake.NewSimpleClientset(makeNodesByIPs(
+					append(azureFx.LoadBalancer().BackendPoolIPv4Addresses(), azureFx.LoadBalancer().BackendPoolIPv6Addresses()...),
+				)...)
+				informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
+				az.serviceLister = informerFactory.Core().V1().Services().Lister()
+				az.nodeLister = informerFactory.Core().V1().Nodes().Lister()
+				informerFactory.Start(wait.NeverStop)
+				informerFactory.WaitForCacheSync(wait.NeverStop)
+			}
 
 			svc.Annotations[consts.ServiceAnnotationDisableLoadBalancerFloatingIP] = "true"
 
@@ -901,6 +932,17 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			)
 			defer ctrl.Finish()
 
+			{
+				kubeClient := fake.NewSimpleClientset(makeNodesByIPs(
+					append(azureFx.LoadBalancer().BackendPoolIPv4Addresses(), azureFx.LoadBalancer().BackendPoolIPv6Addresses()...),
+				)...)
+				informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
+				az.serviceLister = informerFactory.Core().V1().Services().Lister()
+				az.nodeLister = informerFactory.Core().V1().Nodes().Lister()
+				informerFactory.Start(wait.NeverStop)
+				informerFactory.WaitForCacheSync(wait.NeverStop)
+			}
+
 			svc.Annotations[consts.ServiceAnnotationDisableLoadBalancerFloatingIP] = "true"
 
 			serviceTags := []string{securitygroup.ServiceTagInternet}
@@ -1345,188 +1387,6 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		})
 	})
 
-	t.Run("update rules - remove from unrelated rules", func(t *testing.T) {
-		var (
-			ctrl                    = gomock.NewController(t)
-			az                      = GetTestCloud(ctrl)
-			securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-			loadBalancerClient      = az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
-			loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
-			loadBalancer            = azureFx.LoadBalancer().Build()
-
-			allowedServiceTag = azureFx.ServiceTag()
-			allowedIPv4Ranges = fx.RandomIPv4PrefixStrings(3)
-			allowedIPv6Ranges = fx.RandomIPv6PrefixStrings(3)
-			allowedRanges     = append(allowedIPv4Ranges, allowedIPv6Ranges...)
-			svc               = k8sFx.Service().
-						WithAllowedServiceTags(allowedServiceTag).
-						WithAllowedIPRanges(allowedRanges...).
-						Build()
-		)
-		defer ctrl.Finish()
-
-		var (
-			noiseRules = azureFx.NoiseSecurityRules()
-			staleRules = []*armnetwork.SecurityRule{
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, []int32{8000}).
-					WithPriority(4000).
-					WithDestination(azureFx.LoadBalancer().IPv4Addresses()...). // Should remove the rule
-					Build(),
-
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, []int32{6000, 3000}).
-					WithPriority(4001).
-					WithDestination(append(azureFx.LoadBalancer().IPv4Addresses(), "foo", "bar")...). // Should keep foo and bar but clean the rest
-					Build(),
-
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, []int32{9000}).
-					WithPriority(4002).
-					WithDestination(append(azureFx.LoadBalancer().IPv6Addresses(), "baz")...). // Should keep baz but clean the rest
-					Build(),
-
-				{
-					Name: ptr.To("foo"),
-					Properties: &armnetwork.SecurityRulePropertiesFormat{
-						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
-						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
-						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-						SourcePortRange:            ptr.To("*"),
-						SourceAddressPrefixes:      to.SliceOfPtrs("foo"),
-						DestinationPortRanges:      to.SliceOfPtrs("4000", "6000"),
-						DestinationAddressPrefixes: to.SliceOfPtrs(azureFx.LoadBalancer().Addresses()...), // Should remove the rule
-						Priority:                   ptr.To(int32(4003)),
-					},
-				},
-				{
-					Name: ptr.To("bar"),
-					Properties: &armnetwork.SecurityRulePropertiesFormat{
-						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
-						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
-						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-						SourcePortRange:            ptr.To("*"),
-						SourceAddressPrefixes:      to.SliceOfPtrs("bar"),
-						DestinationPortRanges:      to.SliceOfPtrs("5000", "6000"),
-						DestinationAddressPrefixes: to.SliceOfPtrs(append(azureFx.LoadBalancer().Addresses(), "bar")...), // Should keep bar but clean the rest
-						Priority:                   ptr.To(int32(4004)),
-					},
-				},
-			}
-			targetRules = []*armnetwork.SecurityRule{
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, k8sFx.Service().TCPPorts()).
-					WithPriority(505).
-					WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).
-					Build(),
-
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).
-					WithPriority(507).
-					WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).
-					Build(),
-
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, []string{allowedServiceTag}, k8sFx.Service().TCPPorts()).
-					WithPriority(509).
-					WithDestination(azureFx.LoadBalancer().IPv6Addresses()...).
-					Build(),
-
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().TCPPorts()).
-					WithPriority(520).
-					WithDestination(azureFx.LoadBalancer().IPv6Addresses()...).
-					Build(),
-
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{allowedServiceTag}, k8sFx.Service().UDPPorts()).
-					WithPriority(530).
-					WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).
-					Build(),
-
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().UDPPorts()).
-					WithPriority(607).
-					WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).
-					Build(),
-
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, []string{allowedServiceTag}, k8sFx.Service().UDPPorts()).
-					WithPriority(709).
-					WithDestination(azureFx.LoadBalancer().IPv6Addresses()...).
-					Build(),
-
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().UDPPorts()).
-					WithPriority(3000).
-					WithDestination(azureFx.LoadBalancer().IPv6Addresses()...).
-					Build(),
-			}
-		)
-
-		securityGroup := azureFx.SecurityGroup().WithRules(
-			append(append(noiseRules, targetRules...), staleRules...),
-		).Build()
-
-		securityGroupClient.EXPECT().
-			Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
-			Return(securityGroup, nil).
-			Times(1)
-		securityGroupClient.EXPECT().
-			CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any()).
-			DoAndReturn(func(
-				_ context.Context,
-				_, _ string,
-				properties armnetwork.SecurityGroup,
-			) (*armnetwork.SecurityGroup, error) {
-				rules := append(append(noiseRules, targetRules...),
-					azureFx.
-						AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, []int32{6000, 3000}).
-						WithPriority(4001).
-						WithDestination("foo", "bar"). // Should keep foo and bar but clean the rest
-						Build(),
-
-					azureFx.
-						AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, []int32{9000}).
-						WithPriority(4002).
-						WithDestination("baz"). // Should keep baz but clean the rest
-						Build(),
-
-					&armnetwork.SecurityRule{
-						Name: ptr.To("bar"),
-						Properties: &armnetwork.SecurityRulePropertiesFormat{
-							Protocol:                 to.Ptr(armnetwork.SecurityRuleProtocolUDP),
-							Access:                   to.Ptr(armnetwork.SecurityRuleAccessAllow),
-							Direction:                to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-							SourcePortRange:          ptr.To("*"),
-							SourceAddressPrefixes:    to.SliceOfPtrs("bar"),
-							DestinationPortRanges:    to.SliceOfPtrs("5000", "6000"),
-							DestinationAddressPrefix: ptr.To("bar"), // Should keep bar but clean the rest
-							Priority:                 ptr.To(int32(4004)),
-						},
-					},
-				)
-
-				testutil.ExpectExactSecurityRules(t, &properties, rules)
-
-				return nil, nil
-			}).Times(1)
-		loadBalancerClient.EXPECT().
-			Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-			Return(loadBalancer, nil).
-			Times(1)
-		loadBalancerBackendPool.EXPECT().
-			GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
-			Return(
-				azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
-				azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
-			).
-			Times(1)
-
-		_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
-		assert.NoError(t, err)
-	})
-
 	t.Run("update rules - add to related rules", func(t *testing.T) {
 		var (
 			ctrl                    = gomock.NewController(t)
@@ -1621,19 +1481,19 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					azureFx.
 						AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, k8sFx.Service().TCPPorts()).
 						WithPriority(505).
-						WithDestination(append(azureFx.LoadBalancer().IPv4Addresses(), "foo")...). // should add to this rule
+						WithDestination(azureFx.LoadBalancer().IPv4Addresses()...). // should add to this rule
 						Build(),
 
 					azureFx.
 						AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{allowedServiceTag}, k8sFx.Service().UDPPorts()).
 						WithPriority(530).
-						WithDestination(append(azureFx.LoadBalancer().IPv4Addresses(), "bar")...). // should add to this rule
+						WithDestination(azureFx.LoadBalancer().IPv4Addresses()...). // should add to this rule
 						Build(),
 
 					azureFx.
 						AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().TCPPorts()).
 						WithPriority(520).
-						WithDestination(append(azureFx.LoadBalancer().IPv6Addresses(), "baz", "quo")...). // should add to this rule
+						WithDestination(azureFx.LoadBalancer().IPv6Addresses()...). // should add to this rule
 						Build(),
 				)
 
@@ -1698,33 +1558,6 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					WithDestination(append(azureFx.LoadBalancer().IPv6Addresses(), "baz")...). // Should keep baz but clean the rest
 					Build(),
 
-				{
-					Name: ptr.To("foo"),
-					Properties: &armnetwork.SecurityRulePropertiesFormat{
-						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
-						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
-						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-						SourcePortRange:            ptr.To("*"),
-						SourceAddressPrefixes:      to.SliceOfPtrs("foo"),
-						DestinationPortRanges:      to.SliceOfPtrs("4000", "6000"),
-						DestinationAddressPrefixes: to.SliceOfPtrs(azureFx.LoadBalancer().Addresses()...), // Should remove the rule
-						Priority:                   ptr.To(int32(4003)),
-					},
-				},
-				{
-					Name: ptr.To("bar"),
-					Properties: &armnetwork.SecurityRulePropertiesFormat{
-						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
-						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
-						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-						SourcePortRange:            ptr.To("*"),
-						SourceAddressPrefixes:      to.SliceOfPtrs("bar"),
-						DestinationPortRanges:      to.SliceOfPtrs("5000", "6000"),
-						DestinationAddressPrefixes: to.SliceOfPtrs(append(azureFx.LoadBalancer().Addresses(), "bar")...), // Should keep bar but clean the rest
-						Priority:                   ptr.To(int32(4004)),
-					},
-				},
-
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, k8sFx.Service().TCPPorts()).
 					WithPriority(505).
@@ -1774,6 +1607,33 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					WithPriority(3000).
 					WithDestination(azureFx.LoadBalancer().IPv6Addresses()...).
 					Build(),
+
+				{
+					Name: ptr.To("foo"),
+					Properties: &armnetwork.SecurityRulePropertiesFormat{
+						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
+						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
+						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
+						SourcePortRange:            ptr.To("*"),
+						SourceAddressPrefixes:      to.SliceOfPtrs("foo"),
+						DestinationPortRanges:      to.SliceOfPtrs("4000", "6000"),
+						DestinationAddressPrefixes: to.SliceOfPtrs(azureFx.LoadBalancer().Addresses()...),
+						Priority:                   ptr.To(int32(4003)),
+					},
+				},
+				{
+					Name: ptr.To("bar"),
+					Properties: &armnetwork.SecurityRulePropertiesFormat{
+						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
+						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
+						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
+						SourcePortRange:            ptr.To("*"),
+						SourceAddressPrefixes:      to.SliceOfPtrs("bar"),
+						DestinationPortRanges:      to.SliceOfPtrs("5000", "6000"),
+						DestinationAddressPrefixes: to.SliceOfPtrs(append(azureFx.LoadBalancer().Addresses(), "bar")...),
+						Priority:                   ptr.To(int32(4004)),
+					},
+				},
 			}
 		)
 
@@ -1794,46 +1654,21 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			) (*armnetwork.SecurityGroup, error) {
 				rules := append(append(noiseRules, upToDateRules...),
 					azureFx.
-						AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, []int32{6000, 3000}).
-						WithPriority(4001).
-						WithDestination("foo", "bar"). // Should keep foo and bar but clean the rest
-						Build(),
-
-					azureFx.
-						AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, []int32{9000}).
-						WithPriority(4002).
-						WithDestination("baz"). // Should keep baz but clean the rest
-						Build(),
-
-					&armnetwork.SecurityRule{
-						Name: ptr.To("bar"),
-						Properties: &armnetwork.SecurityRulePropertiesFormat{
-							Protocol:                 to.Ptr(armnetwork.SecurityRuleProtocolUDP),
-							Access:                   to.Ptr(armnetwork.SecurityRuleAccessAllow),
-							Direction:                to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-							SourcePortRange:          ptr.To("*"),
-							SourceAddressPrefixes:    to.SliceOfPtrs("bar"),
-							DestinationPortRanges:    to.SliceOfPtrs("5000", "6000"),
-							DestinationAddressPrefix: ptr.To("bar"), // Should keep bar but clean the rest
-							Priority:                 ptr.To(int32(4004)),
-						},
-					},
-					azureFx.
 						AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, k8sFx.Service().TCPPorts()).
 						WithPriority(505).
-						WithDestination(append(azureFx.LoadBalancer().IPv4Addresses(), "foo")...). // should add to this rule
+						WithDestination(azureFx.LoadBalancer().IPv4Addresses()...). // should add to this rule
 						Build(),
 
 					azureFx.
 						AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{allowedServiceTag}, k8sFx.Service().UDPPorts()).
 						WithPriority(530).
-						WithDestination(append(azureFx.LoadBalancer().IPv4Addresses(), "bar")...). // should add to this rule
+						WithDestination(azureFx.LoadBalancer().IPv4Addresses()...). // should add to this rule
 						Build(),
 
 					azureFx.
 						AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().TCPPorts()).
 						WithPriority(520).
-						WithDestination(append(azureFx.LoadBalancer().IPv6Addresses(), "baz", "quo")...). // should add to this rule
+						WithDestination(azureFx.LoadBalancer().IPv6Addresses()...). // should add to this rule
 						Build(),
 				)
 
@@ -2094,14 +1929,22 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
 					loadBalancerClient      = az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
 					loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
-
-					kubeClient      = fake.NewSimpleClientset(&sharedIPSvc, &svc)
-					informerFactory = informers.NewSharedInformerFactory(kubeClient, 0)
-					svcLister       = informerFactory.Core().V1().Services().Lister()
 				)
 				defer ctrl.Finish()
 
-				az.serviceLister = svcLister
+				runtimeObjects := []runtime.Object{
+					&sharedIPSvc, &svc,
+				}
+				runtimeObjects = append(runtimeObjects, makeNodesByIPs(
+					append(
+						azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
+						azureFx.LoadBalancer().BackendPoolIPv6Addresses()...,
+					))...,
+				)
+				kubeClient := fake.NewSimpleClientset(runtimeObjects...)
+				informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
+				az.serviceLister = informerFactory.Core().V1().Services().Lister()
+				az.nodeLister = informerFactory.Core().V1().Nodes().Lister()
 				informerFactory.Start(wait.NeverStop)
 				informerFactory.WaitForCacheSync(wait.NeverStop)
 
@@ -2370,20 +2213,29 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.Name, func(t *testing.T) {
+				t.Parallel()
 				var (
 					ctrl                    = gomock.NewController(t)
 					az                      = GetTestCloud(ctrl)
 					securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
 					loadBalancerClient      = az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
 					loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
-
-					kubeClient      = fake.NewSimpleClientset(&sharedIPSvc, &svc)
-					informerFactory = informers.NewSharedInformerFactory(kubeClient, 0)
-					svcLister       = informerFactory.Core().V1().Services().Lister()
 				)
 				defer ctrl.Finish()
 
-				az.serviceLister = svcLister
+				runtimeObjects := []runtime.Object{
+					&sharedIPSvc, &svc,
+				}
+				runtimeObjects = append(runtimeObjects, makeNodesByIPs(
+					append(
+						azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
+						azureFx.LoadBalancer().BackendPoolIPv6Addresses()...,
+					))...,
+				)
+				kubeClient := fake.NewSimpleClientset(runtimeObjects...)
+				informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
+				az.serviceLister = informerFactory.Core().V1().Services().Lister()
+				az.nodeLister = informerFactory.Core().V1().Nodes().Lister()
 				informerFactory.Start(wait.NeverStop)
 				informerFactory.WaitForCacheSync(wait.NeverStop)
 
@@ -2484,6 +2336,25 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					WithPriority(4095).
 					WithDestination(append(azureFx.LoadBalancer().IPv4Addresses(), "5.5.5.5/32")...).
 					Build(),
+				azureFx.
+					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, k8sFx.Service().TCPPorts()).
+					WithPriority(505).
+					WithDestination("foo"). // should keep it
+					Build(),
+
+				azureFx.
+					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().TCPPorts()).
+					WithPriority(520).
+					WithDestination("baz", "quo"). // should add to this rule
+					Build(),
+
+				azureFx.
+					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{allowedServiceTag}, k8sFx.Service().UDPPorts()).
+					WithPriority(530).
+					WithDestination("bar"). // should add to this rule
+					Build(),
+			}
+			upToDateRules = []*armnetwork.SecurityRule{
 
 				{
 					Name: ptr.To("foo"),
@@ -2512,25 +2383,6 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					},
 				},
 			}
-			upToDateRules = []*armnetwork.SecurityRule{
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, k8sFx.Service().TCPPorts()).
-					WithPriority(505).
-					WithDestination("foo"). // should keep it
-					Build(),
-
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().TCPPorts()).
-					WithPriority(520).
-					WithDestination("baz", "quo"). // should add to this rule
-					Build(),
-
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{allowedServiceTag}, k8sFx.Service().UDPPorts()).
-					WithPriority(530).
-					WithDestination("bar"). // should add to this rule
-					Build(),
-			}
 		)
 
 		securityGroup := azureFx.SecurityGroup().WithRules(
@@ -2548,47 +2400,8 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				_, _ string,
 				properties armnetwork.SecurityGroup,
 			) (*armnetwork.SecurityGroup, error) {
-				rules := append(append(noiseRules, upToDateRules...),
-					azureFx.
-						AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, []int32{6000, 3000}).
-						WithPriority(4001).
-						WithDestination("foo", "bar"). // Should keep foo and bar but clean the rest
-						Build(),
-
-					azureFx.
-						AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, []int32{9000}).
-						WithPriority(4002).
-						WithDestination("baz"). // Should keep baz but clean the rest
-						Build(),
-
-					&armnetwork.SecurityRule{
-						Name: ptr.To("bar"),
-						Properties: &armnetwork.SecurityRulePropertiesFormat{
-							Protocol:                 to.Ptr(armnetwork.SecurityRuleProtocolUDP),
-							Access:                   to.Ptr(armnetwork.SecurityRuleAccessAllow),
-							Direction:                to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-							SourcePortRange:          ptr.To("*"),
-							SourceAddressPrefixes:    to.SliceOfPtrs("bar"),
-							DestinationPortRanges:    to.SliceOfPtrs("5000", "6000"),
-							DestinationAddressPrefix: ptr.To("bar"), // Should keep bar but clean the rest
-							Priority:                 ptr.To(int32(4004)),
-						},
-					},
-
-					azureFx.
-						AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().UDPPorts()).
-						WithPriority(3000).
-						WithDestination("foo"). // should keep foo
-						Build(),
-
-					azureFx.DenyAllSecurityRule(iputil.IPv4).
-						WithPriority(4095).
-						WithDestination("5.5.5.5/32").
-						Build(),
-				)
-
+				rules := append(noiseRules, upToDateRules...)
 				testutil.ExpectExactSecurityRules(t, &properties, rules)
-
 				return nil, nil
 			}).Times(1)
 		loadBalancerClient.EXPECT().
@@ -2639,65 +2452,38 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).
 					WithPriority(507).
-					WithDestination(azureFx.LoadBalancer().IPv4Addresses()...). // should remove the rule
+					WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).
 					Build(),
 
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, []string{allowedServiceTag}, k8sFx.Service().TCPPorts()).
 					WithPriority(509).
-					WithDestination(azureFx.LoadBalancer().IPv6Addresses()...). // should remove the rule
+					WithDestination(azureFx.LoadBalancer().IPv6Addresses()...).
 					Build(),
 
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().UDPPorts()).
 					WithPriority(3000).
-					WithDestination(append(azureFx.LoadBalancer().IPv6Addresses(), "foo")...). // should keep foo
+					WithDestination(append(azureFx.LoadBalancer().IPv6Addresses(), "foo")...).
 					Build(),
 
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, []int32{8000}).
 					WithPriority(4000).
-					WithDestination(azureFx.LoadBalancer().IPv4Addresses()...). // Should remove the rule
+					WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).
 					Build(),
 
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, []int32{6000, 3000}).
 					WithPriority(4001).
-					WithDestination(append(azureFx.LoadBalancer().IPv4Addresses(), "foo", "bar")...). // Should keep foo and bar but clean the rest
+					WithDestination(append(azureFx.LoadBalancer().IPv4Addresses(), "foo", "bar")...).
 					Build(),
 
 				azureFx.
 					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, []int32{9000}).
 					WithPriority(4002).
-					WithDestination(append(azureFx.LoadBalancer().IPv6Addresses(), "baz")...). // Should keep baz but clean the rest
+					WithDestination(append(azureFx.LoadBalancer().IPv6Addresses(), "baz")...).
 					Build(),
-
-				{
-					Name: ptr.To("foo"),
-					Properties: &armnetwork.SecurityRulePropertiesFormat{
-						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
-						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
-						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-						SourcePortRange:            ptr.To("*"),
-						SourceAddressPrefixes:      to.SliceOfPtrs("foo"),
-						DestinationPortRanges:      to.SliceOfPtrs("4000", "6000"),
-						DestinationAddressPrefixes: to.SliceOfPtrs(azureFx.LoadBalancer().Addresses()...), // Should remove the rule
-						Priority:                   ptr.To(int32(4003)),
-					},
-				},
-				{
-					Name: ptr.To("bar"),
-					Properties: &armnetwork.SecurityRulePropertiesFormat{
-						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
-						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
-						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-						SourcePortRange:            ptr.To("*"),
-						SourceAddressPrefixes:      to.SliceOfPtrs("bar"),
-						DestinationPortRanges:      to.SliceOfPtrs("5000", "6000"),
-						DestinationAddressPrefixes: to.SliceOfPtrs(append(azureFx.LoadBalancer().Addresses(), "bar")...), // Should keep bar but clean the rest
-						Priority:                   ptr.To(int32(4004)),
-					},
-				},
 			}
 			upToDateRules = []*armnetwork.SecurityRule{
 				azureFx.
@@ -2735,41 +2521,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				_, _ string,
 				properties armnetwork.SecurityGroup,
 			) (*armnetwork.SecurityGroup, error) {
-				rules := append(append(noiseRules, upToDateRules...),
-					azureFx.
-						AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, []int32{6000, 3000}).
-						WithPriority(4001).
-						WithDestination("foo", "bar"). // Should keep foo and bar but clean the rest
-						Build(),
-
-					azureFx.
-						AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, []int32{9000}).
-						WithPriority(4002).
-						WithDestination("baz"). // Should keep baz but clean the rest
-						Build(),
-
-					&armnetwork.SecurityRule{
-						Name: ptr.To("bar"),
-						Properties: &armnetwork.SecurityRulePropertiesFormat{
-							Protocol:                 to.Ptr(armnetwork.SecurityRuleProtocolUDP),
-							Access:                   to.Ptr(armnetwork.SecurityRuleAccessAllow),
-							Direction:                to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-							SourcePortRange:          ptr.To("*"),
-							SourceAddressPrefixes:    to.SliceOfPtrs("bar"),
-							DestinationPortRanges:    to.SliceOfPtrs("5000", "6000"),
-							DestinationAddressPrefix: ptr.To("bar"), // Should keep bar but clean the rest
-							Priority:                 ptr.To(int32(4004)),
-						},
-					},
-
-					azureFx.
-						AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().UDPPorts()).
-						WithPriority(3000).
-						WithDestination("foo"). // should keep foo
-						Build(),
-				)
-
-				testutil.ExpectExactSecurityRules(t, &properties, rules)
+				testutil.ExpectExactSecurityRules(t, &properties, noiseRules)
 
 				return nil, nil
 			}).Times(1)
@@ -2786,128 +2538,6 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			Times(1)
 
 		_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), false) // deleting
-		assert.NoError(t, err)
-	})
-
-	t.Run("clean rules - when deleting LB and AzureLoadBalancer not found", func(t *testing.T) {
-		var (
-			ctrl                = gomock.NewController(t)
-			az                  = GetTestCloud(ctrl)
-			securityGroupClient = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
-			loadBalancerClient  = az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
-			loadBalancer        = azureFx.LoadBalancer().Build()
-
-			allowedServiceTag = azureFx.ServiceTag()
-			allowedIPv4Ranges = fx.RandomIPv4PrefixStrings(3)
-			allowedIPv6Ranges = fx.RandomIPv6PrefixStrings(3)
-			allowedRanges     = append(allowedIPv4Ranges, allowedIPv6Ranges...)
-			svc               = k8sFx.Service().
-						WithAllowedServiceTags(allowedServiceTag).
-						WithAllowedIPRanges(allowedRanges...).
-						Build()
-		)
-		defer ctrl.Finish()
-
-		var (
-			noiseRules = azureFx.NoiseSecurityRules()
-			staleRules = []*armnetwork.SecurityRule{
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).
-					WithPriority(507).
-					WithDestination(azureFx.LoadBalancer().IPv4Addresses()...). // should remove the rule
-					Build(),
-
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, []string{allowedServiceTag}, k8sFx.Service().TCPPorts()).
-					WithPriority(509).
-					WithDestination(azureFx.LoadBalancer().IPv6Addresses()...). // should remove the rule
-					Build(),
-
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().UDPPorts()).
-					WithPriority(3000).
-					WithDestination(append(azureFx.LoadBalancer().IPv6Addresses(), "foo")...). // should keep foo
-					Build(),
-
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, []int32{8000}).
-					WithPriority(4000).
-					WithDestination(azureFx.LoadBalancer().IPv4Addresses()...). // Should remove the rule
-					Build(),
-
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, []int32{6000, 3000}).
-					WithPriority(4001).
-					WithDestination(append(azureFx.LoadBalancer().IPv4Addresses(), "foo", "bar")...). // Should keep foo and bar but clean the rest
-					Build(),
-
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, []int32{9000}).
-					WithPriority(4002).
-					WithDestination(append(azureFx.LoadBalancer().IPv6Addresses(), "baz")...). // Should keep baz but clean the rest
-					Build(),
-
-				{
-					Name: ptr.To("foo"),
-					Properties: &armnetwork.SecurityRulePropertiesFormat{
-						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolTCP),
-						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
-						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-						SourcePortRange:            ptr.To("*"),
-						SourceAddressPrefixes:      to.SliceOfPtrs("foo"),
-						DestinationPortRanges:      to.SliceOfPtrs("4000", "6000"),
-						DestinationAddressPrefixes: to.SliceOfPtrs(azureFx.LoadBalancer().Addresses()...), // Should remove the rule
-						Priority:                   ptr.To(int32(4003)),
-					},
-				},
-				{
-					Name: ptr.To("bar"),
-					Properties: &armnetwork.SecurityRulePropertiesFormat{
-						Protocol:                   to.Ptr(armnetwork.SecurityRuleProtocolUDP),
-						Access:                     to.Ptr(armnetwork.SecurityRuleAccessAllow),
-						Direction:                  to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-						SourcePortRange:            ptr.To("*"),
-						SourceAddressPrefixes:      to.SliceOfPtrs("bar"),
-						DestinationPortRanges:      to.SliceOfPtrs("5000", "6000"),
-						DestinationAddressPrefixes: to.SliceOfPtrs(append(azureFx.LoadBalancer().Addresses(), "bar")...), // Should keep bar but clean the rest
-						Priority:                   ptr.To(int32(4004)),
-					},
-				},
-			}
-			upToDateRules = []*armnetwork.SecurityRule{
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, k8sFx.Service().TCPPorts()).
-					WithPriority(505).
-					WithDestination("foo"). // should keep it
-					Build(),
-
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().TCPPorts()).
-					WithPriority(520).
-					WithDestination("baz", "quo"). // should add to this rule
-					Build(),
-
-				azureFx.
-					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{allowedServiceTag}, k8sFx.Service().UDPPorts()).
-					WithPriority(530).
-					WithDestination("bar"). // should add to this rule
-					Build(),
-			}
-		)
-		securityGroup := azureFx.SecurityGroup().WithRules(
-			append(append(noiseRules, upToDateRules...), staleRules...),
-		).Build()
-
-		securityGroupClient.EXPECT().
-			Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
-			Return(securityGroup, nil).
-			Times(1)
-		loadBalancerClient.EXPECT().
-			Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
-			Return(loadBalancer, &azcore.ResponseError{StatusCode: http.StatusNotFound}).
-			Times(1)
-
-		_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, nil, false) // deleting
 		assert.NoError(t, err)
 	})
 
