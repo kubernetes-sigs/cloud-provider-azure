@@ -10,7 +10,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v1.2.0
 	github.com/go-git/go-git/v5 v5.16.2
 	github.com/octago/sflags v0.3.1
-	github.com/spf13/pflag v1.0.7
+	github.com/spf13/pflag v1.0.10
 	k8s.io/apimachinery v0.34.0
 	k8s.io/klog v1.0.0
 	k8s.io/utils v0.0.0-20250820121507-0af2bda4dd1d
