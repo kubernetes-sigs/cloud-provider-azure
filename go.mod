@@ -15,10 +15,10 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-logr/logr v1.4.3
 	github.com/google/uuid v1.6.0
-	github.com/prometheus/client_golang v1.23.0
+	github.com/prometheus/client_golang v1.23.2
 	github.com/samber/lo v1.51.0
-	github.com/spf13/cobra v1.9.1
-	github.com/spf13/pflag v1.0.7
+	github.com/spf13/cobra v1.10.1
+	github.com/spf13/pflag v1.0.9
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/otel v1.38.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.60.0
@@ -27,8 +27,8 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.38.0
 	go.opentelemetry.io/otel/trace v1.38.0
 	go.uber.org/mock v0.6.0
-	golang.org/x/sync v0.16.0
-	golang.org/x/sys v0.35.0
+	golang.org/x/sync v0.17.0
+	golang.org/x/sys v0.36.0
 	golang.org/x/text v0.28.0
 	k8s.io/api v0.34.0
 	k8s.io/apimachinery v0.34.0
@@ -42,8 +42,8 @@ require (
 	k8s.io/kubelet v0.34.0
 	k8s.io/utils v0.0.0-20250820121507-0af2bda4dd1d
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.9.2
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.8.3
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.8.4
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.8.4
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.8.5
 	sigs.k8s.io/yaml v1.6.0
 )
 
@@ -99,7 +99,7 @@ require (
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
-	github.com/prometheus/common v0.65.0 // indirect
+	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/otlptranslator v0.0.2 // indirect
 	github.com/prometheus/procfs v0.17.0 // indirect
 	github.com/stoewer/go-strcase v1.3.1 // indirect
