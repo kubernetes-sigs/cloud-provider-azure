@@ -14,7 +14,7 @@ cloudControllerManager:
   # controllerStartInterval: "2m"
   # enableDynamicReloading: "true"
   # http2MaxStreamsPerConnection: "47"
-  imageRepository: "mcr.microsoft.com/oss/kubernetes"
+  #imageRepository: "mcr.microsoft.com/oss/v2/kubernetes"
   imageName: "azure-cloud-controller-manager"
   #imageTag: "v1.23.11"
   imagePullPolicy: "IfNotPresent"
@@ -54,7 +54,7 @@ cloudControllerManager:
   federatedTokenPath: "/var/run/secrets/azure/tokens"
 cloudNodeManager:
   enabled: true
-  imageRepository: "mcr.microsoft.com/oss/kubernetes"
+  #imageRepository: "mcr.microsoft.com/oss/v2/kubernetes"
   imageName: "azure-cloud-node-manager"
   #imageTag: "v1.23.11"
   imagePullPolicy: "IfNotPresent"
