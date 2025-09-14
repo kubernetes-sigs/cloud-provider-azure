@@ -4,14 +4,14 @@ module sigs.k8s.io/cloud-provider-azure/kubetest2-aks
 go 1.24.6
 
 require (
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.19.0
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.19.1
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.11.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v2 v2.4.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v1.2.0
 	github.com/go-git/go-git/v5 v5.16.2
 	github.com/octago/sflags v0.3.1
 	github.com/spf13/pflag v1.0.10
-	k8s.io/apimachinery v0.34.0
+	k8s.io/apimachinery v0.34.1
 	k8s.io/klog v1.0.0
 	k8s.io/utils v0.0.0-20250820121507-0af2bda4dd1d
 	sigs.k8s.io/kubetest2 v0.0.0-20250820195306-f71fd4c1cc1a
