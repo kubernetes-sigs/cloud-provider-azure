@@ -65,9 +65,20 @@ type K8s_State struct {
 	Nodes    map[string]Node
 }
 
+type AddPodEvent struct {
+	Key string // <Pod Namespace/Pod Name> used in podLister
+}
+
+type DeletePodEvent struct { // Location, Address and Service specifically used since the pod is already deleted, so we cannot get this info from the podLister
+	Location string
+	Address  string
+	Service  string
+}
+
 type PodCrudEvent struct {
-	Key       string // <Pod Namespace/Pod Name>
-	EventType string // "Add", "Update", or "Delete"
+	DeletePodEvent DeletePodEvent
+	AddPodEvent    AddPodEvent
+	EventType      string // "Add" or "Delete"; Update is represented as a Delete followed by an Add
 }
 
 // DiffTracker is the main struct that contains the state of the K8s and NRP services

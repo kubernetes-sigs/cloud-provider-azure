@@ -338,11 +338,10 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 
 				key := strings.ToLower(fmt.Sprintf("%s/%s", newES.Namespace, svcName))
 				si, found := az.getLocalServiceInfo(key)
-				if !found {
+				if !found && !az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
 					klog.V(4).Infof("EndpointSlice %s/%s belongs to service %s, but the service is not a local service, or has not finished the initial reconciliation loop. Skip updating load balancer backend pool", newES.Namespace, newES.Name, key)
 					return
 				}
-				lbName, ipFamily := si.lbName, si.ipFamily
 
 				var previousIPs, currentIPs, previousNodeNames, currentNodeNames []string
 				if previousES != nil {
@@ -365,6 +364,7 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 				}
 
 				if az.backendPoolUpdater != nil {
+					lbName, ipFamily := si.lbName, si.ipFamily
 					var bpNames []string
 					bpNameIPv4 := getLocalServiceBackendPoolName(key, false)
 					bpNameIPv6 := getLocalServiceBackendPoolName(key, true)

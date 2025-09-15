@@ -11,12 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
-
 	v1 "k8s.io/api/core/v1"
 	discovery_v1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -60,13 +58,21 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 	klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process BEGIN: location and NRP service batch updater started\n")
 
 	serviceLoadBalancerList := updater.az.diffTracker.GetSyncLoadBalancerServices()
+	serviceNATGatewayList := updater.az.diffTracker.GetSyncNRPNATGateways()
+
 	klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: serviceLoadBalancerList:\n")
 	logObject(serviceLoadBalancerList)
+	klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: serviceNATGatewayList:\n")
+	logObject(serviceNATGatewayList)
 	// Add services
-	if serviceLoadBalancerList.Additions.Len() > 0 {
-		createServicesRequestDTO := difftracker.MapLoadBalancerUpdatesToServicesDataDTO(
+	if serviceLoadBalancerList.Additions.Len() > 0 || serviceNATGatewayList.Additions.Len() > 0 {
+		createServicesRequestDTO := difftracker.MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
 			difftracker.SyncServicesReturnType{
 				Additions: serviceLoadBalancerList.Additions,
+				Removals:  nil,
+			},
+			difftracker.SyncServicesReturnType{
+				Additions: serviceNATGatewayList.Additions,
 				Removals:  nil,
 			},
 			updater.az.SubscriptionID,
@@ -77,12 +83,22 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 		klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: createServicesResponseDTO:\n")
 		logObject(createServicesResponseDTO)
 		if createServicesResponseDTO == nil {
-			updater.az.diffTracker.UpdateNRPLoadBalancers(
-				difftracker.SyncServicesReturnType{
-					Additions: serviceLoadBalancerList.Additions,
-					Removals:  nil,
-				},
-			)
+			if serviceLoadBalancerList.Additions.Len() > 0 {
+				updater.az.diffTracker.UpdateNRPLoadBalancers(
+					difftracker.SyncServicesReturnType{
+						Additions: serviceLoadBalancerList.Additions,
+						Removals:  nil,
+					},
+				)
+			}
+			if serviceNATGatewayList.Additions.Len() > 0 {
+				updater.az.diffTracker.UpdateNRPNATGateways(
+					difftracker.SyncServicesReturnType{
+						Additions: serviceNATGatewayList.Additions,
+						Removals:  nil,
+					},
+				)
+			}
 		} else {
 			klog.Errorf("locationAndNRPServiceBatchUpdater.process: failed to create services: %+v\n", createServicesResponseDTO)
 			return
@@ -156,24 +172,39 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 	}
 
 	// Remove services
-	if serviceLoadBalancerList.Removals.Len() > 0 {
-		removeServicesRequestDTO := difftracker.MapLoadBalancerUpdatesToServicesDataDTO(
+	if serviceLoadBalancerList.Removals.Len() > 0 || serviceNATGatewayList.Removals.Len() > 0 {
+		removeServicesRequestDTO := difftracker.MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
 			difftracker.SyncServicesReturnType{
 				Additions: nil,
 				Removals:  serviceLoadBalancerList.Removals,
 			},
+			difftracker.SyncServicesReturnType{
+				Additions: nil,
+				Removals:  serviceNATGatewayList.Removals,
+			},
 			updater.az.SubscriptionID,
 			updater.az.ResourceGroup)
-		klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: removeServicesRequestDTO: %+v\n", removeServicesRequestDTO)
+		klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: removeServicesRequestDTO:\n")
+		logObject(removeServicesRequestDTO)
 		// TODO (enechitoaia): discuss about ServiceGatewayName (VnetName?)
 		removeServicesResponseDTO := NRPAPIClientUpdateNRPServices(ctx, removeServicesRequestDTO, updater.az.SubscriptionID, updater.az.ResourceGroup)
-		klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: removeServicesResponseDTO: %+v\n", removeServicesResponseDTO)
+		klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: removeServicesResponseDTO:\n")
+		logObject(removeServicesResponseDTO)
 		if removeServicesResponseDTO == nil {
-			updater.az.diffTracker.UpdateNRPLoadBalancers(
-				difftracker.SyncServicesReturnType{
-					Additions: nil,
-					Removals:  serviceLoadBalancerList.Removals,
-				})
+			if serviceLoadBalancerList.Removals.Len() > 0 {
+				updater.az.diffTracker.UpdateNRPLoadBalancers(
+					difftracker.SyncServicesReturnType{
+						Additions: nil,
+						Removals:  serviceLoadBalancerList.Removals,
+					})
+			}
+			if serviceNATGatewayList.Removals.Len() > 0 {
+				updater.az.diffTracker.UpdateNRPNATGateways(
+					difftracker.SyncServicesReturnType{
+						Additions: nil,
+						Removals:  serviceNATGatewayList.Removals,
+					})
+			}
 		} else {
 			klog.Errorf("locationAndNRPServiceBatchUpdater.process: failed to remove services: %v\n", removeServicesResponseDTO)
 			return
@@ -211,6 +242,7 @@ func NRPAPIClientUpdateNRPLocations(
 	subscriptionId string,
 	resourceGroupName string,
 ) error {
+	return nil // TODO (enechitoaia): re-enable when NRP bypass is ready
 	klog.V(2).Infof("NRPAPIClientUpdateNRPLocations: request DTO: %+v", locationDataRequestDTO)
 
 	// Marshal the DTO to JSON
@@ -248,6 +280,7 @@ func NRPAPIClientUpdateNRPLocations(
 }
 
 func NRPAPIClientUpdateNRPServices(ctx context.Context, createServicesRequestDTO difftracker.ServicesDataDTO, subscriptionId string, resourceGroupName string) error {
+	return nil // TODO (enechitoaia): re-enable when NRP bypass is ready
 	klog.V(2).Infof("NRPAPIClientUpdateNRPServices: request DTO: %+v", createServicesRequestDTO)
 
 	// Marshal the DTO to JSON
@@ -305,7 +338,107 @@ func (updater *locationAndNRPServiceBatchUpdater) removeOperation(name string) {
 	return
 }
 
-func (az *Cloud) setUpPodInformerForEgress() {
+func (az *Cloud) podInformerAddPod(pod *v1.Pod) {
+	klog.Infof("CLB-ENECHITOAIA-Pod %s/%s has been added\n", pod.Namespace, pod.Name)
+	if pod.Labels == nil || pod.Labels[consts.PodLabelServiceEgressGateway] == "" {
+		klog.Errorf("Pod %s/%s has no labels or staticGatewayConfiguration label. Cannot process add event.",
+			pod.Namespace, pod.Name)
+		return
+	}
+	// logObject(pod)
+	if pod.Status.HostIP == "" || pod.Status.PodIP == "" {
+		klog.Errorf("Pod %s/%s has no HostIP or PodIP. Cannot process add event.",
+			pod.Namespace, pod.Name)
+		return
+	}
+	klog.Infof("CLB-ENECHITOAIA- Pod %s/%s has Location: %s, PodIP: %s\n", pod.Namespace, pod.Name, pod.Status.HostIP, pod.Status.PodIP)
+	staticGatewayConfigurationName := pod.Labels[consts.PodLabelServiceEgressGateway]
+	klog.Infof("CLB-ENECHITOAIA-Pod %s/%s has static gateway configuration: %s", pod.Namespace, pod.Name, staticGatewayConfigurationName)
+	_, ok := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(staticGatewayConfigurationName)
+	if ok {
+		klog.Infof("Pod %s/%s has static gateway configuration annotation. Found in localServiceNameToNRPServiceMap.",
+			pod.Namespace, pod.Name)
+		az.diffTracker.UpdateK8sPod(
+			difftracker.UpdatePodInputType{
+				PodOperation:           difftracker.ADD,
+				PublicOutboundIdentity: staticGatewayConfigurationName,
+				Location:               pod.Status.HostIP,
+				Address:                pod.Status.PodIP,
+			},
+		)
+		az.TriggerLocationAndNRPServiceBatchUpdate()
+	} else {
+		klog.Infof("Pod %s/%s has static gateway configuration annotation. Not found in localServiceNameToNRPServiceMap.",
+			pod.Namespace, pod.Name)
+		key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(pod)
+		if err != nil {
+			klog.Errorf("Failed to get key for pod %s/%s: %v", pod.Namespace, pod.Name, err)
+			return
+		}
+		az.diffTracker.PodEgressQueue.Add(difftracker.PodCrudEvent{
+			AddPodEvent: difftracker.AddPodEvent{
+				Key: key,
+			},
+			EventType: "Add",
+		})
+	}
+}
+
+func (az *Cloud) podInformerRemovePod(pod *v1.Pod) {
+	klog.Infof("CLB-ENECHITOAIA-Pod %s/%s has been deleted\n", pod.Namespace, pod.Name)
+	if pod.Labels == nil || pod.Labels[consts.PodLabelServiceEgressGateway] == "" {
+		klog.Errorf("Pod %s/%s has no labels. Cannot process delete event.",
+			pod.Namespace, pod.Name)
+		return
+	}
+
+	staticGatewayConfigurationName := pod.Labels[consts.PodLabelServiceEgressGateway]
+	counter, ok := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(staticGatewayConfigurationName)
+	klog.Infof("CLB-ENECHITOAIA-Pod %s/%s has static gateway configuration: %s", pod.Namespace, pod.Name, staticGatewayConfigurationName)
+	klog.Infof("CLB-ENECHITOAIA-Pod %s/%s has Location: %s, PodIP: %s\n", pod.Namespace, pod.Name, pod.Status.HostIP, pod.Status.PodIP)
+	// logObject(pod)
+	if ok {
+		if counter.(int) > 1 {
+			az.diffTracker.UpdateK8sPod(
+				difftracker.UpdatePodInputType{
+					PodOperation:           difftracker.REMOVE,
+					PublicOutboundIdentity: staticGatewayConfigurationName,
+					Location:               pod.Status.HostIP,
+					Address:                pod.Status.PodIP,
+				},
+			)
+			az.TriggerLocationAndNRPServiceBatchUpdate()
+		} else {
+			az.diffTracker.PodEgressQueue.Add(difftracker.PodCrudEvent{
+				DeletePodEvent: difftracker.DeletePodEvent{
+					Location: pod.Status.HostIP,
+					Address:  pod.Status.PodIP,
+					Service:  staticGatewayConfigurationName,
+				},
+				EventType: "Delete",
+			})
+
+			az.diffTracker.UpdateK8sEgress(difftracker.UpdateK8sResource{
+				Operation: difftracker.REMOVE,
+				ID:        staticGatewayConfigurationName,
+			})
+			az.diffTracker.UpdateK8sPod(difftracker.UpdatePodInputType{
+				PodOperation:           difftracker.REMOVE,
+				PublicOutboundIdentity: staticGatewayConfigurationName,
+				Location:               pod.Status.HostIP,
+				Address:                pod.Status.PodIP,
+			})
+			az.TriggerLocationAndNRPServiceBatchUpdate()
+		}
+	} else {
+		// error
+		klog.Errorf("Pod %s/%s has static gateway configuration %s, but it is not found in localServiceNameToNRPServiceMap. Cannot decrement its counter.",
+			pod.Namespace, pod.Name, staticGatewayConfigurationName)
+	}
+}
+
+func (az *Cloud) setUpPodInformerForEgress(informerFactory informers.SharedInformerFactory) {
+	klog.Infof("CLB-ENECHITOAIA-setUpPodInformerForEgress: setting up pod informer for egress with label selector: %s\n", consts.PodLabelServiceEgressGateway)
 	podInformerFactory := informers.NewSharedInformerFactoryWithOptions(
 		az.KubeClient,
 		ResyncPeriod(1*time.Second)(),
@@ -313,52 +446,21 @@ func (az *Cloud) setUpPodInformerForEgress() {
 			options.LabelSelector = consts.PodLabelServiceEgressGateway
 		}),
 	)
-
-	az.podLister = podInformerFactory.Core().V1().Pods().Lister()
-
-	podInformer := podInformerFactory.Core().V1().Pods()
-	_, _ = podInformer.Informer().AddEventHandler(
+	podInformer := podInformerFactory.Core().V1().Pods().Informer()
+	klog.Infof("podInformer: %v\n", podInformer)
+	_, err := podInformer.AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				pod := obj.(*v1.Pod)
-
-				if pod.Labels == nil || pod.Labels[consts.PodLabelServiceEgressGateway] == "" {
-					klog.Errorf("Pod %s/%s has no labels or staticGatewayConfiguration label. Cannot process add event.",
-						pod.Namespace, pod.Name)
-					return
-				}
-
-				staticGatewayConfigurationName := pod.Labels[consts.PodLabelServiceEgressGateway]
-				_, ok := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(staticGatewayConfigurationName)
-				if ok {
-					klog.Infof("Pod %s/%s has static gateway configuration annotation. Found in localServiceNameToNRPServiceMap.",
-						pod.Namespace, pod.Name)
-					az.diffTracker.UpdateK8sPod(
-						difftracker.UpdatePodInputType{
-							PodOperation:           difftracker.ADD,
-							PublicOutboundIdentity: staticGatewayConfigurationName,
-							Location:               pod.Status.HostIP,
-							Address:                pod.Status.PodIP,
-						},
-					)
-					az.TriggerLocationAndNRPServiceBatchUpdate()
-				} else {
-					klog.Infof("Pod %s/%s has static gateway configuration annotation. Not found in localServiceNameToNRPServiceMap.",
-						pod.Namespace, pod.Name)
-					key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-					if err != nil {
-						klog.Errorf("Failed to get key for pod %s/%s: %v", pod.Namespace, pod.Name, err)
-						return
-					}
-					az.diffTracker.PodEgressQueue.Add(difftracker.PodCrudEvent{
-						Key:       key,
-						EventType: "Add",
-					})
-				}
+				az.podInformerAddPod(pod)
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
 				oldPod := oldObj.(*v1.Pod)
 				newPod := newObj.(*v1.Pod)
+				klog.Infof("CLB-ENECHITOAIA-Pod %s/%s has been updated\n", newPod.Namespace, newPod.Name)
+				// logObject(oldObj)
+				// logObject(newObj)
+
 				var (
 					prevEgressGatewayName = ""
 					currEgressGatewayName = ""
@@ -370,124 +472,48 @@ func (az *Cloud) setUpPodInformerForEgress() {
 					currEgressGatewayName = newPod.Labels[consts.PodLabelServiceEgressGateway]
 				}
 
+				podJustCompletedNodeIPAndPodIPInitialization := (oldPod.Status.HostIP == "" || oldPod.Status.PodIP == "") && (newPod.Status.HostIP != "" && newPod.Status.PodIP != "")
+				if currEgressGatewayName != "" && podJustCompletedNodeIPAndPodIPInitialization {
+					klog.Infof("CLB-ENECHITOAIA-Pod %s/%s has just completed NodeIP and PodIP initialization. Treating as an Add event.",
+						newPod.Namespace, newPod.Name)
+					az.podInformerAddPod(newPod)
+					return
+				}
+
 				if prevEgressGatewayName == currEgressGatewayName {
 					klog.Infof("Pod %s/%s has no change in static gateway configuration. No action needed.",
 						newPod.Namespace, newPod.Name)
 					return
 				}
 
+				klog.Infof("CLB-ENECHITOAIA-Pod %s/%s has changed static gateway configuration from %s to %s",
+					newPod.Namespace, newPod.Name, prevEgressGatewayName, currEgressGatewayName)
 				if prevEgressGatewayName != "" {
-					counter, ok := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(prevEgressGatewayName)
-					if ok {
-						if counter.(int) > 1 {
-							az.diffTracker.UpdateK8sPod(
-								difftracker.UpdatePodInputType{
-									PodOperation:           difftracker.REMOVE,
-									PublicOutboundIdentity: prevEgressGatewayName,
-									Location:               oldPod.Status.HostIP,
-									Address:                oldPod.Status.PodIP,
-								},
-							)
-							az.TriggerLocationAndNRPServiceBatchUpdate()
-						} else {
-							key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(oldPod)
-							if err != nil {
-								klog.Errorf("Failed to get key for pod %s/%s: %v", oldPod.Namespace, oldPod.Name, err)
-								return
-							}
-							az.diffTracker.PodEgressQueue.Add(difftracker.PodCrudEvent{
-								Key:       key,
-								EventType: "Delete",
-							})
-						}
-					} else {
-						// error
-						klog.Errorf("Pod %s/%s has static gateway configuration %s, but it is not found in localServiceNameToNRPServiceMap. Cannot decrement its counter.",
-							oldPod.Namespace, oldPod.Name, prevEgressGatewayName)
-						return
-					}
+					az.podInformerRemovePod(oldPod)
 				}
 
 				if currEgressGatewayName != "" {
-					_, ok := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(currEgressGatewayName)
-					if ok {
-						klog.Infof("Pod %s/%s has static gateway configuration annotation. Found in localServiceNameToNRPServiceMap.",
-							newPod.Namespace, newPod.Name)
-						az.diffTracker.UpdateK8sPod(
-							difftracker.UpdatePodInputType{
-								PodOperation:           difftracker.ADD,
-								PublicOutboundIdentity: currEgressGatewayName,
-								Location:               newPod.Status.HostIP,
-								Address:                newPod.Status.PodIP,
-							},
-						)
-						az.TriggerLocationAndNRPServiceBatchUpdate()
-					} else {
-						klog.Infof("Pod %s/%s has static gateway configuration annotation. Not found in localServiceNameToNRPServiceMap.",
-							newPod.Namespace, newPod.Name)
-						key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(newPod)
-						if err != nil {
-							klog.Errorf("Failed to get key for pod %s/%s: %v", newPod.Namespace, newPod.Name, err)
-							return
-						}
-						az.diffTracker.PodEgressQueue.Add(difftracker.PodCrudEvent{
-							Key:       key,
-							EventType: "Add",
-						})
-					}
+					az.podInformerAddPod(newPod)
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
 				pod := obj.(*v1.Pod)
-				if pod.Labels == nil || pod.Labels[consts.PodLabelServiceEgressGateway] == "" {
-					klog.Errorf("Pod %s/%s has no labels. Cannot process delete event.",
-						pod.Namespace, pod.Name)
-					return
-				}
-
-				staticGatewayConfigurationName := pod.Labels[consts.PodLabelServiceEgressGateway]
-				counter, ok := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(staticGatewayConfigurationName)
-				if ok {
-					if counter.(int) > 1 {
-						az.diffTracker.UpdateK8sPod(
-							difftracker.UpdatePodInputType{
-								PodOperation:           difftracker.REMOVE,
-								PublicOutboundIdentity: staticGatewayConfigurationName,
-								Location:               pod.Status.HostIP,
-								Address:                pod.Status.PodIP,
-							},
-						)
-						az.TriggerLocationAndNRPServiceBatchUpdate()
-					} else {
-						key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(pod)
-						if err != nil {
-							klog.Errorf("Failed to get key for pod %s/%s: %v", pod.Namespace, pod.Name, err)
-							return
-						}
-						az.diffTracker.PodEgressQueue.Add(difftracker.PodCrudEvent{
-							Key:       key,
-							EventType: "Delete",
-						})
-
-						az.diffTracker.UpdateK8sEgress(difftracker.UpdateK8sResource{
-							Operation: difftracker.REMOVE,
-							ID:        staticGatewayConfigurationName,
-						})
-						az.diffTracker.UpdateK8sPod(difftracker.UpdatePodInputType{
-							PodOperation:           difftracker.REMOVE,
-							PublicOutboundIdentity: staticGatewayConfigurationName,
-							Location:               pod.Status.HostIP,
-							Address:                pod.Status.PodIP,
-						})
-						az.TriggerLocationAndNRPServiceBatchUpdate()
-					}
-				} else {
-					// error
-					klog.Errorf("Pod %s/%s has static gateway configuration %s, but it is not found in localServiceNameToNRPServiceMap. Cannot decrement its counter.",
-						pod.Namespace, pod.Name, staticGatewayConfigurationName)
-				}
+				az.podInformerRemovePod(pod)
 			},
 		})
+	if err != nil {
+		klog.Errorf("CLB-ENECHITOAIA-setUpPodInformerForEgress: failed to add event handlers to pod informer: %v\n", err)
+		return
+	} else {
+		klog.Infof("CLB-ENECHITOAIA-setUpPodInformerForEgress: successfully added event handlers to pod informer\n")
+	}
+
+	az.podLister = podInformerFactory.Core().V1().Pods().Lister() // TODO (move it)
+	klog.Infof("az.podLister: %v\n", az.podLister)
+	klog.Infof("CLB-ENECHITOAIA-setUpPodInformerForEgress: starting pod informer factory\n")
+	podInformerFactory.Start(wait.NeverStop)
+	podInformerFactory.WaitForCacheSync(wait.NeverStop)
+	klog.Infof("CLB-ENECHITOAIA-setUpPodInformerForEgress: end of setUpPodInformerForEgress\n")
 }
 
 // ResyncPeriod returns a function that generates a randomized resync duration
@@ -535,30 +561,37 @@ func (updater *podEgressResourceUpdater) process(ctx context.Context) {
 
 		event := item
 
-		klog.Infof("Processing event: %s for pod: %s", event.EventType, event.Key)
-
-		namespace, name, err := cache.SplitMetaNamespaceKey(event.Key)
-		if err != nil {
-			klog.Errorf("Failed to split key %s: %v", event.Key, err)
-			updater.az.diffTracker.PodEgressQueue.Done(item)
-			continue
-		}
-
-		pod, err := updater.az.podLister.Pods(namespace).Get(name)
-		if err != nil {
-			klog.Errorf("Pod %s/%s not found, skipping event processing: %v", namespace, name, err)
-			updater.az.diffTracker.PodEgressQueue.Done(item)
-			continue
-		}
-
-		location := pod.Status.HostIP
-		address := pod.Status.PodIP
-		service := pod.Labels[consts.PodLabelServiceEgressGateway]
-
 		switch event.EventType {
 		case "Add":
+			eventData := event.AddPodEvent
+			klog.Infof("Processing event: %s for pod: %s", event.EventType, eventData.Key)
+
+			namespace, name, err := cache.SplitMetaNamespaceKey(eventData.Key)
+			if err != nil {
+				klog.Errorf("Failed to split key %s: %v", eventData.Key, err)
+				updater.az.diffTracker.PodEgressQueue.Done(item)
+				continue
+			}
+
+			pod, err := updater.az.podLister.Pods(namespace).Get(name)
+			if err != nil {
+				klog.Errorf("Pod %s/%s not found, skipping event processing: %v", namespace, name, err)
+				updater.az.diffTracker.PodEgressQueue.Done(item)
+				continue
+			}
+
+			location := pod.Status.HostIP
+			address := pod.Status.PodIP
+			service := pod.Labels[consts.PodLabelServiceEgressGateway]
+			// TBD(enechitoaia): Handle any future pod annotations here
+
+			klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: Pod %s/%s - Location: %s, Address: %s, Service: %s",
+				namespace, name, location, address, service)
+
 			_, ok := updater.az.diffTracker.LocalServiceNameToNRPServiceMap.Load(service)
 			if ok {
+				klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: Pod %s/%s service %s already exists in localServiceNameToNRPServiceMap",
+					namespace, name, service)
 				updater.az.diffTracker.UpdateK8sPod(difftracker.UpdatePodInputType{
 					PodOperation:           difftracker.ADD,
 					PublicOutboundIdentity: service,
@@ -567,39 +600,45 @@ func (updater *podEgressResourceUpdater) process(ctx context.Context) {
 				})
 				updater.az.TriggerLocationAndNRPServiceBatchUpdate()
 			} else {
-				pipResource := armnetwork.PublicIPAddress{
-					ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
-						updater.az.SubscriptionID, updater.az.ResourceGroup, service)),
-					SKU: &armnetwork.PublicIPAddressSKU{
-						Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandard),
-					},
-					Location: to.Ptr(updater.az.Location),
-					Properties: &armnetwork.PublicIPAddressPropertiesFormat{ // TODO (enechitoaia): What properties should we use for the Public IP
-						PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
-					},
-				}
-				updater.az.CreateOrUpdatePIPOutbound(&pipResource)
-
-				natGatewayResource := armnetwork.NatGateway{
-					ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/natGateways/%s",
-						updater.az.SubscriptionID, updater.az.ResourceGroup, service)),
-					SKU: &armnetwork.NatGatewaySKU{
-						Name: to.Ptr(armnetwork.NatGatewaySKUNameStandardV2)},
-					Location: to.Ptr(updater.az.Location),
-					Properties: &armnetwork.NatGatewayPropertiesFormat{ // TODO (enechitoaia): What properties should we use for the Nat Gateway
-						PublicIPAddresses: []*armnetwork.SubResource{
-							{
-								ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
-									updater.az.SubscriptionID, updater.az.ResourceGroup, service)),
-							},
-						},
-					},
-				}
-				updater.az.createOrUpdateNatGateway(ctx, updater.az.ResourceGroup, natGatewayResource)
+				klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: Pod %s/%s service %s does not exist in localServiceNameToNRPServiceMap. Creating resources.",
+					namespace, name, service)
+				klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: Creating Public IP %s in resource group %s", service, updater.az.ResourceGroup)
+				// pipResource := armnetwork.PublicIPAddress{
+				// 	ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
+				// 		updater.az.SubscriptionID, updater.az.ResourceGroup, service)),
+				// 	SKU: &armnetwork.PublicIPAddressSKU{
+				// 		Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandard),
+				// 	},
+				// 	Location: to.Ptr(updater.az.Location),
+				// 	Properties: &armnetwork.PublicIPAddressPropertiesFormat{ // TODO (enechitoaia): What properties should we use for the Public IP
+				// 		PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
+				// 	},
+				// }
+				// updater.az.CreateOrUpdatePIPOutbound(&pipResource)
+				klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: Creating NAT Gateway %s in resource group %s", service, updater.az.ResourceGroup)
+				// natGatewayResource := armnetwork.NatGateway{
+				// 	ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/natGateways/%s",
+				// 		updater.az.SubscriptionID, updater.az.ResourceGroup, service)),
+				// 	SKU: &armnetwork.NatGatewaySKU{
+				// 		Name: to.Ptr(armnetwork.NatGatewaySKUNameStandardV2)},
+				// 	Location: to.Ptr(updater.az.Location),
+				// 	Properties: &armnetwork.NatGatewayPropertiesFormat{ // TODO (enechitoaia): What properties should we use for the Nat Gateway
+				// 		PublicIPAddresses: []*armnetwork.SubResource{
+				// 			{
+				// 				ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
+				// 					updater.az.SubscriptionID, updater.az.ResourceGroup, service)),
+				// 			},
+				// 		},
+				// 	},
+				// }
+				// updater.az.createOrUpdateNatGateway(ctx, updater.az.ResourceGroup, natGatewayResource)
+				// CALL NRP API TO CREATE THE SERVICE
 				updater.az.diffTracker.UpdateK8sEgress(difftracker.UpdateK8sResource{
 					Operation: difftracker.ADD,
 					ID:        service,
 				})
+
+				// createOrUpdateService(service, natGatewayResource.ID)
 				updater.az.diffTracker.UpdateK8sPod(difftracker.UpdatePodInputType{
 					PodOperation:           difftracker.ADD,
 					PublicOutboundIdentity: service,
@@ -607,9 +646,17 @@ func (updater *podEgressResourceUpdater) process(ctx context.Context) {
 					Address:                address,
 				})
 				updater.az.TriggerLocationAndNRPServiceBatchUpdate()
+				klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: successfully added pod %s/%s for service %s", namespace, name, service)
 			}
 		case "Delete":
-			// WIP(enechitoaia): 	createOrUpdateService(Service, null)
+			eventData := event.DeletePodEvent
+
+			location := eventData.Location
+			address := eventData.Address
+			service := eventData.Service
+
+			klog.Infof("Processing event: %s, pod %s/%s for service %s", event.EventType, location, address, service)
+
 			removeNATGatewayRequestDTO := difftracker.MapNATGatewayUpdatesToServicesDataDTO(
 				difftracker.SyncServicesReturnType{
 					Additions: nil,
@@ -618,28 +665,33 @@ func (updater *podEgressResourceUpdater) process(ctx context.Context) {
 				updater.az.SubscriptionID,
 				updater.az.ResourceGroup,
 			)
+			klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: removeNATGatewayRequestDTO:\n")
+			logObject(removeNATGatewayRequestDTO)
 			err := NRPAPIClientUpdateNRPServices(ctx, removeNATGatewayRequestDTO, updater.az.SubscriptionID, updater.az.ResourceGroup)
 			klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: removeNATGatewayResponseDTO:\n")
-
 			if err == nil {
 				klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: removeNATGatewayResponseDTO is nil")
+				klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: delete NAT Gateway %s in resource group %s", service, updater.az.ResourceGroup)
+				// updater.az.deleteNatGateway(ctx, updater.az.ResourceGroup, service)
+				klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: delete Public IP %s in resource group %s", service, updater.az.ResourceGroup)
+				// updater.az.DeletePublicIPOutbound(service)
 				updater.az.diffTracker.UpdateK8sEgress(difftracker.UpdateK8sResource{
 					Operation: difftracker.REMOVE,
 					ID:        service,
 				})
-				updater.az.deleteNatGateway(ctx, updater.az.ResourceGroup, service)
-				updater.az.DeletePublicIPOutbound(service)
 				updater.az.diffTracker.UpdateK8sPod(difftracker.UpdatePodInputType{
 					PodOperation:           difftracker.REMOVE,
 					PublicOutboundIdentity: service,
 					Location:               location,
 					Address:                address,
 				})
+				updater.az.TriggerLocationAndNRPServiceBatchUpdate()
 			}
-		default:
-			klog.Warningf("Unknown event type: %s for pod: %s", event.EventType, event.Key)
-		}
+			klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: successfully deleted pod %s/%s for service %s", location, address, service)
 
+		default:
+			klog.Warningf("Unknown event type: %s", event.EventType)
+		}
 		updater.az.diffTracker.PodEgressQueue.Done(item)
 	}
 }

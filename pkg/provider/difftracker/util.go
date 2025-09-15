@@ -409,3 +409,57 @@ func MapNATGatewayUpdatesToServicesDataDTO(natGatewayUpdates SyncServicesReturnT
 	}
 	return ServicesDataDTO
 }
+
+func MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(loadBalancerUpdates SyncServicesReturnType, natGatewayUpdates SyncServicesReturnType, subscriptionID string, resourceGroup string) ServicesDataDTO {
+	var ServicesDataDTO ServicesDataDTO
+	ServicesDataDTO.Action = PartialUpdate
+	ServicesDataDTO.Services = []ServiceDTO{}
+	for _, service := range loadBalancerUpdates.Additions.UnsortedList() {
+		serviceDTO := ServiceDTO{
+			Service:     service,
+			ServiceType: Inbound,
+			LoadBalancerBackendPools: []LoadBalancerBackendPoolDTO{
+				{
+					Id: fmt.Sprintf(
+						consts.BackendPoolIDTemplate,
+						subscriptionID,
+						resourceGroup,
+						service,
+						fmt.Sprintf("%s-backendpool", service),
+					),
+				},
+			},
+		}
+		ServicesDataDTO.Services = append(ServicesDataDTO.Services, serviceDTO)
+	}
+	for _, service := range loadBalancerUpdates.Removals.UnsortedList() {
+		serviceDTO := ServiceDTO{
+			Service:  service,
+			isDelete: true,
+		}
+		ServicesDataDTO.Services = append(ServicesDataDTO.Services, serviceDTO)
+	}
+	for _, service := range natGatewayUpdates.Additions.UnsortedList() {
+		serviceDTO := ServiceDTO{
+			Service:     service,
+			ServiceType: Outbound,
+			PublicNatGateway: NatGatewayDTO{
+				Id: fmt.Sprintf(
+					consts.NatGatewayIDTemplate,
+					subscriptionID,
+					resourceGroup,
+					service,
+				),
+			},
+		}
+		ServicesDataDTO.Services = append(ServicesDataDTO.Services, serviceDTO)
+	}
+	for _, service := range natGatewayUpdates.Removals.UnsortedList() {
+		serviceDTO := ServiceDTO{
+			Service:  service,
+			isDelete: true,
+		}
+		ServicesDataDTO.Services = append(ServicesDataDTO.Services, serviceDTO)
+	}
+	return ServicesDataDTO
+}

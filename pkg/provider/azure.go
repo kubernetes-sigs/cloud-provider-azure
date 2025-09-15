@@ -834,7 +834,8 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 	az.setUpEndpointSlicesInformer(informerFactory)
 
 	if az.ServiceGatewayEnabled {
-		az.setUpPodInformerForEgress()
+		az.setUpPodInformerForEgress(informerFactory)
+		klog.Infof("CLB-ENECHITOAIA-setUpPodInformerForEgress:pod informer setup done\n")
 	}
 }
 

@@ -528,7 +528,7 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 		}
 	}
 
-	_, err = az.reconcileLoadBalancer(ctx, clusterName, service, nil, false /* wantLb */)
+	_, needRetry, err := az.reconcileLoadBalancer(ctx, clusterName, service, nil, false /* wantLb */)
 	if err != nil && !errutils.HasStatusForbiddenOrIgnoredError(err) {
 		return err
 	}
