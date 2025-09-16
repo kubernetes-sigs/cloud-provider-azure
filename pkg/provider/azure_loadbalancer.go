@@ -138,7 +138,7 @@ func (az *Cloud) reconcileService(ctx context.Context, clusterName string, servi
 	logger := log.FromContextOrBackground(ctx)
 
 	logger.V(2).Info("Start reconciling Service", "lb", az.GetLoadBalancerName(ctx, clusterName, service))
-
+	klog.Infof("CLB-ENECHITOAIA-reconcileService: %s\n", service.Name)
 	lb, needRetry, err := az.reconcileLoadBalancer(ctx, clusterName, service, nodes, true /* wantLb */)
 	if err != nil {
 		logger.Error(err, "Failed to reconcile LoadBalancer")
@@ -219,7 +219,7 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 	// the service may be switched from an internal LB to a public one, or vice versa.
 	// Here we'll firstly ensure service do not lie in the opposite LB.
 	const Operation = "EnsureLoadBalancer"
-
+	klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancer: %s\n", service.Name)
 	ctx, span := trace.BeginReconcile(ctx, trace.DefaultTracer(), Operation, attributes.FeatureOfService(service)...)
 	defer func() { span.Observe(ctx, err) }()
 
@@ -414,6 +414,58 @@ func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, ser
 	return nil
 }
 
+func (az *Cloud) deleteServiceGatewayLoadBalancerResources(
+	ctx context.Context,
+	clusterName string,
+	service *v1.Service,
+	lb *armnetwork.LoadBalancer,
+	lbExists bool,
+) (bool, error) {
+	if !az.ServiceGatewayEnabled || service == nil {
+		return false, nil
+	}
+
+	// No LB to delete - we're done
+	if lb == nil || lb.Name == nil || *lb.Name == "" || !lbExists {
+		return true, nil
+	}
+
+	// Delete the load balancer directly
+	klog.Infof("deleteServiceGatewayLoadBalancerResources: deleting LB %s for service %s", *lb.Name, getServiceName(service))
+	if err := az.DeleteLB(ctx, service, *lb.Name); err != nil {
+		klog.Warningf("deleteServiceGatewayLoadBalancerResources: failed to delete LB %s: %v", *lb.Name, err)
+		return false, err
+	}
+
+	// Clear from cache
+	_ = az.lbCache.Delete(*lb.Name)
+
+	// Delete any associated PIPs
+	v4Enabled, v6Enabled := getIPFamiliesEnabled(service)
+	pipRG := az.getPublicIPAddressResourceGroup(service)
+
+	deletePIP := func(isIPv6 bool) {
+		pipName, _, err := az.determinePublicIPName(ctx, clusterName, service, isIPv6)
+		if err != nil || pipName == "" {
+			return
+		}
+		if err := az.DeletePublicIP(service, pipRG, pipName); err != nil {
+			klog.V(4).Infof("deleteServiceGatewayLoadBalancerResources: DeletePublicIP(%s) error (ignored): %v", pipName, err)
+		} else {
+			klog.V(4).Infof("deleteServiceGatewayLoadBalancerResources: deleted PIP %s", pipName)
+		}
+	}
+
+	if v4Enabled {
+		deletePIP(consts.IPVersionIPv4)
+	}
+	if v6Enabled {
+		deletePIP(consts.IPVersionIPv6)
+	}
+
+	return true, nil
+}
+
 // EnsureLoadBalancerDeleted deletes the specified load balancer if it
 // exists, returning nil if the load balancer specified either didn't exist or
 // was successfully deleted.
@@ -485,7 +537,7 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 		}
 	}()
 
-	lb, _, _, lbIPsPrimaryPIPs, _, _, err := az.getServiceLoadBalancer(ctx, service, clusterName, nil, false, []*armnetwork.LoadBalancer{})
+	lb, _, _, lbIPsPrimaryPIPs, lbExists, _, err := az.getServiceLoadBalancer(ctx, service, clusterName, nil, false, []*armnetwork.LoadBalancer{})
 	if err != nil && !errutils.HasStatusForbiddenOrIgnoredError(err) {
 		return err
 	}
@@ -496,6 +548,11 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 	}
 
 	if az.ServiceGatewayEnabled {
+		_, err = az.deleteServiceGatewayLoadBalancerResources(ctx, clusterName, service, lb, lbExists)
+		if err != nil {
+			return err
+		}
+
 		serviceUID := getServiceUID(service)
 		if _, loaded := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(serviceUID); loaded {
 			klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: serviceUID %s is a local service, removing backend pool reference\n", serviceUID)
@@ -526,6 +583,14 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 			klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: successfully updated diff tracker for serviceUID %s. Triggering batchProcessor\n", serviceUID)
 			az.TriggerLocationAndNRPServiceBatchUpdate()
 		}
+
+		if az.UseMultipleStandardLoadBalancers() && isLocalService(service) {
+			key := strings.ToLower(getServiceName(service))
+			az.localServiceNameToServiceInfoMap.Delete(key)
+		}
+
+		isOperationSucceeded = true
+		return nil
 	}
 
 	_, needRetry, err := az.reconcileLoadBalancer(ctx, clusterName, service, nil, false /* wantLb */)
@@ -948,7 +1013,7 @@ func (az *Cloud) getServiceLoadBalancer(
 			}
 		}
 	}
-
+	klog.Infof("CLB-ENECHITOAI-getServiceLoadBalancer(%s, %s, %v): using default load balancer %s", service.Name, clusterName, wantLb, defaultLBName)
 	// create a default LB with meta data if not present
 	if defaultLB == nil {
 		defaultLB = &armnetwork.LoadBalancer{
@@ -956,7 +1021,21 @@ func (az *Cloud) getServiceLoadBalancer(
 			Location:   &az.Location,
 			Properties: &armnetwork.LoadBalancerPropertiesFormat{},
 		}
-		if az.UseStandardLoadBalancer() {
+		// Set SKU to StandardV2 if ServiceGatewayEnabled, otherwise Standard
+		if az.ServiceGatewayEnabled {
+			// For Service Gateway, we need to set a backend pool for the load balancer.
+			backendPoolName := az.getBackendPoolNameForService(service, clusterName, false)
+			defaultLB.Properties.BackendAddressPools = []*armnetwork.BackendAddressPool{
+				{
+					Name: &backendPoolName,
+				},
+			}
+			// StandardV2 SKU is required for Service Gateway
+			// TODO (enechitoaia): should be StandardV2. Using Standard for testing
+			defaultLB.SKU = &armnetwork.LoadBalancerSKU{
+				Name: to.Ptr(armnetwork.LoadBalancerSKUNameStandard),
+			}
+		} else if az.UseStandardLoadBalancer() {
 			defaultLB.SKU = &armnetwork.LoadBalancerSKU{
 				Name: to.Ptr(armnetwork.LoadBalancerSKUNameStandard),
 			}
@@ -1004,7 +1083,10 @@ func (az *Cloud) selectLoadBalancer(ctx context.Context, clusterName string, ser
 			// select this LB as this is a new LB and will have minimum rules
 			// create tmp lb struct to hold metadata for the new load-balancer
 			var loadBalancerSKU *armnetwork.LoadBalancerSKUName
-			if az.UseStandardLoadBalancer() {
+			if az.ServiceGatewayEnabled {
+				// TODO (enechitoaia): should be StandardV2. Using Standard for testing
+				loadBalancerSKU = to.Ptr(armnetwork.LoadBalancerSKUNameStandard)
+			} else if az.UseStandardLoadBalancer() {
 				loadBalancerSKU = to.Ptr(armnetwork.LoadBalancerSKUNameStandard)
 			} else {
 				loadBalancerSKU = to.Ptr(armnetwork.LoadBalancerSKUNameBasic)
@@ -1014,6 +1096,16 @@ func (az *Cloud) selectLoadBalancer(ctx context.Context, clusterName string, ser
 				Location:   &az.Location,
 				SKU:        &armnetwork.LoadBalancerSKU{Name: loadBalancerSKU},
 				Properties: &armnetwork.LoadBalancerPropertiesFormat{},
+			}
+
+			if az.ServiceGatewayEnabled {
+				// For Service Gateway, we need to set a backend pool for the load balancer.
+				backendPoolName := az.getBackendPoolNameForService(service, clusterName, false)
+				selectedLB.Properties.BackendAddressPools = []*armnetwork.BackendAddressPool{
+					{
+						Name: &backendPoolName,
+					},
+				}
 			}
 			if az.HasExtendedLocation() {
 				var typ *armnetwork.ExtendedLocationTypes
@@ -3499,6 +3591,13 @@ func (az *Cloud) reconcilePublicIPs(ctx context.Context, clusterName string, ser
 // reconcilePublicIP reconciles the PublicIP resources similar to how the LB is reconciled with the specified IP family.
 func (az *Cloud) reconcilePublicIP(ctx context.Context, pips []*armnetwork.PublicIPAddress, clusterName string, service *v1.Service, lbName string, wantLb, isIPv6 bool) (*armnetwork.PublicIPAddress, error) {
 	logger := klog.FromContext(ctx).WithName("reconcilePublicIP")
+
+	// Skip PIP reconciliation for Service Gateway when deleting
+	if az.ServiceGatewayEnabled && !wantLb {
+		logger.V(2).Info("Skipping PIP reconciliation for Service Gateway deletion")
+		return nil, nil
+	}
+
 	isInternal := requiresInternalLoadBalancer(service)
 	serviceName := getServiceName(service)
 	serviceIPTagRequest := getServiceIPTagRequestForPublicIP(service)
@@ -4138,6 +4237,12 @@ func (az *Cloud) getAzureLoadBalancerName(
 	clusterName, vmSetName string,
 	isInternal bool,
 ) (string, error) {
+	if az.ServiceGatewayEnabled {
+		// When Service Gateway is enabled, we use the service's UID as the load balancer name to avoid name conflicts.
+		// This is because multiple load balancers can be created for different services in the same VMSS/VMAS.
+		// Using the service's UID ensures that each load balancer has a unique name.
+		return getServiceUID(service), nil
+	}
 	if az.LoadBalancerName != "" {
 		clusterName = az.LoadBalancerName
 	}

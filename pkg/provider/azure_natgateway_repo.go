@@ -19,6 +19,8 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"k8s.io/klog/v2"
@@ -28,24 +30,60 @@ import (
 // CreateOrUpdateLB invokes az.NetworkClientFactory.GetLoadBalancerClient().CreateOrUpdate with exponential backoff retry
 func (az *Cloud) createOrUpdateNatGateway(ctx context.Context, natGatewayResourceGroup string, natGateway armnetwork.NatGateway) error {
 	natGatewayName := ptr.Deref(natGateway.Name, "")
+	klog.Infof("NatGatewayClient.CreateOrUpdate(%s): start", natGatewayName)
 
-	_, err := az.NetworkClientFactory.GetNatGatewayClient().CreateOrUpdate(ctx, natGatewayResourceGroup, natGatewayName, natGateway)
-	if err != nil {
+	// Endless retry loop with 5-second intervals
+	for {
+		_, err := az.NetworkClientFactory.GetNatGatewayClient().CreateOrUpdate(ctx, natGatewayResourceGroup, natGatewayName, natGateway)
+		if err == nil {
+			klog.V(10).Infof("NatGatewayClient.CreateOrUpdate(%s): success", natGatewayName)
+			klog.Infof("NatGatewayClient.CreateOrUpdate(%s): end, error: nil", natGatewayName)
+			return nil
+		}
+
 		natGatewayJSON, _ := json.Marshal(natGateway)
 		klog.Warningf("NatGatewayClient.CreateOrUpdate(%s) failed: %v, NatGateway request: %s", natGatewayName, err, string(natGatewayJSON))
-	} else {
-		klog.V(10).Infof("NatGatewayClient.CreateOrUpdate(%s): success", natGatewayName)
-	}
 
-	return err
+		// Check if context is canceled
+		select {
+		case <-ctx.Done():
+			klog.V(3).Infof("createOrUpdateNatGateway: context canceled, stopping retry")
+			return fmt.Errorf("context canceled: %w", ctx.Err())
+		default:
+			// Continue with retry
+		}
+
+		// Wait 5 seconds before retrying
+		klog.V(3).Infof("createOrUpdateNatGateway: retrying in 5 seconds for NAT Gateway %s", natGatewayName)
+		time.Sleep(5 * time.Second)
+	}
 }
 
 func (az *Cloud) deleteNatGateway(ctx context.Context, natGatewayResourceGroup string, natGatewayName string) error {
-	err := az.NetworkClientFactory.GetNatGatewayClient().Delete(ctx, natGatewayResourceGroup, natGatewayName)
-	if err != nil {
+	klog.Infof("NatGatewayClient.Delete(%s) in resource group %s: start", natGatewayName, natGatewayResourceGroup)
+
+	// Endless retry loop with 5-second intervals
+	for {
+		err := az.NetworkClientFactory.GetNatGatewayClient().Delete(ctx, natGatewayResourceGroup, natGatewayName)
+		if err == nil {
+			klog.V(10).Infof("NatGatewayClient.Delete(%s) in resource group %s: success", natGatewayName, natGatewayResourceGroup)
+			klog.Infof("NatGatewayClient.Delete(%s) in resource group %s: end, error: nil", natGatewayName, natGatewayResourceGroup)
+			return nil
+		}
+
 		klog.Errorf("NatGatewayClient.Delete(%s) in resource group %s failed: %v", natGatewayName, natGatewayResourceGroup, err)
-	} else {
-		klog.V(10).Infof("NatGatewayClient.Delete(%s) in resource group %s: success", natGatewayName, natGatewayResourceGroup)
+
+		// Check if context is canceled
+		select {
+		case <-ctx.Done():
+			klog.V(3).Infof("deleteNatGateway: context canceled, stopping retry")
+			return fmt.Errorf("context canceled: %w", ctx.Err())
+		default:
+			// Continue with retry
+		}
+
+		// Wait 5 seconds before retrying
+		klog.V(3).Infof("deleteNatGateway: retrying in 5 seconds for NAT Gateway %s", natGatewayName)
+		time.Sleep(5 * time.Second)
 	}
-	return err
 }

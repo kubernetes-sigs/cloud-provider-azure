@@ -557,6 +557,152 @@ func (az *Cloud) TriggerLocationAndNRPServiceBatchUpdate() {
 	}
 }
 
+// TODO (enechitoaia): complete it
+/* func (az *Cloud) initializeDiffTracker() error {
+	ctx := context.Background()
+
+	// Initialize K8S Resource state
+	k8s := difftracker.K8s_State{
+		Services: utilsets.NewString(),
+		Egresses: utilsets.NewString(),
+		Nodes:    make(map[string]difftracker.Node),
+	}
+
+	// Build a map of node names to node IPs first
+	nodes, err := az.KubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list nodes: %w", err)
+	}
+
+	nodeNameToIPMap := make(map[string]string)
+	for _, node := range nodes.Items {
+		for _, addr := range node.Status.Addresses {
+			if addr.Type == v1.NodeInternalIP {
+				nodeNameToIPMap[node.Name] = addr.Address
+				break
+			}
+		}
+	}
+
+	// TODO (enechitoaia): TBD ignore the system ones ('kubernetes', 'default', 'kube-system', 'kube-public', 'local-path-storage', 'ingress-basic', 'azure-arc')
+	// 1. Fetch all services and update difftracker.K8sResources.Services
+	services, err := az.serviceLister.List(labels.Everything())
+	if err != nil {
+		return fmt.Errorf("failed to list services: %w", err)
+	}
+
+	for _, service := range services {
+		if service.Spec.Type == v1.ServiceTypeLoadBalancer {
+			k8s.Services.Insert(string(service.UID))
+		}
+	}
+	// END 1.
+
+	// 2. Fetch all endpointSlices and set up difftracker.K8sResources.Nodes and difftracker.K8sResources.Pods with the inbound identities
+	endpointSliceList, err := az.KubeClient.DiscoveryV1().EndpointSlices(v1.NamespaceAll).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list endpointslices: %w", err)
+	}
+	for _, endpointSlice := range endpointSliceList.Items {
+		serviceUID := ""
+		for _, ownerRef := range endpointSlice.OwnerReferences {
+			if ownerRef.Kind == "Service" {
+				serviceUID = string(ownerRef.UID)
+				break
+			}
+		}
+		if serviceUID == "" || !k8s.Services.Has(serviceUID) {
+			continue
+		}
+
+		for _, endpoint := range endpointSlice.Endpoints {
+			if endpoint.NodeName == nil || len(endpoint.Addresses) == 0 {
+				continue
+			}
+
+			nodeIP, exists := nodeNameToIPMap[*endpoint.NodeName]
+			if !exists {
+				klog.Warningf("Could not find IP for node %s", *endpoint.NodeName)
+				continue
+			}
+
+			if _, exists := k8s.Nodes[nodeIP]; !exists {
+				k8s.Nodes[nodeIP] = difftracker.Node{
+					Pods: make(map[string]difftracker.Pod),
+				}
+			}
+
+			for _, podIP := range endpoint.Addresses {
+				pod, exists := k8s.Nodes[nodeIP].Pods[podIP]
+				if !exists {
+					pod = difftracker.Pod{
+						InboundIdentities:       utilsets.NewString(),
+						PublicOutboundIdentity:  "",
+						PrivateOutboundIdentity: "",
+					}
+				}
+				pod.InboundIdentities.Insert(serviceUID)
+				k8s.Nodes[nodeIP].Pods[podIP] = pod
+			}
+		}
+		// END 2.
+
+		// 3. Fetch all egress resources and update difftracker.K8sResources.Egresses along with pods that have outbound identities
+		egressPods, err := az.KubeClient.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+			LabelSelector: consts.PodLabelServiceEgressGateway,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to list pods with egress label: %w", err)
+		}
+
+		for _, pod := range egressPods.Items {
+			// Get the egress label value
+			egressVal := pod.Labels[consts.PodLabelServiceEgressGateway]
+			if egressVal == "" || pod.Status.PodIP == "" || pod.Spec.NodeName == "" {
+				continue
+			}
+			// Add to egresses set
+			k8s.Egresses.Insert(egressVal)
+
+			// Get nodeIP from nodeName
+			nodeIP, exists := nodeNameToIPMap[pod.Spec.NodeName]
+			if !exists {
+				klog.Warningf("Could not find IP for node %s", pod.Spec.NodeName)
+				continue
+			}
+
+			// Initialize node if it doesn't exist
+			if _, exists := k8s.Nodes[nodeIP]; !exists {
+				k8s.Nodes[nodeIP] = difftracker.Node{
+					Pods: make(map[string]difftracker.Pod),
+				}
+			}
+
+			// Get or create the pod entry
+			podEntry, exists := k8s.Nodes[nodeIP].Pods[pod.Status.PodIP]
+			if !exists {
+				podEntry = difftracker.Pod{
+					InboundIdentities:       utilsets.NewString(),
+					PublicOutboundIdentity:  "",
+					PrivateOutboundIdentity: "",
+				}
+			}
+
+			// Set the public outbound identity
+			podEntry.PublicOutboundIdentity = egressVal
+
+			// Update the pod in the node's pods map
+			k8s.Nodes[nodeIP].Pods[pod.Status.PodIP] = podEntry
+		}
+	}
+	// END 3.
+
+
+	return nil
+}
+
+*/
+
 func (az *Cloud) initializeDiffTracker() error {
 	// TODO (enechitoaia): CONSTRUCT K8s and NRP from the current state of the cluster
 	k8s := difftracker.K8s_State{

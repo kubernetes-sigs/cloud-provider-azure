@@ -2602,9 +2602,10 @@ func PossibleLoadBalancerOutboundRuleProtocolValues() []LoadBalancerOutboundRule
 type LoadBalancerSKUName string
 
 const (
-	LoadBalancerSKUNameBasic    LoadBalancerSKUName = "Basic"
-	LoadBalancerSKUNameGateway  LoadBalancerSKUName = "Gateway"
-	LoadBalancerSKUNameStandard LoadBalancerSKUName = "Standard"
+	LoadBalancerSKUNameBasic      LoadBalancerSKUName = "Basic"
+	LoadBalancerSKUNameGateway    LoadBalancerSKUName = "Gateway"
+	LoadBalancerSKUNameStandard   LoadBalancerSKUName = "Standard"
+	LoadBalancerSKUNameStandardV2 LoadBalancerSKUName = "StandardV2"
 )
 
 // PossibleLoadBalancerSKUNameValues returns the possible values for the LoadBalancerSKUName const type.
@@ -2613,6 +2614,7 @@ func PossibleLoadBalancerSKUNameValues() []LoadBalancerSKUName {
 		LoadBalancerSKUNameBasic,
 		LoadBalancerSKUNameGateway,
 		LoadBalancerSKUNameStandard,
+		LoadBalancerSKUNameStandardV2,
 	}
 }
 
@@ -3336,8 +3338,9 @@ func PossiblePublicIPAddressMigrationPhaseValues() []PublicIPAddressMigrationPha
 type PublicIPAddressSKUName string
 
 const (
-	PublicIPAddressSKUNameBasic    PublicIPAddressSKUName = "Basic"
-	PublicIPAddressSKUNameStandard PublicIPAddressSKUName = "Standard"
+	PublicIPAddressSKUNameBasic      PublicIPAddressSKUName = "Basic"
+	PublicIPAddressSKUNameStandard   PublicIPAddressSKUName = "Standard"
+	PublicIPAddressSKUNameStandardV2 PublicIPAddressSKUName = "StandardV2"
 )
 
 // PossiblePublicIPAddressSKUNameValues returns the possible values for the PublicIPAddressSKUName const type.
@@ -3345,6 +3348,7 @@ func PossiblePublicIPAddressSKUNameValues() []PublicIPAddressSKUName {
 	return []PublicIPAddressSKUName{
 		PublicIPAddressSKUNameBasic,
 		PublicIPAddressSKUNameStandard,
+		PublicIPAddressSKUNameStandardV2,
 	}
 }
 

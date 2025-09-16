@@ -74,37 +74,54 @@ func (az *Cloud) CreateOrUpdatePIP(service *v1.Service, pipResourceGroup string,
 	return rerr
 }
 
-func (az *Cloud) CreateOrUpdatePIPOutbound(pip *armnetwork.PublicIPAddress) error {
+func (az *Cloud) CreateOrUpdatePIPOutbound(pipResourceGroup string, pip *armnetwork.PublicIPAddress) error {
+	klog.Infof("CreateOrUpdatePIPOutbound(%s): start", ptr.Deref(pip.Name, ""))
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 
-	rgName := az.ResourceGroup
-	_, rerr := az.NetworkClientFactory.GetPublicIPAddressClient().CreateOrUpdate(ctx, rgName, ptr.Deref(pip.Name, ""), *pip)
-	if rerr == nil {
-		_ = az.pipCache.Delete(rgName)
-		return nil
-	}
-
-	pipJSON, _ := json.Marshal(pip)
-	klog.Warningf("NetworkClientFactory.GetPublicIPAddressClient().CreateOrUpdate(%s, %s) failed: %s, PublicIP request: %s", rgName, ptr.Deref(pip.Name, ""), rerr.Error(), string(pipJSON))
-
-	// Invalidate the cache because of the error
-	var respError *azcore.ResponseError
-	if errors.As(rerr, &respError) && respError != nil {
-		if respError.StatusCode == http.StatusPreconditionFailed {
-			klog.V(3).Infof("PublicIP cache for (%s, %s) is cleanup because of http.StatusPreconditionFailed", rgName, ptr.Deref(pip.Name, ""))
-			_ = az.pipCache.Delete(rgName)
+	// Endless retry loop with 5-second intervals
+	for {
+		_, rerr := az.NetworkClientFactory.GetPublicIPAddressClient().CreateOrUpdate(ctx, pipResourceGroup, ptr.Deref(pip.Name, ""), *pip)
+		klog.V(10).Infof("NetworkClientFactory.GetPublicIPAddressClient().CreateOrUpdate(%s, %s): end", pipResourceGroup, ptr.Deref(pip.Name, ""))
+		if rerr == nil {
+			// Invalidate the cache right after updating
+			_ = az.pipCache.Delete(pipResourceGroup)
+			return nil
 		}
-	}
 
-	retryErrorMessage := rerr.Error()
-	// Invalidate the cache because another new operation has canceled the current request.
-	if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceledErrorMessage) {
-		klog.V(3).Infof("PublicIP cache for (%s, %s) is cleanup because CreateOrUpdate is canceled by another operation", rgName, ptr.Deref(pip.Name, ""))
-		_ = az.pipCache.Delete(rgName)
-	}
+		pipJSON, _ := json.Marshal(pip)
+		klog.Warningf("NetworkClientFactory.GetPublicIPAddressClient().CreateOrUpdate(%s, %s) failed: %s, PublicIP request: %s", pipResourceGroup, ptr.Deref(pip.Name, ""), rerr.Error(), string(pipJSON))
+		// az.Event(service, v1.EventTypeWarning, "CreateOrUpdatePublicIPAddress", rerr.Error())
 
-	return rerr
+		// Invalidate the cache because ETAG precondition mismatch.
+		var respError *azcore.ResponseError
+		if errors.As(rerr, &respError) && respError != nil {
+			if respError.StatusCode == http.StatusPreconditionFailed {
+				klog.V(3).Infof("PublicIP cache for (%s, %s) is cleanup because of http.StatusPreconditionFailed", pipResourceGroup, ptr.Deref(pip.Name, ""))
+				_ = az.pipCache.Delete(pipResourceGroup)
+			}
+		}
+
+		retryErrorMessage := rerr.Error()
+		// Invalidate the cache because another new operation has canceled the current request.
+		if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceledErrorMessage) {
+			klog.V(3).Infof("PublicIP cache for (%s, %s) is cleanup because CreateOrUpdate is canceled by another operation", pipResourceGroup, ptr.Deref(pip.Name, ""))
+			_ = az.pipCache.Delete(pipResourceGroup)
+		}
+
+		// Check if context is canceled
+		select {
+		case <-ctx.Done():
+			klog.V(3).Infof("CreateOrUpdatePIP: context canceled, stopping retry")
+			return fmt.Errorf("context canceled: %w", ctx.Err())
+		default:
+			// Continue with retry
+		}
+
+		// Wait 5 seconds before retrying
+		klog.V(3).Infof("CreateOrUpdatePIP: retrying in 5 seconds for PIP %s", ptr.Deref(pip.Name, ""))
+		time.Sleep(5 * time.Second)
+	}
 }
 
 // DeletePublicIP invokes az.NetworkClientFactory.GetPublicIPAddressClient().Delete with exponential backoff retry
@@ -129,13 +146,38 @@ func (az *Cloud) DeletePublicIP(service *v1.Service, pipResourceGroup string, pi
 	return nil
 }
 
-func (az *Cloud) DeletePublicIPOutbound(pipName string) error {
+func (az *Cloud) DeletePublicIPOutbound(pipResourceGroup string, pipName string) error {
+	klog.Infof("DeletePublicIPOutbound(%s): start", pipName)
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 
-	rgName := az.ResourceGroup
-	rerr := az.NetworkClientFactory.GetPublicIPAddressClient().Delete(ctx, rgName, pipName)
-	return rerr
+	// Endless retry loop with 5-second intervals
+	for {
+		rerr := az.NetworkClientFactory.GetPublicIPAddressClient().Delete(ctx, pipResourceGroup, pipName)
+		klog.Infof("DeletePublicIPOutbound(%s): end, error: %v", pipName, rerr)
+
+		if rerr == nil {
+			// Invalidate the cache right after deleting
+			_ = az.pipCache.Delete(pipResourceGroup)
+			return nil
+		}
+
+		// Log the error
+		klog.Warningf("DeletePublicIPOutbound(%s) failed: %s, will retry in 5 seconds", pipName, rerr.Error())
+
+		// Check if context is canceled
+		select {
+		case <-ctx.Done():
+			klog.V(3).Infof("DeletePublicIPOutbound: context canceled, stopping retry")
+			return fmt.Errorf("context canceled: %w", ctx.Err())
+		default:
+			// Continue with retry
+		}
+
+		// Wait 5 seconds before retrying
+		klog.V(3).Infof("DeletePublicIPOutbound: retrying in 5 seconds for PIP %s", pipName)
+		time.Sleep(5 * time.Second)
+	}
 }
 
 func (az *Cloud) newPIPCache() (azcache.Resource, error) {

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	v1 "k8s.io/api/core/v1"
 	discovery_v1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -603,35 +605,38 @@ func (updater *podEgressResourceUpdater) process(ctx context.Context) {
 				klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: Pod %s/%s service %s does not exist in localServiceNameToNRPServiceMap. Creating resources.",
 					namespace, name, service)
 				klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: Creating Public IP %s in resource group %s", service, updater.az.ResourceGroup)
-				// pipResource := armnetwork.PublicIPAddress{
-				// 	ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
-				// 		updater.az.SubscriptionID, updater.az.ResourceGroup, service)),
-				// 	SKU: &armnetwork.PublicIPAddressSKU{
-				// 		Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandard),
-				// 	},
-				// 	Location: to.Ptr(updater.az.Location),
-				// 	Properties: &armnetwork.PublicIPAddressPropertiesFormat{ // TODO (enechitoaia): What properties should we use for the Public IP
-				// 		PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
-				// 	},
-				// }
-				// updater.az.CreateOrUpdatePIPOutbound(&pipResource)
+				pipResource := armnetwork.PublicIPAddress{
+					Name: to.Ptr(fmt.Sprintf("%s-pip", service)),
+					ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
+						updater.az.SubscriptionID, updater.az.ResourceGroup, service)),
+					SKU: &armnetwork.PublicIPAddressSKU{
+						Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
+					},
+					Location: to.Ptr(updater.az.Location),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{ // TODO (enechitoaia): What properties should we use for the Public IP
+
+						PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
+					},
+				}
+				updater.az.CreateOrUpdatePIPOutbound(updater.az.ResourceGroup, &pipResource)
 				klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: Creating NAT Gateway %s in resource group %s", service, updater.az.ResourceGroup)
-				// natGatewayResource := armnetwork.NatGateway{
-				// 	ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/natGateways/%s",
-				// 		updater.az.SubscriptionID, updater.az.ResourceGroup, service)),
-				// 	SKU: &armnetwork.NatGatewaySKU{
-				// 		Name: to.Ptr(armnetwork.NatGatewaySKUNameStandardV2)},
-				// 	Location: to.Ptr(updater.az.Location),
-				// 	Properties: &armnetwork.NatGatewayPropertiesFormat{ // TODO (enechitoaia): What properties should we use for the Nat Gateway
-				// 		PublicIPAddresses: []*armnetwork.SubResource{
-				// 			{
-				// 				ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
-				// 					updater.az.SubscriptionID, updater.az.ResourceGroup, service)),
-				// 			},
-				// 		},
-				// 	},
-				// }
-				// updater.az.createOrUpdateNatGateway(ctx, updater.az.ResourceGroup, natGatewayResource)
+				natGatewayResource := armnetwork.NatGateway{
+					Name: to.Ptr(service),
+					ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/natGateways/%s",
+						updater.az.SubscriptionID, updater.az.ResourceGroup, service)),
+					SKU: &armnetwork.NatGatewaySKU{
+						Name: to.Ptr(armnetwork.NatGatewaySKUNameStandardV2)},
+					Location: to.Ptr(updater.az.Location),
+					Properties: &armnetwork.NatGatewayPropertiesFormat{ // TODO (enechitoaia): What properties should we use for the Nat Gateway
+						PublicIPAddresses: []*armnetwork.SubResource{
+							{
+								ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s-pip",
+									updater.az.SubscriptionID, updater.az.ResourceGroup, service)),
+							},
+						},
+					},
+				}
+				updater.az.createOrUpdateNatGateway(ctx, updater.az.ResourceGroup, natGatewayResource)
 				// CALL NRP API TO CREATE THE SERVICE
 				updater.az.diffTracker.UpdateK8sEgress(difftracker.UpdateK8sResource{
 					Operation: difftracker.ADD,
@@ -672,9 +677,9 @@ func (updater *podEgressResourceUpdater) process(ctx context.Context) {
 			if err == nil {
 				klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: removeNATGatewayResponseDTO is nil")
 				klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: delete NAT Gateway %s in resource group %s", service, updater.az.ResourceGroup)
-				// updater.az.deleteNatGateway(ctx, updater.az.ResourceGroup, service)
+				updater.az.deleteNatGateway(ctx, updater.az.ResourceGroup, service)
 				klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: delete Public IP %s in resource group %s", service, updater.az.ResourceGroup)
-				// updater.az.DeletePublicIPOutbound(service)
+				updater.az.DeletePublicIPOutbound(updater.az.ResourceGroup, fmt.Sprintf("%s-pip", service))
 				updater.az.diffTracker.UpdateK8sEgress(difftracker.UpdateK8sResource{
 					Operation: difftracker.REMOVE,
 					ID:        service,
