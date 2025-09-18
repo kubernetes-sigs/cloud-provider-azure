@@ -54,17 +54,18 @@ func main() {
 			return nil
 		},
 		Version: version.Get().GitVersion,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			acrProvider, err := credentialprovider.NewAcrProviderFromConfig(args[0], RegistryMirrorStr)
 			if err != nil {
 				klog.Errorf("Failed to initialize ACR provider: %v", err)
-				os.Exit(1)
+				return err
 			}
 
 			if err := NewCredentialProvider(acrProvider).Run(cmd.Context()); err != nil {
 				klog.Errorf("Error running acr credential provider: %v", err)
-				os.Exit(1)
+				return err
 			}
+			return nil
 		},
 	}
 
@@ -76,9 +77,11 @@ func main() {
 		"Mirror a source registry host to a target registry host, and image pull credential will be requested to the target registry host when the image is from source registry host")
 
 	logs.AddFlags(command.Flags())
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer cancel()
-	if err := command.ExecuteContext(ctx); err != nil {
+	if err := func() error {
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer cancel()
+		return command.ExecuteContext(ctx)
+	}(); err != nil {
 		os.Exit(1)
 	}
 }
