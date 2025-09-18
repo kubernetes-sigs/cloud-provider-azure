@@ -5,7 +5,7 @@ go 1.24.0
 godebug default=go1.24
 
 require (
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.19.0
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.19.1
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.11.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 v6.4.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6 v6.2.0
@@ -19,7 +19,7 @@ require (
 	github.com/samber/lo v1.51.0
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.7
-	github.com/stretchr/testify v1.11.0
+	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/otel v1.37.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.59.1
 	go.opentelemetry.io/otel/metric v1.37.0
@@ -139,3 +139,7 @@ require (
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 )
+
+replace github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6 => ./my-vendor/github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6
+
+replace sigs.k8s.io/cloud-provider-azure/pkg/azclient => /home/enechitoaia/cloud-provider-azure/pkg/azclient

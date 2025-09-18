@@ -19,7 +19,6 @@ package natgatewayclient
 
 import (
 	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
-
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 

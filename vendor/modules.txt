@@ -1,7 +1,7 @@
 # cel.dev/expr v0.24.0
 ## explicit; go 1.22.0
 cel.dev/expr
-# github.com/Azure/azure-sdk-for-go/sdk/azcore v1.19.0
+# github.com/Azure/azure-sdk-for-go/sdk/azcore v1.19.1
 ## explicit; go 1.23.0
 github.com/Azure/azure-sdk-for-go/sdk/azcore
 github.com/Azure/azure-sdk-for-go/sdk/azcore/arm
@@ -55,8 +55,8 @@ github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault
 # github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi v1.2.0
 ## explicit; go 1.18
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi
-# github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6 v6.2.0
-## explicit; go 1.18
+# github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6 v6.2.0 => ./my-vendor/github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6
+## explicit; go 1.24.0
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6
 # github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns v1.3.0
 ## explicit; go 1.18
@@ -319,7 +319,7 @@ github.com/spf13/pflag
 # github.com/stoewer/go-strcase v1.3.0
 ## explicit; go 1.11
 github.com/stoewer/go-strcase
-# github.com/stretchr/testify v1.11.0
+# github.com/stretchr/testify v1.11.1
 ## explicit; go 1.17
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/assert/yaml
@@ -1426,8 +1426,8 @@ sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client/metrics
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/common/metrics
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/proto/client
-# sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.9.1
-## explicit; go 1.23.0
+# sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.9.1 => /home/enechitoaia/cloud-provider-azure/pkg/azclient
+## explicit; go 1.24.0
 sigs.k8s.io/cloud-provider-azure/pkg/azclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient/mock_accountclient
@@ -1494,6 +1494,8 @@ sigs.k8s.io/cloud-provider-azure/pkg/azclient/secretclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/secretclient/mock_secretclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient/mock_servicegatewayclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/snapshotclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/snapshotclient/mock_snapshotclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/sshpublickeyresourceclient
@@ -1538,3 +1540,5 @@ sigs.k8s.io/structured-merge-diff/v6/value
 # sigs.k8s.io/yaml v1.6.0
 ## explicit; go 1.22
 sigs.k8s.io/yaml
+# github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6 => ./my-vendor/github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6
+# sigs.k8s.io/cloud-provider-azure/pkg/azclient => /home/enechitoaia/cloud-provider-azure/pkg/azclient

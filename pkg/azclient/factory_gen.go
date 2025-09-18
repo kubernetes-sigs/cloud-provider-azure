@@ -18,10 +18,14 @@
 package azclient
 
 import (
+	"strings"
+	"sync"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/backendaddresspoolclient"
@@ -51,6 +55,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/secretclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/snapshotclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/sshpublickeyresourceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient"
@@ -61,8 +66,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworkclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient"
-	"strings"
-	"sync"
 )
 
 type ClientFactoryImpl struct {
@@ -99,6 +102,7 @@ type ClientFactoryImpl struct {
 	routetableclientInterface               routetableclient.Interface
 	secretclientInterface                   secretclient.Interface
 	securitygroupclientInterface            securitygroupclient.Interface
+	servicegatewayclientInterface           servicegatewayclient.Interface
 	snapshotclientInterface                 sync.Map
 	sshpublickeyresourceclientInterface     sshpublickeyresourceclient.Interface
 	subnetclientInterface                   subnetclient.Interface
@@ -292,6 +296,12 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 
 	//initialize securitygroupclient
 	factory.securitygroupclientInterface, err = factory.createSecurityGroupClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize servicegatewayclient
+	factory.servicegatewayclientInterface, err = factory.createServiceGatewayClient(config.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
@@ -1134,6 +1144,31 @@ func (factory *ClientFactoryImpl) createSecurityGroupClient(subscription string)
 
 func (factory *ClientFactoryImpl) GetSecurityGroupClient() securitygroupclient.Interface {
 	return factory.securitygroupclientInterface
+}
+
+func (factory *ClientFactoryImpl) createServiceGatewayClient(subscription string) (servicegatewayclient.Interface, error) {
+	//initialize servicegatewayclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig)
+	if err != nil {
+		return nil, err
+	}
+	options.Cloud = factory.cloudConfig
+	//add ratelimit policy
+	ratelimitOption := factory.factoryConfig.GetRateLimitConfig("serviceGatewayRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return servicegatewayclient.New(subscription, factory.cred, options)
+}
+
+func (factory *ClientFactoryImpl) GetServiceGatewayClient() servicegatewayclient.Interface {
+	return factory.servicegatewayclientInterface
 }
 
 func (factory *ClientFactoryImpl) createSnapshotClient(subscription string) (snapshotclient.Interface, error) {
