@@ -354,7 +354,7 @@ func (az *Cloud) podInformerAddPod(pod *v1.Pod) {
 		return
 	}
 	klog.Infof("CLB-ENECHITOAIA- Pod %s/%s has Location: %s, PodIP: %s\n", pod.Namespace, pod.Name, pod.Status.HostIP, pod.Status.PodIP)
-	staticGatewayConfigurationName := pod.Labels[consts.PodLabelServiceEgressGateway]
+	staticGatewayConfigurationName := strings.ToLower(pod.Labels[consts.PodLabelServiceEgressGateway])
 	klog.Infof("CLB-ENECHITOAIA-Pod %s/%s has static gateway configuration: %s", pod.Namespace, pod.Name, staticGatewayConfigurationName)
 	_, ok := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(staticGatewayConfigurationName)
 	if ok {
@@ -394,7 +394,7 @@ func (az *Cloud) podInformerRemovePod(pod *v1.Pod) {
 		return
 	}
 
-	staticGatewayConfigurationName := pod.Labels[consts.PodLabelServiceEgressGateway]
+	staticGatewayConfigurationName := strings.ToLower(pod.Labels[consts.PodLabelServiceEgressGateway])
 	counter, ok := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(staticGatewayConfigurationName)
 	klog.Infof("CLB-ENECHITOAIA-Pod %s/%s has static gateway configuration: %s", pod.Namespace, pod.Name, staticGatewayConfigurationName)
 	klog.Infof("CLB-ENECHITOAIA-Pod %s/%s has Location: %s, PodIP: %s\n", pod.Namespace, pod.Name, pod.Status.HostIP, pod.Status.PodIP)
@@ -468,10 +468,10 @@ func (az *Cloud) setUpPodInformerForEgress(informerFactory informers.SharedInfor
 					currEgressGatewayName = ""
 				)
 				if oldPod.Labels != nil {
-					prevEgressGatewayName = oldPod.Labels[consts.PodLabelServiceEgressGateway]
+					prevEgressGatewayName = strings.ToLower(oldPod.Labels[consts.PodLabelServiceEgressGateway])
 				}
 				if newPod.Labels != nil {
-					currEgressGatewayName = newPod.Labels[consts.PodLabelServiceEgressGateway]
+					currEgressGatewayName = strings.ToLower(newPod.Labels[consts.PodLabelServiceEgressGateway])
 				}
 
 				podJustCompletedNodeIPAndPodIPInitialization := (oldPod.Status.HostIP == "" || oldPod.Status.PodIP == "") && (newPod.Status.HostIP != "" && newPod.Status.PodIP != "")
@@ -584,7 +584,7 @@ func (updater *podEgressResourceUpdater) process(ctx context.Context) {
 
 			location := pod.Status.HostIP
 			address := pod.Status.PodIP
-			service := pod.Labels[consts.PodLabelServiceEgressGateway]
+			service := strings.ToLower(pod.Labels[consts.PodLabelServiceEgressGateway])
 			// TBD(enechitoaia): Handle any future pod annotations here
 
 			klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: Pod %s/%s - Location: %s, Address: %s, Service: %s",

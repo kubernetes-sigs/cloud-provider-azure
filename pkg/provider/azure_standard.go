@@ -327,7 +327,7 @@ func getServiceName(service *v1.Service) string {
 
 // This returns a unique identifier for the Service used to tag some resources.
 func getServiceUID(service *v1.Service) string {
-	return string(service.UID)
+	return strings.ToLower(string(service.UID))
 }
 
 // This returns a prefix for loadbalancer/security rules.
@@ -337,7 +337,16 @@ func (az *Cloud) getRulePrefix(service *v1.Service) string {
 
 func (az *Cloud) getPublicIPName(clusterName string, service *v1.Service, isIPv6 bool) (string, error) {
 	isDualStack := isServiceDualStack(service)
-	pipName := fmt.Sprintf("%s-%s", clusterName, az.GetLoadBalancerName(context.TODO(), clusterName, service))
+
+	var pipName string
+	if az.ServiceGatewayEnabled {
+		// New scheme: decouple from clusterName — per-service deterministic naming.
+		// Base name: clb-pip-<serviceUID>
+		pipName = fmt.Sprintf("clb-pip-%s", getServiceUID(service))
+	} else {
+		// Legacy scheme: tied to clusterName — per-cluster naming.
+		pipName = fmt.Sprintf("%s-%s", clusterName, az.GetLoadBalancerName(context.TODO(), clusterName, service))
+	}
 	if id := getServicePIPPrefixID(service, isIPv6); id != "" {
 		id, err := getLastSegment(id, "/")
 		if err == nil {

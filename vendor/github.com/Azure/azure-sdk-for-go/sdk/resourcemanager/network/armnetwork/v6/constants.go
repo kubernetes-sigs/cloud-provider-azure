@@ -2602,10 +2602,10 @@ func PossibleLoadBalancerOutboundRuleProtocolValues() []LoadBalancerOutboundRule
 type LoadBalancerSKUName string
 
 const (
-	LoadBalancerSKUNameBasic      LoadBalancerSKUName = "Basic"
-	LoadBalancerSKUNameGateway    LoadBalancerSKUName = "Gateway"
-	LoadBalancerSKUNameStandard   LoadBalancerSKUName = "Standard"
-	LoadBalancerSKUNameStandardV2 LoadBalancerSKUName = "StandardV2"
+	LoadBalancerSKUNameBasic    LoadBalancerSKUName = "Basic"
+	LoadBalancerSKUNameGateway  LoadBalancerSKUName = "Gateway"
+	LoadBalancerSKUNameStandard LoadBalancerSKUName = "Standard"
+	LoadBalancerSKUNameService  LoadBalancerSKUName = "Service"
 )
 
 // PossibleLoadBalancerSKUNameValues returns the possible values for the LoadBalancerSKUName const type.
@@ -2614,7 +2614,7 @@ func PossibleLoadBalancerSKUNameValues() []LoadBalancerSKUName {
 		LoadBalancerSKUNameBasic,
 		LoadBalancerSKUNameGateway,
 		LoadBalancerSKUNameStandard,
-		LoadBalancerSKUNameStandardV2,
+		LoadBalancerSKUNameService,
 	}
 }
 

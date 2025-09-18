@@ -338,7 +338,7 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 
 				key := strings.ToLower(fmt.Sprintf("%s/%s", newES.Namespace, svcName))
 				si, found := az.getLocalServiceInfo(key)
-				if !found && !az.IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() {
+				if !found && !az.ServiceGatewayEnabled {
 					klog.V(4).Infof("EndpointSlice %s/%s belongs to service %s, but the service is not a local service, or has not finished the initial reconciliation loop. Skip updating load balancer backend pool", newES.Namespace, newES.Name, key)
 					return
 				}
@@ -561,6 +561,25 @@ func (az *Cloud) getBackendPoolNamesForService(service *v1.Service, clusterName 
 // getBackendPoolIDsForService determine the expected backend pool IDs
 // by checking the external traffic policy of the service.
 func (az *Cloud) getBackendPoolIDsForService(service *v1.Service, clusterName, lbName string) map[bool]string {
+	if az.ServiceGatewayEnabled {
+		// Dual-stack is not supported for PodIP backend pools
+		// Decide pool by the single IP family on the Service
+		if len(service.Spec.IPFamilies) == 0 {
+			// Defensive default: fall back to IPv4 naming if IPFamilies is empty
+			name := string(service.GetUID())
+			return map[bool]string{consts.IPVersionIPv4: az.getBackendPoolID(lbName, name)}
+		}
+		switch service.Spec.IPFamilies[0] {
+		case v1.IPv4Protocol:
+			name := string(service.GetUID())
+			return map[bool]string{consts.IPVersionIPv4: az.getBackendPoolID(lbName, name)}
+		case v1.IPv6Protocol:
+			name := fmt.Sprintf("%s-%s", service.GetUID(), consts.IPVersionIPv6StringLower)
+			return map[bool]string{consts.IPVersionIPv6: az.getBackendPoolID(lbName, name)}
+		default:
+			// Fallback to cluster-scoped implementation (shouldn't happen)
+		}
+	}
 	if !isLocalService(service) || !az.UseMultipleStandardLoadBalancers() {
 		return az.getBackendPoolIDs(clusterName, lbName)
 	}

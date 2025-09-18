@@ -195,7 +195,7 @@ func GetTestCloudWithExtendedLocation(ctrl *gomock.Controller) (az *Cloud) {
 func GetTestCloudWithContainerLoadBalancer(ctrl *gomock.Controller) (az *Cloud) {
 	az = GetTestCloud(ctrl)
 	az.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypePodIP
-	az.LoadBalancerSKU = consts.LoadBalancerSKUStandardV2
+	az.LoadBalancerSKU = consts.LoadBalancerSKUService
 	az.ServiceGatewayEnabled = true
 	err := az.initializeDiffTracker()
 	if err != nil {

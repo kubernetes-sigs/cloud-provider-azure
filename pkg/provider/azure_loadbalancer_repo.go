@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -38,6 +39,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
+
+var perServiceLBNameRegex = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 // DeleteLB invokes az.NetworkClientFactory.GetLoadBalancerClient().Delete with exponential backoff retry
 func (az *Cloud) DeleteLB(ctx context.Context, service *v1.Service, lbName string) error {
@@ -84,6 +87,9 @@ func (az *Cloud) ListManagedLBs(ctx context.Context, service *v1.Service, nodes 
 	}
 
 	managedLBNames := utilsets.NewString(clusterName)
+	if az.ServiceGatewayEnabled && service != nil {
+		managedLBNames.Insert(strings.ToLower(string(service.UID)))
+	}
 	managedLBs := make([]*armnetwork.LoadBalancer, 0)
 	if strings.EqualFold(az.LoadBalancerSKU, consts.LoadBalancerSKUBasic) {
 		// return early if wantLb=false
@@ -117,9 +123,22 @@ func (az *Cloud) ListManagedLBs(ctx context.Context, service *v1.Service, nodes 
 	}
 
 	for _, lb := range allLBs {
-		if managedLBNames.Has(trimSuffixIgnoreCase(ptr.Deref(lb.Name, ""), consts.InternalLoadBalancerNameSuffix)) {
+		name := ptr.Deref(lb.Name, "")
+		trimmed := trimSuffixIgnoreCase(name, consts.InternalLoadBalancerNameSuffix)
+
+		if managedLBNames.Has(trimmed) {
 			managedLBs = append(managedLBs, lb)
 			klog.V(4).Infof("ListManagedLBs: found managed LB %s", ptr.Deref(lb.Name, ""))
+			continue
+		}
+
+		// Service Gateway mode: when enumerating without a specific Service object,
+		// treat any UUID-named LB as managed (per-service LB). This supports
+		// global sync / GC / diff-tracker flows.
+		if az.ServiceGatewayEnabled && service == nil && perServiceLBNameRegex.MatchString(strings.ToLower(trimmed)) {
+			managedLBs = append(managedLBs, lb)
+			klog.V(4).Infof("ListManagedLBs: inferred managed per-service LB %s (ServiceGatewayEnabled)", name)
+			continue
 		}
 	}
 

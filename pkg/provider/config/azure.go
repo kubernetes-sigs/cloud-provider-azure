@@ -196,8 +196,8 @@ func (az *Config) IsLBBackendPoolTypePodIP() bool {
 	return strings.EqualFold(az.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePodIP)
 }
 
-func (az *Config) IsLBBackendPoolTypePodIPAndUseStandardV2LoadBalancer() bool {
-	return az.IsLBBackendPoolTypePodIP() && az.UseStandardV2LoadBalancer()
+func (az *Config) IsLBBackendPoolTypePodIPAndUseServiceLoadBalancer() bool {
+	return az.IsLBBackendPoolTypePodIP() && az.UseServiceLoadBalancer()
 }
 
 func (az *Config) GetPutVMSSVMBatchSize() int {
@@ -208,8 +208,8 @@ func (az *Config) UseStandardLoadBalancer() bool {
 	return strings.EqualFold(az.LoadBalancerSKU, consts.LoadBalancerSKUStandard)
 }
 
-func (az *Config) UseStandardV2LoadBalancer() bool {
-	return strings.EqualFold(az.LoadBalancerSKU, consts.LoadBalancerSKUStandardV2)
+func (az *Config) UseServiceLoadBalancer() bool {
+	return strings.EqualFold(az.LoadBalancerSKU, consts.LoadBalancerSKUService)
 }
 
 func (az *Config) ExcludeMasterNodesFromStandardLB() bool {

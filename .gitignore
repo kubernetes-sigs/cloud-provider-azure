@@ -40,3 +40,5 @@ _rundir
 site/.hugo_build.lock
 
 .kubeconfig/
+
+my-vendor/

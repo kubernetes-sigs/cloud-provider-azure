@@ -236,8 +236,8 @@ const (
 	LoadBalancerSKUBasic = "basic"
 	// LoadBalancerSKUStandard is the load balancer standard SKU
 	LoadBalancerSKUStandard = "standard"
-	// LoadBalancerSKUStandardV2 is the load balancer standardV2 SKU
-	LoadBalancerSKUStandardV2 = "standardV2"
+	// LoadBalancerSKUService is the load balancer service SKU
+	LoadBalancerSKUService = "service"
 
 	// PodLabelServiceEgressGateway is the label used on the pod
 	PodLabelServiceEgressGateway = "kubernetes.azure.com/service-egress-gateway"
