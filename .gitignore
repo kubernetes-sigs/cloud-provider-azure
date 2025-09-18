@@ -42,3 +42,7 @@ site/.hugo_build.lock
 .kubeconfig/
 
 my-vendor/
+
+# pkg/
+
+# vendor/

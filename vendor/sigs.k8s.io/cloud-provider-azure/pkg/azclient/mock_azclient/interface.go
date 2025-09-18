@@ -30,7 +30,6 @@ import (
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
-
 	accountclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
 	availabilitysetclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient"
 	backendaddresspoolclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/backendaddresspoolclient"
@@ -59,6 +58,7 @@ import (
 	routetableclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient"
 	secretclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/secretclient"
 	securitygroupclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient"
+	servicegatewayclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient"
 	snapshotclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/snapshotclient"
 	sshpublickeyresourceclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/sshpublickeyresourceclient"
 	subnetclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient"
@@ -588,6 +588,20 @@ func (m *MockClientFactory) GetSecurityGroupClient() securitygroupclient.Interfa
 func (mr *MockClientFactoryMockRecorder) GetSecurityGroupClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSecurityGroupClient", reflect.TypeOf((*MockClientFactory)(nil).GetSecurityGroupClient))
+}
+
+// GetServiceGatewayClient mocks base method.
+func (m *MockClientFactory) GetServiceGatewayClient() servicegatewayclient.Interface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetServiceGatewayClient")
+	ret0, _ := ret[0].(servicegatewayclient.Interface)
+	return ret0
+}
+
+// GetServiceGatewayClient indicates an expected call of GetServiceGatewayClient.
+func (mr *MockClientFactoryMockRecorder) GetServiceGatewayClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetServiceGatewayClient", reflect.TypeOf((*MockClientFactory)(nil).GetServiceGatewayClient))
 }
 
 // GetSnapshotClient mocks base method.
