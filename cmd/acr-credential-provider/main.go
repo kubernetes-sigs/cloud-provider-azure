@@ -19,8 +19,12 @@ limitations under the License.
 package main
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"math/rand"
 	"os"
+	"os/signal"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -37,10 +41,18 @@ func main() {
 	var RegistryMirrorStr string
 
 	command := &cobra.Command{
-		Use:     "acr-credential-provider configFile",
-		Short:   "Acr credential provider for Kubelet",
-		Long:    `The acr credential provider is responsible for providing ACR credentials for kubelet`,
-		Args:    cobra.ExactArgs(1),
+		Use:   "acr-credential-provider configFile",
+		Short: "Acr credential provider for Kubelet",
+		Long:  `The acr credential provider is responsible for providing ACR credentials for kubelet`,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return errors.New("Config file is not specified")
+			}
+			if len(args) > 1 {
+				return fmt.Errorf("expected exactly one argument (config file); Got arguments: %v", args)
+			}
+			return nil
+		},
 		Version: version.Get().GitVersion,
 		Run: func(cmd *cobra.Command, args []string) {
 			acrProvider, err := credentialprovider.NewAcrProviderFromConfig(args[0], RegistryMirrorStr)
@@ -64,7 +76,9 @@ func main() {
 		"Mirror a source registry host to a target registry host, and image pull credential will be requested to the target registry host when the image is from source registry host")
 
 	logs.AddFlags(command.Flags())
-	if err := command.Execute(); err != nil {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+	if err := command.ExecuteContext(ctx); err != nil {
 		os.Exit(1)
 	}
 }
