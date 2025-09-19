@@ -26,10 +26,6 @@ func RequiresQuoting(value string) bool {
 }
 
 func QuoteString(value string, hidden bool) string {
-	if value == "" {
-		return value
-	}
-
 	var literal strings.Builder
 
 	if hidden {
