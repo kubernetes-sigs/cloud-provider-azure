@@ -293,6 +293,82 @@ updates:
     directory: "/"
     open-pull-requests-limit: 1
     schedule:
+      interval: daily
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/cleanup"
+      - "lgtm"
+      - "approved"
+      - "release-1.34"
+    target-branch: "release-1.34"
+    ignore:
+      - dependency-name: "k8s.io/*"
+        versions: [">=0.35.0"]
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: daily
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    target-branch: "release-1.34"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/testing"
+      - "lgtm"
+      - "approved"
+      - "release-1.34"
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    target-branch: "release-1.34"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/cleanup"
+      - "lgtm"
+      - "approved"
+      - "release-1.34"
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
+  - package-ecosystem: "gomod"
+    directory: "/"
+    open-pull-requests-limit: 1
+    schedule:
       interval: weekly
       time: "01:00"
       timezone: "Asia/Shanghai"
