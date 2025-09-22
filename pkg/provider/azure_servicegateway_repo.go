@@ -2,9 +2,11 @@ package provider
 
 import (
 	"context"
+	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 func (az *Cloud) CreateOrUpdateServiceGateway(ctx context.Context, serviceGatewayName string, parameters armnetwork.ServiceGateway) error {
@@ -25,6 +27,18 @@ func (az *Cloud) GetServiceGateway(ctx context.Context, serviceGatewayName strin
 	}
 	klog.Infof("CLB-ENECHITOAIA: successfully got Service Gateway %s in resource group %s", serviceGatewayName, az.ResourceGroup)
 	return result, nil
+}
+
+func (az *Cloud) ExistsServiceGateway(ctx context.Context, serviceGatewayName string) (bool, error) {
+	_, err := az.GetServiceGateway(ctx, serviceGatewayName)
+	if err != nil {
+		if strings.Contains(err.Error(), consts.ResourceNotFoundMessageCode) {
+			return false, nil
+		}
+		klog.Infof("CLB-ENECHITOAIA: error checking existence of Service Gateway %s in resource group %s: %v", serviceGatewayName, az.ResourceGroup, err)
+		return false, err
+	}
+	return true, nil
 }
 
 func (az *Cloud) UpdateAddressLocations(ctx context.Context, serviceGatewayName string, req armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {

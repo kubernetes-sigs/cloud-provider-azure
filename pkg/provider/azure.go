@@ -519,6 +519,39 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		// start NRP location and service batch updater.
 		if az.ServiceGatewayEnabled {
 			klog.V(2).Info("CLB-ENECHITOAIA-Service Gateway is enabled")
+
+			exists, err := az.ExistsServiceGateway(ctx, "ServiceGateway")
+			if err != nil {
+				return fmt.Errorf("InitializeCloudFromConfig: failed to check if Service Gateway %s exists: %w", "ServiceGateway", err)
+			}
+			if !exists {
+				klog.Infof("CLB-ENECHITOAIA: Service Gateway %s does not exist in resource group %s", "ServiceGateway", az.ResourceGroup)
+				klog.Infof("CLB-ENECHITOAIA: creating Service Gateway %s in resource group %s", "ServiceGateway", az.ResourceGroup)
+				// Create the service gateway if it does not exist.
+				serviceGateway := armnetwork.ServiceGateway{
+					Location: to.Ptr(az.Location),
+					SKU: &armnetwork.ServiceGatewaySKU{
+						Name: to.Ptr(armnetwork.ServiceGatewaySKUNameStandard),
+						Tier: to.Ptr(armnetwork.ServcieGatewaySKUTierRegional),
+					},
+					Properties: &armnetwork.ServiceGatewayPropertiesFormat{
+						VirtualNetwork: &armnetwork.VirtualNetwork{ID: to.Ptr(fmt.Sprintf(
+							"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/virtualNetworks/%s",
+							az.SubscriptionID,
+							az.ResourceGroup,
+							az.VnetName,
+						))},
+					},
+				}
+				logObject(serviceGateway)
+				err = az.CreateOrUpdateServiceGateway(ctx, "ServiceGateway", serviceGateway)
+				if err != nil {
+					klog.Infof("CLB-ENECHITOAIA: error creating Service Gateway %s in resource group %s: %v", "ServiceGateway", az.ResourceGroup, err)
+					return fmt.Errorf("InitializeCloudFromConfig: failed to create Service Gateway %s: %w", "ServiceGateway", err)
+				}
+				klog.Infof("CLB-ENECHITOAIA: successfully created Service Gateway %s in resource group %s", "ServiceGateway", az.ResourceGroup)
+			}
+
 			klog.V(2).Info("CLB-ENECHITOAIA-initializing diff tracker")
 			err = az.initializeDiffTracker()
 			if err != nil {

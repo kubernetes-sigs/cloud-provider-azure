@@ -77,3 +77,31 @@ func PossibleServiceGatewayUpdateServicesRequestActionValues() []ServiceGatewayU
 		ServiceGatewayUpdateServicesRequestActionPartialUpdate,
 	}
 }
+
+// ServiceGatewaySKUName - Name of a service gateway SKU.
+type ServiceGatewaySKUName string
+
+const (
+	ServiceGatewaySKUNameStandard ServiceGatewaySKUName = "Standard"
+)
+
+// PossibleServiceGatewaySKUNameValues returns the possible values for the ServiceGatewaySKUName const type.
+func PossibleServiceGatewaySKUNameValues() []ServiceGatewaySKUName {
+	return []ServiceGatewaySKUName{
+		ServiceGatewaySKUNameStandard,
+	}
+}
+
+// ServcieGatewaySKUTier - Tier of a service gateway SKU.
+type ServcieGatewaySKUTier string
+
+const (
+	ServcieGatewaySKUTierRegional ServcieGatewaySKUTier = "Regional"
+)
+
+// PossibleServcieGatewaySKUTierValues returns the possible values for the ServcieGatewaySKUTier const type.
+func PossibleServcieGatewaySKUTierValues() []ServcieGatewaySKUTier {
+	return []ServcieGatewaySKUTier{
+		ServcieGatewaySKUTierRegional,
+	}
+}

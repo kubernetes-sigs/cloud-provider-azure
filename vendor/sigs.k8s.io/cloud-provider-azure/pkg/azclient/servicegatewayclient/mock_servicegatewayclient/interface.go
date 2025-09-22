@@ -176,6 +176,84 @@ func (c *MockInterfaceGetCall) DoAndReturn(f func(context.Context, string, strin
 	return c
 }
 
+// GetAddressLocations mocks base method.
+func (m *MockInterface) GetAddressLocations(ctx context.Context, resourceGroupName, serviceGatewayName string) ([]*armnetwork.ServiceGatewayAddressLocationResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAddressLocations", ctx, resourceGroupName, serviceGatewayName)
+	ret0, _ := ret[0].([]*armnetwork.ServiceGatewayAddressLocationResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAddressLocations indicates an expected call of GetAddressLocations.
+func (mr *MockInterfaceMockRecorder) GetAddressLocations(ctx, resourceGroupName, serviceGatewayName any) *MockInterfaceGetAddressLocationsCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAddressLocations", reflect.TypeOf((*MockInterface)(nil).GetAddressLocations), ctx, resourceGroupName, serviceGatewayName)
+	return &MockInterfaceGetAddressLocationsCall{Call: call}
+}
+
+// MockInterfaceGetAddressLocationsCall wrap *gomock.Call
+type MockInterfaceGetAddressLocationsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockInterfaceGetAddressLocationsCall) Return(arg0 []*armnetwork.ServiceGatewayAddressLocationResponse, arg1 error) *MockInterfaceGetAddressLocationsCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockInterfaceGetAddressLocationsCall) Do(f func(context.Context, string, string) ([]*armnetwork.ServiceGatewayAddressLocationResponse, error)) *MockInterfaceGetAddressLocationsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockInterfaceGetAddressLocationsCall) DoAndReturn(f func(context.Context, string, string) ([]*armnetwork.ServiceGatewayAddressLocationResponse, error)) *MockInterfaceGetAddressLocationsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// GetServices mocks base method.
+func (m *MockInterface) GetServices(ctx context.Context, resourceGroupName, serviceGatewayName string) ([]*armnetwork.ServiceGatewayService, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetServices", ctx, resourceGroupName, serviceGatewayName)
+	ret0, _ := ret[0].([]*armnetwork.ServiceGatewayService)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetServices indicates an expected call of GetServices.
+func (mr *MockInterfaceMockRecorder) GetServices(ctx, resourceGroupName, serviceGatewayName any) *MockInterfaceGetServicesCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetServices", reflect.TypeOf((*MockInterface)(nil).GetServices), ctx, resourceGroupName, serviceGatewayName)
+	return &MockInterfaceGetServicesCall{Call: call}
+}
+
+// MockInterfaceGetServicesCall wrap *gomock.Call
+type MockInterfaceGetServicesCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockInterfaceGetServicesCall) Return(arg0 []*armnetwork.ServiceGatewayService, arg1 error) *MockInterfaceGetServicesCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockInterfaceGetServicesCall) Do(f func(context.Context, string, string) ([]*armnetwork.ServiceGatewayService, error)) *MockInterfaceGetServicesCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockInterfaceGetServicesCall) DoAndReturn(f func(context.Context, string, string) ([]*armnetwork.ServiceGatewayService, error)) *MockInterfaceGetServicesCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // List mocks base method.
 func (m *MockInterface) List(ctx context.Context, resourceGroupName string) ([]*armnetwork.ServiceGateway, error) {
 	m.ctrl.T.Helper()
@@ -215,86 +293,6 @@ func (c *MockInterfaceListCall) DoAndReturn(f func(context.Context, string) ([]*
 	return c
 }
 
-// ...existing code...
-
-// GetAddressLocations mocks base method.
-func (m *MockInterface) GetAddressLocations(ctx context.Context, resourceGroupName, serviceGatewayName string) ([]*armnetwork.ServiceGatewayAddressLocationResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAddressLocations", ctx, resourceGroupName, serviceGatewayName)
-	ret0, _ := ret[0].([]*armnetwork.ServiceGatewayAddressLocationResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetAddressLocations indicates an expected call of GetAddressLocations.
-func (mr *MockInterfaceMockRecorder) GetAddressLocations(ctx, resourceGroupName, serviceGatewayName any) *MockInterfaceGetAddressLocationsCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAddressLocations", reflect.TypeOf((*MockInterface)(nil).GetAddressLocations), ctx, resourceGroupName, serviceGatewayName)
-	return &MockInterfaceGetAddressLocationsCall{Call: call}
-}
-
-// MockInterfaceGetAddressLocationsCall wrap *gomock.Call
-type MockInterfaceGetAddressLocationsCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockInterfaceGetAddressLocationsCall) Return(result []*armnetwork.ServiceGatewayAddressLocationResponse, rerr error) *MockInterfaceGetAddressLocationsCall {
-	c.Call = c.Call.Return(result, rerr)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockInterfaceGetAddressLocationsCall) Do(f func(context.Context, string, string) ([]*armnetwork.ServiceGatewayAddressLocationResponse, error)) *MockInterfaceGetAddressLocationsCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockInterfaceGetAddressLocationsCall) DoAndReturn(f func(context.Context, string, string) ([]*armnetwork.ServiceGatewayAddressLocationResponse, error)) *MockInterfaceGetAddressLocationsCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// GetServices mocks base method.
-func (m *MockInterface) GetServices(ctx context.Context, resourceGroupName, serviceGatewayName string) ([]*armnetwork.ServiceGatewayService, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetServices", ctx, resourceGroupName, serviceGatewayName)
-	ret0, _ := ret[0].([]*armnetwork.ServiceGatewayService)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetServices indicates an expected call of GetServices.
-func (mr *MockInterfaceMockRecorder) GetServices(ctx, resourceGroupName, serviceGatewayName any) *MockInterfaceGetServicesCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetServices", reflect.TypeOf((*MockInterface)(nil).GetServices), ctx, resourceGroupName, serviceGatewayName)
-	return &MockInterfaceGetServicesCall{Call: call}
-}
-
-// MockInterfaceGetServicesCall wrap *gomock.Call
-type MockInterfaceGetServicesCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockInterfaceGetServicesCall) Return(result []*armnetwork.ServiceGatewayService, rerr error) *MockInterfaceGetServicesCall {
-	c.Call = c.Call.Return(result, rerr)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockInterfaceGetServicesCall) Do(f func(context.Context, string, string) ([]*armnetwork.ServiceGatewayService, error)) *MockInterfaceGetServicesCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockInterfaceGetServicesCall) DoAndReturn(f func(context.Context, string, string) ([]*armnetwork.ServiceGatewayService, error)) *MockInterfaceGetServicesCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // UpdateAddressLocations mocks base method.
 func (m *MockInterface) UpdateAddressLocations(ctx context.Context, resourceGroupName, serviceGatewayName string, req armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
 	m.ctrl.T.Helper()
@@ -316,8 +314,8 @@ type MockInterfaceUpdateAddressLocationsCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockInterfaceUpdateAddressLocationsCall) Return(rerr error) *MockInterfaceUpdateAddressLocationsCall {
-	c.Call = c.Call.Return(rerr)
+func (c *MockInterfaceUpdateAddressLocationsCall) Return(arg0 error) *MockInterfaceUpdateAddressLocationsCall {
+	c.Call = c.Call.Return(arg0)
 	return c
 }
 
@@ -354,8 +352,8 @@ type MockInterfaceUpdateServicesCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockInterfaceUpdateServicesCall) Return(rerr error) *MockInterfaceUpdateServicesCall {
-	c.Call = c.Call.Return(rerr)
+func (c *MockInterfaceUpdateServicesCall) Return(arg0 error) *MockInterfaceUpdateServicesCall {
+	c.Call = c.Call.Return(arg0)
 	return c
 }
 
