@@ -211,8 +211,7 @@ func (a *acrProvider) getFromACR(ctx context.Context, loginServer string) (strin
 	}
 
 	klog.V(4).Infof("exchanging an acr refresh_token")
-	registryRefreshToken, err := performTokenExchange(
-		loginServer, directive, a.config.TenantID, armAccessToken.Token)
+	registryRefreshToken, err := performTokenExchange(directive, a.config.TenantID, armAccessToken.Token)
 	if err != nil {
 		klog.Errorf("failed to perform token exchange: %s", err)
 		return "", "", err
