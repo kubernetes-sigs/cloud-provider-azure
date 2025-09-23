@@ -44,7 +44,7 @@ func main() {
 		Use:   "acr-credential-provider configFile",
 		Short: "Acr credential provider for Kubelet",
 		Long:  `The acr credential provider is responsible for providing ACR credentials for kubelet`,
-		Args: func(cmd *cobra.Command, args []string) error {
+		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return errors.New("Config file is not specified")
 			}
