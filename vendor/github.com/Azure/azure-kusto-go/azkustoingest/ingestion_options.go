@@ -3,6 +3,7 @@ package azkustoingest
 import (
 	"github.com/Azure/azure-kusto-go/azkustodata"
 	"net"
+	"net/http"
 	"strings"
 )
 
@@ -47,6 +48,14 @@ func WithCustomIngestConnectionString(kcsb *azkustodata.ConnectionStringBuilder)
 	return func(s *Ingestion) {
 		s.withoutEndpointCorrection = true
 		s.customIngestConnectionString = kcsb
+	}
+}
+
+// WithHttpClient configures the ingest client to use a custom HTTP client.
+// This allows for customization of the HTTP transport, including adding instrumentation like OpenTelemetry.
+func WithHttpClient(client *http.Client) Option {
+	return func(s *Ingestion) {
+		s.httpClient = client
 	}
 }
 
