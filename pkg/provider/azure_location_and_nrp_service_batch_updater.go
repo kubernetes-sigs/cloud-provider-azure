@@ -1,13 +1,11 @@
 package provider
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"net/http"
 	"strings"
 	"time"
 
@@ -79,11 +77,12 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 			},
 			updater.az.SubscriptionID,
 			updater.az.ResourceGroup)
-		klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: createServicesRequestDTO:\n")
+		// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: createServicesRequestDTO:\n")
 		logObject(createServicesRequestDTO)
-		createServicesResponseDTO := NRPAPIClientUpdateNRPServices(ctx, createServicesRequestDTO, updater.az.SubscriptionID, updater.az.ResourceGroup)
-		klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: createServicesResponseDTO:\n")
-		logObject(createServicesResponseDTO)
+		// createServicesResponseDTO := NRPAPIClientUpdateNRPServices(ctx, createServicesRequestDTO, updater.az.SubscriptionID, updater.az.ResourceGroup)
+		// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: createServicesResponseDTO:\n")
+		createServicesResponseDTO := updater.az.UpdateNRPSGWServices(ctx, "ServiceGateway", createServicesRequestDTO)
+		// logObject(createServicesResponseDTO)
 		if createServicesResponseDTO == nil {
 			if serviceLoadBalancerList.Additions.Len() > 0 {
 				updater.az.diffTracker.UpdateNRPLoadBalancers(
@@ -161,9 +160,10 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 		locationDataRequestDTO := difftracker.MapLocationDataToDTO(locationData)
 		klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: locationDataRequestDTO:\n")
 		logObject(locationDataRequestDTO)
-		locationDataResponseDTO := NRPAPIClientUpdateNRPLocations(ctx, locationDataRequestDTO, updater.az.SubscriptionID, updater.az.ResourceGroup)
-		klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: locationDataResponseDTO:\n")
-		logObject(locationDataResponseDTO)
+		// locationDataResponseDTO := NRPAPIClientUpdateNRPLocations(ctx, locationDataRequestDTO, updater.az.SubscriptionID, updater.az.ResourceGroup)
+		locationDataResponseDTO := updater.az.UpdateNRPSGWAddressLocations(ctx, "ServiceGateway", locationDataRequestDTO)
+		// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: locationDataResponseDTO:\n")
+		// logObject(locationDataResponseDTO)
 		if locationDataResponseDTO == nil {
 			updater.az.diffTracker.UpdateLocationsAddresses(locationData)
 		} else {
@@ -182,16 +182,18 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 			},
 			difftracker.SyncServicesReturnType{
 				Additions: nil,
-				Removals:  serviceNATGatewayList.Removals,
+				// Removals:  nil, // TODO (enechitoaia): check it this is correct
+				Removals: serviceNATGatewayList.Removals,
 			},
 			updater.az.SubscriptionID,
 			updater.az.ResourceGroup)
 		klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: removeServicesRequestDTO:\n")
 		logObject(removeServicesRequestDTO)
 		// TODO (enechitoaia): discuss about ServiceGatewayName (VnetName?)
-		removeServicesResponseDTO := NRPAPIClientUpdateNRPServices(ctx, removeServicesRequestDTO, updater.az.SubscriptionID, updater.az.ResourceGroup)
-		klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: removeServicesResponseDTO:\n")
-		logObject(removeServicesResponseDTO)
+		// removeServicesResponseDTO := NRPAPIClientUpdateNRPServices(ctx, removeServicesRequestDTO, updater.az.SubscriptionID, updater.az.ResourceGroup)
+		removeServicesResponseDTO := updater.az.UpdateNRPSGWServices(ctx, "ServiceGateway", removeServicesRequestDTO)
+		// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: removeServicesResponseDTO:\n")
+		// logObject(removeServicesResponseDTO)
 		if removeServicesResponseDTO == nil {
 			if serviceLoadBalancerList.Removals.Len() > 0 {
 				updater.az.diffTracker.UpdateNRPLoadBalancers(
@@ -235,90 +237,90 @@ func logObject(data interface{}) {
 		klog.Errorf("Failed to marshal: %v", err)
 		return
 	}
-	klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: object: %s", string(bytes))
+	klog.Infof("CLB-ENECHITOAIA - above object: %s", string(bytes))
 }
 
-func NRPAPIClientUpdateNRPLocations(
-	ctx context.Context,
-	locationDataRequestDTO difftracker.LocationsDataDTO,
-	subscriptionId string,
-	resourceGroupName string,
-) error {
-	return nil // TODO (enechitoaia): re-enable when NRP bypass is ready
-	klog.V(2).Infof("NRPAPIClientUpdateNRPLocations: request DTO: %+v", locationDataRequestDTO)
+// func NRPAPIClientUpdateNRPLocations(
+// 	ctx context.Context,
+// 	locationDataRequestDTO difftracker.LocationsDataDTO,
+// 	subscriptionId string,
+// 	resourceGroupName string,
+// ) error {
+// 	return nil // TODO (enechitoaia): re-enable when NRP bypass is ready
+// 	klog.V(2).Infof("NRPAPIClientUpdateNRPLocations: request DTO: %+v", locationDataRequestDTO)
 
-	// Marshal the DTO to JSON
-	payload, err := json.Marshal(locationDataRequestDTO)
-	if err != nil {
-		return fmt.Errorf("failed to marshal request DTO: %w", err)
-	}
+// 	// Marshal the DTO to JSON
+// 	payload, err := json.Marshal(locationDataRequestDTO)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to marshal request DTO: %w", err)
+// 	}
 
-	// Construct the in-cluster service URL
-	url := fmt.Sprintf("http://nrp-bypass/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/serviceGateways/ServiceGateway/UpdateLocations",
-		subscriptionId, resourceGroupName)
+// 	// Construct the in-cluster service URL
+// 	url := fmt.Sprintf("http://nrp-bypass/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/serviceGateways/ServiceGateway/UpdateLocations",
+// 		subscriptionId, resourceGroupName)
 
-	// Create the HTTP request
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(payload))
-	if err != nil {
-		return fmt.Errorf("failed to create HTTP request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
+// 	// Create the HTTP request
+// 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(payload))
+// 	if err != nil {
+// 		return fmt.Errorf("failed to create HTTP request: %w", err)
+// 	}
+// 	req.Header.Set("Content-Type", "application/json")
 
-	// Send the request
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send HTTP request: %w", err)
-	}
-	defer resp.Body.Close()
+// 	// Send the request
+// 	client := &http.Client{Timeout: 10 * time.Second}
+// 	resp, err := client.Do(req)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to send HTTP request: %w", err)
+// 	}
+// 	defer resp.Body.Close()
 
-	// Check for non-2xx status codes
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("received non-success status code: %d", resp.StatusCode)
-	}
+// 	// Check for non-2xx status codes
+// 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+// 		return fmt.Errorf("received non-success status code: %d", resp.StatusCode)
+// 	}
 
-	klog.V(2).Infof("NRPAPIClientUpdateNRPLocations: successfully updated locations")
-	return nil
-}
+// 	klog.V(2).Infof("NRPAPIClientUpdateNRPLocations: successfully updated locations")
+// 	return nil
+// }
 
-func NRPAPIClientUpdateNRPServices(ctx context.Context, createServicesRequestDTO difftracker.ServicesDataDTO, subscriptionId string, resourceGroupName string) error {
-	return nil // TODO (enechitoaia): re-enable when NRP bypass is ready
-	klog.V(2).Infof("NRPAPIClientUpdateNRPServices: request DTO: %+v", createServicesRequestDTO)
+// func NRPAPIClientUpdateNRPServices(ctx context.Context, createServicesRequestDTO difftracker.ServicesDataDTO, subscriptionId string, resourceGroupName string) error {
+// 	return nil // TODO (enechitoaia): re-enable when NRP bypass is ready
+// 	klog.V(2).Infof("NRPAPIClientUpdateNRPServices: request DTO: %+v", createServicesRequestDTO)
 
-	// Marshal the DTO to JSON
-	payload, err := json.Marshal(createServicesRequestDTO)
-	if err != nil {
-		return fmt.Errorf("failed to marshal request DTO: %w", err)
-	}
+// 	// Marshal the DTO to JSON
+// 	payload, err := json.Marshal(createServicesRequestDTO)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to marshal request DTO: %w", err)
+// 	}
 
-	// Construct the in-cluster service URL
-	// Replace with actual values or inject them via config/env
-	url := fmt.Sprintf("http://nrp-bypass/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/serviceGateways/ServiceGateway/UpdateServices",
-		subscriptionId, resourceGroupName)
+// 	// Construct the in-cluster service URL
+// 	// Replace with actual values or inject them via config/env
+// 	url := fmt.Sprintf("http://nrp-bypass/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/serviceGateways/ServiceGateway/UpdateServices",
+// 		subscriptionId, resourceGroupName)
 
-	// Create the HTTP request
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(payload))
-	if err != nil {
-		return fmt.Errorf("failed to create HTTP request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
+// 	// Create the HTTP request
+// 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(payload))
+// 	if err != nil {
+// 		return fmt.Errorf("failed to create HTTP request: %w", err)
+// 	}
+// 	req.Header.Set("Content-Type", "application/json")
 
-	// Send the request
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send HTTP request: %w", err)
-	}
-	defer resp.Body.Close()
+// 	// Send the request
+// 	client := &http.Client{Timeout: 10 * time.Second}
+// 	resp, err := client.Do(req)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to send HTTP request: %w", err)
+// 	}
+// 	defer resp.Body.Close()
 
-	// Check for non-2xx status codes
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("received non-success status code: %d", resp.StatusCode)
-	}
+// 	// Check for non-2xx status codes
+// 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+// 		return fmt.Errorf("received non-success status code: %d", resp.StatusCode)
+// 	}
 
-	klog.V(2).Infof("NRPAPIClientUpdateNRPServices: successfully updated services")
-	return nil
-}
+// 	klog.V(2).Infof("NRPAPIClientUpdateNRPServices: successfully updated services")
+// 	return nil
+// }
 
 func mergeMaps[K comparable, V any](maps ...map[K]V) map[K]V {
 	result := make(map[K]V)
@@ -628,6 +630,9 @@ func (updater *podEgressResourceUpdater) process(ctx context.Context) {
 						Name: to.Ptr(armnetwork.NatGatewaySKUNameStandardV2)},
 					Location: to.Ptr(updater.az.Location),
 					Properties: &armnetwork.NatGatewayPropertiesFormat{ // TODO (enechitoaia): What properties should we use for the Nat Gateway
+						ServiceGateway: &armnetwork.ServiceGateway{
+							ID: to.Ptr(updater.az.GetServiceGatewayID()),
+						},
 						PublicIPAddresses: []*armnetwork.SubResource{
 							{
 								ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s-pip",
@@ -661,7 +666,7 @@ func (updater *podEgressResourceUpdater) process(ctx context.Context) {
 			service := eventData.Service
 
 			klog.Infof("Processing event: %s, pod %s/%s for service %s", event.EventType, location, address, service)
-
+			// Remove here Locations and Addresses (the overlay) needed to afterwards remove
 			removeNATGatewayRequestDTO := difftracker.MapNATGatewayUpdatesToServicesDataDTO(
 				difftracker.SyncServicesReturnType{
 					Additions: nil,
@@ -672,7 +677,8 @@ func (updater *podEgressResourceUpdater) process(ctx context.Context) {
 			)
 			klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: removeNATGatewayRequestDTO:\n")
 			logObject(removeNATGatewayRequestDTO)
-			err := NRPAPIClientUpdateNRPServices(ctx, removeNATGatewayRequestDTO, updater.az.SubscriptionID, updater.az.ResourceGroup)
+			// err := NRPAPIClientUpdateNRPServices(ctx, removeNATGatewayRequestDTO, updater.az.SubscriptionID, updater.az.ResourceGroup)
+			err := updater.az.UpdateNRPSGWServices(ctx, "ServiceGateway", removeNATGatewayRequestDTO)
 			klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: removeNATGatewayResponseDTO:\n")
 			if err == nil {
 				klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: removeNATGatewayResponseDTO is nil")

@@ -654,39 +654,48 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 	}
 
 	if az.ServiceGatewayEnabled {
+		serviceUID := getServiceUID(service)
+		klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: az.diffTracker.InitialSyncDone %t\n", az.diffTracker.InitialSyncDone)
+		if _, loaded := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(serviceUID); loaded {
+			klog.Info("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: AICIBA service found in LocalServiceNameToNRPServiceMap\n")
+			if az.diffTracker.InitialSyncDone {
+				klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: serviceUID %s is a local service, removing backend pool reference\n", serviceUID)
+
+				// DELETE THE BACKENDPOOL REFERENCE HERE
+				removeBackendPoolRequestDTO := difftracker.RemoveBackendPoolReferenceFromServicesDTO(
+					difftracker.SyncServicesReturnType{
+						Additions: nil,
+						Removals:  utilsets.NewString(serviceUID),
+					},
+					az.SubscriptionID,
+					az.ResourceGroup)
+				// klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: removeBackendPoolRequestDTO %v\n", removeBackendPoolRequestDTO)
+				// removeBackendPoolResponseDTO := NRPAPIClientUpdateNRPServices(ctx, removeBackendPoolRequestDTO, az.SubscriptionID, az.ResourceGroup)
+				// klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: removeBackendPoolResponseDTO %v\n", removeBackendPoolResponseDTO)
+				klog.Infof("CLB-ENECHITOAIA-removeBackendPoolRequestDTO:\n")
+				logObject(removeBackendPoolRequestDTO)
+				removeBackendPoolResponseDTO := az.UpdateNRPSGWServices(ctx, "ServiceGateway", removeBackendPoolRequestDTO)
+				if removeBackendPoolResponseDTO != nil {
+					klog.Errorf("locationAndNRPServiceBatchUpdater.process: failed to remove backend pool: %v", removeBackendPoolResponseDTO)
+					return fmt.Errorf("failed to remove backend pool: %v", removeBackendPoolResponseDTO)
+				}
+			}
+		}
+
 		_, err = az.deleteServiceGatewayLoadBalancerResources(ctx, clusterName, service, lb, lbExists)
 		if err != nil {
 			return err
 		}
 
-		serviceUID := getServiceUID(service)
-		if _, loaded := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(serviceUID); loaded {
-			klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: serviceUID %s is a local service, removing backend pool reference\n", serviceUID)
-
-			// DELETE THE BACKENDPOOL REFERENCE HERE
-			removeBackendPoolRequestDTO := difftracker.RemoveBackendPoolReferenceFromServicesDTO(
-				difftracker.SyncServicesReturnType{
-					Additions: nil,
-					Removals:  utilsets.NewString(serviceUID),
-				},
-				az.SubscriptionID,
-				az.ResourceGroup)
-			klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: removeBackendPoolRequestDTO %v\n", removeBackendPoolRequestDTO)
-			removeBackendPoolResponseDTO := NRPAPIClientUpdateNRPServices(ctx, removeBackendPoolRequestDTO, az.SubscriptionID, az.ResourceGroup)
-			klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: removeBackendPoolResponseDTO %v\n", removeBackendPoolResponseDTO)
-			if removeBackendPoolResponseDTO != nil {
-				klog.Errorf("locationAndNRPServiceBatchUpdater.process: failed to remove backend pool: %v", removeBackendPoolResponseDTO)
-				return fmt.Errorf("failed to remove backend pool: %v", removeBackendPoolResponseDTO)
-			}
-			klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: successfully removed backend pool reference for serviceUID %s\n", serviceUID)
+		// 3. Now update diff tracker & trigger batch so the service itself is removed upstream
+		if az.diffTracker.InitialSyncDone {
+			// Remove from local maps only after LB successfully deleted
 			az.diffTracker.LocalServiceNameToNRPServiceMap.Delete(serviceUID)
-			az.diffTracker.UpdateK8sService(
-				difftracker.UpdateK8sResource{
-					Operation: difftracker.REMOVE,
-					ID:        serviceUID,
-				},
-			)
-			klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: successfully updated diff tracker for serviceUID %s. Triggering batchProcessor\n", serviceUID)
+			az.diffTracker.UpdateK8sService(difftracker.UpdateK8sResource{
+				Operation: difftracker.REMOVE,
+				ID:        serviceUID,
+			})
+			klog.Infof("EnsureLoadBalancerDeleted(ServiceGateway): updated diff tracker for %s; triggering batch processor", serviceUID)
 			az.TriggerLocationAndNRPServiceBatchUpdate()
 		}
 
@@ -1422,7 +1431,14 @@ func (az *Cloud) ensurePublicIPExists(ctx context.Context, service *v1.Service, 
 			pip.Tags = make(map[string]*string)
 		}
 
-		if az.UseStandardLoadBalancer() {
+		if az.ServiceGatewayEnabled {
+			if pip.SKU == nil || !strings.EqualFold(string(*pip.SKU.Name), string(armnetwork.PublicIPAddressSKUNameStandardV2)) {
+				pip.SKU = &armnetwork.PublicIPAddressSKU{
+					Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
+				}
+				changed = true
+			}
+		} else if az.UseStandardLoadBalancer() {
 			if pip.SKU == nil {
 				pip.SKU = &armnetwork.PublicIPAddressSKU{
 					Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandard),
@@ -1499,7 +1515,25 @@ func (az *Cloud) ensurePublicIPExists(ctx context.Context, service *v1.Service, 
 			return nil, err
 		}
 
-		if az.UseStandardLoadBalancer() {
+		if az.ServiceGatewayEnabled {
+			pip.SKU = &armnetwork.PublicIPAddressSKU{
+				Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
+			}
+
+			if id := getServicePIPPrefixID(service, isIPv6); id != "" {
+				pip.Properties.PublicIPPrefix = &armnetwork.SubResource{ID: ptr.To(id)}
+			}
+
+			if !az.HasExtendedLocation() {
+				zones, err := az.getRegionZonesBackoff(ctx, ptr.Deref(pip.Location, ""))
+				if err != nil {
+					return nil, err
+				}
+				if len(zones) > 0 {
+					pip.Zones = zones
+				}
+			}
+		} else if az.UseStandardLoadBalancer() {
 			pip.SKU = &armnetwork.PublicIPAddressSKU{
 				Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandard),
 			}
@@ -2295,7 +2329,7 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 			lbToReconcile = existingLBs
 		}
 		klog.Infof("CLB-ENECHITOAIA-reconcileLoadBalancer: reconcile backend pool hosts for service(%s) - lb(%s). CHECKING FOR CLB NOW\n", serviceName, lbName)
-		if az.ServiceGatewayEnabled {
+		if az.ServiceGatewayEnabled && az.diffTracker.InitialSyncDone {
 			serviceUID := getServiceUID(service)
 			klog.Infof("CLB-ENECHITOAIA-reconcileLoadBalancer: service(%s) - lb(%s) - adding serviceUID(%s) to diff tracker\n", serviceName, lbName, serviceUID)
 			// Add the serviceName to the K8S state to be synced into NRP during batch sync update flow.

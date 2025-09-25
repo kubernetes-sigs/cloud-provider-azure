@@ -33,6 +33,7 @@ func InitializeDiffTracker(K8s K8s_State, NRP NRP_State) *DiffTracker {
 			workqueue.DefaultTypedControllerRateLimiter[PodCrudEvent](),
 			workqueue.TypedRateLimitingQueueConfig[PodCrudEvent]{Name: "PodEgress"},
 		),
+		InitialSyncDone: false,
 	}
 
 	return diffTracker

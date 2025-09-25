@@ -363,7 +363,8 @@ func MapLoadBalancerUpdatesToServicesDataDTO(loadBalancerUpdates SyncServicesRet
 						subscriptionID,
 						resourceGroup,
 						service,
-						fmt.Sprintf("%s-backendpool", service),
+						service,
+						// fmt.Sprintf("%s-backendpool", service),
 					),
 				},
 			},
@@ -372,8 +373,9 @@ func MapLoadBalancerUpdatesToServicesDataDTO(loadBalancerUpdates SyncServicesRet
 	}
 	for _, service := range loadBalancerUpdates.Removals.UnsortedList() {
 		serviceDTO := ServiceDTO{
-			Service:  service,
-			isDelete: true,
+			Service:     service,
+			IsDelete:    true,
+			ServiceType: Inbound,
 		}
 		ServicesDataDTO.Services = append(ServicesDataDTO.Services, serviceDTO)
 	}
@@ -402,8 +404,9 @@ func MapNATGatewayUpdatesToServicesDataDTO(natGatewayUpdates SyncServicesReturnT
 	}
 	for _, service := range natGatewayUpdates.Removals.UnsortedList() {
 		serviceDTO := ServiceDTO{
-			Service:  service,
-			isDelete: true,
+			Service:     service,
+			IsDelete:    true,
+			ServiceType: Outbound,
 		}
 		ServicesDataDTO.Services = append(ServicesDataDTO.Services, serviceDTO)
 	}
@@ -425,7 +428,8 @@ func MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(loadBalancerUpdates Sy
 						subscriptionID,
 						resourceGroup,
 						service,
-						fmt.Sprintf("%s-backendpool", service),
+						service,
+						// fmt.Sprintf("%s-backendpool", service),
 					),
 				},
 			},
@@ -434,8 +438,9 @@ func MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(loadBalancerUpdates Sy
 	}
 	for _, service := range loadBalancerUpdates.Removals.UnsortedList() {
 		serviceDTO := ServiceDTO{
-			Service:  service,
-			isDelete: true,
+			Service:     service,
+			IsDelete:    true,
+			ServiceType: Inbound,
 		}
 		ServicesDataDTO.Services = append(ServicesDataDTO.Services, serviceDTO)
 	}
@@ -456,8 +461,9 @@ func MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(loadBalancerUpdates Sy
 	}
 	for _, service := range natGatewayUpdates.Removals.UnsortedList() {
 		serviceDTO := ServiceDTO{
-			Service:  service,
-			isDelete: true,
+			Service:     service,
+			IsDelete:    true,
+			ServiceType: Outbound,
 		}
 		ServicesDataDTO.Services = append(ServicesDataDTO.Services, serviceDTO)
 	}

@@ -1364,7 +1364,7 @@ func TestMapLoadBalancerUpdatesToServicesDataDTO_OnlyAdditions(t *testing.T) {
 			{
 				Service:     "service-1",
 				ServiceType: Inbound,
-				isDelete:    false,
+				IsDelete:    false,
 				LoadBalancerBackendPools: []LoadBalancerBackendPoolDTO{
 					{
 						Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/loadBalancers/service-1/backendAddressPools/service-1-backendpool",
@@ -1374,7 +1374,7 @@ func TestMapLoadBalancerUpdatesToServicesDataDTO_OnlyAdditions(t *testing.T) {
 			{
 				Service:     "service-2",
 				ServiceType: Inbound,
-				isDelete:    false,
+				IsDelete:    false,
 				LoadBalancerBackendPools: []LoadBalancerBackendPoolDTO{
 					{
 						Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/loadBalancers/service-2/backendAddressPools/service-2-backendpool",
@@ -1404,11 +1404,11 @@ func TestMapLoadBalancerUpdatesToServicesDataDTO_OnlyRemovals(t *testing.T) {
 		Services: []ServiceDTO{
 			{
 				Service:  "service-3",
-				isDelete: true,
+				IsDelete: true,
 			},
 			{
 				Service:  "service-4",
-				isDelete: true,
+				IsDelete: true,
 			},
 		},
 	}
@@ -1433,7 +1433,7 @@ func TestMapLoadBalancerUpdatesToServicesDataDTO_AdditionsAndRemovals(t *testing
 		Services: []ServiceDTO{
 			{
 				Service:     "service-add-1",
-				isDelete:    false,
+				IsDelete:    false,
 				ServiceType: Inbound,
 				LoadBalancerBackendPools: []LoadBalancerBackendPoolDTO{
 					{
@@ -1444,7 +1444,7 @@ func TestMapLoadBalancerUpdatesToServicesDataDTO_AdditionsAndRemovals(t *testing
 			{
 				Service:     "service-add-2",
 				ServiceType: Inbound,
-				isDelete:    false,
+				IsDelete:    false,
 				LoadBalancerBackendPools: []LoadBalancerBackendPoolDTO{
 					{
 						Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/loadBalancers/service-add-2/backendAddressPools/service-add-2-backendpool",
@@ -1453,11 +1453,11 @@ func TestMapLoadBalancerUpdatesToServicesDataDTO_AdditionsAndRemovals(t *testing
 			},
 			{
 				Service:  "service-remove-1",
-				isDelete: true,
+				IsDelete: true,
 			},
 			{
 				Service:  "service-remove-2",
-				isDelete: true,
+				IsDelete: true,
 			},
 		},
 	}
@@ -1505,7 +1505,7 @@ func TestMapNATGatewayUpdatesToServicesDataDTO_OnlyAdditions(t *testing.T) {
 			{
 				Service:     "natgw-1",
 				ServiceType: Outbound,
-				isDelete:    false,
+				IsDelete:    false,
 				PublicNatGateway: NatGatewayDTO{
 					Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/natGateways/natgw-1",
 				},
@@ -1513,7 +1513,7 @@ func TestMapNATGatewayUpdatesToServicesDataDTO_OnlyAdditions(t *testing.T) {
 			{
 				Service:     "natgw-2",
 				ServiceType: Outbound,
-				isDelete:    false,
+				IsDelete:    false,
 				PublicNatGateway: NatGatewayDTO{
 					Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/natGateways/natgw-2",
 				},
@@ -1541,11 +1541,11 @@ func TestMapNATGatewayUpdatesToServicesDataDTO_OnlyRemovals(t *testing.T) {
 		Services: []ServiceDTO{
 			{
 				Service:  "natgw-3",
-				isDelete: true,
+				IsDelete: true,
 			},
 			{
 				Service:  "natgw-4",
-				isDelete: true,
+				IsDelete: true,
 			},
 		},
 	}
@@ -1571,7 +1571,7 @@ func TestMapNATGatewayUpdatesToServicesDataDTO_AdditionsAndRemovals(t *testing.T
 			{
 				Service:     "natgw-add-1",
 				ServiceType: Outbound,
-				isDelete:    false,
+				IsDelete:    false,
 				PublicNatGateway: NatGatewayDTO{
 					Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/natGateways/natgw-add-1",
 				},
@@ -1579,18 +1579,18 @@ func TestMapNATGatewayUpdatesToServicesDataDTO_AdditionsAndRemovals(t *testing.T
 			{
 				Service:     "natgw-add-2",
 				ServiceType: Outbound,
-				isDelete:    false,
+				IsDelete:    false,
 				PublicNatGateway: NatGatewayDTO{
 					Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/natGateways/natgw-add-2",
 				},
 			},
 			{
 				Service:  "natgw-remove-1",
-				isDelete: true,
+				IsDelete: true,
 			},
 			{
 				Service:  "natgw-remove-2",
-				isDelete: true,
+				IsDelete: true,
 			},
 		},
 	}

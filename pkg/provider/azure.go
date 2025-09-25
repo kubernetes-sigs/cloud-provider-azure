@@ -181,6 +181,10 @@ func NewCloud(ctx context.Context, clientBuilder cloudprovider.ControllerClientB
 		nodePrivateIPToNodeNameMap: map[string]string{},
 	}
 
+	if clientBuilder != nil {
+		az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
+	}
+
 	err := az.InitializeCloudFromConfig(ctx, config, false, callFromCCM)
 	if err != nil {
 		return nil, err
@@ -188,9 +192,6 @@ func NewCloud(ctx context.Context, clientBuilder cloudprovider.ControllerClientB
 
 	az.ipv6DualStackEnabled = true
 
-	if clientBuilder != nil {
-		az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
-	}
 	az.azureResourceLocker = NewAzureResourceLocker(
 		az,
 		consts.AzureResourceLockHolderNameCloudControllerManager,
@@ -556,6 +557,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 			err = az.initializeDiffTracker()
 			if err != nil {
 				klog.Errorf("InitializeCloudFromConfig: failed to initialize difftracker: %s", err.Error())
+				return err
 			}
 
 			klog.V(2).Info("CLB-ENECHITOAIA-starting NRP location and service batch updater")
@@ -620,8 +622,11 @@ func (az *Cloud) initialServiceGatewaySync(ctx context.Context, syncOps *difftra
 			subID,
 			rg,
 		)
-		if err := NRPAPIClientUpdateNRPServices(ctx, additionsDTO, subID, rg); err != nil {
-			return fmt.Errorf("initialServiceGatewaySync: failed additions update: %w", err)
+		// if err := NRPAPIClientUpdateNRPServices(ctx, additionsDTO, subID, rg); err != nil {
+		// 	return fmt.Errorf("initialServiceGatewaySync: failed additions update: %w", err)
+		// }
+		if err := az.UpdateNRPSGWServices(ctx, "ServiceGateway", additionsDTO); err != nil {
+			return fmt.Errorf("initialServiceGatewaySync: failed to update NRP services: %w", err)
 		}
 		// Reflect additions in local NRP state
 		if syncOps.LoadBalancerUpdates.Additions.Len() > 0 {
@@ -641,8 +646,11 @@ func (az *Cloud) initialServiceGatewaySync(ctx context.Context, syncOps *difftra
 	// Step 2: Locations / Addresses
 	if len(syncOps.LocationData.Locations) > 0 {
 		locationsDTO := difftracker.MapLocationDataToDTO(syncOps.LocationData)
-		if err := NRPAPIClientUpdateNRPLocations(ctx, locationsDTO, subID, rg); err != nil {
-			return fmt.Errorf("initialServiceGatewaySync: failed locations update: %w", err)
+		// if err := NRPAPIClientUpdateNRPLocations(ctx, locationsDTO, subID, rg); err != nil {
+		// 	return fmt.Errorf("initialServiceGatewaySync: failed locations update: %w", err)
+		// }
+		if err := az.UpdateNRPSGWAddressLocations(ctx, "ServiceGateway", locationsDTO); err != nil {
+			return fmt.Errorf("initialServiceGatewaySync: failed to update NRP locations: %w", err)
 		}
 		az.diffTracker.UpdateLocationsAddresses(syncOps.LocationData)
 	}
@@ -656,13 +664,16 @@ func (az *Cloud) initialServiceGatewaySync(ctx context.Context, syncOps *difftra
 			},
 			difftracker.SyncServicesReturnType{
 				Additions: nil,
-				Removals:  syncOps.NATGatewayUpdates.Removals,
+				Removals:  nil,
 			},
 			subID,
 			rg,
 		)
-		if err := NRPAPIClientUpdateNRPServices(ctx, removalsDTO, subID, rg); err != nil {
-			return fmt.Errorf("initialServiceGatewaySync: failed removals update: %w", err)
+		// if err := NRPAPIClientUpdateNRPServices(ctx, removalsDTO, subID, rg); err != nil {
+		// 	return fmt.Errorf("initialServiceGatewaySync: failed removals update: %w", err)
+		// }
+		if err := az.UpdateNRPSGWServices(ctx, "ServiceGateway", removalsDTO); err != nil {
+			return fmt.Errorf("initialServiceGatewaySync: failed to update NRP services: %w", err)
 		}
 		// Reflect removals
 		if syncOps.LoadBalancerUpdates.Removals.Len() > 0 {
@@ -683,8 +694,14 @@ func (az *Cloud) initialServiceGatewaySync(ctx context.Context, syncOps *difftra
 }
 
 // TODO (enechitoaia): complete it
-func (az *Cloud) WorkInProgressinitializeDiffTracker() error {
+func (az *Cloud) initializeDiffTracker() error {
+	klog.V(2).Info("initializeDiffTracker: starting initialization of diff tracker")
 	ctx := context.Background()
+
+	// Defensive guard
+	if az.KubeClient == nil {
+		return fmt.Errorf("initializeDiffTracker: KubeClient is nil; initialize the cloud provider with a Kubernetes client before diff tracker setup")
+	}
 
 	// Initialize K8S Resource state
 	k8s := difftracker.K8s_State{
@@ -697,6 +714,8 @@ func (az *Cloud) WorkInProgressinitializeDiffTracker() error {
 	if err != nil {
 		return fmt.Errorf("initializeDiffTracker: failed to list nodes: %w", err)
 	}
+	klog.Infof("initializeDiffTracker: found %d nodes", len(nodeList.Items))
+	// logObject(nodeList.Items)
 
 	// allNodes will be passed to ensureServiceLoadBalancerByUID
 	allNodes := make([]*v1.Node, 0, len(nodeList.Items))
@@ -714,6 +733,8 @@ func (az *Cloud) WorkInProgressinitializeDiffTracker() error {
 			}
 		}
 	}
+	klog.Infof("initializeDiffTracker: nodeNameToIPMap: ")
+	logObject(nodeNameToIPMap)
 
 	// TODO (enechitoaia): TBD ignore the system ones ('kubernetes', 'default', 'kube-system', 'kube-public', 'local-path-storage', 'ingress-basic', 'azure-arc')
 	// 1. Fetch all services and update difftracker.K8sResources.Services
@@ -826,6 +847,8 @@ func (az *Cloud) WorkInProgressinitializeDiffTracker() error {
 		// Update the pod in the node's pods map
 		k8s.Nodes[nodeIP].Pods[pod.Status.PodIP] = podEntry
 	}
+	klog.Infof("initializeDiffTracker: k8s object: ")
+	logObject(k8s)
 	// END 3.
 
 	// 4. Fetch all ServiceGateway.Services and update difftracker.NRPResources.LoadBalancers and difftracker.NRPResources.NATGateways
@@ -836,31 +859,50 @@ func (az *Cloud) WorkInProgressinitializeDiffTracker() error {
 	}
 
 	// TODO (enechitoaia): Implement ServiceGatewayClient
-	// servicesDTO, err := az.ServiceGatewayClient.GetServices()
-	// if err != nil {
-	// 	return fmt.Errorf("initializeDiffTracker: failed to get services from ServiceGateway API: %w", err)
-	// }
-	// for _, service := range servicesDTO.Services {
-	// 	if service.Type == "Inbound" {
-	// 		nrp.LoadBalancers.Insert(service.ID)
-	// 	} else if service.Type == "Outbound" {
-	// 		nrp.NATGateways.Insert(service.ID)
-	// 	}
-	// }
+	servicesDTO, err := az.GetServices(ctx, "ServiceGateway")
+	if err != nil {
+		return fmt.Errorf("initializeDiffTracker: failed to get services from ServiceGateway API: %w", err)
+	}
+	for _, service := range servicesDTO {
+		switch *service.Properties.ServiceType {
+		case "Inbound":
+			nrp.LoadBalancers.Insert(*service.Name)
+		case "Outbound":
+			nrp.NATGateways.Insert(*service.Name)
+		}
+	}
+	klog.Infof("initializeDiffTracker: fetched %d services from ServiceGateway API", len(servicesDTO))
+	logObject(servicesDTO)
 	// END 4.
 
 	// 5. Fetch all locations from ServiceGateway API and update difftracker.NRPResources.Locations
 	// TODO (enechitoaia): Implement ServiceGatewayClient
-	// locationsDTO, err := az.ServiceGatewayClient.GetLocations()
-	// if err != nil {
-	// 	return fmt.Errorf("initializeDiffTracker: failed to get locations from ServiceGateway API: %w", err)
-	// }
-	// for _, location := range locationsDTO.Locations {
-	// 	nrp.Locations[location.Name] = difftracker.NRPLocation{
-	// 		Addresses:       utilsets.NewString(location.Addresses...),
-	// 		PublicAddresses: utilsets.NewString(location.PublicAddresses...),
-	// 	}
-	// }
+	locationsDTO, err := az.GetAddressLocations(ctx, "ServiceGateway")
+	klog.Infof("initializeDiffTracker: fetched %d locations from ServiceGateway API", len(locationsDTO))
+	logObject(locationsDTO)
+	if err != nil {
+		return fmt.Errorf("initializeDiffTracker: failed to get locations from ServiceGateway API: %w", err)
+	}
+	for _, location := range locationsDTO {
+		addresses := make(map[string]difftracker.NRPAddress, 0)
+		for _, addr := range location.Addresses {
+			services := utilsets.NewString()
+			for _, svc := range addr.Services {
+				if svc != nil {
+					services.Insert(*svc)
+				}
+			}
+			addresses[*addr.Address] = difftracker.NRPAddress{
+				Services: services,
+			}
+		}
+		nrp.Locations[*location.AddressLocation] = difftracker.NRPLocation{
+			Addresses: addresses,
+		}
+	}
+
+	klog.Infof("initializeDiffTracker: fetched %d locations from ServiceGateway API", len(nrp.Locations))
+	logObject(nrp.Locations)
 	// END 5.
 
 	// Initialize the diff tracker state and get the necessary operations to sync the cluster with NRP
@@ -899,7 +941,7 @@ func (az *Cloud) WorkInProgressinitializeDiffTracker() error {
 	syncOperations := az.diffTracker.GetSyncOperations()
 	// END 8.
 
-	// 9. Create/Delete LoadBalancers in NRP
+	// 9. Create LoadBalancers and NATGateways in NRP
 	for _, uid := range syncOperations.LoadBalancerUpdates.Additions.UnsortedList() {
 		if !currentLoadBalancersInNRP.Has(uid) {
 			// Fallback cluster name (tags still expect a non-empty value in some helper paths):
@@ -917,26 +959,6 @@ func (az *Cloud) WorkInProgressinitializeDiffTracker() error {
 		}
 	}
 
-	for _, lb := range syncOperations.LoadBalancerUpdates.Removals.UnsortedList() {
-		if currentLoadBalancersInNRP.Has(lb) {
-			klog.Infof("initializeDiffTracker: Deleting Load Balancer %s from NRP", lb)
-			// Fallback cluster name (only needed for tag/SNAT helper paths reused in EnsureLoadBalancerDeleted)
-			clusterName := az.LoadBalancerName
-			if clusterName == "" {
-				clusterName = "kubernetes"
-			}
-			klog.Infof("initializeDiffTracker: Deleting Load Balancer %s from NRP", lb)
-			if err := az.ensureServiceLoadBalancerDeletedByUID(ctx, lb, clusterName); err != nil {
-				klog.Errorf("initializeDiffTracker: failed deleting LB %s: %v", lb, err)
-				continue
-			}
-			// Update local view to avoid redundant attempts in the same run.
-			currentLoadBalancersInNRP.Delete(lb)
-			klog.Infof("initializeDiffTracker: Successfully deleted Load Balancer %s from NRP", lb)
-		}
-	}
-
-	// 10. Create/Delete NATGateways in NRP
 	for _, natGatewayId := range syncOperations.NATGatewayUpdates.Additions.UnsortedList() {
 		if !currentNATGatewaysInNRP.Has(natGatewayId) {
 			klog.Infof("initializeDiffTracker: Creating NAT Gateway %s in NRP", natGatewayId)
@@ -962,7 +984,10 @@ func (az *Cloud) WorkInProgressinitializeDiffTracker() error {
 				SKU: &armnetwork.NatGatewaySKU{
 					Name: to.Ptr(armnetwork.NatGatewaySKUNameStandardV2)},
 				Location: to.Ptr(az.Location),
-				Properties: &armnetwork.NatGatewayPropertiesFormat{ // TODO (enechitoaia): What properties should we use for the Nat Gateway
+				Properties: &armnetwork.NatGatewayPropertiesFormat{
+					ServiceGateway: &armnetwork.ServiceGateway{
+						ID: to.Ptr(az.GetServiceGatewayID()),
+					},
 					PublicIPAddresses: []*armnetwork.SubResource{
 						{
 							ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s-pip",
@@ -974,26 +999,123 @@ func (az *Cloud) WorkInProgressinitializeDiffTracker() error {
 			az.createOrUpdateNatGateway(ctx, az.ResourceGroup, natGatewayResource)
 		}
 	}
+	// END 9.
+
+	// 10. Add Services in ServiceGateway API for created LBs and NATGateways
+	addServicesDTO := difftracker.MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
+		difftracker.SyncServicesReturnType{
+			Additions: syncOperations.LoadBalancerUpdates.Additions,
+			Removals:  nil,
+		},
+		difftracker.SyncServicesReturnType{
+			Additions: syncOperations.NATGatewayUpdates.Additions,
+			Removals:  nil,
+		}, az.SubscriptionID, az.ResourceGroup)
+	if len(addServicesDTO.Services) > 0 {
+		if err := az.UpdateNRPSGWServices(ctx, "ServiceGateway", addServicesDTO); err != nil {
+			return fmt.Errorf("initializeDiffTracker: failed to add services in ServiceGateway API: %w", err)
+		}
+		// Reflect additions in local NRP state
+		if syncOperations.LoadBalancerUpdates.Additions.Len() > 0 {
+			az.diffTracker.UpdateNRPLoadBalancers(difftracker.SyncServicesReturnType{
+				Additions: syncOperations.LoadBalancerUpdates.Additions,
+				Removals:  utilsets.NewString(),
+			})
+		}
+		if syncOperations.NATGatewayUpdates.Additions.Len() > 0 {
+			az.diffTracker.UpdateNRPNATGateways(difftracker.SyncServicesReturnType{
+				Additions: syncOperations.NATGatewayUpdates.Additions,
+				Removals:  utilsets.NewString(),
+			})
+		}
+	}
+	// END 10.
+
+	// 11. Update Addresses and Locations
+	if len(syncOperations.LocationData.Locations) > 0 {
+		locationsDTO := difftracker.MapLocationDataToDTO(syncOperations.LocationData)
+		if err := az.UpdateNRPSGWAddressLocations(ctx, "ServiceGateway", locationsDTO); err != nil {
+			return fmt.Errorf("initializeDiffTracker: failed to update locations in ServiceGateway API: %w", err)
+		}
+		az.diffTracker.UpdateLocationsAddresses(syncOperations.LocationData)
+	}
+	// END 11.
+
+	// 12. Delete Services in ServiceGateway API for deleted LBs and NATGateways
+	removeServicesDTO := difftracker.MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
+		difftracker.SyncServicesReturnType{
+			Additions: nil,
+			Removals:  syncOperations.LoadBalancerUpdates.Removals,
+		},
+		difftracker.SyncServicesReturnType{
+			Additions: nil,
+			Removals:  syncOperations.NATGatewayUpdates.Removals,
+		},
+		az.SubscriptionID,
+		az.ResourceGroup,
+	)
+	if len(removeServicesDTO.Services) > 0 {
+		if err := az.UpdateNRPSGWServices(ctx, "ServiceGateway", removeServicesDTO); err != nil {
+			return fmt.Errorf("initializeDiffTracker: failed to remove services in ServiceGateway API: %w", err)
+		}
+		// Reflect removals
+		if syncOperations.LoadBalancerUpdates.Removals.Len() > 0 {
+			az.diffTracker.UpdateNRPLoadBalancers(difftracker.SyncServicesReturnType{
+				Additions: utilsets.NewString(),
+				Removals:  syncOperations.LoadBalancerUpdates.Removals,
+			})
+		}
+		if syncOperations.NATGatewayUpdates.Removals.Len() > 0 {
+			az.diffTracker.UpdateNRPNATGateways(difftracker.SyncServicesReturnType{
+				Additions: utilsets.NewString(),
+				Removals:  syncOperations.NATGatewayUpdates.Removals,
+			})
+		}
+	}
+	// END 12.
+
+	// 13. Delete LoadBalancers and NATGateways in NRP
+	for _, lb := range syncOperations.LoadBalancerUpdates.Removals.UnsortedList() {
+		if currentLoadBalancersInNRP.Has(lb) {
+			klog.Infof("initializeDiffTracker: Deleting Load Balancer %s from NRP", lb)
+			// Fallback cluster name (only needed for tag/SNAT helper paths reused in EnsureLoadBalancerDeleted)
+			clusterName := az.LoadBalancerName
+			if clusterName == "" {
+				clusterName = "kubernetes"
+			}
+			klog.Infof("initializeDiffTracker: Deleting Load Balancer %s from NRP", lb)
+			if err := az.ensureServiceLoadBalancerDeletedByUID(ctx, lb, clusterName); err != nil {
+				klog.Errorf("initializeDiffTracker: failed deleting LB %s: %v", lb, err)
+				continue
+			}
+			// Update local view to avoid redundant attempts in the same run.
+			currentLoadBalancersInNRP.Delete(lb)
+			klog.Infof("initializeDiffTracker: Successfully deleted Load Balancer %s from NRP", lb)
+		}
+	}
 
 	for _, natGatewayId := range syncOperations.NATGatewayUpdates.Removals.UnsortedList() {
 		if currentNATGatewaysInNRP.Has(natGatewayId) {
 			klog.Infof("initializeDiffTracker: Deleting NAT Gateway %s from NRP", natGatewayId)
+			// az.DetachNatGatewayFromServiceGateway(ctx, az.ResourceGroup, natGatewayId)
 			az.deleteNatGateway(ctx, az.ResourceGroup, natGatewayId)
 			az.DeletePublicIPOutbound(az.ResourceGroup, fmt.Sprintf("%s-pip", natGatewayId))
 		}
 	}
 	// END 9. and 10.
 
-	// ----- Perform ordered ServiceGateway sync (add -> locations -> remove) -----
-	if err := az.initialServiceGatewaySync(ctx, syncOperations); err != nil {
-		return fmt.Errorf("initializeDiffTracker: ordered ServiceGateway sync failed: %w", err)
-	}
+	// // ----- Perform ordered ServiceGateway sync (add -> locations -> remove) -----
+	// if err := az.initialServiceGatewaySync(ctx, syncOperations); err != nil {
+	// 	return fmt.Errorf("initializeDiffTracker: ordered ServiceGateway sync failed: %w", err)
+	// }
 
+	az.diffTracker.InitialSyncDone = true
+	klog.Infof("initializeDiffTracker: az.diffTracker.InitialSyncDone: %v", az.diffTracker.InitialSyncDone)
 	klog.Infof("initializeDiffTracker: completed ordered ServiceGateway sync and initialization")
 	return nil
 }
 
-func (az *Cloud) initializeDiffTracker() error {
+func (az *Cloud) STUBinitializeDiffTracker() error {
 	// TODO (enechitoaia): CONSTRUCT K8s and NRP from the current state of the cluster
 	k8s := difftracker.K8s_State{
 		Services: utilsets.NewString(),

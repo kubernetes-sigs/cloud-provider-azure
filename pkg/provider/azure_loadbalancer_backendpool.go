@@ -432,6 +432,16 @@ func (az *Cloud) getVnetResourceID() string {
 	)
 }
 
+func (az *Cloud) GetServiceGatewayID() string {
+	serviceGatewayName := "ServiceGateway"
+	return fmt.Sprintf(
+		"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/serviceGateways/%s",
+		az.SubscriptionID,
+		az.ResourceGroup,
+		serviceGatewayName,
+	)
+}
+
 func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(ctx context.Context, service *v1.Service, nodes []*v1.Node, _, _, clusterName, lbName string, backendPool *armnetwork.BackendAddressPool) error {
 	if backendPool == nil {
 		backendPool = &armnetwork.BackendAddressPool{}

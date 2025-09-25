@@ -90,6 +90,8 @@ type DiffTracker struct {
 
 	PodEgressQueue                  workqueue.TypedRateLimitingInterface[PodCrudEvent]
 	LocalServiceNameToNRPServiceMap sync.Map
+
+	InitialSyncDone bool
 }
 
 // --------------------------------------------------------------------------------
@@ -195,7 +197,7 @@ type ServiceDTO struct {
 	ServiceType              ServiceType                  `json:"ServiceType"`
 	LoadBalancerBackendPools []LoadBalancerBackendPoolDTO `json:"LoadBalancerBackendPools"`
 	PublicNatGateway         NatGatewayDTO                `json:"PublicNatGateway"`
-	isDelete                 bool
+	IsDelete                 bool
 }
 
 type ServicesDataDTO struct {

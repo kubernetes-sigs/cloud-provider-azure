@@ -9052,6 +9052,9 @@ type NatGatewayPropertiesFormat struct {
 	// An array of public ip prefixes associated with the nat gateway resource.
 	PublicIPPrefixes []*SubResource
 
+	// Reference to an existing service gateway.
+	ServiceGateway *ServiceGateway
+
 	// READ-ONLY; The provisioning state of the NAT gateway resource.
 	ProvisioningState *ProvisioningState
 

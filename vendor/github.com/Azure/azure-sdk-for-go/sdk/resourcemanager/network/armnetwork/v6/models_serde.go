@@ -11,8 +11,9 @@ package armnetwork
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"reflect"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 )
 
 // MarshalJSON implements the json.Marshaller interface for type AADAuthenticationParameters.
@@ -22473,6 +22474,7 @@ func (n NatGatewayPropertiesFormat) MarshalJSON() ([]byte, error) {
 	populate(objectMap, "publicIpAddresses", n.PublicIPAddresses)
 	populate(objectMap, "publicIpPrefixes", n.PublicIPPrefixes)
 	populate(objectMap, "resourceGuid", n.ResourceGUID)
+	populate(objectMap, "ServiceGateway", n.ServiceGateway)
 	populate(objectMap, "subnets", n.Subnets)
 	return json.Marshal(objectMap)
 }
@@ -22500,6 +22502,9 @@ func (n *NatGatewayPropertiesFormat) UnmarshalJSON(data []byte) error {
 			delete(rawMsg, key)
 		case "resourceGuid":
 			err = unpopulate(val, "ResourceGUID", &n.ResourceGUID)
+			delete(rawMsg, key)
+		case "ServiceGateway":
+			err = unpopulate(val, "ServiceGateway", &n.ServiceGateway)
 			delete(rawMsg, key)
 		case "subnets":
 			err = unpopulate(val, "Subnets", &n.Subnets)
