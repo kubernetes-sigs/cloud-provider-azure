@@ -20,8 +20,11 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"math/rand"
 	"os"
+	"os/signal"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -38,27 +41,31 @@ func main() {
 	var RegistryMirrorStr string
 
 	command := &cobra.Command{
-		Use:     "acr-credential-provider configFile",
-		Short:   "Acr credential provider for Kubelet",
-		Long:    `The acr credential provider is responsible for providing ACR credentials for kubelet`,
-		Args:    cobra.MinimumNArgs(1),
-		Version: version.Get().GitVersion,
-		Run: func(_ *cobra.Command, args []string) {
-			if len(args) != 1 {
-				klog.Errorf("Config file is not specified")
-				os.Exit(1)
+		Use:   "acr-credential-provider configFile",
+		Short: "Acr credential provider for Kubelet",
+		Long:  `The acr credential provider is responsible for providing ACR credentials for kubelet`,
+		Args: func(_ *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return errors.New("Config file is not specified")
 			}
-
+			if len(args) > 1 {
+				return fmt.Errorf("expected exactly one argument (config file); Got arguments: %v", args)
+			}
+			return nil
+		},
+		Version: version.Get().GitVersion,
+		RunE: func(cmd *cobra.Command, args []string) error {
 			acrProvider, err := credentialprovider.NewAcrProviderFromConfig(args[0], RegistryMirrorStr)
 			if err != nil {
 				klog.Errorf("Failed to initialize ACR provider: %v", err)
-				os.Exit(1)
+				return err
 			}
 
-			if err := NewCredentialProvider(acrProvider).Run(context.TODO()); err != nil {
+			if err := NewCredentialProvider(acrProvider).Run(cmd.Context()); err != nil {
 				klog.Errorf("Error running acr credential provider: %v", err)
-				os.Exit(1)
+				return err
 			}
+			return nil
 		},
 	}
 
@@ -70,7 +77,11 @@ func main() {
 		"Mirror a source registry host to a target registry host, and image pull credential will be requested to the target registry host when the image is from source registry host")
 
 	logs.AddFlags(command.Flags())
-	if err := command.Execute(); err != nil {
+	if err := func() error {
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer cancel()
+		return command.ExecuteContext(ctx)
+	}(); err != nil {
 		os.Exit(1)
 	}
 }
