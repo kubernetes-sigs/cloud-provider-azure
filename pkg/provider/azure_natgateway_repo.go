@@ -27,6 +27,18 @@ import (
 	"k8s.io/utils/ptr"
 )
 
+func (az *Cloud) getNatGateway(ctx context.Context, natGatewayResourceGroup string, natGatewayName string) (*armnetwork.NatGateway, error) {
+	klog.Infof("NatGatewayClient.Get(%s) in resource group %s: start", natGatewayName, natGatewayResourceGroup)
+	result, err := az.NetworkClientFactory.GetNatGatewayClient().Get(ctx, natGatewayResourceGroup, natGatewayName, nil)
+	if err != nil {
+		klog.Errorf("NatGatewayClient.Get(%s) in resource group %s failed: %v", natGatewayName, natGatewayResourceGroup, err)
+		return nil, err
+	}
+	klog.V(10).Infof("NatGatewayClient.Get(%s) in resource group %s: success", natGatewayName, natGatewayResourceGroup)
+	klog.Infof("NatGatewayClient.Get(%s) in resource group %s: end, error: nil", natGatewayName, natGatewayResourceGroup)
+	return result, nil
+}
+
 // CreateOrUpdateLB invokes az.NetworkClientFactory.GetLoadBalancerClient().CreateOrUpdate with exponential backoff retry
 func (az *Cloud) createOrUpdateNatGateway(ctx context.Context, natGatewayResourceGroup string, natGateway armnetwork.NatGateway) error {
 	natGatewayName := ptr.Deref(natGateway.Name, "")

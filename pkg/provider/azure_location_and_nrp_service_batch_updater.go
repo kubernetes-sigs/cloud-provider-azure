@@ -20,7 +20,6 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
-	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 // LocationAndNRPServiceBatchUpdater is a batch processor for updating NRP locations and services.
@@ -422,17 +421,17 @@ func (az *Cloud) podInformerRemovePod(pod *v1.Pod) {
 				EventType: "Delete",
 			})
 
-			az.diffTracker.UpdateK8sEgress(difftracker.UpdateK8sResource{
-				Operation: difftracker.REMOVE,
-				ID:        staticGatewayConfigurationName,
-			})
-			az.diffTracker.UpdateK8sPod(difftracker.UpdatePodInputType{
-				PodOperation:           difftracker.REMOVE,
-				PublicOutboundIdentity: staticGatewayConfigurationName,
-				Location:               pod.Status.HostIP,
-				Address:                pod.Status.PodIP,
-			})
-			az.TriggerLocationAndNRPServiceBatchUpdate()
+			// az.diffTracker.UpdateK8sEgress(difftracker.UpdateK8sResource{
+			// 	Operation: difftracker.REMOVE,
+			// 	ID:        staticGatewayConfigurationName,
+			// })
+			// az.diffTracker.UpdateK8sPod(difftracker.UpdatePodInputType{
+			// 	PodOperation:           difftracker.REMOVE,
+			// 	PublicOutboundIdentity: staticGatewayConfigurationName,
+			// 	Location:               pod.Status.HostIP,
+			// 	Address:                pod.Status.PodIP,
+			// })
+			// az.TriggerLocationAndNRPServiceBatchUpdate()
 		}
 	} else {
 		// error
@@ -666,19 +665,21 @@ func (updater *podEgressResourceUpdater) process(ctx context.Context) {
 			service := eventData.Service
 
 			klog.Infof("Processing event: %s, pod %s/%s for service %s", event.EventType, location, address, service)
+			// TODO(enechitoaia): remove after testing
 			// Remove here Locations and Addresses (the overlay) needed to afterwards remove
-			removeNATGatewayRequestDTO := difftracker.MapNATGatewayUpdatesToServicesDataDTO(
-				difftracker.SyncServicesReturnType{
-					Additions: nil,
-					Removals:  utilsets.NewString(service),
-				},
-				updater.az.SubscriptionID,
-				updater.az.ResourceGroup,
-			)
-			klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: removeNATGatewayRequestDTO:\n")
-			logObject(removeNATGatewayRequestDTO)
+			// removeNATGatewayRequestDTO := difftracker.MapNATGatewayUpdatesToServicesDataDTO(
+			// 	difftracker.SyncServicesReturnType{
+			// 		Additions: nil,
+			// 		Removals:  utilsets.NewString(service),
+			// 	},
+			// 	updater.az.SubscriptionID,
+			// 	updater.az.ResourceGroup,
+			// )
+			// klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: removeNATGatewayRequestDTO:\n")
+			// logObject(removeNATGatewayRequestDTO)
+			err := updater.az.DisassociateNatGatewayFromServiceGateway(ctx, "ServiceGateway", service)
 			// err := NRPAPIClientUpdateNRPServices(ctx, removeNATGatewayRequestDTO, updater.az.SubscriptionID, updater.az.ResourceGroup)
-			err := updater.az.UpdateNRPSGWServices(ctx, "ServiceGateway", removeNATGatewayRequestDTO)
+			// err := updater.az.UpdateNRPSGWServices(ctx, "ServiceGateway", removeNATGatewayRequestDTO)
 			klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: removeNATGatewayResponseDTO:\n")
 			if err == nil {
 				klog.Infof("CLB-ENECHITOAIA-podEgressResourceUpdater.process: removeNATGatewayResponseDTO is nil")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
@@ -156,6 +157,67 @@ func (az *Cloud) UpdateNRPSGWAddressLocations(ctx context.Context, serviceGatewa
 	}
 
 	klog.Infof("CLB-ENECHITOAIA: successfully updated NRP service gateway address locations for %s in resource group %s", serviceGatewayName, az.ResourceGroup)
+	return nil
+}
+
+func (az *Cloud) DisassociateNatGatewayFromServiceGateway(ctx context.Context, serviceGatewayName string, natGatewayName string) error {
+	klog.Infof("Disassociating NAT Gateway %s from Service Gateway %s in resource group %s", natGatewayName, serviceGatewayName, az.ResourceGroup)
+
+	// First get the service and remove the nat gateway reference
+	services, err := az.GetServices(ctx, serviceGatewayName)
+	if err != nil {
+		klog.Errorf("Failed to get Service Gateway %s: %v", serviceGatewayName, err)
+		return err
+	}
+
+	var serviceToBeUpdated *armnetwork.ServiceGatewayService
+	for _, service := range services {
+		if service.Name != nil && *service.Name == natGatewayName {
+			serviceToBeUpdated = service
+			break
+		}
+	}
+
+	if serviceToBeUpdated == nil {
+		klog.Infof("NAT Gateway %s is not associated with Service Gateway %s", natGatewayName, serviceGatewayName)
+		return nil
+	}
+
+	if serviceToBeUpdated.Properties != nil {
+		serviceToBeUpdated.Properties.PublicNatGatewayID = nil
+	}
+
+	updateServicesRequest := armnetwork.ServiceGatewayUpdateServicesRequest{
+		Action:          to.Ptr(armnetwork.ServiceGatewayUpdateServicesRequestActionPartialUpdate),
+		ServiceRequests: []*armnetwork.ServiceGatewayServiceRequest{},
+	}
+
+	updateServicesRequest.ServiceRequests = append(updateServicesRequest.ServiceRequests, &armnetwork.ServiceGatewayServiceRequest{
+		IsDelete: to.Ptr(false),
+		Service:  serviceToBeUpdated,
+	})
+
+	err = az.UpdateServices(ctx, serviceGatewayName, updateServicesRequest)
+	if err != nil {
+		klog.Errorf("Failed to update Service Gateway %s to disassociate NAT Gateway %s: %v", serviceGatewayName, natGatewayName, err)
+		return err
+	}
+	klog.Infof("Successfully removed NAT Gateway %s reference from Service Gateway %s", natGatewayName, serviceGatewayName)
+
+	// Now get the NAT gateway and remove the service gateway reference
+
+	natGateway, err := az.getNatGateway(ctx, az.ResourceGroup, natGatewayName)
+	if err != nil {
+		klog.Errorf("Failed to get NAT Gateway %s: %v", natGatewayName, err)
+		return err
+	}
+	natGateway.Properties.ServiceGateway = nil
+	err = az.createOrUpdateNatGateway(ctx, az.ResourceGroup, *natGateway)
+	if err != nil {
+		klog.Errorf("Failed to disassociate NAT Gateway %s from Service Gateway %s: %v", natGatewayName, serviceGatewayName, err)
+		return err
+	}
+	klog.Infof("Successfully disassociated NAT Gateway %s from Service Gateway %s in resource group %s", natGatewayName, serviceGatewayName, az.ResourceGroup)
 	return nil
 }
 
