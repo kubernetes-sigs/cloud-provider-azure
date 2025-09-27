@@ -78,7 +78,7 @@ interactions:
                 - application/json
             User-Agent:
                 - azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent?api-version=2025-01-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -184,7 +184,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-BlobContainer-client azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent/blobServices/default/containers/akscitblobsdktest?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent/blobServices/default/containers/akscitblobsdktest?api-version=2025-01-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -237,7 +237,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-BlobContainer-client azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent/blobServices/default/containers?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent/blobServices/default/containers?api-version=2025-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -288,7 +288,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-BlobContainer-client azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent/blobServices/default/containers/akscitblobsdktest?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent/blobServices/default/containers/akscitblobsdktest?api-version=2025-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -390,7 +390,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-BlobContainer-client azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent/blobServices/default/containers/akscitblobsdktest?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent/blobServices/default/containers/akscitblobsdktest?api-version=2025-01-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -439,7 +439,7 @@ interactions:
         headers:
             User-Agent:
                 - azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent?api-version=2025-01-01
         method: DELETE
       response:
         proto: HTTP/2.0
