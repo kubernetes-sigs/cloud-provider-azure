@@ -10,7 +10,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 v6.4.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6 v6.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns v1.3.0
-	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage v1.8.1
+	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage/v2 v2.0.0
 	github.com/evanphx/json-patch v5.9.11+incompatible
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-logr/logr v1.4.3
@@ -41,7 +41,7 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubelet v0.34.1
 	k8s.io/utils v0.0.0-20250820121507-0af2bda4dd1d
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.9.2
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.9.3
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.8.6
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.8.7
 	sigs.k8s.io/yaml v1.6.0
@@ -117,12 +117,12 @@ require (
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.41.0 // indirect
-	golang.org/x/exp v0.0.0-20250819193227-8b4c13bb791b // indirect
-	golang.org/x/net v0.43.0 // indirect
+	golang.org/x/crypto v0.42.0 // indirect
+	golang.org/x/exp v0.0.0-20250911091902-df9299821621 // indirect
+	golang.org/x/net v0.44.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
-	golang.org/x/term v0.34.0 // indirect
-	golang.org/x/time v0.12.0 // indirect
+	golang.org/x/term v0.35.0 // indirect
+	golang.org/x/time v0.13.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250826171959-ef028d996bc1 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250826171959-ef028d996bc1 // indirect
 	google.golang.org/grpc v1.75.0 // indirect
