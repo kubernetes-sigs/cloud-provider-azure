@@ -19,6 +19,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -79,10 +80,25 @@ func Test_runPlugin(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			p := NewCredentialProvider(&fakePlugin{})
+			configFile, err := os.CreateTemp(".", "config.json")
+			if err != nil {
+				t.Fatalf("Unexpected error when creating temp file: %v", err)
+			}
+			defer os.Remove(configFile.Name())
 
+			_, err = configFile.WriteString(`
+			{
+				"aadClientId": "foo",
+				"aadClientSecret": "bar"
+			}`)
+			if err != nil {
+				t.Fatalf("Unexpected error when writing to temp file: %v", err)
+			}
+			p := NewCredentialProvider(configFile.Name(), "mcr.microsoft.com:fakeacrname.azurecr.io")
+			p.plugin = &fakePlugin{}
 			out := &bytes.Buffer{}
-			err := p.runPlugin(context.TODO(), testcase.in, out, nil)
+
+			err = p.runPlugin(context.TODO(), testcase.in, out, []string{configFile.Name(), "--registry-mirror=mcr.microsoft.com:fakeacrname.azurecr.io"})
 			if err != nil && !testcase.expectErr {
 				t.Fatal(err)
 			}
