@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
+	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage/v2"
 	"go.uber.org/mock/gomock"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient/mock_accountclient"
