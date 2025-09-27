@@ -78,7 +78,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-Account-client azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Account/providers/Microsoft.Storage/storageAccounts/akscitaccountsdktest?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Account/providers/Microsoft.Storage/storageAccounts/akscitaccountsdktest?api-version=2025-01-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -180,7 +180,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-Account-client azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Account/providers/Microsoft.Storage/storageAccounts/akscitaccountsdktest?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Account/providers/Microsoft.Storage/storageAccounts/akscitaccountsdktest?api-version=2025-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -286,7 +286,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-Account-client azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Account/providers/Microsoft.Storage/storageAccounts/akscitaccountsdktest?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Account/providers/Microsoft.Storage/storageAccounts/akscitaccountsdktest?api-version=2025-01-01
         method: PATCH
       response:
         proto: HTTP/2.0
@@ -341,7 +341,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-Account-client azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Account/providers/Microsoft.Storage/storageAccounts/akscitaccountsdktest?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Account/providers/Microsoft.Storage/storageAccounts/akscitaccountsdktest?api-version=2025-01-01
         method: PATCH
       response:
         proto: HTTP/2.0
@@ -392,7 +392,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-Account-client azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Account/providers/Microsoft.Storage/storageAccounts/akscitaccountsdktest/listKeys?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Account/providers/Microsoft.Storage/storageAccounts/akscitaccountsdktest/listKeys?api-version=2025-01-01
         method: POST
       response:
         proto: HTTP/2.0
@@ -441,7 +441,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-Account-client azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Account/providers/Microsoft.Storage/storageAccounts?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Account/providers/Microsoft.Storage/storageAccounts?api-version=2025-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -494,7 +494,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-Account-client azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Accountnotfound/providers/Microsoft.Storage/storageAccounts?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Accountnotfound/providers/Microsoft.Storage/storageAccounts?api-version=2025-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -543,7 +543,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-Account-client azsdk-go-armstorage/v1.7.0 (go1.23.4; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Account/providers/Microsoft.Storage/storageAccounts/akscitaccountsdktest?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Account/providers/Microsoft.Storage/storageAccounts/akscitaccountsdktest?api-version=2025-01-01
         method: DELETE
       response:
         proto: HTTP/2.0
