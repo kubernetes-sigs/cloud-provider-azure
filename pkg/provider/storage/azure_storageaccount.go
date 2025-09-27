@@ -77,6 +77,7 @@ type AccountOptions struct {
 	RequireInfrastructureEncryption         *bool
 	AllowSharedKeyAccess                    *bool
 	IsMultichannelEnabled                   *bool
+	IsSmbOAuthEnabled                       *bool
 	KeyName                                 *string
 	KeyVersion                              *string
 	KeyVaultURI                             *string
@@ -602,6 +603,18 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 					File: &armstorage.EncryptionService{Enabled: ptr.To(true)},
 					Blob: &armstorage.EncryptionService{Enabled: ptr.To(true)},
 				},
+			}
+		}
+
+		if accountOptions.IsSmbOAuthEnabled != nil {
+			klog.V(2).Infof("set IsSmbOAuthEnabled(%v) for storage account(%s)", *accountOptions.IsSmbOAuthEnabled, accountName)
+			if cp.Properties.AzureFilesIdentityBasedAuthentication == nil {
+				cp.Properties.AzureFilesIdentityBasedAuthentication = &armstorage.AzureFilesIdentityBasedAuthentication{
+					DirectoryServiceOptions: to.Ptr(armstorage.DirectoryServiceOptionsNone),
+				}
+			}
+			cp.Properties.AzureFilesIdentityBasedAuthentication.SmbOAuthSettings = &armstorage.SmbOAuthSettings{
+				IsSmbOAuthEnabled: accountOptions.IsSmbOAuthEnabled,
 			}
 		}
 
