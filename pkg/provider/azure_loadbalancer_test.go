@@ -1305,7 +1305,7 @@ func TestShouldReleaseExistingOwnedPublicIP(t *testing.T) {
 			expectedShouldRelease: false,
 		},
 		{
-			desc:           "existing public ip with no format properties (unit test only?), tags required by annotation, expect release",
+			desc:           "existing public ip with no format properties (unit test only?), tags required by annotation, should NOT release (update instead)",
 			existingPip:    existingPipWithNoPublicIPAddressFormatProperties,
 			lbShouldExist:  true,
 			lbIsInternal:   false,
@@ -1314,7 +1314,7 @@ func TestShouldReleaseExistingOwnedPublicIP(t *testing.T) {
 				IPTagsRequestedByAnnotation: true,
 				IPTags:                      existingPipWithTag.Properties.IPTags,
 			},
-			expectedShouldRelease: true,
+			expectedShouldRelease: false,
 		},
 		{
 			desc:           "LB no longer desired, expect release",
@@ -1353,7 +1353,7 @@ func TestShouldReleaseExistingOwnedPublicIP(t *testing.T) {
 			expectedShouldRelease: true,
 		},
 		{
-			desc:           "mismatching, expect release",
+			desc:           "mismatching IP tags, should NOT release (update instead)",
 			existingPip:    existingPipWithTag,
 			lbShouldExist:  true,
 			lbIsInternal:   false,
@@ -1367,7 +1367,7 @@ func TestShouldReleaseExistingOwnedPublicIP(t *testing.T) {
 					},
 				},
 			},
-			expectedShouldRelease: true,
+			expectedShouldRelease: false,
 		},
 		{
 			// This test is for IPv6 PIP created with CCM v1.27.1 and CCM gets upgraded.
@@ -6389,6 +6389,162 @@ func TestEnsurePIPTagged(t *testing.T) {
 		assert.True(t, changed)
 		assert.Equal(t, expectedPIP, pip)
 	})
+}
+
+func TestEnsurePIPIPTagged(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cloud := GetTestCloud(ctrl)
+
+	tests := []struct {
+		name              string
+		service           *v1.Service
+		pip               *armnetwork.PublicIPAddress
+		expectedChanged   bool
+		expectedIPTags    []*armnetwork.IPTag
+	}{
+		{
+			name: "should update IP tags when they differ",
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						consts.ServiceAnnotationIPTagsForPublicIP: "tag1=value1,tag2=value2",
+					},
+				},
+			},
+			pip: &armnetwork.PublicIPAddress{
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					IPTags: []*armnetwork.IPTag{
+						{
+							IPTagType: ptr.To("tag1"),
+							Tag:       ptr.To("oldvalue1"),
+						},
+					},
+				},
+			},
+			expectedChanged: true,
+			expectedIPTags: []*armnetwork.IPTag{
+				{
+					IPTagType: ptr.To("tag1"),
+					Tag:       ptr.To("value1"),
+				},
+				{
+					IPTagType: ptr.To("tag2"),
+					Tag:       ptr.To("value2"),
+				},
+			},
+		},
+		{
+			name: "should not change when IP tags match",
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						consts.ServiceAnnotationIPTagsForPublicIP: "tag1=value1",
+					},
+				},
+			},
+			pip: &armnetwork.PublicIPAddress{
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					IPTags: []*armnetwork.IPTag{
+						{
+							IPTagType: ptr.To("tag1"),
+							Tag:       ptr.To("value1"),
+						},
+					},
+				},
+			},
+			expectedChanged: false,
+			expectedIPTags: []*armnetwork.IPTag{
+				{
+					IPTagType: ptr.To("tag1"),
+					Tag:       ptr.To("value1"),
+				},
+			},
+		},
+		{
+			name: "should not change when no IP tags requested",
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{},
+				},
+			},
+			pip: &armnetwork.PublicIPAddress{
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					IPTags: []*armnetwork.IPTag{
+						{
+							IPTagType: ptr.To("tag1"),
+							Tag:       ptr.To("value1"),
+						},
+					},
+				},
+			},
+			expectedChanged: false,
+			expectedIPTags: []*armnetwork.IPTag{
+				{
+					IPTagType: ptr.To("tag1"),
+					Tag:       ptr.To("value1"),
+				},
+			},
+		},
+		{
+			name: "should add IP tags to PIP with no properties",
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						consts.ServiceAnnotationIPTagsForPublicIP: "tag1=value1",
+					},
+				},
+			},
+			pip: &armnetwork.PublicIPAddress{
+				Properties: nil,
+			},
+			expectedChanged: true,
+			expectedIPTags: []*armnetwork.IPTag{
+				{
+					IPTagType: ptr.To("tag1"),
+					Tag:       ptr.To("value1"),
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Make a copy to avoid modifying the test data
+			pip := *test.pip
+			if test.pip.Properties != nil {
+				propertiesCopy := *test.pip.Properties
+				pip.Properties = &propertiesCopy
+				if test.pip.Properties.IPTags != nil {
+					pip.Properties.IPTags = make([]*armnetwork.IPTag, len(test.pip.Properties.IPTags))
+					for i, tag := range test.pip.Properties.IPTags {
+						tagCopy := *tag
+						pip.Properties.IPTags[i] = &tagCopy
+					}
+				}
+			}
+
+			changed := cloud.ensurePIPIPTagged(test.service, &pip)
+			assert.Equal(t, test.expectedChanged, changed, "unexpected changed result")
+
+			if pip.Properties != nil {
+				// Sort both actual and expected tags for comparison
+				if pip.Properties.IPTags != nil {
+					sortIPTags(&pip.Properties.IPTags)
+				}
+				expectedCopy := make([]*armnetwork.IPTag, len(test.expectedIPTags))
+				for i, tag := range test.expectedIPTags {
+					tagCopy := *tag
+					expectedCopy[i] = &tagCopy
+				}
+				sortIPTags(&expectedCopy)
+				assert.Equal(t, expectedCopy, pip.Properties.IPTags, "unexpected IP tags")
+			} else {
+				assert.Empty(t, test.expectedIPTags, "expected no IP tags but PIP has no properties")
+			}
+		})
+	}
 }
 
 func TestEnsureLoadBalancerTagged(t *testing.T) {
