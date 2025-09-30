@@ -35,14 +35,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@ec9f2d5744a09debf3a187a3f4f675c53b671911 # v2.13.0
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
         with:
           egress-policy: audit
 
       - name: Checkout code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       - name: Set up Go 1.x
-        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
         with:
           go-version-file: 'go.mod'
           check-latest: true
@@ -58,7 +58,7 @@ jobs:
           cd health-probe-proxy && make build-health-probe-proxy-image && cd ..
 
       - name: Run Trivy scanner CCM
-        uses: aquasecurity/trivy-action@f9424c10c36e288d5fa79bd3dfd1aeb2d6eae808 # master
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # master
         with:
           image-ref: 'local/azure-cloud-controller-manager:${{ github.sha }}'
           format: 'sarif'
@@ -69,12 +69,12 @@ jobs:
         env:
           TRIVY_SKIP_DB_UPDATE: true
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@3c3833e0f8c1c83d449a7478aa59c036a9165498 # v3.29.5
+        uses: github/codeql-action/upload-sarif@3599b3baa15b485a2e49ef411a7a4bb2452e7f93 # v3.29.5
         with:
           sarif_file: 'trivy-ccm-results.sarif'
           category: azure-cloud-controller-manager-image
       - name: Run Trivy scanner CNM
-        uses: aquasecurity/trivy-action@f9424c10c36e288d5fa79bd3dfd1aeb2d6eae808 # master
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # master
         with:
           image-ref: 'local/azure-cloud-node-manager:${{ github.sha }}-linux-amd64'
           format: 'sarif'
@@ -85,12 +85,12 @@ jobs:
         env:
           TRIVY_SKIP_DB_UPDATE: true
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@3c3833e0f8c1c83d449a7478aa59c036a9165498 # v3.29.5
+        uses: github/codeql-action/upload-sarif@3599b3baa15b485a2e49ef411a7a4bb2452e7f93 # v3.29.5
         with:
           sarif_file: 'trivy-cnm-linux-results.sarif'
           category: azure-cloud-node-manager-linux-image
       - name: Run Trivy scanner health-probe-proxy
-        uses: aquasecurity/trivy-action@f9424c10c36e288d5fa79bd3dfd1aeb2d6eae808 # master
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # master
         with:
           image-ref: 'local/health-probe-proxy:${{ github.sha }}'
           format: 'sarif'
@@ -101,13 +101,13 @@ jobs:
         env:
           TRIVY_SKIP_DB_UPDATE: true
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@3c3833e0f8c1c83d449a7478aa59c036a9165498 # v3.29.5
+        uses: github/codeql-action/upload-sarif@3599b3baa15b485a2e49ef411a7a4bb2452e7f93 # v3.29.5
         with:
           sarif_file: 'trivy-health-probe-proxy-linux-results.sarif'
           category: health-probe-proxy-linux-image
 
       - name: Run Trivy vulnerability scanner in repo mode
-        uses: aquasecurity/trivy-action@f9424c10c36e288d5fa79bd3dfd1aeb2d6eae808 # master
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # master
         with:
           scan-type: 'fs'
           format: 'github'
