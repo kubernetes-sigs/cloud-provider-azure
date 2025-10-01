@@ -2,13 +2,54 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 )
+
+func (az *Cloud) existsServiceGateway(ctx context.Context, serviceGatewayName string) (bool, error) {
+	_, err := az.GetServiceGateway(ctx, serviceGatewayName)
+	if err != nil {
+		if strings.Contains(err.Error(), consts.ResourceNotFoundMessageCode) {
+			return false, nil
+		}
+		klog.Infof("ExistsServiceGateway: error checking existence of Service Gateway %s in resource group %s: %v", serviceGatewayName, az.ResourceGroup, err)
+		return false, err
+	}
+	return true, nil
+}
+
+func (az *Cloud) createServiceGateway(ctx context.Context, serviceGatewayName string) error {
+	// Create the service gateway if it does not exist.
+	serviceGateway := armnetwork.ServiceGateway{
+		Location: to.Ptr(az.Location),
+		SKU: &armnetwork.ServiceGatewaySKU{
+			Name: to.Ptr(armnetwork.ServiceGatewaySKUNameStandard),
+			Tier: to.Ptr(armnetwork.ServiceGatewaySKUTierRegional),
+		},
+		Properties: &armnetwork.ServiceGatewayPropertiesFormat{
+			VirtualNetwork: &armnetwork.VirtualNetwork{ID: to.Ptr(fmt.Sprintf(
+				"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/virtualNetworks/%s",
+				az.SubscriptionID,
+				az.ResourceGroup,
+				az.VnetName,
+			))},
+		},
+	}
+	// logObject(serviceGateway)
+	err := az.CreateOrUpdateServiceGateway(ctx, serviceGatewayName, serviceGateway)
+	if err != nil {
+		klog.Infof("createServiceGateway: error creating Service Gateway %s in resource group %s: %v", serviceGatewayName, az.ResourceGroup, err)
+		return fmt.Errorf("InitializeCloudFromConfig: failed to create Service Gateway %s: %w", serviceGatewayName, err)
+	}
+	klog.Infof("createServiceGateway: successfully created Service Gateway %s in resource group %s", serviceGatewayName, az.ResourceGroup)
+	return nil
+}
 
 func extractResourceChildName(id, segment string) string {
 	if id == "" {
@@ -32,10 +73,10 @@ func extractResourceChildName(id, segment string) string {
 
 func (az *Cloud) UpdateNRPSGWServices(ctx context.Context, serviceGatewayName string, updateServicesRequestDTO difftracker.ServicesDataDTO) error {
 	if len(updateServicesRequestDTO.Services) == 0 {
-		klog.Infof("CLB-ENECHITOAIA: no services to update for NRP service gateway %s in resource group %s", serviceGatewayName, az.ResourceGroup)
+		klog.Infof("UpdateNRPSGWServices: no services to update for NRP service gateway %s in resource group %s", serviceGatewayName, az.ResourceGroup)
 		return nil
 	}
-	klog.V(2).InfoS("Updating NRP service gateway", "serviceGatewayName", serviceGatewayName)
+	klog.V(2).Infof("Updating NRP service gateway services for %s in resource group %s", serviceGatewayName, az.ResourceGroup)
 
 	var action armnetwork.ServiceGatewayUpdateServicesRequestAction
 	switch updateServicesRequestDTO.Action {
@@ -91,21 +132,21 @@ func (az *Cloud) UpdateNRPSGWServices(ctx context.Context, serviceGatewayName st
 			},
 		})
 	}
-	klog.Infof("CLB-ENECHITOAIA: UpdateNRPSGWServices request: %+v", req)
-	logObject(req)
+	// klog.Infof("CLB-ENECHITOAIA: UpdateNRPSGWServices request: %+v", req)
+	// logObject(req)
 
 	err := az.UpdateServices(ctx, serviceGatewayName, req)
 	if err != nil {
-		klog.Infof("CLB-ENECHITOAIA: error updating NRP service gateway services for %s in resource group %s: %v", serviceGatewayName, az.ResourceGroup, err)
+		klog.Infof("UpdateNRPSGWServices: error updating NRP service gateway services for %s in resource group %s: %v", serviceGatewayName, az.ResourceGroup, err)
 		return err
 	}
 
-	klog.Infof("CLB-ENECHITOAIA: successfully updated NRP service gateway services for %s in resource group %s", serviceGatewayName, az.ResourceGroup)
+	klog.Infof("UpdateNRPSGWServices: successfully updated NRP service gateway services for %s in resource group %s", serviceGatewayName, az.ResourceGroup)
 	return nil
 }
 
 func (az *Cloud) UpdateNRPSGWAddressLocations(ctx context.Context, serviceGatewayName string, updateAddressLocationsRequestDTO difftracker.LocationsDataDTO) error {
-	klog.V(2).InfoS("Updating NRP service gateway address locations", "serviceGatewayName", serviceGatewayName)
+	klog.V(2).Infof("UpdateNRPSGWAddressLocations: Updating NRP service gateway address locations for %s in resource group %s", serviceGatewayName, az.ResourceGroup)
 
 	var action armnetwork.ServiceGatewayUpdateAddressLocationsRequestAction
 	switch updateAddressLocationsRequestDTO.Action {
@@ -147,26 +188,26 @@ func (az *Cloud) UpdateNRPSGWAddressLocations(ctx context.Context, serviceGatewa
 			Addresses:           addresses,
 		})
 	}
-	klog.Infof("CLB-ENECHITOAIA: UpdateNRPSGWAddressLocations request: %+v", req)
-	logObject(req)
+	// klog.Infof("UpdateNRPSGWAddressLocations: request: %+v", req)
+	// logObject(req)
 
 	err := az.UpdateAddressLocations(ctx, serviceGatewayName, req)
 	if err != nil {
-		klog.Infof("CLB-ENECHITOAIA: error updating NRP service gateway address locations for %s in resource group %s: %v", serviceGatewayName, az.ResourceGroup, err)
+		klog.Infof("UpdateNRPSGWAddressLocations: error updating NRP service gateway address locations for %s in resource group %s: %v", serviceGatewayName, az.ResourceGroup, err)
 		return err
 	}
 
-	klog.Infof("CLB-ENECHITOAIA: successfully updated NRP service gateway address locations for %s in resource group %s", serviceGatewayName, az.ResourceGroup)
+	klog.Infof("UpdateNRPSGWAddressLocations: successfully updated NRP service gateway address locations for %s in resource group %s", serviceGatewayName, az.ResourceGroup)
 	return nil
 }
 
 func (az *Cloud) DisassociateNatGatewayFromServiceGateway(ctx context.Context, serviceGatewayName string, natGatewayName string) error {
-	klog.Infof("Disassociating NAT Gateway %s from Service Gateway %s in resource group %s", natGatewayName, serviceGatewayName, az.ResourceGroup)
+	klog.Infof("DisassociateNatGatewayFromServiceGateway: Disassociating NAT Gateway %s from Service Gateway %s in resource group %s", natGatewayName, serviceGatewayName, az.ResourceGroup)
 
 	// First get the service and remove the nat gateway reference
 	services, err := az.GetServices(ctx, serviceGatewayName)
 	if err != nil {
-		klog.Errorf("Failed to get Service Gateway %s: %v", serviceGatewayName, err)
+		klog.Errorf("DisassociateNatGatewayFromServiceGateway: Failed to get Service Gateway %s: %v", serviceGatewayName, err)
 		return err
 	}
 
@@ -179,7 +220,7 @@ func (az *Cloud) DisassociateNatGatewayFromServiceGateway(ctx context.Context, s
 	}
 
 	if serviceToBeUpdated == nil {
-		klog.Infof("NAT Gateway %s is not associated with Service Gateway %s", natGatewayName, serviceGatewayName)
+		klog.Infof("DisassociateNatGatewayFromServiceGateway: NAT Gateway %s is not associated with Service Gateway %s", natGatewayName, serviceGatewayName)
 		return nil
 	}
 
@@ -199,45 +240,24 @@ func (az *Cloud) DisassociateNatGatewayFromServiceGateway(ctx context.Context, s
 
 	err = az.UpdateServices(ctx, serviceGatewayName, updateServicesRequest)
 	if err != nil {
-		klog.Errorf("Failed to update Service Gateway %s to disassociate NAT Gateway %s: %v", serviceGatewayName, natGatewayName, err)
+		klog.Errorf("DisassociateNatGatewayFromServiceGateway: Failed to update Service Gateway %s to disassociate NAT Gateway %s: %v", serviceGatewayName, natGatewayName, err)
 		return err
 	}
-	klog.Infof("Successfully removed NAT Gateway %s reference from Service Gateway %s", natGatewayName, serviceGatewayName)
+	klog.Infof("DisassociateNatGatewayFromServiceGateway: Successfully removed NAT Gateway %s reference from Service Gateway %s", natGatewayName, serviceGatewayName)
 
 	// Now get the NAT gateway and remove the service gateway reference
 
 	natGateway, err := az.getNatGateway(ctx, az.ResourceGroup, natGatewayName)
 	if err != nil {
-		klog.Errorf("Failed to get NAT Gateway %s: %v", natGatewayName, err)
+		klog.Errorf("DisassociateNatGatewayFromServiceGateway: Failed to get NAT Gateway %s: %v", natGatewayName, err)
 		return err
 	}
 	natGateway.Properties.ServiceGateway = nil
 	err = az.createOrUpdateNatGateway(ctx, az.ResourceGroup, *natGateway)
 	if err != nil {
-		klog.Errorf("Failed to disassociate NAT Gateway %s from Service Gateway %s: %v", natGatewayName, serviceGatewayName, err)
+		klog.Errorf("DisassociateNatGatewayFromServiceGateway: Failed to disassociate NAT Gateway %s from Service Gateway %s: %v", natGatewayName, serviceGatewayName, err)
 		return err
 	}
-	klog.Infof("Successfully disassociated NAT Gateway %s from Service Gateway %s in resource group %s", natGatewayName, serviceGatewayName, az.ResourceGroup)
+	klog.Infof("DisassociateNatGatewayFromServiceGateway: Successfully disassociated NAT Gateway %s from Service Gateway %s in resource group %s", natGatewayName, serviceGatewayName, az.ResourceGroup)
 	return nil
 }
-
-// TODO (enechitoaia): remove after testing
-// func (az *Cloud) DetachNatGatewayFromServiceGateway(ctx context.Context, resourceGroupName string, natGatewayName string) error {
-// 	klog.Infof("Detaching NAT Gateway %s from Service Gateway in resource group %s", natGatewayName, resourceGroupName)
-// 	removeNatGatewayDTOFromServiceGateway := difftracker.MapNATGatewayUpdatesToServicesDataDTO(difftracker.SyncServicesReturnType{
-// 		Additions: nil,
-// 		Removals:  utilsets.NewString(natGatewayName),
-// 	}, az.SubscriptionID, resourceGroupName)
-// 	err := az.UpdateNRPSGWServices(ctx, "ServiceGateway", removeNatGatewayDTOFromServiceGateway)
-// 	if err != nil {
-// 		klog.Infof("CLB-ENECHITOAIA: error detaching NAT Gateway %s from Service Gateway in resource group %s: %v", natGatewayName, resourceGroupName, err)
-// 	} else {
-// 		klog.Infof("CLB-ENECHITOAIA: successfully detached NAT Gateway %s from Service Gateway in resource group %s", natGatewayName, resourceGroupName)
-// 	}
-// 	return err
-// }
-
-// func (az *Cloud) RemoveOverlayAddressesFromNatGateway(ctx context.Context, resourceGroupName string, natGatewayName string) error {
-// 	klog.Infof("Removing overlay addresses from NAT Gateway %s in resource group %s", natGatewayName, resourceGroupName)
-
-// }

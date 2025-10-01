@@ -92,16 +92,16 @@ func PossibleServiceGatewaySKUNameValues() []ServiceGatewaySKUName {
 	}
 }
 
-// ServcieGatewaySKUTier - Tier of a service gateway SKU.
-type ServcieGatewaySKUTier string
+// ServiceGatewaySKUTier - Tier of a service gateway SKU.
+type ServiceGatewaySKUTier string
 
 const (
-	ServcieGatewaySKUTierRegional ServcieGatewaySKUTier = "Regional"
+	ServiceGatewaySKUTierRegional ServiceGatewaySKUTier = "Regional"
 )
 
-// PossibleServcieGatewaySKUTierValues returns the possible values for the ServcieGatewaySKUTier const type.
-func PossibleServcieGatewaySKUTierValues() []ServcieGatewaySKUTier {
-	return []ServcieGatewaySKUTier{
-		ServcieGatewaySKUTierRegional,
+// PossibleServiceGatewaySKUTierValues returns the possible values for the ServiceGatewaySKUTier const type.
+func PossibleServiceGatewaySKUTierValues() []ServiceGatewaySKUTier {
+	return []ServiceGatewaySKUTier{
+		ServiceGatewaySKUTierRegional,
 	}
 }

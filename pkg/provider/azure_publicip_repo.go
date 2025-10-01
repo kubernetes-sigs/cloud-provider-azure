@@ -74,10 +74,8 @@ func (az *Cloud) CreateOrUpdatePIP(service *v1.Service, pipResourceGroup string,
 	return rerr
 }
 
-func (az *Cloud) CreateOrUpdatePIPOutbound(pipResourceGroup string, pip *armnetwork.PublicIPAddress) error {
+func (az *Cloud) CreateOrUpdatePIPOutbound(ctx context.Context, pipResourceGroup string, pip *armnetwork.PublicIPAddress) error {
 	klog.Infof("CreateOrUpdatePIPOutbound(%s): start", ptr.Deref(pip.Name, ""))
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
 
 	// Endless retry loop with 5-second intervals
 	for {
@@ -146,10 +144,8 @@ func (az *Cloud) DeletePublicIP(service *v1.Service, pipResourceGroup string, pi
 	return nil
 }
 
-func (az *Cloud) DeletePublicIPOutbound(pipResourceGroup string, pipName string) error {
+func (az *Cloud) DeletePublicIPOutbound(ctx context.Context, pipResourceGroup string, pipName string) error {
 	klog.Infof("DeletePublicIPOutbound(%s): start", pipName)
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
 
 	// Endless retry loop with 5-second intervals
 	for {

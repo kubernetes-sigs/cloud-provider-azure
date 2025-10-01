@@ -24,10 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
@@ -276,11 +273,11 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 	// 2. lb sku is service
 	// 3. backendPoolType is PodIP
 	if az.ServiceGatewayEnabled && az.IsLBBackendPoolTypePodIPAndUseServiceLoadBalancer() {
-		klog.V(2).Info("Service Gateway is enabled, using PodIP backend pool type with Service Load Balancer")
+		klog.V(2).Info("InitializeCloudFromConfig: Service Gateway is enabled, using PodIP backend pool type with Service Load Balancer")
 		az.ServiceGatewayEnabled = true
 	} else {
-		klog.V(2).Info("CLB-ENECHITOAIA-Service Gateway is not enabled")
-		klog.V(2).Infof("CLB-ENECHITOAIA-ServiceGatewayEnabled=%t, LoadBalancerSKU=%s, LoadBalancerBackendPoolConfigurationType=%s", az.ServiceGatewayEnabled, az.LoadBalancerSKU, az.LoadBalancerBackendPoolConfigurationType)
+		// klog.V(2).Info("CLB-ENECHITOAIA-Service Gateway is not enabled")
+		// klog.V(2).Infof("CLB-ENECHITOAIA-ServiceGatewayEnabled=%t, LoadBalancerSKU=%s, LoadBalancerBackendPoolConfigurationType=%s", az.ServiceGatewayEnabled, az.LoadBalancerSKU, az.LoadBalancerBackendPoolConfigurationType)
 		az.ServiceGatewayEnabled = false
 	}
 
@@ -397,7 +394,6 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 	} else if az.IsLBBackendPoolTypeNodeIP() {
 		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIP(az)
 	} else if az.IsLBBackendPoolTypePodIP() {
-		klog.V(2).Info("CLB-ENECHITOAIA-Service Gateway is enabled, using PodIP backend pool type with Service Load Balancer")
 		az.LoadBalancerBackendPool = newBackendPoolTypePodIP(az)
 	}
 
@@ -519,52 +515,26 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 
 		// start NRP location and service batch updater.
 		if az.ServiceGatewayEnabled {
-			klog.V(2).Info("CLB-ENECHITOAIA-Service Gateway is enabled")
-
-			exists, err := az.ExistsServiceGateway(ctx, "ServiceGateway")
+			exists, err := az.existsServiceGateway(ctx, "ServiceGateway")
 			if err != nil {
 				return fmt.Errorf("InitializeCloudFromConfig: failed to check if Service Gateway %s exists: %w", "ServiceGateway", err)
 			}
 			if !exists {
-				klog.Infof("CLB-ENECHITOAIA: Service Gateway %s does not exist in resource group %s", "ServiceGateway", az.ResourceGroup)
-				klog.Infof("CLB-ENECHITOAIA: creating Service Gateway %s in resource group %s", "ServiceGateway", az.ResourceGroup)
-				// Create the service gateway if it does not exist.
-				serviceGateway := armnetwork.ServiceGateway{
-					Location: to.Ptr(az.Location),
-					SKU: &armnetwork.ServiceGatewaySKU{
-						Name: to.Ptr(armnetwork.ServiceGatewaySKUNameStandard),
-						Tier: to.Ptr(armnetwork.ServcieGatewaySKUTierRegional),
-					},
-					Properties: &armnetwork.ServiceGatewayPropertiesFormat{
-						VirtualNetwork: &armnetwork.VirtualNetwork{ID: to.Ptr(fmt.Sprintf(
-							"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/virtualNetworks/%s",
-							az.SubscriptionID,
-							az.ResourceGroup,
-							az.VnetName,
-						))},
-					},
-				}
-				logObject(serviceGateway)
-				err = az.CreateOrUpdateServiceGateway(ctx, "ServiceGateway", serviceGateway)
+				err = az.createServiceGateway(ctx, "ServiceGateway")
 				if err != nil {
-					klog.Infof("CLB-ENECHITOAIA: error creating Service Gateway %s in resource group %s: %v", "ServiceGateway", az.ResourceGroup, err)
 					return fmt.Errorf("InitializeCloudFromConfig: failed to create Service Gateway %s: %w", "ServiceGateway", err)
 				}
-				klog.Infof("CLB-ENECHITOAIA: successfully created Service Gateway %s in resource group %s", "ServiceGateway", az.ResourceGroup)
 			}
 
-			klog.V(2).Info("CLB-ENECHITOAIA-initializing diff tracker")
 			err = az.initializeDiffTracker()
 			if err != nil {
 				klog.Errorf("InitializeCloudFromConfig: failed to initialize difftracker: %s", err.Error())
 				return err
 			}
 
-			klog.V(2).Info("CLB-ENECHITOAIA-starting NRP location and service batch updater")
 			az.locationAndNRPServiceBatchUpdater = newLocationAndNRPServiceBatchUpdater(az)
 			go az.locationAndNRPServiceBatchUpdater.run(ctx)
 
-			klog.V(2).Info("CLB-ENECHITOAIA-starting pod egress resource updater")
 			az.podEgressResourceUpdater = newPodEgressResourceUpdater(az)
 			go az.podEgressResourceUpdater.run(ctx)
 		}
@@ -581,594 +551,6 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 			go az.refreshZones(ctx, az.syncRegionZonesMap)
 		}
 	}
-
-	return nil
-}
-
-func (az *Cloud) TriggerLocationAndNRPServiceBatchUpdate() {
-	select {
-	case az.locationAndNRPServiceBatchUpdater.(*locationAndNRPServiceBatchUpdater).channelUpdateTrigger <- true:
-		// trigger batch update
-	default:
-		// channel is full, do nothing
-		klog.V(2).Info("az.locationAndNRPServiceBatchUpdater.channelUpdateTrigger is full. Batch update is already triggered.")
-	}
-}
-
-// initialServiceGatewaySync performs the ordered first sync against ServiceGateway:
-// 1. Add services (LB + NATGW)
-// 2. Update locations/addresses
-// 3. Remove services
-// If any step fails, it aborts and returns error without marking difftracker as initialized.
-func (az *Cloud) initialServiceGatewaySync(ctx context.Context, syncOps *difftracker.SyncDiffTrackerReturnType) error {
-	if syncOps == nil {
-		return fmt.Errorf("initialServiceGatewaySync: nil sync operations")
-	}
-
-	subID := az.SubscriptionID
-	rg := az.ResourceGroup
-
-	// Step 1: Additions
-	if syncOps.LoadBalancerUpdates.Additions.Len() > 0 || syncOps.NATGatewayUpdates.Additions.Len() > 0 {
-		additionsDTO := difftracker.MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
-			difftracker.SyncServicesReturnType{
-				Additions: syncOps.LoadBalancerUpdates.Additions,
-				Removals:  nil,
-			},
-			difftracker.SyncServicesReturnType{
-				Additions: syncOps.NATGatewayUpdates.Additions,
-				Removals:  nil,
-			},
-			subID,
-			rg,
-		)
-		// if err := NRPAPIClientUpdateNRPServices(ctx, additionsDTO, subID, rg); err != nil {
-		// 	return fmt.Errorf("initialServiceGatewaySync: failed additions update: %w", err)
-		// }
-		if err := az.UpdateNRPSGWServices(ctx, "ServiceGateway", additionsDTO); err != nil {
-			return fmt.Errorf("initialServiceGatewaySync: failed to update NRP services: %w", err)
-		}
-		// Reflect additions in local NRP state
-		if syncOps.LoadBalancerUpdates.Additions.Len() > 0 {
-			az.diffTracker.UpdateNRPLoadBalancers(difftracker.SyncServicesReturnType{
-				Additions: syncOps.LoadBalancerUpdates.Additions,
-				Removals:  utilsets.NewString(),
-			})
-		}
-		if syncOps.NATGatewayUpdates.Additions.Len() > 0 {
-			az.diffTracker.UpdateNRPNATGateways(difftracker.SyncServicesReturnType{
-				Additions: syncOps.NATGatewayUpdates.Additions,
-				Removals:  utilsets.NewString(),
-			})
-		}
-	}
-
-	// Step 2: Locations / Addresses
-	if len(syncOps.LocationData.Locations) > 0 {
-		locationsDTO := difftracker.MapLocationDataToDTO(syncOps.LocationData)
-		// if err := NRPAPIClientUpdateNRPLocations(ctx, locationsDTO, subID, rg); err != nil {
-		// 	return fmt.Errorf("initialServiceGatewaySync: failed locations update: %w", err)
-		// }
-		if err := az.UpdateNRPSGWAddressLocations(ctx, "ServiceGateway", locationsDTO); err != nil {
-			return fmt.Errorf("initialServiceGatewaySync: failed to update NRP locations: %w", err)
-		}
-		az.diffTracker.UpdateLocationsAddresses(syncOps.LocationData)
-	}
-
-	// Step 3: Removals
-	if syncOps.LoadBalancerUpdates.Removals.Len() > 0 || syncOps.NATGatewayUpdates.Removals.Len() > 0 {
-		removalsDTO := difftracker.MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
-			difftracker.SyncServicesReturnType{
-				Additions: nil,
-				Removals:  syncOps.LoadBalancerUpdates.Removals,
-			},
-			difftracker.SyncServicesReturnType{
-				Additions: nil,
-				Removals:  nil,
-			},
-			subID,
-			rg,
-		)
-		// if err := NRPAPIClientUpdateNRPServices(ctx, removalsDTO, subID, rg); err != nil {
-		// 	return fmt.Errorf("initialServiceGatewaySync: failed removals update: %w", err)
-		// }
-		if err := az.UpdateNRPSGWServices(ctx, "ServiceGateway", removalsDTO); err != nil {
-			return fmt.Errorf("initialServiceGatewaySync: failed to update NRP services: %w", err)
-		}
-		// Reflect removals
-		if syncOps.LoadBalancerUpdates.Removals.Len() > 0 {
-			az.diffTracker.UpdateNRPLoadBalancers(difftracker.SyncServicesReturnType{
-				Additions: utilsets.NewString(),
-				Removals:  syncOps.LoadBalancerUpdates.Removals,
-			})
-		}
-		if syncOps.NATGatewayUpdates.Removals.Len() > 0 {
-			az.diffTracker.UpdateNRPNATGateways(difftracker.SyncServicesReturnType{
-				Additions: utilsets.NewString(),
-				Removals:  syncOps.NATGatewayUpdates.Removals,
-			})
-		}
-	}
-
-	return nil
-}
-
-// TODO (enechitoaia): complete it
-func (az *Cloud) initializeDiffTracker() error {
-	klog.V(2).Info("initializeDiffTracker: starting initialization of diff tracker")
-	ctx := context.Background()
-
-	// Defensive guard
-	if az.KubeClient == nil {
-		return fmt.Errorf("initializeDiffTracker: KubeClient is nil; initialize the cloud provider with a Kubernetes client before diff tracker setup")
-	}
-
-	// Initialize K8S Resource state
-	k8s := difftracker.K8s_State{
-		Services: utilsets.NewString(),
-		Egresses: utilsets.NewString(),
-		Nodes:    make(map[string]difftracker.Node),
-	}
-	// List nodes once (cache not initialized yet)
-	nodeList, err := az.KubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("initializeDiffTracker: failed to list nodes: %w", err)
-	}
-	klog.Infof("initializeDiffTracker: found %d nodes", len(nodeList.Items))
-	// logObject(nodeList.Items)
-
-	// allNodes will be passed to ensureServiceLoadBalancerByUID
-	allNodes := make([]*v1.Node, 0, len(nodeList.Items))
-	nodeNameToIPMap := make(map[string]string, len(nodeList.Items))
-
-	for i := range nodeList.Items {
-		n := &nodeList.Items[i]
-		allNodes = append(allNodes, n)
-
-		// Grab first InternalIP
-		for _, addr := range n.Status.Addresses {
-			if addr.Type == v1.NodeInternalIP {
-				nodeNameToIPMap[n.Name] = addr.Address
-				break
-			}
-		}
-	}
-	klog.Infof("initializeDiffTracker: nodeNameToIPMap: ")
-	logObject(nodeNameToIPMap)
-
-	// TODO (enechitoaia): TBD ignore the system ones ('kubernetes', 'default', 'kube-system', 'kube-public', 'local-path-storage', 'ingress-basic', 'azure-arc')
-	// 1. Fetch all services and update difftracker.K8sResources.Services
-	services, err := az.KubeClient.CoreV1().Services(v1.NamespaceAll).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("initializeDiffTracker: failed to list services: %w", err)
-	}
-
-	for _, service := range services.Items {
-		if service.Spec.Type == v1.ServiceTypeLoadBalancer {
-			k8s.Services.Insert(strings.ToLower(string(service.UID)))
-		}
-	}
-	// END 1.
-
-	// 2. Fetch all endpointSlices and set up difftracker.K8sResources.Nodes and difftracker.K8sResources.Pods with the inbound identities
-	endpointSliceList, err := az.KubeClient.DiscoveryV1().EndpointSlices(v1.NamespaceAll).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("initializeDiffTracker: failed to list endpointslices: %w", err)
-	}
-	for _, endpointSlice := range endpointSliceList.Items {
-		serviceUID := ""
-		for _, ownerRef := range endpointSlice.OwnerReferences {
-			if ownerRef.Kind == "Service" {
-				serviceUID = string(ownerRef.UID)
-				break
-			}
-		}
-		if serviceUID == "" || !k8s.Services.Has(serviceUID) {
-			continue
-		}
-
-		for _, endpoint := range endpointSlice.Endpoints {
-			if endpoint.NodeName == nil || len(endpoint.Addresses) == 0 {
-				continue
-			}
-
-			nodeIP, exists := nodeNameToIPMap[*endpoint.NodeName]
-			if !exists {
-				klog.Warningf("initializeDiffTracker: Could not find IP for node %s", *endpoint.NodeName)
-				continue
-			}
-
-			if _, exists := k8s.Nodes[nodeIP]; !exists {
-				k8s.Nodes[nodeIP] = difftracker.Node{
-					Pods: make(map[string]difftracker.Pod),
-				}
-			}
-
-			for _, podIP := range endpoint.Addresses {
-				pod, exists := k8s.Nodes[nodeIP].Pods[podIP]
-				if !exists {
-					pod = difftracker.Pod{
-						InboundIdentities:       utilsets.NewString(),
-						PublicOutboundIdentity:  "",
-						PrivateOutboundIdentity: "",
-					}
-				}
-				pod.InboundIdentities.Insert(serviceUID)
-				k8s.Nodes[nodeIP].Pods[podIP] = pod
-			}
-		}
-	}
-	// END 2.
-
-	// 3. Fetch all egress resources and update difftracker.K8sResources.Egresses along with pods that have outbound identities
-	egressPods, err := az.KubeClient.CoreV1().Pods("").List(ctx, metav1.ListOptions{
-		LabelSelector: consts.PodLabelServiceEgressGateway,
-	})
-	if err != nil {
-		return fmt.Errorf("initializeDiffTracker: failed to list pods with egress label: %w", err)
-	}
-
-	for _, pod := range egressPods.Items {
-		// Get the egress label value
-		egressVal := strings.ToLower(pod.Labels[consts.PodLabelServiceEgressGateway])
-		if egressVal == "" || pod.Status.PodIP == "" || pod.Spec.NodeName == "" {
-			continue
-		}
-		// Add to egresses set
-		k8s.Egresses.Insert(egressVal)
-
-		// Get nodeIP from nodeName
-		nodeIP, exists := nodeNameToIPMap[pod.Spec.NodeName]
-		if !exists {
-			klog.Warningf("initializeDiffTracker: Could not find IP for node %s", pod.Spec.NodeName)
-			continue
-		}
-
-		// Initialize node if it doesn't exist
-		if _, exists := k8s.Nodes[nodeIP]; !exists {
-			k8s.Nodes[nodeIP] = difftracker.Node{
-				Pods: make(map[string]difftracker.Pod),
-			}
-		}
-
-		// Get or create the pod entry
-		podEntry, exists := k8s.Nodes[nodeIP].Pods[pod.Status.PodIP]
-		if !exists {
-			podEntry = difftracker.Pod{
-				InboundIdentities:       utilsets.NewString(),
-				PublicOutboundIdentity:  "",
-				PrivateOutboundIdentity: "",
-			}
-		}
-
-		// Set the public outbound identity
-		podEntry.PublicOutboundIdentity = egressVal
-
-		// Update the pod in the node's pods map
-		k8s.Nodes[nodeIP].Pods[pod.Status.PodIP] = podEntry
-	}
-	klog.Infof("initializeDiffTracker: k8s object: ")
-	logObject(k8s)
-	// END 3.
-
-	// 4. Fetch all ServiceGateway.Services and update difftracker.NRPResources.LoadBalancers and difftracker.NRPResources.NATGateways
-	nrp := difftracker.NRP_State{
-		LoadBalancers: utilsets.NewString(),
-		NATGateways:   utilsets.NewString(),
-		Locations:     make(map[string]difftracker.NRPLocation),
-	}
-
-	// TODO (enechitoaia): Implement ServiceGatewayClient
-	servicesDTO, err := az.GetServices(ctx, "ServiceGateway")
-	if err != nil {
-		return fmt.Errorf("initializeDiffTracker: failed to get services from ServiceGateway API: %w", err)
-	}
-	for _, service := range servicesDTO {
-		switch *service.Properties.ServiceType {
-		case "Inbound":
-			nrp.LoadBalancers.Insert(*service.Name)
-		case "Outbound":
-			nrp.NATGateways.Insert(*service.Name)
-		}
-	}
-	klog.Infof("initializeDiffTracker: fetched %d services from ServiceGateway API", len(servicesDTO))
-	logObject(servicesDTO)
-	// END 4.
-
-	// 5. Fetch all locations from ServiceGateway API and update difftracker.NRPResources.Locations
-	// TODO (enechitoaia): Implement ServiceGatewayClient
-	locationsDTO, err := az.GetAddressLocations(ctx, "ServiceGateway")
-	klog.Infof("initializeDiffTracker: fetched %d locations from ServiceGateway API", len(locationsDTO))
-	logObject(locationsDTO)
-	if err != nil {
-		return fmt.Errorf("initializeDiffTracker: failed to get locations from ServiceGateway API: %w", err)
-	}
-	for _, location := range locationsDTO {
-		addresses := make(map[string]difftracker.NRPAddress, 0)
-		for _, addr := range location.Addresses {
-			services := utilsets.NewString()
-			for _, svc := range addr.Services {
-				if svc != nil {
-					services.Insert(*svc)
-				}
-			}
-			addresses[*addr.Address] = difftracker.NRPAddress{
-				Services: services,
-			}
-		}
-		nrp.Locations[*location.AddressLocation] = difftracker.NRPLocation{
-			Addresses: addresses,
-		}
-	}
-
-	klog.Infof("initializeDiffTracker: fetched %d locations from ServiceGateway API", len(nrp.Locations))
-	logObject(nrp.Locations)
-	// END 5.
-
-	// Initialize the diff tracker state and get the necessary operations to sync the cluster with NRP
-	az.diffTracker = difftracker.InitializeDiffTracker(k8s, nrp)
-
-	// 6. Fetch LoadBalancers from NRP
-	lbclient := az.NetworkClientFactory.GetLoadBalancerClient()
-	lbs, err := lbclient.List(ctx, az.ResourceGroup)
-	currentLoadBalancersInNRP := utilsets.NewString()
-	if err != nil {
-		return fmt.Errorf("initializeDiffTracker: failed to list load balancers: %w", err)
-	}
-	for _, lb := range lbs {
-		if lb.Name == nil {
-			continue
-		}
-		currentLoadBalancersInNRP.Insert(strings.ToLower(*lb.Name))
-	}
-
-	// 7. Fetch NATGateways from NRP
-	ngclient := az.NetworkClientFactory.GetNatGatewayClient()
-	ngs, err := ngclient.List(ctx, az.ResourceGroup)
-	currentNATGatewaysInNRP := utilsets.NewString()
-	if err != nil {
-		return fmt.Errorf("initializeDiffTracker: failed to list nat gateways: %w", err)
-	}
-	for _, ng := range ngs {
-		if ng.Name == nil {
-			continue
-		}
-		currentNATGatewaysInNRP.Insert(strings.ToLower(*ng.Name))
-	}
-	// END 6. and 7.
-
-	// 8. Get sync operations to sync the cluster with NRP
-	syncOperations := az.diffTracker.GetSyncOperations()
-	// END 8.
-
-	// 9. Create LoadBalancers and NATGateways in NRP
-	for _, uid := range syncOperations.LoadBalancerUpdates.Additions.UnsortedList() {
-		if !currentLoadBalancersInNRP.Has(uid) {
-			// Fallback cluster name (tags still expect a non-empty value in some helper paths):
-			clusterName := az.LoadBalancerName
-			if clusterName == "" {
-				clusterName = "kubernetes"
-			}
-
-			err = az.ensureServiceLoadBalancerByUID(ctx, uid, clusterName, allNodes)
-			if err != nil {
-				klog.Errorf("initializeDiffTracker: failed ensuring LB for service uid %s: %v", uid, err)
-				continue
-			}
-			klog.V(3).Infof("initializeDiffTracker: ensured LoadBalancer for service uid %s", uid)
-		}
-	}
-
-	for _, natGatewayId := range syncOperations.NATGatewayUpdates.Additions.UnsortedList() {
-		if !currentNATGatewaysInNRP.Has(natGatewayId) {
-			klog.Infof("initializeDiffTracker: Creating NAT Gateway %s in NRP", natGatewayId)
-			pipResource := armnetwork.PublicIPAddress{
-				Name: to.Ptr(fmt.Sprintf("%s-pip", natGatewayId)),
-				ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
-					az.SubscriptionID, az.ResourceGroup, natGatewayId)),
-				SKU: &armnetwork.PublicIPAddressSKU{
-					Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
-				},
-				Location: to.Ptr(az.Location),
-				Properties: &armnetwork.PublicIPAddressPropertiesFormat{ // TODO (enechitoaia): What properties should we use for the Public IP
-
-					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
-				},
-			}
-			az.CreateOrUpdatePIPOutbound(az.ResourceGroup, &pipResource)
-
-			natGatewayResource := armnetwork.NatGateway{
-				Name: to.Ptr(natGatewayId),
-				ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/natGateways/%s",
-					az.SubscriptionID, az.ResourceGroup, natGatewayId)),
-				SKU: &armnetwork.NatGatewaySKU{
-					Name: to.Ptr(armnetwork.NatGatewaySKUNameStandardV2)},
-				Location: to.Ptr(az.Location),
-				Properties: &armnetwork.NatGatewayPropertiesFormat{
-					ServiceGateway: &armnetwork.ServiceGateway{
-						ID: to.Ptr(az.GetServiceGatewayID()),
-					},
-					PublicIPAddresses: []*armnetwork.SubResource{
-						{
-							ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s-pip",
-								az.SubscriptionID, az.ResourceGroup, natGatewayId)),
-						},
-					},
-				},
-			}
-			az.createOrUpdateNatGateway(ctx, az.ResourceGroup, natGatewayResource)
-		}
-	}
-	// END 9.
-
-	// 10. Add Services in ServiceGateway API for created LBs and NATGateways
-	addServicesDTO := difftracker.MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
-		difftracker.SyncServicesReturnType{
-			Additions: syncOperations.LoadBalancerUpdates.Additions,
-			Removals:  nil,
-		},
-		difftracker.SyncServicesReturnType{
-			Additions: syncOperations.NATGatewayUpdates.Additions,
-			Removals:  nil,
-		}, az.SubscriptionID, az.ResourceGroup)
-	if len(addServicesDTO.Services) > 0 {
-		if err := az.UpdateNRPSGWServices(ctx, "ServiceGateway", addServicesDTO); err != nil {
-			return fmt.Errorf("initializeDiffTracker: failed to add services in ServiceGateway API: %w", err)
-		}
-		// Reflect additions in local NRP state
-		if syncOperations.LoadBalancerUpdates.Additions.Len() > 0 {
-			az.diffTracker.UpdateNRPLoadBalancers(difftracker.SyncServicesReturnType{
-				Additions: syncOperations.LoadBalancerUpdates.Additions,
-				Removals:  utilsets.NewString(),
-			})
-		}
-		if syncOperations.NATGatewayUpdates.Additions.Len() > 0 {
-			az.diffTracker.UpdateNRPNATGateways(difftracker.SyncServicesReturnType{
-				Additions: syncOperations.NATGatewayUpdates.Additions,
-				Removals:  utilsets.NewString(),
-			})
-		}
-	}
-	// END 10.
-
-	// 11. Update Addresses and Locations
-	if len(syncOperations.LocationData.Locations) > 0 {
-		locationsDTO := difftracker.MapLocationDataToDTO(syncOperations.LocationData)
-		if err := az.UpdateNRPSGWAddressLocations(ctx, "ServiceGateway", locationsDTO); err != nil {
-			return fmt.Errorf("initializeDiffTracker: failed to update locations in ServiceGateway API: %w", err)
-		}
-		az.diffTracker.UpdateLocationsAddresses(syncOperations.LocationData)
-	}
-	// END 11.
-
-	// 12. Delete Services in ServiceGateway API for deleted LBs and NATGateways
-	removeServicesDTO := difftracker.MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
-		difftracker.SyncServicesReturnType{
-			Additions: nil,
-			Removals:  syncOperations.LoadBalancerUpdates.Removals,
-		},
-		difftracker.SyncServicesReturnType{
-			Additions: nil,
-			Removals:  syncOperations.NATGatewayUpdates.Removals,
-		},
-		az.SubscriptionID,
-		az.ResourceGroup,
-	)
-	if len(removeServicesDTO.Services) > 0 {
-		if err := az.UpdateNRPSGWServices(ctx, "ServiceGateway", removeServicesDTO); err != nil {
-			return fmt.Errorf("initializeDiffTracker: failed to remove services in ServiceGateway API: %w", err)
-		}
-		// Reflect removals
-		if syncOperations.LoadBalancerUpdates.Removals.Len() > 0 {
-			az.diffTracker.UpdateNRPLoadBalancers(difftracker.SyncServicesReturnType{
-				Additions: utilsets.NewString(),
-				Removals:  syncOperations.LoadBalancerUpdates.Removals,
-			})
-		}
-		if syncOperations.NATGatewayUpdates.Removals.Len() > 0 {
-			az.diffTracker.UpdateNRPNATGateways(difftracker.SyncServicesReturnType{
-				Additions: utilsets.NewString(),
-				Removals:  syncOperations.NATGatewayUpdates.Removals,
-			})
-		}
-	}
-	// END 12.
-
-	// 13. Delete LoadBalancers and NATGateways in NRP
-	for _, lb := range syncOperations.LoadBalancerUpdates.Removals.UnsortedList() {
-		if currentLoadBalancersInNRP.Has(lb) {
-			klog.Infof("initializeDiffTracker: Deleting Load Balancer %s from NRP", lb)
-			// Fallback cluster name (only needed for tag/SNAT helper paths reused in EnsureLoadBalancerDeleted)
-			clusterName := az.LoadBalancerName
-			if clusterName == "" {
-				clusterName = "kubernetes"
-			}
-			klog.Infof("initializeDiffTracker: Deleting Load Balancer %s from NRP", lb)
-			if err := az.ensureServiceLoadBalancerDeletedByUID(ctx, lb, clusterName); err != nil {
-				klog.Errorf("initializeDiffTracker: failed deleting LB %s: %v", lb, err)
-				continue
-			}
-			// Update local view to avoid redundant attempts in the same run.
-			currentLoadBalancersInNRP.Delete(lb)
-			klog.Infof("initializeDiffTracker: Successfully deleted Load Balancer %s from NRP", lb)
-		}
-	}
-
-	for _, natGatewayId := range syncOperations.NATGatewayUpdates.Removals.UnsortedList() {
-		if currentNATGatewaysInNRP.Has(natGatewayId) {
-			klog.Infof("initializeDiffTracker: Deleting NAT Gateway %s from NRP", natGatewayId)
-			// az.DetachNatGatewayFromServiceGateway(ctx, az.ResourceGroup, natGatewayId)
-			az.deleteNatGateway(ctx, az.ResourceGroup, natGatewayId)
-			az.DeletePublicIPOutbound(az.ResourceGroup, fmt.Sprintf("%s-pip", natGatewayId))
-		}
-	}
-	// END 9. and 10.
-
-	// // ----- Perform ordered ServiceGateway sync (add -> locations -> remove) -----
-	// if err := az.initialServiceGatewaySync(ctx, syncOperations); err != nil {
-	// 	return fmt.Errorf("initializeDiffTracker: ordered ServiceGateway sync failed: %w", err)
-	// }
-
-	az.diffTracker.InitialSyncDone = true
-	klog.Infof("initializeDiffTracker: az.diffTracker.InitialSyncDone: %v", az.diffTracker.InitialSyncDone)
-	klog.Infof("initializeDiffTracker: completed ordered ServiceGateway sync and initialization")
-	return nil
-}
-
-func (az *Cloud) STUBinitializeDiffTracker() error {
-	// TODO (enechitoaia): CONSTRUCT K8s and NRP from the current state of the cluster
-	k8s := difftracker.K8s_State{
-		Services: utilsets.NewString(),
-		Egresses: utilsets.NewString(),
-		Nodes:    make(map[string]difftracker.Node),
-	}
-	nrp := difftracker.NRP_State{
-		LoadBalancers: utilsets.NewString(),
-		NATGateways:   utilsets.NewString(),
-		Locations:     make(map[string]difftracker.NRPLocation),
-	}
-
-	// Initialize the diff tracker state and get the necessary operations to sync the cluster with NRP
-	az.diffTracker = difftracker.InitializeDiffTracker(k8s, nrp)
-
-	// Get the operations to sync the cluster with NRP
-	// syncOperations := az.diffTracker.GetSyncOperations()
-
-	// Get LocationDataDTO for Updating/Creating/Deleting Locations in ServiceGateway API
-	// locationDataDTO := difftracker.MapLocationDataToDTO(syncOperations.LocationData)
-
-	// Get ServiceDataDTO for Updating/Creating/Deleting Services in ServiceGateway API
-	// loadBalancerServicesDTO := difftracker.MapLoadBalancerUpdatesToServiceDataDTO(syncOperations.LoadBalancerUpdates, az.SubscriptionID, az.ResourceGroup)
-	// natGatewayServicesDTO := difftracker.MapNATGatewayUpdatesToServiceDataDTO(syncOperations.NATGatewayUpdates, az.SubscriptionID, az.ResourceGroup)
-	// servicesDTO := difftracker.ServiceDataDTO{
-	// 	Action:   difftracker.PartialUpdate,
-	// 	Services: append(loadBalancerServicesDTO.Services, natGatewayServicesDTO.Services...),
-	// }
-
-	// TODO (enechitoaia)
-	// Create LBs
-	// Create NAT Gateways
-	// Create LB rules
-	// ...
-
-	// TODO (enechitoaia): Implement the logic for ServiceGatewayClient
-	// Call ServiceGate APIs (including ServiceGateway) to update the state of the NRP
-	// locationDataResponseDTO, err := az.ServiceGatewayClient.UpdateLocations(locationDataDTO)
-	// if err != nil {
-	// 	klog.Errorf("Failed to update locations in ServiceGateway API: %s", err.Error())
-	// 	return err
-	// }
-	// serviceDataResponseDTO, err := az.ServiceGatewayClient.UpdateServices(servicesDTO)
-	// if err != nil {
-	// 	klog.Errorf("Failed to update services in ServiceGateway API: %s", err.Error())
-	// 	return err
-	// }
-	// if Load Balancers have been correctly updated:
-	// az.diffTracker.UpdateNRPLoadBalancers(syncOperations.LoadBalancerUpdates)
-	// if NAT Gateways have been correctly updated:
-	// az.diffTracker.UpdateNRPNATGateways(syncOperations.NATGatewayUpdates)
-	// if Locations have been correctly updated:
-	// az.diffTracker.UpdateLocationsAddresses(syncOperations.LocationData)
 
 	return nil
 }
@@ -1392,8 +774,8 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 	az.setUpEndpointSlicesInformer(informerFactory)
 
 	if az.ServiceGatewayEnabled {
-		az.setUpPodInformerForEgress(informerFactory)
-		klog.Infof("CLB-ENECHITOAIA-setUpPodInformerForEgress:pod informer setup done\n")
+		az.setUpPodInformerForEgress()
+		// klog.Infof("CLB-ENECHITOAIA-setUpPodInformerForEgress:pod informer setup done\n")
 	}
 }
 

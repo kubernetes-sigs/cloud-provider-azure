@@ -312,7 +312,7 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 						klog.Errorf("EndpointSlice %s/%s does not have service UID, skip updating load balancer backend pool", es.Namespace, es.Name)
 						return
 					}
-					if _, loaded := az.diffTracker.LocalServiceNameToNRPServiceMap.LoadOrStore(serviceUID, struct{}{}); loaded {
+					if _, loaded := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(strings.ToLower(serviceUID)); loaded {
 						updateK8sEndpointsInputType := difftracker.UpdateK8sEndpointsInputType{
 							InboundIdentity: serviceUID,
 							OldAddresses:    nil,
@@ -390,7 +390,7 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 						return
 					}
 
-					if _, loaded := az.diffTracker.LocalServiceNameToNRPServiceMap.LoadOrStore(serviceUID, serviceUID); loaded {
+					if _, loaded := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(strings.ToLower(serviceUID)); loaded {
 						updateK8sEndpointsInputType := difftracker.UpdateK8sEndpointsInputType{
 							InboundIdentity: serviceUID,
 							OldAddresses:    az.getPodIPToNodeIPMapFromEndpointSlice(previousES, false),
@@ -428,7 +428,8 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 						return
 					}
 
-					if _, loaded := az.diffTracker.LocalServiceNameToNRPServiceMap.LoadOrStore(serviceUID, serviceUID); loaded {
+					logSyncStringIntMap("LocalServiceNameToNRPServiceMap", &az.diffTracker.LocalServiceNameToNRPServiceMap)
+					if _, loaded := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(strings.ToLower(serviceUID)); loaded {
 						updateK8sEndpointsInputType := difftracker.UpdateK8sEndpointsInputType{
 							InboundIdentity: serviceUID,
 							OldAddresses:    az.getPodIPToNodeIPMapFromEndpointSlice(es, false),

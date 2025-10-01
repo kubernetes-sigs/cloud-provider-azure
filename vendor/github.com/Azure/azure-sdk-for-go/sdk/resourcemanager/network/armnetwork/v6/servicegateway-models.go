@@ -340,7 +340,7 @@ type ServiceGatewaySKU struct {
 	Name *ServiceGatewaySKUName
 
 	// Tier of a service gateway SKU.
-	Tier *ServcieGatewaySKUTier
+	Tier *ServiceGatewaySKUTier
 }
 
 // ServiceGateway resource.

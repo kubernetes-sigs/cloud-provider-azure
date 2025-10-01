@@ -341,8 +341,8 @@ func (az *Cloud) getPublicIPName(clusterName string, service *v1.Service, isIPv6
 	var pipName string
 	if az.ServiceGatewayEnabled {
 		// New scheme: decouple from clusterName — per-service deterministic naming.
-		// Base name: clb-pip-<serviceUID>
-		pipName = fmt.Sprintf("clb-pip-%s", getServiceUID(service))
+		// Base name: <serviceUID>-pip
+		pipName = fmt.Sprintf("%s-pip", getServiceUID(service))
 	} else {
 		// Legacy scheme: tied to clusterName — per-cluster naming.
 		pipName = fmt.Sprintf("%s-%s", clusterName, az.GetLoadBalancerName(context.TODO(), clusterName, service))
