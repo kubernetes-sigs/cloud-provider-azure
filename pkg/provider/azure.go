@@ -260,6 +260,18 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		return fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config")
 	}
 
+	// Use a single flag to determine if the service gateway is enabled.
+	// All 3 conditions must be true:
+	// 1. ServiceGatewayEnabled is true
+	// 2. lb sku is service
+	// 3. backendPoolType is PodIP
+	if az.ServiceGatewayEnabled && az.IsLBBackendPoolTypePodIPAndUseServiceLoadBalancer() {
+		klog.V(2).Info("InitializeCloudFromConfig: Service Gateway is enabled, using PodIP backend pool type with Service Load Balancer")
+		az.ServiceGatewayEnabled = true
+	} else {
+		az.ServiceGatewayEnabled = false
+	}
+
 	if config.RouteTableResourceGroup == "" {
 		config.RouteTableResourceGroup = config.ResourceGroup
 	}
@@ -298,15 +310,13 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		}
 	}
 
-	if config.LoadBalancerBackendPoolConfigurationType == "" ||
-		// TODO(nilo19): support pod IP mode in the future
-		strings.EqualFold(config.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePODIP) {
+	if config.LoadBalancerBackendPoolConfigurationType == "" {
 		config.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration
 	} else {
 		supportedLoadBalancerBackendPoolConfigurationTypes := utilsets.NewString(
 			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration),
 			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypeNodeIP),
-			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypePODIP))
+			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypePodIP))
 		if !supportedLoadBalancerBackendPoolConfigurationTypes.Has(strings.ToLower(config.LoadBalancerBackendPoolConfigurationType)) {
 			return fmt.Errorf("loadBalancerBackendPoolConfigurationType %s is not supported, supported values are %v", config.LoadBalancerBackendPoolConfigurationType, supportedLoadBalancerBackendPoolConfigurationTypes.UnsortedList())
 		}
