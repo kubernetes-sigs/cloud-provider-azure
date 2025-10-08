@@ -17,6 +17,8 @@ limitations under the License.
 package provider
 
 import (
+	"net/netip"
+
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
@@ -29,6 +31,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient/mock_diskclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/managedclusterclient/mock_managedclusterclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privateendpointclient/mock_privateendpointclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatelinkserviceclient/mock_privatelinkserviceclient"
@@ -138,6 +141,9 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	virtualMachinesClient := mock_virtualmachineclient.NewMockInterface(ctrl)
 	clientFactory.EXPECT().GetVirtualMachineClient().Return(virtualMachinesClient).AnyTimes()
 
+	managedClusterClient := mock_managedclusterclient.NewMockInterface(ctrl)
+	clientFactory.EXPECT().GetManagedClusterClient().Return(managedClusterClient).AnyTimes()
+
 	securtyGrouptrack2Client := mock_securitygroupclient.NewMockInterface(ctrl)
 	clientFactory.EXPECT().GetSecurityGroupClient().Return(securtyGrouptrack2Client).AnyTimes()
 	mockPrivateDNSClient := mock_privatezoneclient.NewMockInterface(ctrl)
@@ -184,5 +190,26 @@ func GetTestCloudWithExtendedLocation(ctrl *gomock.Controller) (az *Cloud) {
 	az = GetTestCloud(ctrl)
 	az.Config.ExtendedLocationName = "microsoftlosangeles1"
 	az.Config.ExtendedLocationType = "EdgeZone"
+	return az
+}
+
+// GetTestCloudWithContainerLoadBalancer returns a fake azure cloud for unit tests in Azure supporting container load balancer.
+func GetTestCloudWithContainerLoadBalancer(ctrl *gomock.Controller) (az *Cloud) {
+	az = GetTestCloud(ctrl)
+	az.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypePodIP
+	az.LoadBalancerSKU = consts.LoadBalancerSKUService
+	az.ServiceGatewayEnabled = true
+	return az
+}
+
+func GetTestCloudWithContainerLoadBalancerAndPrefixCidr(ctrl *gomock.Controller, isIPv6 bool) (az *Cloud) {
+	az = GetTestCloudWithContainerLoadBalancer(ctrl)
+	if !isIPv6 {
+		prefix, _ := netip.ParsePrefix("10.0.0.1/32")
+		az.PodCidrsIPv4 = []netip.Prefix{prefix}
+	} else {
+		prefix, _ := netip.ParsePrefix("2001:db8::/64")
+		az.PodCidrsIPv6 = []netip.Prefix{prefix}
+	}
 	return az
 }
