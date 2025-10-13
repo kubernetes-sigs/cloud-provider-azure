@@ -1,0 +1,47 @@
+run:
+  timeout: 30m
+  tests: true
+  modules-download-mode: vendor
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - goconst
+    - goimports
+    - revive
+    - gosec
+    - misspell
+    - nakedret
+    - typecheck
+    - unconvert
+    - asasalint
+    - asciicheck
+    - bidichk
+    - errorlint
+    - loggercheck
+  fast: false
+issues:
+  exclude-rules:
+    - path: tests/e2e
+      linters:
+        - revive
+  max-issues-per-linter: 0
+  max-same-issues: 0
+linters-settings:
+  staticcheck:
+    checks: ["all", "-SA1019"]
+  gosec:
+    excludes:
+      - G114
+      - G115
+  goimports:
+    local-prefixes: sigs.k8s.io/cloud-provider-azure
+  goconst:
+    min-occurrences: 10
+
+  
