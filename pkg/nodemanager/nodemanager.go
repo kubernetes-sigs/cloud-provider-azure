@@ -40,6 +40,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	clientretry "k8s.io/client-go/util/retry"
+	"k8s.io/client-go/util/workqueue"
 	cloudprovider "k8s.io/cloud-provider"
 	cloudproviderapi "k8s.io/cloud-provider/api"
 	cloudnodeutil "k8s.io/cloud-provider/node/helpers"
@@ -129,6 +130,8 @@ type CloudNodeController struct {
 	labelReconcileInfo []labelReconcile
 
 	enableBetaTopologyLabels bool
+
+	workqueue workqueue.TypedRateLimitingInterface[string]
 }
 
 // NewCloudNodeController creates a CloudNodeController object
@@ -159,6 +162,7 @@ func NewCloudNodeController(
 		waitForRoutes:             waitForRoutes,
 		nodeStatusUpdateFrequency: nodeStatusUpdateFrequency,
 		enableBetaTopologyLabels:  enableBetaTopologyLabels,
+		workqueue:                 workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]()),
 	}
 
 	// Only reconcile the beta topology labels when the feature flag is enabled.
@@ -169,8 +173,8 @@ func NewCloudNodeController(
 	// Use shared informer to listen to add/update of nodes. Note that any nodes
 	// that exist before node controller starts will show up in the update method
 	_, _ = cnc.nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj interface{}) { cnc.AddCloudNode(context.TODO(), obj) },
-		UpdateFunc: func(oldObj, newObj interface{}) { cnc.UpdateCloudNode(context.TODO(), oldObj, newObj) },
+		AddFunc:    func(obj interface{}) { cnc.enqueueNode(obj) },
+		UpdateFunc: func(_, newObj interface{}) { cnc.enqueueNode(newObj) },
 	})
 
 	return cnc
@@ -180,11 +184,15 @@ func NewCloudNodeController(
 // from the cloud provider. This call is blocking so should be called
 // via a goroutine
 func (cnc *CloudNodeController) Run(ctx context.Context) {
-	defer utilruntime.HandleCrash()
+	defer utilruntime.HandleCrashWithContext(ctx)
+	defer cnc.workqueue.ShutDown()
 
 	// The following loops run communicate with the APIServer with a worst case complexity
 	// of O(num_nodes) per cycle. These functions are justified here because these events fire
 	// very infrequently. DO NOT MODIFY this to perform frequent operations.
+
+	// Start worker goroutine for processing node events from the work queue
+	go wait.UntilWithContext(ctx, cnc.runWorker, time.Second)
 
 	// Start a loop to periodically update the node addresses obtained from the cloud
 	wait.UntilWithContext(ctx, func(ctx context.Context) { cnc.UpdateNodeStatus(ctx) }, cnc.nodeStatusUpdateFrequency)
@@ -212,6 +220,70 @@ func (cnc *CloudNodeController) UpdateNodeStatus(ctx context.Context) {
 	if err != nil {
 		klog.Errorf("Error reconciling node labels for node %q, err: %v", node.Name, err)
 	}
+}
+
+// enqueueNode adds a node to the work queue if it matches the controller's node name
+func (cnc *CloudNodeController) enqueueNode(obj interface{}) {
+	node, ok := obj.(*v1.Node)
+	if !ok {
+		utilruntime.HandleError(fmt.Errorf("unexpected object type: %v", obj))
+		return
+	}
+
+	if strings.EqualFold(cnc.nodeName, node.Name) {
+		cnc.workqueue.Add(node.Name)
+	}
+}
+
+// runWorker is a long-running function that will continually call the
+// processNextWorkItem function in order to read and process a message on the workqueue.
+func (cnc *CloudNodeController) runWorker(ctx context.Context) {
+	for cnc.processNextWorkItem(ctx) {
+	}
+}
+
+// processNextWorkItem will read a single work item off the workqueue and
+// attempt to process it, by calling the handleNodeEventWithRetry function.
+func (cnc *CloudNodeController) processNextWorkItem(ctx context.Context) bool {
+	key, shutdown := cnc.workqueue.Get()
+	if shutdown {
+		return false
+	}
+	defer cnc.workqueue.Done(key)
+
+	err := cnc.handleNodeEventWrapper(ctx, key)
+	if err != nil {
+		cnc.workqueue.AddRateLimited(key)
+		utilruntime.HandleErrorWithContext(ctx, err, "Error processing node", "node", key)
+		return true
+	}
+
+	cnc.workqueue.Forget(key)
+	return true
+}
+
+// handleNodeEventWrapper retrieves the node from the informer cache and processes it
+func (cnc *CloudNodeController) handleNodeEventWrapper(ctx context.Context, nodeName string) error {
+	node, err := cnc.nodeInformer.Lister().Get(nodeName)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil // Node was deleted, nothing to do
+		}
+		return err
+	}
+
+	return cnc.handleNodeEvent(ctx, node)
+}
+
+// handleNodeEvent processes both add and update events for nodes that need cloud initialization
+func (cnc *CloudNodeController) handleNodeEvent(ctx context.Context, node *v1.Node) error {
+	cloudTaint := GetCloudTaint(node.Spec.Taints)
+	if cloudTaint == nil {
+		klog.V(2).Infof("Node %s has no cloud taint, skipping initialization", node.Name)
+		return nil
+	}
+
+	return cnc.initializeNode(ctx, node)
 }
 
 // reconcileNodeLabels reconciles node labels transitioning from beta to GA
@@ -323,69 +395,27 @@ func (cnc *CloudNodeController) updateNodeAddress(ctx context.Context, node *v1.
 // in a retry-if-conflict loop.
 type nodeModifier func(*v1.Node)
 
-// UpdateCloudNode handles node update event.
-func (cnc *CloudNodeController) UpdateCloudNode(ctx context.Context, _, newObj interface{}) {
-	node, ok := newObj.(*v1.Node)
-	if !ok {
-		utilruntime.HandleError(fmt.Errorf("unexpected object type: %v", newObj))
-		return
-	}
-
-	// Skip other nodes other than cnc.nodeName.
-	if !strings.EqualFold(cnc.nodeName, node.Name) {
-		return
-	}
-
-	cloudTaint := GetCloudTaint(node.Spec.Taints)
-	if cloudTaint == nil {
-		// The node has already been initialized so nothing to do.
-		return
-	}
-
-	cnc.initializeNode(ctx, node)
-}
-
-// AddCloudNode handles initializing new nodes registered with the cloud taint.
-func (cnc *CloudNodeController) AddCloudNode(ctx context.Context, obj interface{}) {
-	node := obj.(*v1.Node)
-
-	// Skip other nodes other than cnc.nodeName.
-	if !strings.EqualFold(cnc.nodeName, node.Name) {
-		return
-	}
-
-	cloudTaint := GetCloudTaint(node.Spec.Taints)
-	if cloudTaint == nil {
-		klog.V(2).Infof("This node %s is registered without the cloud taint. Will not process.", node.Name)
-		return
-	}
-
-	cnc.initializeNode(ctx, node)
-}
-
 // This processes nodes that were added into the cluster, and cloud initialize them if appropriate
-func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Node) {
+func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Node) error {
 	klog.Infof("Initializing node %s with cloud provider", node.Name)
 	curNode, err := cnc.kubeClient.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
 	if err != nil {
-		utilruntime.HandleError(fmt.Errorf("failed to get node %s: %w", node.Name, err))
-		return
+		return fmt.Errorf("failed to get node: %w", err)
 	}
 
 	cloudTaint := GetCloudTaint(curNode.Spec.Taints)
 	if cloudTaint == nil {
 		// Node object received from event had the cloud taint but was outdated,
 		// the node has actually already been initialized.
-		return
+		return nil
 	}
 
 	if cnc.waitForRoutes {
 		// Set node condition node NodeNetworkUnavailable=true so that Pods won't
 		// be scheduled to this node until routes have been created.
-		err = cnc.updateNetworkingCondition(node, false)
+		err := cnc.updateNetworkingCondition(node, false)
 		if err != nil {
-			utilruntime.HandleError(fmt.Errorf("failed to patch condition for node %s: %w", node.Name, err))
-			return
+			return fmt.Errorf("failed to patch condition for node %s: %w", node.Name, err)
 		}
 	}
 
@@ -397,9 +427,7 @@ func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Nod
 		return err
 	})
 	if err != nil {
-		// Instead of just logging the error, panic and node manager can restart
-		utilruntime.Must(fmt.Errorf("failed to initialize node %s at cloudprovider: %w", node.Name, err))
-		return
+		return fmt.Errorf("failed to initialize node at cloudprovider %s: %w", node.Name, err)
 	}
 
 	nodeModifiers = append(nodeModifiers, func(n *v1.Node) {
@@ -432,9 +460,10 @@ func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Nod
 		return nil
 	})
 	if err != nil {
-		utilruntime.HandleError(err)
-		return
+		return fmt.Errorf("failed to update node addresses for node %s: %w", node.Name, err)
 	}
+
+	return nil
 }
 
 // getNodeModifiersFromCloudProvider returns a slice of nodeModifiers that update
