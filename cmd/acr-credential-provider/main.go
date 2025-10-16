@@ -53,7 +53,7 @@ func main() {
 			return nil
 		},
 		Version: version.Get().GitVersion,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			if err := NewCredentialProvider(args[0], RegistryMirrorStr).Run(context.TODO()); err != nil {
 				klog.Errorf("Error running acr credential provider: %v", err)
 				return err
