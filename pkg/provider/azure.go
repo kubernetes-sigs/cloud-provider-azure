@@ -44,7 +44,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
@@ -209,7 +208,7 @@ func NewCloudFromConfigFile(ctx context.Context, clientBuilder cloudprovider.Con
 		}
 
 		defer configFile.Close()
-		configValue, err = config.ParseConfig(configFile)
+		configValue, err = azureconfig.ParseConfig(configFile)
 		if err != nil {
 			klog.Fatalf("Failed to parse Azure cloud provider config: %v", err)
 		}
@@ -254,7 +253,7 @@ var (
 )
 
 // InitializeCloudFromConfig initializes the Cloud from config.
-func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.Config, _, callFromCCM bool) error {
+func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azureconfig.Config, _, callFromCCM bool) error {
 	if config == nil {
 		// should not reach here
 		return fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config")
@@ -353,12 +352,12 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		az.MaximumLoadBalancerRuleCount = consts.MaximumLoadBalancerRuleCount
 	}
 
-	if strings.EqualFold(consts.VMTypeVMSS, az.Config.VMType) {
+	if strings.EqualFold(consts.VMTypeVMSS, az.VMType) {
 		az.VMSet, err = newScaleSet(az)
 		if err != nil {
 			return err
 		}
-	} else if strings.EqualFold(consts.VMTypeVmssFlex, az.Config.VMType) {
+	} else if strings.EqualFold(consts.VMTypeVmssFlex, az.VMType) {
 		az.VMSet, err = newFlexScaleSet(az)
 		if err != nil {
 			return err
@@ -384,7 +383,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 
 	if az.AuthProvider == nil {
 		var authProvider *azclient.AuthProvider
-		authProvider, err = azclient.NewAuthProvider(&az.ARMClientConfig, &az.AzureClientConfig.AzureAuthConfig)
+		authProvider, err = azclient.NewAuthProvider(&az.ARMClientConfig, &az.AzureAuthConfig)
 		if err != nil {
 			return err
 		}
@@ -401,9 +400,9 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		klog.V(2).Infof("Azure cloud provider is starting without credentials")
 	}
 
-	if az.ARMClientConfig.UserAgent == "" {
+	if az.UserAgent == "" {
 		k8sVersion := version.Get().GitVersion
-		az.ARMClientConfig.UserAgent = fmt.Sprintf("kubernetes-cloudprovider/%s", k8sVersion)
+		az.UserAgent = fmt.Sprintf("kubernetes-cloudprovider/%s", k8sVersion)
 	}
 
 	if az.ComputeClientFactory == nil && az.AuthProvider != nil {
@@ -539,7 +538,7 @@ func (az *Cloud) checkEnableMultipleStandardLoadBalancers() error {
 }
 
 func (az *Cloud) initCaches() (err error) {
-	if az.Config.DisableAPICallCache {
+	if az.DisableAPICallCache {
 		klog.Infof("API call cache is disabled, ignore logs about cache operations")
 	}
 
@@ -735,24 +734,24 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 
 	if prevNode != nil {
 		// Remove from nodeNames cache.
-		az.nodeNames.Delete(prevNode.ObjectMeta.Name)
+		az.nodeNames.Delete(prevNode.Name)
 
 		// Remove from nodeZones cache.
-		prevZone, ok := prevNode.ObjectMeta.Labels[v1.LabelTopologyZone]
+		prevZone, ok := prevNode.Labels[v1.LabelTopologyZone]
 		if ok && az.isAvailabilityZone(prevZone) {
-			az.nodeZones[prevZone].Delete(prevNode.ObjectMeta.Name)
+			az.nodeZones[prevZone].Delete(prevNode.Name)
 			if az.nodeZones[prevZone].Len() == 0 {
 				az.nodeZones[prevZone] = nil
 			}
 		}
 
 		// Remove from nodeResourceGroups cache.
-		_, ok = prevNode.ObjectMeta.Labels[consts.ExternalResourceGroupLabel]
+		_, ok = prevNode.Labels[consts.ExternalResourceGroupLabel]
 		if ok {
-			delete(az.nodeResourceGroups, prevNode.ObjectMeta.Name)
+			delete(az.nodeResourceGroups, prevNode.Name)
 		}
 
-		managed, ok := prevNode.ObjectMeta.Labels[consts.ManagedByAzureLabel]
+		managed, ok := prevNode.Labels[consts.ManagedByAzureLabel]
 		isNodeManagedByCloudProvider := !ok || !strings.EqualFold(managed, consts.NotManagedByAzureLabelValue)
 
 		klog.Infof("managed=%v, ok=%v, isNodeManagedByCloudProvider=%v",
@@ -760,7 +759,7 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 
 		// Remove from unmanagedNodes cache
 		if !isNodeManagedByCloudProvider {
-			az.unmanagedNodes.Delete(prevNode.ObjectMeta.Name)
+			az.unmanagedNodes.Delete(prevNode.Name)
 		}
 
 		// Remove from nodePrivateIPs cache.
@@ -772,51 +771,51 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 
 		// if the node is being deleted from the cluster, exclude it from load balancers
 		if newNode == nil {
-			az.excludeLoadBalancerNodes.Insert(prevNode.ObjectMeta.Name)
-			az.nodesWithCorrectLoadBalancerByPrimaryVMSet.Delete(strings.ToLower(prevNode.ObjectMeta.Name))
+			az.excludeLoadBalancerNodes.Insert(prevNode.Name)
+			az.nodesWithCorrectLoadBalancerByPrimaryVMSet.Delete(strings.ToLower(prevNode.Name))
 			delete(az.nodePrivateIPs, strings.ToLower(prevNode.Name))
 		}
 	}
 
 	if newNode != nil {
 		// Add to nodeNames cache.
-		az.nodeNames = utilsets.SafeInsert(az.nodeNames, newNode.ObjectMeta.Name)
+		az.nodeNames = utilsets.SafeInsert(az.nodeNames, newNode.Name)
 
 		// Add to nodeZones cache.
-		newZone, ok := newNode.ObjectMeta.Labels[v1.LabelTopologyZone]
+		newZone, ok := newNode.Labels[v1.LabelTopologyZone]
 		if ok && az.isAvailabilityZone(newZone) {
-			az.nodeZones[newZone] = utilsets.SafeInsert(az.nodeZones[newZone], newNode.ObjectMeta.Name)
+			az.nodeZones[newZone] = utilsets.SafeInsert(az.nodeZones[newZone], newNode.Name)
 		}
 
 		// Add to nodeResourceGroups cache.
-		newRG, ok := newNode.ObjectMeta.Labels[consts.ExternalResourceGroupLabel]
+		newRG, ok := newNode.Labels[consts.ExternalResourceGroupLabel]
 		if ok && len(newRG) > 0 {
-			az.nodeResourceGroups[newNode.ObjectMeta.Name] = strings.ToLower(newRG)
+			az.nodeResourceGroups[newNode.Name] = strings.ToLower(newRG)
 		}
 
-		_, hasExcludeBalancerLabel := newNode.ObjectMeta.Labels[v1.LabelNodeExcludeBalancers]
-		managed, ok := newNode.ObjectMeta.Labels[consts.ManagedByAzureLabel]
+		_, hasExcludeBalancerLabel := newNode.Labels[v1.LabelNodeExcludeBalancers]
+		managed, ok := newNode.Labels[consts.ManagedByAzureLabel]
 		isNodeManagedByCloudProvider := !ok || !strings.EqualFold(managed, consts.NotManagedByAzureLabelValue)
 
 		// Update unmanagedNodes cache
 		if !isNodeManagedByCloudProvider {
-			az.unmanagedNodes.Insert(newNode.ObjectMeta.Name)
+			az.unmanagedNodes.Insert(newNode.Name)
 		}
 
 		// Update excludeLoadBalancerNodes cache
 		switch {
 		case !isNodeManagedByCloudProvider:
-			az.excludeLoadBalancerNodes.Insert(newNode.ObjectMeta.Name)
-			klog.V(6).Infof("excluding Node %q from LoadBalancer because it is not managed by cloud provider", newNode.ObjectMeta.Name)
+			az.excludeLoadBalancerNodes.Insert(newNode.Name)
+			klog.V(6).Infof("excluding Node %q from LoadBalancer because it is not managed by cloud provider", newNode.Name)
 
 		case hasExcludeBalancerLabel:
-			az.excludeLoadBalancerNodes.Insert(newNode.ObjectMeta.Name)
-			klog.V(6).Infof("excluding Node %q from LoadBalancer because it has exclude-from-external-load-balancers label", newNode.ObjectMeta.Name)
+			az.excludeLoadBalancerNodes.Insert(newNode.Name)
+			klog.V(6).Infof("excluding Node %q from LoadBalancer because it has exclude-from-external-load-balancers label", newNode.Name)
 
 		default:
 			// Nodes not falling into the three cases above are valid backends and
 			// should not appear in excludeLoadBalancerNodes cache.
-			az.excludeLoadBalancerNodes.Delete(newNode.ObjectMeta.Name)
+			az.excludeLoadBalancerNodes.Delete(newNode.Name)
 		}
 
 		// Add to nodePrivateIPs cache

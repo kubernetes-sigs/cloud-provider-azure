@@ -770,7 +770,7 @@ func TestEnsureLoadBalancerDeleted(t *testing.T) {
 			} else {
 				assert.Nil(t, err, "TestCase[%d]: %s", i, c.desc)
 				assert.NotNil(t, lbStatus, "TestCase[%d]: %s", i, c.desc)
-				result, rerr := az.NetworkClientFactory.GetLoadBalancerClient().List(context.TODO(), az.Config.ResourceGroup)
+				result, rerr := az.NetworkClientFactory.GetLoadBalancerClient().List(context.TODO(), az.ResourceGroup)
 				assert.Nil(t, rerr, "TestCase[%d]: %s", i, c.desc)
 				assert.Equal(t, 1, len(result), "TestCase[%d]: %s", i, c.desc)
 				assert.Equal(t, 1, len(result[0].Properties.LoadBalancingRules), "TestCase[%d]: %s", i, c.desc)
@@ -1197,10 +1197,10 @@ func TestServiceOwnsPublicIP(t *testing.T) {
 				setServiceLoadBalancerIP(&service, c.serviceLBIP)
 			}
 			if c.serviceLBName != "" {
-				if service.ObjectMeta.Annotations == nil {
-					service.ObjectMeta.Annotations = map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "pip1"}
+				if service.Annotations == nil {
+					service.Annotations = map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "pip1"}
 				} else {
-					service.ObjectMeta.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]] = "pip1"
+					service.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]] = "pip1"
 				}
 			}
 			owns, isUserAssignedPIP := serviceOwnsPublicIP(&service, c.pip, c.clusterName)
@@ -3129,7 +3129,7 @@ func TestReconcileLoadBalancerRuleCommon(t *testing.T) {
 	for _, test := range testCases {
 		t.Run(test.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
-			az.Config.LoadBalancerSKU = test.loadBalancerSKU
+			az.LoadBalancerSKU = test.loadBalancerSKU
 			service := test.service
 			firstPort := service.Spec.Ports[0]
 			probeProtocol := test.probeProtocol
@@ -4048,10 +4048,10 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			az := GetTestCloud(ctrl)
-			az.Config.LoadBalancerSKU = test.loadBalancerSKU
-			az.Config.DisableOutboundSNAT = test.disableOutboundSnat
+			az.LoadBalancerSKU = test.loadBalancerSKU
+			az.DisableOutboundSNAT = test.disableOutboundSnat
 			if test.preConfigLBType != "" {
-				az.Config.PreConfiguredBackendPoolLoadBalancerTypes = test.preConfigLBType
+				az.PreConfiguredBackendPoolLoadBalancerTypes = test.preConfigLBType
 			}
 			az.LoadBalancerResourceGroup = test.loadBalancerResourceGroup
 
@@ -5534,7 +5534,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			}
 
 			service := getTestService("test1", v1.ProtocolTCP, nil, test.isIPv6, 80)
-			service.ObjectMeta.Annotations = test.additionalAnnotations
+			service.Annotations = test.additionalAnnotations
 			mockPIPsClient := az.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
 			if test.shouldPutPIP {
 				mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ string, parameters armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
@@ -5734,7 +5734,7 @@ func TestShouldUpdateLoadBalancer(t *testing.T) {
 				mockLBsClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil)
 			}
 			if test.lbHasDeletionTimestamp {
-				service.ObjectMeta.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+				service.DeletionTimestamp = &metav1.Time{Time: time.Now()}
 			}
 			if test.existsLb {
 				lb := &armnetwork.LoadBalancer{
@@ -5844,7 +5844,7 @@ func TestIsBackendPoolPreConfigured(t *testing.T) {
 	for _, test := range testCases {
 		t.Run(test.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
-			az.Config.PreConfiguredBackendPoolLoadBalancerTypes = test.preConfiguredBackendPoolLoadBalancerTypes
+			az.PreConfiguredBackendPoolLoadBalancerTypes = test.preConfiguredBackendPoolLoadBalancerTypes
 			var service v1.Service
 			if test.isInternalService {
 				service = getInternalTestService("test", 80)
@@ -7819,16 +7819,16 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.description, func(t *testing.T) {
 			if c.useStandardLB {
-				az.Config.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+				az.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 			} else {
-				az.Config.LoadBalancerSKU = consts.LoadBalancerSKUBasic
+				az.LoadBalancerSKU = consts.LoadBalancerSKUBasic
 			}
 
 			if len(c.multiSLBConfigs) > 0 {
 				az.MultipleStandardLoadBalancerConfigurations = c.multiSLBConfigs
 			}
 
-			az.Config.LoadBalancerName = c.lbName
+			az.LoadBalancerName = c.lbName
 			svc := getTestService("test", v1.ProtocolTCP, c.serviceAnnotation, false)
 			if c.serviceLabel != nil {
 				svc.Labels = c.serviceLabel
@@ -8142,9 +8142,9 @@ func TestGetFrontendIPConfigName(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.description, func(t *testing.T) {
 			if c.useStandardLB {
-				az.Config.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+				az.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 			} else {
-				az.Config.LoadBalancerSKU = consts.LoadBalancerSKUBasic
+				az.LoadBalancerSKU = consts.LoadBalancerSKUBasic
 			}
 			svc.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = c.subnetName
 			svc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = strconv.FormatBool(c.isInternal)
@@ -8196,9 +8196,9 @@ func TestGetFrontendIPConfigNames(t *testing.T) {
 		c := c
 		t.Run(c.description, func(t *testing.T) {
 			if c.useStandardLB {
-				az.Config.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+				az.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 			} else {
-				az.Config.LoadBalancerSKU = consts.LoadBalancerSKUBasic
+				az.LoadBalancerSKU = consts.LoadBalancerSKUBasic
 			}
 			svc.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = c.subnetName
 			svc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = strconv.FormatBool(c.isInternal)

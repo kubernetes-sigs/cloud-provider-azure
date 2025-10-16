@@ -1001,7 +1001,7 @@ func (az *Cloud) selectLoadBalancer(ctx context.Context, clusterName string, ser
 		return nil, false, err
 	}
 	// validate if the selected LB has not exceeded the MaximumLoadBalancerRuleCount
-	if az.Config.MaximumLoadBalancerRuleCount != 0 && selectedLBRuleCount >= az.Config.MaximumLoadBalancerRuleCount {
+	if az.MaximumLoadBalancerRuleCount != 0 && selectedLBRuleCount >= az.MaximumLoadBalancerRuleCount {
 		err = fmt.Errorf("selectLoadBalancer: cluster(%s) service(%s) isInternal(%t) -  all available load balancers have exceeded maximum rule limit %d, vmSetNames (%v)", clusterName, serviceName, isInternal, selectedLBRuleCount, vmSetNames)
 		klog.Error(err)
 		return selectedLB, existsLb, err
@@ -2884,7 +2884,7 @@ func (az *Cloud) getExpectedLBRules(
 	// https://github.com/kubernetes/kubernetes/blob/7c013c3f64db33cf19f38bb2fc8d9182e42b0b7b/pkg/proxy/healthcheck/service_health.go#L236
 	var nodeEndpointHealthprobe *armnetwork.Probe
 	var nodeEndpointHealthprobeAdded bool
-	if servicehelpers.NeedsHealthCheck(service) && !(consts.IsPLSEnabled(service.Annotations) && consts.IsPLSProxyProtocolEnabled(service.Annotations)) {
+	if servicehelpers.NeedsHealthCheck(service) && (!consts.IsPLSEnabled(service.Annotations) || !consts.IsPLSProxyProtocolEnabled(service.Annotations)) {
 		podPresencePath, podPresencePort := servicehelpers.GetServiceHealthCheckPathPort(service)
 		lbRuleName := az.getLoadBalancerRuleName(service, v1.ProtocolTCP, podPresencePort, isIPv6)
 		probeInterval, numberOfProbes, err := az.getHealthProbeConfigProbeIntervalAndNumOfProbe(service, podPresencePort)
@@ -2969,7 +2969,7 @@ func (az *Cloud) getExpectedLBRules(
 				klog.V(2).Infof("getExpectedLBRules lb name (%s) rule name (%s) no lb rule required", lbName, lbRuleName)
 				continue
 			}
-			if port.Protocol == v1.ProtocolSCTP && !(az.UseStandardLoadBalancer() && consts.IsK8sServiceUsingInternalLoadBalancer(service)) {
+			if port.Protocol == v1.ProtocolSCTP && (!az.UseStandardLoadBalancer() || !consts.IsK8sServiceUsingInternalLoadBalancer(service)) {
 				return expectedProbes, expectedRules, fmt.Errorf("SCTP is only supported on standard loadbalancer in internal mode")
 			}
 
@@ -3250,7 +3250,7 @@ func (az *Cloud) shouldUpdateLoadBalancer(ctx context.Context, clusterName strin
 	}
 
 	_, _, _, _, existsLb, _, _ := az.getServiceLoadBalancer(ctx, service, clusterName, nodes, false, existingManagedLBs)
-	return existsLb && service.ObjectMeta.DeletionTimestamp == nil && service.Spec.Type == v1.ServiceTypeLoadBalancer, nil
+	return existsLb && service.DeletionTimestamp == nil && service.Spec.Type == v1.ServiceTypeLoadBalancer, nil
 }
 
 // Determine if we should release existing owned public IPs

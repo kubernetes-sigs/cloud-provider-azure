@@ -1217,7 +1217,7 @@ func TestEnsureHostInPoolVmssFlex(t *testing.T) {
 			fs, err := NewTestFlexScaleSet(ctrl)
 			assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 			if tc.isStandardLB {
-				fs.Config.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+				fs.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 			}
 
 			mockVMSSClient := fs.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
@@ -1364,7 +1364,7 @@ func TestEnsureVMSSFlexInPool(t *testing.T) {
 		fs, err := NewTestFlexScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 		if tc.isStandardLB {
-			fs.Config.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+			fs.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 		}
 
 		testVmssFlex := genreteTestVmssFlex("vmssflex1", testVmssFlex1ID)
@@ -1481,7 +1481,7 @@ func TestEnsureHostsInPoolVmssFlex(t *testing.T) {
 		fs, err := NewTestFlexScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 		if tc.isStandardLB {
-			fs.Config.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+			fs.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 		}
 
 		mockVMSSClient := fs.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
@@ -1817,7 +1817,7 @@ func TestEnsureBackendPoolDeletedVmssFlex(t *testing.T) {
 			fs, err := NewTestFlexScaleSet(ctrl)
 			assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 			if tc.isStandardLB {
-				fs.Config.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+				fs.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 			}
 
 			testVmssFlex := genreteTestVmssFlex("vmssflex1", testVmssFlex1ID)

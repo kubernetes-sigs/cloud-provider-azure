@@ -297,9 +297,10 @@ func isServiceDualStack(svc *v1.Service) bool {
 // getIPFamiliesEnabled checks if IPv4, IPv6 are enabled according to svc.Spec.IPFamilies.
 func getIPFamiliesEnabled(svc *v1.Service) (v4Enabled bool, v6Enabled bool) {
 	for _, ipFamily := range svc.Spec.IPFamilies {
-		if ipFamily == v1.IPv4Protocol {
+		switch ipFamily {
+		case v1.IPv4Protocol:
 			v4Enabled = true
-		} else if ipFamily == v1.IPv6Protocol {
+		case v1.IPv6Protocol:
 			v6Enabled = true
 		}
 	}

@@ -224,8 +224,8 @@ func TestInstanceID(t *testing.T) {
 		} else {
 			cloud.VMSet, _ = newAvailabilitySet(cloud)
 		}
-		cloud.Config.VMType = test.vmType
-		cloud.Config.UseInstanceMetadata = test.useInstanceMetadata
+		cloud.VMType = test.vmType
+		cloud.UseInstanceMetadata = test.useInstanceMetadata
 		listener, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
@@ -609,8 +609,8 @@ func TestNodeAddresses(t *testing.T) {
 		} else {
 			cloud.VMSet, _ = newAvailabilitySet(cloud)
 		}
-		cloud.Config.VMType = test.vmType
-		cloud.Config.UseInstanceMetadata = test.useInstanceMetadata
+		cloud.VMType = test.vmType
+		cloud.UseInstanceMetadata = test.useInstanceMetadata
 		listener, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
@@ -785,7 +785,7 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	cloud := GetTestCloud(ctrl)
-	cloud.Config.UseInstanceMetadata = true
+	cloud.UseInstanceMetadata = true
 	metadataTemplate := `{"compute":{"name":"%s"},"network":{"interface":[{"ipv4":{"ipAddress":[{"privateIpAddress":"%s","publicIpAddress":"%s"}]},"ipv6":{"ipAddress":[{"privateIpAddress":"%s","publicIpAddress":"%s"}]}}]}}`
 
 	testcases := []struct {

@@ -395,16 +395,17 @@ func TestNewAuthProviderWithServicePrincipalClientSecret(t *testing.T) {
 					assert.Equal(t, testAADClientSecret, clientSecret)
 					assert.Equal(t, *testClientOption, options.ClientOptions)
 
-					if tenantID == testNetworkTenantID {
+					switch tenantID {
+					case testNetworkTenantID:
 						assert.Empty(t, options.AdditionallyAllowedTenants)
 						return testFakeNetworkTokenCredential, nil
-					} else if tenantID == testTenantID {
+					case testTenantID:
 						assert.Contains(t, options.AdditionallyAllowedTenants, testNetworkTenantID)
 						return testFakeComputeTokenCredential, nil
+					default:
+						t.Fatalf("unexpected tenant ID: %s", tenantID)
+						return nil, nil
 					}
-
-					t.Fatalf("unexpected tenant ID: %s", tenantID)
-					return nil, nil
 				},
 			},
 			Assertions: []AuthProviderAssertions{
@@ -656,16 +657,17 @@ func TestNewAuthProviderWithServicePrincipalClientCertificate(t *testing.T) {
 					assert.Equal(t, *testClientOption, options.ClientOptions)
 					assert.True(t, options.SendCertificateChain)
 
-					if tenantID == testNetworkTenantID {
+					switch tenantID {
+					case testNetworkTenantID:
 						assert.Empty(t, options.AdditionallyAllowedTenants)
 						return testFakeNetworkTokenCredential, nil
-					} else if tenantID == testTenantID {
+					case testTenantID:
 						assert.Contains(t, options.AdditionallyAllowedTenants, testNetworkTenantID)
 						return testFakeComputeTokenCredential, nil
+					default:
+						t.Fatalf("unexpected tenant ID: %s", tenantID)
+						return nil, nil
 					}
-
-					t.Fatalf("unexpected tenant ID: %s", tenantID)
-					return nil, nil
 				},
 			},
 			Assertions: []AuthProviderAssertions{

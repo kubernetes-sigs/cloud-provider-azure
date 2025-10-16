@@ -409,11 +409,11 @@ func TestZoneInitialized(t *testing.T) {
 
 		assert.Equal(t, 1, len(fnh.UpdatedNodes), "Node was not updated")
 		assert.Equal(t, "node0", fnh.UpdatedNodes[0].Name, "Node was not updated")
-		assert.Equal(t, 3, len(fnh.UpdatedNodes[0].ObjectMeta.Labels),
+		assert.Equal(t, 3, len(fnh.UpdatedNodes[0].Labels),
 			"Node label for Region and Zone were not set")
-		assert.Equal(t, "eastus", fnh.UpdatedNodes[0].ObjectMeta.Labels[v1.LabelZoneRegionStable],
+		assert.Equal(t, "eastus", fnh.UpdatedNodes[0].Labels[v1.LabelZoneRegionStable],
 			"Node Region not correctly updated")
-		assert.Equal(t, "eastus-1", fnh.UpdatedNodes[0].ObjectMeta.Labels[v1.LabelZoneFailureDomainStable],
+		assert.Equal(t, "eastus-1", fnh.UpdatedNodes[0].Labels[v1.LabelZoneFailureDomainStable],
 			"Node FailureDomain not correctly updated")
 	})
 
@@ -491,15 +491,15 @@ func TestZoneInitialized(t *testing.T) {
 
 		assert.Equal(t, 1, len(fnh.UpdatedNodes), "Node was not updated")
 		assert.Equal(t, "node0", fnh.UpdatedNodes[0].Name, "Node was not updated")
-		assert.Equal(t, 6, len(fnh.UpdatedNodes[0].ObjectMeta.Labels),
+		assert.Equal(t, 6, len(fnh.UpdatedNodes[0].Labels),
 			"Node label for Region and Zone were not set")
-		assert.Equal(t, "eastus", fnh.UpdatedNodes[0].ObjectMeta.Labels[v1.LabelZoneRegionStable],
+		assert.Equal(t, "eastus", fnh.UpdatedNodes[0].Labels[v1.LabelZoneRegionStable],
 			"Node Region not correctly updated")
-		assert.Equal(t, "eastus-1", fnh.UpdatedNodes[0].ObjectMeta.Labels[v1.LabelZoneFailureDomainStable],
+		assert.Equal(t, "eastus-1", fnh.UpdatedNodes[0].Labels[v1.LabelZoneFailureDomainStable],
 			"Node FailureDomain not correctly updated")
-		assert.Equal(t, "eastus", fnh.UpdatedNodes[0].ObjectMeta.Labels[v1.LabelZoneRegion],
+		assert.Equal(t, "eastus", fnh.UpdatedNodes[0].Labels[v1.LabelZoneRegion],
 			"Node Region not correctly updated")
-		assert.Equal(t, "eastus-1", fnh.UpdatedNodes[0].ObjectMeta.Labels[v1.LabelZoneFailureDomain],
+		assert.Equal(t, "eastus-1", fnh.UpdatedNodes[0].Labels[v1.LabelZoneFailureDomain],
 			"Node FailureDomain not correctly updated")
 	})
 }

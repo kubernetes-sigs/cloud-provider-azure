@@ -74,7 +74,7 @@ func TestLock(t *testing.T) {
 		{
 			desc:        "should return an error when trying to acquire a lease which has not expired",
 			existed:     true,
-			expectedErr: "Lease has not expired yet",
+			expectedErr: "lease has not expired yet",
 		},
 		{
 			desc:       "should not return an error if the lease has not expired but the previous holder is the same",

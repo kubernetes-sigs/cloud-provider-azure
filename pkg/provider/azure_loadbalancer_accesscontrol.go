@@ -164,5 +164,5 @@ func (az *Cloud) isNodeManagedByCloudProvider(node *v1.Node) bool {
 	az.nodeCachesLock.Lock()
 	defer az.nodeCachesLock.Unlock()
 
-	return !az.unmanagedNodes.Has(node.ObjectMeta.Name)
+	return !az.unmanagedNodes.Has(node.Name)
 }

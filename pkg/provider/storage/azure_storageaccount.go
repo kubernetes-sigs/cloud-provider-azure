@@ -155,21 +155,7 @@ func (az *AccountRepo) getStorageAccounts(ctx context.Context, storageAccountCli
 	accounts := []accountWithLocation{}
 	for _, acct := range result {
 		if acct.Name != nil && acct.Location != nil && acct.SKU != nil {
-			if !(isStorageTypeEqual(acct, accountOptions) &&
-				isAccountKindEqual(acct, accountOptions) &&
-				isLocationEqual(acct, accountOptions) &&
-				isLargeFileSharesPropertyEqual(acct, accountOptions) &&
-				isTagsEqual(acct, accountOptions) &&
-				isTaggedWithSkip(acct) &&
-				isHnsPropertyEqual(acct, accountOptions) &&
-				isEnableNfsV3PropertyEqual(acct, accountOptions) &&
-				isEnableHTTPSTrafficOnlyEqual(acct, accountOptions) &&
-				isAllowBlobPublicAccessEqual(acct, accountOptions) &&
-				isRequireInfrastructureEncryptionEqual(acct, accountOptions) &&
-				isAllowSharedKeyAccessEqual(acct, accountOptions) &&
-				isAccessTierEqual(acct, accountOptions) &&
-				AreVNetRulesEqual(acct, accountOptions) &&
-				isPrivateEndpointAsExpected(acct, accountOptions)) {
+			if !isStorageTypeEqual(acct, accountOptions) || !isAccountKindEqual(acct, accountOptions) || !isLocationEqual(acct, accountOptions) || !isLargeFileSharesPropertyEqual(acct, accountOptions) || !isTagsEqual(acct, accountOptions) || !isTaggedWithSkip(acct) || !isHnsPropertyEqual(acct, accountOptions) || !isEnableNfsV3PropertyEqual(acct, accountOptions) || !isEnableHTTPSTrafficOnlyEqual(acct, accountOptions) || !isAllowBlobPublicAccessEqual(acct, accountOptions) || !isRequireInfrastructureEncryptionEqual(acct, accountOptions) || !isAllowSharedKeyAccessEqual(acct, accountOptions) || !isAccessTierEqual(acct, accountOptions) || !AreVNetRulesEqual(acct, accountOptions) || !isPrivateEndpointAsExpected(acct, accountOptions) {
 				continue
 			}
 
@@ -364,11 +350,11 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 		subnetName = az.SubnetName
 	}
 
-	if accountOptions.SubscriptionID != "" && !strings.EqualFold(accountOptions.SubscriptionID, az.Config.SubscriptionID) && accountOptions.ResourceGroup == "" {
+	if accountOptions.SubscriptionID != "" && !strings.EqualFold(accountOptions.SubscriptionID, az.SubscriptionID) && accountOptions.ResourceGroup == "" {
 		return "", "", fmt.Errorf("resourceGroup must be specified when subscriptionID(%s) is not empty", accountOptions.SubscriptionID)
 	}
 
-	subsID := az.Config.SubscriptionID
+	subsID := az.SubscriptionID
 	if accountOptions.SubscriptionID != "" {
 		subsID = accountOptions.SubscriptionID
 	}
@@ -1159,7 +1145,7 @@ func isEnableBlobVersioningEqual(property *armstorage.BlobServiceProperties, acc
 
 // get a storage account by UUID
 func generateStorageAccountName(accountNamePrefix string) string {
-	uniqueID := strings.Replace(uuid.NewString(), "-", "", -1)
+	uniqueID := strings.ReplaceAll(uuid.NewString(), "-", "")
 	accountName := strings.ToLower(accountNamePrefix + uniqueID)
 	if len(accountName) > consts.StorageAccountNameMaxLength {
 		return accountName[:consts.StorageAccountNameMaxLength-1]

@@ -345,7 +345,7 @@ func (az *Cloud) newLBCache() (azcache.Resource, error) {
 	if az.LoadBalancerCacheTTLInSeconds == 0 {
 		az.LoadBalancerCacheTTLInSeconds = loadBalancerCacheTTLDefaultInSeconds
 	}
-	return azcache.NewTimedCache(time.Duration(az.LoadBalancerCacheTTLInSeconds)*time.Second, getter, az.Config.DisableAPICallCache)
+	return azcache.NewTimedCache(time.Duration(az.LoadBalancerCacheTTLInSeconds)*time.Second, getter, az.DisableAPICallCache)
 }
 
 func (az *Cloud) getAzureLoadBalancer(ctx context.Context, name string, crt azcache.AzureCacheReadType) (lb *armnetwork.LoadBalancer, exists bool, err error) {

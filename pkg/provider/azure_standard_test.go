@@ -190,9 +190,9 @@ func TestMapLoadBalancerNameToVMSet(t *testing.T) {
 
 	for _, c := range cases {
 		if c.useStandardLB {
-			az.Config.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+			az.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 		} else {
-			az.Config.LoadBalancerSKU = consts.LoadBalancerSKUBasic
+			az.LoadBalancerSKU = consts.LoadBalancerSKUBasic
 		}
 		vmset := az.mapLoadBalancerNameToVMSet(c.lbName, c.clusterName)
 		assert.Equal(t, c.expectedVMSet, vmset, c.description)
@@ -325,9 +325,9 @@ func TestGetLoadBalancingRuleName(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.description, func(t *testing.T) {
 			if c.useStandardLB {
-				az.Config.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+				az.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 			} else {
-				az.Config.LoadBalancerSKU = consts.LoadBalancerSKUBasic
+				az.LoadBalancerSKU = consts.LoadBalancerSKUBasic
 			}
 			svc.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = c.subnetName
 			svc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = strconv.FormatBool(c.isInternal)
@@ -1452,7 +1452,7 @@ func TestStandardEnsureHostInPool(t *testing.T) {
 			defer ctrl.Finish()
 			cloud := GetTestCloud(ctrl)
 			if test.isStandardLB {
-				cloud.Config.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+				cloud.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 			}
 
 			testVM := buildDefaultTestVirtualMachine(availabilitySetID, []string{test.nicID})
@@ -1569,8 +1569,8 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
-			cloud.Config.LoadBalancerSKU = consts.LoadBalancerSKUStandard
-			cloud.Config.ExcludeMasterFromStandardLB = ptr.To(true)
+			cloud.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+			cloud.ExcludeMasterFromStandardLB = ptr.To(true)
 			cloud.excludeLoadBalancerNodes = utilsets.NewString(test.excludeLBNodes...)
 
 			testVM := buildDefaultTestVirtualMachine(availabilitySetID, []string{test.nicID})

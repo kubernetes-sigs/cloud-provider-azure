@@ -601,7 +601,7 @@ func nodeAddressesChangeDetected(addressSet1, addressSet2 []v1.NodeAddress) bool
 // Ensure all provided node ip addresses are found in the cloud provider, otherwise return false
 // When there's no provided node ip addresses, it will return true.
 func ensureNodeProvidedIPsExists(node *v1.Node, nodeAddresses []v1.NodeAddress) ([]v1.NodeAddress, bool) {
-	providedIPStr, ok := node.ObjectMeta.Annotations[cloudproviderapi.AnnotationAlphaProvidedIPAddr]
+	providedIPStr, ok := node.Annotations[cloudproviderapi.AnnotationAlphaProvidedIPAddr]
 	if !ok || len(providedIPStr) == 0 {
 		return []v1.NodeAddress{}, true
 	}
@@ -637,7 +637,7 @@ func (cnc *CloudNodeController) getInstanceTypeByName(ctx context.Context, node 
 func (cnc *CloudNodeController) getZoneByName(ctx context.Context, node *v1.Node) (cloudprovider.Zone, error) {
 	zone, err := cnc.nodeProvider.GetZone(ctx, types.NodeName(node.Name))
 	if err != nil {
-		return cloudprovider.Zone{}, fmt.Errorf("Zone: Error fetching by NodeName %s: %w", node.Name, err)
+		return cloudprovider.Zone{}, fmt.Errorf("zone: error fetching by NodeName %s: %w", node.Name, err)
 	}
 
 	return zone, nil
