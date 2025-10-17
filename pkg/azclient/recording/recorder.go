@@ -171,13 +171,13 @@ func NewRecorder() (*Recorder, *cloud.Configuration, string, error) {
 	var tokenCredential azcore.TokenCredential
 	var subscriptionID string
 	var tenantID string
-	var recOpstions *gorecorder.Options = &gorecorder.Options{
+	recOptions := &gorecorder.Options{
 		CassetteName:       cassetteName,
 		Mode:               gorecorder.ModeRecordOnce,
 		SkipRequestLatency: true,
 		RealTransport:      utils.DefaultTransport,
 	}
-	rec, err := gorecorder.NewWithOptions(recOpstions)
+	rec, err := gorecorder.NewWithOptions(recOptions)
 	if err != nil {
 		return nil, nil, "", err
 	}
@@ -269,9 +269,9 @@ func NewRecorder() (*Recorder, *cloud.Configuration, string, error) {
 			i.Request.URL = opsurl.String()
 		}
 		if !strings.EqualFold(tenantID, "tenantid") {
-			i.Request.URL = strings.Replace(i.Request.URL, tenantID, "tenantid", -1)
-			i.Request.Body = strings.Replace(i.Request.Body, tenantID, "tenantid", -1)
-			i.Response.Body = strings.Replace(i.Response.Body, tenantID, "tenantid", -1)
+			i.Request.URL = strings.ReplaceAll(i.Request.URL, tenantID, "tenantid")
+			i.Request.Body = strings.ReplaceAll(i.Request.Body, tenantID, "tenantid")
+			i.Response.Body = strings.ReplaceAll(i.Response.Body, tenantID, "tenantid")
 			if i.Request.Form.Has("tenant_id") {
 				value := i.Request.Form
 				value.Set("tenant_id", tenantID)

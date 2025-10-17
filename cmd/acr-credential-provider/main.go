@@ -45,7 +45,7 @@ func main() {
 		Long:  `The acr credential provider is responsible for providing ACR credentials for kubelet`,
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				return errors.New("Config file is not specified")
+				return errors.New("config file is not specified")
 			}
 			if len(args) > 1 {
 				return fmt.Errorf("expected exactly one argument (config file); Got arguments: %v", args)

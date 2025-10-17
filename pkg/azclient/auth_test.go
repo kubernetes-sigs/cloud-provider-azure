@@ -146,7 +146,7 @@ func TestNewAuthProvider(t *testing.T) {
 						assert.Equal(t, testTenantID, tenantID)
 						assert.Equal(t, testAADClientID, clientID)
 						assert.Equal(t, testAADClientSecret, clientSecret)
-						assert.Equal(t, testCloudConfig, options.ClientOptions.Cloud)
+						assert.Equal(t, testCloudConfig, options.Cloud)
 						return testFakeComputeTokenCredential, nil
 					}
 				},
@@ -181,7 +181,7 @@ func TestNewAuthProvider(t *testing.T) {
 					option.NewClientCertificateCredentialFn = func(tenantID, clientID string, _ []*x509.Certificate, _ crypto.PrivateKey, options *azidentity.ClientCertificateCredentialOptions) (azcore.TokenCredential, error) {
 						assert.Equal(t, testTenantID, tenantID)
 						assert.Equal(t, testAADClientID, clientID)
-						assert.Equal(t, testCloudConfig, options.ClientOptions.Cloud)
+						assert.Equal(t, testCloudConfig, options.Cloud)
 						return testFakeComputeTokenCredential, nil
 					}
 				},
@@ -227,7 +227,7 @@ func TestNewAuthProvider(t *testing.T) {
 						assert.Equal(t, testTenantID, tenantID)
 						assert.Equal(t, testAADClientID, clientID)
 						assert.Equal(t, testAADClientSecret, clientSecret)
-						assert.Equal(t, testCloudConfig, options.ClientOptions.Cloud)
+						assert.Equal(t, testCloudConfig, options.Cloud)
 						return testFakeComputeTokenCredential, nil
 					}
 				},
@@ -257,14 +257,14 @@ func TestNewAuthProvider(t *testing.T) {
 							assert.Equal(t, testNetworkTenantID, tenantID)
 							assert.Equal(t, testAADClientID, clientID)
 							assert.Equal(t, testAADClientSecret, clientSecret)
-							assert.Equal(t, testCloudConfig, options.ClientOptions.Cloud)
+							assert.Equal(t, testCloudConfig, options.Cloud)
 							return testFakeNetworkTokenCredential, nil
 						}
 
 						assert.Equal(t, testTenantID, tenantID)
 						assert.Equal(t, testAADClientID, clientID)
 						assert.Equal(t, testAADClientSecret, clientSecret)
-						assert.Equal(t, testCloudConfig, options.ClientOptions.Cloud)
+						assert.Equal(t, testCloudConfig, options.Cloud)
 						return testFakeComputeTokenCredential, nil
 					}
 				},

@@ -163,7 +163,7 @@ func (o *CloudNodeManagerOptions) ApplyTo(c *cloudnodeconfig.Config, userAgent s
 		return err
 	}
 	c.Kubeconfig.DisableCompression = true
-	c.Kubeconfig.ContentConfig.ContentType = o.ClientConnection.ContentType
+	c.Kubeconfig.ContentType = o.ClientConnection.ContentType
 	c.Kubeconfig.QPS = o.ClientConnection.QPS
 	c.Kubeconfig.Burst = int(o.ClientConnection.Burst)
 	c.WaitForRoutes = o.WaitForRoutes
