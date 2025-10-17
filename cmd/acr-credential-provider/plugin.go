@@ -44,13 +44,18 @@ func init() {
 
 // ExecPlugin implements the exec-based plugin for fetching credentials that is invoked by the kubelet.
 type ExecPlugin struct {
-	plugin credentialprovider.CredentialProvider
+	configFile        string
+	RegistryMirrorStr string
+	plugin            credentialprovider.CredentialProvider
 }
 
 // NewCredentialProvider returns an instance of execPlugin that fetches
 // credentials based on the provided plugin implementing the CredentialProvider interface.
-func NewCredentialProvider(plugin credentialprovider.CredentialProvider) *ExecPlugin {
-	return &ExecPlugin{plugin}
+func NewCredentialProvider(configFile string, registryMirrorStr string) *ExecPlugin {
+	return &ExecPlugin{
+		configFile:        configFile,
+		RegistryMirrorStr: registryMirrorStr,
+	}
 }
 
 // Run executes the credential provider plugin. Required information for the plugin request (in
@@ -83,6 +88,14 @@ func (e *ExecPlugin) runPlugin(ctx context.Context, r io.Reader, w io.Writer, ar
 
 	if request.Image == "" {
 		return errors.New("image in plugin request was empty")
+	}
+
+	if e.plugin == nil {
+		// acr provider plugin are decided at runtime by the request information.
+		e.plugin, err = credentialprovider.NewAcrProvider(request, e.RegistryMirrorStr, e.configFile)
+		if err != nil {
+			return err
+		}
 	}
 
 	response, err := e.plugin.GetCredentials(ctx, request.Image, args)

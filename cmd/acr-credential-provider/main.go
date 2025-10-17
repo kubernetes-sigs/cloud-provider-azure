@@ -31,7 +31,6 @@ import (
 	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/credentialprovider"
 	"sigs.k8s.io/cloud-provider-azure/pkg/version"
 )
 
@@ -54,14 +53,8 @@ func main() {
 			return nil
 		},
 		Version: version.Get().GitVersion,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			acrProvider, err := credentialprovider.NewAcrProviderFromConfig(args[0], RegistryMirrorStr)
-			if err != nil {
-				klog.Errorf("Failed to initialize ACR provider: %v", err)
-				return err
-			}
-
-			if err := NewCredentialProvider(acrProvider).Run(cmd.Context()); err != nil {
+		RunE: func(_ *cobra.Command, args []string) error {
+			if err := NewCredentialProvider(args[0], RegistryMirrorStr).Run(context.TODO()); err != nil {
 				klog.Errorf("Error running acr credential provider: %v", err)
 				return err
 			}
