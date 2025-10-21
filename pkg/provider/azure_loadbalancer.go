@@ -703,7 +703,7 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 
 				// klog.Infof("CLB-ENECHITOAIA-removeBackendPoolRequestDTO:\n")
 				// logObject(removeBackendPoolRequestDTO)
-				removeBackendPoolResponseDTO := az.UpdateNRPSGWServices(ctx, "ServiceGateway", removeBackendPoolRequestDTO)
+				removeBackendPoolResponseDTO := az.UpdateNRPSGWServices(ctx, az.ServiceGatewayResourceName, removeBackendPoolRequestDTO)
 				if removeBackendPoolResponseDTO != nil {
 					klog.Errorf("locationAndNRPServiceBatchUpdater.process: failed to remove backend pool: %v", removeBackendPoolResponseDTO)
 					return fmt.Errorf("failed to remove backend pool: %v", removeBackendPoolResponseDTO)

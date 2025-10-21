@@ -78,7 +78,7 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 		logObject(createServicesRequestDTO)
 		// createServicesResponseDTO := NRPAPIClientUpdateNRPServices(ctx, createServicesRequestDTO, updater.az.SubscriptionID, updater.az.ResourceGroup)
 		// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: createServicesResponseDTO:\n")
-		err := updater.az.UpdateNRPSGWServices(ctx, "ServiceGateway", createServicesRequestDTO)
+		err := updater.az.UpdateNRPSGWServices(ctx, updater.az.ServiceGatewayResourceName, createServicesRequestDTO)
 		// logObject(err)
 		if err != nil {
 			klog.Errorf("locationAndNRPServiceBatchUpdater.process: failed to create services: %+v\n", err)
@@ -158,7 +158,7 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 		// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: locationDataRequestDTO:\n")
 		// logObject(locationDataRequestDTO)
 		// locationDataResponseDTO := NRPAPIClientUpdateNRPLocations(ctx, locationDataRequestDTO, updater.az.SubscriptionID, updater.az.ResourceGroup)
-		locationDataResponseDTO := updater.az.UpdateNRPSGWAddressLocations(ctx, "ServiceGateway", locationDataRequestDTO)
+		locationDataResponseDTO := updater.az.UpdateNRPSGWAddressLocations(ctx, updater.az.ServiceGatewayResourceName, locationDataRequestDTO)
 		// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: locationDataResponseDTO:\n")
 		// logObject(locationDataResponseDTO)
 		if locationDataResponseDTO == nil {
@@ -185,7 +185,7 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 			updater.az.ResourceGroup)
 		// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: removeServicesRequestDTO:\n")
 		// logObject(removeServicesRequestDTO)
-		removeServicesResponseDTO := updater.az.UpdateNRPSGWServices(ctx, "ServiceGateway", removeServicesRequestDTO)
+		removeServicesResponseDTO := updater.az.UpdateNRPSGWServices(ctx, updater.az.ServiceGatewayResourceName, removeServicesRequestDTO)
 		if removeServicesResponseDTO == nil {
 			if serviceLoadBalancerList.Removals.Len() > 0 {
 				updater.az.diffTracker.UpdateNRPLoadBalancers(

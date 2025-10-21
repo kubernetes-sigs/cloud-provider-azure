@@ -515,14 +515,14 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 
 		// start NRP location and service batch updater.
 		if az.ServiceGatewayEnabled {
-			exists, err := az.existsServiceGateway(ctx, "ServiceGateway")
+			exists, err := az.existsServiceGateway(ctx, az.ServiceGatewayResourceName)
 			if err != nil {
-				return fmt.Errorf("InitializeCloudFromConfig: failed to check if Service Gateway %s exists: %w", "ServiceGateway", err)
+				return fmt.Errorf("InitializeCloudFromConfig: failed to check if Service Gateway %s exists: %w", az.ServiceGatewayResourceName, err)
 			}
 			if !exists {
-				err = az.createServiceGateway(ctx, "ServiceGateway")
+				err = az.createServiceGateway(ctx, az.ServiceGatewayResourceName)
 				if err != nil {
-					return fmt.Errorf("InitializeCloudFromConfig: failed to create Service Gateway %s: %w", "ServiceGateway", err)
+					return fmt.Errorf("InitializeCloudFromConfig: failed to create Service Gateway %s: %w", az.ServiceGatewayResourceName, err)
 				}
 			}
 

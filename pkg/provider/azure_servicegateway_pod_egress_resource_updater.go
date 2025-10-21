@@ -148,7 +148,7 @@ func (updater *podEgressResourceUpdater) process(ctx context.Context) {
 			service := eventData.Service
 
 			klog.Infof("podEgressResourceUpdater.process: Processing event: %s, pod %s/%s for service %s", event.EventType, location, address, service)
-			err := updater.az.DisassociateNatGatewayFromServiceGateway(ctx, "ServiceGateway", service)
+			err := updater.az.DisassociateNatGatewayFromServiceGateway(ctx, updater.az.ServiceGatewayResourceName, service)
 			klog.Infof("podEgressResourceUpdater.process: removeNATGatewayResponseDTO:\n")
 			if err == nil {
 				klog.Infof("podEgressResourceUpdater.process: removeNATGatewayResponseDTO is nil")

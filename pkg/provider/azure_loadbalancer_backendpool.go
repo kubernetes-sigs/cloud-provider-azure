@@ -433,7 +433,7 @@ func (az *Cloud) getVnetResourceID() string {
 }
 
 func (az *Cloud) GetServiceGatewayID() string {
-	serviceGatewayName := "ServiceGateway"
+	serviceGatewayName := az.ServiceGatewayResourceName
 	return fmt.Sprintf(
 		"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/serviceGateways/%s",
 		az.SubscriptionID,

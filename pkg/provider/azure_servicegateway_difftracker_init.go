@@ -223,7 +223,7 @@ func (az *Cloud) initializeDiffTracker() error {
 		Locations:     make(map[string]difftracker.NRPLocation),
 	}
 
-	servicesDTO, err := az.GetServices(ctx, "ServiceGateway")
+	servicesDTO, err := az.GetServices(ctx, az.ServiceGatewayResourceName)
 	if err != nil {
 		return fmt.Errorf("initializeDiffTracker: failed to get services from ServiceGateway API: %w", err)
 	}
@@ -244,7 +244,7 @@ func (az *Cloud) initializeDiffTracker() error {
 
 	// 5. Fetch all locations from ServiceGateway API and update difftracker.NRPResources.Locations
 
-	locationsDTO, err := az.GetAddressLocations(ctx, "ServiceGateway")
+	locationsDTO, err := az.GetAddressLocations(ctx, az.ServiceGatewayResourceName)
 	klog.Infof("initializeDiffTracker: fetched %d locations from ServiceGateway API", len(locationsDTO))
 	logObject(locationsDTO)
 	if err != nil {
@@ -399,7 +399,7 @@ func (az *Cloud) initializeDiffTracker() error {
 			Removals:  nil,
 		}, az.SubscriptionID, az.ResourceGroup)
 	if len(addServicesDTO.Services) > 0 {
-		if err := az.UpdateNRPSGWServices(ctx, "ServiceGateway", addServicesDTO); err != nil {
+		if err := az.UpdateNRPSGWServices(ctx, az.ServiceGatewayResourceName, addServicesDTO); err != nil {
 			return fmt.Errorf("initializeDiffTracker: failed to add services in ServiceGateway API: %w", err)
 		}
 		// Reflect additions in local NRP state
@@ -421,7 +421,7 @@ func (az *Cloud) initializeDiffTracker() error {
 	// 11. Update Addresses and Locations
 	if len(syncOperations.LocationData.Locations) > 0 {
 		locationsDTO := difftracker.MapLocationDataToDTO(syncOperations.LocationData)
-		if err := az.UpdateNRPSGWAddressLocations(ctx, "ServiceGateway", locationsDTO); err != nil {
+		if err := az.UpdateNRPSGWAddressLocations(ctx, az.ServiceGatewayResourceName, locationsDTO); err != nil {
 			return fmt.Errorf("initializeDiffTracker: failed to update locations in ServiceGateway API: %w", err)
 		}
 		az.diffTracker.UpdateLocationsAddresses(syncOperations.LocationData)
@@ -442,7 +442,7 @@ func (az *Cloud) initializeDiffTracker() error {
 		az.ResourceGroup,
 	)
 	if len(removeServicesDTO.Services) > 0 {
-		if err := az.UpdateNRPSGWServices(ctx, "ServiceGateway", removeServicesDTO); err != nil {
+		if err := az.UpdateNRPSGWServices(ctx, az.ServiceGatewayResourceName, removeServicesDTO); err != nil {
 			return fmt.Errorf("initializeDiffTracker: failed to remove services in ServiceGateway API: %w", err)
 		}
 		// Reflect removals
