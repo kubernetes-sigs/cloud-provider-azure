@@ -291,3 +291,12 @@ func (az *Cloud) GetPlatformSubFaultDomain(ctx context.Context) (string, error) 
 	}
 	return "", nil
 }
+
+// GetInterconnectGroupID returns the Platform Interconnect Group ID from IMDS if set.
+// TODO: Implement actual IMDS parsing logic when format is finalized.
+// Currently returns empty string to allow infrastructure to be in place.
+func (az *Cloud) GetInterconnectGroupID(_ context.Context) (string, error) {
+	// Placeholder implementation - returns empty until IMDS format is determined
+	klog.V(4).Infof("GetInterconnectGroupID: placeholder implementation, returning empty")
+	return "", nil
+}
