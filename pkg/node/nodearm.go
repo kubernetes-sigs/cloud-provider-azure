@@ -87,3 +87,9 @@ func (np *ARMNodeProvider) GetZone(ctx context.Context, name types.NodeName) (cl
 func (np *ARMNodeProvider) GetPlatformSubFaultDomain(_ context.Context) (string, error) {
 	return "", nil
 }
+
+// GetInterconnectGroupId returns the Interconnect Group ID from IMDS if set.
+// ARMNodeProvider doesn't use IMDS, so this always returns empty string.
+func (np *ARMNodeProvider) GetInterconnectGroupId(_ context.Context) (string, error) {
+	return "", nil
+}

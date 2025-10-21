@@ -150,3 +150,17 @@ func TestGetPlatformSubFaultDomain(t *testing.T) {
 		})
 	}
 }
+
+func TestGetInterconnectGroupId(t *testing.T) {
+	// Infrastructure-only test: verifies placeholder implementation returns empty
+	cloud := &Cloud{
+		Config: config.Config{
+			UseInstanceMetadata: true,
+		},
+	}
+
+	id, err := cloud.GetInterconnectGroupId(context.TODO())
+
+	assert.NoError(t, err, "GetInterconnectGroupId should not return error")
+	assert.Equal(t, "", id, "GetInterconnectGroupId should return empty string (placeholder)")
+}
