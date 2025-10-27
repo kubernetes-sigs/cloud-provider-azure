@@ -454,7 +454,7 @@ delete-workload-cluster:
 ##@ Tools
 
 LINTER = $(shell pwd)/bin/golangci-lint
-LINTER_VERSION = v1.64.8
+LINTER_VERSION = v2.5.0
 .PHONY: golangci-lint
 golangci-lint:  ## Download golangci-lint locally if necessary.
 	@echo "Installing golangci-lint"

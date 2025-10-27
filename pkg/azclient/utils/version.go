@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+//revive:disable-next-line var-naming // utils package name kept for backwards compatibility
 package utils
 
 const (

@@ -101,10 +101,11 @@ func AddFlags(fs *flag.FlagSet) {
 // PrintAndExitIfRequested will check if the -version flag was passed
 // and, if so, print the version and exit.
 func PrintAndExitIfRequested(component string) {
-	if *versionFlag == VersionRaw {
+	switch *versionFlag {
+	case VersionRaw:
 		fmt.Printf("%#v\n", version.Get())
 		os.Exit(0)
-	} else if *versionFlag == VersionTrue {
+	case VersionTrue:
 		fmt.Printf("%s %s\n", component, version.Get())
 		os.Exit(0)
 	}

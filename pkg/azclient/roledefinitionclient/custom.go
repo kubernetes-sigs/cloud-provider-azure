@@ -35,7 +35,7 @@ func (client *Client) List(ctx context.Context, scopeName string, option *armaut
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
-	pager := client.RoleDefinitionsClient.NewListPager(scopeName, option)
+	pager := client.NewListPager(scopeName, option)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
 		if err != nil {

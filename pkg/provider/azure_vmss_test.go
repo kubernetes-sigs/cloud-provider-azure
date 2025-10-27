@@ -4106,13 +4106,13 @@ func TestGetAgentPoolVMSetNamesMixedInstances(t *testing.T) {
 		vmList := []string{"vmssee6c2000000", "vmssee6c2000001", "vmssee6c2000002"}
 		existingVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, vmList, "", false)
 
-		mockVMClient := ss.Cloud.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+		mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 		mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(existingVMs, nil).AnyTimes()
 
-		mockVMSSClient := ss.Cloud.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+		mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachineScaleSet{expectedScaleSet}, nil)
 
-		mockVMSSVMClient := ss.Cloud.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+		mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
 		ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
 		if ss.ListVmssVirtualMachinesWithoutInstanceView {
 			mockVMSSVMClient.EXPECT().List(gomock.Any(), gomock.Any(), testVMSSName).Return(existingVMSSVMs, nil)
@@ -4186,7 +4186,7 @@ func TestScaleSet_VMSSBatchSize(t *testing.T) {
 			vmssName   = "foo"
 			getVMSSErr = &azcore.ResponseError{ErrorCode: "list vmss error"}
 		)
-		mockVMSSClient := ss.Cloud.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+		mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).
 			Return(nil, getVMSSErr)
 
@@ -4199,7 +4199,7 @@ func TestScaleSet_VMSSBatchSize(t *testing.T) {
 		defer ctrl.Finish()
 		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err)
-		ss.Cloud.PutVMSSVMBatchSize = BatchSize
+		ss.PutVMSSVMBatchSize = BatchSize
 
 		scaleSet := &armcompute.VirtualMachineScaleSet{
 			Name: ptr.To("foo"),
@@ -4210,7 +4210,7 @@ func TestScaleSet_VMSSBatchSize(t *testing.T) {
 				OrchestrationMode: to.Ptr(armcompute.OrchestrationModeUniform),
 			},
 		}
-		mockVMSSClient := ss.Cloud.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+		mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).
 			Return([]*armcompute.VirtualMachineScaleSet{scaleSet}, nil)
 
@@ -4224,7 +4224,7 @@ func TestScaleSet_VMSSBatchSize(t *testing.T) {
 		defer ctrl.Finish()
 		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err)
-		ss.Cloud.PutVMSSVMBatchSize = 0
+		ss.PutVMSSVMBatchSize = 0
 
 		scaleSet := &armcompute.VirtualMachineScaleSet{
 			Name: ptr.To("foo"),
@@ -4235,7 +4235,7 @@ func TestScaleSet_VMSSBatchSize(t *testing.T) {
 				OrchestrationMode: to.Ptr(armcompute.OrchestrationModeUniform),
 			},
 		}
-		mockVMSSClient := ss.Cloud.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+		mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).
 			Return([]*armcompute.VirtualMachineScaleSet{scaleSet}, nil)
 
@@ -4249,7 +4249,7 @@ func TestScaleSet_VMSSBatchSize(t *testing.T) {
 		defer ctrl.Finish()
 		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err)
-		ss.Cloud.PutVMSSVMBatchSize = BatchSize
+		ss.PutVMSSVMBatchSize = BatchSize
 
 		scaleSet := &armcompute.VirtualMachineScaleSet{
 			Name: ptr.To("bar"),
@@ -4257,7 +4257,7 @@ func TestScaleSet_VMSSBatchSize(t *testing.T) {
 				OrchestrationMode: to.Ptr(armcompute.OrchestrationModeUniform),
 			},
 		}
-		mockVMSSClient := ss.Cloud.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+		mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).
 			Return([]*armcompute.VirtualMachineScaleSet{scaleSet}, nil)
 

@@ -666,10 +666,10 @@ func TestCleanupBasicLoadBalancer(t *testing.T) {
 			}
 
 			az := GetTestCloud(ctrl)
-			az.Config.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+			az.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 
 			if !tc.useStandardLB {
-				az.Config.LoadBalancerSKU = consts.LoadBalancerSKUBasic
+				az.LoadBalancerSKU = consts.LoadBalancerSKUBasic
 			}
 
 			service := &v1.Service{}

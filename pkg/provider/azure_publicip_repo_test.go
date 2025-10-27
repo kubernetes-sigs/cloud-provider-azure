@@ -34,7 +34,6 @@ import (
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
@@ -77,7 +76,7 @@ func TestCreateOrUpdatePIP(t *testing.T) {
 		err := az.CreateOrUpdatePIP(&v1.Service{}, az.ResourceGroup, &armnetwork.PublicIPAddress{Name: ptr.To("nic")})
 		assert.Contains(t, err.Error(), test.expectedErr.Error())
 
-		cachedPIP, err := az.pipCache.GetWithDeepCopy(context.TODO(), az.ResourceGroup, cache.CacheReadTypeDefault)
+		cachedPIP, err := az.pipCache.GetWithDeepCopy(context.TODO(), az.ResourceGroup, azcache.CacheReadTypeDefault)
 		assert.NoError(t, err)
 		if test.cacheExpectedEmpty {
 			assert.Empty(t, cachedPIP)

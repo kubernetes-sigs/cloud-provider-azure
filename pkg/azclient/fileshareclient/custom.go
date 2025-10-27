@@ -77,7 +77,7 @@ func (client *Client) List(ctx context.Context, resourceGroupName string, accoun
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
 
-	pager := client.FileSharesClient.NewListPager(resourceGroupName, accountName, option)
+	pager := client.NewListPager(resourceGroupName, accountName, option)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
 		if err != nil {

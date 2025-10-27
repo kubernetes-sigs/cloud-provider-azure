@@ -95,7 +95,7 @@ func newFlexScaleSet(az *Cloud) (VMSet, error) {
 // GetPrimaryVMSetName returns the VM set name depending on the configured vmType.
 // It returns config.PrimaryScaleSetName for vmss and config.PrimaryAvailabilitySetName for standard vmType.
 func (fs *FlexScaleSet) GetPrimaryVMSetName() string {
-	return fs.Config.PrimaryScaleSetName
+	return fs.PrimaryScaleSetName
 }
 
 // getNodeVMSetName returns the vmss flex name by the node name.
@@ -141,7 +141,7 @@ func (fs *FlexScaleSet) GetVMSetNames(ctx context.Context, service *v1.Service, 
 	if !hasMode || fs.UseStandardLoadBalancer() {
 		// no mode specified in service annotation or use single SLB mode
 		// default to PrimaryScaleSetName
-		vmssFlexNames := to.SliceOfPtrs(fs.Config.PrimaryScaleSetName)
+		vmssFlexNames := to.SliceOfPtrs(fs.PrimaryScaleSetName)
 		return vmssFlexNames, nil
 	}
 
@@ -483,7 +483,7 @@ func (fs *FlexScaleSet) EnsureHostInPool(ctx context.Context, service *v1.Servic
 
 	var primaryIPConfig *armnetwork.InterfaceIPConfiguration
 	ipv6 := isBackendPoolIPv6(backendPoolID)
-	if !fs.Cloud.ipv6DualStackEnabled && !ipv6 {
+	if !fs.ipv6DualStackEnabled && !ipv6 {
 		primaryIPConfig, err = getPrimaryIPConfig(nic)
 		if err != nil {
 			return "", "", "", nil, err

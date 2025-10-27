@@ -35,7 +35,7 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
 
-	resp, err := client.BlobServicesClient.GetServiceProperties(ctx, resourceGroupName, resourceName, nil)
+	resp, err := client.GetServiceProperties(ctx, resourceGroupName, resourceName, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +49,7 @@ func (client *Client) Set(ctx context.Context, resourceGroupName string, resourc
 	ctx, endSpan := runtime.StartSpan(ctx, SetOperationName, client.tracer, nil)
 	defer endSpan(err)
 
-	resp, err := client.BlobServicesClient.SetServiceProperties(ctx, resourceGroupName, resourceName, parameters, nil)
+	resp, err := client.SetServiceProperties(ctx, resourceGroupName, resourceName, parameters, nil)
 	if err != nil {
 		return nil, err
 	}
