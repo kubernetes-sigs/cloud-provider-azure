@@ -53,7 +53,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient/mock_virtualmachineclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
@@ -274,7 +273,7 @@ func setMockLBsDualStack(az *Cloud, expectedLBs *[]*armnetwork.LoadBalancer, svc
 		expectedLBName += "-internal"
 	}
 
-	fullServiceName := strings.Replace(svcName, "-", "", -1)
+	fullServiceName := strings.ReplaceAll(svcName, "-", "")
 
 	if lbIndex >= len(*expectedLBs) {
 		lb := &armnetwork.LoadBalancer{
@@ -412,7 +411,7 @@ func setMockLBs(az *Cloud, expectedLBs *[]*armnetwork.LoadBalancer, svcName stri
 		expectedLBName += "-internal"
 	}
 
-	fullServiceName := strings.Replace(svcName, "-", "", -1)
+	fullServiceName := strings.ReplaceAll(svcName, "-", "")
 
 	if lbIndex >= len((*expectedLBs)) {
 		lb := &armnetwork.LoadBalancer{
@@ -1078,8 +1077,10 @@ func TestReconcilePublicIPsWithExternalAndInternalSwitch(t *testing.T) {
 	validatePublicIPs(t, pips, &svc, true)
 }
 
-const networkInterfacesIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/networkInterfaces/%s"
-const primaryIPConfigIDTemplate = "%s/ipConfigurations/ipconfig"
+const (
+	networkInterfacesIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/networkInterfaces/%s"
+	primaryIPConfigIDTemplate   = "%s/ipConfigurations/ipconfig"
+)
 
 // returns the full identifier of Network Interface.
 func getNetworkInterfaceID(subscriptionID string, resourceGroupName, nicName string) string {
@@ -1097,9 +1098,11 @@ func getPrimaryIPConfigID(nicID string) string {
 		nicID)
 }
 
-const TestResourceNameFormat = "%s-%d"
-const TestVMResourceBaseName = "vm"
-const TestASResourceBaseName = "as"
+const (
+	TestResourceNameFormat = "%s-%d"
+	TestVMResourceBaseName = "vm"
+	TestASResourceBaseName = "as"
+)
 
 func getTestResourceName(resourceBaseName string, index int) string {
 	return fmt.Sprintf(TestResourceNameFormat, resourceBaseName, index)
@@ -1112,7 +1115,7 @@ func getVMName(vmIndex int) string {
 func getAvailabilitySetName(az *Cloud, vmIndex int, numAS int) string {
 	asIndex := vmIndex % numAS
 	if asIndex == 0 {
-		return az.Config.PrimaryAvailabilitySetName
+		return az.PrimaryAvailabilitySetName
 	}
 
 	return getTestResourceName(TestASResourceBaseName, asIndex)
@@ -1143,7 +1146,7 @@ func getClusterResources(az *Cloud, vmCount int, availabilitySetCount int) (clus
 		clusterResources.availabilitySetNames = append(clusterResources.availabilitySetNames, asName)
 
 		nicName := getNICName(vmIndex)
-		nicID := getNetworkInterfaceID(az.Config.SubscriptionID, az.Config.ResourceGroup, nicName)
+		nicID := getNetworkInterfaceID(az.SubscriptionID, az.ResourceGroup, nicName)
 		primaryIPConfigID := getPrimaryIPConfigID(nicID)
 		isPrimary := true
 		newNIC := &armnetwork.Interface{
@@ -1164,10 +1167,10 @@ func getClusterResources(az *Cloud, vmCount int, availabilitySetCount int) (clus
 		expectedInterfaces = append(expectedInterfaces, newNIC)
 
 		// create vm
-		asID := az.getAvailabilitySetID(az.Config.ResourceGroup, asName)
+		asID := az.getAvailabilitySetID(az.ResourceGroup, asName)
 		newVM := &armcompute.VirtualMachine{
 			Name:     &vmName,
-			Location: &az.Config.Location,
+			Location: &az.Location,
 			Properties: &armcompute.VirtualMachineProperties{
 				AvailabilitySet: &armcompute.SubResource{
 					ID: &asID,
@@ -1859,7 +1862,7 @@ func getCloudFromConfig(t *testing.T, configContent string) *Cloud {
 	defer ctrl.Finish()
 
 	configReader := strings.NewReader(configContent)
-	c, err := config.ParseConfig(configReader)
+	c, err := providerconfig.ParseConfig(configReader)
 	assert.NoError(t, err)
 
 	az := GetTestCloud(ctrl)
@@ -2318,10 +2321,12 @@ func TestUpdateNodeCacheExcludeLoadBalancer(t *testing.T) {
 			Name: "anotherNode",
 		},
 		Spec: v1.NodeSpec{
-			Taints: []v1.Taint{{
-				Key:    cloudproviderapi.TaintExternalCloudProvider,
-				Value:  "aValue",
-				Effect: v1.TaintEffectNoSchedule},
+			Taints: []v1.Taint{
+				{
+					Key:    cloudproviderapi.TaintExternalCloudProvider,
+					Value:  "aValue",
+					Effect: v1.TaintEffectNoSchedule,
+				},
 			},
 		},
 		Status: v1.NodeStatus{
@@ -2366,7 +2371,6 @@ func TestGetActiveZones(t *testing.T) {
 }
 
 func TestInitializeCloudFromConfig(t *testing.T) {
-
 	t.Run("cannot initialize from nil config", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -2376,7 +2380,6 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 
 		err := az.InitializeCloudFromConfig(context.Background(), nil, false, true)
 		assert.Equal(t, fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config"), err)
-
 	})
 	t.Run("disableAvailabilitySetNodes true is only supported when vmType is 'vmss'", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
@@ -2385,7 +2388,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		zoneMock := az.zoneRepo.(*zone.MockRepository)
 		zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
 
-		azureconfig := config.Config{
+		azureconfig := providerconfig.Config{
 			DisableAvailabilitySetNodes: true,
 			VMType:                      consts.VMTypeStandard,
 		}
@@ -2394,14 +2397,13 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		assert.Equal(t, expectedErr, err)
 	})
 	t.Run("useInstanceMetadata must be enabled without Azure credentials", func(t *testing.T) {
-
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		az := GetTestCloud(ctrl)
 		zoneMock := az.zoneRepo.(*zone.MockRepository)
 		zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
 
-		azureconfig := config.Config{
+		azureconfig := providerconfig.Config{
 			AzureClientConfig: providerconfig.AzureClientConfig{
 				ARMClientConfig: azclient.ARMClientConfig{
 					Cloud: "AZUREPUBLICCLOUD",
@@ -2415,14 +2417,13 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		assert.Equal(t, expectedErr, err)
 	})
 	t.Run("loadBalancerBackendPoolConfigurationType invalid is not supported, supported values are", func(t *testing.T) {
-
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		az := GetTestCloud(ctrl)
 		zoneMock := az.zoneRepo.(*zone.MockRepository)
 		zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
 
-		azureconfig := config.Config{
+		azureconfig := providerconfig.Config{
 			LoadBalancerBackendPoolConfigurationType: "invalid",
 		}
 		err := az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, true)
@@ -2436,14 +2437,13 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		zoneMock := az.zoneRepo.(*zone.MockRepository)
 		zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
 
-		azureconfig := config.Config{}
+		azureconfig := providerconfig.Config{}
 		err := az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, true)
 		assert.NoError(t, err)
-		assert.Equal(t, az.Config.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration)
+		assert.Equal(t, az.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration)
 	})
 
 	t.Run("should setup network client factory with network subscription ID - same network sub in same tenant", func(t *testing.T) {
-
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -2459,8 +2459,8 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		az.ComputeClientFactory = nil
 		az.NetworkClientFactory = nil
 
-		azureconfig := config.Config{}
-		azureconfig.ARMClientConfig.TenantID = tenantID
+		azureconfig := providerconfig.Config{}
+		azureconfig.TenantID = tenantID
 		azureconfig.SubscriptionID = subscriptionID
 
 		nCall := 0
@@ -2493,7 +2493,6 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 	})
 
 	t.Run("should setup network client factory with network subscription ID - different network sub in same tenant", func(t *testing.T) {
-
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -2510,9 +2509,9 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		az.ComputeClientFactory = nil
 		az.NetworkClientFactory = nil
 
-		azureconfig := config.Config{}
-		azureconfig.ARMClientConfig.TenantID = tenantID
-		azureconfig.ARMClientConfig.NetworkResourceTenantID = tenantID
+		azureconfig := providerconfig.Config{}
+		azureconfig.TenantID = tenantID
+		azureconfig.NetworkResourceTenantID = tenantID
 		azureconfig.NetworkResourceSubscriptionID = networkSubscriptionID
 		azureconfig.SubscriptionID = computeSubscriptionID
 
@@ -2546,7 +2545,6 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 	})
 
 	t.Run("should setup network client factory with network subscription ID - different network sub in different tenant", func(t *testing.T) {
-
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -2564,9 +2562,9 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		az.ComputeClientFactory = nil
 		az.NetworkClientFactory = nil
 
-		azureconfig := config.Config{}
-		azureconfig.ARMClientConfig.TenantID = tenantID
-		azureconfig.ARMClientConfig.NetworkResourceTenantID = networkTenantID
+		azureconfig := providerconfig.Config{}
+		azureconfig.TenantID = tenantID
+		azureconfig.NetworkResourceTenantID = networkTenantID
 		azureconfig.NetworkResourceSubscriptionID = networkSubscriptionID
 		azureconfig.SubscriptionID = computeSubscriptionID
 
@@ -2605,7 +2603,7 @@ func TestSetLBDefaults(t *testing.T) {
 	defer ctrl.Finish()
 	az := GetTestCloud(ctrl)
 
-	config := &config.Config{}
+	config := &providerconfig.Config{}
 	_ = az.setLBDefaults(config)
 	assert.Equal(t, config.LoadBalancerSKU, consts.LoadBalancerSKUStandard)
 }
@@ -2616,22 +2614,22 @@ func TestCheckEnableMultipleStandardLoadBalancers(t *testing.T) {
 	az := GetTestCloud(ctrl)
 	az.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypeNodeIP
 
-	az.MultipleStandardLoadBalancerConfigurations = []config.MultipleStandardLoadBalancerConfiguration{
+	az.MultipleStandardLoadBalancerConfigurations = []providerconfig.MultipleStandardLoadBalancerConfiguration{
 		{
 			Name: "kubernetes",
-			MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
+			MultipleStandardLoadBalancerConfigurationSpec: providerconfig.MultipleStandardLoadBalancerConfigurationSpec{
 				PrimaryVMSet: "vmss-0",
 			},
 		},
 		{
 			Name: "lb1",
-			MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
+			MultipleStandardLoadBalancerConfigurationSpec: providerconfig.MultipleStandardLoadBalancerConfigurationSpec{
 				PrimaryVMSet: "vmss-1",
 			},
 		},
 		{
 			Name: "kubernetes",
-			MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
+			MultipleStandardLoadBalancerConfigurationSpec: providerconfig.MultipleStandardLoadBalancerConfigurationSpec{
 				PrimaryVMSet: "vmss-2",
 			},
 		},
@@ -2640,10 +2638,10 @@ func TestCheckEnableMultipleStandardLoadBalancers(t *testing.T) {
 	err := az.checkEnableMultipleStandardLoadBalancers()
 	assert.Equal(t, "duplicated multiple standard load balancer configuration name kubernetes", err.Error())
 
-	az.MultipleStandardLoadBalancerConfigurations = []config.MultipleStandardLoadBalancerConfiguration{
+	az.MultipleStandardLoadBalancerConfigurations = []providerconfig.MultipleStandardLoadBalancerConfiguration{
 		{
 			Name: "kubernetes",
-			MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
+			MultipleStandardLoadBalancerConfigurationSpec: providerconfig.MultipleStandardLoadBalancerConfigurationSpec{
 				PrimaryVMSet: "vmss-0",
 			},
 		},
@@ -2655,22 +2653,22 @@ func TestCheckEnableMultipleStandardLoadBalancers(t *testing.T) {
 	err = az.checkEnableMultipleStandardLoadBalancers()
 	assert.Equal(t, "multiple standard load balancer configuration lb1 must have primary VMSet", err.Error())
 
-	az.MultipleStandardLoadBalancerConfigurations = []config.MultipleStandardLoadBalancerConfiguration{
+	az.MultipleStandardLoadBalancerConfigurations = []providerconfig.MultipleStandardLoadBalancerConfiguration{
 		{
 			Name: "kubernetes",
-			MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
+			MultipleStandardLoadBalancerConfigurationSpec: providerconfig.MultipleStandardLoadBalancerConfigurationSpec{
 				PrimaryVMSet: "vmss-0",
 			},
 		},
 		{
 			Name: "lb1",
-			MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
+			MultipleStandardLoadBalancerConfigurationSpec: providerconfig.MultipleStandardLoadBalancerConfigurationSpec{
 				PrimaryVMSet: "vmss-2",
 			},
 		},
 		{
 			Name: "lb2",
-			MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
+			MultipleStandardLoadBalancerConfigurationSpec: providerconfig.MultipleStandardLoadBalancerConfigurationSpec{
 				PrimaryVMSet: "vmss-2",
 			},
 		},

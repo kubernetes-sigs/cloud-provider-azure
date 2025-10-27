@@ -73,7 +73,7 @@ var (
 	// ErrCIDRSetSubNetTooBig occurs when the subnet mask size is too
 	// big compared to the CIDR mask size.
 	ErrCIDRSetSubNetTooBig = errors.New(
-		"New CIDR set failed; the node CIDR size is too big")
+		"new CIDR set failed; the node CIDR size is too big")
 )
 
 // NewCIDRSet creates a new CidrSet.

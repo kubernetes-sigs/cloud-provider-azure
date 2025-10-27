@@ -209,7 +209,7 @@ func (o *CloudControllerManagerOptions) ApplyTo(
 		return err
 	}
 	c.Kubeconfig.DisableCompression = true
-	c.Kubeconfig.ContentConfig.ContentType = o.Generic.ClientConnection.ContentType
+	c.Kubeconfig.ContentType = o.Generic.ClientConnection.ContentType
 	c.Kubeconfig.QPS = o.Generic.ClientConnection.QPS
 	c.Kubeconfig.Burst = int(o.Generic.ClientConnection.Burst)
 

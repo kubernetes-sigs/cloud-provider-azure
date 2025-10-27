@@ -26,7 +26,7 @@ import (
 
 // List gets a list of Deployment in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*resources.DeploymentExtended, rerr error) {
-	pager := client.DeploymentsClient.NewListByResourceGroupPager(resourceGroupName, nil)
+	pager := client.NewListByResourceGroupPager(resourceGroupName, nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
 		if err != nil {
