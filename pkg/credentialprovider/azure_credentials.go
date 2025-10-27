@@ -115,7 +115,7 @@ func getManagedIdentityCredential(_ *v1.CredentialProviderRequest, config *provi
 
 	clientOption, _, err := azclient.GetAzCoreClientOption(&config.ARMClientConfig)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get Azure client options: %w", err)
+		return nil, fmt.Errorf("failed to get Azure client options: %w", err)
 	}
 	if config.UseManagedIdentityExtension {
 		credOptions := &azidentity.ManagedIdentityCredentialOptions{
@@ -145,7 +145,7 @@ func getServiceAccountTokenCredential(req *v1.CredentialProviderRequest, config 
 
 	clientOption, _, err := azclient.GetAzCoreClientOption(&config.ARMClientConfig)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get Azure client options for image %s: %w", req.Image, err)
+		return nil, fmt.Errorf("failed to get Azure client options for image %s: %w", req.Image, err)
 	}
 
 	// check required annotations
