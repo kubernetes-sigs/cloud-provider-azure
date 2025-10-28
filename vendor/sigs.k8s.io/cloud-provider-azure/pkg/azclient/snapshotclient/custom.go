@@ -24,7 +24,7 @@ import (
 
 // List gets a list of Snapshot in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*armcompute.Snapshot, rerr error) {
-	pager := client.SnapshotsClient.NewListByResourceGroupPager(resourceGroupName, nil)
+	pager := client.NewListByResourceGroupPager(resourceGroupName, nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
 		if err != nil {
