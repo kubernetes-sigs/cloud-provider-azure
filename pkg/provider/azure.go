@@ -526,10 +526,20 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 				}
 			}
 
+			err = az.attachServiceGatewayToSubnet(ctx)
+			if err != nil {
+				return fmt.Errorf("InitializeCloudFromConfig: failed to attach Service Gateway %s to subnet %s: %w", az.ServiceGatewayResourceName, az.SubnetName, err)
+			}
+
 			err = az.initializeDiffTracker()
 			if err != nil {
 				klog.Errorf("InitializeCloudFromConfig: failed to initialize difftracker: %s", err.Error())
 				return err
+			}
+
+			err = az.ensureDefaultOutboundServiceExists(ctx)
+			if err != nil {
+				return fmt.Errorf("InitializeCloudFromConfig: failed to ensure default outbound service exists: %w", err)
 			}
 
 			az.locationAndNRPServiceBatchUpdater = newLocationAndNRPServiceBatchUpdater(az)

@@ -233,6 +233,9 @@ func (az *Cloud) initializeDiffTracker() error {
 			nrp.LoadBalancers.Insert(*service.Name)
 			// localServiceNameToNRPServiceMap[strings.ToLower(*service.Name)] = 0
 		case "Outbound":
+			if service.Name != nil && *service.Name == "default-natgw-v2" {
+				continue
+			}
 			nrp.NATGateways.Insert(*service.Name)
 		}
 		// if service.Name != nil && *service.Name != "" {
@@ -349,10 +352,12 @@ func (az *Cloud) initializeDiffTracker() error {
 	for _, natGatewayId := range syncOperations.NATGatewayUpdates.Additions.UnsortedList() {
 		if !currentNATGatewaysInNRP.Has(natGatewayId) {
 			klog.Infof("initializeDiffTracker: Creating NAT Gateway %s in NRP", natGatewayId)
+
+			pipResourceName := fmt.Sprintf("%s-pip", natGatewayId)
 			pipResource := armnetwork.PublicIPAddress{
-				Name: to.Ptr(fmt.Sprintf("%s-pip", natGatewayId)),
+				Name: to.Ptr(pipResourceName),
 				ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
-					az.SubscriptionID, az.ResourceGroup, natGatewayId)),
+					az.SubscriptionID, az.ResourceGroup, pipResourceName)),
 				SKU: &armnetwork.PublicIPAddressSKU{
 					Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
 				},
@@ -377,8 +382,8 @@ func (az *Cloud) initializeDiffTracker() error {
 					},
 					PublicIPAddresses: []*armnetwork.SubResource{
 						{
-							ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s-pip",
-								az.SubscriptionID, az.ResourceGroup, natGatewayId)),
+							ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
+								az.SubscriptionID, az.ResourceGroup, pipResourceName)),
 						},
 					},
 				},

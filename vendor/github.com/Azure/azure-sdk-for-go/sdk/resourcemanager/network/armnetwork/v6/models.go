@@ -12306,10 +12306,16 @@ type SubnetListResult struct {
 	Value []*Subnet
 }
 
+type ServiceGatewaySubnetPropertiesFormat struct {
+	ID *string
+}
+
 // SubnetPropertiesFormat - Properties of the subnet.
 type SubnetPropertiesFormat struct {
 	// The address prefix for the subnet.
 	AddressPrefix *string
+
+	ServiceGateway *ServiceGatewaySubnetPropertiesFormat
 
 	// List of address prefixes for the subnet.
 	AddressPrefixes []*string
