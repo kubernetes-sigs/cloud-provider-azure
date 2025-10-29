@@ -152,15 +152,79 @@ func TestGetPlatformSubFaultDomain(t *testing.T) {
 }
 
 func TestGetInterconnectGroupID(t *testing.T) {
-	// Infrastructure-only test: verifies placeholder implementation returns empty
-	cloud := &Cloud{
-		Config: config.Config{
-			UseInstanceMetadata: true,
+	testCases := []struct {
+		name                string
+		useInstanceMetadata bool
+		respString          string
+		expectedID          string
+		expectedErr         bool
+	}{
+		{
+			name:                "InterconnectGroup tag present",
+			useInstanceMetadata: true,
+			respString:          `{"compute":{"tagsList":[{"name":"Platform_Interconnect_Group","value":"group-123"},{"name":"Other_Tag","value":"other"}]}}`,
+			expectedID:          "group-123",
+			expectedErr:         false,
+		},
+		{
+			name:                "InterconnectGroup tag absent",
+			useInstanceMetadata: true,
+			respString:          `{"compute":{"tagsList":[{"name":"Other_Tag","value":"other"}]}}`,
+			expectedID:          "",
+			expectedErr:         false,
+		},
+		{
+			name:                "Empty tagsList",
+			useInstanceMetadata: true,
+			respString:          `{"compute":{"tagsList":[]}}`,
+			expectedID:          "",
+			expectedErr:         false,
+		},
+		{
+			name:                "UseInstanceMetadata false",
+			useInstanceMetadata: false,
+			respString:          `{"compute":{"tagsList":[{"name":"Platform_Interconnect_Group","value":"group-123"}]}}`,
+			expectedID:          "",
+			expectedErr:         false,
 		},
 	}
 
-	id, err := cloud.GetInterconnectGroupID(context.TODO())
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud := &Cloud{
+				Config: config.Config{
+					Location:            "eastus",
+					UseInstanceMetadata: tc.useInstanceMetadata,
+				},
+			}
 
-	assert.NoError(t, err, "GetInterconnectGroupID should not return error")
-	assert.Equal(t, "", id, "GetInterconnectGroupID should return empty string (placeholder)")
+			listener, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Errorf("Test [%s] unexpected error: %v", tc.name, err)
+			}
+
+			mux := http.NewServeMux()
+			mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				fmt.Fprint(w, tc.respString)
+			}))
+			go func() {
+				_ = http.Serve(listener, mux)
+			}()
+			defer listener.Close()
+
+			cloud.Metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
+			if err != nil {
+				t.Errorf("Test [%s] unexpected error: %v", tc.name, err)
+			}
+
+			id, err := cloud.GetInterconnectGroupID(context.TODO())
+
+			if tc.expectedErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedID, id)
+			}
+		})
+	}
 }
