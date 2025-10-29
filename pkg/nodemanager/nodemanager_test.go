@@ -194,7 +194,8 @@ func TestNodeInitialized(t *testing.T) {
 		false,
 		false)
 
-	cloudNodeController.AddCloudNode(ctx, fnh.Existing[0])
+	err := cloudNodeController.handleNodeEvent(ctx, fnh.Existing[0])
+	assert.NoError(t, err)
 
 	assert.Equal(t, 1, len(fnh.UpdatedNodes), "Node was not updated")
 	assert.Equal(t, "node0", fnh.UpdatedNodes[0].Name, "Node was not updated")
@@ -275,7 +276,8 @@ func TestUpdateCloudNode(t *testing.T) {
 		false)
 	eventBroadcaster.StartLogging(klog.Infof)
 
-	cloudNodeController.UpdateCloudNode(ctx, fnh.Existing[0], fnh.Existing[0])
+	err := cloudNodeController.handleNodeEvent(ctx, fnh.Existing[0])
+	assert.NoError(t, err)
 
 	assert.Equal(t, 1, len(fnh.UpdatedNodes), "Node was not updated")
 	assert.Equal(t, "node0", fnh.UpdatedNodes[0].Name, "Node was not updated")
@@ -327,7 +329,8 @@ func TestNodeIgnored(t *testing.T) {
 		false)
 	eventBroadcaster.StartLogging(klog.Infof)
 
-	cloudNodeController.AddCloudNode(context.TODO(), fnh.Existing[0])
+	err := cloudNodeController.handleNodeEvent(context.TODO(), fnh.Existing[0])
+	assert.NoError(t, err)
 	assert.Equal(t, 0, len(fnh.UpdatedNodes), "Node was wrongly updated")
 
 }
@@ -408,7 +411,8 @@ func TestZoneInitialized(t *testing.T) {
 		}
 		eventBroadcaster.StartLogging(klog.Infof)
 
-		cloudNodeController.AddCloudNode(context.TODO(), fnh.Existing[0])
+		err := cloudNodeController.handleNodeEvent(context.TODO(), fnh.Existing[0])
+		assert.NoError(t, err)
 
 		assert.Equal(t, 1, len(fnh.UpdatedNodes), "Node was not updated")
 		assert.Equal(t, "node0", fnh.UpdatedNodes[0].Name, "Node was not updated")
@@ -491,7 +495,8 @@ func TestZoneInitialized(t *testing.T) {
 		}
 		eventBroadcaster.StartLogging(klog.Infof)
 
-		cloudNodeController.AddCloudNode(context.TODO(), fnh.Existing[0])
+		err := cloudNodeController.handleNodeEvent(context.TODO(), fnh.Existing[0])
+		assert.NoError(t, err)
 
 		assert.Equal(t, 1, len(fnh.UpdatedNodes), "Node was not updated")
 		assert.Equal(t, "node0", fnh.UpdatedNodes[0].Name, "Node was not updated")
@@ -592,7 +597,8 @@ func TestAddCloudNode(t *testing.T) {
 	factory.Start(ctx.Done())
 	cache.WaitForCacheSync(ctx.Done(), nodeInformer.Informer().HasSynced)
 
-	cloudNodeController.AddCloudNode(ctx, fnh.Existing[0])
+	err := cloudNodeController.handleNodeEvent(ctx, fnh.Existing[0])
+	assert.NoError(t, err)
 	assert.Equal(t, 1, len(fnh.UpdatedNodes), "Node was not updated")
 	assert.Equal(t, "node0", fnh.UpdatedNodes[0].Name, "Node was not updated")
 	assert.Equal(t, 3, len(fnh.UpdatedNodes[0].Status.Addresses), "Node status not updated")
@@ -754,7 +760,8 @@ func TestNodeProvidedIPAddresses(t *testing.T) {
 		false)
 	eventBroadcaster.StartLogging(klog.Infof)
 
-	cloudNodeController.AddCloudNode(context.TODO(), fnh.Existing[0])
+	err := cloudNodeController.handleNodeEvent(context.TODO(), fnh.Existing[0])
+	assert.NoError(t, err)
 	assert.Equal(t, 1, len(fnh.UpdatedNodes), "Node was not updated")
 	assert.Equal(t, "node0", fnh.UpdatedNodes[0].Name, "Node was not updated")
 	assert.Equal(t, 3, len(fnh.UpdatedNodes[0].Status.Addresses), "Node status unexpectedly updated")
@@ -1177,7 +1184,8 @@ func TestNodeProviderID(t *testing.T) {
 	}
 	eventBroadcaster.StartLogging(klog.Infof)
 
-	cloudNodeController.AddCloudNode(context.TODO(), fnh.Existing[0])
+	err := cloudNodeController.handleNodeEvent(context.TODO(), fnh.Existing[0])
+	assert.NoError(t, err)
 
 	assert.Equal(t, 1, len(fnh.UpdatedNodes), "Node was not updated")
 	assert.Equal(t, "node0", fnh.UpdatedNodes[0].Name, "Node was not updated")
@@ -1264,7 +1272,8 @@ func TestNodeProviderIDAlreadySet(t *testing.T) {
 	}
 	eventBroadcaster.StartLogging(klog.Infof)
 
-	cloudNodeController.AddCloudNode(context.TODO(), fnh.Existing[0])
+	err := cloudNodeController.handleNodeEvent(context.TODO(), fnh.Existing[0])
+	assert.NoError(t, err)
 
 	assert.Equal(t, 1, len(fnh.UpdatedNodes), "Node was not updated")
 	assert.Equal(t, "node0", fnh.UpdatedNodes[0].Name, "Node was not updated")
@@ -1272,7 +1281,7 @@ func TestNodeProviderIDAlreadySet(t *testing.T) {
 	assert.Equal(t, "test-provider-id", fnh.UpdatedNodes[0].Spec.ProviderID, "Node ProviderID not set correctly")
 }
 
-// This test checks that a node manager should retry 20 times when failing to get providerID and then panic
+// This test checks that a node manager should retry 20 times when failing to get providerID and then return an error
 func TestNodeProviderIDNotSet(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -1332,16 +1341,10 @@ func TestNodeProviderIDNotSet(t *testing.T) {
 	}
 	eventBroadcaster.StartLogging(klog.Infof)
 
-	// Expect AddCloudNode() to panic when providerID is not set properly
-	func() {
-		defer func() {
-			err := recover()
-			assert.NotNil(t, err, "AddCloudNode() didn't panic")
-		}()
-
-		cloudNodeController.AddCloudNode(context.TODO(), fnh.Existing[0])
-		t.Errorf("AddCloudNode() didn't panic when providerID not found")
-	}()
+	// Expect handleNodeEvent() to return an error when providerID is not set properly
+	err := cloudNodeController.handleNodeEvent(context.TODO(), fnh.Existing[0])
+	assert.Error(t, err, "handleNodeEvent() should return an error when providerID not found")
+	assert.Contains(t, err.Error(), "failed to set node provider id", "Error should mention failed to set node provider id")
 
 	// Node update should fail
 	assert.Equal(t, 0, len(fnh.UpdatedNodes), "Node was updated (unexpected)")
