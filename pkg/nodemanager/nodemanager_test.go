@@ -183,7 +183,7 @@ func TestNodeInitialized(t *testing.T) {
 		},
 	}, nil).AnyTimes()
 	mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("1", nil)
-	mockNP.EXPECT().GetInterconnectGroupID(ctx).Return("", nil)
+	mockNP.EXPECT().GetInterconnectGroupID(ctx).Return("group-123", nil)
 
 	cloudNodeController := NewCloudNodeController(
 		"node0",
@@ -201,6 +201,7 @@ func TestNodeInitialized(t *testing.T) {
 	assert.Equal(t, "node0", fnh.UpdatedNodes[0].Name, "Node was not updated")
 	assert.Equal(t, 0, len(fnh.UpdatedNodes[0].Spec.Taints), "Node Taint was not removed after cloud init")
 	assert.Equal(t, "1", fnh.UpdatedNodes[0].Labels[consts.LabelPlatformSubFaultDomain])
+	assert.Equal(t, "group-123", fnh.UpdatedNodes[0].Labels[consts.LabelPlatformInterconnectGroup])
 }
 
 func TestUpdateCloudNode(t *testing.T) {
@@ -263,7 +264,7 @@ func TestUpdateCloudNode(t *testing.T) {
 		},
 	}, nil).AnyTimes()
 	mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("1", nil)
-	mockNP.EXPECT().GetInterconnectGroupID(ctx).Return("", nil)
+	mockNP.EXPECT().GetInterconnectGroupID(ctx).Return("group-456", nil)
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := NewCloudNodeController(
@@ -285,6 +286,7 @@ func TestUpdateCloudNode(t *testing.T) {
 	assert.Equal(t, 2, len(fnh.UpdatedNodes[0].Status.Conditions), "Node Contions was not updated")
 	assert.Equal(t, "NetworkUnavailable", string(fnh.UpdatedNodes[0].Status.Conditions[0].Type), "Node Condition NetworkUnavailable was not updated")
 	assert.Equal(t, "1", fnh.UpdatedNodes[0].Labels[consts.LabelPlatformSubFaultDomain])
+	assert.Equal(t, "group-456", fnh.UpdatedNodes[0].Labels[consts.LabelPlatformInterconnectGroup])
 }
 
 // This test checks that a node without the external cloud provider taint are NOT cloudprovider initialized
