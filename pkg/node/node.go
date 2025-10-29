@@ -83,3 +83,8 @@ func (np *IMDSNodeProvider) GetZone(ctx context.Context, _ types.NodeName) (clou
 func (np *IMDSNodeProvider) GetPlatformSubFaultDomain(ctx context.Context) (string, error) {
 	return np.azure.GetPlatformSubFaultDomain(ctx)
 }
+
+// GetInterconnectGroupID returns the Interconnect Group ID from IMDS.
+func (np *IMDSNodeProvider) GetInterconnectGroupID(ctx context.Context) (string, error) {
+	return np.azure.GetInterconnectGroupID(ctx)
+}

@@ -183,6 +183,7 @@ func TestNodeInitialized(t *testing.T) {
 		},
 	}, nil).AnyTimes()
 	mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("1", nil)
+	mockNP.EXPECT().GetInterconnectGroupID(ctx).Return("", nil)
 
 	cloudNodeController := NewCloudNodeController(
 		"node0",
@@ -261,6 +262,7 @@ func TestUpdateCloudNode(t *testing.T) {
 		},
 	}, nil).AnyTimes()
 	mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("1", nil)
+	mockNP.EXPECT().GetInterconnectGroupID(ctx).Return("", nil)
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := NewCloudNodeController(
@@ -394,6 +396,7 @@ func TestZoneInitialized(t *testing.T) {
 			},
 		}, nil).AnyTimes()
 		mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("", nil)
+		mockNP.EXPECT().GetInterconnectGroupID(ctx).Return("", nil)
 
 		eventBroadcaster := record.NewBroadcaster()
 		cloudNodeController := &CloudNodeController{
@@ -475,6 +478,7 @@ func TestZoneInitialized(t *testing.T) {
 			},
 		}, nil).AnyTimes()
 		mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("", nil)
+		mockNP.EXPECT().GetInterconnectGroupID(ctx).Return("", nil)
 
 		eventBroadcaster := record.NewBroadcaster()
 		cloudNodeController := &CloudNodeController{
@@ -572,6 +576,7 @@ func TestAddCloudNode(t *testing.T) {
 		},
 	}, nil).AnyTimes()
 	mockNP.EXPECT().GetPlatformSubFaultDomain(gomock.Any()).Return("", nil)
+	mockNP.EXPECT().GetInterconnectGroupID(gomock.Any()).Return("", nil)
 
 	factory := informers.NewSharedInformerFactory(fnh, 0)
 	nodeInformer := factory.Core().V1().Nodes()
@@ -736,6 +741,7 @@ func TestNodeProvidedIPAddresses(t *testing.T) {
 		},
 	}, nil).AnyTimes()
 	mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("", nil)
+	mockNP.EXPECT().GetInterconnectGroupID(ctx).Return("", nil)
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := NewCloudNodeController(
@@ -1158,6 +1164,7 @@ func TestNodeProviderID(t *testing.T) {
 		},
 	}, nil).AnyTimes()
 	mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("", nil).AnyTimes()
+	mockNP.EXPECT().GetInterconnectGroupID(ctx).Return("", nil).AnyTimes()
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := &CloudNodeController{
@@ -1244,6 +1251,7 @@ func TestNodeProviderIDAlreadySet(t *testing.T) {
 		},
 	}, nil).AnyTimes()
 	mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("", nil).AnyTimes()
+	mockNP.EXPECT().GetInterconnectGroupID(ctx).Return("", nil).AnyTimes()
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := &CloudNodeController{
