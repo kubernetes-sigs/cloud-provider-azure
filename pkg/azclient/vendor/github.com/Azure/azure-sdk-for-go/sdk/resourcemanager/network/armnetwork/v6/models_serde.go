@@ -20854,6 +20854,7 @@ func (l LoadBalancerPropertiesFormat) MarshalJSON() ([]byte, error) {
 	populate(objectMap, "loadBalancingRules", l.LoadBalancingRules)
 	populate(objectMap, "outboundRules", l.OutboundRules)
 	populate(objectMap, "probes", l.Probes)
+	populate(objectMap, "scope", l.Scope)
 	populate(objectMap, "provisioningState", l.ProvisioningState)
 	populate(objectMap, "resourceGuid", l.ResourceGUID)
 	return json.Marshal(objectMap)
@@ -20888,6 +20889,9 @@ func (l *LoadBalancerPropertiesFormat) UnmarshalJSON(data []byte) error {
 			delete(rawMsg, key)
 		case "probes":
 			err = unpopulate(val, "Probes", &l.Probes)
+			delete(rawMsg, key)
+		case "scope":
+			err = unpopulate(val, "Scope", &l.Scope)
 			delete(rawMsg, key)
 		case "provisioningState":
 			err = unpopulate(val, "ProvisioningState", &l.ProvisioningState)

@@ -8426,6 +8426,9 @@ type LoadBalancerPropertiesFormat struct {
 	// Collection of probe objects used in the load balancer.
 	Probes []*Probe
 
+	// Indicates the scope of the load balancer: external (Public) or internal (Private).
+	Scope *LoadBalancerScope
+
 	// READ-ONLY; The provisioning state of the load balancer resource.
 	ProvisioningState *ProvisioningState
 

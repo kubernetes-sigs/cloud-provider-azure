@@ -8426,6 +8426,9 @@ type LoadBalancerPropertiesFormat struct {
 	// Collection of probe objects used in the load balancer.
 	Probes []*Probe
 
+	// Indicates the scope of the load balancer: external (Public) or internal (Private).
+	Scope *LoadBalancerScope
+
 	// READ-ONLY; The provisioning state of the load balancer resource.
 	ProvisioningState *ProvisioningState
 
@@ -9051,6 +9054,9 @@ type NatGatewayPropertiesFormat struct {
 
 	// An array of public ip prefixes associated with the nat gateway resource.
 	PublicIPPrefixes []*SubResource
+
+	// Reference to an existing service gateway.
+	ServiceGateway *ServiceGateway
 
 	// READ-ONLY; The provisioning state of the NAT gateway resource.
 	ProvisioningState *ProvisioningState

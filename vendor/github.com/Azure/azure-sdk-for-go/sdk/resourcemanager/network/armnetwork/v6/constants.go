@@ -2626,6 +2626,22 @@ const (
 	LoadBalancerSKUTierRegional LoadBalancerSKUTier = "Regional"
 )
 
+// LoadBalancerScope - Indicates the scope of the load balancer: external (Public) or internal (Private).
+type LoadBalancerScope string
+
+const (
+	LoadBalancerScopePrivate LoadBalancerScope = "Private"
+	LoadBalancerScopePublic  LoadBalancerScope = "Public"
+)
+
+// PossibleLoadBalancerScopeValues returns the possible values for the LoadBalancerScope const type.
+func PossibleLoadBalancerScopeValues() []LoadBalancerScope {
+	return []LoadBalancerScope{
+		LoadBalancerScopePrivate,
+		LoadBalancerScopePublic,
+	}
+}
+
 // PossibleLoadBalancerSKUTierValues returns the possible values for the LoadBalancerSKUTier const type.
 func PossibleLoadBalancerSKUTierValues() []LoadBalancerSKUTier {
 	return []LoadBalancerSKUTier{

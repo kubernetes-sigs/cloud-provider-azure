@@ -339,9 +339,9 @@ import (
 //
 // Examples:
 //
-//	math.sqrt(81) // returns 9.0
-//	math.sqrt(985.25)   // returns 31.388692231439016
-//      math.sqrt(-15)  // returns NaN
+//		math.sqrt(81) // returns 9.0
+//		math.sqrt(985.25)   // returns 31.388692231439016
+//	     math.sqrt(-15)  // returns NaN
 func Math(options ...MathOption) cel.EnvOption {
 	m := &mathLib{version: math.MaxUint32}
 	for _, o := range options {
@@ -723,20 +723,18 @@ func sign(val ref.Val) ref.Val {
 	}
 }
 
-
 func sqrt(val ref.Val) ref.Val {
 	switch v := val.(type) {
 	case types.Double:
-	  return types.Double(math.Sqrt(float64(v)))
+		return types.Double(math.Sqrt(float64(v)))
 	case types.Int:
-	  return types.Double(math.Sqrt(float64(v)))
+		return types.Double(math.Sqrt(float64(v)))
 	case types.Uint:
-	  return types.Double(math.Sqrt(float64(v)))
+		return types.Double(math.Sqrt(float64(v)))
 	default:
-	  return types.NewErr("no such overload: sqrt")
+		return types.NewErr("no such overload: sqrt")
 	}
 }
-
 
 func bitAndPairInt(first, second ref.Val) ref.Val {
 	l := first.(types.Int)

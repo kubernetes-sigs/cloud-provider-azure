@@ -13,7 +13,6 @@ func (az *Cloud) attachServiceGatewayToSubnet(ctx context.Context) error {
 	klog.Infof("Attaching Service Gateway %s to subnet in VNet %s", az.ServiceGatewayResourceName, az.VnetName)
 	subnetName := "aks-subnet"
 	subnet, err := az.subnetRepo.Get(ctx, az.ResourceGroup, az.VnetName, subnetName)
-	logObject(subnet)
 	if err != nil {
 		return err
 	}

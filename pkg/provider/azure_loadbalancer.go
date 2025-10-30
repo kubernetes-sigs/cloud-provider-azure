@@ -1168,6 +1168,10 @@ func (az *Cloud) getServiceLoadBalancer(
 		}
 		// Set SKU to Service if ServiceGatewayEnabled, otherwise Standard
 		if az.ServiceGatewayEnabled {
+			// Set SKU to Service if ServiceGatewayEnabled
+			defaultLB.Properties = &armnetwork.LoadBalancerPropertiesFormat{
+				Scope: to.Ptr(armnetwork.LoadBalancerScopePublic),
+			}
 			// For Service Gateway, we need to set a backend pool for the load balancer.
 			// Use per-service backend pool (Service UID). Dual-stack is not supported here.
 			backendPoolName, err := az.getBackendPoolNameForCLBService(service)
@@ -1246,6 +1250,10 @@ func (az *Cloud) selectLoadBalancer(ctx context.Context, clusterName string, ser
 			}
 
 			if az.ServiceGatewayEnabled {
+				// Set SKU to Service if ServiceGatewayEnabled
+				selectedLB.Properties = &armnetwork.LoadBalancerPropertiesFormat{
+					Scope: to.Ptr(armnetwork.LoadBalancerScopePublic),
+				}
 				// For Service Gateway, we need to set a backend pool for the load balancer.
 				backendPoolName, err := az.getBackendPoolNameForCLBService(service)
 				if err != nil {
