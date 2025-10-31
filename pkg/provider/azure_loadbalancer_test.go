@@ -8517,6 +8517,93 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 	}
 }
 
+func TestFindFrontendIPConfigsOfService(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testCases := []struct {
+		desc         string
+		existingPIPs []*armnetwork.PublicIPAddress
+		fip          *armnetwork.FrontendIPConfiguration
+		service      *v1.Service
+		isIPv6       bool
+	}{
+		{
+			desc: "config works for ipv6 service",
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("pip1"),
+					ID:   ptr.To("pip1"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress:              ptr.To("fd00::eef0"),
+						PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv6),
+					},
+				},
+			},
+			fip: &armnetwork.FrontendIPConfiguration{
+				Name: ptr.To("auid"),
+				Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &armnetwork.PublicIPAddress{
+						ID: ptr.To("pip1"),
+					},
+				},
+			},
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:         types.UID("secondary"),
+					Annotations: map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "pip1"},
+				},
+			},
+			isIPv6: true,
+		},
+		{
+			desc: "config works for ipv4 service",
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("pip1"),
+					ID:   ptr.To("pip1"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress:              ptr.To("4.3.2.1"),
+						PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
+					},
+				},
+			},
+			fip: &armnetwork.FrontendIPConfiguration{
+				Name: ptr.To("auid"),
+				Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &armnetwork.PublicIPAddress{
+						ID: ptr.To("pip1"),
+					},
+				},
+			},
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:         types.UID("secondary"),
+					Annotations: map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "pip1"},
+				},
+			},
+		},
+	}
+
+	for _, test := range testCases {
+		test := test
+		t.Run(test.desc, func(t *testing.T) {
+			cloud := GetTestCloud(ctrl)
+			if test.existingPIPs != nil {
+				mockPIPsClient := cloud.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
+				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPIPs, nil).MaxTimes(2)
+			}
+			configs, err := cloud.findFrontendIPConfigsOfService(context.TODO(), []*armnetwork.FrontendIPConfiguration{test.fip}, test.service)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			assert.Equal(t, 1, len(configs))
+			assert.NotNil(t, configs[test.isIPv6])
+			assert.Equal(t, test.fip, configs[test.isIPv6])
+		})
+	}
+}
+
 func TestReconcileMultipleStandardLoadBalancerNodes(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
