@@ -217,11 +217,10 @@ spec:
         lun: 0
         nameSuffix: etcddisk
       image:
-        marketplace:
-          offer: capi
-          publisher: cncf-upstream
-          sku: ubuntu-2204-gen1
-          version: latest
+        computeGallery:
+          gallery: "ClusterAPI-f72ceb4f-5159-4c26-a0fe-2ea738f0d019"
+          name: "capi-ubun2-2404"
+          version: 1.34.1
       osDisk:
         diskSizeGB: 128
         osType: Linux
@@ -269,11 +268,10 @@ spec:
     type: RollingUpdate
   template:
     image:
-      marketplace:
-        offer: capi
-        publisher: cncf-upstream
-        sku: ubuntu-2204-gen1
-        version: latest
+      computeGallery:
+        gallery: "ClusterAPI-f72ceb4f-5159-4c26-a0fe-2ea738f0d019"
+        name: "capi-ubun2-2404"
+        version: 1.34.1
     osDisk:
       diskSizeGB: 30
       managedDisk:
@@ -421,11 +419,10 @@ spec:
     type: RollingUpdate
   template:
     image:
-      marketplace:
-        offer: capi
-        publisher: cncf-upstream
-        sku: ubuntu-2204-gen1
-        version: latest
+      computeGallery:
+        gallery: "ClusterAPI-f72ceb4f-5159-4c26-a0fe-2ea738f0d019"
+        name: "capi-ubun2-2404"
+        version: 1.34.1
     osDisk:
       diskSizeGB: 30
       managedDisk:
