@@ -2458,6 +2458,8 @@ func TestDeterminePublicIPName(t *testing.T) {
 		expectedPIPName string
 		expectedError   bool
 		isIPv6          bool
+		serviceIPv6     bool
+		annotations     map[string]string
 	}{
 		{
 			desc: "determinePublicIpName shall get public IP from az.getPublicIPName if no specific " +
@@ -2486,12 +2488,22 @@ func TestDeterminePublicIPName(t *testing.T) {
 			expectedPIPName: "pipName",
 			expectedError:   false,
 		},
+		{
+			desc: "determinePublicIpName shall use IPv6 pip annotation for IPv6 single stack service",
+			annotations: map[string]string{
+				consts.ServiceAnnotationPIPNameDualStack[true]: "service-lb-public-IP3dbe-v6",
+			},
+			expectedPIPName: "service-lb-public-IP3dbe-v6",
+			isIPv6:          true,
+			serviceIPv6:     true,
+			expectedError:   false,
+		},
 	}
 
 	for _, test := range testCases {
 		t.Run(test.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
-			service := getTestService("test1", v1.ProtocolTCP, nil, false, 80)
+			service := getTestService("test1", v1.ProtocolTCP, test.annotations, test.serviceIPv6, 80)
 			setServiceLoadBalancerIP(&service, test.loadBalancerIP)
 
 			mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
