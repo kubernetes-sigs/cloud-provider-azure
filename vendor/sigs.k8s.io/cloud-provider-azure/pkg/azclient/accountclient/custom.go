@@ -20,7 +20,7 @@ import (
 	"context"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
-	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage/v2"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
