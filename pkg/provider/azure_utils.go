@@ -378,6 +378,12 @@ func getServicePIPName(service *v1.Service, isIPv6 bool) string {
 	}
 
 	if !isServiceDualStack(service) {
+		v4Enabled, v6Enabled := getIPFamiliesEnabled(service)
+		if isIPv6 && v6Enabled && !v4Enabled {
+			if name := service.Annotations[consts.ServiceAnnotationPIPNameDualStack[true]]; name != "" {
+				return name
+			}
+		}
 		return service.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]]
 	}
 
@@ -398,6 +404,12 @@ func getServicePIPPrefixID(service *v1.Service, isIPv6 bool) string {
 	}
 
 	if !isServiceDualStack(service) {
+		v4Enabled, v6Enabled := getIPFamiliesEnabled(service)
+		if isIPv6 && v6Enabled && !v4Enabled {
+			if id := service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[true]]; id != "" {
+				return id
+			}
+		}
 		return service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[false]]
 	}
 

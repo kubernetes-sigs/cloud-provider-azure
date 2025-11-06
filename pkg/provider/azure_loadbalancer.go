@@ -1703,7 +1703,7 @@ func (az *Cloud) findFrontendIPConfigsOfService(
 			var fipIsIPv6 bool
 			var err error
 			if fipIPVersion != nil {
-				fipIsIPv6 = fipIPVersion == to.Ptr(armnetwork.IPVersionIPv6)
+				fipIsIPv6 = *fipIPVersion == armnetwork.IPVersionIPv6
 			} else {
 				if fipIsIPv6, err = az.isFIPIPv6(service, config); err != nil {
 					return nil, err
@@ -1902,7 +1902,7 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 		var err error
 		_, _, fipIPVersion := az.serviceOwnsFrontendIP(ctx, ownedFIPConfig, service)
 		if fipIPVersion != nil {
-			isIPv6 = fipIPVersion == to.Ptr(armnetwork.IPVersionIPv6)
+			isIPv6 = *fipIPVersion == armnetwork.IPVersionIPv6
 		} else {
 			if isIPv6, err = az.isFIPIPv6(service, ownedFIPConfig); err != nil {
 				return nil, false, err
@@ -2608,7 +2608,7 @@ func (az *Cloud) reconcileFrontendIPConfigs(
 			var isIPv6 bool
 			var err error
 			if fipIPVersion != nil {
-				isIPv6 = fipIPVersion == to.Ptr(armnetwork.IPVersionIPv6)
+				isIPv6 = *fipIPVersion == armnetwork.IPVersionIPv6
 			} else {
 				if isIPv6, err = az.isFIPIPv6(service, config); err != nil {
 					return nil, toDeleteConfigs, false, err

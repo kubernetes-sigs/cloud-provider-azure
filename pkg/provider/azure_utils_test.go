@@ -794,7 +794,7 @@ func TestGetServicePIPName(t *testing.T) {
 			&v1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						consts.ServiceAnnotationPIPNameDualStack[false]: "pip-name-ipv6",
+						consts.ServiceAnnotationPIPNameDualStack[true]: "pip-name-ipv6",
 					},
 				},
 				Spec: v1.ServiceSpec{
@@ -836,6 +836,21 @@ func TestGetServicePIPName(t *testing.T) {
 			true,
 			"pip-name-ipv6",
 		},
+		{
+			"From ServiceAnnotationPIPName IPv6 single stack fallback",
+			&v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						consts.ServiceAnnotationPIPNameDualStack[false]: "pip-name-ipv6",
+					},
+				},
+				Spec: v1.ServiceSpec{
+					IPFamilies: []v1.IPFamily{v1.IPv6Protocol},
+				},
+			},
+			true,
+			"pip-name-ipv6",
+		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.desc, func(t *testing.T) {
@@ -872,7 +887,7 @@ func TestGetServicePIPPrefixID(t *testing.T) {
 			&v1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						consts.ServiceAnnotationPIPPrefixIDDualStack[false]: "pip-prefix-id-ipv6",
+						consts.ServiceAnnotationPIPPrefixIDDualStack[true]: "pip-prefix-id-ipv6",
 					},
 				},
 				Spec: v1.ServiceSpec{
@@ -914,6 +929,21 @@ func TestGetServicePIPPrefixID(t *testing.T) {
 			true,
 			"pip-prefix-id-ipv6",
 		},
+		{
+			"From ServiceAnnotationPIPPrefixIDDualStack IPv6 single stack fallback",
+			&v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						consts.ServiceAnnotationPIPPrefixIDDualStack[false]: "pip-prefix-id-ipv6",
+					},
+				},
+				Spec: v1.ServiceSpec{
+					IPFamilies: []v1.IPFamily{v1.IPv6Protocol},
+				},
+			},
+			true,
+			"pip-prefix-id-ipv6",
+		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.desc, func(t *testing.T) {
@@ -921,6 +951,22 @@ func TestGetServicePIPPrefixID(t *testing.T) {
 			assert.Equal(t, tc.expectedID, id)
 		})
 	}
+}
+
+func TestGetServicePIPNames(t *testing.T) {
+	svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Annotations: map[string]string{
+				consts.ServiceAnnotationPIPNameDualStack[true]: "pip-name-ipv6",
+			},
+		},
+		Spec: v1.ServiceSpec{
+			IPFamilies: []v1.IPFamily{v1.IPv6Protocol},
+		},
+	}
+
+	names := getServicePIPNames(svc)
+	assert.Equal(t, []string{"", "pip-name-ipv6"}, names)
 }
 
 func TestGetResourceByIPFamily(t *testing.T) {
