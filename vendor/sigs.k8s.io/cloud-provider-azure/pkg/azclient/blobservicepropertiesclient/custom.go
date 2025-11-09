@@ -20,7 +20,7 @@ import (
 	"context"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
-	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
+	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/metrics"
 )
@@ -29,13 +29,13 @@ const GetOperationName = "BlobServicesClient.GetServiceProperties"
 const SetOperationName = "BlobServicesClient.SetServiceProperties"
 
 // Get gets the BlobServiceProperties
-func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (*armstorage.BlobServiceProperties, error) {
+func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armstorage.BlobServiceProperties, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "BlobService", "getServiceProperties")
-	defer func() { metricsCtx.Observe(ctx, nil) }()
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
-	defer endSpan(nil)
+	defer endSpan(err)
 
-	resp, err := client.BlobServicesClient.GetServiceProperties(ctx, resourceGroupName, resourceName, nil)
+	resp, err := client.GetServiceProperties(ctx, resourceGroupName, resourceName, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -43,13 +43,13 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 	return &resp.BlobServiceProperties, nil
 }
 
-func (client *Client) Set(ctx context.Context, resourceGroupName string, resourceName string, parameters armstorage.BlobServiceProperties) (*armstorage.BlobServiceProperties, error) {
+func (client *Client) Set(ctx context.Context, resourceGroupName string, resourceName string, parameters armstorage.BlobServiceProperties) (result *armstorage.BlobServiceProperties, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "BlobService", "setServiceProperties")
-	defer func() { metricsCtx.Observe(ctx, nil) }()
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, SetOperationName, client.tracer, nil)
-	defer endSpan(nil)
+	defer endSpan(err)
 
-	resp, err := client.BlobServicesClient.SetServiceProperties(ctx, resourceGroupName, resourceName, parameters, nil)
+	resp, err := client.SetServiceProperties(ctx, resourceGroupName, resourceName, parameters, nil)
 	if err != nil {
 		return nil, err
 	}
