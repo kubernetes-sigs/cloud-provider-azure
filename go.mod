@@ -5,7 +5,7 @@ go 1.24.6
 godebug default=go1.24.6
 
 require (
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.19.1
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.20.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 v6.4.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6 v6.2.0
@@ -27,8 +27,8 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.38.0
 	go.opentelemetry.io/otel/trace v1.38.0
 	go.uber.org/mock v0.6.0
-	golang.org/x/sync v0.17.0
-	golang.org/x/sys v0.37.0
+	golang.org/x/sync v0.18.0
+	golang.org/x/sys v0.38.0
 	golang.org/x/text v0.30.0
 	k8s.io/api v0.34.1
 	k8s.io/apimachinery v0.34.1
@@ -43,7 +43,7 @@ require (
 	k8s.io/utils v0.0.0-20250820121507-0af2bda4dd1d
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.10.0
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.8.6
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.9.0
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.10.1
 	sigs.k8s.io/yaml v1.6.0
 )
 
