@@ -3,7 +3,7 @@ module sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader
 go 1.24.6
 
 require (
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.19.1
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.20.0
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
 	k8s.io/api v0.34.1
