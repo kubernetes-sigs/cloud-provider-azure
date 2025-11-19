@@ -98,7 +98,7 @@ func (az *Cloud) initializeDiffTracker() error {
 		}
 	}
 	klog.Infof("initializeDiffTracker: nodeNameToIPMap: ")
-	logObject(nodeNameToIPMap)
+	//logObject(nodeNameToIPMap)
 
 	// 1. Fetch all services and update difftracker.K8sResources.Services
 	services, err := az.KubeClient.CoreV1().Services(v1.NamespaceAll).List(ctx, metav1.ListOptions{})
@@ -249,7 +249,7 @@ func (az *Cloud) initializeDiffTracker() error {
 
 	locationsDTO, err := az.GetAddressLocations(ctx, az.ServiceGatewayResourceName)
 	klog.Infof("initializeDiffTracker: fetched %d locations from ServiceGateway API", len(locationsDTO))
-	logObject(locationsDTO)
+	//logObject(locationsDTO)
 	if err != nil {
 		return fmt.Errorf("initializeDiffTracker: failed to get locations from ServiceGateway API: %w", err)
 	}
@@ -294,10 +294,10 @@ func (az *Cloud) initializeDiffTracker() error {
 	az.diffTracker = difftracker.InitializeDiffTracker(k8s, nrp)
 	az.diffTracker.LocalServiceNameToNRPServiceMap = syncMapFromMap(localServiceNameToNRPServiceMap)
 	klog.Infof("initializeDiffTracker: initialized diff tracker localServiceNameToNRPServiceMap with %d entries", localServiceNameToNRPServiceMap)
-	logObject(localServiceNameToNRPServiceMap)
+	//logObject(localServiceNameToNRPServiceMap)
 	logSyncStringIntMap("initializeDiffTracker: LocalServiceNameToNRPServiceMap", &az.diffTracker.LocalServiceNameToNRPServiceMap)
 	klog.Infof("initializeDiffTracker: initialized diff tracker")
-	logObject(az.diffTracker)
+	//logObject(az.diffTracker)
 	// 6. Fetch LoadBalancers from NRP
 	lbclient := az.NetworkClientFactory.GetLoadBalancerClient()
 	lbs, err := lbclient.List(ctx, az.ResourceGroup)

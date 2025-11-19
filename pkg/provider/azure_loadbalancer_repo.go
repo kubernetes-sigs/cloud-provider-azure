@@ -148,7 +148,7 @@ func (az *Cloud) ListManagedLBs(ctx context.Context, service *v1.Service, nodes 
 // CreateOrUpdateLB invokes az.NetworkClientFactory.GetLoadBalancerClient().CreateOrUpdate with exponential backoff retry
 func (az *Cloud) CreateOrUpdateLB(ctx context.Context, service *v1.Service, lb armnetwork.LoadBalancer) error {
 	klog.Infof("EDWARD: CreateOrUpdateLB: creating default load balancer for Service Gateway: ")
-	logObject(lb)
+	// logObject(lb)
 	lb = cleanupSubnetInFrontendIPConfigurations(&lb)
 
 	rgName := az.getLoadBalancerResourceGroup()

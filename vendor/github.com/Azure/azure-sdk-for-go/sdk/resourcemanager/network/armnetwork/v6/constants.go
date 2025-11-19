@@ -2626,6 +2626,14 @@ const (
 	LoadBalancerSKUTierRegional LoadBalancerSKUTier = "Regional"
 )
 
+// PossibleLoadBalancerSKUTierValues returns the possible values for the LoadBalancerSKUTier const type.
+func PossibleLoadBalancerSKUTierValues() []LoadBalancerSKUTier {
+	return []LoadBalancerSKUTier{
+		LoadBalancerSKUTierGlobal,
+		LoadBalancerSKUTierRegional,
+	}
+}
+
 // LoadBalancerScope - Indicates the scope of the load balancer: external (Public) or internal (Private).
 type LoadBalancerScope string
 
@@ -2639,14 +2647,6 @@ func PossibleLoadBalancerScopeValues() []LoadBalancerScope {
 	return []LoadBalancerScope{
 		LoadBalancerScopePrivate,
 		LoadBalancerScopePublic,
-	}
-}
-
-// PossibleLoadBalancerSKUTierValues returns the possible values for the LoadBalancerSKUTier const type.
-func PossibleLoadBalancerSKUTierValues() []LoadBalancerSKUTier {
-	return []LoadBalancerSKUTier{
-		LoadBalancerSKUTierGlobal,
-		LoadBalancerSKUTierRegional,
 	}
 }
 

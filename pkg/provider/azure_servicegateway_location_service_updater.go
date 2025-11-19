@@ -49,7 +49,7 @@ func (az *Cloud) TriggerLocationAndNRPServiceBatchUpdate() {
 func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 	klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process BEGIN: processing batch update\n")
 	klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process BEGIN: difftracker:\n")
-	logDiffTracker(updater.az.diffTracker)
+	// logDiffTracker(updater.az.diffTracker)
 	// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process BEGIN: subscription ID: %s\n", updater.az.SubscriptionID)
 	// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process BEGIN: resource group: %s\n", updater.az.ResourceGroup)
 	// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process BEGIN: location and NRP service batch updater started\n")
@@ -57,10 +57,10 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 	serviceLoadBalancerList := updater.az.diffTracker.GetSyncLoadBalancerServices()
 	serviceNATGatewayList := updater.az.diffTracker.GetSyncNRPNATGateways()
 
-	klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: serviceLoadBalancerList:\n")
-	logObject(serviceLoadBalancerList)
-	klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: serviceNATGatewayList:\n")
-	logObject(serviceNATGatewayList)
+	// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: serviceLoadBalancerList:\n")
+	//logObject(serviceLoadBalancerList)
+	// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: serviceNATGatewayList:\n")
+	//logObject(serviceNATGatewayList)
 	// Add services
 	if serviceLoadBalancerList.Additions.Len() > 0 || serviceNATGatewayList.Additions.Len() > 0 {
 		createServicesRequestDTO := difftracker.MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
@@ -74,8 +74,8 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 			},
 			updater.az.SubscriptionID,
 			updater.az.ResourceGroup)
-		klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: createServicesRequestDTO:\n")
-		logObject(createServicesRequestDTO)
+		// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: createServicesRequestDTO:\n")
+		//logObject(createServicesRequestDTO)
 		// createServicesResponseDTO := NRPAPIClientUpdateNRPServices(ctx, createServicesRequestDTO, updater.az.SubscriptionID, updater.az.ResourceGroup)
 		// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: createServicesResponseDTO:\n")
 		err := updater.az.UpdateNRPSGWServices(ctx, updater.az.ServiceGatewayResourceName, createServicesRequestDTO)
@@ -151,8 +151,8 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 
 	// Update all locations and addresses
 	locationData := updater.az.diffTracker.GetSyncLocationsAddresses()
-	klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: locationData:\n")
-	logObject(locationData)
+	// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: locationData:\n")
+	// logObject(locationData)
 	if len(locationData.Locations) > 0 {
 		locationDataRequestDTO := difftracker.MapLocationDataToDTO(locationData)
 		// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: locationDataRequestDTO:\n")
@@ -211,7 +211,7 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 
 	// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process END: processing batch update")
 	klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process END: difftracker:")
-	logDiffTracker(updater.az.diffTracker)
+	// logDiffTracker(updater.az.diffTracker)
 }
 
 func logDiffTracker(dt interface{}) {

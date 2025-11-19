@@ -40,7 +40,7 @@ type ServiceGatewaysClientBeginUpdateServicesOptions struct {
 
 // ServiceGatewaysClientGetOptions contains the optional parameters for the ServiceGatewaysClient.Get method.
 type ServiceGatewaysClientGetOptions struct {
-	// placeholder for future optional parameters
+	// Expands referenced resources.
 	Expand *string
 }
 
