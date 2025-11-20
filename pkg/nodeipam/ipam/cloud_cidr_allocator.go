@@ -39,6 +39,7 @@ import (
 	netutils "k8s.io/utils/net"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/nodeipam/ipam/cidrset"
 	providerazure "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 	nodeutil "sigs.k8s.io/cloud-provider-azure/pkg/util/controller/node"
@@ -264,10 +265,11 @@ func (ca *cloudCIDRAllocator) updateNodeSubnetMaskSizes(ctx context.Context, nod
 }
 
 func (ca *cloudCIDRAllocator) Run(ctx context.Context) {
+	logger := log.Background().WithName("Run")
 	defer utilruntime.HandleCrash()
 
-	klog.Infof("Starting cloud CIDR allocator")
-	defer klog.Infof("Shutting down cloud CIDR allocator")
+	logger.Info("Starting cloud CIDR allocator")
+	defer logger.Info("Shutting down cloud CIDR allocator")
 
 	if !cache.WaitForNamedCacheSync("cidrallocator", ctx.Done(), ca.nodesSynced) {
 		return

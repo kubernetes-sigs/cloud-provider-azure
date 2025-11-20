@@ -47,6 +47,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 // NodeProvider defines the interfaces for node provider.
@@ -428,7 +429,7 @@ func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Nod
 			return err
 		}
 
-		klog.Infof("Successfully initialized node %s with cloud provider", node.Name)
+		logger.Info("Successfully initialized node with cloud provider", "node", node.Name)
 		return nil
 	})
 	if err != nil {

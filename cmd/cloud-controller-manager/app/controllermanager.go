@@ -211,6 +211,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 
 // RunWrapper adapts the ccm boot logic to the leader elector call back function
 func RunWrapper(s *options.CloudControllerManagerOptions, c *cloudcontrollerconfig.Config, h *controllerhealthz.MutableHealthzHandler) func(ctx context.Context) {
+	logger := log.Background().WithName("RunWrapper")
 	return func(ctx context.Context) {
 		if !c.DynamicReloadingConfig.EnableDynamicReloading {
 			klog.V(1).Infof("using static initialization from config file %s", c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile)
@@ -253,7 +254,7 @@ func RunWrapper(s *options.CloudControllerManagerOptions, c *cloudcontrollerconf
 				}
 
 				if !shouldRemainStopped {
-					klog.Info("RunWrapper: restarting all controllers")
+					logger.Info("RunWrapper: restarting all controllers")
 					cancelFunc = runAsync(s, errCh, h)
 				} else {
 					klog.Warningf("All controllers are stopped!")
@@ -268,6 +269,7 @@ func RunWrapper(s *options.CloudControllerManagerOptions, c *cloudcontrollerconf
 }
 
 func shouldDisableCloudProvider(configFilePath string) (bool, error) {
+	logger := log.Background().WithName("shouldDisableCloudProvider")
 	configBytes, err := os.ReadFile(configFilePath)
 	if err != nil {
 		klog.Errorf("shouldDisableCloudProvider: failed to read %s  %s", configFilePath, err.Error())
@@ -282,7 +284,7 @@ func shouldDisableCloudProvider(configFilePath string) (bool, error) {
 		return false, err
 	}
 
-	klog.Infof("shouldDisableCloudProvider: should disable cloud provider: %t", c.DisableCloudProvider)
+	logger.Info("should disable cloud provider", "disableCloudProvider", c.DisableCloudProvider)
 	return c.DisableCloudProvider, nil
 }
 
@@ -341,8 +343,9 @@ func StartHTTPServer(ctx context.Context, c *cloudcontrollerconfig.CompletedConf
 
 // Run runs the ExternalCMServer.  This should never exit.
 func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig, h *controllerhealthz.MutableHealthzHandler) error {
+	logger := log.Background().WithName("Run")
 	// To help debugging, immediately log version
-	klog.Infof("Version: %#v", version.Get())
+	logger.Info("Version", "version", version.Get())
 
 	var (
 		cloud cloudprovider.Interface
@@ -397,6 +400,7 @@ func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig, h *contr
 // startControllers starts the cloud specific controller loops.
 func startControllers(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig,
 	cloud cloudprovider.Interface, controllers map[string]initFunc, healthzHandler *controllerhealthz.MutableHealthzHandler) error {
+	logger := log.Background().WithName("startControllers")
 	// Initialize the cloud provider with a reference to the clientBuilder
 	cloud.Initialize(completedConfig.ClientBuilder, ctx.Done())
 	// Set the informer on the user cloud object
@@ -430,7 +434,7 @@ func startControllers(ctx context.Context, controllerContext genericcontrollerma
 			}
 		}
 		controllerChecks = append(controllerChecks, check)
-		klog.Infof("Started %q", controllerName)
+		logger.Info("Started", "controller", controllerName)
 
 		time.Sleep(wait.Jitter(completedConfig.ComponentConfig.Generic.ControllerStartInterval.Duration, ControllerStartJitter))
 	}
