@@ -26,10 +26,11 @@ import (
 	"time"
 
 	"k8s.io/apiserver/pkg/server"
-	"k8s.io/klog/v2"
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 type handler struct {
@@ -41,6 +42,7 @@ type handler struct {
 // service. It returns an indication of whether it is running as a service;
 // and an error.
 func InitService(serviceName string) error {
+	logger := log.Background().WithName("InitService")
 	h := &handler{
 		tosvc:   make(chan bool),
 		fromsvc: make(chan error),
@@ -57,17 +59,18 @@ func InitService(serviceName string) error {
 	if err != nil {
 		return err
 	}
-	klog.Infof("Running %s as a Windows service!", serviceName)
+	logger.Info("Running as a Windows service", "serviceName", serviceName)
 	return nil
 }
 
 func (h *handler) Execute(_ []string, r <-chan svc.ChangeRequest, s chan<- svc.Status) (bool, uint32) {
+	logger := log.Background().WithName("Execute")
 	s <- svc.Status{State: svc.StartPending, Accepts: 0}
 	// Unblock initService()
 	h.fromsvc <- nil
 
 	s <- svc.Status{State: svc.Running, Accepts: svc.AcceptStop | svc.AcceptShutdown | svc.Accepted(windows.SERVICE_ACCEPT_PARAMCHANGE)}
-	klog.Infof("Service running")
+	logger.Info("Service running")
 Loop:
 	for {
 		select {
@@ -80,7 +83,7 @@ Loop:
 			case svc.Interrogate:
 				s <- c.CurrentStatus
 			case svc.Stop, svc.Shutdown:
-				klog.Infof("Service stopping")
+				logger.Info("Service stopping")
 				// We need to translate this request into a signal that can be handled by the signal handler
 				// handling shutdowns normally (currently apiserver/pkg/server/signal.go).
 				// If we do not do this, our main threads won't be notified of the upcoming shutdown.
