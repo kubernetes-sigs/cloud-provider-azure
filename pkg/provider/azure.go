@@ -44,6 +44,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
@@ -254,6 +255,7 @@ var (
 
 // InitializeCloudFromConfig initializes the Cloud from config.
 func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azureconfig.Config, _, callFromCCM bool) error {
+	logger := log.Background().WithName("InitializeCloudFromConfig")
 	if config == nil {
 		// should not reach here
 		return fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config")
@@ -418,7 +420,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 		if err != nil {
 			return err
 		}
-		klog.InfoS("Setting up ARM client factory for network resources", "subscriptionID", networkSubscriptionID)
+		logger.Info("Setting up ARM client factory for network resources", "subscriptionID", networkSubscriptionID)
 
 		az.ComputeClientFactory, err = newARMClientFactory(&azclient.ClientFactoryConfig{
 			SubscriptionID: az.SubscriptionID,
@@ -426,7 +428,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 		if err != nil {
 			return err
 		}
-		klog.InfoS("Setting up ARM client factory for compute resources", "subscriptionID", az.SubscriptionID)
+		logger.Info("Setting up ARM client factory for compute resources", "subscriptionID", az.SubscriptionID)
 	}
 
 	networkClientFactory := az.NetworkClientFactory
@@ -532,8 +534,9 @@ func (az *Cloud) checkEnableMultipleStandardLoadBalancers() error {
 }
 
 func (az *Cloud) initCaches() (err error) {
+	logger := log.Background().WithName("initCaches")
 	if az.Config.DisableAPICallCache {
-		klog.Infof("API call cache is disabled, ignore logs about cache operations")
+		logger.Info("API call cache is disabled, ignore logs about cache operations")
 	}
 
 	az.vmCache, err = az.newVMCache()
@@ -677,7 +680,8 @@ func (az *Cloud) ProviderName() string {
 
 // SetInformers sets informers for Azure cloud provider.
 func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
-	klog.Infof("Setting up informers for Azure cloud provider")
+	logger := log.Background().WithName("SetInformers")
+	logger.Info("Setting up informers for Azure cloud provider")
 	nodeInformer := informerFactory.Core().V1().Nodes().Informer()
 	_, _ = nodeInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
@@ -723,6 +727,7 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 
 // updateNodeCaches updates local cache for node's zones and external resource groups.
 func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
+	logger := log.Background().WithName("updateNodeCaches")
 	az.nodeCachesLock.Lock()
 	defer az.nodeCachesLock.Unlock()
 
@@ -748,8 +753,7 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 		managed, ok := prevNode.ObjectMeta.Labels[consts.ManagedByAzureLabel]
 		isNodeManagedByCloudProvider := !ok || !strings.EqualFold(managed, consts.NotManagedByAzureLabelValue)
 
-		klog.Infof("managed=%v, ok=%v, isNodeManagedByCloudProvider=%v",
-			managed, ok, isNodeManagedByCloudProvider)
+		logger.Info("node management status", "managed", managed, "ok", ok, "isNodeManagedByCloudProvider", isNodeManagedByCloudProvider)
 
 		// Remove from unmanagedNodes cache
 		if !isNodeManagedByCloudProvider {

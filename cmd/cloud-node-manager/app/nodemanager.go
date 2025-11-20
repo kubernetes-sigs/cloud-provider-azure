@@ -34,6 +34,7 @@ import (
 
 	cloudnodeconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-node-manager/app/config"
 	"sigs.k8s.io/cloud-provider-azure/cmd/cloud-node-manager/app/options"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	nodeprovider "sigs.k8s.io/cloud-provider-azure/pkg/node"
 	"sigs.k8s.io/cloud-provider-azure/pkg/nodemanager"
 	"sigs.k8s.io/cloud-provider-azure/pkg/version"
@@ -94,9 +95,10 @@ func NewCloudNodeManagerCommand() *cobra.Command {
 
 // Run runs the ExternalCMServer.  This should never exit.
 func Run(ctx context.Context, c *cloudnodeconfig.Config) error {
+	logger := log.Background().WithName("Run")
 	// To help debugging, immediately log version and nodeName
-	klog.Infof("Version: %+v", version.Get())
-	klog.Infof("NodeName: %s", c.NodeName)
+	logger.Info("Version", "version", version.Get())
+	logger.Info("NodeName", "nodeName", c.NodeName)
 
 	// Start the controller manager HTTP server
 	var checks []healthz.HealthChecker
@@ -122,6 +124,7 @@ func Run(ctx context.Context, c *cloudnodeconfig.Config) error {
 
 // startControllers starts the cloud specific controller loops.
 func startControllers(ctx context.Context, c *cloudnodeconfig.Config, healthzHandler *controllerhealthz.MutableHealthzHandler) error {
+	logger := log.Background().WithName("startControllers")
 	klog.V(1).Infof("Starting cloud-node-manager...")
 
 	// Start the CloudNodeController
@@ -140,7 +143,7 @@ func startControllers(ctx context.Context, c *cloudnodeconfig.Config, healthzHan
 	check := controllerhealthz.NamedPingChecker(c.NodeName)
 	healthzHandler.AddHealthChecker(check)
 
-	klog.Infof("Started cloud-node-manager")
+	logger.Info("Started cloud-node-manager")
 
 	// If apiserver is not running we should wait for some time and fail only then. This is particularly
 	// important when we start node manager before apiserver starts.
