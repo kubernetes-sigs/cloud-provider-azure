@@ -96,7 +96,7 @@ func (updater *loadBalancerBackendPoolUpdater) run(ctx context.Context) {
 		updater.process(ctx)
 		return false, nil
 	})
-	logger.Info("loadBalancerBackendPoolUpdater.run: stopped", "error", err.Error())
+	logger.Error(err, "loadBalancerBackendPoolUpdater.run: stopped")
 }
 
 // getAddIPsToBackendPoolOperation creates a new loadBalancerBackendPoolUpdateOperation
