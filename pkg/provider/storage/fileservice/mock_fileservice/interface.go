@@ -30,7 +30,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
+	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage/v2"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -38,7 +38,6 @@ import (
 type MockRepository struct {
 	ctrl     *gomock.Controller
 	recorder *MockRepositoryMockRecorder
-	isgomock struct{}
 }
 
 // MockRepositoryMockRecorder is the mock recorder for MockRepository.
