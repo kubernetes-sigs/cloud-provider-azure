@@ -95,7 +95,7 @@ func (d *delayedRouteUpdater) run(ctx context.Context) {
 		d.updateRoutes(ctx)
 		return false, nil
 	})
-	logger.Info("delayedRouteUpdater: stopped", "error", err.Error())
+	logger.Error(err, "delayedRouteUpdater: stopped")
 }
 
 // updateRoutes invokes route table client to update all routes.
