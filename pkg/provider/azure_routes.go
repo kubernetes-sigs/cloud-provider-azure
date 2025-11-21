@@ -33,6 +33,7 @@ import (
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 )
 
@@ -88,12 +89,13 @@ func newDelayedRouteUpdater(az *Cloud, interval time.Duration) batchProcessor {
 
 // run starts the updater reconciling loop.
 func (d *delayedRouteUpdater) run(ctx context.Context) {
-	klog.Info("delayedRouteUpdater: started")
+	logger := log.Background().WithName("delayedRouteUpdater")
+	logger.Info("delayedRouteUpdater: started")
 	err := wait.PollUntilContextCancel(ctx, d.interval, true, func(ctx context.Context) (bool, error) {
 		d.updateRoutes(ctx)
 		return false, nil
 	})
-	klog.Infof("delayedRouteUpdater: stopped due to %s", err.Error())
+	logger.Error(err, "delayedRouteUpdater: stopped")
 }
 
 // updateRoutes invokes route table client to update all routes.
