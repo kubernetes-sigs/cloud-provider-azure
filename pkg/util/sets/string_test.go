@@ -367,3 +367,82 @@ func TestLen(t *testing.T) {
 		})
 	}
 }
+
+func TestEquals(t *testing.T) {
+	tests := []struct {
+		name string
+		s1   *IgnoreCaseSet
+		s2   *IgnoreCaseSet
+		want bool
+	}{
+		{
+			name: "both nil",
+			s1:   nil,
+			s2:   nil,
+			want: true,
+		},
+		{
+			name: "first nil",
+			s1:   nil,
+			s2:   NewString("foo"),
+			want: false,
+		},
+		{
+			name: "second nil",
+			s1:   NewString("foo"),
+			s2:   nil,
+			want: false,
+		},
+		{
+			name: "empty sets",
+			s1:   NewString(),
+			s2:   NewString(),
+			want: true,
+		},
+		{
+			name: "same elements",
+			s1:   NewString("foo", "bar"),
+			s2:   NewString("foo", "bar"),
+			want: true,
+		},
+		{
+			name: "same elements with different case",
+			s1:   NewString("foo", "bar"),
+			s2:   NewString("FOO", "BAR"),
+			want: true,
+		},
+		{
+			name: "different sizes",
+			s1:   NewString("foo", "bar"),
+			s2:   NewString("foo"),
+			want: false,
+		},
+		{
+			name: "same size but different elements",
+			s1:   NewString("foo", "bar"),
+			s2:   NewString("foo", "baz"),
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.s1 == nil && tt.s2 == nil {
+				// Special case for nil sets
+				if !tt.want {
+					t.Errorf("Equals() = true, want %v", tt.want)
+				}
+				return
+			}
+			if tt.s1 == nil || tt.s2 == nil {
+				// One set is nil, they can't be equal
+				if tt.want {
+					t.Errorf("Equals() = false, want %v", tt.want)
+				}
+				return
+			}
+			if got := tt.s1.Equals(tt.s2); got != tt.want {
+				t.Errorf("Equals() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
