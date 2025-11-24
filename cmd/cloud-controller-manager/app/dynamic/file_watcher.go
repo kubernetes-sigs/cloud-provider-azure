@@ -24,6 +24,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 
 	"k8s.io/klog/v2"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
