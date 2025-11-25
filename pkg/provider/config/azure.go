@@ -178,6 +178,8 @@ type Config struct {
 	// ServiceGatewayEnabled indicates whether the service gateway is enabled for the cluster.
 	ServiceGatewayEnabled      bool   `json:"serviceGatewayEnabled,omitempty" yaml:"serviceGatewayEnabled,omitempty"`
 	ServiceGatewayResourceName string `json:"serviceGatewayResourceName,omitempty" yaml:"serviceGatewayResourceName,omitempty"`
+
+	BatchUpdaterSleepDuration int `json:"batchUpdaterSleepDuration,omitempty" yaml:"batchUpdaterSleepDuration,omitempty"`
 }
 
 // HasExtendedLocation returns true if extendedlocation prop are specified.

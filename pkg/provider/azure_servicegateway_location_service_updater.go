@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"time"
 
 	discovery_v1 "k8s.io/api/discovery/v1"
 	"k8s.io/klog/v2"
@@ -14,12 +15,15 @@ import (
 type locationAndNRPServiceBatchUpdater struct {
 	az                   *Cloud
 	channelUpdateTrigger chan bool
+
+	lastTimeProcessed int64
 }
 
 func newLocationAndNRPServiceBatchUpdater(az *Cloud) *locationAndNRPServiceBatchUpdater {
 	return &locationAndNRPServiceBatchUpdater{
 		az:                   az,
 		channelUpdateTrigger: make(chan bool, 1),
+		lastTimeProcessed:    0,
 	}
 }
 
@@ -47,8 +51,15 @@ func (az *Cloud) TriggerLocationAndNRPServiceBatchUpdate() {
 }
 
 func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
+	currentTime := getCurrentTimeInMillis()
+	if currentTime-updater.lastTimeProcessed < int64(updater.az.BatchUpdaterSleepDuration) {
+		// sleep thread for updater.sleepDuration time
+		remainingTime := int64(updater.az.BatchUpdaterSleepDuration) - (currentTime - updater.lastTimeProcessed)
+		klog.V(2).Infof("locationAndNRPServiceBatchUpdater.process: sleeping for %d ms before processing", remainingTime)
+		time.Sleep(time.Duration(remainingTime) * time.Millisecond)
+	}
+	updater.lastTimeProcessed = getCurrentTimeInMillis() // Update AFTER sleep
 	klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process BEGIN: processing batch update\n")
-	klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process BEGIN: difftracker:\n")
 	// logDiffTracker(updater.az.diffTracker)
 	// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process BEGIN: subscription ID: %s\n", updater.az.SubscriptionID)
 	// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process BEGIN: resource group: %s\n", updater.az.ResourceGroup)
@@ -212,6 +223,10 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 	// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process END: processing batch update")
 	klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process END: difftracker:")
 	// logDiffTracker(updater.az.diffTracker)
+}
+
+func getCurrentTimeInMillis() int64 {
+	return time.Now().UnixMilli()
 }
 
 func logDiffTracker(dt interface{}) {

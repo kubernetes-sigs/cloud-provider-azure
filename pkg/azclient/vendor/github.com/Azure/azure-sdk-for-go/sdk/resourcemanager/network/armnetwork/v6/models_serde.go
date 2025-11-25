@@ -30748,6 +30748,7 @@ func (s SubnetPropertiesFormat) MarshalJSON() ([]byte, error) {
 	populate(objectMap, "serviceAssociationLinks", s.ServiceAssociationLinks)
 	populate(objectMap, "serviceEndpointPolicies", s.ServiceEndpointPolicies)
 	populate(objectMap, "serviceEndpoints", s.ServiceEndpoints)
+	populate(objectMap, "serviceGateway", s.ServiceGateway)
 	populate(objectMap, "sharingScope", s.SharingScope)
 	return json.Marshal(objectMap)
 }
@@ -30823,6 +30824,9 @@ func (s *SubnetPropertiesFormat) UnmarshalJSON(data []byte) error {
 			delete(rawMsg, key)
 		case "serviceEndpoints":
 			err = unpopulate(val, "ServiceEndpoints", &s.ServiceEndpoints)
+			delete(rawMsg, key)
+		case "serviceGateway":
+			err = unpopulate(val, "ServiceGateway", &s.ServiceGateway)
 			delete(rawMsg, key)
 		case "sharingScope":
 			err = unpopulate(val, "SharingScope", &s.SharingScope)

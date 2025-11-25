@@ -20854,6 +20854,7 @@ func (l LoadBalancerPropertiesFormat) MarshalJSON() ([]byte, error) {
 	populate(objectMap, "loadBalancingRules", l.LoadBalancingRules)
 	populate(objectMap, "outboundRules", l.OutboundRules)
 	populate(objectMap, "probes", l.Probes)
+	populate(objectMap, "scope", l.Scope)
 	populate(objectMap, "provisioningState", l.ProvisioningState)
 	populate(objectMap, "resourceGuid", l.ResourceGUID)
 	return json.Marshal(objectMap)
@@ -20894,6 +20895,9 @@ func (l *LoadBalancerPropertiesFormat) UnmarshalJSON(data []byte) error {
 			delete(rawMsg, key)
 		case "resourceGuid":
 			err = unpopulate(val, "ResourceGUID", &l.ResourceGUID)
+			delete(rawMsg, key)
+		case "scope":
+			err = unpopulate(val, "Scope", &l.Scope)
 			delete(rawMsg, key)
 		}
 		if err != nil {
@@ -30744,6 +30748,7 @@ func (s SubnetPropertiesFormat) MarshalJSON() ([]byte, error) {
 	populate(objectMap, "serviceAssociationLinks", s.ServiceAssociationLinks)
 	populate(objectMap, "serviceEndpointPolicies", s.ServiceEndpointPolicies)
 	populate(objectMap, "serviceEndpoints", s.ServiceEndpoints)
+	populate(objectMap, "serviceGateway", s.ServiceGateway)
 	populate(objectMap, "sharingScope", s.SharingScope)
 	return json.Marshal(objectMap)
 }
@@ -30819,6 +30824,9 @@ func (s *SubnetPropertiesFormat) UnmarshalJSON(data []byte) error {
 			delete(rawMsg, key)
 		case "serviceEndpoints":
 			err = unpopulate(val, "ServiceEndpoints", &s.ServiceEndpoints)
+			delete(rawMsg, key)
+		case "serviceGateway":
+			err = unpopulate(val, "ServiceGateway", &s.ServiceGateway)
 			delete(rawMsg, key)
 		case "sharingScope":
 			err = unpopulate(val, "SharingScope", &s.SharingScope)

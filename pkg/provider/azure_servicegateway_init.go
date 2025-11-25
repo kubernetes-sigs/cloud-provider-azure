@@ -12,15 +12,12 @@ import (
 func (az *Cloud) attachServiceGatewayToSubnet(ctx context.Context) error {
 	klog.Infof("Attaching Service Gateway %s to subnet in VNet %s", az.ServiceGatewayResourceName, az.VnetName)
 	subnetName := "aks-subnet"
-	subnet, err := az.subnetRepo.Get(ctx, az.ResourceGroup, az.VnetName, subnetName)
+
+	subnet, err := az.NetworkClientFactory.GetSubnetClient().Get(ctx, az.ResourceGroup, az.VnetName, subnetName, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get subnet: %w", err)
 	}
-	if subnet.Properties != nil && subnet.Properties.ServiceGateway != nil && subnet.Properties.ServiceGateway.ID != nil {
-		klog.Infof("Service Gateway %s is already attached to subnet in VNet %s", az.ServiceGatewayResourceName, az.VnetName)
-		// already attached
-		return nil
-	}
+
 	// Ensure subnet.Properties and ServiceGateway are initialized
 	if subnet.Properties == nil {
 		subnet.Properties = &armnetwork.SubnetPropertiesFormat{}
@@ -28,11 +25,15 @@ func (az *Cloud) attachServiceGatewayToSubnet(ctx context.Context) error {
 	if subnet.Properties.ServiceGateway == nil {
 		subnet.Properties.ServiceGateway = &armnetwork.ServiceGatewaySubnetPropertiesFormat{}
 	}
-	subnet.Properties.ServiceGateway.ID = to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/serviceGateways/%s", az.SubscriptionID, az.ResourceGroup, az.ServiceGatewayResourceName))
-	err = az.subnetRepo.CreateOrUpdate(ctx, az.ResourceGroup, az.VnetName, subnetName, *subnet)
+
+	subnet.Properties.ServiceGateway.ID = to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/serviceGateways/%s",
+		az.SubscriptionID, az.ResourceGroup, az.ServiceGatewayResourceName))
+
+	_, err = az.NetworkClientFactory.GetSubnetClient().CreateOrUpdate(ctx, az.ResourceGroup, az.VnetName, subnetName, *subnet)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to attach Service Gateway to subnet: %w", err)
 	}
+
 	klog.Infof("Successfully attached Service Gateway %s to subnet in VNet %s", az.ServiceGatewayResourceName, az.VnetName)
 	return nil
 }
