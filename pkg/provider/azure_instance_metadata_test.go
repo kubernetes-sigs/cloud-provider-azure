@@ -19,13 +19,12 @@ package provider
 import (
 	"context"
 	"errors"
-	"fmt"
-	"net"
-	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
+	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 )
 
@@ -117,27 +116,21 @@ func TestGetPlatformSubFaultDomain(t *testing.T) {
 					UseInstanceMetadata: true,
 				},
 			}
-			listener, err := net.Listen("tcp", "127.0.0.1:0")
-			if err != nil {
-				t.Errorf("Test [%s] unexpected error: %v", testCase.description, err)
-			}
 
-			respString := `{"compute":{"zone":"1", "platformFaultDomain":"1", "location":"westus", "platformSubFaultDomain": "2"}}`
-			if testCase.nilCompute {
-				respString = "{}"
+			getter := func(context.Context, string) (interface{}, error) {
+				if testCase.nilCompute {
+					return &InstanceMetadata{}, nil
+				}
+				return &InstanceMetadata{
+					Compute: &ComputeMetadata{
+						PlatformSubFaultDomain: "2",
+					},
+				}, nil
 			}
-			mux := http.NewServeMux()
-			mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				fmt.Fprint(w, respString)
-			}))
-			go func() {
-				_ = http.Serve(listener, mux)
-			}()
-			defer listener.Close()
-
-			cloud.Metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
-			if err != nil {
-				t.Errorf("Test [%s] unexpected error: %v", testCase.description, err)
+			cache, err := azcache.NewTimedCache(time.Minute, getter, false)
+			assert.NoError(t, err)
+			cloud.Metadata = &InstanceMetadataService{
+				imsCache: cache,
 			}
 
 			fd, err := cloud.GetPlatformSubFaultDomain(context.TODO())

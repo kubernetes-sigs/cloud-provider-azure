@@ -19,16 +19,16 @@ package provider
 import (
 	"context"
 	"fmt"
-	"net"
-	"net/http"
 	"testing"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/stretchr/testify/assert"
-
 	"go.uber.org/mock/gomock"
+
+	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/ptr"
@@ -152,28 +152,19 @@ func TestGetZone(t *testing.T) {
 	}
 
 	for _, test := range testcases {
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
+		meta := InstanceMetadata{}
+		if !test.isNilResp {
+			meta.Compute = &ComputeMetadata{
+				Zone:        test.zone,
+				FaultDomain: test.faultDomain,
+				Location:    test.location,
+			}
 		}
-
-		respString := fmt.Sprintf(`{"compute":{"zone":"%s", "platformFaultDomain":"%s", "location":"%s"}}`, test.zone, test.faultDomain, test.location)
-		if test.isNilResp {
-			respString = "{}"
-		}
-		mux := http.NewServeMux()
-		mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			fmt.Fprint(w, respString)
-		}))
-		go func() {
-			_ = http.Serve(listener, mux)
-		}()
-		defer listener.Close()
-
-		cloud.Metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
-		if err != nil {
-			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
-		}
+		cache, err := azcache.NewTimedCache(consts.MetadataCacheTTL, func(_ context.Context, _ string) (interface{}, error) {
+			return &meta, nil
+		}, false)
+		assert.NoError(t, err)
+		cloud.Metadata = &InstanceMetadataService{imsCache: cache}
 
 		zone, err := cloud.GetZone(context.Background())
 		if err != nil {
