@@ -84,7 +84,7 @@ func TestAttachDiskWithVmssFlex(t *testing.T) {
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
 			vmssFlexVMUpdateError:          &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound},
-			expectedErr:                    fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 404, RawError: instance not found"),
+			expectedErr:                    fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 404, RawError: instance not found"),
 		},
 		{
 			description:                    "error should be returned when disk lun is inconsistent",
@@ -206,7 +206,7 @@ func TestDettachDiskWithVmssFlex(t *testing.T) {
 			vmListErr:                      nil,
 			vmssFlexVMUpdateError:          &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound},
 			diskMap:                        map[string]string{"diskUri1": "dataDisktestvm1"},
-			expectedErr:                    fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 404, RawError: instance not found"),
+			expectedErr:                    fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 404, RawError: instance not found"),
 		},
 	}
 
@@ -268,7 +268,7 @@ func TestUpdateVMWithVmssFlex(t *testing.T) {
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
 			vmssFlexVMUpdateError:          &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound},
-			expectedErr:                    fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 404, RawError: instance not found"),
+			expectedErr:                    fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 404, RawError: instance not found"),
 		},
 	}
 

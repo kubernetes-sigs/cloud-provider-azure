@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -151,9 +152,9 @@ func TestGetZone(t *testing.T) {
 	}
 
 	for _, test := range testcases {
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		listener, err := net.Listen("tcp4", "127.0.0.1:0")
 		if err != nil {
-			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
+			t.Skipf("skip due to restricted listen on loopback: %v", err)
 		}
 
 		respString := fmt.Sprintf(`{"compute":{"zone":"%s", "platformFaultDomain":"%s", "location":"%s"}}`, test.zone, test.faultDomain, test.location)
@@ -164,12 +165,12 @@ func TestGetZone(t *testing.T) {
 		mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			fmt.Fprint(w, respString)
 		}))
-		go func() {
-			_ = http.Serve(listener, mux)
-		}()
-		defer listener.Close()
+		server := httptest.NewUnstartedServer(mux)
+		server.Listener = listener
+		server.Start()
+		defer server.Close()
 
-		cloud.Metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
+		cloud.Metadata, err = NewInstanceMetadataService(server.URL + "/")
 		if err != nil {
 			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
 		}

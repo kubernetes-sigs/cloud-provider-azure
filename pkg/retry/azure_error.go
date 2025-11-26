@@ -78,7 +78,7 @@ func (err *Error) Error() error {
 		retryAfterSeconds = int(err.RetryAfter.Sub(curTime) / time.Second)
 	}
 
-	return fmt.Errorf("retriable: %v, retryAfter: %ds, httpStatusCode: %d, rawError: %w",
+	return fmt.Errorf("retriable: %v, retryAfter: %ds, httpStatusCode: %d, RawError: %w",
 		err.Retriable, retryAfterSeconds, err.HTTPStatusCode, err.RawError)
 }
 

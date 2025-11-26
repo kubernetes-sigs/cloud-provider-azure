@@ -972,7 +972,7 @@ func TestGetStandardInstanceIDByNodeName(t *testing.T) {
 		{
 			name:           "GetInstanceIDByNodeName should report error if Error encountered when invoke mockVMClient.Get",
 			nodeName:       "vm3",
-			expectedErrMsg: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: VMGet error"),
+			expectedErrMsg: fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 500, RawError: VMGet error"),
 		},
 		{
 			name:           "GetInstanceIDByNodeName should report error if ResourceID is invalid",
@@ -1742,7 +1742,7 @@ func TestGetAvailabilitySetByNodeName(t *testing.T) {
 			nodeName:      "vm-1",
 			vmasVMIDs:     []string{"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-1"},
 			vmasListError: &retry.Error{RawError: fmt.Errorf("error during vmas list")},
-			expectedErr:   fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error during vmas list"),
+			expectedErr:   fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: error during vmas list"),
 		},
 		{
 			description: "getAvailabilitySetByNodeName should report an error if the vmID on the vmas is invalid",

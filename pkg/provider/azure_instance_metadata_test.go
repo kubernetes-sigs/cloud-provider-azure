@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -117,11 +118,7 @@ func TestGetPlatformSubFaultDomain(t *testing.T) {
 					UseInstanceMetadata: true,
 				},
 			}
-			listener, err := net.Listen("tcp", "127.0.0.1:0")
-			if err != nil {
-				t.Errorf("Test [%s] unexpected error: %v", testCase.description, err)
-			}
-
+			var err error
 			respString := `{"compute":{"zone":"1", "platformFaultDomain":"1", "location":"westus", "platformSubFaultDomain": "2"}}`
 			if testCase.nilCompute {
 				respString = "{}"
@@ -130,12 +127,16 @@ func TestGetPlatformSubFaultDomain(t *testing.T) {
 			mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				fmt.Fprint(w, respString)
 			}))
-			go func() {
-				_ = http.Serve(listener, mux)
-			}()
-			defer listener.Close()
+			listener, listenErr := net.Listen("tcp4", "127.0.0.1:0")
+			if listenErr != nil {
+				t.Skipf("skip due to restricted listen on loopback: %v", listenErr)
+			}
+			server := httptest.NewUnstartedServer(mux)
+			server.Listener = listener
+			server.Start()
+			defer server.Close()
 
-			cloud.Metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
+			cloud.Metadata, err = NewInstanceMetadataService(server.URL + "/")
 			if err != nil {
 				t.Errorf("Test [%s] unexpected error: %v", testCase.description, err)
 			}

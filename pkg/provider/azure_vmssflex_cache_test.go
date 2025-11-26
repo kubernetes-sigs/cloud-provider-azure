@@ -427,7 +427,7 @@ func TestGetVmssFlexByVmssFlexID(t *testing.T) {
 			testVmssFlexList: []compute.VirtualMachineScaleSet{},
 			vmssFlexListErr:  &retry.Error{RawError: fmt.Errorf("error during vmss list")},
 			expectedVmssFlex: nil,
-			expectedErr:      fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error during vmss list"),
+			expectedErr:      fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: error during vmss list"),
 		},
 	}
 
@@ -480,7 +480,7 @@ func TestGetVmssFlexIDByName(t *testing.T) {
 			testVmssFlexList:   []compute.VirtualMachineScaleSet{},
 			vmssFlexListErr:    &retry.Error{RawError: fmt.Errorf("error during vmss list")},
 			expectedVmssFlexID: "",
-			expectedErr:        fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error during vmss list"),
+			expectedErr:        fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: error during vmss list"),
 		},
 	}
 
@@ -535,7 +535,7 @@ func TestGetVmssFlexByName(t *testing.T) {
 			testVmssFlexList: []compute.VirtualMachineScaleSet{},
 			vmssFlexListErr:  &retry.Error{RawError: fmt.Errorf("error during vmss list")},
 			expectedVmssFlex: nil,
-			expectedErr:      fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error during vmss list"),
+			expectedErr:      fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: error during vmss list"),
 		},
 	}
 
