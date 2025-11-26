@@ -498,6 +498,27 @@ func (az *Cloud) initializeDiffTracker() error {
 	}
 	// END 9. and 10.
 
+	// 	Address (delete) orphaned PIP resources
+	pipclient := az.NetworkClientFactory.GetPublicIPAddressClient()
+	pips, err := pipclient.List(ctx, az.ResourceGroup)
+	if err != nil {
+		return fmt.Errorf("initializeDiffTracker: failed to list public IP addresses: %w", err)
+	}
+	for _, pip := range pips {
+		if pip.Name == nil || !strings.HasSuffix(*pip.Name, "-pip") || *pip.Name == "default-natgw-v2-pip" {
+			continue
+		}
+
+		associatedResourceName := strings.TrimSuffix(*pip.Name, "-pip")
+		lbExists := az.diffTracker.NRPResources.LoadBalancers.Has(associatedResourceName)
+		ngExists := az.diffTracker.NRPResources.NATGateways.Has(associatedResourceName)
+		if !lbExists && !ngExists {
+			klog.Infof("initializeDiffTracker: Deleting orphaned Public IP %s from NRP", *pip.Name)
+			az.DeletePublicIPOutbound(ctx, az.ResourceGroup, *pip.Name)
+		}
+	}
+	// Mark initial sync as done
+
 	az.diffTracker.InitialSyncDone = true
 	// klog.Infof("initializeDiffTracker: az.diffTracker.InitialSyncDone: %v", az.diffTracker.InitialSyncDone)
 	// klog.Infof("initializeDiffTracker: completed ordered ServiceGateway sync and initialization")

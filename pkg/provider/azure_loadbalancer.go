@@ -531,51 +531,19 @@ func (az *Cloud) deleteServiceGatewayLoadBalancerResources(
 		return false, nil
 	}
 
-	// No LB to delete - we're done
-	if lb == nil || lb.Name == nil || *lb.Name == "" || !lbExists {
-		return true, nil
+	// Delete the load balancer if it exists
+	if lb != nil && lb.Name != nil && *lb.Name != "" && lbExists {
+		klog.Infof("deleteServiceGatewayLoadBalancerResources: deleting LB %s for service %s", *lb.Name, getServiceName(service))
+		if err := az.DeleteLB(ctx, service, *lb.Name); err != nil {
+			klog.Warningf("deleteServiceGatewayLoadBalancerResources: failed to delete LB %s: %v", *lb.Name, err)
+			return false, err
+		}
+
+		// Clear from cache
+		_ = az.lbCache.Delete(*lb.Name)
+	} else {
+		klog.V(4).Infof("deleteServiceGatewayLoadBalancerResources: LB does not exist for service %s, proceeding with PIP cleanup", getServiceName(service))
 	}
-
-	// Delete the load balancer directly
-	klog.Infof("deleteServiceGatewayLoadBalancerResources: deleting LB %s for service %s", *lb.Name, getServiceName(service))
-	if err := az.DeleteLB(ctx, service, *lb.Name); err != nil {
-		klog.Warningf("deleteServiceGatewayLoadBalancerResources: failed to delete LB %s: %v", *lb.Name, err)
-		return false, err
-	}
-
-	// klog.Infof("deleteServiceGatewayLoadBalancerResources: deleting LB %s for service %s", *lb.Name, getServiceName(service))
-	// if err := az.DeleteLB(ctx, service, *lb.Name); err != nil {
-	// 	// NEW: handle Service Gateway reference blocking deletion
-	// 	var respErr *azcore.ResponseError
-	// 	if errors.As(err, &respErr) && respErr.ErrorCode == "LoadBalancerWithPoolReferencedInServiceGatewayCannotBeDeleted" {
-	// 		serviceUID := getServiceUID(service)
-	// 		klog.Warningf("deleteServiceGatewayLoadBalancerResources: LB %s deletion blocked because backend pool still referenced in Service Gateway service %s; attempting to detach backend pool then will retry", *lb.Name, serviceUID)
-
-	// 		// Build a detach (empty backend pool) partial update. This is idempotent.
-	// 		removeBackendPoolRequestDTO := difftracker.RemoveBackendPoolReferenceFromServicesDTO(
-	// 			difftracker.SyncServicesReturnType{
-	// 				Additions: nil,
-	// 				Removals:  utilsets.NewString(serviceUID),
-	// 			},
-	// 			az.SubscriptionID,
-	// 			az.ResourceGroup,
-	// 		)
-
-	// 		if resp := az.UpdateNRPSGWServices(ctx, "ServiceGateway", removeBackendPoolRequestDTO); resp != nil {
-	// 			klog.Errorf("deleteServiceGatewayLoadBalancerResources: backend pool detach request for %s returned error payload: %v", serviceUID, resp)
-	// 			// Return original delete error; controller will retry.
-	// 			return false, err
-	// 		}
-
-	// 		klog.Infof("deleteServiceGatewayLoadBalancerResources: submitted backend pool detach for service %s; LB %s deletion will be retried", serviceUID, *lb.Name)
-	// 	} else {
-	// 		klog.Warningf("deleteServiceGatewayLoadBalancerResources: failed to delete LB %s: %v", *lb.Name, err)
-	// 	}
-	// 	return false, err
-	// }
-
-	// Clear from cache
-	_ = az.lbCache.Delete(*lb.Name)
 
 	// Delete any associated PIPs
 	v4Enabled, v6Enabled := getIPFamiliesEnabled(service)
