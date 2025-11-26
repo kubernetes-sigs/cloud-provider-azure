@@ -26,7 +26,7 @@ import (
 
 	"github.com/Azure/azure-kusto-go/azkustodata"
 	"github.com/Azure/azure-kusto-go/azkustoingest"
-	"sigs.k8s.io/cloud-provider-azure/pkg/log"
+	logr "sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 var (
@@ -66,7 +66,7 @@ func validate() error {
 // | Timestamp            | TestScenario                            | ClusterType | BranchName   | Passed | ErrorDetails |
 // | 2023-01-09T01:00:00Z | Feature:Autoscaling || !Serial && !Slow | autoscaling | release-1.26 | true   | <failed-tests-detail> |
 func KustoIngest(passed bool, labelFilter, clusterType, junitReportPath string) error {
-	logger := log.Background().WithName("KustoIngest")
+	logger := logr.Background().WithName("KustoIngest")
 	if err := validate(); err != nil {
 		return err
 	}
