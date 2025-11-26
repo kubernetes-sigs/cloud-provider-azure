@@ -77,8 +77,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - azsdk-go-armmsi/v1.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Identity/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResource?api-version=2023-01-31
+                - azsdk-go-armmsi/v1.3.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Identity/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResource?api-version=2024-11-30
         method: PUT
       response:
         proto: HTTP/2.0
@@ -130,8 +130,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-Identity-client azsdk-go-armmsi/v1.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Identity/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResource?api-version=2023-01-31
+                - ccm-Identity-client azsdk-go-armmsi/v1.3.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Identity/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResource?api-version=2024-11-30
         method: GET
       response:
         proto: HTTP/2.0
@@ -181,8 +181,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-Identity-client azsdk-go-armmsi/v1.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Identity/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResourcenotfound?api-version=2023-01-31
+                - ccm-Identity-client azsdk-go-armmsi/v1.3.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Identity/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResourcenotfound?api-version=2024-11-30
         method: GET
       response:
         proto: HTTP/2.0
@@ -232,8 +232,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - azsdk-go-armmsi/v1.2.0 (go1.23.2; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Identity/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResource?api-version=2023-01-31
+                - azsdk-go-armmsi/v1.3.0 (go1.23.2; linux)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Identity/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResource?api-version=2024-11-30
         method: DELETE
       response:
         proto: HTTP/2.0
