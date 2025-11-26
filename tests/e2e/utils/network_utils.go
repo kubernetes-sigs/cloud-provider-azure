@@ -52,11 +52,11 @@ var (
 )
 
 // getVirtualNetworkList returns the list of virtual networks in the cluster resource group.
-func (azureTestClient *AzureTestClient) getVirtualNetworkList() (result []*aznetwork.VirtualNetwork, err error) {
+func (tc *AzureTestClient) getVirtualNetworkList() (result []*aznetwork.VirtualNetwork, err error) {
 	Logf("Getting virtual network list")
-	vNetClient := azureTestClient.createVirtualNetworksClient()
+	vNetClient := tc.createVirtualNetworksClient()
 	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
-		result, err = vNetClient.List(context.Background(), azureTestClient.GetResourceGroup())
+		result, err = vNetClient.List(context.Background(), tc.GetResourceGroup())
 		if err != nil {
 			if !IsRetryableAPIError(err) {
 				return false, err
@@ -70,27 +70,27 @@ func (azureTestClient *AzureTestClient) getVirtualNetworkList() (result []*aznet
 }
 
 // GetClusterVirtualNetwork returns the cluster's virtual network.
-func (azureTestClient *AzureTestClient) GetClusterVirtualNetwork() (virtualNetwork *aznetwork.VirtualNetwork, err error) {
-	vNetList, err := azureTestClient.getVirtualNetworkList()
+func (tc *AzureTestClient) GetClusterVirtualNetwork() (virtualNetwork *aznetwork.VirtualNetwork, err error) {
+	vNetList, err := tc.getVirtualNetworkList()
 	if err != nil {
 		return
 	}
 
 	switch len(vNetList) {
 	case 0:
-		err = fmt.Errorf("found no virtual network in resource group %s", azureTestClient.GetResourceGroup())
+		err = fmt.Errorf("found no virtual network in resource group %s", tc.GetResourceGroup())
 		return
 	case 1:
 		virtualNetwork = vNetList[0]
 		return
 	default:
-		err = fmt.Errorf("found more than one virtual network in resource group %s", azureTestClient.GetResourceGroup())
+		err = fmt.Errorf("found more than one virtual network in resource group %s", tc.GetResourceGroup())
 		return
 	}
 }
 
 // CreateSubnet creates a new subnet in the specified virtual network.
-func (azureTestClient *AzureTestClient) CreateSubnet(vnet *aznetwork.VirtualNetwork, subnetName *string, prefixes []*string, waitUntilComplete bool) (*aznetwork.Subnet, error) {
+func (tc *AzureTestClient) CreateSubnet(vnet *aznetwork.VirtualNetwork, subnetName *string, prefixes []*string, waitUntilComplete bool) (*aznetwork.Subnet, error) {
 	Logf("creating a new subnet %s, %v", *subnetName, StrPtrSliceToStrSlice(prefixes))
 	subnetParameter := *vnet.Properties.Subnets[0]
 	subnetParameter.Name = subnetName
@@ -99,14 +99,14 @@ func (azureTestClient *AzureTestClient) CreateSubnet(vnet *aznetwork.VirtualNetw
 	} else {
 		subnetParameter.Properties.AddressPrefixes = prefixes
 	}
-	subnetsClient := azureTestClient.createSubnetsClient()
-	_, err := subnetsClient.CreateOrUpdate(context.Background(), azureTestClient.GetResourceGroup(), *vnet.Name, *subnetName, subnetParameter)
+	subnetsClient := tc.createSubnetsClient()
+	_, err := subnetsClient.CreateOrUpdate(context.Background(), tc.GetResourceGroup(), *vnet.Name, *subnetName, subnetParameter)
 	var subnet *aznetwork.Subnet
 	if err != nil || !waitUntilComplete {
 		return subnet, err
 	}
 	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
-		subnet, err = subnetsClient.Get(context.Background(), azureTestClient.GetResourceGroup(), *vnet.Name, *subnetName, nil)
+		subnet, err = subnetsClient.Get(context.Background(), tc.GetResourceGroup(), *vnet.Name, *subnetName, nil)
 		if err != nil {
 			if !IsRetryableAPIError(err) {
 				return false, err
@@ -119,10 +119,10 @@ func (azureTestClient *AzureTestClient) CreateSubnet(vnet *aznetwork.VirtualNetw
 }
 
 // DeleteSubnet deletes a subnet with retry.
-func (azureTestClient *AzureTestClient) DeleteSubnet(vnetName string, subnetName string) error {
-	subnetClient := azureTestClient.createSubnetsClient()
+func (tc *AzureTestClient) DeleteSubnet(vnetName string, subnetName string) error {
+	subnetClient := tc.createSubnetsClient()
 	return wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
-		err := subnetClient.Delete(context.Background(), azureTestClient.GetResourceGroup(), vnetName, subnetName)
+		err := subnetClient.Delete(context.Background(), tc.GetResourceGroup(), vnetName, subnetName)
 		if err != nil {
 			Logf("unexpected error %q while deleting subnet %s", err.Error(), subnetName)
 			return false, nil
@@ -130,7 +130,7 @@ func (azureTestClient *AzureTestClient) DeleteSubnet(vnetName string, subnetName
 
 		subnet, err := subnetClient.Get(
 			context.Background(),
-			azureTestClient.GetResourceGroup(),
+			tc.GetResourceGroup(),
 			vnetName,
 			subnetName,
 			nil,
@@ -213,11 +213,11 @@ func isCIDRIPv6(cidr *string) (bool, error) {
 }
 
 // getSecurityGroupList returns the list of security groups in the cluster resource group.
-func (azureTestClient *AzureTestClient) getSecurityGroupList() (result []*aznetwork.SecurityGroup, err error) {
+func (tc *AzureTestClient) getSecurityGroupList() (result []*aznetwork.SecurityGroup, err error) {
 	Logf("Getting virtual network list")
-	securityGroupsClient := azureTestClient.CreateSecurityGroupsClient()
+	securityGroupsClient := tc.CreateSecurityGroupsClient()
 	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
-		result, err = securityGroupsClient.List(context.Background(), azureTestClient.GetResourceGroup())
+		result, err = securityGroupsClient.List(context.Background(), tc.GetResourceGroup())
 		if err != nil {
 			Logf("error when listing security groups: %w", err)
 			if !IsRetryableAPIError(err) {
@@ -231,9 +231,9 @@ func (azureTestClient *AzureTestClient) getSecurityGroupList() (result []*aznetw
 }
 
 // GetClusterSecurityGroups gets the security groups of the cluster.
-func (azureTestClient *AzureTestClient) GetClusterSecurityGroups() (ret []*aznetwork.SecurityGroup, err error) {
+func (tc *AzureTestClient) GetClusterSecurityGroups() (ret []*aznetwork.SecurityGroup, err error) {
 	err = wait.PollImmediate(time.Second, time.Minute, func() (bool, error) {
-		securityGroupsList, err := azureTestClient.getSecurityGroupList()
+		securityGroupsList, err := tc.getSecurityGroupList()
 		if err != nil {
 			return false, err
 		}
@@ -247,7 +247,7 @@ func (azureTestClient *AzureTestClient) GetClusterSecurityGroups() (ret []*aznet
 		return false, nil
 	})
 	if errors.Is(err, wait.ErrWaitTimeout) {
-		err = fmt.Errorf("could not find the cluster security group in resource group %s", azureTestClient.GetResourceGroup())
+		err = fmt.Errorf("could not find the cluster security group in resource group %s", tc.GetResourceGroup())
 	}
 	return
 }
@@ -272,9 +272,9 @@ func CreateLoadBalancerServiceManifest(name string, annotation map[string]string
 }
 
 // WaitCreatePIP waits to create a public ip resource in a specific resource group
-func WaitCreatePIP(azureTestClient *AzureTestClient, ipName, rgName string, ipParameter *aznetwork.PublicIPAddress) (*aznetwork.PublicIPAddress, error) {
+func WaitCreatePIP(tc *AzureTestClient, ipName, rgName string, ipParameter *aznetwork.PublicIPAddress) (*aznetwork.PublicIPAddress, error) {
 	Logf("Creating public IP resource named %s", ipName)
-	pipClient := azureTestClient.createPublicIPAddressesClient()
+	pipClient := tc.createPublicIPAddressesClient()
 	_, err := pipClient.CreateOrUpdate(context.Background(), rgName, ipName, *ipParameter)
 	var pip *aznetwork.PublicIPAddress
 	if err != nil {
@@ -394,15 +394,15 @@ func DeletePIPPrefixWithRetry(cli *AzureTestClient, name string) error {
 }
 
 // DeletePIPWithRetry tries to delete a public ip resource
-func DeletePIPWithRetry(azureTestClient *AzureTestClient, ipName, rgName string) error {
+func DeletePIPWithRetry(tc *AzureTestClient, ipName, rgName string) error {
 	if ipName == "" {
 		return nil
 	}
 	if rgName == "" {
-		rgName = azureTestClient.GetResourceGroup()
+		rgName = tc.GetResourceGroup()
 	}
 	Logf("Deleting public IP resource named %s in resource group %s", ipName, rgName)
-	pipClient := azureTestClient.createPublicIPAddressesClient()
+	pipClient := tc.createPublicIPAddressesClient()
 	err := wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
 		err := pipClient.Delete(context.Background(), rgName, ipName)
 		if err != nil {
@@ -415,10 +415,10 @@ func DeletePIPWithRetry(azureTestClient *AzureTestClient, ipName, rgName string)
 }
 
 // WaitGetPIP waits to get a specific public ip resource
-func WaitGetPIP(azureTestClient *AzureTestClient, ipName string) (pip *aznetwork.PublicIPAddress, err error) {
-	pipClient := azureTestClient.createPublicIPAddressesClient()
+func WaitGetPIP(tc *AzureTestClient, ipName string) (pip *aznetwork.PublicIPAddress, err error) {
+	pipClient := tc.createPublicIPAddressesClient()
 	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
-		pip, err = pipClient.Get(context.Background(), azureTestClient.GetResourceGroup(), ipName, nil)
+		pip, err = pipClient.Get(context.Background(), tc.GetResourceGroup(), ipName, nil)
 		if err != nil {
 			if !IsRetryableAPIError(err) {
 				return false, err
@@ -531,8 +531,8 @@ func SelectAvailablePrivateIPs(tc *AzureTestClient) ([]*string, error) {
 }
 
 // GetPublicIPFromAddress finds public ip according to ip address
-func (azureTestClient *AzureTestClient) GetPublicIPFromAddress(resourceGroupName string, ipAddr *string) (pip *aznetwork.PublicIPAddress, err error) {
-	pipList, err := azureTestClient.ListPublicIPs(resourceGroupName)
+func (tc *AzureTestClient) GetPublicIPFromAddress(resourceGroupName string, ipAddr *string) (pip *aznetwork.PublicIPAddress, err error) {
+	pipList, err := tc.ListPublicIPs(resourceGroupName)
 	if err != nil {
 		return pip, err
 	}
@@ -545,8 +545,8 @@ func (azureTestClient *AzureTestClient) GetPublicIPFromAddress(resourceGroupName
 }
 
 // ListPublicIPs lists all the publicIP addresses active
-func (azureTestClient *AzureTestClient) ListPublicIPs(resourceGroupName string) ([]*aznetwork.PublicIPAddress, error) {
-	pipClient := azureTestClient.createPublicIPAddressesClient()
+func (tc *AzureTestClient) ListPublicIPs(resourceGroupName string) ([]*aznetwork.PublicIPAddress, error) {
+	pipClient := tc.createPublicIPAddressesClient()
 
 	result, err := pipClient.List(context.Background(), resourceGroupName)
 	if err != nil {
@@ -556,8 +556,8 @@ func (azureTestClient *AzureTestClient) ListPublicIPs(resourceGroupName string) 
 }
 
 // ListLoadBalancers lists all the load balancers active
-func (azureTestClient *AzureTestClient) ListLoadBalancers(resourceGroupName string) ([]*aznetwork.LoadBalancer, error) {
-	lbClient := azureTestClient.createLoadBalancerClient()
+func (tc *AzureTestClient) ListLoadBalancers(resourceGroupName string) ([]*aznetwork.LoadBalancer, error) {
+	lbClient := tc.createLoadBalancerClient()
 
 	result, err := lbClient.List(context.Background(), resourceGroupName)
 	if err != nil {
@@ -568,20 +568,20 @@ func (azureTestClient *AzureTestClient) ListLoadBalancers(resourceGroupName stri
 }
 
 // GetLoadBalancer gets aznetwork.LoadBalancer by loadBalancer name.
-func (azureTestClient *AzureTestClient) GetLoadBalancer(resourceGroupName, lbName string) (*aznetwork.LoadBalancer, error) {
-	lbClient := azureTestClient.createLoadBalancerClient()
+func (tc *AzureTestClient) GetLoadBalancer(resourceGroupName, lbName string) (*aznetwork.LoadBalancer, error) {
+	lbClient := tc.createLoadBalancerClient()
 	return lbClient.Get(context.Background(), resourceGroupName, lbName, nil)
 }
 
 // GetPrivateLinkService gets aznetwork.PrivateLinkService by privateLinkService name.
-func (azureTestClient *AzureTestClient) GetPrivateLinkService(resourceGroupName, plsName string) (*aznetwork.PrivateLinkService, error) {
-	plsClient := azureTestClient.createPrivateLinkServiceClient()
+func (tc *AzureTestClient) GetPrivateLinkService(resourceGroupName, plsName string) (*aznetwork.PrivateLinkService, error) {
+	plsClient := tc.createPrivateLinkServiceClient()
 	return plsClient.Get(context.Background(), resourceGroupName, plsName, nil)
 }
 
 // ListPrivateLinkServices lists all the private link services active
-func (azureTestClient *AzureTestClient) ListPrivateLinkServices(resourceGroupName string) ([]*aznetwork.PrivateLinkService, error) {
-	plsClient := azureTestClient.createPrivateLinkServiceClient()
+func (tc *AzureTestClient) ListPrivateLinkServices(resourceGroupName string) ([]*aznetwork.PrivateLinkService, error) {
+	plsClient := tc.createPrivateLinkServiceClient()
 
 	result, err := plsClient.List(context.Background(), resourceGroupName)
 	if err != nil {
