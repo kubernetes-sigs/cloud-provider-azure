@@ -400,6 +400,7 @@ type nodeModifier func(*v1.Node)
 
 // This processes nodes that were added into the cluster, and cloud initialize them if appropriate
 func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Node) error {
+	logger := log.Background().WithName("initializeNode")
 	klog.Infof("Initializing node %s with cloud provider", node.Name)
 	curNode, err := cnc.kubeClient.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
 	if err != nil {
