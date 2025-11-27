@@ -18,10 +18,9 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
-	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -226,36 +225,36 @@ func TestInstanceID(t *testing.T) {
 		}
 		cloud.Config.VMType = test.vmType
 		cloud.Config.UseInstanceMetadata = test.useInstanceMetadata
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
-		}
-
-		mux := http.NewServeMux()
-		mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			if test.metadataTemplate != "" {
-				fmt.Fprint(w, test.metadataTemplate)
+		var metadata InstanceMetadata
+		var getter azcache.GetFunc
+		if test.metadataTemplate != "" {
+			if test.expectedErrMsg != nil && test.expectedErrMsg.Error() == "failure of getting instance metadata" {
+				getter = func(_ context.Context, _ string) (interface{}, error) {
+					return nil, test.expectedErrMsg
+				}
 			} else {
-				fmt.Fprintf(w, "{\"compute\":{\"name\":\"%s\",\"VMScaleSetName\":\"%s\",\"subscriptionId\":\"subscription\",\"resourceGroupName\":\"rg\", \"resourceId\":\"%s\"}}", test.metadataName, test.vmssName, test.resourceID)
+				_ = json.Unmarshal([]byte(test.metadataTemplate), &metadata)
 			}
-		}))
-		go func() {
-			_ = http.Serve(listener, mux)
-		}()
-		defer listener.Close()
-
-		cloud.Metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
-		if err != nil {
-			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
-		}
-		if test.useCustomImsCache {
-			cloud.Metadata.imsCache, err = azcache.NewTimedCache(consts.MetadataCacheTTL, func(_ context.Context, _ string) (interface{}, error) {
-				return nil, fmt.Errorf("getError")
-			}, false)
-			if err != nil {
-				t.Errorf("Test [%s] unexpected error: %v", test.name, err)
+		} else {
+			metadata.Compute = &ComputeMetadata{
+				Name:           test.metadataName,
+				VMScaleSetName: test.vmssName,
+				SubscriptionID: "subscription",
+				ResourceGroup:  "rg",
+				ResourceID:     test.resourceID,
 			}
 		}
+		if getter == nil {
+			getter = func(_ context.Context, _ string) (interface{}, error) {
+				if test.useCustomImsCache {
+					return nil, fmt.Errorf("getError")
+				}
+				return &metadata, nil
+			}
+		}
+		cache, err := azcache.NewTimedCache(consts.MetadataCacheTTL, getter, false)
+		assert.NoError(t, err)
+		cloud.Metadata = &InstanceMetadataService{imsCache: cache}
 		vmListWithPowerState := make(map[string]string)
 		for _, vm := range test.vmList {
 			vmListWithPowerState[vm] = ""
@@ -446,8 +445,6 @@ func TestNodeAddresses(t *testing.T) {
 			Address: "192.168.1.12",
 		},
 	}
-	metadataTemplate := `{"compute":{"name":"%s"},"network":{"interface":[{"ipv4":{"ipAddress":[{"privateIpAddress":"%s","publicIpAddress":"%s"}]},"ipv6":{"ipAddress":[{"privateIpAddress":"%s","publicIpAddress":"%s"}]}}]}}`
-	loadbalancerTemplate := `{"loadbalancer": {"publicIpAddresses": [{"frontendIpAddress": "%s","privateIpAddress": "%s"},{"frontendIpAddress": "%s","privateIpAddress": "%s"}]}}`
 
 	testcases := []struct {
 		name                string
@@ -470,13 +467,13 @@ func TestNodeAddresses(t *testing.T) {
 			name:                "NodeAddresses should report error if metadata.Network is nil",
 			metadataTemplate:    `{"compute":{"name":"vm1"}}`,
 			useInstanceMetadata: true,
-			expectedErrMsg:      fmt.Errorf("failure of getting instance metadata"),
+			expectedErrMsg:      fmt.Errorf("get empty IP addresses from instance metadata service"),
 		},
 		{
 			name:                "NodeAddresses should report error if metadata.Compute is nil",
 			metadataTemplate:    `{"network":{"interface":[]}}`,
 			useInstanceMetadata: true,
-			expectedErrMsg:      fmt.Errorf("failure of getting instance metadata"),
+			expectedErrMsg:      fmt.Errorf("get empty IP addresses from instance metadata service"),
 		},
 		{
 			name:                "NodeAddresses should report error if metadata.armnetwork.Interface is nil",
@@ -485,7 +482,7 @@ func TestNodeAddresses(t *testing.T) {
 			vmType:              consts.VMTypeStandard,
 			metadataTemplate:    `{"compute":{"name":"vm1"},"network":{}}`,
 			useInstanceMetadata: true,
-			expectedErrMsg:      fmt.Errorf("no interface is found for the instance"),
+			expectedErrMsg:      fmt.Errorf("get empty IP addresses from instance metadata service"),
 		},
 		{
 			name:                "NodeAddresses should report error when invoke GetMetadata",
@@ -611,37 +608,38 @@ func TestNodeAddresses(t *testing.T) {
 		}
 		cloud.Config.VMType = test.vmType
 		cloud.Config.UseInstanceMetadata = test.useInstanceMetadata
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
+		publicV4 := test.ipV4Public
+		publicV6 := test.ipV6Public
+		metadata := InstanceMetadata{
+			Compute: &ComputeMetadata{
+				Name: test.metadataName,
+			},
+			Network: &NetworkMetadata{
+				Interface: []*NetworkInterface{
+					{
+						IPV4: NetworkData{
+							IPAddress: []IPAddress{
+								{PrivateIP: test.ipV4, PublicIP: publicV4},
+							},
+						},
+						IPV6: NetworkData{
+							IPAddress: []IPAddress{
+								{PrivateIP: test.ipV6, PublicIP: publicV6},
+							},
+						},
+					},
+				},
+			},
 		}
-
-		mux := http.NewServeMux()
-		mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if strings.Contains(r.RequestURI, consts.ImdsLoadBalancerURI) {
-				fmt.Fprintf(w, loadbalancerTemplate, test.ipV4Public, test.ipV4, test.ipV6Public, test.ipV6)
-				return
+		getter := func(_ context.Context, _ string) (interface{}, error) {
+			if test.useCustomImsCache {
+				return nil, fmt.Errorf("getError")
 			}
-
-			if test.metadataTemplate != "" {
-				fmt.Fprint(w, test.metadataTemplate)
-			} else {
-				if test.loadBalancerSKU == "standard" {
-					fmt.Fprintf(w, metadataTemplate, test.metadataName, test.ipV4, "", test.ipV6, "")
-				} else {
-					fmt.Fprintf(w, metadataTemplate, test.metadataName, test.ipV4, test.ipV4Public, test.ipV6, test.ipV6Public)
-				}
-			}
-		}))
-		go func() {
-			_ = http.Serve(listener, mux)
-		}()
-		defer listener.Close()
-
-		cloud.Metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
-		if err != nil {
-			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
+			return &metadata, nil
 		}
+		cache, err := azcache.NewTimedCache(consts.MetadataCacheTTL, getter, false)
+		assert.NoError(t, err)
+		cloud.Metadata = &InstanceMetadataService{imsCache: cache}
 
 		if test.useCustomImsCache {
 			cloud.Metadata.imsCache, err = azcache.NewTimedCache(consts.MetadataCacheTTL, func(_ context.Context, _ string) (interface{}, error) {
@@ -786,7 +784,6 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 	defer ctrl.Finish()
 	cloud := GetTestCloud(ctrl)
 	cloud.Config.UseInstanceMetadata = true
-	metadataTemplate := `{"compute":{"name":"%s"},"network":{"interface":[{"ipv4":{"ipAddress":[{"privateIpAddress":"%s","publicIpAddress":"%s"}]},"ipv6":{"ipAddress":[{"privateIpAddress":"%s","publicIpAddress":"%s"}]}}]}}`
 
 	testcases := []struct {
 		name            string
@@ -842,24 +839,22 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 	}
 
 	for _, test := range testcases {
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
+		meta := InstanceMetadata{
+			Compute: &ComputeMetadata{Name: test.nodeName},
+			Network: &NetworkMetadata{
+				Interface: []*NetworkInterface{
+					{
+						IPV4: NetworkData{IPAddress: []IPAddress{{PrivateIP: test.ipV4, PublicIP: test.ipV4Public}}},
+						IPV6: NetworkData{IPAddress: []IPAddress{{PrivateIP: test.ipV6, PublicIP: test.ipV6Public}}},
+					},
+				},
+			},
 		}
-
-		mux := http.NewServeMux()
-		mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			fmt.Fprintf(w, metadataTemplate, test.nodeName, test.ipV4, test.ipV4Public, test.ipV6, test.ipV6Public)
-		}))
-		go func() {
-			_ = http.Serve(listener, mux)
-		}()
-		defer listener.Close()
-
-		cloud.Metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
-		if err != nil {
-			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
-		}
+		cache, err := azcache.NewTimedCache(consts.MetadataCacheTTL, func(_ context.Context, _ string) (interface{}, error) {
+			return &meta, nil
+		}, false)
+		assert.NoError(t, err)
+		cloud.Metadata = &InstanceMetadataService{imsCache: cache}
 
 		ipAddresses, err := cloud.NodeAddressesByProviderID(context.Background(), test.providerID)
 		assert.Equal(t, test.expectedErrMsg, err, test.name)

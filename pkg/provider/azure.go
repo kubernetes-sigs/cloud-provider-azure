@@ -44,7 +44,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
@@ -209,7 +208,7 @@ func NewCloudFromConfigFile(ctx context.Context, clientBuilder cloudprovider.Con
 		}
 
 		defer configFile.Close()
-		configValue, err = config.ParseConfig(configFile)
+		configValue, err = azureconfig.ParseConfig(configFile)
 		if err != nil {
 			klog.Fatalf("Failed to parse Azure cloud provider config: %v", err)
 		}
@@ -254,7 +253,7 @@ var (
 )
 
 // InitializeCloudFromConfig initializes the Cloud from config.
-func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.Config, _, callFromCCM bool) error {
+func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azureconfig.Config, _, callFromCCM bool) error {
 	if config == nil {
 		// should not reach here
 		return fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config")

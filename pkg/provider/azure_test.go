@@ -54,7 +54,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient/mock_virtualmachineclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
-	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
@@ -2402,7 +2401,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
 
 		azureconfig := config.Config{
-			AzureClientConfig: providerconfig.AzureClientConfig{
+			AzureClientConfig: config.AzureClientConfig{
 				ARMClientConfig: azclient.ARMClientConfig{
 					Cloud: "AZUREPUBLICCLOUD",
 				},
