@@ -48,7 +48,7 @@ func TestDeleteLB(t *testing.T) {
 	mockLBClient.EXPECT().Delete(gomock.Any(), az.ResourceGroup, "lb").Return(&retry.Error{HTTPStatusCode: http.StatusInternalServerError})
 
 	err := az.DeleteLB(context.TODO(), &v1.Service{}, "lb")
-	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), fmt.Sprintf("%s", err.Error()))
+	assert.EqualError(t, fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 500, RawError: %w", error(nil)), fmt.Sprintf("%s", err.Error()))
 }
 
 func TestListManagedLBs(t *testing.T) {
@@ -65,7 +65,7 @@ func TestListManagedLBs(t *testing.T) {
 	}{
 		{
 			clientErr:   &retry.Error{HTTPStatusCode: http.StatusInternalServerError},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)),
+			expectedErr: fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 500, RawError: %w", error(nil)),
 		},
 		{
 			clientErr:   &retry.Error{HTTPStatusCode: http.StatusNotFound},
@@ -140,15 +140,15 @@ func TestCreateOrUpdateLB(t *testing.T) {
 	}{
 		{
 			clientErr:   &retry.Error{HTTPStatusCode: http.StatusPreconditionFailed},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 412, RawError: %w", error(nil)),
+			expectedErr: fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 412, RawError: %w", error(nil)),
 		},
 		{
 			clientErr:   &retry.Error{RawError: fmt.Errorf(consts.OperationCanceledErrorMessage)},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", errors.New("canceledandsupersededduetoanotheroperation")),
+			expectedErr: fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: %w", errors.New("canceledandsupersededduetoanotheroperation")),
 		},
 		{
 			clientErr:   &retry.Error{RawError: errors.New(referencedResourceNotProvisionedRawErrorString)},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", errors.New(referencedResourceNotProvisionedRawErrorString)),
+			expectedErr: fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: %w", errors.New(referencedResourceNotProvisionedRawErrorString)),
 		},
 	}
 

@@ -231,7 +231,7 @@ func WaitAutoScaleNodes(cs clientset.Interface, targetNodeCount int, isScaleDown
 			return false, err
 		}
 		if nodes == nil {
-			err = fmt.Errorf("Unexpected nil node list")
+			err = fmt.Errorf("unexpected nil node list")
 			return false, err
 		}
 		nodeConditions = map[string][]v1.NodeCondition{}
@@ -265,7 +265,7 @@ func WaitAutoScaleNodes(cs clientset.Interface, targetNodeCount int, isScaleDown
 		return len(nodes) == targetNodeCount, nil
 	}); errors.Is(err, wait.ErrWaitTimeout) {
 		Logf("Node conditions: %v", nodeConditions)
-		return fmt.Errorf("Fail to get target node count in limited time")
+		return fmt.Errorf("fail to get target node count in limited time")
 	}
 	Logf("Node conditions: %v", nodeConditions)
 	return err
@@ -288,7 +288,7 @@ func HoldAutoScaleNodes(cs clientset.Interface, targetNodeCount int) error {
 			return false, err
 		}
 		if nodes == nil {
-			err = fmt.Errorf("Unexpected nil node list")
+			err = fmt.Errorf("unexpected nil node list")
 			return false, err
 		}
 		nodeConditions = map[string][]v1.NodeCondition{}

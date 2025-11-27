@@ -726,7 +726,7 @@ func TestGetVMSS(t *testing.T) {
 			existedVMSSName: "vmss-1",
 			vmssName:        "vmss-1",
 			vmssListError:   &retry.Error{RawError: fmt.Errorf("error during vmss list")},
-			expectedErr:     fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error during vmss list"),
+			expectedErr:     fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: error during vmss list"),
 		},
 	}
 
@@ -1046,7 +1046,7 @@ func TestGetInstanceTypeByNodeName(t *testing.T) {
 			vmList:       []string{"vmss-vm-000000"},
 			vmClientErr:  &retry.Error{RawError: fmt.Errorf("error")},
 			expectedType: "",
-			expectedErr:  fmt.Errorf("getter function of nonVmssUniformNodesCache: failed to list vms in the resource group rg: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"),
+			expectedErr:  fmt.Errorf("getter function of nonVmssUniformNodesCache: failed to list vms in the resource group rg: retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: error"),
 		},
 	}
 
@@ -1171,7 +1171,7 @@ func TestGetPrimaryInterface(t *testing.T) {
 			vmList:              []string{"vmss-vm-000000"},
 			hasPrimaryInterface: true,
 			vmClientErr:         &retry.Error{RawError: fmt.Errorf("error")},
-			expectedErr:         fmt.Errorf("getter function of nonVmssUniformNodesCache: failed to list vms in the resource group rg: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"),
+			expectedErr:         fmt.Errorf("getter function of nonVmssUniformNodesCache: failed to list vms in the resource group rg: retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: error"),
 		},
 		{
 			description:         "GetPrimaryInterface should report the error if vmss client returns retry error",
@@ -1179,7 +1179,7 @@ func TestGetPrimaryInterface(t *testing.T) {
 			vmList:              []string{"vmss-vm-000000"},
 			hasPrimaryInterface: true,
 			vmssClientErr:       &retry.Error{RawError: fmt.Errorf("error")},
-			expectedErr:         fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"),
+			expectedErr:         fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: error"),
 		},
 		{
 			description:         "GetPrimaryInterface should report the error if there is no primary interface",
@@ -1202,7 +1202,7 @@ func TestGetPrimaryInterface(t *testing.T) {
 			vmList:              []string{"vmss-vm-000000"},
 			hasPrimaryInterface: true,
 			nicClientErr:        &retry.Error{RawError: fmt.Errorf("error")},
-			expectedErr:         fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"),
+			expectedErr:         fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: error"),
 		},
 		{
 			description:         "GetPrimaryInterface should report the error if the NIC instance is not found",
@@ -1279,7 +1279,7 @@ func TestGetVMSSPublicIPAddress(t *testing.T) {
 			pipName:      "pip",
 			found:        false,
 			pipClientErr: &retry.Error{RawError: fmt.Errorf("error")},
-			expectedErr:  fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"),
+			expectedErr:  fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: error"),
 		},
 		{
 			description: "GetVMSSPublicIPAddress should not report errors if the pip cannot be found",
@@ -1337,7 +1337,7 @@ func TestGetPrivateIPsByNodeName(t *testing.T) {
 			vmList:             []string{"vmss-vm-000000"},
 			vmClientErr:        &retry.Error{RawError: fmt.Errorf("error")},
 			expectedPrivateIPs: []string{},
-			expectedErr:        fmt.Errorf("getter function of nonVmssUniformNodesCache: failed to list vms in the resource group rg: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"),
+			expectedErr:        fmt.Errorf("getter function of nonVmssUniformNodesCache: failed to list vms in the resource group rg: retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: error"),
 		},
 	}
 
@@ -1415,7 +1415,7 @@ func TestListScaleSetVMs(t *testing.T) {
 		{
 			description:     "listScaleSetVMs should report the error that the vmss vm client hits",
 			vmssVMClientErr: &retry.Error{RawError: fmt.Errorf("error")},
-			expectedErr:     fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"),
+			expectedErr:     fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: error"),
 		},
 	}
 
@@ -2851,7 +2851,7 @@ func TestEnsureBackendPoolDeletedFromVMSS(t *testing.T) {
 			backendPoolID:      testLBBackendpoolID0,
 			expectedPutVMSS:    true,
 			vmssClientErr:      &retry.Error{RawError: fmt.Errorf("error")},
-			expectedErr:        utilerrors.NewAggregate([]error{fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error")}),
+			expectedErr:        utilerrors.NewAggregate([]error{fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: error")}),
 		},
 	}
 

@@ -933,7 +933,7 @@ func TestUpdateVMsIgnoreError(t *testing.T) {
 	vmssvmClient := getTestVMSSVMClient(armClient)
 	rerr := vmssvmClient.UpdateVMs(context.TODO(), "rg", "vmss1", instances, "test", 0)
 	assert.NotNil(t, rerr)
-	assert.Equal(t, rerr.Error().Error(), "Retriable: false, RetryAfter: 4s, HTTPStatusCode: 0, RawError: Retriable: true, RetryAfter: 4s, HTTPStatusCode: 0, RawError: The request failed due to conflict with a concurrent request.")
+	assert.Equal(t, "retriable: false, retryAfter: 4s, httpStatusCode: 0, RawError: retriable: true, retryAfter: 4s, httpStatusCode: 0, RawError: The request failed due to conflict with a concurrent request.", rerr.Error().Error())
 }
 
 func getTestVMSSVM(vmssName, instanceID string) compute.VirtualMachineScaleSetVM {

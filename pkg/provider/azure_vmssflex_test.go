@@ -629,7 +629,7 @@ func TestGetPrimaryInterfaceVmssFlex(t *testing.T) {
 			nic:                            network.Interface{},
 			nicGetErr:                      &retry.Error{RawError: fmt.Errorf("NIC not found")},
 			expectedNeworkInterface:        network.Interface{},
-			expectedErr:                    fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: NIC not found"),
+			expectedErr:                    fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: NIC not found"),
 		},
 	}
 
@@ -1021,7 +1021,7 @@ func TestEnsureHostInPoolVmssFlex(t *testing.T) {
 			expectedNodeResourceGroup:      "",
 			expectedVMSetName:              "",
 			expectedNodeName:               "",
-			expectedErr:                    fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to get nic for node: vmssflex1000001"),
+			expectedErr:                    fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: failed to get nic for node: vmssflex1000001"),
 		},
 		{
 			description:                    "EnsureHostInPool should return error if the nic update fails",
@@ -1039,7 +1039,7 @@ func TestEnsureHostInPoolVmssFlex(t *testing.T) {
 			expectedNodeResourceGroup:      "",
 			expectedVMSetName:              "",
 			expectedNodeName:               "",
-			expectedErr:                    fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to update nic"),
+			expectedErr:                    fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: failed to update nic"),
 		},
 		{
 			description:                    "EnsureHostInPool should skip the node if primary nic is in Failed state",
@@ -1355,7 +1355,7 @@ func TestEnsureHostsInPoolVmssFlex(t *testing.T) {
 			nic:                            testNic1,
 			nicGetErr:                      nil,
 			vmssPutErr:                     &retry.Error{RawError: fmt.Errorf("failed to update nic")},
-			expectedErr:                    fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to update nic"),
+			expectedErr:                    fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: failed to update nic"),
 		},
 	}
 
@@ -1490,7 +1490,7 @@ func TestEnsureBackendPoolDeletedFromVMSetsVmssFlex(t *testing.T) {
 			hasDefaultVMProfile:  true,
 			vmssPutErr:           &retry.Error{RawError: fmt.Errorf("failed to update nic")},
 			vmssListCallingTimes: 2,
-			expectedErr:          fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to update nic"),
+			expectedErr:          fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: failed to update nic"),
 		},
 	}
 
@@ -1570,7 +1570,7 @@ func TestEnsureBackendPoolDeletedFromNodeVmssFlex(t *testing.T) {
 			backendPoolID: "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0",
 			nics:          []network.Interface{generateTestNic("testvm1-nic", false, network.ProvisioningStateSucceeded, "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm1")},
 			nicGetErr:     &retry.Error{RawError: fmt.Errorf("failed to get nic")},
-			expectedErr:   fmt.Errorf("ensureBackendPoolDeletedFromNode: failed to get interface of name testvm1-nic: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to get nic"),
+			expectedErr:   fmt.Errorf("ensureBackendPoolDeletedFromNode: failed to get interface of name testvm1-nic: retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: failed to get nic"),
 		},
 		{
 			description: "EnsureBackendPoolDeletedFromNode should skip the node if the NIC is in failed state",
@@ -1592,7 +1592,7 @@ func TestEnsureBackendPoolDeletedFromNodeVmssFlex(t *testing.T) {
 			expectedPutNICTimes: 1,
 			nicGetErr:           nil,
 			nicPutErr:           &retry.Error{RawError: fmt.Errorf("failed to update nic")},
-			expectedErr:         fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to update nic"),
+			expectedErr:         fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: failed to update nic"),
 		},
 	}
 
@@ -1690,7 +1690,7 @@ func TestEnsureBackendPoolDeletedVmssFlex(t *testing.T) {
 			nic:                            generateTestNic("testvm1-nic", false, network.ProvisioningStateSucceeded, "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm1"),
 			nicGetErr:                      nil,
 			nicPutErr:                      &retry.Error{RawError: fmt.Errorf("failed to update nic")},
-			expectedErr:                    fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to update nic"),
+			expectedErr:                    fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: failed to update nic"),
 		},
 	}
 

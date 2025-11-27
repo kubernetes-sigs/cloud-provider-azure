@@ -196,7 +196,7 @@ func (c *Client) Send(_ context.Context, request *http.Request, decorators ...au
 	)
 
 	if response == nil && err == nil {
-		return response, retry.NewError(false, fmt.Errorf("Empty response and no HTTP code"))
+		return response, retry.NewError(false, fmt.Errorf("empty response and no HTTP code"))
 	}
 
 	return response, retry.GetError(response, err)
@@ -674,7 +674,7 @@ func withAPIVersion(apiVersion string) autorest.PrepareDecorator {
 			r, err := p.Prepare(r)
 			if err == nil {
 				if r.URL == nil {
-					return r, fmt.Errorf("Error in withAPIVersion: Invoked with a nil URL")
+					return r, fmt.Errorf("error in withAPIVersion: invoked with a nil URL")
 				}
 
 				v := r.URL.Query()

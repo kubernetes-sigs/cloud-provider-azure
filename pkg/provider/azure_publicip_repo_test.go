@@ -33,7 +33,6 @@ import (
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
@@ -50,17 +49,17 @@ func TestCreateOrUpdatePIP(t *testing.T) {
 	}{
 		{
 			clientErr:          &retry.Error{HTTPStatusCode: http.StatusPreconditionFailed},
-			expectedErr:        fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 412, RawError: %w", error(nil)),
+			expectedErr:        fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 412, RawError: %w", error(nil)),
 			cacheExpectedEmpty: true,
 		},
 		{
 			clientErr:          &retry.Error{RawError: fmt.Errorf(consts.OperationCanceledErrorMessage)},
-			expectedErr:        fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", fmt.Errorf("canceledandsupersededduetoanotheroperation")),
+			expectedErr:        fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: %w", fmt.Errorf("canceledandsupersededduetoanotheroperation")),
 			cacheExpectedEmpty: true,
 		},
 		{
 			clientErr:          &retry.Error{HTTPStatusCode: http.StatusInternalServerError},
-			expectedErr:        fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)),
+			expectedErr:        fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 500, RawError: %w", error(nil)),
 			cacheExpectedEmpty: false,
 		},
 	}
@@ -77,7 +76,7 @@ func TestCreateOrUpdatePIP(t *testing.T) {
 		err := az.CreateOrUpdatePIP(&v1.Service{}, az.ResourceGroup, network.PublicIPAddress{Name: ptr.To("nic")})
 		assert.EqualError(t, test.expectedErr, err.Error())
 
-		cachedPIP, err := az.pipCache.GetWithDeepCopy(context.TODO(), az.ResourceGroup, cache.CacheReadTypeDefault)
+		cachedPIP, err := az.pipCache.GetWithDeepCopy(context.TODO(), az.ResourceGroup, azcache.CacheReadTypeDefault)
 		assert.NoError(t, err)
 		if test.cacheExpectedEmpty {
 			assert.Empty(t, cachedPIP)
@@ -96,7 +95,7 @@ func TestDeletePublicIP(t *testing.T) {
 	mockPIPClient.EXPECT().Delete(gomock.Any(), az.ResourceGroup, "pip").Return(&retry.Error{HTTPStatusCode: http.StatusInternalServerError})
 
 	err := az.DeletePublicIP(&v1.Service{}, az.ResourceGroup, "pip")
-	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), err.Error())
+	assert.EqualError(t, fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 500, RawError: %w", error(nil)), err.Error())
 }
 
 func TestListPIP(t *testing.T) {
@@ -245,7 +244,7 @@ func TestFindMatchedPIP(t *testing.T) {
 		{
 			description:   "should report an error if failed to list pip",
 			listError:     retry.NewError(false, errors.New("list error")),
-			expectedError: errors.New("findMatchedPIPByLoadBalancerIP: failed to listPIP: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: list error"),
+			expectedError: errors.New("findMatchedPIPByLoadBalancerIP: failed to listPIP: retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: list error"),
 		},
 		{
 			description:        "should refresh the cache if failed to search by name",
@@ -266,7 +265,7 @@ func TestFindMatchedPIP(t *testing.T) {
 			pips:                []network.PublicIPAddress{},
 			listErrorSecondTime: retry.NewError(false, errors.New("list error")),
 			shouldRefreshCache:  true,
-			expectedError:       errors.New("findMatchedPIPByName: failed to listPIP force refresh: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: list error"),
+			expectedError:       errors.New("findMatchedPIPByName: failed to listPIP force refresh: retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: list error"),
 		},
 	} {
 		t.Run(tc.description, func(t *testing.T) {

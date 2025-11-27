@@ -57,7 +57,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
-	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
@@ -2827,7 +2826,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 	assert.Equal(t, expectedErr, err)
 
 	azureconfig = config.Config{
-		AzureClientConfig: providerconfig.AzureClientConfig{
+		AzureClientConfig: config.AzureClientConfig{
 			ARMClientConfig: azclient.ARMClientConfig{
 				Cloud: "AZUREPUBLICCLOUD",
 			},

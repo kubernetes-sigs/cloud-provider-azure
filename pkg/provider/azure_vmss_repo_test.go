@@ -96,7 +96,7 @@ func TestGetVirtualMachineWithRetry(t *testing.T) {
 		},
 		{
 			vmClientErr: &retry.Error{HTTPStatusCode: http.StatusInternalServerError},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)),
+			expectedErr: fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 500, RawError: %w", error(nil)),
 		},
 	}
 

@@ -224,7 +224,7 @@ func TestGetVMManagementTypeByNodeName(t *testing.T) {
 			nodeName:                 "fakeName",
 			vmListErr:                &retry.Error{RawError: fmt.Errorf("failed to list VMs")},
 			expectedVMManagementType: ManagedByUnknownVMSet,
-			expectedErr:              fmt.Errorf("getter function of nonVmssUniformNodesCache: failed to list vms in the resource group rg: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to list VMs"),
+			expectedErr:              fmt.Errorf("getter function of nonVmssUniformNodesCache: failed to list vms in the resource group rg: retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: failed to list VMs"),
 		},
 	}
 
@@ -304,7 +304,7 @@ func TestGetVMManagementTypeByProviderID(t *testing.T) {
 			providerID:               "fakeName",
 			vmListErr:                &retry.Error{RawError: fmt.Errorf("failed to list VMs")},
 			expectedVMManagementType: ManagedByUnknownVMSet,
-			expectedErr:              fmt.Errorf("getter function of nonVmssUniformNodesCache: failed to list vms in the resource group rg: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to list VMs"),
+			expectedErr:              fmt.Errorf("getter function of nonVmssUniformNodesCache: failed to list vms in the resource group rg: retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: failed to list VMs"),
 		},
 	}
 
@@ -398,7 +398,7 @@ func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
 			expectedNIC:              "testvm1",
 			nicGetErr:                &retry.Error{RawError: fmt.Errorf("failed to get nic")},
 			expectedVMManagementType: ManagedByUnknownVMSet,
-			expectedErr:              fmt.Errorf("failed to get vm name by ip config ID /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm1-nic/ipConfigurations/pipConfig: %w", errors.New("failed to get interface of name testvm1-nic: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to get nic")),
+			expectedErr:              fmt.Errorf("failed to get vm name by ip config ID /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm1-nic/ipConfigurations/pipConfig: %w", errors.New("failed to get interface of name testvm1-nic: retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: failed to get nic")),
 		},
 		{
 			description:              "getVMManagementTypeByIPConfigurationID should return ManagedByVmssUniform for vmss uniform node",
@@ -421,7 +421,7 @@ func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
 			ipConfigurationID:        "fakeID",
 			vmListErr:                &retry.Error{RawError: fmt.Errorf("failed to list VMs")},
 			expectedVMManagementType: ManagedByUnknownVMSet,
-			expectedErr:              fmt.Errorf("getter function of nonVmssUniformNodesCache: failed to list vms in the resource group rg: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to list VMs"),
+			expectedErr:              fmt.Errorf("getter function of nonVmssUniformNodesCache: failed to list vms in the resource group rg: retriable: false, retryAfter: 0s, httpStatusCode: 0, RawError: failed to list VMs"),
 		},
 	}
 

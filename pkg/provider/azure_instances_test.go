@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -217,6 +218,7 @@ func TestInstanceID(t *testing.T) {
 	}
 
 	for _, test := range testcases {
+		var err error
 		if test.nilVMSet {
 			cloud.VMSet = nil
 		} else {
@@ -224,11 +226,6 @@ func TestInstanceID(t *testing.T) {
 		}
 		cloud.Config.VMType = test.vmType
 		cloud.Config.UseInstanceMetadata = test.useInstanceMetadata
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
-		}
-
 		mux := http.NewServeMux()
 		mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			if test.metadataTemplate != "" {
@@ -237,12 +234,16 @@ func TestInstanceID(t *testing.T) {
 				fmt.Fprintf(w, "{\"compute\":{\"name\":\"%s\",\"VMScaleSetName\":\"%s\",\"subscriptionId\":\"subscription\",\"resourceGroupName\":\"rg\", \"resourceId\":\"%s\"}}", test.metadataName, test.vmssName, test.resourceID)
 			}
 		}))
-		go func() {
-			_ = http.Serve(listener, mux)
-		}()
-		defer listener.Close()
+		listener, listenErr := net.Listen("tcp4", "127.0.0.1:0")
+		if listenErr != nil {
+			t.Skipf("skip due to restricted listen on loopback: %v", listenErr)
+		}
+		server := httptest.NewUnstartedServer(mux)
+		server.Listener = listener
+		server.Start()
+		defer server.Close()
 
-		cloud.Metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
+		cloud.Metadata, err = NewInstanceMetadataService(server.URL + "/")
 		if err != nil {
 			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
 		}
@@ -602,6 +603,7 @@ func TestNodeAddresses(t *testing.T) {
 	}
 
 	for _, test := range testcases {
+		var err error
 		if test.nilVMSet {
 			cloud.VMSet = nil
 		} else {
@@ -609,9 +611,9 @@ func TestNodeAddresses(t *testing.T) {
 		}
 		cloud.Config.VMType = test.vmType
 		cloud.Config.UseInstanceMetadata = test.useInstanceMetadata
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
+		listener, listenErr := net.Listen("tcp4", "127.0.0.1:0")
+		if listenErr != nil {
+			t.Skipf("skip due to restricted listen on loopback: %v", listenErr)
 		}
 
 		mux := http.NewServeMux()
@@ -631,12 +633,12 @@ func TestNodeAddresses(t *testing.T) {
 				}
 			}
 		}))
-		go func() {
-			_ = http.Serve(listener, mux)
-		}()
-		defer listener.Close()
+		server := httptest.NewUnstartedServer(mux)
+		server.Listener = listener
+		server.Start()
+		defer server.Close()
 
-		cloud.Metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
+		cloud.Metadata, err = NewInstanceMetadataService(server.URL + "/")
 		if err != nil {
 			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
 		}
@@ -842,21 +844,22 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 	}
 
 	for _, test := range testcases {
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
+		var err error
+		listener, listenErr := net.Listen("tcp4", "127.0.0.1:0")
+		if listenErr != nil {
+			t.Skipf("skip due to restricted listen on loopback: %v", listenErr)
 		}
 
 		mux := http.NewServeMux()
 		mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			fmt.Fprintf(w, metadataTemplate, test.nodeName, test.ipV4, test.ipV4Public, test.ipV6, test.ipV6Public)
 		}))
-		go func() {
-			_ = http.Serve(listener, mux)
-		}()
-		defer listener.Close()
+		server := httptest.NewUnstartedServer(mux)
+		server.Listener = listener
+		server.Start()
+		defer server.Close()
 
-		cloud.Metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
+		cloud.Metadata, err = NewInstanceMetadataService(server.URL + "/")
 		if err != nil {
 			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
 		}

@@ -41,7 +41,7 @@ func (f fakeStruct) Get() string {
 // TestCopyBasic tests object with pointer, struct, map, slice, interface.
 func TestCopyBasic(t *testing.T) {
 	zones := []string{"zone0", "zone1"}
-	var vmOriginal *compute.VirtualMachine = &compute.VirtualMachine{
+	vmOriginal := &compute.VirtualMachine{
 		VirtualMachineProperties: &compute.VirtualMachineProperties{
 			ProvisioningState: ptr.To("Failed"),
 		},
@@ -67,7 +67,7 @@ func TestCopyBasic(t *testing.T) {
 
 // TestCopyVMInSyncMap tests object like compute.VirtualMachine in a sync.Map.
 func TestCopyVMInSyncMap(t *testing.T) {
-	var vmOriginal *compute.VirtualMachine = &compute.VirtualMachine{
+	vmOriginal := &compute.VirtualMachine{
 		VirtualMachineProperties: &compute.VirtualMachineProperties{
 			ProvisioningState: ptr.To("Failed"),
 		},

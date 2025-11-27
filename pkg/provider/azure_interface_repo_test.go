@@ -43,5 +43,5 @@ func TestCreateOrUpdateInterface(t *testing.T) {
 	mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(&retry.Error{HTTPStatusCode: http.StatusInternalServerError})
 
 	err := az.CreateOrUpdateInterface(context.TODO(), &v1.Service{}, network.Interface{Name: ptr.To("nic")})
-	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), err.Error())
+	assert.EqualError(t, fmt.Errorf("retriable: false, retryAfter: 0s, httpStatusCode: 500, RawError: %w", error(nil)), err.Error())
 }
