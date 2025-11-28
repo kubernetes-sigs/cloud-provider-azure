@@ -35,6 +35,7 @@ import (
 	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/klog/v2"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/nodeipam/ipam"
 )
 
@@ -119,6 +120,7 @@ func NewNodeIpamController(
 	nodeCIDRMaskSizes []int,
 	allocatorType ipam.CIDRAllocatorType) (*Controller, error) {
 
+	logger := log.Background().WithName("NewNodeIpamController")
 	if kubeClient == nil {
 		klog.Fatalf("kubeClient is nil when starting Controller")
 	}
@@ -126,7 +128,7 @@ func NewNodeIpamController(
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartStructuredLogging(0)
 
-	klog.Infof("Sending events to api server.")
+	logger.Info("Sending events to api server")
 	eventBroadcaster.StartRecordingToSink(
 		&v1core.EventSinkImpl{
 			Interface: kubeClient.CoreV1().Events(""),
@@ -188,10 +190,11 @@ func NewNodeIpamController(
 
 // Run starts an asynchronous loop that monitors the status of cluster nodes.
 func (nc *Controller) Run(ctx context.Context) {
+	logger := log.Background().WithName("Run")
 	defer utilruntime.HandleCrash()
 
-	klog.Infof("Starting ipam controller")
-	defer klog.Infof("Shutting down ipam controller")
+	logger.Info("Starting ipam controller")
+	defer logger.Info("Shutting down ipam controller")
 
 	if !cache.WaitForNamedCacheSync("node", ctx.Done(), nc.nodeInformerSynced) {
 		return

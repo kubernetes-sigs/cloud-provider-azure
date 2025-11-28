@@ -24,9 +24,12 @@ import (
 	"github.com/fsnotify/fsnotify"
 
 	"k8s.io/klog/v2"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 func RunFileWatcherOrDie(path string) chan struct{} {
+	logger := log.Background().WithName("RunFileWatcherOrDie")
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		klog.Errorf("RunFileWatcherOrDie: failed to initialize file watcher: %s", err)
@@ -46,7 +49,7 @@ func RunFileWatcherOrDie(path string) chan struct{} {
 					os.Exit(1)
 				}
 
-				klog.Infof("RunFileWatcherOrDie: found file update event: %v", event)
+				logger.Info("found file update event", "event", event)
 				updateChan <- struct{}{}
 
 				if strings.EqualFold(event.Name, path) && event.Op&fsnotify.Remove == fsnotify.Remove {

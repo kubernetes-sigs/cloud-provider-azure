@@ -35,6 +35,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -89,12 +90,13 @@ func newLoadBalancerBackendPoolUpdater(az *Cloud, interval time.Duration) *loadB
 
 // run starts the loadBalancerBackendPoolUpdater, and stops if the context exits.
 func (updater *loadBalancerBackendPoolUpdater) run(ctx context.Context) {
+	logger := log.Background().WithName("run")
 	klog.V(2).Info("loadBalancerBackendPoolUpdater.run: started")
 	err := wait.PollUntilContextCancel(ctx, updater.interval, false, func(ctx context.Context) (bool, error) {
 		updater.process(ctx)
 		return false, nil
 	})
-	klog.Infof("loadBalancerBackendPoolUpdater.run: stopped due to %s", err.Error())
+	logger.Error(err, "loadBalancerBackendPoolUpdater.run: stopped")
 }
 
 // getAddIPsToBackendPoolOperation creates a new loadBalancerBackendPoolUpdateOperation

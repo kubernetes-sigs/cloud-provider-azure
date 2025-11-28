@@ -26,8 +26,7 @@ import (
 
 	"github.com/Azure/azure-kusto-go/azkustodata"
 	"github.com/Azure/azure-kusto-go/azkustoingest"
-
-	"k8s.io/klog/v2"
+	logr "sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 var (
@@ -67,6 +66,7 @@ func validate() error {
 // | Timestamp            | TestScenario                            | ClusterType | BranchName   | Passed | ErrorDetails |
 // | 2023-01-09T01:00:00Z | Feature:Autoscaling || !Serial && !Slow | autoscaling | release-1.26 | true   | <failed-tests-detail> |
 func KustoIngest(passed bool, labelFilter, clusterType, junitReportPath string) error {
+	logger := logr.Background().WithName("KustoIngest")
 	if err := validate(); err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func KustoIngest(passed bool, labelFilter, clusterType, junitReportPath string) 
 		if err := enc.Encode(data); err != nil {
 			panic(fmt.Errorf("failed to json encode data: %w", err))
 		}
-		klog.Infof("ingested data: %s", data)
+		logger.Info("", "ingested data", data)
 	}()
 
 	if _, err := in.FromReader(context.Background(), r); err != nil {

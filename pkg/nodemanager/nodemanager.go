@@ -48,6 +48,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 // NodeProvider defines the interfaces for node provider.
@@ -399,6 +400,7 @@ type nodeModifier func(*v1.Node)
 
 // This processes nodes that were added into the cluster, and cloud initialize them if appropriate
 func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Node) error {
+	logger := log.Background().WithName("initializeNode")
 	klog.Infof("Initializing node %s with cloud provider", node.Name)
 	curNode, err := cnc.kubeClient.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
 	if err != nil {
@@ -458,7 +460,7 @@ func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Nod
 			return err
 		}
 
-		klog.Infof("Successfully initialized node %s with cloud provider", node.Name)
+		logger.Info("Successfully initialized node with cloud provider", "node", node.Name)
 		return nil
 	})
 	if err != nil {
