@@ -25,6 +25,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -143,10 +144,11 @@ func getManagedIdentityCredential(_ *v1.CredentialProviderRequest, config *provi
 }
 
 func getServiceAccountTokenCredential(req *v1.CredentialProviderRequest, config *providerconfig.AzureClientConfig) (azcore.TokenCredential, error) {
+	logger := log.Background().WithName("getServiceAccountTokenCredential")
 	if len(req.ServiceAccountToken) == 0 {
 		return nil, fmt.Errorf("kubernetes Service account token is not provided for image %s", req.Image)
 	}
-	klog.V(2).Infof("Kubernetes Service account token is provided for image %s", req.Image)
+	logger.V(2).Info("Kubernetes Service account token is provided", "image", req.Image)
 
 	clientOption, _, err := azclient.GetAzCoreClientOption(&config.ARMClientConfig)
 	if err != nil {
@@ -181,9 +183,10 @@ func getServiceAccountTokenCredential(req *v1.CredentialProviderRequest, config 
 }
 
 func (a *acrProvider) GetCredentials(ctx context.Context, image string, _ []string) (*v1.CredentialProviderResponse, error) {
+	logger := log.Background().WithName("GetCredentials")
 	targetloginServer, sourceloginServer := a.parseACRLoginServerFromImage(image)
 	if targetloginServer == "" {
-		klog.V(2).Infof("image(%s) is not from ACR, return empty authentication", image)
+		logger.V(2).Info("image is not from ACR, return empty authentication", "image", image)
 		return &v1.CredentialProviderResponse{
 			CacheKeyType:  v1.RegistryPluginCacheKeyType,
 			CacheDuration: &metav1.Duration{Duration: 0},
@@ -255,6 +258,7 @@ func (a *acrProvider) GetCredentials(ctx context.Context, image string, _ []stri
 
 // getFromACR gets credentials from ACR.
 func (a *acrProvider) getFromACR(ctx context.Context, loginServer string) (string, string, error) {
+	logger := log.Background().WithName("getFromACR")
 	var armAccessToken azcore.AccessToken
 	var err error
 	if armAccessToken, err = a.credential.GetToken(ctx, policy.TokenRequestOptions{
@@ -266,14 +270,14 @@ func (a *acrProvider) getFromACR(ctx context.Context, loginServer string) (strin
 		return "", "", err
 	}
 
-	klog.V(4).Infof("discovering auth redirects for: %s", loginServer)
+	logger.V(4).Info("discovering auth redirects", "loginServer", loginServer)
 	directive, err := receiveChallengeFromLoginServer(loginServer, "https")
 	if err != nil {
 		klog.Errorf("failed to receive challenge: %s", err)
 		return "", "", err
 	}
 
-	klog.V(4).Infof("exchanging an acr refresh_token")
+	logger.V(4).Info("exchanging an acr refresh_token")
 	registryRefreshToken, err := performTokenExchange(directive, a.config.TenantID, armAccessToken.Token)
 	if err != nil {
 		klog.Errorf("failed to perform token exchange: %s", err)

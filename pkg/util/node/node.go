@@ -26,7 +26,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/klog/v2"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 type nodeForCIDRMergePatch struct {
@@ -66,6 +67,7 @@ func PatchNodeCIDR(c clientset.Interface, node types.NodeName, cidr string) erro
 
 // PatchNodeCIDRs patches the specified node.CIDR=cidrs[0] and node.CIDRs to the given value.
 func PatchNodeCIDRs(c clientset.Interface, node types.NodeName, cidrs []string) error {
+	logger := log.Background().WithName("PatchNodeCIDRs")
 	// set the pod cidrs list and set the old pod cidr field
 	patch := nodeForCIDRMergePatch{
 		Spec: nodeSpecForMergePatch{
@@ -78,7 +80,7 @@ func PatchNodeCIDRs(c clientset.Interface, node types.NodeName, cidrs []string) 
 	if err != nil {
 		return fmt.Errorf("failed to json.Marshal CIDR: %w", err)
 	}
-	klog.V(4).Infof("cidrs patch bytes for node %s are:%s", string(node), string(patchBytes))
+	logger.V(4).Info("cidrs patch bytes for node", "node", string(node), "cidrsPatchBytes", string(patchBytes))
 	if _, err := c.CoreV1().Nodes().Patch(context.TODO(), string(node), types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{}); err != nil {
 		return fmt.Errorf("failed to patch node CIDR: %w", err)
 	}

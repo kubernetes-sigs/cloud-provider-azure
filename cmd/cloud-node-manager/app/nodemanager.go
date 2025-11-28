@@ -125,7 +125,7 @@ func Run(ctx context.Context, c *cloudnodeconfig.Config) error {
 // startControllers starts the cloud specific controller loops.
 func startControllers(ctx context.Context, c *cloudnodeconfig.Config, healthzHandler *controllerhealthz.MutableHealthzHandler) error {
 	logger := log.Background().WithName("startControllers")
-	klog.V(1).Infof("Starting cloud-node-manager...")
+	logger.V(1).Info("Starting cloud-node-manager...")
 
 	// Start the CloudNodeController
 	nodeController := nodemanager.NewCloudNodeController(

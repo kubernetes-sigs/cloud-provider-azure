@@ -30,6 +30,7 @@ import (
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 // NetworkMetadata contains metadata about an instance's network
@@ -151,6 +152,7 @@ func fillNetInterfacePublicIPs(publicIPs []PublicIPMetadata, netInterface *Netwo
 }
 
 func (ims *InstanceMetadataService) getMetadata(_ context.Context, key string) (interface{}, error) {
+	logger := log.Background().WithName("getMetadata")
 	instanceMetadata, err := ims.getInstanceMetadata(key)
 	if err != nil {
 		return nil, err
@@ -168,7 +170,7 @@ func (ims *InstanceMetadataService) getMetadata(_ context.Context, key string) (
 		if err != nil || loadBalancerMetadata == nil || loadBalancerMetadata.LoadBalancer == nil {
 			// Log a warning since loadbalancer metadata may not be available when the VM
 			// is not in standard LoadBalancer backend address pool.
-			klog.V(4).Infof("Warning: failed to get loadbalancer metadata: %v", err)
+			logger.V(4).Info("Warning: failed to get loadbalancer metadata", "error", err)
 			return instanceMetadata, nil
 		}
 
@@ -296,7 +298,8 @@ func (az *Cloud) GetPlatformSubFaultDomain(ctx context.Context) (string, error) 
 // TODO: Implement actual IMDS parsing logic when format is finalized.
 // Currently returns empty string to allow infrastructure to be in place.
 func (az *Cloud) GetInterconnectGroupID(_ context.Context) (string, error) {
+	logger := log.Background().WithName("GetInterconnectGroupID")
 	// Placeholder implementation - returns empty until IMDS format is determined
-	klog.V(4).Infof("GetInterconnectGroupID: placeholder implementation, returning empty")
+	logger.V(4).Info("placeholder implementation, returning empty")
 	return "", nil
 }

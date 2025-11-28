@@ -23,23 +23,25 @@ import (
 	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 // CreateOrUpdateVMSS invokes az.ComputeClientFactory.GetVirtualMachineScaleSetClient().Update().
 func (az *Cloud) CreateOrUpdateVMSS(resourceGroupName string, VMScaleSetName string, parameters armcompute.VirtualMachineScaleSet) error {
+	logger := log.Background().WithName("CreateOrUpdateVMSS")
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 
 	// When vmss is being deleted, CreateOrUpdate API would report "the vmss is being deleted" error.
 	// Since it is being deleted, we shouldn't send more CreateOrUpdate requests for it.
-	klog.V(3).Infof("CreateOrUpdateVMSS: verify the status of the vmss being created or updated")
+	logger.V(3).Info("verify the status of the vmss being created or updated")
 	vmss, err := az.ComputeClientFactory.GetVirtualMachineScaleSetClient().Get(ctx, resourceGroupName, VMScaleSetName, nil)
 	if err != nil {
 		klog.Errorf("CreateOrUpdateVMSS: error getting vmss(%s): %v", VMScaleSetName, err)
 		return err
 	}
 	if vmss.Properties.ProvisioningState != nil && strings.EqualFold(*vmss.Properties.ProvisioningState, consts.ProvisionStateDeleting) {
-		klog.V(3).Infof("CreateOrUpdateVMSS: found vmss %s being deleted, skipping", VMScaleSetName)
+		logger.V(3).Info("found vmss being deleted, skipping", "vmss", VMScaleSetName)
 		return nil
 	}
 
