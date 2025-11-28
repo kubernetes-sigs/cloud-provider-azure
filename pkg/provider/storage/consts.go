@@ -17,7 +17,7 @@ limitations under the License.
 package storage
 
 import (
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage/v2"
 )
 
 const (
