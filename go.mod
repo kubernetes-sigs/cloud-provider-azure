@@ -1,6 +1,6 @@
 module sigs.k8s.io/cloud-provider-azure
 
-go 1.23.12
+go 1.24.0
 
 godebug winsymlink=0
 
