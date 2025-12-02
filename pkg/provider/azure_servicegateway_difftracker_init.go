@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
@@ -58,7 +59,13 @@ func logSyncStringIntMap(prefix string, m *sync.Map) {
 }
 
 func (az *Cloud) initializeDiffTracker() error {
-	klog.V(2).Info("initializeDiffTracker: starting initialization of diff tracker")
+	mc := metrics.NewMetricContext("services", "initializeDiffTracker", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), az.ServiceGatewayResourceName)
+	isOperationSucceeded := false
+	defer func() {
+		mc.ObserveOperationWithResult(isOperationSucceeded)
+	}()
+
+	klog.Infof("initializeDiffTracker: starting initialization of diff tracker")
 	ctx := context.Background()
 
 	// Defensive guard
@@ -520,6 +527,7 @@ func (az *Cloud) initializeDiffTracker() error {
 	// Mark initial sync as done
 
 	az.diffTracker.InitialSyncDone = true
+	isOperationSucceeded = true
 	// klog.Infof("initializeDiffTracker: az.diffTracker.InitialSyncDone: %v", az.diffTracker.InitialSyncDone)
 	// klog.Infof("initializeDiffTracker: completed ordered ServiceGateway sync and initialization")
 	return nil

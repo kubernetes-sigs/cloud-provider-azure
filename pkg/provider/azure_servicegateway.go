@@ -9,6 +9,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 )
 
@@ -97,6 +98,13 @@ func (az *Cloud) UpdateNRPSGWServices(ctx context.Context, serviceGatewayName st
 		klog.Infof("UpdateNRPSGWServices: no services to update for NRP service gateway %s in resource group %s", serviceGatewayName, az.ResourceGroup)
 		return nil
 	}
+
+	mc := metrics.NewMetricContext("services", "UpdateNRPSGWServices", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), serviceGatewayName)
+	isOperationSucceeded := false
+	defer func() {
+		mc.ObserveOperationWithResult(isOperationSucceeded)
+	}()
+
 	klog.V(2).Infof("Updating NRP service gateway services for %s in resource group %s", serviceGatewayName, az.ResourceGroup)
 
 	var action armnetwork.ServiceGatewayUpdateServicesRequestAction
@@ -163,10 +171,17 @@ func (az *Cloud) UpdateNRPSGWServices(ctx context.Context, serviceGatewayName st
 	}
 
 	klog.Infof("UpdateNRPSGWServices: successfully updated NRP service gateway services for %s in resource group %s", serviceGatewayName, az.ResourceGroup)
+	isOperationSucceeded = true
 	return nil
 }
 
 func (az *Cloud) UpdateNRPSGWAddressLocations(ctx context.Context, serviceGatewayName string, updateAddressLocationsRequestDTO difftracker.LocationsDataDTO) error {
+	mc := metrics.NewMetricContext("services", "UpdateNRPSGWAddressLocations", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), serviceGatewayName)
+	isOperationSucceeded := false
+	defer func() {
+		mc.ObserveOperationWithResult(isOperationSucceeded)
+	}()
+
 	klog.V(2).Infof("UpdateNRPSGWAddressLocations: Updating NRP service gateway address locations for %s in resource group %s", serviceGatewayName, az.ResourceGroup)
 
 	var action armnetwork.ServiceGatewayUpdateAddressLocationsRequestAction
@@ -219,6 +234,7 @@ func (az *Cloud) UpdateNRPSGWAddressLocations(ctx context.Context, serviceGatewa
 	}
 
 	klog.Infof("UpdateNRPSGWAddressLocations: successfully updated NRP service gateway address locations for %s in resource group %s", serviceGatewayName, az.ResourceGroup)
+	isOperationSucceeded = true
 	return nil
 }
 

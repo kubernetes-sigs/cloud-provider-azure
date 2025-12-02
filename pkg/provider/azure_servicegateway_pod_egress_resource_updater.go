@@ -10,6 +10,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 )
 
@@ -48,6 +49,10 @@ func (updater *podEgressResourceUpdater) process(ctx context.Context) {
 
 		event := item
 
+		// Create metrics context for each queue item processing
+		mc := metrics.NewMetricContext("services", "podEgressResourceUpdater.process", updater.az.ResourceGroup, updater.az.getNetworkResourceSubscriptionID(), "pod-egress")
+		isOperationSucceeded := false
+
 		switch event.EventType {
 		case "Add":
 			eventData := event.AddPodEvent
@@ -56,6 +61,7 @@ func (updater *podEgressResourceUpdater) process(ctx context.Context) {
 			namespace, name, err := cache.SplitMetaNamespaceKey(eventData.Key)
 			if err != nil {
 				klog.Errorf("podEgressResourceUpdater.process: Failed to split key %s: %v", eventData.Key, err)
+				mc.ObserveOperationWithResult(isOperationSucceeded)
 				updater.az.diffTracker.PodEgressQueue.Done(item)
 				continue
 			}
@@ -63,6 +69,7 @@ func (updater *podEgressResourceUpdater) process(ctx context.Context) {
 			pod, err := updater.az.podLister.Pods(namespace).Get(name)
 			if err != nil {
 				klog.Errorf("podEgressResourceUpdater.process: Pod %s/%s not found, skipping event processing: %v", namespace, name, err)
+				mc.ObserveOperationWithResult(isOperationSucceeded)
 				updater.az.diffTracker.PodEgressQueue.Done(item)
 				continue
 			}
@@ -140,6 +147,7 @@ func (updater *podEgressResourceUpdater) process(ctx context.Context) {
 				updater.az.TriggerLocationAndNRPServiceBatchUpdate()
 				klog.Infof("podEgressResourceUpdater.process: successfully added pod %s/%s for service %s", namespace, name, service)
 			}
+			isOperationSucceeded = true
 		case "Delete":
 			eventData := event.DeletePodEvent
 
@@ -167,12 +175,17 @@ func (updater *podEgressResourceUpdater) process(ctx context.Context) {
 					Address:                address,
 				})
 				updater.az.TriggerLocationAndNRPServiceBatchUpdate()
+				klog.Infof("podEgressResourceUpdater.process: successfully deleted pod %s/%s for service %s", location, address, service)
+				isOperationSucceeded = true
+			} else {
+				klog.Errorf("podEgressResourceUpdater.process: failed to disassociate NAT Gateway %s from Service Gateway: %v", service, err)
 			}
-			klog.Infof("podEgressResourceUpdater.process: successfully deleted pod %s/%s for service %s", location, address, service)
 
 		default:
 			klog.Warningf("Unknown event type: %s", event.EventType)
 		}
+
+		mc.ObserveOperationWithResult(isOperationSucceeded)
 		updater.az.diffTracker.PodEgressQueue.Done(item)
 	}
 }

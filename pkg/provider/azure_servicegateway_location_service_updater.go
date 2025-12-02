@@ -8,6 +8,7 @@ import (
 
 	discovery_v1 "k8s.io/api/discovery/v1"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 )
 
@@ -51,6 +52,22 @@ func (az *Cloud) TriggerLocationAndNRPServiceBatchUpdate() {
 }
 
 func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
+	mc := metrics.NewMetricContext("services", "locationAndNRPServiceBatchUpdater.process", updater.az.ResourceGroup, updater.az.getNetworkResourceSubscriptionID(), "batch")
+	isOperationSucceeded := false
+
+	// Track dimensions for metrics
+	var lbAdditions, lbRemovals, natAdditions, natRemovals, numLocations, numAddresses int
+
+	defer func() {
+		mc.ObserveOperationWithResult(isOperationSucceeded,
+			"lb_additions", lbAdditions,
+			"lb_removals", lbRemovals,
+			"nat_additions", natAdditions,
+			"nat_removals", natRemovals,
+			"num_locations", numLocations,
+			"num_addresses", numAddresses)
+	}()
+
 	currentTime := getCurrentTimeInMillis()
 	if currentTime-updater.lastTimeProcessed < int64(updater.az.BatchUpdaterSleepDuration) {
 		// sleep thread for updater.sleepDuration time
@@ -67,6 +84,16 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 
 	serviceLoadBalancerList := updater.az.diffTracker.GetSyncLoadBalancerServices()
 	serviceNATGatewayList := updater.az.diffTracker.GetSyncNRPNATGateways()
+
+	// Capture dimensions for metrics
+	lbAdditions = serviceLoadBalancerList.Additions.Len()
+	lbRemovals = serviceLoadBalancerList.Removals.Len()
+	natAdditions = serviceNATGatewayList.Additions.Len()
+	natRemovals = serviceNATGatewayList.Removals.Len()
+
+	// Log batch processing dimensions for observability
+	klog.V(2).Infof("locationAndNRPServiceBatchUpdater.process: batch dimensions - LB additions: %d, LB removals: %d, NAT additions: %d, NAT removals: %d",
+		lbAdditions, lbRemovals, natAdditions, natRemovals)
 
 	// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: serviceLoadBalancerList:\n")
 	//logObject(serviceLoadBalancerList)
@@ -162,9 +189,20 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 
 	// Update all locations and addresses
 	locationData := updater.az.diffTracker.GetSyncLocationsAddresses()
+
+	// Always capture location/address counts for metrics (even if zero)
+	numLocations = len(locationData.Locations)
+	numAddresses = 0
+	for _, loc := range locationData.Locations {
+		numAddresses += len(loc.Addresses)
+	}
+
 	// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: locationData:\n")
 	// logObject(locationData)
 	if len(locationData.Locations) > 0 {
+		klog.V(2).Infof("locationAndNRPServiceBatchUpdater.process: updating %d locations with %d total addresses",
+			numLocations, numAddresses)
+
 		locationDataRequestDTO := difftracker.MapLocationDataToDTO(locationData)
 		// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process: locationDataRequestDTO:\n")
 		// logObject(locationDataRequestDTO)
@@ -221,6 +259,7 @@ func (updater *locationAndNRPServiceBatchUpdater) process(ctx context.Context) {
 	}
 
 	// klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process END: processing batch update")
+	isOperationSucceeded = true
 	klog.Infof("CLB-ENECHITOAIA-locationAndNRPServiceBatchUpdater.process END: difftracker:")
 	// logDiffTracker(updater.az.diffTracker)
 }

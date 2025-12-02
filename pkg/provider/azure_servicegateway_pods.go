@@ -117,7 +117,7 @@ func (az *Cloud) setUpPodInformerForEgress() {
 	// klog.Infof("CLB-ENECHITOAIA-setUpPodInformerForEgress: setting up pod informer for egress with label selector: %s\n", consts.PodLabelServiceEgressGateway)
 	podInformerFactory := informers.NewSharedInformerFactoryWithOptions(
 		az.KubeClient,
-		ResyncPeriod(1*time.Second)(),
+		ResyncPeriod(12*time.Hour)(),
 		informers.WithTweakListOptions(func(options *metav1.ListOptions) {
 			options.LabelSelector = consts.PodLabelServiceEgressGateway
 		}),
