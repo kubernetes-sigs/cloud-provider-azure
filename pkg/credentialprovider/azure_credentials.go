@@ -66,9 +66,7 @@ type acrProvider struct {
 	registryMirror map[string]string // Registry mirror relation: source registry -> target registry
 }
 
-type getTokenCredentialFunc func(req *v1.CredentialProviderRequest, config *providerconfig.AzureClientConfig) (azcore.TokenCredential, error)
-
-func NewAcrProvider(req *v1.CredentialProviderRequest, registryMirrorStr string, configFile string) (CredentialProvider, error) {
+func NewAcrProvider(req *v1.CredentialProviderRequest, registryMirrorStr string, configFile string, ibConfig IdentityBindingsConfig) (CredentialProvider, error) {
 	config, err := configloader.Load[providerconfig.AzureClientConfig](context.Background(), nil, &configloader.FileLoaderConfig{FilePath: configFile})
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
@@ -83,20 +81,27 @@ func NewAcrProvider(req *v1.CredentialProviderRequest, registryMirrorStr string,
 		return nil, err
 	}
 
-	var getTokenCredential getTokenCredentialFunc
-
-	// kubelet is responsible for checking the service account token emptiness when service account token is enabled, and only when service account token provide is enabled,
-	// service account token is set in the request, so we can safely check the service account token emptiness to decide which credential to use.
-	if len(req.ServiceAccountToken) != 0 {
-		klog.V(2).Infof("Using service account token to authenticate ACR for image %s", req.Image)
-		getTokenCredential = getServiceAccountTokenCredential
+	var credential azcore.TokenCredential
+	if ibConfig.SNIName != "" {
+		klog.V(2).Infof("Using identity bindings token credential for image %s", req.Image)
+		credential, err = GetIdentityBindingsTokenCredential(req, config, ibConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get identity bindings token credential for image %s: %w", req.Image, err)
+		}
+	} else if len(req.ServiceAccountToken) != 0 {
+		// Use service account token credential
+		klog.V(2).Infof("Using service account token credential for image %s", req.Image)
+		credential, err = getServiceAccountTokenCredential(req, config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get service account token credential for image %s: %w", req.Image, err)
+		}
 	} else {
+		// Use managed identity
 		klog.V(2).Infof("Using managed identity to authenticate ACR for image %s", req.Image)
-		getTokenCredential = getManagedIdentityCredential
-	}
-	credential, err := getTokenCredential(req, config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get token credential for image %s: %w", req.Image, err)
+		credential, err = getManagedIdentityCredential(req, config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get token credential for image %s: %w", req.Image, err)
+		}
 	}
 
 	return &acrProvider{

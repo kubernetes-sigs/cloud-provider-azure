@@ -31,13 +31,20 @@ import (
 	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
 
+	"sigs.k8s.io/cloud-provider-azure/cmd/acr-credential-provider/pkg/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/version"
 )
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
 
-	var RegistryMirrorStr string
+	var (
+		RegistryMirrorStr string
+		IBSNIName         string
+		IBDefaultClient   string
+		IBDefaultTenant   string
+		IBAPIIP           string
+	)
 
 	command := &cobra.Command{
 		Use:   "acr-credential-provider configFile",
@@ -54,7 +61,12 @@ func main() {
 		},
 		Version: version.Get().GitVersion,
 		RunE: func(_ *cobra.Command, args []string) error {
-			if err := NewCredentialProvider(args[0], RegistryMirrorStr).Run(context.TODO()); err != nil {
+			ibConfig, err := config.ParseIdentityBindingsConfig(IBSNIName, IBDefaultClient, IBDefaultTenant, IBAPIIP)
+			if err != nil {
+				klog.Errorf("Error parsing identity bindings config: %v", err)
+				return err
+			}
+			if err := NewCredentialProvider(args[0], RegistryMirrorStr, ibConfig).Run(context.TODO()); err != nil {
 				klog.Errorf("Error running acr credential provider: %v", err)
 				return err
 			}
@@ -68,6 +80,14 @@ func main() {
 	// Flags
 	command.Flags().StringVarP(&RegistryMirrorStr, "registry-mirror", "r", "",
 		"Mirror a source registry host to a target registry host, and image pull credential will be requested to the target registry host when the image is from source registry host")
+	command.Flags().StringVar(&IBSNIName, config.FlagIBSNIName, "",
+		"SNI name for identity bindings")
+	command.Flags().StringVar(&IBDefaultClient, config.FlagIBDefaultClient, "",
+		"Default Azure AD client ID for identity bindings")
+	command.Flags().StringVar(&IBDefaultTenant, config.FlagIBDefaultTenant, "",
+		"Default Azure AD tenant ID for identity bindings")
+	command.Flags().StringVar(&IBAPIIP, config.FlagIBAPIIP, "",
+		"API server IP address for identity bindings endpoint")
 
 	logs.AddFlags(command.Flags())
 	if err := func() error {
