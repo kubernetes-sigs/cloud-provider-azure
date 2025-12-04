@@ -41,7 +41,7 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubelet v0.34.2
 	k8s.io/utils v0.0.0-20250820121507-0af2bda4dd1d
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.10.0
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.12.0
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.9.0
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.10.2
 	sigs.k8s.io/yaml v1.6.0
@@ -122,7 +122,7 @@ require (
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/term v0.37.0 // indirect
-	golang.org/x/time v0.13.0 // indirect
+	golang.org/x/time v0.14.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250826171959-ef028d996bc1 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250826171959-ef028d996bc1 // indirect
 	google.golang.org/grpc v1.75.0 // indirect
