@@ -84,7 +84,7 @@ func UpdateVMsInBatch(ctx context.Context, client *Client, resourceGroupName str
 
 // List gets a list of VirtualMachineScaleSetVM in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string, parentResourceName string) (result []*armcompute.VirtualMachineScaleSetVM, rerr error) {
-	pager := client.VirtualMachineScaleSetVMsClient.NewListPager(resourceGroupName, parentResourceName, nil)
+	pager := client.NewListPager(resourceGroupName, parentResourceName, nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
 		if err != nil {
@@ -106,7 +106,7 @@ func (client *Client) GetInstanceView(ctx context.Context, resourceGroupName str
 
 // List gets a list of VirtualMachineScaleSetVM in the resource group.
 func (client *Client) ListVMInstanceView(ctx context.Context, resourceGroupName string, parentResourceName string) (result []*armcompute.VirtualMachineScaleSetVM, rerr error) {
-	pager := client.VirtualMachineScaleSetVMsClient.NewListPager(resourceGroupName, parentResourceName, &armcompute.VirtualMachineScaleSetVMsClientListOptions{
+	pager := client.NewListPager(resourceGroupName, parentResourceName, &armcompute.VirtualMachineScaleSetVMsClientListOptions{
 		Expand: to.Ptr(string(armcompute.InstanceViewTypesInstanceView)),
 	})
 	for pager.More() {
