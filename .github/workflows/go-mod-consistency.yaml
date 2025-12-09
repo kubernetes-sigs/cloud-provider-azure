@@ -30,7 +30,6 @@ jobs:
             go.sum
             tests/go.sum
             pkg/azclient/go.sum
-            pkg/azclient/cache/go.sum
             pkg/azclient/configloader/go.sum
             pkg/azclient/trace/go.sum
             pkg/azclient/client-gen/go.sum
@@ -43,7 +42,6 @@ jobs:
             .
             tests
             pkg/azclient
-            pkg/azclient/cache
             pkg/azclient/configloader
             pkg/azclient/trace
             pkg/azclient/client-gen
