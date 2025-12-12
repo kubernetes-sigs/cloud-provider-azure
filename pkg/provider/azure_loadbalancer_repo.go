@@ -409,7 +409,8 @@ func isBackendPoolOnSameLB(newBackendPoolID string, existingBackendPools []strin
 }
 
 func (az *Cloud) serviceOwnsRule(service *v1.Service, rule string) bool {
-	if !strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyTypeLocal)) &&
+	if !az.ServiceGatewayEnabled &&
+		!strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyTypeLocal)) &&
 		rule == consts.SharedProbeName {
 		return true
 	}

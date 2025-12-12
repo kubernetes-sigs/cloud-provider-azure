@@ -541,7 +541,7 @@ func getLocalServiceBackendPoolName(serviceName string, ipv6 bool) string {
 // getBackendPoolNameForService determine the expected backend pool name
 // by checking the external traffic policy of the service.
 func (az *Cloud) getBackendPoolNameForService(service *v1.Service, clusterName string, ipv6 bool) string {
-	if !isLocalService(service) || !az.UseMultipleStandardLoadBalancers() {
+	if (!isLocalService(service) && !az.ServiceGatewayEnabled) || !az.UseMultipleStandardLoadBalancers() {
 		return getBackendPoolName(clusterName, ipv6)
 	}
 	return getLocalServiceBackendPoolName(getServiceName(service), ipv6)
@@ -550,7 +550,7 @@ func (az *Cloud) getBackendPoolNameForService(service *v1.Service, clusterName s
 // getBackendPoolNamesForService determine the expected backend pool names
 // by checking the external traffic policy of the service.
 func (az *Cloud) getBackendPoolNamesForService(service *v1.Service, clusterName string) map[bool]string {
-	if !isLocalService(service) || !az.UseMultipleStandardLoadBalancers() {
+	if (!isLocalService(service) && !az.ServiceGatewayEnabled) || !az.UseMultipleStandardLoadBalancers() {
 		return getBackendPoolNames(clusterName)
 	}
 	return map[bool]string{

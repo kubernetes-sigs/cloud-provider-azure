@@ -454,7 +454,7 @@ func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(ctx context.Context, service 
 		activeNodes           *utilsets.IgnoreCaseSet
 	)
 	if bi.UseMultipleStandardLoadBalancers() {
-		if !isLocalService(service) {
+		if !isLocalService(service) && !bi.ServiceGatewayEnabled {
 			activeNodes = bi.getActiveNodesByLoadBalancerName(lbName)
 		} else {
 			key := strings.ToLower(getServiceName(service))
