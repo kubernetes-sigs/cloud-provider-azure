@@ -3270,12 +3270,6 @@ func shouldReleaseExistingOwnedPublicIP(
 	// Latch some variables for readability purposes.
 	pipName := *existingPip.Name
 
-	// Assume the current IP Tags are empty by default unless properties specify otherwise.
-	currentIPTags := []*armnetwork.IPTag{}
-	if existingPip.Properties != nil {
-		currentIPTags = existingPip.Properties.IPTags
-	}
-
 	// Check whether the public IP is being referenced by other service.
 	// The owned public IP can be released only when there is not other service using it.
 	// case 1: there is at least one reference when deleting the PIP
@@ -3296,9 +3290,9 @@ func shouldReleaseExistingOwnedPublicIP(
 		// #3 - If the name of this public ip does not match the desired name,
 		// NOTICE: For IPv6 Service created with CCM v1.27.1, the created PIP has IPv6 suffix.
 		// We need to recreate such PIP and current logic to delete needs no change.
-		(pipName != desiredPipName) ||
-		// #4 If the service annotations have specified the ip tags that the public ip must have, but they do not match the ip tags of the existing instance
-		(ipTagRequest.IPTagsRequestedByAnnotation && !areIPTagsEquivalent(currentIPTags, ipTagRequest.IPTags))
+		(pipName != desiredPipName)
+		// #4 IP tags mismatch should be handled by updating the PIP, not recreating it
+		// (ipTagRequest.IPTagsRequestedByAnnotation && !areIPTagsEquivalent(currentIPTags, ipTagRequest.IPTags))
 }
 
 // ensurePIPTagged ensures the public IP of the service is tagged as configured
@@ -3343,6 +3337,35 @@ func (az *Cloud) ensurePIPTagged(service *v1.Service, pip *armnetwork.PublicIPAd
 	pip.Tags = tags
 
 	return changed
+}
+
+// ensurePIPIPTagged ensures the public IP of the service has correct IP tags as configured
+func (az *Cloud) ensurePIPIPTagged(service *v1.Service, pip *armnetwork.PublicIPAddress) bool {
+	serviceIPTagRequest := getServiceIPTagRequestForPublicIP(service)
+	
+	// If no IP tags are requested by annotations, no update needed
+	if !serviceIPTagRequest.IPTagsRequestedByAnnotation {
+		return false
+	}
+
+	// Get current IP tags from the PIP
+	currentIPTags := []*armnetwork.IPTag{}
+	if pip.Properties != nil {
+		currentIPTags = pip.Properties.IPTags
+	}
+
+	// Compare current and desired IP tags
+	if areIPTagsEquivalent(currentIPTags, serviceIPTagRequest.IPTags) {
+		return false // No changes needed
+	}
+
+	// Update the IP tags
+	if pip.Properties == nil {
+		pip.Properties = &armnetwork.PublicIPAddressPropertiesFormat{}
+	}
+	pip.Properties.IPTags = serviceIPTagRequest.IPTags
+
+	return true // IP tags were updated
 }
 
 // reconcilePublicIPs reconciles the PublicIP resources similar to how the LB is reconciled.
@@ -3539,6 +3562,9 @@ func (az *Cloud) getPublicIPUpdates(
 			}
 			if !isUserAssignedPIP {
 				if az.ensurePIPTagged(service, pip) {
+					dirtyPIP = true
+				}
+				if az.ensurePIPIPTagged(service, pip) {
 					dirtyPIP = true
 				}
 			}
