@@ -3,6 +3,7 @@
 # https://github.com/codespell-project/codespell
 name: codespell
 on: 
+  workflow_dispatch:
   push:
     branches: [ master, 'release-**' ]
   pull_request:
