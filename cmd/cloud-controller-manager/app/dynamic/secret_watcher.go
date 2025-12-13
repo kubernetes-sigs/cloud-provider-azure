@@ -30,6 +30,7 @@ import (
 
 	cloudcontrollerconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/config"
 	"sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/options"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 type SecretWatcher struct {
@@ -64,6 +65,7 @@ func RunSecretWatcherOrDie(c *cloudcontrollerconfig.Config) chan struct{} {
 // NewSecretWatcher creates a SecretWatcher and a signal channel to indicate
 // the specific secret has been updated
 func NewSecretWatcher(informerFactory informers.SharedInformerFactory, secretName, secretNamespace string) (*SecretWatcher, chan struct{}) {
+	logger := log.Background().WithName("NewSecretWatcher")
 	secretInformer := informerFactory.Core().V1().Secrets()
 	updateSignal := make(chan struct{})
 
@@ -79,7 +81,7 @@ func NewSecretWatcher(informerFactory informers.SharedInformerFactory, secretNam
 
 				if strings.EqualFold(newSecret.Name, secretName) &&
 					strings.EqualFold(newSecret.Namespace, secretNamespace) {
-					klog.V(1).Infof("secret %s updated, sending the signal", newSecret.Name)
+					logger.V(1).Info("secret updated, sending the signal", "secretName", newSecret.Name)
 					updateSignal <- struct{}{}
 				}
 			},

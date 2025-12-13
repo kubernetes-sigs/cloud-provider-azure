@@ -48,8 +48,9 @@ func (az *Cloud) buildClusterServiceSharedProbe() *armnetwork.Probe {
 // for following protocols: TCP HTTP HTTPS(SLB only)
 // return nil if no new probe is added
 func (az *Cloud) buildHealthProbeRulesForPort(serviceManifest *v1.Service, port v1.ServicePort, lbrule string, healthCheckNodePortProbe *armnetwork.Probe, useSharedProbe bool) (*armnetwork.Probe, error) {
+	logger := klog.Background().WithName("buildHealthProbeRulesForPort")
 	if useSharedProbe {
-		klog.V(4).Infof("skip creating health probe for port %d because the shared probe is used", port.Port)
+		logger.V(4).Info("skip creating health probe for port because the shared probe is used", "port", port.Port)
 		return nil, nil
 	}
 
@@ -299,6 +300,7 @@ func (az *Cloud) keepSharedProbe(
 	expectedProbes []*armnetwork.Probe,
 	wantLB bool,
 ) ([]*armnetwork.Probe, error) {
+	logger := klog.Background().WithName("keepSharedProbe")
 	var shouldConsiderRemoveSharedProbe bool
 	if !wantLB {
 		shouldConsiderRemoveSharedProbe = true
@@ -321,8 +323,8 @@ func (az *Cloud) keepSharedProbe(
 							// If the service owns the rule and is now a local service,
 							// it means the service was switched from Cluster to Local
 							if az.serviceOwnsRule(service, ruleName) && isLocalService(service) {
-								klog.V(2).Infof("service %s has switched from Cluster to Local, removing shared probe",
-									getServiceName(service))
+								logger.V(2).Info("service has switched from Cluster to Local, removing shared probe",
+									"serviceName", getServiceName(service))
 								// Remove the shared probe from the load balancer directly
 								if lb.Properties != nil && lb.Properties.Probes != nil && i < len(lb.Properties.Probes) {
 									lb.Properties.Probes = append(lb.Properties.Probes[:i], lb.Properties.Probes[i+1:]...)
@@ -340,7 +342,8 @@ func (az *Cloud) keepSharedProbe(
 							return []*armnetwork.Probe{}, err
 						}
 						if !az.serviceOwnsRule(service, ruleName) && shouldConsiderRemoveSharedProbe {
-							klog.V(4).Infof("there are load balancing rule %s of another service referencing the health probe %s, so the health probe should not be removed", *rule.ID, *probe.ID)
+							logger.V(4).Info("there are load balancing rule of another service referencing the health probe, so the health probe should not be removed",
+								"ruleID", *rule.ID, "probeID", *probe.ID)
 							sharedProbe := az.buildClusterServiceSharedProbe()
 							expectedProbes = append(expectedProbes, sharedProbe)
 							return expectedProbes, nil

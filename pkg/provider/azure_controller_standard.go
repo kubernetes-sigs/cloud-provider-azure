@@ -30,11 +30,13 @@ import (
 	"k8s.io/utils/ptr"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
 )
 
 // AttachDisk attaches a disk to vm
 func (as *availabilitySet) AttachDisk(ctx context.Context, nodeName types.NodeName, diskMap map[string]*AttachDiskOptions) error {
+	logger := log.Background().WithName("AttachDisk")
 	vm, err := as.getVirtualMachine(ctx, nodeName, azcache.CacheReadTypeDefault)
 	if err != nil {
 		return err
@@ -63,7 +65,7 @@ func (as *availabilitySet) AttachDisk(ctx context.Context, nodeName types.NodeNa
 			}
 		}
 		if attached {
-			klog.V(2).Infof("azureDisk - disk(%s) already attached to node(%s) on LUN(%d)", diskURI, nodeName, opt.Lun)
+			logger.V(2).Info("azureDisk - disk already attached to node on LUN", "diskURI", diskURI, "nodeName", nodeName, "LUN", opt.Lun)
 			continue
 		}
 
@@ -99,7 +101,7 @@ func (as *availabilitySet) AttachDisk(ctx context.Context, nodeName types.NodeNa
 		},
 		Location: vm.Location,
 	}
-	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - attach disk list(%v)", nodeResourceGroup, vmName, diskMap)
+	logger.V(2).Info("azureDisk - update: vm - attach disk list", "resourceGroup", nodeResourceGroup, "vmName", vmName, "diskMap", diskMap)
 
 	result, rerr := as.ComputeClientFactory.GetVirtualMachineClient().CreateOrUpdate(ctx, nodeResourceGroup, vmName, newVM)
 	if rerr != nil {
@@ -112,7 +114,7 @@ func (as *availabilitySet) AttachDisk(ctx context.Context, nodeName types.NodeNa
 		}
 	}
 
-	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - attach disk list(%v) returned with %v", nodeResourceGroup, vmName, diskMap, err)
+	logger.V(2).Info("azureDisk - update: vm - attach disk list returned", "resourceGroup", nodeResourceGroup, "vmName", vmName, "diskMap", diskMap, "error", err)
 
 	if rerr == nil && result != nil {
 		as.updateCache(vmName, result)
@@ -123,9 +125,10 @@ func (as *availabilitySet) AttachDisk(ctx context.Context, nodeName types.NodeNa
 }
 
 func (as *availabilitySet) DeleteCacheForNode(_ context.Context, nodeName string) error {
+	logger := log.Background().WithName("DeleteCacheForNode")
 	err := as.vmCache.Delete(nodeName)
 	if err == nil {
-		klog.V(2).Infof("DeleteCacheForNode(%s) successfully", nodeName)
+		logger.V(2).Info("DeleteCacheForNode successfully", "nodeName", nodeName)
 	} else {
 		klog.Errorf("DeleteCacheForNode(%s) failed with %v", nodeName, err)
 	}
@@ -134,6 +137,7 @@ func (as *availabilitySet) DeleteCacheForNode(_ context.Context, nodeName string
 
 // DetachDisk detaches a disk from VM
 func (as *availabilitySet) DetachDisk(ctx context.Context, nodeName types.NodeName, diskMap map[string]string, forceDetach bool) error {
+	logger := log.Background().WithName("DetachDisk")
 	vm, err := as.getVirtualMachine(ctx, nodeName, azcache.CacheReadTypeDefault)
 	if err != nil {
 		// if host doesn't exist, no need to detach
@@ -157,7 +161,7 @@ func (as *availabilitySet) DetachDisk(ctx context.Context, nodeName types.NodeNa
 				(disk.Vhd != nil && disk.Vhd.URI != nil && diskURI != "" && strings.EqualFold(*disk.Vhd.URI, diskURI)) ||
 				(disk.ManagedDisk != nil && diskURI != "" && strings.EqualFold(*disk.ManagedDisk.ID, diskURI)) {
 				// found the disk
-				klog.V(2).Infof("azureDisk - detach disk: name %s uri %s", diskName, diskURI)
+				logger.V(2).Info("azureDisk - detach disk", "diskName", diskName, "diskURI", diskURI)
 				disks[i].ToBeDetached = ptr.To(true)
 				if forceDetach {
 					disks[i].DetachOption = to.Ptr(armcompute.DiskDetachOptionTypesForceDetach)
@@ -191,7 +195,7 @@ func (as *availabilitySet) DetachDisk(ctx context.Context, nodeName types.NodeNa
 		},
 		Location: vm.Location,
 	}
-	klog.V(2).Infof("azureDisk - update(%s): vm(%s) node(%s)- detach disk list(%s)", nodeResourceGroup, vmName, nodeName, diskMap)
+	logger.V(2).Info("azureDisk - update: vm node - detach disk list", "resourceGroup", nodeResourceGroup, "vmName", vmName, "nodeName", nodeName, "diskMap", diskMap)
 
 	result, err := as.ComputeClientFactory.GetVirtualMachineClient().CreateOrUpdate(ctx, nodeResourceGroup, vmName, newVM)
 	if err != nil {
@@ -205,7 +209,7 @@ func (as *availabilitySet) DetachDisk(ctx context.Context, nodeName types.NodeNa
 		}
 	}
 
-	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - detach disk list(%s) returned with %v", nodeResourceGroup, vmName, diskMap, err)
+	logger.V(2).Info("azureDisk - update: vm - detach disk list returned with error", "resourceGroup", nodeResourceGroup, "vmName", vmName, "diskMap", diskMap, "error", err)
 
 	if err == nil && result != nil {
 		as.updateCache(vmName, result)
@@ -240,6 +244,7 @@ func (as *availabilitySet) UpdateVM(ctx context.Context, nodeName types.NodeName
 }
 
 func (as *availabilitySet) updateCache(nodeName string, vm *armcompute.VirtualMachine) {
+	logger := log.Background().WithName("updateCache")
 	if nodeName == "" {
 		klog.Errorf("updateCache(%s) failed with empty nodeName", nodeName)
 		return
@@ -249,7 +254,7 @@ func (as *availabilitySet) updateCache(nodeName string, vm *armcompute.VirtualMa
 		return
 	}
 	as.vmCache.Update(nodeName, vm)
-	klog.V(2).Infof("updateCache(%s) successfully", nodeName)
+	logger.V(2).Info("updateCache successfully", "nodeName", nodeName)
 }
 
 // GetDataDisks gets a list of data disks attached to the node.

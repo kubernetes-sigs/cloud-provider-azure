@@ -40,11 +40,12 @@ import (
 
 // CreateOrUpdatePIP invokes az.NetworkClientFactory.GetPublicIPAddressClient().CreateOrUpdate with exponential backoff retry
 func (az *Cloud) CreateOrUpdatePIP(service *v1.Service, pipResourceGroup string, pip *armnetwork.PublicIPAddress) error {
+	logger := klog.Background().WithName("CreateOrUpdatePIP")
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 
 	_, rerr := az.NetworkClientFactory.GetPublicIPAddressClient().CreateOrUpdate(ctx, pipResourceGroup, ptr.Deref(pip.Name, ""), *pip)
-	klog.V(10).Infof("NetworkClientFactory.GetPublicIPAddressClient().CreateOrUpdate(%s, %s): end", pipResourceGroup, ptr.Deref(pip.Name, ""))
+	logger.V(10).Info("NetworkClientFactory.GetPublicIPAddressClient().CreateOrUpdate end", "pipResourceGroup", pipResourceGroup, "pipName", ptr.Deref(pip.Name, ""))
 	if rerr == nil {
 		// Invalidate the cache right after updating
 		_ = az.pipCache.Delete(pipResourceGroup)
@@ -59,7 +60,7 @@ func (az *Cloud) CreateOrUpdatePIP(service *v1.Service, pipResourceGroup string,
 	var respError *azcore.ResponseError
 	if errors.As(rerr, &respError) && respError != nil {
 		if respError.StatusCode == http.StatusPreconditionFailed {
-			klog.V(3).Infof("PublicIP cache for (%s, %s) is cleanup because of http.StatusPreconditionFailed", pipResourceGroup, ptr.Deref(pip.Name, ""))
+			logger.V(3).Info("PublicIP cache is cleanup because of http.StatusPreconditionFailed", "pipResourceGroup", pipResourceGroup, "pipName", ptr.Deref(pip.Name, ""))
 			_ = az.pipCache.Delete(pipResourceGroup)
 		}
 	}
@@ -67,7 +68,7 @@ func (az *Cloud) CreateOrUpdatePIP(service *v1.Service, pipResourceGroup string,
 	retryErrorMessage := rerr.Error()
 	// Invalidate the cache because another new operation has canceled the current request.
 	if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceledErrorMessage) {
-		klog.V(3).Infof("PublicIP cache for (%s, %s) is cleanup because CreateOrUpdate is canceled by another operation", pipResourceGroup, ptr.Deref(pip.Name, ""))
+		logger.V(3).Info("PublicIP cache is cleanup because CreateOrUpdate is canceled by another operation", "pipResourceGroup", pipResourceGroup, "pipName", ptr.Deref(pip.Name, ""))
 		_ = az.pipCache.Delete(pipResourceGroup)
 	}
 

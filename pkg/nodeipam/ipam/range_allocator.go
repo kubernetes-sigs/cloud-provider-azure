@@ -37,6 +37,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/nodeipam/ipam/cidrset"
 	nodeutil "sigs.k8s.io/cloud-provider-azure/pkg/util/controller/node"
 	utilnode "sigs.k8s.io/cloud-provider-azure/pkg/util/node"
@@ -74,6 +75,7 @@ type rangeAllocator struct {
 // Caller must ensure that ClusterCIDRs are semantically correct e.g (1 for non DualStack, 2 for DualStack etc..)
 // can initialize its CIDR map. NodeList is only nil in testing.
 func NewCIDRRangeAllocator(client clientset.Interface, nodeInformer informers.NodeInformer, allocatorParams CIDRAllocatorParams, nodeList *v1.NodeList) (CIDRAllocator, error) {
+	logger := log.Background().WithName("NewCIDRRangeAllocator")
 	if client == nil {
 		klog.Fatalf("kubeClient is nil when starting NodeController")
 	}
@@ -81,7 +83,7 @@ func NewCIDRRangeAllocator(client clientset.Interface, nodeInformer informers.No
 	eventBroadcaster := record.NewBroadcaster()
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cidrAllocator"})
 	eventBroadcaster.StartStructuredLogging(0)
-	klog.V(0).Infof("Sending events to api server.")
+	logger.V(0).Info("Sending events to api server.")
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: client.CoreV1().Events("")})
 
 	// create a cidrSet for each cidr we operate on
@@ -109,22 +111,22 @@ func NewCIDRRangeAllocator(client clientset.Interface, nodeInformer informers.No
 	if allocatorParams.ServiceCIDR != nil {
 		filterOutServiceRange(ra.clusterCIDRs, ra.cidrSets, allocatorParams.ServiceCIDR)
 	} else {
-		klog.V(0).Info("No Service CIDR provided. Skipping filtering out service addresses.")
+		logger.V(0).Info("No Service CIDR provided. Skipping filtering out service addresses.")
 	}
 
 	if allocatorParams.SecondaryServiceCIDR != nil {
 		filterOutServiceRange(ra.clusterCIDRs, ra.cidrSets, allocatorParams.SecondaryServiceCIDR)
 	} else {
-		klog.V(0).Info("No Secondary Service CIDR provided. Skipping filtering out secondary service addresses.")
+		logger.V(0).Info("No Secondary Service CIDR provided. Skipping filtering out secondary service addresses.")
 	}
 
 	if nodeList != nil {
 		for i, node := range nodeList.Items {
 			if len(node.Spec.PodCIDRs) == 0 {
-				klog.V(4).Infof("Node %v has no CIDR, ignoring", node.Name)
+				logger.V(4).Info("Node has no CIDR, ignoring", "nodeName", node.Name)
 				continue
 			}
-			klog.V(4).Infof("Node %v has CIDR %s, occupying it in CIDR map", node.Name, node.Spec.PodCIDR)
+			logger.V(4).Info("Node has CIDR, occupying it in CIDR map", "nodeName", node.Name, "podCIDR", node.Spec.PodCIDR)
 			if err := ra.occupyCIDRs(&nodeList.Items[i]); err != nil {
 				// This will happen if:
 				// 1. We find garbage in the podCIDRs field. Retrying is useless.
@@ -173,10 +175,11 @@ func NewCIDRRangeAllocator(client clientset.Interface, nodeInformer informers.No
 }
 
 func (r *rangeAllocator) Run(ctx context.Context) {
+	logger := log.Background().WithName("Run")
 	defer utilruntime.HandleCrash()
 
-	klog.Infof("Starting range CIDR allocator")
-	defer klog.Infof("Shutting down range CIDR allocator")
+	logger.Info("Starting range CIDR allocator")
+	defer logger.Info("Shutting down range CIDR allocator")
 
 	if !cache.WaitForNamedCacheSync("cidrallocator", ctx.Done(), r.nodesSynced) {
 		return
@@ -252,11 +255,12 @@ func (r *rangeAllocator) occupyCIDRs(node *v1.Node) error {
 // function you have to make sure to update nodesInProcessing properly with the
 // disposition of the node when the work is done.
 func (r *rangeAllocator) AllocateOrOccupyCIDR(node *v1.Node) error {
+	logger := log.Background().WithName("AllocateOrOccupyCIDR")
 	if node == nil {
 		return nil
 	}
 	if !r.insertNodeToProcessing(node.Name) {
-		klog.V(2).Infof("Node %v is already in a process of CIDR assignment.", node.Name)
+		logger.V(2).Info("Node is already in a process of CIDR assignment.", "nodeName", node.Name)
 		return nil
 	}
 
@@ -277,13 +281,14 @@ func (r *rangeAllocator) AllocateOrOccupyCIDR(node *v1.Node) error {
 	}
 
 	// queue the assignment
-	klog.V(4).Infof("Putting node %s with CIDR %v into the work queue", node.Name, allocated.allocatedCIDRs)
+	logger.V(4).Info("Putting node with CIDR into the work queue", "nodeName", node.Name, "allocatedCIDRs", allocated.allocatedCIDRs)
 	r.nodeCIDRUpdateChannel <- allocated
 	return nil
 }
 
 // ReleaseCIDR marks node.podCIDRs[...] as unused in our tracked cidrSets
 func (r *rangeAllocator) ReleaseCIDR(node *v1.Node) error {
+	logger := log.Background().WithName("ReleaseCIDR")
 	if node == nil || len(node.Spec.PodCIDRs) == 0 {
 		return nil
 	}
@@ -301,7 +306,7 @@ func (r *rangeAllocator) ReleaseCIDR(node *v1.Node) error {
 			return fmt.Errorf("node:%s has an allocated cidr: %v at index:%v that does not exist in cluster cidrs configuration", node.Name, cidr, idx)
 		}
 
-		klog.V(4).Infof("release CIDR %s for node:%v", cidr, node.Name)
+		logger.V(4).Info("release CIDR for node", "cidr", cidr, "nodeName", node.Name)
 		if err = r.cidrSets[idx].Release(podCIDR); err != nil {
 			return fmt.Errorf("error when releasing CIDR %v: %w", cidr, err)
 		}
@@ -350,6 +355,7 @@ func (r *rangeAllocator) allocatePodCIDRs() ([]*net.IPNet, error) {
 
 // updateCIDRsAllocation assigns CIDR to Node and sends an update to the API server.
 func (r *rangeAllocator) updateCIDRsAllocation(data nodeReservedCIDRs) (dataToRetry nodeReservedCIDRs, err error) {
+	logger := log.Background().WithName("updateCIDRsAllocation")
 	var node *v1.Node
 
 	defer func() {
@@ -392,7 +398,7 @@ func (r *rangeAllocator) updateCIDRsAllocation(data nodeReservedCIDRs) (dataToRe
 			}
 		}
 		if match {
-			klog.V(4).Infof("Node %v already has allocated CIDR %v. It matches the proposed one.", node.Name, data.allocatedCIDRs)
+			logger.V(4).Info("Node already has allocated CIDR. It matches the proposed one.", "nodeName", node.Name, "allocatedCIDRs", data.allocatedCIDRs)
 			return data, nil
 		}
 	}

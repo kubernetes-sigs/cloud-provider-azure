@@ -24,6 +24,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 // CreateAddNodeHandler creates an add node handler.
@@ -89,6 +91,7 @@ func GetNodeCondition(status *v1.NodeStatus, conditionType v1.NodeConditionType)
 
 // RecordNodeStatusChange records a event related to a node status change. (Common to lifecycle and ipam)
 func RecordNodeStatusChange(recorder record.EventRecorder, node *v1.Node, newStatus string) {
+	logger := log.Background().WithName("RecordNodeStatusChange")
 	ref := &v1.ObjectReference{
 		APIVersion: "v1",
 		Kind:       "Node",
@@ -96,7 +99,7 @@ func RecordNodeStatusChange(recorder record.EventRecorder, node *v1.Node, newSta
 		UID:        node.UID,
 		Namespace:  "",
 	}
-	klog.V(2).Infof("Recording status change %s event message for node %s", newStatus, node.Name)
+	logger.V(2).Info("Recording status change event message for node", "status", newStatus, "node", node.Name)
 	// TODO: This requires a transaction, either both node status is updated
 	// and event is recorded or neither should happen, see issue #6055.
 	recorder.Eventf(ref, v1.EventTypeNormal, newStatus, "Node %s status is now: %s", node.Name, newStatus)
