@@ -38,6 +38,32 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/deepcopy"
 )
 
+func (az *Cloud) CreateOrUpdatePIPOutbound(ctx context.Context, pipResourceGroup string, pip *armnetwork.PublicIPAddress) error {
+	klog.Infof("CreateOrUpdatePIPOutbound(%s): start", ptr.Deref(pip.Name, ""))
+
+	// Endless retry loop with 5-second intervals
+	for {
+		// Call the existing CreateOrUpdatePIP function
+		err := az.CreateOrUpdatePIP(nil, pipResourceGroup, pip)
+		if err == nil {
+			return nil
+		}
+
+		// Check if context is canceled
+		select {
+		case <-ctx.Done():
+			klog.V(3).Infof("CreateOrUpdatePIPOutbound: context canceled, stopping retry")
+			return fmt.Errorf("context canceled: %w", ctx.Err())
+		default:
+			// Continue with retry
+		}
+
+		// Wait 5 seconds before retrying
+		klog.V(3).Infof("CreateOrUpdatePIPOutbound: retrying in 5 seconds for PIP %s", ptr.Deref(pip.Name, ""))
+		time.Sleep(5 * time.Second)
+	}
+}
+
 // CreateOrUpdatePIP invokes az.NetworkClientFactory.GetPublicIPAddressClient().CreateOrUpdate with exponential backoff retry
 func (az *Cloud) CreateOrUpdatePIP(service *v1.Service, pipResourceGroup string, pip *armnetwork.PublicIPAddress) error {
 	ctx, cancel := getContextWithCancel()
@@ -72,6 +98,32 @@ func (az *Cloud) CreateOrUpdatePIP(service *v1.Service, pipResourceGroup string,
 	}
 
 	return rerr
+}
+
+func (az *Cloud) DeletePublicIPOutbound(ctx context.Context, pipResourceGroup string, pipName string) error {
+	klog.Infof("DeletePublicIPOutbound(%s): start", pipName)
+
+	// Endless retry loop with 5-second intervals
+	for {
+		// Call the existing DeletePublicIP function
+		err := az.DeletePublicIP(nil, pipResourceGroup, pipName)
+		if err == nil {
+			return nil
+		}
+
+		// Check if context is canceled
+		select {
+		case <-ctx.Done():
+			klog.V(3).Infof("DeletePublicIPOutbound: context canceled, stopping retry")
+			return fmt.Errorf("context canceled: %w", ctx.Err())
+		default:
+			// Continue with retry
+		}
+
+		// Wait 5 seconds before retrying
+		klog.V(3).Infof("DeletePublicIPOutbound: retrying in 5 seconds for PIP %s", pipName)
+		time.Sleep(5 * time.Second)
+	}
 }
 
 // DeletePublicIP invokes az.NetworkClientFactory.GetPublicIPAddressClient().Delete with exponential backoff retry
