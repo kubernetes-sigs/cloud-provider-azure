@@ -200,7 +200,17 @@ push-ccm-image: ## Push controller-manager image.
 
 .PHONY: push-node-image-linux
 push-node-image-linux: ## Push node-manager image for Linux.
-	docker push $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH)
+	@RETRY_COUNT=0; \
+	MAX_RETRIES=3; \
+	until docker push $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH) || [ $$RETRY_COUNT -ge $$MAX_RETRIES ]; do \
+		RETRY_COUNT=$$((RETRY_COUNT+1)); \
+		echo "Retrying to push image $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH), attempt #$$RETRY_COUNT"; \
+		sleep 30; \
+	done; \
+	if [ $$? -ne 0 ]; then \
+		echo "docker push failed after $$MAX_RETRIES attempts. Aborting."; \
+		exit 1; \
+	fi; \
 
 push-node-image-linux-push-name-%:
 	$(MAKE) ARCH=$* push-node-image-linux-push-name
