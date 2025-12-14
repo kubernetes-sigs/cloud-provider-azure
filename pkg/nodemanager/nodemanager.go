@@ -140,15 +140,15 @@ func NewCloudNodeController(
 	nodeProvider NodeProvider,
 	nodeStatusUpdateFrequency time.Duration,
 	waitForRoutes, enableBetaTopologyLabels bool) *CloudNodeController {
-
+	logger := log.Background().WithName("NewCloudNodeController")
 	eventBroadcaster := record.NewBroadcaster()
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cloud-node-controller"})
 	eventBroadcaster.StartLogging(klog.Infof)
 	if kubeClient != nil {
-		klog.V(0).Infof("Sending events to api server.")
+		logger.V(0).Info("Sending events to api server.")
 		eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
 	} else {
-		klog.V(0).Infof("No api server defined - no events will be sent to API server.")
+		logger.V(0).Info("No api server defined - no events will be sent to API server.")
 	}
 
 	cnc := &CloudNodeController{
@@ -257,10 +257,11 @@ func (cnc *CloudNodeController) reconcileNodeLabels(node *v1.Node) error {
 
 // UpdateNodeAddress updates the nodeAddress of a single node
 func (cnc *CloudNodeController) updateNodeAddress(ctx context.Context, node *v1.Node) error {
+	logger := log.Background().WithName("updateNodeAddress")
 	// Do not process nodes that are still tainted
 	cloudTaint := GetCloudTaint(node.Spec.Taints)
 	if cloudTaint != nil {
-		klog.V(5).Infof("This node %s is still tainted. Will not process.", node.Name)
+		logger.V(5).Info("This node is still tainted. Will not process.", "nodeName", node.Name)
 		return nil
 	}
 
@@ -270,7 +271,7 @@ func (cnc *CloudNodeController) updateNodeAddress(ctx context.Context, node *v1.
 		// Continue to update node address when not sure the node is not exists
 		klog.Warningf("ensureNodeExistsByProviderID (node %s) reported an error (%v), continue to update its address", node.Name, err)
 	} else if !exists {
-		klog.V(4).Infof("The node %s is no longer present according to the cloud provider, do not process.", node.Name)
+		logger.V(4).Info("The node is no longer present according to the cloud provider, do not process.", "nodeName", node.Name)
 		return nil
 	}
 
@@ -280,7 +281,7 @@ func (cnc *CloudNodeController) updateNodeAddress(ctx context.Context, node *v1.
 	}
 
 	if len(nodeAddresses) == 0 {
-		klog.V(5).Infof("Skipping node address update for node %q since cloud provider did not return any", node.Name)
+		logger.V(5).Info("Skipping node address update since cloud provider did not return any", "nodeName", node.Name)
 		return nil
 	}
 
@@ -367,7 +368,7 @@ func (cnc *CloudNodeController) AddCloudNode(ctx context.Context, obj interface{
 // This processes nodes that were added into the cluster, and cloud initialize them if appropriate
 func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Node) {
 	logger := log.Background().WithName("initializeNode")
-	klog.Infof("Initializing node %s with cloud provider", node.Name)
+	logger.Info("Initializing node with cloud provider", "node", node.Name)
 	curNode, err := cnc.kubeClient.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("failed to get node %s: %w", node.Name, err))
@@ -511,7 +512,8 @@ func (cnc *CloudNodeController) getNodeModifiersFromCloudProvider(ctx context.Co
 
 // addCloudNodeLabel creates a nodeModifier that adds a label to a node.
 func addCloudNodeLabel(key, value string) func(*v1.Node) {
-	klog.V(2).Infof("Adding node label from cloud provider: %s=%s", key, value)
+	logger := log.Background().WithName("addCloudNodeLabel")
+	logger.V(2).Info("Adding node label from cloud provider", "key", key, "value", value)
 	return func(node *v1.Node) {
 		if node.Labels == nil {
 			node.Labels = map[string]string{}
@@ -654,19 +656,19 @@ func (cnc *CloudNodeController) getPlatformSubFaultDomain(ctx context.Context) (
 }
 
 func (cnc *CloudNodeController) updateNetworkingCondition(node *v1.Node, networkReady bool) error {
+	logger := log.Background().WithName("updateNetworkingCondition")
 	_, condition := nodeutil.GetNodeCondition(&(node.Status), v1.NodeNetworkUnavailable)
 	if networkReady && condition != nil && condition.Status == v1.ConditionFalse {
-		klog.V(4).Infof("set node %v with NodeNetworkUnavailable=false was canceled because it is already set", node.Name)
+		logger.V(4).Info("set node with NodeNetworkUnavailable=false was canceled because it is already set", "nodeName", node.Name)
 		return nil
 	}
 
 	if !networkReady && condition != nil && condition.Status == v1.ConditionTrue {
-		klog.V(4).Infof("set node %v with NodeNetworkUnavailable=true was canceled because it is already set", node.Name)
+		logger.V(4).Info("set node with NodeNetworkUnavailable=true was canceled because it is already set", "nodeName", node.Name)
 		return nil
 	}
 
-	klog.V(2).Infof("Patching node status %v with %v previous condition was:%+v", node.Name, networkReady, condition)
-
+	logger.V(2).Info("Patching node status", "nodeName", node.Name, "networkReady", networkReady, "previousCondition", condition)
 	// either condition is not there, or has a value != to what we need
 	// start setting it
 	err := clientretry.RetryOnConflict(updateNetworkConditionBackoff, func() error {
@@ -692,7 +694,7 @@ func (cnc *CloudNodeController) updateNetworkingCondition(node *v1.Node, network
 			})
 		}
 		if err != nil {
-			klog.V(4).Infof("Error updating node %s, retrying: %v", types.NodeName(node.Name), err)
+			logger.V(4).Info("Error updating node, retrying", "nodeName", types.NodeName(node.Name), "error", err)
 		}
 		return err
 	})
