@@ -42,6 +42,7 @@ import (
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	vmutil "sigs.k8s.io/cloud-provider-azure/pkg/util/vm"
 )
@@ -331,6 +332,7 @@ func (az *Cloud) getRulePrefix(service *v1.Service) string {
 }
 
 func (az *Cloud) getPublicIPName(clusterName string, service *v1.Service, isIPv6 bool) (string, error) {
+	logger := log.Background().WithName("getPublicIPName")
 	isDualStack := isServiceDualStack(service)
 	pipName := fmt.Sprintf("%s-%s", clusterName, az.GetLoadBalancerName(context.TODO(), clusterName, service))
 	if id := getServicePIPPrefixID(service, isIPv6); id != "" {
@@ -344,12 +346,13 @@ func (az *Cloud) getPublicIPName(clusterName string, service *v1.Service, isIPv6
 	maxLength := consts.PIPPrefixNameMaxLength - consts.IPFamilySuffixLength
 	if len(pipName) > maxLength {
 		pipNameSegment = pipNameSegment[:maxLength]
-		klog.V(6).Infof("original PIP name is lengthy %q, truncate it to %q", pipName, pipNameSegment)
+		logger.V(6).Info("original PIP name is lengthy, truncate it", "originalName", pipName, "truncatedName", pipNameSegment)
 	}
 	return getResourceByIPFamily(pipNameSegment, isDualStack, isIPv6), nil
 }
 
 func publicIPOwnsFrontendIP(service *v1.Service, fip *armnetwork.FrontendIPConfiguration, pip *armnetwork.PublicIPAddress) bool {
+	logger := log.Background().WithName("publicIPOwnsFrontendIP")
 	if pip != nil &&
 		pip.ID != nil &&
 		pip.Properties != nil &&
@@ -358,7 +361,7 @@ func publicIPOwnsFrontendIP(service *v1.Service, fip *armnetwork.FrontendIPConfi
 		fip.Properties != nil &&
 		fip.Properties.PublicIPAddress != nil {
 		if strings.EqualFold(ptr.Deref(pip.ID, ""), ptr.Deref(fip.Properties.PublicIPAddress.ID, "")) {
-			klog.V(6).Infof("publicIPOwnsFrontendIP:found secondary service %s of the frontend IP config %s", service.Name, *fip.Name)
+			logger.V(6).Info("found secondary service of the frontend IP config", "serviceName", service.Name, "fipName", *fip.Name)
 			return true
 		}
 	}
@@ -474,6 +477,7 @@ func newAvailabilitySet(az *Cloud) (VMSet, error) {
 // It must return ("", cloudprovider.InstanceNotFound) if the instance does
 // not exist or is no longer running.
 func (as *availabilitySet) GetInstanceIDByNodeName(ctx context.Context, name string) (string, error) {
+	logger := log.Background().WithName("GetInstanceIDByNodeName")
 	var machine *armcompute.VirtualMachine
 	var err error
 
@@ -484,10 +488,10 @@ func (as *availabilitySet) GetInstanceIDByNodeName(ctx context.Context, name str
 	}
 	if err != nil {
 		if as.CloudProviderBackoff {
-			klog.V(2).Infof("GetInstanceIDByNodeName(%s) backing off", name)
+			logger.V(2).Info("backing off", "node", name)
 			machine, err = as.GetVirtualMachineWithRetry(ctx, types.NodeName(name), azcache.CacheReadTypeUnsafe)
 			if err != nil {
-				klog.V(2).Infof("GetInstanceIDByNodeName(%s) abort backoff", name)
+				logger.V(2).Info("abort backoff", "node", name)
 				return "", err
 			}
 		} else {
@@ -506,6 +510,7 @@ func (as *availabilitySet) GetInstanceIDByNodeName(ctx context.Context, name str
 
 // GetPowerStatusByNodeName returns the power state of the specified node.
 func (as *availabilitySet) GetPowerStatusByNodeName(ctx context.Context, name string) (powerState string, err error) {
+	logger := log.Background().WithName("GetPowerStatusByNodeName")
 	vm, err := as.getVirtualMachine(ctx, types.NodeName(name), azcache.CacheReadTypeDefault)
 	if err != nil {
 		return powerState, err
@@ -516,7 +521,7 @@ func (as *availabilitySet) GetPowerStatusByNodeName(ctx context.Context, name st
 	}
 
 	// vm.Properties.InstanceView or vm.Properties.InstanceView.Statuses are nil when the VM is under deleting.
-	klog.V(3).Infof("InstanceView for node %q is nil, assuming it's deleting", name)
+	logger.V(3).Info("InstanceView for node is nil, assuming it's deleting", "node", name)
 	return consts.VMPowerStateUnknown, nil
 }
 
@@ -739,6 +744,7 @@ func (as *availabilitySet) GetVMSetNames(ctx context.Context, service *v1.Servic
 }
 
 func (as *availabilitySet) GetNodeVMSetName(ctx context.Context, node *v1.Node) (string, error) {
+	logger := log.Background().WithName("as.GetNodeVMSetName")
 	var hostName string
 	for _, nodeAddress := range node.Status.Addresses {
 		if strings.EqualFold(string(nodeAddress.Type), string(v1.NodeHostName)) {
@@ -765,7 +771,7 @@ func (as *availabilitySet) GetNodeVMSetName(ctx context.Context, node *v1.Node) 
 	for _, vm := range vms {
 		if strings.EqualFold(ptr.Deref(vm.Name, ""), hostName) {
 			if vm.Properties.AvailabilitySet != nil && ptr.Deref(vm.Properties.AvailabilitySet.ID, "") != "" {
-				klog.V(4).Infof("as.GetNodeVMSetName: found vm %s", hostName)
+				logger.V(4).Info("found vm", "vm", hostName)
 
 				asName, err = getLastSegment(ptr.Deref(vm.Properties.AvailabilitySet.ID, ""), "/")
 				if err != nil {
@@ -778,7 +784,7 @@ func (as *availabilitySet) GetNodeVMSetName(ctx context.Context, node *v1.Node) 
 		}
 	}
 
-	klog.V(4).Infof("as.GetNodeVMSetName: found availability set name %s from node name %s", asName, node.Name)
+	logger.V(4).Info("found availability set name from node name", "set name", asName, "node name", node.Name)
 	return asName, nil
 }
 
@@ -800,11 +806,12 @@ func extractResourceGroupByNicID(nicID string) (string, error) {
 
 // getPrimaryInterfaceWithVMSet gets machine primary network interface by node name and vmSet.
 func (as *availabilitySet) getPrimaryInterfaceWithVMSet(ctx context.Context, nodeName, vmSetName string) (*armnetwork.Interface, string, error) {
+	logger := log.Background().WithName("getPrimaryInterfaceWithVMSet")
 	var machine *armcompute.VirtualMachine
 
 	machine, err := as.GetVirtualMachineWithRetry(ctx, types.NodeName(nodeName), azcache.CacheReadTypeDefault)
 	if err != nil {
-		klog.V(2).Infof("GetPrimaryInterface(%s, %s) abort backoff", nodeName, vmSetName)
+		logger.V(2).Info("abort backoff", "nodeName", nodeName, "vmSetName", vmSetName)
 		return nil, "", err
 	}
 
@@ -837,8 +844,7 @@ func (as *availabilitySet) getPrimaryInterfaceWithVMSet(ctx context.Context, nod
 	if vmSetName != "" && needCheck {
 		expectedAvailabilitySetID := as.getAvailabilitySetID(nodeResourceGroup, vmSetName)
 		if machine.Properties.AvailabilitySet == nil || !strings.EqualFold(*machine.Properties.AvailabilitySet.ID, expectedAvailabilitySetID) {
-			klog.V(3).Infof(
-				"GetPrimaryInterface: nic (%s) is not in the availabilitySet(%s)", nicName, vmSetName)
+			logger.V(3).Info("nic is not in the availabilitySet", "nic", nicName, "availabilitySet", vmSetName)
 			return nil, "", errNotInVMSet
 		}
 	}
@@ -865,12 +871,13 @@ func (as *availabilitySet) getPrimaryInterfaceWithVMSet(ctx context.Context, nod
 // EnsureHostInPool ensures the given VM's Primary NIC's Primary IP Configuration is
 // participating in the specified LoadBalancer Backend Pool.
 func (as *availabilitySet) EnsureHostInPool(ctx context.Context, service *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetName string) (string, string, string, *armcompute.VirtualMachineScaleSetVM, error) {
+	logger := log.Background().WithName("EnsureHostInPool")
 	vmName := mapNodeNameToVMName(nodeName)
 	serviceName := getServiceName(service)
 	nic, _, err := as.getPrimaryInterfaceWithVMSet(ctx, vmName, vmSetName)
 	if err != nil {
 		if errors.Is(err, errNotInVMSet) {
-			klog.V(3).Infof("EnsureHostInPool skips node %s because it is not in the vmSet %s", nodeName, vmSetName)
+			logger.V(3).Info("skips node because it is not in the vmSet", "node", nodeName, "vmSet", vmSetName)
 			return "", "", "", nil, nil
 		}
 
@@ -925,7 +932,7 @@ func (as *availabilitySet) EnsureHostInPool(ctx context.Context, service *v1.Ser
 				return "", "", "", nil, err
 			}
 			if !isSameLB {
-				klog.V(4).Infof("Node %q has already been added to LB %q, omit adding it to a new one", nodeName, oldLBName)
+				logger.V(4).Info("Node has already been added to LB, omit adding it to a new one", "node", nodeName, "oldLBName", oldLBName)
 				return "", "", "", nil, nil
 			}
 		}
@@ -938,7 +945,7 @@ func (as *availabilitySet) EnsureHostInPool(ctx context.Context, service *v1.Ser
 		primaryIPConfig.Properties.LoadBalancerBackendAddressPools = newBackendPools
 
 		nicName := *nic.Name
-		klog.V(3).Infof("nicupdate(%s): nic(%s) - updating", serviceName, nicName)
+		logger.V(3).Info("updating", "nicupdate", serviceName, "nic", nicName)
 		err := as.CreateOrUpdateInterface(ctx, service, nic)
 		if err != nil {
 			return "", "", "", nil, err
@@ -950,6 +957,7 @@ func (as *availabilitySet) EnsureHostInPool(ctx context.Context, service *v1.Ser
 // EnsureHostsInPool ensures the given Node's primary IP configurations are
 // participating in the specified LoadBalancer Backend Pool.
 func (as *availabilitySet) EnsureHostsInPool(ctx context.Context, service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetName string) error {
+	logger := log.Background().WithName("EnsureHostsInPool")
 	mc := metrics.NewMetricContext("services", "vmas_ensure_hosts_in_pool", as.ResourceGroup, as.SubscriptionID, getServiceName(service))
 	isOperationSucceeded := false
 	defer func() {
@@ -960,7 +968,7 @@ func (as *availabilitySet) EnsureHostsInPool(ctx context.Context, service *v1.Se
 	for _, node := range nodes {
 		localNodeName := node.Name
 		if as.UseStandardLoadBalancer() && as.ExcludeMasterNodesFromStandardLB() && isControlPlaneNode(node) {
-			klog.V(4).Infof("Excluding master node %q from load balancer backendpool %q", localNodeName, backendPoolID)
+			logger.V(4).Info("Excluding master node from load balancer backendpool", "node", localNodeName, "backendpool", backendPoolID)
 			continue
 		}
 
@@ -970,7 +978,7 @@ func (as *availabilitySet) EnsureHostsInPool(ctx context.Context, service *v1.Se
 			return err
 		}
 		if shouldExcludeLoadBalancer {
-			klog.V(4).Infof("Excluding unmanaged/external-resource-group node %q", localNodeName)
+			logger.V(4).Info("Excluding unmanaged/external-resource-group node", "node", localNodeName)
 			continue
 		}
 
@@ -996,6 +1004,7 @@ func (as *availabilitySet) EnsureHostsInPool(ctx context.Context, service *v1.Se
 // EnsureBackendPoolDeleted ensures the loadBalancer backendAddressPools deleted from the specified nodes.
 // backendPoolIDs are the IDs of the backendpools to be deleted.
 func (as *availabilitySet) EnsureBackendPoolDeleted(ctx context.Context, service *v1.Service, backendPoolIDs []string, vmSetName string, backendAddressPools []*armnetwork.BackendAddressPool, _ bool) (bool, error) {
+	logger := log.Background().WithName("EnsureBackendPoolDeleted")
 	// Returns nil if backend address pools already deleted.
 	if backendAddressPools == nil {
 		return false, nil
@@ -1048,7 +1057,7 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(ctx context.Context, service
 		nic, vmasID, err := as.getPrimaryInterfaceWithVMSet(ctx, vmName, vmSetName)
 		if err != nil {
 			if errors.Is(err, errNotInVMSet) {
-				klog.V(3).Infof("EnsureBackendPoolDeleted skips node %s because it is not in the vmSet %s", nodeName, vmSetName)
+				logger.V(3).Info("skips node because it is not in the vmSet", "node", nodeName, "vmSet", vmSetName)
 				return false, nil
 			}
 
@@ -1062,7 +1071,7 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(ctx context.Context, service
 		// Only remove nodes belonging to specified vmSet to basic LB backends.
 		// If vmasID is empty, then it is standalone VM.
 		if vmasID != "" && !strings.EqualFold(vmasName, vmSetName) {
-			klog.V(2).Infof("EnsureBackendPoolDeleted: skipping the node %s belonging to another vm set %s", nodeName, vmasName)
+			logger.V(2).Info("skipping the node belonging to another vm set", "node", nodeName, "vmSet", vmasName)
 			continue
 		}
 
@@ -1104,7 +1113,7 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(ctx context.Context, service
 		}
 		nic.Properties.IPConfigurations = newIPConfigs
 		nicUpdaters = append(nicUpdaters, func() error {
-			klog.V(2).Infof("EnsureBackendPoolDeleted begins to CreateOrUpdate for NIC(%s, %s) with backendPoolIDs %q", as.ResourceGroup, ptr.Deref(nic.Name, ""), backendPoolIDs)
+			logger.V(2).Info("begins to CreateOrUpdate for NIC with backendPoolIDs", "resourceGroup", as.ResourceGroup, "nicName", ptr.Deref(nic.Name, ""), "backendPoolIDs", backendPoolIDs)
 			_, rerr := as.ComputeClientFactory.GetInterfaceClient().CreateOrUpdate(ctx, as.ResourceGroup, ptr.Deref(nic.Name, ""), *nic)
 			if rerr != nil {
 				klog.Errorf("EnsureBackendPoolDeleted CreateOrUpdate for NIC(%s, %s) failed with error %v", as.ResourceGroup, ptr.Deref(nic.Name, ""), rerr.Error())
@@ -1143,9 +1152,10 @@ func getAvailabilitySetNameByID(asID string) (string, error) {
 
 // GetNodeNameByIPConfigurationID gets the node name and the availabilitySet name by IP configuration ID.
 func (as *availabilitySet) GetNodeNameByIPConfigurationID(ctx context.Context, ipConfigurationID string) (string, string, error) {
+	logger := log.Background().WithName("GetNodeNameByIPConfigurationID")
 	matches := nicIDRE.FindStringSubmatch(ipConfigurationID)
 	if len(matches) != 3 {
-		klog.V(4).Infof("Can not extract VM name from ipConfigurationID (%s)", ipConfigurationID)
+		logger.V(4).Info("Can not extract VM name from ipConfigurationID", "ipConfigurationID", ipConfigurationID)
 		return "", "", fmt.Errorf("invalid ip config ID %s", ipConfigurationID)
 	}
 
@@ -1162,7 +1172,7 @@ func (as *availabilitySet) GetNodeNameByIPConfigurationID(ctx context.Context, i
 		vmID = ptr.Deref(nic.Properties.VirtualMachine.ID, "")
 	}
 	if vmID == "" {
-		klog.V(2).Infof("GetNodeNameByIPConfigurationID(%s): empty vmID", ipConfigurationID)
+		logger.V(2).Info("empty vmID", "ipConfigurationID", ipConfigurationID)
 		return "", "", nil
 	}
 

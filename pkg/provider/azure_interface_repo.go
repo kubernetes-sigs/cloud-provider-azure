@@ -22,12 +22,15 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 // CreateOrUpdateInterface invokes az.ComputeClientFactory.GetInterfaceClient().CreateOrUpdate with exponential backoff retry
 func (az *Cloud) CreateOrUpdateInterface(ctx context.Context, service *v1.Service, nic *armnetwork.Interface) error {
+	logger := log.Background().WithName("CreateOrUpdateInterface")
 	_, rerr := az.ComputeClientFactory.GetInterfaceClient().CreateOrUpdate(ctx, az.ResourceGroup, *nic.Name, *nic)
-	klog.V(10).Infof("InterfacesClient.CreateOrUpdate(%s): end", *nic.Name)
+	logger.V(10).Info("InterfacesClient.CreateOrUpdate: end", "nicName", *nic.Name)
 	if rerr != nil {
 		klog.Errorf("InterfacesClient.CreateOrUpdate(%s) failed: %s", *nic.Name, rerr.Error())
 		az.Event(service, v1.EventTypeWarning, "CreateOrUpdateInterface", rerr.Error())

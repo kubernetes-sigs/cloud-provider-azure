@@ -23,10 +23,10 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
-	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 )
 
@@ -52,6 +52,7 @@ func NewRepository(config azureconfig.Config, clientFactory azclient.ClientFacto
 	}, nil
 }
 func (az *fileServicePropertiesRepo) Get(ctx context.Context, subsID, resourceGroup, account string) (*armstorage.FileServiceProperties, error) {
+	logger := log.Background().WithName("Get")
 	if az.clientFactory == nil {
 		return nil, fmt.Errorf("clientFactory is nil")
 	}
@@ -65,7 +66,7 @@ func (az *fileServicePropertiesRepo) Get(ctx context.Context, subsID, resourceGr
 		return nil, err
 	}
 	if cache != nil {
-		klog.V(2).Infof("Get service properties(%s) from cache", account)
+		logger.V(2).Info("Get service properties from cache", "account", account)
 		return cache, nil
 	}
 

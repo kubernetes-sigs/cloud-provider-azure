@@ -22,11 +22,12 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 func (d *deployer) deleteResourceGroup(subscriptionID string, credential azcore.TokenCredential) error {
-	klog.Infof("Deleting resource group %q", d.ResourceGroupName)
+	logger := klog.Background().WithName("deleteResourceGroup")
+	logger.Info("Deleting resource group", "resourceGroup", d.ResourceGroupName)
 	rgClient, _ := armresources.NewResourceGroupsClient(subscriptionID, credential, nil)
 
 	poller, err := rgClient.BeginDelete(ctx, d.ResourceGroupName, nil)
@@ -40,6 +41,7 @@ func (d *deployer) deleteResourceGroup(subscriptionID string, credential azcore.
 }
 
 func (d *deployer) Down() error {
+	logger := klog.Background().WithName("Down")
 	// Create a credentials object.
 	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
@@ -51,6 +53,6 @@ func (d *deployer) Down() error {
 		klog.Fatalf("failed to delete resource group %q: %v", d.ResourceGroupName, err)
 	}
 
-	klog.Infof("Resource group %q deleted", d.ResourceGroupName)
+	logger.Info("Resource group deleted", "resourceGroup", d.ResourceGroupName)
 	return nil
 }
