@@ -24,7 +24,7 @@ import (
 
 // List gets a list of IPGroup in the resource group.
 func (client *Client) ListVirtualMachineScaleSetNetworkInterfaces(ctx context.Context, resourceGroupName string, virtualMachineScaleSetName string) ([]*armnetwork.Interface, error) {
-	pager := client.InterfacesClient.NewListVirtualMachineScaleSetNetworkInterfacesPager(resourceGroupName, virtualMachineScaleSetName, nil)
+	pager := client.NewListVirtualMachineScaleSetNetworkInterfacesPager(resourceGroupName, virtualMachineScaleSetName, nil)
 	var result []*armnetwork.Interface
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
