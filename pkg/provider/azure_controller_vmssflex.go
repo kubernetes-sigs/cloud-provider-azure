@@ -34,10 +34,12 @@ import (
 	"k8s.io/utils/ptr"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 // AttachDisk attaches a disk to vm
 func (fs *FlexScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName, diskMap map[string]*AttachDiskOptions) error {
+	logger := log.Background().WithName("AttachDisk")
 	vmName := mapNodeNameToVMName(nodeName)
 	vm, err := fs.getVmssFlexVM(ctx, vmName, azcache.CacheReadTypeDefault)
 	if err != nil {
@@ -66,7 +68,7 @@ func (fs *FlexScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName,
 			}
 		}
 		if attached {
-			klog.V(2).Infof("azureDisk - disk(%s) already attached to node(%s) on LUN(%d)", diskURI, nodeName, opt.Lun)
+			logger.V(2).Info("azureDisk - disk already attached to node on LUN", "diskURI", diskURI, "nodeName", nodeName, "LUN", opt.Lun)
 			continue
 		}
 
@@ -103,7 +105,7 @@ func (fs *FlexScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName,
 		Location: vm.Location,
 	}
 
-	klog.V(2).Infof("azureDisk - update: rg(%s) vm(%s) - attach disk list(%+v)", nodeResourceGroup, vmName, diskMap)
+	logger.V(2).Info("azureDisk - update: rg vm - attach disk list", "resourceGroup", nodeResourceGroup, "vmName", vmName, "diskMap", diskMap)
 	result, err := fs.ComputeClientFactory.GetVirtualMachineClient().CreateOrUpdate(ctx, nodeResourceGroup, *vm.Name, newVM)
 	var rerr *azcore.ResponseError
 	if err != nil && errors.As(err, &rerr) {
@@ -116,7 +118,7 @@ func (fs *FlexScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName,
 		}
 	}
 
-	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - attach disk list(%+v) returned with %v", nodeResourceGroup, vmName, diskMap, rerr)
+	logger.V(2).Info("azureDisk - update: vm - attach disk list returned with error", "resourceGroup", nodeResourceGroup, "vmName", vmName, "diskMap", diskMap, "error", rerr)
 
 	if err == nil && result != nil {
 		if rerr := fs.updateCache(ctx, vmName, result); rerr != nil {
@@ -130,6 +132,7 @@ func (fs *FlexScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName,
 
 // DetachDisk detaches a disk from VM
 func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName, diskMap map[string]string, forceDetach bool) error {
+	logger := log.Background().WithName("DetachDisk")
 	vmName := mapNodeNameToVMName(nodeName)
 	vm, err := fs.getVmssFlexVM(ctx, vmName, azcache.CacheReadTypeDefault)
 	if err != nil {
@@ -153,7 +156,7 @@ func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName,
 				(disk.Vhd != nil && disk.Vhd.URI != nil && diskURI != "" && strings.EqualFold(*disk.Vhd.URI, diskURI)) ||
 				(disk.ManagedDisk != nil && diskURI != "" && strings.EqualFold(*disk.ManagedDisk.ID, diskURI)) {
 				// found the disk
-				klog.V(2).Infof("azureDisk - detach disk: name %s uri %s", diskName, diskURI)
+				logger.V(2).Info("azureDisk - detach disk", "diskName", diskName, "diskURI", diskURI)
 				disks[i].ToBeDetached = ptr.To(true)
 				if forceDetach {
 					disks[i].DetachOption = to.Ptr(armcompute.DiskDetachOptionTypesForceDetach)
@@ -188,7 +191,7 @@ func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName,
 		Location: vm.Location,
 	}
 
-	klog.V(2).Infof("azureDisk - update(%s): vm(%s) node(%s)- detach disk list(%s)", nodeResourceGroup, vmName, nodeName, diskMap)
+	logger.V(2).Info("azureDisk - update: vm node - detach disk list", "resourceGroup", nodeResourceGroup, "vmName", vmName, "nodeName", nodeName, "diskMap", diskMap)
 
 	result, err := fs.ComputeClientFactory.GetVirtualMachineClient().CreateOrUpdate(ctx, nodeResourceGroup, *vm.Name, newVM)
 	if err != nil {
@@ -204,7 +207,7 @@ func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName,
 		}
 	}
 
-	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - detach disk list(%s) returned with %v", nodeResourceGroup, vmName, diskMap, err)
+	logger.V(2).Info("azureDisk - update: vm - detach disk list returned with error", "resourceGroup", nodeResourceGroup, "vmName", vmName, "diskMap", diskMap, "error", err)
 
 	if err == nil && result != nil {
 		if rerr := fs.updateCache(ctx, vmName, result); rerr != nil {
@@ -235,6 +238,7 @@ func (fs *FlexScaleSet) UpdateVM(ctx context.Context, nodeName types.NodeName) e
 }
 
 func (fs *FlexScaleSet) updateCache(ctx context.Context, nodeName string, vm *armcompute.VirtualMachine) error {
+	logger := log.Background().WithName("updateCache")
 	if nodeName == "" {
 		return fmt.Errorf("nodeName is empty")
 	}
@@ -267,7 +271,7 @@ func (fs *FlexScaleSet) updateCache(ctx context.Context, nodeName string, vm *ar
 
 	fs.vmssFlexVMNameToVmssID.Store(strings.ToLower(*vm.Properties.OSProfile.ComputerName), vmssFlexID)
 	fs.vmssFlexVMNameToNodeName.Store(*vm.Name, strings.ToLower(*vm.Properties.OSProfile.ComputerName))
-	klog.V(2).Infof("updateCache(%s) for vmssFlexID(%s) successfully", nodeName, vmssFlexID)
+	logger.V(2).Info("updateCache for vmssFlexID successfully", "nodeName", nodeName, "vmssFlexID", vmssFlexID)
 	return nil
 }
 

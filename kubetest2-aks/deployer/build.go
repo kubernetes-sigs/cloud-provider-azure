@@ -22,7 +22,7 @@ import (
 
 	git "github.com/go-git/go-git/v5"
 	plumbing "github.com/go-git/go-git/v5/plumbing"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/kubetest2/pkg/exec"
 )
@@ -87,7 +87,8 @@ func (d *deployer) makeCloudProviderImages(path string) (string, error) {
 
 // makeCloudProviderImagesByPath makes CCM or CNM images with repo path.
 func (d *deployer) makeCloudProviderImagesByPath() (string, error) {
-	klog.Infof("Making Cloud provider images with repo path")
+	logger := klog.Background().WithName("makeCloudProviderImagesByPath")
+	logger.Info("Making Cloud provider images with repo path")
 
 	path := d.TargetPath
 	return d.makeCloudProviderImages(path)
@@ -95,7 +96,8 @@ func (d *deployer) makeCloudProviderImagesByPath() (string, error) {
 
 // makeCloudProviderImagesByTag makes CCM or CNM images with repo refs.
 func (d *deployer) makeCloudProviderImagesByTag(url string) (string, error) {
-	klog.Infof("Making Cloud provider images with refs")
+	logger := klog.Background().WithName("makeCloudProviderImagesByTag")
+	logger.Info("Making Cloud provider images with refs")
 	ccmPath := fmt.Sprintf("%s/cloud-provider-azure", gitClonePath)
 
 	repo, err := git.PlainClone(ccmPath, false, &git.CloneOptions{
@@ -118,6 +120,7 @@ func (d *deployer) makeCloudProviderImagesByTag(url string) (string, error) {
 }
 
 func (d *deployer) Build() error {
+	logger := klog.Background().WithName("Build")
 	err := d.verifyBuildFlags()
 	if err != nil {
 		return fmt.Errorf("failed to verify build flags: %v", err)
@@ -134,7 +137,7 @@ func (d *deployer) Build() error {
 				return fmt.Errorf("failed to make Cloud provider image with tag %q: %v", d.TargetTag, err)
 			}
 		}
-		klog.Infof("cloud-provider-azure image with tag %q are ready", imageTag)
+		logger.Info("cloud-provider-azure image are ready", "imageTag", imageTag)
 	}
 
 	return nil

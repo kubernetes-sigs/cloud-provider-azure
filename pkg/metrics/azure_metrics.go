@@ -22,9 +22,9 @@ import (
 
 	"k8s.io/component-base/metrics"
 	"k8s.io/component-base/metrics/legacyregistry"
-	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 var (
@@ -98,11 +98,12 @@ func (mc *MetricContext) ObserveOperationWithResult(isOperationSucceeded bool, l
 }
 
 func (mc *MetricContext) logLatency(logLevel int32, latency float64, additionalKeysAndValues ...interface{}) {
+	logger := log.Background().WithName("logLatency")
 	keysAndValues := []interface{}{"latency_seconds", latency}
 	for i, label := range metricLabels {
 		keysAndValues = append(keysAndValues, label, mc.attributes[i])
 	}
-	klog.V(klog.Level(logLevel)).InfoS("Observed Request Latency", append(keysAndValues, additionalKeysAndValues...)...)
+	logger.V(int(logLevel)).Info("Observed Request Latency", append(keysAndValues, additionalKeysAndValues...)...)
 }
 
 // CountFailedOperation increase the number of failed operations
