@@ -58,7 +58,8 @@ import (
 	"unicode"
 
 	utilnet "k8s.io/apimachinery/pkg/util/net"
-	"k8s.io/klog/v2"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 const (
@@ -145,6 +146,7 @@ func performTokenExchange(
 	directive *authDirective,
 	tenant string,
 	accessToken string) (string, error) {
+	logger := log.Background().WithName("performTokenExchange")
 	var err error
 	data := url.Values{
 		"service":       []string{directive.service},
@@ -177,7 +179,7 @@ func performTokenExchange(
 
 	if exchange.Header != nil {
 		if correlationID, ok := exchange.Header["X-Ms-Correlation-Request-Id"]; ok {
-			klog.V(4).Infof("correlationID: %s", correlationID)
+			logger.V(4).Info("", "correlationID", correlationID)
 		}
 	}
 
