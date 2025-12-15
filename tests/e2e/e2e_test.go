@@ -115,6 +115,6 @@ func TestAzureTest(t *testing.T) {
 
 	logger.Info("Ingesting test result to kusto")
 	if err := utils.KustoIngest(passed, suiteConfig.LabelFilter, os.Getenv(utils.AKSClusterType), reporterConfig.JUnitReport); err != nil {
-		klog.Error(err)
+		logger.Error(err, "Failed to ingest test result to kusto")
 	}
 }
