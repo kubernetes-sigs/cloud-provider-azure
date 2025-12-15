@@ -1,7 +1,6 @@
 package difftracker
 
 import (
-	"k8s.io/client-go/util/workqueue"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -27,14 +26,30 @@ func InitializeDiffTracker(K8s K8s_State, NRP NRP_State) *DiffTracker {
 	}
 
 	diffTracker := &DiffTracker{
-		K8sResources: K8s,
-		NRPResources: NRP,
-		PodEgressQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
-			workqueue.DefaultTypedControllerRateLimiter[PodCrudEvent](),
-			workqueue.TypedRateLimitingQueueConfig[PodCrudEvent]{Name: "PodEgress"},
-		),
+		K8sResources:    K8s,
+		NRPResources:    NRP,
 		InitialSyncDone: false,
+
+		// Initialize Engine state management maps
+		pendingServiceOps: make(map[string]*ServiceOperationState),
+		bufferedEndpoints: make(map[string][]BufferedEndpointUpdate),
+		bufferedPods:      make(map[string][]BufferedPodUpdate),
+		pendingDeletions:  make(map[string]*PendingDeletion),
+
+		// Initialize Engine communication channels
+		serviceUpdaterTrigger:   make(chan bool, 1),
+		locationsUpdaterTrigger: make(chan bool, 1),
 	}
 
 	return diffTracker
+}
+
+// GetServiceUpdaterTrigger returns the trigger channel for ServiceUpdater
+func (dt *DiffTracker) GetServiceUpdaterTrigger() <-chan bool {
+	return dt.serviceUpdaterTrigger
+}
+
+// GetLocationsUpdaterTrigger returns the trigger channel for LocationsUpdater
+func (dt *DiffTracker) GetLocationsUpdaterTrigger() <-chan bool {
+	return dt.locationsUpdaterTrigger
 }

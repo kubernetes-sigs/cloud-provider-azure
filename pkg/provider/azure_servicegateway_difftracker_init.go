@@ -299,7 +299,7 @@ func (az *Cloud) initializeDiffTracker() error {
 
 	// Initialize the diff tracker state and get the necessary operations to sync the cluster with NRP
 	az.diffTracker = difftracker.InitializeDiffTracker(k8s, nrp)
-	az.diffTracker.LocalServiceNameToNRPServiceMap = syncMapFromMap(localServiceNameToNRPServiceMap)
+	az.diffTracker.LocalServiceNameToNRPServiceMap = *syncMapFromMap(localServiceNameToNRPServiceMap)
 	klog.Infof("initializeDiffTracker: initialized diff tracker localServiceNameToNRPServiceMap with %d entries", localServiceNameToNRPServiceMap)
 	//logObject(localServiceNameToNRPServiceMap)
 	logSyncStringIntMap("initializeDiffTracker: LocalServiceNameToNRPServiceMap", &az.diffTracker.LocalServiceNameToNRPServiceMap)
@@ -533,10 +533,10 @@ func (az *Cloud) initializeDiffTracker() error {
 	return nil
 }
 
-func syncMapFromMap(localServiceNameToNRPServiceMap map[string]int) sync.Map {
+func syncMapFromMap(localServiceNameToNRPServiceMap map[string]int) *sync.Map {
 	var syncMap sync.Map
 	for k, v := range localServiceNameToNRPServiceMap {
 		syncMap.Store(k, v)
 	}
-	return syncMap
+	return &syncMap
 }

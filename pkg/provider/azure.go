@@ -124,13 +124,11 @@ type Cloud struct {
 	regionZonesMap   map[string][]string
 	refreshZonesLock sync.RWMutex
 
-	KubeClient                        clientset.Interface
-	eventBroadcaster                  record.EventBroadcaster
-	eventRecorder                     record.EventRecorder
-	routeUpdater                      batchProcessor
-	backendPoolUpdater                batchProcessor
-	locationAndNRPServiceBatchUpdater batchProcessor
-	podEgressResourceUpdater          batchProcessor
+	KubeClient         clientset.Interface
+	eventBroadcaster   record.EventBroadcaster
+	eventRecorder      record.EventRecorder
+	routeUpdater       batchProcessor
+	backendPoolUpdater batchProcessor
 
 	vmCache        azcache.Resource
 	lbCache        azcache.Resource
@@ -145,8 +143,6 @@ type Cloud struct {
 	pipCache azcache.Resource
 	// Add service lister to always get latest service
 	serviceLister corelisters.ServiceLister
-	// Add pod lister to always get latest pod
-	podLister corelisters.PodLister
 	// node-sync-loop routine and service-reconcile routine should not update LoadBalancer at the same time
 	serviceReconcileLock sync.Mutex
 
@@ -276,8 +272,6 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		klog.V(2).Info("InitializeCloudFromConfig: Service Gateway is enabled, using PodIP backend pool type with Service Load Balancer")
 		az.ServiceGatewayEnabled = true
 	} else {
-		// klog.V(2).Info("CLB-ENECHITOAIA-Service Gateway is not enabled")
-		// klog.V(2).Infof("CLB-ENECHITOAIA-ServiceGatewayEnabled=%t, LoadBalancerSKU=%s, LoadBalancerBackendPoolConfigurationType=%s", az.ServiceGatewayEnabled, az.LoadBalancerSKU, az.LoadBalancerBackendPoolConfigurationType)
 		az.ServiceGatewayEnabled = false
 	}
 
@@ -497,7 +491,6 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 	if err != nil {
 		return err
 	}
-
 	// updating routes and syncing zones only in CCM
 	if callFromCCM {
 		// start delayed route updater.
@@ -542,11 +535,14 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 				return fmt.Errorf("InitializeCloudFromConfig: failed to ensure default outbound service exists: %w", err)
 			}
 
-			az.locationAndNRPServiceBatchUpdater = newLocationAndNRPServiceBatchUpdater(az)
-			go az.locationAndNRPServiceBatchUpdater.run(ctx)
+			klog.Infof("InitializeCloudFromConfig: Starting Engine goroutines (ServiceUpdater + LocationsUpdater)")
+			serviceUpdater := difftracker.NewServiceUpdater(ctx, az, az.diffTracker,
+				az.diffTracker.OnServiceCreationComplete, az.diffTracker.GetServiceUpdaterTrigger())
+			go serviceUpdater.Run()
 
-			az.podEgressResourceUpdater = newPodEgressResourceUpdater(az)
-			go az.podEgressResourceUpdater.run(ctx)
+			locationsUpdater := difftracker.NewLocationsUpdater(ctx, az, az.diffTracker)
+			go locationsUpdater.Run()
+			klog.Infof("InitializeCloudFromConfig: Engine goroutines started successfully")
 		}
 		// Azure Stack does not support zone at the moment
 		// https://docs.microsoft.com/en-us/azure-stack/user/azure-stack-network-differences?view=azs-2102
@@ -785,7 +781,6 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 
 	if az.ServiceGatewayEnabled {
 		az.setUpPodInformerForEgress()
-		// klog.Infof("CLB-ENECHITOAIA-setUpPodInformerForEgress:pod informer setup done\n")
 	}
 }
 

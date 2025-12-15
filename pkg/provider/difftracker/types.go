@@ -3,7 +3,6 @@ package difftracker
 import (
 	"sync"
 
-	"k8s.io/client-go/util/workqueue"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -16,6 +15,17 @@ const (
 	ADD Operation = iota
 	REMOVE
 	UPDATE
+)
+
+// ResourceState represents the lifecycle state of a service in the Engine
+type ResourceState int
+
+const (
+	StateNotStarted ResourceState = iota
+	StateCreationInProgress
+	StateCreated
+	StateDeletionPending
+	StateDeletionInProgress
 )
 
 type UpdateAction int
@@ -65,20 +75,30 @@ type K8s_State struct {
 	Nodes    map[string]Node
 }
 
-type AddPodEvent struct {
-	Key string // <Pod Namespace/Pod Name> used in podLister
+// ================================================================================================
+// ENGINE STATE TRACKING TYPES
+// ================================================================================================
+
+// ServiceOperationState tracks the lifecycle state of a service being created or deleted
+type ServiceOperationState struct {
+	ServiceUID  string
+	IsInbound   bool
+	State       ResourceState
+	RetryCount  int
+	LastAttempt string // timestamp as string for serialization
 }
 
-type DeletePodEvent struct { // Location, Address and Service specifically used since the pod is already deleted, so we cannot get this info from the podLister
-	Location string
-	Address  string
-	Service  string
+// BufferedEndpointUpdate represents endpoints waiting for their service to be created
+type BufferedEndpointUpdate struct {
+	PodIPToNodeIP map[string]string // podIP -> nodeIP
+	Timestamp     string            // When buffered
 }
 
-type PodCrudEvent struct {
-	DeletePodEvent DeletePodEvent
-	AddPodEvent    AddPodEvent
-	EventType      string // "Add" or "Delete"; Update is represented as a Delete followed by an Add
+// PendingDeletion tracks a service waiting for locations to clear before deletion
+type PendingDeletion struct {
+	ServiceUID string
+	IsInbound  bool
+	Timestamp  string
 }
 
 // DiffTracker is the main struct that contains the state of the K8s and NRP services
@@ -88,10 +108,19 @@ type DiffTracker struct {
 	K8sResources K8s_State
 	NRPResources NRP_State
 
-	PodEgressQueue                  workqueue.TypedRateLimitingInterface[PodCrudEvent]
 	LocalServiceNameToNRPServiceMap sync.Map
 
 	InitialSyncDone bool
+
+	// Engine state management
+	pendingServiceOps map[string]*ServiceOperationState
+	bufferedEndpoints map[string][]BufferedEndpointUpdate
+	bufferedPods      map[string][]BufferedPodUpdate
+	pendingDeletions  map[string]*PendingDeletion
+
+	// Communication channels
+	serviceUpdaterTrigger   chan bool
+	locationsUpdaterTrigger chan bool
 }
 
 // --------------------------------------------------------------------------------
@@ -118,6 +147,14 @@ type UpdatePodInputType struct {
 	PrivateOutboundIdentity string
 	Location                string
 	Address                 string
+}
+
+// BufferedPodUpdate represents a pod waiting for its service to be created
+type BufferedPodUpdate struct {
+	PodKey    string // namespace/name for logging
+	Location  string // HostIP
+	Address   string // PodIP
+	Timestamp string // When buffered (for debugging/metrics)
 }
 
 // --------------------------------------------------------------------------------

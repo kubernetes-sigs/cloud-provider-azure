@@ -1367,7 +1367,7 @@ func TestMapLoadBalancerUpdatesToServicesDataDTO_OnlyAdditions(t *testing.T) {
 				IsDelete:    false,
 				LoadBalancerBackendPools: []LoadBalancerBackendPoolDTO{
 					{
-						Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/loadBalancers/service-1/backendAddressPools/service-1-backendpool",
+						Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/loadBalancers/service-1/backendAddressPools/service-1",
 					},
 				},
 			},
@@ -1377,7 +1377,7 @@ func TestMapLoadBalancerUpdatesToServicesDataDTO_OnlyAdditions(t *testing.T) {
 				IsDelete:    false,
 				LoadBalancerBackendPools: []LoadBalancerBackendPoolDTO{
 					{
-						Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/loadBalancers/service-2/backendAddressPools/service-2-backendpool",
+						Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/loadBalancers/service-2/backendAddressPools/service-2",
 					},
 				},
 			},
@@ -1403,12 +1403,14 @@ func TestMapLoadBalancerUpdatesToServicesDataDTO_OnlyRemovals(t *testing.T) {
 		Action: PartialUpdate,
 		Services: []ServiceDTO{
 			{
-				Service:  "service-3",
-				IsDelete: true,
+				Service:     "service-3",
+				ServiceType: Inbound,
+				IsDelete:    true,
 			},
 			{
-				Service:  "service-4",
-				IsDelete: true,
+				Service:     "service-4",
+				ServiceType: Inbound,
+				IsDelete:    true,
 			},
 		},
 	}
@@ -1437,7 +1439,7 @@ func TestMapLoadBalancerUpdatesToServicesDataDTO_AdditionsAndRemovals(t *testing
 				ServiceType: Inbound,
 				LoadBalancerBackendPools: []LoadBalancerBackendPoolDTO{
 					{
-						Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/loadBalancers/service-add-1/backendAddressPools/service-add-1-backendpool",
+						Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/loadBalancers/service-add-1/backendAddressPools/service-add-1",
 					},
 				},
 			},
@@ -1447,17 +1449,19 @@ func TestMapLoadBalancerUpdatesToServicesDataDTO_AdditionsAndRemovals(t *testing
 				IsDelete:    false,
 				LoadBalancerBackendPools: []LoadBalancerBackendPoolDTO{
 					{
-						Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/loadBalancers/service-add-2/backendAddressPools/service-add-2-backendpool",
+						Id: "/subscriptions/test-subscription-id/resourceGroups/test-resource-group-name/providers/Microsoft.Network/loadBalancers/service-add-2/backendAddressPools/service-add-2",
 					},
 				},
 			},
 			{
-				Service:  "service-remove-1",
-				IsDelete: true,
+				Service:     "service-remove-1",
+				ServiceType: Inbound,
+				IsDelete:    true,
 			},
 			{
-				Service:  "service-remove-2",
-				IsDelete: true,
+				Service:     "service-remove-2",
+				ServiceType: Inbound,
+				IsDelete:    true,
 			},
 		},
 	}
@@ -1540,12 +1544,14 @@ func TestMapNATGatewayUpdatesToServicesDataDTO_OnlyRemovals(t *testing.T) {
 		Action: PartialUpdate,
 		Services: []ServiceDTO{
 			{
-				Service:  "natgw-3",
-				IsDelete: true,
+				Service:     "natgw-3",
+				ServiceType: Outbound,
+				IsDelete:    true,
 			},
 			{
-				Service:  "natgw-4",
-				IsDelete: true,
+				Service:     "natgw-4",
+				ServiceType: Outbound,
+				IsDelete:    true,
 			},
 		},
 	}
@@ -1585,12 +1591,14 @@ func TestMapNATGatewayUpdatesToServicesDataDTO_AdditionsAndRemovals(t *testing.T
 				},
 			},
 			{
-				Service:  "natgw-remove-1",
-				IsDelete: true,
+				Service:     "natgw-remove-1",
+				ServiceType: Outbound,
+				IsDelete:    true,
 			},
 			{
-				Service:  "natgw-remove-2",
-				IsDelete: true,
+				Service:     "natgw-remove-2",
+				ServiceType: Outbound,
+				IsDelete:    true,
 			},
 		},
 	}

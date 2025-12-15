@@ -656,11 +656,9 @@ func TestEndpointSlicesInformerContainerLoadBalancer(t *testing.T) {
 			cloud.diffTracker.LocalServiceNameToNRPServiceMap = sync.Map{}
 			cloud.diffTracker.LocalServiceNameToNRPServiceMap.Store("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", struct{}{})
 
-			u := newLocationAndNRPServiceBatchUpdater(cloud)
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			cloud.locationAndNRPServiceBatchUpdater = u
-			go cloud.locationAndNRPServiceBatchUpdater.run(ctx)
+			// Engine pattern is now wired (Phase 6 complete)
+			// EndpointSlice informer calls diffTracker.UpdateEndpoints which handles buffering/state
+			// ServiceUpdater and LocationsUpdater goroutines handle async resource creation
 
 			cloud.setUpEndpointSlicesInformer(informerFactory)
 			stopChan := make(chan struct{})

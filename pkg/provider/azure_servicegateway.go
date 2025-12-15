@@ -161,8 +161,6 @@ func (az *Cloud) UpdateNRPSGWServices(ctx context.Context, serviceGatewayName st
 			},
 		})
 	}
-	// klog.Infof("CLB-ENECHITOAIA: UpdateNRPSGWServices request: %+v", req)
-	// logObject(req)
 
 	err := az.UpdateServices(ctx, serviceGatewayName, req)
 	if err != nil {

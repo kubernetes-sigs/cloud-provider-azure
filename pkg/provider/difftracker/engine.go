@@ -1,0 +1,702 @@
+package difftracker
+
+import (
+	"strings"
+	"time"
+
+	"k8s.io/klog/v2"
+)
+
+const (
+	maxRetries = 3
+)
+
+// AddService handles service creation events for inbound (Load Balancer) services.
+// If the service already exists in NRP, it does nothing (idempotent).
+// If the service doesn't exist, it triggers service creation via XUpdater.
+func (dt *DiffTracker) AddService(serviceUID string, isInbound bool) {
+	startTime := time.Now()
+	defer func() {
+		recordEngineOperation("add_service", startTime, nil)
+		updatePendingServiceOperationsMetric(dt)
+		updateTrackedServicesMetric(dt)
+	}()
+
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
+	if serviceUID == "" {
+		klog.Error("Engine.AddService: serviceUID cannot be empty")
+		return
+	}
+
+	klog.V(4).Infof("Engine.AddService: serviceUID=%s, isInbound=%v", serviceUID, isInbound)
+
+	// Check if service already exists in NRP
+	if isInbound {
+		if dt.NRPResources.LoadBalancers.Has(serviceUID) {
+			klog.V(2).Infof("Engine.AddService: Load Balancer %s already exists in NRP", serviceUID)
+			return
+		}
+	} else {
+		if dt.NRPResources.NATGateways.Has(serviceUID) {
+			klog.V(2).Infof("Engine.AddService: NAT Gateway %s already exists in NRP", serviceUID)
+			return
+		}
+	}
+
+	// Check if service operation is already tracked
+	opState, exists := dt.pendingServiceOps[serviceUID]
+	if exists {
+		klog.V(2).Infof("Engine.AddService: Service %s already tracked with state %v", serviceUID, opState.State)
+		return
+	}
+
+	// Service doesn't exist - need to create it
+	klog.V(2).Infof("Engine.AddService: Service %s doesn't exist, triggering creation", serviceUID)
+
+	// Add service operation to pending list
+	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
+		ServiceUID:  serviceUID,
+		IsInbound:   isInbound,
+		State:       StateNotStarted,
+		RetryCount:  0,
+		LastAttempt: time.Now().Format(time.RFC3339),
+	}
+
+	// Trigger ServiceUpdater to create the service
+	select {
+	case dt.serviceUpdaterTrigger <- true:
+		klog.V(4).Infof("Engine.AddService: Triggered ServiceUpdater for service %s", serviceUID)
+	default:
+		klog.V(2).Infof("Engine.AddService: ServiceUpdater trigger already pending, service %s will be processed in batch", serviceUID)
+	}
+}
+
+// UpdateEndpoints handles endpoint updates for inbound (Load Balancer) services.
+// If the service is already created in NRP, endpoints are immediately updated.
+// If the service is being created, endpoints are buffered until creation completes.
+// If the service doesn't exist, this shouldn't happen (AddService should be called first).
+func (dt *DiffTracker) UpdateEndpoints(serviceUID string, oldPodIPToNodeIP, newPodIPToNodeIP map[string]string) {
+	startTime := time.Now()
+	defer func() {
+		recordEngineOperation("update_endpoints", startTime, nil)
+		updateBufferedUpdatesMetric(dt)
+	}()
+
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
+	if serviceUID == "" {
+		klog.Error("Engine.UpdateEndpoints: serviceUID cannot be empty")
+		return
+	}
+
+	klog.V(4).Infof("Engine.UpdateEndpoints: serviceUID=%s, old=%d, new=%d", serviceUID, len(oldPodIPToNodeIP), len(newPodIPToNodeIP))
+
+	// Check if service operation is tracked
+	opState, exists := dt.pendingServiceOps[serviceUID]
+
+	if !exists {
+		// Check if service exists in NRP (created outside Engine)
+		if dt.NRPResources.LoadBalancers.Has(serviceUID) {
+			klog.V(2).Infof("Engine.UpdateEndpoints: Service %s exists in NRP, updating endpoints immediately", serviceUID)
+			errs := dt.UpdateK8sEndpoints(UpdateK8sEndpointsInputType{
+				InboundIdentity: serviceUID,
+				OldAddresses:    oldPodIPToNodeIP,
+				NewAddresses:    newPodIPToNodeIP,
+			})
+			if len(errs) > 0 {
+				klog.Errorf("Engine.UpdateEndpoints: Failed to update endpoints for service %s: %v", serviceUID, errs)
+				// Still trigger LocationsUpdater even if some endpoints failed
+			}
+			// Trigger LocationsUpdater to sync the changes
+			select {
+			case dt.locationsUpdaterTrigger <- true:
+			default:
+			}
+			return
+		}
+
+		// Service doesn't exist and not tracked - this shouldn't happen
+		klog.Warningf("Engine.UpdateEndpoints: Service %s not found in NRP or pending operations, buffering endpoints anyway", serviceUID)
+		dt.bufferedEndpoints[serviceUID] = append(dt.bufferedEndpoints[serviceUID], BufferedEndpointUpdate{
+			PodIPToNodeIP: newPodIPToNodeIP,
+			Timestamp:     time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	// Service operation exists - check state
+	switch opState.State {
+	case StateCreationInProgress:
+		// Service is being created - buffer the endpoints (only store new state, old state will be empty when promoting)
+		klog.V(2).Infof("Engine.UpdateEndpoints: Service %s is being created, buffering %d endpoints", serviceUID, len(newPodIPToNodeIP))
+		dt.bufferedEndpoints[serviceUID] = append(dt.bufferedEndpoints[serviceUID], BufferedEndpointUpdate{
+			PodIPToNodeIP: newPodIPToNodeIP,
+			Timestamp:     time.Now().Format(time.RFC3339),
+		})
+
+	case StateCreated:
+		// Service is ready - update endpoints immediately
+		klog.V(2).Infof("Engine.UpdateEndpoints: Service %s is ready, updating endpoints immediately (old=%d, new=%d)", serviceUID, len(oldPodIPToNodeIP), len(newPodIPToNodeIP))
+		errs := dt.UpdateK8sEndpoints(UpdateK8sEndpointsInputType{
+			InboundIdentity: serviceUID,
+			OldAddresses:    oldPodIPToNodeIP,
+			NewAddresses:    newPodIPToNodeIP,
+		})
+		if len(errs) > 0 {
+			klog.Errorf("Engine.UpdateEndpoints: Failed to update endpoints for service %s: %v", serviceUID, errs)
+			// Still trigger LocationsUpdater even if some endpoints failed
+		}
+		// Trigger LocationsUpdater to sync the changes
+		select {
+		case dt.locationsUpdaterTrigger <- true:
+		default:
+		}
+
+	case StateDeletionPending, StateDeletionInProgress:
+		// Service is being deleted - ignore endpoint updates
+		klog.Warningf("Engine.UpdateEndpoints: Cannot update endpoints for service %s which is being deleted", serviceUID)
+
+	default:
+		klog.Errorf("Engine.UpdateEndpoints: Unknown state %v for service %s", opState.State, serviceUID)
+	}
+}
+
+// DeleteService handles service deletion events for inbound (Load Balancer) services.
+// It marks the service for deletion and triggers DeletionChecker to verify locations are cleared.
+func (dt *DiffTracker) DeleteService(serviceUID string, isInbound bool) {
+	startTime := time.Now()
+	defer func() {
+		recordEngineOperation("delete_service", startTime, nil)
+		updatePendingServiceOperationsMetric(dt)
+		updatePendingDeletionsMetric(dt)
+	}()
+
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
+	if serviceUID == "" {
+		klog.Error("Engine.DeleteService: serviceUID cannot be empty")
+		return
+	}
+
+	klog.V(4).Infof("Engine.DeleteService: serviceUID=%s, isInbound=%v", serviceUID, isInbound)
+
+	// Check if service exists in pending operations
+	opState, exists := dt.pendingServiceOps[serviceUID]
+
+	if !exists {
+		// Service not tracked - check if it exists in NRP
+		var existsInNRP bool
+		if isInbound {
+			existsInNRP = dt.NRPResources.LoadBalancers.Has(serviceUID)
+		} else {
+			existsInNRP = dt.NRPResources.NATGateways.Has(serviceUID)
+		}
+
+		if !existsInNRP {
+			klog.V(2).Infof("Engine.DeleteService: Service %s doesn't exist in NRP or pending operations, nothing to delete", serviceUID)
+			return
+		}
+
+		// Service exists in NRP but not tracked - create tracking entry
+		klog.V(2).Infof("Engine.DeleteService: Service %s exists in NRP, marking for deletion", serviceUID)
+		dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
+			ServiceUID:  serviceUID,
+			IsInbound:   isInbound,
+			State:       StateDeletionPending,
+			RetryCount:  0,
+			LastAttempt: time.Now().Format(time.RFC3339),
+		}
+	} else {
+		// Service is tracked - update state based on current state
+		switch opState.State {
+		case StateCreationInProgress:
+			klog.Warningf("Engine.DeleteService: Service %s is being created but deletion requested, marking for deletion", serviceUID)
+			opState.State = StateDeletionPending
+
+		case StateCreated:
+			klog.V(2).Infof("Engine.DeleteService: Service %s is ready, marking for deletion", serviceUID)
+			opState.State = StateDeletionPending
+
+		case StateDeletionPending, StateDeletionInProgress:
+			klog.V(2).Infof("Engine.DeleteService: Service %s is already being deleted", serviceUID)
+			return
+
+		default:
+			klog.Errorf("Engine.DeleteService: Unknown state %v for service %s", opState.State, serviceUID)
+			return
+		}
+	}
+
+	// Clear any buffered endpoints/pods for this service
+	delete(dt.bufferedEndpoints, serviceUID)
+	delete(dt.bufferedPods, serviceUID)
+
+	// Add to pending deletions (will be checked by LocationsUpdater after next sync)
+	dt.pendingDeletions[serviceUID] = &PendingDeletion{
+		ServiceUID: serviceUID,
+		IsInbound:  isInbound,
+		Timestamp:  time.Now().Format(time.RFC3339),
+	}
+
+	// Check immediately if locations are already clear
+	// Will be re-checked after each location sync
+	hasLocations := dt.serviceHasLocationsInNRP(serviceUID)
+	if !hasLocations {
+		klog.V(2).Infof("Engine.DeleteService: Service %s has no locations, triggering immediate deletion", serviceUID)
+		// Get the state pointer (may be newly created or from earlier in this function)
+		if opState, exists := dt.pendingServiceOps[serviceUID]; exists {
+			opState.State = StateDeletionInProgress
+		}
+		select {
+		case dt.serviceUpdaterTrigger <- true:
+		default:
+		}
+		delete(dt.pendingDeletions, serviceUID)
+	}
+}
+
+// OnServiceCreationComplete is called by ServiceUpdater after service creation or deletion completes.
+// For creation: promotes buffered endpoints/pods and updates the service state.
+// For deletion: cleans up Engine state.
+func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool, err error) {
+	startTime := time.Now()
+	defer func() {
+		recordEngineOperation("service_creation_complete", startTime, err)
+		updatePendingServiceOperationsMetric(dt)
+		updateBufferedUpdatesMetric(dt)
+	}()
+
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
+	opState, exists := dt.pendingServiceOps[serviceUID]
+	if !exists {
+		klog.Warningf("Engine.OnServiceCreationComplete: Service %s not found in pending operations", serviceUID)
+		return
+	}
+
+	// Determine if this is creation or deletion based on current state
+	isDeletion := (opState.State == StateDeletionInProgress)
+
+	if isDeletion {
+		// Handle deletion completion
+		if success {
+			klog.V(2).Infof("Engine.OnServiceCreationComplete: Service %s deleted successfully", serviceUID)
+			recordServiceOperation("delete", opState.IsInbound, startTime, nil)
+			// Clean up all state
+			delete(dt.pendingServiceOps, serviceUID)
+			delete(dt.bufferedEndpoints, serviceUID)
+			delete(dt.bufferedPods, serviceUID)
+			delete(dt.pendingDeletions, serviceUID)
+		} else {
+			klog.Errorf("Engine.OnServiceCreationComplete: Service %s deletion failed: %v", serviceUID, err)
+			recordServiceOperation("delete", opState.IsInbound, startTime, err)
+			opState.RetryCount++
+			opState.LastAttempt = time.Now().Format(time.RFC3339)
+			recordServiceOperationRetry("delete", opState.IsInbound, opState.RetryCount)
+
+			if opState.RetryCount >= maxRetries {
+				klog.Errorf("Engine.OnServiceCreationComplete: Service %s deletion failed after %d retries, giving up", serviceUID, maxRetries)
+				// Give up - clean up state
+				delete(dt.pendingServiceOps, serviceUID)
+				delete(dt.bufferedEndpoints, serviceUID)
+				delete(dt.bufferedPods, serviceUID)
+				delete(dt.pendingDeletions, serviceUID)
+			} else {
+				klog.V(2).Infof("Engine.OnServiceCreationComplete: Service %s deletion will be retried (attempt %d/%d)", serviceUID, opState.RetryCount, maxRetries)
+				// Trigger ServiceUpdater for retry
+				select {
+				case dt.serviceUpdaterTrigger <- true:
+				default:
+				}
+			}
+		}
+	} else {
+		// Handle creation completion
+		if success {
+			klog.V(2).Infof("Engine.OnServiceCreationComplete: Service %s created successfully", serviceUID)
+			recordStateTransition(opState.State, StateCreated)
+			recordServiceOperation("create", opState.IsInbound, startTime, nil)
+			opState.State = StateCreated
+			opState.RetryCount = 0
+
+			// Promote any buffered endpoints and pods
+			dt.promoteBufferedEndpointsLocked(serviceUID)
+			dt.promoteBufferedPodsLocked(serviceUID)
+
+		} else {
+			klog.Errorf("Engine.OnServiceCreationComplete: Service %s creation failed: %v", serviceUID, err)
+			recordServiceOperation("create", opState.IsInbound, startTime, err)
+			opState.RetryCount++
+			opState.LastAttempt = time.Now().Format(time.RFC3339)
+			recordServiceOperationRetry("create", opState.IsInbound, opState.RetryCount)
+
+			if opState.RetryCount >= maxRetries {
+				klog.Errorf("Engine.OnServiceCreationComplete: Service %s creation failed after %d retries, giving up", serviceUID, maxRetries)
+				// Clear buffered data and remove from tracking
+				delete(dt.bufferedEndpoints, serviceUID)
+				delete(dt.bufferedPods, serviceUID)
+				delete(dt.pendingServiceOps, serviceUID)
+			} else {
+				klog.V(2).Infof("Engine.OnServiceCreationComplete: Service %s creation will be retried (attempt %d/%d)", serviceUID, opState.RetryCount, maxRetries)
+				// Reset to NotStarted for retry
+				recordStateTransition(opState.State, StateNotStarted)
+				opState.State = StateNotStarted
+				// Trigger ServiceUpdater for retry
+				select {
+				case dt.serviceUpdaterTrigger <- true:
+				default:
+				}
+			}
+		}
+	}
+}
+
+// promoteBufferedEndpointsLocked flushes all buffered endpoints for a service after it's created.
+// Must be called with dt.mu held.
+func (dt *DiffTracker) promoteBufferedEndpointsLocked(serviceUID string) {
+	bufferedEndpoints, exists := dt.bufferedEndpoints[serviceUID]
+	if !exists || len(bufferedEndpoints) == 0 {
+		return
+	}
+
+	klog.V(2).Infof("Engine.promoteBufferedEndpointsLocked: Promoting %d buffered endpoint updates for service %s",
+		len(bufferedEndpoints), serviceUID)
+
+	// Merge all buffered endpoint updates (last one wins for each pod IP)
+	mergedEndpoints := make(map[string]string)
+	for _, update := range bufferedEndpoints {
+		for podIP, nodeIP := range update.PodIPToNodeIP {
+			mergedEndpoints[podIP] = nodeIP
+		}
+	}
+
+	klog.V(4).Infof("Engine.promoteBufferedEndpointsLocked: Merged to %d unique endpoints", len(mergedEndpoints))
+
+	// When promoting buffered endpoints, OldAddresses should be empty since service was just created
+	errs := dt.UpdateK8sEndpoints(UpdateK8sEndpointsInputType{
+		InboundIdentity: serviceUID,
+		OldAddresses:    make(map[string]string),
+		NewAddresses:    mergedEndpoints,
+	})
+	if len(errs) > 0 {
+		klog.Errorf("Engine.promoteBufferedEndpointsLocked: Failed to update endpoints for service %s: %v",
+			serviceUID, errs)
+		// Continue to clear buffer and trigger LocationsUpdater for partial success
+	}
+
+	// Clear buffered endpoints
+	delete(dt.bufferedEndpoints, serviceUID)
+
+	// Trigger LocationsUpdater to sync all the promoted endpoints
+	select {
+	case dt.locationsUpdaterTrigger <- true:
+	default:
+	}
+}
+
+// AddPod handles pod addition events for outbound (NAT Gateway) services.
+// If the service is already created in NRP, the pod is immediately added to DiffTracker.
+// If the service is being created, the pod is buffered until creation completes.
+// If the service doesn't exist, it triggers service creation and buffers the pod.
+func (dt *DiffTracker) AddPod(serviceUID, podKey, location, address string) {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
+	if serviceUID == "" || location == "" || address == "" {
+		klog.Errorf("Engine.AddPod: invalid parameters - serviceUID=%s, location=%s, address=%s", serviceUID, location, address)
+		return
+	}
+
+	klog.V(4).Infof("Engine.AddPod: serviceUID=%s, podKey=%s, location=%s, address=%s",
+		serviceUID, podKey, location, address)
+
+	// Check if service operation is tracked
+	opState, exists := dt.pendingServiceOps[serviceUID]
+
+	if !exists {
+		// Service doesn't exist - need to create it first
+		klog.V(2).Infof("Engine.AddPod: Service %s doesn't exist, creating it and buffering pod %s", serviceUID, podKey)
+
+		// Create service operation
+		dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
+			ServiceUID:  serviceUID,
+			IsInbound:   false, // NAT Gateway is outbound
+			State:       StateNotStarted,
+			RetryCount:  0,
+			LastAttempt: time.Now().Format(time.RFC3339),
+		}
+
+		// Buffer the pod
+		dt.bufferedPods[serviceUID] = append(dt.bufferedPods[serviceUID], BufferedPodUpdate{
+			PodKey:    podKey,
+			Location:  location,
+			Address:   address,
+			Timestamp: time.Now().Format(time.RFC3339),
+		})
+
+		// Trigger ServiceUpdater to create the service
+		select {
+		case dt.serviceUpdaterTrigger <- true:
+			klog.V(4).Infof("Engine.AddPod: Triggered ServiceUpdater for service %s", serviceUID)
+		default:
+			klog.V(2).Infof("Engine.AddPod: ServiceUpdater trigger already pending for service %s", serviceUID)
+		}
+		return
+	}
+
+	// Service operation exists - check state
+	switch opState.State {
+	case StateCreationInProgress:
+		// Service is being created - buffer the pod
+		klog.V(2).Infof("Engine.AddPod: Service %s is being created, buffering pod %s", serviceUID, podKey)
+		dt.bufferedPods[serviceUID] = append(dt.bufferedPods[serviceUID], BufferedPodUpdate{
+			PodKey:    podKey,
+			Location:  location,
+			Address:   address,
+			Timestamp: time.Now().Format(time.RFC3339),
+		})
+
+	case StateCreated:
+		// Service is ready - add pod immediately
+		klog.V(2).Infof("Engine.AddPod: Service %s is ready, adding pod %s immediately", serviceUID, podKey)
+		err := dt.UpdateK8sPod(UpdatePodInputType{
+			PodOperation:           ADD,
+			PublicOutboundIdentity: serviceUID,
+			Location:               location,
+			Address:                address,
+		})
+		if err != nil {
+			klog.Errorf("Engine.AddPod: Failed to add pod %s: %v", podKey, err)
+			// Still trigger LocationsUpdater even if pod add failed
+		}
+
+		// Trigger LocationsUpdater to sync the change
+		select {
+		case dt.locationsUpdaterTrigger <- true:
+		default:
+		}
+
+	case StateDeletionPending, StateDeletionInProgress:
+		// Service is being deleted - ignore pod additions
+		klog.Warningf("Engine.AddPod: Cannot add pod %s to service %s which is being deleted", podKey, serviceUID)
+
+	default:
+		klog.Errorf("Engine.AddPod: Unknown state %v for service %s", opState.State, serviceUID)
+	}
+}
+
+// DeletePod handles pod deletion events for outbound (NAT Gateway) services.
+// It immediately removes the pod from DiffTracker and triggers LocationsUpdater.
+// If this is the last pod for the service, it marks the service for deletion.
+func (dt *DiffTracker) DeletePod(serviceUID, location, address string) {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
+	if serviceUID == "" || location == "" || address == "" {
+		klog.Errorf("Engine.DeletePod: invalid parameters - serviceUID=%s, location=%s, address=%s", serviceUID, location, address)
+		return
+	}
+
+	klog.V(4).Infof("Engine.DeletePod: serviceUID=%s, location=%s, address=%s",
+		serviceUID, location, address)
+
+	// Check counter BEFORE removing pod to determine if this is the last pod
+	val, ok := dt.LocalServiceNameToNRPServiceMap.Load(strings.ToLower(serviceUID))
+	if !ok {
+		klog.Warningf("Engine.DeletePod: Service %s not found in LocalServiceNameToNRPServiceMap", serviceUID)
+		// Still try to remove pod from DiffTracker
+		err := dt.UpdateK8sPod(UpdatePodInputType{
+			PodOperation:           REMOVE,
+			PublicOutboundIdentity: serviceUID,
+			Location:               location,
+			Address:                address,
+		})
+		if err != nil {
+			klog.Errorf("Engine.DeletePod: Failed to remove pod: %v", err)
+		}
+		return
+	}
+
+	counter := val.(int)
+	if counter <= 0 {
+		klog.Errorf("Engine.DeletePod: Service %s has invalid counter: %d", serviceUID, counter)
+		return
+	}
+
+	isLastPod := (counter == 1)
+
+	// Remove pod from DiffTracker (this also updates the counter via UpdateK8sPod)
+	err := dt.UpdateK8sPod(UpdatePodInputType{
+		PodOperation:           REMOVE,
+		PublicOutboundIdentity: serviceUID,
+		Location:               location,
+		Address:                address,
+	})
+
+	if err != nil {
+		klog.Errorf("Engine.DeletePod: Failed to remove pod: %v", err)
+		return
+	}
+
+	if isLastPod {
+		// This was the last pod - mark service for deletion
+		// Note: LocalServiceNameToNRPServiceMap already updated by UpdateK8sPod
+		klog.V(2).Infof("Engine.DeletePod: Last pod removed for service %s, marking for deletion", serviceUID)
+
+		// Check if service is tracked
+		opState, exists := dt.pendingServiceOps[serviceUID]
+		if !exists {
+			// Service not tracked but exists in NRP - create tracking entry
+			dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
+				ServiceUID:  serviceUID,
+				IsInbound:   false,
+				State:       StateDeletionPending,
+				RetryCount:  0,
+				LastAttempt: time.Now().Format(time.RFC3339),
+			}
+		} else {
+			// Update existing tracking
+			opState.State = StateDeletionPending
+		}
+
+		// Add to pending deletions
+		dt.pendingDeletions[serviceUID] = &PendingDeletion{
+			ServiceUID: serviceUID,
+			IsInbound:  false,
+			Timestamp:  time.Now().Format(time.RFC3339),
+		}
+	}
+	// Note: Counter is managed by UpdateK8sPod for both last pod and non-last pod cases
+
+	// Trigger LocationsUpdater to sync the change
+	select {
+	case dt.locationsUpdaterTrigger <- true:
+	default:
+	}
+}
+
+// promoteBufferedPodsLocked flushes all buffered pods for a service after it's created.
+// Must be called with dt.mu held.
+func (dt *DiffTracker) promoteBufferedPodsLocked(serviceUID string) {
+	bufferedPods, exists := dt.bufferedPods[serviceUID]
+	if !exists || len(bufferedPods) == 0 {
+		return
+	}
+
+	klog.V(2).Infof("Engine.promoteBufferedPodsLocked: Promoting %d buffered pods for service %s",
+		len(bufferedPods), serviceUID)
+
+	for _, pod := range bufferedPods {
+		klog.V(4).Infof("Engine.promoteBufferedPodsLocked: Adding pod %s (location=%s, address=%s)",
+			pod.PodKey, pod.Location, pod.Address)
+
+		err := dt.UpdateK8sPod(UpdatePodInputType{
+			PodOperation:           ADD,
+			PublicOutboundIdentity: serviceUID,
+			Location:               pod.Location,
+			Address:                pod.Address,
+		})
+		if err != nil {
+			klog.Errorf("Engine.promoteBufferedPodsLocked: Failed to add pod %s: %v", pod.PodKey, err)
+			continue
+		}
+	}
+
+	// Clear buffered pods
+	delete(dt.bufferedPods, serviceUID)
+
+	// Trigger LocationsUpdater to sync all the promoted pods
+	select {
+	case dt.locationsUpdaterTrigger <- true:
+	default:
+	}
+}
+
+// serviceHasLocationsInNRP checks if any locations in NRP reference this service.
+// Must be called with dt.mu held.
+func (dt *DiffTracker) serviceHasLocationsInNRP(serviceUID string) bool {
+	// Iterate through all NRP locations
+	for _, nrpLocation := range dt.NRPResources.Locations {
+		for _, nrpAddress := range nrpLocation.Addresses {
+			if nrpAddress.Services.Has(serviceUID) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// CheckPendingDeletions checks each pending deletion to see if locations are cleared.
+// This method is called by LocationsUpdater after syncing location changes.
+func (dt *DiffTracker) CheckPendingDeletions() {
+	startTime := time.Now()
+	blockedCount := 0
+	defer func() {
+		recordDeletionCheck(startTime, blockedCount)
+		updatePendingDeletionsMetric(dt)
+	}()
+
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
+	if len(dt.pendingDeletions) == 0 {
+		return
+	}
+
+	klog.V(4).Infof("Engine.CheckPendingDeletions: Checking %d pending deletions", len(dt.pendingDeletions))
+
+	// Iterate through all pending deletions
+	for serviceUID, pendingDeletion := range dt.pendingDeletions {
+		klog.V(4).Infof("Engine.CheckPendingDeletions: Checking service %s (isInbound=%v)",
+			serviceUID, pendingDeletion.IsInbound)
+
+		// Check if service still has locations in NRP
+		hasLocations := dt.serviceHasLocationsInNRP(serviceUID)
+		if hasLocations {
+			klog.V(4).Infof("Engine.CheckPendingDeletions: Service %s still has locations in NRP, waiting",
+				serviceUID)
+			blockedCount++
+			continue
+		}
+
+		// Locations cleared - proceed with deletion
+		klog.V(2).Infof("Engine.CheckPendingDeletions: Service %s has no locations, triggering deletion",
+			serviceUID)
+
+		// Update service state to DeletionInProgress
+		if opState, exists := dt.pendingServiceOps[serviceUID]; exists {
+			recordStateTransition(opState.State, StateDeletionInProgress)
+			opState.State = StateDeletionInProgress
+		} else {
+			// Service not in pendingServiceOps - create entry
+			klog.Warningf("Engine.CheckPendingDeletions: Service %s in pendingDeletions but not in pendingServiceOps, creating entry",
+				serviceUID)
+			dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
+				ServiceUID:  serviceUID,
+				IsInbound:   pendingDeletion.IsInbound,
+				State:       StateDeletionInProgress,
+				RetryCount:  0,
+				LastAttempt: time.Now().Format(time.RFC3339),
+			}
+		}
+
+		// Trigger ServiceUpdater to delete the service
+		select {
+		case dt.serviceUpdaterTrigger <- true:
+			klog.V(4).Infof("Engine.CheckPendingDeletions: Triggered ServiceUpdater for service %s", serviceUID)
+		default:
+			klog.V(2).Infof("Engine.CheckPendingDeletions: ServiceUpdater trigger already pending for service %s", serviceUID)
+		}
+
+		// Remove from pending deletions
+		delete(dt.pendingDeletions, serviceUID)
+	}
+
+	// Update blocked services metric
+	updateServicesBlockedByLocationsMetric(blockedCount)
+}

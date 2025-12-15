@@ -2,6 +2,7 @@ package provider
 
 import (
 	"crypto/rand"
+	"fmt"
 	"math/big"
 	"strings"
 	"time"
@@ -13,7 +14,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 )
 
 // ResyncPeriod returns a function that generates a randomized resync duration
@@ -26,104 +26,23 @@ func ResyncPeriod(base time.Duration) func() time.Duration {
 	}
 }
 
-func (az *Cloud) podInformerAddPod(pod *v1.Pod) {
-	// klog.Infof("CLB-ENECHITOAIA-Pod %s/%s has been added\n", pod.Namespace, pod.Name)
-	if pod.Labels == nil || pod.Labels[consts.PodLabelServiceEgressGateway] == "" {
-		klog.Errorf("podInformerAddPod: Pod %s/%s has no labels or staticGatewayConfiguration label. Cannot process add event.",
-			pod.Namespace, pod.Name)
-		return
-	}
-	// logObject(pod)
-	if pod.Status.HostIP == "" || pod.Status.PodIP == "" {
-		klog.Errorf("podInformerAddPod: Pod %s/%s has no HostIP or PodIP. Cannot process add event.",
-			pod.Namespace, pod.Name)
-		return
-	}
-	// klog.Infof("podInformerAddPod: Pod %s/%s has Location: %s, PodIP: %s\n", pod.Namespace, pod.Name, pod.Status.HostIP, pod.Status.PodIP)
-	staticGatewayConfigurationName := strings.ToLower(pod.Labels[consts.PodLabelServiceEgressGateway])
-	klog.Infof("podInformerAddPod: Pod %s/%s has static gateway configuration: %s", pod.Namespace, pod.Name, staticGatewayConfigurationName)
-	_, ok := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(staticGatewayConfigurationName)
-	if ok {
-		klog.Infof("podInformerAddPod: Pod %s/%s has static gateway configuration annotation. Found in localServiceNameToNRPServiceMap.",
-			pod.Namespace, pod.Name)
-		az.diffTracker.UpdateK8sPod(
-			difftracker.UpdatePodInputType{
-				PodOperation:           difftracker.ADD,
-				PublicOutboundIdentity: staticGatewayConfigurationName,
-				Location:               pod.Status.HostIP,
-				Address:                pod.Status.PodIP,
-			},
-		)
-		az.TriggerLocationAndNRPServiceBatchUpdate()
-	} else {
-		klog.Infof("podInformerAddPod: Pod %s/%s has static gateway configuration annotation. Not found in localServiceNameToNRPServiceMap.",
-			pod.Namespace, pod.Name)
-		key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(pod)
-		if err != nil {
-			klog.Errorf("Failed to get key for pod %s/%s: %v", pod.Namespace, pod.Name, err)
-			return
-		}
-		az.diffTracker.PodEgressQueue.Add(difftracker.PodCrudEvent{
-			AddPodEvent: difftracker.AddPodEvent{
-				Key: key,
-			},
-			EventType: "Add",
-		})
-	}
-}
-
-func (az *Cloud) podInformerRemovePod(pod *v1.Pod) {
-	// klog.Infof("CLB-ENECHITOAIA-Pod %s/%s has been deleted\n", pod.Namespace, pod.Name)
-	if pod.Labels == nil || pod.Labels[consts.PodLabelServiceEgressGateway] == "" {
-		klog.Errorf("Pod %s/%s has no labels. Cannot process delete event.",
-			pod.Namespace, pod.Name)
-		return
-	}
-
-	staticGatewayConfigurationName := strings.ToLower(pod.Labels[consts.PodLabelServiceEgressGateway])
-	counter, ok := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(staticGatewayConfigurationName)
-	// klog.Infof("CLB-ENECHITOAIA-Pod %s/%s has static gateway configuration: %s", pod.Namespace, pod.Name, staticGatewayConfigurationName)
-	klog.Infof("CLB-ENECHITOAIA-Pod %s/%s has Location: %s, PodIP: %s\n", pod.Namespace, pod.Name, pod.Status.HostIP, pod.Status.PodIP)
-	// logObject(pod)
-	logSyncStringIntMap("CLB_ENECHITOAOIA: LocalServiceNameToNRPServiceMap", &az.diffTracker.LocalServiceNameToNRPServiceMap)
-	if ok {
-		if counter.(int) > 1 {
-			az.diffTracker.UpdateK8sPod(
-				difftracker.UpdatePodInputType{
-					PodOperation:           difftracker.REMOVE,
-					PublicOutboundIdentity: staticGatewayConfigurationName,
-					Location:               pod.Status.HostIP,
-					Address:                pod.Status.PodIP,
-				},
-			)
-			az.TriggerLocationAndNRPServiceBatchUpdate()
-		} else {
-			az.diffTracker.PodEgressQueue.Add(difftracker.PodCrudEvent{
-				DeletePodEvent: difftracker.DeletePodEvent{
-					Location: pod.Status.HostIP,
-					Address:  pod.Status.PodIP,
-					Service:  staticGatewayConfigurationName,
-				},
-				EventType: "Delete",
-			})
-		}
-	} else {
-		klog.Errorf("podInformerRemovePod: Pod %s/%s has static gateway configuration %s, but it is not found in localServiceNameToNRPServiceMap. Cannot decrement its counter.",
-			pod.Namespace, pod.Name, staticGatewayConfigurationName)
-	}
-}
-
+// setUpPodInformerForEgress creates an informer for Pods with egress labels.
+// It uses label selectors to filter pods efficiently at the API server level,
+// reducing memory and CPU overhead by only watching relevant pods.
 func (az *Cloud) setUpPodInformerForEgress() {
-	// klog.Infof("CLB-ENECHITOAIA-setUpPodInformerForEgress: setting up pod informer for egress with label selector: %s\n", consts.PodLabelServiceEgressGateway)
+	klog.V(2).Infof("setUpPodInformerForEgress: Setting up pod informer with label selector: %s", consts.PodLabelServiceEgressGateway)
+
+	// Create a separate informer factory with label selector to filter pods at the API server
 	podInformerFactory := informers.NewSharedInformerFactoryWithOptions(
 		az.KubeClient,
 		ResyncPeriod(12*time.Hour)(),
 		informers.WithTweakListOptions(func(options *metav1.ListOptions) {
+			// Only watch pods with the egress gateway label
 			options.LabelSelector = consts.PodLabelServiceEgressGateway
 		}),
 	)
+
 	podInformer := podInformerFactory.Core().V1().Pods().Informer()
-	// klog.Infof("podInformer: %v\n", podInformer)
 	_, err := podInformer.AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
@@ -133,14 +52,9 @@ func (az *Cloud) setUpPodInformerForEgress() {
 			UpdateFunc: func(oldObj, newObj interface{}) {
 				oldPod := oldObj.(*v1.Pod)
 				newPod := newObj.(*v1.Pod)
-				// klog.Infof("CLB-ENECHITOAIA-Pod %s/%s has been updated\n", newPod.Namespace, newPod.Name)
-				// logObject(oldObj)
-				// logObject(newObj)
 
-				var (
-					prevEgressGatewayName = ""
-					currEgressGatewayName = ""
-				)
+				// Extract egress gateway names from labels
+				var prevEgressGatewayName, currEgressGatewayName string
 				if oldPod.Labels != nil {
 					prevEgressGatewayName = strings.ToLower(oldPod.Labels[consts.PodLabelServiceEgressGateway])
 				}
@@ -148,29 +62,44 @@ func (az *Cloud) setUpPodInformerForEgress() {
 					currEgressGatewayName = strings.ToLower(newPod.Labels[consts.PodLabelServiceEgressGateway])
 				}
 
-				podJustCompletedNodeIPAndPodIPInitialization := (oldPod.Status.HostIP == "" || oldPod.Status.PodIP == "") && (newPod.Status.HostIP != "" && newPod.Status.PodIP != "")
-				if currEgressGatewayName != "" && podJustCompletedNodeIPAndPodIPInitialization {
-					// klog.Infof("CLB-ENECHITOAIA-Pod %s/%s has just completed NodeIP and PodIP initialization. Treating as an Add event.",
-					// 	newPod.Namespace, newPod.Name)
-					az.podInformerAddPod(newPod)
-					return
-				}
-
-				if prevEgressGatewayName == currEgressGatewayName {
-					klog.Infof("setUpPodInformerForEgress: Pod %s/%s has no change in static gateway configuration. No action needed.",
+				// Handle pod that just completed IP initialization
+				podJustCompletedIPInitialization := (oldPod.Status.HostIP == "" || oldPod.Status.PodIP == "") &&
+					(newPod.Status.HostIP != "" && newPod.Status.PodIP != "")
+				if currEgressGatewayName != "" && podJustCompletedIPInitialization {
+					klog.V(2).Infof("setUpPodInformerForEgress: Pod %s/%s completed IP initialization, treating as add event",
 						newPod.Namespace, newPod.Name)
+					az.podInformerAddPod(newPod)
 					return
 				}
 
-				// klog.Infof("CLB-ENECHITOAIA-Pod %s/%s has changed static gateway configuration from %s to %s",
-				// 	newPod.Namespace, newPod.Name, prevEgressGatewayName, currEgressGatewayName)
-				if prevEgressGatewayName != "" {
-					az.podInformerRemovePod(oldPod)
+				// Handle egress label change
+				if prevEgressGatewayName != currEgressGatewayName {
+					klog.V(2).Infof("setUpPodInformerForEgress: Pod %s/%s changed egress gateway from %s to %s",
+						newPod.Namespace, newPod.Name, prevEgressGatewayName, currEgressGatewayName)
+					if prevEgressGatewayName != "" {
+						az.podInformerRemovePod(oldPod)
+					}
+					if currEgressGatewayName != "" {
+						az.podInformerAddPod(newPod)
+					}
+					return
 				}
 
-				if currEgressGatewayName != "" {
-					az.podInformerAddPod(newPod)
+				// Handle IP change (pod moved to different node or got new IP)
+				if currEgressGatewayName != "" && (oldPod.Status.HostIP != newPod.Status.HostIP || oldPod.Status.PodIP != newPod.Status.PodIP) {
+					klog.V(2).Infof("setUpPodInformerForEgress: Pod %s/%s IPs changed (HostIP: %s→%s, PodIP: %s→%s)",
+						newPod.Namespace, newPod.Name, oldPod.Status.HostIP, newPod.Status.HostIP, oldPod.Status.PodIP, newPod.Status.PodIP)
+					if oldPod.Status.HostIP != "" && oldPod.Status.PodIP != "" {
+						az.podInformerRemovePod(oldPod)
+					}
+					if newPod.Status.HostIP != "" && newPod.Status.PodIP != "" {
+						az.podInformerAddPod(newPod)
+					}
+					return
 				}
+
+				klog.V(4).Infof("setUpPodInformerForEgress: Pod %s/%s update has no relevant changes, skipping",
+					newPod.Namespace, newPod.Name)
 			},
 			DeleteFunc: func(obj interface{}) {
 				pod := obj.(*v1.Pod)
@@ -178,17 +107,71 @@ func (az *Cloud) setUpPodInformerForEgress() {
 			},
 		})
 	if err != nil {
-		klog.Errorf("setUpPodInformerForEgress: failed to add event handlers to pod informer: %v\n", err)
+		klog.Errorf("setUpPodInformerForEgress: Failed to add event handlers to pod informer: %v", err)
 		return
 	}
-	// else {
-	// 	klog.Infof("CLB-ENECHITOAIA-setUpPodInformerForEgress: successfully added event handlers to pod informer\n")
-	// }
 
-	az.podLister = podInformerFactory.Core().V1().Pods().Lister()
-	// klog.Infof("az.podLister: %v\n", az.podLister)
-	// klog.Infof("CLB-ENECHITOAIA-setUpPodInformerForEgress: starting pod informer factory\n")
+	// Start the informer factory
+	klog.V(2).Infof("setUpPodInformerForEgress: Starting pod informer factory")
 	podInformerFactory.Start(wait.NeverStop)
 	podInformerFactory.WaitForCacheSync(wait.NeverStop)
-	// klog.Infof("CLB-ENECHITOAIA-setUpPodInformerForEgress: end of setUpPodInformerForEgress\n")
+	klog.V(2).Infof("setUpPodInformerForEgress: Pod informer successfully initialized and synced")
+}
+
+// podInformerAddPod handles pod addition events for egress.
+// It validates the pod has the required egress label and IPs, then calls Engine.AddPod().
+// The Engine handles all states:
+// - Service doesn't exist → Engine creates NAT Gateway and buffers pod
+// - Service being created → Engine buffers pod
+// - Service ready → Engine adds pod immediately
+func (az *Cloud) podInformerAddPod(pod *v1.Pod) {
+	// Validate pod has egress label (should always be true due to label selector, but check anyway)
+	if pod.Labels == nil || pod.Labels[consts.PodLabelServiceEgressGateway] == "" {
+		klog.V(4).Infof("podInformerAddPod: Pod %s/%s has no egress label, skipping", pod.Namespace, pod.Name)
+		return
+	}
+
+	// Validate pod has required IPs
+	if pod.Status.HostIP == "" || pod.Status.PodIP == "" {
+		klog.V(4).Infof("podInformerAddPod: Pod %s/%s has egress label but no HostIP or PodIP yet, skipping",
+			pod.Namespace, pod.Name)
+		return
+	}
+
+	egressName := strings.ToLower(pod.Labels[consts.PodLabelServiceEgressGateway])
+	podKey := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+
+	klog.V(2).Infof("podInformerAddPod: Pod %s added with egress %s (HostIP=%s, PodIP=%s)",
+		podKey, egressName, pod.Status.HostIP, pod.Status.PodIP)
+
+	// Call Engine.AddPod - it handles all states and service creation
+	az.diffTracker.AddPod(egressName, podKey, pod.Status.HostIP, pod.Status.PodIP)
+}
+
+// podInformerRemovePod handles pod deletion events for egress.
+// It calls Engine.DeletePod() which handles last-pod deletion logic:
+// - Not last pod → Engine removes pod, decrements counter, triggers LocationsUpdater
+// - Last pod → Engine removes pod, marks service for deletion, triggers DeletionChecker
+func (az *Cloud) podInformerRemovePod(pod *v1.Pod) {
+	// Validate pod has egress label
+	if pod.Labels == nil || pod.Labels[consts.PodLabelServiceEgressGateway] == "" {
+		klog.V(4).Infof("podInformerRemovePod: Pod %s/%s has no egress label, skipping", pod.Namespace, pod.Name)
+		return
+	}
+
+	// Need IPs to identify which location/address to remove
+	if pod.Status.HostIP == "" || pod.Status.PodIP == "" {
+		klog.Warningf("podInformerRemovePod: Pod %s/%s has egress label but no IPs, cannot remove",
+			pod.Namespace, pod.Name)
+		return
+	}
+
+	egressName := strings.ToLower(pod.Labels[consts.PodLabelServiceEgressGateway])
+	podKey := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+
+	klog.V(2).Infof("podInformerRemovePod: Pod %s removed from egress %s (HostIP=%s, PodIP=%s)",
+		podKey, egressName, pod.Status.HostIP, pod.Status.PodIP)
+
+	// Call Engine.DeletePod - it handles all cases including last-pod deletion
+	az.diffTracker.DeletePod(egressName, pod.Status.HostIP, pod.Status.PodIP)
 }

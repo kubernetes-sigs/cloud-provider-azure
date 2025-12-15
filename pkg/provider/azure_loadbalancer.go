@@ -51,7 +51,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
 	"sigs.k8s.io/cloud-provider-azure/pkg/trace"
 	"sigs.k8s.io/cloud-provider-azure/pkg/trace/attributes"
@@ -144,7 +143,6 @@ func (az *Cloud) reconcileService(ctx context.Context, clusterName string, servi
 	logger := log.FromContextOrBackground(ctx)
 
 	logger.V(2).Info("Start reconciling Service", "lb", az.GetLoadBalancerName(ctx, clusterName, service))
-	// klog.Infof("CLB-ENECHITOAIA-reconcileService: %s\n", service.Name)
 	lb, needRetry, err := az.reconcileLoadBalancer(ctx, clusterName, service, nodes, true /* wantLb */)
 	if err != nil {
 		logger.Error(err, "Failed to reconcile LoadBalancer")
@@ -331,7 +329,6 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 	// the service may be switched from an internal LB to a public one, or vice versa.
 	// Here we'll firstly ensure service do not lie in the opposite LB.
 	const Operation = "EnsureLoadBalancer"
-	// klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancer: %s\n", service.Name)
 	ctx, span := trace.BeginReconcile(ctx, trace.DefaultTracer(), Operation, attributes.FeatureOfService(service)...)
 	defer func() { span.Observe(ctx, err) }()
 
@@ -391,6 +388,17 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 			logger.V(5).Info("Finished", "service-spec", log.ValueAsMap(service))
 		}
 	}()
+
+	// Use Engine for async service creation when ServiceGatewayEnabled
+	if az.ServiceGatewayEnabled && az.diffTracker != nil {
+		serviceUID := getServiceUID(service)
+		logger.V(2).Info("Using Engine for async service creation", "serviceUID", serviceUID)
+		az.diffTracker.AddService(serviceUID, true) // true = inbound service
+
+		// Status will be populated by subsequent reconcile loops after async creation completes
+		isOperationSucceeded = true
+		return &v1.LoadBalancerStatus{}, nil
+	}
 
 	lbStatus, err = az.reconcileService(ctx, clusterName, service, nodes)
 	if err != nil {
@@ -523,45 +531,6 @@ func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, ser
 	return nil
 }
 
-func (az *Cloud) deleteServiceGatewayLoadBalancerResources(
-	ctx context.Context,
-	clusterName string,
-	service *v1.Service,
-	lb *armnetwork.LoadBalancer,
-	lbExists bool,
-) (bool, error) {
-	if !az.ServiceGatewayEnabled || service == nil {
-		return false, nil
-	}
-
-	// Delete the load balancer if it exists
-	if lb != nil && lb.Name != nil && *lb.Name != "" && lbExists {
-		klog.Infof("deleteServiceGatewayLoadBalancerResources: deleting LB %s for service %s", *lb.Name, getServiceName(service))
-		if err := az.DeleteLB(ctx, service, *lb.Name); err != nil {
-			klog.Warningf("deleteServiceGatewayLoadBalancerResources: failed to delete LB %s: %v", *lb.Name, err)
-			return false, err
-		}
-
-		// Clear from cache
-		_ = az.lbCache.Delete(*lb.Name)
-	} else {
-		klog.V(4).Infof("deleteServiceGatewayLoadBalancerResources: LB does not exist for service %s, proceeding with PIP cleanup", getServiceName(service))
-	}
-
-	// Delete the PIPs that were attached to the LB
-	pipRG := az.getPublicIPAddressResourceGroup(service)
-	for _, pipName := range pipsToDelete {
-		klog.V(4).Infof("deleteServiceGatewayLoadBalancerResources: deleting PIP %s", pipName)
-		if err := az.DeletePublicIP(service, pipRG, pipName); err != nil {
-			klog.V(4).Infof("deleteServiceGatewayLoadBalancerResources: DeletePublicIP(%s) error (ignored): %v", pipName, err)
-		} else {
-			klog.V(4).Infof("deleteServiceGatewayLoadBalancerResources: successfully deleted PIP %s", pipName)
-		}
-	}
-
-	return true, nil
-}
-
 // EnsureLoadBalancerDeleted deletes the specified load balancer if it
 // exists, returning nil if the load balancer specified either didn't exist or
 // was successfully deleted.
@@ -571,7 +540,6 @@ func (az *Cloud) deleteServiceGatewayLoadBalancerResources(
 // Implementations must treat the *v1.Service parameter as read-only and not modify it.
 // Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
 func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) (err error) {
-	// klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: %s\n", service.Name)
 	const Operation = "EnsureLoadBalancerDeleted"
 
 	ctx, span := trace.BeginReconcile(ctx, trace.DefaultTracer(), Operation, attributes.FeatureOfService(service)...)
@@ -633,7 +601,7 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 		}
 	}()
 
-	lb, _, _, lbIPsPrimaryPIPs, lbExists, _, err := az.getServiceLoadBalancer(ctx, service, clusterName, nil, false, []*armnetwork.LoadBalancer{})
+	lb, _, _, lbIPsPrimaryPIPs, _, _, err := az.getServiceLoadBalancer(ctx, service, clusterName, nil, false, []*armnetwork.LoadBalancer{})
 	if err != nil && !errutils.HasStatusForbiddenOrIgnoredError(err) {
 		return err
 	}
@@ -643,53 +611,13 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 		return err
 	}
 
-	if az.ServiceGatewayEnabled {
+	// Use Engine for async service deletion when ServiceGatewayEnabled
+	if az.ServiceGatewayEnabled && az.diffTracker != nil {
 		serviceUID := getServiceUID(service)
-		klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: az.diffTracker.InitialSyncDone %t\n", az.diffTracker.InitialSyncDone)
-		logSyncStringIntMap("LocalServiceNameToNRPServiceMap", &az.diffTracker.LocalServiceNameToNRPServiceMap)
-		if _, loaded := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(strings.ToLower(serviceUID)); loaded {
-			klog.Info("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: AICIBA service found in LocalServiceNameToNRPServiceMap\n")
-			if az.diffTracker.InitialSyncDone {
-				klog.Infof("CLB-ENECHITOAIA-EnsureLoadBalancerDeleted: serviceUID %s is a local service, removing backend pool reference\n", serviceUID)
+		logger.V(2).Info("Using Engine for async service deletion", "serviceUID", serviceUID)
+		az.diffTracker.DeleteService(serviceUID, true) // true = inbound service
 
-				removeBackendPoolRequestDTO := difftracker.RemoveBackendPoolReferenceFromServicesDTO(
-					difftracker.SyncServicesReturnType{
-						Additions: nil,
-						Removals:  utilsets.NewString(serviceUID),
-					},
-					az.SubscriptionID,
-					az.ResourceGroup)
-
-				// klog.Infof("CLB-ENECHITOAIA-removeBackendPoolRequestDTO:\n")
-				// logObject(removeBackendPoolRequestDTO)
-				removeBackendPoolResponseDTO := az.UpdateNRPSGWServices(ctx, az.ServiceGatewayResourceName, removeBackendPoolRequestDTO)
-				if removeBackendPoolResponseDTO != nil {
-					klog.Errorf("locationAndNRPServiceBatchUpdater.process: failed to remove backend pool: %v", removeBackendPoolResponseDTO)
-					return fmt.Errorf("failed to remove backend pool: %v", removeBackendPoolResponseDTO)
-				}
-			}
-		}
-
-		_, err = az.deleteServiceGatewayLoadBalancerResources(ctx, clusterName, service, lb, lbExists)
-		if err != nil {
-			return err
-		}
-
-		if az.diffTracker.InitialSyncDone {
-			az.diffTracker.LocalServiceNameToNRPServiceMap.Delete(serviceUID)
-			az.diffTracker.UpdateK8sService(difftracker.UpdateK8sResource{
-				Operation: difftracker.REMOVE,
-				ID:        serviceUID,
-			})
-			klog.Infof("EnsureLoadBalancerDeleted(ServiceGateway): updated diffTracker for %s; triggering batch processor", serviceUID)
-			az.TriggerLocationAndNRPServiceBatchUpdate()
-		}
-
-		if az.UseMultipleStandardLoadBalancers() && (isLocalService(service) || az.ServiceGatewayEnabled) {
-			key := strings.ToLower(getServiceName(service))
-			az.localServiceNameToServiceInfoMap.Delete(key)
-		}
-
+		// Return success immediately - actual deletion happens asynchronously
 		isOperationSucceeded = true
 		return nil
 	}
@@ -705,19 +633,17 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 		}
 	}
 
-	// check flipped service also unless Service Gateway is enabled (it uses a single per-service LB)
-	if !az.ServiceGatewayEnabled {
-		flippedService := flipServiceInternalAnnotation(service)
-		if _, _, err := az.reconcileLoadBalancer(ctx, clusterName, flippedService, nil, false /* wantLb */); err != nil {
-			return err
-		}
+	// check flipped service also
+	flippedService := flipServiceInternalAnnotation(service)
+	if _, _, err := az.reconcileLoadBalancer(ctx, clusterName, flippedService, nil, false /* wantLb */); err != nil {
+		return err
 	}
 
 	if _, err = az.reconcilePublicIPs(ctx, clusterName, service, "", false /* wantLb */); err != nil {
 		return err
 	}
 
-	if az.UseMultipleStandardLoadBalancers() && (isLocalService(service) || az.ServiceGatewayEnabled) {
+	if az.UseMultipleStandardLoadBalancers() && isLocalService(service) {
 		key := strings.ToLower(svcName)
 		az.localServiceNameToServiceInfoMap.Delete(key)
 	}
@@ -730,9 +656,6 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 // GetLoadBalancerName returns the name of the load balancer. Implementations must treat the
 // *v1.Service parameter as read-only and not modify it.
 func (az *Cloud) GetLoadBalancerName(_ context.Context, _ string, service *v1.Service) string {
-	if az.ServiceGatewayEnabled {
-		return strings.ToLower(string(service.UID))
-	}
 	return cloudprovider.DefaultLoadBalancerName(service)
 }
 
@@ -2331,20 +2254,6 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 		lbToReconcile = append(lbToReconcile, lb)
 		if az.UseMultipleStandardLoadBalancers() {
 			lbToReconcile = existingLBs
-		}
-		// klog.Infof("CLB-ENECHITOAIA-reconcileLoadBalancer: reconcile backend pool hosts for service(%s) - lb(%s). CHECKING FOR CLB NOW\n", serviceName, lbName)
-		if az.ServiceGatewayEnabled && az.diffTracker.InitialSyncDone {
-			serviceUID := getServiceUID(service)
-			// klog.Infof("CLB-ENECHITOAIA-reconcileLoadBalancer: service(%s) - lb(%s) - adding serviceUID(%s) to diff tracker\n", serviceName, lbName, serviceUID)
-			// Add the serviceName to the K8S state to be synced into NRP during batch sync update flow.
-			az.diffTracker.UpdateK8sService(
-				difftracker.UpdateK8sResource{
-					Operation: difftracker.ADD,
-					ID:        serviceUID,
-				},
-			)
-			// klog.Infof("CLB-ENECHITOAIA-reconcileLoadBalancer: service(%s) - lb(%s) - adding serviceUID(%s) to diff tracker - DONE. TRIGGERING BATCH PROCESSOR:\n", serviceName, lbName, serviceUID)
-			az.TriggerLocationAndNRPServiceBatchUpdate()
 		}
 
 		lb, err = az.reconcileBackendPoolHosts(ctx, lb, lbToReconcile, service, nodes, clusterName, vmSetName, lbBackendPoolIDs)
