@@ -51,7 +51,7 @@ func main() {
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", strconv.Itoa(healthCheckPort)))
 	if err != nil {
-		klog.Errorf("failed to listen on port %d: %s", targetPort, err)
+		logger.Error(err, "failed to listen on port", "port", targetPort)
 		panic(err)
 	}
 	logger.Info("listening on port", "port", healthCheckPort)
@@ -60,7 +60,7 @@ func main() {
 	defer func(proxyListener *proxyproto.Listener) {
 		err := proxyListener.Close()
 		if err != nil {
-			klog.Errorf("failed to close proxy listener: %s", err)
+			logger.Error(err, "failed to close proxy listener")
 			panic(err)
 		}
 	}(proxyListener)
@@ -68,7 +68,7 @@ func main() {
 	logger.Info("listening on port with proxy listener", "port", healthCheckPort)
 	err = http.Serve(proxyListener, nil)
 	if err != nil {
-		klog.Errorf("failed to serve: %s", err)
+		logger.Error(err, "failed to serve")
 		panic(err)
 	}
 }

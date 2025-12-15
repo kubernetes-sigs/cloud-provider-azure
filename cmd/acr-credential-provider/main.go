@@ -26,13 +26,14 @@ import (
 
 	"github.com/spf13/cobra"
 	"k8s.io/component-base/logs"
-	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/credentialprovider"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/version"
 )
 
 func main() {
+	logger := log.Background().WithName("main")
 	rand.Seed(time.Now().UnixNano())
 
 	var RegistryMirrorStr string
@@ -45,18 +46,18 @@ func main() {
 		Version: version.Get().GitVersion,
 		Run: func(_ *cobra.Command, args []string) {
 			if len(args) != 1 {
-				klog.Errorf("Config file is not specified")
+				logger.Errorf(nil, "Config file is not specified")
 				os.Exit(1)
 			}
 
 			acrProvider, err := credentialprovider.NewAcrProviderFromConfig(args[0], RegistryMirrorStr)
 			if err != nil {
-				klog.Errorf("Failed to initialize ACR provider: %v", err)
+				logger.Error(err, "Failed to initialize ACR provider")
 				os.Exit(1)
 			}
 
 			if err := NewCredentialProvider(acrProvider).Run(context.TODO()); err != nil {
-				klog.Errorf("Error running acr credential provider: %v", err)
+				logger.Error(err, "Error running acr credential provider")
 				os.Exit(1)
 			}
 		},

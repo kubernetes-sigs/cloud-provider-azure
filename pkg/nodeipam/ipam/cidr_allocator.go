@@ -30,7 +30,8 @@ import (
 	informers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	cloudprovider "k8s.io/cloud-provider"
-	"k8s.io/klog/v2"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 // CIDRAllocatorType is the type of the allocator to use.
@@ -104,6 +105,7 @@ func New(kubeClient clientset.Interface, cloud cloudprovider.Interface, nodeInfo
 }
 
 func listNodes(kubeClient clientset.Interface) (*corev1.NodeList, error) {
+	logger := log.Background().WithName("listNodes")
 	var nodeList *corev1.NodeList
 	// We must poll because apiserver might not be up. This error causes
 	// controller manager to restart.
@@ -114,7 +116,7 @@ func listNodes(kubeClient clientset.Interface) (*corev1.NodeList, error) {
 			LabelSelector: labels.Everything().String(),
 		})
 		if err != nil {
-			klog.Errorf("Failed to list all nodes: %v", err)
+			logger.Error(err, "Failed to list all nodes")
 			return false, nil
 		}
 		return true, nil

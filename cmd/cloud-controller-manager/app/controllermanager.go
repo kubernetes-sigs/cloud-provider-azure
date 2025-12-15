@@ -72,6 +72,7 @@ const (
 
 // NewCloudControllerManagerCommand creates a *cobra.Command object with default parameters
 func NewCloudControllerManagerCommand() *cobra.Command {
+	logger := log.Background().WithName("NewCloudControllerManagerCommand")
 	s, err := options.NewCloudControllerManagerOptions()
 	if err != nil {
 		klog.Fatalf("unable to initialize command options: %v", err)
@@ -168,7 +169,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 					Callbacks: leaderelection.LeaderCallbacks{
 						OnStartedLeading: RunWrapper(s, c, healthHandler),
 						OnStoppedLeading: func() {
-							klog.ErrorS(nil, "leaderelection lost")
+							logger.Error(nil, "leaderelection lost")
 							klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 						},
 					},
