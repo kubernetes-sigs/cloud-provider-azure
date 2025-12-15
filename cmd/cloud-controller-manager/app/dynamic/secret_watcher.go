@@ -26,7 +26,6 @@ import (
 	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog/v2"
 
 	cloudcontrollerconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/config"
 	"sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/options"
@@ -51,11 +50,12 @@ func (c *SecretWatcher) Run(stopCh <-chan struct{}) error {
 }
 
 func RunSecretWatcherOrDie(c *cloudcontrollerconfig.Config) chan struct{} {
+	logger := log.Background().WithName("RunSecretWatcherOrDie")
 	factory := informers.NewSharedInformerFactory(c.VersionedClient, options.ResyncPeriod(c)())
 	secretWatcher, updateCh := NewSecretWatcher(factory, c.DynamicReloadingConfig.CloudConfigSecretName, c.DynamicReloadingConfig.CloudConfigSecretNamespace)
 	err := secretWatcher.Run(wait.NeverStop)
 	if err != nil {
-		klog.Errorf("Run: failed to initialize secret watcher: %v", err)
+		logger.Error(err, "Run: failed to initialize secret watcher")
 		os.Exit(1)
 	}
 
