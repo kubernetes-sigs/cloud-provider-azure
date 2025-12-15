@@ -29,13 +29,14 @@ import (
 
 	"github.com/spf13/cobra"
 	"k8s.io/component-base/logs"
-	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/cmd/acr-credential-provider/pkg/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/version"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
-func main() {
+func main(){
+	logger := log.Background().WithName("main")
 	rand.Seed(time.Now().UnixNano())
 
 	var (
@@ -61,13 +62,14 @@ func main() {
 		},
 		Version: version.Get().GitVersion,
 		RunE: func(_ *cobra.Command, args []string) error {
+			
 			ibConfig, err := config.ParseIdentityBindingsConfig(IBSNIName, IBDefaultClient, IBDefaultTenant, IBAPIIP)
 			if err != nil {
-				klog.Errorf("Error parsing identity bindings config: %v", err)
+				logger.Error(err, "Error parsing identity bindings config")
 				return err
 			}
 			if err := NewCredentialProvider(args[0], RegistryMirrorStr, ibConfig).Run(context.TODO()); err != nil {
-				klog.Errorf("Error running acr credential provider: %v", err)
+				logger.Error(err, "Error running acr credential provider")
 				return err
 			}
 			return nil

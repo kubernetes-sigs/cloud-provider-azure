@@ -1968,7 +1968,7 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 
 			batchSize, err := ss.VMSSBatchSize(ctx, meta.vmssName)
 			if err != nil {
-				klog.ErrorS(err, "Failed to get vmss batch size", logFields...)
+				logger.Error(err, "Failed to get vmss batch size", logFields...)
 				return err
 			}
 
@@ -1981,7 +1981,7 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 			}
 			err = utilerrors.NewAggregate(errs)
 			if err != nil {
-				klog.ErrorS(err, "Failed to update VMs for VMSS", logFields...)
+				logger.Error(err, "Failed to update VMs for VMSS", logFields...)
 				return err
 			}
 			updatedVM.Store(true)
