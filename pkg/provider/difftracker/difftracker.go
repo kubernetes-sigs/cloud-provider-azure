@@ -32,8 +32,8 @@ func InitializeDiffTracker(K8s K8s_State, NRP NRP_State) *DiffTracker {
 
 		// Initialize Engine state management maps
 		pendingServiceOps: make(map[string]*ServiceOperationState),
-		bufferedEndpoints: make(map[string][]BufferedEndpointUpdate),
-		bufferedPods:      make(map[string][]BufferedPodUpdate),
+		pendingEndpoints:  make(map[string][]PendingEndpointUpdate),
+		pendingPods:       make(map[string][]PendingPodUpdate),
 		pendingDeletions:  make(map[string]*PendingDeletion),
 
 		// Initialize Engine communication channels

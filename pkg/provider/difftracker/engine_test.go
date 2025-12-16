@@ -37,8 +37,8 @@ func newTestDiffTracker() *DiffTracker {
 			Nodes:    make(map[string]Node),
 		},
 		pendingServiceOps:       make(map[string]*ServiceOperationState),
-		bufferedEndpoints:       make(map[string][]BufferedEndpointUpdate),
-		bufferedPods:            make(map[string][]BufferedPodUpdate),
+		pendingEndpoints:        make(map[string][]PendingEndpointUpdate),
+		pendingPods:             make(map[string][]PendingPodUpdate),
 		pendingDeletions:        make(map[string]*PendingDeletion),
 		serviceUpdaterTrigger:   make(chan bool, 1),
 		locationsUpdaterTrigger: make(chan bool, 1),
@@ -211,7 +211,7 @@ func TestEngineUpdateEndpoints_ServiceCreating(t *testing.T) {
 	dt.UpdateEndpoints(serviceUID, oldEndpoints, newEndpoints)
 
 	// Verify endpoints were buffered
-	buffered, exists := dt.bufferedEndpoints[serviceUID]
+	buffered, exists := dt.pendingEndpoints[serviceUID]
 	assert.True(t, exists, "Endpoints should be buffered")
 	assert.Greater(t, len(buffered), 0, "Should have buffered updates")
 
@@ -275,7 +275,7 @@ func TestEngineAddPod_ServiceCreating(t *testing.T) {
 	dt.AddPod(egressUID, "ns1/pod2", "node2", "10.0.0.2")
 
 	// Verify pod was buffered
-	buffered, exists := dt.bufferedPods[egressUID]
+	buffered, exists := dt.pendingPods[egressUID]
 	assert.True(t, exists, "Pods should be buffered")
 	assert.Greater(t, len(buffered), 0, "Should have buffered pod updates")
 

@@ -60,9 +60,8 @@ type NRP_State struct {
 }
 
 type Pod struct {
-	InboundIdentities       *utilsets.IgnoreCaseSet
-	PublicOutboundIdentity  string
-	PrivateOutboundIdentity string
+	InboundIdentities      *utilsets.IgnoreCaseSet
+	PublicOutboundIdentity string
 }
 
 type Node struct {
@@ -88,8 +87,8 @@ type ServiceOperationState struct {
 	LastAttempt string // timestamp as string for serialization
 }
 
-// BufferedEndpointUpdate represents endpoints waiting for their service to be created
-type BufferedEndpointUpdate struct {
+// PendingEndpointUpdate represents endpoints waiting for their service to be created
+type PendingEndpointUpdate struct {
 	PodIPToNodeIP map[string]string // podIP -> nodeIP
 	Timestamp     string            // When buffered
 }
@@ -114,8 +113,8 @@ type DiffTracker struct {
 
 	// Engine state management
 	pendingServiceOps map[string]*ServiceOperationState
-	bufferedEndpoints map[string][]BufferedEndpointUpdate
-	bufferedPods      map[string][]BufferedPodUpdate
+	pendingEndpoints  map[string][]PendingEndpointUpdate
+	pendingPods       map[string][]PendingPodUpdate
 	pendingDeletions  map[string]*PendingDeletion
 
 	// Communication channels
@@ -142,15 +141,14 @@ type UpdateK8sEndpointsInputType struct {
 
 // UpdatePodInputType represents input for K8s pod updates (egress assignments)
 type UpdatePodInputType struct {
-	PodOperation            Operation
-	PublicOutboundIdentity  string
-	PrivateOutboundIdentity string
-	Location                string
-	Address                 string
+	PodOperation           Operation
+	PublicOutboundIdentity string
+	Location               string
+	Address                string
 }
 
-// BufferedPodUpdate represents a pod waiting for its service to be created
-type BufferedPodUpdate struct {
+// PendingPodUpdate represents a pod waiting for its service to be created
+type PendingPodUpdate struct {
 	PodKey    string // namespace/name for logging
 	Location  string // HostIP
 	Address   string // PodIP

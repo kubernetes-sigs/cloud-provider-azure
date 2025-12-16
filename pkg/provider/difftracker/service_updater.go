@@ -288,6 +288,12 @@ func (s *ServiceUpdater) createInboundService(serviceUID string) {
 	}
 	klog.V(3).Infof("ServiceUpdater: registered inbound service %s with ServiceGateway", serviceUID)
 
+	// Update NRPResources to reflect the sync
+	s.diffTracker.UpdateNRPLoadBalancers(SyncServicesReturnType{
+		Additions: newIgnoreCaseSetFromSlice([]string{serviceUID}),
+		Removals:  nil,
+	})
+
 	// Step 6: Success callback
 	s.onComplete(serviceUID, true, nil)
 	klog.Infof("ServiceUpdater: createInboundService completed successfully for %s", serviceUID)
@@ -373,6 +379,12 @@ func (s *ServiceUpdater) createOutboundService(serviceUID string) {
 	}
 	klog.V(3).Infof("ServiceUpdater: registered outbound service %s with ServiceGateway", serviceUID)
 
+	// Update NRPResources to reflect the sync
+	s.diffTracker.UpdateNRPNATGateways(SyncServicesReturnType{
+		Additions: newIgnoreCaseSetFromSlice([]string{serviceUID}),
+		Removals:  nil,
+	})
+
 	// Step 4: Success callback
 	s.onComplete(serviceUID, true, nil)
 	klog.Infof("ServiceUpdater: createOutboundService completed successfully for %s", serviceUID)
@@ -385,8 +397,35 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string) {
 	ctx := s.ctx
 	var lastErr error
 
-	// Step 1: Unregister from ServiceGateway API
-	servicesDTO := MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
+	// Step 1: Remove backend pool references from ServiceGateway
+	// This should be done before deleting the LoadBalancer to properly clean up references
+	removeBackendPoolDTO := RemoveBackendPoolReferenceFromServicesDTO(
+		SyncServicesReturnType{
+			Additions: nil,
+			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
+		},
+		s.cloud.GetSubscriptionID(),
+		s.cloud.GetResourceGroup(),
+	)
+
+	if err := s.cloud.UpdateNRPSGWServices(ctx, s.cloud.GetServiceGatewayResourceName(), removeBackendPoolDTO); err != nil {
+		klog.Warningf("ServiceUpdater: failed to remove backend pool reference for inbound service %s: %v", serviceUID, err)
+		// Don't fail the deletion - continue with LoadBalancer deletion
+	} else {
+		klog.V(3).Infof("ServiceUpdater: removed backend pool reference for inbound service %s", serviceUID)
+	}
+
+	// Step 2: Delete LoadBalancer
+	if err := s.cloud.EnsureServiceLoadBalancerDeletedByUID(ctx, serviceUID, s.cloud.GetClusterName()); err != nil {
+		klog.Errorf("ServiceUpdater: failed to delete LoadBalancer for inbound service %s: %v", serviceUID, err)
+		lastErr = fmt.Errorf("failed to delete LoadBalancer: %w", err)
+		// Continue with PIP deletion
+	} else {
+		klog.V(3).Infof("ServiceUpdater: deleted LoadBalancer for inbound service %s", serviceUID)
+	}
+
+	// Step 3: Fully unregister service from ServiceGateway
+	unregisterDTO := MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
 		SyncServicesReturnType{
 			Additions: nil,
 			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
@@ -399,24 +438,15 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string) {
 		s.cloud.GetResourceGroup(),
 	)
 
-	if err := s.cloud.UpdateNRPSGWServices(ctx, s.cloud.GetServiceGatewayResourceName(), servicesDTO); err != nil {
-		klog.Errorf("ServiceUpdater: failed to unregister inbound service %s from ServiceGateway: %v", serviceUID, err)
+	if err := s.cloud.UpdateNRPSGWServices(ctx, s.cloud.GetServiceGatewayResourceName(), unregisterDTO); err != nil {
+		klog.Errorf("ServiceUpdater: failed to fully unregister inbound service %s from ServiceGateway: %v", serviceUID, err)
 		lastErr = fmt.Errorf("failed to unregister from ServiceGateway: %w", err)
-		// Continue with deletion even if ServiceGateway update fails
-	} else {
-		klog.V(3).Infof("ServiceUpdater: unregistered inbound service %s from ServiceGateway", serviceUID)
-	}
-
-	// Step 2: Delete LoadBalancer
-	if err := s.cloud.EnsureServiceLoadBalancerDeletedByUID(ctx, serviceUID, s.cloud.GetClusterName()); err != nil {
-		klog.Errorf("ServiceUpdater: failed to delete LoadBalancer for inbound service %s: %v", serviceUID, err)
-		lastErr = fmt.Errorf("failed to delete LoadBalancer: %w", err)
 		// Continue with PIP deletion
 	} else {
-		klog.V(3).Infof("ServiceUpdater: deleted LoadBalancer for inbound service %s", serviceUID)
+		klog.V(3).Infof("ServiceUpdater: fully unregistered inbound service %s from ServiceGateway", serviceUID)
 	}
 
-	// Step 3: Delete Public IP
+	// Step 4: Delete Public IP
 	pipName := fmt.Sprintf("%s-pip", serviceUID)
 	if err := s.cloud.DeletePublicIPOutbound(ctx, s.cloud.GetResourceGroup(), pipName); err != nil {
 		klog.Errorf("ServiceUpdater: failed to delete Public IP %s for inbound service %s: %v", pipName, serviceUID, err)
@@ -425,12 +455,17 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string) {
 		klog.V(3).Infof("ServiceUpdater: deleted Public IP %s for inbound service %s", pipName, serviceUID)
 	}
 
-	// Step 4: Notify completion (Engine will clean up state based on success/failure)
+	// Step 5: Update NRPResources and notify completion
 	if lastErr != nil {
 		klog.Warningf("ServiceUpdater: deleteInboundService completed with errors for %s: %v", serviceUID, lastErr)
 		s.onComplete(serviceUID, false, lastErr)
 	} else {
 		klog.Infof("ServiceUpdater: deleteInboundService completed successfully for %s", serviceUID)
+		// Update NRPResources to reflect the deletion
+		s.diffTracker.UpdateNRPLoadBalancers(SyncServicesReturnType{
+			Additions: nil,
+			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
+		})
 		s.onComplete(serviceUID, true, nil)
 	}
 }
@@ -482,12 +517,17 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string) {
 		klog.V(3).Infof("ServiceUpdater: deleted Public IP %s for outbound service %s", pipName, serviceUID)
 	}
 
-	// Step 4: Notify completion (Engine will clean up state based on success/failure)
+	// Step 4: Update NRPResources and notify completion
 	if lastErr != nil {
 		klog.Warningf("ServiceUpdater: deleteOutboundService completed with errors for %s: %v", serviceUID, lastErr)
 		s.onComplete(serviceUID, false, lastErr)
 	} else {
 		klog.Infof("ServiceUpdater: deleteOutboundService completed successfully for %s", serviceUID)
+		// Update NRPResources to reflect the deletion
+		s.diffTracker.UpdateNRPNATGateways(SyncServicesReturnType{
+			Additions: nil,
+			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
+		})
 		s.onComplete(serviceUID, true, nil)
 	}
 }

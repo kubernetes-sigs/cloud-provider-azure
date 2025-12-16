@@ -42,10 +42,8 @@ func (dt *DiffTracker) UpdateK8sEgress(input UpdateK8sResource) error {
 	return updateK8Resource(input, dt.K8sResources.Egresses, ResourceTypeEgress)
 }
 
-func (dt *DiffTracker) UpdateK8sEndpoints(input UpdateK8sEndpointsInputType) []error {
-	dt.mu.Lock()
-	defer dt.mu.Unlock()
-
+// updateK8sEndpointsLocked updates K8s endpoints state. Assumes lock is already held.
+func (dt *DiffTracker) updateK8sEndpointsLocked(input UpdateK8sEndpointsInputType) []error {
 	var errs []error
 	for address, location := range input.NewAddresses {
 
@@ -108,6 +106,13 @@ func (dt *DiffTracker) UpdateK8sEndpoints(input UpdateK8sEndpointsInputType) []e
 	return errs
 }
 
+// UpdateK8sEndpoints is a public wrapper that acquires lock before calling updateK8sEndpointsLocked.
+func (dt *DiffTracker) UpdateK8sEndpoints(input UpdateK8sEndpointsInputType) []error {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	return dt.updateK8sEndpointsLocked(input)
+}
+
 func (dt *DiffTracker) addOrUpdatePod(input UpdatePodInputType) error {
 	node, exists := dt.K8sResources.Nodes[input.Location]
 	if !exists {
@@ -121,7 +126,6 @@ func (dt *DiffTracker) addOrUpdatePod(input UpdatePodInputType) error {
 	}
 
 	pod.PublicOutboundIdentity = input.PublicOutboundIdentity
-	pod.PrivateOutboundIdentity = input.PrivateOutboundIdentity
 	node.Pods[input.Address] = pod
 
 	return nil
@@ -141,10 +145,8 @@ func (dt *DiffTracker) removePod(input UpdatePodInputType) error {
 	return nil
 }
 
-func (dt *DiffTracker) UpdateK8sPod(input UpdatePodInputType) error {
-	dt.mu.Lock()
-	defer dt.mu.Unlock()
-
+// updateK8sPodLocked updates K8s pod state. Assumes lock is already held.
+func (dt *DiffTracker) updateK8sPodLocked(input UpdatePodInputType) error {
 	switch input.PodOperation {
 	case ADD, UPDATE:
 		counter := 0
@@ -170,4 +172,11 @@ func (dt *DiffTracker) UpdateK8sPod(input UpdatePodInputType) error {
 		return fmt.Errorf("invalid pod operation: %s for pod at %s:%s",
 			input.PodOperation, input.Location, input.Address)
 	}
+}
+
+// UpdateK8sPod is a public wrapper that acquires lock before calling updateK8sPodLocked.
+func (dt *DiffTracker) UpdateK8sPod(input UpdatePodInputType) error {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	return dt.updateK8sPodLocked(input)
 }

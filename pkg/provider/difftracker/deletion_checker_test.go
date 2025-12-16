@@ -335,7 +335,7 @@ func TestCheckPendingDeletions_LocationsClearedAfterCheck(t *testing.T) {
 	dt.CheckPendingDeletions()
 
 	dt.mu.Lock()
-	op, _ := dt.pendingServiceOps[serviceUID]
+	op := dt.pendingServiceOps[serviceUID]
 	_, pending := dt.pendingDeletions[serviceUID]
 	dt.mu.Unlock()
 
@@ -359,7 +359,7 @@ func TestCheckPendingDeletions_LocationsClearedAfterCheck(t *testing.T) {
 	dt.CheckPendingDeletions()
 
 	dt.mu.Lock()
-	op2, _ := dt.pendingServiceOps[serviceUID]
+	op2 := dt.pendingServiceOps[serviceUID]
 	_, pending2 := dt.pendingDeletions[serviceUID]
 	dt.mu.Unlock()
 

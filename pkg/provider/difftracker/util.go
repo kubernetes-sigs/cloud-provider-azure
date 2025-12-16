@@ -53,7 +53,7 @@ func (syncStatus SyncStatus) MarshalJSON() ([]byte, error) {
 func (node *Node) HasPods() bool { return len(node.Pods) > 0 }
 
 func (pod *Pod) HasIdentities() bool {
-	return pod.InboundIdentities.Len() > 0 || pod.PublicOutboundIdentity != "" || pod.PrivateOutboundIdentity != ""
+	return pod.InboundIdentities.Len() > 0 || pod.PublicOutboundIdentity != ""
 }
 
 // DeepEqual compares the K8s and NRP states to check if they are in sync
@@ -118,14 +118,11 @@ func (dt *DiffTracker) DeepEqual() bool {
 				return false
 			}
 
-			// Compare [...InboundIdentities, PublicOutboundIdentity, PrivateOutboundIdentity] with Services
+			// Compare [...InboundIdentities, PublicOutboundIdentity] with Services
 			combinedIdentities := []string{}
 			combinedIdentities = append(combinedIdentities, pod.InboundIdentities.UnsortedList()...)
 			if pod.PublicOutboundIdentity != "" {
 				combinedIdentities = append(combinedIdentities, pod.PublicOutboundIdentity)
-			}
-			if pod.PrivateOutboundIdentity != "" {
-				combinedIdentities = append(combinedIdentities, pod.PrivateOutboundIdentity)
 			}
 
 			if len(combinedIdentities) != nrpAddress.Services.Len() {
@@ -261,10 +258,6 @@ func (dt *DiffTracker) Equals(other *DiffTracker) bool {
 			}
 
 			if pod.PublicOutboundIdentity != otherPod.PublicOutboundIdentity {
-				return false
-			}
-
-			if pod.PrivateOutboundIdentity != otherPod.PrivateOutboundIdentity {
 				return false
 			}
 		}

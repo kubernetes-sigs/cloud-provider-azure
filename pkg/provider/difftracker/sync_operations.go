@@ -128,9 +128,6 @@ func createServiceRef(pod Pod) *utilsets.IgnoreCaseSet {
 	if pod.PublicOutboundIdentity != "" {
 		serviceRef.Insert(pod.PublicOutboundIdentity)
 	}
-	if pod.PrivateOutboundIdentity != "" {
-		serviceRef.Insert(pod.PrivateOutboundIdentity)
-	}
 	return serviceRef
 }
 

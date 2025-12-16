@@ -176,11 +176,10 @@ func TestUpdateK8sPod(t *testing.T) {
 
 	// Test adding new egress assignment
 	input := UpdatePodInputType{
-		PodOperation:            ADD,
-		PublicOutboundIdentity:  "public1",
-		PrivateOutboundIdentity: "private1",
-		Location:                "node1",
-		Address:                 "10.0.0.1",
+		PodOperation:           ADD,
+		PublicOutboundIdentity: "public1",
+		Location:               "node1",
+		Address:                "10.0.0.1",
 	}
 
 	err := dt.UpdateK8sPod(input)
@@ -190,7 +189,6 @@ func TestUpdateK8sPod(t *testing.T) {
 	assert.Contains(t, dt.K8sResources.Nodes, "node1")
 	assert.Contains(t, dt.K8sResources.Nodes["node1"].Pods, "10.0.0.1")
 	assert.Equal(t, "public1", dt.K8sResources.Nodes["node1"].Pods["10.0.0.1"].PublicOutboundIdentity)
-	assert.Equal(t, "private1", dt.K8sResources.Nodes["node1"].Pods["10.0.0.1"].PrivateOutboundIdentity)
 
 	// Test removing egress assignment
 	input = UpdatePodInputType{
@@ -556,9 +554,8 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 						"node1": {
 							Pods: map[string]Pod{
 								"10.0.0.1": {
-									InboundIdentities:       utilsets.NewString("service1", "service2"),
-									PublicOutboundIdentity:  "public1",
-									PrivateOutboundIdentity: "private1",
+									InboundIdentities:      utilsets.NewString("service1", "service2"),
+									PublicOutboundIdentity: "public1",
 								},
 							},
 						},
@@ -578,7 +575,7 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 			},
 			expectedNRP: map[string]map[string][]string{
 				"node1": {
-					"10.0.0.1": {"service1", "service2", "public1", "private1"},
+					"10.0.0.1": {"service1", "service2", "public1"},
 				},
 			},
 		},
@@ -672,8 +669,7 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 						"node3": {
 							Pods: map[string]Pod{
 								"10.0.0.5": {
-									InboundIdentities:       utilsets.NewString("service5"),
-									PrivateOutboundIdentity: "private5",
+									InboundIdentities: utilsets.NewString("service5"),
 								},
 							},
 						},
@@ -706,7 +702,7 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 					"10.0.0.1": {"service1", "service3", "public1"},
 				},
 				"node3": {
-					"10.0.0.5": {"service5", "private5"},
+					"10.0.0.5": {"service5"},
 				},
 			},
 		},
@@ -1037,33 +1033,28 @@ func TestInitializeDiffTracker(t *testing.T) {
 			"Node1": {
 				Pods: map[string]Pod{
 					"Pod34": {
-						InboundIdentities:       utilsets.NewString("Service0"),
-						PublicOutboundIdentity:  "",
-						PrivateOutboundIdentity: "",
+						InboundIdentities:      utilsets.NewString("Service0"),
+						PublicOutboundIdentity: "",
 					},
 					"Pod0": {
-						InboundIdentities:       utilsets.NewString("Service0"),
-						PublicOutboundIdentity:  "Egress0",
-						PrivateOutboundIdentity: "",
+						InboundIdentities:      utilsets.NewString("Service0"),
+						PublicOutboundIdentity: "Egress0",
 					},
 					"Pod1": {
-						InboundIdentities:       utilsets.NewString("Service1", "Service2"),
-						PublicOutboundIdentity:  "Egress1",
-						PrivateOutboundIdentity: "",
+						InboundIdentities:      utilsets.NewString("Service1", "Service2"),
+						PublicOutboundIdentity: "Egress1",
 					},
 					"Pod3": {
-						InboundIdentities:       utilsets.NewString(),
-						PublicOutboundIdentity:  "Egress2",
-						PrivateOutboundIdentity: "",
+						InboundIdentities:      utilsets.NewString(),
+						PublicOutboundIdentity: "Egress2",
 					},
 				},
 			},
 			"Node2": {
 				Pods: map[string]Pod{
 					"Pod2": {
-						InboundIdentities:       utilsets.NewString("Service1"),
-						PublicOutboundIdentity:  "Egress2",
-						PrivateOutboundIdentity: "",
+						InboundIdentities:      utilsets.NewString("Service1"),
+						PublicOutboundIdentity: "Egress2",
 					},
 				},
 			},

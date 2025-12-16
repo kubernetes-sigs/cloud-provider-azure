@@ -261,12 +261,12 @@ func updateBufferedUpdatesMetric(dt *DiffTracker) {
 	defer dt.mu.Unlock()
 
 	endpointCount := 0
-	for _, updates := range dt.bufferedEndpoints {
+	for _, updates := range dt.pendingEndpoints {
 		endpointCount += len(updates)
 	}
 
 	podCount := 0
-	for _, updates := range dt.bufferedPods {
+	for _, updates := range dt.pendingPods {
 		podCount += len(updates)
 	}
 

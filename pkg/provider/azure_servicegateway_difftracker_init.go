@@ -161,7 +161,6 @@ func (az *Cloud) initializeDiffTracker() error {
 					pod = difftracker.Pod{
 						InboundIdentities:       utilsets.NewString(),
 						PublicOutboundIdentity:  "",
-						PrivateOutboundIdentity: "",
 					}
 				}
 				pod.InboundIdentities.Insert(serviceUID)
@@ -206,9 +205,8 @@ func (az *Cloud) initializeDiffTracker() error {
 		podEntry, exists := k8s.Nodes[nodeIP].Pods[pod.Status.PodIP]
 		if !exists {
 			podEntry = difftracker.Pod{
-				InboundIdentities:       utilsets.NewString(),
-				PublicOutboundIdentity:  "",
-				PrivateOutboundIdentity: "",
+				InboundIdentities:      utilsets.NewString(),
+				PublicOutboundIdentity: "",
 			}
 		}
 
