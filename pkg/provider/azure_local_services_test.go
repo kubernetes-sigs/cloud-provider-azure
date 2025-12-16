@@ -638,7 +638,13 @@ func TestEndpointSlicesInformerContainerLoadBalancer(t *testing.T) {
 				// },
 			}
 
-			cloud.diffTracker = difftracker.InitializeDiffTracker(k8s, nrp)
+			cloud.diffTracker = difftracker.InitializeDiffTracker(k8s, nrp, difftracker.Config{
+				SubscriptionID:             cloud.SubscriptionID,
+				ResourceGroup:              cloud.ResourceGroup,
+				Location:                   cloud.Location,
+				ServiceGatewayResourceName: cloud.ServiceGatewayResourceName,
+				ServiceGatewayID:           cloud.GetServiceGatewayID(),
+			}, cloud.NetworkClientFactory, nil)
 
 			cloud.localServiceNameToServiceInfoMap = sync.Map{}
 			if !tc.notLocal {

@@ -1142,10 +1142,10 @@ func TestInitializeDiffTracker(t *testing.T) {
 	// Create a minimal mock for testing - we're only testing the initialization logic
 	// and sync operations calculation, not actual Azure API calls
 	config := Config{
-		SubscriptionID:             "test-subscription",
-		ResourceGroup:              "test-rg",
-		Location:                   "eastus",
-		ClusterName:                "test-cluster",
+		SubscriptionID: "test-subscription",
+		ResourceGroup:  "test-rg",
+		Location:       "eastus",
+
 		ServiceGatewayResourceName: "test-sgw",
 		ServiceGatewayID:           "/subscriptions/test-subscription/resourceGroups/test-rg/providers/Microsoft.Network/serviceGateways/test-sgw",
 	}

@@ -36,6 +36,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
@@ -419,8 +420,7 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 						klog.Errorf("EndpointSlice %s/%s does not have service UID, skip updating load balancer backend pool", es.Namespace, es.Name)
 						return
 					}
-
-					logSyncStringIntMap("LocalServiceNameToNRPServiceMap", &az.diffTracker.LocalServiceNameToNRPServiceMap)
+					difftracker.LogSyncStringIntMap("LocalServiceNameToNRPServiceMap", &az.diffTracker.LocalServiceNameToNRPServiceMap)
 					if _, loaded := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(strings.ToLower(serviceUID)); loaded {
 						// Use Engine to handle endpoint deletion (state checking, triggering LocationsUpdater, etc.)
 						oldAddresses := az.getPodIPToNodeIPMapFromEndpointSlice(es, false)

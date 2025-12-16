@@ -847,12 +847,18 @@ func TestEnsureLoadBalancerContainerLoadBalancer(t *testing.T) {
 				NATGateways:   utilsets.NewString(),
 				Locations:     make(map[string]difftracker.NRPLocation),
 			}
-			az.diffTracker = difftracker.InitializeDiffTracker(k8s, nrp)
+			az.diffTracker = difftracker.InitializeDiffTracker(k8s, nrp, difftracker.Config{
+				SubscriptionID:             az.SubscriptionID,
+				ResourceGroup:              az.ResourceGroup,
+				Location:                   az.Location,
+				ServiceGatewayResourceName: az.ServiceGatewayResourceName,
+				ServiceGatewayID:           az.GetServiceGatewayID(),
+			}, az.NetworkClientFactory, nil)
 
-// 			az.locationAndNRPServiceBatchUpdater = newLocationAndNRPServiceBatchUpdater(az)
-// 			ctx, cancel := context.WithCancel(context.Background())
-// 			defer cancel()
-// 			go az.locationAndNRPServiceBatchUpdater.run(ctx)
+			// 			az.locationAndNRPServiceBatchUpdater = newLocationAndNRPServiceBatchUpdater(az)
+			// 			ctx, cancel := context.WithCancel(context.Background())
+			// 			defer cancel()
+			// 			go az.locationAndNRPServiceBatchUpdater.run(ctx)
 
 			// Engine pattern is now wired for inbound services (Phase 6 complete)
 			// EnsureLoadBalancer calls diffTracker.AddService, EndpointSlice informer calls diffTracker.UpdateEndpoints
@@ -953,18 +959,25 @@ func TestEnsureLoadBalancerDeleteContainerLoadBalancer(t *testing.T) {
 				NATGateways:   utilsets.NewString(),
 				Locations:     make(map[string]difftracker.NRPLocation),
 			}
-		az.diffTracker = difftracker.InitializeDiffTracker(k8s, nrp)
+			az.diffTracker = difftracker.InitializeDiffTracker(k8s, nrp, difftracker.Config{
+				SubscriptionID:             az.SubscriptionID,
+				ResourceGroup:              az.ResourceGroup,
+				Location:                   az.Location,
+				ServiceGatewayResourceName: az.ServiceGatewayResourceName,
+				ServiceGatewayID:           az.GetServiceGatewayID(),
+			}, az.NetworkClientFactory, nil)
 
-		// Engine pattern is now wired for inbound services (Phase 6 complete)
-		// ServiceUpdater and LocationsUpdater goroutines are started in InitializeCloudFromConfig
-		// For unit tests, mock the Engine behavior or start goroutines explicitly if needed
+			// Engine pattern is now wired for inbound services (Phase 6 complete)
+			// ServiceUpdater and LocationsUpdater goroutines are started in InitializeCloudFromConfig
+			// For unit tests, mock the Engine behavior or start goroutines explicitly if needed
 
-		mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
-		mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ *v1.Service, lb *armnetwork.LoadBalancer) (bool, bool, *armnetwork.LoadBalancer, error) {
-			return false, false, lb, nil
-		}).AnyTimes()
-		mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-		mockLBBackendPool.EXPECT().GetBackendPrivateIPs(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()			clusterResources, expectedInterfaces, expectedVirtualMachines := getClusterResources(az, vmCount, availabilitySetCount)
+			mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+			mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ *v1.Service, lb *armnetwork.LoadBalancer) (bool, bool, *armnetwork.LoadBalancer, error) {
+				return false, false, lb, nil
+			}).AnyTimes()
+			mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			mockLBBackendPool.EXPECT().GetBackendPrivateIPs(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+			clusterResources, expectedInterfaces, expectedVirtualMachines := getClusterResources(az, vmCount, availabilitySetCount)
 			setMockEnv(az, expectedInterfaces, expectedVirtualMachines, 5)
 
 			service := c.service

@@ -46,6 +46,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient/mock_virtualnetworklinkclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
@@ -197,10 +198,29 @@ func GetTestCloudWithContainerLoadBalancer(ctrl *gomock.Controller) (az *Cloud) 
 	az.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypePodIP
 	az.LoadBalancerSKU = consts.LoadBalancerSKUService
 	az.ServiceGatewayEnabled = true
-	err := az.initializeDiffTracker()
-	if err != nil {
-		panic(err)
+	// Initialize empty diffTracker for tests
+	dtConfig := difftracker.Config{
+		ResourceGroup:              az.ResourceGroup,
+		SubscriptionID:             az.SubscriptionID,
+		Location:                   az.Location,
+		ServiceGatewayResourceName: "test-sgw",
+		ServiceGatewayID:           "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.ServiceNetworking/serviceGateways/test-sgw",
 	}
+	az.diffTracker = difftracker.InitializeDiffTracker(
+		difftracker.K8s_State{
+			Services: utilsets.NewString(),
+			Egresses: utilsets.NewString(),
+			Nodes:    make(map[string]difftracker.Node),
+		},
+		difftracker.NRP_State{
+			LoadBalancers: utilsets.NewString(),
+			NATGateways:   utilsets.NewString(),
+			Locations:     make(map[string]difftracker.NRPLocation),
+		},
+		dtConfig,
+		az.NetworkClientFactory,
+		az.KubeClient,
+	)
 	return az
 }
 

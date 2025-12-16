@@ -159,8 +159,8 @@ func (az *Cloud) initializeDiffTracker() error {
 				pod, exists := k8s.Nodes[nodeIP].Pods[podIP]
 				if !exists {
 					pod = difftracker.Pod{
-						InboundIdentities:       utilsets.NewString(),
-						PublicOutboundIdentity:  "",
+						InboundIdentities:      utilsets.NewString(),
+						PublicOutboundIdentity: "",
 					}
 				}
 				pod.InboundIdentities.Insert(serviceUID)
@@ -300,7 +300,6 @@ func (az *Cloud) initializeDiffTracker() error {
 		SubscriptionID:             az.getNetworkResourceSubscriptionID(),
 		ResourceGroup:              az.ResourceGroup,
 		Location:                   az.Location,
-		ClusterName:                az.LoadBalancerName,
 		ServiceGatewayResourceName: az.ServiceGatewayResourceName,
 		ServiceGatewayID:           az.GetServiceGatewayID(),
 	}

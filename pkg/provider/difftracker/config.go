@@ -14,9 +14,6 @@ type Config struct {
 	// Azure location/region
 	Location string
 
-	// Kubernetes cluster name
-	ClusterName string
-
 	// Service Gateway resource name
 	ServiceGatewayResourceName string
 
@@ -34,9 +31,6 @@ func (c *Config) Validate() error {
 	}
 	if c.Location == "" {
 		return fmt.Errorf("config validation failed: Location is required")
-	}
-	if c.ClusterName == "" {
-		return fmt.Errorf("config validation failed: ClusterName is required")
 	}
 	if c.ServiceGatewayResourceName == "" {
 		return fmt.Errorf("config validation failed: ServiceGatewayResourceName is required")

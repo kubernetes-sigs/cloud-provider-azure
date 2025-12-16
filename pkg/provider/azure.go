@@ -524,7 +524,15 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 				return fmt.Errorf("InitializeCloudFromConfig: failed to attach Service Gateway %s to subnet %s: %w", az.ServiceGatewayResourceName, az.SubnetName, err)
 			}
 
-			err = az.initializeDiffTracker()
+			// Initialize difftracker from cluster state
+			dtConfig := difftracker.Config{
+				SubscriptionID:             az.SubscriptionID,
+				ResourceGroup:              az.ResourceGroup,
+				Location:                   az.Location,
+				ServiceGatewayResourceName: az.ServiceGatewayResourceName,
+				ServiceGatewayID:           az.GetServiceGatewayID(),
+			}
+			az.diffTracker, err = difftracker.InitializeFromCluster(ctx, dtConfig, az.NetworkClientFactory, az.KubeClient)
 			if err != nil {
 				klog.Errorf("InitializeCloudFromConfig: failed to initialize difftracker: %s", err.Error())
 				return err

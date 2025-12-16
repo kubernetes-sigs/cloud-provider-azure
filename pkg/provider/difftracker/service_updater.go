@@ -3,13 +3,9 @@ package difftracker
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"k8s.io/klog/v2"
-	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 // ServiceUpdater processes service creation/deletion in parallel
@@ -208,142 +204,32 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 
 	ctx := s.ctx
 
-	// Step 1: Create Public IP
-	pipName := fmt.Sprintf("%s-pip", serviceUID)
-	pipResource := armnetwork.PublicIPAddress{
-		Name: to.Ptr(pipName),
-		ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
-			s.diffTracker.config.SubscriptionID, s.diffTracker.config.ResourceGroup, pipName)),
-		SKU: &armnetwork.PublicIPAddressSKU{
-			Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
-		},
-		Location: to.Ptr(s.diffTracker.config.Location),
-		Properties: &armnetwork.PublicIPAddressPropertiesFormat{
-			PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
-		},
-	}
+	// Step 1: Build resources using shared helper
+	pipResource, lbResource, servicesDTO := buildInboundServiceResources(serviceUID, config, s.diffTracker.config)
 
+	// Step 2: Create Public IP
 	if err := s.diffTracker.createOrUpdatePIP(ctx, s.diffTracker.config.ResourceGroup, &pipResource); err != nil {
 		klog.Errorf("ServiceUpdater: failed to create Public IP for inbound service %s: %v", serviceUID, err)
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to create Public IP: %w", err))
 		return
 	}
+	pipName := fmt.Sprintf("%s-pip", serviceUID)
 	klog.V(3).Infof("ServiceUpdater: created Public IP %s for inbound service %s", pipName, serviceUID)
 
-	// Step 2: Build LoadBalancer resource structure with backend pools, rules, and probes
-	// Backend pool name must match ServiceGateway expectations for CLB mode.
-	// For CLB with PodIP backend, the pool is named using the service UID.
-	// This matches what getBackendPoolNameForCLBService() expects.
-	backendPoolName := serviceUID
-
-	frontendIPConfigID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/frontendIPConfigurations/frontend",
-		s.diffTracker.config.SubscriptionID, s.diffTracker.config.ResourceGroup, serviceUID)
-	backendPoolID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s",
-		s.diffTracker.config.SubscriptionID, s.diffTracker.config.ResourceGroup, serviceUID, backendPoolName)
-
-	// Build backend pool
-	backendPools := []*armnetwork.BackendAddressPool{
-		{
-			Name:       to.Ptr(backendPoolName),
-			Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
-				// Backend pool will be populated by ServiceGateway with pod IPs
-			},
-		},
-	}
-
-	// Build LB rules and probes from config
-	var lbRules []*armnetwork.LoadBalancingRule
-	var probes []*armnetwork.Probe
-
-	if config != nil && len(config.FrontendPorts) > 0 {
-		// For CLB with PodIP backend pool, we disable floating IP and don't create health probes
-		// Traffic goes directly to pod IPs on the backend port
-		for i, frontendPort := range config.FrontendPorts {
-			backendPort := frontendPort.Port
-			if i < len(config.BackendPorts) {
-				backendPort = config.BackendPorts[i].Port
-			}
-
-			protocol := armnetwork.TransportProtocolTCP
-			if frontendPort.Protocol == "UDP" {
-				protocol = armnetwork.TransportProtocolUDP
-			}
-
-			ruleName := fmt.Sprintf("rule-%s-%d", strings.ToLower(frontendPort.Protocol), frontendPort.Port)
-
-			lbRules = append(lbRules, &armnetwork.LoadBalancingRule{
-				Name: to.Ptr(ruleName),
-				Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
-					Protocol:             to.Ptr(protocol),
-					FrontendPort:         to.Ptr(frontendPort.Port),
-					BackendPort:          to.Ptr(backendPort),
-					EnableFloatingIP:     to.Ptr(false), // Disabled for PodIP backend
-					IdleTimeoutInMinutes: to.Ptr(int32(4)),
-					EnableTCPReset:       to.Ptr(true),
-					FrontendIPConfiguration: &armnetwork.SubResource{
-						ID: to.Ptr(frontendIPConfigID),
-					},
-					BackendAddressPool: &armnetwork.SubResource{
-						ID: to.Ptr(backendPoolID),
-					},
-					// No probe for PodIP backend pools
-				},
-			})
-
-			klog.V(4).Infof("ServiceUpdater: created LB rule %s: frontend=%d backend=%d protocol=%s for service %s",
-				ruleName, frontendPort.Port, backendPort, frontendPort.Protocol, serviceUID)
-		}
-	} else {
-		klog.V(2).Infof("ServiceUpdater: no port configuration provided for service %s, creating LB without rules", serviceUID)
-	}
-
-	lbResource := armnetwork.LoadBalancer{
-		Name:     to.Ptr(serviceUID),
-		Location: to.Ptr(s.diffTracker.config.Location),
-		SKU: &armnetwork.LoadBalancerSKU{
-			Name: to.Ptr(armnetwork.LoadBalancerSKUNameService),
-		},
-		Properties: &armnetwork.LoadBalancerPropertiesFormat{
-			FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
-				{
-					Name: to.Ptr("frontend"),
-					Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
-						PublicIPAddress: &armnetwork.PublicIPAddress{
-							ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
-								s.diffTracker.config.SubscriptionID, s.diffTracker.config.ResourceGroup, pipName)),
-						},
-					},
-				},
-			},
-			BackendAddressPools: backendPools,
-			LoadBalancingRules:  lbRules,
-			Probes:              probes,
-		},
-	}
-
-	// Step 3: Create LoadBalancer via CreateOrUpdateLB
+	// Step 3: Create LoadBalancer
 	if err := s.diffTracker.createOrUpdateLB(ctx, lbResource); err != nil {
 		klog.Errorf("ServiceUpdater: failed to create LoadBalancer for inbound service %s: %v", serviceUID, err)
 		// Don't delete PIP here - retry will use existing PIP
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to create LoadBalancer: %w", err))
 		return
 	}
-	klog.V(3).Infof("ServiceUpdater: created LoadBalancer with %d rules for inbound service %s", len(lbRules), serviceUID)
+	lbRulesCount := 0
+	if lbResource.Properties != nil && lbResource.Properties.LoadBalancingRules != nil {
+		lbRulesCount = len(lbResource.Properties.LoadBalancingRules)
+	}
+	klog.V(3).Infof("ServiceUpdater: created LoadBalancer with %d rules for inbound service %s", lbRulesCount, serviceUID)
 
 	// Step 4: Register service with ServiceGateway API
-	servicesDTO := MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
-		SyncServicesReturnType{
-			Additions: newIgnoreCaseSetFromSlice([]string{serviceUID}),
-			Removals:  nil,
-		},
-		SyncServicesReturnType{
-			Additions: nil,
-			Removals:  nil,
-		},
-		s.diffTracker.config.SubscriptionID,
-		s.diffTracker.config.ResourceGroup,
-	)
-
 	if err := s.diffTracker.updateNRPSGWServices(ctx, s.diffTracker.config.ServiceGatewayResourceName, servicesDTO); err != nil {
 		klog.Errorf("ServiceUpdater: failed to register inbound service %s with ServiceGateway: %v", serviceUID, err)
 		// Don't delete resources - retry will reconcile
@@ -369,50 +255,19 @@ func (s *ServiceUpdater) createOutboundService(serviceUID string, config *Outbou
 
 	ctx := s.ctx
 
-	// Step 1: Create Public IP
-	pipName := fmt.Sprintf("%s-pip", serviceUID)
-	pipResource := armnetwork.PublicIPAddress{
-		Name: to.Ptr(pipName),
-		ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
-			s.diffTracker.config.SubscriptionID, s.diffTracker.config.ResourceGroup, pipName)),
-		SKU: &armnetwork.PublicIPAddressSKU{
-			Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
-		},
-		Location: to.Ptr(s.diffTracker.config.Location),
-		Properties: &armnetwork.PublicIPAddressPropertiesFormat{
-			PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
-		},
-	}
+	// Step 1: Build resources using shared helper
+	pipResource, natGatewayResource, servicesDTO := buildOutboundServiceResources(serviceUID, config, s.diffTracker.config)
 
+	// Step 2: Create Public IP
 	if err := s.diffTracker.createOrUpdatePIP(ctx, s.diffTracker.config.ResourceGroup, &pipResource); err != nil {
 		klog.Errorf("ServiceUpdater: failed to create Public IP for outbound service %s: %v", serviceUID, err)
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to create Public IP: %w", err))
 		return
 	}
+	pipName := fmt.Sprintf("%s-pip", serviceUID)
 	klog.V(3).Infof("ServiceUpdater: created Public IP %s for outbound service %s", pipName, serviceUID)
 
-	// Step 2: Create NAT Gateway
-	natGatewayResource := armnetwork.NatGateway{
-		Name: to.Ptr(serviceUID),
-		ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/natGateways/%s",
-			s.diffTracker.config.SubscriptionID, s.diffTracker.config.ResourceGroup, serviceUID)),
-		SKU: &armnetwork.NatGatewaySKU{
-			Name: to.Ptr(armnetwork.NatGatewaySKUNameStandardV2),
-		},
-		Location: to.Ptr(s.diffTracker.config.Location),
-		Properties: &armnetwork.NatGatewayPropertiesFormat{
-			ServiceGateway: &armnetwork.ServiceGateway{
-				ID: to.Ptr(s.diffTracker.config.ServiceGatewayID),
-			},
-			PublicIPAddresses: []*armnetwork.SubResource{
-				{
-					ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
-						s.diffTracker.config.SubscriptionID, s.diffTracker.config.ResourceGroup, pipName)),
-				},
-			},
-		},
-	}
-
+	// Step 3: Create NAT Gateway
 	if err := s.diffTracker.createOrUpdateNatGateway(ctx, s.diffTracker.config.ResourceGroup, natGatewayResource); err != nil {
 		klog.Errorf("ServiceUpdater: failed to create NAT Gateway for outbound service %s: %v", serviceUID, err)
 		// Don't delete PIP here - retry will use existing PIP
@@ -421,20 +276,7 @@ func (s *ServiceUpdater) createOutboundService(serviceUID string, config *Outbou
 	}
 	klog.V(3).Infof("ServiceUpdater: created NAT Gateway for outbound service %s", serviceUID)
 
-	// Step 3: Register service with ServiceGateway API
-	servicesDTO := MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
-		SyncServicesReturnType{
-			Additions: nil,
-			Removals:  nil,
-		},
-		SyncServicesReturnType{
-			Additions: newIgnoreCaseSetFromSlice([]string{serviceUID}),
-			Removals:  nil,
-		},
-		s.diffTracker.config.SubscriptionID,
-		s.diffTracker.config.ResourceGroup,
-	)
-
+	// Step 4: Register service with ServiceGateway API
 	if err := s.diffTracker.updateNRPSGWServices(ctx, s.diffTracker.config.ServiceGatewayResourceName, servicesDTO); err != nil {
 		klog.Errorf("ServiceUpdater: failed to register outbound service %s with ServiceGateway: %v", serviceUID, err)
 		// Don't delete resources - retry will reconcile
@@ -594,13 +436,4 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string) {
 		})
 		s.onComplete(serviceUID, true, nil)
 	}
-}
-
-// newIgnoreCaseSetFromSlice creates an IgnoreCaseSet from a slice of strings
-func newIgnoreCaseSetFromSlice(items []string) *utilsets.IgnoreCaseSet {
-	set := utilsets.NewString()
-	for _, item := range items {
-		set.Insert(item)
-	}
-	return set
 }

@@ -36,7 +36,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
@@ -333,49 +332,9 @@ func getServiceUID(service *v1.Service) string {
 }
 
 // extractInboundConfigFromService creates InboundConfig from a Kubernetes Service
+// Delegates to the shared implementation in difftracker.ExtractInboundConfigFromService
 func (az *Cloud) extractInboundConfigFromService(service *v1.Service) *difftracker.InboundConfig {
-	if service == nil || len(service.Spec.Ports) == 0 {
-		return nil
-	}
-
-	config := &difftracker.InboundConfig{
-		FrontendPorts: make([]difftracker.PortMapping, 0, len(service.Spec.Ports)),
-		BackendPorts:  make([]difftracker.PortMapping, 0, len(service.Spec.Ports)),
-	}
-
-	// Extract port mappings from service
-	for _, port := range service.Spec.Ports {
-		protocol := string(port.Protocol)
-		if protocol == "" {
-			protocol = "TCP"
-		}
-
-		// Frontend port (service port)
-		config.FrontendPorts = append(config.FrontendPorts, difftracker.PortMapping{
-			Port:     port.Port,
-			Protocol: protocol,
-		})
-
-		// Backend port (target port)
-		// For CLB with PodIP backend, we use TargetPort
-		// If TargetPort is not specified, default to Port
-		backendPort := port.Port
-		if port.TargetPort.Type == intstr.Int {
-			backendPort = port.TargetPort.IntVal
-		} else if port.TargetPort.Type == intstr.String {
-			// Named ports not supported in CLB mode - use Port as fallback
-			klog.V(2).Infof("Named targetPort %s not supported in CLB mode for service %s, using Port %d",
-				port.TargetPort.StrVal, getServiceName(service), port.Port)
-			backendPort = port.Port
-		}
-
-		config.BackendPorts = append(config.BackendPorts, difftracker.PortMapping{
-			Port:     backendPort,
-			Protocol: protocol,
-		})
-	}
-
-	return config
+	return difftracker.ExtractInboundConfigFromService(service)
 }
 
 // This returns a prefix for loadbalancer/security rules.
