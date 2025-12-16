@@ -196,7 +196,7 @@ func getNodePrivateIPAddress(node *v1.Node, isIPv6 bool) string {
 	for _, nodeAddress := range node.Status.Addresses {
 		if strings.EqualFold(string(nodeAddress.Type), string(v1.NodeInternalIP)) &&
 			utilnet.IsIPv6String(nodeAddress.Address) == isIPv6 {
-			logger.V(6).Info("", "node", node.Name, "ip", nodeAddress.Address)
+			logger.V(6).Info("Get node private IP address", "node", node.Name, "ip", nodeAddress.Address)
 			return nodeAddress.Address
 		}
 	}

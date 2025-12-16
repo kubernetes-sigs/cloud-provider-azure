@@ -1012,7 +1012,7 @@ func (fs *FlexScaleSet) ensureBackendPoolDeletedFromNode(ctx context.Context, vm
 			return nil
 		})
 	}
-	logger.V(2).Info("", "nicUpdaters size", len(nicUpdaters))
+	logger.V(2).Info("NIC updaters size", "nicUpdatersSize", len(nicUpdaters))
 	errs := utilerrors.AggregateGoroutines(nicUpdaters...)
 	if errs != nil {
 		allErrs = append(allErrs, utilerrors.Flatten(errs))

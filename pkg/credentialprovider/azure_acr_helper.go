@@ -178,7 +178,7 @@ func performTokenExchange(
 
 	if exchange.Header != nil {
 		if correlationID, ok := exchange.Header["X-Ms-Correlation-Request-Id"]; ok {
-			logger.V(4).Info("", "correlationID", correlationID)
+			logger.V(4).Info("Got correlation ID header", "correlationID", correlationID)
 		}
 	}
 
