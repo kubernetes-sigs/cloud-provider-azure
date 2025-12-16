@@ -3,6 +3,7 @@ package difftracker
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
@@ -80,7 +81,7 @@ func (s *ServiceUpdater) processBatch() {
 	// Collect work to do while holding lock, then spawn goroutines after releasing lock
 	type workItem struct {
 		serviceUID string
-		isInbound  bool
+		config     ServiceConfig
 		state      ResourceState
 	}
 	var workToDo []workItem
@@ -102,7 +103,7 @@ func (s *ServiceUpdater) processBatch() {
 			// Transition to CreationInProgress
 			recordStateTransition(StateNotStarted, StateCreationInProgress)
 			opState.State = StateCreationInProgress
-			workToDo = append(workToDo, workItem{serviceUID, opState.Config.IsInbound, StateCreationInProgress})
+			workToDo = append(workToDo, workItem{serviceUID, opState.Config, StateCreationInProgress})
 
 		case StateCreationInProgress:
 			// Already being processed by another goroutine, skip
@@ -128,7 +129,7 @@ func (s *ServiceUpdater) processBatch() {
 			klog.V(4).Infof("ServiceUpdater: service %s in StateDeletionPending, waiting for locations to be cleared", serviceUID)
 
 		case StateDeletionInProgress:
-			workToDo = append(workToDo, workItem{serviceUID, opState.Config.IsInbound, StateDeletionInProgress})
+			workToDo = append(workToDo, workItem{serviceUID, opState.Config, StateDeletionInProgress})
 		}
 	}
 	s.diffTracker.mu.Unlock()
@@ -141,7 +142,7 @@ func (s *ServiceUpdater) processBatch() {
 		switch work.state {
 		case StateCreationInProgress:
 			s.wg.Add(1)
-			go func(uid string, isInbound bool) {
+			go func(uid string, cfg ServiceConfig) {
 				defer s.wg.Done()
 				defer func() {
 					s.mu.Lock()
@@ -162,15 +163,15 @@ func (s *ServiceUpdater) processBatch() {
 					return
 				}
 
-				if isInbound {
-					s.createInboundService(uid)
+				if cfg.IsInbound {
+					s.createInboundService(uid, cfg.InboundConfig)
 				} else {
-					s.createOutboundService(uid)
+					s.createOutboundService(uid, cfg.OutboundConfig)
 				}
-			}(work.serviceUID, work.isInbound)
+			}(work.serviceUID, work.config)
 		case StateDeletionInProgress:
 			s.wg.Add(1)
-			go func(uid string, isInbound bool) {
+			go func(uid string, cfg ServiceConfig) {
 				defer s.wg.Done()
 				defer func() {
 					s.mu.Lock()
@@ -191,18 +192,18 @@ func (s *ServiceUpdater) processBatch() {
 					return
 				}
 
-				if isInbound {
+				if cfg.IsInbound {
 					s.deleteInboundService(uid)
 				} else {
 					s.deleteOutboundService(uid)
 				}
-			}(work.serviceUID, work.isInbound)
+			}(work.serviceUID, work.config)
 		}
 	}
 }
 
 // createInboundService creates LoadBalancer resources for inbound service
-func (s *ServiceUpdater) createInboundService(serviceUID string) {
+func (s *ServiceUpdater) createInboundService(serviceUID string, config *InboundConfig) {
 	klog.Infof("ServiceUpdater: createInboundService started for %s", serviceUID)
 
 	ctx := s.ctx
@@ -229,7 +230,73 @@ func (s *ServiceUpdater) createInboundService(serviceUID string) {
 	}
 	klog.V(3).Infof("ServiceUpdater: created Public IP %s for inbound service %s", pipName, serviceUID)
 
-	// Step 2: Create LoadBalancer resource structure
+	// Step 2: Build LoadBalancer resource structure with backend pools, rules, and probes
+	// Backend pool name must match ServiceGateway expectations for CLB mode.
+	// For CLB with PodIP backend, the pool is named using the service UID.
+	// This matches what getBackendPoolNameForCLBService() expects.
+	backendPoolName := serviceUID
+
+	frontendIPConfigID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/frontendIPConfigurations/frontend",
+		s.diffTracker.config.SubscriptionID, s.diffTracker.config.ResourceGroup, serviceUID)
+	backendPoolID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s",
+		s.diffTracker.config.SubscriptionID, s.diffTracker.config.ResourceGroup, serviceUID, backendPoolName)
+
+	// Build backend pool
+	backendPools := []*armnetwork.BackendAddressPool{
+		{
+			Name:       to.Ptr(backendPoolName),
+			Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+				// Backend pool will be populated by ServiceGateway with pod IPs
+			},
+		},
+	}
+
+	// Build LB rules and probes from config
+	var lbRules []*armnetwork.LoadBalancingRule
+	var probes []*armnetwork.Probe
+
+	if config != nil && len(config.FrontendPorts) > 0 {
+		// For CLB with PodIP backend pool, we disable floating IP and don't create health probes
+		// Traffic goes directly to pod IPs on the backend port
+		for i, frontendPort := range config.FrontendPorts {
+			backendPort := frontendPort.Port
+			if i < len(config.BackendPorts) {
+				backendPort = config.BackendPorts[i].Port
+			}
+
+			protocol := armnetwork.TransportProtocolTCP
+			if frontendPort.Protocol == "UDP" {
+				protocol = armnetwork.TransportProtocolUDP
+			}
+
+			ruleName := fmt.Sprintf("rule-%s-%d", strings.ToLower(frontendPort.Protocol), frontendPort.Port)
+
+			lbRules = append(lbRules, &armnetwork.LoadBalancingRule{
+				Name: to.Ptr(ruleName),
+				Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+					Protocol:             to.Ptr(protocol),
+					FrontendPort:         to.Ptr(frontendPort.Port),
+					BackendPort:          to.Ptr(backendPort),
+					EnableFloatingIP:     to.Ptr(false), // Disabled for PodIP backend
+					IdleTimeoutInMinutes: to.Ptr(int32(4)),
+					EnableTCPReset:       to.Ptr(true),
+					FrontendIPConfiguration: &armnetwork.SubResource{
+						ID: to.Ptr(frontendIPConfigID),
+					},
+					BackendAddressPool: &armnetwork.SubResource{
+						ID: to.Ptr(backendPoolID),
+					},
+					// No probe for PodIP backend pools
+				},
+			})
+
+			klog.V(4).Infof("ServiceUpdater: created LB rule %s: frontend=%d backend=%d protocol=%s for service %s",
+				ruleName, frontendPort.Port, backendPort, frontendPort.Protocol, serviceUID)
+		}
+	} else {
+		klog.V(2).Infof("ServiceUpdater: no port configuration provided for service %s, creating LB without rules", serviceUID)
+	}
+
 	lbResource := armnetwork.LoadBalancer{
 		Name:     to.Ptr(serviceUID),
 		Location: to.Ptr(s.diffTracker.config.Location),
@@ -248,6 +315,9 @@ func (s *ServiceUpdater) createInboundService(serviceUID string) {
 					},
 				},
 			},
+			BackendAddressPools: backendPools,
+			LoadBalancingRules:  lbRules,
+			Probes:              probes,
 		},
 	}
 
@@ -258,7 +328,7 @@ func (s *ServiceUpdater) createInboundService(serviceUID string) {
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to create LoadBalancer: %w", err))
 		return
 	}
-	klog.V(3).Infof("ServiceUpdater: created LoadBalancer for inbound service %s", serviceUID)
+	klog.V(3).Infof("ServiceUpdater: created LoadBalancer with %d rules for inbound service %s", len(lbRules), serviceUID)
 
 	// Step 4: Register service with ServiceGateway API
 	servicesDTO := MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
@@ -294,7 +364,7 @@ func (s *ServiceUpdater) createInboundService(serviceUID string) {
 }
 
 // createOutboundService creates NAT Gateway resources for outbound service
-func (s *ServiceUpdater) createOutboundService(serviceUID string) {
+func (s *ServiceUpdater) createOutboundService(serviceUID string, config *OutboundConfig) {
 	klog.Infof("ServiceUpdater: createOutboundService started for %s", serviceUID)
 
 	ctx := s.ctx

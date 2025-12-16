@@ -40,7 +40,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	cloudprovider "k8s.io/cloud-provider"
 	servicehelpers "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/klog/v2"
@@ -391,10 +390,13 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 	}()
 
 	// Use Engine for async service creation when ServiceGatewayEnabled
-	if az.ServiceGatewayEnabled && az.diffTracker != nil {
+	if az.ServiceGatewayEnabled {
 		serviceUID := getServiceUID(service)
 		logger.V(2).Info("Using Engine for async service creation", "serviceUID", serviceUID)
-		config := difftracker.NewInboundServiceConfig(serviceUID, nil)
+
+		// Extract port configuration from service
+		inboundConfig := az.extractInboundConfigFromService(service)
+		config := difftracker.NewInboundServiceConfig(serviceUID, inboundConfig)
 		az.diffTracker.AddService(config)
 
 		// Status will be populated by subsequent reconcile loops after async creation completes
@@ -614,7 +616,7 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 	}
 
 	// Use Engine for async service deletion when ServiceGatewayEnabled
-	if az.ServiceGatewayEnabled && az.diffTracker != nil {
+	if az.ServiceGatewayEnabled {
 		serviceUID := getServiceUID(service)
 		logger.V(2).Info("Using Engine for async service deletion", "serviceUID", serviceUID)
 		az.diffTracker.DeleteService(serviceUID, true) // true = inbound service
@@ -3102,16 +3104,6 @@ func (az *Cloud) getExpectedLBRules(
 	isIPv6 bool,
 ) ([]*armnetwork.Probe, []*armnetwork.LoadBalancingRule, error) {
 	var expectedRules []*armnetwork.LoadBalancingRule
-	// If we are using Pod IP in the LB backend, we skip health probes, disable floating IP and use port.TargetPort.
-	if az.ServiceGatewayEnabled {
-		expectedRules, err := getExpectedLoadBalancingRuleforBackendPoolTypePodIP(service, az, isIPv6, lbFrontendIPConfigID, lbBackendPoolID, expectedRules)
-		if err != nil {
-			return nil, nil, err
-		}
-		return nil, expectedRules, nil
-	}
-
-	// Otherwise, the existing flow remains unchanged
 	var expectedProbes []*armnetwork.Probe
 
 	// support podPresence health check when External Traffic Policy is local
@@ -3141,7 +3133,6 @@ func (az *Cloud) getExpectedLBRules(
 
 	var useSharedProbe bool
 	if az.useSharedLoadBalancerHealthProbeMode() &&
-		!az.ServiceGatewayEnabled &&
 		!strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyLocal)) {
 		nodeEndpointHealthprobe = az.buildClusterServiceSharedProbe()
 		useSharedProbe = true
@@ -3259,37 +3250,6 @@ func (az *Cloud) getExpectedLBRules(
 	}
 
 	return expectedProbes, expectedRules, nil
-}
-
-func getExpectedLoadBalancingRuleforBackendPoolTypePodIP(service *v1.Service, az *Cloud, isIPv6 bool, lbFrontendIPConfigID string, lbBackendPoolID string, expectedRules []*armnetwork.LoadBalancingRule) ([]*armnetwork.LoadBalancingRule, error) {
-	// Check for multi-IP families in the service spec (not allowed for BackendPool of type PodIP).
-	if len(service.Spec.IPFamilies) > 1 {
-		return nil, fmt.Errorf("dual-stack services are not supported when LB backend pool type is PodIP")
-	}
-	// Build rules for each service port but with floatingIP = false, no health probes.
-	for _, port := range service.Spec.Ports {
-		if port.TargetPort.Type == intstr.String {
-			return nil, fmt.Errorf("named targetPort is not supported when LB backend pool type is PodIP: %s", port.TargetPort.StrVal)
-		}
-		ruleName := az.getLoadBalancerRuleName(service, port.Protocol, port.Port, isIPv6)
-		transportProto, _, _, err := getProtocolsFromKubernetesProtocol(port.Protocol)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse transport protocol: %w", err)
-		}
-		props, err := az.getExpectedLoadBalancingRulePropertiesForPort(service, lbFrontendIPConfigID, lbBackendPoolID, port, transportProto)
-		if err != nil {
-			return nil, fmt.Errorf("error generating LB rule: %w", err)
-		}
-		// Turn off floating IP and skip health probe attachments.
-		props.EnableFloatingIP = ptr.To(false)
-		props.Probe = nil
-		props.BackendPort = &port.TargetPort.IntVal
-		expectedRules = append(expectedRules, &armnetwork.LoadBalancingRule{
-			Name:       &ruleName,
-			Properties: props,
-		})
-	}
-	return expectedRules, nil
 }
 
 // getDefaultLoadBalancingRulePropertiesFormat returns the loadbalancing rule for one port
@@ -3775,19 +3735,6 @@ func (az *Cloud) getPublicIPUpdates(
 			return false, nil, false, nil, fmt.Errorf("PIP name is empty: %v", pip)
 		}
 		pipName := *pip.Name
-
-		// For Service Gateway, enforce strict PIP naming pattern matching.
-		// Skip PIPs that don't follow the per-service naming convention to prevent
-		// cross-contamination between default shared LB PIPs and per-service LB PIPs.
-		if az.ServiceGatewayEnabled {
-			serviceUID := string(service.UID)
-			expectedPIPPrefix := fmt.Sprintf("%s-pip", serviceUID)
-			// Only consider PIPs that match the expected per-service naming pattern
-			if !strings.HasPrefix(pipName, expectedPIPPrefix) {
-				klog.V(4).Infof("getPublicIPUpdates: skipping PIP %s for service %s - does not match Service Gateway naming pattern (expected prefix: %s)", pipName, serviceName, expectedPIPPrefix)
-				continue
-			}
-		}
 
 		// If we've been told to use a specific public ip by the client, let's track whether or not it actually existed
 		// when we inspect the set in Azure.
