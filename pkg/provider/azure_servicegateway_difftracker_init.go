@@ -296,7 +296,15 @@ func (az *Cloud) initializeDiffTracker() error {
 	// END 5.
 
 	// Initialize the diff tracker state and get the necessary operations to sync the cluster with NRP
-	az.diffTracker = difftracker.InitializeDiffTracker(k8s, nrp)
+	config := difftracker.Config{
+		SubscriptionID:             az.getNetworkResourceSubscriptionID(),
+		ResourceGroup:              az.ResourceGroup,
+		Location:                   az.Location,
+		ClusterName:                az.LoadBalancerName,
+		ServiceGatewayResourceName: az.ServiceGatewayResourceName,
+		ServiceGatewayID:           az.GetServiceGatewayID(),
+	}
+	az.diffTracker = difftracker.InitializeDiffTracker(k8s, nrp, config, az.NetworkClientFactory, az.KubeClient)
 	az.diffTracker.LocalServiceNameToNRPServiceMap = *syncMapFromMap(localServiceNameToNRPServiceMap)
 	klog.Infof("initializeDiffTracker: initialized diff tracker localServiceNameToNRPServiceMap with %d entries", localServiceNameToNRPServiceMap)
 	//logObject(localServiceNameToNRPServiceMap)

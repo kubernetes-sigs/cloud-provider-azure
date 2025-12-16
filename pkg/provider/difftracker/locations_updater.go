@@ -10,20 +10,21 @@ import (
 
 // LocationsUpdater syncs location and address changes to NRP Service Gateway
 type LocationsUpdater struct {
-	cloud       CloudProvider
 	diffTracker *DiffTracker
 	ctx         context.Context
 	cancel      context.CancelFunc
 }
 
 // NewLocationsUpdater creates a new LocationsUpdater
-func NewLocationsUpdater(ctx context.Context, cloud CloudProvider, diffTracker *DiffTracker) *LocationsUpdater {
-	if cloud == nil || diffTracker == nil {
-		panic("LocationsUpdater: cloud and diffTracker must not be nil")
+func NewLocationsUpdater(ctx context.Context, diffTracker *DiffTracker) *LocationsUpdater {
+	if diffTracker == nil {
+		panic("LocationsUpdater: diffTracker must not be nil")
+	}
+	if diffTracker.networkClientFactory == nil {
+		panic("LocationsUpdater: diffTracker.networkClientFactory must not be nil")
 	}
 	childCtx, cancel := context.WithCancel(ctx)
 	return &LocationsUpdater{
-		cloud:       cloud,
 		diffTracker: diffTracker,
 		ctx:         childCtx,
 		cancel:      cancel,
@@ -57,7 +58,7 @@ func (lu *LocationsUpdater) Stop() {
 // process computes location/address diff and syncs to NRP
 func (lu *LocationsUpdater) process(ctx context.Context) {
 	mc := metrics.NewMetricContext("locations", "LocationsUpdater.process",
-		lu.cloud.GetResourceGroup(), lu.cloud.GetSubscriptionID(), "sync")
+		lu.diffTracker.config.ResourceGroup, lu.diffTracker.config.SubscriptionID, "sync")
 	isOperationSucceeded := false
 	var numLocations, numAddresses int
 
@@ -91,7 +92,7 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 	locationsDTO := MapLocationDataToDTO(locationData)
 
 	// Call NRP Service Gateway API to update locations/addresses
-	err := lu.cloud.UpdateNRPSGWAddressLocations(ctx, lu.cloud.GetServiceGatewayResourceName(), locationsDTO)
+	err := lu.diffTracker.updateNRPSGWAddressLocations(ctx, lu.diffTracker.config.ServiceGatewayResourceName, locationsDTO)
 	if err != nil {
 		klog.Errorf("LocationsUpdater: Failed to update locations in NRP: %v", err)
 		recordLocationsUpdate(startTime, numLocations, numAddresses, err)

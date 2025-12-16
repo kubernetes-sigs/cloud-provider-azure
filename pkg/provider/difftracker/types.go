@@ -3,6 +3,8 @@ package difftracker
 import (
 	"sync"
 
+	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -110,6 +112,11 @@ type DiffTracker struct {
 	LocalServiceNameToNRPServiceMap sync.Map
 
 	InitialSyncDone bool
+
+	// Configuration and clients
+	config               Config
+	networkClientFactory azclient.ClientFactory
+	kubeClient           kubernetes.Interface
 
 	// Engine state management
 	pendingServiceOps map[string]*ServiceOperationState

@@ -25,16 +25,16 @@ import (
 
 // TestServiceUpdaterInitialization tests ServiceUpdater creation
 func TestServiceUpdaterInitialization(t *testing.T) {
-	// Skip: ServiceUpdater requires non-nil CloudProvider which needs extensive mocking
+	// Skip: ServiceUpdater requires DiffTracker with Azure clients which needs extensive mocking
 	// The initialization logic is simple and verified through integration tests
-	t.Skip("ServiceUpdater requires CloudProvider interface - deferred to integration tests")
+	t.Skip("ServiceUpdater requires Azure client mocking - deferred to integration tests")
 }
 
 // TestServiceUpdaterGracefulStop tests that ServiceUpdater stops gracefully
 func TestServiceUpdaterGracefulStop(t *testing.T) {
-	// Skip: ServiceUpdater requires non-nil CloudProvider which needs extensive mocking
+	// Skip: ServiceUpdater requires DiffTracker with Azure clients which needs extensive mocking
 	// Graceful shutdown logic is verified through integration tests
-	t.Skip("ServiceUpdater requires CloudProvider interface - deferred to integration tests")
+	t.Skip("ServiceUpdater requires Azure client mocking - deferred to integration tests")
 }
 
 // TestServiceUpdaterProcessBatchFlow tests that processBatch correctly categorizes work
@@ -104,14 +104,14 @@ func TestServiceUpdaterProcessBatchFlow(t *testing.T) {
 
 // TestServiceUpdaterSemaphoreLimit tests that semaphore limits concurrent operations
 func TestServiceUpdaterSemaphoreLimit(t *testing.T) {
-	// Skip: ServiceUpdater requires non-nil CloudProvider which needs extensive mocking
+	// Skip: ServiceUpdater requires DiffTracker with Azure clients which needs extensive mocking
 	// Semaphore limiting is verified through integration tests
-	t.Skip("ServiceUpdater requires CloudProvider interface - deferred to integration tests")
+	t.Skip("ServiceUpdater requires Azure client mocking - deferred to integration tests")
 }
 
 // TestServiceUpdaterActiveOpsTracking tests that activeOps map prevents duplicate processing
 func TestServiceUpdaterActiveOpsTracking(t *testing.T) {
-	// Skip: ServiceUpdater requires non-nil CloudProvider which needs extensive mocking
+	// Skip: ServiceUpdater requires DiffTracker with Azure clients which needs extensive mocking
 	// Active operations tracking is verified through integration tests
-	t.Skip("ServiceUpdater requires CloudProvider interface - deferred to integration tests")
+	t.Skip("ServiceUpdater requires Azure client mocking - deferred to integration tests")
 }

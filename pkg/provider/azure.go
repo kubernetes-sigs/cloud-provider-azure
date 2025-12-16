@@ -536,11 +536,11 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 			}
 
 			klog.Infof("InitializeCloudFromConfig: Starting Engine goroutines (ServiceUpdater + LocationsUpdater)")
-			serviceUpdater := difftracker.NewServiceUpdater(ctx, az, az.diffTracker,
+			serviceUpdater := difftracker.NewServiceUpdater(ctx, az.diffTracker,
 				az.diffTracker.OnServiceCreationComplete, az.diffTracker.GetServiceUpdaterTrigger())
 			go serviceUpdater.Run()
 
-			locationsUpdater := difftracker.NewLocationsUpdater(ctx, az, az.diffTracker)
+			locationsUpdater := difftracker.NewLocationsUpdater(ctx, az.diffTracker)
 			go locationsUpdater.Run()
 			klog.Infof("InitializeCloudFromConfig: Engine goroutines started successfully")
 		}

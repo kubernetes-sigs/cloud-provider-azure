@@ -6,8 +6,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
+	"k8s.io/client-go/kubernetes/fake"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
-	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 var (
@@ -25,13 +27,13 @@ func TestDiffTracker_DeepEqual(t *testing.T) {
 			name: "equal empty states",
 			dt: &DiffTracker{
 				K8sResources: K8s_State{
-					Services: utilsets.NewString(),
-					Egresses: utilsets.NewString(),
+					Services: sets.NewString(),
+					Egresses: sets.NewString(),
 					Nodes:    map[string]Node{},
 				},
 				NRPResources: NRP_State{
-					LoadBalancers: utilsets.NewString(),
-					NATGateways:   utilsets.NewString(),
+					LoadBalancers: sets.NewString(),
+					NATGateways:   sets.NewString(),
 					Locations:     map[string]NRPLocation{},
 				},
 			},
@@ -41,13 +43,13 @@ func TestDiffTracker_DeepEqual(t *testing.T) {
 			name: "equal states with services",
 			dt: &DiffTracker{
 				K8sResources: K8s_State{
-					Services: utilsets.NewString("service1", "service2"),
-					Egresses: utilsets.NewString(),
+					Services: sets.NewString("service1", "service2"),
+					Egresses: sets.NewString(),
 					Nodes:    map[string]Node{},
 				},
 				NRPResources: NRP_State{
-					LoadBalancers: utilsets.NewString("service1", "service2"),
-					NATGateways:   utilsets.NewString(),
+					LoadBalancers: sets.NewString("service1", "service2"),
+					NATGateways:   sets.NewString(),
 					Locations:     map[string]NRPLocation{},
 				},
 			},
@@ -57,13 +59,13 @@ func TestDiffTracker_DeepEqual(t *testing.T) {
 			name: "services not equal",
 			dt: &DiffTracker{
 				K8sResources: K8s_State{
-					Services: utilsets.NewString("service1", "service2"),
-					Egresses: utilsets.NewString(),
+					Services: sets.NewString("service1", "service2"),
+					Egresses: sets.NewString(),
 					Nodes:    map[string]Node{},
 				},
 				NRPResources: NRP_State{
-					LoadBalancers: utilsets.NewString("service1"),
-					NATGateways:   utilsets.NewString(),
+					LoadBalancers: sets.NewString("service1"),
+					NATGateways:   sets.NewString(),
 					Locations:     map[string]NRPLocation{},
 				},
 			},
@@ -82,7 +84,7 @@ func TestDiffTracker_DeepEqual(t *testing.T) {
 func TestUpdateK8sService(t *testing.T) {
 	dt := &DiffTracker{
 		K8sResources: K8s_State{
-			Services: utilsets.NewString(),
+			Services: sets.NewString(),
 		},
 	}
 
@@ -113,10 +115,10 @@ func TestUpdateK8sService(t *testing.T) {
 func TestGetSyncLoadBalancerServices(t *testing.T) {
 	dt := &DiffTracker{
 		K8sResources: K8s_State{
-			Services: utilsets.NewString("service1", "service2", "service3"),
+			Services: sets.NewString("service1", "service2", "service3"),
 		},
 		NRPResources: NRP_State{
-			LoadBalancers: utilsets.NewString("service2", "service3", "service4"),
+			LoadBalancers: sets.NewString("service2", "service3", "service4"),
 		},
 	}
 
@@ -212,7 +214,7 @@ func TestGetSyncLocationsAddresses(t *testing.T) {
 				"node1": {
 					Pods: map[string]Pod{
 						"10.0.0.1": {
-							InboundIdentities:      utilsets.NewString("service1"),
+							InboundIdentities:      sets.NewString("service1"),
 							PublicOutboundIdentity: "public1",
 						},
 					},
@@ -258,55 +260,55 @@ func TestUpdateNRPLoadBalancers(t *testing.T) {
 	tests := []struct {
 		name         string
 		initialState *DiffTracker
-		expectedNRP  *utilsets.IgnoreCaseSet
+		expectedNRP  *sets.IgnoreCaseSet
 	}{
 		{
 			name: "add services from K8s to NRP",
 			initialState: &DiffTracker{
 				K8sResources: K8s_State{
-					Services: utilsets.NewString("service1", "service2", "service3"),
+					Services: sets.NewString("service1", "service2", "service3"),
 				},
 				NRPResources: NRP_State{
-					LoadBalancers: utilsets.NewString("service1"),
+					LoadBalancers: sets.NewString("service1"),
 				},
 			},
-			expectedNRP: utilsets.NewString("service1", "service2", "service3"),
+			expectedNRP: sets.NewString("service1", "service2", "service3"),
 		},
 		{
 			name: "remove services from NRP that are not in K8s",
 			initialState: &DiffTracker{
 				K8sResources: K8s_State{
-					Services: utilsets.NewString("service1"),
+					Services: sets.NewString("service1"),
 				},
 				NRPResources: NRP_State{
-					LoadBalancers: utilsets.NewString("service1", "service2", "service3"),
+					LoadBalancers: sets.NewString("service1", "service2", "service3"),
 				},
 			},
-			expectedNRP: utilsets.NewString("service1"),
+			expectedNRP: sets.NewString("service1"),
 		},
 		{
 			name: "add and remove services to sync K8s and NRP",
 			initialState: &DiffTracker{
 				K8sResources: K8s_State{
-					Services: utilsets.NewString("service1", "service2", "service4"),
+					Services: sets.NewString("service1", "service2", "service4"),
 				},
 				NRPResources: NRP_State{
-					LoadBalancers: utilsets.NewString("service1", "service3", "service5"),
+					LoadBalancers: sets.NewString("service1", "service3", "service5"),
 				},
 			},
-			expectedNRP: utilsets.NewString("service1", "service2", "service4"),
+			expectedNRP: sets.NewString("service1", "service2", "service4"),
 		},
 		{
 			name: "no changes needed when K8s and NRP are in sync",
 			initialState: &DiffTracker{
 				K8sResources: K8s_State{
-					Services: utilsets.NewString("service1", "service2"),
+					Services: sets.NewString("service1", "service2"),
 				},
 				NRPResources: NRP_State{
-					LoadBalancers: utilsets.NewString("service1", "service2"),
+					LoadBalancers: sets.NewString("service1", "service2"),
 				},
 			},
-			expectedNRP: utilsets.NewString("service1", "service2"),
+			expectedNRP: sets.NewString("service1", "service2"),
 		},
 	}
 
@@ -327,7 +329,7 @@ func TestUpdateNRPLoadBalancers(t *testing.T) {
 func TestUpdateK8sEgress(t *testing.T) {
 	dt := &DiffTracker{
 		K8sResources: K8s_State{
-			Egresses: utilsets.NewString(),
+			Egresses: sets.NewString(),
 		},
 	}
 
@@ -405,10 +407,10 @@ func TestGetSyncNRPNATGateways(t *testing.T) {
 			// Initialize DiffTracker with the test case data
 			dt := &DiffTracker{
 				K8sResources: K8s_State{
-					Egresses: utilsets.NewString(tt.k8sEgresses...),
+					Egresses: sets.NewString(tt.k8sEgresses...),
 				},
 				NRPResources: NRP_State{
-					NATGateways: utilsets.NewString(tt.nrpNATGateways...),
+					NATGateways: sets.NewString(tt.nrpNATGateways...),
 				},
 			}
 
@@ -437,55 +439,55 @@ func TestUpdateNRPNATGateways(t *testing.T) {
 	tests := []struct {
 		name         string
 		initialState *DiffTracker
-		expectedNRP  *utilsets.IgnoreCaseSet
+		expectedNRP  *sets.IgnoreCaseSet
 	}{
 		{
 			name: "add egresses from K8s to NRP",
 			initialState: &DiffTracker{
 				K8sResources: K8s_State{
-					Egresses: utilsets.NewString("egress1", "egress2", "egress3"),
+					Egresses: sets.NewString("egress1", "egress2", "egress3"),
 				},
 				NRPResources: NRP_State{
-					NATGateways: utilsets.NewString("egress1"),
+					NATGateways: sets.NewString("egress1"),
 				},
 			},
-			expectedNRP: utilsets.NewString("egress1", "egress2", "egress3"),
+			expectedNRP: sets.NewString("egress1", "egress2", "egress3"),
 		},
 		{
 			name: "remove egresses from NRP that are not in K8s",
 			initialState: &DiffTracker{
 				K8sResources: K8s_State{
-					Egresses: utilsets.NewString("egress1"),
+					Egresses: sets.NewString("egress1"),
 				},
 				NRPResources: NRP_State{
-					NATGateways: utilsets.NewString("egress1", "egress2", "egress3"),
+					NATGateways: sets.NewString("egress1", "egress2", "egress3"),
 				},
 			},
-			expectedNRP: utilsets.NewString("egress1"),
+			expectedNRP: sets.NewString("egress1"),
 		},
 		{
 			name: "add and remove egresses to sync K8s and NRP",
 			initialState: &DiffTracker{
 				K8sResources: K8s_State{
-					Egresses: utilsets.NewString("egress1", "egress2", "egress4"),
+					Egresses: sets.NewString("egress1", "egress2", "egress4"),
 				},
 				NRPResources: NRP_State{
-					NATGateways: utilsets.NewString("egress1", "egress3", "egress5"),
+					NATGateways: sets.NewString("egress1", "egress3", "egress5"),
 				},
 			},
-			expectedNRP: utilsets.NewString("egress1", "egress2", "egress4"),
+			expectedNRP: sets.NewString("egress1", "egress2", "egress4"),
 		},
 		{
 			name: "no changes needed when K8s and NRP are in sync",
 			initialState: &DiffTracker{
 				K8sResources: K8s_State{
-					Egresses: utilsets.NewString("egress1", "egress2"),
+					Egresses: sets.NewString("egress1", "egress2"),
 				},
 				NRPResources: NRP_State{
-					NATGateways: utilsets.NewString("egress1", "egress2"),
+					NATGateways: sets.NewString("egress1", "egress2"),
 				},
 			},
-			expectedNRP: utilsets.NewString("egress1", "egress2"),
+			expectedNRP: sets.NewString("egress1", "egress2"),
 		},
 	}
 
@@ -529,7 +531,7 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 						"node1": {
 							Pods: map[string]Pod{
 								"10.0.0.1": {
-									InboundIdentities:      utilsets.NewString("service1"),
+									InboundIdentities:      sets.NewString("service1"),
 									PublicOutboundIdentity: "public1",
 								},
 							},
@@ -554,7 +556,7 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 						"node1": {
 							Pods: map[string]Pod{
 								"10.0.0.1": {
-									InboundIdentities:      utilsets.NewString("service1", "service2"),
+									InboundIdentities:      sets.NewString("service1", "service2"),
 									PublicOutboundIdentity: "public1",
 								},
 							},
@@ -566,7 +568,7 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 						"node1": {
 							Addresses: map[string]NRPAddress{
 								"10.0.0.1": {
-									Services: utilsets.NewString("service1"),
+									Services: sets.NewString("service1"),
 								},
 							},
 						},
@@ -587,7 +589,7 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 						"node1": {
 							Pods: map[string]Pod{
 								"10.0.0.1": {
-									InboundIdentities: utilsets.NewString("service1"),
+									InboundIdentities: sets.NewString("service1"),
 								},
 							},
 						},
@@ -598,10 +600,10 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 						"node1": {
 							Addresses: map[string]NRPAddress{
 								"10.0.0.1": {
-									Services: utilsets.NewString("service1"),
+									Services: sets.NewString("service1"),
 								},
 								"10.0.0.2": {
-									Services: utilsets.NewString("service2"),
+									Services: sets.NewString("service2"),
 								},
 							},
 						},
@@ -622,7 +624,7 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 						"node1": {
 							Pods: map[string]Pod{
 								"10.0.0.1": {
-									InboundIdentities: utilsets.NewString("service1"),
+									InboundIdentities: sets.NewString("service1"),
 								},
 							},
 						},
@@ -633,14 +635,14 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 						"node1": {
 							Addresses: map[string]NRPAddress{
 								"10.0.0.1": {
-									Services: utilsets.NewString("service1"),
+									Services: sets.NewString("service1"),
 								},
 							},
 						},
 						"node2": {
 							Addresses: map[string]NRPAddress{
 								"10.0.0.2": {
-									Services: utilsets.NewString("service2"),
+									Services: sets.NewString("service2"),
 								},
 							},
 						},
@@ -661,7 +663,7 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 						"node1": {
 							Pods: map[string]Pod{
 								"10.0.0.1": {
-									InboundIdentities:      utilsets.NewString("service1", "service3"),
+									InboundIdentities:      sets.NewString("service1", "service3"),
 									PublicOutboundIdentity: "public1",
 								},
 							},
@@ -669,7 +671,7 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 						"node3": {
 							Pods: map[string]Pod{
 								"10.0.0.5": {
-									InboundIdentities: utilsets.NewString("service5"),
+									InboundIdentities: sets.NewString("service5"),
 								},
 							},
 						},
@@ -680,17 +682,17 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 						"node1": {
 							Addresses: map[string]NRPAddress{
 								"10.0.0.1": {
-									Services: utilsets.NewString("service1", "service2"),
+									Services: sets.NewString("service1", "service2"),
 								},
 								"10.0.0.2": {
-									Services: utilsets.NewString("service4"),
+									Services: sets.NewString("service4"),
 								},
 							},
 						},
 						"node2": {
 							Addresses: map[string]NRPAddress{
 								"10.0.0.3": {
-									Services: utilsets.NewString("service3"),
+									Services: sets.NewString("service3"),
 								},
 							},
 						},
@@ -759,13 +761,13 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 func createTestDiffTracker() *DiffTracker {
 	return &DiffTracker{
 		K8sResources: K8s_State{
-			Services: utilsets.NewString(),
-			Egresses: utilsets.NewString(),
+			Services: sets.NewString(),
+			Egresses: sets.NewString(),
 			Nodes: map[string]Node{
 				"node1": {
 					Pods: map[string]Pod{
 						"10.0.0.1": {
-							InboundIdentities:      utilsets.NewString("existingService"),
+							InboundIdentities:      sets.NewString("existingService"),
 							PublicOutboundIdentity: "existingPublicOutboundIdentity",
 						},
 					},
@@ -773,13 +775,13 @@ func createTestDiffTracker() *DiffTracker {
 			},
 		},
 		NRPResources: NRP_State{
-			LoadBalancers: utilsets.NewString(),
-			NATGateways:   utilsets.NewString(),
+			LoadBalancers: sets.NewString(),
+			NATGateways:   sets.NewString(),
 			Locations: map[string]NRPLocation{
 				"node1": {
 					Addresses: map[string]NRPAddress{
 						"10.0.0.1": {
-							Services: utilsets.NewString("existingService", "existingPublicOutboundIdentity"),
+							Services: sets.NewString("existingService", "existingPublicOutboundIdentity"),
 						},
 					},
 				},
@@ -801,26 +803,26 @@ func TestGetSyncOperations(t *testing.T) {
 			name: "states already in sync",
 			initialState: &DiffTracker{
 				K8sResources: K8s_State{
-					Services: utilsets.NewString("service1"),
-					Egresses: utilsets.NewString("egress1"),
+					Services: sets.NewString("service1"),
+					Egresses: sets.NewString("egress1"),
 					Nodes: map[string]Node{
 						"node1": {
 							Pods: map[string]Pod{
 								"10.0.0.1": {
-									InboundIdentities: utilsets.NewString("service1"),
+									InboundIdentities: sets.NewString("service1"),
 								},
 							},
 						},
 					},
 				},
 				NRPResources: NRP_State{
-					LoadBalancers: utilsets.NewString("service1"),
-					NATGateways:   utilsets.NewString("egress1"),
+					LoadBalancers: sets.NewString("service1"),
+					NATGateways:   sets.NewString("egress1"),
 					Locations: map[string]NRPLocation{
 						"node1": {
 							Addresses: map[string]NRPAddress{
 								"10.0.0.1": {
-									Services: utilsets.NewString("service1"),
+									Services: sets.NewString("service1"),
 								},
 							},
 						},
@@ -836,26 +838,26 @@ func TestGetSyncOperations(t *testing.T) {
 			name: "services out of sync",
 			initialState: &DiffTracker{
 				K8sResources: K8s_State{
-					Services: utilsets.NewString("service1", "service2"),
-					Egresses: utilsets.NewString("egress1"),
+					Services: sets.NewString("service1", "service2"),
+					Egresses: sets.NewString("egress1"),
 					Nodes: map[string]Node{
 						"node1": {
 							Pods: map[string]Pod{
 								"10.0.0.1": {
-									InboundIdentities: utilsets.NewString("service1"),
+									InboundIdentities: sets.NewString("service1"),
 								},
 							},
 						},
 					},
 				},
 				NRPResources: NRP_State{
-					LoadBalancers: utilsets.NewString("service1"),
-					NATGateways:   utilsets.NewString("egress1"),
+					LoadBalancers: sets.NewString("service1"),
+					NATGateways:   sets.NewString("egress1"),
 					Locations: map[string]NRPLocation{
 						"node1": {
 							Addresses: map[string]NRPAddress{
 								"10.0.0.1": {
-									Services: utilsets.NewString("service1"),
+									Services: sets.NewString("service1"),
 								},
 							},
 						},
@@ -871,26 +873,26 @@ func TestGetSyncOperations(t *testing.T) {
 			name: "egresses out of sync",
 			initialState: &DiffTracker{
 				K8sResources: K8s_State{
-					Services: utilsets.NewString("service1"),
-					Egresses: utilsets.NewString("egress1", "egress2"),
+					Services: sets.NewString("service1"),
+					Egresses: sets.NewString("egress1", "egress2"),
 					Nodes: map[string]Node{
 						"node1": {
 							Pods: map[string]Pod{
 								"10.0.0.1": {
-									InboundIdentities: utilsets.NewString("service1"),
+									InboundIdentities: sets.NewString("service1"),
 								},
 							},
 						},
 					},
 				},
 				NRPResources: NRP_State{
-					LoadBalancers: utilsets.NewString("service1"),
-					NATGateways:   utilsets.NewString("egress1"),
+					LoadBalancers: sets.NewString("service1"),
+					NATGateways:   sets.NewString("egress1"),
 					Locations: map[string]NRPLocation{
 						"node1": {
 							Addresses: map[string]NRPAddress{
 								"10.0.0.1": {
-									Services: utilsets.NewString("service1"),
+									Services: sets.NewString("service1"),
 								},
 							},
 						},
@@ -906,26 +908,26 @@ func TestGetSyncOperations(t *testing.T) {
 			name: "locations out of sync",
 			initialState: &DiffTracker{
 				K8sResources: K8s_State{
-					Services: utilsets.NewString("service1"),
-					Egresses: utilsets.NewString("egress1"),
+					Services: sets.NewString("service1"),
+					Egresses: sets.NewString("egress1"),
 					Nodes: map[string]Node{
 						"node1": {
 							Pods: map[string]Pod{
 								"10.0.0.1": {
-									InboundIdentities: utilsets.NewString("service1", "service2"),
+									InboundIdentities: sets.NewString("service1", "service2"),
 								},
 							},
 						},
 					},
 				},
 				NRPResources: NRP_State{
-					LoadBalancers: utilsets.NewString("service1"),
-					NATGateways:   utilsets.NewString("egress1"),
+					LoadBalancers: sets.NewString("service1"),
+					NATGateways:   sets.NewString("egress1"),
 					Locations: map[string]NRPLocation{
 						"node1": {
 							Addresses: map[string]NRPAddress{
 								"10.0.0.1": {
-									Services: utilsets.NewString("service1"),
+									Services: sets.NewString("service1"),
 								},
 							},
 						},
@@ -941,33 +943,33 @@ func TestGetSyncOperations(t *testing.T) {
 			name: "multiple components out of sync",
 			initialState: &DiffTracker{
 				K8sResources: K8s_State{
-					Services: utilsets.NewString("service1", "service3"),
-					Egresses: utilsets.NewString("egress1", "egress3"),
+					Services: sets.NewString("service1", "service3"),
+					Egresses: sets.NewString("egress1", "egress3"),
 					Nodes: map[string]Node{
 						"node1": {
 							Pods: map[string]Pod{
 								"10.0.0.1": {
-									InboundIdentities:      utilsets.NewString("service1"),
+									InboundIdentities:      sets.NewString("service1"),
 									PublicOutboundIdentity: "public1",
 								},
 								"10.0.0.3": {
-									InboundIdentities: utilsets.NewString("service3"),
+									InboundIdentities: sets.NewString("service3"),
 								},
 							},
 						},
 					},
 				},
 				NRPResources: NRP_State{
-					LoadBalancers: utilsets.NewString("service1", "service2"),
-					NATGateways:   utilsets.NewString("egress1", "egress2"),
+					LoadBalancers: sets.NewString("service1", "service2"),
+					NATGateways:   sets.NewString("egress1", "egress2"),
 					Locations: map[string]NRPLocation{
 						"node1": {
 							Addresses: map[string]NRPAddress{
 								"10.0.0.1": {
-									Services: utilsets.NewString("service1"),
+									Services: sets.NewString("service1"),
 								},
 								"10.0.0.2": {
-									Services: utilsets.NewString("service2"),
+									Services: sets.NewString("service2"),
 								},
 							},
 						},
@@ -1027,25 +1029,25 @@ func TestGetSyncOperations(t *testing.T) {
 // correctly when there is a huge discrepancy between K8s Cluster and NRP.
 func TestInitializeDiffTracker(t *testing.T) {
 	K8sResources := K8s_State{
-		Services: utilsets.NewString("Service0", "Service1", "Service2"),
-		Egresses: utilsets.NewString("Egress0", "Egress1", "Egress2"),
+		Services: sets.NewString("Service0", "Service1", "Service2"),
+		Egresses: sets.NewString("Egress0", "Egress1", "Egress2"),
 		Nodes: map[string]Node{
 			"Node1": {
 				Pods: map[string]Pod{
 					"Pod34": {
-						InboundIdentities:      utilsets.NewString("Service0"),
+						InboundIdentities:      sets.NewString("Service0"),
 						PublicOutboundIdentity: "",
 					},
 					"Pod0": {
-						InboundIdentities:      utilsets.NewString("Service0"),
+						InboundIdentities:      sets.NewString("Service0"),
 						PublicOutboundIdentity: "Egress0",
 					},
 					"Pod1": {
-						InboundIdentities:      utilsets.NewString("Service1", "Service2"),
+						InboundIdentities:      sets.NewString("Service1", "Service2"),
 						PublicOutboundIdentity: "Egress1",
 					},
 					"Pod3": {
-						InboundIdentities:      utilsets.NewString(),
+						InboundIdentities:      sets.NewString(),
 						PublicOutboundIdentity: "Egress2",
 					},
 				},
@@ -1053,7 +1055,7 @@ func TestInitializeDiffTracker(t *testing.T) {
 			"Node2": {
 				Pods: map[string]Pod{
 					"Pod2": {
-						InboundIdentities:      utilsets.NewString("Service1"),
+						InboundIdentities:      sets.NewString("Service1"),
 						PublicOutboundIdentity: "Egress2",
 					},
 				},
@@ -1062,29 +1064,29 @@ func TestInitializeDiffTracker(t *testing.T) {
 	}
 
 	NRPResources := NRP_State{
-		LoadBalancers: utilsets.NewString("Service0", "Service6", "Service5"),
-		NATGateways:   utilsets.NewString("Egress0", "Egress6", "Egress5"),
+		LoadBalancers: sets.NewString("Service0", "Service6", "Service5"),
+		NATGateways:   sets.NewString("Egress0", "Egress6", "Egress5"),
 		Locations: map[string]NRPLocation{
 			"Node1": {
 				Addresses: map[string]NRPAddress{
 					"Pod34": {
-						Services: utilsets.NewString("Service0", "Service5"),
+						Services: sets.NewString("Service0", "Service5"),
 					},
 					"Pod00": {
-						Services: utilsets.NewString("Service6", "Egress5"),
+						Services: sets.NewString("Service6", "Egress5"),
 					},
 					"Pod0": {
-						Services: utilsets.NewString("Service0", "Egress0"),
+						Services: sets.NewString("Service0", "Egress0"),
 					},
 				},
 			},
 			"Node3": {
 				Addresses: map[string]NRPAddress{
 					"Pod4": {
-						Services: utilsets.NewString("Service6", "Eggres6"),
+						Services: sets.NewString("Service6", "Eggres6"),
 					},
 					"Pod5": {
-						Services: utilsets.NewString("Egress5"),
+						Services: sets.NewString("Egress5"),
 					},
 				},
 			},
@@ -1094,12 +1096,12 @@ func TestInitializeDiffTracker(t *testing.T) {
 	expectedSyncOperations := &SyncDiffTrackerReturnType{
 		SyncStatus: SUCCESS,
 		LoadBalancerUpdates: SyncServicesReturnType{
-			Additions: utilsets.NewString("Service1", "Service2"),
-			Removals:  utilsets.NewString("Service6", "Service5"),
+			Additions: sets.NewString("Service1", "Service2"),
+			Removals:  sets.NewString("Service6", "Service5"),
 		},
 		NATGatewayUpdates: SyncServicesReturnType{
-			Additions: utilsets.NewString("Egress1", "Egress2"),
-			Removals:  utilsets.NewString("Egress6", "Egress5"),
+			Additions: sets.NewString("Egress1", "Egress2"),
+			Removals:  sets.NewString("Egress6", "Egress5"),
 		},
 		LocationData: LocationData{
 			Action: PartialUpdate,
@@ -1108,16 +1110,16 @@ func TestInitializeDiffTracker(t *testing.T) {
 					AddressUpdateAction: PartialUpdate,
 					Addresses: map[string]Address{
 						"Pod00": {
-							ServiceRef: utilsets.NewString(),
+							ServiceRef: sets.NewString(),
 						},
 						"Pod34": {
-							ServiceRef: utilsets.NewString("Service0"),
+							ServiceRef: sets.NewString("Service0"),
 						},
 						"Pod1": {
-							ServiceRef: utilsets.NewString("Service1", "Service2", "Egress1"),
+							ServiceRef: sets.NewString("Service1", "Service2", "Egress1"),
 						},
 						"Pod3": {
-							ServiceRef: utilsets.NewString("Egress2"),
+							ServiceRef: sets.NewString("Egress2"),
 						},
 					},
 				},
@@ -1125,7 +1127,7 @@ func TestInitializeDiffTracker(t *testing.T) {
 					AddressUpdateAction: FullUpdate,
 					Addresses: map[string]Address{
 						"Pod2": {
-							ServiceRef: utilsets.NewString("Service1", "Egress2"),
+							ServiceRef: sets.NewString("Service1", "Egress2"),
 						},
 					},
 				},
@@ -1137,7 +1139,24 @@ func TestInitializeDiffTracker(t *testing.T) {
 		},
 	}
 
-	diffTracker := InitializeDiffTracker(K8sResources, NRPResources)
+	// Create a minimal mock for testing - we're only testing the initialization logic
+	// and sync operations calculation, not actual Azure API calls
+	config := Config{
+		SubscriptionID:             "test-subscription",
+		ResourceGroup:              "test-rg",
+		Location:                   "eastus",
+		ClusterName:                "test-cluster",
+		ServiceGatewayResourceName: "test-sgw",
+		ServiceGatewayID:           "/subscriptions/test-subscription/resourceGroups/test-rg/providers/Microsoft.Network/serviceGateways/test-sgw",
+	}
+
+	// For this test, we're only testing state tracking logic, not Azure API calls
+	// Provide mock clients to satisfy validation (they won't be called)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockKubeClient := fake.NewSimpleClientset()
+	diffTracker := InitializeDiffTracker(K8sResources, NRPResources, config, mockFactory, mockKubeClient)
 	syncOperations := diffTracker.GetSyncOperations()
 	// It follows a call to ServiceGateway API and if it is successful we can proceed with syncing difftracker.NRP
 	diffTracker.UpdateNRPLoadBalancers(syncOperations.LoadBalancerUpdates)
@@ -1151,29 +1170,29 @@ func TestInitializeDiffTracker(t *testing.T) {
 	expectedDiffTracker := &DiffTracker{
 		K8sResources: K8sResources,
 		NRPResources: NRP_State{
-			LoadBalancers: utilsets.NewString("Service0", "Service1", "Service2"),
-			NATGateways:   utilsets.NewString("Egress0", "Egress1", "Egress2"),
+			LoadBalancers: sets.NewString("Service0", "Service1", "Service2"),
+			NATGateways:   sets.NewString("Egress0", "Egress1", "Egress2"),
 			Locations: map[string]NRPLocation{
 				"Node1": {
 					Addresses: map[string]NRPAddress{
 						"Pod34": {
-							Services: utilsets.NewString("Service0"),
+							Services: sets.NewString("Service0"),
 						},
 						"Pod0": {
-							Services: utilsets.NewString("Service0", "Egress0"),
+							Services: sets.NewString("Service0", "Egress0"),
 						},
 						"Pod1": {
-							Services: utilsets.NewString("Service1", "Service2", "Egress1"),
+							Services: sets.NewString("Service1", "Service2", "Egress1"),
 						},
 						"Pod3": {
-							Services: utilsets.NewString("Egress2"),
+							Services: sets.NewString("Egress2"),
 						},
 					},
 				},
 				"Node2": {
 					Addresses: map[string]NRPAddress{
 						"Pod2": {
-							Services: utilsets.NewString("Service1", "Egress2"),
+							Services: sets.NewString("Service1", "Egress2"),
 						},
 					},
 				},
@@ -1237,10 +1256,10 @@ func TestMapLocationDataToDTO(t *testing.T) {
 						AddressUpdateAction: PartialUpdate,
 						Addresses: map[string]Address{
 							"addr1": {
-								ServiceRef: utilsets.NewString("service1", "service2"),
+								ServiceRef: sets.NewString("service1", "service2"),
 							},
 							"addr2": {
-								ServiceRef: utilsets.NewString("service3"),
+								ServiceRef: sets.NewString("service3"),
 							},
 						},
 					},
@@ -1248,7 +1267,7 @@ func TestMapLocationDataToDTO(t *testing.T) {
 						AddressUpdateAction: FullUpdate,
 						Addresses: map[string]Address{
 							"addr3": {
-								ServiceRef: utilsets.NewString("service4"),
+								ServiceRef: sets.NewString("service4"),
 							},
 						},
 					},
@@ -1268,11 +1287,11 @@ func TestMapLocationDataToDTO(t *testing.T) {
 						Addresses: []AddressDTO{
 							{
 								Address:      "addr1",
-								ServiceNames: utilsets.NewString("service1", "service2"),
+								ServiceNames: sets.NewString("service1", "service2"),
 							},
 							{
 								Address:      "addr2",
-								ServiceNames: utilsets.NewString("service3"),
+								ServiceNames: sets.NewString("service3"),
 							},
 						},
 					},
@@ -1282,7 +1301,7 @@ func TestMapLocationDataToDTO(t *testing.T) {
 						Addresses: []AddressDTO{
 							{
 								Address:      "addr3",
-								ServiceNames: utilsets.NewString("service4"),
+								ServiceNames: sets.NewString("service4"),
 							},
 						},
 					},

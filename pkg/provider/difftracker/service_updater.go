@@ -13,7 +13,6 @@ import (
 
 // ServiceUpdater processes service creation/deletion in parallel
 type ServiceUpdater struct {
-	cloud       CloudProvider
 	diffTracker *DiffTracker
 	onComplete  func(serviceUID string, success bool, err error)
 	trigger     <-chan bool
@@ -26,13 +25,21 @@ type ServiceUpdater struct {
 }
 
 // NewServiceUpdater creates a new ServiceUpdater instance
-func NewServiceUpdater(ctx context.Context, cloud CloudProvider, diffTracker *DiffTracker, onComplete func(string, bool, error), triggerChan <-chan bool) *ServiceUpdater {
-	if cloud == nil || diffTracker == nil {
-		panic("ServiceUpdater: cloud and diffTracker must not be nil")
+func NewServiceUpdater(ctx context.Context, diffTracker *DiffTracker, onComplete func(string, bool, error), triggerChan <-chan bool) *ServiceUpdater {
+	if diffTracker == nil {
+		panic("ServiceUpdater: diffTracker must not be nil")
+	}
+	if onComplete == nil {
+		panic("ServiceUpdater: onComplete callback must not be nil")
+	}
+	if triggerChan == nil {
+		panic("ServiceUpdater: triggerChan must not be nil")
+	}
+	if diffTracker.networkClientFactory == nil {
+		panic("ServiceUpdater: diffTracker.networkClientFactory must not be nil")
 	}
 	childCtx, cancel := context.WithCancel(ctx)
 	return &ServiceUpdater{
-		cloud:       cloud,
 		diffTracker: diffTracker,
 		onComplete:  onComplete,
 		trigger:     triggerChan,
@@ -205,17 +212,17 @@ func (s *ServiceUpdater) createInboundService(serviceUID string) {
 	pipResource := armnetwork.PublicIPAddress{
 		Name: to.Ptr(pipName),
 		ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
-			s.cloud.GetSubscriptionID(), s.cloud.GetResourceGroup(), pipName)),
+			s.diffTracker.config.SubscriptionID, s.diffTracker.config.ResourceGroup, pipName)),
 		SKU: &armnetwork.PublicIPAddressSKU{
 			Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
 		},
-		Location: to.Ptr(s.cloud.GetLocation()),
+		Location: to.Ptr(s.diffTracker.config.Location),
 		Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 			PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 		},
 	}
 
-	if err := s.cloud.CreateOrUpdatePIPOutbound(ctx, s.cloud.GetResourceGroup(), &pipResource); err != nil {
+	if err := s.diffTracker.createOrUpdatePIP(ctx, s.diffTracker.config.ResourceGroup, &pipResource); err != nil {
 		klog.Errorf("ServiceUpdater: failed to create Public IP for inbound service %s: %v", serviceUID, err)
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to create Public IP: %w", err))
 		return
@@ -223,7 +230,7 @@ func (s *ServiceUpdater) createInboundService(serviceUID string) {
 	klog.V(3).Infof("ServiceUpdater: created Public IP %s for inbound service %s", pipName, serviceUID)
 
 	// Step 2: Get service object
-	svc, err := s.cloud.GetServiceByUID(ctx, serviceUID)
+	svc, err := s.diffTracker.getServiceByUID(ctx, serviceUID)
 	if err != nil {
 		klog.Errorf("ServiceUpdater: failed to get service for inbound service %s: %v", serviceUID, err)
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to get service: %w", err))
@@ -238,7 +245,7 @@ func (s *ServiceUpdater) createInboundService(serviceUID string) {
 	// Step 3: Create LoadBalancer resource structure
 	lbResource := armnetwork.LoadBalancer{
 		Name:     to.Ptr(serviceUID),
-		Location: to.Ptr(s.cloud.GetLocation()),
+		Location: to.Ptr(s.diffTracker.config.Location),
 		SKU: &armnetwork.LoadBalancerSKU{
 			Name: to.Ptr(armnetwork.LoadBalancerSKUNameService),
 		},
@@ -249,7 +256,7 @@ func (s *ServiceUpdater) createInboundService(serviceUID string) {
 					Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
 						PublicIPAddress: &armnetwork.PublicIPAddress{
 							ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
-								s.cloud.GetSubscriptionID(), s.cloud.GetResourceGroup(), pipName)),
+								s.diffTracker.config.SubscriptionID, s.diffTracker.config.ResourceGroup, pipName)),
 						},
 					},
 				},
@@ -258,7 +265,7 @@ func (s *ServiceUpdater) createInboundService(serviceUID string) {
 	}
 
 	// Step 4: Create LoadBalancer via CreateOrUpdateLB
-	if err := s.cloud.CreateOrUpdateLB(ctx, svc, lbResource); err != nil {
+	if err := s.diffTracker.createOrUpdateLB(ctx, svc, lbResource); err != nil {
 		klog.Errorf("ServiceUpdater: failed to create LoadBalancer for inbound service %s: %v", serviceUID, err)
 		// Don't delete PIP here - retry will use existing PIP
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to create LoadBalancer: %w", err))
@@ -276,11 +283,11 @@ func (s *ServiceUpdater) createInboundService(serviceUID string) {
 			Additions: nil,
 			Removals:  nil,
 		},
-		s.cloud.GetSubscriptionID(),
-		s.cloud.GetResourceGroup(),
+		s.diffTracker.config.SubscriptionID,
+		s.diffTracker.config.ResourceGroup,
 	)
 
-	if err := s.cloud.UpdateNRPSGWServices(ctx, s.cloud.GetServiceGatewayResourceName(), servicesDTO); err != nil {
+	if err := s.diffTracker.updateNRPSGWServices(ctx, s.diffTracker.config.ServiceGatewayResourceName, servicesDTO); err != nil {
 		klog.Errorf("ServiceUpdater: failed to register inbound service %s with ServiceGateway: %v", serviceUID, err)
 		// Don't delete resources - retry will reconcile
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to register with ServiceGateway: %w", err))
@@ -310,17 +317,17 @@ func (s *ServiceUpdater) createOutboundService(serviceUID string) {
 	pipResource := armnetwork.PublicIPAddress{
 		Name: to.Ptr(pipName),
 		ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
-			s.cloud.GetSubscriptionID(), s.cloud.GetResourceGroup(), pipName)),
+			s.diffTracker.config.SubscriptionID, s.diffTracker.config.ResourceGroup, pipName)),
 		SKU: &armnetwork.PublicIPAddressSKU{
 			Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
 		},
-		Location: to.Ptr(s.cloud.GetLocation()),
+		Location: to.Ptr(s.diffTracker.config.Location),
 		Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 			PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 		},
 	}
 
-	if err := s.cloud.CreateOrUpdatePIPOutbound(ctx, s.cloud.GetResourceGroup(), &pipResource); err != nil {
+	if err := s.diffTracker.createOrUpdatePIP(ctx, s.diffTracker.config.ResourceGroup, &pipResource); err != nil {
 		klog.Errorf("ServiceUpdater: failed to create Public IP for outbound service %s: %v", serviceUID, err)
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to create Public IP: %w", err))
 		return
@@ -331,25 +338,25 @@ func (s *ServiceUpdater) createOutboundService(serviceUID string) {
 	natGatewayResource := armnetwork.NatGateway{
 		Name: to.Ptr(serviceUID),
 		ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/natGateways/%s",
-			s.cloud.GetSubscriptionID(), s.cloud.GetResourceGroup(), serviceUID)),
+			s.diffTracker.config.SubscriptionID, s.diffTracker.config.ResourceGroup, serviceUID)),
 		SKU: &armnetwork.NatGatewaySKU{
 			Name: to.Ptr(armnetwork.NatGatewaySKUNameStandardV2),
 		},
-		Location: to.Ptr(s.cloud.GetLocation()),
+		Location: to.Ptr(s.diffTracker.config.Location),
 		Properties: &armnetwork.NatGatewayPropertiesFormat{
 			ServiceGateway: &armnetwork.ServiceGateway{
-				ID: to.Ptr(s.cloud.GetServiceGatewayID()),
+				ID: to.Ptr(s.diffTracker.config.ServiceGatewayID),
 			},
 			PublicIPAddresses: []*armnetwork.SubResource{
 				{
 					ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
-						s.cloud.GetSubscriptionID(), s.cloud.GetResourceGroup(), pipName)),
+						s.diffTracker.config.SubscriptionID, s.diffTracker.config.ResourceGroup, pipName)),
 				},
 			},
 		},
 	}
 
-	if err := s.cloud.CreateOrUpdateNatGateway(ctx, s.cloud.GetResourceGroup(), natGatewayResource); err != nil {
+	if err := s.diffTracker.createOrUpdateNatGateway(ctx, s.diffTracker.config.ResourceGroup, natGatewayResource); err != nil {
 		klog.Errorf("ServiceUpdater: failed to create NAT Gateway for outbound service %s: %v", serviceUID, err)
 		// Don't delete PIP here - retry will use existing PIP
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to create NAT Gateway: %w", err))
@@ -367,11 +374,11 @@ func (s *ServiceUpdater) createOutboundService(serviceUID string) {
 			Additions: newIgnoreCaseSetFromSlice([]string{serviceUID}),
 			Removals:  nil,
 		},
-		s.cloud.GetSubscriptionID(),
-		s.cloud.GetResourceGroup(),
+		s.diffTracker.config.SubscriptionID,
+		s.diffTracker.config.ResourceGroup,
 	)
 
-	if err := s.cloud.UpdateNRPSGWServices(ctx, s.cloud.GetServiceGatewayResourceName(), servicesDTO); err != nil {
+	if err := s.diffTracker.updateNRPSGWServices(ctx, s.diffTracker.config.ServiceGatewayResourceName, servicesDTO); err != nil {
 		klog.Errorf("ServiceUpdater: failed to register outbound service %s with ServiceGateway: %v", serviceUID, err)
 		// Don't delete resources - retry will reconcile
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to register with ServiceGateway: %w", err))
@@ -404,11 +411,11 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string) {
 			Additions: nil,
 			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
 		},
-		s.cloud.GetSubscriptionID(),
-		s.cloud.GetResourceGroup(),
+		s.diffTracker.config.SubscriptionID,
+		s.diffTracker.config.ResourceGroup,
 	)
 
-	if err := s.cloud.UpdateNRPSGWServices(ctx, s.cloud.GetServiceGatewayResourceName(), removeBackendPoolDTO); err != nil {
+	if err := s.diffTracker.updateNRPSGWServices(ctx, s.diffTracker.config.ServiceGatewayResourceName, removeBackendPoolDTO); err != nil {
 		klog.Warningf("ServiceUpdater: failed to remove backend pool reference for inbound service %s: %v", serviceUID, err)
 		// Don't fail the deletion - continue with LoadBalancer deletion
 	} else {
@@ -416,7 +423,7 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string) {
 	}
 
 	// Step 2: Delete LoadBalancer
-	if err := s.cloud.EnsureServiceLoadBalancerDeletedByUID(ctx, serviceUID, s.cloud.GetClusterName()); err != nil {
+	if err := s.diffTracker.deleteLB(ctx, serviceUID); err != nil {
 		klog.Errorf("ServiceUpdater: failed to delete LoadBalancer for inbound service %s: %v", serviceUID, err)
 		lastErr = fmt.Errorf("failed to delete LoadBalancer: %w", err)
 		// Continue with PIP deletion
@@ -434,11 +441,11 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string) {
 			Additions: nil,
 			Removals:  nil,
 		},
-		s.cloud.GetSubscriptionID(),
-		s.cloud.GetResourceGroup(),
+		s.diffTracker.config.SubscriptionID,
+		s.diffTracker.config.ResourceGroup,
 	)
 
-	if err := s.cloud.UpdateNRPSGWServices(ctx, s.cloud.GetServiceGatewayResourceName(), unregisterDTO); err != nil {
+	if err := s.diffTracker.updateNRPSGWServices(ctx, s.diffTracker.config.ServiceGatewayResourceName, unregisterDTO); err != nil {
 		klog.Errorf("ServiceUpdater: failed to fully unregister inbound service %s from ServiceGateway: %v", serviceUID, err)
 		lastErr = fmt.Errorf("failed to unregister from ServiceGateway: %w", err)
 		// Continue with PIP deletion
@@ -448,7 +455,7 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string) {
 
 	// Step 4: Delete Public IP
 	pipName := fmt.Sprintf("%s-pip", serviceUID)
-	if err := s.cloud.DeletePublicIPOutbound(ctx, s.cloud.GetResourceGroup(), pipName); err != nil {
+	if err := s.diffTracker.deletePublicIP(ctx, s.diffTracker.config.ResourceGroup, pipName); err != nil {
 		klog.Errorf("ServiceUpdater: failed to delete Public IP %s for inbound service %s: %v", pipName, serviceUID, err)
 		lastErr = fmt.Errorf("failed to delete Public IP: %w", err)
 	} else {
@@ -487,11 +494,11 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string) {
 			Additions: nil,
 			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
 		},
-		s.cloud.GetSubscriptionID(),
-		s.cloud.GetResourceGroup(),
+		s.diffTracker.config.SubscriptionID,
+		s.diffTracker.config.ResourceGroup,
 	)
 
-	if err := s.cloud.UpdateNRPSGWServices(ctx, s.cloud.GetServiceGatewayResourceName(), servicesDTO); err != nil {
+	if err := s.diffTracker.updateNRPSGWServices(ctx, s.diffTracker.config.ServiceGatewayResourceName, servicesDTO); err != nil {
 		klog.Errorf("ServiceUpdater: failed to unregister outbound service %s from ServiceGateway: %v", serviceUID, err)
 		lastErr = fmt.Errorf("failed to unregister from ServiceGateway: %w", err)
 		// Continue with deletion
@@ -500,7 +507,7 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string) {
 	}
 
 	// Step 2: Delete NAT Gateway
-	if err := s.cloud.DeleteNatGateway(ctx, s.cloud.GetResourceGroup(), serviceUID); err != nil {
+	if err := s.diffTracker.deleteNatGateway(ctx, s.diffTracker.config.ResourceGroup, serviceUID); err != nil {
 		klog.Errorf("ServiceUpdater: failed to delete NAT Gateway for outbound service %s: %v", serviceUID, err)
 		lastErr = fmt.Errorf("failed to delete NAT Gateway: %w", err)
 		// Continue with PIP deletion
@@ -510,7 +517,7 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string) {
 
 	// Step 3: Delete Public IP
 	pipName := fmt.Sprintf("%s-pip", serviceUID)
-	if err := s.cloud.DeletePublicIPOutbound(ctx, s.cloud.GetResourceGroup(), pipName); err != nil {
+	if err := s.diffTracker.deletePublicIP(ctx, s.diffTracker.config.ResourceGroup, pipName); err != nil {
 		klog.Errorf("ServiceUpdater: failed to delete Public IP %s for outbound service %s: %v", pipName, serviceUID, err)
 		lastErr = fmt.Errorf("failed to delete Public IP: %w", err)
 	} else {
