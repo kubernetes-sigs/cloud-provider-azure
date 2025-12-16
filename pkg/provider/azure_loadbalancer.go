@@ -829,7 +829,13 @@ func (az *Cloud) getServiceLoadBalancer(
 			// service is not on this load balancer
 			continue
 		}
-		logger.V(4).Info(fmt.Sprintf("getServiceLoadBalancer(%s, %s, %v): current lb IPs: %q", service.Name, clusterName, wantLb, lbIPsPrimaryPIPs))
+		logger.V(4).Info(
+			"Current service load balancer state",
+			"service", service.Name,
+			"clusterName", clusterName,
+			"wantLB", wantLb,
+			"currentLBIPs", lbIPsPrimaryPIPs,
+		)
 
 		// select another load balancer instead of returning
 		// the current one if the change is needed
@@ -950,7 +956,7 @@ func (az *Cloud) selectLoadBalancer(ctx context.Context, clusterName string, ser
 		klog.Errorf("az.selectLoadBalancer: cluster(%s) service(%s) isInternal(%t) - az.GetVMSetNames failed, err=(%v)", clusterName, serviceName, isInternal, err)
 		return nil, false, err
 	}
-	logger.V(2).Info("", "clusterName", clusterName, "serviceName", serviceName, "isInternal", isInternal, "vmSetNames", vmSetNames)
+	logger.V(2).Info("retrieved VM set names", "clusterName", clusterName, "serviceName", serviceName, "isInternal", isInternal, "vmSetNames", vmSetNames)
 
 	mapExistingLBs := map[string]*armnetwork.LoadBalancer{}
 	for _, lb := range existingLBs {
@@ -2930,7 +2936,7 @@ func (az *Cloud) getExpectedLBRules(
 		consts.IsK8sServiceHasHAModeEnabled(service) {
 
 		lbRuleName := az.getloadbalancerHAmodeRuleName(service, isIPv6)
-		logger.V(2).Info("", "lb name", lbName, "rule name", lbRuleName)
+		logger.V(2).Info("getExpectedLBRules", "lbName", lbName, "ruleName", lbRuleName)
 
 		props, err := az.getExpectedHAModeLoadBalancingRuleProperties(service, lbFrontendIPConfigID, lbBackendPoolID)
 		if err != nil {
@@ -2971,7 +2977,7 @@ func (az *Cloud) getExpectedLBRules(
 
 		for _, port := range service.Spec.Ports {
 			lbRuleName := az.getLoadBalancerRuleName(service, port.Protocol, port.Port, isIPv6)
-			logger.V(2).Info("", "lb name", lbName, "rule name", lbRuleName)
+			logger.V(2).Info("getExpectedLBRules", "lbName", lbName, "ruleName", lbRuleName)
 			isNoLBRuleRequired, err := consts.IsLBRuleOnK8sServicePortDisabled(service.Annotations, port.Port)
 			if err != nil {
 				err := fmt.Errorf("failed to parse annotation %s: %w", consts.BuildAnnotationKeyForPort(port.Port, consts.PortAnnotationNoLBRule), err)
@@ -2979,7 +2985,7 @@ func (az *Cloud) getExpectedLBRules(
 					"rule-name", lbRuleName, "port", port.Port)
 			}
 			if isNoLBRuleRequired {
-				logger.V(2).Info("no lb rule required", "lb name", lbName, "rule name", lbRuleName)
+				logger.V(2).Info("no lb rule required", "lbName", lbName, "ruleName", lbRuleName)
 				continue
 			}
 			if port.Protocol == v1.ProtocolSCTP && (!az.UseStandardLoadBalancer() || !consts.IsK8sServiceUsingInternalLoadBalancer(service)) {

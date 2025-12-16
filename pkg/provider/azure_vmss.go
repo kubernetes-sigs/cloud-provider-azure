@@ -837,10 +837,10 @@ func (ss *ScaleSet) listScaleSetVMs(scaleSetName, resourceGroup string) ([]*armc
 	var allVMs []*armcompute.VirtualMachineScaleSetVM
 	var rerr error
 	if ss.ListVmssVirtualMachinesWithoutInstanceView {
-		logger.V(6).Info("listScaleSetVMs called for scaleSetName:", "scaleSetName", scaleSetName, "resourceGroup", resourceGroup)
+		logger.V(6).Info("listScaleSetVMs called for scaleSetName", "scaleSetName", scaleSetName, "resourceGroup", resourceGroup)
 		allVMs, rerr = ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().List(ctx, resourceGroup, scaleSetName)
 	} else {
-		logger.V(6).Info("listScaleSetVMs called for scaleSetNamewith instanceView", "scaleSetName", scaleSetName, "resourceGroup", resourceGroup)
+		logger.V(6).Info("listScaleSetVMs called for scaleSetName with instanceView", "scaleSetName", scaleSetName, "resourceGroup", resourceGroup)
 		allVMs, rerr = ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().ListVMInstanceView(ctx, resourceGroup, scaleSetName)
 	}
 	if rerr != nil {
@@ -1099,7 +1099,7 @@ func (ss *ScaleSet) EnsureHostInPool(ctx context.Context, _ *v1.Service, nodeNam
 	needCheck := !ss.UseStandardLoadBalancer()
 
 	if vmSetNameOfLB != "" && needCheck && !strings.EqualFold(vmSetNameOfLB, vm.VMSSName) {
-		logger.V(3).Info("skips the node %s because it is not in the ScaleSet %s", vmName, vmSetNameOfLB)
+		logger.V(3).Info("skips the node because it is not in the ScaleSet", "vmName", vmName, "vmSetNameOfLB", vmSetNameOfLB)
 		return "", "", "", nil, nil
 	}
 
@@ -1788,7 +1788,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVmssUniform(ctx context.Context,
 			} else if v, ok := value.(*armcompute.VirtualMachineScaleSet); ok {
 				vmss = v
 			}
-			logger.V(2).Info("", "vmssName", ptr.Deref(vmss.Name, ""), "backendPoolIDs", backendPoolIDs)
+			logger.V(2).Info("Ensure backend pools are deleted from vmss uniform", "vmssName", ptr.Deref(vmss.Name, ""), "backendPoolIDs", backendPoolIDs)
 
 			// When vmss is being deleted, CreateOrUpdate API would report "the vmss is being deleted" error.
 			// Since it is being deleted, we shouldn't send more CreateOrUpdate requests for it.
@@ -1847,7 +1847,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVmssUniform(ctx context.Context,
 			return utilerrors.Flatten(utilerrors.NewAggregate(errorList))
 		}
 	} else {
-		logger.V(2).Info("", "vmss", vmSetName, "backendPoolIDs", backendPoolIDs)
+		logger.V(2).Info("Ensure backend pools are deleted from vmss uniform", "vmss", vmSetName, "backendPoolIDs", backendPoolIDs)
 		vmssNamesMap[vmSetName] = true
 	}
 
