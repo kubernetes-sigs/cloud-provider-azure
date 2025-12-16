@@ -383,7 +383,15 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string) {
 	ctx := s.ctx
 	var lastErr error
 
-	// Step 1: Unregister from ServiceGateway API
+	// Step 1: Disassociate NAT Gateway from ServiceGateway
+	if err := s.diffTracker.disassociateNatGatewayFromServiceGateway(ctx, s.diffTracker.config.ServiceGatewayResourceName, serviceUID); err != nil {
+		klog.Warningf("ServiceUpdater: failed to disassociate NAT Gateway %s from ServiceGateway: %v", serviceUID, err)
+		// Non-fatal - continue with deletion
+	} else {
+		klog.V(3).Infof("ServiceUpdater: disassociated NAT Gateway %s from ServiceGateway", serviceUID)
+	}
+
+	// Step 2: Unregister from ServiceGateway API
 	servicesDTO := MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
 		SyncServicesReturnType{
 			Additions: nil,
@@ -405,7 +413,7 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string) {
 		klog.V(3).Infof("ServiceUpdater: unregistered outbound service %s from ServiceGateway", serviceUID)
 	}
 
-	// Step 2: Delete NAT Gateway
+	// Step 3: Delete NAT Gateway
 	if err := s.diffTracker.deleteNatGateway(ctx, s.diffTracker.config.ResourceGroup, serviceUID); err != nil {
 		klog.Errorf("ServiceUpdater: failed to delete NAT Gateway for outbound service %s: %v", serviceUID, err)
 		lastErr = fmt.Errorf("failed to delete NAT Gateway: %w", err)
@@ -414,7 +422,7 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string) {
 		klog.V(3).Infof("ServiceUpdater: deleted NAT Gateway for outbound service %s", serviceUID)
 	}
 
-	// Step 3: Delete Public IP
+	// Step 4: Delete Public IP
 	pipName := fmt.Sprintf("%s-pip", serviceUID)
 	if err := s.diffTracker.deletePublicIP(ctx, s.diffTracker.config.ResourceGroup, pipName); err != nil {
 		klog.Errorf("ServiceUpdater: failed to delete Public IP %s for outbound service %s: %v", pipName, serviceUID, err)
@@ -423,7 +431,7 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string) {
 		klog.V(3).Infof("ServiceUpdater: deleted Public IP %s for outbound service %s", pipName, serviceUID)
 	}
 
-	// Step 4: Update NRPResources and notify completion
+	// Step 5: Update NRPResources and notify completion
 	if lastErr != nil {
 		klog.Warningf("ServiceUpdater: deleteOutboundService completed with errors for %s: %v", serviceUID, lastErr)
 		s.onComplete(serviceUID, false, lastErr)

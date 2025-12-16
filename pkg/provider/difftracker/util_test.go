@@ -639,6 +639,7 @@ func TestConfigValidate(t *testing.T) {
 				SubscriptionID:             "sub1",
 				ResourceGroup:              "rg1",
 				Location:                   "eastus",
+				VNetName:                   "test-vnet",
 				ServiceGatewayResourceName: "sgw",
 				ServiceGatewayID:           "/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.Network/serviceGateways/sgw",
 			},

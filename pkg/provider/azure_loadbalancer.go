@@ -23,14 +23,12 @@ import (
 	"fmt"
 	"math"
 	"net"
-	"net/http"
 	"net/netip"
 	"reflect"
 	"sort"
 	"strings"
 	"unicode"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/samber/lo"
@@ -38,7 +36,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	cloudprovider "k8s.io/cloud-provider"
 	servicehelpers "k8s.io/cloud-provider/service/helpers"
@@ -212,107 +209,107 @@ func (az *Cloud) reconcileService(ctx context.Context, clusterName string, servi
 }
 
 // getServiceByUID returns the Service whose UID matches the given uid.
-func (az *Cloud) getServiceByUID(ctx context.Context, uid string) (*v1.Service, error) {
-	// list via client (could be expensive; acceptable for initialization)
-	svcList, err := az.KubeClient.CoreV1().Services(v1.NamespaceAll).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("getServiceByUID: list failed: %w", err)
-	}
-	for _, svc := range svcList.Items {
-		if string(svc.UID) == uid {
-			return svc.DeepCopy(), nil
-		}
-	}
-	return nil, fmt.Errorf("service with uid %s not found", uid)
-}
+// func (az *Cloud) getServiceByUID(ctx context.Context, uid string) (*v1.Service, error) {
+// 	// list via client (could be expensive; acceptable for initialization)
+// 	svcList, err := az.KubeClient.CoreV1().Services(v1.NamespaceAll).List(ctx, metav1.ListOptions{})
+// 	if err != nil {
+// 		return nil, fmt.Errorf("getServiceByUID: list failed: %w", err)
+// 	}
+// 	for _, svc := range svcList.Items {
+// 		if string(svc.UID) == uid {
+// 			return svc.DeepCopy(), nil
+// 		}
+// 	}
+// 	return nil, fmt.Errorf("service with uid %s not found", uid)
+// }
 
 // ensureServiceLoadBalancerByUID ensures LB for a service UID (addition path).
-func (az *Cloud) ensureServiceLoadBalancerByUID(ctx context.Context, uid string, clusterName string, nodes []*v1.Node) error {
-	svc, err := az.getServiceByUID(ctx, uid)
-	if err != nil {
-		// If the service vanished, treat as stale; nothing to ensure.
-		klog.V(3).Infof("ensureServiceLoadBalancerByUID: service uid %s not found, skipping", uid)
-		return nil
-	}
-	if svc.Spec.Type != v1.ServiceTypeLoadBalancer {
-		klog.V(3).Infof("ensureServiceLoadBalancerByUID: service %s/%s is no longer LoadBalancer, skipping", svc.Namespace, svc.Name)
-		return nil
-	}
-	// Call existing reconciliation
-	_, err = az.EnsureLoadBalancer(ctx, clusterName, svc, nodes)
-	if err != nil {
-		return fmt.Errorf("ensureServiceLoadBalancerByUID: EnsureLoadBalancer failed for svc %s/%s: %w", svc.Namespace, svc.Name, err)
-	}
-	return nil
-}
+// func (az *Cloud) ensureServiceLoadBalancerByUID(ctx context.Context, uid string, clusterName string, nodes []*v1.Node) error {
+// 	svc, err := az.getServiceByUID(ctx, uid)
+// 	if err != nil {
+// 		// If the service vanished, treat as stale; nothing to ensure.
+// 		klog.V(3).Infof("ensureServiceLoadBalancerByUID: service uid %s not found, skipping", uid)
+// 		return nil
+// 	}
+// 	if svc.Spec.Type != v1.ServiceTypeLoadBalancer {
+// 		klog.V(3).Infof("ensureServiceLoadBalancerByUID: service %s/%s is no longer LoadBalancer, skipping", svc.Namespace, svc.Name)
+// 		return nil
+// 	}
+// 	// Call existing reconciliation
+// 	_, err = az.EnsureLoadBalancer(ctx, clusterName, svc, nodes)
+// 	if err != nil {
+// 		return fmt.Errorf("ensureServiceLoadBalancerByUID: EnsureLoadBalancer failed for svc %s/%s: %w", svc.Namespace, svc.Name, err)
+// 	}
+// 	return nil
+// }
 
 // ensureServiceLoadBalancerDeletedByUID ensures deletion of a per-service LoadBalancer (ServiceGatewayEnabled)
 // identified by its service UID (which is also the LB name in this mode). Falls back to
 // a direct orphan cleanup if the Service object no longer exists.
-func (az *Cloud) ensureServiceLoadBalancerDeletedByUID(ctx context.Context, uid string, clusterName string) error {
-	// Normalize
-	uid = strings.ToLower(uid)
+// func (az *Cloud) ensureServiceLoadBalancerDeletedByUID(ctx context.Context, uid string, clusterName string) error {
+// 	// Normalize
+// 	uid = strings.ToLower(uid)
 
-	// Try to retrieve the live Service
-	svc, err := az.getServiceByUID(ctx, uid)
-	if err == nil && svc != nil && svc.Spec.Type == v1.ServiceTypeLoadBalancer {
-		// Use the full provider deletion path (handles SG + PIP + diff tracker updates)
-		if err := az.EnsureLoadBalancerDeleted(ctx, clusterName, svc); err != nil {
-			return fmt.Errorf("ensureServiceLoadBalancerDeletedByUID: EnsureLoadBalancerDeleted failed for service %s/%s (uid=%s): %w",
-				svc.Namespace, svc.Name, uid, err)
-		}
-		klog.V(3).Infof("ensureServiceLoadBalancerDeletedByUID: deleted LB via EnsureLoadBalancerDeleted for uid %s", uid)
-		return nil
-	}
+// 	// Try to retrieve the live Service
+// 	svc, err := az.getServiceByUID(ctx, uid)
+// 	if err == nil && svc != nil && svc.Spec.Type == v1.ServiceTypeLoadBalancer {
+// 		// Use the full provider deletion path (handles SG + PIP + diff tracker updates)
+// 		if err := az.EnsureLoadBalancerDeleted(ctx, clusterName, svc); err != nil {
+// 			return fmt.Errorf("ensureServiceLoadBalancerDeletedByUID: EnsureLoadBalancerDeleted failed for service %s/%s (uid=%s): %w",
+// 				svc.Namespace, svc.Name, uid, err)
+// 		}
+// 		klog.V(3).Infof("ensureServiceLoadBalancerDeletedByUID: deleted LB via EnsureLoadBalancerDeleted for uid %s", uid)
+// 		return nil
+// 	}
 
-	// Orphan fallback: Service not found or no longer LB type.
-	// Construct a minimal placeholder Service so event code paths don't panic.
-	placeholder := &v1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "orphan-" + uid[:8],
-			Namespace: "default",
-			UID:       types.UID(uid),
-		},
-		Spec: v1.ServiceSpec{
-			Type: v1.ServiceTypeLoadBalancer,
-		},
-	}
+// 	// Orphan fallback: Service not found or no longer LB type.
+// 	// Construct a minimal placeholder Service so event code paths don't panic.
+// 	placeholder := &v1.Service{
+// 		ObjectMeta: metav1.ObjectMeta{
+// 			Name:      "orphan-" + uid[:8],
+// 			Namespace: "default",
+// 			UID:       types.UID(uid),
+// 		},
+// 		Spec: v1.ServiceSpec{
+// 			Type: v1.ServiceTypeLoadBalancer,
+// 		},
+// 	}
 
-	// Delete LB directly
-	if derr := az.DeleteLB(ctx, placeholder, uid); derr != nil {
-		var respErr *azcore.ResponseError
-		if errors.As(derr, &respErr) && respErr.StatusCode == http.StatusNotFound {
-			klog.V(4).Infof("ensureServiceLoadBalancerDeletedByUID: LB %s already absent", uid)
-		} else {
-			return fmt.Errorf("ensureServiceLoadBalancerDeletedByUID: DeleteLB failed for orphan uid %s: %w", uid, derr)
-		}
-	} else {
-		klog.V(3).Infof("ensureServiceLoadBalancerDeletedByUID: deleted orphan LB %s", uid)
-	}
+// 	// Delete LB directly
+// 	if derr := az.DeleteLB(ctx, placeholder, uid); derr != nil {
+// 		var respErr *azcore.ResponseError
+// 		if errors.As(derr, &respErr) && respErr.StatusCode == http.StatusNotFound {
+// 			klog.V(4).Infof("ensureServiceLoadBalancerDeletedByUID: LB %s already absent", uid)
+// 		} else {
+// 			return fmt.Errorf("ensureServiceLoadBalancerDeletedByUID: DeleteLB failed for orphan uid %s: %w", uid, derr)
+// 		}
+// 	} else {
+// 		klog.V(3).Infof("ensureServiceLoadBalancerDeletedByUID: deleted orphan LB %s", uid)
+// 	}
 
-	// Best-effort PIP cleanup
-	basePIP := fmt.Sprintf("%s-pip", uid)
-	deletePIP := func(name string) {
-		if name == "" {
-			return
-		}
-		if perr := az.DeletePublicIP(placeholder, az.ResourceGroup, name); perr != nil {
-			var respErr *azcore.ResponseError
-			if errors.As(perr, &respErr) && respErr.StatusCode == http.StatusNotFound {
-				klog.V(5).Infof("ensureServiceLoadBalancerDeletedByUID: PIP %s already absent", name)
-			} else {
-				klog.V(4).Infof("ensureServiceLoadBalancerDeletedByUID: DeletePublicIP(%s) error (ignored): %v", name, perr)
-			}
-		} else {
-			klog.V(4).Infof("ensureServiceLoadBalancerDeletedByUID: deleted PIP %s", name)
-		}
-	}
-	deletePIP(basePIP)
-	// Uncomment if you ever create IPv6 PIPs in this mode:
-	// deletePIP(basePIP + "-ipv6")
+// 	// Best-effort PIP cleanup
+// 	basePIP := fmt.Sprintf("%s-pip", uid)
+// 	deletePIP := func(name string) {
+// 		if name == "" {
+// 			return
+// 		}
+// 		if perr := az.DeletePublicIP(placeholder, az.ResourceGroup, name); perr != nil {
+// 			var respErr *azcore.ResponseError
+// 			if errors.As(perr, &respErr) && respErr.StatusCode == http.StatusNotFound {
+// 				klog.V(5).Infof("ensureServiceLoadBalancerDeletedByUID: PIP %s already absent", name)
+// 			} else {
+// 				klog.V(4).Infof("ensureServiceLoadBalancerDeletedByUID: DeletePublicIP(%s) error (ignored): %v", name, perr)
+// 			}
+// 		} else {
+// 			klog.V(4).Infof("ensureServiceLoadBalancerDeletedByUID: deleted PIP %s", name)
+// 		}
+// 	}
+// 	deletePIP(basePIP)
+// 	// Uncomment if you ever create IPv6 PIPs in this mode:
+// 	// deletePIP(basePIP + "-ipv6")
 
-	return nil
-}
+// 	return nil
+// }
 
 // EnsureLoadBalancer creates a new load balancer 'name', or updates the existing one. Returns the status of the balancer
 // Implementations must treat the *v1.Service and *v1.Node

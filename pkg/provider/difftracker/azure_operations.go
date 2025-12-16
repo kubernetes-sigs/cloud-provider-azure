@@ -149,14 +149,88 @@ func (dt *DiffTracker) deleteNatGateway(ctx context.Context, natGatewayResourceG
 	return nil
 }
 
+// disassociateNatGatewayFromServiceGateway removes the NAT gateway association from the Service Gateway
+// This should be called before deleting the NAT gateway to properly clean up the references
+func (dt *DiffTracker) disassociateNatGatewayFromServiceGateway(ctx context.Context, serviceGatewayName string, natGatewayName string) error {
+	klog.Infof("disassociateNatGatewayFromServiceGateway: Disassociating NAT Gateway %s from Service Gateway %s in resource group %s", natGatewayName, serviceGatewayName, dt.config.ResourceGroup)
+
+	// Step 1: Get the service and remove the NAT gateway reference
+	services, err := dt.networkClientFactory.GetServiceGatewayClient().GetServices(ctx, dt.config.ResourceGroup, serviceGatewayName)
+	if err != nil {
+		klog.Errorf("disassociateNatGatewayFromServiceGateway: Failed to get Service Gateway %s: %v", serviceGatewayName, err)
+		return fmt.Errorf("failed to get Service Gateway services: %w", err)
+	}
+
+	var serviceToBeUpdated *armnetwork.ServiceGatewayService
+	for _, service := range services {
+		if service.Name != nil && *service.Name == natGatewayName {
+			serviceToBeUpdated = service
+			break
+		}
+	}
+
+	if serviceToBeUpdated == nil {
+		klog.Infof("disassociateNatGatewayFromServiceGateway: NAT Gateway %s is not associated with Service Gateway %s", natGatewayName, serviceGatewayName)
+		return nil
+	}
+
+	// Remove the NAT gateway reference from the service
+	if serviceToBeUpdated.Properties != nil {
+		serviceToBeUpdated.Properties.PublicNatGatewayID = nil
+	}
+
+	updateServicesRequest := armnetwork.ServiceGatewayUpdateServicesRequest{
+		Action: ptr.To(armnetwork.ServiceGatewayUpdateServicesRequestActionPartialUpdate),
+		ServiceRequests: []*armnetwork.ServiceGatewayServiceRequest{
+			{
+				IsDelete: ptr.To(false),
+				Service:  serviceToBeUpdated,
+			},
+		},
+	}
+
+	err = dt.networkClientFactory.GetServiceGatewayClient().UpdateServices(ctx, dt.config.ResourceGroup, serviceGatewayName, updateServicesRequest)
+	if err != nil {
+		klog.Errorf("disassociateNatGatewayFromServiceGateway: Failed to update Service Gateway %s to disassociate NAT Gateway %s: %v", serviceGatewayName, natGatewayName, err)
+		return fmt.Errorf("failed to update Service Gateway: %w", err)
+	}
+	klog.Infof("disassociateNatGatewayFromServiceGateway: Successfully removed NAT Gateway %s reference from Service Gateway %s", natGatewayName, serviceGatewayName)
+
+	// Step 2: Get the NAT gateway and remove the service gateway reference
+	natGateway, err := dt.networkClientFactory.GetNatGatewayClient().Get(ctx, dt.config.ResourceGroup, natGatewayName, nil)
+	if err != nil {
+		klog.Errorf("disassociateNatGatewayFromServiceGateway: Failed to get NAT Gateway %s: %v", natGatewayName, err)
+		return fmt.Errorf("failed to get NAT Gateway: %w", err)
+	}
+
+	if natGateway.Properties != nil {
+		natGateway.Properties.ServiceGateway = nil
+	}
+
+	_, err = dt.networkClientFactory.GetNatGatewayClient().CreateOrUpdate(ctx, dt.config.ResourceGroup, natGatewayName, *natGateway)
+	if err != nil {
+		klog.Errorf("disassociateNatGatewayFromServiceGateway: Failed to update NAT Gateway %s to remove Service Gateway reference: %v", natGatewayName, err)
+		return fmt.Errorf("failed to update NAT Gateway: %w", err)
+	}
+
+	klog.Infof("disassociateNatGatewayFromServiceGateway: Successfully disassociated NAT Gateway %s from Service Gateway %s in resource group %s", natGatewayName, serviceGatewayName, dt.config.ResourceGroup)
+	return nil
+}
+
 // updateNRPSGWServices updates services in the Service Gateway
 func (dt *DiffTracker) updateNRPSGWServices(ctx context.Context, serviceGatewayName string, updateServicesRequestDTO ServicesDataDTO) error {
+	// Early return if no services to update
+	if len(updateServicesRequestDTO.Services) == 0 {
+		klog.Infof("updateNRPSGWServices(%s): no services to update", serviceGatewayName)
+		return nil
+	}
+
 	klog.Infof("updateNRPSGWServices(%s): start", serviceGatewayName)
 
 	// Convert DTO to ARM SDK request
 	req := armnetwork.ServiceGatewayUpdateServicesRequest{
 		Action:          convertServicesUpdateActionToARM(updateServicesRequestDTO.Action),
-		ServiceRequests: convertServiceDTOsToServiceRequests(updateServicesRequestDTO.Services),
+		ServiceRequests: convertServiceDTOsToServiceRequests(updateServicesRequestDTO.Services, dt.config),
 	}
 
 	err := dt.networkClientFactory.GetServiceGatewayClient().UpdateServices(ctx, dt.config.ResourceGroup, serviceGatewayName, req)
@@ -230,49 +304,75 @@ func convertLocationsUpdateActionToARM(action UpdateAction) *armnetwork.ServiceG
 	}
 }
 
-func convertServiceDTOsToServiceRequests(services []ServiceDTO) []*armnetwork.ServiceGatewayServiceRequest {
+// extractResourceChildName extracts a child resource name from an Azure resource ID
+func extractResourceChildName(id, segment string) string {
+	if id == "" {
+		return ""
+	}
+	parts := strings.Split(id, "/")
+	// Look for the explicit segment first
+	for i := 0; i < len(parts)-1; i++ {
+		if strings.EqualFold(parts[i], segment) && parts[i+1] != "" {
+			return parts[i+1]
+		}
+	}
+	// Fallback: last non-empty
+	for i := len(parts) - 1; i >= 0; i-- {
+		if parts[i] != "" {
+			return parts[i]
+		}
+	}
+	return ""
+}
+
+func convertServiceDTOsToServiceRequests(services []ServiceDTO, config Config) []*armnetwork.ServiceGatewayServiceRequest {
 	serviceRequests := make([]*armnetwork.ServiceGatewayServiceRequest, 0, len(services))
+
+	// Construct VNet resource ID once for all backend pools
+	vnetID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/virtualNetworks/%s",
+		config.SubscriptionID, config.ResourceGroup, config.VNetName)
+
 	for _, svc := range services {
-		// Build the ServiceGatewayService
-		armSvc := &armnetwork.ServiceGatewayService{
-			Name:       ptr.To(svc.Service),
-			Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{},
-		}
-
-		// Set service type in properties
-		switch svc.ServiceType {
-		case Inbound:
-			armSvc.Properties.ServiceType = ptr.To(armnetwork.ServiceGatewayServicePropertiesFormatServiceTypeInbound)
-		case Outbound:
-			armSvc.Properties.ServiceType = ptr.To(armnetwork.ServiceGatewayServicePropertiesFormatServiceTypeOutbound)
-		}
-
-		// Set LoadBalancer backend pools
-		if len(svc.LoadBalancerBackendPools) > 0 {
-			armSvc.Properties.LoadBalancerBackendPools = make([]*armnetwork.BackendAddressPool, 0, len(svc.LoadBalancerBackendPools))
-			for _, pool := range svc.LoadBalancerBackendPools {
-				armSvc.Properties.LoadBalancerBackendPools = append(armSvc.Properties.LoadBalancerBackendPools, &armnetwork.BackendAddressPool{
-					ID: ptr.To(pool.Id),
-				})
+		// Build backend pools with full details
+		loadBalancerBackendPools := make([]*armnetwork.BackendAddressPool, len(svc.LoadBalancerBackendPools))
+		for i := range svc.LoadBalancerBackendPools {
+			backendPoolResourceID := svc.LoadBalancerBackendPools[i].Id
+			backendPoolName := extractResourceChildName(backendPoolResourceID, "backendAddressPools")
+			loadBalancerBackendPools[i] = &armnetwork.BackendAddressPool{
+				ID:   &backendPoolResourceID,
+				Name: &backendPoolName,
+				Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+					VirtualNetwork: &armnetwork.SubResource{
+						ID: &vnetID,
+					},
+				},
 			}
 		}
 
-		// Set NAT Gateway
-		if svc.PublicNatGateway.Id != "" {
-			armSvc.Properties.PublicNatGatewayID = ptr.To(svc.PublicNatGateway.Id)
+		// Set service type and NAT gateway based on service type
+		var serviceType armnetwork.ServiceGatewayServicePropertiesFormatServiceType
+		var publicNatGatewayID *string
+		switch svc.ServiceType {
+		case Inbound:
+			serviceType = armnetwork.ServiceGatewayServicePropertiesFormatServiceTypeInbound
+			publicNatGatewayID = nil
+		case Outbound:
+			serviceType = armnetwork.ServiceGatewayServicePropertiesFormatServiceTypeOutbound
+			publicNatGatewayID = &svc.PublicNatGateway.Id
 		}
 
-		// Wrap in ServiceGatewayServiceRequest
-		serviceRequest := &armnetwork.ServiceGatewayServiceRequest{
-			Service: armSvc,
-		}
-
-		// Set IsDelete flag on the request
-		if svc.IsDelete {
-			serviceRequest.IsDelete = ptr.To(true)
-		}
-
-		serviceRequests = append(serviceRequests, serviceRequest)
+		// Build and append the service request
+		serviceRequests = append(serviceRequests, &armnetwork.ServiceGatewayServiceRequest{
+			IsDelete: &svc.IsDelete,
+			Service: &armnetwork.ServiceGatewayService{
+				Name: &svc.Service,
+				Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
+					LoadBalancerBackendPools: loadBalancerBackendPools,
+					PublicNatGatewayID:       publicNatGatewayID,
+					ServiceType:              &serviceType,
+				},
+			},
+		})
 	}
 	return serviceRequests
 }

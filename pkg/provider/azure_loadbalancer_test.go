@@ -963,6 +963,7 @@ func TestEnsureLoadBalancerDeleteContainerLoadBalancer(t *testing.T) {
 				SubscriptionID:             az.SubscriptionID,
 				ResourceGroup:              az.ResourceGroup,
 				Location:                   az.Location,
+				VNetName:                   az.VnetName,
 				ServiceGatewayResourceName: az.ServiceGatewayResourceName,
 				ServiceGatewayID:           az.GetServiceGatewayID(),
 			}, az.NetworkClientFactory, nil)

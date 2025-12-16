@@ -273,6 +273,7 @@ func TestConfigValidation_AllFieldsRequired(t *testing.T) {
 				SubscriptionID:             "sub-123",
 				ResourceGroup:              "rg-456",
 				Location:                   "eastus",
+				VNetName:                   "test-vnet",
 				ServiceGatewayResourceName: "sgw-789",
 				ServiceGatewayID:           "/subscriptions/sub-123/resourceGroups/rg-456/providers/Microsoft.Network/serviceGateways/sgw-789",
 			},

@@ -176,6 +176,7 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 
 	{
 		kubeClient := fake.NewSimpleClientset() // FIXME: inject kubeClient
+		az.KubeClient = kubeClient
 		informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
 		az.serviceLister = informerFactory.Core().V1().Services().Lister()
 		informerFactory.Start(wait.NeverStop)
@@ -203,6 +204,7 @@ func GetTestCloudWithContainerLoadBalancer(ctrl *gomock.Controller) (az *Cloud) 
 		ResourceGroup:              az.ResourceGroup,
 		SubscriptionID:             az.SubscriptionID,
 		Location:                   az.Location,
+		VNetName:                   az.VnetName,
 		ServiceGatewayResourceName: "test-sgw",
 		ServiceGatewayID:           "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.ServiceNetworking/serviceGateways/test-sgw",
 	}

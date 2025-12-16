@@ -1145,6 +1145,7 @@ func TestInitializeDiffTracker(t *testing.T) {
 		SubscriptionID: "test-subscription",
 		ResourceGroup:  "test-rg",
 		Location:       "eastus",
+		VNetName:       "test-vnet",
 
 		ServiceGatewayResourceName: "test-sgw",
 		ServiceGatewayID:           "/subscriptions/test-subscription/resourceGroups/test-rg/providers/Microsoft.Network/serviceGateways/test-sgw",

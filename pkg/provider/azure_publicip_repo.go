@@ -74,6 +74,7 @@ func (az *Cloud) CreateOrUpdatePIP(service *v1.Service, pipResourceGroup string,
 	return rerr
 }
 
+// TODO(enechitoaia): remove when aks-rp
 func (az *Cloud) CreateOrUpdatePIPOutbound(ctx context.Context, pipResourceGroup string, pip *armnetwork.PublicIPAddress) error {
 	klog.Infof("CreateOrUpdatePIPOutbound(%s): start", ptr.Deref(pip.Name, ""))
 
@@ -144,37 +145,37 @@ func (az *Cloud) DeletePublicIP(service *v1.Service, pipResourceGroup string, pi
 	return nil
 }
 
-func (az *Cloud) DeletePublicIPOutbound(ctx context.Context, pipResourceGroup string, pipName string) error {
-	klog.Infof("DeletePublicIPOutbound(%s): start", pipName)
+// func (az *Cloud) DeletePublicIPOutbound(ctx context.Context, pipResourceGroup string, pipName string) error {
+// 	klog.Infof("DeletePublicIPOutbound(%s): start", pipName)
 
-	// Endless retry loop with 5-second intervals
-	for {
-		rerr := az.NetworkClientFactory.GetPublicIPAddressClient().Delete(ctx, pipResourceGroup, pipName)
-		klog.Infof("DeletePublicIPOutbound(%s): end, error: %v", pipName, rerr)
+// 	// Endless retry loop with 5-second intervals
+// 	for {
+// 		rerr := az.NetworkClientFactory.GetPublicIPAddressClient().Delete(ctx, pipResourceGroup, pipName)
+// 		klog.Infof("DeletePublicIPOutbound(%s): end, error: %v", pipName, rerr)
 
-		if rerr == nil {
-			// Invalidate the cache right after deleting
-			_ = az.pipCache.Delete(pipResourceGroup)
-			return nil
-		}
+// 		if rerr == nil {
+// 			// Invalidate the cache right after deleting
+// 			_ = az.pipCache.Delete(pipResourceGroup)
+// 			return nil
+// 		}
 
-		// Log the error
-		klog.Warningf("DeletePublicIPOutbound(%s) failed: %s, will retry in 5 seconds", pipName, rerr.Error())
+// 		// Log the error
+// 		klog.Warningf("DeletePublicIPOutbound(%s) failed: %s, will retry in 5 seconds", pipName, rerr.Error())
 
-		// Check if context is canceled
-		select {
-		case <-ctx.Done():
-			klog.V(3).Infof("DeletePublicIPOutbound: context canceled, stopping retry")
-			return fmt.Errorf("context canceled: %w", ctx.Err())
-		default:
-			// Continue with retry
-		}
+// 		// Check if context is canceled
+// 		select {
+// 		case <-ctx.Done():
+// 			klog.V(3).Infof("DeletePublicIPOutbound: context canceled, stopping retry")
+// 			return fmt.Errorf("context canceled: %w", ctx.Err())
+// 		default:
+// 			// Continue with retry
+// 		}
 
-		// Wait 5 seconds before retrying
-		klog.V(3).Infof("DeletePublicIPOutbound: retrying in 5 seconds for PIP %s", pipName)
-		time.Sleep(5 * time.Second)
-	}
-}
+// 		// Wait 5 seconds before retrying
+// 		klog.V(3).Infof("DeletePublicIPOutbound: retrying in 5 seconds for PIP %s", pipName)
+// 		time.Sleep(5 * time.Second)
+// 	}
+// }
 
 func (az *Cloud) newPIPCache() (azcache.Resource, error) {
 	getter := func(ctx context.Context, key string) (interface{}, error) {

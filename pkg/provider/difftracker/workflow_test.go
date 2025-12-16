@@ -354,6 +354,7 @@ func TestConfigValidationInWorkflow(t *testing.T) {
 				SubscriptionID:             "sub",
 				ResourceGroup:              "rg",
 				Location:                   "eastus",
+				VNetName:                   "test-vnet",
 				ServiceGatewayResourceName: "sgw",
 				ServiceGatewayID:           "/sub/rg/sgw",
 			},
