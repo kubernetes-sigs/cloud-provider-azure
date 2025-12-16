@@ -102,7 +102,7 @@ func (s *ServiceUpdater) processBatch() {
 			// Transition to CreationInProgress
 			recordStateTransition(StateNotStarted, StateCreationInProgress)
 			opState.State = StateCreationInProgress
-			workToDo = append(workToDo, workItem{serviceUID, opState.IsInbound, StateCreationInProgress})
+			workToDo = append(workToDo, workItem{serviceUID, opState.Config.IsInbound, StateCreationInProgress})
 
 		case StateCreationInProgress:
 			// Already being processed by another goroutine, skip
@@ -128,7 +128,7 @@ func (s *ServiceUpdater) processBatch() {
 			klog.V(4).Infof("ServiceUpdater: service %s in StateDeletionPending, waiting for locations to be cleared", serviceUID)
 
 		case StateDeletionInProgress:
-			workToDo = append(workToDo, workItem{serviceUID, opState.IsInbound, StateDeletionInProgress})
+			workToDo = append(workToDo, workItem{serviceUID, opState.Config.IsInbound, StateDeletionInProgress})
 		}
 	}
 	s.diffTracker.mu.Unlock()
@@ -229,20 +229,7 @@ func (s *ServiceUpdater) createInboundService(serviceUID string) {
 	}
 	klog.V(3).Infof("ServiceUpdater: created Public IP %s for inbound service %s", pipName, serviceUID)
 
-	// Step 2: Get service object
-	svc, err := s.diffTracker.getServiceByUID(ctx, serviceUID)
-	if err != nil {
-		klog.Errorf("ServiceUpdater: failed to get service for inbound service %s: %v", serviceUID, err)
-		s.onComplete(serviceUID, false, fmt.Errorf("failed to get service: %w", err))
-		return
-	}
-	if svc == nil {
-		klog.Errorf("ServiceUpdater: service not found for inbound service %s", serviceUID)
-		s.onComplete(serviceUID, false, fmt.Errorf("service not found"))
-		return
-	}
-
-	// Step 3: Create LoadBalancer resource structure
+	// Step 2: Create LoadBalancer resource structure
 	lbResource := armnetwork.LoadBalancer{
 		Name:     to.Ptr(serviceUID),
 		Location: to.Ptr(s.diffTracker.config.Location),
@@ -264,8 +251,8 @@ func (s *ServiceUpdater) createInboundService(serviceUID string) {
 		},
 	}
 
-	// Step 4: Create LoadBalancer via CreateOrUpdateLB
-	if err := s.diffTracker.createOrUpdateLB(ctx, svc, lbResource); err != nil {
+	// Step 3: Create LoadBalancer via CreateOrUpdateLB
+	if err := s.diffTracker.createOrUpdateLB(ctx, lbResource); err != nil {
 		klog.Errorf("ServiceUpdater: failed to create LoadBalancer for inbound service %s: %v", serviceUID, err)
 		// Don't delete PIP here - retry will use existing PIP
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to create LoadBalancer: %w", err))
@@ -273,7 +260,7 @@ func (s *ServiceUpdater) createInboundService(serviceUID string) {
 	}
 	klog.V(3).Infof("ServiceUpdater: created LoadBalancer for inbound service %s", serviceUID)
 
-	// Step 5: Register service with ServiceGateway API
+	// Step 4: Register service with ServiceGateway API
 	servicesDTO := MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
 		SyncServicesReturnType{
 			Additions: newIgnoreCaseSetFromSlice([]string{serviceUID}),
@@ -301,7 +288,7 @@ func (s *ServiceUpdater) createInboundService(serviceUID string) {
 		Removals:  nil,
 	})
 
-	// Step 6: Success callback
+	// Step 5: Success callback
 	s.onComplete(serviceUID, true, nil)
 	klog.Infof("ServiceUpdater: createInboundService completed successfully for %s", serviceUID)
 }

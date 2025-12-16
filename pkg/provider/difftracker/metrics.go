@@ -242,7 +242,7 @@ func updatePendingServiceOperationsMetric(dt *DiffTracker) {
 
 	for _, opState := range dt.pendingServiceOps {
 		serviceType := "outbound"
-		if opState.IsInbound {
+		if opState.Config.IsInbound {
 			serviceType = "inbound"
 		}
 		stateCounts[opState.State][serviceType]++

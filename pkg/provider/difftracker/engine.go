@@ -7,10 +7,6 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const (
-	maxRetries = 3
-)
-
 // triggerLocationsUpdater sends a non-blocking trigger to the LocationsUpdater.
 func (dt *DiffTracker) triggerLocationsUpdater() {
 	select {
@@ -30,7 +26,7 @@ func (dt *DiffTracker) triggerServiceUpdater() {
 // AddService handles service creation events for inbound (Load Balancer) services.
 // If the service already exists in NRP, it does nothing (idempotent).
 // If the service doesn't exist, it triggers service creation via XUpdater.
-func (dt *DiffTracker) AddService(serviceUID string, isInbound bool) {
+func (dt *DiffTracker) AddService(config ServiceConfig) {
 	startTime := time.Now()
 	defer func() {
 		recordEngineOperation("add_service", startTime, nil)
@@ -41,15 +37,17 @@ func (dt *DiffTracker) AddService(serviceUID string, isInbound bool) {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
-	if serviceUID == "" {
-		klog.Error("Engine.AddService: serviceUID cannot be empty")
+	// Validate configuration
+	if err := config.Validate(); err != nil {
+		klog.Errorf("Engine.AddService: invalid config: %v", err)
 		return
 	}
 
-	klog.V(4).Infof("Engine.AddService: serviceUID=%s, isInbound=%v", serviceUID, isInbound)
+	serviceUID := config.UID
+	klog.V(4).Infof("Engine.AddService: serviceUID=%s, isInbound=%v", serviceUID, config.IsInbound)
 
 	// Check if service already exists in NRP
-	if isInbound {
+	if config.IsInbound {
 		if dt.NRPResources.LoadBalancers.Has(serviceUID) {
 			klog.V(2).Infof("Engine.AddService: Load Balancer %s already exists in NRP", serviceUID)
 			return
@@ -74,7 +72,7 @@ func (dt *DiffTracker) AddService(serviceUID string, isInbound bool) {
 	// Add service operation to pending list
 	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
 		ServiceUID:  serviceUID,
-		IsInbound:   isInbound,
+		Config:      config,
 		State:       StateNotStarted,
 		RetryCount:  0,
 		LastAttempt: time.Now().Format(time.RFC3339),
@@ -211,9 +209,15 @@ func (dt *DiffTracker) DeleteService(serviceUID string, isInbound bool) {
 
 		// Service exists in NRP but not tracked - create tracking entry
 		klog.V(2).Infof("Engine.DeleteService: Service %s exists in NRP, marking for deletion", serviceUID)
+		var config ServiceConfig
+		if isInbound {
+			config = NewInboundServiceConfig(serviceUID, nil)
+		} else {
+			config = NewOutboundServiceConfig(serviceUID, nil)
+		}
 		dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
 			ServiceUID:  serviceUID,
-			IsInbound:   isInbound,
+			Config:      config,
 			State:       StateDeletionPending,
 			RetryCount:  0,
 			LastAttempt: time.Now().Format(time.RFC3339),
@@ -291,7 +295,7 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 		// Handle deletion completion
 		if success {
 			klog.V(2).Infof("Engine.OnServiceCreationComplete: Service %s deleted successfully", serviceUID)
-			recordServiceOperation("delete", opState.IsInbound, startTime, nil)
+			recordServiceOperation("delete", opState.Config.IsInbound, startTime, nil)
 			// Clean up all state
 			delete(dt.pendingServiceOps, serviceUID)
 			delete(dt.pendingEndpoints, serviceUID)
@@ -299,30 +303,21 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 			delete(dt.pendingDeletions, serviceUID)
 		} else {
 			klog.Errorf("Engine.OnServiceCreationComplete: Service %s deletion failed: %v", serviceUID, err)
-			recordServiceOperation("delete", opState.IsInbound, startTime, err)
+			recordServiceOperation("delete", opState.Config.IsInbound, startTime, err)
 			opState.RetryCount++
 			opState.LastAttempt = time.Now().Format(time.RFC3339)
-			recordServiceOperationRetry("delete", opState.IsInbound, opState.RetryCount)
+			recordServiceOperationRetry("delete", opState.Config.IsInbound, opState.RetryCount)
 
-			if opState.RetryCount >= maxRetries { // Todo: backoff is good but we need to keep on trying
-				klog.Errorf("Engine.OnServiceCreationComplete: Service %s deletion failed after %d retries, giving up", serviceUID, maxRetries)
-				// Give up - clean up state
-				delete(dt.pendingServiceOps, serviceUID)
-				delete(dt.pendingEndpoints, serviceUID)
-				delete(dt.pendingPods, serviceUID)
-				delete(dt.pendingDeletions, serviceUID)
-			} else {
-				klog.V(2).Infof("Engine.OnServiceCreationComplete: Service %s deletion will be retried (attempt %d/%d)", serviceUID, opState.RetryCount, maxRetries)
-				// Trigger ServiceUpdater for retry
-				dt.triggerServiceUpdater()
-			}
+			klog.V(2).Infof("Engine.OnServiceCreationComplete: Service %s deletion will be retried (attempt %d)", serviceUID, opState.RetryCount)
+			// Trigger ServiceUpdater for retry
+			dt.triggerServiceUpdater()
 		}
 	} else {
 		// Handle creation completion
 		if success {
 			klog.V(2).Infof("Engine.OnServiceCreationComplete: Service %s created successfully", serviceUID)
 			recordStateTransition(opState.State, StateCreated)
-			recordServiceOperation("create", opState.IsInbound, startTime, nil)
+			recordServiceOperation("create", opState.Config.IsInbound, startTime, nil)
 			opState.State = StateCreated
 			opState.RetryCount = 0
 
@@ -332,25 +327,17 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 
 		} else {
 			klog.Errorf("Engine.OnServiceCreationComplete: Service %s creation failed: %v", serviceUID, err)
-			recordServiceOperation("create", opState.IsInbound, startTime, err)
+			recordServiceOperation("create", opState.Config.IsInbound, startTime, err)
 			opState.RetryCount++
 			opState.LastAttempt = time.Now().Format(time.RFC3339)
-			recordServiceOperationRetry("create", opState.IsInbound, opState.RetryCount)
+			recordServiceOperationRetry("create", opState.Config.IsInbound, opState.RetryCount)
 
-			if opState.RetryCount >= maxRetries {
-				klog.Errorf("Engine.OnServiceCreationComplete: Service %s creation failed after %d retries, giving up", serviceUID, maxRetries)
-				// Clear buffered data and remove from tracking
-				delete(dt.pendingEndpoints, serviceUID)
-				delete(dt.pendingPods, serviceUID)
-				delete(dt.pendingServiceOps, serviceUID)
-			} else {
-				klog.V(2).Infof("Engine.OnServiceCreationComplete: Service %s creation will be retried (attempt %d/%d)", serviceUID, opState.RetryCount, maxRetries)
-				// Reset to NotStarted for retry
-				recordStateTransition(opState.State, StateNotStarted)
-				opState.State = StateNotStarted
-				// Trigger ServiceUpdater for retry
-				dt.triggerServiceUpdater()
-			}
+			klog.V(2).Infof("Engine.OnServiceCreationComplete: Service %s creation will be retried (attempt %d)", serviceUID, opState.RetryCount)
+			// Reset to NotStarted for retry
+			recordStateTransition(opState.State, StateNotStarted)
+			opState.State = StateNotStarted
+			// Trigger ServiceUpdater for retry
+			dt.triggerServiceUpdater()
 		}
 	}
 }
@@ -439,7 +426,7 @@ func (dt *DiffTracker) AddPod(serviceUID, podKey, location, address string) {
 		// Create service operation
 		dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
 			ServiceUID:  serviceUID,
-			IsInbound:   false, // NAT Gateway is outbound
+			Config:      NewOutboundServiceConfig(serviceUID, nil),
 			State:       StateNotStarted,
 			RetryCount:  0,
 			LastAttempt: time.Now().Format(time.RFC3339),
@@ -562,7 +549,7 @@ func (dt *DiffTracker) DeletePod(serviceUID, location, address string) {
 			// Service not tracked but exists in NRP - create tracking entry
 			dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
 				ServiceUID:  serviceUID,
-				IsInbound:   false,
+				Config:      NewOutboundServiceConfig(serviceUID, nil),
 				State:       StateDeletionPending,
 				RetryCount:  0,
 				LastAttempt: time.Now().Format(time.RFC3339),
@@ -678,9 +665,15 @@ func (dt *DiffTracker) CheckPendingDeletions() {
 			// Service not in pendingServiceOps - create entry
 			klog.Warningf("Engine.CheckPendingDeletions: Service %s in pendingDeletions but not in pendingServiceOps, creating entry",
 				serviceUID)
+			var config ServiceConfig
+			if pendingDeletion.IsInbound {
+				config = NewInboundServiceConfig(serviceUID, nil)
+			} else {
+				config = NewOutboundServiceConfig(serviceUID, nil)
+			}
 			dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
 				ServiceUID:  serviceUID,
-				IsInbound:   pendingDeletion.IsInbound,
+				Config:      config,
 				State:       StateDeletionInProgress,
 				RetryCount:  0,
 				LastAttempt: time.Now().Format(time.RFC3339),

@@ -1,11 +1,21 @@
 package difftracker
 
 import (
+	"errors"
 	"sync"
 
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
+)
+
+// ================================================================================================
+// ERRORS
+// ================================================================================================
+
+var (
+	// ErrServiceUIDEmpty is returned when a service UID is empty
+	ErrServiceUIDEmpty = errors.New("service UID cannot be empty")
 )
 
 // ================================================================================================
@@ -43,6 +53,80 @@ const (
 	ALREADY_IN_SYNC SyncStatus = iota
 	SUCCESS
 )
+
+// ================================================================================================
+// SERVICE CONFIGURATION TYPES
+// ================================================================================================
+
+// PortMapping represents a port mapping configuration
+type PortMapping struct {
+	Port     int32
+	Protocol string // TCP or UDP
+}
+
+// HealthProbeConfig represents health probe configuration
+type HealthProbeConfig struct {
+	Protocol          string // TCP, HTTP, or HTTPS
+	Port              int32
+	IntervalInSeconds int32
+	NumberOfProbes    int32
+	RequestPath       *string // For HTTP/HTTPS probes
+}
+
+// InboundConfig contains Load Balancer configuration for inbound services
+type InboundConfig struct {
+	FrontendPorts      []PortMapping      // nullable for future use
+	BackendPorts       []PortMapping      // nullable for future use
+	Protocol           *string            // TCP/UDP, nullable
+	IdleTimeoutMinutes *int32             // nullable
+	SessionPersistence *string            // nullable
+	HealthProbe        *HealthProbeConfig // nullable
+}
+
+// OutboundConfig contains NAT Gateway configuration for outbound services
+type OutboundConfig struct {
+	// Placeholder for future NAT Gateway options
+}
+
+// ServiceConfig encapsulates all configuration needed for a service
+type ServiceConfig struct {
+	UID            string
+	IsInbound      bool
+	InboundConfig  *InboundConfig  // nil allowed for defaults
+	OutboundConfig *OutboundConfig // nil allowed for defaults
+}
+
+// Validate checks if the ServiceConfig is valid
+func (c *ServiceConfig) Validate() error {
+	if c.UID == "" {
+		return ErrServiceUIDEmpty
+	}
+	if c.IsInbound && c.InboundConfig == nil {
+		// Allow nil InboundConfig - will use defaults
+	}
+	if !c.IsInbound && c.OutboundConfig == nil {
+		// Allow nil OutboundConfig - will use defaults
+	}
+	return nil
+}
+
+// NewInboundServiceConfig creates a ServiceConfig for an inbound service
+func NewInboundServiceConfig(uid string, inboundConfig *InboundConfig) ServiceConfig {
+	return ServiceConfig{
+		UID:           uid,
+		IsInbound:     true,
+		InboundConfig: inboundConfig,
+	}
+}
+
+// NewOutboundServiceConfig creates a ServiceConfig for an outbound service
+func NewOutboundServiceConfig(uid string, outboundConfig *OutboundConfig) ServiceConfig {
+	return ServiceConfig{
+		UID:            uid,
+		IsInbound:      false,
+		OutboundConfig: outboundConfig,
+	}
+}
 
 // --------------------------------------------------------------------------------
 // DiffTracker keeps track of the state of the K8s cluster and NRP
@@ -83,7 +167,7 @@ type K8s_State struct {
 // ServiceOperationState tracks the lifecycle state of a service being created or deleted
 type ServiceOperationState struct {
 	ServiceUID  string
-	IsInbound   bool
+	Config      ServiceConfig // Replaces IsInbound bool - contains full service configuration
 	State       ResourceState
 	RetryCount  int
 	LastAttempt string // timestamp as string for serialization

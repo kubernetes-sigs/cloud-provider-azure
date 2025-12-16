@@ -51,6 +51,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
 	"sigs.k8s.io/cloud-provider-azure/pkg/trace"
 	"sigs.k8s.io/cloud-provider-azure/pkg/trace/attributes"
@@ -393,7 +394,8 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 	if az.ServiceGatewayEnabled && az.diffTracker != nil {
 		serviceUID := getServiceUID(service)
 		logger.V(2).Info("Using Engine for async service creation", "serviceUID", serviceUID)
-		az.diffTracker.AddService(serviceUID, true) // true = inbound service
+		config := difftracker.NewInboundServiceConfig(serviceUID, nil)
+		az.diffTracker.AddService(config)
 
 		// Status will be populated by subsequent reconcile loops after async creation completes
 		isOperationSucceeded = true

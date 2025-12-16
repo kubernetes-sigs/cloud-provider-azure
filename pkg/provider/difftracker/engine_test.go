@@ -51,13 +51,13 @@ func TestEngineAddService_NewService(t *testing.T) {
 	serviceUID := "service-1"
 
 	// Execute
-	dt.AddService(serviceUID, true)
+	dt.AddService(NewInboundServiceConfig(serviceUID, nil))
 
 	// Verify service is tracked
 	opState, exists := dt.pendingServiceOps[serviceUID]
 	assert.True(t, exists, "Service should be tracked")
 	assert.Equal(t, serviceUID, opState.ServiceUID)
-	assert.True(t, opState.IsInbound)
+	assert.True(t, opState.Config.IsInbound)
 	assert.Equal(t, StateNotStarted, opState.State)
 	assert.Equal(t, 0, opState.RetryCount)
 
@@ -79,7 +79,7 @@ func TestEngineAddService_ExistsInNRP(t *testing.T) {
 	dt.NRPResources.LoadBalancers.Insert(serviceUID)
 
 	// Execute
-	dt.AddService(serviceUID, true)
+	dt.AddService(NewInboundServiceConfig(serviceUID, nil))
 
 	// Verify service is NOT tracked (since it exists)
 	_, exists := dt.pendingServiceOps[serviceUID]
@@ -102,13 +102,13 @@ func TestEngineAddService_AlreadyTracked(t *testing.T) {
 	// Setup: service already tracked
 	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
 		ServiceUID: serviceUID,
-		IsInbound:  true,
+		Config:     NewInboundServiceConfig(serviceUID, nil),
 		State:      StateCreationInProgress,
 		RetryCount: 0,
 	}
 
 	// Execute
-	dt.AddService(serviceUID, true)
+	dt.AddService(NewInboundServiceConfig(serviceUID, nil))
 
 	// Verify state unchanged
 	opState := dt.pendingServiceOps[serviceUID]
@@ -200,7 +200,7 @@ func TestEngineUpdateEndpoints_ServiceCreating(t *testing.T) {
 	// Setup: service is being created
 	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
 		ServiceUID: serviceUID,
-		IsInbound:  true,
+		Config:     NewInboundServiceConfig(serviceUID, nil),
 		State:      StateCreationInProgress,
 		RetryCount: 0,
 	}
@@ -238,7 +238,7 @@ func TestEngineOnServiceCreationComplete_Failure(t *testing.T) {
 	// Setup: service is being created
 	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
 		ServiceUID: serviceUID,
-		IsInbound:  true,
+		Config:     NewInboundServiceConfig(serviceUID, nil),
 		State:      StateCreationInProgress,
 		RetryCount: 0,
 	}
@@ -266,7 +266,7 @@ func TestEngineAddPod_ServiceCreating(t *testing.T) {
 	// Setup: service is being created
 	dt.pendingServiceOps[egressUID] = &ServiceOperationState{
 		ServiceUID: egressUID,
-		IsInbound:  false,
+		Config:     NewOutboundServiceConfig(egressUID, nil),
 		State:      StateCreationInProgress,
 		RetryCount: 0,
 	}

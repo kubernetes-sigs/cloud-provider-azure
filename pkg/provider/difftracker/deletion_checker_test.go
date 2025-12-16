@@ -35,7 +35,7 @@ func TestCheckPendingDeletions_NoLocations(t *testing.T) {
 	}
 	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
 		ServiceUID: serviceUID,
-		IsInbound:  true,
+		Config:     NewInboundServiceConfig(serviceUID, nil),
 		State:      StateDeletionPending,
 		RetryCount: 0,
 	}
@@ -79,7 +79,7 @@ func TestCheckPendingDeletions_WithLocations(t *testing.T) {
 	}
 	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
 		ServiceUID: serviceUID,
-		IsInbound:  true,
+		Config:     NewInboundServiceConfig(serviceUID, nil),
 		State:      StateDeletionPending,
 		RetryCount: 0,
 	}
@@ -133,7 +133,7 @@ func TestCheckPendingDeletions_MultipleServices(t *testing.T) {
 	dt.pendingDeletions[service1] = &PendingDeletion{ServiceUID: service1, IsInbound: true}
 	dt.pendingServiceOps[service1] = &ServiceOperationState{
 		ServiceUID: service1,
-		IsInbound:  true,
+		Config:     NewInboundServiceConfig(service1, nil),
 		State:      StateDeletionPending,
 		RetryCount: 0,
 	}
@@ -142,7 +142,7 @@ func TestCheckPendingDeletions_MultipleServices(t *testing.T) {
 	dt.pendingDeletions[service2] = &PendingDeletion{ServiceUID: service2, IsInbound: true}
 	dt.pendingServiceOps[service2] = &ServiceOperationState{
 		ServiceUID: service2,
-		IsInbound:  true,
+		Config:     NewInboundServiceConfig(service2, nil),
 		State:      StateDeletionPending,
 		RetryCount: 0,
 	}
@@ -158,7 +158,7 @@ func TestCheckPendingDeletions_MultipleServices(t *testing.T) {
 	dt.pendingDeletions[service3] = &PendingDeletion{ServiceUID: service3, IsInbound: false}
 	dt.pendingServiceOps[service3] = &ServiceOperationState{
 		ServiceUID: service3,
-		IsInbound:  false,
+		Config:     NewOutboundServiceConfig(service3, nil),
 		State:      StateDeletionPending,
 		RetryCount: 0,
 	}
@@ -244,7 +244,7 @@ func TestCheckPendingDeletions_MissingFromPendingServiceOps(t *testing.T) {
 	assert.True(t, exists, "Service should be added to pendingServiceOps")
 	assert.Equal(t, StateDeletionInProgress, opState.State, "Service state should be DeletionInProgress")
 	assert.Equal(t, serviceUID, opState.ServiceUID, "ServiceUID should match")
-	assert.True(t, opState.IsInbound, "IsInbound should be true")
+	assert.True(t, opState.Config.IsInbound, "IsInbound should be true")
 
 	// Verify: Service removed from pendingDeletions
 	dt.mu.Lock()
@@ -319,7 +319,7 @@ func TestCheckPendingDeletions_LocationsClearedAfterCheck(t *testing.T) {
 	dt.pendingDeletions[serviceUID] = &PendingDeletion{ServiceUID: serviceUID, IsInbound: true}
 	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
 		ServiceUID: serviceUID,
-		IsInbound:  true,
+		Config:     NewInboundServiceConfig(serviceUID, nil),
 		State:      StateDeletionPending,
 		RetryCount: 0,
 	}

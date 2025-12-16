@@ -65,7 +65,7 @@ func (dt *DiffTracker) deletePublicIP(ctx context.Context, pipResourceGroup stri
 }
 
 // createOrUpdateLB creates or updates a load balancer
-func (dt *DiffTracker) createOrUpdateLB(ctx context.Context, service *v1.Service, lb armnetwork.LoadBalancer) error {
+func (dt *DiffTracker) createOrUpdateLB(ctx context.Context, lb armnetwork.LoadBalancer) error {
 	lbName := ptr.Deref(lb.Name, "")
 	if lbName == "" {
 		return fmt.Errorf("createOrUpdateLB: load balancer name is empty")
