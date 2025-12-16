@@ -216,8 +216,8 @@ func releaseLease(
 	prevHolder := ptr.Deref(lease.Spec.HolderIdentity, "")
 	if !strings.EqualFold(prevHolder, holder) {
 		logger.Info(
-			"%s is holding the lease instead of %s, no need to release it.",
-			prevHolder, holder,
+			"lease is already held by a different holder, no need to release it.",
+			"requestedHolder", holder, "leaseHolder", prevHolder,
 		)
 		return nil
 	}

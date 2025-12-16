@@ -44,7 +44,7 @@ func main() {
 	targetUrl, _ := url.Parse(fmt.Sprintf("http://localhost:%s", strconv.Itoa(targetPort)))
 
 	proxy := httputil.NewSingleHostReverseProxy(targetUrl)
-	logger.Info("", "target url", targetUrl)
+	logger.Info("Target URL", "targetURL", targetUrl)
 
 	http.Handle("/", proxy)
 	logger.Info("proxying between ports", "from", healthCheckPort, "to", targetPort)

@@ -73,9 +73,9 @@ func (az *Cloud) reconcilePrivateLinkService(
 	}
 
 	fipConfigID := fipConfig.ID
-	logger.V(2).Info("",
+	logger.V(2).Info("Reconcile private link service for service",
 		"service", serviceName,
-		"LB fipConfigID", ptr.Deref(fipConfig.Name, ""),
+		"LBFipConfigID", ptr.Deref(fipConfig.Name, ""),
 		"wantPLS", wantPLS,
 		"createPLS", createPLS)
 
@@ -105,7 +105,7 @@ func (az *Cloud) reconcilePrivateLinkService(
 
 		exists := !strings.EqualFold(ptr.Deref(existingPLS.ID, ""), consts.PrivateLinkServiceNotExistID)
 		if exists {
-			logger.V(4).Info("found existing private link service attached(%s)", "service", serviceName, "privateLinkService", ptr.Deref(existingPLS.Name, ""))
+			logger.V(4).Info("found existing private link service attached", "service", serviceName, "privateLinkService", ptr.Deref(existingPLS.Name, ""))
 			if !isManagedPrivateLinkSerivce(existingPLS, clusterName) {
 				return false, fmt.Errorf(
 					"reconcilePrivateLinkService for service(%s) failed: LB frontend(%s) already has unmanaged private link service(%s)",

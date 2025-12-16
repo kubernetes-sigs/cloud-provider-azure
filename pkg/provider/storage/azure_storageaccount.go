@@ -877,7 +877,7 @@ func (az *AccountRepo) AddStorageAccountTags(ctx context.Context, subsID, resour
 		// only update when newTags is different from old tags
 		_ = az.storageAccountCache.Delete(account) // clean cache
 		updateParams := &armstorage.AccountUpdateParameters{Tags: newTags}
-		logger.V(2).Info("", "account", account, "tags", newTags)
+		logger.V(2).Info("Add storage account with tags", "account", account, "tags", newTags)
 		accountClient, err := az.ComputeClientFactory.GetAccountClientForSub(subsID)
 		if err != nil {
 			return err
@@ -910,7 +910,7 @@ func (az *AccountRepo) RemoveStorageAccountTag(ctx context.Context, subsID, reso
 		// only update when newTags is different from old tags
 		_ = az.storageAccountCache.Delete(account) // clean cache
 		updateParams := &armstorage.AccountUpdateParameters{Tags: result.Tags}
-		logger.V(2).Info("", "tag", key, "account", account)
+		logger.V(2).Info("Remove tag from storage account", "tag", key, "account", account)
 		accountClient, err := az.ComputeClientFactory.GetAccountClientForSub(subsID)
 		if err != nil {
 			return err
