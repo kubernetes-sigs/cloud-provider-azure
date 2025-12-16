@@ -101,7 +101,7 @@ func KustoIngest(passed bool, labelFilter, clusterType, junitReportPath string) 
 		if err := enc.Encode(data); err != nil {
 			panic(fmt.Errorf("failed to json encode data: %w", err))
 		}
-		logger.Info("", "ingested data", data)
+		logger.Info("ingested data", "data", data)
 	}()
 
 	if _, err := in.FromReader(context.Background(), r); err != nil {

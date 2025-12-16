@@ -130,12 +130,12 @@ func (updater *loadBalancerBackendPoolUpdater) addOperation(operation batchOpera
 	defer updater.lock.Unlock()
 
 	op := operation.(*loadBalancerBackendPoolUpdateOperation)
-	logger.V(4).Info("",
+	logger.V(4).Info("Add operation to load balancer backend pool updater",
 		"kind", op.kind,
-		"service name", op.serviceName,
-		"load balancer name", op.loadBalancerName,
-		"backend pool name", op.backendPoolName,
-		"node IPs", strings.Join(op.nodeIPs, ","))
+		"serviceName", op.serviceName,
+		"loadBalancerName", op.loadBalancerName,
+		"backendPoolName", op.backendPoolName,
+		"nodeIPs", strings.Join(op.nodeIPs, ","))
 	updater.operations = append(updater.operations, operation)
 	return operation
 }
@@ -149,12 +149,12 @@ func (updater *loadBalancerBackendPoolUpdater) removeOperation(serviceName strin
 	for i := len(updater.operations) - 1; i >= 0; i-- {
 		op := updater.operations[i].(*loadBalancerBackendPoolUpdateOperation)
 		if strings.EqualFold(op.serviceName, serviceName) {
-			logger.V(4).Info("",
+			logger.V(4).Info("Remove all operations targeting to the specific service",
 				"kind", op.kind,
-				"service name", op.serviceName,
-				"load balancer name", op.loadBalancerName,
-				"backend pool name", op.backendPoolName,
-				"node IPs", strings.Join(op.nodeIPs, ","))
+				"serviceName", op.serviceName,
+				"loadBalancerName", op.loadBalancerName,
+				"backendPoolName", op.backendPoolName,
+				"nodeIPs", strings.Join(op.nodeIPs, ","))
 			updater.operations = append(updater.operations[:i], updater.operations[i+1:]...)
 		}
 	}
