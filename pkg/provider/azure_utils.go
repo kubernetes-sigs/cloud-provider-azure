@@ -32,6 +32,7 @@ import (
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 const (
@@ -62,6 +63,7 @@ func getContextWithCancel() (context.Context, context.CancelFunc) {
 //
 // XXX: return error instead of logging; decouple tag parsing and tag application
 func parseTags(tags string, tagsMap map[string]string) map[string]*string {
+	logger := log.Background().WithName("parseTags")
 	formatted := make(map[string]*string)
 
 	if tags != "" {
@@ -99,7 +101,7 @@ func parseTags(tags string, tagsMap map[string]string) map[string]*string {
 			}
 
 			if found, k := findKeyInMapCaseInsensitive(formatted, key); found && k != key {
-				klog.V(4).Infof("parseTags: found identical keys: %s from tags and %s from tagsMap (case-insensitive), %s will replace %s", k, key, key, k)
+				logger.V(4).Info("found identical keys from tags and tagsMap (case-insensitive), will replace", "identical keys", k, "keyFromTagsMap", key)
 				delete(formatted, k)
 			}
 			formatted[key] = ptr.To(value)
@@ -137,6 +139,7 @@ func findKeyInMapWithPrefix(targetMap map[string]*string, key string) (bool, str
 }
 
 func (az *Cloud) reconcileTags(currentTagsOnResource, newTags map[string]*string) (reconciledTags map[string]*string, changed bool) {
+	logger := log.Background().WithName("reconcileTags")
 	var systemTags []string
 	systemTagsMap := make(map[string]*string)
 
@@ -169,7 +172,7 @@ func (az *Cloud) reconcileTags(currentTagsOnResource, newTags map[string]*string
 		for k := range currentTagsOnResource {
 			if _, ok := newTags[k]; !ok {
 				if found, _ := findKeyInMapWithPrefix(systemTagsMap, k); !found {
-					klog.V(2).Infof("reconcileTags: delete tag %s: %s", k, ptr.Deref(currentTagsOnResource[k], ""))
+					logger.V(2).Info("delete tag", "key", k, "value", ptr.Deref(currentTagsOnResource[k], ""))
 					delete(currentTagsOnResource, k)
 					changed = true
 				}
@@ -189,10 +192,11 @@ func getExtendedLocationTypeFromString(extendedLocationType string) armnetwork.E
 }
 
 func getNodePrivateIPAddress(node *v1.Node, isIPv6 bool) string {
+	logger := log.Background().WithName("getNodePrivateIPAddress")
 	for _, nodeAddress := range node.Status.Addresses {
 		if strings.EqualFold(string(nodeAddress.Type), string(v1.NodeInternalIP)) &&
 			utilnet.IsIPv6String(nodeAddress.Address) == isIPv6 {
-			klog.V(6).Infof("getNodePrivateIPAddress: node %s, ip %s", node.Name, nodeAddress.Address)
+			logger.V(6).Info("Get node private IP address", "node", node.Name, "ip", nodeAddress.Address)
 			return nodeAddress.Address
 		}
 	}
@@ -522,9 +526,10 @@ func getServiceIPFamily(service *v1.Service) string {
 
 // getResourceGroupAndNameFromNICID parses the ip configuration ID to get the resource group and nic name.
 func getResourceGroupAndNameFromNICID(ipConfigurationID string) (string, string, error) {
+	logger := log.Background().WithName("getResourceGroupAndNameFromNICID")
 	matches := nicIDRE.FindStringSubmatch(ipConfigurationID)
 	if len(matches) != 3 {
-		klog.V(4).Infof("Can not extract nic name from ipConfigurationID (%s)", ipConfigurationID)
+		logger.V(4).Info("Can not extract nic name from ipConfigurationID", "ipConfigurationID", ipConfigurationID)
 		return "", "", fmt.Errorf("invalid ip config ID %s", ipConfigurationID)
 	}
 

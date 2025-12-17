@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/storage/fileservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
@@ -220,6 +221,7 @@ func parseServiceAccountToken(tokenStr string) (string, error) {
 }
 
 func (az *AccountRepo) getStorageAccountWithCache(ctx context.Context, subsID, resourceGroup, account string) (armstorage.Account, error) {
+	logger := log.Background().WithName("getStorageAccountWithCache")
 	if az.ComputeClientFactory == nil {
 		return armstorage.Account{}, fmt.Errorf("ComputeClientFactory is nil")
 	}
@@ -232,7 +234,7 @@ func (az *AccountRepo) getStorageAccountWithCache(ctx context.Context, subsID, r
 		return armstorage.Account{}, err
 	}
 	if cache != nil {
-		klog.V(2).Infof("Get storage account(%s) from cache", account)
+		logger.V(2).Info("Get storage account from cache", "account", account)
 		return *cache, nil
 	}
 
@@ -283,6 +285,7 @@ func (az *AccountRepo) GetStorageAccesskeyFromServiceAccountToken(ctx context.Co
 // GetStorageAccesskey gets the storage account access key
 // getLatestAccountKey: get the latest account key per CreationTime if true, otherwise get the first account key
 func (az *AccountRepo) GetStorageAccesskey(ctx context.Context, accountClient accountclient.Interface, account, resourceGroup string, getLatestAccountKey bool) (string, error) {
+	logger := log.Background().WithName("GetStorageAccesskey")
 	result, err := accountClient.ListKeys(ctx, resourceGroup, account)
 	if err != nil {
 		return "", err
@@ -310,12 +313,12 @@ func (az *AccountRepo) GetStorageAccesskey(ctx context.Context, accountClient ac
 				if k.CreationTime != nil {
 					creationTime = *k.CreationTime
 				}
-				klog.V(2).Infof("got storage account key with creation time: %v", creationTime)
+				logger.V(2).Info("got storage account key with creation time", "creationTime", creationTime)
 			} else {
 				if k.CreationTime != nil && creationTime.Before(*k.CreationTime) {
 					key = v
 					creationTime = *k.CreationTime
-					klog.V(2).Infof("got storage account key with latest creation time: %v", creationTime)
+					logger.V(2).Info("got storage account key with latest creation time", "creationTime", creationTime)
 				}
 			}
 		}
@@ -329,6 +332,7 @@ func (az *AccountRepo) GetStorageAccesskey(ctx context.Context, accountClient ac
 
 // EnsureStorageAccount search storage account, create one storage account(with genAccountNamePrefix) if not found, return accountName, accountKey
 func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions *AccountOptions, genAccountNamePrefix string) (string, string, error) {
+	logger := log.Background().WithName("EnsureStorageAccount")
 	if accountOptions == nil {
 		return "", "", fmt.Errorf("account options is nil")
 	}
@@ -369,7 +373,7 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 	}
 	if ptr.Deref(accountOptions.CreatePrivateEndpoint, false) {
 		if accountOptions.StorageType == "" {
-			klog.V(2).Info("set StorageType as file when not specified")
+			logger.V(2).Info("set StorageType as file when not specified")
 			accountOptions.StorageType = StorageTypeFile
 		}
 
@@ -408,7 +412,7 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 			}
 
 			if len(accounts) > 0 {
-				klog.V(4).Infof("found %d matching accounts", len(accounts))
+				logger.V(4).Info("found matching accounts", "count", len(accounts))
 				index := 0
 				if accountOptions.PickRandomMatchingAccount {
 					// randomly pick one matching account
@@ -417,21 +421,21 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 						return "", "", err
 					}
 					index = int(n.Int64())
-					klog.V(4).Infof("randomly pick one matching account, index: %d, matching accounts: %s", index, accounts)
+					logger.V(4).Info("randomly pick one matching account", "index", index, "matching accounts", accounts)
 				}
 				accountName = accounts[index].Name
 				createNewAccount = false
 				if accountOptions.SourceAccountName != "" {
-					klog.V(4).Infof("source account name(%s) is provided, try to find a matching account with source account name", accountOptions.SourceAccountName)
+					logger.V(4).Info("source account name is provided, try to find a matching account with source account name", "sourceAccountName", accountOptions.SourceAccountName)
 					for _, acct := range accounts {
 						if acct.Name == accountOptions.SourceAccountName {
-							klog.V(2).Infof("found a matching account %s type %s location %s with source account name", acct.Name, acct.StorageType, acct.Location)
+							logger.V(2).Info("found a matching account with source account name", "account", acct.Name, "type", acct.StorageType, "location", acct.Location)
 							accountName = acct.Name
 							break
 						}
 					}
 				}
-				klog.V(4).Infof("found a matching account %s with account index %d", accountName, index)
+				logger.V(4).Info("found a matching account", "account", accountName, "index", index)
 			}
 		}
 
@@ -443,7 +447,7 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 		if accountOptions.CreateAccount {
 			// check whether account exists
 			if _, err := az.GetStorageAccesskey(ctx, storageAccountClient, accountName, resourceGroup, accountOptions.GetLatestAccountKey); err != nil {
-				klog.V(2).Infof("get storage key for storage account %s returned with %v", accountName, err)
+				logger.V(2).Error(err, "get storage key for storage account returned with error", "account", accountName)
 				createNewAccount = true
 			}
 		}
@@ -499,7 +503,7 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 				Action:                   to.Ptr(string(armstorage.DefaultActionAllow)),
 			}
 			virtualNetworkRules = append(virtualNetworkRules, vnetRule)
-			klog.V(4).Infof("subnetID(%s) has been set", subnetID)
+			logger.V(4).Info("subnetID has been set", "subnetID", subnetID)
 		}
 		if len(virtualNetworkRules) > 0 {
 			networkRuleSet = &armstorage.NetworkRuleSet{
@@ -527,13 +531,18 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 
 		var publicNetworkAccess *armstorage.PublicNetworkAccess
 		if accountOptions.PublicNetworkAccess != "" {
-			klog.V(2).Infof("set PublicNetworkAccess(%s) on account(%s), subscription(%s), resource group(%s)", accountOptions.PublicNetworkAccess, accountName, subsID, resourceGroup)
+			logger.V(2).Info("set PublicNetworkAccess on account", "PublicNetworkAccess", accountOptions.PublicNetworkAccess, "account", accountName, "subscription", subsID, "resourceGroup", resourceGroup)
 			access := armstorage.PublicNetworkAccess(accountOptions.PublicNetworkAccess)
 			publicNetworkAccess = &access
 		}
 
-		klog.V(2).Infof("azure - no matching account found, begin to create a new account %s in resource group %s, location: %s, accountType: %s, accountKind: %s, tags: %+v",
-			accountName, resourceGroup, location, accountType, kind, accountOptions.Tags)
+		logger.V(2).Info("azure - no matching account found, begin to create a new account",
+			"accountName", accountName,
+			"resourceGroup", resourceGroup,
+			"location", location,
+			"accountType", accountType,
+			"accountKind", kind,
+			"tags", accountOptions.Tags)
 
 		cp := &armstorage.AccountCreateParameters{
 			SKU:  &armstorage.SKU{Name: to.Ptr(armstorage.SKUName(accountType))},
@@ -554,15 +563,15 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 			if *accountOptions.EnableLargeFileShare {
 				state = armstorage.LargeFileSharesStateEnabled
 			}
-			klog.V(2).Infof("enable LargeFileShare(%s) for storage account(%s)", state, accountName)
+			logger.V(2).Info("enable LargeFileShare for storage account", "LargeFileShare", state, "account", accountName)
 			cp.Properties.LargeFileSharesState = to.Ptr(state)
 		}
 		if accountOptions.AllowBlobPublicAccess != nil {
-			klog.V(2).Infof("set AllowBlobPublicAccess(%v) for storage account(%s)", *accountOptions.AllowBlobPublicAccess, accountName)
+			logger.V(2).Info("set AllowBlobPublicAccess for storage account", "AllowBlobPublicAccess", *accountOptions.AllowBlobPublicAccess, "account", accountName)
 			cp.Properties.AllowBlobPublicAccess = accountOptions.AllowBlobPublicAccess
 		}
 		if accountOptions.RequireInfrastructureEncryption != nil {
-			klog.V(2).Infof("set RequireInfrastructureEncryption(%v) for storage account(%s)", *accountOptions.RequireInfrastructureEncryption, accountName)
+			logger.V(2).Info("set RequireInfrastructureEncryption for storage account", "RequireInfrastructureEncryption", *accountOptions.RequireInfrastructureEncryption, "account", accountName)
 			cp.Properties.Encryption = &armstorage.Encryption{
 				RequireInfrastructureEncryption: accountOptions.RequireInfrastructureEncryption,
 				KeySource:                       to.Ptr(armstorage.KeySourceMicrosoftStorage),
@@ -573,11 +582,11 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 			}
 		}
 		if accountOptions.AllowSharedKeyAccess != nil {
-			klog.V(2).Infof("set Allow SharedKeyAccess (%v) for storage account (%s)", *accountOptions.AllowSharedKeyAccess, accountName)
+			logger.V(2).Info("set Allow SharedKeyAccess for storage account", "allowSharedKeyAccess", *accountOptions.AllowSharedKeyAccess, "account", accountName)
 			cp.Properties.AllowSharedKeyAccess = accountOptions.AllowSharedKeyAccess
 		}
 		if accountOptions.KeyVaultURI != nil {
-			klog.V(2).Infof("set KeyVault(%v) for storage account(%s)", accountOptions.KeyVaultURI, accountName)
+			logger.V(2).Info("set KeyVault for storage account", "KeyVault", accountOptions.KeyVaultURI, "account", accountName)
 			cp.Properties.Encryption = &armstorage.Encryption{
 				KeyVaultProperties: &armstorage.KeyVaultProperties{
 					KeyName:     accountOptions.KeyName,
@@ -593,7 +602,7 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 		}
 
 		if accountOptions.IsSmbOAuthEnabled != nil {
-			klog.V(2).Infof("set IsSmbOAuthEnabled(%v) for storage account(%s)", *accountOptions.IsSmbOAuthEnabled, accountName)
+			logger.V(2).Info("set IsSmbOAuthEnabled for storage account", "IsSmbOAuthEnabled", *accountOptions.IsSmbOAuthEnabled, "account", accountName)
 			if cp.Properties.AzureFilesIdentityBasedAuthentication == nil {
 				cp.Properties.AzureFilesIdentityBasedAuthentication = &armstorage.AzureFilesIdentityBasedAuthentication{
 					DirectoryServiceOptions: to.Ptr(armstorage.DirectoryServiceOptionsNone),
@@ -660,12 +669,15 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 			prop.FileServiceProperties.Cors = nil
 			if accountOptions.DisableFileServiceDeleteRetentionPolicy != nil {
 				enable := !*accountOptions.DisableFileServiceDeleteRetentionPolicy
-				klog.V(2).Infof("set ShareDeleteRetentionPolicy(%v) on account(%s), subscription(%s), resource group(%s)",
-					enable, accountName, subsID, resourceGroup)
+				logger.V(2).Info("set ShareDeleteRetentionPolicy on account",
+					"ShareDeleteRetentionPolicy", enable,
+					"account", accountName,
+					"subscription", subsID,
+					"resourceGroup", resourceGroup)
 				prop.FileServiceProperties.ShareDeleteRetentionPolicy = &armstorage.DeleteRetentionPolicy{Enabled: &enable}
 			}
 			if accountOptions.IsMultichannelEnabled != nil {
-				klog.V(2).Infof("enable SMB Multichannel setting on account(%s), subscription(%s), resource group(%s)", accountName, subsID, resourceGroup)
+				logger.V(2).Info("enable SMB Multichannel setting on account", "account", accountName, "subscription", subsID, "resourceGroup", resourceGroup)
 				enabled := *accountOptions.IsMultichannelEnabled
 				prop.FileServiceProperties.ProtocolSettings = &armstorage.ProtocolSettings{Smb: &armstorage.SmbSetting{Multichannel: &armstorage.Multichannel{Enabled: &enabled}}}
 			}
@@ -676,7 +688,7 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 		}
 
 		if accountOptions.AccessTier != "" {
-			klog.V(2).Infof("set AccessTier(%s) on account(%s), subscription(%s), resource group(%s)", accountOptions.AccessTier, accountName, subsID, resourceGroup)
+			logger.V(2).Info("set AccessTier on account", "AccessTier", accountOptions.AccessTier, "account", accountName, "subscription", subsID, "resourceGroup", resourceGroup)
 			cp.Properties.AccessTier = to.Ptr(armstorage.AccessTier(accountOptions.AccessTier))
 		}
 	}
@@ -722,7 +734,8 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 }
 
 func (az *AccountRepo) createPrivateEndpoint(ctx context.Context, accountName string, accountID *string, privateEndpointName, vnetResourceGroup, vnetName, subnetName, location string, storageType Type) error {
-	klog.V(2).Infof("Creating private endpoint(%s) for account (%s)", privateEndpointName, accountName)
+	logger := log.Background().WithName("createPrivateEndpoint")
+	logger.V(2).Info("Creating private endpoint", "privateEndpointName", privateEndpointName, "account", accountName)
 
 	subnet, err := az.subnetRepo.Get(ctx, vnetResourceGroup, vnetName, subnetName)
 	if err != nil {
@@ -735,7 +748,7 @@ func (az *AccountRepo) createPrivateEndpoint(ctx context.Context, accountName st
 		if subnet.Properties.PrivateEndpointNetworkPolicies == nil || *subnet.Properties.PrivateEndpointNetworkPolicies == armnetwork.VirtualNetworkPrivateEndpointNetworkPoliciesEnabled {
 			subnet.Properties.PrivateEndpointNetworkPolicies = to.Ptr(armnetwork.VirtualNetworkPrivateEndpointNetworkPoliciesDisabled)
 		} else {
-			klog.V(2).Infof("PrivateEndpointNetworkPolicies is already set to %s for subnet (%s, %s)", *subnet.Properties.PrivateEndpointNetworkPolicies, vnetName, subnetName)
+			logger.V(2).Info("PrivateEndpointNetworkPolicies is already set for subnet", "policies", *subnet.Properties.PrivateEndpointNetworkPolicies, "vnetName", vnetName, "subnetName", subnetName)
 		}
 	}
 
@@ -771,7 +784,8 @@ func (az *AccountRepo) createPrivateEndpoint(ctx context.Context, accountName st
 }
 
 func (az *AccountRepo) createPrivateDNSZone(ctx context.Context, vnetResourceGroup, privateDNSZoneName string) error {
-	klog.V(2).Infof("Creating private dns zone(%s) in resourceGroup (%s)", privateDNSZoneName, vnetResourceGroup)
+	logger := log.Background().WithName("createPrivateDNSZone")
+	logger.V(2).Info("Creating private DNS zone", "privateDNSZone", privateDNSZoneName, "ResourceGroup", vnetResourceGroup)
 	location := LocationGlobal
 	privateDNSZone := privatedns.PrivateZone{Location: &location}
 	clientFactory := az.NetworkClientFactory
@@ -783,7 +797,7 @@ func (az *AccountRepo) createPrivateDNSZone(ctx context.Context, vnetResourceGro
 
 	if _, err := privatednsclient.CreateOrUpdate(ctx, vnetResourceGroup, privateDNSZoneName, privateDNSZone); err != nil {
 		if strings.Contains(err.Error(), "exists already") {
-			klog.V(2).Infof("private dns zone(%s) in resourceGroup (%s) already exists", privateDNSZoneName, vnetResourceGroup)
+			logger.V(2).Info("private dns zone in resourceGroup already exists", "privateDNSZone", privateDNSZoneName, "ResourceGroup", vnetResourceGroup)
 			return nil
 		}
 		return err
@@ -792,7 +806,8 @@ func (az *AccountRepo) createPrivateDNSZone(ctx context.Context, vnetResourceGro
 }
 
 func (az *AccountRepo) createVNetLink(ctx context.Context, vNetLinkName, vnetResourceGroup, vnetName, privateDNSZoneName string) error {
-	klog.V(2).Infof("Creating virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s)", vNetLinkName, privateDNSZoneName, vnetResourceGroup)
+	logger := log.Background().WithName("createVNetLink")
+	logger.V(2).Info("Creating virtual network link", "vNetLinkName", vNetLinkName, "privateDNSZone", privateDNSZoneName, "ResourceGroup", vnetResourceGroup)
 	clientFactory := az.NetworkClientFactory
 	if clientFactory == nil {
 		// multi-tenant support
@@ -813,7 +828,8 @@ func (az *AccountRepo) createVNetLink(ctx context.Context, vNetLinkName, vnetRes
 }
 
 func (az *AccountRepo) createPrivateDNSZoneGroup(ctx context.Context, dnsZoneGroupName, privateEndpointName, vnetResourceGroup, vnetName, privateDNSZoneName string) error {
-	klog.V(2).Infof("Creating private DNS zone group(%s) with privateEndpoint(%s), vNetName(%s), resourceGroup(%s)", dnsZoneGroupName, privateEndpointName, vnetName, vnetResourceGroup)
+	logger := log.Background().WithName("createPrivateDNSZoneGroup")
+	logger.V(2).Info("Creating private DNS zone group", "dnsZoneGroup", dnsZoneGroupName, "privateEndpoint", privateEndpointName, "vnetName", vnetName, "ResourceGroup", vnetResourceGroup)
 	privateDNSZoneGroup := &armnetwork.PrivateDNSZoneGroup{
 		Properties: &armnetwork.PrivateDNSZoneGroupPropertiesFormat{
 			PrivateDNSZoneConfigs: []*armnetwork.PrivateDNSZoneConfig{
@@ -837,6 +853,7 @@ func (az *AccountRepo) createPrivateDNSZoneGroup(ctx context.Context, dnsZoneGro
 
 // AddStorageAccountTags add tags to storage account
 func (az *AccountRepo) AddStorageAccountTags(ctx context.Context, subsID, resourceGroup, account string, tags map[string]*string) error {
+	logger := log.Background().WithName("AddStorageAccountTags")
 	// add lock to avoid concurrent update on the cache
 	az.lockMap.LockEntry(account)
 	defer az.lockMap.UnlockEntry(account)
@@ -859,7 +876,7 @@ func (az *AccountRepo) AddStorageAccountTags(ctx context.Context, subsID, resour
 		// only update when newTags is different from old tags
 		_ = az.storageAccountCache.Delete(account) // clean cache
 		updateParams := &armstorage.AccountUpdateParameters{Tags: newTags}
-		klog.V(2).Infof("add storage account(%s) with tags(%+v)", account, newTags)
+		logger.V(2).Info("Add storage account with tags", "account", account, "tags", newTags)
 		accountClient, err := az.ComputeClientFactory.GetAccountClientForSub(subsID)
 		if err != nil {
 			return err
@@ -872,6 +889,7 @@ func (az *AccountRepo) AddStorageAccountTags(ctx context.Context, subsID, resour
 
 // RemoveStorageAccountTag remove tag from storage account
 func (az *AccountRepo) RemoveStorageAccountTag(ctx context.Context, subsID, resourceGroup, account, key string) error {
+	logger := log.Background().WithName("RemoveStorageAccountTag")
 	// add lock to avoid concurrent update on the cache
 	az.lockMap.LockEntry(account)
 	defer az.lockMap.UnlockEntry(account)
@@ -891,7 +909,7 @@ func (az *AccountRepo) RemoveStorageAccountTag(ctx context.Context, subsID, reso
 		// only update when newTags is different from old tags
 		_ = az.storageAccountCache.Delete(account) // clean cache
 		updateParams := &armstorage.AccountUpdateParameters{Tags: result.Tags}
-		klog.V(2).Infof("remove tag(%s) from storage account(%s)", key, account)
+		logger.V(2).Info("Remove tag from storage account", "tag", key, "account", account)
 		accountClient, err := az.ComputeClientFactory.GetAccountClientForSub(subsID)
 		if err != nil {
 			return err
@@ -924,6 +942,7 @@ func isLocationEqual(account *armstorage.Account, accountOptions *AccountOptions
 }
 
 func AreVNetRulesEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
+	logger := log.Background().WithName("AreVNetRulesEqual")
 	if len(accountOptions.VirtualNetworkResourceIDs) > 0 {
 		if account.Properties == nil || account.Properties.NetworkRuleSet == nil ||
 			account.Properties.NetworkRuleSet.VirtualNetworkRules == nil {
@@ -942,7 +961,7 @@ func AreVNetRulesEqual(account *armstorage.Account, accountOptions *AccountOptio
 				return false
 			}
 		}
-		klog.V(2).Infof("found all vnet rules(%v) in account %s", accountOptions.VirtualNetworkResourceIDs, ptr.Deref(account.Name, ""))
+		logger.V(2).Info("found all vnet rules in account", "rules", accountOptions.VirtualNetworkResourceIDs, "account", ptr.Deref(account.Name, ""))
 	}
 	return true
 }
@@ -958,10 +977,11 @@ func isLargeFileSharesPropertyEqual(account *armstorage.Account, accountOptions 
 }
 
 func isTaggedWithSkip(account *armstorage.Account) bool {
+	logger := log.Background().WithName("isTaggedWithSkip")
 	if account.Tags != nil {
 		// skip account with SkipMatchingTag tag
 		if _, ok := account.Tags[SkipMatchingTag]; ok {
-			klog.V(2).Infof("found %s tag for account %s, skip matching", SkipMatchingTag, ptr.Deref(account.Name, ""))
+			logger.V(2).Info("found tag for account, skip matching", "tag", SkipMatchingTag, "account", ptr.Deref(account.Name, ""))
 			return false
 		}
 	}

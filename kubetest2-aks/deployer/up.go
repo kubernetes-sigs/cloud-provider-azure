@@ -36,7 +36,7 @@ import (
 	armcontainerservicev2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v2"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/kubetest2/pkg/exec"
@@ -210,6 +210,7 @@ func (d *deployer) prepareCustomConfig() ([]byte, error) {
 
 // prepareClusterConfig generates cluster config.
 func (d *deployer) prepareClusterConfig(clusterID string) (*armcontainerservicev2.ManagedCluster, string, error) {
+	logger := klog.Background().WithName("prepareClusterConfig")
 	configFile, err := openPath(d.ConfigPath)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to read cluster config file at %q: %v", d.ConfigPath, err)
@@ -230,12 +231,12 @@ func (d *deployer) prepareClusterConfig(clusterID string) (*armcontainerservicev
 		return nil, "", fmt.Errorf("failed to prepare custom config: %v", err)
 	}
 
-	klog.Infof("Customized configurations are: %s", string(customConfig))
+	logger.Info("Customized configurations", "config", string(customConfig))
 
 	encodedCustomConfig := base64.StdEncoding.EncodeToString(customConfig)
 	clusterConfig = strings.ReplaceAll(clusterConfig, "{CUSTOM_CONFIG}", encodedCustomConfig)
 
-	klog.Infof("AKS cluster config without credential: %s", clusterConfig)
+	logger.Info("AKS cluster config without credential", "config", clusterConfig)
 
 	mcConfig := &armcontainerservicev2.ManagedCluster{}
 	err = json.Unmarshal([]byte(clusterConfig), mcConfig)
@@ -248,10 +249,11 @@ func (d *deployer) prepareClusterConfig(clusterID string) (*armcontainerservicev
 }
 
 func updateAzureCredential(mcConfig *armcontainerservicev2.ManagedCluster) {
-	klog.Infof("Updating Azure credentials to manage cluster resource group")
+	logger := klog.Background().WithName("updateAzureCredential")
+	logger.Info("Updating Azure credentials to manage cluster resource group")
 
 	if len(clientID) != 0 && len(clientSecret) != 0 {
-		klog.Infof("Service principal is used to manage cluster resource group")
+		logger.Info("Service principal is used to manage cluster resource group")
 		// Reset `Identity` in case managed identity is defined in templates while service principal is used.
 		mcConfig.Identity = nil
 		mcConfig.Properties.ServicePrincipalProfile = &armcontainerservicev2.ManagedClusterServicePrincipalProfile{
@@ -262,7 +264,7 @@ func updateAzureCredential(mcConfig *armcontainerservicev2.ManagedCluster) {
 	}
 	// Managed identity is preferable over service principal and picked by default when creating an AKS cluster.
 	// TODO(mainred): we can consider supporting user-assigned managed identity.
-	klog.Infof("System assigned managed identity is used to manage cluster resource group")
+	logger.Info("System assigned managed identity is used to manage cluster resource group")
 	// Reset `ServicePrincipalProfile` in case service principal is defined in templates while managed identity is used.
 	mcConfig.Properties.ServicePrincipalProfile = nil
 	systemAssignedIdentity := armcontainerservicev2.ResourceIdentityTypeSystemAssigned
@@ -273,7 +275,8 @@ func updateAzureCredential(mcConfig *armcontainerservicev2.ManagedCluster) {
 
 // createAKSWithCustomConfig creates an AKS cluster with custom configuration.
 func (d *deployer) createAKSWithCustomConfig() error {
-	klog.Infof("Creating the AKS cluster with custom config")
+	logger := klog.Background().WithName("createAKSWithCustomConfig")
+	logger.Info("Creating the AKS cluster with custom config")
 	clusterID := fmt.Sprintf("/subscriptions/%s/resourcegroups/%s/providers/Microsoft.ContainerService/managedClusters/%s", subscriptionID, d.ResourceGroupName, d.ClusterName)
 
 	mcConfig, encodedCustomConfig, err := d.prepareClusterConfig(clusterID)
@@ -307,13 +310,14 @@ func (d *deployer) createAKSWithCustomConfig() error {
 		return fmt.Errorf("failed to put resource: %v", err.Error())
 	}
 
-	klog.Infof("An AKS cluster %q in resource group %q is created", d.ClusterName, d.ResourceGroupName)
+	logger.Info("An AKS cluster is created", "clusterName", d.ClusterName, "resourceGroup", d.ResourceGroupName)
 	return nil
 }
 
 // getAKSKubeconfig gets kubeconfig of the AKS cluster and writes it to specific path.
 func (d *deployer) getAKSKubeconfig() error {
-	klog.Infof("Retrieving AKS cluster's kubeconfig")
+	logger := klog.Background().WithName("getAKSKubeconfig")
+	logger.Info("Retrieving AKS cluster's kubeconfig")
 	client, err := armcontainerservicev2.NewManagedClustersClient(subscriptionID, cred, nil)
 	if err != nil {
 		return fmt.Errorf("failed to new managed cluster client with sub ID %q: %v", subscriptionID, err)
@@ -324,7 +328,7 @@ func (d *deployer) getAKSKubeconfig() error {
 		resp, err = client.ListClusterUserCredentials(ctx, d.ResourceGroupName, d.ClusterName, nil)
 		if err != nil {
 			if strings.Contains(err.Error(), "404 Not Found") {
-				klog.Infof("failed to list cluster user credentials for 1 minute, retrying")
+				logger.Info("failed to list cluster user credentials for 1 minute, retrying")
 				return false, nil
 			}
 			return false, fmt.Errorf("failed to list cluster user credentials with resource group name %q, cluster ID %q: %v", d.ResourceGroupName, d.ClusterName, err)
@@ -349,7 +353,7 @@ func (d *deployer) getAKSKubeconfig() error {
 		return fmt.Errorf("failed to write kubeconfig to %s", destPath)
 	}
 
-	klog.Infof("Succeeded in getting kubeconfig of cluster %q in resource group %q", d.ClusterName, d.ResourceGroupName)
+	logger.Info("Succeeded in getting kubeconfig of cluster", "clusterName", d.ClusterName, "resourceGroup", d.ResourceGroupName)
 	return nil
 }
 
@@ -380,6 +384,7 @@ func (d *deployer) verifyUpFlags() error {
 }
 
 func (d *deployer) Up() error {
+	logger := klog.Background().WithName("Up")
 	if err := d.verifyUpFlags(); err != nil {
 		return fmt.Errorf("up flags are invalid: %v", err)
 	}
@@ -389,7 +394,7 @@ func (d *deployer) Up() error {
 	if err != nil {
 		return fmt.Errorf("failed to create the resource group: %v", err)
 	}
-	klog.Infof("Resource group %s created", *resourceGroup.ResourceGroup.ID)
+	logger.Info("Resource group created", "resourceGroupID", *resourceGroup.ResourceGroup.ID)
 
 	// Create the AKS cluster
 	if err := d.createAKSWithCustomConfig(); err != nil {

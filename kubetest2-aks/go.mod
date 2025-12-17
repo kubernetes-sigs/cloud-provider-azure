@@ -13,6 +13,7 @@ require (
 	github.com/spf13/pflag v1.0.10
 	k8s.io/apimachinery v0.34.3
 	k8s.io/klog v1.0.0
+	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20250820121507-0af2bda4dd1d
 	sigs.k8s.io/kubetest2 v0.0.0-20250820195306-f71fd4c1cc1a
 )
@@ -48,5 +49,4 @@ require (
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
-	k8s.io/klog/v2 v2.130.1 // indirect
 )
