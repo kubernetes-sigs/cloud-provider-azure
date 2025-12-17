@@ -36,7 +36,7 @@ import (
 
 // AttachDisk attaches a disk to vm
 func (as *availabilitySet) AttachDisk(ctx context.Context, nodeName types.NodeName, diskMap map[string]*AttachDiskOptions) error {
-	logger := log.Background().WithName("AttachDisk")
+	logger := log.FromContextOrBackground(ctx).WithName("AttachDisk")
 	vm, err := as.getVirtualMachine(ctx, nodeName, azcache.CacheReadTypeDefault)
 	if err != nil {
 		return err
@@ -124,8 +124,8 @@ func (as *availabilitySet) AttachDisk(ctx context.Context, nodeName types.NodeNa
 	return rerr
 }
 
-func (as *availabilitySet) DeleteCacheForNode(_ context.Context, nodeName string) error {
-	logger := log.Background().WithName("DeleteCacheForNode")
+func (as *availabilitySet) DeleteCacheForNode(ctx context.Context, nodeName string) error {
+	logger := log.FromContextOrBackground(ctx).WithName("DeleteCacheForNode")
 	err := as.vmCache.Delete(nodeName)
 	if err == nil {
 		logger.V(2).Info("DeleteCacheForNode successfully", "nodeName", nodeName)
@@ -137,7 +137,7 @@ func (as *availabilitySet) DeleteCacheForNode(_ context.Context, nodeName string
 
 // DetachDisk detaches a disk from VM
 func (as *availabilitySet) DetachDisk(ctx context.Context, nodeName types.NodeName, diskMap map[string]string, forceDetach bool) error {
-	logger := log.Background().WithName("DetachDisk")
+	logger := log.FromContextOrBackground(ctx).WithName("DetachDisk")
 	vm, err := as.getVirtualMachine(ctx, nodeName, azcache.CacheReadTypeDefault)
 	if err != nil {
 		// if host doesn't exist, no need to detach

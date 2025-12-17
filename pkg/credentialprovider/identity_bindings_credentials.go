@@ -65,13 +65,13 @@ type tokenResponse struct {
 // createTransport creates an HTTP transport with custom CA
 // The transport uses a custom dialer that resolves the SNI name to the configured API server IP
 func createTransport(sniName string, apiServerIP string, caPool *x509.CertPool) *http.Transport {
-	logger := log.Background().WithName("createTransport")
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	// reset Proxy to avoid using environment proxy settings
 	transport.Proxy = nil
 
 	// Custom dialer that resolves the SNI hostname to the fixed API server IP
 	transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		logger := log.FromContextOrBackground(ctx).WithName("createTransport")
 		// Extract port from addr (format is "host:port")
 		_, port, err := net.SplitHostPort(addr)
 		if err != nil {
@@ -136,7 +136,7 @@ func (c *identityBindingsTokenCredential) getTransport() (*http.Transport, error
 
 // GetToken retrieves an access token using identity bindings token exchange
 func (c *identityBindingsTokenCredential) GetToken(ctx context.Context, opts policy.TokenRequestOptions) (azcore.AccessToken, error) {
-	logger := log.Background().WithName("GetToken")
+	logger := log.FromContextOrBackground(ctx).WithName("GetToken")
 	// The scope should be exactly one value in format "https://management.azure.com/.default"
 	// or "https://containerregistry.azure.net/.default"
 	if len(opts.Scopes) != 1 {

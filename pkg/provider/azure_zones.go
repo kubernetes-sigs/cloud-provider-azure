@@ -37,7 +37,7 @@ import (
 var _ cloudprovider.Zones = (*Cloud)(nil)
 
 func (az *Cloud) refreshZones(ctx context.Context, refreshFunc func(ctx context.Context) error) {
-	logger := log.Background().WithName("refreshZones")
+	logger := log.FromContextOrBackground(ctx).WithName("refreshZones")
 	logger.V(2).Info("refreshing zones every 30 minutes")
 	err := wait.PollUntilContextCancel(ctx, consts.ZoneFetchingInterval, false, func(ctx context.Context) (bool, error) {
 		_ = refreshFunc(ctx)
@@ -47,7 +47,7 @@ func (az *Cloud) refreshZones(ctx context.Context, refreshFunc func(ctx context.
 }
 
 func (az *Cloud) syncRegionZonesMap(ctx context.Context) error {
-	logger := log.Background().WithName("syncRegionZonesMap")
+	logger := log.FromContextOrBackground(ctx).WithName("syncRegionZonesMap")
 	logger.V(2).Info("starting to fetch all available zones for the subscription", "subscriptionID", az.SubscriptionID)
 	zones, err := az.zoneRepo.ListZones(ctx)
 	if err != nil {
@@ -77,7 +77,7 @@ func (az *Cloud) updateRegionZonesMap(zones map[string][]string) {
 }
 
 func (az *Cloud) getRegionZonesBackoff(ctx context.Context, region string) ([]*string, error) {
-	logger := log.Background().WithName("getRegionZonesBackoff")
+	logger := log.FromContextOrBackground(ctx).WithName("getRegionZonesBackoff")
 	if az.IsStackCloud() {
 		// Azure Stack does not support zone at the moment
 		// https://docs.microsoft.com/en-us/azure-stack/user/azure-stack-network-differences?view=azs-2102
@@ -148,7 +148,7 @@ func (az *Cloud) GetZoneID(zoneLabel string) string {
 // This interface will not be called if InstancesV2 is enabled.
 // If the node is not running with availability zones, then it will fall back to fault domain.
 func (az *Cloud) GetZone(ctx context.Context) (cloudprovider.Zone, error) {
-	logger := log.Background().WithName("GetZone")
+	logger := log.FromContextOrBackground(ctx).WithName("GetZone")
 	if az.UseInstanceMetadata {
 		metadata, err := az.Metadata.GetMetadata(ctx, azcache.CacheReadTypeUnsafe)
 		if err != nil {
@@ -195,7 +195,7 @@ func (az *Cloud) GetZone(ctx context.Context) (cloudprovider.Zone, error) {
 // DEPRECATED: Zones is deprecated in favor of retrieving zone/region information from InstancesV2.
 // This interface will not be called if InstancesV2 is enabled.
 func (az *Cloud) GetZoneByProviderID(ctx context.Context, providerID string) (cloudprovider.Zone, error) {
-	logger := log.Background().WithName("GetZoneByProviderID")
+	logger := log.FromContextOrBackground(ctx).WithName("GetZoneByProviderID")
 	if providerID == "" {
 		return cloudprovider.Zone{}, errNodeNotInitialized
 	}
@@ -220,7 +220,7 @@ func (az *Cloud) GetZoneByProviderID(ctx context.Context, providerID string) (cl
 // DEPRECATED: Zones is deprecated in favor of retrieving zone/region information from InstancesV2.
 // This interface will not be called if InstancesV2 is enabled.
 func (az *Cloud) GetZoneByNodeName(ctx context.Context, nodeName types.NodeName) (cloudprovider.Zone, error) {
-	logger := log.Background().WithName("GetZoneByNodeName")
+	logger := log.FromContextOrBackground(ctx).WithName("GetZoneByNodeName")
 	// Returns "" for unmanaged nodes because azure cloud provider couldn't fetch information for them.
 	unmanaged, err := az.IsNodeUnmanaged(string(nodeName))
 	if err != nil {

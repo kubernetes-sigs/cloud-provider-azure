@@ -221,7 +221,7 @@ func parseServiceAccountToken(tokenStr string) (string, error) {
 }
 
 func (az *AccountRepo) getStorageAccountWithCache(ctx context.Context, subsID, resourceGroup, account string) (armstorage.Account, error) {
-	logger := log.Background().WithName("getStorageAccountWithCache")
+	logger := log.FromContextOrBackground(ctx).WithName("getStorageAccountWithCache")
 	if az.ComputeClientFactory == nil {
 		return armstorage.Account{}, fmt.Errorf("ComputeClientFactory is nil")
 	}
@@ -285,7 +285,7 @@ func (az *AccountRepo) GetStorageAccesskeyFromServiceAccountToken(ctx context.Co
 // GetStorageAccesskey gets the storage account access key
 // getLatestAccountKey: get the latest account key per CreationTime if true, otherwise get the first account key
 func (az *AccountRepo) GetStorageAccesskey(ctx context.Context, accountClient accountclient.Interface, account, resourceGroup string, getLatestAccountKey bool) (string, error) {
-	logger := log.Background().WithName("GetStorageAccesskey")
+	logger := log.FromContextOrBackground(ctx).WithName("GetStorageAccesskey")
 	result, err := accountClient.ListKeys(ctx, resourceGroup, account)
 	if err != nil {
 		return "", err
@@ -332,7 +332,7 @@ func (az *AccountRepo) GetStorageAccesskey(ctx context.Context, accountClient ac
 
 // EnsureStorageAccount search storage account, create one storage account(with genAccountNamePrefix) if not found, return accountName, accountKey
 func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions *AccountOptions, genAccountNamePrefix string) (string, string, error) {
-	logger := log.Background().WithName("EnsureStorageAccount")
+	logger := log.FromContextOrBackground(ctx).WithName("EnsureStorageAccount")
 	if accountOptions == nil {
 		return "", "", fmt.Errorf("account options is nil")
 	}
@@ -734,7 +734,7 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 }
 
 func (az *AccountRepo) createPrivateEndpoint(ctx context.Context, accountName string, accountID *string, privateEndpointName, vnetResourceGroup, vnetName, subnetName, location string, storageType Type) error {
-	logger := log.Background().WithName("createPrivateEndpoint")
+	logger := log.FromContextOrBackground(ctx).WithName("createPrivateEndpoint")
 	logger.V(2).Info("Creating private endpoint", "privateEndpointName", privateEndpointName, "account", accountName)
 
 	subnet, err := az.subnetRepo.Get(ctx, vnetResourceGroup, vnetName, subnetName)
@@ -784,7 +784,7 @@ func (az *AccountRepo) createPrivateEndpoint(ctx context.Context, accountName st
 }
 
 func (az *AccountRepo) createPrivateDNSZone(ctx context.Context, vnetResourceGroup, privateDNSZoneName string) error {
-	logger := log.Background().WithName("createPrivateDNSZone")
+	logger := log.FromContextOrBackground(ctx).WithName("createPrivateDNSZone")
 	logger.V(2).Info("Creating private DNS zone", "privateDNSZone", privateDNSZoneName, "ResourceGroup", vnetResourceGroup)
 	location := LocationGlobal
 	privateDNSZone := privatedns.PrivateZone{Location: &location}
@@ -806,7 +806,7 @@ func (az *AccountRepo) createPrivateDNSZone(ctx context.Context, vnetResourceGro
 }
 
 func (az *AccountRepo) createVNetLink(ctx context.Context, vNetLinkName, vnetResourceGroup, vnetName, privateDNSZoneName string) error {
-	logger := log.Background().WithName("createVNetLink")
+	logger := log.FromContextOrBackground(ctx).WithName("createVNetLink")
 	logger.V(2).Info("Creating virtual network link", "vNetLinkName", vNetLinkName, "privateDNSZone", privateDNSZoneName, "ResourceGroup", vnetResourceGroup)
 	clientFactory := az.NetworkClientFactory
 	if clientFactory == nil {
@@ -828,7 +828,7 @@ func (az *AccountRepo) createVNetLink(ctx context.Context, vNetLinkName, vnetRes
 }
 
 func (az *AccountRepo) createPrivateDNSZoneGroup(ctx context.Context, dnsZoneGroupName, privateEndpointName, vnetResourceGroup, vnetName, privateDNSZoneName string) error {
-	logger := log.Background().WithName("createPrivateDNSZoneGroup")
+	logger := log.FromContextOrBackground(ctx).WithName("createPrivateDNSZoneGroup")
 	logger.V(2).Info("Creating private DNS zone group", "dnsZoneGroup", dnsZoneGroupName, "privateEndpoint", privateEndpointName, "vnetName", vnetName, "ResourceGroup", vnetResourceGroup)
 	privateDNSZoneGroup := &armnetwork.PrivateDNSZoneGroup{
 		Properties: &armnetwork.PrivateDNSZoneGroupPropertiesFormat{
@@ -853,7 +853,7 @@ func (az *AccountRepo) createPrivateDNSZoneGroup(ctx context.Context, dnsZoneGro
 
 // AddStorageAccountTags add tags to storage account
 func (az *AccountRepo) AddStorageAccountTags(ctx context.Context, subsID, resourceGroup, account string, tags map[string]*string) error {
-	logger := log.Background().WithName("AddStorageAccountTags")
+	logger := log.FromContextOrBackground(ctx).WithName("AddStorageAccountTags")
 	// add lock to avoid concurrent update on the cache
 	az.lockMap.LockEntry(account)
 	defer az.lockMap.UnlockEntry(account)
@@ -889,7 +889,7 @@ func (az *AccountRepo) AddStorageAccountTags(ctx context.Context, subsID, resour
 
 // RemoveStorageAccountTag remove tag from storage account
 func (az *AccountRepo) RemoveStorageAccountTag(ctx context.Context, subsID, resourceGroup, account, key string) error {
-	logger := log.Background().WithName("RemoveStorageAccountTag")
+	logger := log.FromContextOrBackground(ctx).WithName("RemoveStorageAccountTag")
 	// add lock to avoid concurrent update on the cache
 	az.lockMap.LockEntry(account)
 	defer az.lockMap.UnlockEntry(account)

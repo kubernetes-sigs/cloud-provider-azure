@@ -280,7 +280,7 @@ func (cnc *CloudNodeController) handleNodeEventWrapper(ctx context.Context, node
 
 // handleNodeEvent processes both add and update events for nodes that need cloud initialization
 func (cnc *CloudNodeController) handleNodeEvent(ctx context.Context, node *v1.Node) error {
-	logger := log.Background().WithName("handleNodeEvent")
+	logger := log.FromContextOrBackground(ctx).WithName("handleNodeEvent")
 	cloudTaint := GetCloudTaint(node.Spec.Taints)
 	if cloudTaint == nil {
 		logger.V(2).Info("Node has no cloud taint, skipping initialization", "nodeName", node.Name)
@@ -332,7 +332,7 @@ func (cnc *CloudNodeController) reconcileNodeLabels(node *v1.Node) error {
 
 // UpdateNodeAddress updates the nodeAddress of a single node
 func (cnc *CloudNodeController) updateNodeAddress(ctx context.Context, node *v1.Node) error {
-	logger := log.Background().WithName("updateNodeAddress")
+	logger := log.FromContextOrBackground(ctx).WithName("updateNodeAddress")
 	// Do not process nodes that are still tainted
 	cloudTaint := GetCloudTaint(node.Spec.Taints)
 	if cloudTaint != nil {
@@ -402,7 +402,7 @@ type nodeModifier func(*v1.Node)
 
 // This processes nodes that were added into the cluster, and cloud initialize them if appropriate
 func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Node) error {
-	logger := log.Background().WithName("initializeNode")
+	logger := log.FromContextOrBackground(ctx).WithName("initializeNode")
 	logger.Info("Initializing node with cloud provider", "node", node.Name)
 	curNode, err := cnc.kubeClient.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
 	if err != nil {
