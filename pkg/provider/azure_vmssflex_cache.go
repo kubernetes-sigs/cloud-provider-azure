@@ -132,7 +132,7 @@ func (fs *FlexScaleSet) newVmssFlexVMCache() (azcache.Resource, error) {
 }
 
 func (fs *FlexScaleSet) getNodeNameByVMName(ctx context.Context, vmName string) (string, error) {
-	logger := log.Background().WithName("getNodeNameByVMName")
+	logger := log.FromContextOrBackground(ctx).WithName("getNodeNameByVMName")
 	fs.lockMap.LockEntry(consts.GetNodeVmssFlexIDLockKey)
 	defer fs.lockMap.UnlockEntry(consts.GetNodeVmssFlexIDLockKey)
 	cachedNodeName, isCached := fs.vmssFlexVMNameToNodeName.Load(vmName)
@@ -173,7 +173,7 @@ func (fs *FlexScaleSet) getNodeNameByVMName(ctx context.Context, vmName string) 
 }
 
 func (fs *FlexScaleSet) getNodeVmssFlexID(ctx context.Context, nodeName string) (string, error) {
-	logger := log.Background().WithName("getNodeVmssFlexID")
+	logger := log.FromContextOrBackground(ctx).WithName("getNodeVmssFlexID")
 	fs.lockMap.LockEntry(consts.GetNodeVmssFlexIDLockKey)
 	defer fs.lockMap.UnlockEntry(consts.GetNodeVmssFlexIDLockKey)
 	cachedVmssFlexID, isCached := fs.vmssFlexVMNameToVmssID.Load(nodeName)
@@ -232,7 +232,7 @@ func (fs *FlexScaleSet) getNodeVmssFlexID(ctx context.Context, nodeName string) 
 }
 
 func (fs *FlexScaleSet) getVmssFlexVM(ctx context.Context, nodeName string, crt azcache.AzureCacheReadType) (vm *armcompute.VirtualMachine, err error) {
-	logger := log.Background().WithName("getVmssFlexVM")
+	logger := log.FromContextOrBackground(ctx).WithName("getVmssFlexVM")
 	vmssFlexID, err := fs.getNodeVmssFlexID(ctx, nodeName)
 	if err != nil {
 		return vm, err
@@ -253,7 +253,7 @@ func (fs *FlexScaleSet) getVmssFlexVM(ctx context.Context, nodeName string, crt 
 }
 
 func (fs *FlexScaleSet) getVmssFlexByVmssFlexID(ctx context.Context, vmssFlexID string, crt azcache.AzureCacheReadType) (*armcompute.VirtualMachineScaleSet, error) {
-	logger := log.Background().WithName("getVmssFlexByVmssFlexID")
+	logger := log.FromContextOrBackground(ctx).WithName("getVmssFlexByVmssFlexID")
 	cached, err := fs.vmssFlexCache.Get(ctx, consts.VmssFlexKey, crt)
 	if err != nil {
 		return nil, err
@@ -342,7 +342,7 @@ func (fs *FlexScaleSet) getVmssFlexByName(ctx context.Context, vmssFlexName stri
 }
 
 func (fs *FlexScaleSet) DeleteCacheForNode(ctx context.Context, nodeName string) error {
-	logger := log.Background().WithName("DeleteCacheForNode")
+	logger := log.FromContextOrBackground(ctx).WithName("DeleteCacheForNode")
 	if fs.Config.DisableAPICallCache {
 		return nil
 	}

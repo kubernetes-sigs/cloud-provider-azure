@@ -171,7 +171,7 @@ func newScaleSet(az *Cloud) (VMSet, error) {
 }
 
 func (ss *ScaleSet) getVMSS(ctx context.Context, vmssName string, crt azcache.AzureCacheReadType) (*armcompute.VirtualMachineScaleSet, error) {
-	logger := log.Background().WithName("getVMSS")
+	logger := log.FromContextOrBackground(ctx).WithName("getVMSS")
 	getter := func(vmssName string) (*armcompute.VirtualMachineScaleSet, error) {
 		cached, err := ss.vmssCache.Get(ctx, consts.VMSSKey, crt)
 		if err != nil {
@@ -210,7 +210,7 @@ func (ss *ScaleSet) getVMSS(ctx context.Context, vmssName string, crt azcache.Az
 // getVmssVMByNodeIdentity find virtualMachineScaleSetVM by nodeIdentity, using node's parent VMSS cache.
 // Returns cloudprovider.InstanceNotFound if the node does not belong to the scale set named in nodeIdentity.
 func (ss *ScaleSet) getVmssVMByNodeIdentity(ctx context.Context, node *nodeIdentity, crt azcache.AzureCacheReadType) (*virtualmachine.VirtualMachine, error) {
-	logger := log.Background().WithName("getVmssVMByNodeIdentity")
+	logger := log.FromContextOrBackground(ctx).WithName("getVmssVMByNodeIdentity")
 	// FIXME(ccc): check only if vmss is uniform.
 	_, err := getScaleSetVMInstanceID(node.nodeName)
 	if err != nil {
@@ -284,7 +284,7 @@ func (ss *ScaleSet) getVmssVM(ctx context.Context, nodeName string, crt azcache.
 
 // GetPowerStatusByNodeName returns the power state of the specified node.
 func (ss *ScaleSet) GetPowerStatusByNodeName(ctx context.Context, name string) (powerState string, err error) {
-	logger := log.Background().WithName("GetPowerStatusByNodeName")
+	logger := log.FromContextOrBackground(ctx).WithName("GetPowerStatusByNodeName")
 	vmManagementType, err := ss.getVMManagementTypeByNodeName(ctx, name, azcache.CacheReadTypeUnsafe)
 	if err != nil {
 		klog.Errorf("Failed to check VM management type: %v", err)
@@ -349,7 +349,7 @@ func (ss *ScaleSet) GetProvisioningStateByNodeName(ctx context.Context, name str
 // getCachedVirtualMachineByInstanceID gets scaleSetVMInfo from cache.
 // The node must belong to one of scale sets.
 func (ss *ScaleSet) getVmssVMByInstanceID(ctx context.Context, resourceGroup, scaleSetName, instanceID string, crt azcache.AzureCacheReadType) (*armcompute.VirtualMachineScaleSetVM, error) {
-	logger := log.Background().WithName("getVmssVMByInstanceID")
+	logger := log.FromContextOrBackground(ctx).WithName("getVmssVMByInstanceID")
 	getter := func(ctx context.Context, crt azcache.AzureCacheReadType) (vm *armcompute.VirtualMachineScaleSetVM, found bool, err error) {
 		virtualMachines, err := ss.getVMSSVMsFromCache(ctx, resourceGroup, scaleSetName, crt)
 		if err != nil {
@@ -450,7 +450,7 @@ func (ss *ScaleSet) GetInstanceIDByNodeName(ctx context.Context, name string) (s
 // azure:///subscriptions/subsid/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/aks-agentpool-22126781-vmss/virtualMachines/1
 // /subscriptions/subsid/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/aks-agentpool-22126781-vmss/virtualMachines/k8s-agentpool-36841236-vmss_1
 func (ss *ScaleSet) GetNodeNameByProviderID(ctx context.Context, providerID string) (types.NodeName, error) {
-	logger := log.Background().WithName("GetNodeNameByProviderID")
+	logger := log.FromContextOrBackground(ctx).WithName("GetNodeNameByProviderID")
 	vmManagementType, err := ss.getVMManagementTypeByProviderID(ctx, providerID, azcache.CacheReadTypeUnsafe)
 	if err != nil {
 		klog.Errorf("Failed to check VM management type: %v", err)
@@ -651,9 +651,10 @@ func (ss *ScaleSet) GetIPByNodeName(ctx context.Context, nodeName string) (strin
 }
 
 func (ss *ScaleSet) getVMSSPublicIPAddress(resourceGroupName string, virtualMachineScaleSetName string, virtualMachineIndex string, networkInterfaceName string, IPConfigurationName string, publicIPAddressName string) (*armnetwork.PublicIPAddress, bool, error) {
-	logger := log.Background().WithName("getVMSSPublicIPAddress")
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
+
+	logger := log.FromContextOrBackground(ctx).WithName("getVMSSPublicIPAddress")
 
 	pip, err := ss.NetworkClientFactory.GetPublicIPAddressClient().GetVirtualMachineScaleSetPublicIPAddress(ctx, resourceGroupName, virtualMachineScaleSetName, virtualMachineIndex, networkInterfaceName, IPConfigurationName, publicIPAddressName, nil)
 	exists, rerr := checkResourceExistsFromError(err)
@@ -767,7 +768,7 @@ func extractResourceGroupByProviderID(providerID string) (string, error) {
 
 // getNodeIdentityByNodeName use the VMSS cache to find a node's resourcegroup and vmss, returned in a nodeIdentity.
 func (ss *ScaleSet) getNodeIdentityByNodeName(ctx context.Context, nodeName string, crt azcache.AzureCacheReadType) (*nodeIdentity, error) {
-	logger := log.Background().WithName("getNodeIdentityByNodeName")
+	logger := log.FromContextOrBackground(ctx).WithName("getNodeIdentityByNodeName")
 	getter := func(nodeName string, crt azcache.AzureCacheReadType) (*nodeIdentity, error) {
 		node := &nodeIdentity{
 			nodeName: nodeName,
@@ -830,9 +831,10 @@ func (ss *ScaleSet) getNodeIdentityByNodeName(ctx context.Context, nodeName stri
 
 // listScaleSetVMs lists VMs belonging to the specified scale set.
 func (ss *ScaleSet) listScaleSetVMs(scaleSetName, resourceGroup string) ([]*armcompute.VirtualMachineScaleSetVM, error) {
-	logger := log.Background().WithName("listScaleSetVMs")
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
+
+	logger := log.FromContextOrBackground(ctx).WithName("listScaleSetVMs")
 
 	var allVMs []*armcompute.VirtualMachineScaleSetVM
 	var rerr error
@@ -857,7 +859,7 @@ func (ss *ScaleSet) listScaleSetVMs(scaleSetName, resourceGroup string) ([]*armc
 // getAgentPoolScaleSets lists the virtual machines for the resource group and then builds
 // a list of scale sets that match the nodes available to k8s.
 func (ss *ScaleSet) getAgentPoolScaleSets(ctx context.Context, nodes []*v1.Node) ([]string, error) {
-	logger := log.Background().WithName("getAgentPoolScaleSets")
+	logger := log.FromContextOrBackground(ctx).WithName("getAgentPoolScaleSets")
 	agentPoolScaleSets := []string{}
 	for nx := range nodes {
 		if isControlPlaneNode(nodes[nx]) {
@@ -1207,7 +1209,7 @@ func getVmssAndResourceGroupNameByVMID(id string) (string, string, error) {
 }
 
 func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetNameOfLB string) error {
-	logger := log.Background().WithName("ensureVMSSInPool")
+	logger := log.FromContextOrBackground(ctx).WithName("ensureVMSSInPool")
 	logger.V(2).Info("ensuring VMSS with backendPoolID", "backendPoolID", backendPoolID)
 	vmssNamesMap := make(map[string]bool)
 
@@ -1410,7 +1412,7 @@ func isWindows2019(vmss *armcompute.VirtualMachineScaleSet) bool {
 }
 
 func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetNameOfLB string) error {
-	logger := log.Background().WithName("ensureHostsInPool")
+	logger := log.FromContextOrBackground(ctx).WithName("ensureHostsInPool")
 	mc := metrics.NewMetricContext("services", "vmss_ensure_hosts_in_pool", ss.ResourceGroup, ss.SubscriptionID, getServiceName(service))
 	isOperationSucceeded := false
 	defer func() {
@@ -1520,7 +1522,7 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 // EnsureHostsInPool ensures the given Node's primary IP configurations are
 // participating in the specified LoadBalancer Backend Pool.
 func (ss *ScaleSet) EnsureHostsInPool(ctx context.Context, service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetNameOfLB string) error {
-	logger := log.Background().WithName("EnsureHostsInPool")
+	logger := log.FromContextOrBackground(ctx).WithName("EnsureHostsInPool")
 	if ss.DisableAvailabilitySetNodes && !ss.EnableVmssFlexNodes {
 		return ss.ensureHostsInPool(ctx, service, nodes, backendPoolID, vmSetNameOfLB)
 	}
@@ -1773,7 +1775,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(ctx context.Context, backen
 }
 
 func (ss *ScaleSet) ensureBackendPoolDeletedFromVmssUniform(ctx context.Context, backendPoolIDs []string, vmSetName string) error {
-	logger := log.Background().WithName("ensureBackendPoolDeletedFromVmssUniform")
+	logger := log.FromContextOrBackground(ctx).WithName("ensureBackendPoolDeletedFromVmssUniform")
 	vmssNamesMap := make(map[string]bool)
 	// the standard load balancer supports multiple vmss in its backend while the basic SKU doesn't
 	if ss.UseStandardLoadBalancer() {
@@ -1860,7 +1862,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVmssUniform(ctx context.Context,
 
 // ensureBackendPoolDeleted ensures the loadBalancer backendAddressPools deleted from the specified nodes.
 func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Service, backendPoolIDs []string, vmSetName string, backendAddressPools []*armnetwork.BackendAddressPool) (bool, error) {
-	logger := log.Background().WithName("ensureBackendPoolDeleted")
+	logger := log.FromContextOrBackground(ctx).WithName("ensureBackendPoolDeleted")
 	// Returns nil if backend address pools already deleted.
 	if backendAddressPools == nil {
 		return false, nil
@@ -2194,7 +2196,7 @@ func deleteBackendPoolFromIPConfig(msg, backendPoolID, resource string, primaryN
 
 // EnsureBackendPoolDeletedFromVMSets ensures the loadBalancer backendAddressPools deleted from the specified VMSS
 func (ss *ScaleSet) EnsureBackendPoolDeletedFromVMSets(ctx context.Context, vmssNamesMap map[string]bool, backendPoolIDs []string) error {
-	logger := log.Background().WithName("EnsureBackendPoolDeletedFromVMSets")
+	logger := log.FromContextOrBackground(ctx).WithName("EnsureBackendPoolDeletedFromVMSets")
 	vmssUpdaters := make([]func() error, 0, len(vmssNamesMap))
 	errors := make([]error, 0, len(vmssNamesMap))
 	for vmssName := range vmssNamesMap {
@@ -2334,7 +2336,7 @@ func (ss *ScaleSet) GetAgentPoolVMSetNames(ctx context.Context, nodes []*v1.Node
 }
 
 func (ss *ScaleSet) GetNodeVMSetName(ctx context.Context, node *v1.Node) (string, error) {
-	logger := log.Background().WithName("GetNodeVMSetName")
+	logger := log.FromContextOrBackground(ctx).WithName("GetNodeVMSetName")
 	vmManagementType, err := ss.getVMManagementTypeByNodeName(ctx, node.Name, azcache.CacheReadTypeUnsafe)
 	if err != nil {
 		klog.Errorf("Failed to check VM management type: %v", err)
@@ -2363,7 +2365,7 @@ func (ss *ScaleSet) GetNodeVMSetName(ctx context.Context, node *v1.Node) (string
 
 // VMSSBatchSize returns the batch size for VMSS operations.
 func (ss *ScaleSet) VMSSBatchSize(ctx context.Context, vmssName string) (int, error) {
-	logger := log.Background().WithName("VMSSBatchSize")
+	logger := log.FromContextOrBackground(ctx).WithName("VMSSBatchSize")
 	batchSize := 1
 	vmss, err := ss.getVMSS(ctx, vmssName, azcache.CacheReadTypeDefault)
 	if err != nil {

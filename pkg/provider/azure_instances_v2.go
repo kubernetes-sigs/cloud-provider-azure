@@ -33,7 +33,7 @@ var _ cloudprovider.InstancesV2 = (*Cloud)(nil)
 // InstanceExists returns true if the instance for the given node exists according to the cloud provider.
 // Use the node.name or node.spec.providerID field to find the node in the cloud provider.
 func (az *Cloud) InstanceExists(ctx context.Context, node *v1.Node) (bool, error) {
-	logger := log.Background().WithName("InstanceExists")
+	logger := log.FromContextOrBackground(ctx).WithName("InstanceExists")
 	if node == nil {
 		return false, nil
 	}
@@ -66,7 +66,7 @@ func (az *Cloud) InstanceExists(ctx context.Context, node *v1.Node) (bool, error
 // InstanceShutdown returns true if the instance is shutdown according to the cloud provider.
 // Use the node.name or node.spec.providerID field to find the node in the cloud provider.
 func (az *Cloud) InstanceShutdown(ctx context.Context, node *v1.Node) (bool, error) {
-	logger := log.Background().WithName("InstanceShutdown")
+	logger := log.FromContextOrBackground(ctx).WithName("InstanceShutdown")
 	if node == nil {
 		return false, nil
 	}
@@ -100,7 +100,7 @@ func (az *Cloud) InstanceShutdown(ctx context.Context, node *v1.Node) (bool, err
 // translated into specific fields in the Node object on registration.
 // Use the node.name or node.spec.providerID field to find the node in the cloud provider.
 func (az *Cloud) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloudprovider.InstanceMetadata, error) {
-	logger := log.Background().WithName("InstanceMetadata")
+	logger := log.FromContextOrBackground(ctx).WithName("InstanceMetadata")
 	meta := cloudprovider.InstanceMetadata{}
 	if node == nil {
 		return &meta, nil

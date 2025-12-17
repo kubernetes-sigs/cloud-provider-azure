@@ -190,7 +190,7 @@ func NewNodeIpamController(
 
 // Run starts an asynchronous loop that monitors the status of cluster nodes.
 func (nc *Controller) Run(ctx context.Context) {
-	logger := log.Background().WithName("Run")
+	logger := log.FromContextOrBackground(ctx).WithName("Run")
 	defer utilruntime.HandleCrash()
 
 	logger.Info("Starting ipam controller")

@@ -275,7 +275,7 @@ func (fs *FlexScaleSet) GetProvisioningStateByNodeName(ctx context.Context, name
 
 // GetPowerStatusByNodeName returns the powerState for the specified node.
 func (fs *FlexScaleSet) GetPowerStatusByNodeName(ctx context.Context, name string) (powerState string, err error) {
-	logger := log.Background().WithName("fs.GetPowerStatusByNodeName")
+	logger := log.FromContextOrBackground(ctx).WithName("fs.GetPowerStatusByNodeName")
 	vm, err := fs.getVmssFlexVM(ctx, name, azcache.CacheReadTypeDefault)
 	if err != nil {
 		return powerState, err
@@ -450,7 +450,7 @@ func (fs *FlexScaleSet) GetNodeCIDRMasksByProviderID(ctx context.Context, provid
 // EnsureHostInPool ensures the given VM's Primary NIC's Primary IP Configuration is
 // participating in the specified LoadBalancer Backend Pool, which returns (resourceGroup, vmasName, instanceID, vmssVM, error).
 func (fs *FlexScaleSet) EnsureHostInPool(ctx context.Context, service *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetNameOfLB string) (string, string, string, *armcompute.VirtualMachineScaleSetVM, error) {
-	logger := log.Background().WithName("EnsureHostInPool")
+	logger := log.FromContextOrBackground(ctx).WithName("EnsureHostInPool")
 	serviceName := getServiceName(service)
 	name := mapNodeNameToVMName(nodeName)
 	vmssFlexName, err := fs.getNodeVmssFlexName(ctx, name)
@@ -559,7 +559,7 @@ func (fs *FlexScaleSet) EnsureHostInPool(ctx context.Context, service *v1.Servic
 }
 
 func (fs *FlexScaleSet) ensureVMSSFlexInPool(ctx context.Context, _ *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetNameOfLB string) error {
-	logger := log.Background().WithName("ensureVMSSFlexInPool")
+	logger := log.FromContextOrBackground(ctx).WithName("ensureVMSSFlexInPool")
 	logger.V(2).Info("ensuring VMSS Flex with backendPoolID", "backendPoolID", backendPoolID)
 	vmssFlexIDsMap := make(map[string]bool)
 
@@ -712,7 +712,7 @@ func (fs *FlexScaleSet) ensureVMSSFlexInPool(ctx context.Context, _ *v1.Service,
 // EnsureHostsInPool ensures the given Node's primary IP configurations are
 // participating in the specified LoadBalancer Backend Pool.
 func (fs *FlexScaleSet) EnsureHostsInPool(ctx context.Context, service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetNameOfLB string) error {
-	logger := log.Background().WithName("EnsureHostsInPool")
+	logger := log.FromContextOrBackground(ctx).WithName("EnsureHostsInPool")
 	mc := metrics.NewMetricContext("services", "vmssflex_ensure_hosts_in_pool", fs.ResourceGroup, fs.SubscriptionID, getServiceName(service))
 	isOperationSucceeded := false
 	defer func() {
@@ -783,7 +783,7 @@ func (fs *FlexScaleSet) ensureBackendPoolDeletedFromVmssFlex(ctx context.Context
 
 // EnsureBackendPoolDeletedFromVMSets ensures the loadBalancer backendAddressPools deleted from the specified VMSS Flex
 func (fs *FlexScaleSet) EnsureBackendPoolDeletedFromVMSets(ctx context.Context, vmssNamesMap map[string]bool, backendPoolIDs []string) error {
-	logger := log.Background().WithName("fs.EnsureBackendPoolDeletedFromVMSets")
+	logger := log.FromContextOrBackground(ctx).WithName("fs.EnsureBackendPoolDeletedFromVMSets")
 	vmssUpdaters := make([]func() error, 0, len(vmssNamesMap))
 	errors := make([]error, 0, len(vmssNamesMap))
 	for vmssName := range vmssNamesMap {
@@ -870,7 +870,7 @@ func (fs *FlexScaleSet) EnsureBackendPoolDeletedFromVMSets(ctx context.Context, 
 
 // EnsureBackendPoolDeleted ensures the loadBalancer backendAddressPools deleted from the specified nodes.
 func (fs *FlexScaleSet) EnsureBackendPoolDeleted(ctx context.Context, service *v1.Service, backendPoolIDs []string, vmSetName string, backendAddressPools []*armnetwork.BackendAddressPool, deleteFromVMSet bool) (bool, error) {
-	logger := log.Background().WithName("EnsureBackendPoolDeleted")
+	logger := log.FromContextOrBackground(ctx).WithName("EnsureBackendPoolDeleted")
 	// Returns nil if backend address pools already deleted.
 	if backendAddressPools == nil {
 		return false, nil
@@ -952,7 +952,7 @@ func (fs *FlexScaleSet) EnsureBackendPoolDeleted(ctx context.Context, service *v
 }
 
 func (fs *FlexScaleSet) ensureBackendPoolDeletedFromNode(ctx context.Context, vmssFlexVMNameMap map[string]string, backendPoolIDs []string) (bool, error) {
-	logger := log.Background().WithName("ensureBackendPoolDeletedFromNode")
+	logger := log.FromContextOrBackground(ctx).WithName("ensureBackendPoolDeletedFromNode")
 	nicUpdaters := make([]func() error, 0)
 	allErrs := make([]error, 0)
 	nics := map[string]*armnetwork.Interface{} // nicName -> nic

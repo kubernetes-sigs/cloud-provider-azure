@@ -256,7 +256,7 @@ var (
 
 // InitializeCloudFromConfig initializes the Cloud from config.
 func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.Config, _, callFromCCM bool) error {
-	logger := log.Background().WithName("InitializeCloudFromConfig")
+	logger := log.FromContextOrBackground(ctx).WithName("InitializeCloudFromConfig")
 	if config == nil {
 		// should not reach here
 		return fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config")

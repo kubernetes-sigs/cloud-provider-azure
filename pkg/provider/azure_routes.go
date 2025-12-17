@@ -89,7 +89,7 @@ func newDelayedRouteUpdater(az *Cloud, interval time.Duration) batchProcessor {
 
 // run starts the updater reconciling loop.
 func (d *delayedRouteUpdater) run(ctx context.Context) {
-	logger := log.Background().WithName("delayedRouteUpdater")
+	logger := log.FromContextOrBackground(ctx).WithName("delayedRouteUpdater")
 	logger.Info("delayedRouteUpdater: started")
 	err := wait.PollUntilContextCancel(ctx, d.interval, true, func(ctx context.Context) (bool, error) {
 		d.updateRoutes(ctx)
@@ -100,7 +100,7 @@ func (d *delayedRouteUpdater) run(ctx context.Context) {
 
 // updateRoutes invokes route table client to update all routes.
 func (d *delayedRouteUpdater) updateRoutes(ctx context.Context) {
-	logger := log.Background().WithName("updateRoutes")
+	logger := log.FromContextOrBackground(ctx).WithName("updateRoutes")
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
@@ -297,7 +297,7 @@ func (d *delayedRouteUpdater) removeOperation(_ string) {}
 // ListRoutes lists all managed routes that belong to the specified clusterName
 // implements cloudprovider.Routes.ListRoutes
 func (az *Cloud) ListRoutes(ctx context.Context, clusterName string) ([]*cloudprovider.Route, error) {
-	logger := log.Background().WithName("ListRoutes")
+	logger := log.FromContextOrBackground(ctx).WithName("ListRoutes")
 	logger.V(10).Info("START", "clusterName", clusterName)
 	routeTable, err := az.routeTableRepo.Get(ctx, az.RouteTableName, azcache.CacheReadTypeDefault)
 	routes, err := processRoutes(az.ipv6DualStackEnabled, routeTable, err)
@@ -370,7 +370,7 @@ func processRoutes(ipv6DualStackEnabled bool, routeTable *armnetwork.RouteTable,
 }
 
 func (az *Cloud) createRouteTable(ctx context.Context) error {
-	logger := log.Background().WithName("createRouteTable")
+	logger := log.FromContextOrBackground(ctx).WithName("createRouteTable")
 	routeTable := armnetwork.RouteTable{
 		Name:       ptr.To(az.RouteTableName),
 		Location:   ptr.To(az.Location),
@@ -387,7 +387,7 @@ func (az *Cloud) createRouteTable(ctx context.Context) error {
 // to create a more user-meaningful name.
 // implements cloudprovider.Routes.CreateRoute
 func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, _ string, kubeRoute *cloudprovider.Route) error {
-	logger := log.Background().WithName("CreateRoute")
+	logger := log.FromContextOrBackground(ctx).WithName("CreateRoute")
 	mc := metrics.NewMetricContext("routes", "create_route", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), string(kubeRoute.TargetNode))
 	isOperationSucceeded := false
 	defer func() {
@@ -463,8 +463,8 @@ func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, _ string, 
 // DeleteRoute deletes the specified managed route
 // Route should be as returned by ListRoutes
 // implements cloudprovider.Routes.DeleteRoute
-func (az *Cloud) DeleteRoute(_ context.Context, clusterName string, kubeRoute *cloudprovider.Route) error {
-	logger := log.Background().WithName("DeleteRoute")
+func (az *Cloud) DeleteRoute(ctx context.Context, clusterName string, kubeRoute *cloudprovider.Route) error {
+	logger := log.FromContextOrBackground(ctx).WithName("DeleteRoute")
 	mc := metrics.NewMetricContext("routes", "delete_route", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), string(kubeRoute.TargetNode))
 	isOperationSucceeded := false
 	defer func() {

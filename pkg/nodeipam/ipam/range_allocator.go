@@ -175,7 +175,7 @@ func NewCIDRRangeAllocator(client clientset.Interface, nodeInformer informers.No
 }
 
 func (r *rangeAllocator) Run(ctx context.Context) {
-	logger := log.Background().WithName("Run")
+	logger := log.FromContextOrBackground(ctx).WithName("Run")
 	defer utilruntime.HandleCrash()
 
 	logger.Info("Starting range CIDR allocator")

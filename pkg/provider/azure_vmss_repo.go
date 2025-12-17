@@ -28,9 +28,10 @@ import (
 
 // CreateOrUpdateVMSS invokes az.ComputeClientFactory.GetVirtualMachineScaleSetClient().Update().
 func (az *Cloud) CreateOrUpdateVMSS(resourceGroupName string, VMScaleSetName string, parameters armcompute.VirtualMachineScaleSet) error {
-	logger := log.Background().WithName("CreateOrUpdateVMSS")
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
+
+	logger := log.FromContextOrBackground(ctx).WithName("CreateOrUpdateVMSS")
 
 	// When vmss is being deleted, CreateOrUpdate API would report "the vmss is being deleted" error.
 	// Since it is being deleted, we shouldn't send more CreateOrUpdate requests for it.
