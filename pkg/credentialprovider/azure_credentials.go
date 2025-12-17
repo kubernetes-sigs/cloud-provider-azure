@@ -119,7 +119,7 @@ func NewAcrProviderFromConfig(configFile string, registryMirrorStr string) (Cred
 }
 
 func (a *acrProvider) GetCredentials(ctx context.Context, image string, _ []string) (*v1.CredentialProviderResponse, error) {
-	logger := log.Background().WithName("GetCredentials")
+	logger := log.FromContextOrBackground(ctx).WithName("GetCredentials")
 	targetloginServer, sourceloginServer := a.parseACRLoginServerFromImage(image)
 	if targetloginServer == "" {
 		logger.V(2).Info("image is not from ACR, return empty authentication", "image", image)
@@ -194,7 +194,7 @@ func (a *acrProvider) GetCredentials(ctx context.Context, image string, _ []stri
 
 // getFromACR gets credentials from ACR.
 func (a *acrProvider) getFromACR(ctx context.Context, loginServer string) (string, string, error) {
-	logger := log.Background().WithName("getFromACR")
+	logger := log.FromContextOrBackground(ctx).WithName("getFromACR")
 	var armAccessToken azcore.AccessToken
 	var err error
 	if armAccessToken, err = a.credential.GetToken(ctx, policy.TokenRequestOptions{

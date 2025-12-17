@@ -257,7 +257,7 @@ func (cnc *CloudNodeController) reconcileNodeLabels(node *v1.Node) error {
 
 // UpdateNodeAddress updates the nodeAddress of a single node
 func (cnc *CloudNodeController) updateNodeAddress(ctx context.Context, node *v1.Node) error {
-	logger := log.Background().WithName("updateNodeAddress")
+	logger := log.FromContextOrBackground(ctx).WithName("updateNodeAddress")
 	// Do not process nodes that are still tainted
 	cloudTaint := GetCloudTaint(node.Spec.Taints)
 	if cloudTaint != nil {
@@ -367,7 +367,7 @@ func (cnc *CloudNodeController) AddCloudNode(ctx context.Context, obj interface{
 
 // This processes nodes that were added into the cluster, and cloud initialize them if appropriate
 func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Node) {
-	logger := log.Background().WithName("initializeNode")
+	logger := log.FromContextOrBackground(ctx).WithName("initializeNode")
 	logger.Info("Initializing node with cloud provider", "node", node.Name)
 	curNode, err := cnc.kubeClient.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
 	if err != nil {

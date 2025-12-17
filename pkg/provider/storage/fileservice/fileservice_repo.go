@@ -53,7 +53,7 @@ func NewRepository(config azureconfig.Config, clientFactory azclient.ClientFacto
 	}, nil
 }
 func (az *fileServicePropertiesRepo) Get(ctx context.Context, subsID, resourceGroup, account string) (*armstorage.FileServiceProperties, error) {
-	logger := log.Background().WithName("Get")
+	logger := log.FromContextOrBackground(ctx).WithName("Get")
 	if az.clientFactory == nil {
 		return nil, fmt.Errorf("clientFactory is nil")
 	}

@@ -39,7 +39,7 @@ import (
 
 // AttachDisk attaches a disk to vm
 func (fs *FlexScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName, diskMap map[string]*AttachDiskOptions) error {
-	logger := log.Background().WithName("AttachDisk")
+	logger := log.FromContextOrBackground(ctx).WithName("AttachDisk")
 	vmName := mapNodeNameToVMName(nodeName)
 	vm, err := fs.getVmssFlexVM(ctx, vmName, azcache.CacheReadTypeDefault)
 	if err != nil {
@@ -132,7 +132,7 @@ func (fs *FlexScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName,
 
 // DetachDisk detaches a disk from VM
 func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName, diskMap map[string]string, forceDetach bool) error {
-	logger := log.Background().WithName("DetachDisk")
+	logger := log.FromContextOrBackground(ctx).WithName("DetachDisk")
 	vmName := mapNodeNameToVMName(nodeName)
 	vm, err := fs.getVmssFlexVM(ctx, vmName, azcache.CacheReadTypeDefault)
 	if err != nil {
@@ -238,7 +238,7 @@ func (fs *FlexScaleSet) UpdateVM(ctx context.Context, nodeName types.NodeName) e
 }
 
 func (fs *FlexScaleSet) updateCache(ctx context.Context, nodeName string, vm *armcompute.VirtualMachine) error {
-	logger := log.Background().WithName("updateCache")
+	logger := log.FromContextOrBackground(ctx).WithName("updateCache")
 	if nodeName == "" {
 		return fmt.Errorf("nodeName is empty")
 	}

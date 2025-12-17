@@ -95,7 +95,7 @@ func NewCloudNodeManagerCommand() *cobra.Command {
 
 // Run runs the ExternalCMServer.  This should never exit.
 func Run(ctx context.Context, c *cloudnodeconfig.Config) error {
-	logger := log.Background().WithName("Run")
+	logger := log.FromContextOrBackground(ctx).WithName("Run")
 	// To help debugging, immediately log version and nodeName
 	logger.Info("Version", "version", version.Get())
 	logger.Info("NodeName", "nodeName", c.NodeName)
@@ -124,7 +124,7 @@ func Run(ctx context.Context, c *cloudnodeconfig.Config) error {
 
 // startControllers starts the cloud specific controller loops.
 func startControllers(ctx context.Context, c *cloudnodeconfig.Config, healthzHandler *controllerhealthz.MutableHealthzHandler) error {
-	logger := log.Background().WithName("startControllers")
+	logger := log.FromContextOrBackground(ctx).WithName("startControllers")
 	logger.V(1).Info("Starting cloud-node-manager...")
 
 	// Start the CloudNodeController

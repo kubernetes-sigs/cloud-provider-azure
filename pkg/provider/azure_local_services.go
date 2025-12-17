@@ -90,7 +90,7 @@ func newLoadBalancerBackendPoolUpdater(az *Cloud, interval time.Duration) *loadB
 
 // run starts the loadBalancerBackendPoolUpdater, and stops if the context exits.
 func (updater *loadBalancerBackendPoolUpdater) run(ctx context.Context) {
-	logger := log.Background().WithName("loadBalancerBackendPoolUpdater.run")
+	logger := log.FromContextOrBackground(ctx).WithName("loadBalancerBackendPoolUpdater.run")
 	logger.V(2).Info("started")
 	err := wait.PollUntilContextCancel(ctx, updater.interval, false, func(ctx context.Context) (bool, error) {
 		updater.process(ctx)
@@ -166,7 +166,7 @@ func (updater *loadBalancerBackendPoolUpdater) removeOperation(serviceName strin
 // if it is retriable, otherwise all operations in the batch targeting to
 // this backend pool will fail.
 func (updater *loadBalancerBackendPoolUpdater) process(ctx context.Context) {
-	logger := log.Background().WithName("loadBalancerBackendPoolUpdater.process")
+	logger := log.FromContextOrBackground(ctx).WithName("loadBalancerBackendPoolUpdater.process")
 	updater.lock.Lock()
 	defer updater.lock.Unlock()
 
@@ -533,7 +533,7 @@ func (az *Cloud) cleanupLocalServiceBackendPool(
 	lbs []*armnetwork.LoadBalancer,
 	clusterName string,
 ) (newLBs []*armnetwork.LoadBalancer, err error) {
-	logger := log.Background().WithName("cleanupLocalServiceBackendPool")
+	logger := log.FromContextOrBackground(ctx).WithName("cleanupLocalServiceBackendPool")
 	var changed bool
 	for _, lb := range lbs {
 		lbName := ptr.Deref(lb.Name, "")
