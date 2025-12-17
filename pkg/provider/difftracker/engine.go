@@ -158,9 +158,22 @@ func (dt *DiffTracker) UpdateEndpoints(serviceUID string, oldPodIPToNodeIP, newP
 		// Trigger LocationsUpdater to sync the changes
 		dt.triggerLocationsUpdater()
 
-	case StateDeletionPending, StateDeletionInProgress:
-		// Service is being deleted - ignore endpoint updates
-		klog.Warningf("Engine.UpdateEndpoints: Cannot update endpoints for service %s which is being deleted", serviceUID)
+	case StateDeletionPending:
+		// Service is pending deletion - still process endpoint removals to clear NRP locations
+		klog.V(2).Infof("Engine.UpdateEndpoints: Service %s is pending deletion, processing endpoint update to clear locations (old=%d, new=%d)", serviceUID, len(oldPodIPToNodeIP), len(newPodIPToNodeIP))
+		errs := dt.updateK8sEndpointsLocked(UpdateK8sEndpointsInputType{
+			InboundIdentity: serviceUID,
+			OldAddresses:    oldPodIPToNodeIP,
+			NewAddresses:    newPodIPToNodeIP,
+		})
+		if len(errs) > 0 {
+			klog.Errorf("Engine.UpdateEndpoints: Failed to update endpoints for service %s: %v", serviceUID, errs)
+		}
+		dt.triggerLocationsUpdater()
+
+	case StateDeletionInProgress:
+		// Service deletion already in progress - ignore endpoint updates
+		klog.V(4).Infof("Engine.UpdateEndpoints: Service %s deletion in progress, ignoring endpoint update", serviceUID)
 
 	default:
 		klog.Errorf("Engine.UpdateEndpoints: Unknown state %v for service %s", opState.State, serviceUID)
@@ -520,6 +533,10 @@ func (dt *DiffTracker) DeletePod(serviceUID, location, address string) {
 		return
 	}
 
+	// TODO(eddie): Revisit this logic - currently marks service for deletion when counter reaches 1,
+	// but if pods are being scaled down (not to zero), this causes premature deletion marking.
+	// Consider checking if there are pending pod additions or waiting for a grace period before
+	// marking for deletion to avoid the service getting stuck in StateDeletionPending.
 	isLastPod := (counter == 1)
 
 	// Remove pod from DiffTracker (this also updates the counter via UpdateK8sPod)

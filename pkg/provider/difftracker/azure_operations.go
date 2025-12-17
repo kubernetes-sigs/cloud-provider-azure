@@ -392,24 +392,22 @@ func convertLocationDTOsToAddressLocations(locations []LocationDTO) []*armnetwor
 			armLoc.AddressUpdateAction = ptr.To(armnetwork.ServiceGatewayAddressLocationAddressUpdateActionFullUpdate)
 		}
 
-		// Convert addresses
-		if len(loc.Addresses) > 0 {
-			armLoc.Addresses = make([]*armnetwork.ServiceGatewayAddress, 0, len(loc.Addresses))
-			for _, addr := range loc.Addresses {
-				armAddr := &armnetwork.ServiceGatewayAddress{
-					Address: ptr.To(addr.Address),
-				}
-
-				// Convert service names
-				if addr.ServiceNames != nil && addr.ServiceNames.Len() > 0 {
-					armAddr.Services = make([]*string, 0, addr.ServiceNames.Len())
-					for _, svcName := range addr.ServiceNames.UnsortedList() {
-						armAddr.Services = append(armAddr.Services, ptr.To(svcName))
-					}
-				}
-
-				armLoc.Addresses = append(armLoc.Addresses, armAddr)
+		// Convert addresses - always initialize the slice to avoid null in JSON
+		armLoc.Addresses = make([]*armnetwork.ServiceGatewayAddress, 0, len(loc.Addresses))
+		for _, addr := range loc.Addresses {
+			armAddr := &armnetwork.ServiceGatewayAddress{
+				Address: ptr.To(addr.Address),
 			}
+
+			// Convert service names - always initialize the slice to avoid null in JSON
+			armAddr.Services = make([]*string, 0, addr.ServiceNames.Len())
+			if addr.ServiceNames != nil && addr.ServiceNames.Len() > 0 {
+				for _, svcName := range addr.ServiceNames.UnsortedList() {
+					armAddr.Services = append(armAddr.Services, ptr.To(svcName))
+				}
+			}
+
+			armLoc.Addresses = append(armLoc.Addresses, armAddr)
 		}
 
 		armLocations = append(armLocations, armLoc)

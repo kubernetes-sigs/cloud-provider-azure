@@ -105,6 +105,7 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 			Name: to.Ptr(armnetwork.LoadBalancerSKUNameService),
 		},
 		Properties: &armnetwork.LoadBalancerPropertiesFormat{
+			Scope: to.Ptr(armnetwork.LoadBalancerScopePublic),
 			FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
 				{
 					Name: to.Ptr("frontend"),

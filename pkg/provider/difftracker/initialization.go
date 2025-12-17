@@ -463,6 +463,14 @@ func InitializeFromCluster(
 			continue
 		}
 
+		// Fully unregister service from ServiceGateway
+		unregisterDTO := buildServiceGatewayRemovalDTO(lb, true, config)
+		if err := diffTracker.updateNRPSGWServices(ctx, config.ServiceGatewayResourceName, unregisterDTO); err != nil {
+			klog.Errorf("InitializeFromCluster: failed to fully unregister service %s from ServiceGateway: %v", lb, err)
+			lastErr = err
+			// Continue with PIP deletion
+		}
+
 		// Delete PIP
 		_, pipName, _ := buildInboundResourceNames(lb)
 		if err := diffTracker.deletePublicIP(ctx, config.ResourceGroup, pipName); err != nil {
