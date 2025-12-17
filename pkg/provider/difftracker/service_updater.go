@@ -331,18 +331,7 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string) {
 	}
 
 	// Step 3: Fully unregister service from ServiceGateway
-	unregisterDTO := MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
-		SyncServicesReturnType{
-			Additions: nil,
-			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
-		},
-		SyncServicesReturnType{
-			Additions: nil,
-			Removals:  nil,
-		},
-		s.diffTracker.config.SubscriptionID,
-		s.diffTracker.config.ResourceGroup,
-	)
+	unregisterDTO := buildServiceGatewayRemovalDTO(serviceUID, true, s.diffTracker.config)
 
 	if err := s.diffTracker.updateNRPSGWServices(ctx, s.diffTracker.config.ServiceGatewayResourceName, unregisterDTO); err != nil {
 		klog.Errorf("ServiceUpdater: failed to fully unregister inbound service %s from ServiceGateway: %v", serviceUID, err)
@@ -353,7 +342,7 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string) {
 	}
 
 	// Step 4: Delete Public IP
-	pipName := fmt.Sprintf("%s-pip", serviceUID)
+	_, pipName, _ := buildInboundResourceNames(serviceUID)
 	if err := s.diffTracker.deletePublicIP(ctx, s.diffTracker.config.ResourceGroup, pipName); err != nil {
 		klog.Errorf("ServiceUpdater: failed to delete Public IP %s for inbound service %s: %v", pipName, serviceUID, err)
 		lastErr = fmt.Errorf("failed to delete Public IP: %w", err)
@@ -392,18 +381,7 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string) {
 	}
 
 	// Step 2: Unregister from ServiceGateway API
-	servicesDTO := MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
-		SyncServicesReturnType{
-			Additions: nil,
-			Removals:  nil,
-		},
-		SyncServicesReturnType{
-			Additions: nil,
-			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
-		},
-		s.diffTracker.config.SubscriptionID,
-		s.diffTracker.config.ResourceGroup,
-	)
+	servicesDTO := buildServiceGatewayRemovalDTO(serviceUID, false, s.diffTracker.config)
 
 	if err := s.diffTracker.updateNRPSGWServices(ctx, s.diffTracker.config.ServiceGatewayResourceName, servicesDTO); err != nil {
 		klog.Errorf("ServiceUpdater: failed to unregister outbound service %s from ServiceGateway: %v", serviceUID, err)
@@ -423,7 +401,7 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string) {
 	}
 
 	// Step 4: Delete Public IP
-	pipName := fmt.Sprintf("%s-pip", serviceUID)
+	_, pipName := buildOutboundResourceNames(serviceUID)
 	if err := s.diffTracker.deletePublicIP(ctx, s.diffTracker.config.ResourceGroup, pipName); err != nil {
 		klog.Errorf("ServiceUpdater: failed to delete Public IP %s for outbound service %s: %v", pipName, serviceUID, err)
 		lastErr = fmt.Errorf("failed to delete Public IP: %w", err)

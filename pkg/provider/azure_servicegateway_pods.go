@@ -62,47 +62,86 @@ func (az *Cloud) setUpPodInformerForEgress() {
 					currEgressGatewayName = strings.ToLower(newPod.Labels[consts.PodLabelServiceEgressGateway])
 				}
 
-				// Handle pod that just completed IP initialization
-				podJustCompletedIPInitialization := (oldPod.Status.HostIP == "" || oldPod.Status.PodIP == "") &&
-					(newPod.Status.HostIP != "" && newPod.Status.PodIP != "")
-				if currEgressGatewayName != "" && podJustCompletedIPInitialization {
-					klog.V(2).Infof("setUpPodInformerForEgress: Pod %s/%s completed IP initialization, treating as add event",
+				// Detect relevant changes
+				labelChanged := prevEgressGatewayName != currEgressGatewayName
+				oldHadIPs := oldPod.Status.HostIP != "" && oldPod.Status.PodIP != ""
+				newHasIPs := newPod.Status.HostIP != "" && newPod.Status.PodIP != ""
+				ipsChanged := oldPod.Status.HostIP != newPod.Status.HostIP || oldPod.Status.PodIP != newPod.Status.PodIP
+
+				// Check if pod became invalid (non-Running/Pending, or got deletion timestamp)
+				oldWasValid := oldPod.DeletionTimestamp == nil &&
+					(oldPod.Status.Phase == v1.PodRunning || oldPod.Status.Phase == v1.PodPending)
+				newIsValid := newPod.DeletionTimestamp == nil &&
+					(newPod.Status.Phase == v1.PodRunning || newPod.Status.Phase == v1.PodPending)
+
+				// Determine required actions
+				var needsRemove, needsAdd bool
+				var reason string
+
+				if labelChanged {
+					// Label changed: remove from old gateway (if had IPs), add to new gateway (if valid and has IPs)
+					needsRemove = prevEgressGatewayName != "" && oldHadIPs
+					needsAdd = currEgressGatewayName != "" && newHasIPs && newIsValid
+					reason = fmt.Sprintf("label changed from %s to %s", prevEgressGatewayName, currEgressGatewayName)
+				} else if currEgressGatewayName != "" {
+					// Same label: check various state transitions
+					if oldWasValid && !newIsValid && oldHadIPs {
+						// Pod became invalid (terminated, failed, or being deleted)
+						needsRemove = true
+						reason = fmt.Sprintf("pod became invalid (Phase: %s, DeletionTimestamp: %v)",
+							newPod.Status.Phase, newPod.DeletionTimestamp != nil)
+					} else if !oldHadIPs && newHasIPs && newIsValid {
+						// Pod just got IPs and is valid
+						needsAdd = true
+						reason = "completed IP initialization"
+					} else if oldHadIPs && !newHasIPs {
+						// Pod lost IPs
+						needsRemove = true
+						reason = "lost IPs"
+					} else if oldHadIPs && newHasIPs && ipsChanged && newIsValid {
+						// IPs changed (pod moved or got new IP) - only re-add if still valid
+						needsRemove = true
+						needsAdd = true
+						reason = fmt.Sprintf("IPs changed (HostIP: %s→%s, PodIP: %s→%s)",
+							oldPod.Status.HostIP, newPod.Status.HostIP, oldPod.Status.PodIP, newPod.Status.PodIP)
+					} else if oldHadIPs && newHasIPs && !newIsValid {
+						// Pod still has IPs but became invalid - need to remove
+						needsRemove = true
+						reason = fmt.Sprintf("pod became invalid while having IPs (Phase: %s, DeletionTimestamp: %v)",
+							newPod.Status.Phase, newPod.DeletionTimestamp != nil)
+					}
+				} // Execute actions
+				if needsRemove || needsAdd {
+					klog.V(2).Infof("setUpPodInformerForEgress: Pod %s/%s update: %s",
+						newPod.Namespace, newPod.Name, reason)
+					if needsRemove {
+						az.podInformerRemovePod(oldPod)
+					}
+					if needsAdd {
+						az.podInformerAddPod(newPod)
+					}
+				} else {
+					klog.V(4).Infof("setUpPodInformerForEgress: Pod %s/%s update has no relevant changes, skipping",
 						newPod.Namespace, newPod.Name)
-					az.podInformerAddPod(newPod)
-					return
 				}
-
-				// Handle egress label change
-				if prevEgressGatewayName != currEgressGatewayName {
-					klog.V(2).Infof("setUpPodInformerForEgress: Pod %s/%s changed egress gateway from %s to %s",
-						newPod.Namespace, newPod.Name, prevEgressGatewayName, currEgressGatewayName)
-					if prevEgressGatewayName != "" {
-						az.podInformerRemovePod(oldPod)
-					}
-					if currEgressGatewayName != "" {
-						az.podInformerAddPod(newPod)
-					}
-					return
-				}
-
-				// Handle IP change (pod moved to different node or got new IP)
-				if currEgressGatewayName != "" && (oldPod.Status.HostIP != newPod.Status.HostIP || oldPod.Status.PodIP != newPod.Status.PodIP) {
-					klog.V(2).Infof("setUpPodInformerForEgress: Pod %s/%s IPs changed (HostIP: %s→%s, PodIP: %s→%s)",
-						newPod.Namespace, newPod.Name, oldPod.Status.HostIP, newPod.Status.HostIP, oldPod.Status.PodIP, newPod.Status.PodIP)
-					if oldPod.Status.HostIP != "" && oldPod.Status.PodIP != "" {
-						az.podInformerRemovePod(oldPod)
-					}
-					if newPod.Status.HostIP != "" && newPod.Status.PodIP != "" {
-						az.podInformerAddPod(newPod)
-					}
-					return
-				}
-
-				klog.V(4).Infof("setUpPodInformerForEgress: Pod %s/%s update has no relevant changes, skipping",
-					newPod.Namespace, newPod.Name)
 			},
 			DeleteFunc: func(obj interface{}) {
-				pod := obj.(*v1.Pod)
+				var pod *v1.Pod
+				switch v := obj.(type) {
+				case *v1.Pod:
+					pod = v
+				case cache.DeletedFinalStateUnknown:
+					// We may miss the deletion event if the watch stream is disconnected and the object is deleted.
+					var ok bool
+					pod, ok = v.Obj.(*v1.Pod)
+					if !ok {
+						klog.Errorf("Cannot convert to *v1.Pod: %T", v.Obj)
+						return
+					}
+				default:
+					klog.Errorf("Cannot convert to *v1.Pod: %T", v)
+					return
+				}
 				az.podInformerRemovePod(pod)
 			},
 		})
@@ -128,6 +167,20 @@ func (az *Cloud) podInformerAddPod(pod *v1.Pod) {
 	// Validate pod has egress label (should always be true due to label selector, but check anyway)
 	if pod.Labels == nil || pod.Labels[consts.PodLabelServiceEgressGateway] == "" {
 		klog.V(4).Infof("podInformerAddPod: Pod %s/%s has no egress label, skipping", pod.Namespace, pod.Name)
+		return
+	}
+
+	// Skip pods that are being deleted
+	if pod.DeletionTimestamp != nil {
+		klog.V(4).Infof("podInformerAddPod: Pod %s/%s is being deleted (DeletionTimestamp set), skipping",
+			pod.Namespace, pod.Name)
+		return
+	}
+
+	// Only process pods in Running or Pending phase
+	if pod.Status.Phase != v1.PodRunning && pod.Status.Phase != v1.PodPending {
+		klog.V(4).Infof("podInformerAddPod: Pod %s/%s is in phase %s (not Running/Pending), skipping",
+			pod.Namespace, pod.Name, pod.Status.Phase)
 		return
 	}
 

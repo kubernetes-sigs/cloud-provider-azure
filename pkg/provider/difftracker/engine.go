@@ -120,10 +120,7 @@ func (dt *DiffTracker) UpdateEndpoints(serviceUID string, oldPodIPToNodeIP, newP
 				// Still trigger LocationsUpdater even if some endpoints failed
 			}
 			// Trigger LocationsUpdater to sync the changes
-			select {
-			case dt.locationsUpdaterTrigger <- true:
-			default:
-			}
+			dt.triggerLocationsUpdater()
 			return
 		}
 

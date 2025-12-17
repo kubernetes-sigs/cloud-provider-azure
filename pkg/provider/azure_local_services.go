@@ -36,7 +36,6 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
@@ -309,14 +308,14 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 				if az.ServiceGatewayEnabled {
 					serviceUID, loaded := getServiceUIDOfEndpointSlice(es)
 					if !loaded {
-						klog.Errorf("EndpointSlice %s/%s does not have service UID, skip updating load balancer backend pool", es.Namespace, es.Name)
+						klog.V(4).Infof("EndpointSlice %s/%s does not have service UID, skip updating", es.Namespace, es.Name)
 						return
 					}
-					if _, loaded := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(strings.ToLower(serviceUID)); loaded {
-						// Use Engine to handle endpoint updates (buffering, state checking, etc.)
-						newAddresses := az.getPodIPToNodeIPMapFromEndpointSlice(es, false)
-						az.diffTracker.UpdateEndpoints(serviceUID, nil, newAddresses)
-					}
+					// Use Engine to handle endpoint updates (buffering, state checking, etc.)
+					// Determine IP family from EndpointSlice AddressType
+					ipv6 := es.AddressType == discovery_v1.AddressTypeIPv6
+					newAddresses := az.getPodIPToNodeIPMapFromEndpointSlice(es, ipv6)
+					az.diffTracker.UpdateEndpoints(serviceUID, nil, newAddresses)
 				}
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
@@ -382,16 +381,16 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 				if az.ServiceGatewayEnabled {
 					serviceUID, loaded := getServiceUIDOfEndpointSlice(newES)
 					if !loaded {
-						klog.Errorf("EndpointSlice %s/%s does not have service UID, skip updating load balancer backend pool", newES.Namespace, newES.Name)
+						klog.V(4).Infof("EndpointSlice %s/%s does not have service UID, skip updating", newES.Namespace, newES.Name)
 						return
 					}
 
-					if _, loaded := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(strings.ToLower(serviceUID)); loaded {
-						// Use Engine to handle endpoint updates (buffering, state checking, etc.)
-						oldAddresses := az.getPodIPToNodeIPMapFromEndpointSlice(previousES, false)
-						newAddresses := az.getPodIPToNodeIPMapFromEndpointSlice(newES, false)
-						az.diffTracker.UpdateEndpoints(serviceUID, oldAddresses, newAddresses)
-					}
+					// Use Engine to handle endpoint updates (buffering, state checking, etc.)
+					// Determine IP family from EndpointSlice AddressType
+					ipv6 := newES.AddressType == discovery_v1.AddressTypeIPv6
+					oldAddresses := az.getPodIPToNodeIPMapFromEndpointSlice(previousES, ipv6)
+					newAddresses := az.getPodIPToNodeIPMapFromEndpointSlice(newES, ipv6)
+					az.diffTracker.UpdateEndpoints(serviceUID, oldAddresses, newAddresses)
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
@@ -417,15 +416,15 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 				if az.ServiceGatewayEnabled {
 					serviceUID, loaded := getServiceUIDOfEndpointSlice(es)
 					if !loaded {
-						klog.Errorf("EndpointSlice %s/%s does not have service UID, skip updating load balancer backend pool", es.Namespace, es.Name)
+						klog.V(4).Infof("EndpointSlice %s/%s does not have service UID, skip updating", es.Namespace, es.Name)
 						return
 					}
-					difftracker.LogSyncStringIntMap("LocalServiceNameToNRPServiceMap", &az.diffTracker.LocalServiceNameToNRPServiceMap)
-					if _, loaded := az.diffTracker.LocalServiceNameToNRPServiceMap.Load(strings.ToLower(serviceUID)); loaded {
-						// Use Engine to handle endpoint deletion (state checking, triggering LocationsUpdater, etc.)
-						oldAddresses := az.getPodIPToNodeIPMapFromEndpointSlice(es, false)
-						az.diffTracker.UpdateEndpoints(serviceUID, oldAddresses, nil)
-					}
+
+					// Use Engine to handle endpoint deletion (state checking, triggering LocationsUpdater, etc.)
+					// Determine IP family from EndpointSlice AddressType
+					ipv6 := es.AddressType == discovery_v1.AddressTypeIPv6
+					oldAddresses := az.getPodIPToNodeIPMapFromEndpointSlice(es, ipv6)
+					az.diffTracker.UpdateEndpoints(serviceUID, oldAddresses, nil)
 				}
 			},
 		})
@@ -473,7 +472,27 @@ func getServiceUIDOfEndpointSlice(es *discovery_v1.EndpointSlice) (uid string, l
 func (az *Cloud) getPodIPToNodeIPMapFromEndpointSlice(es *discovery_v1.EndpointSlice, ipv6 bool) map[string]string {
 	podIPToNodeIPMap := make(map[string]string)
 
+	// Handle nil EndpointSlice
+	if es == nil {
+		return podIPToNodeIPMap
+	}
+
+	// Validate AddressType matches expected IP family
+	expectedAddressType := discovery_v1.AddressTypeIPv4
+	if ipv6 {
+		expectedAddressType = discovery_v1.AddressTypeIPv6
+	}
+	if es.AddressType != expectedAddressType {
+		klog.V(4).Infof("EndpointSlice %s/%s has AddressType %s, expected %s, skipping", es.Namespace, es.Name, es.AddressType, expectedAddressType)
+		return podIPToNodeIPMap
+	}
+
 	for _, ep := range es.Endpoints {
+		// Skip endpoints that are not ready (terminating, failing health checks, etc.)
+		if ep.Conditions.Ready != nil && !*ep.Conditions.Ready {
+			continue
+		}
+
 		// Skip endpoints without a node name
 		nodeName := ptr.Deref(ep.NodeName, "")
 		if nodeName == "" {

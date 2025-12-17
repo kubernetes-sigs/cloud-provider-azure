@@ -257,3 +257,43 @@ func ExtractInboundConfigFromService(service *v1.Service) *InboundConfig {
 
 	return config
 }
+
+// buildInboundResourceNames returns the resource names for an inbound service
+func buildInboundResourceNames(serviceUID string) (lbName string, pipName string, backendPoolName string) {
+	return serviceUID, fmt.Sprintf("%s-pip", serviceUID), serviceUID
+}
+
+// buildOutboundResourceNames returns the resource names for an outbound service
+func buildOutboundResourceNames(serviceUID string) (natGatewayName string, pipName string) {
+	return serviceUID, fmt.Sprintf("%s-pip", serviceUID)
+}
+
+// buildServiceGatewayRemovalDTO creates a ServicesDTO for removing a service from ServiceGateway
+func buildServiceGatewayRemovalDTO(serviceUID string, isInbound bool, dtConfig Config) ServicesDataDTO {
+	if isInbound {
+		return MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
+			SyncServicesReturnType{
+				Additions: nil,
+				Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
+			},
+			SyncServicesReturnType{
+				Additions: nil,
+				Removals:  nil,
+			},
+			dtConfig.SubscriptionID,
+			dtConfig.ResourceGroup,
+		)
+	}
+	return MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
+		SyncServicesReturnType{
+			Additions: nil,
+			Removals:  nil,
+		},
+		SyncServicesReturnType{
+			Additions: nil,
+			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
+		},
+		dtConfig.SubscriptionID,
+		dtConfig.ResourceGroup,
+	)
+}

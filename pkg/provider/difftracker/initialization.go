@@ -37,6 +37,9 @@ func InitializeFromCluster(
 	if kubeClient == nil {
 		return nil, fmt.Errorf("InitializeFromCluster: KubeClient is nil; initialize the cloud provider with a Kubernetes client before diff tracker setup")
 	}
+	if networkClientFactory == nil {
+		return nil, fmt.Errorf("InitializeFromCluster: NetworkClientFactory is nil; cannot initialize diff tracker without Azure network clients")
+	}
 
 	localServiceNameToNRPServiceMap := make(map[string]int, 0) // used to initialize sync map in diff tracker
 
@@ -319,10 +322,9 @@ func InitializeFromCluster(
 			inboundConfig = ExtractInboundConfigFromService(svc)
 		}
 
-		// Build resources using shared helper
+		// Build and create inbound service resources
 		pipResource, lbResource, servicesDTO := buildInboundServiceResources(uid, inboundConfig, config)
 
-		// Create PIP
 		if err := diffTracker.createOrUpdatePIP(ctx, config.ResourceGroup, &pipResource); err != nil {
 			klog.Errorf("InitializeFromCluster: failed to create Public IP for service uid %s: %v", uid, err)
 			lastErr = err
@@ -330,7 +332,6 @@ func InitializeFromCluster(
 		}
 		klog.V(3).Infof("InitializeFromCluster: created Public IP for service uid %s", uid)
 
-		// Create LoadBalancer
 		if err := diffTracker.createOrUpdateLB(ctx, lbResource); err != nil {
 			klog.Errorf("InitializeFromCluster: failed to create LoadBalancer for service uid %s: %v", uid, err)
 			lastErr = err
@@ -338,7 +339,6 @@ func InitializeFromCluster(
 		}
 		klog.V(3).Infof("InitializeFromCluster: created LoadBalancer for service uid %s", uid)
 
-		// Register with ServiceGateway
 		if err := diffTracker.updateNRPSGWServices(ctx, config.ServiceGatewayResourceName, servicesDTO); err != nil {
 			klog.Errorf("InitializeFromCluster: failed to register service uid %s with ServiceGateway: %v", uid, err)
 			lastErr = err
@@ -355,24 +355,21 @@ func InitializeFromCluster(
 
 		klog.Infof("InitializeFromCluster: Creating NAT Gateway %s in NRP", natGatewayId)
 
-		// Build resources using shared helper
+		// Build and create outbound service resources
 		pipResource, natGatewayResource, servicesDTO := buildOutboundServiceResources(natGatewayId, nil, config)
 
-		// Create PIP
 		if err := diffTracker.createOrUpdatePIP(ctx, config.ResourceGroup, &pipResource); err != nil {
 			klog.Errorf("InitializeFromCluster: failed to create Public IP for NAT Gateway %s: %v", natGatewayId, err)
 			lastErr = err
 			continue
 		}
 
-		// Create NAT Gateway
 		if err := diffTracker.createOrUpdateNatGateway(ctx, config.ResourceGroup, natGatewayResource); err != nil {
 			klog.Errorf("InitializeFromCluster: failed to create NAT Gateway %s: %v", natGatewayId, err)
 			lastErr = err
 			continue
 		}
 
-		// Register with ServiceGateway
 		if err := diffTracker.updateNRPSGWServices(ctx, config.ServiceGatewayResourceName, servicesDTO); err != nil {
 			klog.Errorf("InitializeFromCluster: failed to register NAT Gateway %s with ServiceGateway: %v", natGatewayId, err)
 			lastErr = err
@@ -467,7 +464,7 @@ func InitializeFromCluster(
 		}
 
 		// Delete PIP
-		pipName := fmt.Sprintf("%s-pip", lb)
+		_, pipName, _ := buildInboundResourceNames(lb)
 		if err := diffTracker.deletePublicIP(ctx, config.ResourceGroup, pipName); err != nil {
 			klog.Warningf("InitializeFromCluster: failed to delete Public IP %s: %v", pipName, err)
 		}
@@ -484,13 +481,18 @@ func InitializeFromCluster(
 
 		klog.Infof("InitializeFromCluster: Deleting NAT Gateway %s from NRP", natGatewayId)
 
+		// Disassociate NAT Gateway from ServiceGateway before deletion
+		if err := diffTracker.disassociateNatGatewayFromServiceGateway(ctx, config.ServiceGatewayResourceName, natGatewayId); err != nil {
+			klog.Warningf("InitializeFromCluster: failed to disassociate NAT Gateway %s from ServiceGateway: %v", natGatewayId, err)
+		}
+
 		if err := diffTracker.deleteNatGateway(ctx, config.ResourceGroup, natGatewayId); err != nil {
 			klog.Errorf("InitializeFromCluster: failed deleting NAT Gateway %s: %v", natGatewayId, err)
 			lastErr = err
 			continue
 		}
 
-		pipName := fmt.Sprintf("%s-pip", natGatewayId)
+		_, pipName := buildOutboundResourceNames(natGatewayId)
 		if err := diffTracker.deletePublicIP(ctx, config.ResourceGroup, pipName); err != nil {
 			klog.Warningf("InitializeFromCluster: failed to delete Public IP %s: %v", pipName, err)
 		}
