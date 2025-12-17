@@ -48,7 +48,7 @@ func (az *Cloud) reconcilePrivateLinkService(
 	fipConfig *armnetwork.FrontendIPConfiguration,
 	wantPLS bool,
 ) (bool /*deleted PLS*/, error) {
-	logger := log.Background().WithName("reconcilePrivateLinkService")
+	logger := log.FromContextOrBackground(ctx).WithName("reconcilePrivateLinkService")
 	isinternal := requiresInternalLoadBalancer(service)
 	_, _, fipIPVersion := az.serviceOwnsFrontendIP(ctx, fipConfig, service)
 	serviceName := getServiceName(service)
@@ -245,7 +245,7 @@ func (az *Cloud) disablePLSNetworkPolicy(ctx context.Context, service *v1.Servic
 }
 
 func (az *Cloud) safeDeletePLS(ctx context.Context, pls *armnetwork.PrivateLinkService, service *v1.Service) error {
-	logger := log.Background().WithName("safeDeletePLS")
+	logger := log.FromContextOrBackground(ctx).WithName("safeDeletePLS")
 	if pls == nil {
 		return nil
 	}
@@ -373,7 +373,7 @@ func (az *Cloud) reconcilePLSIpConfigs(
 	existingPLS *armnetwork.PrivateLinkService,
 	service *v1.Service,
 ) (bool, error) {
-	logger := log.Background().WithName("reconcilePLSIpConfigs")
+	logger := log.FromContextOrBackground(ctx).WithName("reconcilePLSIpConfigs")
 	changed := false
 	serviceName := getServiceName(service)
 

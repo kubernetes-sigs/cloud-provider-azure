@@ -477,7 +477,7 @@ func newAvailabilitySet(az *Cloud) (VMSet, error) {
 // It must return ("", cloudprovider.InstanceNotFound) if the instance does
 // not exist or is no longer running.
 func (as *availabilitySet) GetInstanceIDByNodeName(ctx context.Context, name string) (string, error) {
-	logger := log.Background().WithName("GetInstanceIDByNodeName")
+	logger := log.FromContextOrBackground(ctx).WithName("GetInstanceIDByNodeName")
 	var machine *armcompute.VirtualMachine
 	var err error
 
@@ -510,7 +510,7 @@ func (as *availabilitySet) GetInstanceIDByNodeName(ctx context.Context, name str
 
 // GetPowerStatusByNodeName returns the power state of the specified node.
 func (as *availabilitySet) GetPowerStatusByNodeName(ctx context.Context, name string) (powerState string, err error) {
-	logger := log.Background().WithName("GetPowerStatusByNodeName")
+	logger := log.FromContextOrBackground(ctx).WithName("GetPowerStatusByNodeName")
 	vm, err := as.getVirtualMachine(ctx, types.NodeName(name), azcache.CacheReadTypeDefault)
 	if err != nil {
 		return powerState, err
@@ -744,7 +744,7 @@ func (as *availabilitySet) GetVMSetNames(ctx context.Context, service *v1.Servic
 }
 
 func (as *availabilitySet) GetNodeVMSetName(ctx context.Context, node *v1.Node) (string, error) {
-	logger := log.Background().WithName("as.GetNodeVMSetName")
+	logger := log.FromContextOrBackground(ctx).WithName("as.GetNodeVMSetName")
 	var hostName string
 	for _, nodeAddress := range node.Status.Addresses {
 		if strings.EqualFold(string(nodeAddress.Type), string(v1.NodeHostName)) {
@@ -806,7 +806,7 @@ func extractResourceGroupByNicID(nicID string) (string, error) {
 
 // getPrimaryInterfaceWithVMSet gets machine primary network interface by node name and vmSet.
 func (as *availabilitySet) getPrimaryInterfaceWithVMSet(ctx context.Context, nodeName, vmSetName string) (*armnetwork.Interface, string, error) {
-	logger := log.Background().WithName("getPrimaryInterfaceWithVMSet")
+	logger := log.FromContextOrBackground(ctx).WithName("getPrimaryInterfaceWithVMSet")
 	var machine *armcompute.VirtualMachine
 
 	machine, err := as.GetVirtualMachineWithRetry(ctx, types.NodeName(nodeName), azcache.CacheReadTypeDefault)
@@ -867,7 +867,7 @@ func (as *availabilitySet) getPrimaryInterfaceWithVMSet(ctx context.Context, nod
 // EnsureHostInPool ensures the given VM's Primary NIC's Primary IP Configuration is
 // participating in the specified LoadBalancer Backend Pool.
 func (as *availabilitySet) EnsureHostInPool(ctx context.Context, service *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetName string) (string, string, string, *armcompute.VirtualMachineScaleSetVM, error) {
-	logger := log.Background().WithName("EnsureHostInPool")
+	logger := log.FromContextOrBackground(ctx).WithName("EnsureHostInPool")
 	vmName := mapNodeNameToVMName(nodeName)
 	serviceName := getServiceName(service)
 	nic, _, err := as.getPrimaryInterfaceWithVMSet(ctx, vmName, vmSetName)
@@ -953,7 +953,7 @@ func (as *availabilitySet) EnsureHostInPool(ctx context.Context, service *v1.Ser
 // EnsureHostsInPool ensures the given Node's primary IP configurations are
 // participating in the specified LoadBalancer Backend Pool.
 func (as *availabilitySet) EnsureHostsInPool(ctx context.Context, service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetName string) error {
-	logger := log.Background().WithName("EnsureHostsInPool")
+	logger := log.FromContextOrBackground(ctx).WithName("EnsureHostsInPool")
 	mc := metrics.NewMetricContext("services", "vmas_ensure_hosts_in_pool", as.ResourceGroup, as.SubscriptionID, getServiceName(service))
 	isOperationSucceeded := false
 	defer func() {
@@ -1000,7 +1000,7 @@ func (as *availabilitySet) EnsureHostsInPool(ctx context.Context, service *v1.Se
 // EnsureBackendPoolDeleted ensures the loadBalancer backendAddressPools deleted from the specified nodes.
 // backendPoolIDs are the IDs of the backendpools to be deleted.
 func (as *availabilitySet) EnsureBackendPoolDeleted(ctx context.Context, service *v1.Service, backendPoolIDs []string, vmSetName string, backendAddressPools []*armnetwork.BackendAddressPool, _ bool) (bool, error) {
-	logger := log.Background().WithName("EnsureBackendPoolDeleted")
+	logger := log.FromContextOrBackground(ctx).WithName("EnsureBackendPoolDeleted")
 	// Returns nil if backend address pools already deleted.
 	if backendAddressPools == nil {
 		return false, nil
@@ -1148,7 +1148,7 @@ func getAvailabilitySetNameByID(asID string) (string, error) {
 
 // GetNodeNameByIPConfigurationID gets the node name and the availabilitySet name by IP configuration ID.
 func (as *availabilitySet) GetNodeNameByIPConfigurationID(ctx context.Context, ipConfigurationID string) (string, string, error) {
-	logger := log.Background().WithName("GetNodeNameByIPConfigurationID")
+	logger := log.FromContextOrBackground(ctx).WithName("GetNodeNameByIPConfigurationID")
 	matches := nicIDRE.FindStringSubmatch(ipConfigurationID)
 	if len(matches) != 3 {
 		logger.V(4).Info("Can not extract VM name from ipConfigurationID", "ipConfigurationID", ipConfigurationID)

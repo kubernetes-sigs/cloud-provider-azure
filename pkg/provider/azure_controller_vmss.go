@@ -36,7 +36,7 @@ import (
 
 // AttachDisk attaches a disk to vm
 func (ss *ScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName, diskMap map[string]*AttachDiskOptions) error {
-	logger := log.Background().WithName("AttachDisk")
+	logger := log.FromContextOrBackground(ctx).WithName("AttachDisk")
 	vmName := mapNodeNameToVMName(nodeName)
 	vm, err := ss.getVmssVM(ctx, vmName, azcache.CacheReadTypeDefault)
 	if err != nil {
@@ -133,7 +133,7 @@ func (ss *ScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName, dis
 
 // DetachDisk detaches a disk from VM
 func (ss *ScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName, diskMap map[string]string, forceDetach bool) error {
-	logger := log.Background().WithName("DetachDisk")
+	logger := log.FromContextOrBackground(ctx).WithName("DetachDisk")
 	vmName := mapNodeNameToVMName(nodeName)
 	vm, err := ss.getVmssVM(ctx, vmName, azcache.CacheReadTypeDefault)
 	if err != nil {

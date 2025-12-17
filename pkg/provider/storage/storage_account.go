@@ -29,7 +29,7 @@ import (
 // GetStorageAccesskey gets the storage account access key
 // getLatestAccountKey: get the latest account key per CreationTime if true, otherwise get the first account key
 func GetStorageAccesskey(ctx context.Context, saClient accountclient.Interface, account, resourceGroup string, getLatestAccountKey bool) (string, error) {
-	logger := log.Background().WithName("GetStorageAccesskey")
+	logger := log.FromContextOrBackground(ctx).WithName("GetStorageAccesskey")
 	if saClient == nil {
 		return "", fmt.Errorf("StorageAccountClient is nil")
 	}

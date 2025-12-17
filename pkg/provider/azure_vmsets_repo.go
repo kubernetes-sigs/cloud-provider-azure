@@ -36,7 +36,7 @@ import (
 
 // GetVirtualMachineWithRetry invokes az.getVirtualMachine with exponential backoff retry
 func (az *Cloud) GetVirtualMachineWithRetry(ctx context.Context, name types.NodeName, crt azcache.AzureCacheReadType) (*armcompute.VirtualMachine, error) {
-	logger := log.Background().WithName("GetVirtualMachineWithRetry")
+	logger := log.FromContextOrBackground(ctx).WithName("GetVirtualMachineWithRetry")
 	var machine *armcompute.VirtualMachine
 	var retryErr error
 	err := wait.ExponentialBackoff(az.RequestBackoff(), func() (bool, error) {
@@ -59,7 +59,7 @@ func (az *Cloud) GetVirtualMachineWithRetry(ctx context.Context, name types.Node
 
 // ListVirtualMachines invokes az.ComputeClientFactory.GetVirtualMachineClient().List with exponential backoff retry
 func (az *Cloud) ListVirtualMachines(ctx context.Context, resourceGroup string) ([]*armcompute.VirtualMachine, error) {
-	logger := log.Background().WithName("ListVirtualMachines")
+	logger := log.FromContextOrBackground(ctx).WithName("ListVirtualMachines")
 	allNodes, err := az.ComputeClientFactory.GetVirtualMachineClient().List(ctx, resourceGroup)
 	if err != nil {
 		klog.Errorf("ComputeClientFactory.GetVirtualMachineClient().List(%v) failure with err=%v", resourceGroup, err)
@@ -76,7 +76,7 @@ func (az *Cloud) getPrivateIPsForMachine(ctx context.Context, nodeName types.Nod
 }
 
 func (az *Cloud) getPrivateIPsForMachineWithRetry(ctx context.Context, nodeName types.NodeName) ([]string, error) {
-	logger := log.Background().WithName("getPrivateIPsForMachineWithRetry")
+	logger := log.FromContextOrBackground(ctx).WithName("getPrivateIPsForMachineWithRetry")
 	var privateIPs []string
 	err := wait.ExponentialBackoff(az.RequestBackoff(), func() (bool, error) {
 		var retryErr error
@@ -101,7 +101,7 @@ func (az *Cloud) getIPForMachine(ctx context.Context, nodeName types.NodeName) (
 
 // GetIPForMachineWithRetry invokes az.getIPForMachine with exponential backoff retry
 func (az *Cloud) GetIPForMachineWithRetry(ctx context.Context, name types.NodeName) (string, string, error) {
-	logger := log.Background().WithName("GetIPForMachineWithRetry")
+	logger := log.FromContextOrBackground(ctx).WithName("GetIPForMachineWithRetry")
 	var ip, publicIP string
 	err := wait.ExponentialBackoffWithContext(ctx, az.RequestBackoff(), func(ctx context.Context) (bool, error) {
 		var retryErr error
@@ -117,8 +117,9 @@ func (az *Cloud) GetIPForMachineWithRetry(ctx context.Context, name types.NodeNa
 }
 
 func (az *Cloud) newVMCache() (azcache.Resource, error) {
-	logger := log.Background().WithName("newVMCache")
+
 	getter := func(ctx context.Context, key string) (interface{}, error) {
+		logger := log.FromContextOrBackground(ctx).WithName("newVMCache")
 		// Currently InstanceView request are used by azure_zones, while the calls come after non-InstanceView
 		// request. If we first send an InstanceView request and then a non InstanceView request, the second
 		// request will still hit throttling. This is what happens now for cloud controller manager: In this

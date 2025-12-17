@@ -56,8 +56,8 @@ type securityGroupRepo struct {
 }
 
 func NewSecurityGroupRepo(securityGroupResourceGroup string, securityGroupName string, nsgCacheTTLInSeconds int, disableAPICallCache bool, securityGroupClient securitygroupclient.Interface) (Repository, error) {
-	logger := log.Background().WithName("NewSecurityGroupRepo")
 	getter := func(ctx context.Context, key string) (interface{}, error) {
+		logger := log.FromContextOrBackground(ctx).WithName("NewSecurityGroupRepo.getter")
 		nsg, err := securityGroupClient.Get(ctx, securityGroupResourceGroup, key)
 		exists, rerr := errutils.CheckResourceExistsFromAzcoreError(err)
 		if rerr != nil {
@@ -92,7 +92,7 @@ func NewSecurityGroupRepo(securityGroupResourceGroup string, securityGroupName s
 
 // CreateOrUpdateSecurityGroup invokes az.SecurityGroupsClient.CreateOrUpdate with exponential backoff retry
 func (az *securityGroupRepo) CreateOrUpdateSecurityGroup(ctx context.Context, sg *armnetwork.SecurityGroup) error {
-	logger := log.Background().WithName("CreateOrUpdateSecurityGroup")
+	logger := log.FromContextOrBackground(ctx).WithName("CreateOrUpdateSecurityGroup")
 	_, rerr := az.securigyGroupClient.CreateOrUpdate(ctx, az.securityGroupResourceGroup, *sg.Name, *sg)
 	logger.V(10).Info("SecurityGroupsClient.CreateOrUpdate: end", "securityGroupName", *sg.Name)
 	if rerr == nil {

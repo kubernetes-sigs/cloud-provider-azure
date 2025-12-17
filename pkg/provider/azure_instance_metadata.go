@@ -151,8 +151,8 @@ func fillNetInterfacePublicIPs(publicIPs []PublicIPMetadata, netInterface *Netwo
 	}
 }
 
-func (ims *InstanceMetadataService) getMetadata(_ context.Context, key string) (interface{}, error) {
-	logger := log.Background().WithName("getMetadata")
+func (ims *InstanceMetadataService) getMetadata(ctx context.Context, key string) (interface{}, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("getMetadata")
 	instanceMetadata, err := ims.getInstanceMetadata(key)
 	if err != nil {
 		return nil, err
