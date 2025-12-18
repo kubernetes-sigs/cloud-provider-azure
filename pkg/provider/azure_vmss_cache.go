@@ -66,8 +66,8 @@ const (
 )
 
 func (ss *ScaleSet) newVMSSCache() (azcache.Resource, error) {
-	logger := log.Background().WithName("newVMSSCache")
 	getter := func(ctx context.Context, _ string) (interface{}, error) {
+		logger := log.FromContextOrBackground(ctx).WithName("newVMSSCache")
 		localCache := &sync.Map{} // [vmssName]*vmssEntry
 
 		allResourceGroups, err := ss.GetResourceGroups()
@@ -144,10 +144,10 @@ func (ss *ScaleSet) getVMSSVMsFromCache(ctx context.Context, resourceGroup, vmss
 
 // newVMSSVirtualMachinesCache instantiates a new VMs cache for VMs belonging to the provided VMSS.
 func (ss *ScaleSet) newVMSSVirtualMachinesCache() (azcache.Resource, error) {
-	logger := log.Background().WithName("newVMSSVirtualMachinesCache")
 	vmssVirtualMachinesCacheTTL := time.Duration(ss.VmssVirtualMachinesCacheTTLInSeconds) * time.Second
 
-	getter := func(_ context.Context, cacheKey string) (interface{}, error) {
+	getter := func(ctx context.Context, cacheKey string) (interface{}, error) {
+		logger := log.FromContextOrBackground(ctx).WithName("newVMSSVirtualMachinesCache")
 		localCache := &sync.Map{} // [nodeName]*VMSSVirtualMachineEntry
 		oldCache := make(map[string]*VMSSVirtualMachineEntry)
 
@@ -250,7 +250,7 @@ func (ss *ScaleSet) newVMSSVirtualMachinesCache() (azcache.Resource, error) {
 
 // DeleteCacheForNode deletes Node from VMSS VM and VM caches.
 func (ss *ScaleSet) DeleteCacheForNode(ctx context.Context, nodeName string) error {
-	logger := log.Background().WithName("DeleteCacheForNode")
+	logger := log.FromContextOrBackground(ctx).WithName("DeleteCacheForNode")
 	if ss.DisableAPICallCache {
 		return nil
 	}
@@ -292,7 +292,7 @@ func (ss *ScaleSet) DeleteCacheForNode(ctx context.Context, nodeName string) err
 }
 
 func (ss *ScaleSet) updateCache(ctx context.Context, nodeName, resourceGroupName, vmssName, instanceID string, updatedVM *armcompute.VirtualMachineScaleSetVM) error {
-	logger := log.Background().WithName("updateCache")
+	logger := log.FromContextOrBackground(ctx).WithName("updateCache")
 	if nodeName == "" {
 		return fmt.Errorf("updateCache(%s, %s, %s) failed with empty nodeName", vmssName, resourceGroupName, nodeName)
 	}
@@ -336,7 +336,7 @@ func (ss *ScaleSet) updateCache(ctx context.Context, nodeName, resourceGroupName
 
 func (ss *ScaleSet) newNonVmssUniformNodesCache() (azcache.Resource, error) {
 	getter := func(ctx context.Context, _ string) (interface{}, error) {
-		logger := log.Background().WithName("newNonVmssUniformNodesCache")
+		logger := log.FromContextOrBackground(ctx).WithName("newNonVmssUniformNodesCache")
 		vmssFlexVMNodeNames := utilsets.NewString()
 		vmssFlexVMProviderIDs := utilsets.NewString()
 		avSetVMNodeNames := utilsets.NewString()
@@ -393,7 +393,7 @@ func (ss *ScaleSet) newNonVmssUniformNodesCache() (azcache.Resource, error) {
 }
 
 func (ss *ScaleSet) getVMManagementTypeByNodeName(ctx context.Context, nodeName string, crt azcache.AzureCacheReadType) (VMManagementType, error) {
-	logger := log.Background().WithName("getVMManagementTypeByNodeName")
+	logger := log.FromContextOrBackground(ctx).WithName("getVMManagementTypeByNodeName")
 	if ss.DisableAvailabilitySetNodes && !ss.EnableVmssFlexNodes {
 		return ManagedByVmssUniform, nil
 	}

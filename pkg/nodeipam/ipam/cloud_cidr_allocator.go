@@ -266,7 +266,7 @@ func (ca *cloudCIDRAllocator) updateNodeSubnetMaskSizes(ctx context.Context, nod
 }
 
 func (ca *cloudCIDRAllocator) Run(ctx context.Context) {
-	logger := log.Background().WithName("Run")
+	logger := log.FromContextOrBackground(ctx).WithName("Run")
 	defer utilruntime.HandleCrash()
 
 	logger.Info("Starting cloud CIDR allocator")
@@ -353,7 +353,8 @@ func (ca *cloudCIDRAllocator) occupyCIDRs(node *v1.Node) error {
 // function you have to make sure to update nodesInProcessing properly with the
 // disposition of the node when the work is done.
 func (ca *cloudCIDRAllocator) AllocateOrOccupyCIDR(node *v1.Node) error {
-	logger := log.Background().WithName("AllocateOrOccupyCIDR")
+	ctx := context.Background()
+	logger := log.FromContextOrBackground(ctx).WithName("AllocateOrOccupyCIDR")
 	if node == nil || node.Spec.ProviderID == "" {
 		return nil
 	}
@@ -362,7 +363,7 @@ func (ca *cloudCIDRAllocator) AllocateOrOccupyCIDR(node *v1.Node) error {
 		return nil
 	}
 
-	err := ca.updateNodeSubnetMaskSizes(context.Background(), node.Name, node.Spec.ProviderID)
+	err := ca.updateNodeSubnetMaskSizes(ctx, node.Name, node.Spec.ProviderID)
 	if err != nil {
 		klog.Errorf("AllocateOrOccupyCIDR(%s): failed to update node subnet mask sizes: %v", node.Name, err)
 		return err

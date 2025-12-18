@@ -136,7 +136,7 @@ func (c *identityBindingsTokenCredential) getTransport() (*http.Transport, error
 
 // GetToken retrieves an access token using identity bindings token exchange
 func (c *identityBindingsTokenCredential) GetToken(ctx context.Context, opts policy.TokenRequestOptions) (azcore.AccessToken, error) {
-	logger := log.Background().WithName("GetToken")
+	logger := log.FromContextOrBackground(ctx).WithName("GetToken")
 	// The scope should be exactly one value in format "https://management.azure.com/.default"
 	// or "https://containerregistry.azure.net/.default"
 	if len(opts.Scopes) != 1 {

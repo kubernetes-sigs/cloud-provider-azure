@@ -33,6 +33,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
@@ -83,7 +84,7 @@ func isLBBackendPoolsExisting(lbBackendPoolNames map[bool]string, bpName *string
 }
 
 func (bc *backendPoolTypeNodeIPConfig) CleanupVMSetFromBackendPoolByCondition(ctx context.Context, slb *armnetwork.LoadBalancer, service *v1.Service, _ []*v1.Node, clusterName string, shouldRemoveVMSetFromSLB func(string) bool) (*armnetwork.LoadBalancer, error) {
-	logger := klog.Background().WithName("bc.CleanupVMSetFromBackendPoolByCondition")
+	logger := log.FromContextOrBackground(ctx).WithName("bc.CleanupVMSetFromBackendPoolByCondition")
 	v4Enabled, v6Enabled := getIPFamiliesEnabled(service)
 
 	lbBackendPoolNames := getBackendPoolNames(clusterName)
@@ -164,7 +165,7 @@ func (bc *backendPoolTypeNodeIPConfig) ReconcileBackendPools(
 	service *v1.Service,
 	lb *armnetwork.LoadBalancer,
 ) (bool, bool, *armnetwork.LoadBalancer, error) {
-	logger := klog.Background().WithName("bc.ReconcileBackendPools")
+	logger := log.FromContextOrBackground(ctx).WithName("bc.ReconcileBackendPools")
 	var newBackendPools []*armnetwork.BackendAddressPool
 	var err error
 	if lb.Properties.BackendAddressPools != nil {
@@ -303,7 +304,7 @@ func getBackendIPConfigurationsToBeDeleted(
 	bp armnetwork.BackendAddressPool,
 	bipConfigNotFound, bipConfigExclude []*armnetwork.InterfaceIPConfiguration,
 ) []*armnetwork.InterfaceIPConfiguration {
-	logger := klog.Background().WithName("getBackendIPConfigurationsToBeDeleted")
+	logger := log.Background().WithName("getBackendIPConfigurationsToBeDeleted")
 	if bp.Properties == nil || bp.Properties.BackendIPConfigurations == nil {
 		return []*armnetwork.InterfaceIPConfiguration{}
 	}
@@ -342,7 +343,7 @@ func getBackendIPConfigurationsToBeDeleted(
 }
 
 func (bc *backendPoolTypeNodeIPConfig) GetBackendPrivateIPs(ctx context.Context, clusterName string, service *v1.Service, lb *armnetwork.LoadBalancer) ([]string, []string) {
-	logger := klog.Background().WithName("bc.GetBackendPrivateIPs")
+	logger := log.FromContextOrBackground(ctx).WithName("bc.GetBackendPrivateIPs")
 	serviceName := getServiceName(service)
 	lbBackendPoolNames := getBackendPoolNames(clusterName)
 	if lb.Properties == nil || lb.Properties.BackendAddressPools == nil {
@@ -407,7 +408,7 @@ func (az *Cloud) getVnetResourceID() string {
 }
 
 func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(ctx context.Context, service *v1.Service, nodes []*v1.Node, _, _, clusterName, lbName string, backendPool *armnetwork.BackendAddressPool) error {
-	logger := klog.Background().WithName("bi.EnsureHostsInPool")
+	logger := log.FromContextOrBackground(ctx).WithName("bi.EnsureHostsInPool")
 	if backendPool == nil {
 		backendPool = &armnetwork.BackendAddressPool{}
 	}
@@ -521,7 +522,7 @@ func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(ctx context.Context, service 
 }
 
 func (bi *backendPoolTypeNodeIP) CleanupVMSetFromBackendPoolByCondition(ctx context.Context, slb *armnetwork.LoadBalancer, _ *v1.Service, nodes []*v1.Node, clusterName string, shouldRemoveVMSetFromSLB func(string) bool) (*armnetwork.LoadBalancer, error) {
-	logger := klog.Background().WithName("bi.CleanupVMSetFromBackendPoolByCondition")
+	logger := log.FromContextOrBackground(ctx).WithName("bi.CleanupVMSetFromBackendPoolByCondition")
 	lbBackendPoolNames := getBackendPoolNames(clusterName)
 	newBackendPools := make([]*armnetwork.BackendAddressPool, 0)
 	if slb.Properties != nil && slb.Properties.BackendAddressPools != nil {
@@ -581,7 +582,7 @@ func (bi *backendPoolTypeNodeIP) CleanupVMSetFromBackendPoolByCondition(ctx cont
 }
 
 func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(ctx context.Context, clusterName string, service *v1.Service, lb *armnetwork.LoadBalancer) (bool, bool, *armnetwork.LoadBalancer, error) {
-	logger := klog.Background().WithName("bi.ReconcileBackendPools")
+	logger := log.FromContextOrBackground(ctx).WithName("bi.ReconcileBackendPools")
 	var newBackendPools []*armnetwork.BackendAddressPool
 	if lb.Properties.BackendAddressPools != nil {
 		newBackendPools = lb.Properties.BackendAddressPools
@@ -752,8 +753,8 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(ctx context.Context, clus
 	return isBackendPoolPreConfigured, backendPoolsUpdated, lb, nil
 }
 
-func (bi *backendPoolTypeNodeIP) GetBackendPrivateIPs(_ context.Context, clusterName string, service *v1.Service, lb *armnetwork.LoadBalancer) ([]string, []string) {
-	logger := klog.Background().WithName("GetBackendPrivateIPs")
+func (bi *backendPoolTypeNodeIP) GetBackendPrivateIPs(ctx context.Context, clusterName string, service *v1.Service, lb *armnetwork.LoadBalancer) ([]string, []string) {
+	logger := log.FromContextOrBackground(ctx).WithName("GetBackendPrivateIPs")
 	serviceName := getServiceName(service)
 	lbBackendPoolNames := bi.getBackendPoolNamesForService(service, clusterName)
 	if lb.Properties == nil || lb.Properties.BackendAddressPools == nil {
@@ -802,7 +803,7 @@ func (bi *backendPoolTypeNodeIP) getBackendPoolNodeNames(bp *armnetwork.BackendA
 }
 
 func newBackendPool(lb *armnetwork.LoadBalancer, isBackendPoolPreConfigured bool, preConfiguredBackendPoolLoadBalancerTypes, serviceName, lbBackendPoolName string) bool {
-	logger := klog.Background().WithName("newBackendPool")
+	logger := log.Background().WithName("newBackendPool")
 	if isBackendPoolPreConfigured {
 		logger.V(2).Info("lb backendpool - PreConfiguredBackendPoolLoadBalancerTypes has been set but can not find corresponding backend pool, ignoring it",
 			"serviceName", serviceName,
@@ -824,7 +825,7 @@ func newBackendPool(lb *armnetwork.LoadBalancer, isBackendPoolPreConfigured bool
 }
 
 func (az *Cloud) addNodeIPAddressesToBackendPool(backendPool *armnetwork.BackendAddressPool, nodeIPAddresses []string) bool {
-	logger := klog.Background().WithName("bi.addNodeIPAddressesToBackendPool")
+	logger := log.Background().WithName("bi.addNodeIPAddressesToBackendPool")
 	vnetID := az.getVnetResourceID()
 	if backendPool.Properties != nil {
 		if backendPool.Properties.VirtualNetwork == nil ||
@@ -889,7 +890,7 @@ func removeNodeIPAddressesFromBackendPool(
 	changed := false
 	nodeIPsSet := utilsets.NewString(nodeIPAddresses...)
 
-	logger := klog.Background().WithName("removeNodeIPAddressFromBackendPool")
+	logger := log.Background().WithName("removeNodeIPAddressFromBackendPool")
 
 	if backendPool.Properties == nil ||
 		backendPool.Properties.LoadBalancerBackendAddresses == nil {

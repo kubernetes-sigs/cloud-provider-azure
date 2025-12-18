@@ -211,8 +211,8 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 
 // RunWrapper adapts the ccm boot logic to the leader elector call back function
 func RunWrapper(s *options.CloudControllerManagerOptions, c *cloudcontrollerconfig.Config, h *controllerhealthz.MutableHealthzHandler) func(ctx context.Context) {
-	logger := log.Background().WithName("RunWrapper")
 	return func(ctx context.Context) {
+		logger := log.FromContextOrBackground(ctx).WithName("RunWrapper")
 		if !c.DynamicReloadingConfig.EnableDynamicReloading {
 			logger.V(1).Info("using static initialization from config file", "cloudConfigFile", c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile)
 			if err := Run(ctx, c.Complete(), h); err != nil {
@@ -289,8 +289,8 @@ func shouldDisableCloudProvider(configFilePath string) (bool, error) {
 }
 
 func runAsync(s *options.CloudControllerManagerOptions, errCh chan error, h *controllerhealthz.MutableHealthzHandler) context.CancelFunc {
-	logger := log.Background().WithName("runAsync")
 	ctx, cancelFunc := context.WithCancel(context.Background())
+	logger := log.FromContextOrBackground(ctx).WithName("runAsync")
 
 	go func() {
 		c, err := s.Config(KnownControllers(), ControllersDisabledByDefault.List(), names.CCMControllerAliases())
@@ -344,7 +344,7 @@ func StartHTTPServer(ctx context.Context, c *cloudcontrollerconfig.CompletedConf
 
 // Run runs the ExternalCMServer.  This should never exit.
 func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig, h *controllerhealthz.MutableHealthzHandler) error {
-	logger := log.Background().WithName("Run")
+	logger := log.FromContextOrBackground(ctx).WithName("Run")
 	// To help debugging, immediately log version
 	logger.Info("Version", "version", version.Get())
 
@@ -401,7 +401,7 @@ func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig, h *contr
 // startControllers starts the cloud specific controller loops.
 func startControllers(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig,
 	cloud cloudprovider.Interface, controllers map[string]initFunc, healthzHandler *controllerhealthz.MutableHealthzHandler) error {
-	logger := log.Background().WithName("startControllers")
+	logger := log.FromContextOrBackground(ctx).WithName("startControllers")
 	// Initialize the cloud provider with a reference to the clientBuilder
 	cloud.Initialize(completedConfig.ClientBuilder, ctx.Done())
 	// Set the informer on the user cloud object

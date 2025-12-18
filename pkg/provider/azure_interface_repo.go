@@ -28,7 +28,7 @@ import (
 
 // CreateOrUpdateInterface invokes az.ComputeClientFactory.GetInterfaceClient().CreateOrUpdate with exponential backoff retry
 func (az *Cloud) CreateOrUpdateInterface(ctx context.Context, service *v1.Service, nic *armnetwork.Interface) error {
-	logger := log.Background().WithName("CreateOrUpdateInterface")
+	logger := log.FromContextOrBackground(ctx).WithName("CreateOrUpdateInterface")
 	_, rerr := az.ComputeClientFactory.GetInterfaceClient().CreateOrUpdate(ctx, az.ResourceGroup, *nic.Name, *nic)
 	logger.V(10).Info("InterfacesClient.CreateOrUpdate: end", "nicName", *nic.Name)
 	if rerr != nil {

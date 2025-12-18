@@ -151,8 +151,8 @@ func fillNetInterfacePublicIPs(publicIPs []PublicIPMetadata, netInterface *Netwo
 	}
 }
 
-func (ims *InstanceMetadataService) getMetadata(_ context.Context, key string) (interface{}, error) {
-	logger := log.Background().WithName("getMetadata")
+func (ims *InstanceMetadataService) getMetadata(ctx context.Context, key string) (interface{}, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("getMetadata")
 	instanceMetadata, err := ims.getInstanceMetadata(key)
 	if err != nil {
 		return nil, err
@@ -297,8 +297,8 @@ func (az *Cloud) GetPlatformSubFaultDomain(ctx context.Context) (string, error) 
 // GetInterconnectGroupID returns the Platform Interconnect Group ID from IMDS if set.
 // TODO: Implement actual IMDS parsing logic when format is finalized.
 // Currently returns empty string to allow infrastructure to be in place.
-func (az *Cloud) GetInterconnectGroupID(_ context.Context) (string, error) {
-	logger := log.Background().WithName("GetInterconnectGroupID")
+func (az *Cloud) GetInterconnectGroupID(ctx context.Context) (string, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("GetInterconnectGroupID")
 	// Placeholder implementation - returns empty until IMDS format is determined
 	logger.V(4).Info("placeholder implementation, returning empty")
 	return "", nil

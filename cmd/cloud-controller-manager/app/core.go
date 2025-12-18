@@ -105,7 +105,7 @@ func startServiceController(ctx context.Context, controllerContext genericcontro
 }
 
 func startRouteController(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface) (http.Handler, bool, error) {
-	logger := log.Background().WithName("startRouteController")
+	logger := log.FromContextOrBackground(ctx).WithName("startRouteController")
 	if !completedConfig.ComponentConfig.KubeCloudShared.ConfigureCloudRoutes {
 		logger.Info("Will not configure cloud provider routes", "--configure-cloud-routes", completedConfig.ComponentConfig.KubeCloudShared.ConfigureCloudRoutes)
 		return nil, false, nil

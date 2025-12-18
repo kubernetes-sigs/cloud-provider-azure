@@ -57,7 +57,7 @@ func (az *Cloud) DeleteLB(ctx context.Context, service *v1.Service, lbName strin
 
 // ListLB invokes az.NetworkClientFactory.GetLoadBalancerClient().List with exponential backoff retry
 func (az *Cloud) ListLB(ctx context.Context, service *v1.Service) ([]*armnetwork.LoadBalancer, error) {
-	logger := log.Background().WithName("ListLB")
+	logger := log.FromContextOrBackground(ctx).WithName("ListLB")
 	rgName := az.getLoadBalancerResourceGroup()
 	allLBs, rerr := az.NetworkClientFactory.GetLoadBalancerClient().List(ctx, rgName)
 	if rerr != nil {
@@ -75,7 +75,7 @@ func (az *Cloud) ListLB(ctx context.Context, service *v1.Service) ([]*armnetwork
 // ListManagedLBs invokes az.NetworkClientFactory.GetLoadBalancerClient().List and filter out
 // those that are not managed by cloud provider azure or not associated to a managed VMSet.
 func (az *Cloud) ListManagedLBs(ctx context.Context, service *v1.Service, nodes []*v1.Node, clusterName string) ([]*armnetwork.LoadBalancer, error) {
-	logger := log.Background().WithName("ListManagedLBs")
+	logger := log.FromContextOrBackground(ctx).WithName("ListManagedLBs")
 	allLBs, err := az.ListLB(ctx, service)
 	if err != nil {
 		return nil, err
@@ -131,7 +131,7 @@ func (az *Cloud) ListManagedLBs(ctx context.Context, service *v1.Service, nodes 
 
 // CreateOrUpdateLB invokes az.NetworkClientFactory.GetLoadBalancerClient().CreateOrUpdate with exponential backoff retry
 func (az *Cloud) CreateOrUpdateLB(ctx context.Context, service *v1.Service, lb armnetwork.LoadBalancer) error {
-	logger := log.Background().WithName("CreateOrUpdateLB")
+	logger := log.FromContextOrBackground(ctx).WithName("CreateOrUpdateLB")
 	lb = cleanupSubnetInFrontendIPConfigurations(&lb)
 
 	rgName := az.getLoadBalancerResourceGroup()
@@ -191,7 +191,7 @@ func (az *Cloud) CreateOrUpdateLB(ctx context.Context, service *v1.Service, lb a
 }
 
 func (az *Cloud) CreateOrUpdateLBBackendPool(ctx context.Context, lbName string, backendPool *armnetwork.BackendAddressPool) error {
-	logger := log.Background().WithName("CreateOrUpdateLBBackendPool")
+	logger := log.FromContextOrBackground(ctx).WithName("CreateOrUpdateLBBackendPool")
 	logger.V(4).Info("updating backend pool in LB", "backendPoolName", ptr.Deref(backendPool.Name, ""), "loadBalancerName", lbName)
 	_, err := az.NetworkClientFactory.GetBackendAddressPoolClient().CreateOrUpdate(ctx, az.getLoadBalancerResourceGroup(), lbName, ptr.Deref(backendPool.Name, ""), *backendPool)
 	if err == nil {
@@ -221,7 +221,7 @@ func (az *Cloud) CreateOrUpdateLBBackendPool(ctx context.Context, lbName string,
 }
 
 func (az *Cloud) DeleteLBBackendPool(ctx context.Context, lbName, backendPoolName string) error {
-	logger := log.Background().WithName("DeleteLBBackendPool")
+	logger := log.FromContextOrBackground(ctx).WithName("DeleteLBBackendPool")
 	logger.V(4).Info("deleting backend pool in LB", "backendPoolName", backendPoolName, "loadBalancerName", lbName)
 	err := az.NetworkClientFactory.GetBackendAddressPoolClient().Delete(ctx, az.getLoadBalancerResourceGroup(), lbName, backendPoolName)
 	if err == nil {
@@ -284,7 +284,7 @@ func (az *Cloud) MigrateToIPBasedBackendPoolAndWaitForCompletion(
 	ctx context.Context,
 	lbName string, backendPoolNames []string, nicsCountMap map[string]int,
 ) error {
-	logger := log.Background().WithName("MigrateToIPBasedBackendPoolAndWaitForCompletion")
+	logger := log.FromContextOrBackground(ctx).WithName("MigrateToIPBasedBackendPoolAndWaitForCompletion")
 	if _, rerr := az.NetworkClientFactory.GetLoadBalancerClient().MigrateToIPBased(ctx, az.ResourceGroup, lbName, &armnetwork.LoadBalancersClientMigrateToIPBasedOptions{
 		Parameters: &armnetwork.MigrateLoadBalancerToIPBasedRequest{
 			Pools: to.SliceOfPtrs(backendPoolNames...),
@@ -334,8 +334,8 @@ func (az *Cloud) MigrateToIPBasedBackendPoolAndWaitForCompletion(
 }
 
 func (az *Cloud) newLBCache() (azcache.Resource, error) {
-	logger := log.Background().WithName("newLBCache")
 	getter := func(ctx context.Context, key string) (interface{}, error) {
+		logger := log.FromContextOrBackground(ctx).WithName("newLBCache")
 		lb, err := az.NetworkClientFactory.GetLoadBalancerClient().Get(ctx, az.getLoadBalancerResourceGroup(), key, nil)
 		exists, rerr := checkResourceExistsFromError(err)
 		if rerr != nil {
@@ -425,7 +425,7 @@ func isNICPool(bp *armnetwork.BackendAddressPool) bool {
 func (az *Cloud) cleanupBasicLoadBalancer(
 	ctx context.Context, clusterName string, service *v1.Service, existingLBs []*armnetwork.LoadBalancer,
 ) ([]*armnetwork.LoadBalancer, error) {
-	logger := log.Background().WithName("cleanupBasicLoadBalancer")
+	logger := log.FromContextOrBackground(ctx).WithName("cleanupBasicLoadBalancer")
 	if !az.UseStandardLoadBalancer() {
 		return existingLBs, nil
 	}

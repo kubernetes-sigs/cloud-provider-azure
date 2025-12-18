@@ -576,7 +576,7 @@ func (az *Cloud) shouldChangeLoadBalancer(service *v1.Service, currLBName, clust
 // and delete the load balancer if there is no ip config on it. It returns the name of the deleted load balancer
 // and it will be used in reconcileLoadBalancer to remove the load balancer from the list.
 func (az *Cloud) removeFrontendIPConfigurationFromLoadBalancer(ctx context.Context, lb *armnetwork.LoadBalancer, existingLBs []*armnetwork.LoadBalancer, fips []*armnetwork.FrontendIPConfiguration, clusterName string, service *v1.Service) (string, bool /* deleted PLS */, error) {
-	logger := log.Background().WithName("removeFrontendIPConfigurationFromLoadBalancer")
+	logger := log.FromContextOrBackground(ctx).WithName("removeFrontendIPConfigurationFromLoadBalancer")
 	if lb == nil || lb.Properties == nil || lb.Properties.FrontendIPConfigurations == nil {
 		return "", false, nil
 	}
@@ -662,7 +662,7 @@ func (az *Cloud) removeFrontendIPConfigurationFromLoadBalancer(ctx context.Conte
 }
 
 func (az *Cloud) cleanOrphanedLoadBalancer(ctx context.Context, lb *armnetwork.LoadBalancer, existingLBs []*armnetwork.LoadBalancer, service *v1.Service, clusterName string) error {
-	logger := log.Background().WithName("cleanOrphanedLoadBalancer")
+	logger := log.FromContextOrBackground(ctx).WithName("cleanOrphanedLoadBalancer")
 	lbName := ptr.Deref(lb.Name, "")
 	serviceName := getServiceName(service)
 	isBackendPoolPreConfigured := az.isBackendPoolPreConfigured(service)
@@ -741,7 +741,7 @@ func (az *Cloud) cleanOrphanedLoadBalancer(ctx context.Context, lb *armnetwork.L
 
 // safeDeleteLoadBalancer deletes the load balancer after decoupling it from the vmSet
 func (az *Cloud) safeDeleteLoadBalancer(ctx context.Context, lb armnetwork.LoadBalancer, clusterName string, service *v1.Service) error {
-	logger := log.Background().WithName("safeDeleteLoadBalancer")
+	logger := log.FromContextOrBackground(ctx).WithName("safeDeleteLoadBalancer")
 	vmSetName := az.mapLoadBalancerNameToVMSet(ptr.Deref(lb.Name, ""), clusterName)
 	lbBackendPoolIDsToDelete := []string{}
 	if lb.Properties != nil && lb.Properties.BackendAddressPools != nil {
@@ -947,7 +947,7 @@ func (az *Cloud) getServiceLoadBalancer(
 // then selects the first one (sorted based on name).
 // Note: this function is only useful for basic LB clusters.
 func (az *Cloud) selectLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, existingLBs []*armnetwork.LoadBalancer, nodes []*v1.Node) (selectedLB *armnetwork.LoadBalancer, existsLb bool, err error) {
-	logger := log.Background().WithName("selectLoadBalancer")
+	logger := log.FromContextOrBackground(ctx).WithName("selectLoadBalancer")
 	isInternal := requiresInternalLoadBalancer(service)
 	serviceName := getServiceName(service)
 	logger.V(2).Info("start", "serviceName", serviceName, "isInternal", isInternal)
@@ -1026,7 +1026,7 @@ func (az *Cloud) selectLoadBalancer(ctx context.Context, clusterName string, ser
 // and the second one as additional one. With DualStack support, the second IP may be
 // the IP of another IP family so the new logic returns two variables.
 func (az *Cloud) getServiceLoadBalancerStatus(ctx context.Context, service *v1.Service, lb *armnetwork.LoadBalancer) (status *v1.LoadBalancerStatus, lbIPsPrimaryPIPs []string, fipConfigs []*armnetwork.FrontendIPConfiguration, err error) {
-	logger := log.Background().WithName("getServiceLoadBalancerStatus")
+	logger := log.FromContextOrBackground(ctx).WithName("getServiceLoadBalancerStatus")
 	if lb == nil {
 		logger.V(10).Info("lb is nil")
 		return nil, nil, nil, nil
@@ -1155,7 +1155,7 @@ func updateServiceLoadBalancerIPs(service *v1.Service, serviceIPs []string) *v1.
 }
 
 func (az *Cloud) ensurePublicIPExists(ctx context.Context, service *v1.Service, pipName string, domainNameLabel, clusterName string, shouldPIPExisted, foundDNSLabelAnnotation, isIPv6 bool) (*armnetwork.PublicIPAddress, error) {
-	logger := log.Background().WithName("ensurePublicIPExists")
+	logger := log.FromContextOrBackground(ctx).WithName("ensurePublicIPExists")
 	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
 	pip, existsPip, err := az.getPublicIPAddress(ctx, pipResourceGroup, pipName, azcache.CacheReadTypeDefault)
 	if err != nil {
@@ -1744,7 +1744,7 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurations(
 	existingLBs []*armnetwork.LoadBalancer,
 	nodes []*v1.Node,
 ) (err error) {
-	logger := log.Background().WithName("reconcileMultipleStandardLoadBalancerConfigurations")
+	logger := log.FromContextOrBackground(ctx).WithName("reconcileMultipleStandardLoadBalancerConfigurations")
 	if !az.UseMultipleStandardLoadBalancers() {
 		return nil
 	}
@@ -1819,7 +1819,7 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurations(
 // This entails adding rules/probes for expected Ports and removing stale rules/ports.
 // nodes only used if wantLb is true
 func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node, wantLb bool) (*armnetwork.LoadBalancer, bool /*needRetry*/, error) {
-	logger := log.Background().WithName("reconcileLoadBalancer")
+	logger := log.FromContextOrBackground(ctx).WithName("reconcileLoadBalancer")
 	isBackendPoolPreConfigured := az.isBackendPoolPreConfigured(service)
 	serviceName := getServiceName(service)
 	logger.V(2).Info("started", "serviceName", serviceName, "wantLb", wantLb)
@@ -2175,7 +2175,7 @@ func (az *Cloud) accommodateNodesByPrimaryVMSet(
 	nodes []*v1.Node,
 	nodeNameToLBConfigIDXMap map[string]int,
 ) error {
-	logger := log.Background().WithName("accommodateNodesByPrimaryVMSet")
+	logger := log.FromContextOrBackground(ctx).WithName("accommodateNodesByPrimaryVMSet")
 	for _, node := range nodes {
 		if _, ok := az.nodesWithCorrectLoadBalancerByPrimaryVMSet.Load(strings.ToLower(node.Name)); ok {
 			continue
@@ -2542,7 +2542,7 @@ func (az *Cloud) reconcileFrontendIPConfigs(
 	wantLb bool,
 	lbFrontendIPConfigNames map[bool]string,
 ) ([]*armnetwork.FrontendIPConfiguration, []*armnetwork.FrontendIPConfiguration, bool, error) {
-	logger := log.Background().WithName("reconcileFrontendIPConfigs")
+	logger := log.FromContextOrBackground(ctx).WithName("reconcileFrontendIPConfigs")
 	var err error
 	lbName := *lb.Name
 	serviceName := getServiceName(service)
@@ -2759,7 +2759,7 @@ func (az *Cloud) getFrontendZones(
 	isFipChanged bool,
 	serviceName, lbFrontendIPConfigName string,
 ) error {
-	logger := log.Background().WithName("getFrontendZones")
+	logger := log.FromContextOrBackground(ctx).WithName("getFrontendZones")
 	if !isFipChanged { // fetch zone information from API for new frontends
 		// only add zone information for new internal frontend IP configurations for standard load balancer not deployed to an edge zone.
 		location := az.Location
@@ -3592,7 +3592,7 @@ func (az *Cloud) getPublicIPUpdates(
 
 // safeDeletePublicIP deletes public IP by removing its reference first.
 func (az *Cloud) safeDeletePublicIP(ctx context.Context, service *v1.Service, pipResourceGroup string, pip *armnetwork.PublicIPAddress, lb *armnetwork.LoadBalancer) error {
-	logger := log.Background().WithName("safeDeletePublicIP")
+	logger := log.FromContextOrBackground(ctx).WithName("safeDeletePublicIP")
 	// Remove references if pip.IPConfiguration is not nil.
 	if pip.Properties != nil &&
 		pip.Properties.IPConfiguration != nil {
@@ -4180,7 +4180,7 @@ func (az *Cloud) getEligibleLoadBalancersForService(ctx context.Context, service
 		lbFailedPlacementFlag     []string
 	)
 
-	logger := klog.Background().
+	logger := log.FromContextOrBackground(ctx).
 		WithName("getEligibleLoadBalancersForService").
 		WithValues("service", service.Name)
 
@@ -4338,7 +4338,7 @@ func (az *Cloud) isLoadBalancerInUseByService(service *v1.Service, lbConfig conf
 // service. Hence, it can be tracked by the loadBalancer IP.
 // If the IP version is not empty, which means it is the secondary Service, it returns IP version of the Service FIP.
 func (az *Cloud) serviceOwnsFrontendIP(ctx context.Context, fip *armnetwork.FrontendIPConfiguration, service *v1.Service) (bool, bool, *armnetwork.IPVersion) {
-	logger := log.Background().WithName("serviceOwnsFrontendIP")
+	logger := log.FromContextOrBackground(ctx).WithName("serviceOwnsFrontendIP")
 	var isPrimaryService bool
 	baseName := az.GetLoadBalancerName(ctx, "", service)
 	if fip != nil && strings.HasPrefix(ptr.Deref(fip.Name, ""), baseName) {
