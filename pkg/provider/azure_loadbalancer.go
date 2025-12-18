@@ -4180,7 +4180,7 @@ func (az *Cloud) getEligibleLoadBalancersForService(ctx context.Context, service
 		lbFailedPlacementFlag     []string
 	)
 
-	logger := klog.Background().
+	logger := log.FromContextOrBackground(ctx).
 		WithName("getEligibleLoadBalancersForService").
 		WithValues("service", service.Name)
 
