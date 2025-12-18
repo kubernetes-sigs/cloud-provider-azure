@@ -65,13 +65,13 @@ type tokenResponse struct {
 // createTransport creates an HTTP transport with custom CA
 // The transport uses a custom dialer that resolves the SNI name to the configured API server IP
 func createTransport(sniName string, apiServerIP string, caPool *x509.CertPool) *http.Transport {
+	logger := log.Background().WithName("createTransport")
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	// reset Proxy to avoid using environment proxy settings
 	transport.Proxy = nil
 
 	// Custom dialer that resolves the SNI hostname to the fixed API server IP
 	transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-		logger := log.FromContextOrBackground(ctx).WithName("createTransport")
 		// Extract port from addr (format is "host:port")
 		_, port, err := net.SplitHostPort(addr)
 		if err != nil {

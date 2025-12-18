@@ -63,7 +63,7 @@ type FlexScaleSet struct {
 
 // RefreshCaches invalidates and renew all related caches.
 func (fs *FlexScaleSet) RefreshCaches() error {
-	logger := klog.Background().WithName("fs.RefreshCaches")
+	logger := log.Background().WithName("fs.RefreshCaches")
 	var err error
 	fs.vmssFlexCache, err = fs.newVmssFlexCache()
 	if err != nil {
