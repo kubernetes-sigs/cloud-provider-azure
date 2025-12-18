@@ -35,14 +35,16 @@ import (
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/deepcopy"
 )
 
 // CreateOrUpdatePIP invokes az.NetworkClientFactory.GetPublicIPAddressClient().CreateOrUpdate with exponential backoff retry
 func (az *Cloud) CreateOrUpdatePIP(service *v1.Service, pipResourceGroup string, pip *armnetwork.PublicIPAddress) error {
-	logger := klog.Background().WithName("CreateOrUpdatePIP")
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
+
+	logger := log.FromContextOrBackground(ctx).WithName("CreateOrUpdatePIP")
 
 	_, rerr := az.NetworkClientFactory.GetPublicIPAddressClient().CreateOrUpdate(ctx, pipResourceGroup, ptr.Deref(pip.Name, ""), *pip)
 	logger.V(10).Info("NetworkClientFactory.GetPublicIPAddressClient().CreateOrUpdate end", "pipResourceGroup", pipResourceGroup, "pipName", ptr.Deref(pip.Name, ""))
