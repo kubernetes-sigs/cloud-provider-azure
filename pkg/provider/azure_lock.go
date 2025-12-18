@@ -26,10 +26,10 @@ import (
 	k8sapierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 type AzureResourceLocker struct {
@@ -87,7 +87,7 @@ func createLeaseIfNotExists(
 	leaseDurationSeconds int32,
 	clientset kubernetes.Interface,
 ) error {
-	logger := klog.Background().WithName("createLeaseIfNotExists").
+	logger := log.FromContextOrBackground(ctx).WithName("createLeaseIfNotExists").
 		WithValues("leaseNamespace", leaseNamespace, "leaseName", leaseName,
 			"leaseDurationSeconds", leaseDurationSeconds).V(4)
 
@@ -126,7 +126,7 @@ func (l *AzureResourceLocker) acquireLease(
 	clientset kubernetes.Interface,
 	holder, leaseNamespace, leaseName string,
 ) error {
-	logger := klog.Background().WithName("acquireLease").
+	logger := log.FromContextOrBackground(ctx).WithName("acquireLease").
 		WithValues("holder", holder, "leaseNamespace", leaseNamespace, "leaseName", leaseName).V(4)
 
 	lease, err := clientset.CoordinationV1().Leases(leaseNamespace).Get(ctx, leaseName, metav1.GetOptions{})
@@ -199,7 +199,7 @@ func releaseLease(
 	clientset kubernetes.Interface,
 	leaseNamespace, leaseName, holder string,
 ) error {
-	logger := klog.Background().WithName("releaseLease").
+	logger := log.FromContextOrBackground(ctx).WithName("releaseLease").
 		WithValues("leaseNamespace", leaseNamespace, "leaseName", leaseName, "holder", holder).V(4)
 
 	lease, err := clientset.CoordinationV1().
