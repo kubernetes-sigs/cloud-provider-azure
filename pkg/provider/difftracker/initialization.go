@@ -3,6 +3,7 @@ package difftracker
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -16,6 +17,14 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
+
+// isValidServiceUUID checks if a name matches the standard UUID format (8-4-4-4-12 hexadecimal)
+// Used to distinguish service LoadBalancers (UUID names) from system LoadBalancers (e.g., "kubernetes")
+var uuidRegex = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+func isValidServiceUUID(name string) bool {
+	return uuidRegex.MatchString(strings.ToLower(name))
+}
 
 // InitializeFromCluster initializes a DiffTracker by fetching K8s and NRP state, computing the diff,
 // and synchronizing resources. This replaces the provider-level initializeDiffTracker function.
@@ -41,7 +50,7 @@ func InitializeFromCluster(
 		return nil, fmt.Errorf("InitializeFromCluster: NetworkClientFactory is nil; cannot initialize diff tracker without Azure network clients")
 	}
 
-	localServiceNameToNRPServiceMap := make(map[string]int, 0) // used to initialize sync map in diff tracker
+	localServiceNameToNRPServiceMap := make(map[string]int) // used to initialize sync map in diff tracker
 
 	// Initialize K8S Resource state
 	k8s := K8s_State{
@@ -205,11 +214,16 @@ func InitializeFromCluster(
 		return nil, fmt.Errorf("InitializeFromCluster: failed to get services from ServiceGateway API: %w", err)
 	}
 	for _, service := range servicesDTO {
+		// Defensive guards for potentially incomplete data
+		if service == nil || service.Properties == nil || service.Properties.ServiceType == nil || service.Name == nil {
+			klog.V(4).Infof("InitializeFromCluster: skipping service entry with nil fields")
+			continue
+		}
 		switch *service.Properties.ServiceType {
 		case "Inbound":
 			nrp.LoadBalancers.Insert(*service.Name)
 		case "Outbound":
-			if service.Name != nil && *service.Name == "default-natgw-v2" {
+			if *service.Name == "default-natgw-v2" {
 				continue
 			}
 			nrp.NATGateways.Insert(*service.Name)
@@ -278,6 +292,7 @@ func InitializeFromCluster(
 	}
 	klog.Infof("InitializeFromCluster: found %d LoadBalancers in NRP", currentLoadBalancersInNRP.Len())
 
+	// 7. Fetch NAT Gateways from NRP
 	ngclient := networkClientFactory.GetNatGatewayClient()
 	ngs, err := ngclient.List(ctx, config.ResourceGroup)
 	currentNATGatewaysInNRP := utilsets.NewString()
@@ -547,7 +562,98 @@ func InitializeFromCluster(
 		}
 	}
 
-	// 14. Address orphaned PIP resources
+	// 14. Address orphaned resources
+	// Track orphaned resource deletion metrics
+	orphanedLBDeletions := 0
+	orphanedNATDeletions := 0
+	orphanedPIPDeletions := 0
+
+	// 14a. Check for orphaned LoadBalancers
+	klog.Infof("InitializeFromCluster: checking for orphaned LoadBalancers")
+	orphanedLBs := []string{}
+	for _, lbName := range currentLoadBalancersInNRP.UnsortedList() {
+		// Skip system LoadBalancers (non-UUID names like "kubernetes", "kubernetes-internal")
+		if !isValidServiceUUID(lbName) {
+			continue
+		}
+
+		// Check if LoadBalancer exists in desired state
+		if !diffTracker.NRPResources.LoadBalancers.Has(lbName) {
+			orphanedLBs = append(orphanedLBs, lbName)
+		}
+	}
+
+	if len(orphanedLBs) > 0 {
+		klog.Infof("InitializeFromCluster: found %d orphaned LoadBalancers", len(orphanedLBs))
+		for _, lbName := range orphanedLBs {
+			klog.Infof("InitializeFromCluster: deleting orphaned LoadBalancer %s from NRP", lbName)
+
+			// Delete LoadBalancer
+			if err := diffTracker.deleteLB(ctx, lbName); err != nil {
+				klog.Warningf("InitializeFromCluster: failed to delete orphaned LoadBalancer %s: %v", lbName, err)
+				lastErr = err
+			} else {
+				orphanedLBDeletions++
+				klog.V(3).Infof("InitializeFromCluster: deleted orphaned LoadBalancer %s", lbName)
+
+				// Delete associated Public IP
+				_, pipName, _ := buildInboundResourceNames(lbName)
+				if err := diffTracker.deletePublicIP(ctx, config.ResourceGroup, pipName); err != nil {
+					klog.Warningf("InitializeFromCluster: failed to delete Public IP %s for orphaned LoadBalancer: %v", pipName, err)
+					lastErr = err
+				} else {
+					klog.V(3).Infof("InitializeFromCluster: deleted Public IP %s for orphaned LoadBalancer", pipName)
+				}
+			}
+		}
+	} else {
+		klog.Infof("InitializeFromCluster: no orphaned LoadBalancers found")
+	}
+
+	// 14b. Check for orphaned NAT Gateways
+	klog.Infof("InitializeFromCluster: checking for orphaned NAT Gateways")
+	orphanedNATs := []string{}
+	for _, ngName := range currentNATGatewaysInNRP.UnsortedList() {
+		// Skip default NAT Gateway
+		if ngName == "default-natgw-v2" {
+			continue
+		}
+
+		// Check if NAT Gateway exists in desired state
+		if !diffTracker.NRPResources.NATGateways.Has(ngName) {
+			orphanedNATs = append(orphanedNATs, ngName)
+		}
+	}
+
+	if len(orphanedNATs) > 0 {
+		klog.Infof("InitializeFromCluster: found %d orphaned NAT Gateways", len(orphanedNATs))
+		for _, ngName := range orphanedNATs {
+			klog.Infof("InitializeFromCluster: deleting orphaned NAT Gateway %s from NRP", ngName)
+
+			// Delete NAT Gateway
+			if err := diffTracker.deleteNatGateway(ctx, config.ResourceGroup, ngName); err != nil {
+				klog.Warningf("InitializeFromCluster: failed to delete orphaned NAT Gateway %s: %v", ngName, err)
+				lastErr = err
+			} else {
+				orphanedNATDeletions++
+				klog.V(3).Infof("InitializeFromCluster: deleted orphaned NAT Gateway %s", ngName)
+
+				// Delete associated Public IP
+				_, pipName := buildOutboundResourceNames(ngName)
+				if err := diffTracker.deletePublicIP(ctx, config.ResourceGroup, pipName); err != nil {
+					klog.Warningf("InitializeFromCluster: failed to delete Public IP %s for orphaned NAT Gateway: %v", pipName, err)
+					lastErr = err
+				} else {
+					klog.V(3).Infof("InitializeFromCluster: deleted Public IP %s for orphaned NAT Gateway", pipName)
+				}
+			}
+		}
+	} else {
+		klog.Infof("InitializeFromCluster: no orphaned NAT Gateways found")
+	}
+
+	// 14c. Address orphaned Public IP resources
+	klog.Infof("InitializeFromCluster: checking for orphaned Public IPs")
 	pipclient := networkClientFactory.GetPublicIPAddressClient()
 	pips, err := pipclient.List(ctx, config.ResourceGroup)
 	if err != nil {
@@ -559,16 +665,34 @@ func InitializeFromCluster(
 				continue
 			}
 
+			// Skip PIPs that are still attached to a resource (will fail deletion with "PublicIPAddressCannotBeDeleted")
+			if pip.Properties != nil && pip.Properties.IPConfiguration != nil {
+				klog.V(4).Infof("InitializeFromCluster: skipping Public IP %s (still attached to resource)", *pip.Name)
+				continue
+			}
+
 			associatedResourceName := strings.TrimSuffix(*pip.Name, "-pip")
 			lbExists := diffTracker.NRPResources.LoadBalancers.Has(associatedResourceName)
 			ngExists := diffTracker.NRPResources.NATGateways.Has(associatedResourceName)
 			if !lbExists && !ngExists {
-				klog.Infof("InitializeFromCluster: Deleting orphaned Public IP %s from NRP", *pip.Name)
+				klog.Infof("InitializeFromCluster: deleting orphaned Public IP %s from NRP", *pip.Name)
 				if err := diffTracker.deletePublicIP(ctx, config.ResourceGroup, *pip.Name); err != nil {
 					klog.Warningf("InitializeFromCluster: failed to delete orphaned Public IP %s: %v", *pip.Name, err)
+					lastErr = err
+				} else {
+					orphanedPIPDeletions++
+					klog.V(3).Infof("InitializeFromCluster: deleted orphaned Public IP %s", *pip.Name)
 				}
 			}
 		}
+	}
+
+	// Log orphaned resource cleanup summary
+	if orphanedLBDeletions > 0 || orphanedNATDeletions > 0 || orphanedPIPDeletions > 0 {
+		klog.Infof("InitializeFromCluster: orphaned resource cleanup - LB deletions: %d, NAT deletions: %d, PIP deletions: %d",
+			orphanedLBDeletions, orphanedNATDeletions, orphanedPIPDeletions)
+	} else {
+		klog.Infof("InitializeFromCluster: no orphaned resources found")
 	}
 
 	// Mark initial sync as done
