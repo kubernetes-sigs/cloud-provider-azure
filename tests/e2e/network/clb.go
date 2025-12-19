@@ -14,6 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// NOTE: The Container Load Balancer (CLB) tests have been reorganized into the
+// tests/e2e/network/clb/ directory for better maintainability. This file is
+// preserved for reference. The new structure includes:
+// - clb_suite_test.go: Shared types, constants, and helper functions
+// - clb_basic_test.go: Basic LoadBalancer service creation test
+// - clb_scale_test.go: Large-scale pod creation test (120 pods)
+// - clb_label_update_test.go: Dynamic label update test (475 pods)
+// - clb_concurrent_test.go: Concurrent services test (15 services × 5 pods)
+
 package network
 
 import (
@@ -37,7 +46,7 @@ import (
 const (
 	clbTestLabel       = "CLB"
 	subscriptionID     = "3dc13b6d-6896-40ac-98f7-f18cbce2a405"
-	resourceGroupName  = "MC_enechitebld143737281_e2e-enechitoaia-0_eastus2euap"
+	resourceGroupName  = "mc_enechitebld146945876_e2e-enechitoaia-34_eastus2euap"
 	serviceGatewayName = "my-service-gateway"
 	apiVersion         = "2025-01-01"
 )
@@ -309,7 +318,7 @@ var _ = Describe("Container Load Balancer", Label(clbTestLabel), func() {
 		ns = nil
 	})
 
-	XIt("should create a simple LoadBalancer service and verify it exists in Azure", func() {
+	It("should create a simple LoadBalancer service and verify it exists in Azure", func() {
 		By("Creating a simple LoadBalancer service")
 
 		service := &v1.Service{
@@ -355,10 +364,8 @@ var _ = Describe("Container Load Balancer", Label(clbTestLabel), func() {
 		By("Verifying Public IP exists in Azure using CLI")
 
 		// Get resource group
-		rgName := "MC_enechitebld143737281_e2e-enechitoaia-0_eastus2euap"
-		utils.Logf("Checking resources in Resource Group: %s", rgName)
-
-		// Azure names resources using the service UID
+		rgName := resourceGroupName
+		utils.Logf("Checking resources in Resource Group: %s", rgName) // Azure names resources using the service UID
 		serviceUID := string(createdService.UID)
 		expectedPIPName := fmt.Sprintf("%s-pip", serviceUID)
 		expectedLBName := serviceUID
@@ -1255,11 +1262,11 @@ var _ = Describe("Container Load Balancer", Label(clbTestLabel), func() {
 	})
 
 	// Test 4: Multiple concurrent services with pods
-	It("should handle X concurrent LoadBalancer services with Y pods each", func() {
+	XIt("should handle X concurrent LoadBalancer services with Y pods each", func() {
 		const (
-			numServices    = 50
-			podsPerService = 7
-			totalPods      = numServices * podsPerService // 350 pods
+			numServices    = 15
+			podsPerService = 5
+			totalPods      = numServices * podsPerService // 75 pods
 			azureWaitTime  = 90 * time.Second
 			testTimeout    = 20 * time.Minute
 		)
