@@ -17,6 +17,7 @@ limitations under the License.
 package sets
 
 import (
+	"encoding/json"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -25,6 +26,37 @@ import (
 // IgnoreCaseSet is a set of strings that is case-insensitive.
 type IgnoreCaseSet struct {
 	set sets.Set[string]
+}
+
+func (s *IgnoreCaseSet) MarshalJSON() ([]byte, error) {
+	if s == nil {
+		return []byte("null"), nil
+	}
+	if s.Len() == 0 {
+		return []byte("[]"), nil
+	}
+	return json.Marshal(s.UnsortedList())
+}
+
+// Equals returns true if the two sets are equal.
+func (s1 *IgnoreCaseSet) Equals(s2 *IgnoreCaseSet) bool {
+	// Early exit if sizes are different
+	if len(s1.UnsortedList()) != len(s2.UnsortedList()) {
+		return false
+	}
+	// Check if all items in s1 are in s2
+	for _, item := range s1.UnsortedList() {
+		if !s2.Has(item) {
+			return false
+		}
+	}
+	// Check if all items in s2 are in s1
+	for _, item := range s2.UnsortedList() {
+		if !s1.Has(item) {
+			return false
+		}
+	}
+	return true
 }
 
 // NewString creates a new IgnoreCaseSet with the given items.
