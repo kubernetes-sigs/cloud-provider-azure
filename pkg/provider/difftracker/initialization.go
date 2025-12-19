@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,6 +18,18 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
+)
+
+const (
+	// workerPoolSize controls the number of concurrent workers for orphaned resource cleanup.
+	// Increase this value to speed up cleanup of large numbers of orphaned resources.
+	// Decrease if Azure API rate limiting becomes an issue.
+	workerPoolSize = 10
+
+	// taskDelay is the delay between task submissions to prevent Azure API throttling.
+	// Increase this value if experiencing rate limiting errors during cleanup.
+	// Decrease to speed up cleanup (but may trigger throttling).
+	taskDelay = 100 * time.Millisecond
 )
 
 // isValidServiceUUID checks if a name matches the standard UUID format (8-4-4-4-12 hexadecimal)
@@ -318,79 +332,140 @@ func InitializeFromCluster(
 
 	// 9. Create LoadBalancers and NATGateways in NRP
 	var lastErr error
-	for _, uid := range syncOperations.LoadBalancerUpdates.Additions.UnsortedList() {
-		if currentLoadBalancersInNRP.Has(uid) {
+	var lbCreations int32
+	var natCreations int32
+
+	// 9a. Create LoadBalancers in parallel
+	lbAdditions := syncOperations.LoadBalancerUpdates.Additions.UnsortedList()
+	lbsToCreate := []string{}
+	for _, uid := range lbAdditions {
+		if !currentLoadBalancersInNRP.Has(uid) {
+			lbsToCreate = append(lbsToCreate, uid)
+		} else {
 			klog.V(3).Infof("InitializeFromCluster: LoadBalancer %s already exists in NRP, skipping creation", uid)
-			continue
 		}
-
-		// Get the service to extract port configuration
-		svc, exists := serviceUIDToService[uid]
-		if !exists {
-			klog.Errorf("InitializeFromCluster: failed to find service for uid %s, creating LB without rules", uid)
-			svc = nil
-		}
-
-		// Extract inbound config from service (same logic as EnsureLoadBalancer)
-		var inboundConfig *InboundConfig
-		if svc != nil {
-			inboundConfig = ExtractInboundConfigFromService(svc)
-		}
-
-		// Build and create inbound service resources
-		pipResource, lbResource, servicesDTO := buildInboundServiceResources(uid, inboundConfig, config)
-
-		if err := diffTracker.createOrUpdatePIP(ctx, config.ResourceGroup, &pipResource); err != nil {
-			klog.Errorf("InitializeFromCluster: failed to create Public IP for service uid %s: %v", uid, err)
-			lastErr = err
-			continue
-		}
-		klog.V(3).Infof("InitializeFromCluster: created Public IP for service uid %s", uid)
-
-		if err := diffTracker.createOrUpdateLB(ctx, lbResource); err != nil {
-			klog.Errorf("InitializeFromCluster: failed to create LoadBalancer for service uid %s: %v", uid, err)
-			lastErr = err
-			continue
-		}
-		klog.V(3).Infof("InitializeFromCluster: created LoadBalancer for service uid %s", uid)
-
-		if err := diffTracker.updateNRPSGWServices(ctx, config.ServiceGatewayResourceName, servicesDTO); err != nil {
-			klog.Errorf("InitializeFromCluster: failed to register service uid %s with ServiceGateway: %v", uid, err)
-			lastErr = err
-			continue
-		}
-		klog.V(3).Infof("InitializeFromCluster: registered service uid %s with ServiceGateway", uid)
 	}
 
-	for _, natGatewayId := range syncOperations.NATGatewayUpdates.Additions.UnsortedList() {
-		if currentNATGatewaysInNRP.Has(natGatewayId) {
+	if len(lbsToCreate) > 0 {
+		klog.Infof("InitializeFromCluster: creating %d LoadBalancers", len(lbsToCreate))
+		klog.V(3).Infof("InitializeFromCluster: parallelizing LB creation with %d workers", workerPoolSize)
+		pool := NewWorkerPool(workerPoolSize)
+		for _, uid := range lbsToCreate {
+			uid := uid // capture for closure
+			pool.Submit(func() error {
+				klog.Infof("InitializeFromCluster: createInboundService started for %s", uid)
+
+				// Get the service to extract port configuration
+				svc, exists := serviceUIDToService[uid]
+				if !exists {
+					klog.Errorf("InitializeFromCluster: failed to find service for uid %s, creating LB without rules", uid)
+					svc = nil
+				}
+
+				// Extract inbound config from service
+				var inboundConfig *InboundConfig
+				if svc != nil {
+					inboundConfig = ExtractInboundConfigFromService(svc)
+				}
+
+				// Build and create inbound service resources
+				pipResource, lbResource, servicesDTO := buildInboundServiceResources(uid, inboundConfig, config)
+
+				// Step 1: Create Public IP
+				if err := diffTracker.createOrUpdatePIP(ctx, config.ResourceGroup, &pipResource); err != nil {
+					klog.Errorf("InitializeFromCluster: failed to create Public IP for service uid %s: %v", uid, err)
+					return err
+				}
+				klog.V(3).Infof("InitializeFromCluster: created Public IP for service uid %s", uid)
+
+				// Step 2: Create LoadBalancer
+				if err := diffTracker.createOrUpdateLB(ctx, lbResource); err != nil {
+					klog.Errorf("InitializeFromCluster: failed to create LoadBalancer for service uid %s: %v", uid, err)
+					return err
+				}
+				klog.V(3).Infof("InitializeFromCluster: created LoadBalancer for service uid %s", uid)
+
+				// Step 3: Register with ServiceGateway
+				if err := diffTracker.updateNRPSGWServices(ctx, config.ServiceGatewayResourceName, servicesDTO); err != nil {
+					klog.Errorf("InitializeFromCluster: failed to register service uid %s with ServiceGateway: %v", uid, err)
+					return err
+				}
+				klog.V(3).Infof("InitializeFromCluster: registered service uid %s with ServiceGateway", uid)
+
+				atomic.AddInt32(&lbCreations, 1)
+				klog.Infof("InitializeFromCluster: createInboundService completed successfully for %s", uid)
+				return nil
+			})
+		}
+		if err := pool.Wait(); err != nil {
+			lastErr = err
+		}
+	} else {
+		klog.Infof("InitializeFromCluster: no LoadBalancers to create")
+	}
+
+	// 9b. Create NAT Gateways in parallel
+	natAdditions := syncOperations.NATGatewayUpdates.Additions.UnsortedList()
+	natsToCreate := []string{}
+	for _, natGatewayId := range natAdditions {
+		if !currentNATGatewaysInNRP.Has(natGatewayId) {
+			natsToCreate = append(natsToCreate, natGatewayId)
+		} else {
 			klog.V(3).Infof("InitializeFromCluster: NAT Gateway %s already exists in NRP, skipping creation", natGatewayId)
-			continue
 		}
+	}
 
-		klog.Infof("InitializeFromCluster: Creating NAT Gateway %s in NRP", natGatewayId)
+	if len(natsToCreate) > 0 {
+		klog.Infof("InitializeFromCluster: creating %d NAT Gateways", len(natsToCreate))
+		klog.V(3).Infof("InitializeFromCluster: parallelizing NAT creation with %d workers", workerPoolSize)
+		pool := NewWorkerPool(workerPoolSize)
+		for _, natGatewayId := range natsToCreate {
+			natGatewayId := natGatewayId // capture for closure
+			pool.Submit(func() error {
+				klog.Infof("InitializeFromCluster: createOutboundService started for %s", natGatewayId)
 
-		// Build and create outbound service resources
-		pipResource, natGatewayResource, servicesDTO := buildOutboundServiceResources(natGatewayId, nil, config)
+				// Build and create outbound service resources
+				pipResource, natGatewayResource, servicesDTO := buildOutboundServiceResources(natGatewayId, nil, config)
 
-		if err := diffTracker.createOrUpdatePIP(ctx, config.ResourceGroup, &pipResource); err != nil {
-			klog.Errorf("InitializeFromCluster: failed to create Public IP for NAT Gateway %s: %v", natGatewayId, err)
+				// Step 1: Create Public IP
+				if err := diffTracker.createOrUpdatePIP(ctx, config.ResourceGroup, &pipResource); err != nil {
+					klog.Errorf("InitializeFromCluster: failed to create Public IP for NAT Gateway %s: %v", natGatewayId, err)
+					return err
+				}
+				klog.V(3).Infof("InitializeFromCluster: created Public IP for NAT Gateway %s", natGatewayId)
+
+				// Step 2: Create NAT Gateway
+				if err := diffTracker.createOrUpdateNatGateway(ctx, config.ResourceGroup, natGatewayResource); err != nil {
+					klog.Errorf("InitializeFromCluster: failed to create NAT Gateway %s: %v", natGatewayId, err)
+					return err
+				}
+				klog.V(3).Infof("InitializeFromCluster: created NAT Gateway resource %s", natGatewayId)
+
+				// Step 3: Register with ServiceGateway
+				if err := diffTracker.updateNRPSGWServices(ctx, config.ServiceGatewayResourceName, servicesDTO); err != nil {
+					klog.Errorf("InitializeFromCluster: failed to register NAT Gateway %s with ServiceGateway: %v", natGatewayId, err)
+					return err
+				}
+				klog.V(3).Infof("InitializeFromCluster: registered NAT Gateway %s with ServiceGateway", natGatewayId)
+
+				atomic.AddInt32(&natCreations, 1)
+				klog.Infof("InitializeFromCluster: createOutboundService completed successfully for %s", natGatewayId)
+				return nil
+			})
+		}
+		if err := pool.Wait(); err != nil {
 			lastErr = err
-			continue
 		}
+	} else {
+		klog.Infof("InitializeFromCluster: no NAT Gateways to create")
+	}
 
-		if err := diffTracker.createOrUpdateNatGateway(ctx, config.ResourceGroup, natGatewayResource); err != nil {
-			klog.Errorf("InitializeFromCluster: failed to create NAT Gateway %s: %v", natGatewayId, err)
-			lastErr = err
-			continue
-		}
-
-		if err := diffTracker.updateNRPSGWServices(ctx, config.ServiceGatewayResourceName, servicesDTO); err != nil {
-			klog.Errorf("InitializeFromCluster: failed to register NAT Gateway %s with ServiceGateway: %v", natGatewayId, err)
-			lastErr = err
-			continue
-		}
-		klog.V(3).Infof("InitializeFromCluster: created NAT Gateway %s", natGatewayId)
+	// Log Phase 9 creation summary
+	finalLBCreations := atomic.LoadInt32(&lbCreations)
+	finalNATCreations := atomic.LoadInt32(&natCreations)
+	if finalLBCreations > 0 || finalNATCreations > 0 {
+		klog.Infof("InitializeFromCluster: Phase 9 creation summary - LB creations: %d, NAT creations: %d",
+			finalLBCreations, finalNATCreations)
 	}
 
 	// 10. Add Services in ServiceGateway API for created LBs and NATGateways
@@ -450,123 +525,151 @@ func InitializeFromCluster(
 	}
 
 	// 13. Delete LoadBalancers and NATGateways in NRP
-	for _, lb := range syncOperations.LoadBalancerUpdates.Removals.UnsortedList() {
-		klog.Infof("InitializeFromCluster: deleteInboundService started for %s", lb)
-		lbExistsInAzure := currentLoadBalancersInNRP.Has(lb)
+	// Track deletion metrics
+	var lbDeletions int32
+	var natDeletions int32
 
-		// Step 1: Remove backend pool references from ServiceGateway (if LB exists in Azure)
-		if lbExistsInAzure {
-			removeBackendPoolDTO := RemoveBackendPoolReferenceFromServicesDTO(
-				SyncServicesReturnType{
-					Additions: nil,
-					Removals:  newIgnoreCaseSetFromSlice([]string{lb}),
-				},
-				config.SubscriptionID,
-				config.ResourceGroup,
-			)
-			if err := diffTracker.updateNRPSGWServices(ctx, config.ServiceGatewayResourceName, removeBackendPoolDTO); err != nil {
-				klog.Warningf("InitializeFromCluster: failed to remove backend pool reference for %s: %v", lb, err)
-				// Don't fail - continue with LoadBalancer deletion
-			} else {
-				klog.V(3).Infof("InitializeFromCluster: removed backend pool reference for %s", lb)
-			}
+	// 13a. Delete LoadBalancers
+	lbRemovals := syncOperations.LoadBalancerUpdates.Removals.UnsortedList()
+	if len(lbRemovals) > 0 {
+		klog.Infof("InitializeFromCluster: deleting %d LoadBalancers", len(lbRemovals))
+		klog.V(3).Infof("InitializeFromCluster: parallelizing LB deletion with %d workers", workerPoolSize)
+		pool := NewWorkerPool(workerPoolSize)
+		for _, lb := range lbRemovals {
+			lb := lb // capture for closure
+			pool.Submit(func() error {
+				klog.Infof("InitializeFromCluster: deleteInboundService started for %s", lb)
+				lbExistsInAzure := currentLoadBalancersInNRP.Has(lb)
+
+				// Step 1: Remove backend pool references from ServiceGateway (if LB exists in Azure)
+				if lbExistsInAzure {
+					removeBackendPoolDTO := RemoveBackendPoolReferenceFromServicesDTO(
+						SyncServicesReturnType{
+							Additions: nil,
+							Removals:  newIgnoreCaseSetFromSlice([]string{lb}),
+						},
+						config.SubscriptionID,
+						config.ResourceGroup,
+					)
+					if err := diffTracker.updateNRPSGWServices(ctx, config.ServiceGatewayResourceName, removeBackendPoolDTO); err != nil {
+						klog.Warningf("InitializeFromCluster: failed to remove backend pool reference for %s: %v", lb, err)
+						// Don't fail - continue with LoadBalancer deletion
+					} else {
+						klog.V(3).Infof("InitializeFromCluster: removed backend pool reference for %s", lb)
+					}
+				}
+
+				// Step 2: Delete LoadBalancer (if exists in Azure)
+				if lbExistsInAzure {
+					if err := diffTracker.deleteLB(ctx, lb); err != nil {
+						klog.Errorf("InitializeFromCluster: failed to delete LoadBalancer %s: %v", lb, err)
+						return err
+					}
+					klog.V(3).Infof("InitializeFromCluster: deleted LoadBalancer %s", lb)
+				}
+
+				// Step 3: Fully unregister service from ServiceGateway (ALWAYS)
+				unregisterDTO := buildServiceGatewayRemovalDTO(lb, true, config)
+				if err := diffTracker.updateNRPSGWServices(ctx, config.ServiceGatewayResourceName, unregisterDTO); err != nil {
+					klog.Errorf("InitializeFromCluster: failed to fully unregister service %s from ServiceGateway: %v", lb, err)
+					return err
+				}
+				klog.V(3).Infof("InitializeFromCluster: fully unregistered service %s from ServiceGateway", lb)
+
+				// Step 4: Delete Public IP (if exists in Azure)
+				if lbExistsInAzure {
+					_, pipName, _ := buildInboundResourceNames(lb)
+					if err := diffTracker.deletePublicIP(ctx, config.ResourceGroup, pipName); err != nil {
+						klog.Errorf("InitializeFromCluster: failed to delete Public IP %s: %v", pipName, err)
+						return err
+					}
+					klog.V(3).Infof("InitializeFromCluster: deleted Public IP %s", pipName)
+				}
+
+				atomic.AddInt32(&lbDeletions, 1)
+				klog.Infof("InitializeFromCluster: deleteInboundService completed successfully for %s", lb)
+				return nil
+			})
 		}
-
-		// Step 2: Delete LoadBalancer (if exists in Azure)
-		if lbExistsInAzure {
-			if err := diffTracker.deleteLB(ctx, lb); err != nil {
-				klog.Errorf("InitializeFromCluster: failed to delete LoadBalancer %s: %v", lb, err)
-				lastErr = err
-				// Continue with unregistration
-			} else {
-				klog.V(3).Infof("InitializeFromCluster: deleted LoadBalancer %s", lb)
-			}
-		}
-
-		// Step 3: Fully unregister service from ServiceGateway (ALWAYS, even if LB doesn't exist in Azure)
-		unregisterDTO := buildServiceGatewayRemovalDTO(lb, true, config)
-		if err := diffTracker.updateNRPSGWServices(ctx, config.ServiceGatewayResourceName, unregisterDTO); err != nil {
-			klog.Errorf("InitializeFromCluster: failed to fully unregister service %s from ServiceGateway: %v", lb, err)
+		if err := pool.Wait(); err != nil {
 			lastErr = err
-			// Continue with PIP deletion
-		} else {
-			klog.V(3).Infof("InitializeFromCluster: fully unregistered service %s from ServiceGateway", lb)
 		}
-
-		// Step 4: Delete Public IP (if exists in Azure)
-		if lbExistsInAzure {
-			_, pipName, _ := buildInboundResourceNames(lb)
-			if err := diffTracker.deletePublicIP(ctx, config.ResourceGroup, pipName); err != nil {
-				klog.Errorf("InitializeFromCluster: failed to delete Public IP %s: %v", pipName, err)
-				lastErr = err
-			} else {
-				klog.V(3).Infof("InitializeFromCluster: deleted Public IP %s", pipName)
-			}
-		}
-
-		if lastErr == nil {
-			klog.Infof("InitializeFromCluster: deleteInboundService completed successfully for %s", lb)
-		} else {
-			klog.Warningf("InitializeFromCluster: deleteInboundService completed with errors for %s", lb)
-		}
+	} else {
+		klog.Infof("InitializeFromCluster: no LoadBalancers to delete")
 	}
 
-	for _, natGatewayId := range syncOperations.NATGatewayUpdates.Removals.UnsortedList() {
-		klog.Infof("InitializeFromCluster: deleteOutboundService started for %s", natGatewayId)
-		ngExistsInAzure := currentNATGatewaysInNRP.Has(natGatewayId)
+	// 13b. Delete NAT Gateways
+	natRemovals := syncOperations.NATGatewayUpdates.Removals.UnsortedList()
+	if len(natRemovals) > 0 {
+		klog.Infof("InitializeFromCluster: deleting %d NAT Gateways", len(natRemovals))
+		klog.V(3).Infof("InitializeFromCluster: parallelizing NAT deletion with %d workers", workerPoolSize)
+		pool := NewWorkerPool(workerPoolSize)
+		for _, natGatewayId := range natRemovals {
+			natGatewayId := natGatewayId // capture for closure
+			pool.Submit(func() error {
+				klog.Infof("InitializeFromCluster: deleteOutboundService started for %s", natGatewayId)
+				ngExistsInAzure := currentNATGatewaysInNRP.Has(natGatewayId)
 
-		// Step 1: Disassociate NAT Gateway from ServiceGateway (ALWAYS)
-		if err := diffTracker.disassociateNatGatewayFromServiceGateway(ctx, config.ServiceGatewayResourceName, natGatewayId); err != nil {
-			klog.Warningf("InitializeFromCluster: failed to disassociate NAT Gateway %s from ServiceGateway: %v", natGatewayId, err)
-			// Non-fatal - continue with deletion
-		} else {
-			klog.V(3).Infof("InitializeFromCluster: disassociated NAT Gateway %s from ServiceGateway", natGatewayId)
+				// Step 1: Disassociate NAT Gateway from ServiceGateway (ALWAYS)
+				if err := diffTracker.disassociateNatGatewayFromServiceGateway(ctx, config.ServiceGatewayResourceName, natGatewayId); err != nil {
+					klog.Warningf("InitializeFromCluster: failed to disassociate NAT Gateway %s from ServiceGateway: %v", natGatewayId, err)
+					// Non-fatal - continue with deletion
+				} else {
+					klog.V(3).Infof("InitializeFromCluster: disassociated NAT Gateway %s from ServiceGateway", natGatewayId)
+				}
+
+				// Step 2: Unregister from ServiceGateway API (ALWAYS)
+				unregisterDTO := buildServiceGatewayRemovalDTO(natGatewayId, false, config)
+				if err := diffTracker.updateNRPSGWServices(ctx, config.ServiceGatewayResourceName, unregisterDTO); err != nil {
+					klog.Errorf("InitializeFromCluster: failed to unregister outbound service %s from ServiceGateway: %v", natGatewayId, err)
+					return err
+				}
+				klog.V(3).Infof("InitializeFromCluster: unregistered outbound service %s from ServiceGateway", natGatewayId)
+
+				// Step 3: Delete NAT Gateway (if exists in Azure)
+				if ngExistsInAzure {
+					if err := diffTracker.deleteNatGateway(ctx, config.ResourceGroup, natGatewayId); err != nil {
+						klog.Errorf("InitializeFromCluster: failed to delete NAT Gateway %s: %v", natGatewayId, err)
+						return err
+					}
+					klog.V(3).Infof("InitializeFromCluster: deleted NAT Gateway %s", natGatewayId)
+				}
+
+				// Step 4: Delete Public IP (if exists in Azure)
+				if ngExistsInAzure {
+					_, pipName := buildOutboundResourceNames(natGatewayId)
+					if err := diffTracker.deletePublicIP(ctx, config.ResourceGroup, pipName); err != nil {
+						klog.Errorf("InitializeFromCluster: failed to delete Public IP %s: %v", pipName, err)
+						return err
+					}
+					klog.V(3).Infof("InitializeFromCluster: deleted Public IP %s", pipName)
+				}
+
+				atomic.AddInt32(&natDeletions, 1)
+				klog.Infof("InitializeFromCluster: deleteOutboundService completed successfully for %s", natGatewayId)
+				return nil
+			})
 		}
-
-		// Step 2: Unregister from ServiceGateway API (ALWAYS)
-		unregisterDTO := buildServiceGatewayRemovalDTO(natGatewayId, false, config)
-		if err := diffTracker.updateNRPSGWServices(ctx, config.ServiceGatewayResourceName, unregisterDTO); err != nil {
-			klog.Errorf("InitializeFromCluster: failed to unregister outbound service %s from ServiceGateway: %v", natGatewayId, err)
+		if err := pool.Wait(); err != nil {
 			lastErr = err
-			// Continue with deletion
-		} else {
-			klog.V(3).Infof("InitializeFromCluster: unregistered outbound service %s from ServiceGateway", natGatewayId)
 		}
+	} else {
+		klog.Infof("InitializeFromCluster: no NAT Gateways to delete")
+	}
 
-		// Step 3: Delete NAT Gateway (if exists in Azure)
-		if ngExistsInAzure {
-			if err := diffTracker.deleteNatGateway(ctx, config.ResourceGroup, natGatewayId); err != nil {
-				klog.Errorf("InitializeFromCluster: failed to delete NAT Gateway %s: %v", natGatewayId, err)
-				lastErr = err
-				// Continue with PIP deletion
-			} else {
-				klog.V(3).Infof("InitializeFromCluster: deleted NAT Gateway %s", natGatewayId)
-			}
-		}
-
-		// Step 4: Delete Public IP (if exists in Azure)
-		if ngExistsInAzure {
-			_, pipName := buildOutboundResourceNames(natGatewayId)
-			if err := diffTracker.deletePublicIP(ctx, config.ResourceGroup, pipName); err != nil {
-				klog.Errorf("InitializeFromCluster: failed to delete Public IP %s: %v", pipName, err)
-				lastErr = err
-			} else {
-				klog.V(3).Infof("InitializeFromCluster: deleted Public IP %s", pipName)
-			}
-		}
-
-		if lastErr == nil {
-			klog.Infof("InitializeFromCluster: deleteOutboundService completed successfully for %s", natGatewayId)
-		} else {
-			klog.Warningf("InitializeFromCluster: deleteOutboundService completed with errors for %s", natGatewayId)
-		}
+	// Log Phase 13 deletion summary
+	finalLBDeletions := atomic.LoadInt32(&lbDeletions)
+	finalNATDeletions := atomic.LoadInt32(&natDeletions)
+	if finalLBDeletions > 0 || finalNATDeletions > 0 {
+		klog.Infof("InitializeFromCluster: Phase 13 deletion summary - LB deletions: %d, NAT deletions: %d",
+			finalLBDeletions, finalNATDeletions)
 	}
 
 	// 14. Address orphaned resources
 	// Track orphaned resource deletion metrics
-	orphanedLBDeletions := 0
-	orphanedNATDeletions := 0
-	orphanedPIPDeletions := 0
+	var orphanedLBDeletions int32
+	var orphanedNATDeletions int32
+	var orphanedPIPDeletions int32
 
 	// 14a. Check for orphaned LoadBalancers
 	klog.Infof("InitializeFromCluster: checking for orphaned LoadBalancers")
@@ -585,26 +688,33 @@ func InitializeFromCluster(
 
 	if len(orphanedLBs) > 0 {
 		klog.Infof("InitializeFromCluster: found %d orphaned LoadBalancers", len(orphanedLBs))
+		klog.V(3).Infof("InitializeFromCluster: parallelizing orphaned LB cleanup with %d workers", workerPoolSize)
+		pool := NewWorkerPool(workerPoolSize)
 		for _, lbName := range orphanedLBs {
-			klog.Infof("InitializeFromCluster: deleting orphaned LoadBalancer %s from NRP", lbName)
+			lbName := lbName // capture for closure
+			pool.Submit(func() error {
+				klog.Infof("InitializeFromCluster: deleting orphaned LoadBalancer %s from NRP", lbName)
 
-			// Delete LoadBalancer
-			if err := diffTracker.deleteLB(ctx, lbName); err != nil {
-				klog.Warningf("InitializeFromCluster: failed to delete orphaned LoadBalancer %s: %v", lbName, err)
-				lastErr = err
-			} else {
-				orphanedLBDeletions++
+				// Delete LoadBalancer
+				if err := diffTracker.deleteLB(ctx, lbName); err != nil {
+					klog.Warningf("InitializeFromCluster: failed to delete orphaned LoadBalancer %s: %v", lbName, err)
+					return err
+				}
+				atomic.AddInt32(&orphanedLBDeletions, 1)
 				klog.V(3).Infof("InitializeFromCluster: deleted orphaned LoadBalancer %s", lbName)
 
 				// Delete associated Public IP
 				_, pipName, _ := buildInboundResourceNames(lbName)
 				if err := diffTracker.deletePublicIP(ctx, config.ResourceGroup, pipName); err != nil {
 					klog.Warningf("InitializeFromCluster: failed to delete Public IP %s for orphaned LoadBalancer: %v", pipName, err)
-					lastErr = err
-				} else {
-					klog.V(3).Infof("InitializeFromCluster: deleted Public IP %s for orphaned LoadBalancer", pipName)
+					return err
 				}
-			}
+				klog.V(3).Infof("InitializeFromCluster: deleted Public IP %s for orphaned LoadBalancer", pipName)
+				return nil
+			})
+		}
+		if err := pool.Wait(); err != nil {
+			lastErr = err
 		}
 	} else {
 		klog.Infof("InitializeFromCluster: no orphaned LoadBalancers found")
@@ -627,26 +737,33 @@ func InitializeFromCluster(
 
 	if len(orphanedNATs) > 0 {
 		klog.Infof("InitializeFromCluster: found %d orphaned NAT Gateways", len(orphanedNATs))
+		klog.V(3).Infof("InitializeFromCluster: parallelizing orphaned NAT cleanup with %d workers", workerPoolSize)
+		pool := NewWorkerPool(workerPoolSize)
 		for _, ngName := range orphanedNATs {
-			klog.Infof("InitializeFromCluster: deleting orphaned NAT Gateway %s from NRP", ngName)
+			ngName := ngName // capture for closure
+			pool.Submit(func() error {
+				klog.Infof("InitializeFromCluster: deleting orphaned NAT Gateway %s from NRP", ngName)
 
-			// Delete NAT Gateway
-			if err := diffTracker.deleteNatGateway(ctx, config.ResourceGroup, ngName); err != nil {
-				klog.Warningf("InitializeFromCluster: failed to delete orphaned NAT Gateway %s: %v", ngName, err)
-				lastErr = err
-			} else {
-				orphanedNATDeletions++
+				// Delete NAT Gateway
+				if err := diffTracker.deleteNatGateway(ctx, config.ResourceGroup, ngName); err != nil {
+					klog.Warningf("InitializeFromCluster: failed to delete orphaned NAT Gateway %s: %v", ngName, err)
+					return err
+				}
+				atomic.AddInt32(&orphanedNATDeletions, 1)
 				klog.V(3).Infof("InitializeFromCluster: deleted orphaned NAT Gateway %s", ngName)
 
 				// Delete associated Public IP
 				_, pipName := buildOutboundResourceNames(ngName)
 				if err := diffTracker.deletePublicIP(ctx, config.ResourceGroup, pipName); err != nil {
 					klog.Warningf("InitializeFromCluster: failed to delete Public IP %s for orphaned NAT Gateway: %v", pipName, err)
-					lastErr = err
-				} else {
-					klog.V(3).Infof("InitializeFromCluster: deleted Public IP %s for orphaned NAT Gateway", pipName)
+					return err
 				}
-			}
+				klog.V(3).Infof("InitializeFromCluster: deleted Public IP %s for orphaned NAT Gateway", pipName)
+				return nil
+			})
+		}
+		if err := pool.Wait(); err != nil {
+			lastErr = err
 		}
 	} else {
 		klog.Infof("InitializeFromCluster: no orphaned NAT Gateways found")
@@ -660,6 +777,7 @@ func InitializeFromCluster(
 		klog.Errorf("InitializeFromCluster: failed to list public IP addresses: %v", err)
 		lastErr = err
 	} else {
+		orphanedPIPs := []string{}
 		for _, pip := range pips {
 			if pip.Name == nil || !strings.HasSuffix(*pip.Name, "-pip") || *pip.Name == "default-natgw-v2-pip" {
 				continue
@@ -675,22 +793,42 @@ func InitializeFromCluster(
 			lbExists := diffTracker.NRPResources.LoadBalancers.Has(associatedResourceName)
 			ngExists := diffTracker.NRPResources.NATGateways.Has(associatedResourceName)
 			if !lbExists && !ngExists {
-				klog.Infof("InitializeFromCluster: deleting orphaned Public IP %s from NRP", *pip.Name)
-				if err := diffTracker.deletePublicIP(ctx, config.ResourceGroup, *pip.Name); err != nil {
-					klog.Warningf("InitializeFromCluster: failed to delete orphaned Public IP %s: %v", *pip.Name, err)
-					lastErr = err
-				} else {
-					orphanedPIPDeletions++
-					klog.V(3).Infof("InitializeFromCluster: deleted orphaned Public IP %s", *pip.Name)
-				}
+				orphanedPIPs = append(orphanedPIPs, *pip.Name)
 			}
+		}
+
+		if len(orphanedPIPs) > 0 {
+			klog.Infof("InitializeFromCluster: found %d orphaned Public IPs", len(orphanedPIPs))
+			klog.V(3).Infof("InitializeFromCluster: parallelizing orphaned PIP cleanup with %d workers", workerPoolSize)
+			pool := NewWorkerPool(workerPoolSize)
+			for _, pipName := range orphanedPIPs {
+				pipName := pipName // capture for closure
+				pool.Submit(func() error {
+					klog.Infof("InitializeFromCluster: deleting orphaned Public IP %s from NRP", pipName)
+					if err := diffTracker.deletePublicIP(ctx, config.ResourceGroup, pipName); err != nil {
+						klog.Warningf("InitializeFromCluster: failed to delete orphaned Public IP %s: %v", pipName, err)
+						return err
+					}
+					atomic.AddInt32(&orphanedPIPDeletions, 1)
+					klog.V(3).Infof("InitializeFromCluster: deleted orphaned Public IP %s", pipName)
+					return nil
+				})
+			}
+			if err := pool.Wait(); err != nil {
+				lastErr = err
+			}
+		} else {
+			klog.Infof("InitializeFromCluster: no orphaned Public IPs found")
 		}
 	}
 
 	// Log orphaned resource cleanup summary
-	if orphanedLBDeletions > 0 || orphanedNATDeletions > 0 || orphanedPIPDeletions > 0 {
+	finalOrphanedLBDeletions := atomic.LoadInt32(&orphanedLBDeletions)
+	finalOrphanedNATDeletions := atomic.LoadInt32(&orphanedNATDeletions)
+	finalOrphanedPIPDeletions := atomic.LoadInt32(&orphanedPIPDeletions)
+	if finalOrphanedLBDeletions > 0 || finalOrphanedNATDeletions > 0 || finalOrphanedPIPDeletions > 0 {
 		klog.Infof("InitializeFromCluster: orphaned resource cleanup - LB deletions: %d, NAT deletions: %d, PIP deletions: %d",
-			orphanedLBDeletions, orphanedNATDeletions, orphanedPIPDeletions)
+			finalOrphanedLBDeletions, finalOrphanedNATDeletions, finalOrphanedPIPDeletions)
 	} else {
 		klog.Infof("InitializeFromCluster: no orphaned resources found")
 	}
@@ -756,4 +894,48 @@ func LogSyncStringIntMap(prefix string, m *sync.Map) {
 	for _, k := range keys {
 		klog.V(4).Infof("%s entry: %s -> %d", prefix, k, tmp[k])
 	}
+}
+
+// WorkerPool manages a pool of worker goroutines for parallel task execution
+type WorkerPool struct {
+	tasks chan func() error
+	wg    sync.WaitGroup
+	mu    sync.Mutex
+	err   error
+}
+
+// NewWorkerPool creates a new worker pool with the specified number of workers
+func NewWorkerPool(workers int) *WorkerPool {
+	p := &WorkerPool{
+		tasks: make(chan func() error),
+	}
+	for i := 0; i < workers; i++ {
+		p.wg.Add(1)
+		go func() {
+			defer p.wg.Done()
+			for task := range p.tasks {
+				if err := task(); err != nil {
+					p.mu.Lock()
+					if p.err == nil {
+						p.err = err
+					}
+					p.mu.Unlock()
+				}
+			}
+		}()
+	}
+	return p
+}
+
+// Submit adds a task to the worker pool with inter-task delay for rate limiting
+func (p *WorkerPool) Submit(task func() error) {
+	time.Sleep(taskDelay)
+	p.tasks <- task
+}
+
+// Wait closes the task channel and waits for all workers to complete, returning the first error encountered
+func (p *WorkerPool) Wait() error {
+	close(p.tasks)
+	p.wg.Wait()
+	return p.err
 }
