@@ -7,6 +7,9 @@ import (
 
 // SyncServices handles the synchronization of services between K8s and NRP
 func GetServicesToSync(k8sServices, Services *utilsets.IgnoreCaseSet) SyncServicesReturnType {
+	klog.Infof("GetServicesToSync: K8s services (%d): %v", k8sServices.Len(), k8sServices.UnsortedList())
+	klog.Infof("GetServicesToSync: NRP services (%d): %v", Services.Len(), Services.UnsortedList())
+
 	syncServices := SyncServicesReturnType{
 		Additions: utilsets.NewString(),
 		Removals:  utilsets.NewString(),
@@ -17,7 +20,7 @@ func GetServicesToSync(k8sServices, Services *utilsets.IgnoreCaseSet) SyncServic
 			continue
 		}
 		syncServices.Additions.Insert(service)
-		klog.V(2).Infof("Added service %s to syncing object\n", service)
+		klog.Infof("GetServicesToSync: Added service %s to additions", service)
 	}
 
 	for _, service := range Services.UnsortedList() {
@@ -25,9 +28,10 @@ func GetServicesToSync(k8sServices, Services *utilsets.IgnoreCaseSet) SyncServic
 			continue
 		}
 		syncServices.Removals.Insert(service)
-		klog.V(2).Infof("Removed service %s from syncing object\n", service)
+		klog.Infof("GetServicesToSync: Added service %s to removals", service)
 	}
 
+	klog.Infof("GetServicesToSync: Result - Additions: %d, Removals: %d", syncServices.Additions.Len(), syncServices.Removals.Len())
 	return syncServices
 }
 
@@ -63,14 +67,29 @@ func (dt *DiffTracker) GetSyncLocationsAddresses() LocationData {
 		locationUpdated := false
 
 		for address, pod := range node.Pods {
-			serviceRef := createServiceRef(pod)
-			addressData := Address{ServiceRef: serviceRef}
+			// Filter services: only include services that are StateCreated or exist in NRP
+			serviceRef := dt.createServiceRefFiltered(pod)
 
-			_, addressExists := nrpLocation.Addresses[address]
-			if !locationExists || !addressExists || !serviceRef.Equals(nrpLocation.Addresses[address].Services) {
-				location.Addresses[address] = addressData
-				locationUpdated = true
+			// Check if address exists in NRP and if service list changed
+			nrpAddressData, addressExists := nrpLocation.Addresses[address]
+
+			// Skip this address if:
+			// 1. No ready services AND address doesn't exist in NRP (nothing to sync)
+			// 2. ServiceRef matches what's already in NRP (no change)
+			if serviceRef.Len() == 0 && !addressExists {
+				// No services and address not in NRP - nothing to do
+				continue
 			}
+
+			if addressExists && serviceRef.Equals(nrpAddressData.Services) {
+				// ServiceRef matches NRP - no change needed
+				continue
+			}
+
+			// ServiceRef changed (or address is new) - need to sync
+			addressData := Address{ServiceRef: serviceRef}
+			location.Addresses[address] = addressData
+			locationUpdated = true
 		}
 		if locationUpdated {
 			result.Locations[nodeIp] = location
@@ -129,6 +148,46 @@ func createServiceRef(pod Pod) *utilsets.IgnoreCaseSet {
 		serviceRef.Insert(pod.PublicOutboundIdentity)
 	}
 	return serviceRef
+}
+
+// createServiceRefFiltered creates ServiceRef but only includes services that are StateCreated
+// This prevents LocationsUpdater from trying to sync locations for services still being created
+// Must be called with dt.mu held
+func (dt *DiffTracker) createServiceRefFiltered(pod Pod) *utilsets.IgnoreCaseSet {
+	serviceRef := utilsets.NewString()
+
+	// Check inbound services (LoadBalancers)
+	for _, serviceUID := range pod.InboundIdentities.UnsortedList() {
+		if dt.isServiceReady(serviceUID, true) {
+			serviceRef.Insert(serviceUID)
+		}
+	}
+
+	// Check outbound service (NAT Gateway)
+	if pod.PublicOutboundIdentity != "" {
+		if dt.isServiceReady(pod.PublicOutboundIdentity, false) {
+			serviceRef.Insert(pod.PublicOutboundIdentity)
+		}
+	}
+
+	return serviceRef
+}
+
+// isServiceReady checks if a service is ready for location sync
+// Returns true if service is StateCreated or exists in NRP (but not tracked)
+// Must be called with dt.mu held
+func (dt *DiffTracker) isServiceReady(serviceUID string, isInbound bool) bool {
+	// Check if service is tracked in pendingServiceOps
+	if opState, exists := dt.pendingServiceOps[serviceUID]; exists {
+		// Only sync if service is StateCreated
+		return opState.State == StateCreated
+	}
+
+	// Service not tracked - check if it exists in NRP (created outside Engine)
+	if isInbound {
+		return dt.NRPResources.LoadBalancers.Has(serviceUID)
+	}
+	return dt.NRPResources.NATGateways.Has(serviceUID)
 }
 
 // Helper function to find LocationData in result

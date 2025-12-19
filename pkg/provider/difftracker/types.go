@@ -211,6 +211,16 @@ type DiffTracker struct {
 	// Communication channels
 	serviceUpdaterTrigger   chan bool
 	locationsUpdaterTrigger chan bool
+
+	// Initialization tracking
+	isInitializing         int32 // Atomic: 1 during initialization, 0 after
+	initCompletionChecker  chan struct{}
+	pendingUpdaterTriggers int32 // Atomic counter for in-flight updater triggers
+	initCompletionOnce     sync.Once
+
+	// Updater references (started during initialization, kept running)
+	serviceUpdater   *ServiceUpdater
+	locationsUpdater *LocationsUpdater
 }
 
 // --------------------------------------------------------------------------------

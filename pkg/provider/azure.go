@@ -544,14 +544,9 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 				return fmt.Errorf("InitializeCloudFromConfig: failed to ensure default outbound service exists: %w", err)
 			}
 
-			klog.Infof("InitializeCloudFromConfig: Starting Engine goroutines (ServiceUpdater + LocationsUpdater)")
-			serviceUpdater := difftracker.NewServiceUpdater(ctx, az.diffTracker,
-				az.diffTracker.OnServiceCreationComplete, az.diffTracker.GetServiceUpdaterTrigger())
-			go serviceUpdater.Run()
-
-			locationsUpdater := difftracker.NewLocationsUpdater(ctx, az.diffTracker)
-			go locationsUpdater.Run()
-			klog.Infof("InitializeCloudFromConfig: Engine goroutines started successfully")
+			// Note: ServiceUpdater and LocationsUpdater are already started by InitializeFromCluster
+			// and continue running for normal operations
+			klog.Infof("InitializeCloudFromConfig: Engine updaters already running from initialization")
 		}
 		// Azure Stack does not support zone at the moment
 		// https://docs.microsoft.com/en-us/azure-stack/user/azure-stack-network-differences?view=azs-2102

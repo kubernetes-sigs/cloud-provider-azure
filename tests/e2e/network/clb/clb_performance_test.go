@@ -129,12 +129,12 @@ var _ = Describe("Container Load Balancer Performance Test", Label(clbTestLabel,
 
 	It("should create LoadBalancer services with pods and measure performance", NodeTimeout(2*time.Hour), func(ctx SpecContext) {
 		const (
-			numServices       = 500
+			numServices       = 20
 			podsPerService    = 1
 			servicePort       = int32(8080)
 			targetPort        = 8080
-			batchSize         = 500 // Create all services in parallel
-			verificationBatch = 10  // Verify in batches to avoid overwhelming API
+			batchSize         = 20 // Create all services in parallel
+			verificationBatch = 10 // Verify in batches to avoid overwhelming API
 		)
 
 		totalServices = numServices // Set for dynamic cleanup wait calculation

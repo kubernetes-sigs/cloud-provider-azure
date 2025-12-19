@@ -2,9 +2,13 @@ package difftracker
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"sync"
+	"sync/atomic"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"k8s.io/klog/v2"
 )
 
@@ -132,6 +136,24 @@ func (s *ServiceUpdater) processBatch() {
 
 	// Record batch size metric
 	recordServiceUpdaterBatch(len(workToDo))
+
+	if len(workToDo) > 0 {
+		klog.Infof("ServiceUpdater: processBatch collected %d services to process", len(workToDo))
+	}
+
+	// Decrement in-flight trigger counter and check initialization completion
+	// Run this asynchronously to avoid blocking goroutines waiting on completion callbacks
+	defer func() {
+		s.diffTracker.mu.Lock()
+		shouldCheck := atomic.LoadInt32(&s.diffTracker.isInitializing) == 1
+		s.diffTracker.mu.Unlock()
+
+		if shouldCheck {
+			atomic.AddInt32(&s.diffTracker.pendingUpdaterTriggers, -1)
+			// Trigger check asynchronously to avoid holding the lock while goroutines complete
+			go s.diffTracker.checkInitializationComplete()
+		}
+	}()
 
 	// Spawn goroutines after releasing diffTracker lock
 	for _, work := range workToDo {
@@ -334,9 +356,15 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string) {
 	unregisterDTO := buildServiceGatewayRemovalDTO(serviceUID, true, s.diffTracker.config)
 
 	if err := s.diffTracker.updateNRPSGWServices(ctx, s.diffTracker.config.ServiceGatewayResourceName, unregisterDTO); err != nil {
-		klog.Errorf("ServiceUpdater: failed to fully unregister inbound service %s from ServiceGateway: %v", serviceUID, err)
-		lastErr = fmt.Errorf("failed to unregister from ServiceGateway: %w", err)
-		// Continue with PIP deletion
+		// Treat 404 NotFound as success - the service is already gone from ServiceGateway
+		var respErr *azcore.ResponseError
+		if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
+			klog.V(3).Infof("ServiceUpdater: inbound service %s already unregistered from ServiceGateway (404 NotFound)", serviceUID)
+		} else {
+			klog.Errorf("ServiceUpdater: failed to fully unregister inbound service %s from ServiceGateway: %v", serviceUID, err)
+			lastErr = fmt.Errorf("failed to unregister from ServiceGateway: %w", err)
+			// Continue with PIP deletion
+		}
 	} else {
 		klog.V(3).Infof("ServiceUpdater: fully unregistered inbound service %s from ServiceGateway", serviceUID)
 	}

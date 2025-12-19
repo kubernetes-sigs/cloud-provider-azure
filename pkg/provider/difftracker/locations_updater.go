@@ -2,6 +2,7 @@ package difftracker
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -66,6 +67,16 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 		mc.ObserveOperationWithResult(isOperationSucceeded,
 			"num_locations", numLocations,
 			"num_addresses", numAddresses)
+
+		// Decrement in-flight trigger counter and check initialization completion
+		lu.diffTracker.mu.Lock()
+		shouldCheck := atomic.LoadInt32(&lu.diffTracker.isInitializing) == 1
+		lu.diffTracker.mu.Unlock()
+
+		if shouldCheck {
+			atomic.AddInt32(&lu.diffTracker.pendingUpdaterTriggers, -1)
+			lu.diffTracker.checkInitializationComplete()
+		}
 	}()
 
 	startTime := time.Now()

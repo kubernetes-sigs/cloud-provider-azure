@@ -58,38 +58,42 @@ func (pod *Pod) HasIdentities() bool {
 
 // DeepEqual compares the K8s and NRP states to check if they are in sync
 func (dt *DiffTracker) DeepEqual() bool {
+	klog.Infof("DeepEqual: Checking equality - K8s Services=%d, NRP LoadBalancers=%d, K8s Egresses=%d, NRP NATGateways=%d",
+		dt.K8sResources.Services.Len(), dt.NRPResources.LoadBalancers.Len(),
+		dt.K8sResources.Egresses.Len(), dt.NRPResources.NATGateways.Len())
+
 	// Compare Services with LoadBalancers
 	if dt.K8sResources.Services.Len() != dt.NRPResources.LoadBalancers.Len() {
-		klog.V(2).Infof("DiffTracker.DeepEqual: Services and LoadBalancers length mismatch")
+		klog.Infof("DeepEqual: Services and LoadBalancers length mismatch")
 		return false
 	}
 	for _, service := range dt.K8sResources.Services.UnsortedList() {
 		if !dt.NRPResources.LoadBalancers.Has(service) {
-			klog.V(2).Infof("DiffTracker.DeepEqual: Service %s not found in LoadBalancers\n", service)
+			klog.Infof("DeepEqual: Service %s not found in LoadBalancers", service)
 			return false
 		}
 	}
 	for _, service := range dt.NRPResources.LoadBalancers.UnsortedList() {
 		if !dt.K8sResources.Services.Has(service) {
-			klog.V(2).Infof("DiffTracker.DeepEqual: Service %s not found in Services\n", service)
+			klog.Infof("DeepEqual: LoadBalancer %s not found in Services", service)
 			return false
 		}
 	}
 
 	// Compare Egresses with NATGateways
 	if dt.K8sResources.Egresses.Len() != dt.NRPResources.NATGateways.Len() {
-		klog.V(2).Infof("DiffTracker.DeepEqual: Egresses and NATGateways length mismatch")
+		klog.Infof("DeepEqual: Egresses and NATGateways length mismatch")
 		return false
 	}
 	for _, egress := range dt.K8sResources.Egresses.UnsortedList() {
 		if !dt.NRPResources.NATGateways.Has(egress) {
-			klog.V(2).Infof("DiffTracker.DeepEqual: Egress %s not found in NATGateways\n", egress)
+			klog.Infof("DeepEqual: Egress %s not found in NATGateways", egress)
 			return false
 		}
 	}
 	for _, egress := range dt.NRPResources.NATGateways.UnsortedList() {
 		if !dt.K8sResources.Egresses.Has(egress) {
-			klog.V(2).Infof("DiffTracker.DeepEqual: Egress %s not found in Egresses\n", egress)
+			klog.Infof("DeepEqual: NATGateway %s not found in Egresses", egress)
 			return false
 		}
 	}
