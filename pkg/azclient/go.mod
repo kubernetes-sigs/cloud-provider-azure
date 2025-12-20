@@ -1,6 +1,6 @@
 module sigs.k8s.io/cloud-provider-azure/pkg/azclient
 
-go 1.24.6
+go 1.25.0
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.20.0
@@ -31,7 +31,7 @@ require (
 	golang.org/x/time v0.14.0
 	gopkg.in/dnaeon/go-vcr.v3 v3.2.0
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/utils v0.0.0-20241210054802-24370beab758
+	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 )
 
 require (
