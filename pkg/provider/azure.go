@@ -194,6 +194,7 @@ func NewCloud(ctx context.Context, clientBuilder cloudprovider.ControllerClientB
 }
 
 func NewCloudFromConfigFile(ctx context.Context, clientBuilder cloudprovider.ControllerClientBuilder, configFilePath string, calFromCCM bool) (cloudprovider.Interface, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("NewCloudFromConfigFile")
 	var (
 		cloud cloudprovider.Interface
 		err   error
@@ -204,14 +205,15 @@ func NewCloudFromConfigFile(ctx context.Context, clientBuilder cloudprovider.Con
 		var configFile *os.File
 		configFile, err = os.Open(configFilePath)
 		if err != nil {
-			klog.Fatalf("Couldn't open cloud provider configuration %s: %#v",
-				configFilePath, err)
+			logger.Error(err, "Couldn't open cloud provider configuration", "configFilePath", configFilePath)
+			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 		}
 
 		defer configFile.Close()
 		configValue, err = azureconfig.ParseConfig(configFile)
 		if err != nil {
-			klog.Fatalf("Failed to parse Azure cloud provider config: %v", err)
+			logger.Error(err, "Failed to parse Azure cloud provider config")
+			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 		}
 	}
 	cloud, err = NewCloud(ctx, clientBuilder, configValue, calFromCCM && configFilePath != "")
@@ -498,7 +500,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 			// wait for the success first time of syncing zones
 			err = az.syncRegionZonesMap(ctx)
 			if err != nil {
-				klog.Errorf("InitializeCloudFromConfig: failed to sync regional zones map for the first time: %s", err.Error())
+				logger.Error(err, "Failed to sync regional zones map for the first time")
 				return err
 			}
 
@@ -709,12 +711,12 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 			if !isNode {
 				deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
 				if !ok {
-					klog.Errorf("Received unexpected object: %v", obj)
+					logger.Error(nil, "Received unexpected object", "obj", obj)
 					return
 				}
 				node, ok = deletedState.Obj.(*v1.Node)
 				if !ok {
-					klog.Errorf("DeletedFinalStateUnknown contained non-Node object: %v", deletedState.Obj)
+					logger.Error(nil, "DeletedFinalStateUnknown contained non-Node object", "obj", deletedState.Obj)
 					return
 				}
 			}
@@ -850,7 +852,7 @@ func (az *Cloud) updateNodeTaint(node *v1.Node) {
 
 	if isNodeReady(node) {
 		if err := cloudnodeutil.RemoveTaintOffNode(az.KubeClient, node.Name, node, nodeOutOfServiceTaint); err != nil {
-			klog.Errorf("failed to remove taint %s from the node %s", v1.TaintNodeOutOfService, node.Name)
+			logger.Error(err, "failed to remove taint from the node", "taint", v1.TaintNodeOutOfService, "node", node.Name)
 		}
 	} else {
 		// node shutdown taint is added when cloud provider determines instance is shutdown
@@ -858,7 +860,7 @@ func (az *Cloud) updateNodeTaint(node *v1.Node) {
 			taints.TaintExists(node.Spec.Taints, nodeShutdownTaint) {
 			logger.V(2).Info("adding taint to node", "taint", v1.TaintNodeOutOfService, "node", node.Name)
 			if err := cloudnodeutil.AddOrUpdateTaintOnNode(az.KubeClient, node.Name, nodeOutOfServiceTaint); err != nil {
-				klog.Errorf("failed to add taint %s to the node %s", v1.TaintNodeOutOfService, node.Name)
+				logger.Error(err, "failed to add taint to the node", "taint", v1.TaintNodeOutOfService, "node", node.Name)
 			}
 		} else {
 			logger.V(2).Info("node is not ready but either shutdown taint is missing or out-of-service taint is already added, skip adding node out-of-service taint", "node", node.Name)

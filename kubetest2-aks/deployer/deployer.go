@@ -24,7 +24,7 @@ import (
 
 	"github.com/octago/sflags/gen/gpflag"
 	"github.com/spf13/pflag"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/kubetest2/pkg/types"
 )
 
@@ -93,7 +93,8 @@ func (d *deployer) Version() string {
 func bindFlags(d *deployer) *pflag.FlagSet {
 	flags, err := gpflag.Parse(d)
 	if err != nil {
-		klog.Fatalf("unable to generate flags from deployer")
+		klog.ErrorS(err, "unable to generate flags from deployer")
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 		return nil
 	}
 

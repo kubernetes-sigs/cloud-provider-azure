@@ -30,11 +30,11 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/component-base/logs"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/version"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
+	"sigs.k8s.io/cloud-provider-azure/pkg/version"
 )
 
-func main(){
+func main() {
 	logger := log.Background().WithName("main")
 	rand.Seed(time.Now().UnixNano())
 

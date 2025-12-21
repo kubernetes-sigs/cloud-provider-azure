@@ -84,7 +84,7 @@ func startCloudNodeLifecycleController(ctx context.Context, controllerContext ge
 }
 
 func startServiceController(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface) (http.Handler, bool, error) {
-	logger := log.Background().WithName("startServiceController")
+	logger := log.FromContextOrBackground(ctx).WithName("startServiceController")
 	// Start the service controller
 	serviceController, err := servicecontroller.New(
 		cloud,

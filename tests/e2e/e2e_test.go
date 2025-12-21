@@ -61,7 +61,8 @@ func TestAzureTest(t *testing.T) {
 	}
 	if reportDir != "" {
 		if err := os.MkdirAll(reportDir, 0755); err != nil {
-			klog.Fatalf("Failed creating report directory: %v", err)
+			logger.Error(err, "Failed creating report directory")
+			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 		}
 	}
 
