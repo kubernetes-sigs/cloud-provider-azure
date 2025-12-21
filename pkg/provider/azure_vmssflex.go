@@ -120,7 +120,7 @@ func (fs *FlexScaleSet) GetNodeVMSetName(ctx context.Context, node *v1.Node) (st
 
 // GetAgentPoolVMSetNames returns all vmSet names according to the nodes
 func (fs *FlexScaleSet) GetAgentPoolVMSetNames(ctx context.Context, nodes []*v1.Node) ([]*string, error) {
-	logger := log.Background().WithName("GetAgentPoolVMSetNames")
+	logger := log.FromContextOrBackground(ctx).WithName("GetAgentPoolVMSetNames")
 	vmSetNames := make([]*string, 0)
 	for _, node := range nodes {
 		vmSetName, err := fs.GetNodeVMSetName(ctx, node)
@@ -139,7 +139,7 @@ func (fs *FlexScaleSet) GetAgentPoolVMSetNames(ctx context.Context, nodes []*v1.
 // for loadbalancer exists then returns the eligible VMSet. The mode selection
 // annotation would be ignored when using one SLB per cluster.
 func (fs *FlexScaleSet) GetVMSetNames(ctx context.Context, service *v1.Service, nodes []*v1.Node) ([]*string, error) {
-	logger := log.Background().WithName("GetVMSetNames")
+	logger := log.FromContextOrBackground(ctx).WithName("fs.GetVMSetNames")
 	hasMode, isAuto, serviceVMSetName := fs.getServiceLoadBalancerMode(service)
 	if !hasMode || fs.UseStandardLoadBalancer() {
 		// no mode specified in service annotation or use single SLB mode
@@ -196,7 +196,7 @@ func (fs *FlexScaleSet) GetNodeNameByProviderID(ctx context.Context, providerID 
 // It must return ("", cloudprovider.InstanceNotFound) if the instance does
 // not exist or is no longer running.
 func (fs *FlexScaleSet) GetInstanceIDByNodeName(ctx context.Context, name string) (string, error) {
-	logger := log.Background().WithName("GetInstanceIDByNodeName")
+	logger := log.FromContextOrBackground(ctx).WithName("GetInstanceIDByNodeName")
 	machine, err := fs.getVmssFlexVM(ctx, name, azcache.CacheReadTypeUnsafe)
 	if err != nil {
 		return "", err
@@ -215,7 +215,7 @@ func (fs *FlexScaleSet) GetInstanceIDByNodeName(ctx context.Context, name string
 
 // GetInstanceTypeByNodeName gets the instance type by node name.
 func (fs *FlexScaleSet) GetInstanceTypeByNodeName(ctx context.Context, name string) (string, error) {
-	logger := log.Background().WithName("GetInstanceTypeByNodeName")
+	logger := log.FromContextOrBackground(ctx).WithName("GetInstanceTypeByNodeName")
 	machine, err := fs.getVmssFlexVM(ctx, name, azcache.CacheReadTypeUnsafe)
 	if err != nil {
 		logger.Error(err, "fs.GetInstanceTypeByNodeName failed", "node", name, "operation", "fs.getVmssFlexVMWithoutInstanceView")
@@ -232,7 +232,7 @@ func (fs *FlexScaleSet) GetInstanceTypeByNodeName(ctx context.Context, name stri
 // with availability zone, then it returns fault domain.
 // for details, refer to https://kubernetes-sigs.github.io/cloud-provider-azure/topics/availability-zones/#node-labels
 func (fs *FlexScaleSet) GetZoneByNodeName(ctx context.Context, name string) (cloudprovider.Zone, error) {
-	logger := log.Background().WithName("GetZoneByNodeName")
+	logger := log.FromContextOrBackground(ctx).WithName("GetZoneByNodeName")
 	vm, err := fs.getVmssFlexVM(ctx, name, azcache.CacheReadTypeUnsafe)
 	if err != nil {
 		logger.Error(err, "fs.GetZoneByNodeName failed", "node", name, "operation", "fs.getVmssFlexVMWithoutInstanceView")
@@ -298,10 +298,10 @@ func (fs *FlexScaleSet) GetPowerStatusByNodeName(ctx context.Context, name strin
 
 // GetPrimaryInterface gets machine primary network interface by node name.
 func (fs *FlexScaleSet) GetPrimaryInterface(ctx context.Context, nodeName string) (*armnetwork.Interface, error) {
-	logger := log.Background().WithName("GetPrimaryInterface")
+	logger := log.FromContextOrBackground(ctx).WithName("GetPrimaryInterface")
 	machine, err := fs.getVmssFlexVM(ctx, nodeName, azcache.CacheReadTypeDefault)
 	if err != nil {
-		logger.Error(err, "fs.GetInstanceTypeByNodeName failed", "node", nodeName, "opeartion", "fs.getVmssFlexVMWithoutInstanceView")
+		logger.Error(err, "fs.GetInstanceTypeByNodeName failed: fs.getVmssFlexVMWithoutInstanceView failed", "node", nodeName, "opeartion", "fs.getVmssFlexVMWithoutInstanceView")
 		return nil, err
 	}
 
@@ -329,7 +329,7 @@ func (fs *FlexScaleSet) GetPrimaryInterface(ctx context.Context, nodeName string
 
 // GetIPByNodeName gets machine private IP and public IP by node name.
 func (fs *FlexScaleSet) GetIPByNodeName(ctx context.Context, name string) (string, string, error) {
-	logger := log.Background().WithName("GetIPByNodeName")
+	logger := log.FromContextOrBackground(ctx).WithName("GetIPByNodeName")
 	nic, err := fs.GetPrimaryInterface(ctx, name)
 	if err != nil {
 		return "", "", err
@@ -337,7 +337,7 @@ func (fs *FlexScaleSet) GetIPByNodeName(ctx context.Context, name string) (strin
 
 	ipConfig, err := getPrimaryIPConfig(nic)
 	if err != nil {
-		logger.Error(err, "fs.GetIPByNodeName failed", "node", name, "operation", "fs.getPrimaryIPConfig", "nic", nic)
+		logger.Error(err, "fs.GetIPByNodeName failed: getPrimaryIPConfig failed", "node", name, "operation", "fs.getPrimaryIPConfig", "nic", nic)
 		return "", "", err
 	}
 
@@ -386,7 +386,7 @@ func (fs *FlexScaleSet) GetPrivateIPsByNodeName(ctx context.Context, name string
 
 // GetNodeNameByIPConfigurationID gets the nodeName and vmSetName by IP configuration ID.
 func (fs *FlexScaleSet) GetNodeNameByIPConfigurationID(ctx context.Context, ipConfigurationID string) (string, string, error) {
-	logger := log.Background().WithName("GetNodeNameByIPConfigurationID")
+	logger := log.FromContextOrBackground(ctx).WithName("GetNodeNameByIPConfigurationID")
 	nodeName, vmssFlexName, _, err := fs.getNodeInformationByIPConfigurationID(ctx, ipConfigurationID)
 	if err != nil {
 		logger.Error(err, "fs.GetNodeNameByIPConfigurationID failed", "ipConfigurationID", ipConfigurationID)
@@ -397,7 +397,7 @@ func (fs *FlexScaleSet) GetNodeNameByIPConfigurationID(ctx context.Context, ipCo
 }
 
 func (fs *FlexScaleSet) getNodeInformationByIPConfigurationID(ctx context.Context, ipConfigurationID string) (string, string, string, error) {
-	logger := log.Background().WithName("getNodeInformationByIPConfigurationID")
+	logger := log.FromContextOrBackground(ctx).WithName("getNodeInformationByIPConfigurationID")
 	nicResourceGroup, nicName, err := getResourceGroupAndNameFromNICID(ipConfigurationID)
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to get resource group and name from ip config ID %s: %w", ipConfigurationID, err)
@@ -425,7 +425,7 @@ func (fs *FlexScaleSet) getNodeInformationByIPConfigurationID(ctx context.Contex
 
 // GetNodeCIDRMaskByProviderID returns the node CIDR subnet mask by provider ID.
 func (fs *FlexScaleSet) GetNodeCIDRMasksByProviderID(ctx context.Context, providerID string) (int, int, error) {
-	logger := log.Background().WithName("GetNodeCIDRMasksByProviderID")
+	logger := log.FromContextOrBackground(ctx).WithName("GetNodeCIDRMasksByProviderID")
 	nodeNameWrapper, err := fs.GetNodeNameByProviderID(ctx, providerID)
 	if err != nil {
 		logger.Error(err, "Unable to get the vmss flex vm node name by providerID", "providerID", providerID)
@@ -773,7 +773,7 @@ func (fs *FlexScaleSet) EnsureHostsInPool(ctx context.Context, service *v1.Servi
 }
 
 func (fs *FlexScaleSet) ensureBackendPoolDeletedFromVmssFlex(ctx context.Context, backendPoolIDs []string, vmSetName string) error {
-	logger := log.Background().WithName("ensureBackendPoolDeletedFromVmssFlex")
+	logger := log.FromContextOrBackground(ctx).WithName("ensureBackendPoolDeletedFromVmssFlex")
 	vmssNamesMap := make(map[string]bool)
 	if fs.UseStandardLoadBalancer() {
 		cached, err := fs.vmssFlexCache.Get(ctx, consts.VmssFlexKey, azcache.CacheReadTypeDefault)

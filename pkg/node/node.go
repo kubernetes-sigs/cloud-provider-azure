@@ -24,6 +24,7 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	azureprovider "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 )
@@ -35,12 +36,14 @@ type IMDSNodeProvider struct {
 
 // NewIMDSNodeProvider creates a new IMDSNodeProvider.
 func NewIMDSNodeProvider(ctx context.Context) *IMDSNodeProvider {
+	logger := log.FromContextOrBackground(ctx).WithName("NewIMDSNodeProvider")
 	az, err := azureprovider.NewCloud(ctx, nil, &config.Config{
 		UseInstanceMetadata: true,
 		VMType:              "vmss",
 	}, false)
 	if err != nil {
-		klog.Fatalf("Failed to initialize Azure cloud provider: %v", err)
+		logger.Error(err, "Failed to initialize Azure cloud provider")
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
 	return &IMDSNodeProvider{

@@ -26,8 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/klog/v2"
-
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
@@ -279,10 +277,11 @@ func (ims *InstanceMetadataService) GetMetadata(ctx context.Context, crt azcache
 
 // GetPlatformSubFaultDomain returns the PlatformSubFaultDomain from IMDS if set.
 func (az *Cloud) GetPlatformSubFaultDomain(ctx context.Context) (string, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("GetPlatformSubFaultDomain")
 	if az.UseInstanceMetadata {
 		metadata, err := az.Metadata.GetMetadata(ctx, azcache.CacheReadTypeUnsafe)
 		if err != nil {
-			klog.Errorf("GetPlatformSubFaultDomain: failed to GetMetadata: %s", err.Error())
+			logger.Error(err, "failed to GetMetadata")
 			return "", err
 		}
 		if metadata.Compute == nil {

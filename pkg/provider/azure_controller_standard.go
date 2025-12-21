@@ -105,9 +105,9 @@ func (as *availabilitySet) AttachDisk(ctx context.Context, nodeName types.NodeNa
 
 	result, rerr := as.ComputeClientFactory.GetVirtualMachineClient().CreateOrUpdate(ctx, nodeResourceGroup, vmName, newVM)
 	if rerr != nil {
-		klog.Errorf("azureDisk - attach disk list(%v) on rg(%s) vm(%s) failed, err: %+v", diskMap, nodeResourceGroup, vmName, rerr)
+		logger.Error(rerr, "azureDisk - attach disk list failed", "diskMap", diskMap, "resourceGroup", nodeResourceGroup, "vmName", vmName)
 		if exists, err := errutils.CheckResourceExistsFromAzcoreError(rerr); !exists && err == nil {
-			klog.Errorf("azureDisk - begin to filterNonExistingDisks(%v) on rg(%s) vm(%s)", diskMap, nodeResourceGroup, vmName)
+			logger.Error(err, "azureDisk - begin to filterNonExistingDisks", "diskMap", diskMap, "resourceGroup", nodeResourceGroup, "vmName", vmName)
 			disks := FilterNonExistingDisks(ctx, as.ComputeClientFactory, newVM.Properties.StorageProfile.DataDisks)
 			newVM.Properties.StorageProfile.DataDisks = disks
 			result, rerr = as.ComputeClientFactory.GetVirtualMachineClient().CreateOrUpdate(ctx, nodeResourceGroup, vmName, newVM)
@@ -130,7 +130,7 @@ func (as *availabilitySet) DeleteCacheForNode(ctx context.Context, nodeName stri
 	if err == nil {
 		logger.V(2).Info("DeleteCacheForNode successfully", "nodeName", nodeName)
 	} else {
-		klog.Errorf("DeleteCacheForNode(%s) failed with %v", nodeName, err)
+		logger.Error(err, "DeleteCacheForNode failed", "node", nodeName)
 	}
 	return err
 }
@@ -199,10 +199,10 @@ func (as *availabilitySet) DetachDisk(ctx context.Context, nodeName types.NodeNa
 
 	result, err := as.ComputeClientFactory.GetVirtualMachineClient().CreateOrUpdate(ctx, nodeResourceGroup, vmName, newVM)
 	if err != nil {
-		klog.Errorf("azureDisk - detach disk list(%s) on rg(%s) vm(%s) failed, err: %v", diskMap, nodeResourceGroup, vmName, err)
+		logger.Error(err, "azureDisk - detach disk list failed", "diskMap", diskMap, "resourceGroup", nodeResourceGroup, "vmName", vmName)
 		var exists bool
 		if exists, err = errutils.CheckResourceExistsFromAzcoreError(err); !exists && err == nil {
-			klog.Errorf("azureDisk - begin to filterNonExistingDisks(%v) on rg(%s) vm(%s)", diskMap, nodeResourceGroup, vmName)
+			logger.Error(err, "azureDisk - begin to filterNonExistingDisks", "diskMap", diskMap, "resourceGroup", nodeResourceGroup, "vmName", vmName)
 			disks := FilterNonExistingDisks(ctx, as.ComputeClientFactory, vm.Properties.StorageProfile.DataDisks)
 			newVM.Properties.StorageProfile.DataDisks = disks
 			result, err = as.ComputeClientFactory.GetVirtualMachineClient().CreateOrUpdate(ctx, nodeResourceGroup, vmName, newVM)
@@ -246,11 +246,11 @@ func (as *availabilitySet) UpdateVM(ctx context.Context, nodeName types.NodeName
 func (as *availabilitySet) updateCache(nodeName string, vm *armcompute.VirtualMachine) {
 	logger := log.Background().WithName("updateCache")
 	if nodeName == "" {
-		klog.Errorf("updateCache(%s) failed with empty nodeName", nodeName)
+		logger.Error(nil, "updateCache failed with empty nodeName", "nodeName", nodeName)
 		return
 	}
 	if vm == nil || vm.Properties == nil {
-		klog.Errorf("updateCache(%s) failed with nil vm or vm.Properties", nodeName)
+		logger.Error(nil, "updateCache failed with nil vm or vm.Properties", "nodeName", nodeName)
 		return
 	}
 	as.vmCache.Update(nodeName, vm)
