@@ -77,7 +77,8 @@ func NewSecurityGroupRepo(securityGroupResourceGroup string, securityGroupName s
 	}
 	cache, err := azcache.NewTimedCache(time.Duration(nsgCacheTTLInSeconds)*time.Second, getter, disableAPICallCache)
 	if err != nil {
-		klog.Errorf("Failed to create cache for security group %q: %v", securityGroupName, err)
+		logger := log.Background().WithName("NewSecurityGroupRepo")
+		logger.Error(err, "Failed to create cache for security group", "securityGroupName", securityGroupName)
 		return nil, err
 	}
 

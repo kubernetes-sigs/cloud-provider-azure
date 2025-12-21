@@ -23,7 +23,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
@@ -53,18 +52,19 @@ func CreateUpdateNodeHandler(f func(oldNode, newNode *v1.Node) error) func(oldOb
 // CreateDeleteNodeHandler creates a delete node handler. (Common to lifecycle and ipam)
 func CreateDeleteNodeHandler(f func(node *v1.Node) error) func(obj interface{}) {
 	return func(originalObj interface{}) {
+		logger := log.Background().WithName("CreateDeleteNodeHandler")
 		originalNode, isNode := originalObj.(*v1.Node)
 		// We can get DeletedFinalStateUnknown instead of *v1.Node here and
 		// we need to handle that correctly. #34692
 		if !isNode {
 			deletedState, ok := originalObj.(cache.DeletedFinalStateUnknown)
 			if !ok {
-				klog.Errorf("Received unexpected object: %v", originalObj)
+				logger.Error(nil, "Received unexpected object", "object", originalObj)
 				return
 			}
 			originalNode, ok = deletedState.Obj.(*v1.Node)
 			if !ok {
-				klog.Errorf("DeletedFinalStateUnknown contained non-Node object: %v", deletedState.Obj)
+				logger.Error(nil, "DeletedFinalStateUnknown contained non-Node object", "object", deletedState.Obj)
 				return
 			}
 		}

@@ -193,6 +193,7 @@ func (cnc *CloudNodeController) Run(ctx context.Context) {
 
 // UpdateNodeStatus updates the node status, such as node addresses
 func (cnc *CloudNodeController) UpdateNodeStatus(ctx context.Context) {
+	logger := log.FromContextOrBackground(ctx).WithName("UpdateNodeStatus")
 	node, err := cnc.nodeInformer.Lister().Get(cnc.nodeName)
 	if err != nil {
 		// If node not found, just ignore it.
@@ -200,18 +201,18 @@ func (cnc *CloudNodeController) UpdateNodeStatus(ctx context.Context) {
 			return
 		}
 
-		klog.Errorf("Error getting node %q from informer, err: %v", cnc.nodeName, err)
+		logger.Error(err, "Error getting node from informer", "node", cnc.nodeName)
 		return
 	}
 
 	err = cnc.updateNodeAddress(ctx, node)
 	if err != nil {
-		klog.Errorf("Error reconciling node address for node %q, err: %v", node.Name, err)
+		logger.Error(err, "Error reconciling node address for node", "node", node.Name)
 	}
 
 	err = cnc.reconcileNodeLabels(node)
 	if err != nil {
-		klog.Errorf("Error reconciling node labels for node %q, err: %v", node.Name, err)
+		logger.Error(err, "Error reconciling node labels for node", "node", node.Name)
 	}
 }
 
@@ -700,7 +701,7 @@ func (cnc *CloudNodeController) updateNetworkingCondition(node *v1.Node, network
 	})
 
 	if err != nil {
-		klog.Errorf("Error updating node %s: %v", node.Name, err)
+		logger.Error(err, "Error updating node", "node", node.Name)
 	}
 
 	return err

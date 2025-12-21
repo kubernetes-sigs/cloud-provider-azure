@@ -140,7 +140,8 @@ func init() {
 		var err error
 		cred, err = azidentity.NewDefaultAzureCredential(nil)
 		if err != nil {
-			klog.Fatalf("failed to authenticate: %v", err)
+			klog.ErrorS(err, "failed to authenticate")
+			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 		}
 	})
 }
@@ -411,7 +412,8 @@ func (d *deployer) Up() error {
 func (d *deployer) IsUp() (up bool, err error) {
 	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
-		klog.Fatalf("failed to authenticate: %v", err)
+		klog.ErrorS(err, "failed to authenticate")
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
