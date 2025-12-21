@@ -27,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	cloudprovider "k8s.io/cloud-provider"
-	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
 
@@ -126,7 +125,7 @@ func (d *delayedRouteUpdater) updateRoutes(ctx context.Context) {
 	)
 	routeTable, err = d.az.routeTableRepo.Get(ctx, d.az.RouteTableName, azcache.CacheReadTypeDefault)
 	if err != nil {
-		klog.Errorf("getRouteTable() failed with error: %v", err)
+		logger.Error(err, "getRouteTable() failed")
 		return
 	}
 
@@ -134,13 +133,13 @@ func (d *delayedRouteUpdater) updateRoutes(ctx context.Context) {
 	if routeTable == nil {
 		err = d.az.createRouteTable(ctx)
 		if err != nil {
-			klog.Errorf("createRouteTable() failed with error: %v", err)
+			logger.Error(err, "createRouteTable() failed")
 			return
 		}
 
 		routeTable, err = d.az.routeTableRepo.Get(ctx, d.az.RouteTableName, azcache.CacheReadTypeDefault)
 		if err != nil {
-			klog.Errorf("getRouteTable() failed with error: %v", err)
+			logger.Error(err, "getRouteTable() failed")
 			return
 		}
 	}
@@ -197,7 +196,7 @@ func (d *delayedRouteUpdater) updateRoutes(ctx context.Context) {
 			}
 		}
 		if rt.operation == routeOperationDelete && !dirty {
-			klog.Warningf("updateRoutes: route to be deleted %s does not match any of the existing route", ptr.Deref(rt.route.Name, ""))
+			logger.Info("route to be deleted does not match any of the existing route", "route", ptr.Deref(rt.route.Name, ""))
 		}
 
 		// Add missing routes if the operation is add.
@@ -217,7 +216,7 @@ func (d *delayedRouteUpdater) updateRoutes(ctx context.Context) {
 		}
 		_, err := d.az.routeTableRepo.CreateOrUpdate(ctx, *routeTable)
 		if err != nil {
-			klog.Errorf("CreateOrUpdateRouteTable() failed with error: %v", err)
+			logger.Error(err, "CreateOrUpdateRouteTable() failed")
 			return
 		}
 
@@ -331,7 +330,7 @@ func (az *Cloud) ListRoutes(ctx context.Context, clusterName string) ([]*cloudpr
 		// Wait for operation complete.
 		err = op.wait().err
 		if err != nil {
-			klog.Errorf("ListRoutes: failed to update route table tags with error: %v", err)
+			logger.Error(err, "failed to update route table tags")
 			return nil, err
 		}
 	}
@@ -450,7 +449,7 @@ func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, _ string, 
 	// Wait for operation complete.
 	err = op.wait().err
 	if err != nil {
-		klog.Errorf("CreateRoute failed for node %q with error: %v", kubeRoute.TargetNode, err)
+		logger.Error(err, "CreateRoute failed for node", "node", kubeRoute.TargetNode)
 		return err
 	}
 
@@ -496,7 +495,7 @@ func (az *Cloud) DeleteRoute(ctx context.Context, clusterName string, kubeRoute 
 	// Wait for operation complete.
 	err = op.wait().err
 	if err != nil {
-		klog.Errorf("DeleteRoute failed for node %q with error: %v", kubeRoute.TargetNode, err)
+		logger.Error(err, "DeleteRoute failed for node", "node", kubeRoute.TargetNode)
 		return err
 	}
 
@@ -513,7 +512,7 @@ func (az *Cloud) DeleteRoute(ctx context.Context, clusterName string, kubeRoute 
 		// Wait for operation complete.
 		err = op.wait().err
 		if err != nil {
-			klog.Errorf("DeleteRoute failed for node %q with error: %v", kubeRoute.TargetNode, err)
+			logger.Error(err, "DeleteRoute failed for node", "node", kubeRoute.TargetNode)
 			return err
 		}
 	}

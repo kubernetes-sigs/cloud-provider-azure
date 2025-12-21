@@ -109,9 +109,9 @@ func (fs *FlexScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName,
 	result, err := fs.ComputeClientFactory.GetVirtualMachineClient().CreateOrUpdate(ctx, nodeResourceGroup, *vm.Name, newVM)
 	var rerr *azcore.ResponseError
 	if err != nil && errors.As(err, &rerr) {
-		klog.Errorf("azureDisk - attach disk list(%+v) on rg(%s) vm(%s) failed, err: %v", diskMap, nodeResourceGroup, vmName, rerr)
+		logger.Error(rerr, "azureDisk - attach disk list failed", "diskMap", diskMap, "resourceGroup", nodeResourceGroup, "vmName", vmName)
 		if rerr.StatusCode == http.StatusNotFound {
-			klog.Errorf("azureDisk - begin to filterNonExistingDisks(%v) on rg(%s) vm(%s)", diskMap, nodeResourceGroup, vmName)
+			logger.Error(rerr, "azureDisk - begin to filterNonExistingDisks", "diskMap", diskMap, "resourceGroup", nodeResourceGroup, "vmName", vmName)
 			disks := FilterNonExistingDisks(ctx, fs.ComputeClientFactory, newVM.Properties.StorageProfile.DataDisks)
 			newVM.Properties.StorageProfile.DataDisks = disks
 			result, err = fs.ComputeClientFactory.GetVirtualMachineClient().CreateOrUpdate(ctx, nodeResourceGroup, *vm.Name, newVM)
@@ -122,7 +122,7 @@ func (fs *FlexScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName,
 
 	if err == nil && result != nil {
 		if rerr := fs.updateCache(ctx, vmName, result); rerr != nil {
-			klog.Errorf("updateCache(%s) failed with error: %v", vmName, rerr)
+			logger.Error(rerr, "updateCache failed", "vmName", vmName)
 		}
 	} else {
 		_ = fs.DeleteCacheForNode(ctx, vmName)
@@ -195,11 +195,11 @@ func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName,
 
 	result, err := fs.ComputeClientFactory.GetVirtualMachineClient().CreateOrUpdate(ctx, nodeResourceGroup, *vm.Name, newVM)
 	if err != nil {
-		klog.Errorf("azureDisk - detach disk list(%s) on rg(%s) vm(%s) failed, err: %v", diskMap, nodeResourceGroup, vmName, err)
+		logger.Error(err, "azureDisk - detach disk list failed", "diskMap", diskMap, "resourceGroup", nodeResourceGroup, "vmName", vmName)
 		var rerr *azcore.ResponseError
 		if errors.As(err, &rerr) {
 			if rerr.StatusCode == http.StatusNotFound {
-				klog.Errorf("azureDisk - begin to filterNonExistingDisks(%v) on rg(%s) vm(%s)", diskMap, nodeResourceGroup, vmName)
+				logger.Error(rerr, "azureDisk - begin to filterNonExistingDisks", "diskMap", diskMap, "resourceGroup", nodeResourceGroup, "vmName", vmName)
 				disks := FilterNonExistingDisks(ctx, fs.ComputeClientFactory, vm.Properties.StorageProfile.DataDisks)
 				newVM.Properties.StorageProfile.DataDisks = disks
 				result, err = fs.ComputeClientFactory.GetVirtualMachineClient().CreateOrUpdate(ctx, nodeResourceGroup, *vm.Name, newVM)
@@ -211,7 +211,7 @@ func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName,
 
 	if err == nil && result != nil {
 		if rerr := fs.updateCache(ctx, vmName, result); rerr != nil {
-			klog.Errorf("updateCache(%s) failed with error: %v", vmName, rerr)
+			logger.Error(rerr, "updateCache failed", "vmName", vmName)
 		}
 	} else {
 		_ = fs.DeleteCacheForNode(ctx, vmName)

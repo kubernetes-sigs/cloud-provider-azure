@@ -38,11 +38,12 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	ref "k8s.io/client-go/tools/reference"
-	"k8s.io/klog/v2"
 	clocks "k8s.io/utils/clock"
 	testingclocks "k8s.io/utils/clock/testing"
 
 	jsonpatch "github.com/evanphx/json-patch"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 // FakeNodeHandler is a fake implementation of NodesInterface and NodeInterface. It
@@ -266,7 +267,8 @@ func (m *FakeNodeHandler) Watch(_ context.Context, _ metav1.ListOptions) (watch.
 }
 
 // Patch patches a Node in the fake store.
-func (m *FakeNodeHandler) Patch(_ context.Context, name string, pt types.PatchType, data []byte, _ metav1.PatchOptions, _ ...string) (*v1.Node, error) {
+func (m *FakeNodeHandler) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, _ metav1.PatchOptions, _ ...string) (*v1.Node, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("Patch")
 	m.lock.Lock()
 	defer func() {
 		m.RequestCount++
@@ -296,12 +298,12 @@ func (m *FakeNodeHandler) Patch(_ context.Context, name string, pt types.PatchTy
 
 	originalObjJS, err := json.Marshal(nodeCopy)
 	if err != nil {
-		klog.Errorf("Failed to marshal %v", nodeCopy)
+		logger.Error(err, "Failed to marshal", "nodeCopy", nodeCopy)
 		return nil, nil
 	}
 	var originalNode v1.Node
 	if err = json.Unmarshal(originalObjJS, &originalNode); err != nil {
-		klog.Errorf("Failed to unmarshal original object: %v", err)
+		logger.Error(err, "Failed to unmarshal original object")
 		return nil, nil
 	}
 
@@ -310,31 +312,31 @@ func (m *FakeNodeHandler) Patch(_ context.Context, name string, pt types.PatchTy
 	case types.JSONPatchType:
 		patchObj, err := jsonpatch.DecodePatch(data)
 		if err != nil {
-			klog.Error(err.Error())
+			logger.Error(err, "Failed to decode JSON patch")
 			return nil, nil
 		}
 		if patchedObjJS, err = patchObj.Apply(originalObjJS); err != nil {
-			klog.Error(err.Error())
+			logger.Error(err, "Failed to apply JSON patch")
 			return nil, nil
 		}
 	case types.MergePatchType:
 		if patchedObjJS, err = jsonpatch.MergePatch(originalObjJS, data); err != nil {
-			klog.Error(err.Error())
+			logger.Error(err, "Failed to apply Merge patch")
 			return nil, nil
 		}
 	case types.StrategicMergePatchType:
 		if patchedObjJS, err = strategicpatch.StrategicMergePatch(originalObjJS, data, originalNode); err != nil {
-			klog.Error(err.Error())
+			logger.Error(err, "Failed to apply Strategic Merge patch")
 			return nil, nil
 		}
 	default:
-		klog.Errorf("unknown Content-Type header for patch: %v", pt)
+		logger.Error(nil, "unknown Content-Type header for patch", "patchType", pt)
 		return nil, nil
 	}
 
 	var updatedNode v1.Node
 	if err = json.Unmarshal(patchedObjJS, &updatedNode); err != nil {
-		klog.Errorf("Failed to unmarshal patched object: %v", err)
+		logger.Error(err, "Failed to unmarshal patched object")
 		return nil, nil
 	}
 
@@ -371,11 +373,12 @@ func (f *FakeRecorder) AnnotatedEventf(obj runtime.Object, _ map[string]string, 
 }
 
 func (f *FakeRecorder) generateEvent(obj runtime.Object, _ metav1.Time, eventtype, reason, message string) {
+	logger := log.Background().WithName("FakeRecorder.generateEvent")
 	f.Lock()
 	defer f.Unlock()
 	ref, err := ref.GetReference(scheme.Scheme, obj)
 	if err != nil {
-		klog.Errorf("Encountered error while getting reference: %v", err)
+		logger.Error(err, "Encountered error while getting reference")
 		return
 	}
 	event := f.makeEvent(ref, eventtype, reason, message)
