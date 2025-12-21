@@ -24,8 +24,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
+
 	"k8s.io/component-base/metrics/testutil"
-	"k8s.io/klog/v2"
 )
 
 const (
@@ -887,7 +888,7 @@ func TestGetBitforCIDR(t *testing.T) {
 			description:    "Get error with IPv6",
 		},
 	}
-
+	logger := log.Background().WithName("TestGetBitforCIDR")
 	for _, tc := range cases {
 		_, clusterCIDR, err := net.ParseCIDR(tc.clusterCIDRStr)
 		if err != nil {
@@ -905,17 +906,17 @@ func TestGetBitforCIDR(t *testing.T) {
 
 		got, err := cs.getIndexForCIDR(subnetCIDR)
 		if err == nil && tc.expectErr {
-			klog.Errorf("expected error but got null for %v", tc.description)
+			logger.Error(nil, "expected error but got null", "description", tc.description)
 			continue
 		}
 
 		if err != nil && !tc.expectErr {
-			klog.Errorf("unexpected error: %v for %v", err, tc.description)
+			logger.Error(err, "unexpected error", "description", tc.description)
 			continue
 		}
 
 		if got != tc.expectedBit {
-			klog.Errorf("expected %v, but got %v for %v", tc.expectedBit, got, tc.description)
+			logger.Error(nil, "expected value mismatch", "expected", tc.expectedBit, "got", got, "description", tc.description)
 		}
 	}
 }

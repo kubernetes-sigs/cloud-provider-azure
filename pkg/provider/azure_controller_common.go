@@ -55,7 +55,7 @@ type ExtendedLocation struct {
 }
 
 func FilterNonExistingDisks(ctx context.Context, clientFactory azclient.ClientFactory, unfilteredDisks []*armcompute.DataDisk) []*armcompute.DataDisk {
-	logger := log.Background().WithName("FilterNonExistingDisks")
+	logger := log.FromContextOrBackground(ctx).WithName("FilterNonExistingDisks")
 	filteredDisks := []*armcompute.DataDisk{}
 	for _, disk := range unfilteredDisks {
 		filter := false

@@ -31,11 +31,11 @@ import (
 	"k8s.io/component-base/logs"
 
 	"sigs.k8s.io/cloud-provider-azure/cmd/acr-credential-provider/pkg/config"
-	"sigs.k8s.io/cloud-provider-azure/pkg/version"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
+	"sigs.k8s.io/cloud-provider-azure/pkg/version"
 )
 
-func main(){
+func main() {
 	logger := log.Background().WithName("main")
 	rand.Seed(time.Now().UnixNano())
 
@@ -62,7 +62,6 @@ func main(){
 		},
 		Version: version.Get().GitVersion,
 		RunE: func(_ *cobra.Command, args []string) error {
-			
 			ibConfig, err := config.ParseIdentityBindingsConfig(IBSNIName, IBDefaultClient, IBDefaultTenant, IBAPIIP)
 			if err != nil {
 				logger.Error(err, "Error parsing identity bindings config")

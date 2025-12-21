@@ -45,12 +45,14 @@ func (d *deployer) Down() error {
 	// Create a credentials object.
 	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
-		klog.Fatalf("failed to authenticate: %v", err)
+		klog.ErrorS(err, "failed to authenticate")
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
 	err = d.deleteResourceGroup(subscriptionID, cred)
 	if err != nil {
-		klog.Fatalf("failed to delete resource group %q: %v", d.ResourceGroupName, err)
+		klog.ErrorS(err, "failed to delete resource group", "resourceGroup", d.ResourceGroupName)
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
 	logger.Info("Resource group deleted", "resourceGroup", d.ResourceGroupName)

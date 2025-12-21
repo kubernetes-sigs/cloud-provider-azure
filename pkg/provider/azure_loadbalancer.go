@@ -624,7 +624,7 @@ func (az *Cloud) removeFrontendIPConfigurationFromLoadBalancer(ctx context.Conte
 			err     error
 		)
 		if deleted, err = az.reconcilePrivateLinkService(ctx, clusterName, service, fip, false /* wantPLS */); err != nil {
-			klog.Errorf("removeFrontendIPConfigurationFromLoadBalancer(%s, %s, %s, %s): failed to clean up PLS: %v", ptr.Deref(lb.Name, ""), ptr.Deref(fip.Name, ""), clusterName, service.Name, err)
+			logger.Error(err, "failed to clean up PLS", "lbName", ptr.Deref(lb.Name, ""), "fipName", ptr.Deref(fip.Name, ""), "clusterName", clusterName, "serviceName", service.Name)
 			return "", false, err
 		}
 		if deleted {
@@ -640,12 +640,11 @@ func (az *Cloud) removeFrontendIPConfigurationFromLoadBalancer(ctx context.Conte
 	for _, fip := range fips {
 		fipNames = append(fipNames, ptr.Deref(fip.Name, ""))
 	}
-	logPrefix := fmt.Sprintf("removeFrontendIPConfigurationFromLoadBalancer(%s, %q, %s, %s)", ptr.Deref(lb.Name, ""), fipNames, clusterName, service.Name)
 	if len(fipConfigs) == 0 {
 		logger.V(2).Info("deleting load balancer because there is no remaining frontend IP configurations", "lbName", ptr.Deref(lb.Name, ""), "fipNames", fipNames, "clusterName", clusterName, "serviceName", service.Name)
 		err := az.cleanOrphanedLoadBalancer(ctx, lb, existingLBs, service, clusterName)
 		if err != nil {
-			klog.Errorf("%s: failed to cleanupOrphanedLoadBalancer: %v", logPrefix, err)
+			logger.Error(err, "failed to cleanupOrphanedLoadBalancer", "lbName", ptr.Deref(lb.Name, ""), "fipNames", fipNames, "clusterName", clusterName, "serviceName", service.Name)
 			return "", false, err
 		}
 		deletedLBName = ptr.Deref(lb.Name, "")
@@ -653,7 +652,7 @@ func (az *Cloud) removeFrontendIPConfigurationFromLoadBalancer(ctx context.Conte
 		logger.V(2).Info("updating the load balancer", "lbName", ptr.Deref(lb.Name, ""), "fipNames", fipNames, "clusterName", clusterName, "serviceName", service.Name)
 		err := az.CreateOrUpdateLB(ctx, service, *lb)
 		if err != nil {
-			klog.Errorf("%s: failed to CreateOrUpdateLB: %v", logPrefix, err)
+			logger.Error(err, "failed to CreateOrUpdateLB", "lbName", ptr.Deref(lb.Name, ""), "fipNames", fipNames, "clusterName", clusterName, "serviceName", service.Name)
 			return "", false, err
 		}
 		_ = az.lbCache.Delete(ptr.Deref(lb.Name, ""))
@@ -701,7 +700,7 @@ func (az *Cloud) cleanOrphanedLoadBalancer(ctx context.Context, lb *armnetwork.L
 		}
 
 		if deleteErr := az.safeDeleteLoadBalancer(ctx, *lb, clusterName, service); deleteErr != nil {
-			klog.Warningf("cleanOrphanedLoadBalancer(%s, %s, %s): failed to DeleteLB: %v", lbName, serviceName, clusterName, deleteErr)
+			logger.Error(deleteErr, "failed to DeleteLB", "lbName", lbName, "serviceName", serviceName, "clusterName", clusterName)
 
 			rgName, vmssName, parseErr := errutils.GetVMSSMetadataByRawError(deleteErr)
 			if parseErr != nil {
@@ -725,12 +724,12 @@ func (az *Cloud) cleanOrphanedLoadBalancer(ctx context.Context, lb *armnetwork.L
 
 			vmssNamesMap := map[string]bool{vmssName: true}
 			if err := az.VMSet.EnsureBackendPoolDeletedFromVMSets(ctx, vmssNamesMap, lbBackendPoolIDsToDelete); err != nil {
-				klog.Errorf("cleanOrphanedLoadBalancer(%s, %s, %s): failed to EnsureBackendPoolDeletedFromVMSets: %v", lbName, serviceName, clusterName, err)
+				logger.Error(err, "failed to EnsureBackendPoolDeletedFromVMSets", "lbName", lbName, "serviceName", serviceName, "clusterName", clusterName)
 				return err
 			}
 
 			if deleteErr := az.DeleteLB(ctx, service, lbName); deleteErr != nil {
-				klog.Errorf("cleanOrphanedLoadBalancer(%s, %s, %s): failed delete lb for the second time, stop retrying: %v", lbName, serviceName, clusterName, deleteErr)
+				logger.Error(deleteErr, "failed delete lb for the second time, stop retrying", "lbName", lbName, "serviceName", serviceName, "clusterName", clusterName)
 				return deleteErr
 			}
 		}
@@ -953,7 +952,7 @@ func (az *Cloud) selectLoadBalancer(ctx context.Context, clusterName string, ser
 	logger.V(2).Info("start", "serviceName", serviceName, "isInternal", isInternal)
 	vmSetNames, err := az.VMSet.GetVMSetNames(ctx, service, nodes)
 	if err != nil {
-		klog.Errorf("az.selectLoadBalancer: cluster(%s) service(%s) isInternal(%t) - az.GetVMSetNames failed, err=(%v)", clusterName, serviceName, isInternal, err)
+		logger.Error(err, "az.selectLoadBalancer: az.GetVMSetNames failed", "clusterName", clusterName, "serviceName", serviceName, "isInternal", isInternal)
 		return nil, false, err
 	}
 	logger.V(2).Info("retrieved VM set names", "clusterName", clusterName, "serviceName", serviceName, "isInternal", isInternal, "vmSetNames", vmSetNames)
@@ -1008,13 +1007,26 @@ func (az *Cloud) selectLoadBalancer(ctx context.Context, clusterName string, ser
 
 	if selectedLB == nil {
 		err = fmt.Errorf("selectLoadBalancer: cluster(%s) service(%s) isInternal(%t) - unable to find load balancer for selected VM sets %v", clusterName, serviceName, isInternal, vmSetNames)
-		klog.Error(err)
+		logger.Error(
+			err, "unable to find load balancer for selected VM sets",
+			"cluster", clusterName,
+			"service", serviceName,
+			"isInternal", isInternal,
+			"vmSetNames", vmSetNames,
+		)
 		return nil, false, err
 	}
 	// validate if the selected LB has not exceeded the MaximumLoadBalancerRuleCount
 	if az.MaximumLoadBalancerRuleCount != 0 && selectedLBRuleCount >= az.MaximumLoadBalancerRuleCount {
 		err = fmt.Errorf("selectLoadBalancer: cluster(%s) service(%s) isInternal(%t) -  all available load balancers have exceeded maximum rule limit %d, vmSetNames (%v)", clusterName, serviceName, isInternal, selectedLBRuleCount, vmSetNames)
-		klog.Error(err)
+		logger.Error(
+			err, "all available load balancers have exceeded maximum rule limit",
+			"cluster", clusterName,
+			"service", serviceName,
+			"isInternal", isInternal,
+			"maxRuleLimit", az.MaximumLoadBalancerRuleCount,
+			"vmSetNames", vmSetNames,
+		)
 		return selectedLB, existsLb, err
 	}
 
@@ -1771,7 +1783,7 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurations(
 
 	svcs, err := az.KubeClient.CoreV1().Services("").List(ctx, metav1.ListOptions{})
 	if err != nil {
-		klog.Errorf("reconcileMultipleStandardLoadBalancerConfigurations: failed to list all load balancer services: %V", err)
+		logger.Error(err, "failed to list all load balancer services")
 		return fmt.Errorf("failed to list all load balancer services: %w", err)
 	}
 	rulePrefixToSVCNameMap := make(map[string]string)
@@ -1830,7 +1842,7 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 	}
 
 	if existingLBs, err = az.cleanupBasicLoadBalancer(ctx, clusterName, service, existingLBs); err != nil {
-		logger.Error(err, "reconcileLoadBalancer: failed to check and remove outdated basic load balancers", "service", serviceName)
+		logger.Error(err, "failed to check and remove outdated basic load balancers", "service", serviceName)
 		return nil, false, err
 	}
 
@@ -1840,19 +1852,19 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 	if !az.UseMultipleStandardLoadBalancers() || !isLocalService(service) {
 		existingLBs, err = az.cleanupLocalServiceBackendPool(ctx, service, nodes, existingLBs, clusterName)
 		if err != nil {
-			klog.Errorf("reconcileLoadBalancer: failed to cleanup local service backend pool for service %q, error: %s", serviceName, err.Error())
+			logger.Error(err, "failed to cleanup local service backend pool for service", "service", serviceName)
 			return nil, false, err
 		}
 	}
 
 	if err := az.reconcileMultipleStandardLoadBalancerConfigurations(ctx, existingLBs, service, clusterName, existingLBs, nodes); err != nil {
-		klog.Errorf("reconcileLoadBalancer: failed to reconcile multiple standard load balancer configurations: %s", err.Error())
+		logger.Error(err, "failed to reconcile multiple standard load balancer configurations")
 		return nil, false, err
 	}
 
 	lb, newLBs, lbStatus, _, _, deletedPLS, err := az.getServiceLoadBalancer(ctx, service, clusterName, nodes, wantLb, existingLBs)
 	if err != nil {
-		klog.Errorf("reconcileLoadBalancer: failed to get load balancer for service %q, error: %v", serviceName, err)
+		logger.Error(err, "failed to get load balancer for service", "service", serviceName)
 		return nil, false, err
 	}
 	if deletedPLS {
@@ -1973,12 +1985,11 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 				fipConfigToDel := toDeleteConfigs[i]
 				deletedPLS, err = az.reconcilePrivateLinkService(ctx, clusterName, service, fipConfigToDel, false /* wantPLS */)
 				if err != nil {
-					klog.Errorf(
-						"reconcileLoadBalancer for service(%s): lb(%s) - failed to clean up PrivateLinkService for frontEnd(%s): %v",
-						serviceName,
-						lbName,
-						ptr.Deref(fipConfigToDel.Name, ""),
-						err,
+					logger.Error(
+						err, "failed to clean up PrivateLinkService for frontEnd",
+						"service", serviceName,
+						"lbName", lbName,
+						"frontEndConfig", ptr.Deref(fipConfigToDel.Name, ""),
 					)
 				}
 				if deletedPLS {
@@ -1994,21 +2005,21 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 		if lb.Properties == nil || len(lb.Properties.FrontendIPConfigurations) == 0 {
 			err := az.cleanOrphanedLoadBalancer(ctx, lb, existingLBs, service, clusterName)
 			if err != nil {
-				klog.Errorf("reconcileLoadBalancer for service(%s): lb(%s) - failed to cleanOrphanedLoadBalancer: %v", serviceName, lbName, err)
+				logger.Error(err, "failed to cleanOrphanedLoadBalancer", "service", serviceName, "lbName", lbName)
 				return nil, false, err
 			}
 		} else {
 			logger.V(2).Info("updating", "service", serviceName, "load balancer", lbName)
 			err := az.CreateOrUpdateLB(ctx, service, *lb)
 			if err != nil {
-				klog.Errorf("reconcileLoadBalancer for service(%s) abort backoff: lb(%s) - updating: %s", serviceName, lbName, err.Error())
+				logger.Error(err, "abort backoff - updating", "service", serviceName, "lbName", lbName)
 				return nil, false, err
 			}
 
 			// Refresh updated lb which will be used later in other places.
 			newLB, exist, err := az.getAzureLoadBalancer(ctx, lbName, azcache.CacheReadTypeForceRefresh)
 			if err != nil {
-				klog.Errorf("reconcileLoadBalancer for service(%s): getAzureLoadBalancer(%s) failed: %v", serviceName, lbName, err)
+				logger.Error(err, "getAzureLoadBalancer failed", "service", serviceName, "lbName", lbName)
 				return nil, false, err
 			}
 			if !exist {
@@ -2184,7 +2195,7 @@ func (az *Cloud) accommodateNodesByPrimaryVMSet(
 		// TODO(niqi): reduce the API calls for VMAS and standalone VMs
 		vmSetName, err := az.VMSet.GetNodeVMSetName(ctx, node)
 		if err != nil {
-			klog.Errorf("accommodateNodesByPrimaryVMSet: failed to get vmSetName for node(%s): %s", node.Name, err.Error())
+			logger.Error(err, "failed to get vmSetName for node", "node", node.Name)
 			return err
 		}
 		for i := range az.MultipleStandardLoadBalancerConfigurations {
@@ -2722,7 +2733,7 @@ func (az *Cloud) reconcileFrontendIPConfigs(
 
 			if isInternal {
 				if err := az.getFrontendZones(ctx, newConfig, previousZone, isFipChanged, serviceName, lbFrontendIPConfigNames[isIPv6]); err != nil {
-					klog.Errorf("reconcileLoadBalancer for service (%s)(%t): failed to getFrontendZones: %s", serviceName, wantLb, err.Error())
+					logger.Error(err, "failed to getFrontendZones", "service", serviceName, "wantLb", wantLb)
 					return err
 				}
 			}
@@ -3602,7 +3613,7 @@ func (az *Cloud) safeDeletePublicIP(ctx context.Context, service *v1.Service, pi
 		// stored in the cache and is not up-to-date.
 		latestPIP, ok, err := az.getPublicIPAddress(ctx, pipResourceGroup, *pip.Name, azcache.CacheReadTypeForceRefresh)
 		if err != nil {
-			klog.Errorf("safeDeletePublicIP: failed to get latest public IP %s/%s: %s", pipResourceGroup, *pip.Name, err.Error())
+			logger.Error(err, "failed to get latest public IP", "pipResourceGroup", pipResourceGroup, "pipName", *pip.Name)
 			return err
 		}
 		if ok && latestPIP.Properties != nil &&
@@ -3663,7 +3674,7 @@ func (az *Cloud) safeDeletePublicIP(ctx context.Context, service *v1.Service, pi
 			if frontendIPConfigUpdated || loadBalancerRuleUpdated {
 				err := az.CreateOrUpdateLB(ctx, service, *lb)
 				if err != nil {
-					klog.Errorf("safeDeletePublicIP for service(%s) failed with error: %v", getServiceName(service), err)
+					logger.Error(err, "safeDeletePublicIP for service failed", "service", getServiceName(service))
 					return err
 				}
 			}
@@ -3781,12 +3792,13 @@ func getInternalSubnet(service *v1.Service) *string {
 }
 
 func ipInSubnet(ip string, subnet *armnetwork.Subnet) bool {
+	logger := log.Background().WithName("ipInSubnet")
 	if subnet == nil || subnet.Properties == nil {
 		return false
 	}
 	netIP, err := netip.ParseAddr(ip)
 	if err != nil {
-		klog.Errorf("ipInSubnet: failed to parse ip %s: %v", netIP, err)
+		logger.Error(err, "failed to parse ip", "ip", ip)
 		return false
 	}
 	cidrs := make([]*string, 0)
@@ -3799,7 +3811,7 @@ func ipInSubnet(ip string, subnet *armnetwork.Subnet) bool {
 	for _, cidr := range cidrs {
 		network, err := netip.ParsePrefix(*cidr)
 		if err != nil {
-			klog.Errorf("ipInSubnet: failed to parse ip cidr %s: %v", *cidr, err)
+			logger.Error(err, "failed to parse ip cidr", "cidr", *cidr)
 			continue
 		}
 		if network.Contains(netIP) {

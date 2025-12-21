@@ -21,7 +21,6 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
@@ -32,7 +31,7 @@ func (az *Cloud) CreateOrUpdateInterface(ctx context.Context, service *v1.Servic
 	_, rerr := az.ComputeClientFactory.GetInterfaceClient().CreateOrUpdate(ctx, az.ResourceGroup, *nic.Name, *nic)
 	logger.V(10).Info("InterfacesClient.CreateOrUpdate: end", "nicName", *nic.Name)
 	if rerr != nil {
-		klog.Errorf("InterfacesClient.CreateOrUpdate(%s) failed: %s", *nic.Name, rerr.Error())
+		logger.Error(rerr, "InterfacesClient.CreateOrUpdate failed", "nicName", *nic.Name)
 		az.Event(service, v1.EventTypeWarning, "CreateOrUpdateInterface", rerr.Error())
 		return rerr
 	}

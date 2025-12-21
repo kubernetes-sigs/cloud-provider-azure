@@ -42,6 +42,7 @@ import (
 
 // DeleteLB invokes az.NetworkClientFactory.GetLoadBalancerClient().Delete with exponential backoff retry
 func (az *Cloud) DeleteLB(ctx context.Context, service *v1.Service, lbName string) error {
+	logger := log.FromContextOrBackground(ctx).WithName("DeleteLB")
 	rgName := az.getLoadBalancerResourceGroup()
 	rerr := az.NetworkClientFactory.GetLoadBalancerClient().Delete(ctx, rgName, lbName)
 	if rerr == nil {
@@ -50,7 +51,7 @@ func (az *Cloud) DeleteLB(ctx context.Context, service *v1.Service, lbName strin
 		return nil
 	}
 
-	klog.Errorf("LoadbalancerClient.Delete(%s) failed: %s", lbName, rerr.Error())
+	logger.Error(rerr, "LoadbalancerClient.Delete failed", "lbName", lbName)
 	az.Event(service, v1.EventTypeWarning, "DeleteLoadBalancer", rerr.Error())
 	return rerr
 }
@@ -65,7 +66,7 @@ func (az *Cloud) ListLB(ctx context.Context, service *v1.Service) ([]*armnetwork
 			return nil, nil
 		}
 		az.Event(service, v1.EventTypeWarning, "ListLoadBalancers", rerr.Error())
-		klog.Errorf("LoadbalancerClient.List(%v) failure with err=%v", rgName, rerr)
+		logger.Error(rerr, "LoadbalancerClient.List failure", "resourceGroup", rgName)
 		return nil, rerr
 	}
 	logger.V(2).Info("LoadbalancerClient.List success", "resourceGroup", rgName)
@@ -166,20 +167,20 @@ func (az *Cloud) CreateOrUpdateLB(ctx context.Context, service *v1.Service, lb a
 	if strings.Contains(strings.ToLower(retryErrorMessage), strings.ToLower(consts.ReferencedResourceNotProvisionedMessageCode)) {
 		matches := pipErrorMessageRE.FindStringSubmatch(retryErrorMessage)
 		if len(matches) != 3 {
-			klog.Errorf("Failed to parse the retry error message %s", retryErrorMessage)
+			logger.Error(nil, "Failed to parse the retry error message", "retryErrorMessage", retryErrorMessage)
 			return rerr
 		}
 		pipRG, pipName := matches[1], matches[2]
 		logger.V(3).Info("The public IP referenced by load balancer is not in Succeeded provisioning state, will try to update it", "pipName", pipName, "loadBalancerName", ptr.Deref(lb.Name, ""))
 		pip, _, err := az.getPublicIPAddress(ctx, pipRG, pipName, azcache.CacheReadTypeDefault)
 		if err != nil {
-			klog.Errorf("Failed to get the public IP %s in resource group %s: %v", pipName, pipRG, err)
+			logger.Error(err, "Failed to get the public IP", "pip", pipName, "resourceGroup", pipRG)
 			return rerr
 		}
 		// Perform a dummy update to fix the provisioning state
 		err = az.CreateOrUpdatePIP(service, pipRG, pip)
 		if err != nil {
-			klog.Errorf("Failed to update the public IP %s in resource group %s: %v", pipName, pipRG, err)
+			logger.Error(err, "Failed to update the public IP", "pip", pipName, "resourceGroup", pipRG)
 			return rerr
 		}
 		// Invalidate the LB cache, return the error, and the controller manager
@@ -291,7 +292,7 @@ func (az *Cloud) MigrateToIPBasedBackendPoolAndWaitForCompletion(
 		},
 	}); rerr != nil {
 		backendPoolNamesStr := strings.Join(backendPoolNames, ",")
-		klog.Errorf("MigrateToIPBasedBackendPoolAndWaitForCompletion: Failed to migrate to IP based backend pool for lb %s, backend pool %s: %s", lbName, backendPoolNamesStr, rerr.Error())
+		logger.Error(rerr, "Failed to migrate to IP based backend pool", "lb", lbName, "backendPool", backendPoolNamesStr)
 		return rerr
 	}
 
@@ -308,7 +309,7 @@ func (az *Cloud) MigrateToIPBasedBackendPoolAndWaitForCompletion(
 
 			bp, rerr := az.NetworkClientFactory.GetBackendAddressPoolClient().Get(ctx, az.ResourceGroup, lbName, bpName)
 			if rerr != nil {
-				klog.Errorf("MigrateToIPBasedBackendPoolAndWaitForCompletion: Failed to get backend pool %s for lb %s: %s", bpName, lbName, rerr.Error())
+				logger.Error(rerr, "Failed to get backend pool", "backendPool", bpName, "lb", lbName)
 				return false, rerr
 			}
 
@@ -326,7 +327,7 @@ func (az *Cloud) MigrateToIPBasedBackendPoolAndWaitForCompletion(
 			return nil
 		}
 
-		klog.Errorf("MigrateToIPBasedBackendPoolAndWaitForCompletion: Failed to wait for migration to IP based backend pool for lb %s, backend pool %s: %s", lbName, strings.Join(backendPoolNames, ","), err.Error())
+		logger.Error(err, "Failed to wait for migration to IP based backend pool", "lb", lbName, "backendPool", strings.Join(backendPoolNames, ","))
 		return err
 	}
 

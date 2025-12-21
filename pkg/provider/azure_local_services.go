@@ -382,11 +382,11 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 					var ok bool
 					es, ok = v.Obj.(*discovery_v1.EndpointSlice)
 					if !ok {
-						klog.Errorf("Cannot convert to *discovery_v1.EndpointSlice: %T", v.Obj)
+						logger.Error(nil, "Cannot convert to *discovery_v1.EndpointSlice", "obj", v.Obj)
 						return
 					}
 				default:
-					klog.Errorf("Cannot convert to *discovery_v1.EndpointSlice: %T", v)
+					logger.Error(nil, "Cannot convert to *discovery_v1.EndpointSlice", "obj.(type)", v)
 					return
 				}
 
