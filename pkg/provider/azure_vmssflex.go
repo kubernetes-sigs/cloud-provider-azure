@@ -301,7 +301,7 @@ func (fs *FlexScaleSet) GetPrimaryInterface(ctx context.Context, nodeName string
 	logger := log.FromContextOrBackground(ctx).WithName("GetPrimaryInterface")
 	machine, err := fs.getVmssFlexVM(ctx, nodeName, azcache.CacheReadTypeDefault)
 	if err != nil {
-		logger.Error(err, "fs.GetInstanceTypeByNodeName failed: fs.getVmssFlexVMWithoutInstanceView failed", "node", nodeName, "opeartion", "fs.getVmssFlexVMWithoutInstanceView")
+		logger.Error(err, "fs.GetInstanceTypeByNodeName failed: fs.getVmssFlexVMWithoutInstanceView failed", "node", nodeName)
 		return nil, err
 	}
 
