@@ -27,7 +27,7 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/component-base/logs"
 
-	"sigs.k8s.io/cloud-provider-azure/cmd/acr-credential-provider/pkg/config"
+	"sigs.k8s.io/cloud-provider-azure/pkg/credentialprovider"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/version"
 )

@@ -350,6 +350,7 @@ func (cnc *CloudNodeController) UpdateCloudNode(ctx context.Context, _, newObj i
 
 // AddCloudNode handles initializing new nodes registered with the cloud taint.
 func (cnc *CloudNodeController) AddCloudNode(ctx context.Context, obj interface{}) {
+	logger := log.FromContextOrBackground(ctx).WithName("AddCloudNode")
 	node := obj.(*v1.Node)
 
 	// Skip other nodes other than cnc.nodeName.
@@ -359,7 +360,7 @@ func (cnc *CloudNodeController) AddCloudNode(ctx context.Context, obj interface{
 
 	cloudTaint := GetCloudTaint(node.Spec.Taints)
 	if cloudTaint == nil {
-		klog.V(2).Infof("This node %s is registered without the cloud taint. Will not process.", node.Name)
+		logger.V(2).Info("This node is registered without the cloud taint. Will not process.", "nodeName", node.Name)
 		return
 	}
 
