@@ -46,7 +46,7 @@ func main() {
 		Version: version.Get().GitVersion,
 		Run: func(_ *cobra.Command, args []string) {
 			if len(args) != 1 {
-				logger.Error("Config file is not specified")
+				logger.Error(nil, "Config file is not specified")
 				os.Exit(1)
 			}
 

@@ -618,7 +618,7 @@ func (as *availabilitySet) GetIPByNodeName(ctx context.Context, name string) (st
 
 	ipConfig, err := getPrimaryIPConfig(nic)
 	if err != nil {
-		logger.Error(err, "as.GetIPByNodeName failed: getPrimaryIPConfig error", "node", name, "nic", nic)
+		logger.Error(err, "getPrimaryIPConfig failed", "node", name, "nic", nic)
 		return "", "", err
 	}
 
@@ -689,7 +689,7 @@ func (as *availabilitySet) getAgentPoolAvailabilitySets(vms []*armcompute.Virtua
 		}
 		asName, err := getLastSegment(asID, "/")
 		if err != nil {
-			logger.Error(err, "as.getNodeAvailabilitySet - Node getLastSegment failed", "node", nodeName, "asID", asID)
+			logger.Error(err, "Node getLastSegment failed", "node", nodeName, "asID", asID)
 			return nil, err
 		}
 		// AvailabilitySet ID is currently upper cased in a non-deterministic way
