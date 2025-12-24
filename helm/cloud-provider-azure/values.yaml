@@ -14,9 +14,9 @@ cloudControllerManager:
   # controllerStartInterval: "2m"
   # enableDynamicReloading: "true"
   # http2MaxStreamsPerConnection: "47"
-  imageRepository: "mcr.microsoft.com/oss/kubernetes"
+  imageRepository: "mcr.microsoft.com/oss/v2/kubernetes"
   imageName: "azure-cloud-controller-manager"
-  #imageTag: "v1.23.11"
+  #imageTag: "v1.34.3"
   imagePullPolicy: "IfNotPresent"
   # kubeAPIBurst: "100"
   # kubeAPIContentType: "application/vnd.kubernetes.protobuf"
@@ -54,9 +54,9 @@ cloudControllerManager:
   federatedTokenPath: "/var/run/secrets/azure/tokens"
 cloudNodeManager:
   enabled: true
-  imageRepository: "mcr.microsoft.com/oss/kubernetes"
+  imageRepository: "mcr.microsoft.com/oss/v2/kubernetes"
   imageName: "azure-cloud-node-manager"
-  #imageTag: "v1.23.11"
+  #imageTag: "v1.34.3"
   imagePullPolicy: "IfNotPresent"
   # cloudConfig: "/etc/kubernetes/azure.json"
   # kubeAPIBurst: "100"
@@ -81,5 +81,5 @@ cloudNodeManager:
   enableHealthProbeProxy: false
   healthCheckPort: 10356
   targetPort: 10256
-  healthProbeProxyImage: "mcr.microsoft.com/oss/kubernetes/azure-health-probe-proxy:v1.29.0"
-  healthProbeProxyImageWindows: "mcr.microsoft.com/oss/kubernetes/azure-health-probe-proxy:v1.29.0"
+  healthProbeProxyImage: "mcr.microsoft.com/oss/v2/kubernetes/azure-health-probe-proxy:v1.34.3"
+  healthProbeProxyImageWindows: "mcr.microsoft.com/oss/v2/kubernetes/azure-health-probe-proxy:v1.34.3"
