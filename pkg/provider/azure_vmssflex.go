@@ -218,7 +218,7 @@ func (fs *FlexScaleSet) GetInstanceTypeByNodeName(ctx context.Context, name stri
 	logger := log.FromContextOrBackground(ctx).WithName("GetInstanceTypeByNodeName")
 	machine, err := fs.getVmssFlexVM(ctx, name, azcache.CacheReadTypeUnsafe)
 	if err != nil {
-		logger.Error(err, "fs.GetInstanceTypeByNodeName failed", "node", name, "operation", "fs.getVmssFlexVMWithoutInstanceView")
+		logger.Error(err, "fs.getVmssFlexVM failed", "node", name)
 		return "", err
 	}
 
@@ -235,7 +235,7 @@ func (fs *FlexScaleSet) GetZoneByNodeName(ctx context.Context, name string) (clo
 	logger := log.FromContextOrBackground(ctx).WithName("GetZoneByNodeName")
 	vm, err := fs.getVmssFlexVM(ctx, name, azcache.CacheReadTypeUnsafe)
 	if err != nil {
-		logger.Error(err, "fs.GetZoneByNodeName failed", "node", name, "operation", "fs.getVmssFlexVMWithoutInstanceView")
+		logger.Error(err, "fs.getVmssFlexVM failed", "node", name)
 		return cloudprovider.Zone{}, err
 	}
 
@@ -301,7 +301,7 @@ func (fs *FlexScaleSet) GetPrimaryInterface(ctx context.Context, nodeName string
 	logger := log.FromContextOrBackground(ctx).WithName("GetPrimaryInterface")
 	machine, err := fs.getVmssFlexVM(ctx, nodeName, azcache.CacheReadTypeDefault)
 	if err != nil {
-		logger.Error(err, "fs.GetInstanceTypeByNodeName failed: fs.getVmssFlexVMWithoutInstanceView failed", "node", nodeName)
+		logger.Error(err, "fs.getVmssFlexVMWithoutInstanceView failed", "node", nodeName)
 		return nil, err
 	}
 
@@ -337,7 +337,7 @@ func (fs *FlexScaleSet) GetIPByNodeName(ctx context.Context, name string) (strin
 
 	ipConfig, err := getPrimaryIPConfig(nic)
 	if err != nil {
-		logger.Error(err, "fs.GetIPByNodeName failed: getPrimaryIPConfig failed", "node", name, "operation", "fs.getPrimaryIPConfig", "nic", nic)
+		logger.Error(err, "getPrimaryIPConfig failed", "node", name, "nic", nic)
 		return "", "", err
 	}
 
@@ -445,13 +445,13 @@ func (fs *FlexScaleSet) GetNodeCIDRMasksByProviderID(ctx context.Context, provid
 	if v4, ok := vmssFlex.Tags[consts.VMSetCIDRIPV4TagKey]; ok && v4 != nil {
 		ipv4Mask, err = strconv.Atoi(ptr.Deref(v4, ""))
 		if err != nil {
-			logger.Error(err, "error when paring the value of the ipv4 mask size", "value", ptr.Deref(v4, ""))
+			logger.Error(err, "error when parsing the value of the ipv4 mask size", "value", ptr.Deref(v4, ""))
 		}
 	}
 	if v6, ok := vmssFlex.Tags[consts.VMSetCIDRIPV6TagKey]; ok && v6 != nil {
 		ipv6Mask, err = strconv.Atoi(ptr.Deref(v6, ""))
 		if err != nil {
-			logger.Error(err, "error when paring the value of the ipv6 mask size", "value", ptr.Deref(v6, ""))
+			logger.Error(err, "error when parsing the value of the ipv6 mask size", "value", ptr.Deref(v6, ""))
 		}
 	}
 
@@ -486,7 +486,7 @@ func (fs *FlexScaleSet) EnsureHostInPool(ctx context.Context, service *v1.Servic
 
 	nic, err := fs.GetPrimaryInterface(ctx, name)
 	if err != nil {
-		logger.Error(err, "error", "fs.EnsureHostInPool", name, "s.GetPrimaryInterface", name, "vmSetNameOfLB", vmSetNameOfLB)
+		logger.Error(err, "fs.GetPrimaryInterface failed", "node", name, "vmSetNameOfLB", vmSetNameOfLB)
 		return "", "", "", nil, err
 	}
 
