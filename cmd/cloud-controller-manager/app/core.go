@@ -84,6 +84,7 @@ func startCloudNodeLifecycleController(ctx context.Context, controllerContext ge
 }
 
 func startServiceController(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface) (http.Handler, bool, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("startServiceController")
 	// Start the service controller
 	serviceController, err := servicecontroller.New(
 		cloud,
@@ -95,7 +96,7 @@ func startServiceController(ctx context.Context, controllerContext genericcontro
 	)
 	if err != nil {
 		// This error shouldn't fail. It lives like this as a legacy.
-		klog.Errorf("Failed to start service controller: %v", err)
+		logger.Error(err, "Failed to start service controller")
 		return nil, false, nil
 	}
 

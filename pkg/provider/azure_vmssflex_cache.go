@@ -38,6 +38,7 @@ import (
 
 func (fs *FlexScaleSet) newVmssFlexCache() (azcache.Resource, error) {
 	getter := func(ctx context.Context, _ string) (interface{}, error) {
+		logger := log.FromContextOrBackground(ctx).WithName("newVmssFlexCache")
 		localCache := &sync.Map{}
 
 		allResourceGroups, err := fs.GetResourceGroups()
@@ -52,7 +53,7 @@ func (fs *FlexScaleSet) newVmssFlexCache() (azcache.Resource, error) {
 					klog.Warningf("Skip caching vmss for resource group %s due to error: %v", resourceGroup, rerr.Error())
 					continue
 				}
-				klog.Errorf("VirtualMachineScaleSetsClient.List failed: %v", rerr)
+				logger.Error(rerr, "VirtualMachineScaleSetsClient.List failed")
 				return nil, rerr
 			}
 
@@ -80,6 +81,7 @@ func (fs *FlexScaleSet) newVmssFlexCache() (azcache.Resource, error) {
 
 func (fs *FlexScaleSet) newVmssFlexVMCache() (azcache.Resource, error) {
 	getter := func(ctx context.Context, key string) (interface{}, error) {
+		logger := log.FromContextOrBackground(ctx).WithName("newVmssFlexVMCache")
 		localCache := &sync.Map{}
 		armResource, err := arm.ParseResourceID("/" + key)
 		if err != nil {
@@ -87,7 +89,7 @@ func (fs *FlexScaleSet) newVmssFlexVMCache() (azcache.Resource, error) {
 		}
 		vms, rerr := fs.ComputeClientFactory.GetVirtualMachineClient().ListVmssFlexVMsWithOutInstanceView(ctx, armResource.ResourceGroupName, key)
 		if rerr != nil {
-			klog.Errorf("List failed: %v", rerr)
+			logger.Error(rerr, "List failed")
 			return nil, rerr
 		}
 
@@ -102,7 +104,7 @@ func (fs *FlexScaleSet) newVmssFlexVMCache() (azcache.Resource, error) {
 
 		vms, rerr = fs.ComputeClientFactory.GetVirtualMachineClient().ListVmssFlexVMsWithOnlyInstanceView(ctx, armResource.ResourceGroupName, key)
 		if rerr != nil {
-			klog.Errorf("ListVMInstanceView failed: %v", rerr)
+			logger.Error(rerr, "ListVMInstanceView failed")
 			return nil, rerr
 		}
 
@@ -151,7 +153,7 @@ func (fs *FlexScaleSet) getNodeNameByVMName(ctx context.Context, vmName string) 
 			vmssFlexID := key.(string)
 			_, err := fs.vmssFlexVMCache.Get(ctx, vmssFlexID, azcache.CacheReadTypeForceRefresh)
 			if err != nil {
-				klog.Errorf("failed to refresh vmss flex VM cache for vmssFlexID %s", vmssFlexID)
+				logger.Error(err, "failed to refresh vmss flex VM cache", "vmssFlexID", vmssFlexID)
 			}
 			return true
 		})
@@ -211,7 +213,7 @@ func (fs *FlexScaleSet) getNodeVmssFlexID(ctx context.Context, nodeName string) 
 
 		for _, vmssID := range vmssFlexIDs {
 			if _, err := fs.vmssFlexVMCache.Get(ctx, vmssID, azcache.CacheReadTypeForceRefresh); err != nil {
-				klog.Errorf("failed to refresh vmss flex VM cache for vmssFlexID %s", vmssID)
+				logger.Error(err, "failed to refresh vmss flex VM cache for vmssFlexID", "vmssFlexID", vmssID)
 			}
 			// if the vm is cached stop refreshing
 			cachedVmssFlexID, isCached = fs.vmssFlexVMNameToVmssID.Load(nodeName)
@@ -348,7 +350,7 @@ func (fs *FlexScaleSet) DeleteCacheForNode(ctx context.Context, nodeName string)
 	}
 	vmssFlexID, err := fs.getNodeVmssFlexID(ctx, nodeName)
 	if err != nil {
-		klog.Errorf("getNodeVmssFlexID(%s) failed with %v", nodeName, err)
+		logger.Error(err, "getNodeVmssFlexID failed with node", "node", nodeName)
 		return err
 	}
 
@@ -356,12 +358,12 @@ func (fs *FlexScaleSet) DeleteCacheForNode(ctx context.Context, nodeName string)
 	defer fs.lockMap.UnlockEntry(vmssFlexID)
 	cached, err := fs.vmssFlexVMCache.Get(ctx, vmssFlexID, azcache.CacheReadTypeDefault)
 	if err != nil {
-		klog.Errorf("vmssFlexVMCache.Get(%s, %s) failed with %v", vmssFlexID, nodeName, err)
+		logger.Error(err, "vmssFlexVMCache.Get failed", "vmssFlexID", vmssFlexID, "node", nodeName)
 		return err
 	}
 	if cached == nil {
 		err := fmt.Errorf("nil cache returned from %s", vmssFlexID)
-		klog.Errorf("DeleteCacheForNode(%s, %s) failed with %v", vmssFlexID, nodeName, err)
+		logger.Error(err, "DeleteCacheForNode failed", "vmssFlexID", vmssFlexID, "node", nodeName)
 		return err
 	}
 	vmMap := cached.(*sync.Map)

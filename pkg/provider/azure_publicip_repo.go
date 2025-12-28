@@ -81,10 +81,11 @@ func (az *Cloud) CreateOrUpdatePIP(service *v1.Service, pipResourceGroup string,
 func (az *Cloud) DeletePublicIP(service *v1.Service, pipResourceGroup string, pipName string) error {
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
+	logger := log.FromContextOrBackground(ctx).WithName("DeletePublicIP")
 
 	rerr := az.NetworkClientFactory.GetPublicIPAddressClient().Delete(ctx, pipResourceGroup, pipName)
 	if rerr != nil {
-		klog.Errorf("NetworkClientFactory.GetPublicIPAddressClient().Delete(%s) failed: %s", pipName, rerr.Error())
+		logger.Error(rerr, "NetworkClientFactory.GetPublicIPAddressClient().Delete failed", "pipName", pipName)
 		az.Event(service, v1.EventTypeWarning, "DeletePublicIPAddress", rerr.Error())
 
 		if strings.Contains(rerr.Error(), consts.CannotDeletePublicIPErrorMessageCode) {
