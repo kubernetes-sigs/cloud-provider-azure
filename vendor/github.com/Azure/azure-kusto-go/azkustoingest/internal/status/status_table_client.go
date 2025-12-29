@@ -16,11 +16,17 @@ const (
 	fullMetadata          = aztables.MetadataFormatFull
 )
 
+type TableClientReader interface {
+	Read(ctx context.Context, ingestionSourceID string) (map[string]interface{}, error)
+}
+
 // TableClient allows reading and writing to azure tables.
 type TableClient struct {
 	tableURI resources.URI
 	client   *aztables.Client
 }
+
+var _ TableClientReader = (*TableClient)(nil)
 
 // NewTableClient Creates an azure table client.
 func NewTableClient(client policy.Transporter, uri resources.URI) (*TableClient, error) {

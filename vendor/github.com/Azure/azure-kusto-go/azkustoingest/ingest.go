@@ -3,13 +3,15 @@ package azkustoingest
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
+
 	"github.com/Azure/azure-kusto-go/azkustodata"
 	"github.com/Azure/azure-kusto-go/azkustodata/errors"
 	"github.com/Azure/azure-kusto-go/azkustoingest/internal/properties"
 	"github.com/Azure/azure-kusto-go/azkustoingest/internal/queued"
 	"github.com/Azure/azure-kusto-go/azkustoingest/internal/resources"
 	"github.com/google/uuid"
-	"io"
 )
 
 type Ingestor interface {
@@ -33,6 +35,7 @@ type Ingestion struct {
 
 	withoutEndpointCorrection    bool
 	customIngestConnectionString *azkustodata.ConnectionStringBuilder
+	httpClient                   *http.Client
 	applicationForTracing        string
 	clientVersionForTracing      string
 }
@@ -50,7 +53,15 @@ func New(kcsb *azkustodata.ConnectionStringBuilder, options ...Option) (*Ingesti
 	i.applicationForTracing = clientDetails.ApplicationForTracing()
 	i.clientVersionForTracing = clientDetails.ClientVersionForTracing()
 
-	client, err := azkustodata.New(kcsb)
+	var client *azkustodata.Client
+	var err error
+
+	if i.httpClient != nil {
+		client, err = azkustodata.New(kcsb, azkustodata.WithHttpClient(i.httpClient))
+	} else {
+		client, err = azkustodata.New(kcsb)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -162,17 +173,24 @@ func (i *Ingestion) fromFile(ctx context.Context, fPath string, options []FileOp
 
 	result.record.IngestionSourcePath = fPath
 
+	blobURL := fPath
+	size := int64(0)
 	if local {
-		err = i.fs.Local(ctx, fPath, props)
-	} else {
-		err = i.fs.Blob(ctx, fPath, 0, props)
+		blobURL, size, err = i.fs.UploadLocalToBlob(ctx, fPath, props)
+		if err != nil {
+			return nil, err
+		}
 	}
 
+	if err = result.putQueued(ctx, i); err != nil {
+		return nil, err
+	}
+
+	err = i.fs.IngestBlob(ctx, blobURL, size, props)
 	if err != nil {
 		return nil, err
 	}
 
-	result.putQueued(ctx, i)
 	return result, nil
 }
 
@@ -190,13 +208,20 @@ func (i *Ingestion) fromReader(ctx context.Context, reader io.Reader, options []
 		return nil, err
 	}
 
-	path, err := i.fs.Reader(ctx, reader, props)
+	blobURL, size, err := i.fs.UploadReaderToBlob(ctx, reader, props)
 	if err != nil {
 		return nil, err
 	}
 
-	result.record.IngestionSourcePath = path
-	result.putQueued(ctx, i)
+	if err = result.putQueued(ctx, i); err != nil {
+		return nil, err
+	}
+
+	err = i.fs.IngestBlob(ctx, blobURL, size, props)
+	if err != nil {
+		return nil, err
+	}
+
 	return result, nil
 }
 
