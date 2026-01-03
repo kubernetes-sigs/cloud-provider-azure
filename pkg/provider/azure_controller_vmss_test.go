@@ -174,6 +174,8 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 		vmssvmName     types.NodeName
 		disks          []string
 		forceDetach    bool
+		noDisksOnVM    bool
+		skipUpdate     bool
 		expectedErr    bool
 		expectedErrMsg string
 	}{
@@ -221,11 +223,31 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 			expectedErrMsg: "instance not found",
 		},
 		{
-			desc:        "no error shall be returned if everything is good and the attaching disk does not match data disk",
+			desc:        "no error shall be returned if VM has disks but the disk to detach does not match any data disk",
 			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
 			vmssName:    "vmss00",
 			vmssvmName:  "vmss00-vm-000000",
 			disks:       []string{"disk-name-err"},
+			skipUpdate:  true,
+			expectedErr: false,
+		},
+		{
+			desc:        "no error shall be returned if VM has disks but multiple disks to detach do not match any data disk",
+			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
+			vmssName:    "vmss00",
+			vmssvmName:  "vmss00-vm-000000",
+			disks:       []string{"disk-name-err", "another-nonexistent-disk"},
+			skipUpdate:  true,
+			expectedErr: false,
+		},
+		{
+			desc:        "no error shall be returned if no disks are found on the VM and update is skipped",
+			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
+			vmssName:    "vmss00",
+			vmssvmName:  "vmss00-vm-000000",
+			disks:       []string{diskName},
+			noDisksOnVM: true,
+			skipUpdate:  true,
 			expectedErr: false,
 		},
 	}
@@ -245,17 +267,13 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 		expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(testCloud, scaleSetName, "", 0, test.vmssVMList, "succeeded", false)
 		var updatedVMSSVM *armcompute.VirtualMachineScaleSetVM
 		for itr, vmssvm := range expectedVMSSVMs {
-			vmssvm.Properties.StorageProfile = &armcompute.StorageProfile{
-				OSDisk: &armcompute.OSDisk{
-					Name: ptr.To("OSDisk1"),
-					ManagedDisk: &armcompute.ManagedDiskParameters{
-						ID: ptr.To("ManagedID"),
-						DiskEncryptionSet: &armcompute.DiskEncryptionSetParameters{
-							ID: ptr.To("DiskEncryptionSetID"),
-						},
-					},
-				},
-				DataDisks: []*armcompute.DataDisk{
+			var dataDisks []*armcompute.DataDisk
+			if test.noDisksOnVM {
+				// No disks on the VM
+				dataDisks = []*armcompute.DataDisk{}
+			} else {
+				// Default: VM has disks
+				dataDisks = []*armcompute.DataDisk{
 					{
 						Lun:  ptr.To(int32(0)),
 						Name: ptr.To(diskName),
@@ -268,7 +286,19 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 						Lun:  ptr.To(int32(2)),
 						Name: ptr.To("disk3"),
 					},
+				}
+			}
+			vmssvm.Properties.StorageProfile = &armcompute.StorageProfile{
+				OSDisk: &armcompute.OSDisk{
+					Name: ptr.To("OSDisk1"),
+					ManagedDisk: &armcompute.ManagedDiskParameters{
+						ID: ptr.To("ManagedID"),
+						DiskEncryptionSet: &armcompute.DiskEncryptionSetParameters{
+							ID: ptr.To("DiskEncryptionSetID"),
+						},
+					},
 				},
+				DataDisks: dataDisks,
 			}
 
 			if string(test.vmssvmName) == *vmssvm.Properties.OSProfile.ComputerName {
@@ -279,9 +309,11 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 		mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), testCloud.ResourceGroup, scaleSetName).Return(expectedVMSSVMs, nil).AnyTimes()
 		if scaleSetName == strings.ToLower(string(fakeStatusNotFoundVMSSName)) {
 			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any()).Return(updatedVMSSVM, &azcore.ResponseError{StatusCode: http.StatusNotFound, ErrorCode: cloudprovider.InstanceNotFound.Error()}).AnyTimes()
-		} else {
+		} else if !test.skipUpdate {
+			// Update should only be called if there are matching disks to detach
 			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any()).Return(updatedVMSSVM, nil).AnyTimes()
 		}
+		// If skipUpdate is true, we explicitly expect Update NOT to be called (no mock expectation set)
 
 		mockVMClient := testCloud.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 		mockVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
@@ -300,7 +332,11 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 
 		if !test.expectedErr {
 			dataDisks, _, err := ss.GetDataDisks(context.TODO(), test.vmssvmName, azcache.CacheReadTypeDefault)
-			assert.Equal(t, true, len(dataDisks) == 3, "TestCase[%d]: %s, actual data disk num: %d, err: %v", i, test.desc, len(dataDisks), err)
+			if test.noDisksOnVM {
+				assert.Equal(t, true, len(dataDisks) == 0, "TestCase[%d]: %s, actual data disk num: %d, err: %v", i, test.desc, len(dataDisks), err)
+			} else {
+				assert.Equal(t, true, len(dataDisks) == 3, "TestCase[%d]: %s, actual data disk num: %d, err: %v", i, test.desc, len(dataDisks), err)
+			}
 		}
 	}
 }
