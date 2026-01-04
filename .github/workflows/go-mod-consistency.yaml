@@ -21,35 +21,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v4.2.2
 
+      - name: Discover Go modules
+        id: gomods
+        uses: ./.github/actions/discover-go-modules
+
       - name: Setup Go
         uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
         with:
-          go-version-file: go.mod
+          go-version: ${{ steps.gomods.outputs.version }}
           check-latest: true
-          cache-dependency-path: |
-            go.sum
-            tests/go.sum
-            pkg/azclient/go.sum
-            pkg/azclient/cache/go.sum
-            pkg/azclient/configloader/go.sum
-            pkg/azclient/trace/go.sum
-            pkg/azclient/client-gen/go.sum
-            health-probe-proxy/go.sum
+          cache-dependency-path: ${{ steps.gomods.outputs.gosums }}
 
       - name: Run go mod tidy and verify
         run: |
           set -euo pipefail
-          modules=(
-            .
-            tests
-            pkg/azclient
-            pkg/azclient/cache
-            pkg/azclient/configloader
-            pkg/azclient/trace
-            pkg/azclient/client-gen
-            health-probe-proxy
-          )
+          mapfile -t modules <<< "${{ steps.gomods.outputs.modules }}"
+          if [ "${#modules[@]}" -eq 0 ]; then
+            echo "No modules found from discovery step" >&2
+            exit 1
+          fi
           for m in "${modules[@]}"; do
+            if [ -z "${m}" ]; then
+              continue
+            fi
             echo ">> go mod tidy (${m})"
             (cd "${m}" && go mod tidy)
             echo ">> go mod verify (${m})"
