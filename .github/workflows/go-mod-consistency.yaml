@@ -23,42 +23,7 @@ jobs:
 
       - name: Discover Go modules
         id: gomods
-        run: |
-          set -euo pipefail
-          mapfile -t go_mods < <(git ls-files '**/go.mod')
-          if [ "${#go_mods[@]}" -eq 0 ]; then
-            echo "No go.mod files found" >&2
-            exit 1
-          fi
-
-          max=$(awk '$1=="go"{print $2}' "${go_mods[@]}" | sort -V | tail -n1)
-          if [ -z "${max}" ]; then
-            echo "No go directive found in go.mod files" >&2
-            exit 1
-          fi
-
-          modules=()
-          gosums=()
-          for mod in "${go_mods[@]}"; do
-            dir="$(dirname "$mod")"
-            modules+=("${dir}")
-            if [ -f "${dir}/go.sum" ]; then
-              gosums+=("${dir}/go.sum")
-            fi
-          done
-
-          mapfile -t modules < <(printf '%s\n' "${modules[@]}" | sort -u)
-          mapfile -t gosums < <(printf '%s\n' "${gosums[@]}" | sort -u)
-
-          {
-            echo "version=${max}"
-            echo "modules<<EOF"
-            printf '%s\n' "${modules[@]}"
-            echo "EOF"
-            echo "gosums<<EOF"
-            printf '%s\n' "${gosums[@]}"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+        uses: ./.github/actions/discover-go-modules
 
       - name: Setup Go
         uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
