@@ -317,8 +317,8 @@ func (az *Cloud) keepSharedProbe(
 					if len(probe.Properties.LoadBalancingRules) == 1 {
 						ruleName, err := getLastSegment(*probe.Properties.LoadBalancingRules[0].ID, "/")
 						if err != nil {
-							klog.Errorf("failed to parse load balancing rule name %s attached to health probe %s",
-								*probe.Properties.LoadBalancingRules[0].ID, *probe.ID)
+							logger.Error(err, "failed to parse load balancing rule name attached to health probe",
+								"ruleName", *probe.Properties.LoadBalancingRules[0].ID, "healthProbe", *probe.ID)
 						} else {
 							// If the service owns the rule and is now a local service,
 							// it means the service was switched from Cluster to Local
@@ -338,7 +338,7 @@ func (az *Cloud) keepSharedProbe(
 					for _, rule := range probe.Properties.LoadBalancingRules {
 						ruleName, err := getLastSegment(*rule.ID, "/")
 						if err != nil {
-							klog.Errorf("failed to parse load balancing rule name %s attached to health probe %s", *rule.ID, *probe.ID)
+							logger.Error(err, "failed to parse load balancing rule name attached to health probe", "ruleName", *rule.ID, "healthProbe", *probe.ID)
 							return []*armnetwork.Probe{}, err
 						}
 						if !az.serviceOwnsRule(service, ruleName) && shouldConsiderRemoveSharedProbe {

@@ -45,7 +45,7 @@ func (az *Cloud) GetVirtualMachineWithRetry(ctx context.Context, name types.Node
 			return true, cloudprovider.InstanceNotFound
 		}
 		if retryErr != nil {
-			klog.Errorf("GetVirtualMachineWithRetry(%s): backoff failure, will retry, err=%v", name, retryErr)
+			logger.Error(retryErr, "backoff failure, will retry", "node", name)
 			return false, nil
 		}
 		logger.V(2).Info("backoff success", "node", name)
@@ -62,7 +62,7 @@ func (az *Cloud) ListVirtualMachines(ctx context.Context, resourceGroup string) 
 	logger := log.FromContextOrBackground(ctx).WithName("ListVirtualMachines")
 	allNodes, err := az.ComputeClientFactory.GetVirtualMachineClient().List(ctx, resourceGroup)
 	if err != nil {
-		klog.Errorf("ComputeClientFactory.GetVirtualMachineClient().List(%v) failure with err=%v", resourceGroup, err)
+		logger.Error(err, "ComputeClientFactory.GetVirtualMachineClient().List failure", "resourceGroup", resourceGroup)
 		return nil, err
 	}
 	logger.V(6).Info("ComputeClientFactory.GetVirtualMachineClient().List success", "resourceGroup", resourceGroup)
@@ -86,7 +86,7 @@ func (az *Cloud) getPrivateIPsForMachineWithRetry(ctx context.Context, nodeName 
 			if errors.Is(retryErr, cloudprovider.InstanceNotFound) {
 				return true, retryErr
 			}
-			klog.Errorf("GetPrivateIPsByNodeName(%s): backoff failure, will retry,err=%v", nodeName, retryErr)
+			logger.Error(retryErr, "GetPrivateIPsByNodeName: backoff failure, will retry", "node", nodeName)
 			return false, nil
 		}
 		logger.V(3).Info("backoff success", "node", nodeName)
@@ -107,7 +107,7 @@ func (az *Cloud) GetIPForMachineWithRetry(ctx context.Context, name types.NodeNa
 		var retryErr error
 		ip, publicIP, retryErr = az.VMSet.GetIPByNodeName(ctx, string(name))
 		if retryErr != nil {
-			klog.Errorf("GetIPForMachineWithRetry(%s): backoff failure, will retry,err=%v", name, retryErr)
+			logger.Error(retryErr, "GetIPForMachineWithRetry: backoff failure, will retry", "node", name)
 			return false, nil
 		}
 		logger.V(3).Info("backoff success", "node", name)

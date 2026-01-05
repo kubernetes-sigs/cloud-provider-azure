@@ -84,7 +84,7 @@ func (ss *ScaleSet) newVMSSCache() (azcache.Resource, error) {
 					resourceGroupNotFound = true
 					continue
 				}
-				klog.Errorf("ComputeClientFactory.GetVirtualMachineScaleSetClient().List failed: %v", rerr)
+				logger.Error(rerr, "ComputeClientFactory.GetVirtualMachineScaleSetClient().List failed")
 				return nil, rerr
 			}
 
@@ -256,7 +256,7 @@ func (ss *ScaleSet) DeleteCacheForNode(ctx context.Context, nodeName string) err
 	}
 	vmManagementType, err := ss.getVMManagementTypeByNodeName(ctx, nodeName, azcache.CacheReadTypeUnsafe)
 	if err != nil {
-		klog.Errorf("getVMManagementTypeByNodeName(%s) failed with %v", nodeName, err)
+		logger.Error(err, "getVMManagementTypeByNodeName failed", "node", nodeName)
 		return err
 	}
 
@@ -271,7 +271,7 @@ func (ss *ScaleSet) DeleteCacheForNode(ctx context.Context, nodeName string) err
 
 	node, err := ss.getNodeIdentityByNodeName(ctx, nodeName, azcache.CacheReadTypeUnsafe)
 	if err != nil {
-		klog.Errorf("getNodeIdentityByNodeName(%s) failed with %v", nodeName, err)
+		logger.Error(err, "getNodeIdentityByNodeName failed", "node", nodeName)
 		return err
 	}
 	// get sync.Map cache and remove the node from the cache
@@ -281,7 +281,7 @@ func (ss *ScaleSet) DeleteCacheForNode(ctx context.Context, nodeName string) err
 
 	virtualMachines, err := ss.getVMSSVMsFromCache(ctx, node.resourceGroup, node.vmssName, azcache.CacheReadTypeUnsafe)
 	if err != nil {
-		klog.Errorf("getVMSSVMsFromCache(%s, %s) failed with %v", node.resourceGroup, node.vmssName, err)
+		logger.Error(err, "getVMSSVMsFromCache failed", "resourceGroup", node.resourceGroup, "vmssName", node.vmssName)
 		return err
 	}
 
