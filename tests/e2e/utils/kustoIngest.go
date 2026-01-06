@@ -26,6 +26,7 @@ import (
 
 	"github.com/Azure/azure-kusto-go/azkustodata"
 	"github.com/Azure/azure-kusto-go/azkustoingest"
+
 	logr "sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
