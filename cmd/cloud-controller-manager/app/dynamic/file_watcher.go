@@ -24,12 +24,15 @@ import (
 	"github.com/fsnotify/fsnotify"
 
 	"k8s.io/klog/v2"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 func RunFileWatcherOrDie(path string) chan struct{} {
+	logger := log.Background().WithName("RunFileWatcherOrDie")
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		klog.Errorf("RunFileWatcherOrDie: failed to initialize file watcher: %s", err)
+		logger.Error(err, "RunFileWatcherOrDie: failed to initialize file watcher")
 		os.Exit(1)
 	}
 
@@ -41,12 +44,12 @@ func RunFileWatcherOrDie(path string) chan struct{} {
 			select {
 			case event, ok := <-watcher.Events:
 				if !ok {
-					klog.Error("RunFileWatcherOrDie: events channel closed unexpectedly")
+					logger.Error(nil, "RunFileWatcherOrDie: events channel closed unexpectedly")
 					_ = watcher.Close()
 					os.Exit(1)
 				}
 
-				klog.Infof("RunFileWatcherOrDie: found file update event: %v", event)
+				logger.Info("found file update event", "event", event)
 				updateChan <- struct{}{}
 
 				if strings.EqualFold(event.Name, path) && event.Op&fsnotify.Remove == fsnotify.Remove {
@@ -54,12 +57,12 @@ func RunFileWatcherOrDie(path string) chan struct{} {
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
-					klog.Error("RunFileWatcherOrDie: errors channel closed unexpectedly")
+					logger.Error(nil, "RunFileWatcherOrDie: errors channel closed unexpectedly")
 					_ = watcher.Close()
 					os.Exit(1)
 				}
 
-				klog.Errorf("RunFileWatcherOrDie: failed to watch file %s: %s", path, err.Error())
+				logger.Error(err, "RunFileWatcherOrDie: failed to watch file", "path", path)
 				_ = watcher.Close()
 				os.Exit(1)
 			}
@@ -70,6 +73,7 @@ func RunFileWatcherOrDie(path string) chan struct{} {
 }
 
 func startWatchingOrDie(watcher *fsnotify.Watcher, path string, maxRetries int) {
+	logger := log.Background().WithName("startWatchingOrDie")
 	attempt := 0
 	for {
 		err := watcher.Add(path)
@@ -80,7 +84,7 @@ func startWatchingOrDie(watcher *fsnotify.Watcher, path string, maxRetries int) 
 				time.Sleep(time.Second)
 				continue
 			}
-			klog.Errorf("RunFileWatcherOrDie: failed to watch %s after %d times retry", path, maxRetries)
+			logger.Error(err, "RunFileWatcherOrDie: failed to watch after retries", "path", path, "maxRetries", maxRetries)
 			_ = watcher.Close()
 			os.Exit(1)
 		}

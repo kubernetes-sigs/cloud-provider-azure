@@ -26,10 +26,10 @@ import (
 	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog/v2"
 
 	cloudcontrollerconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/config"
 	"sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/options"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 type SecretWatcher struct {
@@ -50,11 +50,12 @@ func (c *SecretWatcher) Run(stopCh <-chan struct{}) error {
 }
 
 func RunSecretWatcherOrDie(c *cloudcontrollerconfig.Config) chan struct{} {
+	logger := log.Background().WithName("RunSecretWatcherOrDie")
 	factory := informers.NewSharedInformerFactory(c.VersionedClient, options.ResyncPeriod(c)())
 	secretWatcher, updateCh := NewSecretWatcher(factory, c.DynamicReloadingConfig.CloudConfigSecretName, c.DynamicReloadingConfig.CloudConfigSecretNamespace)
 	err := secretWatcher.Run(wait.NeverStop)
 	if err != nil {
-		klog.Errorf("Run: failed to initialize secret watcher: %v", err)
+		logger.Error(err, "Run: failed to initialize secret watcher")
 		os.Exit(1)
 	}
 
@@ -64,6 +65,7 @@ func RunSecretWatcherOrDie(c *cloudcontrollerconfig.Config) chan struct{} {
 // NewSecretWatcher creates a SecretWatcher and a signal channel to indicate
 // the specific secret has been updated
 func NewSecretWatcher(informerFactory informers.SharedInformerFactory, secretName, secretNamespace string) (*SecretWatcher, chan struct{}) {
+	logger := log.Background().WithName("NewSecretWatcher")
 	secretInformer := informerFactory.Core().V1().Secrets()
 	updateSignal := make(chan struct{})
 
@@ -79,7 +81,7 @@ func NewSecretWatcher(informerFactory informers.SharedInformerFactory, secretNam
 
 				if strings.EqualFold(newSecret.Name, secretName) &&
 					strings.EqualFold(newSecret.Namespace, secretNamespace) {
-					klog.V(1).Infof("secret %s updated, sending the signal", newSecret.Name)
+					logger.V(1).Info("secret updated, sending the signal", "secretName", newSecret.Name)
 					updateSignal <- struct{}{}
 				}
 			},

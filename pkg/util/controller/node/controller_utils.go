@@ -23,7 +23,8 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/klog/v2"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 // CreateAddNodeHandler creates an add node handler.
@@ -51,18 +52,19 @@ func CreateUpdateNodeHandler(f func(oldNode, newNode *v1.Node) error) func(oldOb
 // CreateDeleteNodeHandler creates a delete node handler. (Common to lifecycle and ipam)
 func CreateDeleteNodeHandler(f func(node *v1.Node) error) func(obj interface{}) {
 	return func(originalObj interface{}) {
+		logger := log.Background().WithName("CreateDeleteNodeHandler")
 		originalNode, isNode := originalObj.(*v1.Node)
 		// We can get DeletedFinalStateUnknown instead of *v1.Node here and
 		// we need to handle that correctly. #34692
 		if !isNode {
 			deletedState, ok := originalObj.(cache.DeletedFinalStateUnknown)
 			if !ok {
-				klog.Errorf("Received unexpected object: %v", originalObj)
+				logger.Error(nil, "Received unexpected object", "object", originalObj)
 				return
 			}
 			originalNode, ok = deletedState.Obj.(*v1.Node)
 			if !ok {
-				klog.Errorf("DeletedFinalStateUnknown contained non-Node object: %v", deletedState.Obj)
+				logger.Error(nil, "DeletedFinalStateUnknown contained non-Node object", "object", deletedState.Obj)
 				return
 			}
 		}
@@ -89,6 +91,7 @@ func GetNodeCondition(status *v1.NodeStatus, conditionType v1.NodeConditionType)
 
 // RecordNodeStatusChange records a event related to a node status change. (Common to lifecycle and ipam)
 func RecordNodeStatusChange(recorder record.EventRecorder, node *v1.Node, newStatus string) {
+	logger := log.Background().WithName("RecordNodeStatusChange")
 	ref := &v1.ObjectReference{
 		APIVersion: "v1",
 		Kind:       "Node",
@@ -96,7 +99,7 @@ func RecordNodeStatusChange(recorder record.EventRecorder, node *v1.Node, newSta
 		UID:        node.UID,
 		Namespace:  "",
 	}
-	klog.V(2).Infof("Recording status change %s event message for node %s", newStatus, node.Name)
+	logger.V(2).Info("Recording status change event message for node", "status", newStatus, "node", node.Name)
 	// TODO: This requires a transaction, either both node status is updated
 	// and event is recorded or neither should happen, see issue #6055.
 	recorder.Eventf(ref, v1.EventTypeNormal, newStatus, "Node %s status is now: %s", node.Name, newStatus)

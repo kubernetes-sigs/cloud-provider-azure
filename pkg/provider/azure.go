@@ -44,6 +44,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
@@ -194,6 +195,7 @@ func NewCloud(ctx context.Context, clientBuilder cloudprovider.ControllerClientB
 }
 
 func NewCloudFromConfigFile(ctx context.Context, clientBuilder cloudprovider.ControllerClientBuilder, configFilePath string, calFromCCM bool) (cloudprovider.Interface, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("NewCloudFromConfigFile")
 	var (
 		cloud cloudprovider.Interface
 		err   error
@@ -204,14 +206,15 @@ func NewCloudFromConfigFile(ctx context.Context, clientBuilder cloudprovider.Con
 		var configFile *os.File
 		configFile, err = os.Open(configFilePath)
 		if err != nil {
-			klog.Fatalf("Couldn't open cloud provider configuration %s: %#v",
-				configFilePath, err)
+			logger.Error(err, "Couldn't open cloud provider configuration", "configFilePath", configFilePath)
+			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 		}
 
 		defer configFile.Close()
 		configValue, err = config.ParseConfig(configFile)
 		if err != nil {
-			klog.Fatalf("Failed to parse Azure cloud provider config: %v", err)
+			logger.Error(err, "Failed to parse Azure cloud provider config")
+			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 		}
 	}
 	cloud, err = NewCloud(ctx, clientBuilder, configValue, calFromCCM && configFilePath != "")
@@ -255,6 +258,7 @@ var (
 
 // InitializeCloudFromConfig initializes the Cloud from config.
 func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.Config, _, callFromCCM bool) error {
+	logger := log.FromContextOrBackground(ctx).WithName("InitializeCloudFromConfig")
 	if config == nil {
 		// should not reach here
 		return fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config")
@@ -398,7 +402,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 			return fmt.Errorf("useInstanceMetadata must be enabled without Azure credentials")
 		}
 
-		klog.V(2).Infof("Azure cloud provider is starting without credentials")
+		logger.V(2).Info("Azure cloud provider is starting without credentials")
 	}
 
 	if az.ARMClientConfig.UserAgent == "" {
@@ -419,7 +423,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		if err != nil {
 			return err
 		}
-		klog.InfoS("Setting up ARM client factory for network resources", "subscriptionID", networkSubscriptionID)
+		logger.Info("Setting up ARM client factory for network resources", "subscriptionID", networkSubscriptionID)
 
 		az.ComputeClientFactory, err = newARMClientFactory(&azclient.ClientFactoryConfig{
 			SubscriptionID: az.SubscriptionID,
@@ -427,7 +431,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		if err != nil {
 			return err
 		}
-		klog.InfoS("Setting up ARM client factory for compute resources", "subscriptionID", az.SubscriptionID)
+		logger.Info("Setting up ARM client factory for compute resources", "subscriptionID", az.SubscriptionID)
 	}
 
 	networkClientFactory := az.NetworkClientFactory
@@ -497,7 +501,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 			// wait for the success first time of syncing zones
 			err = az.syncRegionZonesMap(ctx)
 			if err != nil {
-				klog.Errorf("InitializeCloudFromConfig: failed to sync regional zones map for the first time: %s", err.Error())
+				logger.Error(err, "Failed to sync regional zones map for the first time")
 				return err
 			}
 
@@ -539,8 +543,9 @@ func (az *Cloud) checkEnableMultipleStandardLoadBalancers() error {
 }
 
 func (az *Cloud) initCaches() (err error) {
+	logger := log.Background().WithName("initCaches")
 	if az.Config.DisableAPICallCache {
-		klog.Infof("API call cache is disabled, ignore logs about cache operations")
+		logger.Info("API call cache is disabled, ignore logs about cache operations")
 	}
 
 	az.vmCache, err = az.newVMCache()
@@ -585,6 +590,7 @@ func (az *Cloud) setLBDefaults(config *azureconfig.Config) error {
 }
 
 func (az *Cloud) setCloudProviderBackoffDefaults(config *azureconfig.Config) wait.Backoff {
+	logger := log.Background().WithName("setCloudProviderBackoffDefaults")
 	// Conditionally configure resource request backoff
 	resourceRequestBackoff := wait.Backoff{
 		Steps: 1,
@@ -611,11 +617,11 @@ func (az *Cloud) setCloudProviderBackoffDefaults(config *azureconfig.Config) wai
 			Duration: time.Duration(config.CloudProviderBackoffDuration) * time.Second,
 			Jitter:   config.CloudProviderBackoffJitter,
 		}
-		klog.V(2).Infof("Azure cloudprovider using try backoff: retries=%d, exponent=%f, duration=%d, jitter=%f",
-			config.CloudProviderBackoffRetries,
-			config.CloudProviderBackoffExponent,
-			config.CloudProviderBackoffDuration,
-			config.CloudProviderBackoffJitter)
+		logger.V(2).Info("Azure cloudprovider using try backoff",
+			"retries", config.CloudProviderBackoffRetries,
+			"exponent", config.CloudProviderBackoffExponent,
+			"duration", config.CloudProviderBackoffDuration,
+			"jitter", config.CloudProviderBackoffJitter)
 	} else {
 		// CloudProviderBackoffRetries will be set to 1 by default as the requirements of Azure SDK.
 		config.CloudProviderBackoffRetries = 1
@@ -684,7 +690,8 @@ func (az *Cloud) ProviderName() string {
 
 // SetInformers sets informers for Azure cloud provider.
 func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
-	klog.Infof("Setting up informers for Azure cloud provider")
+	logger := log.Background().WithName("SetInformers")
+	logger.Info("Setting up informers for Azure cloud provider")
 	nodeInformer := informerFactory.Core().V1().Nodes().Informer()
 	_, _ = nodeInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
@@ -705,18 +712,18 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 			if !isNode {
 				deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
 				if !ok {
-					klog.Errorf("Received unexpected object: %v", obj)
+					logger.Error(nil, "Received unexpected object", "obj", obj)
 					return
 				}
 				node, ok = deletedState.Obj.(*v1.Node)
 				if !ok {
-					klog.Errorf("DeletedFinalStateUnknown contained non-Node object: %v", deletedState.Obj)
+					logger.Error(nil, "DeletedFinalStateUnknown contained non-Node object", "obj", deletedState.Obj)
 					return
 				}
 			}
 			az.updateNodeCaches(node, nil)
 
-			klog.V(4).Infof("Removing node %s from VMSet cache.", node.Name)
+			logger.V(4).Info("Removing node from VMSet cache", "node", node.Name)
 			_ = az.VMSet.DeleteCacheForNode(context.Background(), node.Name)
 		},
 	})
@@ -730,6 +737,7 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 
 // updateNodeCaches updates local cache for node's zones and external resource groups.
 func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
+	logger := log.Background().WithName("updateNodeCaches")
 	az.nodeCachesLock.Lock()
 	defer az.nodeCachesLock.Unlock()
 
@@ -755,8 +763,7 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 		managed, ok := prevNode.ObjectMeta.Labels[consts.ManagedByAzureLabel]
 		isNodeManagedByCloudProvider := !ok || !strings.EqualFold(managed, consts.NotManagedByAzureLabelValue)
 
-		klog.Infof("managed=%v, ok=%v, isNodeManagedByCloudProvider=%v",
-			managed, ok, isNodeManagedByCloudProvider)
+		logger.Info("node management status", "managed", managed, "ok", ok, "isNodeManagedByCloudProvider", isNodeManagedByCloudProvider)
 
 		// Remove from unmanagedNodes cache
 		if !isNodeManagedByCloudProvider {
@@ -765,7 +772,7 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 
 		// Remove from nodePrivateIPs cache.
 		for _, address := range getNodePrivateIPAddresses(prevNode) {
-			klog.V(6).Infof("removing IP address %s of the node %s", address, prevNode.Name)
+			logger.V(6).Info("removing IP address of the node", "address", address, "node", prevNode.Name)
 			az.nodePrivateIPs[prevNode.Name].Delete(address)
 			delete(az.nodePrivateIPToNodeNameMap, address)
 		}
@@ -807,11 +814,11 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 		switch {
 		case !isNodeManagedByCloudProvider:
 			az.excludeLoadBalancerNodes.Insert(newNode.ObjectMeta.Name)
-			klog.V(6).Infof("excluding Node %q from LoadBalancer because it is not managed by cloud provider", newNode.ObjectMeta.Name)
+			logger.V(6).Info("excluding Node from LoadBalancer because it is not managed by cloud provider", "node", newNode.ObjectMeta.Name)
 
 		case hasExcludeBalancerLabel:
 			az.excludeLoadBalancerNodes.Insert(newNode.ObjectMeta.Name)
-			klog.V(6).Infof("excluding Node %q from LoadBalancer because it has exclude-from-external-load-balancers label", newNode.ObjectMeta.Name)
+			logger.V(6).Info("excluding Node from LoadBalancer because it has exclude-from-external-load-balancers label", "node", newNode.ObjectMeta.Name)
 
 		default:
 			// Nodes not falling into the three cases above are valid backends and
@@ -825,7 +832,7 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 				az.nodePrivateIPToNodeNameMap = make(map[string]string)
 			}
 
-			klog.V(6).Infof("adding IP address %s of the node %s", address, newNode.Name)
+			logger.V(6).Info("adding IP address of the node", "address", address, "node", newNode.Name)
 			az.nodePrivateIPs[strings.ToLower(newNode.Name)] = utilsets.SafeInsert(az.nodePrivateIPs[strings.ToLower(newNode.Name)], address)
 			az.nodePrivateIPToNodeNameMap[address] = newNode.Name
 		}
@@ -834,6 +841,7 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 
 // updateNodeTaint updates node out-of-service taint
 func (az *Cloud) updateNodeTaint(node *v1.Node) {
+	logger := log.Background().WithName("updateNodeTaint")
 	if node == nil {
 		klog.Warningf("node is nil, skip updating node out-of-service taint (should not happen)")
 		return
@@ -845,18 +853,18 @@ func (az *Cloud) updateNodeTaint(node *v1.Node) {
 
 	if isNodeReady(node) {
 		if err := cloudnodeutil.RemoveTaintOffNode(az.KubeClient, node.Name, node, nodeOutOfServiceTaint); err != nil {
-			klog.Errorf("failed to remove taint %s from the node %s", v1.TaintNodeOutOfService, node.Name)
+			logger.Error(err, "failed to remove taint from the node", "taint", v1.TaintNodeOutOfService, "node", node.Name)
 		}
 	} else {
 		// node shutdown taint is added when cloud provider determines instance is shutdown
 		if !taints.TaintExists(node.Spec.Taints, nodeOutOfServiceTaint) &&
 			taints.TaintExists(node.Spec.Taints, nodeShutdownTaint) {
-			klog.V(2).Infof("adding %s taint to node %s", v1.TaintNodeOutOfService, node.Name)
+			logger.V(2).Info("adding taint to node", "taint", v1.TaintNodeOutOfService, "node", node.Name)
 			if err := cloudnodeutil.AddOrUpdateTaintOnNode(az.KubeClient, node.Name, nodeOutOfServiceTaint); err != nil {
-				klog.Errorf("failed to add taint %s to the node %s", v1.TaintNodeOutOfService, node.Name)
+				logger.Error(err, "failed to add taint to the node", "taint", v1.TaintNodeOutOfService, "node", node.Name)
 			}
 		} else {
-			klog.V(2).Infof("node %s is not ready but either shutdown taint is missing or out-of-service taint is already added, skip adding node out-of-service taint", node.Name)
+			logger.V(2).Info("node is not ready but either shutdown taint is missing or out-of-service taint is already added, skip adding node out-of-service taint", "node", node.Name)
 		}
 	}
 }

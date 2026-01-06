@@ -12,7 +12,7 @@ require (
 	github.com/octago/sflags v0.3.1
 	github.com/spf13/pflag v1.0.6
 	k8s.io/apimachinery v0.33.0
-	k8s.io/klog v1.0.0
+	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
 	sigs.k8s.io/kubetest2 v0.0.0-20241216131453-22d5b1410bef
 )
@@ -48,5 +48,4 @@ require (
 	golang.org/x/sys v0.32.0 // indirect
 	golang.org/x/text v0.24.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
-	k8s.io/klog/v2 v2.130.1 // indirect
 )

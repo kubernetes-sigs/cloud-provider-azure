@@ -22,14 +22,14 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/klog/v2"
-
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 // GetStorageAccesskey gets the storage account access key
 // getLatestAccountKey: get the latest account key per CreationTime if true, otherwise get the first account key
 func GetStorageAccesskey(ctx context.Context, saClient accountclient.Interface, account, resourceGroup string, getLatestAccountKey bool) (string, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("GetStorageAccesskey")
 	if saClient == nil {
 		return "", fmt.Errorf("StorageAccountClient is nil")
 	}
@@ -61,12 +61,12 @@ func GetStorageAccesskey(ctx context.Context, saClient accountclient.Interface, 
 				if k.CreationTime != nil {
 					creationTime = *k.CreationTime
 				}
-				klog.V(2).Infof("got storage account key with creation time: %v", creationTime)
+				logger.V(2).Info("got storage account key with creation time", "creationTime", creationTime)
 			} else {
 				if k.CreationTime != nil && creationTime.Before(*k.CreationTime) {
 					key = v
 					creationTime = *k.CreationTime
-					klog.V(2).Infof("got storage account key with latest creation time: %v", creationTime)
+					logger.V(2).Info("got storage account key with latest creation time", "creationTime", creationTime)
 				}
 			}
 		}
