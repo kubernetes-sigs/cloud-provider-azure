@@ -35,6 +35,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -89,12 +90,13 @@ func newLoadBalancerBackendPoolUpdater(az *Cloud, interval time.Duration) *loadB
 
 // run starts the loadBalancerBackendPoolUpdater, and stops if the context exits.
 func (updater *loadBalancerBackendPoolUpdater) run(ctx context.Context) {
-	klog.V(2).Info("loadBalancerBackendPoolUpdater.run: started")
+	logger := log.FromContextOrBackground(ctx).WithName("loadBalancerBackendPoolUpdater.run")
+	logger.V(2).Info("started")
 	err := wait.PollUntilContextCancel(ctx, updater.interval, false, func(ctx context.Context) (bool, error) {
 		updater.process(ctx)
 		return false, nil
 	})
-	klog.Infof("loadBalancerBackendPoolUpdater.run: stopped due to %s", err.Error())
+	logger.Error(err, "stopped")
 }
 
 // getAddIPsToBackendPoolOperation creates a new loadBalancerBackendPoolUpdateOperation
@@ -123,34 +125,36 @@ func getRemoveIPsFromBackendPoolOperation(serviceName, loadBalancerName, backend
 
 // addOperation adds an operation to the loadBalancerBackendPoolUpdater.
 func (updater *loadBalancerBackendPoolUpdater) addOperation(operation batchOperation) batchOperation {
+	logger := log.Background().WithName("loadBalancerBackendPoolUpdater.addOperation")
 	updater.lock.Lock()
 	defer updater.lock.Unlock()
 
 	op := operation.(*loadBalancerBackendPoolUpdateOperation)
-	klog.V(4).InfoS("loadBalancerBackendPoolUpdater.addOperation",
+	logger.V(4).Info("Add operation to load balancer backend pool updater",
 		"kind", op.kind,
-		"service name", op.serviceName,
-		"load balancer name", op.loadBalancerName,
-		"backend pool name", op.backendPoolName,
-		"node IPs", strings.Join(op.nodeIPs, ","))
+		"serviceName", op.serviceName,
+		"loadBalancerName", op.loadBalancerName,
+		"backendPoolName", op.backendPoolName,
+		"nodeIPs", strings.Join(op.nodeIPs, ","))
 	updater.operations = append(updater.operations, operation)
 	return operation
 }
 
 // removeOperation removes all operations targeting to the specified service.
 func (updater *loadBalancerBackendPoolUpdater) removeOperation(serviceName string) {
+	logger := log.Background().WithName("loadBalancerBackendPoolUpdater.removeOperation")
 	updater.lock.Lock()
 	defer updater.lock.Unlock()
 
 	for i := len(updater.operations) - 1; i >= 0; i-- {
 		op := updater.operations[i].(*loadBalancerBackendPoolUpdateOperation)
 		if strings.EqualFold(op.serviceName, serviceName) {
-			klog.V(4).InfoS("loadBalancerBackendPoolUpdater.removeOperation",
+			logger.V(4).Info("Remove all operations targeting to the specific service",
 				"kind", op.kind,
-				"service name", op.serviceName,
-				"load balancer name", op.loadBalancerName,
-				"backend pool name", op.backendPoolName,
-				"node IPs", strings.Join(op.nodeIPs, ","))
+				"serviceName", op.serviceName,
+				"loadBalancerName", op.loadBalancerName,
+				"backendPoolName", op.backendPoolName,
+				"nodeIPs", strings.Join(op.nodeIPs, ","))
 			updater.operations = append(updater.operations[:i], updater.operations[i+1:]...)
 		}
 	}
@@ -162,11 +166,12 @@ func (updater *loadBalancerBackendPoolUpdater) removeOperation(serviceName strin
 // if it is retriable, otherwise all operations in the batch targeting to
 // this backend pool will fail.
 func (updater *loadBalancerBackendPoolUpdater) process(ctx context.Context) {
+	logger := log.FromContextOrBackground(ctx).WithName("loadBalancerBackendPoolUpdater.process")
 	updater.lock.Lock()
 	defer updater.lock.Unlock()
 
 	if len(updater.operations) == 0 {
-		klog.V(4).Infof("loadBalancerBackendPoolUpdater.process: no operations to process")
+		logger.V(4).Info("no operations to process")
 		return
 	}
 
@@ -176,11 +181,11 @@ func (updater *loadBalancerBackendPoolUpdater) process(ctx context.Context) {
 		lbOp := op.(*loadBalancerBackendPoolUpdateOperation)
 		si, found := updater.az.getLocalServiceInfo(strings.ToLower(lbOp.serviceName))
 		if !found {
-			klog.V(4).Infof("loadBalancerBackendPoolUpdater.process: service %s is not a local service, skip the operation", lbOp.serviceName)
+			logger.V(4).Info("service is not a local service, skip the operation", "service", lbOp.serviceName)
 			continue
 		}
 		if !strings.EqualFold(si.lbName, lbOp.loadBalancerName) {
-			klog.V(4).InfoS("loadBalancerBackendPoolUpdater.process: service is not associated with the load balancer, skip the operation",
+			logger.V(4).Info("service is not associated with the load balancer, skip the operation",
 				"service", lbOp.serviceName,
 				"previous load balancer", lbOp.loadBalancerName,
 				"current load balancer", si.lbName)
@@ -234,7 +239,7 @@ func (updater *loadBalancerBackendPoolUpdater) process(ctx context.Context) {
 		// To keep the code clean, ignore the case when `changed` is true
 		// but the backend pool object is not changed after multiple times of removal and re-adding.
 		if changed {
-			klog.V(2).Infof("loadBalancerBackendPoolUpdater.process: updating backend pool %s/%s", lbName, poolName)
+			logger.V(2).Info("updating backend pool", "loadBalancer", lbName, "backendPool", poolName)
 			_, err = updater.az.NetworkClientFactory.GetBackendAddressPoolClient().CreateOrUpdate(ctx, updater.az.ResourceGroup, lbName, poolName, *bp)
 			if err != nil {
 				updater.processError(err, operationName, ops...)
@@ -253,8 +258,9 @@ func (updater *loadBalancerBackendPoolUpdater) processError(
 	operationName string,
 	operations ...batchOperation,
 ) {
+	logger := log.Background().WithName("loadBalancerBackendPoolUpdater.processError")
 	if exists, err := errutils.CheckResourceExistsFromAzcoreError(rerr); !exists && err == nil {
-		klog.V(4).Infof("backend pool not found for operation %s, skip updating", operationName)
+		logger.V(4).Info("backend pool not found for operation, skip updating", "operation", operationName)
 		return
 	}
 
@@ -298,6 +304,7 @@ func (az *Cloud) getLocalServiceInfo(serviceName string) (*serviceInfo, bool) {
 // setUpEndpointSlicesInformer creates an informer for EndpointSlices of local services.
 // It watches the update events and send backend pool update operations to the batch updater.
 func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInformerFactory) {
+	logger := log.Background().WithName("setUpEndpointSlicesInformer")
 	endpointSlicesInformer := informerFactory.Discovery().V1().EndpointSlices().Informer()
 	_, _ = endpointSlicesInformer.AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
@@ -311,17 +318,17 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 
 				svcName := getServiceNameOfEndpointSlice(newES)
 				if svcName == "" {
-					klog.V(4).Infof("EndpointSlice %s/%s does not have service name label, skip updating load balancer backend pool", newES.Namespace, newES.Name)
+					logger.V(4).Info("EndpointSlice does not have service name label, skip updating load balancer backend pool", "namespace", newES.Namespace, "name", newES.Name)
 					return
 				}
 
-				klog.V(4).Infof("Detecting EndpointSlice %s/%s update", newES.Namespace, newES.Name)
+				logger.V(4).Info("Detecting EndpointSlice update", "namespace", newES.Namespace, "name", newES.Name)
 				az.endpointSlicesCache.Store(strings.ToLower(fmt.Sprintf("%s/%s", newES.Namespace, newES.Name)), newES)
 
 				key := strings.ToLower(fmt.Sprintf("%s/%s", newES.Namespace, svcName))
 				si, found := az.getLocalServiceInfo(key)
 				if !found {
-					klog.V(4).Infof("EndpointSlice %s/%s belongs to service %s, but the service is not a local service, or has not finished the initial reconciliation loop. Skip updating load balancer backend pool", newES.Namespace, newES.Name, key)
+					logger.V(4).Info("EndpointSlice belongs to service, but the service is not a local service, or has not finished the initial reconciliation loop. Skip updating load balancer backend pool", "namespace", newES.Namespace, "name", newES.Name, "service", key)
 					return
 				}
 				lbName, ipFamily := si.lbName, si.ipFamily
@@ -375,11 +382,11 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 					var ok bool
 					es, ok = v.Obj.(*discovery_v1.EndpointSlice)
 					if !ok {
-						klog.Errorf("Cannot convert to *discovery_v1.EndpointSlice: %T", v.Obj)
+						logger.Error(nil, "Cannot convert to *discovery_v1.EndpointSlice", "obj", v.Obj)
 						return
 					}
 				default:
-					klog.Errorf("Cannot convert to *discovery_v1.EndpointSlice: %T", v)
+					logger.Error(nil, "Cannot convert to *discovery_v1.EndpointSlice", "obj.(type)", v)
 					return
 				}
 
@@ -491,6 +498,7 @@ func newServiceInfo(ipFamily, lbName string) *serviceInfo {
 
 // getLocalServiceEndpointsNodeNames gets the node names that host all endpoints of the local service.
 func (az *Cloud) getLocalServiceEndpointsNodeNames(service *v1.Service) *utilsets.IgnoreCaseSet {
+	logger := log.Background().WithName("getLocalServiceEndpointsNodeNames")
 	var eps []*discovery_v1.EndpointSlice
 	az.endpointSlicesCache.Range(func(_, value interface{}) bool {
 		endpointSlice := value.(*discovery_v1.EndpointSlice)
@@ -508,7 +516,7 @@ func (az *Cloud) getLocalServiceEndpointsNodeNames(service *v1.Service) *utilset
 	var nodeNames []string
 	for _, ep := range eps {
 		for _, endpoint := range ep.Endpoints {
-			klog.V(4).Infof("EndpointSlice %s/%s has endpoint %s on node %s", ep.Namespace, ep.Name, endpoint.Addresses, ptr.Deref(endpoint.NodeName, ""))
+			logger.V(4).Info("EndpointSlice has endpoint on node", "namespace", ep.Namespace, "name", ep.Name, "addresses", endpoint.Addresses, "nodeName", ptr.Deref(endpoint.NodeName, ""))
 			nodeNames = append(nodeNames, ptr.Deref(endpoint.NodeName, ""))
 		}
 	}
@@ -525,6 +533,7 @@ func (az *Cloud) cleanupLocalServiceBackendPool(
 	lbs []*armnetwork.LoadBalancer,
 	clusterName string,
 ) (newLBs []*armnetwork.LoadBalancer, err error) {
+	logger := log.FromContextOrBackground(ctx).WithName("cleanupLocalServiceBackendPool")
 	var changed bool
 	for _, lb := range lbs {
 		lbName := ptr.Deref(lb.Name, "")
@@ -543,7 +552,7 @@ func (az *Cloud) cleanupLocalServiceBackendPool(
 
 	if changed {
 		// Refresh the list of existing LBs after cleanup to update etags for the LBs.
-		klog.V(4).Info("Refreshing the list of existing LBs")
+		logger.V(4).Info("Refreshing the list of existing LBs")
 		lbs, err = az.ListManagedLBs(ctx, svc, nodes, clusterName)
 		if err != nil {
 			return nil, fmt.Errorf("reconcileLoadBalancer: failed to list managed LB: %w", err)
@@ -617,10 +626,11 @@ func (az *Cloud) reconcileIPsInLocalServiceBackendPoolsAsync(
 	currentIPsInBackendPools map[string][]string,
 	expectedIPs []string,
 ) {
+	logger := log.Background().WithName("reconcileIPsInLocalServiceBackendPoolsAsync")
 	for bpName, currentIPs := range currentIPsInBackendPools {
 		ipsToBeDeleted := compareNodeIPs(currentIPs, expectedIPs)
 		if len(ipsToBeDeleted) == 0 && len(currentIPs) == len(expectedIPs) {
-			klog.V(4).Infof("No IP change detected for service %s, skip updating load balancer backend pool", serviceName)
+			logger.V(4).Info("No IP change detected for service, skip updating load balancer backend pool", "service", serviceName)
 			return
 		}
 		if len(ipsToBeDeleted) > 0 {

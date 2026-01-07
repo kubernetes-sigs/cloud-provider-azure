@@ -26,9 +26,9 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
-	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 const (
@@ -55,6 +55,7 @@ type ExtendedLocation struct {
 }
 
 func FilterNonExistingDisks(ctx context.Context, clientFactory azclient.ClientFactory, unfilteredDisks []*armcompute.DataDisk) []*armcompute.DataDisk {
+	logger := log.FromContextOrBackground(ctx).WithName("FilterNonExistingDisks")
 	filteredDisks := []*armcompute.DataDisk{}
 	for _, disk := range unfilteredDisks {
 		filter := false
@@ -62,12 +63,12 @@ func FilterNonExistingDisks(ctx context.Context, clientFactory azclient.ClientFa
 			diSKURI := *disk.ManagedDisk.ID
 			exist, err := checkDiskExists(ctx, clientFactory, diSKURI)
 			if err != nil {
-				klog.Errorf("checkDiskExists(%s) failed with error: %v", diSKURI, err)
+				logger.Error(err, "checkDiskExists failed", "diskURI", diSKURI)
 			} else {
 				// only filter disk when checkDiskExists returns <false, nil>
 				filter = !exist
 				if filter {
-					klog.Errorf("disk(%s) does not exist, removed from data disk list", diSKURI)
+					logger.Error(nil, "disk does not exist, removed from data disk list", "diskURI", diSKURI)
 				}
 			}
 		}

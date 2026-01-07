@@ -23,7 +23,8 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
-	"k8s.io/klog/v2"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 var _ cloudprovider.InstancesV2 = (*Cloud)(nil)
@@ -31,6 +32,7 @@ var _ cloudprovider.InstancesV2 = (*Cloud)(nil)
 // InstanceExists returns true if the instance for the given node exists according to the cloud provider.
 // Use the node.name or node.spec.providerID field to find the node in the cloud provider.
 func (az *Cloud) InstanceExists(ctx context.Context, node *v1.Node) (bool, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("InstanceExists")
 	if node == nil {
 		return false, nil
 	}
@@ -39,7 +41,7 @@ func (az *Cloud) InstanceExists(ctx context.Context, node *v1.Node) (bool, error
 		return false, err
 	}
 	if unmanaged {
-		klog.V(4).Infof("InstanceExists: omitting unmanaged node %q", node.Name)
+		logger.V(4).Info("omitting unmanaged node", "nodeName", node.Name)
 		return true, nil
 	}
 
@@ -52,7 +54,7 @@ func (az *Cloud) InstanceExists(ctx context.Context, node *v1.Node) (bool, error
 				return false, nil
 			}
 
-			klog.Errorf("InstanceExists: failed to get the provider ID by node name %s: %v", node.Name, err)
+			logger.Error(err, "InstanceExists: failed to get the provider ID by node name", "node", node.Name)
 			return false, err
 		}
 	}
@@ -63,6 +65,7 @@ func (az *Cloud) InstanceExists(ctx context.Context, node *v1.Node) (bool, error
 // InstanceShutdown returns true if the instance is shutdown according to the cloud provider.
 // Use the node.name or node.spec.providerID field to find the node in the cloud provider.
 func (az *Cloud) InstanceShutdown(ctx context.Context, node *v1.Node) (bool, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("InstanceShutdown")
 	if node == nil {
 		return false, nil
 	}
@@ -71,7 +74,7 @@ func (az *Cloud) InstanceShutdown(ctx context.Context, node *v1.Node) (bool, err
 		return false, err
 	}
 	if unmanaged {
-		klog.V(4).Infof("InstanceShutdown: omitting unmanaged node %q", node.Name)
+		logger.V(4).Info("omitting unmanaged node", "nodeName", node.Name)
 		return false, nil
 	}
 	providerID := node.Spec.ProviderID
@@ -84,7 +87,7 @@ func (az *Cloud) InstanceShutdown(ctx context.Context, node *v1.Node) (bool, err
 				return false, nil
 			}
 
-			klog.Errorf("InstanceShutdown: failed to get the provider ID by node name %s: %v", node.Name, err)
+			logger.Error(err, "InstanceShutdown: failed to get the provider ID by node name", "node", node.Name)
 			return false, err
 		}
 	}
@@ -96,6 +99,7 @@ func (az *Cloud) InstanceShutdown(ctx context.Context, node *v1.Node) (bool, err
 // translated into specific fields in the Node object on registration.
 // Use the node.name or node.spec.providerID field to find the node in the cloud provider.
 func (az *Cloud) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloudprovider.InstanceMetadata, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("InstanceMetadata")
 	meta := cloudprovider.InstanceMetadata{}
 	if node == nil {
 		return &meta, nil
@@ -105,7 +109,7 @@ func (az *Cloud) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloudpro
 		return &meta, err
 	}
 	if unmanaged {
-		klog.V(4).Infof("InstanceMetadata: omitting unmanaged node %q", node.Name)
+		logger.V(4).Info("omitting unmanaged node", "nodeName", node.Name)
 		return &meta, nil
 	}
 
@@ -114,7 +118,7 @@ func (az *Cloud) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloudpro
 	} else {
 		providerID, err := cloudprovider.GetInstanceProviderID(ctx, az, types.NodeName(node.Name))
 		if err != nil {
-			klog.Errorf("InstanceMetadata: failed to get the provider ID by node name %s: %v", node.Name, err)
+			logger.Error(err, "InstanceMetadata: failed to get the provider ID by node name", "node", node.Name)
 			return nil, err
 		}
 		meta.ProviderID = providerID
@@ -122,21 +126,21 @@ func (az *Cloud) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloudpro
 
 	instanceType, err := az.InstanceType(ctx, types.NodeName(node.Name))
 	if err != nil {
-		klog.Errorf("InstanceMetadata: failed to get the instance type of %s: %v", node.Name, err)
+		logger.Error(err, "InstanceMetadata: failed to get the instance type", "node", node.Name)
 		return &cloudprovider.InstanceMetadata{}, err
 	}
 	meta.InstanceType = instanceType
 
 	nodeAddresses, err := az.NodeAddresses(ctx, types.NodeName(node.Name))
 	if err != nil {
-		klog.Errorf("InstanceMetadata: failed to get the node address of %s: %v", node.Name, err)
+		logger.Error(err, "InstanceMetadata: failed to get the node address", "node", node.Name)
 		return &cloudprovider.InstanceMetadata{}, err
 	}
 	meta.NodeAddresses = nodeAddresses
 
 	zone, err := az.GetZoneByNodeName(ctx, types.NodeName(node.Name))
 	if err != nil {
-		klog.Errorf("InstanceMetadata: failed to get the node zone of %s: %v", node.Name, err)
+		logger.Error(err, "InstanceMetadata: failed to get the node zone", "node", node.Name)
 		return &cloudprovider.InstanceMetadata{}, err
 	}
 	meta.Zone = zone.FailureDomain

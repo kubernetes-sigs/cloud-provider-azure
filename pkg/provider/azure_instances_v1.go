@@ -26,10 +26,10 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
-	"k8s.io/klog/v2"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 var _ cloudprovider.Instances = (*Cloud)(nil)
@@ -45,9 +45,10 @@ var (
 )
 
 func (az *Cloud) addressGetter(ctx context.Context, nodeName types.NodeName) ([]v1.NodeAddress, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("addressGetter")
 	ip, publicIP, err := az.getIPForMachine(ctx, nodeName)
 	if err != nil {
-		klog.V(2).Infof("NodeAddresses(%s) abort backoff: %v", nodeName, err)
+		logger.V(2).Info("NodeAddresses abort backoff", "nodeName", nodeName, "error", err)
 		return nil, err
 	}
 
@@ -66,13 +67,14 @@ func (az *Cloud) addressGetter(ctx context.Context, nodeName types.NodeName) ([]
 
 // NodeAddresses returns the addresses of the specified instance.
 func (az *Cloud) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.NodeAddress, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("NodeAddresses")
 	// Returns nil for unmanaged nodes because azure cloud provider couldn't fetch information for them.
 	unmanaged, err := az.IsNodeUnmanaged(string(name))
 	if err != nil {
 		return nil, err
 	}
 	if unmanaged {
-		klog.V(4).Infof("NodeAddresses: omitting unmanaged node %q", name)
+		logger.V(4).Info("omitting unmanaged node", "nodeName", name)
 		return nil, nil
 	}
 
@@ -156,13 +158,14 @@ func (az *Cloud) getLocalInstanceNodeAddresses(netInterfaces []*NetworkInterface
 // This method will not be called from the node that is requesting this ID. i.e. metadata service
 // and other local methods cannot be used here
 func (az *Cloud) NodeAddressesByProviderID(ctx context.Context, providerID string) ([]v1.NodeAddress, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("NodeAddressesByProviderID")
 	if providerID == "" {
 		return nil, errNodeNotInitialized
 	}
 
 	// Returns nil for unmanaged nodes because azure cloud provider couldn't fetch information for them.
 	if az.IsNodeUnmanagedByProviderID(providerID) {
-		klog.V(4).Infof("NodeAddressesByProviderID: omitting unmanaged node %q", providerID)
+		logger.V(4).Info("omitting unmanaged node", "providerID", providerID)
 		return nil, nil
 	}
 
@@ -182,13 +185,14 @@ func (az *Cloud) NodeAddressesByProviderID(ctx context.Context, providerID strin
 // InstanceExistsByProviderID returns true if the instance with the given provider id still exists and is running.
 // If false is returned with no error, the instance will be immediately deleted by the cloud controller manager.
 func (az *Cloud) InstanceExistsByProviderID(ctx context.Context, providerID string) (bool, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("InstanceExistsByProviderID")
 	if providerID == "" {
 		return false, errNodeNotInitialized
 	}
 
 	// Returns true for unmanaged nodes because azure cloud provider always assumes them exists.
 	if az.IsNodeUnmanagedByProviderID(providerID) {
-		klog.V(4).Infof("InstanceExistsByProviderID: assuming unmanaged node %q exists", providerID)
+		logger.V(4).Info("assuming unmanaged node exists", "providerID", providerID)
 		return true, nil
 	}
 
@@ -218,6 +222,7 @@ func (az *Cloud) InstanceExistsByProviderID(ctx context.Context, providerID stri
 
 // InstanceShutdownByProviderID returns true if the instance is in safe state to detach volumes
 func (az *Cloud) InstanceShutdownByProviderID(ctx context.Context, providerID string) (bool, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("InstanceShutdownByProviderID")
 	if providerID == "" {
 		return false, nil
 	}
@@ -245,7 +250,7 @@ func (az *Cloud) InstanceShutdownByProviderID(ctx context.Context, providerID st
 
 		return false, err
 	}
-	klog.V(3).Infof("InstanceShutdownByProviderID gets power status %q for node %q", powerStatus, nodeName)
+	logger.V(3).Info("gets power status for node", "powerStatus", powerStatus, "nodeName", nodeName)
 
 	provisioningState, err := az.VMSet.GetProvisioningStateByNodeName(ctx, string(nodeName))
 	if err != nil {
@@ -256,7 +261,7 @@ func (az *Cloud) InstanceShutdownByProviderID(ctx context.Context, providerID st
 
 		return false, err
 	}
-	klog.V(3).Infof("InstanceShutdownByProviderID gets provisioning state %q for node %q", provisioningState, nodeName)
+	logger.V(3).Info("gets provisioning state for node", "provisioningState", provisioningState, "nodeName", nodeName)
 
 	status := strings.ToLower(powerStatus)
 	provisioningSucceeded := strings.EqualFold(strings.ToLower(provisioningState), strings.ToLower(string(consts.ProvisioningStateSucceeded)))
@@ -288,6 +293,7 @@ func (az *Cloud) isCurrentInstance(name types.NodeName, metadataVMName string) (
 // InstanceID returns the cloud provider ID of the specified instance.
 // Note that if the instance does not exist or is no longer running, we must return ("", cloudprovider.InstanceNotFound)
 func (az *Cloud) InstanceID(ctx context.Context, name types.NodeName) (string, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("InstanceID")
 	nodeName := mapNodeNameToVMName(name)
 	unmanaged, err := az.IsNodeUnmanaged(nodeName)
 	if err != nil {
@@ -295,7 +301,7 @@ func (az *Cloud) InstanceID(ctx context.Context, name types.NodeName) (string, e
 	}
 	if unmanaged {
 		// InstanceID is same with nodeName for unmanaged nodes.
-		klog.V(4).Infof("InstanceID: getting ID %q for unmanaged node %q", name, name)
+		logger.V(4).Info("getting ID for unmanaged node", "id", name, "unmanaged", name)
 		return nodeName, nil
 	}
 
@@ -350,13 +356,14 @@ func (az *Cloud) getLocalInstanceProviderID(metadata *InstanceMetadata, _ string
 // This method will not be called from the node that is requesting this ID. i.e. metadata service
 // and other local methods cannot be used here
 func (az *Cloud) InstanceTypeByProviderID(ctx context.Context, providerID string) (string, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("InstanceTypeByProviderID")
 	if providerID == "" {
 		return "", errNodeNotInitialized
 	}
 
 	// Returns "" for unmanaged nodes because azure cloud provider couldn't fetch information for them.
 	if az.IsNodeUnmanagedByProviderID(providerID) {
-		klog.V(4).Infof("InstanceTypeByProviderID: omitting unmanaged node %q", providerID)
+		logger.V(4).Info("omitting unmanaged node", "providerID", providerID)
 		return "", nil
 	}
 
@@ -378,13 +385,14 @@ func (az *Cloud) InstanceTypeByProviderID(ctx context.Context, providerID string
 // (Implementer Note): This is used by kubelet. Kubelet will label the node. Real log from kubelet:
 // Adding node label from cloud provider: beta.kubernetes.io/instance-type=[value]
 func (az *Cloud) InstanceType(ctx context.Context, name types.NodeName) (string, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("InstanceType")
 	// Returns "" for unmanaged nodes because azure cloud provider couldn't fetch information for them.
 	unmanaged, err := az.IsNodeUnmanaged(string(name))
 	if err != nil {
 		return "", err
 	}
 	if unmanaged {
-		klog.V(4).Infof("InstanceType: omitting unmanaged node %q", name)
+		logger.V(4).Info("omitting unmanaged node", "nodeName", name)
 		return "", nil
 	}
 

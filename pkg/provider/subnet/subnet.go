@@ -20,9 +20,9 @@ import (
 	"context"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
-	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 type Repository interface {
@@ -42,10 +42,11 @@ func NewRepo(subnetsClient subnetclient.Interface) (Repository, error) {
 
 // CreateOrUpdateSubnet invokes az.SubnetClient.CreateOrUpdate with exponential backoff retry
 func (az *repo) CreateOrUpdate(ctx context.Context, rg string, vnetName string, subnetName string, subnet armnetwork.Subnet) error {
+	logger := log.FromContextOrBackground(ctx).WithName("SubnetsClient.CreateOrUpdate")
 	_, rerr := az.SubnetsClient.CreateOrUpdate(ctx, rg, vnetName, subnetName, subnet)
-	klog.V(10).Infof("SubnetsClient.CreateOrUpdate(%s): end", subnetName)
+	logger.V(10).Info("end", "subnetName", subnetName)
 	if rerr != nil {
-		klog.Errorf("SubnetClient.CreateOrUpdate(%s) failed: %s", subnetName, rerr.Error())
+		logger.Error(rerr, "SubnetClient.CreateOrUpdate failed", "subnetName", subnetName)
 		return rerr
 	}
 
@@ -53,9 +54,10 @@ func (az *repo) CreateOrUpdate(ctx context.Context, rg string, vnetName string, 
 }
 
 func (az *repo) Get(ctx context.Context, rg string, vnetName string, subnetName string) (*armnetwork.Subnet, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("SubnetsClient.Get")
 	subnet, err := az.SubnetsClient.Get(ctx, rg, vnetName, subnetName, nil)
 	if err != nil {
-		klog.Errorf("SubnetClient.Get(%s) failed: %s", subnetName, err.Error())
+		logger.Error(err, "SubnetClient.Get failed", "subnetName", subnetName)
 		return nil, err
 	}
 	return subnet, nil

@@ -31,10 +31,12 @@ import (
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 // GetVirtualMachineWithRetry invokes az.getVirtualMachine with exponential backoff retry
 func (az *Cloud) GetVirtualMachineWithRetry(ctx context.Context, name types.NodeName, crt azcache.AzureCacheReadType) (*armcompute.VirtualMachine, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("GetVirtualMachineWithRetry")
 	var machine *armcompute.VirtualMachine
 	var retryErr error
 	err := wait.ExponentialBackoff(az.RequestBackoff(), func() (bool, error) {
@@ -43,10 +45,10 @@ func (az *Cloud) GetVirtualMachineWithRetry(ctx context.Context, name types.Node
 			return true, cloudprovider.InstanceNotFound
 		}
 		if retryErr != nil {
-			klog.Errorf("GetVirtualMachineWithRetry(%s): backoff failure, will retry, err=%v", name, retryErr)
+			logger.Error(retryErr, "backoff failure, will retry", "node", name)
 			return false, nil
 		}
-		klog.V(2).Infof("GetVirtualMachineWithRetry(%s): backoff success", name)
+		logger.V(2).Info("backoff success", "node", name)
 		return true, nil
 	})
 	if errors.Is(err, wait.ErrWaitTimeout) {
@@ -57,12 +59,13 @@ func (az *Cloud) GetVirtualMachineWithRetry(ctx context.Context, name types.Node
 
 // ListVirtualMachines invokes az.ComputeClientFactory.GetVirtualMachineClient().List with exponential backoff retry
 func (az *Cloud) ListVirtualMachines(ctx context.Context, resourceGroup string) ([]*armcompute.VirtualMachine, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("ListVirtualMachines")
 	allNodes, err := az.ComputeClientFactory.GetVirtualMachineClient().List(ctx, resourceGroup)
 	if err != nil {
-		klog.Errorf("ComputeClientFactory.GetVirtualMachineClient().List(%v) failure with err=%v", resourceGroup, err)
+		logger.Error(err, "ComputeClientFactory.GetVirtualMachineClient().List failure", "resourceGroup", resourceGroup)
 		return nil, err
 	}
-	klog.V(6).Infof("ComputeClientFactory.GetVirtualMachineClient().List(%v) success", resourceGroup)
+	logger.V(6).Info("ComputeClientFactory.GetVirtualMachineClient().List success", "resourceGroup", resourceGroup)
 	return allNodes, nil
 }
 
@@ -73,6 +76,7 @@ func (az *Cloud) getPrivateIPsForMachine(ctx context.Context, nodeName types.Nod
 }
 
 func (az *Cloud) getPrivateIPsForMachineWithRetry(ctx context.Context, nodeName types.NodeName) ([]string, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("getPrivateIPsForMachineWithRetry")
 	var privateIPs []string
 	err := wait.ExponentialBackoff(az.RequestBackoff(), func() (bool, error) {
 		var retryErr error
@@ -82,10 +86,10 @@ func (az *Cloud) getPrivateIPsForMachineWithRetry(ctx context.Context, nodeName 
 			if errors.Is(retryErr, cloudprovider.InstanceNotFound) {
 				return true, retryErr
 			}
-			klog.Errorf("GetPrivateIPsByNodeName(%s): backoff failure, will retry,err=%v", nodeName, retryErr)
+			logger.Error(retryErr, "GetPrivateIPsByNodeName: backoff failure, will retry", "node", nodeName)
 			return false, nil
 		}
-		klog.V(3).Infof("GetPrivateIPsByNodeName(%s): backoff success", nodeName)
+		logger.V(3).Info("backoff success", "node", nodeName)
 		return true, nil
 	})
 	return privateIPs, err
@@ -97,22 +101,25 @@ func (az *Cloud) getIPForMachine(ctx context.Context, nodeName types.NodeName) (
 
 // GetIPForMachineWithRetry invokes az.getIPForMachine with exponential backoff retry
 func (az *Cloud) GetIPForMachineWithRetry(ctx context.Context, name types.NodeName) (string, string, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("GetIPForMachineWithRetry")
 	var ip, publicIP string
 	err := wait.ExponentialBackoffWithContext(ctx, az.RequestBackoff(), func(ctx context.Context) (bool, error) {
 		var retryErr error
 		ip, publicIP, retryErr = az.VMSet.GetIPByNodeName(ctx, string(name))
 		if retryErr != nil {
-			klog.Errorf("GetIPForMachineWithRetry(%s): backoff failure, will retry,err=%v", name, retryErr)
+			logger.Error(retryErr, "GetIPForMachineWithRetry: backoff failure, will retry", "node", name)
 			return false, nil
 		}
-		klog.V(3).Infof("GetIPForMachineWithRetry(%s): backoff success", name)
+		logger.V(3).Info("backoff success", "node", name)
 		return true, nil
 	})
 	return ip, publicIP, err
 }
 
 func (az *Cloud) newVMCache() (azcache.Resource, error) {
+
 	getter := func(ctx context.Context, key string) (interface{}, error) {
+		logger := log.FromContextOrBackground(ctx).WithName("newVMCache")
 		// Currently InstanceView request are used by azure_zones, while the calls come after non-InstanceView
 		// request. If we first send an InstanceView request and then a non InstanceView request, the second
 		// request will still hit throttling. This is what happens now for cloud controller manager: In this
@@ -132,13 +139,13 @@ func (az *Cloud) newVMCache() (azcache.Resource, error) {
 		}
 
 		if !exists {
-			klog.V(2).Infof("Virtual machine %q not found", key)
+			logger.V(2).Info("Virtual machine not found", "vmName", key)
 			return nil, nil
 		}
 
 		if vm != nil && vm.Properties != nil &&
 			strings.EqualFold(ptr.Deref(vm.Properties.ProvisioningState, ""), string(consts.ProvisioningStateDeleting)) {
-			klog.V(2).Infof("Virtual machine %q is under deleting", key)
+			logger.V(2).Info("Virtual machine is under deleting", "vmName", key)
 			return nil, nil
 		}
 

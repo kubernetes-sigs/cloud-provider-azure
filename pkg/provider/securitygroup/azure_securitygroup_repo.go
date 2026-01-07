@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
 )
 
@@ -56,6 +57,7 @@ type securityGroupRepo struct {
 
 func NewSecurityGroupRepo(securityGroupResourceGroup string, securityGroupName string, nsgCacheTTLInSeconds int, disableAPICallCache bool, securityGroupClient securitygroupclient.Interface) (Repository, error) {
 	getter := func(ctx context.Context, key string) (interface{}, error) {
+		logger := log.FromContextOrBackground(ctx).WithName("NewSecurityGroupRepo.getter")
 		nsg, err := securityGroupClient.Get(ctx, securityGroupResourceGroup, key)
 		exists, rerr := errutils.CheckResourceExistsFromAzcoreError(err)
 		if rerr != nil {
@@ -63,7 +65,7 @@ func NewSecurityGroupRepo(securityGroupResourceGroup string, securityGroupName s
 		}
 
 		if !exists {
-			klog.V(2).Infof("Security group %q not found", key)
+			logger.V(2).Info("Security group not found", "securityGroup", key)
 			return nil, nil
 		}
 
@@ -75,7 +77,8 @@ func NewSecurityGroupRepo(securityGroupResourceGroup string, securityGroupName s
 	}
 	cache, err := azcache.NewTimedCache(time.Duration(nsgCacheTTLInSeconds)*time.Second, getter, disableAPICallCache)
 	if err != nil {
-		klog.Errorf("Failed to create cache for security group %q: %v", securityGroupName, err)
+		logger := log.Background().WithName("NewSecurityGroupRepo")
+		logger.Error(err, "Failed to create cache for security group", "securityGroupName", securityGroupName)
 		return nil, err
 	}
 
@@ -90,8 +93,9 @@ func NewSecurityGroupRepo(securityGroupResourceGroup string, securityGroupName s
 
 // CreateOrUpdateSecurityGroup invokes az.SecurityGroupsClient.CreateOrUpdate with exponential backoff retry
 func (az *securityGroupRepo) CreateOrUpdateSecurityGroup(ctx context.Context, sg *armnetwork.SecurityGroup) error {
+	logger := log.FromContextOrBackground(ctx).WithName("CreateOrUpdateSecurityGroup")
 	_, rerr := az.securigyGroupClient.CreateOrUpdate(ctx, az.securityGroupResourceGroup, *sg.Name, *sg)
-	klog.V(10).Infof("SecurityGroupsClient.CreateOrUpdate(%s): end", *sg.Name)
+	logger.V(10).Info("SecurityGroupsClient.CreateOrUpdate: end", "securityGroupName", *sg.Name)
 	if rerr == nil {
 		// Invalidate the cache right after updating
 		_ = az.nsgCache.Delete(*sg.Name)
@@ -104,13 +108,13 @@ func (az *securityGroupRepo) CreateOrUpdateSecurityGroup(ctx context.Context, sg
 
 		// Invalidate the cache because ETAG precondition mismatch.
 		if respError.StatusCode == http.StatusPreconditionFailed {
-			klog.V(3).Infof("SecurityGroup cache for %s is cleanup because of http.StatusPreconditionFailed", *sg.Name)
+			logger.V(3).Info("SecurityGroup cache is cleanup because of http.StatusPreconditionFailed", "securityGroupName", *sg.Name)
 			_ = az.nsgCache.Delete(*sg.Name)
 		}
 
 		// Invalidate the cache because another new operation has canceled the current request.
 		if strings.Contains(strings.ToLower(respError.Error()), consts.OperationCanceledErrorMessage) {
-			klog.V(3).Infof("SecurityGroup cache for %s is cleanup because CreateOrUpdateSecurityGroup is canceled by another operation", *sg.Name)
+			logger.V(3).Info("SecurityGroup cache is cleanup because CreateOrUpdateSecurityGroup is canceled by another operation", "securityGroupName", *sg.Name)
 			_ = az.nsgCache.Delete(*sg.Name)
 		}
 	}

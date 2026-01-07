@@ -27,12 +27,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	cloudprovider "k8s.io/cloud-provider"
-	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 )
 
@@ -88,22 +88,24 @@ func newDelayedRouteUpdater(az *Cloud, interval time.Duration) batchProcessor {
 
 // run starts the updater reconciling loop.
 func (d *delayedRouteUpdater) run(ctx context.Context) {
-	klog.Info("delayedRouteUpdater: started")
+	logger := log.FromContextOrBackground(ctx).WithName("delayedRouteUpdater")
+	logger.Info("delayedRouteUpdater: started")
 	err := wait.PollUntilContextCancel(ctx, d.interval, true, func(ctx context.Context) (bool, error) {
 		d.updateRoutes(ctx)
 		return false, nil
 	})
-	klog.Infof("delayedRouteUpdater: stopped due to %s", err.Error())
+	logger.Error(err, "delayedRouteUpdater: stopped")
 }
 
 // updateRoutes invokes route table client to update all routes.
 func (d *delayedRouteUpdater) updateRoutes(ctx context.Context) {
+	logger := log.FromContextOrBackground(ctx).WithName("updateRoutes")
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
 	// No need to do any updating.
 	if len(d.routesToUpdate) == 0 {
-		klog.V(4).Info("updateRoutes: nothing to update, returning")
+		logger.V(4).Info("nothing to update, returning")
 		return
 	}
 
@@ -123,7 +125,7 @@ func (d *delayedRouteUpdater) updateRoutes(ctx context.Context) {
 	)
 	routeTable, err = d.az.routeTableRepo.Get(ctx, d.az.RouteTableName, azcache.CacheReadTypeDefault)
 	if err != nil {
-		klog.Errorf("getRouteTable() failed with error: %v", err)
+		logger.Error(err, "getRouteTable() failed")
 		return
 	}
 
@@ -131,13 +133,13 @@ func (d *delayedRouteUpdater) updateRoutes(ctx context.Context) {
 	if routeTable == nil {
 		err = d.az.createRouteTable(ctx)
 		if err != nil {
-			klog.Errorf("createRouteTable() failed with error: %v", err)
+			logger.Error(err, "createRouteTable() failed")
 			return
 		}
 
 		routeTable, err = d.az.routeTableRepo.Get(ctx, d.az.RouteTableName, azcache.CacheReadTypeDefault)
 		if err != nil {
-			klog.Errorf("getRouteTable() failed with error: %v", err)
+			logger.Error(err, "getRouteTable() failed")
 			return
 		}
 	}
@@ -189,12 +191,12 @@ func (d *delayedRouteUpdater) updateRoutes(ctx context.Context) {
 				if rt.operation == routeOperationDelete {
 					routes = append(routes[:i], routes[i+1:]...)
 					dirty = true
-					klog.V(2).Infof("updateRoutes: found outdated route %s targeting node %s, removing it", ptr.Deref(rt.route.Name, ""), rt.nodeName)
+					logger.V(2).Info("found outdated route targeting node, removing it", "route", ptr.Deref(rt.route.Name, ""), "node", rt.nodeName)
 				}
 			}
 		}
 		if rt.operation == routeOperationDelete && !dirty {
-			klog.Warningf("updateRoutes: route to be deleted %s does not match any of the existing route", ptr.Deref(rt.route.Name, ""))
+			logger.Info("route to be deleted does not match any of the existing route", "route", ptr.Deref(rt.route.Name, ""))
 		}
 
 		// Add missing routes if the operation is add.
@@ -209,12 +211,12 @@ func (d *delayedRouteUpdater) updateRoutes(ctx context.Context) {
 
 	if dirty {
 		if !onlyUpdateTags {
-			klog.V(2).Infof("updateRoutes: updating routes")
+			logger.V(2).Info("updating routes")
 			routeTable.Properties.Routes = routes
 		}
 		_, err := d.az.routeTableRepo.CreateOrUpdate(ctx, *routeTable)
 		if err != nil {
-			klog.Errorf("CreateOrUpdateRouteTable() failed with error: %v", err)
+			logger.Error(err, "CreateOrUpdateRouteTable() failed")
 			return
 		}
 
@@ -226,20 +228,21 @@ func (d *delayedRouteUpdater) updateRoutes(ctx context.Context) {
 // cleanupOutdatedRoutes deletes all non-dualstack routes when dualstack is enabled,
 // and deletes all dualstack routes when dualstack is not enabled.
 func (d *delayedRouteUpdater) cleanupOutdatedRoutes(existingRoutes []*armnetwork.Route) (routes []*armnetwork.Route, changed bool) {
+	logger := log.Background().WithName("cleanupOutdatedRoutes")
 	for i := len(existingRoutes) - 1; i >= 0; i-- {
 		existingRouteName := ptr.Deref(existingRoutes[i].Name, "")
 		split := strings.Split(existingRouteName, consts.RouteNameSeparator)
 
-		klog.V(4).Infof("cleanupOutdatedRoutes: checking route %s", existingRouteName)
+		logger.V(4).Info("checking route", "route", existingRouteName)
 
 		// filter out unmanaged routes
 		deleteRoute := false
 		if d.az.nodeNames.Has(split[0]) {
 			if d.az.ipv6DualStackEnabled && len(split) == 1 {
-				klog.V(2).Infof("cleanupOutdatedRoutes: deleting outdated non-dualstack route %s", existingRouteName)
+				logger.V(2).Info("deleting outdated non-dualstack route", "route", existingRouteName)
 				deleteRoute = true
 			} else if !d.az.ipv6DualStackEnabled && len(split) == 2 {
-				klog.V(2).Infof("cleanupOutdatedRoutes: deleting outdated dualstack route %s", existingRouteName)
+				logger.V(2).Info("deleting outdated dualstack route", "route", existingRouteName)
 				deleteRoute = true
 			}
 
@@ -293,7 +296,8 @@ func (d *delayedRouteUpdater) removeOperation(_ string) {}
 // ListRoutes lists all managed routes that belong to the specified clusterName
 // implements cloudprovider.Routes.ListRoutes
 func (az *Cloud) ListRoutes(ctx context.Context, clusterName string) ([]*cloudprovider.Route, error) {
-	klog.V(10).Infof("ListRoutes: START clusterName=%q", clusterName)
+	logger := log.FromContextOrBackground(ctx).WithName("ListRoutes")
+	logger.V(10).Info("START", "clusterName", clusterName)
 	routeTable, err := az.routeTableRepo.Get(ctx, az.RouteTableName, azcache.CacheReadTypeDefault)
 	routes, err := processRoutes(az.ipv6DualStackEnabled, routeTable, err)
 	if err != nil {
@@ -320,13 +324,13 @@ func (az *Cloud) ListRoutes(ctx context.Context, clusterName string) ([]*cloudpr
 	// ensure the route table is tagged as configured
 	tags, changed := az.ensureRouteTableTagged(routeTable)
 	if changed {
-		klog.V(2).Infof("ListRoutes: updating tags on route table %s", ptr.Deref(routeTable.Name, ""))
+		logger.V(2).Info("updating tags on route table", "routeTableName", ptr.Deref(routeTable.Name, ""))
 		op := az.routeUpdater.addOperation(getUpdateRouteTableTagsOperation(tags))
 
 		// Wait for operation complete.
 		err = op.wait().err
 		if err != nil {
-			klog.Errorf("ListRoutes: failed to update route table tags with error: %v", err)
+			logger.Error(err, "failed to update route table tags")
 			return nil, err
 		}
 	}
@@ -336,6 +340,7 @@ func (az *Cloud) ListRoutes(ctx context.Context, clusterName string) ([]*cloudpr
 
 // Injectable for testing
 func processRoutes(ipv6DualStackEnabled bool, routeTable *armnetwork.RouteTable, err error) ([]*cloudprovider.Route, error) {
+	logger := log.Background().WithName("processRoutes")
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +354,7 @@ func processRoutes(ipv6DualStackEnabled bool, routeTable *armnetwork.RouteTable,
 		for i, route := range routeTable.Properties.Routes {
 			instance := MapRouteNameToNodeName(ipv6DualStackEnabled, *route.Name)
 			cidr := *route.Properties.AddressPrefix
-			klog.V(10).Infof("ListRoutes: * instance=%q, cidr=%q", instance, cidr)
+			logger.V(10).Info("ListRoutes: *", "instance", instance, "cidr", cidr)
 
 			kubeRoutes[i] = &cloudprovider.Route{
 				Name:            *route.Name,
@@ -359,18 +364,19 @@ func processRoutes(ipv6DualStackEnabled bool, routeTable *armnetwork.RouteTable,
 		}
 	}
 
-	klog.V(10).Info("ListRoutes: FINISH")
+	logger.V(10).Info("ListRoutes: FINISH")
 	return kubeRoutes, nil
 }
 
 func (az *Cloud) createRouteTable(ctx context.Context) error {
+	logger := log.FromContextOrBackground(ctx).WithName("createRouteTable")
 	routeTable := armnetwork.RouteTable{
 		Name:       ptr.To(az.RouteTableName),
 		Location:   ptr.To(az.Location),
 		Properties: &armnetwork.RouteTablePropertiesFormat{},
 	}
 
-	klog.V(3).Infof("createRouteTableIfNotExists: creating routetable. routeTableName=%q", az.RouteTableName)
+	logger.V(3).Info("creating routetable if not exists", "routeTableName", az.RouteTableName)
 	_, err := az.routeTableRepo.CreateOrUpdate(ctx, routeTable)
 	return err
 }
@@ -380,6 +386,7 @@ func (az *Cloud) createRouteTable(ctx context.Context) error {
 // to create a more user-meaningful name.
 // implements cloudprovider.Routes.CreateRoute
 func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, _ string, kubeRoute *cloudprovider.Route) error {
+	logger := log.FromContextOrBackground(ctx).WithName("CreateRoute")
 	mc := metrics.NewMetricContext("routes", "create_route", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), string(kubeRoute.TargetNode))
 	isOperationSucceeded := false
 	defer func() {
@@ -394,7 +401,7 @@ func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, _ string, 
 		return err
 	}
 	if unmanaged {
-		klog.V(2).Infof("CreateRoute: omitting unmanaged node %q", kubeRoute.TargetNode)
+		logger.V(2).Info("omitting unmanaged node", "node", kubeRoute.TargetNode)
 		az.routeCIDRsLock.Lock()
 		defer az.routeCIDRsLock.Unlock()
 		az.routeCIDRs[nodeName] = kubeRoute.DestinationCIDR
@@ -413,16 +420,16 @@ func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, _ string, 
 	} else {
 		// for dual stack and single stack IPv6 we need to select
 		// a private ip that matches family of the cidr
-		klog.V(4).Infof("CreateRoute: create route instance=%q cidr=%q is in dual stack mode", kubeRoute.TargetNode, kubeRoute.DestinationCIDR)
+		logger.V(4).Info("create route instance in dual stack mode", "instance", kubeRoute.TargetNode, "cidr", kubeRoute.DestinationCIDR)
 		nodePrivateIPs, err := az.getPrivateIPsForMachine(ctx, kubeRoute.TargetNode)
 		if nil != err {
-			klog.V(3).Infof("CreateRoute: create route: failed(GetPrivateIPsByNodeName) instance=%q cidr=%q with error=%v", kubeRoute.TargetNode, kubeRoute.DestinationCIDR, err)
+			logger.V(3).Error(err, "create route: failed(GetPrivateIPsByNodeName)", "instance", kubeRoute.TargetNode, "cidr", kubeRoute.DestinationCIDR)
 			return err
 		}
 
 		targetIP, err = findFirstIPByFamily(nodePrivateIPs, CIDRv6)
 		if nil != err {
-			klog.V(3).Infof("CreateRoute: create route: failed(findFirstIpByFamily) instance=%q cidr=%q with error=%v", kubeRoute.TargetNode, kubeRoute.DestinationCIDR, err)
+			logger.V(3).Error(err, "create route: failed(findFirstIpByFamily)", "instance", kubeRoute.TargetNode, "cidr", kubeRoute.DestinationCIDR)
 			return err
 		}
 	}
@@ -436,17 +443,17 @@ func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, _ string, 
 		},
 	}
 
-	klog.V(2).Infof("CreateRoute: creating route for clusterName=%q instance=%q cidr=%q", clusterName, kubeRoute.TargetNode, kubeRoute.DestinationCIDR)
+	logger.V(2).Info("creating route", "clusterName", clusterName, "instance", kubeRoute.TargetNode, "cidr", kubeRoute.DestinationCIDR)
 	op := az.routeUpdater.addOperation(getAddRouteOperation(route, string(kubeRoute.TargetNode)))
 
 	// Wait for operation complete.
 	err = op.wait().err
 	if err != nil {
-		klog.Errorf("CreateRoute failed for node %q with error: %v", kubeRoute.TargetNode, err)
+		logger.Error(err, "CreateRoute failed for node", "node", kubeRoute.TargetNode)
 		return err
 	}
 
-	klog.V(2).Infof("CreateRoute: route created. clusterName=%q instance=%q cidr=%q", clusterName, kubeRoute.TargetNode, kubeRoute.DestinationCIDR)
+	logger.V(2).Info("route created", "clusterName", clusterName, "instance", kubeRoute.TargetNode, "cidr", kubeRoute.DestinationCIDR)
 	isOperationSucceeded = true
 
 	return nil
@@ -455,7 +462,8 @@ func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, _ string, 
 // DeleteRoute deletes the specified managed route
 // Route should be as returned by ListRoutes
 // implements cloudprovider.Routes.DeleteRoute
-func (az *Cloud) DeleteRoute(_ context.Context, clusterName string, kubeRoute *cloudprovider.Route) error {
+func (az *Cloud) DeleteRoute(ctx context.Context, clusterName string, kubeRoute *cloudprovider.Route) error {
+	logger := log.FromContextOrBackground(ctx).WithName("DeleteRoute")
 	mc := metrics.NewMetricContext("routes", "delete_route", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), string(kubeRoute.TargetNode))
 	isOperationSucceeded := false
 	defer func() {
@@ -469,7 +477,7 @@ func (az *Cloud) DeleteRoute(_ context.Context, clusterName string, kubeRoute *c
 		return err
 	}
 	if unmanaged {
-		klog.V(2).Infof("DeleteRoute: omitting unmanaged node %q", kubeRoute.TargetNode)
+		logger.V(2).Info("omitting unmanaged node", "node", kubeRoute.TargetNode)
 		az.routeCIDRsLock.Lock()
 		defer az.routeCIDRsLock.Unlock()
 		delete(az.routeCIDRs, nodeName)
@@ -477,7 +485,7 @@ func (az *Cloud) DeleteRoute(_ context.Context, clusterName string, kubeRoute *c
 	}
 
 	routeName := mapNodeNameToRouteName(az.ipv6DualStackEnabled, kubeRoute.TargetNode, kubeRoute.DestinationCIDR)
-	klog.V(2).Infof("DeleteRoute: deleting route. clusterName=%q instance=%q cidr=%q routeName=%q", clusterName, kubeRoute.TargetNode, kubeRoute.DestinationCIDR, routeName)
+	logger.V(2).Info("deleting route", "clusterName", clusterName, "instance", kubeRoute.TargetNode, "cidr", kubeRoute.DestinationCIDR, "routeName", routeName)
 	route := &armnetwork.Route{
 		Name:       ptr.To(routeName),
 		Properties: &armnetwork.RoutePropertiesFormat{},
@@ -487,14 +495,14 @@ func (az *Cloud) DeleteRoute(_ context.Context, clusterName string, kubeRoute *c
 	// Wait for operation complete.
 	err = op.wait().err
 	if err != nil {
-		klog.Errorf("DeleteRoute failed for node %q with error: %v", kubeRoute.TargetNode, err)
+		logger.Error(err, "DeleteRoute failed for node", "node", kubeRoute.TargetNode)
 		return err
 	}
 
 	// Remove outdated ipv4 routes as well
 	if az.ipv6DualStackEnabled {
 		routeNameWithoutIPV6Suffix := strings.Split(routeName, consts.RouteNameSeparator)[0]
-		klog.V(2).Infof("DeleteRoute: deleting route. clusterName=%q instance=%q cidr=%q routeName=%q", clusterName, kubeRoute.TargetNode, kubeRoute.DestinationCIDR, routeNameWithoutIPV6Suffix)
+		logger.V(2).Info("deleting route", "clusterName", clusterName, "instance", kubeRoute.TargetNode, "cidr", kubeRoute.DestinationCIDR, "routeName", routeNameWithoutIPV6Suffix)
 		route := &armnetwork.Route{
 			Name:       ptr.To(routeNameWithoutIPV6Suffix),
 			Properties: &armnetwork.RoutePropertiesFormat{},
@@ -504,12 +512,12 @@ func (az *Cloud) DeleteRoute(_ context.Context, clusterName string, kubeRoute *c
 		// Wait for operation complete.
 		err = op.wait().err
 		if err != nil {
-			klog.Errorf("DeleteRoute failed for node %q with error: %v", kubeRoute.TargetNode, err)
+			logger.Error(err, "DeleteRoute failed for node", "node", kubeRoute.TargetNode)
 			return err
 		}
 	}
 
-	klog.V(2).Infof("DeleteRoute: route deleted. clusterName=%q instance=%q cidr=%q", clusterName, kubeRoute.TargetNode, kubeRoute.DestinationCIDR)
+	logger.V(2).Info("route deleted", "clusterName", clusterName, "instance", kubeRoute.TargetNode, "cidr", kubeRoute.DestinationCIDR)
 	isOperationSucceeded = true
 
 	return nil
