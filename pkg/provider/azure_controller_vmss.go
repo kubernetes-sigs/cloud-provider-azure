@@ -172,19 +172,26 @@ func (ss *ScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName, dis
 	}
 
 	if !bFoundDisk {
-		// only log here, next action is to update VM status with original meta data
-		klog.Warningf("detach azure disk on node(%s): disk list(%s) not found", nodeName, diskMap)
-	} else {
-		if ss.IsStackCloud() {
-			// Azure stack does not support ToBeDetached flag, use original way to detach disk
-			var newDisks []*armcompute.DataDisk
-			for _, disk := range disks {
-				if !ptr.Deref(disk.ToBeDetached, false) {
-					newDisks = append(newDisks, disk)
-				}
+		// No matching disks found to detach - skip the VM update.
+		// This can occur when:
+		// 1. The VM has no data disks attached
+		// 2. The requested disk(s) to detach are not present on the VM
+		// Skipping the update avoids unnecessary API calls and prevents generic updates to the VM
+		// that can stay pending during critical failures (e.g., zone outages).
+		// This update can block the client from seeing the successful detach of the disk(s).
+		klog.Warningf("azureDisk - detach disk: VM update skipped as no disks to detach on node(%s) with diskMap(%v)", nodeName, diskMap)
+		return nil
+	}
+
+	if ss.IsStackCloud() {
+		// Azure stack does not support ToBeDetached flag, use original way to detach disk
+		var newDisks []*armcompute.DataDisk
+		for _, disk := range disks {
+			if !ptr.Deref(disk.ToBeDetached, false) {
+				newDisks = append(newDisks, disk)
 			}
-			disks = newDisks
 		}
+		disks = newDisks
 	}
 
 	newVM := &armcompute.VirtualMachineScaleSetVM{
@@ -207,13 +214,13 @@ func (ss *ScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName, dis
 		}
 	}
 
-	logger.V(2).Info("azureDisk - update: vm - detach disk returned with error", "resourceGroup", nodeResourceGroup, "nodeName", nodeName, "diskMap", diskMap, "error", err)
-
 	if rerr == nil && result != nil && result.Properties != nil {
+		logger.V(2).Info("azureDisk - update: vm - detach disk returned successfully", "resourceGroup", nodeResourceGroup, "nodeName", nodeName, "diskMap", diskMap)
 		if err := ss.updateCache(ctx, vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, result); err != nil {
 			klog.Errorf("updateCache(%s, %s, %s, %s) failed with error: %v", vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, err)
 		}
 	} else {
+		logger.V(2).Info("azureDisk - update: vm - detach disk returned with error", "resourceGroup", nodeResourceGroup, "nodeName", nodeName, "diskMap", diskMap, "error", rerr)
 		_ = ss.DeleteCacheForNode(ctx, vmName)
 	}
 	return rerr
