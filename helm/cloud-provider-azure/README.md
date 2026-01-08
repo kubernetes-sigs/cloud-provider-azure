@@ -1,6 +1,6 @@
 # cloud-provider-azure
 
-![Version: 1.34.3](https://img.shields.io/badge/Version-1.34.3-informational?style=flat-square)
+![Version: 1.34.4](https://img.shields.io/badge/Version-1.34.4-informational?style=flat-square)
 
 A Helm chart for installing kubernetes-sigs/cloud-provider-azure components
 
