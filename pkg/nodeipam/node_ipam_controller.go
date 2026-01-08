@@ -35,6 +35,7 @@ import (
 	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/klog/v2"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/nodeipam/ipam"
 )
 
@@ -119,14 +120,16 @@ func NewNodeIpamController(
 	nodeCIDRMaskSizes []int,
 	allocatorType ipam.CIDRAllocatorType) (*Controller, error) {
 
+	logger := log.Background().WithName("NewNodeIpamController")
 	if kubeClient == nil {
-		klog.Fatalf("kubeClient is nil when starting Controller")
+		logger.Error(nil, "kubeClient is nil when starting Controller")
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartStructuredLogging(0)
 
-	klog.Infof("Sending events to api server.")
+	logger.Info("Sending events to api server")
 	eventBroadcaster.StartRecordingToSink(
 		&v1core.EventSinkImpl{
 			Interface: kubeClient.CoreV1().Events(""),
@@ -139,7 +142,8 @@ func NewNodeIpamController(
 	// Cloud CIDR allocator does not rely on clusterCIDR or nodeCIDRMaskSize for allocation.
 	if allocatorType != ipam.CloudAllocatorType {
 		if len(clusterCIDRs) == 0 {
-			klog.Fatal("Controller: Must specify --cluster-cidr if --allocate-node-cidrs is set")
+			logger.Error(nil, "Controller: Must specify --cluster-cidr if --allocate-node-cidrs is set")
+			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 		}
 
 		// TODO: (khenidak) IPv6DualStack beta:
@@ -150,7 +154,8 @@ func NewNodeIpamController(
 		for idx, cidr := range clusterCIDRs {
 			mask := cidr.Mask
 			if maskSize, _ := mask.Size(); maskSize > nodeCIDRMaskSizes[idx] {
-				klog.Fatal("Controller: Invalid --cluster-cidr, mask size of cluster CIDR must be less than or equal to --node-cidr-mask-size configured for CIDR family")
+				logger.Error(nil, "Controller: Invalid --cluster-cidr, mask size of cluster CIDR must be less than or equal to --node-cidr-mask-size configured for CIDR family")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 		}
 	}
@@ -188,10 +193,11 @@ func NewNodeIpamController(
 
 // Run starts an asynchronous loop that monitors the status of cluster nodes.
 func (nc *Controller) Run(ctx context.Context) {
+	logger := log.FromContextOrBackground(ctx).WithName("Run")
 	defer utilruntime.HandleCrash()
 
-	klog.Infof("Starting ipam controller")
-	defer klog.Infof("Shutting down ipam controller")
+	logger.Info("Starting ipam controller")
+	defer logger.Info("Shutting down ipam controller")
 
 	if !cache.WaitForNamedCacheSync("node", ctx.Done(), nc.nodeInformerSynced) {
 		return

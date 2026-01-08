@@ -35,12 +35,14 @@ import (
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 // DeleteLB invokes az.NetworkClientFactory.GetLoadBalancerClient().Delete with exponential backoff retry
 func (az *Cloud) DeleteLB(ctx context.Context, service *v1.Service, lbName string) error {
+	logger := log.FromContextOrBackground(ctx).WithName("DeleteLB")
 	rgName := az.getLoadBalancerResourceGroup()
 	rerr := az.NetworkClientFactory.GetLoadBalancerClient().Delete(ctx, rgName, lbName)
 	if rerr == nil {
@@ -49,13 +51,14 @@ func (az *Cloud) DeleteLB(ctx context.Context, service *v1.Service, lbName strin
 		return nil
 	}
 
-	klog.Errorf("LoadbalancerClient.Delete(%s) failed: %s", lbName, rerr.Error())
+	logger.Error(rerr, "LoadbalancerClient.Delete failed", "lbName", lbName)
 	az.Event(service, v1.EventTypeWarning, "DeleteLoadBalancer", rerr.Error())
 	return rerr
 }
 
 // ListLB invokes az.NetworkClientFactory.GetLoadBalancerClient().List with exponential backoff retry
 func (az *Cloud) ListLB(ctx context.Context, service *v1.Service) ([]*armnetwork.LoadBalancer, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("ListLB")
 	rgName := az.getLoadBalancerResourceGroup()
 	allLBs, rerr := az.NetworkClientFactory.GetLoadBalancerClient().List(ctx, rgName)
 	if rerr != nil {
@@ -63,16 +66,17 @@ func (az *Cloud) ListLB(ctx context.Context, service *v1.Service) ([]*armnetwork
 			return nil, nil
 		}
 		az.Event(service, v1.EventTypeWarning, "ListLoadBalancers", rerr.Error())
-		klog.Errorf("LoadbalancerClient.List(%v) failure with err=%v", rgName, rerr)
+		logger.Error(rerr, "LoadbalancerClient.List failure", "resourceGroup", rgName)
 		return nil, rerr
 	}
-	klog.V(2).Infof("LoadbalancerClient.List(%v) success", rgName)
+	logger.V(2).Info("LoadbalancerClient.List success", "resourceGroup", rgName)
 	return allLBs, nil
 }
 
 // ListManagedLBs invokes az.NetworkClientFactory.GetLoadBalancerClient().List and filter out
 // those that are not managed by cloud provider azure or not associated to a managed VMSet.
 func (az *Cloud) ListManagedLBs(ctx context.Context, service *v1.Service, nodes []*v1.Node, clusterName string) ([]*armnetwork.LoadBalancer, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("ListManagedLBs")
 	allLBs, err := az.ListLB(ctx, service)
 	if err != nil {
 		return nil, err
@@ -88,7 +92,7 @@ func (az *Cloud) ListManagedLBs(ctx context.Context, service *v1.Service, nodes 
 	if strings.EqualFold(az.LoadBalancerSKU, consts.LoadBalancerSKUBasic) {
 		// return early if wantLb=false
 		if nodes == nil {
-			klog.V(4).Infof("ListManagedLBs: return all LBs in the resource group %s, including unmanaged LBs", az.getLoadBalancerResourceGroup())
+			logger.V(4).Info("return all LBs in the resource group, including unmanaged LBs", "resourceGroup", az.getLoadBalancerResourceGroup())
 			return allLBs, nil
 		}
 
@@ -100,7 +104,7 @@ func (az *Cloud) ListManagedLBs(ctx context.Context, service *v1.Service, nodes 
 
 		if len(agentPoolVMSetNames) > 0 {
 			for _, vmSetName := range agentPoolVMSetNames {
-				klog.V(6).Infof("ListManagedLBs: found agent pool vmSet name %s", *vmSetName)
+				logger.V(6).Info("found agent pool", "vmSet Name", *vmSetName)
 				agentPoolVMSetNamesMap[strings.ToLower(*vmSetName)] = true
 			}
 		}
@@ -119,7 +123,7 @@ func (az *Cloud) ListManagedLBs(ctx context.Context, service *v1.Service, nodes 
 	for _, lb := range allLBs {
 		if managedLBNames.Has(trimSuffixIgnoreCase(ptr.Deref(lb.Name, ""), consts.InternalLoadBalancerNameSuffix)) {
 			managedLBs = append(managedLBs, lb)
-			klog.V(4).Infof("ListManagedLBs: found managed LB %s", ptr.Deref(lb.Name, ""))
+			logger.V(4).Info("found managed LB", "loadBalancerName", ptr.Deref(lb.Name, ""))
 		}
 	}
 
@@ -128,11 +132,12 @@ func (az *Cloud) ListManagedLBs(ctx context.Context, service *v1.Service, nodes 
 
 // CreateOrUpdateLB invokes az.NetworkClientFactory.GetLoadBalancerClient().CreateOrUpdate with exponential backoff retry
 func (az *Cloud) CreateOrUpdateLB(ctx context.Context, service *v1.Service, lb armnetwork.LoadBalancer) error {
+	logger := log.FromContextOrBackground(ctx).WithName("CreateOrUpdateLB")
 	lb = cleanupSubnetInFrontendIPConfigurations(&lb)
 
 	rgName := az.getLoadBalancerResourceGroup()
 	_, err := az.NetworkClientFactory.GetLoadBalancerClient().CreateOrUpdate(ctx, rgName, ptr.Deref(lb.Name, ""), lb)
-	klog.V(10).Infof("LoadbalancerClient.CreateOrUpdate(%s): end", *lb.Name)
+	logger.V(10).Info("LoadbalancerClient.CreateOrUpdate: end", "loadBalancerName", *lb.Name)
 	if err == nil {
 		// Invalidate the cache right after updating
 		_ = az.lbCache.Delete(*lb.Name)
@@ -147,14 +152,14 @@ func (az *Cloud) CreateOrUpdateLB(ctx context.Context, service *v1.Service, lb a
 	}
 	// Invalidate the cache because ETAG precondition mismatch.
 	if rerr.StatusCode == http.StatusPreconditionFailed {
-		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because of http.StatusPreconditionFailed", ptr.Deref(lb.Name, ""))
+		logger.V(3).Info("LoadBalancer cache is cleanup because of http.StatusPreconditionFailed", "loadBalancerName", ptr.Deref(lb.Name, ""))
 		_ = az.lbCache.Delete(*lb.Name)
 	}
 
 	retryErrorMessage := rerr.Error()
 	// Invalidate the cache because another new operation has canceled the current request.
 	if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceledErrorMessage) {
-		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because CreateOrUpdate is canceled by another operation", ptr.Deref(lb.Name, ""))
+		logger.V(3).Info("LoadBalancer cache is cleanup because CreateOrUpdate is canceled by another operation", "loadBalancerName", ptr.Deref(lb.Name, ""))
 		_ = az.lbCache.Delete(*lb.Name)
 	}
 
@@ -162,20 +167,20 @@ func (az *Cloud) CreateOrUpdateLB(ctx context.Context, service *v1.Service, lb a
 	if strings.Contains(strings.ToLower(retryErrorMessage), strings.ToLower(consts.ReferencedResourceNotProvisionedMessageCode)) {
 		matches := pipErrorMessageRE.FindStringSubmatch(retryErrorMessage)
 		if len(matches) != 3 {
-			klog.Errorf("Failed to parse the retry error message %s", retryErrorMessage)
+			logger.Error(nil, "Failed to parse the retry error message", "retryErrorMessage", retryErrorMessage)
 			return rerr
 		}
 		pipRG, pipName := matches[1], matches[2]
-		klog.V(3).Infof("The public IP %s referenced by load balancer %s is not in Succeeded provisioning state, will try to update it", pipName, ptr.Deref(lb.Name, ""))
+		logger.V(3).Info("The public IP referenced by load balancer is not in Succeeded provisioning state, will try to update it", "pipName", pipName, "loadBalancerName", ptr.Deref(lb.Name, ""))
 		pip, _, err := az.getPublicIPAddress(ctx, pipRG, pipName, azcache.CacheReadTypeDefault)
 		if err != nil {
-			klog.Errorf("Failed to get the public IP %s in resource group %s: %v", pipName, pipRG, err)
+			logger.Error(err, "Failed to get the public IP", "pip", pipName, "resourceGroup", pipRG)
 			return rerr
 		}
 		// Perform a dummy update to fix the provisioning state
 		err = az.CreateOrUpdatePIP(service, pipRG, pip)
 		if err != nil {
-			klog.Errorf("Failed to update the public IP %s in resource group %s: %v", pipName, pipRG, err)
+			logger.Error(err, "Failed to update the public IP", "pip", pipName, "resourceGroup", pipRG)
 			return rerr
 		}
 		// Invalidate the LB cache, return the error, and the controller manager
@@ -187,7 +192,8 @@ func (az *Cloud) CreateOrUpdateLB(ctx context.Context, service *v1.Service, lb a
 }
 
 func (az *Cloud) CreateOrUpdateLBBackendPool(ctx context.Context, lbName string, backendPool *armnetwork.BackendAddressPool) error {
-	klog.V(4).Infof("CreateOrUpdateLBBackendPool: updating backend pool %s in LB %s", ptr.Deref(backendPool.Name, ""), lbName)
+	logger := log.FromContextOrBackground(ctx).WithName("CreateOrUpdateLBBackendPool")
+	logger.V(4).Info("updating backend pool in LB", "backendPoolName", ptr.Deref(backendPool.Name, ""), "loadBalancerName", lbName)
 	_, err := az.NetworkClientFactory.GetBackendAddressPoolClient().CreateOrUpdate(ctx, az.getLoadBalancerResourceGroup(), lbName, ptr.Deref(backendPool.Name, ""), *backendPool)
 	if err == nil {
 		// Invalidate the cache right after updating
@@ -201,14 +207,14 @@ func (az *Cloud) CreateOrUpdateLBBackendPool(ctx context.Context, lbName string,
 
 	// Invalidate the cache because ETAG precondition mismatch.
 	if rerr.StatusCode == http.StatusPreconditionFailed {
-		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because of http.StatusPreconditionFailed", lbName)
+		logger.V(3).Info("LoadBalancer cache is cleanup because of http.StatusPreconditionFailed", "loadBalancerName", lbName)
 		_ = az.lbCache.Delete(lbName)
 	}
 
 	retryErrorMessage := rerr.Error()
 	// Invalidate the cache because another new operation has canceled the current request.
 	if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceledErrorMessage) {
-		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because CreateOrUpdate is canceled by another operation", lbName)
+		logger.V(3).Info("LoadBalancer cache is cleanup because CreateOrUpdate is canceled by another operation", "loadBalancerName", lbName)
 		_ = az.lbCache.Delete(lbName)
 	}
 
@@ -216,7 +222,8 @@ func (az *Cloud) CreateOrUpdateLBBackendPool(ctx context.Context, lbName string,
 }
 
 func (az *Cloud) DeleteLBBackendPool(ctx context.Context, lbName, backendPoolName string) error {
-	klog.V(4).Infof("DeleteLBBackendPool: deleting backend pool %s in LB %s", backendPoolName, lbName)
+	logger := log.FromContextOrBackground(ctx).WithName("DeleteLBBackendPool")
+	logger.V(4).Info("deleting backend pool in LB", "backendPoolName", backendPoolName, "loadBalancerName", lbName)
 	err := az.NetworkClientFactory.GetBackendAddressPoolClient().Delete(ctx, az.getLoadBalancerResourceGroup(), lbName, backendPoolName)
 	if err == nil {
 		// Invalidate the cache right after updating
@@ -230,14 +237,14 @@ func (az *Cloud) DeleteLBBackendPool(ctx context.Context, lbName, backendPoolNam
 	}
 	// Invalidate the cache because ETAG precondition mismatch.
 	if rerr.StatusCode == http.StatusPreconditionFailed {
-		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because of http.StatusPreconditionFailed", lbName)
+		logger.V(3).Info("LoadBalancer cache is cleanup because of http.StatusPreconditionFailed", "loadBalancerName", lbName)
 		_ = az.lbCache.Delete(lbName)
 	}
 
 	retryErrorMessage := rerr.Error()
 	// Invalidate the cache because another new operation has canceled the current request.
 	if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceledErrorMessage) {
-		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because CreateOrUpdate is canceled by another operation", lbName)
+		logger.V(3).Info("LoadBalancer cache is cleanup because CreateOrUpdate is canceled by another operation", "loadBalancerName", lbName)
 		_ = az.lbCache.Delete(lbName)
 	}
 
@@ -278,13 +285,14 @@ func (az *Cloud) MigrateToIPBasedBackendPoolAndWaitForCompletion(
 	ctx context.Context,
 	lbName string, backendPoolNames []string, nicsCountMap map[string]int,
 ) error {
+	logger := log.FromContextOrBackground(ctx).WithName("MigrateToIPBasedBackendPoolAndWaitForCompletion")
 	if _, rerr := az.NetworkClientFactory.GetLoadBalancerClient().MigrateToIPBased(ctx, az.ResourceGroup, lbName, &armnetwork.LoadBalancersClientMigrateToIPBasedOptions{
 		Parameters: &armnetwork.MigrateLoadBalancerToIPBasedRequest{
 			Pools: to.SliceOfPtrs(backendPoolNames...),
 		},
 	}); rerr != nil {
 		backendPoolNamesStr := strings.Join(backendPoolNames, ",")
-		klog.Errorf("MigrateToIPBasedBackendPoolAndWaitForCompletion: Failed to migrate to IP based backend pool for lb %s, backend pool %s: %s", lbName, backendPoolNamesStr, rerr.Error())
+		logger.Error(rerr, "Failed to migrate to IP based backend pool", "lb", lbName, "backendPool", backendPoolNamesStr)
 		return rerr
 	}
 
@@ -301,12 +309,12 @@ func (az *Cloud) MigrateToIPBasedBackendPoolAndWaitForCompletion(
 
 			bp, rerr := az.NetworkClientFactory.GetBackendAddressPoolClient().Get(ctx, az.ResourceGroup, lbName, bpName)
 			if rerr != nil {
-				klog.Errorf("MigrateToIPBasedBackendPoolAndWaitForCompletion: Failed to get backend pool %s for lb %s: %s", bpName, lbName, rerr.Error())
+				logger.Error(rerr, "Failed to get backend pool", "backendPool", bpName, "lb", lbName)
 				return false, rerr
 			}
 
 			if countIPsOnBackendPool(bp) != nicsCount {
-				klog.V(4).Infof("MigrateToIPBasedBackendPoolAndWaitForCompletion: Expected IPs %d, current IPs %d, will retry in 5s", nicsCount, countIPsOnBackendPool(bp))
+				logger.V(4).Info("Expected IPs vs current IPs, will retry in 5s", "expectedIPs", nicsCount, "currentIPs", countIPsOnBackendPool(bp))
 				return false, nil
 			}
 			succeeded[bpName] = true
@@ -319,7 +327,7 @@ func (az *Cloud) MigrateToIPBasedBackendPoolAndWaitForCompletion(
 			return nil
 		}
 
-		klog.Errorf("MigrateToIPBasedBackendPoolAndWaitForCompletion: Failed to wait for migration to IP based backend pool for lb %s, backend pool %s: %s", lbName, strings.Join(backendPoolNames, ","), err.Error())
+		logger.Error(err, "Failed to wait for migration to IP based backend pool", "lb", lbName, "backendPool", strings.Join(backendPoolNames, ","))
 		return err
 	}
 
@@ -328,6 +336,7 @@ func (az *Cloud) MigrateToIPBasedBackendPoolAndWaitForCompletion(
 
 func (az *Cloud) newLBCache() (azcache.Resource, error) {
 	getter := func(ctx context.Context, key string) (interface{}, error) {
+		logger := log.FromContextOrBackground(ctx).WithName("newLBCache")
 		lb, err := az.NetworkClientFactory.GetLoadBalancerClient().Get(ctx, az.getLoadBalancerResourceGroup(), key, nil)
 		exists, rerr := checkResourceExistsFromError(err)
 		if rerr != nil {
@@ -335,7 +344,7 @@ func (az *Cloud) newLBCache() (azcache.Resource, error) {
 		}
 
 		if !exists {
-			klog.V(2).Infof("Load balancer %q not found", key)
+			logger.V(2).Info("Load balancer not found", "loadBalancerName", key)
 			return nil, nil
 		}
 
@@ -417,6 +426,7 @@ func isNICPool(bp *armnetwork.BackendAddressPool) bool {
 func (az *Cloud) cleanupBasicLoadBalancer(
 	ctx context.Context, clusterName string, service *v1.Service, existingLBs []*armnetwork.LoadBalancer,
 ) ([]*armnetwork.LoadBalancer, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("cleanupBasicLoadBalancer")
 	if !az.UseStandardLoadBalancer() {
 		return existingLBs, nil
 	}
@@ -425,9 +435,9 @@ func (az *Cloud) cleanupBasicLoadBalancer(
 	for i := len(existingLBs) - 1; i >= 0; i-- {
 		lb := existingLBs[i]
 		if lb != nil && lb.SKU != nil && lb.SKU.Name != nil && *lb.SKU.Name == armnetwork.LoadBalancerSKUNameBasic {
-			klog.V(2).Infof("cleanupBasicLoadBalancer: found basic load balancer %q, removing it", *lb.Name)
+			logger.V(2).Info("found basic load balancer, removing it", "loadBalancerName", *lb.Name)
 			if err := az.safeDeleteLoadBalancer(ctx, *lb, clusterName, service); err != nil {
-				klog.ErrorS(err, "cleanupBasicLoadBalancer: failed to delete outdated basic load balancer", "loadBalancerName", *lb.Name)
+				logger.Error(err, "cleanupBasicLoadBalancer: failed to delete outdated basic load balancer", "loadBalancerName", *lb.Name)
 				return nil, err
 			}
 			existingLBs = append(existingLBs[:i], existingLBs[i+1:]...)
@@ -442,7 +452,7 @@ func (az *Cloud) cleanupBasicLoadBalancer(
 		var err error
 		az.pipCache, err = az.newPIPCache()
 		if err != nil {
-			klog.ErrorS(err, "cleanupBasicLoadBalancer: failed to refresh pip cache")
+			logger.Error(err, "cleanupBasicLoadBalancer: failed to refresh pip cache")
 			return nil, err
 		}
 	}

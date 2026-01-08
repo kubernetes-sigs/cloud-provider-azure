@@ -32,6 +32,7 @@ import (
 )
 
 func main() {
+	logger := klog.Background().WithName("main")
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
@@ -43,31 +44,31 @@ func main() {
 	targetUrl, _ := url.Parse(fmt.Sprintf("http://localhost:%s", strconv.Itoa(targetPort)))
 
 	proxy := httputil.NewSingleHostReverseProxy(targetUrl)
-	klog.Infof("target url: %s", targetUrl)
+	logger.Info("Target URL", "targetURL", targetUrl)
 
 	http.Handle("/", proxy)
-	klog.Infof("proxying from port %d to port %d", healthCheckPort, targetPort)
+	logger.Info("proxying between ports", "from", healthCheckPort, "to", targetPort)
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", strconv.Itoa(healthCheckPort)))
 	if err != nil {
-		klog.Errorf("failed to listen on port %d: %s", targetPort, err)
+		logger.Error(err, "failed to listen on port", "port", targetPort)
 		panic(err)
 	}
-	klog.Infof("listening on port %d", healthCheckPort)
+	logger.Info("listening on port", "port", healthCheckPort)
 
 	proxyListener := &proxyproto.Listener{Listener: listener}
 	defer func(proxyListener *proxyproto.Listener) {
 		err := proxyListener.Close()
 		if err != nil {
-			klog.Errorf("failed to close proxy listener: %s", err)
+			logger.Error(err, "failed to close proxy listener")
 			panic(err)
 		}
 	}(proxyListener)
 
-	klog.Infof("listening on port with proxy listener %d", healthCheckPort)
+	logger.Info("listening on port with proxy listener", "port", healthCheckPort)
 	err = http.Serve(proxyListener, nil)
 	if err != nil {
-		klog.Errorf("failed to serve: %s", err)
+		logger.Error(err, "failed to serve")
 		panic(err)
 	}
 }
