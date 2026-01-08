@@ -36,11 +36,11 @@
   {{- if eq .Values.cloudControllerManager.imageRepository "mcr.microsoft.com/oss/kubernetes" -}}
     {{- $_ := set . "ccmImageRepository" "mcr.microsoft.com/oss/v2/kubernetes" }}
   {{- else -}}
-    {{- $_ := set . "ccmImageRepository" .Values.cloudNodeManager.imageRepository }}
+    {{- $_ := set . "ccmImageRepository" .Values.cloudControllerManager.imageRepository }}
   {{- end -}}
 {{- else -}}
   {{- $_ := set . "cnmImageRepository" .Values.cloudNodeManager.imageRepository }}
-  {{- $_ := set . "ccmImageRepository" .Values.cloudNodeManager.imageRepository }}
+  {{- $_ := set . "ccmImageRepository" .Values.cloudControllerManager.imageRepository }}
 {{- end -}}
 {{- if .Values.cloudControllerManager.enabled }}
 apiVersion: v1
