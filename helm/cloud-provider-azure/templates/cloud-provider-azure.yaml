@@ -19,7 +19,7 @@
 {{- else if eq .Capabilities.KubeVersion.Minor "30" -}}
   {{- $_ := set . "cloudProviderAzureVersion" "v1.30.15" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "31" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.31.10" }}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.31.12" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "32" -}}
   {{- $_ := set . "cloudProviderAzureVersion" "v1.32.11" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "33" -}}

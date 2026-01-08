@@ -57,58 +57,96 @@ $ helm install --repo https://raw.githubusercontent.com/kubernetes-sigs/cloud-pr
 
 Below is the complete set of configuration that you may include when invoking `helm install` against your Kubernetes cluster. Each configuration value is used via the `--set` command line argument (See the example usage of `--set infra.clusterName=my-azure-cluster` above).
 
-If no default value is provided for a particular configuration, it will have no effect unless declared by the user with a valid value. See [the values.yaml file](values.yaml) for example values for each configuration.
+## cloud-controller-manager configuration
 
-## Values
+| configuration value                                               | default value                        | description                                                                                                                                                                      |
+|-------------------------------------------------------------------|--------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `infra.clusterName`                                               | `"kubernetes"`                       | Set the cluster name appropriate for your infra provider (e.g., capz, AKS).                                                                                                      |
+| `cloudControllerManager.enabled`                                  | `true`                               | Enable or disable the azure-cloud-controller-manager deployment.                                                                                                                 |
+| `cloudControllerManager.caCertDir`                                | `"/etc/ssl"`                         | Specify the CA cert directory to mount on the azure-cloud-controller-manager pod.                                                                                                |
+| `cloudControllerManager.cloudConfig`                              | `"/etc/kubernetes/azure.json"`       | The path to the cloud provider configuration file. Empty string for no configuration file.                                                                                       |
+| `cloudControllerManager.clusterCIDR`                              | `"10.244.0.0/16"`                    | set to the network CIDR for pod IP addresses                                                                                                                                     |
+| `cloudControllerManager.configureCloudRoutes`                     | `"true"`                             | if you're using Azure CNI set to `"false"`                                                                                                                                       |
+| `cloudControllerManager.imageRepository`                          | `"mcr.microsoft.com/oss/v2/kubernetes" for Kubernetes 1.32 and later, `"mcr.microsoft.com/oss/kubernetes"` for Kubernetes 1.31 and prior | container image repository (including any image project directories) location where the Azure `cloud-controller-manager` container image is hosted                               |
+| `cloudControllerManager.imageName`                                | `"azure-cloud-controller-manager"`   | container image name for the Azure `cloud-controller-manager` runtime                                                                                                            |
+| `cloudControllerManager.imagePullPolicy`                          | `"IfNotPresent"`                     | you may change to`"Always"` or `"Never"` if appropriate for your environment, see [here](https://kubernetes.io/docs/concepts/containers/images/#image-pull-policy) for more info |
+| `cloudControllerManager.logVerbosity`                             | `"2"`                                | set to a higher number when debugging the azure-cloud-controller-manager runtime                                                                                                 |
+| `cloudControllerManager.securePort`                               | `"10268"`                            | The port on which to serve HTTPS with authentication and authorization.                                                                                                          |
+| `cloudControllerManager.replicas`                                 | `"1"`                                | Number of replicas for the azure-cloud-controller-manager deployment. It should be no more than the number of control plane Nodes                                                |
+| `cloudControllerManager.routeReconciliationPeriod`                | `"10s"`                              | how often to reconcile node routes                                                                                                                                               |
+| `cloudControllerManager.containerResourceManagement.requestsCPU`  | `"100m"`                             | CPU requests configuration for the azure-cloud-controller-manager pod                                                                                                            |
+| `cloudControllerManager.containerResourceManagement.requestsMem`  | `"128Mi"`                            | Memory requests configuration for the azure-cloud-controller-manager pod                                                                                                         |
+| `cloudControllerManager.containerResourceManagement.limitsCPU`    | `"4"`                                | CPU limits configuration for the azure-cloud-controller-manager pod                                                                                                              |
+| `cloudControllerManager.containerResourceManagement.limitsMem`    | `"2Gi"`                              | Memory limits configuration for the azure-cloud-controller-manager pod                                                                                                           |
+| `cloudControllerManager.federatedTokenPath`                       | `"/var/run/secrets/azure/tokens"`    | Directory path where service account token will be projected. This is used in workload identity                                                                                  |
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| cloudControllerManager.allocateNodeCidrs | string | `"true"` |  |
-| cloudControllerManager.caCertDir | string | `"/etc/ssl"` |  |
-| cloudControllerManager.cloudConfig | string | `"/etc/kubernetes/azure.json"` |  |
-| cloudControllerManager.clusterCIDR | string | `"10.244.0.0/16"` |  |
-| cloudControllerManager.configureCloudRoutes | string | `"true"` |  |
-| cloudControllerManager.containerResourceManagement.limitsCPU | string | `"4"` |  |
-| cloudControllerManager.containerResourceManagement.limitsMem | string | `"2Gi"` |  |
-| cloudControllerManager.containerResourceManagement.requestsCPU | string | `"100m"` |  |
-| cloudControllerManager.containerResourceManagement.requestsMem | string | `"128Mi"` |  |
-| cloudControllerManager.enabled | bool | `true` |  |
-| cloudControllerManager.federatedTokenPath | string | `"/var/run/secrets/azure/tokens"` |  |
-| cloudControllerManager.imageName | string | `"azure-cloud-controller-manager"` |  |
-| cloudControllerManager.imagePullPolicy | string | `"IfNotPresent"` |  |
-| cloudControllerManager.imageRepository | string | `"mcr.microsoft.com/oss/v2/kubernetes"` |  |
-| cloudControllerManager.leaderElect | string | `"true"` |  |
-| cloudControllerManager.logVerbosity | string | `"2"` |  |
-| cloudControllerManager.nodeSelector."node-role.kubernetes.io/control-plane" | string | `""` |  |
-| cloudControllerManager.replicas | int | `1` |  |
-| cloudControllerManager.routeReconciliationPeriod | string | `"10s"` |  |
-| cloudControllerManager.securePort | int | `10268` |  |
-| cloudControllerManager.tolerations[0].effect | string | `"NoSchedule"` |  |
-| cloudControllerManager.tolerations[0].key | string | `"node-role.kubernetes.io/master"` |  |
-| cloudControllerManager.tolerations[1].effect | string | `"NoSchedule"` |  |
-| cloudControllerManager.tolerations[1].key | string | `"node-role.kubernetes.io/control-plane"` |  |
-| cloudControllerManager.tolerations[2].effect | string | `"NoExecute"` |  |
-| cloudControllerManager.tolerations[2].key | string | `"node-role.kubernetes.io/etcd"` |  |
-| cloudControllerManager.updateStrategy | object | `{}` |  |
-| cloudNodeManager.containerResourceManagement.limitsCPU | string | `"2"` |  |
-| cloudNodeManager.containerResourceManagement.limitsCPUWin | string | `"2"` |  |
-| cloudNodeManager.containerResourceManagement.limitsMem | string | `"512Mi"` |  |
-| cloudNodeManager.containerResourceManagement.limitsMemWin | string | `"512Mi"` |  |
-| cloudNodeManager.containerResourceManagement.requestsCPU | string | `"50m"` |  |
-| cloudNodeManager.containerResourceManagement.requestsCPUWin | string | `"50m"` |  |
-| cloudNodeManager.containerResourceManagement.requestsMem | string | `"50Mi"` |  |
-| cloudNodeManager.containerResourceManagement.requestsMemWin | string | `"50Mi"` |  |
-| cloudNodeManager.enableHealthProbeProxy | bool | `false` |  |
-| cloudNodeManager.enabled | bool | `true` |  |
-| cloudNodeManager.healthCheckPort | int | `10356` |  |
-| cloudNodeManager.healthProbeProxyImage | string | `"mcr.microsoft.com/oss/v2/kubernetes/azure-health-probe-proxy:v1.34.3"` |  |
-| cloudNodeManager.healthProbeProxyImageWindows | string | `"mcr.microsoft.com/oss/v2/kubernetes/azure-health-probe-proxy:v1.34.3"` |  |
-| cloudNodeManager.imageName | string | `"azure-cloud-node-manager"` |  |
-| cloudNodeManager.imagePullPolicy | string | `"IfNotPresent"` |  |
-| cloudNodeManager.imageRepository | string | `"mcr.microsoft.com/oss/kubernetes"` |  |
-| cloudNodeManager.logVerbosity | string | `"2"` |  |
-| cloudNodeManager.targetPort | int | `10256` |  |
-| infra.clusterName | string | `"kubernetes"` |  |                      |
+## cloud-node-manager configuration
+
+| configuration value | default value | description |
+| --- | --- | --- |
+| `cloudNodeManager.enabled` | `true` | Enable or disable the azure-cloud-node-manager deployment. |
+| `cloudNodeManager.imageRepository` | `"mcr.microsoft.com/oss/kubernetes"` | container image repository (including any image project directories) location where the Azure `cloud-node-manager` container image is hosted |
+| `cloudNodeManager.imageName` | `"azure-cloud-node-manager"` | container image name for the Azure `cloud-node-manager` runtime |
+| `cloudControllerManager.imagePullPolicy` | `"IfNotPresent"` | you may change to`"Always"` or `"Never"` if appropriate for your environment, see [here](https://kubernetes.io/docs/concepts/containers/images/#image-pull-policy) for more info |
+| `cloudNodeManager.logVerbosity`                            | `"2"`                                | set to a higher number when debugging the azure-cloud-node-manager runtime                                                                                                 |
+| `cloudNodeManager.containerResourceManagement.requestsCPU` | `"50m"` | CPU requests configuration for the azure-cloud-node-manager pod running on Linux nodes |
+| `cloudNodeManager.containerResourceManagement.requestsMem` | `"50Mi"` | Memory requests configuration for the azure-cloud-node-manager pod running on Linux nodes |
+| `cloudNodeManager.containerResourceManagement.limitsCPU` | `"2"` | CPU limits configuration for the azure-cloud-node-manager pod running on Linux nodes |
+| `cloudNodeManager.containerResourceManagement.limitsMem` | `"512Mi"` | Memory limits configuration for the azure-cloud-node-manager pod running on Linux nodes |
+| `cloudNodeManager.containerResourceManagement.requestsCPUWin` | `"50m"` | CPU requests configuration for the azure-cloud-node-manager pod running on Windows nodes |
+| `cloudNodeManager.containerResourceManagement.requestsMemWin` | `"50Mi"` | Memory requests configuration for the azure-cloud-node-manager pod running on Windows nodes |
+| `cloudNodeManager.containerResourceManagement.limitsCPUWin` | `"2"` | CPU limits configuration for the azure-cloud-node-manager pod running on Windows nodes |
+| `cloudNodeManager.containerResourceManagement.limitsMemWin` | `"512Mi"` | Memory limits configuration for the azure-cloud-node-manager pod running on Windows nodes |
+
+The following configuration is made available for advanced users. There are no default values applied, and normally you wouldn't need to include these when deploying your Helm release. See [the values.yaml file](values.yaml) for example values for each configuration.
+
+## optional cloud-controller-manager configuration
+
+| configuration value | description |
+| --- | --- |
+| `cloudControllerManager.imageTag` | `"v1.23.11"` | container image tag for the Azure `cloud-controller-manager` runtime |
+| `cloudControllerManager.allocateNodeCidrs` | Should CIDRs for Pods be allocated and set on the cloud provider. If you're using Azure CNI set to "false" |
+| `cloudControllerManager.bindAddress` | The IP address on which to listen for the --secure-port port. The associated interface(s) must be reachable by the rest of the cluster, and by CLI/web clients. If blank or an unspecified address (0.0.0.0 or ::), all interfaces will be used.|
+| `cloudControllerManager.certDir` | The directory where the TLS certs are located. If --tls-cert-file and --tls-private-key-file are provided, this flag will be ignored. |
+| `cloudControllerManager.cloudConfigSecretName` | The name of the cloud config secret. |
+| `cloudControllerManager.contentionProfiling` | Enable lock contention profiling, if profiling is enabled. |
+| `cloudControllerManager.controllerStartInterval` | Interval between starting controller managers. |
+| `cloudControllerManager.enableDynamicReloading` | Enable re-configuring cloud controller manager from secret without restarting. |
+| `cloudControllerManager.http2MaxStreamsPerConnection` | The limit that the server gives to clients for the maximum number of streams in an HTTP/2 connection. Zero means to use golang's default. |
+| `cloudControllerManager.kubeAPIBurst` | Burst to use while talking with kubernetes apiserver. |
+| `cloudControllerManager.kubeAPIContentType` | Content type of requests sent to apiserver. |
+| `cloudControllerManager.kubeAPIQPS` | QPS to use while talking with kubernetes apiserver. |
+| `cloudControllerManager.kubeconfig` | Path to kubeconfig file with authorization and master location information. |
+| `cloudControllerManager.leaderElectLeaseDuration` | The duration that non-leader candidates will wait after observing a leadership renewal until attempting to acquire leadership of a led but unrenewed leader slot. This is effectively the maximum duration that a leader can be stopped before it is replaced by another candidate. This is only applicable if leader election is enabled.|
+| `cloudControllerManager.leaderElectRenewDeadline` | The interval between attempts by the acting master to renew a leadership slot before it stops leading. This must be less than or equal to the lease duration. This is only applicable if leader election is enabled. |
+| `cloudControllerManager.leaderElectRetryPeriod` | The duration the clients should wait between attempting acquisition and renewal of a leadership. This is only applicable if leader election is enabled. |
+| `cloudControllerManager.leaderElectResourceLock` | The type of resource object that is used for locking during leader election. Supported options are 'endpoints', 'configmaps', 'leases', 'endpointsleases' and 'configmapsleases'.|
+| `cloudControllerManager.master` | The address of the Kubernetes API server (overrides any value in kubeconfig). |
+| `cloudControllerManager.minResyncPeriod` | The resync period in reflectors will be random between MinResyncPeriod and 2*MinResyncPeriod. |
+| `cloudControllerManager.nodeStatusUpdateFrequency` | Specifies how often the controller updates nodes' status. |
+| `cloudControllerManager.profiling` | Enable profiling via web interface host:port/debug/pprof/ |
+| `cloudControllerManager.useServiceAccountCredentials` | If true, use individual service account credentials for each controller. |
+
+## optional cloud-node-manager configuration
+
+| configuration value                             | description                                                                                                                                      |
+|-------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
+| `cloudNodeManager.imageTag`                     | `"v1.23.11"`                                                                                                                                     | container image tag for the Azure `cloud-node-manager` runtime |
+| `cloudNodeManager.cloudConfig`                  | The path to the cloud config file to be used when using ARM (i.e., when `cloudNodeManager.useInstanceMetadata=false`) to fetch node information. |
+| `cloudNodeManager.kubeAPIBurst`                 | Burst to use while talking with kubernetes apiserver.                                                                                            |
+| `cloudNodeManager.kubeAPIContentType`           | Content type of requests sent to apiserver.                                                                                                      |
+| `cloudNodeManager.kubeAPIQPS`                   | QPS to use while talking with kubernetes apiserver.                                                                                              |
+| `cloudNodeManager.kubeconfig`                   | Path to kubeconfig file with authorization and master location information.                                                                      |
+| `cloudNodeManager.master`                       | The address of the Kubernetes API server (overrides any value in kubeconfig).                                                                    |
+| `cloudNodeManager.minResyncPeriod`              | The resync period in reflectors will be random between MinResyncPeriod and 2*MinResyncPeriod.                                                    |
+| `cloudNodeManager.nodeStatusUpdateFrequency`    | Specifies how often the controller updates nodes' status.                                                                                        |
+| `cloudNodeManager.waitRoutes`                   | Whether the nodes should wait for routes created on Azure route table. It should be set to true when using kubenet plugin.                       |
+| `cloudNodeManager.useInstanceMetadata`          | Should use Instance Metadata Service for fetching node information; if false will use ARM instead.                                               |
+| `cloudNodeManager.enableHealthProbeProxy`       | Enable health probe proxy sidecar. [Documentation](../health-probe-proxy/README.md)                                                              |
+| `cloudNodeManager.healthProbePort`              | Port for health probe proxy sidecar. [Documentation](../health-probe-proxy/README.md)                                                            |
+| `cloudNodeManager.targetPort`                   | Target port for health probe proxy sidecar. [Documentation](../health-probe-proxy/README.md)                                                     |
+| `cloudNodeManager.healthProbeProxyImage`        | Container image name for the health probe proxy sidecar. [Documentation](../health-probe-proxy/README.md)                                        |
+| `cloudNodeManager.healthProbeProxyImageWindows` | Windows container image name for the health probe proxy sidecar. [Documentation](../health-probe-proxy/README.md)                                |
 
 # Maintaining the Repo
 
