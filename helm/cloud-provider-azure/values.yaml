@@ -54,7 +54,7 @@ cloudControllerManager:
   federatedTokenPath: "/var/run/secrets/azure/tokens"
 cloudNodeManager:
   enabled: true
-  imageRepository: "mcr.microsoft.com/oss/v2/kubernetes"
+  imageRepository: "mcr.microsoft.com/oss/kubernetes"
   imageName: "azure-cloud-node-manager"
   #imageTag: "v1.34.3"
   imagePullPolicy: "IfNotPresent"
