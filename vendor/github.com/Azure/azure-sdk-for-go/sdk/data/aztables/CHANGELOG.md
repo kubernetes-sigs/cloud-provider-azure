@@ -1,5 +1,21 @@
 # Release History
 
+## 1.4.1 (2025-11-13)
+
+### Bugs Fixed
+* Fix an issue that the Storage Table token audiences for sovereign clouds are incorrect.
+
+### Other Changes
+* Updated dependencies.
+
+## 1.4.0 (2025-06-19)
+
+### Features Added
+* Added support for sovereign clouds.
+
+### Other Changes
+* Update dependencies.
+
 ## 1.3.0 (2024-11-05)
 
 ### Features Added
