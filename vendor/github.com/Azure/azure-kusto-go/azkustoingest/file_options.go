@@ -3,9 +3,10 @@ package azkustoingest
 import (
 	"encoding/json"
 	"fmt"
+	"time"
+
 	"github.com/Azure/azure-kusto-go/azkustoingest/ingestoptions"
 	"github.com/cenkalti/backoff/v4"
-	"time"
 
 	"github.com/Azure/azure-kusto-go/azkustodata/errors"
 	"github.com/Azure/azure-kusto-go/azkustoingest/internal/properties"
@@ -84,11 +85,11 @@ func (o option) Run(p *properties.All, clientType ClientScope, sourceType Source
 	}
 
 	if o.clientScopes&clientType == 0 {
-		return errors.ES(errType, errors.KClientArgs, fmt.Sprintf("%s is not valid for client '%s'", o.name, clientType))
+		return errors.ES(errType, errors.KClientArgs, "%s is not valid for client '%s'", o.name, clientType)
 	}
 
 	if o.sourceScope&sourceType == 0 {
-		return errors.ES(errType, errors.KClientArgs, fmt.Sprintf("%s is not valid for ingestion source type '%s' for client '%s'", o.name, sourceType, clientType))
+		return errors.ES(errType, errors.KClientArgs, "%s is not valid for ingestion source type '%s' for client '%s'", o.name, sourceType, clientType)
 	}
 
 	return o.run(p)
