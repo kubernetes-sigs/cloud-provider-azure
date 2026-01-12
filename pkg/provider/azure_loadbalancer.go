@@ -557,6 +557,20 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 		isOperationSucceeded = false
 	)
 	ctx = log.NewContext(ctx, logger)
+
+	// Use Engine for async service deletion when ServiceGatewayEnabled.
+	// This must be checked early to avoid expensive Azure API calls (ListLB, GetNSG)
+	// that are not needed for the async deletion path.
+	if az.ServiceGatewayEnabled {
+		serviceUID := getServiceUID(service)
+		logger.V(2).Info("Using Engine for async service deletion", "serviceUID", serviceUID)
+		az.diffTracker.DeleteService(serviceUID, true) // true = inbound service
+
+		// Return success immediately - actual deletion happens asynchronously
+		mc.ObserveOperationWithResult(true)
+		return nil
+	}
+
 	if az.azureResourceLocker != nil {
 		err = az.azureResourceLocker.Lock(ctx)
 		if err != nil {
@@ -610,17 +624,6 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 	_, err = az.reconcileSecurityGroup(ctx, clusterName, service, ptr.Deref(lb.Name, ""), lbIPsPrimaryPIPs, false /* wantLb */)
 	if err != nil {
 		return err
-	}
-
-	// Use Engine for async service deletion when ServiceGatewayEnabled
-	if az.ServiceGatewayEnabled {
-		serviceUID := getServiceUID(service)
-		logger.V(2).Info("Using Engine for async service deletion", "serviceUID", serviceUID)
-		az.diffTracker.DeleteService(serviceUID, true) // true = inbound service
-
-		// Return success immediately - actual deletion happens asynchronously
-		isOperationSucceeded = true
-		return nil
 	}
 
 	_, needRetry, err := az.reconcileLoadBalancer(ctx, clusterName, service, nil, false /* wantLb */)
