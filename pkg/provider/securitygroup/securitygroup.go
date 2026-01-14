@@ -101,38 +101,43 @@ func NewSecurityGroupHelper(logger logr.Logger, sg *armnetwork.SecurityGroup) (*
 	}, nil
 }
 
-type rulePriorityPrefer string
+type rulePriorityClass string
 
 const (
-	rulePriorityPreferFromStart rulePriorityPrefer = "from_start"
-	rulePriorityPreferFromEnd   rulePriorityPrefer = "from_end"
+	rulePriorityPreferFromStart rulePriorityClass = "from_start"
+	rulePriorityPreferFromEnd   rulePriorityClass = "from_end"
+	rulePriorityIPRangeDeny     rulePriorityClass = "ip_range_deny"
 )
 
 // nextRulePriority returns the next available priority for a new rule.
 // It takes a preference for whether to start from the beginning or end of the priority range.
-func (helper *RuleHelper) nextRulePriority(prefer rulePriorityPrefer) (int32, error) {
-	var (
-		init, end = consts.LoadBalancerMinimumPriority, consts.LoadBalancerMaximumPriority
-		delta     = 1
-	)
-	if prefer == rulePriorityPreferFromEnd {
-		init, end, delta = end-1, init-1, -1
-	}
-
-	for init != end {
-		p := int32(init)
-		if _, found := helper.priorities[p]; found {
-			init += delta
-			continue
+func (helper *RuleHelper) nextRulePriority(class rulePriorityClass) (int32, error) {
+	switch class {
+	case rulePriorityIPRangeDeny:
+		// IP prefix blocking rules have a separate interval before any other rules
+		for p := int32(consts.IPPrefixBlockingMinimumPriority); p <= consts.IPPrefixBlockingMaximumPriority; p++ {
+			if _, found := helper.priorities[p]; !found {
+				return p, nil
+			}
 		}
-		return p, nil
+	case rulePriorityPreferFromStart:
+		for p := int32(consts.LoadBalancerMinimumPriority); p < consts.LoadBalancerMaximumPriority; p++ {
+			if _, found := helper.priorities[p]; !found {
+				return p, nil
+			}
+		}
+	case rulePriorityPreferFromEnd:
+		for p := int32(consts.LoadBalancerMaximumPriority - 1); p >= consts.LoadBalancerMinimumPriority; p-- {
+			if _, found := helper.priorities[p]; !found {
+				return p, nil
+			}
+		}
 	}
-
 	return 0, ErrSecurityRulePriorityExhausted
 }
 
 // getOrCreateRule returns an existing rule or create a new one if it doesn't exist.
-func (helper *RuleHelper) getOrCreateRule(name string, priorityPrefer rulePriorityPrefer) (*armnetwork.SecurityRule, error) {
+func (helper *RuleHelper) getOrCreateRule(name string, priorityPrefer rulePriorityClass) (*armnetwork.SecurityRule, error) {
 	logger := helper.logger.WithName("getOrCreateRule").WithValues("rule-name", name)
 
 	if rule, found := helper.rules[name]; found {
@@ -290,6 +295,69 @@ func (helper *RuleHelper) AddRuleForDenyAll(dstAddresses []netip.Addr) error {
 
 	helper.logger.V(4).Info("Patched a rule for deny all", "rule-name", ptr.To(rule.Name))
 
+	return nil
+}
+
+// AddRuleForBlockedIPRanges adds a deny rule for traffic originating from specified blocked source prefixes.
+// The rule denies traffic for a specific protocol and destination ports to the provided destination address.
+func (helper *RuleHelper) AddRuleForBlockedIPRanges(
+	srcIPRanges []netip.Prefix,
+	protocol armnetwork.SecurityRuleProtocol,
+	dstAddresses []netip.Addr,
+	dstPorts []int32,
+) error {
+	if len(srcIPRanges) == 0 || len(dstAddresses) == 0 {
+		return nil
+	}
+	if !iputil.ArePrefixesFromSameFamily(srcIPRanges) {
+		return ErrSecurityRuleSourceAddressesNotFromSameIPFamily
+	}
+	if !iputil.AreAddressesFromSameFamily(dstAddresses) {
+		return ErrSecurityRuleDestinationAddressesNotFromSameIPFamily
+	}
+	if srcIPRanges[0].Addr().Is4() != dstAddresses[0].Is4() {
+		return ErrSecurityRuleSourceAndDestinationNotFromSameIPFamily
+	}
+
+	var (
+		ipFamily    = iputil.FamilyOfAddr(srcIPRanges[0].Addr())
+		srcPrefixes = fnutil.Map(func(p netip.Prefix) string { return p.String() }, srcIPRanges)
+		dstPrefixes = fnutil.Map(func(a netip.Addr) string { return a.String() }, dstAddresses)
+		name        = GenerateDenyBlockedSecurityRuleName(protocol, ipFamily, srcPrefixes, dstPorts)
+	)
+	helper.logger.V(4).Info("Patching a rule for blocked IP ranges", "ip-family", ipFamily, "protocol", protocol, "destination", dstAddresses)
+
+	rule, err := helper.getOrCreateRule(name, rulePriorityIPRangeDeny)
+	if err != nil {
+		return err
+	}
+
+	// Configure rule properties
+	rule.Properties.Protocol = to.Ptr(protocol)
+	rule.Properties.Access = to.Ptr(armnetwork.SecurityRuleAccessDeny)
+	rule.Properties.Direction = to.Ptr(armnetwork.SecurityRuleDirectionInbound)
+
+	// Source
+	if len(srcPrefixes) == 1 {
+		rule.Properties.SourceAddressPrefix = to.Ptr(srcPrefixes[0])
+		rule.Properties.SourceAddressPrefixes = nil
+	} else {
+		rule.Properties.SourceAddressPrefix = nil
+		rule.Properties.SourceAddressPrefixes = to.SliceOfPtrs(srcPrefixes...)
+	}
+	rule.Properties.SourcePortRange = ptr.To("*")
+
+	// Destination
+	existing := ListDestinationPrefixes(rule)
+	SetDestinationPrefixes(rule, append(existing, dstPrefixes...))
+
+	if len(dstPorts) > 0 {
+		SetDestinationPortRanges(rule, dstPorts)
+	} else {
+		SetAsteriskDestinationPortRange(rule)
+	}
+
+	helper.logger.V(4).Info("Patched a rule for blocked IP ranges", "rule-name", name)
 	return nil
 }
 

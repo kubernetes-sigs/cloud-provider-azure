@@ -223,6 +223,69 @@ func TestAllowedIPRanges(t *testing.T) {
 	})
 }
 
+func TestBlockedIPRanges(t *testing.T) {
+	t.Run("no annotation", func(t *testing.T) {
+		actual, invalid, err := BlockedIPRanges(&v1.Service{
+			Spec: v1.ServiceSpec{
+				Type: v1.ServiceTypeLoadBalancer,
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{},
+			},
+		})
+		assert.NoError(t, err)
+		assert.Empty(t, actual)
+		assert.Empty(t, invalid)
+	})
+	t.Run("with 1 IPv4 range in blocked ip ranges", func(t *testing.T) {
+		actual, invalid, err := BlockedIPRanges(&v1.Service{
+			Spec: v1.ServiceSpec{
+				Type: v1.ServiceTypeLoadBalancer,
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					consts.ServiceAnnotationBlockedIPRanges: "10.10.0.0/24",
+				},
+			},
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, []netip.Prefix{netip.MustParsePrefix("10.10.0.0/24")}, actual)
+		assert.Empty(t, invalid)
+	})
+	t.Run("with 1 IPv6 range in blocked ip ranges", func(t *testing.T) {
+		actual, invalid, err := BlockedIPRanges(&v1.Service{
+			Spec: v1.ServiceSpec{
+				Type: v1.ServiceTypeLoadBalancer,
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					consts.ServiceAnnotationBlockedIPRanges: "2001:db8::/32",
+				},
+			},
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, []netip.Prefix{netip.MustParsePrefix("2001:db8::/32")}, actual)
+		assert.Empty(t, invalid)
+	})
+	t.Run("with invalid IP range", func(t *testing.T) {
+		_, invalid, err := BlockedIPRanges(&v1.Service{
+			Spec: v1.ServiceSpec{
+				Type: v1.ServiceTypeLoadBalancer,
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					consts.ServiceAnnotationBlockedIPRanges: "foobar,10.0.0.1/24",
+				},
+			},
+		})
+		assert.Error(t, err)
+
+		var e *ErrAnnotationValue
+		assert.ErrorAs(t, err, &e)
+		assert.Equal(t, []string{"foobar", "10.0.0.1/24"}, invalid)
+	})
+}
+
 func TestSourceRanges(t *testing.T) {
 	t.Run("not specified in spec", func(t *testing.T) {
 		actual, invalid, err := SourceRanges(&v1.Service{
@@ -338,4 +401,102 @@ func TestAdditionalPublicIPs(t *testing.T) {
 		assert.ErrorAs(t, err, &e)
 		assert.Equal(t, e.AnnotationKey, consts.ServiceAnnotationAdditionalPublicIPs)
 	})
+}
+
+func TestParseIPRangesAnnotation(t *testing.T) {
+	tests := []struct {
+		name          string
+		annotationKey string
+		annotationVal string
+		wantPrefixes  []netip.Prefix
+		wantInvalid   []string
+		wantErr       bool
+	}{
+		{
+			name:          "annotation absent",
+			annotationKey: consts.ServiceAnnotationAllowedIPRanges,
+			annotationVal: "",
+			wantPrefixes:  nil,
+			wantInvalid:   nil,
+			wantErr:       false,
+		},
+		{
+			name:          "single valid IPv4",
+			annotationKey: consts.ServiceAnnotationAllowedIPRanges,
+			annotationVal: "10.0.0.0/24",
+			wantPrefixes:  []netip.Prefix{netip.MustParsePrefix("10.0.0.0/24")},
+			wantInvalid:   nil,
+			wantErr:       false,
+		},
+		{
+			name:          "single valid IPv6",
+			annotationKey: consts.ServiceAnnotationAllowedIPRanges,
+			annotationVal: "2001:db8::/48",
+			wantPrefixes:  []netip.Prefix{netip.MustParsePrefix("2001:db8::/48")},
+			wantInvalid:   nil,
+			wantErr:       false,
+		},
+		{
+			name:          "multiple mixed IPv4 IPv6 with spaces",
+			annotationKey: consts.ServiceAnnotationAllowedIPRanges,
+			annotationVal: " 10.1.0.0/16 , 2001:db8:1::/64 ",
+			wantPrefixes: []netip.Prefix{
+				netip.MustParsePrefix("10.1.0.0/16"),
+				netip.MustParsePrefix("2001:db8:1::/64"),
+			},
+			wantInvalid: nil,
+			wantErr:     false,
+		},
+		{
+			name:          "invalid entries collected",
+			annotationKey: consts.ServiceAnnotationAllowedIPRanges,
+			annotationVal: "foo,10.0.0.1/24,2001:db8::/129,bar",
+			wantPrefixes:  nil,
+			wantInvalid:   []string{"foo", "10.0.0.1/24", "2001:db8::/129", "bar"},
+			wantErr:       true,
+		},
+		{
+			name:          "some valid some invalid",
+			annotationKey: consts.ServiceAnnotationAllowedIPRanges,
+			annotationVal: "10.2.0.0/20,foo,2001:db8:2::/64,bar",
+			wantPrefixes: []netip.Prefix{
+				netip.MustParsePrefix("10.2.0.0/20"),
+				netip.MustParsePrefix("2001:db8:2::/64"),
+			},
+			wantInvalid: []string{"foo", "bar"},
+			wantErr:     true,
+		},
+		{
+			name:          "trailing comma and empty segments skipped",
+			annotationKey: consts.ServiceAnnotationAllowedIPRanges,
+			annotationVal: "10.3.0.0/24,2001:db8:3::/64,",
+			wantPrefixes: []netip.Prefix{
+				netip.MustParsePrefix("10.3.0.0/24"),
+				netip.MustParsePrefix("2001:db8:3::/64"),
+			},
+			wantInvalid: nil,
+			wantErr:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ann := map[string]string{}
+			if tt.annotationVal != "" {
+				ann[tt.annotationKey] = tt.annotationVal
+			}
+			svc := &v1.Service{ObjectMeta: metav1.ObjectMeta{Annotations: ann}}
+
+			prefixes, invalid, err := parseIPRangesAnnotation(svc, tt.annotationKey)
+			if tt.wantErr {
+				assert.Error(t, err)
+				var e *ErrAnnotationValue
+				assert.ErrorAs(t, err, &e)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tt.wantPrefixes, prefixes)
+			assert.Equal(t, tt.wantInvalid, invalid)
+		})
+	}
 }

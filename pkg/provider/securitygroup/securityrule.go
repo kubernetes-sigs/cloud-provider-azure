@@ -38,7 +38,10 @@ func IsManagedSecurityRule(r *armnetwork.SecurityRule) bool {
 		return false
 	}
 	priority := *r.Properties.Priority
-	return strings.HasPrefix(*r.Name, SecurityRuleNamePrefix) && consts.LoadBalancerMinimumPriority <= priority && priority <= consts.LoadBalancerMaximumPriority
+	return strings.HasPrefix(*r.Name, SecurityRuleNamePrefix) &&
+		((consts.IPPrefixBlockingMinimumPriority <= priority && priority <= consts.IPPrefixBlockingMaximumPriority) ||
+			(consts.LoadBalancerMinimumPriority <= priority && priority < consts.LoadBalancerMaximumPriority))
+
 }
 
 // GenerateAllowSecurityRuleName returns the AllowInbound rule name based on the given rule properties.
@@ -73,6 +76,31 @@ func GenerateAllowSecurityRuleName(
 // GenerateDenyAllSecurityRuleName returns the DenyInbound rule name based on the given rule properties.
 func GenerateDenyAllSecurityRuleName(ipFamily iputil.Family) string {
 	return strings.Join([]string{SecurityRuleNamePrefix, "deny-all", string(ipFamily)}, SecurityRuleNameSep)
+}
+
+// GenerateDenyBlockedSecurityRuleName returns the DenyInbound rule name based on the given rule properties.
+func GenerateDenyBlockedSecurityRuleName(
+	protocol armnetwork.SecurityRuleProtocol,
+	ipFamily iputil.Family,
+	srcPrefixes []string,
+	dstPorts []int32,
+) string {
+	dstPortRanges := fnutil.Map(func(p int32) string { return strconv.FormatInt(int64(p), 10) }, dstPorts)
+
+	sort.Strings(srcPrefixes)
+	sort.Strings(dstPortRanges)
+
+	v := strings.Join([]string{
+		string(protocol),
+		strings.Join(srcPrefixes, ","),
+		strings.Join(dstPortRanges, ","),
+	}, "_")
+
+	h := md5.New() //nolint:gosec
+	h.Write([]byte(v))
+	ruleID := fmt.Sprintf("%x", h.Sum(nil))
+
+	return strings.Join([]string{SecurityRuleNamePrefix, "deny-blocked", string(ipFamily), ruleID}, SecurityRuleNameSep)
 }
 
 // NormalizeSecurityRuleAddressPrefixes normalizes the given rule address prefixes.
