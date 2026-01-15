@@ -9,13 +9,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/difftracker"
 )
-
-// diffTrackerInterface defines the subset of DiffTracker methods used by pod informer
-type diffTrackerInterface interface {
-	AddPod(serviceUID, podKey, location, address string)
-	DeletePod(serviceUID, location, address string)
-}
 
 // mockDiffTracker tracks calls to AddPod and DeletePod for testing
 type mockDiffTracker struct {
@@ -34,6 +29,8 @@ type deletePodCall struct {
 	serviceUID string
 	location   string
 	address    string
+	namespace  string
+	name       string
 }
 
 func (m *mockDiffTracker) AddPod(serviceUID, podKey, location, address string) {
@@ -45,12 +42,16 @@ func (m *mockDiffTracker) AddPod(serviceUID, podKey, location, address string) {
 	})
 }
 
-func (m *mockDiffTracker) DeletePod(serviceUID, location, address string) {
+func (m *mockDiffTracker) DeletePod(serviceUID, location, address, namespace, name string) difftracker.DeletePodResult {
 	m.deletePodCalls = append(m.deletePodCalls, deletePodCall{
 		serviceUID: serviceUID,
 		location:   location,
 		address:    address,
+		namespace:  namespace,
+		name:       name,
 	})
+	// Mock always returns non-last pod (tests can adjust if needed)
+	return difftracker.DeletePodResult{IsLastPod: false}
 }
 
 func (m *mockDiffTracker) reset() {
@@ -607,5 +608,5 @@ func (tc *testCloudWithMockDiffTracker) podInformerRemovePod(pod *v1.Pod) {
 	egressName := strings.ToLower(pod.Labels[consts.PodLabelServiceEgressGateway])
 
 	// Call mock instead of real diffTracker
-	tc.mock.DeletePod(egressName, pod.Status.HostIP, pod.Status.PodIP)
+	tc.mock.DeletePod(egressName, pod.Status.HostIP, pod.Status.PodIP, pod.Namespace, pod.Name)
 }

@@ -179,8 +179,8 @@ type PendingEndpointUpdate struct {
 	Timestamp     string            // When buffered
 }
 
-// PendingDeletion tracks a service waiting for locations to clear before deletion
-type PendingDeletion struct {
+// PendingServiceDeletion tracks a service waiting for locations to clear before deletion
+type PendingServiceDeletion struct {
 	ServiceUID string
 	IsInbound  bool
 	Timestamp  string
@@ -203,10 +203,11 @@ type DiffTracker struct {
 	kubeClient           kubernetes.Interface
 
 	// Engine state management
-	pendingServiceOps map[string]*ServiceOperationState
-	pendingEndpoints  map[string][]PendingEndpointUpdate
-	pendingPods       map[string][]PendingPodUpdate
-	pendingDeletions  map[string]*PendingDeletion
+	pendingServiceOps       map[string]*ServiceOperationState
+	pendingEndpoints        map[string][]PendingEndpointUpdate
+	pendingPods             map[string][]PendingPodUpdate
+	pendingServiceDeletions map[string]*PendingServiceDeletion
+	pendingPodDeletions     map[string]*PendingPodDeletion // key = "namespace/name"
 
 	// Communication channels
 	serviceUpdaterTrigger   chan bool

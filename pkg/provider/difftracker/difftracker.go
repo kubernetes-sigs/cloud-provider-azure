@@ -59,10 +59,11 @@ func InitializeDiffTracker(K8s K8s_State, NRP NRP_State, config Config, networkC
 		kubeClient:           kubeClient,
 
 		// Initialize Engine state management maps
-		pendingServiceOps: make(map[string]*ServiceOperationState),
-		pendingEndpoints:  make(map[string][]PendingEndpointUpdate),
-		pendingPods:       make(map[string][]PendingPodUpdate),
-		pendingDeletions:  make(map[string]*PendingDeletion),
+		pendingServiceOps:       make(map[string]*ServiceOperationState),
+		pendingEndpoints:        make(map[string][]PendingEndpointUpdate),
+		pendingPods:             make(map[string][]PendingPodUpdate),
+		pendingServiceDeletions: make(map[string]*PendingServiceDeletion),
+		pendingPodDeletions:     make(map[string]*PendingPodDeletion),
 
 		// Initialize Engine communication channels
 		serviceUpdaterTrigger:   make(chan bool, 1),

@@ -217,7 +217,7 @@ func (dt *DiffTracker) DeleteService(serviceUID string, isInbound bool) {
 	defer func() {
 		recordEngineOperation("delete_service", startTime, nil)
 		updatePendingServiceOperationsMetric(dt)
-		updatePendingDeletionsMetric(dt)
+		updatePendingServiceDeletionsMetric(dt)
 	}()
 
 	dt.mu.Lock()
@@ -295,31 +295,39 @@ func (dt *DiffTracker) DeleteService(serviceUID string, isInbound bool) {
 	delete(dt.pendingPods, serviceUID)
 
 	// Add to pending deletions (will be checked by LocationsUpdater after next sync)
-	dt.pendingDeletions[serviceUID] = &PendingDeletion{
+	dt.pendingServiceDeletions[serviceUID] = &PendingServiceDeletion{
 		ServiceUID: serviceUID,
 		IsInbound:  isInbound,
 		Timestamp:  time.Now().Format(time.RFC3339),
 	}
 
+	// Proactively remove service from K8s state to trigger location cleanup
+	// This ensures LocationsUpdater will sync the removal to NRP without waiting for EndpointSlice events
+	dt.removeServiceFromK8sStateLocked(serviceUID, isInbound)
+
 	// Check immediately if locations are already clear
 	// Will be re-checked after each location sync
 	hasLocations := dt.serviceHasLocationsInNRP(serviceUID)
-	shouldTrigger := false
+	shouldTriggerServiceUpdater := false
 	if !hasLocations {
 		klog.V(2).Infof("Engine.DeleteService: Service %s has no locations, ready for immediate deletion", serviceUID)
 		// Get the state pointer (may be newly created or from earlier in this function)
 		if opState, exists := dt.pendingServiceOps[serviceUID]; exists {
 			opState.State = StateDeletionInProgress
 		}
-		delete(dt.pendingDeletions, serviceUID)
-		shouldTrigger = true
+		delete(dt.pendingServiceDeletions, serviceUID)
+		shouldTriggerServiceUpdater = true
 	}
 
 	// Release lock before triggering to avoid lock contention
 	dt.mu.Unlock()
 
-	if shouldTrigger {
+	if shouldTriggerServiceUpdater {
 		dt.triggerServiceUpdater()
+	} else {
+		// Trigger LocationsUpdater to sync the K8s state changes to NRP
+		// This will clear locations and then CheckPendingServiceDeletions will transition to StateDeletionInProgress
+		dt.triggerLocationsUpdater()
 	}
 }
 
@@ -355,7 +363,7 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 			delete(dt.pendingServiceOps, serviceUID)
 			delete(dt.pendingEndpoints, serviceUID)
 			delete(dt.pendingPods, serviceUID)
-			delete(dt.pendingDeletions, serviceUID)
+			delete(dt.pendingServiceDeletions, serviceUID)
 
 			// Check if initialization is complete after service deletion
 			dt.checkInitializationCompleteLocked()
@@ -373,6 +381,28 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 	} else {
 		// Handle creation completion
 		if success {
+			// RACE CONDITION FIX: Check if deletion was requested while creation was in progress
+			// If StateDeletionPending, don't mark as Created - instead trigger deletion flow
+			if opState.State == StateDeletionPending {
+				klog.Warningf("Engine.OnServiceCreationComplete: Service %s creation completed but deletion pending, triggering deletion", serviceUID)
+				recordStateTransition(opState.State, StateCreated)
+				opState.State = StateCreated // Briefly mark as created so deletion flow works correctly
+
+				// Check if locations are already clear (they should be since we clear K8s state in DeleteService)
+				hasLocations := dt.serviceHasLocationsInNRP(serviceUID)
+				if !hasLocations {
+					// Ready for immediate deletion
+					opState.State = StateDeletionInProgress
+					delete(dt.pendingServiceDeletions, serviceUID)
+					dt.triggerServiceUpdater()
+				} else {
+					// Need to wait for locations to clear - trigger LocationsUpdater
+					// CheckPendingServiceDeletions will handle the transition
+					dt.triggerLocationsUpdater()
+				}
+				return
+			}
+
 			klog.V(2).Infof("Engine.OnServiceCreationComplete: Service %s created successfully", serviceUID)
 			recordStateTransition(opState.State, StateCreated)
 			recordServiceOperation("create", opState.Config.IsInbound, startTime, nil)
@@ -544,20 +574,33 @@ func (dt *DiffTracker) AddPod(serviceUID, podKey, location, address string) {
 	}
 }
 
+// DeletePodResult contains the result of a DeletePod operation
+type DeletePodResult struct {
+	IsLastPod bool // True if this was the last pod for the service
+}
+
 // DeletePod handles pod deletion events for outbound (NAT Gateway) services.
 // It immediately removes the pod from DiffTracker and triggers LocationsUpdater.
 // If this is the last pod for the service, it marks the service for deletion.
-func (dt *DiffTracker) DeletePod(serviceUID, location, address string) {
+// namespace and name are optional - if provided, they enable pod finalizer tracking for last pods.
+// Returns DeletePodResult indicating if this was the last pod.
+//
+// Finalizer handling:
+// - Non-last pods: Caller should remove finalizer immediately (no need to wait)
+// - Last pods: Tracked in pendingPodDeletions, finalizer removed after NAT Gateway deletion
+func (dt *DiffTracker) DeletePod(serviceUID, location, address, namespace, name string) DeletePodResult {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
+	result := DeletePodResult{IsLastPod: false}
+
 	if serviceUID == "" || location == "" || address == "" {
 		klog.Errorf("Engine.DeletePod: invalid parameters - serviceUID=%s, location=%s, address=%s", serviceUID, location, address)
-		return
+		return result
 	}
 
-	klog.V(4).Infof("Engine.DeletePod: serviceUID=%s, location=%s, address=%s",
-		serviceUID, location, address)
+	klog.V(4).Infof("Engine.DeletePod: serviceUID=%s, location=%s, address=%s, namespace=%s, name=%s",
+		serviceUID, location, address, namespace, name)
 
 	// Check counter BEFORE removing pod to determine if this is the last pod
 	val, ok := dt.LocalServiceNameToNRPServiceMap.Load(strings.ToLower(serviceUID))
@@ -575,19 +618,18 @@ func (dt *DiffTracker) DeletePod(serviceUID, location, address string) {
 		}
 		// Trigger LocationsUpdater to sync the change
 		dt.triggerLocationsUpdater()
-		return
+		return result
 	}
 
 	counter := val.(int)
 	if counter <= 0 {
 		klog.Errorf("Engine.DeletePod: Service %s has invalid counter: %d", serviceUID, counter)
-		return
+		return result
 	}
 
-	// TODO(eddie): Revisit this logic - currently marks service for deletion when counter reaches 1,
-	// but if pods are being scaled down (not to zero), this causes premature deletion marking.
-	// Consider checking if there are pending pod additions or waiting for a grace period before
-	// marking for deletion to avoid the service getting stuck in StateDeletionPending.
+	// Check if this is the last pod BEFORE removing it
+	// counter == 1 means "I'm about to remove the last registered pod"
+	// After removal, counter becomes 0 → service should be deleted
 	isLastPod := (counter == 1)
 
 	// Remove pod from DiffTracker (this also updates the counter via UpdateK8sPod)
@@ -600,8 +642,10 @@ func (dt *DiffTracker) DeletePod(serviceUID, location, address string) {
 
 	if err != nil {
 		klog.Errorf("Engine.DeletePod: Failed to remove pod: %v", err)
-		return
+		return result
 	}
+
+	result.IsLastPod = isLastPod
 
 	if isLastPod {
 		// This was the last pod - mark service for deletion
@@ -625,16 +669,35 @@ func (dt *DiffTracker) DeletePod(serviceUID, location, address string) {
 		}
 
 		// Add to pending deletions
-		dt.pendingDeletions[serviceUID] = &PendingDeletion{
+		dt.pendingServiceDeletions[serviceUID] = &PendingServiceDeletion{
 			ServiceUID: serviceUID,
 			IsInbound:  false,
 			Timestamp:  time.Now().Format(time.RFC3339),
 		}
 	}
+
+	// Track pending pod deletion for finalizer removal - ONLY for last pods
+	// Non-last pods: Caller removes finalizer immediately after DeletePod returns
+	// Last pod: Track here, finalizer removed after NAT Gateway deletion in RemoveLastPodFinalizers
+	if isLastPod && namespace != "" && name != "" {
+		podKey := fmt.Sprintf("%s/%s", namespace, name)
+		dt.pendingPodDeletions[podKey] = &PendingPodDeletion{
+			Namespace:  namespace,
+			Name:       name,
+			ServiceUID: serviceUID,
+			Address:    address,
+			Location:   location,
+			IsLastPod:  true,
+			Timestamp:  time.Now().Format(time.RFC3339),
+		}
+		klog.V(3).Infof("Engine.DeletePod: Added pending last pod deletion for %s", podKey)
+	}
 	// Note: Counter is managed by UpdateK8sPod for both last pod and non-last pod cases
 
 	// Trigger LocationsUpdater to sync the change
 	dt.triggerLocationsUpdater()
+
+	return result
 }
 
 // promotePendingPodsLocked flushes all pending pods for a service after it's created.
@@ -682,41 +745,41 @@ func (dt *DiffTracker) serviceHasLocationsInNRP(serviceUID string) bool {
 	return false
 }
 
-// CheckPendingDeletions checks each pending deletion to see if locations are cleared.
+// CheckPendingServiceDeletions checks each pending deletion to see if locations are cleared.
 // This method is called by LocationsUpdater after syncing location changes.
-func (dt *DiffTracker) CheckPendingDeletions() {
+func (dt *DiffTracker) CheckPendingServiceDeletions() {
 	startTime := time.Now()
 	blockedCount := 0
 	defer func() {
 		recordDeletionCheck(startTime, blockedCount)
-		updatePendingDeletionsMetric(dt)
+		updatePendingServiceDeletionsMetric(dt)
 	}()
 
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
-	if len(dt.pendingDeletions) == 0 {
+	if len(dt.pendingServiceDeletions) == 0 {
 		return
 	}
 
-	klog.V(4).Infof("Engine.CheckPendingDeletions: Checking %d pending deletions", len(dt.pendingDeletions))
+	klog.V(4).Infof("Engine.CheckPendingServiceDeletions: Checking %d pending deletions", len(dt.pendingServiceDeletions))
 
 	// Iterate through all pending deletions
-	for serviceUID, pendingDeletion := range dt.pendingDeletions {
-		klog.V(4).Infof("Engine.CheckPendingDeletions: Checking service %s (isInbound=%v)",
+	for serviceUID, pendingDeletion := range dt.pendingServiceDeletions {
+		klog.V(4).Infof("Engine.CheckPendingServiceDeletions: Checking service %s (isInbound=%v)",
 			serviceUID, pendingDeletion.IsInbound)
 
 		// Check if service still has locations in NRP
 		hasLocations := dt.serviceHasLocationsInNRP(serviceUID)
 		if hasLocations {
-			klog.V(4).Infof("Engine.CheckPendingDeletions: Service %s still has locations in NRP, waiting",
+			klog.V(4).Infof("Engine.CheckPendingServiceDeletions: Service %s still has locations in NRP, waiting",
 				serviceUID)
 			blockedCount++
 			continue
 		}
 
 		// Locations cleared - proceed with deletion
-		klog.V(2).Infof("Engine.CheckPendingDeletions: Service %s has no locations, triggering deletion",
+		klog.V(2).Infof("Engine.CheckPendingServiceDeletions: Service %s has no locations, triggering deletion",
 			serviceUID)
 
 		// Update service state to DeletionInProgress
@@ -725,7 +788,7 @@ func (dt *DiffTracker) CheckPendingDeletions() {
 			opState.State = StateDeletionInProgress
 		} else {
 			// Service not in pendingServiceOps - create entry
-			klog.Warningf("Engine.CheckPendingDeletions: Service %s in pendingDeletions but not in pendingServiceOps, creating entry",
+			klog.Warningf("Engine.CheckPendingServiceDeletions: Service %s in pendingServiceDeletions but not in pendingServiceOps, creating entry",
 				serviceUID)
 			var config ServiceConfig
 			if pendingDeletion.IsInbound {
@@ -746,7 +809,7 @@ func (dt *DiffTracker) CheckPendingDeletions() {
 		dt.triggerServiceUpdater()
 
 		// Remove from pending deletions
-		delete(dt.pendingDeletions, serviceUID)
+		delete(dt.pendingServiceDeletions, serviceUID)
 	}
 
 	// Update blocked services metric

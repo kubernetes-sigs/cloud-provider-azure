@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"k8s.io/klog/v2"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -131,10 +132,17 @@ func (dt *DiffTracker) addOrUpdatePod(input UpdatePodInputType) error {
 	return nil
 }
 
-func (dt *DiffTracker) removePod(input UpdatePodInputType) error {
+// removePod removes a pod from K8s state. Returns true if the pod was actually removed,
+// false if it didn't exist (already removed by a previous call).
+func (dt *DiffTracker) removePod(input UpdatePodInputType) (removed bool, err error) {
 	node, exists := dt.K8sResources.Nodes[input.Location]
 	if !exists {
-		return nil
+		return false, nil
+	}
+
+	// Check if pod exists before removing
+	if _, podExists := node.Pods[input.Address]; !podExists {
+		return false, nil
 	}
 
 	delete(node.Pods, input.Address)
@@ -142,20 +150,51 @@ func (dt *DiffTracker) removePod(input UpdatePodInputType) error {
 		delete(dt.K8sResources.Nodes, input.Location)
 	}
 
-	return nil
+	return true, nil
 }
 
 // updateK8sPodLocked updates K8s pod state. Assumes lock is already held.
 func (dt *DiffTracker) updateK8sPodLocked(input UpdatePodInputType) error {
 	switch input.PodOperation {
 	case ADD, UPDATE:
-		counter := 0
-		if val, ok := dt.LocalServiceNameToNRPServiceMap.Load(strings.ToLower(input.PublicOutboundIdentity)); ok {
-			counter = val.(int)
+		// Check if pod already exists with the same outbound identity
+		// This prevents double-counting when pod informer fires AddFunc for pods
+		// that were already counted during initialization
+		alreadyExists := false
+		if node, nodeExists := dt.K8sResources.Nodes[input.Location]; nodeExists {
+			if pod, podExists := node.Pods[input.Address]; podExists {
+				if pod.PublicOutboundIdentity == input.PublicOutboundIdentity {
+					alreadyExists = true
+					klog.V(4).Infof("updateK8sPodLocked: Pod at %s:%s already exists for service %s, skipping counter increment",
+						input.Location, input.Address, input.PublicOutboundIdentity)
+				}
+			}
 		}
-		dt.LocalServiceNameToNRPServiceMap.Store(strings.ToLower(input.PublicOutboundIdentity), counter+1)
+
+		// Only increment counter if pod doesn't already exist
+		if !alreadyExists {
+			counter := 0
+			if val, ok := dt.LocalServiceNameToNRPServiceMap.Load(strings.ToLower(input.PublicOutboundIdentity)); ok {
+				counter = val.(int)
+			}
+			dt.LocalServiceNameToNRPServiceMap.Store(strings.ToLower(input.PublicOutboundIdentity), counter+1)
+		}
 		return dt.addOrUpdatePod(input)
 	case REMOVE:
+		// First, try to remove the pod from K8s state
+		// This returns false if the pod doesn't exist (duplicate removal)
+		removed, err := dt.removePod(input)
+		if err != nil {
+			return err
+		}
+		if !removed {
+			// Pod didn't exist - this is a duplicate removal, don't decrement counter
+			klog.V(4).Infof("updateK8sPodLocked: Pod at %s:%s was already removed (duplicate delete), skipping counter decrement",
+				input.Location, input.Address)
+			return nil
+		}
+
+		// Pod was actually removed, now decrement the counter
 		if val, ok := dt.LocalServiceNameToNRPServiceMap.Load(strings.ToLower(input.PublicOutboundIdentity)); ok {
 			counter := val.(int)
 			if counter <= 0 {
@@ -167,7 +206,7 @@ func (dt *DiffTracker) updateK8sPodLocked(input UpdatePodInputType) error {
 				dt.LocalServiceNameToNRPServiceMap.Store(strings.ToLower(input.PublicOutboundIdentity), counter-1)
 			}
 		}
-		return dt.removePod(input)
+		return nil
 	default:
 		return fmt.Errorf("invalid pod operation: %s for pod at %s:%s",
 			input.PodOperation, input.Location, input.Address)
@@ -179,4 +218,35 @@ func (dt *DiffTracker) UpdateK8sPod(input UpdatePodInputType) error {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 	return dt.updateK8sPodLocked(input)
+}
+
+// removeServiceFromK8sStateLocked removes a service from all pod identities in K8s state.
+// This is used during service deletion to proactively clear location/address references
+// so the LocationsUpdater can sync the removal to NRP.
+// Assumes lock is already held.
+func (dt *DiffTracker) removeServiceFromK8sStateLocked(serviceUID string, isInbound bool) {
+	for nodeIP, node := range dt.K8sResources.Nodes {
+		for podIP, pod := range node.Pods {
+			if isInbound {
+				// Remove from inbound identities
+				if pod.InboundIdentities != nil && pod.InboundIdentities.Has(serviceUID) {
+					pod.InboundIdentities.Delete(serviceUID)
+				}
+			} else {
+				// Clear outbound identity if it matches
+				if strings.EqualFold(pod.PublicOutboundIdentity, serviceUID) {
+					pod.PublicOutboundIdentity = ""
+					node.Pods[podIP] = pod
+				}
+			}
+
+			// Clean up empty pods and nodes
+			if !pod.HasIdentities() {
+				delete(node.Pods, podIP)
+				if !node.HasPods() {
+					delete(dt.K8sResources.Nodes, nodeIP)
+				}
+			}
+		}
+	}
 }

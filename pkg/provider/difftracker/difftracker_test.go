@@ -208,6 +208,7 @@ func TestUpdateK8sPod(t *testing.T) {
 
 func TestGetSyncLocationsAddresses(t *testing.T) {
 	// Setup a diff tracker with some pods and services
+	// Note: Services must be "ready" (exist in NRP or be in StateCreated) to be included in sync
 	dt := &DiffTracker{
 		K8sResources: K8s_State{
 			Nodes: map[string]Node{
@@ -222,7 +223,9 @@ func TestGetSyncLocationsAddresses(t *testing.T) {
 			},
 		},
 		NRPResources: NRP_State{
-			Locations: map[string]NRPLocation{},
+			LoadBalancers: sets.NewString("service1"), // Service must exist in NRP to pass filtering
+			NATGateways:   sets.NewString("public1"),  // NAT Gateway must exist in NRP to pass filtering
+			Locations:     map[string]NRPLocation{},
 		},
 	}
 
@@ -539,7 +542,9 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 					},
 				},
 				NRPResources: NRP_State{
-					Locations: map[string]NRPLocation{},
+					LoadBalancers: sets.NewString("service1"), // Service must exist in NRP to pass filtering
+					NATGateways:   sets.NewString("public1"),  // NAT Gateway must exist in NRP to pass filtering
+					Locations:     map[string]NRPLocation{},
 				},
 			},
 			expectedNRP: map[string]map[string][]string{
@@ -564,6 +569,8 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 					},
 				},
 				NRPResources: NRP_State{
+					LoadBalancers: sets.NewString("service1", "service2"), // Services must exist in NRP to pass filtering
+					NATGateways:   sets.NewString("public1"),              // NAT Gateway must exist in NRP to pass filtering
 					Locations: map[string]NRPLocation{
 						"node1": {
 							Addresses: map[string]NRPAddress{
@@ -596,6 +603,7 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 					},
 				},
 				NRPResources: NRP_State{
+					LoadBalancers: sets.NewString("service1", "service2"), // Services must exist in NRP to pass filtering
 					Locations: map[string]NRPLocation{
 						"node1": {
 							Addresses: map[string]NRPAddress{
@@ -631,6 +639,7 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 					},
 				},
 				NRPResources: NRP_State{
+					LoadBalancers: sets.NewString("service1", "service2"), // Services must exist in NRP to pass filtering
 					Locations: map[string]NRPLocation{
 						"node1": {
 							Addresses: map[string]NRPAddress{
@@ -678,6 +687,9 @@ func TestUpdateLocationsAddresses(t *testing.T) {
 					},
 				},
 				NRPResources: NRP_State{
+					// Services must exist in NRP to pass filtering
+					LoadBalancers: sets.NewString("service1", "service2", "service3", "service4", "service5"),
+					NATGateways:   sets.NewString("public1"),
 					Locations: map[string]NRPLocation{
 						"node1": {
 							Addresses: map[string]NRPAddress{
@@ -908,7 +920,7 @@ func TestGetSyncOperations(t *testing.T) {
 			name: "locations out of sync",
 			initialState: &DiffTracker{
 				K8sResources: K8s_State{
-					Services: sets.NewString("service1"),
+					Services: sets.NewString("service1", "service2"), // service2 must also exist in K8s to avoid removal
 					Egresses: sets.NewString("egress1"),
 					Nodes: map[string]Node{
 						"node1": {
@@ -921,13 +933,13 @@ func TestGetSyncOperations(t *testing.T) {
 					},
 				},
 				NRPResources: NRP_State{
-					LoadBalancers: sets.NewString("service1"),
+					LoadBalancers: sets.NewString("service1", "service2"), // Both services exist in NRP (pass filtering)
 					NATGateways:   sets.NewString("egress1"),
 					Locations: map[string]NRPLocation{
 						"node1": {
 							Addresses: map[string]NRPAddress{
 								"10.0.0.1": {
-									Services: sets.NewString("service1"),
+									Services: sets.NewString("service1"), // Only service1 in location, service2 needs sync
 								},
 							},
 						},
@@ -935,9 +947,9 @@ func TestGetSyncOperations(t *testing.T) {
 				},
 			},
 			expectedSyncStatus:      SUCCESS,
-			expectedLoadBalancerOps: false,
+			expectedLoadBalancerOps: false, // Both services already in sync between K8s and NRP
 			expectedNATGatewayOps:   false,
-			expectedLocationOps:     true,
+			expectedLocationOps:     true, // service2 needs to be added to location
 		},
 		{
 			name: "multiple components out of sync",
@@ -1103,6 +1115,10 @@ func TestInitializeDiffTracker(t *testing.T) {
 			Additions: sets.NewString("Egress1", "Egress2"),
 			Removals:  sets.NewString("Egress6", "Egress5"),
 		},
+		// LocationData: Only services that exist in NRP pass the filtering.
+		// Service1, Service2, Egress1, Egress2 are being ADDED (don't exist in NRP yet),
+		// so they won't appear in location sync until after they're created.
+		// Only Service0 and Egress0 (which exist in NRP) will be synced.
 		LocationData: LocationData{
 			Action: PartialUpdate,
 			Locations: map[string]Location{
@@ -1110,30 +1126,19 @@ func TestInitializeDiffTracker(t *testing.T) {
 					AddressUpdateAction: PartialUpdate,
 					Addresses: map[string]Address{
 						"Pod00": {
-							ServiceRef: sets.NewString(),
+							ServiceRef: sets.NewString(), // Address in NRP not in K8s - will be removed
 						},
 						"Pod34": {
-							ServiceRef: sets.NewString("Service0"),
+							ServiceRef: sets.NewString("Service0"), // Service0 exists in NRP
 						},
-						"Pod1": {
-							ServiceRef: sets.NewString("Service1", "Service2", "Egress1"),
-						},
-						"Pod3": {
-							ServiceRef: sets.NewString("Egress2"),
-						},
+						// Pod1: Service1, Service2, Egress1 don't exist in NRP yet - no sync
+						// Pod3: Egress2 doesn't exist in NRP yet - no sync
 					},
 				},
-				"Node2": {
-					AddressUpdateAction: FullUpdate,
-					Addresses: map[string]Address{
-						"Pod2": {
-							ServiceRef: sets.NewString("Service1", "Egress2"),
-						},
-					},
-				},
+				// Node2: Pod2 has Service1 and Egress2, but neither exist in NRP yet - no location data
 				"Node3": {
 					AddressUpdateAction: PartialUpdate,
-					Addresses:           map[string]Address{},
+					Addresses:           map[string]Address{}, // Node3 in NRP but not in K8s - will be cleared
 				},
 			},
 		},
@@ -1168,6 +1173,14 @@ func TestInitializeDiffTracker(t *testing.T) {
 		"Sync operations do not match expected values")
 
 	// Check if the DiffTracker is updated correctly
+	// Note: Location updates only affect services that exist in NRP.
+	// Service1, Service2, Egress1, Egress2 are being added but don't exist in NRP yet,
+	// so they won't appear in locations until after they're created and location sync runs again.
+	//
+	// UpdateLocationsAddresses behavior:
+	// - Node1 (PartialUpdate): Pod00 deleted (empty ServiceRef), Pod34 updated to Service0,
+	//   Pod0 unchanged (not in LocationData, PartialUpdate preserves existing addresses)
+	// - Node3 (PartialUpdate with empty Addresses): Entire location deleted
 	expectedDiffTracker := &DiffTracker{
 		K8sResources: K8sResources,
 		NRPResources: NRP_State{
@@ -1182,21 +1195,11 @@ func TestInitializeDiffTracker(t *testing.T) {
 						"Pod0": {
 							Services: sets.NewString("Service0", "Egress0"),
 						},
-						"Pod1": {
-							Services: sets.NewString("Service1", "Service2", "Egress1"),
-						},
-						"Pod3": {
-							Services: sets.NewString("Egress2"),
-						},
+						// Pod00 deleted (empty ServiceRef in LocationData)
+						// Pod1, Pod3 not added because their services don't exist in NRP yet
 					},
 				},
-				"Node2": {
-					Addresses: map[string]NRPAddress{
-						"Pod2": {
-							Services: sets.NewString("Service1", "Egress2"),
-						},
-					},
-				},
+				// Node3 deleted because LocationData has empty Addresses for it
 			},
 		},
 	}

@@ -59,7 +59,7 @@ func TestServiceUpdaterProcessBatchFlow(t *testing.T) {
 		},
 		pendingEndpoints:        make(map[string][]PendingEndpointUpdate),
 		pendingPods:             make(map[string][]PendingPodUpdate),
-		pendingDeletions:        make(map[string]*PendingDeletion),
+		pendingServiceDeletions:        make(map[string]*PendingServiceDeletion),
 		serviceUpdaterTrigger:   make(chan bool, 1),
 		locationsUpdaterTrigger: make(chan bool, 1),
 	}

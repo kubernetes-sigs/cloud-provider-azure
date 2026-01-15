@@ -23,13 +23,13 @@ import (
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
-// TestCheckPendingDeletions_NoLocations tests deletion when service has no locations
-func TestCheckPendingDeletions_NoLocations(t *testing.T) {
+// TestCheckPendingServiceDeletions_NoLocations tests deletion when service has no locations
+func TestCheckPendingServiceDeletions_NoLocations(t *testing.T) {
 	dt := newTestDiffTracker()
 
 	// Setup: Service marked for deletion with no locations in NRP
 	serviceUID := "service-1"
-	dt.pendingDeletions[serviceUID] = &PendingDeletion{
+	dt.pendingServiceDeletions[serviceUID] = &PendingServiceDeletion{
 		ServiceUID: serviceUID,
 		IsInbound:  true,
 	}
@@ -40,8 +40,8 @@ func TestCheckPendingDeletions_NoLocations(t *testing.T) {
 		RetryCount: 0,
 	}
 
-	// Call CheckPendingDeletions
-	dt.CheckPendingDeletions()
+	// Call CheckPendingServiceDeletions
+	dt.CheckPendingServiceDeletions()
 
 	// Verify: Service should be moved to DeletionInProgress
 	dt.mu.Lock()
@@ -51,12 +51,12 @@ func TestCheckPendingDeletions_NoLocations(t *testing.T) {
 	assert.True(t, exists, "Service should still be in pendingServiceOps")
 	assert.Equal(t, StateDeletionInProgress, opState.State, "Service state should be DeletionInProgress")
 
-	// Verify: Service removed from pendingDeletions
+	// Verify: Service removed from pendingServiceDeletions
 	dt.mu.Lock()
-	_, stillPending := dt.pendingDeletions[serviceUID]
+	_, stillPending := dt.pendingServiceDeletions[serviceUID]
 	dt.mu.Unlock()
 
-	assert.False(t, stillPending, "Service should be removed from pendingDeletions")
+	assert.False(t, stillPending, "Service should be removed from pendingServiceDeletions")
 
 	// Verify: ServiceUpdater trigger was sent (channel should have value or be full)
 	select {
@@ -67,13 +67,13 @@ func TestCheckPendingDeletions_NoLocations(t *testing.T) {
 	}
 }
 
-// TestCheckPendingDeletions_WithLocations tests deletion blocked by existing locations
-func TestCheckPendingDeletions_WithLocations(t *testing.T) {
+// TestCheckPendingServiceDeletions_WithLocations tests deletion blocked by existing locations
+func TestCheckPendingServiceDeletions_WithLocations(t *testing.T) {
 	dt := newTestDiffTracker()
 
 	// Setup: Service marked for deletion but still has locations in NRP
 	serviceUID := "service-2"
-	dt.pendingDeletions[serviceUID] = &PendingDeletion{
+	dt.pendingServiceDeletions[serviceUID] = &PendingServiceDeletion{
 		ServiceUID: serviceUID,
 		IsInbound:  true,
 	}
@@ -93,8 +93,8 @@ func TestCheckPendingDeletions_WithLocations(t *testing.T) {
 		},
 	}
 
-	// Call CheckPendingDeletions
-	dt.CheckPendingDeletions()
+	// Call CheckPendingServiceDeletions
+	dt.CheckPendingServiceDeletions()
 
 	// Verify: Service should remain in DeletionPending state (not moved to DeletionInProgress)
 	dt.mu.Lock()
@@ -104,12 +104,12 @@ func TestCheckPendingDeletions_WithLocations(t *testing.T) {
 	assert.True(t, exists, "Service should still be in pendingServiceOps")
 	assert.Equal(t, StateDeletionPending, opState.State, "Service state should remain DeletionPending")
 
-	// Verify: Service remains in pendingDeletions
+	// Verify: Service remains in pendingServiceDeletions
 	dt.mu.Lock()
-	_, stillPending := dt.pendingDeletions[serviceUID]
+	_, stillPending := dt.pendingServiceDeletions[serviceUID]
 	dt.mu.Unlock()
 
-	assert.True(t, stillPending, "Service should remain in pendingDeletions")
+	assert.True(t, stillPending, "Service should remain in pendingServiceDeletions")
 
 	// Verify: ServiceUpdater trigger was NOT sent
 	select {
@@ -120,8 +120,8 @@ func TestCheckPendingDeletions_WithLocations(t *testing.T) {
 	}
 }
 
-// TestCheckPendingDeletions_MultipleServices tests handling multiple pending deletions
-func TestCheckPendingDeletions_MultipleServices(t *testing.T) {
+// TestCheckPendingServiceDeletions_MultipleServices tests handling multiple pending deletions
+func TestCheckPendingServiceDeletions_MultipleServices(t *testing.T) {
 	dt := newTestDiffTracker()
 
 	// Setup: Multiple services - some with locations, some without
@@ -130,7 +130,7 @@ func TestCheckPendingDeletions_MultipleServices(t *testing.T) {
 	service3 := "service-ready2"
 
 	// Service 1: No locations, ready for deletion
-	dt.pendingDeletions[service1] = &PendingDeletion{ServiceUID: service1, IsInbound: true}
+	dt.pendingServiceDeletions[service1] = &PendingServiceDeletion{ServiceUID: service1, IsInbound: true}
 	dt.pendingServiceOps[service1] = &ServiceOperationState{
 		ServiceUID: service1,
 		Config:     NewInboundServiceConfig(service1, nil),
@@ -139,7 +139,7 @@ func TestCheckPendingDeletions_MultipleServices(t *testing.T) {
 	}
 
 	// Service 2: Has locations, blocked from deletion
-	dt.pendingDeletions[service2] = &PendingDeletion{ServiceUID: service2, IsInbound: true}
+	dt.pendingServiceDeletions[service2] = &PendingServiceDeletion{ServiceUID: service2, IsInbound: true}
 	dt.pendingServiceOps[service2] = &ServiceOperationState{
 		ServiceUID: service2,
 		Config:     NewInboundServiceConfig(service2, nil),
@@ -155,7 +155,7 @@ func TestCheckPendingDeletions_MultipleServices(t *testing.T) {
 	}
 
 	// Service 3: No locations, ready for deletion
-	dt.pendingDeletions[service3] = &PendingDeletion{ServiceUID: service3, IsInbound: false}
+	dt.pendingServiceDeletions[service3] = &PendingServiceDeletion{ServiceUID: service3, IsInbound: false}
 	dt.pendingServiceOps[service3] = &ServiceOperationState{
 		ServiceUID: service3,
 		Config:     NewOutboundServiceConfig(service3, nil),
@@ -163,8 +163,8 @@ func TestCheckPendingDeletions_MultipleServices(t *testing.T) {
 		RetryCount: 0,
 	}
 
-	// Call CheckPendingDeletions
-	dt.CheckPendingDeletions()
+	// Call CheckPendingServiceDeletions
+	dt.CheckPendingServiceDeletions()
 
 	// Verify: Service 1 should be moved to DeletionInProgress
 	dt.mu.Lock()
@@ -174,9 +174,9 @@ func TestCheckPendingDeletions_MultipleServices(t *testing.T) {
 	assert.Equal(t, StateDeletionInProgress, op1.State, "Service 1 should be in DeletionInProgress")
 
 	dt.mu.Lock()
-	_, pending1 := dt.pendingDeletions[service1]
+	_, pending1 := dt.pendingServiceDeletions[service1]
 	dt.mu.Unlock()
-	assert.False(t, pending1, "Service 1 should be removed from pendingDeletions")
+	assert.False(t, pending1, "Service 1 should be removed from pendingServiceDeletions")
 
 	// Verify: Service 2 should remain in DeletionPending
 	dt.mu.Lock()
@@ -186,9 +186,9 @@ func TestCheckPendingDeletions_MultipleServices(t *testing.T) {
 	assert.Equal(t, StateDeletionPending, op2.State, "Service 2 should remain in DeletionPending")
 
 	dt.mu.Lock()
-	_, pending2 := dt.pendingDeletions[service2]
+	_, pending2 := dt.pendingServiceDeletions[service2]
 	dt.mu.Unlock()
-	assert.True(t, pending2, "Service 2 should remain in pendingDeletions")
+	assert.True(t, pending2, "Service 2 should remain in pendingServiceDeletions")
 
 	// Verify: Service 3 should be moved to DeletionInProgress
 	dt.mu.Lock()
@@ -198,20 +198,20 @@ func TestCheckPendingDeletions_MultipleServices(t *testing.T) {
 	assert.Equal(t, StateDeletionInProgress, op3.State, "Service 3 should be in DeletionInProgress")
 
 	dt.mu.Lock()
-	_, pending3 := dt.pendingDeletions[service3]
+	_, pending3 := dt.pendingServiceDeletions[service3]
 	dt.mu.Unlock()
-	assert.False(t, pending3, "Service 3 should be removed from pendingDeletions")
+	assert.False(t, pending3, "Service 3 should be removed from pendingServiceDeletions")
 }
 
-// TestCheckPendingDeletions_EmptyMap tests behavior with no pending deletions
-func TestCheckPendingDeletions_EmptyMap(t *testing.T) {
+// TestCheckPendingServiceDeletions_EmptyMap tests behavior with no pending deletions
+func TestCheckPendingServiceDeletions_EmptyMap(t *testing.T) {
 	dt := newTestDiffTracker()
 
 	// No pending deletions
-	assert.Empty(t, dt.pendingDeletions, "pendingDeletions should be empty")
+	assert.Empty(t, dt.pendingServiceDeletions, "pendingServiceDeletions should be empty")
 
-	// Call CheckPendingDeletions - should return early without errors
-	dt.CheckPendingDeletions()
+	// Call CheckPendingServiceDeletions - should return early without errors
+	dt.CheckPendingServiceDeletions()
 
 	// Verify: No trigger sent
 	select {
@@ -222,19 +222,19 @@ func TestCheckPendingDeletions_EmptyMap(t *testing.T) {
 	}
 }
 
-// TestCheckPendingDeletions_MissingFromPendingServiceOps tests when service is in pendingDeletions but not pendingServiceOps
-func TestCheckPendingDeletions_MissingFromPendingServiceOps(t *testing.T) {
+// TestCheckPendingServiceDeletions_MissingFromPendingServiceOps tests when service is in pendingServiceDeletions but not pendingServiceOps
+func TestCheckPendingServiceDeletions_MissingFromPendingServiceOps(t *testing.T) {
 	dt := newTestDiffTracker()
 
-	// Setup: Service in pendingDeletions but NOT in pendingServiceOps
+	// Setup: Service in pendingServiceDeletions but NOT in pendingServiceOps
 	serviceUID := "orphaned-service"
-	dt.pendingDeletions[serviceUID] = &PendingDeletion{
+	dt.pendingServiceDeletions[serviceUID] = &PendingServiceDeletion{
 		ServiceUID: serviceUID,
 		IsInbound:  true,
 	}
 
-	// Call CheckPendingDeletions
-	dt.CheckPendingDeletions()
+	// Call CheckPendingServiceDeletions
+	dt.CheckPendingServiceDeletions()
 
 	// Verify: Service should be added to pendingServiceOps with DeletionInProgress state
 	dt.mu.Lock()
@@ -246,12 +246,12 @@ func TestCheckPendingDeletions_MissingFromPendingServiceOps(t *testing.T) {
 	assert.Equal(t, serviceUID, opState.ServiceUID, "ServiceUID should match")
 	assert.True(t, opState.Config.IsInbound, "IsInbound should be true")
 
-	// Verify: Service removed from pendingDeletions
+	// Verify: Service removed from pendingServiceDeletions
 	dt.mu.Lock()
-	_, stillPending := dt.pendingDeletions[serviceUID]
+	_, stillPending := dt.pendingServiceDeletions[serviceUID]
 	dt.mu.Unlock()
 
-	assert.False(t, stillPending, "Service should be removed from pendingDeletions")
+	assert.False(t, stillPending, "Service should be removed from pendingServiceDeletions")
 }
 
 // TestServiceHasLocationsInNRP tests the helper function for checking location references
@@ -309,14 +309,14 @@ func TestServiceHasLocationsInNRP(t *testing.T) {
 	assert.False(t, hasLocs, "Service should have no locations after removal")
 }
 
-// TestCheckPendingDeletions_LocationsClearedAfterCheck tests the flow of locations being cleared
-func TestCheckPendingDeletions_LocationsClearedAfterCheck(t *testing.T) {
+// TestCheckPendingServiceDeletions_LocationsClearedAfterCheck tests the flow of locations being cleared
+func TestCheckPendingServiceDeletions_LocationsClearedAfterCheck(t *testing.T) {
 	dt := newTestDiffTracker()
 
 	serviceUID := "service-flow"
 
 	// Setup: Service with locations
-	dt.pendingDeletions[serviceUID] = &PendingDeletion{ServiceUID: serviceUID, IsInbound: true}
+	dt.pendingServiceDeletions[serviceUID] = &PendingServiceDeletion{ServiceUID: serviceUID, IsInbound: true}
 	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
 		ServiceUID: serviceUID,
 		Config:     NewInboundServiceConfig(serviceUID, nil),
@@ -332,15 +332,15 @@ func TestCheckPendingDeletions_LocationsClearedAfterCheck(t *testing.T) {
 	}
 
 	// First check - should not proceed with deletion
-	dt.CheckPendingDeletions()
+	dt.CheckPendingServiceDeletions()
 
 	dt.mu.Lock()
 	op := dt.pendingServiceOps[serviceUID]
-	_, pending := dt.pendingDeletions[serviceUID]
+	_, pending := dt.pendingServiceDeletions[serviceUID]
 	dt.mu.Unlock()
 
 	assert.Equal(t, StateDeletionPending, op.State, "Should remain in DeletionPending")
-	assert.True(t, pending, "Should remain in pendingDeletions")
+	assert.True(t, pending, "Should remain in pendingServiceDeletions")
 
 	// Clear locations (simulating LocationsUpdater sync)
 	dt.NRPResources.Locations["eastus"] = NRPLocation{
@@ -356,15 +356,15 @@ func TestCheckPendingDeletions_LocationsClearedAfterCheck(t *testing.T) {
 	}
 
 	// Second check - should now proceed with deletion
-	dt.CheckPendingDeletions()
+	dt.CheckPendingServiceDeletions()
 
 	dt.mu.Lock()
 	op2 := dt.pendingServiceOps[serviceUID]
-	_, pending2 := dt.pendingDeletions[serviceUID]
+	_, pending2 := dt.pendingServiceDeletions[serviceUID]
 	dt.mu.Unlock()
 
 	assert.Equal(t, StateDeletionInProgress, op2.State, "Should move to DeletionInProgress")
-	assert.False(t, pending2, "Should be removed from pendingDeletions")
+	assert.False(t, pending2, "Should be removed from pendingServiceDeletions")
 
 	// Verify trigger sent
 	select {

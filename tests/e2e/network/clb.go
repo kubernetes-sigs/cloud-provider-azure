@@ -46,7 +46,7 @@ import (
 const (
 	clbTestLabel       = "CLB"
 	subscriptionID     = "3dc13b6d-6896-40ac-98f7-f18cbce2a405"
-	resourceGroupName  = "mc_enechitebld146945876_e2e-enechitoaia-34_eastus2euap"
+	resourceGroupName  = "MC_enechitebld149025306_e2e-enechitoaia-67_eastus2euap"
 	serviceGatewayName = "my-service-gateway"
 	apiVersion         = "2025-01-01"
 )
@@ -588,7 +588,7 @@ var _ = Describe("Container Load Balancer", Label(clbTestLabel), func() {
 		Expect(updatedService.Spec.Ports[0].Port).To(Equal(int32(5000)), "Port should be 5000")
 	})
 
-	XIt("should create a LoadBalancer service with individual pods created in parallel", func() {
+	It("should create a LoadBalancer service with individual pods created in parallel", func() {
 		const (
 			numPods       = 120
 			servicePort   = int32(8080)
@@ -953,7 +953,7 @@ var _ = Describe("Container Load Balancer", Label(clbTestLabel), func() {
 		utils.Logf("  Running Pods: %d/%d", runningPods, numPods)
 	})
 
-	XIt("should instantly make all running pods available when labels are updated to match service selector", func() {
+	It("should instantly make all running pods available when labels are updated to match service selector", func() {
 		const (
 			numPods       = 475
 			servicePort   = int32(8080)
@@ -1262,7 +1262,7 @@ var _ = Describe("Container Load Balancer", Label(clbTestLabel), func() {
 	})
 
 	// Test 4: Multiple concurrent services with pods
-	XIt("should handle X concurrent LoadBalancer services with Y pods each", func() {
+	It("should handle X concurrent LoadBalancer services with Y pods each", func() {
 		const (
 			numServices    = 15
 			podsPerService = 5

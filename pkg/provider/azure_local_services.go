@@ -311,6 +311,14 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 						klog.V(4).Infof("EndpointSlice %s/%s does not have service UID, skip updating", es.Namespace, es.Name)
 						return
 					}
+
+					// Skip EndpointSlices that are being deleted
+					if es.DeletionTimestamp != nil {
+						klog.V(4).Infof("EndpointSlice %s/%s is being deleted (DeletionTimestamp set), skipping",
+							es.Namespace, es.Name)
+						return
+					}
+
 					// Use Engine to handle endpoint updates (buffering, state checking, etc.)
 					// Determine IP family from EndpointSlice AddressType
 					ipv6 := es.AddressType == discovery_v1.AddressTypeIPv6
@@ -382,6 +390,19 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 					serviceUID, loaded := getServiceUIDOfEndpointSlice(newES)
 					if !loaded {
 						klog.V(4).Infof("EndpointSlice %s/%s does not have service UID, skip updating", newES.Namespace, newES.Name)
+						return
+					}
+
+					// Skip EndpointSlices that are being deleted
+					if newES.DeletionTimestamp != nil {
+						// Handle deletion: remove addresses from K8s state
+						if previousES.DeletionTimestamp == nil {
+							klog.V(2).Infof("EndpointSlice %s/%s started deletion, removing addresses from K8s state",
+								newES.Namespace, newES.Name)
+							ipv6 := newES.AddressType == discovery_v1.AddressTypeIPv6
+							oldAddresses := az.getPodIPToNodeIPMapFromEndpointSlice(previousES, ipv6)
+							az.diffTracker.UpdateEndpoints(serviceUID, oldAddresses, nil)
+						}
 						return
 					}
 

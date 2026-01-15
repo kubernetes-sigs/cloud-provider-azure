@@ -121,7 +121,7 @@ func (s *ServiceUpdater) processBatch() {
 
 		case StateDeletionPending:
 			// Services in StateDeletionPending are waiting for LocationsUpdater to clear their addresses.
-			// They will be moved to pendingDeletions map and checkPendingDeletions() will transition
+			// They will be moved to pendingServiceDeletions map and checkPendingServiceDeletions() will transition
 			// them to StateDeletionInProgress once locations are cleared. Skip processing here.
 			s.mu.Lock()
 			delete(s.activeOps, serviceUID)
@@ -225,6 +225,20 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 	klog.Infof("ServiceUpdater: createInboundService started for %s", serviceUID)
 
 	ctx := s.ctx
+
+	// Step 0: Add finalizer to K8s service to prevent deletion until Azure resources are cleaned up
+	svc, err := s.diffTracker.getServiceByUID(ctx, serviceUID)
+	if err != nil {
+		klog.Warningf("ServiceUpdater: failed to get service %s for finalizer: %v (continuing anyway)", serviceUID, err)
+		// Continue - service may have been deleted or this is initialization cleanup
+	} else {
+		if err := s.diffTracker.addServiceGatewayFinalizer(ctx, svc); err != nil {
+			klog.Errorf("ServiceUpdater: failed to add finalizer to service %s: %v", serviceUID, err)
+			s.onComplete(serviceUID, false, fmt.Errorf("failed to add finalizer: %w", err))
+			return
+		}
+		klog.V(3).Infof("ServiceUpdater: added finalizer to service %s", serviceUID)
+	}
 
 	// Step 1: Build resources using shared helper
 	pipResource, lbResource, servicesDTO := buildInboundServiceResources(serviceUID, config, s.diffTracker.config)
@@ -389,6 +403,21 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string) {
 			Additions: nil,
 			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
 		})
+
+		// Step 6: Remove finalizer from K8s service to allow deletion
+		svc, err := s.diffTracker.getServiceByUID(ctx, serviceUID)
+		if err != nil {
+			klog.V(3).Infof("ServiceUpdater: service %s not found for finalizer removal (may be already deleted): %v", serviceUID, err)
+			// Service already gone - no finalizer to remove
+		} else {
+			if err := s.diffTracker.removeServiceGatewayFinalizer(ctx, svc); err != nil {
+				klog.Warningf("ServiceUpdater: failed to remove finalizer from service %s: %v", serviceUID, err)
+				// Don't fail the deletion - Azure resources are cleaned up
+			} else {
+				klog.V(3).Infof("ServiceUpdater: removed finalizer from service %s", serviceUID)
+			}
+		}
+
 		s.onComplete(serviceUID, true, nil)
 	}
 }
@@ -448,6 +477,10 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string) {
 			Additions: nil,
 			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
 		})
+
+		// Step 6: Remove finalizers from last-pod entries now that NAT Gateway is deleted
+		s.diffTracker.RemoveLastPodFinalizers(ctx, serviceUID)
+
 		s.onComplete(serviceUID, true, nil)
 	}
 }

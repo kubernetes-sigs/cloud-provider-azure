@@ -39,7 +39,7 @@ func newTestDiffTracker() *DiffTracker {
 		pendingServiceOps:       make(map[string]*ServiceOperationState),
 		pendingEndpoints:        make(map[string][]PendingEndpointUpdate),
 		pendingPods:             make(map[string][]PendingPodUpdate),
-		pendingDeletions:        make(map[string]*PendingDeletion),
+		pendingServiceDeletions:        make(map[string]*PendingServiceDeletion),
 		serviceUpdaterTrigger:   make(chan bool, 1),
 		locationsUpdaterTrigger: make(chan bool, 1),
 	}
@@ -170,7 +170,7 @@ func TestEngineDeleteService_WithLocations(t *testing.T) {
 	dt.DeleteService(serviceUID, false)
 
 	// Verify service is in pending deletions (not immediate deletion)
-	pendingDel, exists := dt.pendingDeletions[serviceUID]
+	pendingDel, exists := dt.pendingServiceDeletions[serviceUID]
 	assert.True(t, exists, "Service should be in pending deletions")
 	if exists {
 		assert.Equal(t, serviceUID, pendingDel.ServiceUID)

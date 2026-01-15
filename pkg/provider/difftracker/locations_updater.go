@@ -122,7 +122,14 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 
 	// Check pending deletions after location sync
 	// Services waiting for their locations to clear can now be deleted
-	lu.diffTracker.CheckPendingDeletions()
+	lu.diffTracker.CheckPendingServiceDeletions()
+
+	// Check pending pod deletions after location sync
+	// This handles pods recovered during restart (via recoverStuckFinalizers)
+	// whose addresses need to be synced out of NRP before removing their finalizers.
+	// Note: During normal operation, non-last pod finalizers are removed immediately
+	// in podInformerRemovePod(), not here.
+	lu.diffTracker.CheckPendingPodDeletions(ctx)
 
 	isOperationSucceeded = true
 }

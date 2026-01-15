@@ -63,8 +63,8 @@ func InitializeFromCluster(
 		return nil, err
 	}
 
-	// Build K8s state from cluster
-	k8s, serviceUIDToService, _, localServiceNameToNRPServiceMap, err := buildK8sState(ctx, kubeClient)
+	// Build K8s state from cluster (also returns lists for reuse by recoverStuckFinalizers)
+	k8s, serviceList, serviceUIDToService, endpointSliceList, egressPodList, localServiceNameToNRPServiceMap, nodeNameToIPMap, err := buildK8sState(ctx, kubeClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build K8s state: %w", err)
 	}
@@ -80,6 +80,11 @@ func InitializeFromCluster(
 
 	// Enhance NRP state with orphaned resources
 	enhanceNRPStateWithOrphans(&diffTracker.NRPResources, *currentLoadBalancersInNRP, *currentNATGatewaysInNRP)
+
+	// Recover resources stuck with finalizers from a previous crash
+	// This must happen BEFORE informers start to avoid race conditions
+	// Reuse lists from buildK8sState (avoids duplicate API calls)
+	recoverStuckFinalizers(ctx, diffTracker, nodeNameToIPMap, serviceList, egressPodList, endpointSliceList)
 
 	// Counter already initialized from K8s state during buildK8sState
 	// After initialization sync completes, NRP will match K8s, so counter reflects final state
@@ -108,11 +113,24 @@ func InitializeFromCluster(
 	// - For deletions: Clear orphaned locations so services can be deleted
 	// - For existing services (no additions/deletions): Sync any location changes
 	// - For new services: OnServiceCreationComplete will trigger after creation
+	// - For recovered stuck finalizers: pendingPodDeletions need processing
 	hasDeletions := syncOperations.LoadBalancerUpdates.Removals.Len() > 0 || syncOperations.NATGatewayUpdates.Removals.Len() > 0
+	// hasOnlyExistingServices is true when we have NO new services to create.
+	// This covers two cases:
+	//   1. All services already exist in NRP (need location sync for potential updates)
+	//   2. NO services exist at all (no-op, but harmless to trigger)
+	// The key insight: when Additions > 0, OnServiceCreationComplete will trigger the sync,
+	// so we don't need an explicit trigger here. When Additions == 0, no such callback exists.
 	hasOnlyExistingServices := syncOperations.LoadBalancerUpdates.Additions.Len() == 0 && syncOperations.NATGatewayUpdates.Additions.Len() == 0
 
-	if hasDeletions || hasOnlyExistingServices {
-		klog.Infof("InitializeFromCluster: triggering initial location sync (deletions=%v, onlyExisting=%v)", hasDeletions, hasOnlyExistingServices)
+	// Check if we have pending items from recoverStuckFinalizers
+	diffTracker.mu.Lock()
+	hasRecoveredItems := len(diffTracker.pendingPodDeletions) > 0
+	diffTracker.mu.Unlock()
+
+	if hasDeletions || hasOnlyExistingServices || hasRecoveredItems {
+		klog.Infof("InitializeFromCluster: triggering initial location sync (deletions=%v, onlyExisting=%v, recoveredItems=%v)",
+			hasDeletions, hasOnlyExistingServices, hasRecoveredItems)
 		diffTracker.triggerLocationsUpdater()
 	}
 
@@ -156,10 +174,11 @@ func validateInitializationInputs(kubeClient kubernetes.Interface, networkClient
 }
 
 // buildK8sState fetches and constructs the complete K8s state (services, endpoints, egresses)
+// Also returns nodeNameToIPMap for reuse in recovery operations.
 func buildK8sState(
 	ctx context.Context,
 	kubeClient kubernetes.Interface,
-) (K8s_State, map[string]*v1.Service, *discoveryv1.EndpointSliceList, map[string]int, error) {
+) (K8s_State, *v1.ServiceList, map[string]*v1.Service, *discoveryv1.EndpointSliceList, *v1.PodList, map[string]int, map[string]string, error) {
 	k8s := K8s_State{
 		Services: utilsets.NewString(),
 		Egresses: utilsets.NewString(),
@@ -170,27 +189,28 @@ func buildK8sState(
 	// Build node name to IP mapping
 	nodeNameToIPMap, err := buildNodeNameToIPMap(ctx, kubeClient)
 	if err != nil {
-		return K8s_State{}, nil, nil, nil, err
+		return K8s_State{}, nil, nil, nil, nil, nil, nil, err
 	}
 
 	// Fetch and process services
-	serviceUIDToService, err := processK8sServices(ctx, kubeClient, &k8s, localServiceNameToNRPServiceMap)
+	serviceList, serviceUIDToService, err := processK8sServices(ctx, kubeClient, &k8s, localServiceNameToNRPServiceMap)
 	if err != nil {
-		return K8s_State{}, nil, nil, nil, err
+		return K8s_State{}, nil, nil, nil, nil, nil, nil, err
 	}
 
 	// Fetch and process endpoint slices
 	endpointSliceList, err := processK8sEndpoints(ctx, kubeClient, &k8s, nodeNameToIPMap)
 	if err != nil {
-		return K8s_State{}, nil, nil, nil, err
+		return K8s_State{}, nil, nil, nil, nil, nil, nil, err
 	}
 
 	// Fetch and process egress pods
-	if err := processK8sEgresses(ctx, kubeClient, &k8s, nodeNameToIPMap, localServiceNameToNRPServiceMap); err != nil {
-		return K8s_State{}, nil, nil, nil, err
+	egressPodList, err := processK8sEgresses(ctx, kubeClient, &k8s, nodeNameToIPMap, localServiceNameToNRPServiceMap)
+	if err != nil {
+		return K8s_State{}, nil, nil, nil, nil, nil, nil, err
 	}
 
-	return k8s, serviceUIDToService, endpointSliceList, localServiceNameToNRPServiceMap, nil
+	return k8s, serviceList, serviceUIDToService, endpointSliceList, egressPodList, localServiceNameToNRPServiceMap, nodeNameToIPMap, nil
 }
 
 // buildNodeNameToIPMap creates a mapping from node names to their internal IPs
@@ -215,21 +235,209 @@ func buildNodeNameToIPMap(ctx context.Context, kubeClient kubernetes.Interface) 
 	return nodeNameToIPMap, nil
 }
 
+// ================================================================================================
+// RESTART RECOVERY - FINALIZER CLEANUP FOR ORPHANED RESOURCES
+// ================================================================================================
+
+// recoverStuckFinalizers finds services and pods that have our finalizer + DeletionTimestamp
+// (indicating a crash during cleanup) and re-triggers the appropriate cleanup flows.
+// This runs during initialization, BEFORE informers start, so it's safe from race conditions.
+//
+// IMPORTANT: Since processK8sServices and processK8sEgresses skip resources
+// with DeletionTimestamp, these stuck resources are NOT in K8s state or counters. We just need to:
+// 1. Track them in pending deletions for finalizer removal
+// 2. Trigger LocationsUpdater to sync their addresses out of NRP
+//
+// Recovery strategy:
+//   - For Services: The diff mechanism handles LB/NAT deletion (not in K8s.Services → marked for removal)
+//     Just log for visibility; no explicit pendingServiceDeletions needed as GetSyncOperations will handle it
+//   - For Pods with valid addresses: Track in pendingPodDeletions (don't call DeletePod - counters are clean)
+//   - For Pods with missing addresses: Directly remove finalizer (nothing to sync)
+//   - For malformed resources (no egress label): Directly remove finalizer
+//
+// NOTE: EndpointSlices do not use finalizers - their deletion is handled directly by the informer.
+//
+// Optimization: This function receives pre-fetched lists from buildK8sState to avoid duplicate API calls.
+func recoverStuckFinalizers(
+	ctx context.Context,
+	dt *DiffTracker,
+	nodeNameToIPMap map[string]string,
+	services *v1.ServiceList,
+	egressPods *v1.PodList,
+	endpointSlices *discoveryv1.EndpointSliceList,
+) {
+	klog.Infof("recoverStuckFinalizers: scanning for resources stuck with finalizers")
+
+	servicesRecovered := 0
+	podsRecovered := 0
+	podsDirectCleaned := 0
+
+	// Collect pending items in local maps first, then batch-insert with a single lock
+	pendingPods := make(map[string]*PendingPodDeletion)
+
+	// Recover stuck services (LoadBalancer services with our finalizer + DeletionTimestamp)
+	// NOTE: Unlike pods, services don't need explicit pendingServiceDeletions tracking here.
+	// The diff mechanism handles it: processK8sServices skips this service → not in K8s.Services
+	// → GetSyncOperations sees LB in NRP but not K8s → marked for Removal → reconcileServices deletes it
+	// Service finalizer is removed in OnServiceDeletionComplete after LB/NAT deletion
+	if services == nil {
+		klog.Errorf("recoverStuckFinalizers: services list is nil, skipping service recovery")
+	} else {
+		for i := range services.Items {
+			svc := &services.Items[i]
+
+			// Only process LoadBalancer services
+			if svc.Spec.Type != v1.ServiceTypeLoadBalancer {
+				continue
+			}
+
+			// Check if service has our finalizer AND is being deleted
+			if svc.DeletionTimestamp == nil {
+				continue
+			}
+			if !hasFinalizer(svc.Finalizers, ServiceGatewayServiceCleanupFinalizer) {
+				continue
+			}
+
+			uid := strings.ToLower(string(svc.UID))
+			klog.Infof("recoverStuckFinalizers: found stuck service %s/%s (uid=%s), will be handled by diff mechanism",
+				svc.Namespace, svc.Name, uid)
+			servicesRecovered++
+		}
+	}
+
+	// Recover stuck pods (egress pods with our finalizer + DeletionTimestamp)
+	if egressPods == nil {
+		klog.Errorf("recoverStuckFinalizers: egressPods list is nil, skipping pod recovery")
+	} else {
+		for i := range egressPods.Items {
+			pod := &egressPods.Items[i]
+
+			// Check if pod has our finalizer AND is being deleted
+			if pod.DeletionTimestamp == nil {
+				continue
+			}
+			if !hasFinalizer(pod.Finalizers, ServiceGatewayPodCleanupFinalizer) {
+				continue
+			}
+
+
+			// This pod was mid-deletion when we crashed - re-trigger cleanup
+			egressLabel := strings.ToLower(pod.Labels[consts.PodLabelServiceEgressGateway])
+			if egressLabel == "" {
+				// No egress label = nothing to track, just remove finalizer directly
+				klog.Warningf("recoverStuckFinalizers: pod %s/%s has finalizer but missing egress label, removing finalizer directly",
+					pod.Namespace, pod.Name)
+				if err := dt.removePodFinalizer(ctx, pod); err != nil {
+					klog.Errorf("recoverStuckFinalizers: failed to remove finalizer from pod %s/%s: %v",
+						pod.Namespace, pod.Name, err)
+				} else {
+					podsDirectCleaned++
+				}
+				continue
+			}
+
+			// Get addresses - may be empty if pod was already terminating
+			podIP := pod.Status.PodIP
+			nodeIP := ""
+			if pod.Spec.NodeName != "" {
+				nodeIP = nodeNameToIPMap[pod.Spec.NodeName]
+			}
+
+			// If we don't have addresses, we can't track for sync through DeletePod
+			// (DeletePod rejects empty location/address). Directly remove finalizer since
+			// there's nothing to sync out of NRP anyway.
+			if podIP == "" || nodeIP == "" {
+				klog.Warningf("recoverStuckFinalizers: pod %s/%s has finalizer but missing addresses (podIP=%s, nodeIP=%s), removing finalizer directly",
+					pod.Namespace, pod.Name, podIP, nodeIP)
+				if err := dt.removePodFinalizer(ctx, pod); err != nil {
+					klog.Errorf("recoverStuckFinalizers: failed to remove finalizer from pod %s/%s: %v",
+						pod.Namespace, pod.Name, err)
+				} else {
+					podsDirectCleaned++
+				}
+				continue
+			}
+
+			klog.Infof("recoverStuckFinalizers: recovering stuck pod %s/%s (egress=%s, location=%s, address=%s)",
+				pod.Namespace, pod.Name, egressLabel, nodeIP, podIP)
+
+			// Collect for batch insertion (Issue 2.4: avoid lock contention)
+			// NOTE: We do NOT call DeletePod() because:
+			// 1. The pod was not counted in processK8sEgresses (we skip pods with DeletionTimestamp)
+			// 2. DeletePod would try to decrement a counter that doesn't include this pod
+			// 3. We just need to sync the address out of NRP and remove the finalizer
+			podKey := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+			pendingPods[podKey] = &PendingPodDeletion{
+				Namespace:  pod.Namespace,
+				Name:       pod.Name,
+				ServiceUID: egressLabel,
+				Address:    podIP,
+				Location:   nodeIP,
+				// IsLastPod=false is INTENTIONAL even if this was actually the last pod.
+				// During initialization, NAT Gateway deletion is handled by the DIFF mechanism:
+				// - processK8sEgresses skips this pod → egress NOT in K8s.Egresses
+				// - GetSyncOperations sees NAT in NRP but not K8s → marks for Removal
+				// - reconcileServices queues the NAT Gateway deletion
+				// So we don't need IsLastPod=true to trigger service deletion - the diff does it.
+				// Setting IsLastPod=false allows the finalizer to be removed immediately after
+				// the address sync, rather than waiting for NAT Gateway deletion callback.
+				IsLastPod: false,
+				Timestamp: time.Now().Format(time.RFC3339),
+			}
+			podsRecovered++
+		}
+	}
+
+	// NOTE: EndpointSlices do not use finalizers - their deletion is handled directly
+	// by the endpointSlice informer's DeleteFunc calling UpdateEndpoints.
+	// The endpointSlices parameter is only used for building initial state.
+	_ = endpointSlices
+
+	// Batch-insert all pending items with a single lock (Issue 2.4: reduce lock contention)
+	if len(pendingPods) > 0 {
+		dt.mu.Lock()
+		for key, val := range pendingPods {
+			dt.pendingPodDeletions[key] = val
+		}
+		dt.mu.Unlock()
+	}
+
+	// NOTE: We do NOT trigger LocationsUpdater here because it's not started yet.
+	// The pending items will be picked up when the existing location sync trigger
+	// fires after startInitialization() completes.
+
+	if servicesRecovered > 0 || podsRecovered > 0 || podsDirectCleaned > 0 {
+		klog.Infof("recoverStuckFinalizers: found %d stuck services (handled by diff), recovered %d pods, direct-cleaned %d pods",
+			servicesRecovered, podsRecovered, podsDirectCleaned)
+	} else {
+		klog.Infof("recoverStuckFinalizers: no stuck resources found")
+	}
+}
+
 // processK8sServices fetches and processes LoadBalancer services from K8s
+// NOTE: Services with DeletionTimestamp are EXCLUDED because they are being deleted.
+// Their cleanup is handled by recoverStuckFinalizers.
 func processK8sServices(
 	ctx context.Context,
 	kubeClient kubernetes.Interface,
 	k8s *K8s_State,
 	localServiceNameToNRPServiceMap map[string]int,
-) (map[string]*v1.Service, error) {
+) (*v1.ServiceList, map[string]*v1.Service, error) {
 	services, err := kubeClient.CoreV1().Services(v1.NamespaceAll).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list services: %w", err)
+		return nil, nil, fmt.Errorf("failed to list services: %w", err)
 	}
 
 	serviceUIDToService := make(map[string]*v1.Service)
 	for i, service := range services.Items {
 		if service.Spec.Type == v1.ServiceTypeLoadBalancer {
+			// Skip services that are being deleted - they shouldn't count in K8s state
+			// Their deletion will be handled by recoverStuckFinalizers or the diff mechanism
+			if service.DeletionTimestamp != nil {
+				klog.V(4).Infof("processK8sServices: skipping service %s/%s with DeletionTimestamp", service.Namespace, service.Name)
+				continue
+			}
 			uid := strings.ToLower(string(service.UID))
 			k8s.Services.Insert(uid)
 			// Initialize reference counter with sentinel value -34
@@ -238,10 +446,12 @@ func processK8sServices(
 		}
 	}
 	klog.Infof("processK8sServices: found %d LoadBalancer services", k8s.Services.Len())
-	return serviceUIDToService, nil
+	return services, serviceUIDToService, nil
 }
 
 // processK8sEndpoints fetches endpoint slices and populates K8s nodes/pods with inbound identities
+// NOTE: EndpointSlices with DeletionTimestamp are EXCLUDED because they are being deleted.
+// Their addresses will be synced out by recoverStuckFinalizers.
 func processK8sEndpoints(
 	ctx context.Context,
 	kubeClient kubernetes.Interface,
@@ -253,7 +463,16 @@ func processK8sEndpoints(
 		return nil, fmt.Errorf("failed to list endpointslices: %w", err)
 	}
 
+	processedCount := 0
 	for _, endpointSlice := range endpointSliceList.Items {
+		// Skip EndpointSlices that are being deleted - their addresses shouldn't be in K8s state
+		// Their cleanup is handled by recoverStuckFinalizers
+		if endpointSlice.DeletionTimestamp != nil {
+			klog.V(4).Infof("processK8sEndpoints: skipping EndpointSlice %s/%s with DeletionTimestamp",
+				endpointSlice.Namespace, endpointSlice.Name)
+			continue
+		}
+
 		serviceUID := extractServiceUIDFromEndpointSlice(&endpointSlice)
 		if serviceUID == "" || !k8s.Services.Has(serviceUID) {
 			continue
@@ -275,27 +494,39 @@ func processK8sEndpoints(
 				addInboundIdentityToPod(k8s, nodeIP, podIP, serviceUID)
 			}
 		}
+		processedCount++
 	}
-	klog.Infof("processK8sEndpoints: processed %d endpointslices", len(endpointSliceList.Items))
+	klog.Infof("processK8sEndpoints: processed %d endpointslices (total %d, skipped deleting)",
+		processedCount, len(endpointSliceList.Items))
 	return endpointSliceList, nil
 }
 
 // processK8sEgresses fetches egress pods and populates K8s nodes/pods with outbound identities
+// NOTE: Pods with DeletionTimestamp are EXCLUDED because they are being deleted and should not
+// contribute to the pod counter. Their cleanup is handled by recoverStuckFinalizers.
+// Returns the raw pod list for reuse by recoverStuckFinalizers to avoid duplicate API calls.
 func processK8sEgresses(
 	ctx context.Context,
 	kubeClient kubernetes.Interface,
 	k8s *K8s_State,
 	nodeNameToIPMap map[string]string,
 	localServiceNameToNRPServiceMap map[string]int,
-) error {
+) (*v1.PodList, error) {
 	egressPods, err := kubeClient.CoreV1().Pods("").List(ctx, metav1.ListOptions{
 		LabelSelector: consts.PodLabelServiceEgressGateway,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to list pods with egress label: %w", err)
+		return nil, fmt.Errorf("failed to list pods with egress label: %w", err)
 	}
 
 	for _, pod := range egressPods.Items {
+		// Skip pods that are being deleted - they shouldn't count toward the service
+		// Their addresses will be synced out by recoverStuckFinalizers or during normal deletion
+		if pod.DeletionTimestamp != nil {
+			klog.V(4).Infof("processK8sEgresses: skipping pod %s/%s with DeletionTimestamp", pod.Namespace, pod.Name)
+			continue
+		}
+
 		egressVal := strings.ToLower(pod.Labels[consts.PodLabelServiceEgressGateway])
 		if egressVal == "" || pod.Status.PodIP == "" || pod.Spec.NodeName == "" {
 			continue
@@ -314,7 +545,7 @@ func processK8sEgresses(
 		localServiceNameToNRPServiceMap[egressVal] = localServiceNameToNRPServiceMap[egressVal] + 1
 	}
 	klog.Infof("processK8sEgresses: found %d egress services", k8s.Egresses.Len())
-	return nil
+	return egressPods, nil
 }
 
 // buildNRPState fetches and constructs the complete NRP state (services, locations, LBs, NATs)
@@ -1061,7 +1292,9 @@ func (dt *DiffTracker) reconcileOutboundPods(nrp NRP_State, k8sNodes map[string]
 				location, address := parts[0], parts[1]
 				klog.V(3).Infof("reconcileOutboundPods: calling DeletePod for %s (location=%s, address=%s)",
 					serviceUID, location, address)
-				dt.DeletePod(serviceUID, location, address)
+				// During initialization, we don't have namespace/name - pass empty strings
+				// This is fine because orphaned NRP entries don't need pod finalizer tracking
+				dt.DeletePod(serviceUID, location, address, "", "")
 				deleteCount++
 			}
 		}

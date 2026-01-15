@@ -97,7 +97,7 @@ var (
 	)
 
 	// Pending deletions metrics
-	pendingDeletions = metrics.NewGauge(
+	pendingServiceDeletions = metrics.NewGauge(
 		&metrics.GaugeOpts{
 			Subsystem:      diffTrackerSubsystem,
 			Name:           "pending_deletions",
@@ -208,7 +208,7 @@ func registerMetrics() {
 	legacyregistry.MustRegister(serviceOperationTotal)
 	legacyregistry.MustRegister(serviceOperationDuration)
 	legacyregistry.MustRegister(serviceOperationRetries)
-	legacyregistry.MustRegister(pendingDeletions)
+	legacyregistry.MustRegister(pendingServiceDeletions)
 	legacyregistry.MustRegister(deletionCheckDuration)
 	legacyregistry.MustRegister(servicesBlockedByLocations)
 	legacyregistry.MustRegister(serviceUpdaterConcurrentOps)
@@ -301,11 +301,11 @@ func recordServiceOperationRetry(operation string, isInbound bool, retryCount in
 	serviceOperationRetries.WithLabelValues(operation, serviceType).Observe(float64(retryCount))
 }
 
-// updatePendingDeletionsMetric updates the gauge for pending deletions
-func updatePendingDeletionsMetric(dt *DiffTracker) {
+// updatePendingServiceDeletionsMetric updates the gauge for pending deletions
+func updatePendingServiceDeletionsMetric(dt *DiffTracker) {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
-	pendingDeletions.Set(float64(len(dt.pendingDeletions)))
+	pendingServiceDeletions.Set(float64(len(dt.pendingServiceDeletions)))
 }
 
 // recordDeletionCheck records a deletion checker run

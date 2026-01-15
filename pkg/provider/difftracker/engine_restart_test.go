@@ -99,9 +99,9 @@ func TestEngineDeleteService_AfterRestart(t *testing.T) {
 	assert.Equal(t, StateDeletionInProgress, opState.State, "state should be DeletionInProgress (no locations)")
 	assert.True(t, opState.Config.IsInbound, "should be marked as inbound")
 
-	// Verify service was removed from pendingDeletions (already triggered for deletion)
-	_, exists = dt.pendingDeletions[serviceUID]
-	assert.False(t, exists, "service should not be in pendingDeletions (already triggered)")
+	// Verify service was removed from pendingServiceDeletions (already triggered for deletion)
+	_, exists = dt.pendingServiceDeletions[serviceUID]
+	assert.False(t, exists, "service should not be in pendingServiceDeletions (already triggered)")
 }
 
 // TestEngineAddService_AfterRestart tests that AddService correctly handles

@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"math/big"
@@ -69,6 +70,10 @@ func (az *Cloud) setUpPodInformerForEgress() {
 				ipsChanged := oldPod.Status.HostIP != newPod.Status.HostIP || oldPod.Status.PodIP != newPod.Status.PodIP
 
 				// Check if pod became invalid (non-Running/Pending, or got deletion timestamp)
+				// This is similar to needsCleanup() in k8s.io/cloud-provider/controllers/service/controller.go
+				// Kubernetes uses 2-phase deletion: Phase 1 sets DeletionTimestamp (UPDATE event),
+				// Phase 2 removes object after finalizers are removed (DELETE event).
+				// We detect deletion here in UpdateFunc when DeletionTimestamp transitions from nil.
 				oldWasValid := oldPod.DeletionTimestamp == nil &&
 					(oldPod.Status.Phase == v1.PodRunning || oldPod.Status.Phase == v1.PodPending)
 				newIsValid := newPod.DeletionTimestamp == nil &&
@@ -126,22 +131,39 @@ func (az *Cloud) setUpPodInformerForEgress() {
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
+				// NOTE: Following the Kubernetes service controller pattern, deletion is primarily
+				// handled via UpdateFunc when DeletionTimestamp is set (Kubernetes 2-phase deletion).
+				// See: vendor/k8s.io/cloud-provider/controllers/service/controller.go
+				// "No need to handle deletion event because the deletion would be handled by
+				// the update path when the deletion timestamp is added."
+				//
+				// When pod finalizers are in use, the delete event only fires AFTER we've already
+				// processed the pod deletion in UpdateFunc (where DeletionTimestamp transition is
+				// detected) and removed the finalizer. This DeleteFunc serves as a defensive backup
+				// for edge cases like DeletedFinalStateUnknown from watch stream disconnection.
+				//
+				// This is also needed for pods created during CCM downtime that may not have
+				// finalizers added in time before namespace deletion.
 				var pod *v1.Pod
 				switch v := obj.(type) {
 				case *v1.Pod:
 					pod = v
 				case cache.DeletedFinalStateUnknown:
-					// We may miss the deletion event if the watch stream is disconnected and the object is deleted.
+					// Watch stream was disconnected and the object was deleted from the server.
+					// This is a rare edge case when finalizers couldn't prevent deletion.
 					var ok bool
 					pod, ok = v.Obj.(*v1.Pod)
 					if !ok {
 						klog.Errorf("Cannot convert to *v1.Pod: %T", v.Obj)
 						return
 					}
+					klog.V(2).Infof("DeleteFunc: processing DeletedFinalStateUnknown for pod %s/%s",
+						pod.Namespace, pod.Name)
 				default:
 					klog.Errorf("Cannot convert to *v1.Pod: %T", v)
 					return
 				}
+				// Call is idempotent - safe even if already processed in UpdateFunc
 				az.podInformerRemovePod(pod)
 			},
 		})
@@ -171,6 +193,7 @@ func (az *Cloud) podInformerAddPod(pod *v1.Pod) {
 	}
 
 	// Skip pods that are being deleted
+	// Pods with DeletionTimestamp + our finalizer are handled by recoverStuckFinalizers at startup
 	if pod.DeletionTimestamp != nil {
 		klog.V(4).Infof("podInformerAddPod: Pod %s/%s is being deleted (DeletionTimestamp set), skipping",
 			pod.Namespace, pod.Name)
@@ -197,14 +220,23 @@ func (az *Cloud) podInformerAddPod(pod *v1.Pod) {
 	klog.V(2).Infof("podInformerAddPod: Pod %s added with egress %s (HostIP=%s, PodIP=%s)",
 		podKey, egressName, pod.Status.HostIP, pod.Status.PodIP)
 
+	// Add pod finalizer before registering with engine
+	// This prevents the pod from being deleted before Azure resources are cleaned up
+	if err := az.diffTracker.AddPodFinalizer(context.Background(), pod); err != nil {
+		klog.Warningf("podInformerAddPod: Failed to add finalizer to pod %s: %v", podKey, err)
+		// Continue anyway - finalizer is best-effort protection
+	}
+
 	// Call Engine.AddPod - it handles all states and service creation
 	az.diffTracker.AddPod(egressName, podKey, pod.Status.HostIP, pod.Status.PodIP)
 }
 
 // podInformerRemovePod handles pod deletion events for egress.
 // It calls Engine.DeletePod() which handles last-pod deletion logic:
-// - Not last pod → Engine removes pod, decrements counter, triggers LocationsUpdater
-// - Last pod → Engine removes pod, marks service for deletion, triggers DeletionChecker
+//   - Not last pod → Engine removes pod, decrements counter, triggers LocationsUpdater
+//     Finalizer is removed immediately here (no need to wait for NRP sync)
+//   - Last pod → Engine removes pod, marks service for deletion, triggers ServiceUpdater
+//     Finalizer is tracked and removed after NAT Gateway/PIP deletion completes
 func (az *Cloud) podInformerRemovePod(pod *v1.Pod) {
 	// Validate pod has egress label
 	if pod.Labels == nil || pod.Labels[consts.PodLabelServiceEgressGateway] == "" {
@@ -225,6 +257,20 @@ func (az *Cloud) podInformerRemovePod(pod *v1.Pod) {
 	klog.V(2).Infof("podInformerRemovePod: Pod %s removed from egress %s (HostIP=%s, PodIP=%s)",
 		podKey, egressName, pod.Status.HostIP, pod.Status.PodIP)
 
-	// Call Engine.DeletePod - it handles all cases including last-pod deletion
-	az.diffTracker.DeletePod(egressName, pod.Status.HostIP, pod.Status.PodIP)
+	// Call Engine.DeletePod - returns whether this was the last pod
+	result := az.diffTracker.DeletePod(egressName, pod.Status.HostIP, pod.Status.PodIP, pod.Namespace, pod.Name)
+
+	// For non-last pods, remove finalizer immediately (no need to wait for NRP sync)
+	// For last pods, finalizer is removed after NAT Gateway deletion (handled by RemoveLastPodFinalizers)
+	if !result.IsLastPod {
+		ctx := context.Background()
+		if err := az.diffTracker.RemovePodFinalizerByPod(ctx, pod); err != nil {
+			klog.Warningf("podInformerRemovePod: Failed to remove finalizer from non-last pod %s: %v", podKey, err)
+			// Best effort - pod will eventually be cleaned up
+		} else {
+			klog.V(2).Infof("podInformerRemovePod: Removed finalizer from non-last pod %s", podKey)
+		}
+	} else {
+		klog.V(2).Infof("podInformerRemovePod: Last pod %s, finalizer will be removed after NAT Gateway deletion", podKey)
+	}
 }

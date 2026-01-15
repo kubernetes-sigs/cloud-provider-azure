@@ -31,7 +31,7 @@ import (
 const (
 	clbTestLabel       = "CLB"
 	subscriptionID     = "3dc13b6d-6896-40ac-98f7-f18cbce2a405"
-	resourceGroupName  = "MC_enechitebld146945876_e2e-enechitoaia-67_eastus2euap"
+	resourceGroupName  = "MC_enechitebld149025306_e2e-enechitoaia-67_eastus2euap"
 	serviceGatewayName = "my-service-gateway"
 	apiVersion         = "2025-01-01"
 )
