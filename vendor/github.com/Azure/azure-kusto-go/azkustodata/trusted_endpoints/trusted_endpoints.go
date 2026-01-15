@@ -3,7 +3,6 @@ package trustedEndpoints
 import (
 	_ "embed"
 	"encoding/json"
-	"fmt"
 	"math"
 	"net/url"
 	"strings"
@@ -39,10 +38,10 @@ func createInstance() *TrustedEndpoints {
 	for key, value := range wellKnownData.AllowedEndpointsByLogin {
 		rules := []MatchRule{}
 		for _, suf := range value.AllowedKustoSuffixes {
-			rules = append(rules, MatchRule{suffix: suf, exact: false})
+			rules = append(rules, MatchRule{Suffix: suf, Exact: false})
 		}
 		for _, host := range value.AllowedKustoHostnames {
-			rules = append(rules, MatchRule{suffix: host, exact: true})
+			rules = append(rules, MatchRule{Suffix: host, Exact: true})
 		}
 
 		f, err := newFastSuffixMatcher(rules)
@@ -67,8 +66,8 @@ type TrustedEndpoints struct {
 }
 
 type MatchRule struct {
-	suffix string
-	exact  bool
+	Suffix string
+	Exact  bool
 }
 
 type FastSuffixMatcher struct {
@@ -94,8 +93,8 @@ func (matcher *FastSuffixMatcher) isMatch(candidate string) bool {
 	}
 	if lst, ok := matcher.rules[tailLowerCase(candidate, matcher.suffixLength)]; ok {
 		for _, rule := range lst {
-			if strings.HasSuffix(strings.ToLower(candidate), rule.suffix) {
-				if len(candidate) == len(rule.suffix) || !rule.exact {
+			if strings.HasSuffix(strings.ToLower(candidate), rule.Suffix) {
+				if len(candidate) == len(rule.Suffix) || !rule.Exact {
 					return true
 				}
 			}
@@ -107,8 +106,8 @@ func (matcher *FastSuffixMatcher) isMatch(candidate string) bool {
 
 func newFastSuffixMatcher(rules []MatchRule) (*FastSuffixMatcher, error) {
 	minSufLen := len(lo.MinBy(rules, func(a MatchRule, cur MatchRule) bool {
-		return len(a.suffix) < len(cur.suffix)
-	}).suffix)
+		return len(a.Suffix) < len(cur.Suffix)
+	}).Suffix)
 
 	if minSufLen == 0 || minSufLen == math.MaxInt32 {
 		return nil, errors.ES(
@@ -121,7 +120,7 @@ func newFastSuffixMatcher(rules []MatchRule) (*FastSuffixMatcher, error) {
 
 	processedRules := map[string][]MatchRule{}
 	for _, rule := range rules {
-		suffix := tailLowerCase(rule.suffix, minSufLen)
+		suffix := tailLowerCase(rule.Suffix, minSufLen)
 		if lst, ok := processedRules[suffix]; !ok {
 			processedRules[suffix] = []MatchRule{rule}
 		} else {
@@ -133,15 +132,6 @@ func newFastSuffixMatcher(rules []MatchRule) (*FastSuffixMatcher, error) {
 		suffixLength: minSufLen,
 		rules:        processedRules,
 	}, nil
-}
-
-func values[T comparable, R any](m map[T]R) []R {
-	l := make([]R, 0, len(m))
-	for _, val := range m {
-		l = append(l, val)
-	}
-
-	return l
 }
 
 func createFastSuffixMatcherFromExisting(rules []MatchRule, existing *FastSuffixMatcher) (*FastSuffixMatcher, error) {
@@ -236,6 +226,7 @@ func (trusted *TrustedEndpoints) validateHostnameIsTrusted(host string, loginEnd
 	return errors.ES(
 		errors.OpUnknown,
 		errors.KClientArgs,
-		fmt.Sprintf("Can't communicate with '%s' as this hostname is currently not trusted; please see https://aka.ms/kustotrustedendpoints.", host),
+		"Can't communicate with '%s' as this hostname is currently not trusted; please see https://aka.ms/kustotrustedendpoints.",
+		host,
 	).SetNoRetry()
 }
