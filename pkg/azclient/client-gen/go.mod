@@ -1,6 +1,6 @@
 module sigs.k8s.io/cloud-provider-azure/pkg/azclient/client-gen
 
-go 1.24.6
+go 1.25.0
 
 require (
 	github.com/spf13/cobra v1.10.2
@@ -18,5 +18,5 @@ require (
 	golang.org/x/sys v0.35.0 // indirect
 	golang.org/x/tools v0.36.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	k8s.io/apimachinery v0.34.0 // indirect
+	k8s.io/apimachinery v0.35.0 // indirect
 )
