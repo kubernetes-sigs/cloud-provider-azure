@@ -1,4 +1,3 @@
----
 title: "Proactive Traffic Redirection with Azure Load Balancer Admin State"
 linkTitle: "Load Balancer Admin State"
 type: docs
@@ -44,8 +43,8 @@ For `PreemptScheduled` events, only the first event per node is acted upon; subs
 1. Kubernetes adds the `node.kubernetes.io/out-of-service` taint to a node or emits a `PreemptScheduled` event indicating an imminent Spot eviction.
 2. For Spot events, cloud-provider-azure patches the node with `cloudprovider.azure.microsoft.com/draining=spot-eviction` (one-time) so the signal persists beyond controller restarts; manual application of this taint is treated the same way.
 3. The node informer observes either taint and records the node as draining, then a dedicated admin-state controller enqueues the node for immediate backend updates (independent of the regular `reconcileService` path).
-4. The provider resolves all backend pool entries referencing the node across every managed load balancer (handles multi-SLB, dual-stack).
-5. For each entry, the provider issues an Azure Network API call to set `AdminState = Down`.
+4. The provider resolves all impacted backend pools across every managed load balancer (handles multi-SLB, dual-stack) and identifies backend address entries that correspond to the node.
+5. For each impacted backend pool, the provider updates the backend address pool via the Azure Network API (`LoadBalancerBackendAddressPoolsClient`) to set `AdminState = Down` on the matching backend address entries (one `CreateOrUpdate` per backend pool, only when changes are needed).
 6. Existing TCP connections follow ALB semantics (established flows are honored); new flows are steered to healthy nodes.
 7. When the taint is removed or the node is deleted/replaced, the backend entries either have their admin state restored to `None` or disappear as part of normal reconciliation.
 
@@ -59,13 +58,13 @@ For `PreemptScheduled` events, only the first event per node is acted upon; subs
 
 - Introduce an `AdminStateManager` interface responsible for:
   - Translating a Kubernetes node into all relevant backend pool IDs (leveraging existing helpers such as `reconcileBackendPoolHosts`, `getBackendPoolIDsForService`, and the multiple-SLB bookkeeping).
-  - Calling the Azure SDK (`LoadBalancerBackendAddressPoolsClient`) to update the specific backend address with `AdminState`.
+  - Calling the Azure SDK (`LoadBalancerBackendAddressPoolsClient`) to update backend address pools (pool-scoped `Get`/`CreateOrUpdate`) and set `AdminState` on the matching backend address entries.
   - Caching the last-known state to avoid redundant calls and to surface metrics.
 - Extend reconciliation paths:
   - `EnsureLoadBalancer` / `UpdateLoadBalancer`: remain unchanged but reuse the manager so periodic reconciliations can self-heal any missed admin-state updates.
   - `EnsureLoadBalancerDeleted`: rely on the same manager so nodes being deleted trigger state flips prior to resource removal.
 - Add a lightweight `AdminStateController` with its own work queue: node/taint events enqueue node keys, and workers immediately resolve backend pools and apply the desired admin state without waiting for service/controller churn.
-- Maintain thread-safety by reusing `serviceReconcileLock` around Azure SDK calls and by batching updates per backend pool invocation to minimize ARM round-trips without introducing extra delay.
+- Maintain thread-safety by reusing `serviceReconcileLock` around backend pool updates and by batching updates per backend pool invocation to minimize ARM round-trips without introducing extra delay.
 
 ### Admin State Controller Responsibilities
 
@@ -73,9 +72,24 @@ For `PreemptScheduled` events, only the first event per node is acted upon; subs
 - On each event, enqueue a node key into a dedicated rate-limited work queue.
 - Worker flow:
   1. Fetch the node object from the informer cache and compute desired admin state (`Down` when tainted, `None` when cleared).
-  2. Resolve backend entries using existing pool-mapping helpers.
-  3. Issue Azure SDK calls immediately (within the same event) so the time between taint observation and traffic cutover is bounded only by ARM latency.
+  2. Resolve impacted backend pools across all managed load balancers and group desired changes by backend pool (not by individual backend address).
+  3. Under `serviceReconcileLock`, fetch each impacted backend pool, apply `AdminState` changes to the matching backend address entries, and issue at most one `CreateOrUpdate` per backend pool (only when changes are needed). When multiple nodes are draining concurrently, a single backend pool update may apply changes for multiple backend addresses in that pool.
   4. Record success/failure metrics and retry via the queue if needed.
+  5. Emit a Kubernetes event on the node after the Azure updates complete (Normal on success, Warning on failure) so cluster admins can observe the effective state change.
+
+### Backend Pool Update Strategy
+
+Azure Load Balancer admin state is configured per backend address entry (`LoadBalancerBackendAddresses[*].Properties.AdminState`), but the update surface is the backend address pool subresource. As a result, admin state changes are applied by fetching the backend pool and issuing a pool-scoped `CreateOrUpdate` after mutating the relevant backend address entries.
+
+To minimize Azure Network API calls while keeping cutover latency low, the `AdminStateManager` updates at backend pool granularity:
+
+- Group desired changes by backend pool ID.
+- For each backend pool, do a fresh `Get`, mutate `AdminState` on the matching backend address entries, and issue at most one `CreateOrUpdate` if anything changed.
+- When multiple nodes are draining concurrently, the manager can converge faster by applying `AdminState = Down` for all currently-draining nodes found in the pool in a single `CreateOrUpdate`, rather than performing separate updates per node.
+
+### Concurrency and Locking
+
+Backend pool updates are whole-resource updates (read-modify-write). To avoid lost updates when multiple controllers update backend pools at the same time, admin state updates are serialized with the existing `serviceReconcileLock`. Any other code paths that update backend pools (including the local-service backend pool updater in multiple-SLB mode) must also hold this lock around backend pool `Get`/`CreateOrUpdate` operations.
 
 ### Admin State Lifecycle
 
@@ -85,7 +99,7 @@ For `PreemptScheduled` events, only the first event per node is acted upon; subs
 | `Down → None` | All draining taints removed from the node | Restore admin state to `None` so the node re-enters rotation. |
 | `Down → Removed` | Node deleted/replaced after being tainted | Normal reconciliation removes backend entries; no extra call required. |
 
-Duplicate `PreemptScheduled` events are ignored once the draining taint exists; failure to reach the Azure API leaves the node in its previous state, after which the controller logs, emits an event, and retries with exponential backoff aligned with existing `reconcileLoadBalancer` cadence.
+Duplicate `PreemptScheduled` events are ignored once the draining taint exists; failure to reach the Azure API leaves the node in its previous state, after which the controller logs, emits an event, and retries with backoff (TBD).
 
 ## Detailed Flow
 
@@ -126,7 +140,11 @@ Duplicate `PreemptScheduled` events are ignored once the draining taint exists; 
 
 ## Observability & Telemetry
 
-- Emit structured events on the node and ClusterService to signal admin state transitions.
+- Emit Kubernetes events on the node after admin state updates complete so cluster admins can observe the effective state:
+  - Normal `LoadBalancerAdminStateDown` when `AdminState = Down` has been applied for the node across all managed load balancers/backend pools (and IP families).
+  - Normal `LoadBalancerAdminStateNone` when `AdminState = None` has been restored.
+  - Warning `LoadBalancerAdminStateUpdateFailed` when any Azure update fails; include the error and rely on the controller retry/backoff (TBD) for eventual convergence.
+- Avoid per-Service events: a single node transition can affect many Services and would be too noisy; the node event is the canonical operator signal.
 - Admin-state Azure SDK calls use the existing metrics helper (`pkg/metrics/azure_metrics.go`) with a dedicated prefix (for example `loadbalancer_adminstate`). Each operation wraps `MetricContext.ObserveOperationWithResult`, so latency, error, throttling, and rate-limit counters flow into the same Prometheus series already consumed by operations teams.
 - Include trace spans around Azure SDK calls via `trace.BeginReconcile` so admin state updates appear in standard diagnostics.
 
@@ -139,10 +157,10 @@ Duplicate `PreemptScheduled` events are ignored once the draining taint exists; 
 
 ## Risks and Mitigations
 
-- **Azure API throttling:** Batch updates per reconciliation, reuse SDK retry/backoff, and respect ARM rate limits. Graceful degradation is probe-based behavior.
+- **Azure API throttling / rate limiting:** TBD (to be defined). The design minimizes calls by updating at backend pool granularity (one `CreateOrUpdate` per pool when needed).
 - **Stale state:** Maintain a draining set keyed by node UID so that replacement nodes with the same name do not inherit `Down` state.
 - **Partial updates:** Log and raise Kubernetes events when the controller fails to update a backend so operators can intervene.
-- **Concurrency with backend pool changes:** The admin-state controller acquires the existing `serviceReconcileLock` and invalidates the LB cache entry (`lbCache.Delete`) before issuing Azure SDK calls, forcing a fresh GET that reflects any recent `reconcileBackendPoolHosts` write so etag conflicts are avoided even though the controller runs outside the service reconciliation loop.
+- **Concurrency with backend pool changes:** Serialize backend pool updates with `serviceReconcileLock` (see "Concurrency and Locking") and invalidate the LB cache entry (`lbCache.Delete`) before issuing Azure SDK calls, forcing a fresh GET that reflects any recent `reconcileBackendPoolHosts` write so etag conflicts are avoided even though the controller runs outside the service reconciliation loop.
 
 ## Discussion: Unschedulable Drain Taints
 
