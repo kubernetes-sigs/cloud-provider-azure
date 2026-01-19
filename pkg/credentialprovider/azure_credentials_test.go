@@ -580,8 +580,8 @@ func TestNewAcrProvider_InvalidConfig(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to load config")
 }
 
-func TestNewAcrProvider_ACRImageWithRegistryMirror_UsesManagedIdentity(t *testing.T) {
-	// Test case: ACR image with registry mirror (NI cluster) should use managed identity
+func TestNewAcrProvider_MCRImageMirroredToACR_UsesManagedIdentity(t *testing.T) {
+	// Test case: MCR image mirrored to ACR in NI cluster should use managed identity
 	// even when service account token or identity bindings are provided
 	configFile, err := os.CreateTemp(".", "config.json")
 	assert.NoError(t, err)
@@ -595,17 +595,17 @@ func TestNewAcrProvider_ACRImageWithRegistryMirror_UsesManagedIdentity(t *testin
 	assert.NoError(t, err)
 	assert.NoError(t, configFile.Close())
 
-	// ACR image with service account token and registry mirror
+	// MCR image with service account token - will be mirrored to ACR
 	req := &v1.CredentialProviderRequest{
-		Image:               "test.azurecr.io/test:latest", // ACR image
-		ServiceAccountToken: "test-service-account-token",  // Has token, but should be ignored
+		Image:               "mcr.microsoft.com/azure-cli:latest", // MCR image
+		ServiceAccountToken: "test-service-account-token",         // Has token, but should be ignored
 		ServiceAccountAnnotations: map[string]string{
 			"kubernetes.azure.com/acr-client-id": "test-client-id",
 			"kubernetes.azure.com/acr-tenant-id": "test-tenant-id",
 		},
 	}
 
-	// NI cluster with registry mirror
+	// NI cluster with registry mirror: MCR -> ACR
 	registryMirror := "mcr.microsoft.com:test.azurecr.io"
 
 	provider, err := NewAcrProvider(req, registryMirror, configFile.Name(), IdentityBindingsConfig{})
@@ -688,8 +688,8 @@ func TestNewAcrProvider_ACRImageWithoutRegistryMirror_UsesServiceAccountToken(t 
 	assert.NotNil(t, acrProv.credential)
 }
 
-func TestNewAcrProvider_ACRImageWithRegistryMirror_SkipsIdentityBindings(t *testing.T) {
-	// Test case: ACR image with registry mirror (NI cluster) should skip identity bindings
+func TestNewAcrProvider_MCRImageMirroredToACR_SkipsIdentityBindings(t *testing.T) {
+	// Test case: MCR image mirrored to ACR in NI cluster should skip identity bindings
 	// and use managed identity instead
 	configFile, err := os.CreateTemp(".", "config.json")
 	assert.NoError(t, err)
@@ -703,12 +703,12 @@ func TestNewAcrProvider_ACRImageWithRegistryMirror_SkipsIdentityBindings(t *test
 	assert.NoError(t, err)
 	assert.NoError(t, configFile.Close())
 
-	// ACR image
+	// MCR image that will be mirrored to ACR
 	req := &v1.CredentialProviderRequest{
-		Image: "test.azurecr.io/test:latest", // ACR image
+		Image: "mcr.microsoft.com/azure-cli:latest", // MCR image
 	}
 
-	// NI cluster with registry mirror
+	// NI cluster with registry mirror: MCR -> ACR
 	registryMirror := "mcr.microsoft.com:test.azurecr.io"
 
 	// Identity bindings config that would be used in non-NI clusters
@@ -724,6 +724,78 @@ func TestNewAcrProvider_ACRImageWithRegistryMirror_SkipsIdentityBindings(t *test
 	// Should have used managed identity credential, not identity bindings
 	assert.NotNil(t, acrProv.credential)
 	assert.Equal(t, true, acrProv.config.UseManagedIdentityExtension)
+}
+
+func TestNewAcrProvider_DirectACRImageWithRegistryMirror_UsesServiceAccountToken(t *testing.T) {
+	// Test case: Direct ACR image (not MCR mirrored) in NI cluster should still use
+	// service account token, not managed identity
+	configFile, err := os.CreateTemp(".", "config.json")
+	assert.NoError(t, err)
+	defer os.Remove(configFile.Name())
+
+	configStr := `{
+		"tenantID": "test-tenant-id"
+	}`
+	_, err = configFile.WriteString(configStr)
+	assert.NoError(t, err)
+	assert.NoError(t, configFile.Close())
+
+	// Direct ACR image (not from MCR mirror)
+	req := &v1.CredentialProviderRequest{
+		Image:               "test.azurecr.io/myapp:latest", // Direct ACR image
+		ServiceAccountToken: "test-service-account-token",
+		ServiceAccountAnnotations: map[string]string{
+			"kubernetes.azure.com/acr-client-id": "test-client-id",
+			"kubernetes.azure.com/acr-tenant-id": "test-tenant-id",
+		},
+	}
+
+	// NI cluster with registry mirror (MCR -> ACR)
+	registryMirror := "mcr.microsoft.com:mirror.azurecr.io"
+
+	provider, err := NewAcrProvider(req, registryMirror, configFile.Name(), IdentityBindingsConfig{})
+	assert.NoError(t, err)
+	assert.NotNil(t, provider)
+
+	acrProv := provider.(*acrProvider)
+	// Should have used service account token credential, not managed identity
+	assert.NotNil(t, acrProv.credential)
+}
+
+func TestNewAcrProvider_DirectACRImageWithRegistryMirror_UsesIdentityBindings(t *testing.T) {
+	// Test case: Direct ACR image (not MCR mirrored) in NI cluster should still attempt
+	// to use identity bindings if configured
+	configFile, err := os.CreateTemp(".", "config.json")
+	assert.NoError(t, err)
+	defer os.Remove(configFile.Name())
+
+	configStr := `{
+		"tenantID": "test-tenant-id"
+	}`
+	_, err = configFile.WriteString(configStr)
+	assert.NoError(t, err)
+	assert.NoError(t, configFile.Close())
+
+	// Direct ACR image (not from MCR mirror)
+	req := &v1.CredentialProviderRequest{
+		Image: "test.azurecr.io/myapp:latest", // Direct ACR image
+	}
+
+	// NI cluster with registry mirror (MCR -> ACR)
+	registryMirror := "mcr.microsoft.com:mirror.azurecr.io"
+
+	// Identity bindings config
+	ibConfig := IdentityBindingsConfig{
+		SNIName: "test-sni-name",
+	}
+
+	// This should attempt to use identity bindings since it's a direct ACR image (not MCR mirrored)
+	// The call will fail because identity bindings are not properly configured
+	provider, err := NewAcrProvider(req, registryMirror, configFile.Name(), ibConfig)
+	assert.Error(t, err)
+	assert.Nil(t, provider)
+	// Error should be related to identity bindings
+	assert.Contains(t, err.Error(), "identity bindings")
 }
 
 func TestNewAcrProvider_NonACRImageWithRegistryMirror_UsesIdentityBindings(t *testing.T) {
