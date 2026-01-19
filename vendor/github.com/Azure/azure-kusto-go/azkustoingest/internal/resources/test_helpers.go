@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+
 	"github.com/Azure/azure-kusto-go/azkustodata"
 	dataErrors "github.com/Azure/azure-kusto-go/azkustodata/errors"
 	v1 "github.com/Azure/azure-kusto-go/azkustodata/query/v1"
-	"io"
 
 	"github.com/Azure/azure-kusto-go/azkustodata/types"
 	"github.com/Azure/azure-kusto-go/azkustodata/value"
@@ -111,8 +112,8 @@ func SuccessfulFakeResources() *FakeMgmt {
 }
 
 type FsMock struct {
-	OnLocal  func(ctx context.Context, from string, props properties.All) error
-	OnReader func(ctx context.Context, reader io.Reader, props properties.All) (string, error)
+	OnLocal  func(ctx context.Context, from string, props properties.All) (string, int64, error)
+	OnReader func(ctx context.Context, reader io.Reader, props properties.All) (string, int64, error)
 	OnBlob   func(ctx context.Context, from string, fileSize int64, props properties.All) error
 }
 
@@ -120,21 +121,21 @@ func (f FsMock) Close() error {
 	return nil
 }
 
-func (f FsMock) Local(ctx context.Context, from string, props properties.All) error {
+func (f FsMock) UploadLocalToBlob(ctx context.Context, from string, props properties.All) (string, int64, error) {
 	if f.OnLocal != nil {
 		return f.OnLocal(ctx, from, props)
 	}
-	return nil
+	return "", 0, nil
 }
 
-func (f FsMock) Reader(ctx context.Context, reader io.Reader, props properties.All) (string, error) {
+func (f FsMock) UploadReaderToBlob(ctx context.Context, reader io.Reader, props properties.All) (string, int64, error) {
 	if f.OnReader != nil {
 		return f.OnReader(ctx, reader, props)
 	}
-	return "", nil
+	return "", 0, nil
 }
 
-func (f FsMock) Blob(ctx context.Context, from string, fileSize int64, props properties.All) error {
+func (f FsMock) IngestBlob(ctx context.Context, from string, fileSize int64, props properties.All) error {
 	if f.OnBlob != nil {
 		return f.OnBlob(ctx, from, fileSize, props)
 	}

@@ -106,6 +106,14 @@ type token struct {
 	AuthContext string `kusto:"AuthorizationContext"`
 }
 
+type ResourcesManager interface {
+	ReportStorageResourceResult(string, bool)
+	GetRankedStorageContainers() ([]*URI, error)
+	GetRankedStorageQueues() ([]*URI, error)
+	GetTables() ([]*URI, error)
+	Close()
+}
+
 // Manager manages Kusto resources.
 type Manager struct {
 	client                   mgmter
@@ -118,6 +126,8 @@ type Manager struct {
 	fetchLock                sync.Mutex
 	rankedStorageAccount     *RankedStorageAccountSet
 }
+
+var _ ResourcesManager = (*Manager)(nil)
 
 // New is the constructor for Manager.
 func New(client mgmter) (*Manager, error) {

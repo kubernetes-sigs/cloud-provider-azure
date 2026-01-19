@@ -2,6 +2,7 @@ package azkustoingest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"time"
@@ -13,7 +14,7 @@ import (
 // Result provides a way for users track the state of ingestion jobs.
 type Result struct {
 	record        statusRecord
-	tableClient   *status.TableClient
+	tableClient   status.TableClientReader
 	reportToTable bool
 }
 
@@ -31,12 +32,12 @@ func (r *Result) putProps(props properties.All) {
 	r.record.FromProps(props)
 }
 
-// putQueued sets the initial success status depending on status reporting state
-func (r *Result) putQueued(ctx context.Context, i *Ingestion) {
+// putQueued sets the initial success status depending on the status reporting state, returning the record on failure.
+func (r *Result) putQueued(ctx context.Context, i *Ingestion) error {
 	// If not checking status, just return queued
 	if !r.reportToTable {
 		r.record.Status = Queued
-		return
+		return nil
 	}
 
 	// Get table URI
@@ -45,14 +46,14 @@ func (r *Result) putQueued(ctx context.Context, i *Ingestion) {
 		r.record.Status = StatusRetrievalFailed
 		r.record.FailureStatus = Permanent
 		r.record.Details = "Failed getting status table URI: " + err.Error()
-		return
+		return &r.record
 	}
 
 	if len(tableResources) == 0 {
 		r.record.Status = StatusRetrievalFailed
 		r.record.FailureStatus = Permanent
-		r.record.Details = "Ingestion resources do not include a status table URI: " + err.Error()
-		return
+		r.record.Details = "Ingestion resources does not include a status table URI."
+		return &r.record
 	}
 
 	// create a table client
@@ -61,7 +62,7 @@ func (r *Result) putQueued(ctx context.Context, i *Ingestion) {
 		r.record.Status = StatusRetrievalFailed
 		r.record.FailureStatus = Permanent
 		r.record.Details = "Failed Creating a Status Table client: " + err.Error()
-		return
+		return &r.record
 	}
 
 	// StreamIngest initial record
@@ -71,18 +72,83 @@ func (r *Result) putQueued(ctx context.Context, i *Ingestion) {
 		r.record.Status = StatusRetrievalFailed
 		r.record.FailureStatus = Permanent
 		r.record.Details = "Failed writing initial status record: " + err.Error()
-		return
+		return &r.record
 	}
 
 	r.tableClient = client
+	return nil
 }
+
+type waitConfig struct {
+	interval           time.Duration
+	immediateFirst     bool
+	retryBackoffDelay  []time.Duration
+	retryBackoffJitter time.Duration
+}
+
+type WaitOption func(o *waitConfig)
+
+func WithImmediateFirst() WaitOption {
+	return func(o *waitConfig) {
+		o.immediateFirst = true
+	}
+}
+
+func WithInterval(interval time.Duration) WaitOption {
+	return func(o *waitConfig) {
+		o.interval = interval
+	}
+}
+
+func WithRetryBackoffDelay(delay ...time.Duration) WaitOption {
+	return func(o *waitConfig) {
+		o.retryBackoffDelay = delay
+	}
+}
+
+func WithRetryBackoffJitter(jitter time.Duration) WaitOption {
+	return func(o *waitConfig) {
+		o.retryBackoffJitter = jitter
+	}
+}
+
+var (
+	DefaultWaitPollInterval           = 10 * time.Second
+	DefaultWaitPollRetryBackoffDelay  = []time.Duration{10 * time.Second, 60 * time.Second, 120 * time.Second}
+	DefaultWaitPollRetryBackoffJitter = 5 * time.Second
+)
 
 // Wait returns a channel that can be checked for ingestion results.
 // In order to check actual status please use the ReportResultToTable option when ingesting data.
-func (r *Result) Wait(ctx context.Context) <-chan error {
+func (r *Result) Wait(ctx context.Context, options ...WaitOption) <-chan error {
+	cfg := waitConfig{
+		interval:           DefaultWaitPollInterval,
+		retryBackoffDelay:  DefaultWaitPollRetryBackoffDelay,
+		retryBackoffJitter: DefaultWaitPollRetryBackoffJitter,
+	}
+
+	for _, o := range options {
+		o(&cfg)
+	}
+
 	ch := make(chan error, 1)
 
-	if r.record.Status.IsFinal() || !r.reportToTable {
+	if r.record.Status.IsFinal() {
+		if !r.record.Status.IsSuccess() {
+			ch <- r.record
+		}
+		close(ch)
+		return ch
+	}
+
+	if !r.reportToTable {
+		ch <- errors.New("status reporting is not enabled")
+		close(ch)
+		return ch
+	}
+
+	if r.tableClient == nil {
+		ch <- errors.New("table client is not initialized")
 		close(ch)
 		return ch
 	}
@@ -90,7 +156,7 @@ func (r *Result) Wait(ctx context.Context) <-chan error {
 	go func() {
 		defer close(ch)
 
-		r.poll(ctx)
+		r.poll(ctx, &cfg)
 		if !r.record.Status.IsSuccess() {
 			ch <- r.record
 		}
@@ -99,45 +165,46 @@ func (r *Result) Wait(ctx context.Context) <-chan error {
 	return ch
 }
 
-func (r *Result) poll(ctx context.Context) {
-	const pollInterval = 10 * time.Second
-	attempts := 3
-	delay := [3]int{120, 60, 10} // attempts are counted backwards
+func (r *Result) poll(ctx context.Context, cfg *waitConfig) {
+	initialInterval := cfg.interval
+	if cfg.immediateFirst {
+		initialInterval = 0
+	}
+	attempts := cfg.retryBackoffDelay[:]
+	timer := time.NewTimer(initialInterval)
+	defer timer.Stop()
 
-	// create a table client
-	if r.tableClient != nil {
-		// Create a ticker to poll the table in 10 second intervals.
-		timer := time.NewTimer(pollInterval)
-		defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			r.record.Status = StatusRetrievalCanceled
+			r.record.FailureStatus = Transient
+			return
 
-		for {
-			select {
-			case <-ctx.Done():
-				r.record.Status = StatusRetrievalCanceled
-				r.record.FailureStatus = Transient
-				return
-
-			case <-timer.C:
-				smap, err := r.tableClient.Read(ctx, r.record.IngestionSourceID.String())
-				if err != nil {
-					if attempts == 0 {
-						r.record.Status = StatusRetrievalFailed
-						r.record.FailureStatus = Transient
-						r.record.Details = "Failed reading from Status Table: " + err.Error()
-						return
-					}
-
-					attempts = attempts - 1
-					time.Sleep(time.Duration(delay[attempts]+rand.Intn(5)) * time.Second)
-				} else {
-					r.record.FromMap(smap)
-					if r.record.Status.IsFinal() {
-						return
-					}
+		case <-timer.C:
+			smap, err := r.tableClient.Read(ctx, r.record.IngestionSourceID.String())
+			sleepTime := cfg.interval
+			if err != nil {
+				if len(attempts) == 0 {
+					r.record.Status = StatusRetrievalFailed
+					r.record.FailureStatus = Transient
+					r.record.Details = "Failed reading from Status Table: " + err.Error()
+					return
 				}
 
-				timer.Reset(pollInterval)
+				sleepTime += attempts[0]
+				attempts = attempts[1:]
+				if cfg.retryBackoffJitter > 0 {
+					sleepTime += time.Duration(rand.Intn(int(cfg.retryBackoffJitter)))
+				}
+			} else {
+				r.record.FromMap(smap)
+				if r.record.Status.IsFinal() {
+					return
+				}
 			}
+
+			timer.Reset(sleepTime)
 		}
 	}
 }

@@ -46,7 +46,15 @@ func NewStreaming(kcsb *azkustodata.ConnectionStringBuilder, options ...Option) 
 		kcsb = &newKcsb
 	}
 
-	client, err := azkustodata.New(kcsb)
+	var client *azkustodata.Client
+	var err error
+
+	if o.httpClient != nil {
+		client, err = azkustodata.New(kcsb, azkustodata.WithHttpClient(o.httpClient))
+	} else {
+		client, err = azkustodata.New(kcsb)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +177,7 @@ func streamImpl(c streamIngestor, ctx context.Context, payload io.Reader, props 
 
 	result := newResult()
 	result.putProps(props)
-	result.record.Status = "Success"
+	result.record.Status = Succeeded
 
 	return result, nil
 }
