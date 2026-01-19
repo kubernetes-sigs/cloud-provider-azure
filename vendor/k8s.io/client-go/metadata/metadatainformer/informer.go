@@ -178,32 +178,20 @@ func NewFilteredMetadataInformer(client metadata.Interface, gvr schema.GroupVers
 	return &metadataInformer{
 		gvr: gvr,
 		informer: cache.NewSharedIndexInformer(
-			cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
+			&cache.ListWatch{
 				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 					if tweakListOptions != nil {
 						tweakListOptions(&options)
 					}
-					return client.Resource(gvr).Namespace(namespace).List(context.Background(), options)
+					return client.Resource(gvr).Namespace(namespace).List(context.TODO(), options)
 				},
 				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 					if tweakListOptions != nil {
 						tweakListOptions(&options)
 					}
-					return client.Resource(gvr).Namespace(namespace).Watch(context.Background(), options)
+					return client.Resource(gvr).Namespace(namespace).Watch(context.TODO(), options)
 				},
-				ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
-					if tweakListOptions != nil {
-						tweakListOptions(&options)
-					}
-					return client.Resource(gvr).Namespace(namespace).List(ctx, options)
-				},
-				WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
-					if tweakListOptions != nil {
-						tweakListOptions(&options)
-					}
-					return client.Resource(gvr).Namespace(namespace).Watch(ctx, options)
-				},
-			}, client),
+			},
 			&metav1.PartialObjectMetadata{},
 			resyncPeriod,
 			indexers,

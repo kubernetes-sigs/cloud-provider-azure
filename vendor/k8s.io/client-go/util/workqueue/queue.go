@@ -20,7 +20,6 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/clock"
 )
 
@@ -164,18 +163,17 @@ func newQueue[T comparable](c clock.WithTicker, queue Queue[T], metrics queueMet
 	t := &Typed[T]{
 		clock:                      c,
 		queue:                      queue,
-		dirty:                      sets.Set[T]{},
-		processing:                 sets.Set[T]{},
+		dirty:                      set[T]{},
+		processing:                 set[T]{},
 		cond:                       sync.NewCond(&sync.Mutex{}),
 		metrics:                    metrics,
 		unfinishedWorkUpdatePeriod: updatePeriod,
-		stopCh:                     make(chan struct{}),
 	}
 
 	// Don't start the goroutine for a type of noMetrics so we don't consume
 	// resources unnecessarily
 	if _, ok := metrics.(noMetrics[T]); !ok {
-		t.wg.Go(t.updateUnfinishedWorkLoop)
+		go t.updateUnfinishedWorkLoop()
 	}
 
 	return t
@@ -194,13 +192,13 @@ type Typed[t comparable] struct {
 	queue Queue[t]
 
 	// dirty defines all of the items that need to be processed.
-	dirty sets.Set[t]
+	dirty set[t]
 
 	// Things that are currently being processed are in the processing set.
 	// These things may be simultaneously in the dirty set. When we finish
 	// processing something and remove it from this set, we'll check if
 	// it's in the dirty set, and if so, add it to the queue.
-	processing sets.Set[t]
+	processing set[t]
 
 	cond *sync.Cond
 
@@ -211,29 +209,39 @@ type Typed[t comparable] struct {
 
 	unfinishedWorkUpdatePeriod time.Duration
 	clock                      clock.WithTicker
-
-	// wg manages goroutines started by the queue to allow graceful shutdown
-	// ShutDown() will wait for goroutines to exit before returning.
-	wg sync.WaitGroup
-
-	stopCh chan struct{}
-	// stopOnce guarantees we only signal shutdown a single time
-	stopOnce sync.Once
 }
 
-// Add marks item as needing processing. When the queue is shutdown new
-// items will silently be ignored and not queued or marked as dirty for
-// reprocessing.
+type empty struct{}
+type set[t comparable] map[t]empty
+
+func (s set[t]) has(item t) bool {
+	_, exists := s[item]
+	return exists
+}
+
+func (s set[t]) insert(item t) {
+	s[item] = empty{}
+}
+
+func (s set[t]) delete(item t) {
+	delete(s, item)
+}
+
+func (s set[t]) len() int {
+	return len(s)
+}
+
+// Add marks item as needing processing.
 func (q *Typed[T]) Add(item T) {
 	q.cond.L.Lock()
 	defer q.cond.L.Unlock()
 	if q.shuttingDown {
 		return
 	}
-	if q.dirty.Has(item) {
+	if q.dirty.has(item) {
 		// the same item is added again before it is processed, call the Touch
 		// function if the queue cares about it (for e.g, reset its priority)
-		if !q.processing.Has(item) {
+		if !q.processing.has(item) {
 			q.queue.Touch(item)
 		}
 		return
@@ -241,8 +249,8 @@ func (q *Typed[T]) Add(item T) {
 
 	q.metrics.add(item)
 
-	q.dirty.Insert(item)
-	if q.processing.Has(item) {
+	q.dirty.insert(item)
+	if q.processing.has(item) {
 		return
 	}
 
@@ -277,8 +285,8 @@ func (q *Typed[T]) Get() (item T, shutdown bool) {
 
 	q.metrics.get(item)
 
-	q.processing.Insert(item)
-	q.dirty.Delete(item)
+	q.processing.insert(item)
+	q.dirty.delete(item)
 
 	return item, false
 }
@@ -292,24 +300,18 @@ func (q *Typed[T]) Done(item T) {
 
 	q.metrics.done(item)
 
-	q.processing.Delete(item)
-	if q.dirty.Has(item) {
+	q.processing.delete(item)
+	if q.dirty.has(item) {
 		q.queue.Push(item)
 		q.cond.Signal()
-	} else if q.processing.Len() == 0 {
+	} else if q.processing.len() == 0 {
 		q.cond.Signal()
 	}
 }
 
-// ShutDown will cause q to ignore all new items added to it. Worker
-// goroutines will continue processing items in the queue until it is
-// empty and then receive the shutdown signal.
+// ShutDown will cause q to ignore all new items added to it and
+// immediately instruct the worker goroutines to exit.
 func (q *Typed[T]) ShutDown() {
-	defer q.wg.Wait()
-	q.stopOnce.Do(func() {
-		defer close(q.stopCh)
-	})
-
 	q.cond.L.Lock()
 	defer q.cond.L.Unlock()
 
@@ -318,17 +320,16 @@ func (q *Typed[T]) ShutDown() {
 	q.cond.Broadcast()
 }
 
-// ShutDownWithDrain is equivalent to ShutDown but waits until all items
-// in the queue have been processed.
-// ShutDown can be called after ShutDownWithDrain to force
-// ShutDownWithDrain to stop waiting.
-// Workers must call Done on an item after processing it, otherwise
-// ShutDownWithDrain will block indefinitely.
+// ShutDownWithDrain will cause q to ignore all new items added to it. As soon
+// as the worker goroutines have "drained", i.e: finished processing and called
+// Done on all existing items in the queue; they will be instructed to exit and
+// ShutDownWithDrain will return. Hence: a strict requirement for using this is;
+// your workers must ensure that Done is called on all items in the queue once
+// the shut down has been initiated, if that is not the case: this will block
+// indefinitely. It is, however, safe to call ShutDown after having called
+// ShutDownWithDrain, as to force the queue shut down to terminate immediately
+// without waiting for the drainage.
 func (q *Typed[T]) ShutDownWithDrain() {
-	defer q.wg.Wait()
-	q.stopOnce.Do(func() {
-		defer close(q.stopCh)
-	})
 	q.cond.L.Lock()
 	defer q.cond.L.Unlock()
 
@@ -336,7 +337,7 @@ func (q *Typed[T]) ShutDownWithDrain() {
 	q.shuttingDown = true
 	q.cond.Broadcast()
 
-	for q.processing.Len() != 0 && q.drain {
+	for q.processing.len() != 0 && q.drain {
 		q.cond.Wait()
 	}
 }
@@ -348,22 +349,20 @@ func (q *Typed[T]) ShuttingDown() bool {
 	return q.shuttingDown
 }
 
-func (q *Typed[T]) updateUnfinishedWork() {
-	q.cond.L.Lock()
-	defer q.cond.L.Unlock()
-	if !q.shuttingDown {
-		q.metrics.updateUnfinishedWork()
-	}
-}
-
 func (q *Typed[T]) updateUnfinishedWorkLoop() {
 	t := q.clock.NewTicker(q.unfinishedWorkUpdatePeriod)
 	defer t.Stop()
-	for {
-		select {
-		case <-t.C():
-			q.updateUnfinishedWork()
-		case <-q.stopCh:
+	for range t.C() {
+		if !func() bool {
+			q.cond.L.Lock()
+			defer q.cond.L.Unlock()
+			if !q.shuttingDown {
+				q.metrics.updateUnfinishedWork()
+				return true
+			}
+			return false
+
+		}() {
 			return
 		}
 	}

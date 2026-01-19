@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !go1.18
-// +build !go1.18
-
 // Package btree implements in-memory B-Trees of arbitrary degree.
 //
 // btree implements an in-memory B-Tree for use as an ordered data structure.
@@ -479,7 +476,7 @@ func (n *node) growChildAndRemove(i int, item Item, minItems int, typ toRemove) 
 		child := n.mutableChild(i)
 		// merge with right child
 		mergeItem := n.items.removeAt(i)
-		mergeChild := n.children.removeAt(i + 1).mutableFor(n.cow)
+		mergeChild := n.children.removeAt(i + 1)
 		child.items = append(child.items, mergeItem)
 		child.items = append(child.items, mergeChild.items...)
 		child.children = append(child.children, mergeChild.children...)

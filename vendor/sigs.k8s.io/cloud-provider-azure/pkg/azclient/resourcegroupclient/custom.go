@@ -46,7 +46,7 @@ func (client *Client) Delete(ctx context.Context, resourceGroupName string) erro
 }
 
 func (client *Client) List(ctx context.Context) (result []*resources.ResourceGroup, rerr error) {
-	pager := client.NewListPager(nil)
+	pager := client.ResourceGroupsClient.NewListPager(nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
 		if err != nil {

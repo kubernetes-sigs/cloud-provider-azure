@@ -29,16 +29,10 @@ import (
 
 // ComponentStatusApplyConfiguration represents a declarative configuration of the ComponentStatus type for use
 // with apply.
-//
-// ComponentStatus (and ComponentStatusList) holds the cluster validation info.
-// Deprecated: This API is deprecated in v1.19+
 type ComponentStatusApplyConfiguration struct {
-	metav1.TypeMetaApplyConfiguration `json:",inline"`
-	// Standard object's metadata.
-	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+	metav1.TypeMetaApplyConfiguration    `json:",inline"`
 	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
-	// List of component conditions observed
-	Conditions []ComponentConditionApplyConfiguration `json:"conditions,omitempty"`
+	Conditions                           []ComponentConditionApplyConfiguration `json:"conditions,omitempty"`
 }
 
 // ComponentStatus constructs a declarative configuration of the ComponentStatus type for use with
@@ -51,14 +45,29 @@ func ComponentStatus(name string) *ComponentStatusApplyConfiguration {
 	return b
 }
 
-// ExtractComponentStatusFrom extracts the applied configuration owned by fieldManager from
-// componentStatus for the specified subresource. Pass an empty string for subresource to extract
-// the main resource. Common subresources include "status", "scale", etc.
+// ExtractComponentStatus extracts the applied configuration owned by fieldManager from
+// componentStatus. If no managedFields are found in componentStatus for fieldManager, a
+// ComponentStatusApplyConfiguration is returned with only the Name, Namespace (if applicable),
+// APIVersion and Kind populated. It is possible that no managed fields were found for because other
+// field managers have taken ownership of all the fields previously owned by fieldManager, or because
+// the fieldManager never owned fields any fields.
 // componentStatus must be a unmodified ComponentStatus API object that was retrieved from the Kubernetes API.
-// ExtractComponentStatusFrom provides a way to perform a extract/modify-in-place/apply workflow.
+// ExtractComponentStatus provides a way to perform a extract/modify-in-place/apply workflow.
 // Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
-func ExtractComponentStatusFrom(componentStatus *corev1.ComponentStatus, fieldManager string, subresource string) (*ComponentStatusApplyConfiguration, error) {
+// Experimental!
+func ExtractComponentStatus(componentStatus *corev1.ComponentStatus, fieldManager string) (*ComponentStatusApplyConfiguration, error) {
+	return extractComponentStatus(componentStatus, fieldManager, "")
+}
+
+// ExtractComponentStatusStatus is the same as ExtractComponentStatus except
+// that it extracts the status subresource applied configuration.
+// Experimental!
+func ExtractComponentStatusStatus(componentStatus *corev1.ComponentStatus, fieldManager string) (*ComponentStatusApplyConfiguration, error) {
+	return extractComponentStatus(componentStatus, fieldManager, "status")
+}
+
+func extractComponentStatus(componentStatus *corev1.ComponentStatus, fieldManager string, subresource string) (*ComponentStatusApplyConfiguration, error) {
 	b := &ComponentStatusApplyConfiguration{}
 	err := managedfields.ExtractInto(componentStatus, internal.Parser().Type("io.k8s.api.core.v1.ComponentStatus"), fieldManager, b, subresource)
 	if err != nil {
@@ -70,22 +79,6 @@ func ExtractComponentStatusFrom(componentStatus *corev1.ComponentStatus, fieldMa
 	b.WithAPIVersion("v1")
 	return b, nil
 }
-
-// ExtractComponentStatus extracts the applied configuration owned by fieldManager from
-// componentStatus. If no managedFields are found in componentStatus for fieldManager, a
-// ComponentStatusApplyConfiguration is returned with only the Name, Namespace (if applicable),
-// APIVersion and Kind populated. It is possible that no managed fields were found for because other
-// field managers have taken ownership of all the fields previously owned by fieldManager, or because
-// the fieldManager never owned fields any fields.
-// componentStatus must be a unmodified ComponentStatus API object that was retrieved from the Kubernetes API.
-// ExtractComponentStatus provides a way to perform a extract/modify-in-place/apply workflow.
-// Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
-// applied if another fieldManager has updated or force applied any of the previously applied fields.
-func ExtractComponentStatus(componentStatus *corev1.ComponentStatus, fieldManager string) (*ComponentStatusApplyConfiguration, error) {
-	return ExtractComponentStatusFrom(componentStatus, fieldManager, "")
-}
-
-func (b ComponentStatusApplyConfiguration) IsApplyConfiguration() {}
 
 // WithKind sets the Kind field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
@@ -258,24 +251,8 @@ func (b *ComponentStatusApplyConfiguration) WithConditions(values ...*ComponentC
 	return b
 }
 
-// GetKind retrieves the value of the Kind field in the declarative configuration.
-func (b *ComponentStatusApplyConfiguration) GetKind() *string {
-	return b.TypeMetaApplyConfiguration.Kind
-}
-
-// GetAPIVersion retrieves the value of the APIVersion field in the declarative configuration.
-func (b *ComponentStatusApplyConfiguration) GetAPIVersion() *string {
-	return b.TypeMetaApplyConfiguration.APIVersion
-}
-
 // GetName retrieves the value of the Name field in the declarative configuration.
 func (b *ComponentStatusApplyConfiguration) GetName() *string {
 	b.ensureObjectMetaApplyConfigurationExists()
 	return b.ObjectMetaApplyConfiguration.Name
-}
-
-// GetNamespace retrieves the value of the Namespace field in the declarative configuration.
-func (b *ComponentStatusApplyConfiguration) GetNamespace() *string {
-	b.ensureObjectMetaApplyConfigurationExists()
-	return b.ObjectMetaApplyConfiguration.Namespace
 }

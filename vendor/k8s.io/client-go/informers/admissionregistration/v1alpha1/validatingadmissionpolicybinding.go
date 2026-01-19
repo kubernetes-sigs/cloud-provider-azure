@@ -56,32 +56,20 @@ func NewValidatingAdmissionPolicyBindingInformer(client kubernetes.Interface, re
 // one. This reduces memory footprint and number of connections to the server.
 func NewFilteredValidatingAdmissionPolicyBindingInformer(client kubernetes.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
-		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
+		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.AdmissionregistrationV1alpha1().ValidatingAdmissionPolicyBindings().List(context.Background(), options)
+				return client.AdmissionregistrationV1alpha1().ValidatingAdmissionPolicyBindings().List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.AdmissionregistrationV1alpha1().ValidatingAdmissionPolicyBindings().Watch(context.Background(), options)
+				return client.AdmissionregistrationV1alpha1().ValidatingAdmissionPolicyBindings().Watch(context.TODO(), options)
 			},
-			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
-				if tweakListOptions != nil {
-					tweakListOptions(&options)
-				}
-				return client.AdmissionregistrationV1alpha1().ValidatingAdmissionPolicyBindings().List(ctx, options)
-			},
-			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
-				if tweakListOptions != nil {
-					tweakListOptions(&options)
-				}
-				return client.AdmissionregistrationV1alpha1().ValidatingAdmissionPolicyBindings().Watch(ctx, options)
-			},
-		}, client),
+		},
 		&apiadmissionregistrationv1alpha1.ValidatingAdmissionPolicyBinding{},
 		resyncPeriod,
 		indexers,

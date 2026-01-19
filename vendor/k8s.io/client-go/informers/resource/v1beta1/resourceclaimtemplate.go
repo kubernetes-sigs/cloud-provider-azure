@@ -57,32 +57,20 @@ func NewResourceClaimTemplateInformer(client kubernetes.Interface, namespace str
 // one. This reduces memory footprint and number of connections to the server.
 func NewFilteredResourceClaimTemplateInformer(client kubernetes.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
-		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
+		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ResourceV1beta1().ResourceClaimTemplates(namespace).List(context.Background(), options)
+				return client.ResourceV1beta1().ResourceClaimTemplates(namespace).List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ResourceV1beta1().ResourceClaimTemplates(namespace).Watch(context.Background(), options)
+				return client.ResourceV1beta1().ResourceClaimTemplates(namespace).Watch(context.TODO(), options)
 			},
-			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
-				if tweakListOptions != nil {
-					tweakListOptions(&options)
-				}
-				return client.ResourceV1beta1().ResourceClaimTemplates(namespace).List(ctx, options)
-			},
-			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
-				if tweakListOptions != nil {
-					tweakListOptions(&options)
-				}
-				return client.ResourceV1beta1().ResourceClaimTemplates(namespace).Watch(ctx, options)
-			},
-		}, client),
+		},
 		&apiresourcev1beta1.ResourceClaimTemplate{},
 		resyncPeriod,
 		indexers,

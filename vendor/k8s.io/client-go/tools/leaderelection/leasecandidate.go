@@ -22,14 +22,14 @@ import (
 	"time"
 
 	v1 "k8s.io/api/coordination/v1"
-	v1beta1 "k8s.io/api/coordination/v1beta1"
+	v1alpha2 "k8s.io/api/coordination/v1alpha2"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
-	coordinationv1beta1client "k8s.io/client-go/kubernetes/typed/coordination/v1beta1"
+	coordinationv1alpha2client "k8s.io/client-go/kubernetes/typed/coordination/v1alpha2"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
@@ -43,7 +43,7 @@ type CacheSyncWaiter interface {
 }
 
 type LeaseCandidate struct {
-	leaseClient            coordinationv1beta1client.LeaseCandidateInterface
+	leaseClient            coordinationv1alpha2client.LeaseCandidateInterface
 	leaseCandidateInformer cache.SharedIndexInformer
 	informerFactory        informers.SharedInformerFactory
 	hasSynced              cache.InformerSynced
@@ -84,10 +84,10 @@ func NewCandidate(clientset kubernetes.Interface,
 			options.FieldSelector = fieldSelector
 		}),
 	)
-	leaseCandidateInformer := informerFactory.Coordination().V1beta1().LeaseCandidates().Informer()
+	leaseCandidateInformer := informerFactory.Coordination().V1alpha2().LeaseCandidates().Informer()
 
 	lc := &LeaseCandidate{
-		leaseClient:            clientset.CoordinationV1beta1().LeaseCandidates(candidateNamespace),
+		leaseClient:            clientset.CoordinationV1alpha2().LeaseCandidates(candidateNamespace),
 		leaseCandidateInformer: leaseCandidateInformer,
 		informerFactory:        informerFactory,
 		name:                   candidateName,
@@ -102,7 +102,7 @@ func NewCandidate(clientset kubernetes.Interface,
 
 	h, err := leaseCandidateInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			if leasecandidate, ok := newObj.(*v1beta1.LeaseCandidate); ok {
+			if leasecandidate, ok := newObj.(*v1alpha2.LeaseCandidate); ok {
 				if leasecandidate.Spec.PingTime != nil && leasecandidate.Spec.PingTime.After(leasecandidate.Spec.RenewTime.Time) {
 					lc.enqueueLease()
 				}
@@ -120,12 +120,8 @@ func NewCandidate(clientset kubernetes.Interface,
 func (c *LeaseCandidate) Run(ctx context.Context) {
 	defer c.queue.ShutDown()
 
-	logger := klog.FromContext(ctx)
-	logger = klog.LoggerWithName(logger, "leasecandidate")
-	ctx = klog.NewContext(ctx, logger)
-
 	c.informerFactory.Start(ctx.Done())
-	if !cache.WaitForNamedCacheSyncWithContext(ctx, c.hasSynced) {
+	if !cache.WaitForNamedCacheSync("leasecandidateclient", ctx.Done(), c.hasSynced) {
 		return
 	}
 
@@ -152,7 +148,7 @@ func (c *LeaseCandidate) processNextWorkItem(ctx context.Context) bool {
 		return true
 	}
 
-	utilruntime.HandleErrorWithContext(ctx, err, "Ensuring lease failed")
+	utilruntime.HandleError(err)
 	c.queue.AddRateLimited(key)
 
 	return true
@@ -165,21 +161,20 @@ func (c *LeaseCandidate) enqueueLease() {
 // ensureLease creates the lease if it does not exist and renew it if it exists. Returns the lease and
 // a bool (true if this call created the lease), or any error that occurs.
 func (c *LeaseCandidate) ensureLease(ctx context.Context) error {
-	logger := klog.FromContext(ctx)
 	lease, err := c.leaseClient.Get(ctx, c.name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
-		logger.V(2).Info("Creating lease candidate")
+		klog.V(2).Infof("Creating lease candidate")
 		// lease does not exist, create it.
 		leaseToCreate := c.newLeaseCandidate()
 		if _, err := c.leaseClient.Create(ctx, leaseToCreate, metav1.CreateOptions{}); err != nil {
 			return err
 		}
-		logger.V(2).Info("Created lease candidate")
+		klog.V(2).Infof("Created lease candidate")
 		return nil
 	} else if err != nil {
 		return err
 	}
-	logger.V(2).Info("Lease candidate exists. Renewing.")
+	klog.V(2).Infof("lease candidate exists. Renewing.")
 	clone := lease.DeepCopy()
 	clone.Spec.RenewTime = &metav1.MicroTime{Time: c.clock.Now()}
 	_, err = c.leaseClient.Update(ctx, clone, metav1.UpdateOptions{})
@@ -189,13 +184,13 @@ func (c *LeaseCandidate) ensureLease(ctx context.Context) error {
 	return nil
 }
 
-func (c *LeaseCandidate) newLeaseCandidate() *v1beta1.LeaseCandidate {
-	lc := &v1beta1.LeaseCandidate{
+func (c *LeaseCandidate) newLeaseCandidate() *v1alpha2.LeaseCandidate {
+	lc := &v1alpha2.LeaseCandidate{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      c.name,
 			Namespace: c.namespace,
 		},
-		Spec: v1beta1.LeaseCandidateSpec{
+		Spec: v1alpha2.LeaseCandidateSpec{
 			LeaseName:        c.leaseName,
 			BinaryVersion:    c.binaryVersion,
 			EmulationVersion: c.emulationVersion,

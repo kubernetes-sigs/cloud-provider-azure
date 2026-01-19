@@ -56,32 +56,20 @@ func NewRuntimeClassInformer(client kubernetes.Interface, resyncPeriod time.Dura
 // one. This reduces memory footprint and number of connections to the server.
 func NewFilteredRuntimeClassInformer(client kubernetes.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
-		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
+		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.NodeV1beta1().RuntimeClasses().List(context.Background(), options)
+				return client.NodeV1beta1().RuntimeClasses().List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.NodeV1beta1().RuntimeClasses().Watch(context.Background(), options)
+				return client.NodeV1beta1().RuntimeClasses().Watch(context.TODO(), options)
 			},
-			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
-				if tweakListOptions != nil {
-					tweakListOptions(&options)
-				}
-				return client.NodeV1beta1().RuntimeClasses().List(ctx, options)
-			},
-			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
-				if tweakListOptions != nil {
-					tweakListOptions(&options)
-				}
-				return client.NodeV1beta1().RuntimeClasses().Watch(ctx, options)
-			},
-		}, client),
+		},
 		&apinodev1beta1.RuntimeClass{},
 		resyncPeriod,
 		indexers,

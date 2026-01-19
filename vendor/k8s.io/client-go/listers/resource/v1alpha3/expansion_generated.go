@@ -18,6 +18,26 @@ limitations under the License.
 
 package v1alpha3
 
-// DeviceTaintRuleListerExpansion allows custom methods to be added to
-// DeviceTaintRuleLister.
-type DeviceTaintRuleListerExpansion interface{}
+// DeviceClassListerExpansion allows custom methods to be added to
+// DeviceClassLister.
+type DeviceClassListerExpansion interface{}
+
+// ResourceClaimListerExpansion allows custom methods to be added to
+// ResourceClaimLister.
+type ResourceClaimListerExpansion interface{}
+
+// ResourceClaimNamespaceListerExpansion allows custom methods to be added to
+// ResourceClaimNamespaceLister.
+type ResourceClaimNamespaceListerExpansion interface{}
+
+// ResourceClaimTemplateListerExpansion allows custom methods to be added to
+// ResourceClaimTemplateLister.
+type ResourceClaimTemplateListerExpansion interface{}
+
+// ResourceClaimTemplateNamespaceListerExpansion allows custom methods to be added to
+// ResourceClaimTemplateNamespaceLister.
+type ResourceClaimTemplateNamespaceListerExpansion interface{}
+
+// ResourceSliceListerExpansion allows custom methods to be added to
+// ResourceSliceLister.
+type ResourceSliceListerExpansion interface{}

@@ -27,7 +27,7 @@ type ClosableTransport struct {
 }
 
 func (transport *ClosableTransport) ForceClose() error {
-	transport.CloseIdleConnections()
+	transport.Transport.CloseIdleConnections()
 	return nil
 }
 

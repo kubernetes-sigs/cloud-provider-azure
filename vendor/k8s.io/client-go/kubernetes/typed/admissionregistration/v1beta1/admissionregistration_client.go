@@ -28,8 +28,6 @@ import (
 
 type AdmissionregistrationV1beta1Interface interface {
 	RESTClient() rest.Interface
-	MutatingAdmissionPoliciesGetter
-	MutatingAdmissionPolicyBindingsGetter
 	MutatingWebhookConfigurationsGetter
 	ValidatingAdmissionPoliciesGetter
 	ValidatingAdmissionPolicyBindingsGetter
@@ -39,14 +37,6 @@ type AdmissionregistrationV1beta1Interface interface {
 // AdmissionregistrationV1beta1Client is used to interact with features provided by the admissionregistration.k8s.io group.
 type AdmissionregistrationV1beta1Client struct {
 	restClient rest.Interface
-}
-
-func (c *AdmissionregistrationV1beta1Client) MutatingAdmissionPolicies() MutatingAdmissionPolicyInterface {
-	return newMutatingAdmissionPolicies(c)
-}
-
-func (c *AdmissionregistrationV1beta1Client) MutatingAdmissionPolicyBindings() MutatingAdmissionPolicyBindingInterface {
-	return newMutatingAdmissionPolicyBindings(c)
 }
 
 func (c *AdmissionregistrationV1beta1Client) MutatingWebhookConfigurations() MutatingWebhookConfigurationInterface {
@@ -70,7 +60,9 @@ func (c *AdmissionregistrationV1beta1Client) ValidatingWebhookConfigurations() V
 // where httpClient was generated with rest.HTTPClientFor(c).
 func NewForConfig(c *rest.Config) (*AdmissionregistrationV1beta1Client, error) {
 	config := *c
-	setConfigDefaults(&config)
+	if err := setConfigDefaults(&config); err != nil {
+		return nil, err
+	}
 	httpClient, err := rest.HTTPClientFor(&config)
 	if err != nil {
 		return nil, err
@@ -82,7 +74,9 @@ func NewForConfig(c *rest.Config) (*AdmissionregistrationV1beta1Client, error) {
 // Note the http client provided takes precedence over the configured transport values.
 func NewForConfigAndClient(c *rest.Config, h *http.Client) (*AdmissionregistrationV1beta1Client, error) {
 	config := *c
-	setConfigDefaults(&config)
+	if err := setConfigDefaults(&config); err != nil {
+		return nil, err
+	}
 	client, err := rest.RESTClientForConfigAndClient(&config, h)
 	if err != nil {
 		return nil, err
@@ -105,7 +99,7 @@ func New(c rest.Interface) *AdmissionregistrationV1beta1Client {
 	return &AdmissionregistrationV1beta1Client{c}
 }
 
-func setConfigDefaults(config *rest.Config) {
+func setConfigDefaults(config *rest.Config) error {
 	gv := admissionregistrationv1beta1.SchemeGroupVersion
 	config.GroupVersion = &gv
 	config.APIPath = "/apis"
@@ -114,6 +108,8 @@ func setConfigDefaults(config *rest.Config) {
 	if config.UserAgent == "" {
 		config.UserAgent = rest.DefaultKubernetesUserAgent()
 	}
+
+	return nil
 }
 
 // RESTClient returns a RESTClient that is used to communicate

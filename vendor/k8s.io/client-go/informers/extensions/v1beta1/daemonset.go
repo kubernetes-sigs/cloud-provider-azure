@@ -57,32 +57,20 @@ func NewDaemonSetInformer(client kubernetes.Interface, namespace string, resyncP
 // one. This reduces memory footprint and number of connections to the server.
 func NewFilteredDaemonSetInformer(client kubernetes.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
-		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
+		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ExtensionsV1beta1().DaemonSets(namespace).List(context.Background(), options)
+				return client.ExtensionsV1beta1().DaemonSets(namespace).List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ExtensionsV1beta1().DaemonSets(namespace).Watch(context.Background(), options)
+				return client.ExtensionsV1beta1().DaemonSets(namespace).Watch(context.TODO(), options)
 			},
-			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
-				if tweakListOptions != nil {
-					tweakListOptions(&options)
-				}
-				return client.ExtensionsV1beta1().DaemonSets(namespace).List(ctx, options)
-			},
-			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
-				if tweakListOptions != nil {
-					tweakListOptions(&options)
-				}
-				return client.ExtensionsV1beta1().DaemonSets(namespace).Watch(ctx, options)
-			},
-		}, client),
+		},
 		&apiextensionsv1beta1.DaemonSet{},
 		resyncPeriod,
 		indexers,
