@@ -6,7 +6,7 @@ interactions:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 25
+        content_length: 22
         transfer_encoding: []
         trailer: {}
         host: management.chinacloudapi.cn
@@ -18,7 +18,7 @@ interactions:
             Accept:
                 - application/json
             Content-Length:
-                - "25"
+                - "22"
             Content-Type:
                 - application/json
             User-Agent:
@@ -31,14 +31,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 261
+        content_length: 310
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet","name":"aks-cit-VirtualMachineScaleSet","type":"Microsoft.Resources/resourceGroups","location":"chinaeast2","properties":{"provisioningState":"Succeeded"}}'
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet","name":"aks-cit-VirtualMachineScaleSet","type":"Microsoft.Resources/resourceGroups","location":"chinaeast2","tags":{"createdAt":"2001-02-03T04:05:06Z"},"properties":{"provisioningState":"Succeeded"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "261"
+                - "310"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -47,8 +47,12 @@ interactions:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "2999"
         status: 201 Created
         code: 201
         duration: 200ms
@@ -57,7 +61,7 @@ interactions:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 167
+        content_length: 164
         transfer_encoding: []
         trailer: {}
         host: management.chinacloudapi.cn
@@ -69,7 +73,7 @@ interactions:
             Accept:
                 - application/json
             Content-Length:
-                - "167"
+                - "164"
             Content-Type:
                 - application/json
             User-Agent:
@@ -82,29 +86,34 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 1027
+        content_length: 1024
         uncompressed: false
         body: '{"name":"vnet1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Network/virtualNetworks/vnet1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/virtualNetworks","location":"chinaeast2","properties":{"provisioningState":"Updating","resourceGuid":"00000000-0000-0000-0000-000000000000","addressSpace":{"addressPrefixes":["10.1.0.0/16"]},"privateEndpointVNetPolicies":"Disabled","subnets":[{"name":"subnet1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Updating","addressPrefix":"10.1.0.0/24","delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}],"virtualNetworkPeerings":[],"enableDdosProtection":false}}'
         headers:
+            Azure-Asyncnotification:
+                - Enabled
             Azure-Asyncoperation:
                 - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "1027"
+                - "1024"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/chinaeast2/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "2999"
         status: 201 Created
         code: 201
         duration: 200ms
@@ -146,13 +155,16 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/chinaeast2/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3749"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -180,14 +192,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 1029
+        content_length: 1026
         uncompressed: false
         body: '{"name":"vnet1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Network/virtualNetworks/vnet1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/virtualNetworks","location":"chinaeast2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","addressSpace":{"addressPrefixes":["10.1.0.0/16"]},"privateEndpointVNetPolicies":"Disabled","subnets":[{"name":"subnet1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","addressPrefix":"10.1.0.0/24","delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}],"virtualNetworkPeerings":[],"enableDdosProtection":false}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "1029"
+                - "1026"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -196,13 +208,14 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3749"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -223,8 +236,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets/testResource?api-version=2024-11-01
+                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v7.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets/testResource?api-version=2025-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -248,6 +261,8 @@ interactions:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Failure-Cause:
@@ -260,7 +275,7 @@ interactions:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 885
+        content_length: 882
         transfer_encoding: []
         trailer: {}
         host: management.chinacloudapi.cn
@@ -272,12 +287,12 @@ interactions:
             Accept:
                 - application/json
             Content-Length:
-                - "885"
+                - "882"
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets/testResource?api-version=2024-11-01
+                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v7.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets/testResource?api-version=2025-04-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -285,16 +300,18 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 2457
+        content_length: 2454
         uncompressed: false
         body: "{\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets/testResource\",\r\n  \"type\": \"Microsoft.Compute/virtualMachineScaleSets\",\r\n  \"location\": \"chinaeast2\",\r\n  \"sku\": {\r\n    \"name\": \"Standard_D2s_v3\",\r\n    \"tier\": \"Standard\",\r\n    \"capacity\": 1\r\n  },\r\n  \"etag\": \"\\\"1\\\"\",\r\n  \"properties\": {\r\n    \"singlePlacementGroup\": true,\r\n    \"orchestrationMode\": \"Uniform\",\r\n    \"upgradePolicy\": {\r\n      \"mode\": \"Manual\",\r\n      \"automaticOSUpgradePolicy\": {\r\n        \"enableAutomaticOSUpgrade\": false,\r\n        \"useRollingUpgradePolicy\": false,\r\n        \"disableAutomaticRollback\": false\r\n      }\r\n    },\r\n    \"virtualMachineProfile\": {\r\n      \"osProfile\": {\r\n        \"computerNamePrefix\": \"vmss\",\r\n        \"adminUsername\": \"sample-user\",\r\n        \"windowsConfiguration\": {\r\n          \"provisionVMAgent\": true,\r\n          \"enableAutomaticUpdates\": true\r\n        },\r\n        \"secrets\": [],\r\n        \"allowExtensionOperations\": true,\r\n        \"requireGuestProvisionSignal\": true\r\n      },\r\n      \"storageProfile\": {\r\n        \"osDisk\": {\r\n          \"osType\": \"Windows\",\r\n          \"createOption\": \"FromImage\",\r\n          \"caching\": \"None\",\r\n          \"managedDisk\": {\r\n            \"storageAccountType\": \"Premium_LRS\"\r\n          },\r\n          \"diskSizeGB\": 127\r\n        },\r\n        \"imageReference\": {\r\n          \"publisher\": \"MicrosoftWindowsServer\",\r\n          \"offer\": \"WindowsServer\",\r\n          \"sku\": \"2019-Datacenter\",\r\n          \"version\": \"latest\"\r\n        }\r\n      },\r\n      \"networkProfile\": {\"networkInterfaceConfigurations\":[{\"name\":\"testResource\",\"properties\":{\"primary\":true,\"enableAcceleratedNetworking\":false,\"disableTcpStateTracking\":false,\"dnsSettings\":{\"dnsServers\":[]},\"enableIPForwarding\":true,\"ipConfigurations\":[{\"name\":\"testResource\",\"properties\":{\"subnet\":{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1\"},\"privateIPAddressVersion\":\"IPv4\"}}]}}]},\r\n      \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n    },\r\n    \"provisioningState\": \"Creating\",\r\n    \"overprovision\": false,\r\n    \"doNotRunExtensionsOnOverprovisionedVMs\": false,\r\n    \"uniqueId\": \"00000000-0000-0000-0000-000000000000\",\r\n    \"platformFaultDomainCount\": 5,\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n  }\r\n}"
         headers:
+            Azure-Asyncnotification:
+                - Enabled
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-04-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "2457"
+                - "2454"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -303,15 +320,18 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Need-To-Refresh-Epl-Cache:
                 - "False"
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/chinaeast2/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "2999"
             X-Ms-Request-Charge:
                 - "1"
         status: 201 Created
@@ -332,8 +352,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v7.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-04-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -355,15 +375,18 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Need-To-Refresh-Epl-Cache:
                 - "False"
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/northcentralus/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3749"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -382,8 +405,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets/testResource?api-version=2024-11-01
+                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v7.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets/testResource?api-version=2025-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -391,14 +414,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 2458
+        content_length: 2455
         uncompressed: false
         body: "{\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets/testResource\",\r\n  \"type\": \"Microsoft.Compute/virtualMachineScaleSets\",\r\n  \"location\": \"chinaeast2\",\r\n  \"sku\": {\r\n    \"name\": \"Standard_D2s_v3\",\r\n    \"tier\": \"Standard\",\r\n    \"capacity\": 1\r\n  },\r\n  \"etag\": \"\\\"1\\\"\",\r\n  \"properties\": {\r\n    \"singlePlacementGroup\": true,\r\n    \"orchestrationMode\": \"Uniform\",\r\n    \"upgradePolicy\": {\r\n      \"mode\": \"Manual\",\r\n      \"automaticOSUpgradePolicy\": {\r\n        \"enableAutomaticOSUpgrade\": false,\r\n        \"useRollingUpgradePolicy\": false,\r\n        \"disableAutomaticRollback\": false\r\n      }\r\n    },\r\n    \"virtualMachineProfile\": {\r\n      \"osProfile\": {\r\n        \"computerNamePrefix\": \"vmss\",\r\n        \"adminUsername\": \"sample-user\",\r\n        \"windowsConfiguration\": {\r\n          \"provisionVMAgent\": true,\r\n          \"enableAutomaticUpdates\": true\r\n        },\r\n        \"secrets\": [],\r\n        \"allowExtensionOperations\": true,\r\n        \"requireGuestProvisionSignal\": true\r\n      },\r\n      \"storageProfile\": {\r\n        \"osDisk\": {\r\n          \"osType\": \"Windows\",\r\n          \"createOption\": \"FromImage\",\r\n          \"caching\": \"None\",\r\n          \"managedDisk\": {\r\n            \"storageAccountType\": \"Premium_LRS\"\r\n          },\r\n          \"diskSizeGB\": 127\r\n        },\r\n        \"imageReference\": {\r\n          \"publisher\": \"MicrosoftWindowsServer\",\r\n          \"offer\": \"WindowsServer\",\r\n          \"sku\": \"2019-Datacenter\",\r\n          \"version\": \"latest\"\r\n        }\r\n      },\r\n      \"networkProfile\": {\"networkInterfaceConfigurations\":[{\"name\":\"testResource\",\"properties\":{\"primary\":true,\"enableAcceleratedNetworking\":false,\"disableTcpStateTracking\":false,\"dnsSettings\":{\"dnsServers\":[]},\"enableIPForwarding\":true,\"ipConfigurations\":[{\"name\":\"testResource\",\"properties\":{\"subnet\":{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1\"},\"privateIPAddressVersion\":\"IPv4\"}}]}}]},\r\n      \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n    },\r\n    \"provisioningState\": \"Succeeded\",\r\n    \"overprovision\": false,\r\n    \"doNotRunExtensionsOnOverprovisionedVMs\": false,\r\n    \"uniqueId\": \"00000000-0000-0000-0000-000000000000\",\r\n    \"platformFaultDomainCount\": 5,\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n  }\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "2458"
+                - "2455"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -407,15 +430,16 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Need-To-Refresh-Epl-Cache:
                 - "False"
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3749"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -424,7 +448,7 @@ interactions:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 885
+        content_length: 882
         transfer_encoding: []
         trailer: {}
         host: management.chinacloudapi.cn
@@ -436,12 +460,12 @@ interactions:
             Accept:
                 - application/json
             Content-Length:
-                - "885"
+                - "882"
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets/testResource?api-version=2024-11-01
+                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v7.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets/testResource?api-version=2025-04-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -449,16 +473,18 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 2457
+        content_length: 2454
         uncompressed: false
         body: "{\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets/testResource\",\r\n  \"type\": \"Microsoft.Compute/virtualMachineScaleSets\",\r\n  \"location\": \"chinaeast2\",\r\n  \"sku\": {\r\n    \"name\": \"Standard_D2s_v3\",\r\n    \"tier\": \"Standard\",\r\n    \"capacity\": 1\r\n  },\r\n  \"etag\": \"\\\"1\\\"\",\r\n  \"properties\": {\r\n    \"singlePlacementGroup\": true,\r\n    \"orchestrationMode\": \"Uniform\",\r\n    \"upgradePolicy\": {\r\n      \"mode\": \"Manual\",\r\n      \"automaticOSUpgradePolicy\": {\r\n        \"enableAutomaticOSUpgrade\": false,\r\n        \"useRollingUpgradePolicy\": false,\r\n        \"disableAutomaticRollback\": false\r\n      }\r\n    },\r\n    \"virtualMachineProfile\": {\r\n      \"osProfile\": {\r\n        \"computerNamePrefix\": \"vmss\",\r\n        \"adminUsername\": \"sample-user\",\r\n        \"windowsConfiguration\": {\r\n          \"provisionVMAgent\": true,\r\n          \"enableAutomaticUpdates\": true\r\n        },\r\n        \"secrets\": [],\r\n        \"allowExtensionOperations\": true,\r\n        \"requireGuestProvisionSignal\": true\r\n      },\r\n      \"storageProfile\": {\r\n        \"osDisk\": {\r\n          \"osType\": \"Windows\",\r\n          \"createOption\": \"FromImage\",\r\n          \"caching\": \"None\",\r\n          \"managedDisk\": {\r\n            \"storageAccountType\": \"Premium_LRS\"\r\n          },\r\n          \"diskSizeGB\": 127\r\n        },\r\n        \"imageReference\": {\r\n          \"publisher\": \"MicrosoftWindowsServer\",\r\n          \"offer\": \"WindowsServer\",\r\n          \"sku\": \"2019-Datacenter\",\r\n          \"version\": \"latest\"\r\n        }\r\n      },\r\n      \"networkProfile\": {\"networkInterfaceConfigurations\":[{\"name\":\"testResource\",\"properties\":{\"primary\":true,\"enableAcceleratedNetworking\":false,\"disableTcpStateTracking\":false,\"dnsSettings\":{\"dnsServers\":[]},\"enableIPForwarding\":true,\"ipConfigurations\":[{\"name\":\"testResource\",\"properties\":{\"subnet\":{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1\"},\"privateIPAddressVersion\":\"IPv4\"}}]}}]},\r\n      \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n    },\r\n    \"provisioningState\": \"Updating\",\r\n    \"overprovision\": false,\r\n    \"doNotRunExtensionsOnOverprovisionedVMs\": false,\r\n    \"uniqueId\": \"00000000-0000-0000-0000-000000000000\",\r\n    \"platformFaultDomainCount\": 5,\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n  }\r\n}"
         headers:
+            Azure-Asyncnotification:
+                - Enabled
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-04-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "2457"
+                - "2454"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -467,15 +493,18 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Need-To-Refresh-Epl-Cache:
                 - "False"
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/chinaeast2/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "2999"
             X-Ms-Request-Charge:
                 - "0"
         status: 200 OK
@@ -496,8 +525,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v7.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-04-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -519,15 +548,18 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Need-To-Refresh-Epl-Cache:
                 - "False"
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/chinaeast2/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3749"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -546,8 +578,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets/testResource?api-version=2024-11-01
+                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v7.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets/testResource?api-version=2025-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -555,14 +587,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 2458
+        content_length: 2455
         uncompressed: false
         body: "{\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets/testResource\",\r\n  \"type\": \"Microsoft.Compute/virtualMachineScaleSets\",\r\n  \"location\": \"chinaeast2\",\r\n  \"sku\": {\r\n    \"name\": \"Standard_D2s_v3\",\r\n    \"tier\": \"Standard\",\r\n    \"capacity\": 1\r\n  },\r\n  \"etag\": \"\\\"1\\\"\",\r\n  \"properties\": {\r\n    \"singlePlacementGroup\": true,\r\n    \"orchestrationMode\": \"Uniform\",\r\n    \"upgradePolicy\": {\r\n      \"mode\": \"Manual\",\r\n      \"automaticOSUpgradePolicy\": {\r\n        \"enableAutomaticOSUpgrade\": false,\r\n        \"useRollingUpgradePolicy\": false,\r\n        \"disableAutomaticRollback\": false\r\n      }\r\n    },\r\n    \"virtualMachineProfile\": {\r\n      \"osProfile\": {\r\n        \"computerNamePrefix\": \"vmss\",\r\n        \"adminUsername\": \"sample-user\",\r\n        \"windowsConfiguration\": {\r\n          \"provisionVMAgent\": true,\r\n          \"enableAutomaticUpdates\": true\r\n        },\r\n        \"secrets\": [],\r\n        \"allowExtensionOperations\": true,\r\n        \"requireGuestProvisionSignal\": true\r\n      },\r\n      \"storageProfile\": {\r\n        \"osDisk\": {\r\n          \"osType\": \"Windows\",\r\n          \"createOption\": \"FromImage\",\r\n          \"caching\": \"None\",\r\n          \"managedDisk\": {\r\n            \"storageAccountType\": \"Premium_LRS\"\r\n          },\r\n          \"diskSizeGB\": 127\r\n        },\r\n        \"imageReference\": {\r\n          \"publisher\": \"MicrosoftWindowsServer\",\r\n          \"offer\": \"WindowsServer\",\r\n          \"sku\": \"2019-Datacenter\",\r\n          \"version\": \"latest\"\r\n        }\r\n      },\r\n      \"networkProfile\": {\"networkInterfaceConfigurations\":[{\"name\":\"testResource\",\"properties\":{\"primary\":true,\"enableAcceleratedNetworking\":false,\"disableTcpStateTracking\":false,\"dnsSettings\":{\"dnsServers\":[]},\"enableIPForwarding\":true,\"ipConfigurations\":[{\"name\":\"testResource\",\"properties\":{\"subnet\":{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1\"},\"privateIPAddressVersion\":\"IPv4\"}}]}}]},\r\n      \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n    },\r\n    \"provisioningState\": \"Succeeded\",\r\n    \"overprovision\": false,\r\n    \"doNotRunExtensionsOnOverprovisionedVMs\": false,\r\n    \"uniqueId\": \"00000000-0000-0000-0000-000000000000\",\r\n    \"platformFaultDomainCount\": 5,\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n  }\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "2458"
+                - "2455"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -571,15 +603,16 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Need-To-Refresh-Epl-Cache:
                 - "False"
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3749"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -588,7 +621,7 @@ interactions:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 902
+        content_length: 899
         transfer_encoding: []
         trailer: {}
         host: management.chinacloudapi.cn
@@ -600,14 +633,14 @@ interactions:
             Accept:
                 - application/json
             Content-Length:
-                - "902"
+                - "899"
             Content-Type:
                 - application/json
             If-Match:
                 - invalid
             User-Agent:
-                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets/testResource?api-version=2024-11-01
+                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v7.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets/testResource?api-version=2025-04-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -629,15 +662,18 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Need-To-Refresh-Epl-Cache:
                 - "False"
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/chinaeast2/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "2999"
         status: 412 Precondition Failed
         code: 412
         duration: 200ms
@@ -658,8 +694,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets?api-version=2024-11-01
+                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v7.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets?api-version=2025-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -667,29 +703,32 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 2731
+        content_length: 1920
         uncompressed: false
-        body: "{\r\n  \"value\": [\r\n    {\r\n      \"name\": \"testResource\",\r\n      \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets/testResource\",\r\n      \"type\": \"Microsoft.Compute/virtualMachineScaleSets\",\r\n      \"location\": \"chinaeast2\",\r\n      \"sku\": {\r\n        \"name\": \"Standard_D2s_v3\",\r\n        \"tier\": \"Standard\",\r\n        \"capacity\": 1\r\n      },\r\n      \"etag\": \"\\\"1\\\"\",\r\n      \"properties\": {\r\n        \"singlePlacementGroup\": true,\r\n        \"orchestrationMode\": \"Uniform\",\r\n        \"upgradePolicy\": {\r\n          \"mode\": \"Manual\",\r\n          \"automaticOSUpgradePolicy\": {\r\n            \"enableAutomaticOSUpgrade\": false,\r\n            \"useRollingUpgradePolicy\": false,\r\n            \"disableAutomaticRollback\": false\r\n          }\r\n        },\r\n        \"virtualMachineProfile\": {\r\n          \"osProfile\": {\r\n            \"computerNamePrefix\": \"vmss\",\r\n            \"adminUsername\": \"sample-user\",\r\n            \"windowsConfiguration\": {\r\n              \"provisionVMAgent\": true,\r\n              \"enableAutomaticUpdates\": true\r\n            },\r\n            \"secrets\": [],\r\n            \"allowExtensionOperations\": true,\r\n            \"requireGuestProvisionSignal\": true\r\n          },\r\n          \"storageProfile\": {\r\n            \"osDisk\": {\r\n              \"osType\": \"Windows\",\r\n              \"createOption\": \"FromImage\",\r\n              \"caching\": \"None\",\r\n              \"managedDisk\": {\r\n                \"storageAccountType\": \"Premium_LRS\"\r\n              },\r\n              \"diskSizeGB\": 127\r\n            },\r\n            \"imageReference\": {\r\n              \"publisher\": \"MicrosoftWindowsServer\",\r\n              \"offer\": \"WindowsServer\",\r\n              \"sku\": \"2019-Datacenter\",\r\n              \"version\": \"latest\"\r\n            }\r\n          },\r\n          \"networkProfile\": {\"networkInterfaceConfigurations\":[{\"name\":\"testResource\",\"properties\":{\"primary\":true,\"enableAcceleratedNetworking\":false,\"disableTcpStateTracking\":false,\"dnsSettings\":{\"dnsServers\":[]},\"enableIPForwarding\":true,\"ipConfigurations\":[{\"name\":\"testResource\",\"properties\":{\"subnet\":{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1\"},\"privateIPAddressVersion\":\"IPv4\"}}]}}]},\r\n          \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n        },\r\n        \"provisioningState\": \"Succeeded\",\r\n        \"overprovision\": false,\r\n        \"doNotRunExtensionsOnOverprovisionedVMs\": false,\r\n        \"uniqueId\": \"00000000-0000-0000-0000-000000000000\",\r\n        \"platformFaultDomainCount\": 5,\r\n        \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n      }\r\n    }\r\n  ]\r\n}"
+        body: '{"value":[{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets/testResource","type":"Microsoft.Compute/virtualMachineScaleSets","location":"chinaeast2","sku":{"name":"Standard_D2s_v3","tier":"Standard","capacity":1},"etag":"\"1\"","properties":{"singlePlacementGroup":true,"orchestrationMode":"Uniform","upgradePolicy":{"mode":"Manual","automaticOSUpgradePolicy":{"enableAutomaticOSUpgrade":false,"useRollingUpgradePolicy":false,"disableAutomaticRollback":false}},"virtualMachineProfile":{"osProfile":{"computerNamePrefix":"vmss","adminUsername":"sample-user","windowsConfiguration":{"provisionVMAgent":true,"enableAutomaticUpdates":true},"secrets":[],"allowExtensionOperations":true,"requireGuestProvisionSignal":true},"storageProfile":{"osDisk":{"osType":"Windows","createOption":"FromImage","caching":"None","managedDisk":{"storageAccountType":"Premium_LRS"},"diskSizeGB":127},"imageReference":{"publisher":"MicrosoftWindowsServer","offer":"WindowsServer","sku":"2019-Datacenter","version":"latest"}},"networkProfile":{"networkInterfaceConfigurations":[{"name":"testResource","properties":{"primary":true,"enableAcceleratedNetworking":false,"disableTcpStateTracking":false,"dnsSettings":{"dnsServers":[]},"enableIPForwarding":true,"ipConfigurations":[{"name":"testResource","properties":{"subnet":{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1"},"privateIPAddressVersion":"IPv4"}}]}}]},"timeCreated":"2001-02-03T04:05:06Z"},"provisioningState":"Succeeded","overprovision":false,"doNotRunExtensionsOnOverprovisionedVMs":false,"uniqueId":"00000000-0000-0000-0000-000000000000","platformFaultDomainCount":5,"timeCreated":"2001-02-03T04:05:06Z"}}]}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "2731"
+                - "1920"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Need-To-Refresh-Epl-Cache:
                 - "False"
+            X-Ms-Original-Request-Ids:
+                - 00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3749"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -710,8 +749,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetnotfound/providers/Microsoft.Compute/virtualMachineScaleSets?api-version=2024-11-01
+                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v7.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSetnotfound/providers/Microsoft.Compute/virtualMachineScaleSets?api-version=2025-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -735,6 +774,8 @@ interactions:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Failure-Cause:
@@ -759,8 +800,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets/testResource?api-version=2024-11-01
+                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v7.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachineScaleSet/providers/Microsoft.Compute/virtualMachineScaleSets/testResource?api-version=2025-04-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -772,8 +813,10 @@ interactions:
         uncompressed: false
         body: ""
         headers:
+            Azure-Asyncnotification:
+                - Enabled
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-04-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -781,18 +824,21 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&monitor=true&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-04-01&c=c&h=h&monitor=true&p=00000000-0000-0000-0000-000000000000&s=s&t=t
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Need-To-Refresh-Epl-Cache:
                 - "False"
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/northcentralus/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
+                - "2999"
             X-Ms-Request-Charge:
                 - "1"
         status: 202 Accepted
@@ -813,8 +859,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v6.3.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/ChinaEast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-11-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
+                - ccm-VirtualMachineScaleS azsdk-go-armcompute/v7.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-04-01&c=c&h=h&p=00000000-0000-0000-0000-000000000000&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -836,15 +882,18 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Need-To-Refresh-Epl-Cache:
                 - "False"
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/northcentralus/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3749"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -878,6 +927,8 @@ interactions:
         uncompressed: false
         body: ""
         headers:
+            Azure-Asyncnotification:
+                - Enabled
             Azure-Asyncoperation:
                 - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
@@ -890,13 +941,16 @@ interactions:
                 - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/northcentralus/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
+                - "2999"
         status: 202 Accepted
         code: 202
         duration: 200ms
@@ -938,13 +992,16 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/chinaeast2/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3749"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -985,13 +1042,17 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRWSVJUVUFMTUFDSElORVNDQUxFU0VULUNISU5BRUFTVDIiLCJqb2JMb2NhdGlvbiI6ImNoaW5hZWFzdDIifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRWSVJUVUFMTUFDSElORVNDQUxFU0VULUVBU1RVUzIiLCJqb2JMb2NhdGlvbiI6ImVhc3R1czIifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
+                - "2999"
         status: 202 Accepted
         code: 202
         duration: 200ms
@@ -1011,7 +1072,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRWSVJUVUFMTUFDSElORVNDQUxFU0VULUNISU5BRUFTVDIiLCJqb2JMb2NhdGlvbiI6ImNoaW5hZWFzdDIifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRWSVJUVUFMTUFDSElORVNDQUxFU0VULUVBU1RVUzIiLCJqb2JMb2NhdGlvbiI6ImVhc3R1czIifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -1033,8 +1094,12 @@ interactions:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3749"
         status: 200 OK
         code: 200
         duration: 200ms
