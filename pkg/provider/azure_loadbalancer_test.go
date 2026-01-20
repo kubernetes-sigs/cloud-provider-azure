@@ -3403,7 +3403,7 @@ func getTestLoadBalancer(name, rgName, clusterName, identifier *string, service 
 						DisableOutboundSnat:  ptr.To(false),
 						IdleTimeoutInMinutes: ptr.To(int32(4)),
 						Probe: &armnetwork.SubResource{
-							ID: ptr.To("/subscriptions/subscription/resourceGroups/" + *rgName + "/providers/Microsoft.Network/loadBalancers/testCluster/probes/aservice1-TCP-80"),
+							ID: ptr.To("/subscriptions/subscription/resourceGroups/" + *rgName + "/providers/Microsoft.Network/loadBalancers/" + *name + "/probes/aservice1-TCP-80"),
 						},
 					},
 				},
@@ -3460,7 +3460,7 @@ func getTestLoadBalancerDualStack(name, rgName, clusterName, identifier *string,
 			DisableOutboundSnat:  ptr.To(false),
 			IdleTimeoutInMinutes: ptr.To(int32(4)),
 			Probe: &armnetwork.SubResource{
-				ID: ptr.To("/subscriptions/subscription/resourceGroups/" + *rgName + "/providers/Microsoft.Network/loadBalancers/testCluster/probes/aservice1-TCP-80-IPv6"),
+				ID: ptr.To("/subscriptions/subscription/resourceGroups/" + *rgName + "/providers/Microsoft.Network/loadBalancers/" + *name + "/probes/aservice1-TCP-80-IPv6"),
 			},
 		},
 	})
