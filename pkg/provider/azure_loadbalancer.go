@@ -2017,6 +2017,15 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 			lb = newLB
 
 			addOrUpdateLBInList(&existingLBs, newLB)
+
+			// Invalidate PIP cache only when external PIPs are involved
+			// because LB updates modify pip.properties.ipConfiguration.id which changes the PIP etag.
+			// Internal LB changes (subnet/private IP) don't affect PIPs.
+			if fipChanged && !requiresInternalLoadBalancer(service) {
+				pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
+				_ = az.pipCache.Delete(pipResourceGroup)
+				logger.V(2).Info("Invalidated PIP cache due to frontend IP config changes in lb", "lbName", lbName, "pipResourceGroup", pipResourceGroup)
+			}
 		}
 	}
 
