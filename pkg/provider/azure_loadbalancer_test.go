@@ -50,6 +50,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
@@ -3924,6 +3925,128 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 		},
 	}
 
+	// Helper to convert external LB frontend configs to internal LB configs.
+	convertToInternalLB := func(lb *armnetwork.LoadBalancer, service v1.Service) {
+		for _, fipConfig := range lb.Properties.FrontendIPConfigurations {
+			fipConfig.Properties.PublicIPAddress = nil
+			fipConfig.Properties.PrivateIPAllocationMethod = to.Ptr(armnetwork.IPAllocationMethodStatic)
+			fipConfig.Properties.Subnet = &armnetwork.Subnet{
+				ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/subnet"),
+				Name: ptr.To("subnet"),
+			}
+			fipConfig.Zones = []*string{ptr.To("1"), ptr.To("2"), ptr.To("3")}
+			if strings.HasSuffix(ptr.Deref(fipConfig.Name, ""), ipv6Suffix) {
+				fipConfig.Properties.PrivateIPAddress = ptr.To("fd00::eef0")
+				fipConfig.Properties.PrivateIPAddressVersion = to.Ptr(armnetwork.IPVersionIPv6)
+			} else {
+				fipConfig.Properties.PrivateIPAddress = ptr.To("1.2.3.4")
+			}
+		}
+		if len(lb.Properties.LoadBalancingRules) >= 2 {
+			lb.Properties.LoadBalancingRules[1].Properties.EnableFloatingIP = ptr.To(false)
+			lb.Properties.LoadBalancingRules[1].Properties.BackendPort = ptr.To(service.Spec.Ports[0].NodePort)
+		}
+	}
+
+	externalService := getTestServiceDualStack("service1", v1.ProtocolTCP, nil, 80)
+	internalService := getInternalTestServiceDualStack("service1", 80)
+
+	// External LB with no frontend configs.
+	externalLBEmptyFrontend := getTestLoadBalancerDualStack(ptr.To("testCluster"), ptr.To("rg"), ptr.To("testCluster"), ptr.To("aservice1"), externalService, "Standard")
+	externalLBEmptyFrontend.Properties.FrontendIPConfigurations = []*armnetwork.FrontendIPConfiguration{}
+	expectedExternalLBNewFrontend := getTestLoadBalancerDualStack(ptr.To("testCluster"), ptr.To("rg"), ptr.To("testCluster"), ptr.To("aservice1"), externalService, "Standard")
+
+	// External LB with other frontend configs.
+	externalLBOtherFrontend := getTestLoadBalancerDualStack(ptr.To("testCluster"), ptr.To("rg"), ptr.To("testCluster"), ptr.To("aservice1"), externalService, "Standard")
+	externalLBOtherFrontend.Properties.FrontendIPConfigurations = append(externalLBOtherFrontend.Properties.FrontendIPConfigurations,
+		&armnetwork.FrontendIPConfiguration{
+			Name: ptr.To("bservice1"),
+			ID:   ptr.To("bservice1"),
+			Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+				PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-bservice1")},
+			},
+		},
+	)
+	expectedExternalLBOtherFrontend := getTestLoadBalancerDualStack(ptr.To("testCluster"), ptr.To("rg"), ptr.To("testCluster"), ptr.To("aservice1"), externalService, "Standard")
+	expectedExternalLBOtherFrontend.Properties.FrontendIPConfigurations = []*armnetwork.FrontendIPConfiguration{
+		{
+			Name: ptr.To("bservice1"),
+			ID:   ptr.To("bservice1"),
+			Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+				PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-bservice1")},
+			},
+		},
+	}
+	expectedExternalLBOtherFrontend.Properties.Probes = []*armnetwork.Probe{}
+	expectedExternalLBOtherFrontend.Properties.LoadBalancingRules = []*armnetwork.LoadBalancingRule{}
+
+	// External LB with unchanged frontend configs.
+	externalLBUnchanged := getTestLoadBalancerDualStack(ptr.To("testCluster"), ptr.To("rg"), ptr.To("testCluster"), ptr.To("aservice1"), externalService, "Standard")
+
+	// External LB with one frontend config.
+	externalLBOneFrontend := getTestLoadBalancerDualStack(ptr.To("testCluster"), ptr.To("rg"), ptr.To("testCluster"), ptr.To("aservice1"), externalService, "Standard")
+	expectedExternalLBOrphaned := getTestLoadBalancerDualStack(ptr.To("testCluster"), ptr.To("rg"), ptr.To("testCluster"), ptr.To("aservice1"), externalService, "Standard")
+	expectedExternalLBOrphaned.Properties.FrontendIPConfigurations = []*armnetwork.FrontendIPConfiguration{}
+	expectedExternalLBOrphaned.Properties.BackendAddressPools = nil
+	expectedExternalLBOrphaned.Properties.Probes = []*armnetwork.Probe{}
+	expectedExternalLBOrphaned.Properties.LoadBalancingRules = []*armnetwork.LoadBalancingRule{}
+
+	// Internal LB with no frontend configs.
+	internalLBEmptyFrontend := getTestLoadBalancerDualStack(ptr.To("testCluster-internal"), ptr.To("rg"), ptr.To("testCluster"), ptr.To("aservice1"), internalService, "Standard")
+	internalLBEmptyFrontend.Properties.FrontendIPConfigurations = []*armnetwork.FrontendIPConfiguration{}
+	expectedInternalLBNewFrontend := getTestLoadBalancerDualStack(ptr.To("testCluster-internal"), ptr.To("rg"), ptr.To("testCluster"), ptr.To("aservice1"), internalService, "Standard")
+	convertToInternalLB(expectedInternalLBNewFrontend, internalService)
+
+	// Internal LB with other frontend configs.
+	internalLBOtherFrontend := getTestLoadBalancerDualStack(ptr.To("testCluster-internal"), ptr.To("rg"), ptr.To("testCluster"), ptr.To("aservice1"), internalService, "Standard")
+	convertToInternalLB(internalLBOtherFrontend, internalService)
+	internalLBOtherFrontend.Properties.FrontendIPConfigurations = append(internalLBOtherFrontend.Properties.FrontendIPConfigurations,
+		&armnetwork.FrontendIPConfiguration{
+			Name: ptr.To("bservice1"),
+			ID:   ptr.To("bservice1"),
+			Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+				PrivateIPAddress:          ptr.To("1.2.3.5"),
+				PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
+				Subnet: &armnetwork.Subnet{
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/subnet"),
+					Name: ptr.To("subnet"),
+				},
+			},
+			Zones: []*string{ptr.To("1"), ptr.To("2"), ptr.To("3")},
+		},
+	)
+	expectedInternalLBOtherFrontends := getTestLoadBalancerDualStack(ptr.To("testCluster-internal"), ptr.To("rg"), ptr.To("testCluster"), ptr.To("aservice1"), internalService, "Standard")
+	expectedInternalLBOtherFrontends.Properties.FrontendIPConfigurations = []*armnetwork.FrontendIPConfiguration{
+		{
+			Name: ptr.To("bservice1"),
+			ID:   ptr.To("bservice1"),
+			Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+				PrivateIPAddress:          ptr.To("1.2.3.5"),
+				PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
+				Subnet: &armnetwork.Subnet{
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/subnet"),
+					Name: ptr.To("subnet"),
+				},
+			},
+			Zones: []*string{ptr.To("1"), ptr.To("2"), ptr.To("3")},
+		},
+	}
+	expectedInternalLBOtherFrontends.Properties.Probes = []*armnetwork.Probe{}
+	expectedInternalLBOtherFrontends.Properties.LoadBalancingRules = []*armnetwork.LoadBalancingRule{}
+
+	// Internal LB with unchanged frontend configs.
+	internalLBUnchanged := getTestLoadBalancerDualStack(ptr.To("testCluster-internal"), ptr.To("rg"), ptr.To("testCluster"), ptr.To("aservice1"), internalService, "Standard")
+	convertToInternalLB(internalLBUnchanged, internalService)
+
+	// Internal LB with one frontend config.
+	internalLBOneFrontend := getTestLoadBalancerDualStack(ptr.To("testCluster-internal"), ptr.To("rg"), ptr.To("testCluster"), ptr.To("aservice1"), internalService, "Standard")
+	convertToInternalLB(internalLBOneFrontend, internalService)
+	expectedInternalLBOrphaned := getTestLoadBalancerDualStack(ptr.To("testCluster-internal"), ptr.To("rg"), ptr.To("testCluster"), ptr.To("aservice1"), internalService, "Standard")
+	expectedInternalLBOrphaned.Properties.FrontendIPConfigurations = []*armnetwork.FrontendIPConfiguration{}
+	expectedInternalLBOrphaned.Properties.BackendAddressPools = nil
+	expectedInternalLBOrphaned.Properties.Probes = []*armnetwork.Probe{}
+	expectedInternalLBOrphaned.Properties.LoadBalancingRules = []*armnetwork.LoadBalancingRule{}
+
 	testCases := []struct {
 		desc                                      string
 		service                                   v1.Service
@@ -3936,8 +4059,10 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 		existingLB                                *armnetwork.LoadBalancer
 		expectedLB                                *armnetwork.LoadBalancer
 		expectLBUpdate                            bool
+		expectLBDeleted                           bool
 		expectedGetLBError                        error
 		expectedError                             error
+		expectPIPCacheDeleted                     bool
 	}{
 		{
 			desc: "reconcileLoadBalancer shall return the lb deeply equal to the existingLB if there's no " +
@@ -4003,24 +4128,26 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 			expectedError:       nil,
 		},
 		{
-			desc:            "reconcileLoadBalancer shall reconcile UDP services",
-			loadBalancerSKU: "basic",
-			service:         service6,
-			existingLB:      lb6,
-			wantLb:          true,
-			expectedLB:      expectedLB6,
-			expectLBUpdate:  true,
-			expectedError:   nil,
+			desc:                  "reconcileLoadBalancer shall reconcile UDP services",
+			loadBalancerSKU:       "basic",
+			service:               service6,
+			existingLB:            lb6,
+			wantLb:                true,
+			expectedLB:            expectedLB6,
+			expectLBUpdate:        true,
+			expectPIPCacheDeleted: true,
+			expectedError:         nil,
 		},
 		{
-			desc:            "reconcileLoadBalancer shall reconcile probes for local traffic policy UDP services",
-			loadBalancerSKU: "basic",
-			service:         service7,
-			existingLB:      lb7,
-			wantLb:          true,
-			expectedLB:      expectedLB7,
-			expectLBUpdate:  true,
-			expectedError:   nil,
+			desc:                  "reconcileLoadBalancer shall reconcile probes for local traffic policy UDP services",
+			loadBalancerSKU:       "basic",
+			service:               service7,
+			existingLB:            lb7,
+			wantLb:                true,
+			expectedLB:            expectedLB7,
+			expectLBUpdate:        true,
+			expectPIPCacheDeleted: true,
+			expectedError:         nil,
 		},
 		{
 			desc:                      "reconcileLoadBalancer in other resource group",
@@ -4031,6 +4158,7 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 			wantLb:                    true,
 			expectedLB:                expectedLB8,
 			expectLBUpdate:            true,
+			expectPIPCacheDeleted:     true,
 			expectedError:             nil,
 		},
 		{
@@ -4051,6 +4179,88 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 			shouldRefreshLBAfterReconcileBackendPools: true,
 			expectedGetLBError:                        &azcore.ResponseError{ErrorCode: "error"},
 			expectedError:                             fmt.Errorf("reconcileLoadBalancer for service (default/service1): failed to get load balancer testCluster: %w", errors.New("error")),
+		},
+		{
+			desc:                  "reconcileLoadBalancer shall invalidate PIP cache when external LB creates new frontend",
+			loadBalancerSKU:       "standard",
+			service:               externalService,
+			existingLB:            externalLBEmptyFrontend,
+			wantLb:                true,
+			expectedLB:            expectedExternalLBNewFrontend,
+			expectLBUpdate:        true,
+			expectPIPCacheDeleted: true,
+		},
+		{
+			desc:                  "reconcileLoadBalancer shall invalidate PIP cache when removing service from external LB with other frontend",
+			loadBalancerSKU:       "standard",
+			service:               externalService,
+			existingLB:            externalLBOtherFrontend,
+			wantLb:                false,
+			expectedLB:            expectedExternalLBOtherFrontend,
+			expectLBUpdate:        true,
+			expectPIPCacheDeleted: true,
+		},
+		{
+			desc:                  "reconcileLoadBalancer shall not invalidate PIP cache when external LB has no frontend changes",
+			loadBalancerSKU:       "standard",
+			service:               externalService,
+			existingLB:            externalLBUnchanged,
+			wantLb:                true,
+			expectedLB:            externalLBUnchanged,
+			expectLBUpdate:        false,
+			expectPIPCacheDeleted: false,
+		},
+		{
+			desc:                  "reconcileLoadBalancer shall not invalidate PIP cache when external LB is orphaned and deleted",
+			loadBalancerSKU:       "standard",
+			service:               externalService,
+			existingLB:            externalLBOneFrontend,
+			wantLb:                false,
+			expectedLB:            expectedExternalLBOrphaned,
+			expectLBUpdate:        false,
+			expectLBDeleted:       true,
+			expectPIPCacheDeleted: false,
+		},
+		{
+			desc:                  "reconcileLoadBalancer shall not invalidate PIP cache when internal LB creates new frontend",
+			loadBalancerSKU:       "standard",
+			service:               internalService,
+			existingLB:            internalLBEmptyFrontend,
+			wantLb:                true,
+			expectedLB:            expectedInternalLBNewFrontend,
+			expectLBUpdate:        true,
+			expectPIPCacheDeleted: false,
+		},
+		{
+			desc:                  "reconcileLoadBalancer shall not invalidate PIP cache when removing service from internal LB with other frontends",
+			loadBalancerSKU:       "standard",
+			service:               internalService,
+			existingLB:            internalLBOtherFrontend,
+			wantLb:                false,
+			expectedLB:            expectedInternalLBOtherFrontends,
+			expectLBUpdate:        true,
+			expectPIPCacheDeleted: false,
+		},
+		{
+			desc:                  "reconcileLoadBalancer shall not invalidate PIP cache when internal LB has no frontend changes",
+			loadBalancerSKU:       "standard",
+			service:               internalService,
+			existingLB:            internalLBUnchanged,
+			wantLb:                true,
+			expectedLB:            internalLBUnchanged,
+			expectLBUpdate:        false,
+			expectPIPCacheDeleted: false,
+		},
+		{
+			desc:                  "reconcileLoadBalancer shall not invalidate PIP cache when internal LB is orphaned and deleted",
+			loadBalancerSKU:       "standard",
+			service:               internalService,
+			existingLB:            internalLBOneFrontend,
+			wantLb:                false,
+			expectedLB:            expectedInternalLBOrphaned,
+			expectLBUpdate:        false,
+			expectLBDeleted:       true,
+			expectPIPCacheDeleted: false,
 		},
 	}
 
@@ -4099,6 +4309,9 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 				expectLBUpdateCount++
 			}
 			mockLBsClient.EXPECT().CreateOrUpdate(gomock.Any(), az.getLoadBalancerResourceGroup(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(expectLBUpdateCount)
+			if test.expectLBDeleted {
+				mockLBsClient.EXPECT().Delete(gomock.Any(), az.getLoadBalancerResourceGroup(), *test.existingLB.Name).Return(nil).Times(1)
+			}
 
 			_, err = az.NetworkClientFactory.GetLoadBalancerClient().CreateOrUpdate(context.TODO(), az.getLoadBalancerResourceGroup(), "lb1", *test.existingLB)
 			assert.NoError(t, err)
@@ -4115,11 +4328,59 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 			mockPLSRepo := az.plsRepo.(*privatelinkservice.MockRepository)
 			mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
 
+			if consts.IsK8sServiceUsingInternalLoadBalancer(&service) {
+				mockSubnetRepo := az.subnetRepo.(*subnet.MockRepository)
+				mockSubnetRepo.EXPECT().Get(gomock.Any(), "rg", "vnet", "subnet").Return(&armnetwork.Subnet{
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/subnet"),
+					Name: ptr.To("subnet"),
+				}, nil).AnyTimes()
+			}
+
+			// Populate PIP cache before reconciliation to test cache invalidation.
+			pipResourceGroup := az.getPublicIPAddressResourceGroup(&service)
+			pips, _ := az.listPIP(context.TODO(), pipResourceGroup, 0)
+			store := az.pipCache.GetStore()
+			pipCacheEntryBefore, pipCacheExistsBefore, _ := store.GetByKey(pipResourceGroup)
+			assert.True(t, pipCacheExistsBefore, "Cache should exist before reconciliation")
+			entry := pipCacheEntryBefore.(*cache.AzureCacheEntry)
+			cachedPIPs := entry.Data.(*sync.Map)
+			cachedCount := 0
+			cachedPIPs.Range(func(_, _ any) bool {
+				cachedCount++
+				return true
+			})
+			assert.Equal(t, len(pips), cachedCount, "Cache should have same number of PIPs as listPIP")
+			for _, pip := range pips {
+				pipName := strings.ToLower(ptr.Deref(pip.Name, ""))
+				_, exists := cachedPIPs.Load(pipName)
+				assert.True(t, exists, "Cache should contain PIP %s", pipName)
+			}
+
 			lb, _, rerr := az.reconcileLoadBalancer(context.TODO(), "testCluster", &service, clusterResources.nodes, test.wantLb)
 			if test.expectedError != nil {
 				assert.EqualError(t, rerr, test.expectedError.Error())
 			} else {
 				assert.Equal(t, *test.expectedLB, *lb)
+			}
+
+			pipCacheEntryAfter, pipCacheExistsAfter, _ := store.GetByKey(pipResourceGroup)
+			if test.expectPIPCacheDeleted {
+				assert.False(t, pipCacheExistsAfter)
+			} else {
+				assert.True(t, pipCacheExistsAfter)
+				entry := pipCacheEntryAfter.(*cache.AzureCacheEntry)
+				cachedPIPs := entry.Data.(*sync.Map)
+				cachedCount := 0
+				cachedPIPs.Range(func(_, _ any) bool {
+					cachedCount++
+					return true
+				})
+				assert.Equal(t, len(pips), cachedCount, "Cache should still have same number of PIPs after reconciliation")
+				for _, pip := range pips {
+					pipName := strings.ToLower(ptr.Deref(pip.Name, ""))
+					_, exists := cachedPIPs.Load(pipName)
+					assert.True(t, exists, "Cache should still contain PIP %s after reconciliation", pipName)
+				}
 			}
 		})
 	}
