@@ -14,7 +14,7 @@ cloudControllerManager:
   # controllerStartInterval: "2m"
   # enableDynamicReloading: "true"
   # http2MaxStreamsPerConnection: "47"
-  imageRepository: "mcr.microsoft.com/oss/v2/kubernetes"
+  imageRepository: "mcr.microsoft.com/oss/kubernetes"
   imageName: "azure-cloud-controller-manager"
   #imageTag: "v1.34.3"
   imagePullPolicy: "IfNotPresent"
