@@ -247,7 +247,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		serviceDomainName = utils.GetServiceDomainName(serviceDomainNamePrefix)
+		serviceDomainName = utils.GetServiceDomainName(fmt.Sprintf("%s-new", serviceDomainNamePrefix))
 		By(fmt.Sprintf("Validating External domain name %q", serviceDomainName))
 		err = utils.ValidateServiceConnectivity(ns.Name, agnhostPod, serviceDomainName, int(ports[0].Port), v1.ProtocolTCP)
 		Expect(err).NotTo(HaveOccurred(), "Fail to get response from the domain name")
