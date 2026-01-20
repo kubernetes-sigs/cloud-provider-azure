@@ -581,7 +581,7 @@ func TestNewAcrProvider_InvalidConfig(t *testing.T) {
 }
 
 func TestNewAcrProvider_MCRImageMirroredToACR_UsesManagedIdentity(t *testing.T) {
-	// Test case: MCR image mirrored to ACR in NI cluster should use managed identity
+	// Test case: Mirrored image (image from mirror source registry) should use managed identity
 	// even when service account token or identity bindings are provided
 	configFile, err := os.CreateTemp(".", "config.json")
 	assert.NoError(t, err)
@@ -689,8 +689,7 @@ func TestNewAcrProvider_ACRImageWithoutRegistryMirror_UsesServiceAccountToken(t 
 }
 
 func TestNewAcrProvider_MCRImageMirroredToACR_SkipsIdentityBindings(t *testing.T) {
-	// Test case: MCR image mirrored to ACR in NI cluster should skip identity bindings
-	// and use managed identity instead
+	// Test case: Mirrored image should skip identity bindings and use managed identity instead
 	configFile, err := os.CreateTemp(".", "config.json")
 	assert.NoError(t, err)
 	defer os.Remove(configFile.Name())
@@ -727,7 +726,7 @@ func TestNewAcrProvider_MCRImageMirroredToACR_SkipsIdentityBindings(t *testing.T
 }
 
 func TestNewAcrProvider_DirectACRImageWithRegistryMirror_UsesServiceAccountToken(t *testing.T) {
-	// Test case: Direct ACR image (not MCR mirrored) in NI cluster should still use
+	// Test case: Non-mirrored image (direct ACR image not matching mirror source) should use
 	// service account token, not managed identity
 	configFile, err := os.CreateTemp(".", "config.json")
 	assert.NoError(t, err)
@@ -763,8 +762,8 @@ func TestNewAcrProvider_DirectACRImageWithRegistryMirror_UsesServiceAccountToken
 }
 
 func TestNewAcrProvider_DirectACRImageWithRegistryMirror_UsesIdentityBindings(t *testing.T) {
-	// Test case: Direct ACR image (not MCR mirrored) in NI cluster should still attempt
-	// to use identity bindings if configured
+	// Test case: Non-mirrored image (direct ACR image not matching mirror source) should
+	// use identity bindings if configured
 	configFile, err := os.CreateTemp(".", "config.json")
 	assert.NoError(t, err)
 	defer os.Remove(configFile.Name())
@@ -829,6 +828,47 @@ func TestNewAcrProvider_NonACRImageWithRegistryMirror_UsesIdentityBindings(t *te
 	// This should attempt to use identity bindings since it's not an ACR image
 	// The call will fail because identity bindings are not properly configured,
 	// but it proves the code path is attempting to use identity bindings
+	provider, err := NewAcrProvider(req, registryMirror, configFile.Name(), ibConfig)
+	assert.Error(t, err)
+	assert.Nil(t, provider)
+	// Error should be related to identity bindings, not managed identity
+	assert.Contains(t, err.Error(), "identity bindings")
+}
+
+func TestNewAcrProvider_MirrorTargetImageDirectly_UsesIdentityBindings(t *testing.T) {
+	// Test case: Image uses mirror target ACR directly (not via MCR source)
+	// Registry mirror is set (mcr.microsoft.com:test.azurecr.io), but image
+	// directly references the mirror target (test.azurecr.io/azure-cli:latest)
+	// ibConfig.SNIName is set - should use identity bindings, not managed identity
+	configFile, err := os.CreateTemp(".", "config.json")
+	assert.NoError(t, err)
+	defer os.Remove(configFile.Name())
+
+	configStr := `{
+		"tenantID": "test-tenant-id"
+	}`
+	_, err = configFile.WriteString(configStr)
+	assert.NoError(t, err)
+	assert.NoError(t, configFile.Close())
+
+	// Image uses mirror target ACR directly (not pulling via MCR source)
+	req := &v1.CredentialProviderRequest{
+		Image: "test.azurecr.io/azure-cli:latest", // Direct ACR image, same as mirror target
+	}
+
+	// NI cluster with registry mirror: MCR -> ACR
+	// The image is pulling from test.azurecr.io directly, not from mcr.microsoft.com
+	registryMirror := "mcr.microsoft.com:test.azurecr.io"
+
+	// Identity bindings config is set
+	ibConfig := IdentityBindingsConfig{
+		SNIName: "test-sni-name",
+	}
+
+	// Since the image is NOT from mcr.microsoft.com (the mirror source), but directly
+	// from test.azurecr.io, it should use identity bindings, not managed identity.
+	// The call will fail because identity bindings are not properly configured,
+	// but it proves the code path is attempting to use identity bindings.
 	provider, err := NewAcrProvider(req, registryMirror, configFile.Name(), ibConfig)
 	assert.Error(t, err)
 	assert.Nil(t, provider)
