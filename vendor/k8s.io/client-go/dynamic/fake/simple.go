@@ -156,10 +156,6 @@ func (c *FakeDynamicClient) Resource(resource schema.GroupVersionResource) dynam
 	return &dynamicResourceClient{client: c, resource: resource, listKind: c.gvrToListKind[resource]}
 }
 
-func (c *FakeDynamicClient) IsWatchListSemanticsUnSupported() bool {
-	return true
-}
-
 func (c *dynamicResourceClient) Namespace(ns string) dynamic.ResourceInterface {
 	ret := *c
 	ret.namespace = ns
@@ -172,7 +168,7 @@ func (c *dynamicResourceClient) Create(ctx context.Context, obj *unstructured.Un
 	switch {
 	case len(c.namespace) == 0 && len(subresources) == 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewRootCreateActionWithOptions(c.resource, obj, opts), obj)
+			Invokes(testing.NewRootCreateAction(c.resource, obj), obj)
 
 	case len(c.namespace) == 0 && len(subresources) > 0:
 		var accessor metav1.Object // avoid shadowing err
@@ -182,11 +178,11 @@ func (c *dynamicResourceClient) Create(ctx context.Context, obj *unstructured.Un
 		}
 		name := accessor.GetName()
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewRootCreateSubresourceActionWithOptions(c.resource, name, strings.Join(subresources, "/"), obj, opts), obj)
+			Invokes(testing.NewRootCreateSubresourceAction(c.resource, name, strings.Join(subresources, "/"), obj), obj)
 
 	case len(c.namespace) > 0 && len(subresources) == 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewCreateActionWithOptions(c.resource, c.namespace, obj, opts), obj)
+			Invokes(testing.NewCreateAction(c.resource, c.namespace, obj), obj)
 
 	case len(c.namespace) > 0 && len(subresources) > 0:
 		var accessor metav1.Object // avoid shadowing err
@@ -196,7 +192,7 @@ func (c *dynamicResourceClient) Create(ctx context.Context, obj *unstructured.Un
 		}
 		name := accessor.GetName()
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewCreateSubresourceActionWithOptions(c.resource, name, strings.Join(subresources, "/"), c.namespace, obj, opts), obj)
+			Invokes(testing.NewCreateSubresourceAction(c.resource, name, strings.Join(subresources, "/"), c.namespace, obj), obj)
 
 	}
 
@@ -220,19 +216,19 @@ func (c *dynamicResourceClient) Update(ctx context.Context, obj *unstructured.Un
 	switch {
 	case len(c.namespace) == 0 && len(subresources) == 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewRootUpdateActionWithOptions(c.resource, obj, opts), obj)
+			Invokes(testing.NewRootUpdateAction(c.resource, obj), obj)
 
 	case len(c.namespace) == 0 && len(subresources) > 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewRootUpdateSubresourceActionWithOptions(c.resource, strings.Join(subresources, "/"), obj, opts), obj)
+			Invokes(testing.NewRootUpdateSubresourceAction(c.resource, strings.Join(subresources, "/"), obj), obj)
 
 	case len(c.namespace) > 0 && len(subresources) == 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewUpdateActionWithOptions(c.resource, c.namespace, obj, opts), obj)
+			Invokes(testing.NewUpdateAction(c.resource, c.namespace, obj), obj)
 
 	case len(c.namespace) > 0 && len(subresources) > 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewUpdateSubresourceActionWithOptions(c.resource, strings.Join(subresources, "/"), c.namespace, obj, opts), obj)
+			Invokes(testing.NewUpdateSubresourceAction(c.resource, strings.Join(subresources, "/"), c.namespace, obj), obj)
 
 	}
 
@@ -256,11 +252,11 @@ func (c *dynamicResourceClient) UpdateStatus(ctx context.Context, obj *unstructu
 	switch {
 	case len(c.namespace) == 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewRootUpdateSubresourceActionWithOptions(c.resource, "status", obj, opts), obj)
+			Invokes(testing.NewRootUpdateSubresourceAction(c.resource, "status", obj), obj)
 
 	case len(c.namespace) > 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewUpdateSubresourceActionWithOptions(c.resource, "status", c.namespace, obj, opts), obj)
+			Invokes(testing.NewUpdateSubresourceAction(c.resource, "status", c.namespace, obj), obj)
 
 	}
 
@@ -305,11 +301,11 @@ func (c *dynamicResourceClient) DeleteCollection(ctx context.Context, opts metav
 	var err error
 	switch {
 	case len(c.namespace) == 0:
-		action := testing.NewRootDeleteCollectionActionWithOptions(c.resource, opts, listOptions)
+		action := testing.NewRootDeleteCollectionAction(c.resource, listOptions)
 		_, err = c.client.Fake.Invokes(action, &metav1.Status{Status: "dynamic deletecollection fail"})
 
 	case len(c.namespace) > 0:
-		action := testing.NewDeleteCollectionActionWithOptions(c.resource, c.namespace, opts, listOptions)
+		action := testing.NewDeleteCollectionAction(c.resource, c.namespace, listOptions)
 		_, err = c.client.Fake.Invokes(action, &metav1.Status{Status: "dynamic deletecollection fail"})
 
 	}
@@ -323,19 +319,19 @@ func (c *dynamicResourceClient) Get(ctx context.Context, name string, opts metav
 	switch {
 	case len(c.namespace) == 0 && len(subresources) == 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewRootGetActionWithOptions(c.resource, name, opts), &metav1.Status{Status: "dynamic get fail"})
+			Invokes(testing.NewRootGetAction(c.resource, name), &metav1.Status{Status: "dynamic get fail"})
 
 	case len(c.namespace) == 0 && len(subresources) > 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewRootGetSubresourceActionWithOptions(c.resource, strings.Join(subresources, "/"), name, opts), &metav1.Status{Status: "dynamic get fail"})
+			Invokes(testing.NewRootGetSubresourceAction(c.resource, strings.Join(subresources, "/"), name), &metav1.Status{Status: "dynamic get fail"})
 
 	case len(c.namespace) > 0 && len(subresources) == 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewGetActionWithOptions(c.resource, c.namespace, name, opts), &metav1.Status{Status: "dynamic get fail"})
+			Invokes(testing.NewGetAction(c.resource, c.namespace, name), &metav1.Status{Status: "dynamic get fail"})
 
 	case len(c.namespace) > 0 && len(subresources) > 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewGetSubresourceActionWithOptions(c.resource, c.namespace, strings.Join(subresources, "/"), name, opts), &metav1.Status{Status: "dynamic get fail"})
+			Invokes(testing.NewGetSubresourceAction(c.resource, c.namespace, strings.Join(subresources, "/"), name), &metav1.Status{Status: "dynamic get fail"})
 	}
 
 	if err != nil {
@@ -364,11 +360,11 @@ func (c *dynamicResourceClient) List(ctx context.Context, opts metav1.ListOption
 	switch {
 	case len(c.namespace) == 0:
 		obj, err = c.client.Fake.
-			Invokes(testing.NewRootListActionWithOptions(c.resource, listForFakeClientGVK, opts), &metav1.Status{Status: "dynamic list fail"})
+			Invokes(testing.NewRootListAction(c.resource, listForFakeClientGVK, opts), &metav1.Status{Status: "dynamic list fail"})
 
 	case len(c.namespace) > 0:
 		obj, err = c.client.Fake.
-			Invokes(testing.NewListActionWithOptions(c.resource, listForFakeClientGVK, c.namespace, opts), &metav1.Status{Status: "dynamic list fail"})
+			Invokes(testing.NewListAction(c.resource, listForFakeClientGVK, c.namespace, opts), &metav1.Status{Status: "dynamic list fail"})
 
 	}
 
@@ -413,11 +409,11 @@ func (c *dynamicResourceClient) Watch(ctx context.Context, opts metav1.ListOptio
 	switch {
 	case len(c.namespace) == 0:
 		return c.client.Fake.
-			InvokesWatch(testing.NewRootWatchActionWithOptions(c.resource, opts))
+			InvokesWatch(testing.NewRootWatchAction(c.resource, opts))
 
 	case len(c.namespace) > 0:
 		return c.client.Fake.
-			InvokesWatch(testing.NewWatchActionWithOptions(c.resource, c.namespace, opts))
+			InvokesWatch(testing.NewWatchAction(c.resource, c.namespace, opts))
 	}
 
 	panic("math broke")
@@ -430,19 +426,19 @@ func (c *dynamicResourceClient) Patch(ctx context.Context, name string, pt types
 	switch {
 	case len(c.namespace) == 0 && len(subresources) == 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewRootPatchActionWithOptions(c.resource, name, pt, data, opts), &metav1.Status{Status: "dynamic patch fail"})
+			Invokes(testing.NewRootPatchAction(c.resource, name, pt, data), &metav1.Status{Status: "dynamic patch fail"})
 
 	case len(c.namespace) == 0 && len(subresources) > 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewRootPatchSubresourceActionWithOptions(c.resource, name, pt, data, opts, subresources...), &metav1.Status{Status: "dynamic patch fail"})
+			Invokes(testing.NewRootPatchSubresourceAction(c.resource, name, pt, data, subresources...), &metav1.Status{Status: "dynamic patch fail"})
 
 	case len(c.namespace) > 0 && len(subresources) == 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewPatchActionWithOptions(c.resource, c.namespace, name, pt, data, opts), &metav1.Status{Status: "dynamic patch fail"})
+			Invokes(testing.NewPatchAction(c.resource, c.namespace, name, pt, data), &metav1.Status{Status: "dynamic patch fail"})
 
 	case len(c.namespace) > 0 && len(subresources) > 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewPatchSubresourceActionWithOptions(c.resource, c.namespace, name, pt, data, opts, subresources...), &metav1.Status{Status: "dynamic patch fail"})
+			Invokes(testing.NewPatchSubresourceAction(c.resource, c.namespace, name, pt, data, subresources...), &metav1.Status{Status: "dynamic patch fail"})
 
 	}
 
@@ -466,28 +462,23 @@ func (c *dynamicResourceClient) Apply(ctx context.Context, name string, obj *uns
 	if err != nil {
 		return nil, err
 	}
-	patchOptions := metav1.PatchOptions{
-		Force:        &options.Force,
-		DryRun:       options.DryRun,
-		FieldManager: options.FieldManager,
-	}
 	var uncastRet runtime.Object
 	switch {
 	case len(c.namespace) == 0 && len(subresources) == 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewRootPatchActionWithOptions(c.resource, name, types.ApplyPatchType, outBytes, patchOptions), &metav1.Status{Status: "dynamic patch fail"})
+			Invokes(testing.NewRootPatchAction(c.resource, name, types.ApplyPatchType, outBytes), &metav1.Status{Status: "dynamic patch fail"})
 
 	case len(c.namespace) == 0 && len(subresources) > 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewRootPatchSubresourceActionWithOptions(c.resource, name, types.ApplyPatchType, outBytes, patchOptions, subresources...), &metav1.Status{Status: "dynamic patch fail"})
+			Invokes(testing.NewRootPatchSubresourceAction(c.resource, name, types.ApplyPatchType, outBytes, subresources...), &metav1.Status{Status: "dynamic patch fail"})
 
 	case len(c.namespace) > 0 && len(subresources) == 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewPatchActionWithOptions(c.resource, c.namespace, name, types.ApplyPatchType, outBytes, patchOptions), &metav1.Status{Status: "dynamic patch fail"})
+			Invokes(testing.NewPatchAction(c.resource, c.namespace, name, types.ApplyPatchType, outBytes), &metav1.Status{Status: "dynamic patch fail"})
 
 	case len(c.namespace) > 0 && len(subresources) > 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewPatchSubresourceActionWithOptions(c.resource, c.namespace, name, types.ApplyPatchType, outBytes, patchOptions, subresources...), &metav1.Status{Status: "dynamic patch fail"})
+			Invokes(testing.NewPatchSubresourceAction(c.resource, c.namespace, name, types.ApplyPatchType, outBytes, subresources...), &metav1.Status{Status: "dynamic patch fail"})
 
 	}
 

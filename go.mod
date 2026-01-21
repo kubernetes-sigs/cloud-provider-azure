@@ -1,6 +1,6 @@
 module sigs.k8s.io/cloud-provider-azure
 
-go 1.25.0
+go 1.24.6
 
 godebug default=go1.24.6
 
@@ -30,10 +30,10 @@ require (
 	golang.org/x/sync v0.19.0
 	golang.org/x/sys v0.40.0
 	golang.org/x/text v0.33.0
-	k8s.io/api v0.35.0
-	k8s.io/apimachinery v0.35.0
+	k8s.io/api v0.34.3
+	k8s.io/apimachinery v0.34.3
 	k8s.io/apiserver v0.34.3
-	k8s.io/client-go v0.35.0
+	k8s.io/client-go v0.34.3
 	k8s.io/cloud-provider v0.34.3
 	k8s.io/component-base v0.34.3
 	k8s.io/component-helpers v0.34.3
@@ -42,8 +42,8 @@ require (
 	k8s.io/kubelet v0.34.3
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.14.0
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.10.1
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.12.0
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.10.0
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.11.0
 	sigs.k8s.io/yaml v1.6.0
 )
 
