@@ -5,14 +5,15 @@ package queued
 import (
 	"context"
 	"fmt"
-	"github.com/Azure/azure-kusto-go/azkustoingest/ingestoptions"
-	"github.com/Azure/azure-kusto-go/azkustoingest/internal/utils"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/Azure/azure-kusto-go/azkustoingest/ingestoptions"
+	"github.com/Azure/azure-kusto-go/azkustoingest/internal/utils"
 
 	"github.com/Azure/azure-kusto-go/azkustodata/errors"
 	"github.com/Azure/azure-kusto-go/azkustoingest/internal/gzip"
@@ -41,9 +42,9 @@ const (
 // Queued provides methods for taking data from various sources and ingesting it into Kusto using queued ingestion.
 type Queued interface {
 	io.Closer
-	Local(ctx context.Context, from string, props properties.All) error
-	Reader(ctx context.Context, reader io.Reader, props properties.All) (string, error)
-	Blob(ctx context.Context, from string, fileSize int64, props properties.All) error
+	UploadLocalToBlob(ctx context.Context, from string, props properties.All) (blobURL string, size int64, err error)
+	UploadReaderToBlob(ctx context.Context, reader io.Reader, props properties.All) (blobURL string, size int64, err error)
+	IngestBlob(ctx context.Context, from string, fileSize int64, props properties.All) error
 }
 
 // uploadStream provides a type that mimics `azblob.UploadStream` to allow fakes for testing.
@@ -58,7 +59,7 @@ type Ingestion struct {
 	http  *http.Client
 	db    string
 	table string
-	mgr   *resources.Manager
+	mgr   resources.ResourcesManager
 
 	uploadStream uploadStream
 	uploadBlob   uploadBlob
@@ -107,36 +108,36 @@ func New(db, table string, mgr *resources.Manager, http *http.Client, applicatio
 	return i, nil
 }
 
-// Local ingests a local file into Kusto.
-func (i *Ingestion) Local(ctx context.Context, from string, props properties.All) error {
+// UploadLocalToBlob uploads a local file to blob storage and returns the blob URL and size.
+func (i *Ingestion) UploadLocalToBlob(ctx context.Context, from string, props properties.All) (string, int64, error) {
 	containers, err := i.mgr.GetRankedStorageContainers()
 	if err != nil {
-		return err
+		return "", 0, err
 	}
 
 	if len(containers) == 0 {
-		return errors.ES(
+		return "", 0, errors.ES(
 			errors.OpFileIngest,
 			errors.KBlobstore,
-			"no Blob Storage container resources are defined, there is no container to upload to",
+			"no IngestBlob Storage container resources are defined, there is no container to upload to",
 		).SetNoRetry()
 	}
 
 	queues, err := i.mgr.GetRankedStorageQueues()
 	if err != nil {
-		return err
+		return "", 0, err
 	}
 
 	// We want to check the queue size here so we don't upload a file and then find we don't have a Kusto queue to stick
 	// it in. If we don't have a container, that is handled by containerQueue().
 	if len(queues) == 0 {
-		return errors.ES(errors.OpFileIngest, errors.KBlobstore, "no Kusto queue resources are defined, there is no queue to upload to").SetNoRetry()
+		return "", 0, errors.ES(errors.OpFileIngest, errors.KBlobstore, "no Kusto queue resources are defined, there is no queue to upload to").SetNoRetry()
 	}
 
 	// Go over all the containers and try to upload the file to each one. If we succeed, we are done.
 	for attempts, containerUri := range containers {
 		if attempts >= StorageMaxRetryPolicy {
-			return errors.ES(errors.OpFileIngest, errors.KBlobstore, "max retry policy reached").SetNoRetry()
+			return "", 0, errors.ES(errors.OpFileIngest, errors.KBlobstore, "max retry policy reached").SetNoRetry()
 		}
 
 		client, containerName, err := i.upstreamContainer(containerUri)
@@ -148,7 +149,7 @@ func (i *Ingestion) Local(ctx context.Context, from string, props properties.All
 		blobURL, size, err := i.localToBlob(ctx, from, client, containerName, &props)
 		if err == nil {
 			i.mgr.ReportStorageResourceResult(containerUri.Account(), true)
-			return i.Blob(ctx, blobURL, size, props)
+			return blobURL, size, nil
 		}
 
 		// check if the error is retryable
@@ -156,54 +157,55 @@ func (i *Ingestion) Local(ctx context.Context, from string, props properties.All
 			i.mgr.ReportStorageResourceResult(containerUri.Account(), false)
 			continue
 		} else {
-			return err
+			return "", 0, err
 		}
 	}
 
-	return errors.ES(errors.OpFileIngest, errors.KBlobstore, "could not upload file to any container")
+	return "", 0, errors.ES(errors.OpFileIngest, errors.KBlobstore, "could not upload file to any container")
 }
 
-// Reader uploads a file via an io.Reader.
-// If the function succeeds, it returns the path of the created blob.
-func (i *Ingestion) Reader(ctx context.Context, reader io.Reader, props properties.All) (string, error) {
+// UploadReaderToBlob uploads a file via an io.Reader and returns the blob URL and size.
+func (i *Ingestion) UploadReaderToBlob(ctx context.Context, reader io.Reader, props properties.All) (string, int64, error) {
 	containers, err := i.mgr.GetRankedStorageContainers()
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
 	if len(containers) == 0 {
-		return "", errors.ES(
+		return "", 0, errors.ES(
 			errors.OpFileIngest,
 			errors.KBlobstore,
-			"no Blob Storage container resources are defined, there is no container to upload to",
+			"no IngestBlob Storage container resources are defined, there is no container to upload to",
 		).SetNoRetry()
 	}
 
 	queues, err := i.mgr.GetRankedStorageQueues()
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
 	// We want to check the queue size here so so we don't upload a file and then find we don't have a Kusto queue to stick
 	// it in. If we don't have a container, that is handled by containerQueue().
 	if len(queues) == 0 {
-		return "", errors.ES(errors.OpFileIngest, errors.KBlobstore, "no Kusto queue resources are defined, there is no queue to upload to").SetNoRetry()
+		return "", 0, errors.ES(errors.OpFileIngest, errors.KBlobstore, "no Kusto queue resources are defined, there is no queue to upload to").SetNoRetry()
 	}
 
 	compression := utils.CompressionDiscovery(props.Source.OriginalSource)
 	shouldCompress := ShouldCompress(&props, compression)
 	blobName := GenBlobName(i.db, i.table, nower(), filepath.Base(uuid.New().String()), filepath.Base(props.Source.OriginalSource), compression, shouldCompress, props.Ingestion.Additional.Format.String())
+	seeker, isSeekable := reader.(io.Seeker)
 
 	size := int64(0)
 
-	if shouldCompress {
-		reader = gzip.Compress(reader)
-	}
-
 	// Go over all the containers and try to upload the file to each one. If we succeed, we are done.
 	for attempts, containerUri := range containers {
+		currentReader := reader
+		if shouldCompress {
+			currentReader = gzip.Compress(currentReader)
+		}
+
 		if attempts >= StorageMaxRetryPolicy {
-			return "", errors.ES(errors.OpFileIngest, errors.KBlobstore, "max retry policy reached").SetNoRetry()
+			return "", 0, errors.ES(errors.OpFileIngest, errors.KBlobstore, "max retry policy reached").SetNoRetry()
 		}
 
 		client, containerName, err := i.upstreamContainer(containerUri)
@@ -214,7 +216,7 @@ func (i *Ingestion) Reader(ctx context.Context, reader io.Reader, props properti
 
 		_, err = i.uploadStream(
 			ctx,
-			reader,
+			currentReader,
 			client,
 			containerName,
 			blobName,
@@ -223,22 +225,28 @@ func (i *Ingestion) Reader(ctx context.Context, reader io.Reader, props properti
 
 		if err != nil {
 			i.mgr.ReportStorageResourceResult(containerUri.Account(), false)
-			continue
+			if isSeekable {
+				_, err = seeker.Seek(0, io.SeekStart)
+				if err != nil {
+					return "", 0, errors.ES(errors.OpFileIngest, errors.KLocalFileSystem, "could not seek the reader to the start: %s", err)
+				}
+				continue
+			}
+			return "", 0, errors.ES(errors.OpFileIngest, errors.KLocalFileSystem, "reader does not support seeking, cannot retry: %v", err)
 		}
 
 		i.mgr.ReportStorageResourceResult(containerUri.Account(), true)
-		if gz, ok := reader.(*gzip.Streamer); ok {
+		if gz, ok := currentReader.(*gzip.Streamer); ok {
 			size = gz.InputSize()
 		}
-		err = i.Blob(ctx, fullUrl(client, containerName, blobName), size, props)
-		return blobName, err
+		return fullUrl(client, containerName, blobName), size, nil
 	}
 
-	return blobName, errors.ES(errors.OpFileIngest, errors.KBlobstore, "problem uploading to Blob Storage")
+	return "", 0, errors.ES(errors.OpFileIngest, errors.KBlobstore, "problem uploading to IngestBlob Storage")
 }
 
-// Blob ingests a file from Azure Blob Storage into Kusto.
-func (i *Ingestion) Blob(ctx context.Context, from string, fileSize int64, props properties.All) error {
+// IngestBlob ingests a file from Azure Blob Storage into Kusto.
+func (i *Ingestion) IngestBlob(ctx context.Context, from string, fileSize int64, props properties.All) error {
 	// To learn more about ingestion properties, go to:
 	// https://docs.microsoft.com/en-us/azure/kusto/management/data-ingestion/#ingestion-properties
 	// To learn more about ingestion methods go to:
@@ -382,7 +390,7 @@ func (i *Ingestion) localToBlob(ctx context.Context, from string, client *azblob
 		)
 
 		if err != nil {
-			return "", 0, errors.ES(errors.OpFileIngest, errors.KBlobstore, "problem uploading to Blob Storage: %s", err)
+			return "", 0, errors.ES(errors.OpFileIngest, errors.KBlobstore, "problem uploading to IngestBlob Storage: %s", err)
 		}
 		return fullUrl(client, container, blobName), gstream.InputSize(), nil
 	}
@@ -402,7 +410,7 @@ func (i *Ingestion) localToBlob(ctx context.Context, from string, client *azblob
 	)
 
 	if err != nil {
-		return "", 0, errors.ES(errors.OpFileIngest, errors.KBlobstore, "problem uploading to Blob Storage: %s", err)
+		return "", 0, errors.ES(errors.OpFileIngest, errors.KBlobstore, "problem uploading to IngestBlob Storage: %s", err)
 	}
 
 	return fullUrl(client, container, blobName), stat.Size(), nil
