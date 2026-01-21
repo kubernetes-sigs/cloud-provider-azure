@@ -100,6 +100,8 @@ To minimize Azure Network API calls while keeping cutover latency low, the `Admi
 
 Backend pool updates are whole-resource updates (read-modify-write). To avoid lost updates when multiple controllers update backend pools at the same time, admin state updates are serialized with the existing `serviceReconcileLock`. Any other code paths that update backend pools (including the local-service backend pool updater in multiple-SLB mode) must also hold this lock around backend pool `Get`/`CreateOrUpdate` operations.
 
+To make lock contention visible (and to catch regressions where a path forgets to take the lock), record a dedicated metric for time spent waiting to acquire `serviceReconcileLock` (see "Observability & Telemetry").
+
 ### Admin State Lifecycle
 
 | Transition | Trigger | Action |
@@ -161,6 +163,12 @@ Duplicate `PreemptScheduled` events are ignored once the spot-eviction taint exi
   - Warning `LoadBalancerAdminStateUpdateFailed` when any Azure update fails; include the error and rely on the controller's rate-limiting work queue for exponential backoff and eventual convergence.
 - Avoid per-Service events: a single node transition can affect many Services and would be too noisy; the node event is the canonical operator signal.
 - Admin-state Azure SDK calls use the existing metrics helper (`pkg/metrics/azure_metrics.go`) with a dedicated prefix (for example `loadbalancer_adminstate`). Each operation wraps `MetricContext.ObserveOperationWithResult`, so latency, error, throttling, and rate-limit counters flow into the same Prometheus series already consumed by operations teams.
+- **Lock contention metric:** Record time spent waiting to acquire `serviceReconcileLock`:
+  - **Name:** `cloudprovider_azure_lock_wait_duration_seconds`
+  - **Type:** Histogram
+  - **Labels:** `lock` (e.g., `service_reconcile`), `caller` (e.g., `EnsureLoadBalancer`, `UpdateLoadBalancer`, `EnsureLoadBalancerDeleted`, `AdminStateController`)
+  - **Buckets:** `ExponentialBuckets(0.001, 2, 14)` covering 1ms to ~8s (matches etcd/Kubernetes patterns for lock contention)
+  - **Pattern:** Record `time.Since(start)` after `Lock()` returns, where `start` is captured immediately before the blocking call
 - Include trace spans around Azure SDK calls via `trace.BeginReconcile` so admin state updates appear in standard diagnostics.
 
 ## Testing Strategy
