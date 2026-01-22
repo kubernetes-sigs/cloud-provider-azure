@@ -4221,6 +4221,9 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 			expectLBDeleted:       true,
 			expectPIPCacheDeleted: false,
 		},
+		// The following internal LB test cases verify that cache invalidation does NOT occur for internal LBs.
+		// These serve as negative test cases to ensure the cache invalidation for external LBs
+		// doesn't inadvertently affect internal LB behavior.
 		{
 			desc:                  "reconcileLoadBalancer shall not invalidate PIP cache when internal LB creates new frontend",
 			loadBalancerSKU:       "standard",
@@ -4338,7 +4341,7 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 
 			// Populate PIP cache before reconciliation to test cache invalidation.
 			pipResourceGroup := az.getPublicIPAddressResourceGroup(&service)
-			pips, _ := az.listPIP(context.TODO(), pipResourceGroup, 0)
+			pips, _ := az.listPIP(context.TODO(), pipResourceGroup, cache.CacheReadTypeDefault)
 			store := az.pipCache.GetStore()
 			pipCacheEntryBefore, pipCacheExistsBefore, _ := store.GetByKey(pipResourceGroup)
 			assert.True(t, pipCacheExistsBefore, "Cache should exist before reconciliation")
