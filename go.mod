@@ -1,11 +1,11 @@
 module sigs.k8s.io/cloud-provider-azure
 
-go 1.24.6
+go 1.25.0
 
 godebug default=go1.24.6
 
 require (
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.20.0
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.21.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.1
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 v6.4.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6 v6.2.0
@@ -28,22 +28,22 @@ require (
 	go.opentelemetry.io/otel/trace v1.39.0
 	go.uber.org/mock v0.6.0
 	golang.org/x/sync v0.19.0
-	golang.org/x/sys v0.39.0
-	golang.org/x/text v0.32.0
-	k8s.io/api v0.34.3
-	k8s.io/apimachinery v0.34.3
+	golang.org/x/sys v0.40.0
+	golang.org/x/text v0.33.0
+	k8s.io/api v0.35.0
+	k8s.io/apimachinery v0.35.0
 	k8s.io/apiserver v0.34.3
-	k8s.io/client-go v0.34.3
+	k8s.io/client-go v0.35.0
 	k8s.io/cloud-provider v0.34.3
 	k8s.io/component-base v0.34.3
 	k8s.io/component-helpers v0.34.3
 	k8s.io/controller-manager v0.34.3
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubelet v0.34.3
-	k8s.io/utils v0.0.0-20250820121507-0af2bda4dd1d
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.13.1
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.10.0
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.11.0
+	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.14.1
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.11.0
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.12.1
 	sigs.k8s.io/yaml v1.6.0
 )
 
@@ -116,11 +116,11 @@ require (
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.46.0 // indirect
+	golang.org/x/crypto v0.47.0 // indirect
 	golang.org/x/exp v0.0.0-20250819193227-8b4c13bb791b // indirect
-	golang.org/x/net v0.48.0 // indirect
+	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/oauth2 v0.32.0 // indirect
-	golang.org/x/term v0.38.0 // indirect
+	golang.org/x/term v0.39.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250826171959-ef028d996bc1 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250826171959-ef028d996bc1 // indirect
@@ -131,7 +131,7 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/kms v0.34.3 // indirect
-	k8s.io/kube-openapi v0.0.0-20250814151709-d7b6acb124c3 // indirect
+	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.33.0 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
