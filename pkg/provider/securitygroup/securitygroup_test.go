@@ -17,10 +17,10 @@ limitations under the License.
 package securitygroup_test
 
 import (
-"fmt"
-"net/netip"
-"sort"
-"testing"
+	"fmt"
+	"net/netip"
+	"sort"
+	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
@@ -2047,12 +2047,12 @@ func TestSecurityGroupHelper_AddRuleForBlockedIPRanges(t *testing.T) {
 			existingRules[i] = &armnetwork.SecurityRule{
 				Name: ptr.To(fmt.Sprintf("k8s-azure-lb-blocking-rule-%d", i)),
 				Properties: &armnetwork.SecurityRulePropertiesFormat{
-					Priority:            ptr.To(int32(400 + i)), // 400-499
-					Protocol:            to.Ptr(armnetwork.SecurityRuleProtocolTCP),
-					Access:              to.Ptr(armnetwork.SecurityRuleAccessDeny),
-					Direction:           to.Ptr(armnetwork.SecurityRuleDirectionInbound),
-					SourceAddressPrefix: ptr.To("*"),
-					SourcePortRange:     ptr.To("*"),
+					Priority:                 ptr.To(int32(400 + i)), // 400-499
+					Protocol:                 to.Ptr(armnetwork.SecurityRuleProtocolTCP),
+					Access:                   to.Ptr(armnetwork.SecurityRuleAccessDeny),
+					Direction:                to.Ptr(armnetwork.SecurityRuleDirectionInbound),
+					SourceAddressPrefix:      ptr.To("*"),
+					SourcePortRange:          ptr.To("*"),
 					DestinationAddressPrefix: ptr.To("10.0.0.1"),
 					DestinationPortRange:     ptr.To("443"),
 				},
