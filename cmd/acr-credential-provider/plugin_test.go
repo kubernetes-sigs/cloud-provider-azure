@@ -26,8 +26,6 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/kubelet/pkg/apis/credentialprovider/v1"
-
-	"sigs.k8s.io/cloud-provider-azure/pkg/credentialprovider"
 )
 
 type fakePlugin struct {
@@ -96,7 +94,7 @@ func Test_runPlugin(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Unexpected error when writing to temp file: %v", err)
 			}
-			p := NewCredentialProvider(configFile.Name(), "mcr.microsoft.com:fakeacrname.azurecr.io", credentialprovider.IdentityBindingsConfig{})
+			p := NewCredentialProvider(configFile.Name(), "mcr.microsoft.com:fakeacrname.azurecr.io")
 			p.plugin = &fakePlugin{}
 			out := &bytes.Buffer{}
 
