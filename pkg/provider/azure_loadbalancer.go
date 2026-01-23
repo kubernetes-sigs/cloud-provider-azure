@@ -2036,7 +2036,7 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 				pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
 				err = az.pipCache.Delete(pipResourceGroup)
 				if err != nil {
-					logger.Error(err, "Failed to invalidate PIP cache", "lbName", lbName, "pipResourceGroup", pipResourceGroup)
+					logger.V(5).Info("Failed to invalidate PIP cache", "lbName", lbName, "pipResourceGroup", pipResourceGroup, "err", err)
 				} else {
 					logger.V(5).Info("Invalidated PIP cache due to frontend IP config changes in lb", "lbName", lbName, "pipResourceGroup", pipResourceGroup)
 				}
