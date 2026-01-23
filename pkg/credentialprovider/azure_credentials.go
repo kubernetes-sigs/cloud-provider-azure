@@ -84,14 +84,26 @@ func NewAcrProvider(req *v1.CredentialProviderRequest, registryMirrorStr string,
 		return nil, err
 	}
 
+	provider := &acrProvider{
+		config:         config,
+		environment:    env,
+		cloudConfig:    clientOption.Cloud,
+		registryMirror: parseRegistryMirror(registryMirrorStr),
+	}
+
+	_, sourceRegistry := provider.parseACRLoginServerFromImage(req.Image)
+	// Assumption here is mirrored image is only used on NI cluster and for mirrored image,
+	// managed identity authentication is always used.
+	mirrored := sourceRegistry != ""
+
 	var credential azcore.TokenCredential
-	if ibConfig.SNIName != "" {
+	if !mirrored && ibConfig.SNIName != "" {
 		logger.V(2).Info("Using identity bindings token credential for image", "image", req.Image)
 		credential, err = GetIdentityBindingsTokenCredential(req, config, ibConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get identity bindings token credential for image %s: %w", req.Image, err)
 		}
-	} else if len(req.ServiceAccountToken) != 0 {
+	} else if !mirrored && len(req.ServiceAccountToken) != 0 {
 		// Use service account token credential
 		logger.V(2).Info("Using service account token credential for image", "image", req.Image)
 		credential, err = getServiceAccountTokenCredential(req, config)
@@ -106,14 +118,9 @@ func NewAcrProvider(req *v1.CredentialProviderRequest, registryMirrorStr string,
 			return nil, fmt.Errorf("failed to get token credential for image %s: %w", req.Image, err)
 		}
 	}
+	provider.credential = credential
 
-	return &acrProvider{
-		config:         config,
-		credential:     credential,
-		environment:    env,
-		cloudConfig:    clientOption.Cloud,
-		registryMirror: parseRegistryMirror(registryMirrorStr),
-	}, nil
+	return provider, nil
 }
 
 // getManagedIdentityCredential creates a new instance of the ACR provider.
