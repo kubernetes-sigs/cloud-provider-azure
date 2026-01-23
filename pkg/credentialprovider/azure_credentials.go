@@ -67,10 +67,10 @@ type acrProvider struct {
 	registryMirror map[string]string // Registry mirror relation: source registry -> target registry
 }
 
-func NewAcrProvider(req *v1.CredentialProviderRequest, registryMirrorStr string, configFile string, ibConfig IdentityBindingsConfig) (CredentialProvider, error) {
-	ctx := context.Background()
-	logger := log.FromContextOrBackground(ctx).WithName("NewAcrProvider")
-	config, err := configloader.Load[providerconfig.AzureClientConfig](ctx, nil, &configloader.FileLoaderConfig{FilePath: configFile})
+type getTokenCredentialFunc func(req *v1.CredentialProviderRequest, config *providerconfig.AzureClientConfig) (azcore.TokenCredential, error)
+
+func NewAcrProvider(req *v1.CredentialProviderRequest, registryMirrorStr string, configFile string) (CredentialProvider, error) {
+	config, err := configloader.Load[providerconfig.AzureClientConfig](context.Background(), nil, &configloader.FileLoaderConfig{FilePath: configFile})
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
@@ -84,27 +84,20 @@ func NewAcrProvider(req *v1.CredentialProviderRequest, registryMirrorStr string,
 		return nil, err
 	}
 
-	var credential azcore.TokenCredential
-	if ibConfig.SNIName != "" {
-		logger.V(2).Info("Using identity bindings token credential for image", "image", req.Image)
-		credential, err = GetIdentityBindingsTokenCredential(req, config, ibConfig)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get identity bindings token credential for image %s: %w", req.Image, err)
-		}
-	} else if len(req.ServiceAccountToken) != 0 {
-		// Use service account token credential
-		logger.V(2).Info("Using service account token credential for image", "image", req.Image)
-		credential, err = getServiceAccountTokenCredential(req, config)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get service account token credential for image %s: %w", req.Image, err)
-		}
+	var getTokenCredential getTokenCredentialFunc
+
+	// kubelet is responsible for checking the service account token emptiness when service account token is enabled, and only when service account token provide is enabled,
+	// service account token is set in the request, so we can safely check the service account token emptiness to decide which credential to use.
+	if len(req.ServiceAccountToken) != 0 {
+		klog.V(2).Infof("Using service account token to authenticate ACR for image %s", req.Image)
+		getTokenCredential = getServiceAccountTokenCredential
 	} else {
-		// Use managed identity
-		logger.V(2).Info("Using managed identity to authenticate ACR for image", "image", req.Image)
-		credential, err = getManagedIdentityCredential(req, config)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get token credential for image %s: %w", req.Image, err)
-		}
+		klog.V(2).Infof("Using managed identity to authenticate ACR for image %s", req.Image)
+		getTokenCredential = getManagedIdentityCredential
+	}
+	credential, err := getTokenCredential(req, config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get token credential for image %s: %w", req.Image, err)
 	}
 
 	return &acrProvider{
