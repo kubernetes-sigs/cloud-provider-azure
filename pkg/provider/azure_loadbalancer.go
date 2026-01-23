@@ -396,9 +396,13 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 		config := difftracker.NewInboundServiceConfig(serviceUID, inboundConfig)
 		az.diffTracker.AddService(config)
 
-		// Status will be populated by subsequent reconcile loops after async creation completes
+		// Return the existing LoadBalancer status to prevent the service controller from clearing it.
+		// This is critical for crash recovery: after CCM restarts, it recovers IPs from Azure resources,
+		// but the service controller then re-syncs all services. If we return empty status here,
+		// patchStatus will clear the IPs we just recovered.
+		// For new services, the existing status will be empty anyway, so this is safe.
 		isOperationSucceeded = true
-		return &v1.LoadBalancerStatus{}, nil
+		return service.Status.LoadBalancer.DeepCopy(), nil
 	}
 
 	lbStatus, err = az.reconcileService(ctx, clusterName, service, nodes)
@@ -564,7 +568,7 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 	if az.ServiceGatewayEnabled {
 		serviceUID := getServiceUID(service)
 		logger.V(2).Info("Using Engine for async service deletion", "serviceUID", serviceUID)
-		az.diffTracker.DeleteService(serviceUID, true) // true = inbound service
+		az.diffTracker.DeleteService(serviceUID, true, false) // inbound service, not orphan
 
 		// Return success immediately - actual deletion happens asynchronously
 		mc.ObserveOperationWithResult(true)

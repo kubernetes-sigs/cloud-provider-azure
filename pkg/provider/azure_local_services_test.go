@@ -464,6 +464,200 @@ func getTestEndpointSliceWithAddressesAndServiceOwnerReference(
 	return endpointSlice
 }
 
+func TestGetPodIPToNodeIPMapFromEndpointSlice_ReadinessFiltering(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	trueVal := true
+	falseVal := false
+
+	testCases := []struct {
+		name           string
+		endpointSlice  *discovery_v1.EndpointSlice
+		ipv6           bool
+		nodePrivateIPs map[string]*utilsets.IgnoreCaseSet
+		expectedResult map[string]string
+	}{
+		{
+			name: "Ready=true endpoints are included",
+			endpointSlice: &discovery_v1.EndpointSlice{
+				ObjectMeta:  metav1.ObjectMeta{Name: "eps1", Namespace: "default"},
+				AddressType: discovery_v1.AddressTypeIPv4,
+				Endpoints: []discovery_v1.Endpoint{
+					{
+						Addresses:  []string{"10.0.0.1"},
+						NodeName:   ptr.To("node1"),
+						Conditions: discovery_v1.EndpointConditions{Ready: &trueVal},
+					},
+				},
+			},
+			ipv6: false,
+			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{
+				"node1": utilsets.NewString("192.168.1.1"),
+			},
+			expectedResult: map[string]string{"10.0.0.1": "192.168.1.1"},
+		},
+		{
+			name: "Ready=false endpoints are filtered out",
+			endpointSlice: &discovery_v1.EndpointSlice{
+				ObjectMeta:  metav1.ObjectMeta{Name: "eps1", Namespace: "default"},
+				AddressType: discovery_v1.AddressTypeIPv4,
+				Endpoints: []discovery_v1.Endpoint{
+					{
+						Addresses:  []string{"10.0.0.1"},
+						NodeName:   ptr.To("node1"),
+						Conditions: discovery_v1.EndpointConditions{Ready: &falseVal},
+					},
+				},
+			},
+			ipv6: false,
+			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{
+				"node1": utilsets.NewString("192.168.1.1"),
+			},
+			expectedResult: map[string]string{},
+		},
+		{
+			name: "Ready=nil endpoints are filtered out",
+			endpointSlice: &discovery_v1.EndpointSlice{
+				ObjectMeta:  metav1.ObjectMeta{Name: "eps1", Namespace: "default"},
+				AddressType: discovery_v1.AddressTypeIPv4,
+				Endpoints: []discovery_v1.Endpoint{
+					{
+						Addresses:  []string{"10.0.0.1"},
+						NodeName:   ptr.To("node1"),
+						Conditions: discovery_v1.EndpointConditions{Ready: nil},
+					},
+				},
+			},
+			ipv6: false,
+			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{
+				"node1": utilsets.NewString("192.168.1.1"),
+			},
+			expectedResult: map[string]string{},
+		},
+		{
+			name: "Mixed readiness states - only Ready=true included",
+			endpointSlice: &discovery_v1.EndpointSlice{
+				ObjectMeta:  metav1.ObjectMeta{Name: "eps1", Namespace: "default"},
+				AddressType: discovery_v1.AddressTypeIPv4,
+				Endpoints: []discovery_v1.Endpoint{
+					{
+						Addresses:  []string{"10.0.0.1"},
+						NodeName:   ptr.To("node1"),
+						Conditions: discovery_v1.EndpointConditions{Ready: &trueVal},
+					},
+					{
+						Addresses:  []string{"10.0.0.2"},
+						NodeName:   ptr.To("node2"),
+						Conditions: discovery_v1.EndpointConditions{Ready: &falseVal},
+					},
+					{
+						Addresses:  []string{"10.0.0.3"},
+						NodeName:   ptr.To("node3"),
+						Conditions: discovery_v1.EndpointConditions{Ready: nil},
+					},
+					{
+						Addresses:  []string{"10.0.0.4"},
+						NodeName:   ptr.To("node1"),
+						Conditions: discovery_v1.EndpointConditions{Ready: &trueVal},
+					},
+				},
+			},
+			ipv6: false,
+			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{
+				"node1": utilsets.NewString("192.168.1.1"),
+				"node2": utilsets.NewString("192.168.1.2"),
+				"node3": utilsets.NewString("192.168.1.3"),
+			},
+			expectedResult: map[string]string{
+				"10.0.0.1": "192.168.1.1",
+				"10.0.0.4": "192.168.1.1",
+			},
+		},
+		{
+			name: "All endpoints not ready - empty result",
+			endpointSlice: &discovery_v1.EndpointSlice{
+				ObjectMeta:  metav1.ObjectMeta{Name: "eps1", Namespace: "default"},
+				AddressType: discovery_v1.AddressTypeIPv4,
+				Endpoints: []discovery_v1.Endpoint{
+					{
+						Addresses:  []string{"10.0.0.1"},
+						NodeName:   ptr.To("node1"),
+						Conditions: discovery_v1.EndpointConditions{Ready: &falseVal},
+					},
+					{
+						Addresses:  []string{"10.0.0.2"},
+						NodeName:   ptr.To("node2"),
+						Conditions: discovery_v1.EndpointConditions{Ready: nil},
+					},
+				},
+			},
+			ipv6: false,
+			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{
+				"node1": utilsets.NewString("192.168.1.1"),
+				"node2": utilsets.NewString("192.168.1.2"),
+			},
+			expectedResult: map[string]string{},
+		},
+		{
+			name:           "Nil EndpointSlice returns empty map",
+			endpointSlice:  nil,
+			ipv6:           false,
+			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{},
+			expectedResult: map[string]string{},
+		},
+		{
+			name: "IPv6 endpoints with Ready=true are included",
+			endpointSlice: &discovery_v1.EndpointSlice{
+				ObjectMeta:  metav1.ObjectMeta{Name: "eps1", Namespace: "default"},
+				AddressType: discovery_v1.AddressTypeIPv6,
+				Endpoints: []discovery_v1.Endpoint{
+					{
+						Addresses:  []string{"fd00::1"},
+						NodeName:   ptr.To("node1"),
+						Conditions: discovery_v1.EndpointConditions{Ready: &trueVal},
+					},
+				},
+			},
+			ipv6: true,
+			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{
+				"node1": utilsets.NewString("fd00::100"),
+			},
+			expectedResult: map[string]string{"fd00::1": "fd00::100"},
+		},
+		{
+			name: "Endpoint without NodeName is skipped",
+			endpointSlice: &discovery_v1.EndpointSlice{
+				ObjectMeta:  metav1.ObjectMeta{Name: "eps1", Namespace: "default"},
+				AddressType: discovery_v1.AddressTypeIPv4,
+				Endpoints: []discovery_v1.Endpoint{
+					{
+						Addresses:  []string{"10.0.0.1"},
+						NodeName:   nil,
+						Conditions: discovery_v1.EndpointConditions{Ready: &trueVal},
+					},
+				},
+			},
+			ipv6: false,
+			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{
+				"node1": utilsets.NewString("192.168.1.1"),
+			},
+			expectedResult: map[string]string{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud := GetTestCloud(ctrl)
+			cloud.nodePrivateIPs = tc.nodePrivateIPs
+
+			result := cloud.getPodIPToNodeIPMapFromEndpointSlice(tc.endpointSlice, tc.ipv6)
+
+			assert.Equal(t, tc.expectedResult, result)
+		})
+	}
+}
+
 func TestEndpointSlicesInformer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

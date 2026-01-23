@@ -192,11 +192,14 @@ func (az *Cloud) podInformerAddPod(pod *v1.Pod) {
 		return
 	}
 
-	// Skip pods that are being deleted
-	// Pods with DeletionTimestamp + our finalizer are handled by recoverStuckFinalizers at startup
+	// Handle pods that are being deleted - route to delete handler
+	// This happens when:
+	// 1. Informer sync sees a pod that was marked for deletion before the informer started
+	// 2. Pod deletion was initiated and we receive it as an ADD (client-go behavior)
 	if pod.DeletionTimestamp != nil {
-		klog.V(4).Infof("podInformerAddPod: Pod %s/%s is being deleted (DeletionTimestamp set), skipping",
+		klog.V(2).Infof("podInformerAddPod: Pod %s/%s is being deleted (DeletionTimestamp set), routing to delete handler",
 			pod.Namespace, pod.Name)
+		az.podInformerRemovePod(pod)
 		return
 	}
 

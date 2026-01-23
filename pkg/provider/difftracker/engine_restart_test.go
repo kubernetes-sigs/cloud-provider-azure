@@ -90,7 +90,7 @@ func TestEngineDeleteService_AfterRestart(t *testing.T) {
 	// This is already the case in newTestDiffTracker()
 
 	// 3. DeleteService is called
-	dt.DeleteService(serviceUID, true)
+	dt.DeleteService(serviceUID, true, false)
 
 	// Verify service was added to pendingServiceOps with StateDeletionInProgress
 	// (goes directly to InProgress since service has no locations)
@@ -158,7 +158,7 @@ func TestEngineMultipleOperations_AfterRestart(t *testing.T) {
 	assert.Equal(t, StateNotStarted, opState.State, "Should be in NotStarted state")
 
 	// Test 4: DeleteService for existing service
-	dt.DeleteService(inboundService, true)
+	dt.DeleteService(inboundService, true, false)
 	opState, exists = dt.pendingServiceOps[inboundService]
 	assert.True(t, exists, "Deleted service should be tracked")
 	assert.Equal(t, StateDeletionInProgress, opState.State, "Should be in DeletionInProgress state (no locations)")

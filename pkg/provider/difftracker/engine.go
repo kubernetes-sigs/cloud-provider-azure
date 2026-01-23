@@ -212,7 +212,9 @@ func (dt *DiffTracker) UpdateEndpoints(serviceUID string, oldPodIPToNodeIP, newP
 
 // DeleteService handles service deletion events for inbound (Load Balancer) services.
 // It marks the service for deletion and triggers DeletionChecker to verify locations are cleared.
-func (dt *DiffTracker) DeleteService(serviceUID string, isInbound bool) {
+// DeleteService schedules a service for deletion. If isOrphan is true, the service is an orphaned
+// Azure resource (exists in Azure but not in ServiceGateway) and we skip the NRP existence check.
+func (dt *DiffTracker) DeleteService(serviceUID string, isInbound bool, isOrphan bool) {
 	startTime := time.Now()
 	defer func() {
 		recordEngineOperation("delete_service", startTime, nil)
@@ -228,28 +230,34 @@ func (dt *DiffTracker) DeleteService(serviceUID string, isInbound bool) {
 		return
 	}
 
-	klog.V(4).Infof("Engine.DeleteService: serviceUID=%s, isInbound=%v", serviceUID, isInbound)
+	klog.V(4).Infof("Engine.DeleteService: serviceUID=%s, isInbound=%v, isOrphan=%v", serviceUID, isInbound, isOrphan)
 
 	// Check if service exists in pending operations
 	opState, exists := dt.pendingServiceOps[serviceUID]
 
 	if !exists {
-		// Service not tracked - check if it exists in NRP
+		// Service not tracked - check if it exists in NRP (skip for orphans)
 		var existsInNRP bool
-		if isInbound {
-			existsInNRP = dt.NRPResources.LoadBalancers.Has(serviceUID)
+		if !isOrphan {
+			if isInbound {
+				existsInNRP = dt.NRPResources.LoadBalancers.Has(serviceUID)
+			} else {
+				existsInNRP = dt.NRPResources.NATGateways.Has(serviceUID)
+			}
+
+			if !existsInNRP {
+				dt.mu.Unlock()
+				klog.V(2).Infof("Engine.DeleteService: Service %s doesn't exist in NRP or pending operations, nothing to delete", serviceUID)
+				return
+			}
+		}
+
+		// Service exists in NRP (or is orphan) but not tracked - create tracking entry
+		if isOrphan {
+			klog.V(2).Infof("Engine.DeleteService: Orphaned service %s, marking for deletion", serviceUID)
 		} else {
-			existsInNRP = dt.NRPResources.NATGateways.Has(serviceUID)
+			klog.V(2).Infof("Engine.DeleteService: Service %s exists in NRP, marking for deletion", serviceUID)
 		}
-
-		if !existsInNRP {
-			dt.mu.Unlock()
-			klog.V(2).Infof("Engine.DeleteService: Service %s doesn't exist in NRP or pending operations, nothing to delete", serviceUID)
-			return
-		}
-
-		// Service exists in NRP but not tracked - create tracking entry
-		klog.V(2).Infof("Engine.DeleteService: Service %s exists in NRP, marking for deletion", serviceUID)
 		var config ServiceConfig
 		if isInbound {
 			config = NewInboundServiceConfig(serviceUID, nil)

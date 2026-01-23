@@ -323,6 +323,13 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 					// Determine IP family from EndpointSlice AddressType
 					ipv6 := es.AddressType == discovery_v1.AddressTypeIPv6
 					newAddresses := az.getPodIPToNodeIPMapFromEndpointSlice(es, ipv6)
+
+					// Skip if no ready endpoints to add
+					if len(newAddresses) == 0 {
+						klog.V(4).Infof("EndpointSlice %s/%s has no ready endpoints, skipping UpdateEndpoints", es.Namespace, es.Name)
+						return
+					}
+
 					az.diffTracker.UpdateEndpoints(serviceUID, nil, newAddresses)
 				}
 			},
@@ -411,6 +418,13 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 					ipv6 := newES.AddressType == discovery_v1.AddressTypeIPv6
 					oldAddresses := az.getPodIPToNodeIPMapFromEndpointSlice(previousES, ipv6)
 					newAddresses := az.getPodIPToNodeIPMapFromEndpointSlice(newES, ipv6)
+
+					// Skip if both old and new have no ready endpoints
+					if len(oldAddresses) == 0 && len(newAddresses) == 0 {
+						klog.V(4).Infof("EndpointSlice %s/%s has no ready endpoints in old or new state, skipping UpdateEndpoints", newES.Namespace, newES.Name)
+						return
+					}
+
 					az.diffTracker.UpdateEndpoints(serviceUID, oldAddresses, newAddresses)
 				}
 			},
@@ -510,7 +524,9 @@ func (az *Cloud) getPodIPToNodeIPMapFromEndpointSlice(es *discovery_v1.EndpointS
 
 	for _, ep := range es.Endpoints {
 		// Skip endpoints that are not ready (terminating, failing health checks, etc.)
-		if ep.Conditions.Ready != nil && !*ep.Conditions.Ready {
+		// Treat Ready=nil as not ready - the endpoint controller hasn't confirmed readiness yet
+		if ep.Conditions.Ready == nil || !*ep.Conditions.Ready {
+			klog.V(4).Infof("Skipping endpoint with addresses %v: Ready=%v", ep.Addresses, ep.Conditions.Ready)
 			continue
 		}
 

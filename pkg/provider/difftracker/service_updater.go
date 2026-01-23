@@ -243,14 +243,22 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 	// Step 1: Build resources using shared helper
 	pipResource, lbResource, servicesDTO := buildInboundServiceResources(serviceUID, config, s.diffTracker.config)
 
-	// Step 2: Create Public IP
-	if err := s.diffTracker.createOrUpdatePIP(ctx, s.diffTracker.config.ResourceGroup, &pipResource); err != nil {
+	// Step 2: Create Public IP and capture the response to get the allocated IP address
+	pipResponse, err := s.diffTracker.createOrUpdatePIPWithResponse(ctx, s.diffTracker.config.ResourceGroup, &pipResource)
+	if err != nil {
 		klog.Errorf("ServiceUpdater: failed to create Public IP for inbound service %s: %v", serviceUID, err)
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to create Public IP: %w", err))
 		return
 	}
 	pipName := fmt.Sprintf("%s-pip", serviceUID)
 	klog.V(3).Infof("ServiceUpdater: created Public IP %s for inbound service %s", pipName, serviceUID)
+
+	// Extract IP address from PIP response
+	var pipIPAddress string
+	if pipResponse != nil && pipResponse.Properties != nil && pipResponse.Properties.IPAddress != nil {
+		pipIPAddress = *pipResponse.Properties.IPAddress
+		klog.V(3).Infof("ServiceUpdater: PIP %s has IP address %s", pipName, pipIPAddress)
+	}
 
 	// Step 3: Create LoadBalancer
 	if err := s.diffTracker.createOrUpdateLB(ctx, lbResource); err != nil {
@@ -274,13 +282,27 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 	}
 	klog.V(3).Infof("ServiceUpdater: registered inbound service %s with ServiceGateway", serviceUID)
 
+	// Step 5: Update K8s Service status with the external IP
+	// This is critical for ServiceGateway mode since EnsureLoadBalancer returns empty status immediately.
+	// Without this, the Service.Status.LoadBalancer.Ingress would remain empty.
+	if pipIPAddress != "" {
+		if err := s.diffTracker.updateServiceLoadBalancerStatus(ctx, serviceUID, pipIPAddress); err != nil {
+			klog.Warningf("ServiceUpdater: failed to update service %s status with IP %s: %v (non-fatal, Azure resources created)", serviceUID, pipIPAddress, err)
+			// Non-fatal: Azure resources are created successfully, status update can be retried
+		} else {
+			klog.V(3).Infof("ServiceUpdater: updated service %s status with external IP %s", serviceUID, pipIPAddress)
+		}
+	} else {
+		klog.Warningf("ServiceUpdater: PIP IP address not available for service %s, cannot update service status", serviceUID)
+	}
+
 	// Update NRPResources to reflect the sync
 	s.diffTracker.UpdateNRPLoadBalancers(SyncServicesReturnType{
 		Additions: newIgnoreCaseSetFromSlice([]string{serviceUID}),
 		Removals:  nil,
 	})
 
-	// Step 5: Success callback
+	// Step 6: Success callback
 	s.onComplete(serviceUID, true, nil)
 	klog.Infof("ServiceUpdater: createInboundService completed successfully for %s", serviceUID)
 }
@@ -441,9 +463,15 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string) {
 	servicesDTO := buildServiceGatewayRemovalDTO(serviceUID, false, s.diffTracker.config)
 
 	if err := s.diffTracker.updateNRPSGWServices(ctx, s.diffTracker.config.ServiceGatewayResourceName, servicesDTO); err != nil {
-		klog.Errorf("ServiceUpdater: failed to unregister outbound service %s from ServiceGateway: %v", serviceUID, err)
-		lastErr = fmt.Errorf("failed to unregister from ServiceGateway: %w", err)
-		// Continue with deletion
+		// Treat 404 NotFound as success - the service is already gone from ServiceGateway
+		var respErr *azcore.ResponseError
+		if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
+			klog.V(3).Infof("ServiceUpdater: outbound service %s already unregistered from ServiceGateway (404 NotFound)", serviceUID)
+		} else {
+			klog.Errorf("ServiceUpdater: failed to unregister outbound service %s from ServiceGateway: %v", serviceUID, err)
+			lastErr = fmt.Errorf("failed to unregister from ServiceGateway: %w", err)
+			// Continue with deletion
+		}
 	} else {
 		klog.V(3).Infof("ServiceUpdater: unregistered outbound service %s from ServiceGateway", serviceUID)
 	}

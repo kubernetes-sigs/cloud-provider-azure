@@ -39,7 +39,7 @@ func newTestDiffTracker() *DiffTracker {
 		pendingServiceOps:       make(map[string]*ServiceOperationState),
 		pendingEndpoints:        make(map[string][]PendingEndpointUpdate),
 		pendingPods:             make(map[string][]PendingPodUpdate),
-		pendingServiceDeletions:        make(map[string]*PendingServiceDeletion),
+		pendingServiceDeletions: make(map[string]*PendingServiceDeletion),
 		serviceUpdaterTrigger:   make(chan bool, 1),
 		locationsUpdaterTrigger: make(chan bool, 1),
 	}
@@ -132,7 +132,7 @@ func TestEngineDeleteService_NoLocations(t *testing.T) {
 	dt.NRPResources.LoadBalancers.Insert(serviceUID)
 
 	// Execute
-	dt.DeleteService(serviceUID, true)
+	dt.DeleteService(serviceUID, true, false)
 
 	// Verify service is tracked for deletion
 	opState, exists := dt.pendingServiceOps[serviceUID]
@@ -167,7 +167,7 @@ func TestEngineDeleteService_WithLocations(t *testing.T) {
 	}
 
 	// Execute
-	dt.DeleteService(serviceUID, false)
+	dt.DeleteService(serviceUID, false, false)
 
 	// Verify service is in pending deletions (not immediate deletion)
 	pendingDel, exists := dt.pendingServiceDeletions[serviceUID]

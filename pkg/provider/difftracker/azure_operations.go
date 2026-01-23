@@ -24,26 +24,34 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	servicehelper "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 )
 
 // createOrUpdatePIP creates or updates a public IP address
 func (dt *DiffTracker) createOrUpdatePIP(ctx context.Context, pipResourceGroup string, pip *armnetwork.PublicIPAddress) error {
+	_, err := dt.createOrUpdatePIPWithResponse(ctx, pipResourceGroup, pip)
+	return err
+}
+
+// createOrUpdatePIPWithResponse creates or updates a public IP address and returns the response
+// containing the allocated IP address. Use this when you need the IP address after PIP creation.
+func (dt *DiffTracker) createOrUpdatePIPWithResponse(ctx context.Context, pipResourceGroup string, pip *armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
 	pipName := ptr.Deref(pip.Name, "")
 	if pipName == "" {
-		return fmt.Errorf("createOrUpdatePIP: pip name is empty")
+		return nil, fmt.Errorf("createOrUpdatePIPWithResponse: pip name is empty")
 	}
-	klog.Infof("createOrUpdatePIP(%s): start", pipName)
+	klog.Infof("createOrUpdatePIPWithResponse(%s): start", pipName)
 
-	_, err := dt.networkClientFactory.GetPublicIPAddressClient().CreateOrUpdate(ctx, pipResourceGroup, pipName, *pip)
+	response, err := dt.networkClientFactory.GetPublicIPAddressClient().CreateOrUpdate(ctx, pipResourceGroup, pipName, *pip)
 	klog.V(10).Infof("PublicIPAddressClient.CreateOrUpdate(%s, %s): end", pipResourceGroup, pipName)
 	if err != nil {
 		klog.Warningf("PublicIPAddressClient.CreateOrUpdate(%s, %s) failed: %s", pipResourceGroup, pipName, err.Error())
-		return err
+		return nil, err
 	}
 
-	return nil
+	return response, nil
 }
 
 // deletePublicIP deletes a public IP address
@@ -278,6 +286,45 @@ func (dt *DiffTracker) getServiceByUID(ctx context.Context, uid string) (*v1.Ser
 		}
 	}
 	return nil, fmt.Errorf("service with uid %s not found", uid)
+}
+
+// updateServiceLoadBalancerStatus updates the K8s Service status with the LoadBalancer IP address.
+// This is called after the PIP is successfully created in ServiceGateway mode to populate
+// the Service.Status.LoadBalancer.Ingress field, which would otherwise be empty since
+// EnsureLoadBalancer returns immediately in async mode.
+func (dt *DiffTracker) updateServiceLoadBalancerStatus(ctx context.Context, serviceUID string, ip string) error {
+	if ip == "" {
+		return fmt.Errorf("updateServiceLoadBalancerStatus: ip is empty")
+	}
+
+	svc, err := dt.getServiceByUID(ctx, serviceUID)
+	if err != nil {
+		return fmt.Errorf("updateServiceLoadBalancerStatus: failed to get service: %w", err)
+	}
+
+	// Check if the status already has this IP to avoid unnecessary updates
+	for _, ingress := range svc.Status.LoadBalancer.Ingress {
+		if ingress.IP == ip {
+			klog.V(3).Infof("updateServiceLoadBalancerStatus: service %s/%s already has IP %s", svc.Namespace, svc.Name, ip)
+			return nil
+		}
+	}
+
+	// Make a copy so we don't mutate the shared informer cache
+	updated := svc.DeepCopy()
+	updated.Status.LoadBalancer = v1.LoadBalancerStatus{
+		Ingress: []v1.LoadBalancerIngress{
+			{IP: ip},
+		},
+	}
+
+	_, err = servicehelper.PatchService(dt.kubeClient.CoreV1(), svc, updated)
+	if err != nil {
+		return fmt.Errorf("updateServiceLoadBalancerStatus: failed to patch service: %w", err)
+	}
+
+	klog.V(2).Infof("updateServiceLoadBalancerStatus: updated service %s/%s with LoadBalancer IP %s", svc.Namespace, svc.Name, ip)
+	return nil
 }
 
 // Helper functions to convert DTOs to ARM SDK types
