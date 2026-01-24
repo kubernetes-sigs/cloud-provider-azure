@@ -27,4 +27,4 @@ pushd .
 cd "${REPO_ROOT}"/tests/
 go mod tidy
 popd
-ginkgo -flake-attempts ${FLAKE_ATTEMPTS} -skip "${SKIP_ARGS}" -label-filter "${LABEL_FILTER}" "${REPO_ROOT}"/tests/e2e/ --timeout "${CCM_E2E_TIMEOUT:-210m}"
+ginkgo --timeout "${CCM_E2E_TIMEOUT:-210m}" -flake-attempts ${FLAKE_ATTEMPTS} -skip "${SKIP_ARGS}" -label-filter "${LABEL_FILTER}" "${REPO_ROOT}"/tests/e2e/

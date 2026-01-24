@@ -66,7 +66,6 @@ func TestAzureTest(t *testing.T) {
 	}
 
 	suiteConfig, reporterConfig := GinkgoConfiguration()
-	suiteConfig.Timeout = 0
 
 	if os.Getenv(failFast) == utils.TrueValue {
 		suiteConfig.FailFast = true
