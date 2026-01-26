@@ -37,8 +37,6 @@ import (
 const (
 	serviceTimeout        = 5 * time.Minute
 	serviceTimeoutBasicLB = 10 * time.Minute
-	pullInterval          = 10 * time.Second
-	pullTimeout           = 3 * time.Minute
 
 	ExecAgnhostPod = "exec-agnhost-pod"
 )
@@ -220,7 +218,7 @@ func ValidateServiceConnectivity(ns, execPod, serviceIP string, port int, protoc
 		udpOption = "-u"
 	}
 	cmd := fmt.Sprintf(`nc -vz -w 4 %s %s %d`, udpOption, serviceIP, port)
-	pollErr := wait.PollImmediate(pullInterval, 3*pullTimeout, func() (bool, error) {
+	pollErr := wait.PollImmediate(pollInterval, 2*pollTimeout, func() (bool, error) {
 		stdout, err := RunKubectl(ns, "exec", execPod, "--", "/bin/sh", "-x", "-c", cmd)
 		if err != nil {
 			Logf("got error %v, will retry, output: %s", err, stdout)
