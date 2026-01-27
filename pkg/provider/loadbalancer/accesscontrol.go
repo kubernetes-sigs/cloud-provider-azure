@@ -37,9 +37,6 @@ var (
 	ErrSetBothLoadBalancerSourceRangesAndAllowedIPRanges = fmt.Errorf(
 		"cannot set both spec.LoadBalancerSourceRanges and service annotation %s", consts.ServiceAnnotationAllowedIPRanges,
 	)
-	ErrSetBothAllowedAndBlockedIPRanges = fmt.Errorf(
-		"cannot set both %s and %s annotations", consts.ServiceAnnotationAllowedIPRanges, consts.ServiceAnnotationBlockedIPRanges,
-	)
 )
 
 type AccessControl struct {
@@ -116,11 +113,6 @@ func NewAccessControl(logger logr.Logger, svc *v1.Service, sg *armnetwork.Securi
 	if len(sourceRanges) > 0 && len(allowedIPRanges) > 0 {
 		logger.Error(ErrSetBothLoadBalancerSourceRangesAndAllowedIPRanges, "Forbidden configuration")
 		return nil, ErrSetBothLoadBalancerSourceRangesAndAllowedIPRanges
-	}
-
-	if len(allowedIPRanges) > 0 && len(blockedIPRanges) > 0 {
-		logger.Error(ErrSetBothAllowedAndBlockedIPRanges, "Forbidden configuration")
-		return nil, ErrSetBothAllowedAndBlockedIPRanges
 	}
 
 	if len(sourceRanges) > 0 && len(allowedServiceTags) > 0 {

@@ -204,16 +204,6 @@ func TestNewAccessControl(t *testing.T) {
 		assert.Equal(t, 1, called)
 	})
 
-	t.Run("it should return error if using both azure-allowed-ip-ranges and azure-blocked-ip-ranges", func(t *testing.T) {
-		svc := k8sFx.Service().
-			WithAllowedIPRanges("10.0.0.1/32").
-			WithBlockedIPRanges("20.0.0.1/32").
-			Build()
-
-		_, err := NewAccessControl(log.Noop(), &svc, sg)
-		assert.ErrorIs(t, err, ErrSetBothAllowedAndBlockedIPRanges)
-	})
-
 	t.Run("it should emit warning event if invalid azure-blocked-ip-ranges", func(t *testing.T) {
 		svc := k8sFx.Service().
 			WithBlockedIPRanges("foo", "10.0.0.1/32", "bar").
