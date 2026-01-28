@@ -20,12 +20,12 @@ package diskclient
 import (
 	"context"
 
-	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
+	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate;delete;listbyrg,resource=Disk,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6,packageAlias=armcompute,clientName=DisksClient,expand=false,rateLimitKey=diskRateLimit,crossSubFactory=true,azureStackCloudAPIVersion="2019-03-01"
+// +azure:client:verbs=get;createorupdate;delete;listbyrg,resource=Disk,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7,packageAlias=armcompute,clientName=DisksClient,expand=false,rateLimitKey=diskRateLimit,crossSubFactory=true,azureStackCloudAPIVersion="2019-03-01"
 type Interface interface {
 	utils.GetFunc[armcompute.Disk]
 	utils.CreateOrUpdateFunc[armcompute.Disk]
