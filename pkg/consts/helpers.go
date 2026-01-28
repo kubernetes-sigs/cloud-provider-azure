@@ -50,7 +50,7 @@ func IsHealthProbeRuleOnK8sServicePortDisabled(annotations map[string]string, po
 	return expectAttributeInSvcAnnotationBeEqualTo(annotations, BuildAnnotationKeyForPort(port, PortAnnotationNoHealthProbeRule), TrueAnnotationValue), nil
 }
 
-// IsHealthProbeRuleOnK8sServicePortDisabled return if port is for health probe only
+// IsLBRuleOnK8sServicePortDisabled return if port should have no rule in load balancer
 func IsLBRuleOnK8sServicePortDisabled(annotations map[string]string, port int32) (bool, error) {
 	return expectAttributeInSvcAnnotationBeEqualTo(annotations, BuildAnnotationKeyForPort(port, PortAnnotationNoLBRule), TrueAnnotationValue), nil
 }
