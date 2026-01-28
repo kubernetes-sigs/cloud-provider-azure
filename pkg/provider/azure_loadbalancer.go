@@ -1066,7 +1066,7 @@ func (az *Cloud) getServiceLoadBalancer(
 			}
 			// For Service Gateway, we need to set a backend pool for the load balancer.
 			// Use per-service backend pool (Service UID). Dual-stack is not supported here.
-			backendPoolName, err := az.getBackendPoolNameForCLBService(service)
+			backendPoolName, err := az.getBackendPoolNameForSLBService(service)
 			if err != nil {
 				return nil, existingLBs, nil, nil, false, false, fmt.Errorf("getServiceLoadBalancer: failed to get per-service backend pool name: %w", err)
 			}
@@ -1147,7 +1147,7 @@ func (az *Cloud) selectLoadBalancer(ctx context.Context, clusterName string, ser
 					Scope: to.Ptr(armnetwork.LoadBalancerScopePublic),
 				}
 				// For Service Gateway, we need to set a backend pool for the load balancer.
-				backendPoolName, err := az.getBackendPoolNameForCLBService(service)
+				backendPoolName, err := az.getBackendPoolNameForSLBService(service)
 				if err != nil {
 					return nil, false, fmt.Errorf("selectLoadBalancer: failed to get per-service backend pool name: %w", err)
 				}

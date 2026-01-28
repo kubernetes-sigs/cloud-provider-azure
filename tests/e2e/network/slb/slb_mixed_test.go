@@ -31,8 +31,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-var _ = Describe("Container Load Balancer Mixed Workload", Label(clbTestLabel), func() {
-	basename := "clb-mixed-test"
+var _ = Describe("Container Load Balancer Mixed Workload", Label(slbTestLabel), func() {
+	basename := "slb-mixed-test"
 
 	var (
 		cs clientset.Interface

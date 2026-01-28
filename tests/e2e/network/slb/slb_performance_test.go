@@ -34,8 +34,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-var _ = Describe("Container Load Balancer Performance Test", Label(clbTestLabel, "performance"), func() {
-	basename := "clb-perf-test"
+var _ = Describe("Container Load Balancer Performance Test", Label(slbTestLabel, "performance"), func() {
+	basename := "slb-perf-test"
 
 	var (
 		cs clientset.Interface
@@ -64,7 +64,7 @@ var _ = Describe("Container Load Balancer Performance Test", Label(clbTestLabel,
 		)
 
 		utils.Logf("\n" + strings.Repeat("=", 80))
-		utils.Logf("CLB PERFORMANCE TEST: %d SERVICES - PARALLEL CREATE/DELETE", numServices)
+		utils.Logf("SLB PERFORMANCE TEST: %d SERVICES - PARALLEL CREATE/DELETE", numServices)
 		utils.Logf(strings.Repeat("=", 80))
 		utils.Logf("Test started at: %s", time.Now().Format(time.RFC3339))
 

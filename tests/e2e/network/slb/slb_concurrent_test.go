@@ -34,8 +34,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-var _ = Describe("CLB - Concurrent Services", Label(clbTestLabel), func() {
-	basename := "clb-concurrent-test"
+var _ = Describe("SLB - Concurrent Services", Label(slbTestLabel), func() {
+	basename := "slb-concurrent-test"
 
 	var (
 		cs clientset.Interface

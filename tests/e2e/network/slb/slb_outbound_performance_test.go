@@ -33,8 +33,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-var _ = Describe("Container Load Balancer Outbound Performance Test", Label(clbTestLabel, "outbound-performance"), func() {
-	basename := "clb-outbound-perf"
+var _ = Describe("Container Load Balancer Outbound Performance Test", Label(slbTestLabel, "outbound-performance"), func() {
+	basename := "slb-outbound-perf"
 
 	var (
 		cs clientset.Interface

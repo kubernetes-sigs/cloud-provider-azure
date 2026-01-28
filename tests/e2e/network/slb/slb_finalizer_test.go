@@ -42,7 +42,7 @@ const (
 	serviceGatewayPodFinalizer     = "servicegateway.azure.com/pod-cleanup"
 
 	// Test labels
-	clbFinalizerTestLabel = "CLB-Finalizer"
+	slbFinalizerTestLabel = "SLB-Finalizer"
 )
 
 // hasFinalizer checks if a Kubernetes object has a specific finalizer
@@ -194,8 +194,8 @@ func verifyNATGatewayAndPIPDeleted(natGatewayID string) error {
 	return nil
 }
 
-var _ = Describe("Container Load Balancer Finalizer Tests", Label(clbTestLabel, clbFinalizerTestLabel), func() {
-	basename := "clb-finalizer-test"
+var _ = Describe("Container Load Balancer Finalizer Tests", Label(slbTestLabel, slbFinalizerTestLabel), func() {
+	basename := "slb-finalizer-test"
 
 	var (
 		cs clientset.Interface
@@ -283,7 +283,7 @@ var _ = Describe("Container Load Balancer Finalizer Tests", Label(clbTestLabel, 
 					Name:      serviceName,
 					Namespace: ns.Name,
 					Annotations: map[string]string{
-						"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "clb",
+						"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "slb",
 					},
 				},
 				Spec: v1.ServiceSpec{

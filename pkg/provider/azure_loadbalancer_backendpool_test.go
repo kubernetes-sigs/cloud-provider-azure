@@ -1203,7 +1203,7 @@ func TestReconcileBackendPoolsPodIP(t *testing.T) {
 	az := GetTestCloud(ctrl)
 	bpi := newBackendPoolTypePodIP(az)
 
-	t.Run("should return error when getBackendPoolNameForCLBService fails", func(t *testing.T) {
+	t.Run("should return error when getBackendPoolNameForSLBService fails", func(t *testing.T) {
 		expectedErr := errors.New("dual-stack services are not supported when LB backend pool type is PodIP")
 		service := getTestServiceDualStack("svc-1", v1.ProtocolTCP, nil, 80)
 

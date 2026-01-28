@@ -978,7 +978,7 @@ func (bpi *backendPoolTypePodIP) GetBackendPrivateIPs(_ context.Context, _ strin
 	}
 
 	serviceName := getServiceName(service)
-	lbBackendPoolName, err := bpi.getBackendPoolNameForCLBService(service)
+	lbBackendPoolName, err := bpi.getBackendPoolNameForSLBService(service)
 	if err != nil {
 		klog.Errorf("bpi.GetBackendPrivateIPs: failed to get backend pool name for service %q, error: %s", service.Name, err.Error())
 		return nil, nil
@@ -1000,7 +1000,7 @@ func (bpi *backendPoolTypePodIP) ReconcileBackendPools(ctx context.Context, _ st
 		existingBackendPools = lb.Properties.BackendAddressPools
 	}
 
-	expectedBackendPoolName, err := bpi.getBackendPoolNameForCLBService(service)
+	expectedBackendPoolName, err := bpi.getBackendPoolNameForSLBService(service)
 	if err != nil {
 		return false, false, nil, err
 	}

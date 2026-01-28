@@ -31,8 +31,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-var _ = Describe("Container Load Balancer Lifecycle", Label(clbTestLabel), func() {
-	basename := "clb-lifecycle-test"
+var _ = Describe("Container Load Balancer Lifecycle", Label(slbTestLabel), func() {
+	basename := "slb-lifecycle-test"
 	serviceName := "lifecycle-service"
 
 	var (

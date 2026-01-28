@@ -38,7 +38,7 @@ import (
 )
 
 // CCM Initialization test label
-const clbInitTestLabel = "CLB-Init"
+const slbInitTestLabel = "SLB-Init"
 
 // Constants for initialization tests
 const (
@@ -82,7 +82,7 @@ func getCloudProviderConfig(ctx context.Context, ccmClient *utils.CCMClusterClie
 
 // updateCloudProviderConfig updates the cloud-provider-config secret with the given config
 func updateCloudProviderConfig(ctx context.Context, ccmClient *utils.CCMClusterClient, config map[string]interface{}) error {
-	utils.Logf("Updating cloud-provider-config secret with CLB settings")
+	utils.Logf("Updating cloud-provider-config secret with SLB settings")
 
 	azureJSON, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
@@ -113,8 +113,8 @@ func updateCloudProviderConfig(ctx context.Context, ccmClient *utils.CCMClusterC
 	return nil
 }
 
-// enableCLBConfig modifies the cloud-provider-config to enable CLB/Service Gateway features
-func enableCLBConfig(config map[string]interface{}, serviceGatewayName string) map[string]interface{} {
+// enableSLBConfig modifies the cloud-provider-config to enable SLB/Service Gateway features
+func enableSLBConfig(config map[string]interface{}, serviceGatewayName string) map[string]interface{} {
 	config["loadBalancerSku"] = "service"
 	config["loadBalancerBackendPoolConfigurationType"] = "podIP"
 	config["disableOutboundSNAT"] = false
@@ -323,8 +323,8 @@ func waitForCCMFullyUp(ctx context.Context, ccmClient *utils.CCMClusterClient, t
 	})
 }
 
-var _ = Describe("Container Load Balancer Initialization Tests", Label(clbTestLabel, clbInitTestLabel), func() {
-	basename := "clb-init"
+var _ = Describe("Container Load Balancer Initialization Tests", Label(slbTestLabel, slbInitTestLabel), func() {
+	basename := "slb-init"
 
 	var (
 		cs                       clientset.Interface
@@ -381,7 +381,7 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(clbTestLa
 			Expect(err).NotTo(HaveOccurred())
 			utils.Logf("Backed up original cloud-provider-config")
 
-			// Get and modify cloud-provider-config to enable CLB
+			// Get and modify cloud-provider-config to enable SLB
 			config, err := getCloudProviderConfig(ctx, ccmClient)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -391,8 +391,8 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(clbTestLa
 				serviceGatewayName = sgName
 			}
 
-			// Enable CLB settings
-			config = enableCLBConfig(config, serviceGatewayName)
+			// Enable SLB settings
+			config = enableSLBConfig(config, serviceGatewayName)
 			logCloudProviderConfig(config)
 
 			// Update the secret
@@ -530,7 +530,7 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(clbTestLa
 						Name:      serviceName,
 						Namespace: ns.Name,
 						Annotations: map[string]string{
-							"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "clb",
+							"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "slb",
 						},
 					},
 					Spec: v1.ServiceSpec{
@@ -655,7 +655,7 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(clbTestLa
 					Name:      serviceName,
 					Namespace: ns.Name,
 					Annotations: map[string]string{
-						"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "clb",
+						"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "slb",
 					},
 				},
 				Spec: v1.ServiceSpec{
@@ -1038,7 +1038,7 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(clbTestLa
 					Name:      serviceName,
 					Namespace: ns.Name,
 					Annotations: map[string]string{
-						"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "clb",
+						"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "slb",
 					},
 				},
 				Spec: v1.ServiceSpec{
@@ -1137,7 +1137,7 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(clbTestLa
 						Name:      svcName,
 						Namespace: ns.Name,
 						Annotations: map[string]string{
-							"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "clb",
+							"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "slb",
 						},
 					},
 					Spec: v1.ServiceSpec{
@@ -1426,7 +1426,7 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(clbTestLa
 						Name:      serviceName,
 						Namespace: ns.Name,
 						Annotations: map[string]string{
-							"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "clb",
+							"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "slb",
 						},
 					},
 					Spec: v1.ServiceSpec{

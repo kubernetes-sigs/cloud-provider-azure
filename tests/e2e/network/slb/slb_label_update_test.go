@@ -34,8 +34,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-var _ = Describe("CLB - Label Updates", Label(clbTestLabel), func() {
-	basename := "clb-label-update-test"
+var _ = Describe("SLB - Label Updates", Label(slbTestLabel), func() {
+	basename := "slb-label-update-test"
 
 	var (
 		cs clientset.Interface
@@ -89,7 +89,7 @@ var _ = Describe("CLB - Label Updates", Label(clbTestLabel), func() {
 			azureWaitTime = 60 * time.Second
 		)
 
-		serviceName := "clb-label-update-service"
+		serviceName := "slb-label-update-service"
 
 		// Labels that initially don't match the service
 		initialPodLabels := map[string]string{
@@ -114,7 +114,7 @@ var _ = Describe("CLB - Label Updates", Label(clbTestLabel), func() {
 
 		for i := 0; i < numPods; i++ {
 			go func(index int) {
-				podName := fmt.Sprintf("clb-label-update-pod-%d", index)
+				podName := fmt.Sprintf("slb-label-update-pod-%d", index)
 				pod := &v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      podName,

@@ -34,8 +34,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-var _ = Describe("CLB - Basic Service", Label(clbTestLabel), func() {
-	basename := "clb-basic-test"
+var _ = Describe("SLB - Basic Service", Label(slbTestLabel), func() {
+	basename := "slb-basic-test"
 	serviceName := "inbound-podname-echo5"
 
 	var (

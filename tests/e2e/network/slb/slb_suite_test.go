@@ -28,9 +28,9 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-// Environment variable names for CLB configuration
+// Environment variable names for SLB configuration
 const (
-	clbTestLabel = "CLB"
+	slbTestLabel = "SLB"
 
 	// Environment variable names
 	envServiceGatewayName       = "AZURE_SERVICE_GATEWAY_NAME"
@@ -49,9 +49,9 @@ var (
 	apiVersion         string
 )
 
-// initCLBConfig initializes the CLB test configuration from environment variables
+// initSLBConfig initializes the SLB test configuration from environment variables
 // and AzureTestClient. This should be called in BeforeSuite.
-func initCLBConfig() error {
+func initSLBConfig() error {
 	// Try to get subscription and resource group from AzureTestClient
 	tc, err := utils.CreateAzureTestClient()
 	if err != nil {
@@ -61,7 +61,7 @@ func initCLBConfig() error {
 	subscriptionID = tc.GetSubscriptionID()
 	resourceGroupName = tc.GetResourceGroup()
 
-	// Get CLB-specific config from environment with defaults
+	// Get SLB-specific config from environment with defaults
 	serviceGatewayName = os.Getenv(envServiceGatewayName)
 	if serviceGatewayName == "" {
 		serviceGatewayName = defaultServiceGatewayName
@@ -72,7 +72,7 @@ func initCLBConfig() error {
 		apiVersion = defaultAPIVersion
 	}
 
-	utils.Logf("CLB Test Configuration:")
+	utils.Logf("SLB Test Configuration:")
 	utils.Logf("  Subscription ID: %s", subscriptionID)
 	utils.Logf("  Resource Group: %s", resourceGroupName)
 	utils.Logf("  Service Gateway: %s", serviceGatewayName)
@@ -155,11 +155,11 @@ type Address struct {
 	Services []string `json:"services"`
 }
 
-// Helper functions for CLB tests
+// Helper functions for SLB tests
 
-// ensureCLBConfigInitialized ensures the CLB config is initialized.
-// This should be called before using any CLB config variables.
-func ensureCLBConfigInitialized() {
+// ensureSLBConfigInitialized ensures the SLB config is initialized.
+// This should be called before using any SLB config variables.
+func ensureSLBConfigInitialized() {
 	// Try to get subscription and resource group from environment first
 	if subscriptionID == "" {
 		subscriptionID = os.Getenv("AZURE_SUBSCRIPTION_ID")
@@ -197,13 +197,13 @@ func ensureCLBConfigInitialized() {
 		}
 	}
 
-	utils.Logf("CLB Config: SubscriptionID=%s, ResourceGroup=%s, ServiceGateway=%s, APIVersion=%s",
+	utils.Logf("SLB Config: SubscriptionID=%s, ResourceGroup=%s, ServiceGateway=%s, APIVersion=%s",
 		subscriptionID, resourceGroupName, serviceGatewayName, apiVersion)
 }
 
 // buildServiceGatewayURL constructs the Service Gateway API URL for a given path
 func buildServiceGatewayURL(path string) string {
-	ensureCLBConfigInitialized()
+	ensureSLBConfigInitialized()
 	return fmt.Sprintf(
 		"https://management.azure.com/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/serviceGateways/%s/%s?api-version=%s",
 		subscriptionID, resourceGroupName, serviceGatewayName, path, apiVersion,

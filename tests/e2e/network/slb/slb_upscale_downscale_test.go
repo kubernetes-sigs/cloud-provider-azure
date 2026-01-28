@@ -31,8 +31,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-var _ = Describe("Container Load Balancer Scale Operations", Label(clbTestLabel), func() {
-	basename := "clb-scale-ops-test"
+var _ = Describe("Container Load Balancer Scale Operations", Label(slbTestLabel), func() {
+	basename := "slb-scale-ops-test"
 	serviceName := "scale-ops-service"
 
 	var (

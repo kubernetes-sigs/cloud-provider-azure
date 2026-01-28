@@ -806,7 +806,7 @@ func isDualStackService(service *v1.Service) bool {
 	return len(service.Spec.IPFamilies) == 2
 }
 
-func (az *Cloud) getBackendPoolNameForCLBService(service *v1.Service) (string, error) {
+func (az *Cloud) getBackendPoolNameForSLBService(service *v1.Service) (string, error) {
 	if isDualStackService(service) {
 		return "", fmt.Errorf("dual-stack services are not supported when LB backend pool type is PodIP")
 	}

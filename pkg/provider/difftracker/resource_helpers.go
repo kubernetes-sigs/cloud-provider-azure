@@ -56,7 +56,7 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 	var probes []*armnetwork.Probe
 
 	if config != nil && len(config.FrontendPorts) > 0 {
-		// For CLB with PodIP backend pool, we disable floating IP and don't create health probes
+		// For SLB with PodIP backend pool, we disable floating IP and don't create health probes
 		// Traffic goes directly to pod IPs on the backend port
 		for i, frontendPort := range config.FrontendPorts {
 			backendPort := frontendPort.Port
@@ -237,15 +237,15 @@ func ExtractInboundConfigFromService(service *v1.Service) *InboundConfig {
 		})
 
 		// Backend port (target port)
-		// For CLB with PodIP backend, we use TargetPort
+		// For SLB with PodIP backend, we use TargetPort
 		// If TargetPort is not specified, default to Port
 		backendPort := port.Port
 		if port.TargetPort.Type == 0 && port.TargetPort.IntVal > 0 { // intstr.Int
 			backendPort = port.TargetPort.IntVal
 		} else if port.TargetPort.Type == 1 { // intstr.String
-			// Named ports not supported in CLB mode - use Port as fallback
+			// Named ports not supported in SLB mode - use Port as fallback
 			serviceName := fmt.Sprintf("%s/%s", service.Namespace, service.Name)
-			klog.V(2).Infof("Named targetPort %s not supported in CLB mode for service %s, using Port %d",
+			klog.V(2).Infof("Named targetPort %s not supported in SLB mode for service %s, using Port %d",
 				port.TargetPort.StrVal, serviceName, port.Port)
 			backendPort = port.Port
 		}

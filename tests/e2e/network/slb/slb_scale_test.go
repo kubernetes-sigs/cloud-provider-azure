@@ -34,8 +34,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-var _ = Describe("CLB - Pod Scaling", Label(clbTestLabel), func() {
-	basename := "clb-scale-test"
+var _ = Describe("SLB - Pod Scaling", Label(slbTestLabel), func() {
+	basename := "slb-scale-test"
 
 	var (
 		cs clientset.Interface
@@ -89,7 +89,7 @@ var _ = Describe("CLB - Pod Scaling", Label(clbTestLabel), func() {
 			azureWaitTime = 60 * time.Second
 		)
 
-		serviceName := "clb-parallel-pods-service"
+		serviceName := "slb-parallel-pods-service"
 
 		podLabels := map[string]string{
 			"app": serviceName,

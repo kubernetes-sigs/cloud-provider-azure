@@ -449,7 +449,7 @@ func TestBackendPoolPopulation(t *testing.T) {
 	serviceUID := "my-service-uid"
 	_, lb, _ := buildInboundServiceResources(serviceUID, config, dtConfig)
 
-	// Backend pool should be named after serviceUID for CLB
+	// Backend pool should be named after serviceUID for SLB
 	assert.Len(t, lb.Properties.BackendAddressPools, 1)
 	backendPool := lb.Properties.BackendAddressPools[0]
 

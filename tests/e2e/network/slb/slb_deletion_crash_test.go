@@ -34,8 +34,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-var _ = Describe("Container Load Balancer Deletion Crash Recovery Tests", Label(clbTestLabel, "CLB-DeletionCrash"), func() {
-	basename := "clb-del-crash"
+var _ = Describe("Container Load Balancer Deletion Crash Recovery Tests", Label(slbTestLabel, "SLB-DeletionCrash"), func() {
+	basename := "slb-del-crash"
 
 	var (
 		cs        clientset.Interface
@@ -602,7 +602,7 @@ var _ = Describe("Container Load Balancer Deletion Crash Recovery Tests", Label(
 	})
 })
 
-// countAzureLoadBalancers counts the number of CLB-managed Load Balancers in the resource group
+// countAzureLoadBalancers counts the number of SLB-managed Load Balancers in the resource group
 func countAzureLoadBalancers() (int, error) {
 	cmd := exec.Command("az", "network", "lb", "list",
 		"--resource-group", resourceGroupName,
@@ -617,12 +617,12 @@ func countAzureLoadBalancers() (int, error) {
 		return 0, fmt.Errorf("failed to parse LB JSON: %w", err)
 	}
 
-	// CLB Load Balancers are named with service UIDs (36-char lowercase UUIDs)
+	// SLB Load Balancers are named with service UIDs (36-char lowercase UUIDs)
 	// Exclude AKS-managed LBs like "kubernetes", "kubernetes-internal"
-	clbCount := 0
+	slbCount := 0
 	for _, lb := range lbs {
 		name, _ := lb["name"].(string)
-		// CLB LBs are named with service UIDs: 36 chars, 4 dashes, all lowercase hex
+		// SLB LBs are named with service UIDs: 36 chars, 4 dashes, all lowercase hex
 		if len(name) == 36 && strings.Count(name, "-") == 4 {
 			// Additional check: verify it looks like a UUID (all lowercase hex + dashes)
 			isUUID := true
@@ -633,15 +633,15 @@ func countAzureLoadBalancers() (int, error) {
 				}
 			}
 			if isUUID {
-				clbCount++
+				slbCount++
 			}
 		}
 	}
 
-	return clbCount, nil
+	return slbCount, nil
 }
 
-// countAzurePublicIPs counts the number of CLB-managed Public IPs in the resource group
+// countAzurePublicIPs counts the number of SLB-managed Public IPs in the resource group
 func countAzurePublicIPs() (int, error) {
 	cmd := exec.Command("az", "network", "public-ip", "list",
 		"--resource-group", resourceGroupName,
@@ -656,27 +656,27 @@ func countAzurePublicIPs() (int, error) {
 		return 0, fmt.Errorf("failed to parse PIP JSON: %w", err)
 	}
 
-	// CLB PIPs are named with service UIDs (36-char UUIDs) for inbound services
+	// SLB PIPs are named with service UIDs (36-char UUIDs) for inbound services
 	// NAT Gateway PIPs are named with egress name + "-pip" (e.g., "default-natgw-v2-pip")
-	// We count both types but exclude non-CLB PIPs
-	clbPIPCount := 0
+	// We count both types but exclude non-SLB PIPs
+	slbPIPCount := 0
 	for _, pip := range pips {
 		name, _ := pip["name"].(string)
-		// CLB inbound service PIPs are just UUIDs (36 chars, 4 dashes)
+		// SLB inbound service PIPs are just UUIDs (36 chars, 4 dashes)
 		if len(name) == 36 && strings.Count(name, "-") == 4 {
-			clbPIPCount++
+			slbPIPCount++
 		}
-		// CLB NAT Gateway PIPs end with "-pip" (but exclude default-natgw-v2-pip)
+		// SLB NAT Gateway PIPs end with "-pip" (but exclude default-natgw-v2-pip)
 		if strings.HasSuffix(name, "-pip") && name != "default-natgw-v2-pip" {
-			clbPIPCount++
+			slbPIPCount++
 		}
 	}
 
-	return clbPIPCount, nil
+	return slbPIPCount, nil
 }
 
-// countAzureNATGateways counts the number of CLB-managed NAT Gateways in the resource group
-// CLB creates NAT Gateways named after the egress label value (e.g., namespace name)
+// countAzureNATGateways counts the number of SLB-managed NAT Gateways in the resource group
+// SLB creates NAT Gateways named after the egress label value (e.g., namespace name)
 // The default NAT Gateway "default-natgw-v2" is always excluded
 func countAzureNATGateways() (int, error) {
 	cmd := exec.Command("az", "network", "nat", "gateway", "list",

@@ -14,14 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// NOTE: The Container Load Balancer (CLB) tests have been reorganized into the
-// tests/e2e/network/clb/ directory for better maintainability. This file is
+// NOTE: The Container Load Balancer (SLB) tests have been reorganized into the
+// tests/e2e/network/slb/ directory for better maintainability. This file is
 // preserved for reference. The new structure includes:
-// - clb_suite_test.go: Shared types, constants, and helper functions
-// - clb_basic_test.go: Basic LoadBalancer service creation test
-// - clb_scale_test.go: Large-scale pod creation test (120 pods)
-// - clb_label_update_test.go: Dynamic label update test (475 pods)
-// - clb_concurrent_test.go: Concurrent services test (15 services × 5 pods)
+// - slb_suite_test.go: Shared types, constants, and helper functions
+// - slb_basic_test.go: Basic LoadBalancer service creation test
+// - slb_scale_test.go: Large-scale pod creation test (120 pods)
+// - slb_label_update_test.go: Dynamic label update test (475 pods)
+// - slb_concurrent_test.go: Concurrent services test (15 services × 5 pods)
 
 package network
 
@@ -44,13 +44,13 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-// Environment variable names for CLB configuration
+// Environment variable names for SLB configuration
 const (
-	clbTestLabel = "CLB"
+	slbTestLabel = "SLB"
 
 	// Environment variable names
-	envCLBSubscriptionID        = "AZURE_SUBSCRIPTION_ID"
-	envCLBResourceGroup         = "AZURE_CLB_RESOURCE_GROUP"
+	envSLBSubscriptionID        = "AZURE_SUBSCRIPTION_ID"
+	envSLBResourceGroup         = "AZURE_SLB_RESOURCE_GROUP"
 	envServiceGatewayName       = "AZURE_SERVICE_GATEWAY_NAME"
 	envServiceGatewayAPIVersion = "AZURE_SERVICE_GATEWAY_API_VERSION"
 
@@ -65,13 +65,13 @@ var (
 	resourceGroupName  string
 	serviceGatewayName string
 	apiVersion         string
-	clbConfigInit      bool
+	slbConfigInit      bool
 )
 
-// initCLBTestConfig initializes the CLB test configuration from environment variables
+// initSLBTestConfig initializes the SLB test configuration from environment variables
 // and AzureTestClient. This is called lazily when needed.
-func initCLBTestConfig() error {
-	if clbConfigInit {
+func initSLBTestConfig() error {
+	if slbConfigInit {
 		return nil
 	}
 
@@ -85,14 +85,14 @@ func initCLBTestConfig() error {
 	resourceGroupName = tc.GetResourceGroup()
 
 	// Allow override from environment
-	if envSub := os.Getenv(envCLBSubscriptionID); envSub != "" {
+	if envSub := os.Getenv(envSLBSubscriptionID); envSub != "" {
 		subscriptionID = envSub
 	}
-	if envRG := os.Getenv(envCLBResourceGroup); envRG != "" {
+	if envRG := os.Getenv(envSLBResourceGroup); envRG != "" {
 		resourceGroupName = envRG
 	}
 
-	// Get CLB-specific config from environment with defaults
+	// Get SLB-specific config from environment with defaults
 	serviceGatewayName = os.Getenv(envServiceGatewayName)
 	if serviceGatewayName == "" {
 		serviceGatewayName = defaultServiceGatewayName
@@ -103,13 +103,13 @@ func initCLBTestConfig() error {
 		apiVersion = defaultAPIVersion
 	}
 
-	utils.Logf("CLB Test Configuration:")
+	utils.Logf("SLB Test Configuration:")
 	utils.Logf("  Subscription ID: %s", subscriptionID)
 	utils.Logf("  Resource Group: %s", resourceGroupName)
 	utils.Logf("  Service Gateway: %s", serviceGatewayName)
 	utils.Logf("  API Version: %s", apiVersion)
 
-	clbConfigInit = true
+	slbConfigInit = true
 	return nil
 }
 
@@ -328,8 +328,8 @@ func verifyAzureResources(serviceUID string) error {
 	return nil
 }
 
-var _ = Describe("Container Load Balancer", Label(clbTestLabel), func() {
-	basename := "clb-test"
+var _ = Describe("Container Load Balancer", Label(slbTestLabel), func() {
+	basename := "slb-test"
 	serviceName := "inbound-podname-echo5"
 
 	var (
@@ -655,7 +655,7 @@ var _ = Describe("Container Load Balancer", Label(clbTestLabel), func() {
 			azureWaitTime = 60 * time.Second
 		)
 
-		serviceName := "clb-parallel-pods-service"
+		serviceName := "slb-parallel-pods-service"
 
 		podLabels := map[string]string{
 			"app": serviceName,
@@ -1020,7 +1020,7 @@ var _ = Describe("Container Load Balancer", Label(clbTestLabel), func() {
 			azureWaitTime = 60 * time.Second
 		)
 
-		serviceName := "clb-label-update-service"
+		serviceName := "slb-label-update-service"
 
 		// Labels that initially don't match the service
 		initialPodLabels := map[string]string{
@@ -1045,7 +1045,7 @@ var _ = Describe("Container Load Balancer", Label(clbTestLabel), func() {
 
 		for i := 0; i < numPods; i++ {
 			go func(index int) {
-				podName := fmt.Sprintf("clb-label-update-pod-%d", index)
+				podName := fmt.Sprintf("slb-label-update-pod-%d", index)
 				pod := &v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      podName,

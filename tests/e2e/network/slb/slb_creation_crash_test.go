@@ -32,8 +32,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-var _ = Describe("Container Load Balancer Creation Crash Recovery Tests", Label(clbTestLabel, "CLB-CreationCrash"), func() {
-	basename := "clb-create-crash"
+var _ = Describe("Container Load Balancer Creation Crash Recovery Tests", Label(slbTestLabel, "SLB-CreationCrash"), func() {
+	basename := "slb-create-crash"
 
 	var (
 		cs        clientset.Interface

@@ -3372,7 +3372,7 @@ func TestReconcileLoadBalancerRuleCommon(t *testing.T) {
 			desc:            "LB backend pool of type PodIP - getExpectedLBRules should return expected rules and probes",
 			service:         getTestServiceWithIntTargetPorts("test1", v1.ProtocolTCP, nil, false, 8080, 1234),
 			loadBalancerSKU: "standardV2",
-			expectedRules:   getTestRuleCLB(false, 8080, 1234, false),
+			expectedRules:   getTestRuleSLB(false, 8080, 1234, false),
 			expectedProbes:  nil,
 		},
 	}...)
@@ -3482,7 +3482,7 @@ func getTCPResetTestRules(enableTCPReset bool) map[bool][]*armnetwork.LoadBalanc
 	}
 }
 
-func getTestRuleCLB(enableTCPReset bool, servicePort int32, targetPort int32, isIPv6 bool) map[bool][]*armnetwork.LoadBalancingRule {
+func getTestRuleSLB(enableTCPReset bool, servicePort int32, targetPort int32, isIPv6 bool) map[bool][]*armnetwork.LoadBalancingRule {
 	rule := getTestRule(enableTCPReset, servicePort, isIPv6)
 	rule.Properties.EnableFloatingIP = to.Ptr(false)
 	rule.Properties.Probe = nil

@@ -31,8 +31,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-var _ = Describe("Container Load Balancer Stress Tests", Label(clbTestLabel), func() {
-	basename := "clb-stress-test"
+var _ = Describe("Container Load Balancer Stress Tests", Label(slbTestLabel), func() {
+	basename := "slb-stress-test"
 
 	var (
 		cs clientset.Interface

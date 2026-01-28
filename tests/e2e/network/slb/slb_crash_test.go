@@ -32,10 +32,10 @@ import (
 )
 
 // CCM Crash Recovery test label
-const clbCrashTestLabel = "CLB-Crash"
+const slbCrashTestLabel = "SLB-Crash"
 
-var _ = Describe("Container Load Balancer Crash Recovery", Label(clbTestLabel, clbCrashTestLabel), func() {
-	basename := "clb-crash-test"
+var _ = Describe("Container Load Balancer Crash Recovery", Label(slbTestLabel, slbCrashTestLabel), func() {
+	basename := "slb-crash-test"
 	serviceName := "crash-service"
 
 	var (
@@ -145,7 +145,7 @@ var _ = Describe("Container Load Balancer Crash Recovery", Label(clbTestLabel, c
 				Name:      serviceName,
 				Namespace: ns.Name,
 				Annotations: map[string]string{
-					"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "clb",
+					"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "slb",
 				},
 			},
 			Spec: v1.ServiceSpec{
@@ -245,7 +245,7 @@ var _ = Describe("Container Load Balancer Crash Recovery", Label(clbTestLabel, c
 				Name:      serviceName,
 				Namespace: ns.Name,
 				Annotations: map[string]string{
-					"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "clb",
+					"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "slb",
 				},
 			},
 			Spec: v1.ServiceSpec{
@@ -372,7 +372,7 @@ var _ = Describe("Container Load Balancer Crash Recovery", Label(clbTestLabel, c
 				Name:      serviceName,
 				Namespace: ns.Name,
 				Annotations: map[string]string{
-					"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "clb",
+					"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "slb",
 				},
 			},
 			Spec: v1.ServiceSpec{
@@ -433,8 +433,8 @@ var _ = Describe("Container Load Balancer Crash Recovery", Label(clbTestLabel, c
 	})
 })
 
-var _ = Describe("Container Load Balancer Outbound Crash Recovery", Label(clbTestLabel, clbCrashTestLabel), func() {
-	basename := "clb-outbound-crash"
+var _ = Describe("Container Load Balancer Outbound Crash Recovery", Label(slbTestLabel, slbCrashTestLabel), func() {
+	basename := "slb-outbound-crash"
 
 	var (
 		cs        clientset.Interface

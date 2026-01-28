@@ -376,7 +376,7 @@ func TestBuildInboundServiceResources_BackendPoolNaming(t *testing.T) {
 
 	_, lb, _ := buildInboundServiceResources("my-service-uid", config, dtConfig)
 
-	// Backend pool name must match serviceUID for CLB mode
+	// Backend pool name must match serviceUID for SLB mode
 	assert.Len(t, lb.Properties.BackendAddressPools, 1)
 	backendPool := lb.Properties.BackendAddressPools[0]
 	assert.Equal(t, "my-service-uid", *backendPool.Name)

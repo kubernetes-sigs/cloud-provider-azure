@@ -32,8 +32,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-var _ = Describe("Container Load Balancer Multi-Node Tests", Label(clbTestLabel, "CLB-MultiNode"), func() {
-	basename := "clb-multinode"
+var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel, "SLB-MultiNode"), func() {
+	basename := "slb-multinode"
 
 	var (
 		cs clientset.Interface

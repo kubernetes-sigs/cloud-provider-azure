@@ -39,8 +39,8 @@ const (
 	egressLabel = "kubernetes.azure.com/service-egress-gateway"
 )
 
-var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(clbTestLabel), func() {
-	basename := "clb-outbound-test"
+var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTestLabel), func() {
+	basename := "slb-outbound-test"
 
 	var (
 		cs clientset.Interface
