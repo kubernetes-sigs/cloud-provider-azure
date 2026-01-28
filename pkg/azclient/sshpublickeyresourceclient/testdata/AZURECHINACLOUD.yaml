@@ -6,7 +6,7 @@ interactions:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 25
+        content_length: 22
         transfer_encoding: []
         trailer: {}
         host: management.chinacloudapi.cn
@@ -18,11 +18,11 @@ interactions:
             Accept:
                 - application/json
             Content-Length:
-                - "25"
+                - "22"
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.4; linux)
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.24.0; linux)
         url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-SSHPublicKeyResource?api-version=2021-04-01
         method: PUT
       response:
@@ -31,14 +31,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 257
+        content_length: 306
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource","name":"aks-cit-SSHPublicKeyResource","type":"Microsoft.Resources/resourceGroups","location":"chinaeast2","properties":{"provisioningState":"Succeeded"}}'
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource","name":"aks-cit-SSHPublicKeyResource","type":"Microsoft.Resources/resourceGroups","location":"chinaeast2","tags":{"createdAt":"2001-02-03T04:05:06Z"},"properties":{"provisioningState":"Succeeded"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "257"
+                - "306"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -47,8 +47,12 @@ interactions:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "2999"
         status: 201 Created
         code: 201
         duration: 200ms
@@ -57,7 +61,7 @@ interactions:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 25
+        content_length: 22
         transfer_encoding: []
         trailer: {}
         host: management.chinacloudapi.cn
@@ -69,12 +73,12 @@ interactions:
             Accept:
                 - application/json
             Content-Length:
-                - "25"
+                - "22"
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-SSHPublicKeyResource azsdk-go-armcompute/v6.3.0 (go1.23.4; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource?api-version=2024-11-01
+                - ccm-SSHPublicKeyResource azsdk-go-armcompute/v7.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource?api-version=2025-04-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -82,29 +86,32 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 243
+        content_length: 240
         uncompressed: false
         body: "{\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/AKS-CIT-SSHPUBLICKEYRESOURCE/providers/Microsoft.Compute/sshPublicKeys/testResource\",\r\n  \"location\": \"chinaeast2\",\r\n  \"properties\": {}\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "243"
+                - "240"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Need-To-Refresh-Epl-Cache:
                 - "False"
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/chinaeast2/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "2999"
         status: 201 Created
         code: 201
         duration: 200ms
@@ -125,8 +132,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-SSHPublicKeyResource azsdk-go-armcompute/v6.3.0 (go1.23.4; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource/generateKeyPair?api-version=2024-11-01
+                - ccm-SSHPublicKeyResource azsdk-go-armcompute/v7.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource/generateKeyPair?api-version=2025-04-01
         method: POST
       response:
         proto: HTTP/2.0
@@ -148,15 +155,18 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Need-To-Refresh-Epl-Cache:
                 - "False"
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/chinaeast2/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "2999"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -177,8 +187,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-SSHPublicKeyResource azsdk-go-armcompute/v6.3.0 (go1.23.4; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource?api-version=2024-11-01
+                - ccm-SSHPublicKeyResource azsdk-go-armcompute/v7.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource?api-version=2025-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -186,29 +196,30 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 839
+        content_length: 836
         uncompressed: false
         body: "{\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/AKS-CIT-SSHPUBLICKEYRESOURCE/providers/Microsoft.Compute/sshPublicKeys/testResource\",\r\n  \"location\": \"chinaeast2\",\r\n  \"properties\": {\r\n    \"publicKey\": \"ssh-rsa {KEY} generated-by-azure\"\r\n  }\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "839"
+                - "836"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Need-To-Refresh-Epl-Cache:
                 - "False"
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3749"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -229,8 +240,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-SSHPublicKeyResource azsdk-go-armcompute/v6.3.0 (go1.23.4; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResourcenotfound?api-version=2024-11-01
+                - ccm-SSHPublicKeyResource azsdk-go-armcompute/v7.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResourcenotfound?api-version=2025-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -254,6 +265,8 @@ interactions:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Failure-Cause:
@@ -278,8 +291,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-SSHPublicKeyResource azsdk-go-armcompute/v6.3.0 (go1.23.4; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys?api-version=2024-11-01
+                - ccm-SSHPublicKeyResource azsdk-go-armcompute/v7.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys?api-version=2025-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -287,29 +300,32 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 896
+        content_length: 815
         uncompressed: false
-        body: "{\r\n  \"value\": [\r\n    {\r\n      \"name\": \"testResource\",\r\n      \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/AKS-CIT-SSHPUBLICKEYRESOURCE/providers/Microsoft.Compute/sshPublicKeys/testResource\",\r\n      \"location\": \"chinaeast2\",\r\n      \"properties\": {\r\n        \"publicKey\": \"ssh-rsa {KEY} generated-by-azure\"\r\n      }\r\n    }\r\n  ]\r\n}"
+        body: '{"value":[{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/AKS-CIT-SSHPUBLICKEYRESOURCE/providers/Microsoft.Compute/sshPublicKeys/testResource","location":"chinaeast2","properties":{"publicKey":"ssh-rsa {KEY} generated-by-azure"}}]}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "896"
+                - "815"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Need-To-Refresh-Epl-Cache:
                 - "False"
+            X-Ms-Original-Request-Ids:
+                - 00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3749"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -330,8 +346,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-SSHPublicKeyResource azsdk-go-armcompute/v6.3.0 (go1.23.4; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResourcenotfound/providers/Microsoft.Compute/sshPublicKeys?api-version=2024-11-01
+                - ccm-SSHPublicKeyResource azsdk-go-armcompute/v7.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResourcenotfound/providers/Microsoft.Compute/sshPublicKeys?api-version=2025-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -355,6 +371,8 @@ interactions:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Failure-Cause:
@@ -379,8 +397,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-SSHPublicKeyResource azsdk-go-armcompute/v6.3.0 (go1.23.4; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource?api-version=2024-11-01
+                - ccm-SSHPublicKeyResource azsdk-go-armcompute/v7.3.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SSHPublicKeyResource/providers/Microsoft.Compute/sshPublicKeys/testResource?api-version=2025-04-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -400,15 +418,18 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Need-To-Refresh-Epl-Cache:
                 - "False"
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/northcentralus/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
+                - "2999"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -429,7 +450,7 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.4; linux)
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.24.0; linux)
         url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-SSHPublicKeyResource?api-version=2021-04-01
         method: DELETE
       response:
@@ -449,13 +470,17 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRTU0hQVUJMSUNLRVlSRVNPVVJDRS1DSElOQUVBU1QyIiwiam9iTG9jYXRpb24iOiJjaGluYWVhc3QyIn0?api-version=2021-04-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRTU0hQVUJMSUNLRVlSRVNPVVJDRS1FQVNUVVMyIiwiam9iTG9jYXRpb24iOiJlYXN0dXMyIn0?api-version=2021-04-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
+                - "2999"
         status: 202 Accepted
         code: 202
         duration: 200ms
@@ -474,8 +499,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.4; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRTU0hQVUJMSUNLRVlSRVNPVVJDRS1DSElOQUVBU1QyIiwiam9iTG9jYXRpb24iOiJjaGluYWVhc3QyIn0?api-version=2021-04-01&c=c&h=h&s=s&t=t
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRTU0hQVUJMSUNLRVlSRVNPVVJDRS1FQVNUVVMyIiwiam9iTG9jYXRpb24iOiJlYXN0dXMyIn0?api-version=2021-04-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -497,8 +522,12 @@ interactions:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3749"
         status: 200 OK
         code: 200
         duration: 200ms

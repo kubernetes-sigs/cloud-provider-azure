@@ -91,17 +91,19 @@ func (g Generator) generateTestCase(ctx *genall.GenerationContext, root *loader.
 			aliasMap[markerConf.PackageAlias] = struct{}{}
 			importList[markerConf.PackageName] = aliasMap
 			importList["strings"] = make(map[string]struct{})
+			if markerConf.Etag {
+				importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/to"] = make(map[string]struct{})
+			}
+		}
+		if strings.EqualFold(FuncListByRG, verb) || strings.EqualFold(FuncList, verb) {
+			importList["strings"] = make(map[string]struct{})
 		}
 	}
 	if len(markerConf.Verbs) > 0 {
 		importList["github.com/onsi/gomega"] = map[string]struct{}{}
 	}
 	importList["context"] = make(map[string]struct{})
-	importList["strings"] = make(map[string]struct{})
 	importList["github.com/onsi/ginkgo/v2"] = map[string]struct{}{}
-	if markerConf.Etag {
-		importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/to"] = make(map[string]struct{})
-	}
 	file, err := ctx.Open(root, root.Name+"_test.go")
 	if err != nil {
 		return err
