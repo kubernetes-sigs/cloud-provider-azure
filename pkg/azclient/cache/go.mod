@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.21.0
-	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 v6.4.0
+	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7 v7.3.0
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/sync v0.19.0
 	k8s.io/client-go v0.35.0
