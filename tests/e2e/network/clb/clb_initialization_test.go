@@ -120,7 +120,6 @@ func enableCLBConfig(config map[string]interface{}, serviceGatewayName string) m
 	config["disableOutboundSNAT"] = false
 	config["serviceGatewayEnabled"] = true
 	config["serviceGatewayResourceName"] = serviceGatewayName
-	config["batchUpdaterSleepDuration"] = 400
 	return config
 }
 

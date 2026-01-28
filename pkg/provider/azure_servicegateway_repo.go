@@ -10,7 +10,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// TODO(enechitoaia): remove when aks-rp
+// TODO(enechitoaia): remove after added aks-rp support
 func (az *Cloud) GetServiceGateway(ctx context.Context, serviceGatewayName string) (*armnetwork.ServiceGateway, error) {
 	result, err := az.NetworkClientFactory.GetServiceGatewayClient().Get(ctx, az.ResourceGroup, serviceGatewayName, nil)
 	if err != nil {
@@ -21,7 +21,7 @@ func (az *Cloud) GetServiceGateway(ctx context.Context, serviceGatewayName strin
 	return result, nil
 }
 
-// TODO(enechitoaia): remove when aks-rp
+// TODO(enechitoaia): remove after added aks-rp support
 func (az *Cloud) GetServices(ctx context.Context, serviceGatewayName string) ([]*armnetwork.ServiceGatewayService, error) {
 	result, err := az.NetworkClientFactory.GetServiceGatewayClient().GetServices(ctx, az.ResourceGroup, serviceGatewayName)
 	if err != nil {

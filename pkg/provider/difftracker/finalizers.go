@@ -10,14 +10,25 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"time"
 
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 	servicehelper "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/klog/v2"
 )
+
+// Retry configuration for finalizer removal operations
+var finalizerRetryBackoff = wait.Backoff{
+	Duration: 100 * time.Millisecond, // Initial delay
+	Factor:   2.0,                    // Exponential factor
+	Jitter:   0.1,                    // 10% jitter
+	Steps:    5,                      // Max retries
+	Cap:      5 * time.Second,        // Max delay
+}
 
 // ================================================================================================
 // FINALIZER CONSTANTS
@@ -81,46 +92,116 @@ func hasServiceGatewayFinalizer(service *v1.Service) bool {
 // IMPORTANT: We also add the K8s LoadBalancerCleanupFinalizer so that the upstream
 // service controller's needsCleanup() returns true when the service is being deleted.
 // This ensures EnsureLoadBalancerDeleted is called, which triggers our async deletion flow.
+// Implements retry with exponential backoff for resilience against transient API failures.
 func (dt *DiffTracker) addServiceGatewayFinalizer(ctx context.Context, service *v1.Service) error {
 	if hasServiceGatewayFinalizer(service) {
 		return nil
 	}
 
-	// Make a copy so we don't mutate the shared informer cache
-	updated := service.DeepCopy()
-	updated.ObjectMeta.Finalizers = append(updated.ObjectMeta.Finalizers, ServiceGatewayServiceCleanupFinalizer)
+	namespace := service.Namespace
+	name := service.Name
+	var lastErr error
 
-	// Also add the K8s LoadBalancerCleanupFinalizer if not present.
-	// This is critical: the upstream K8s service controller uses HasLBFinalizer()
-	// in needsCleanup() to determine if a service being deleted needs cleanup.
-	// Without this finalizer, the controller tries to add it (which fails since
-	// the service is being deleted), and never calls EnsureLoadBalancerDeleted.
-	if !servicehelper.HasLBFinalizer(service) {
-		updated.ObjectMeta.Finalizers = append(updated.ObjectMeta.Finalizers, servicehelper.LoadBalancerCleanupFinalizer)
+	retryErr := wait.ExponentialBackoff(finalizerRetryBackoff, func() (bool, error) {
+		// Get fresh service to avoid conflicts
+		currentSvc, err := dt.kubeClient.CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				// Service deleted, nothing to do
+				return true, nil
+			}
+			lastErr = err
+			klog.V(4).Infof("addServiceGatewayFinalizer: transient error getting service %s/%s, will retry: %v", namespace, name, err)
+			return false, nil // Retry
+		}
+
+		// Check if already has finalizer (may have been added by concurrent operation)
+		if hasServiceGatewayFinalizer(currentSvc) {
+			return true, nil
+		}
+
+		// Make a copy so we don't mutate the shared informer cache
+		updated := currentSvc.DeepCopy()
+		updated.ObjectMeta.Finalizers = append(updated.ObjectMeta.Finalizers, ServiceGatewayServiceCleanupFinalizer)
+
+		// Also add the K8s LoadBalancerCleanupFinalizer if not present.
+		// This is critical: the upstream K8s service controller uses HasLBFinalizer()
+		// in needsCleanup() to determine if a service being deleted needs cleanup.
+		// Without this finalizer, the controller tries to add it (which fails since
+		// the service is being deleted), and never calls EnsureLoadBalancerDeleted.
+		if !servicehelper.HasLBFinalizer(currentSvc) {
+			updated.ObjectMeta.Finalizers = append(updated.ObjectMeta.Finalizers, servicehelper.LoadBalancerCleanupFinalizer)
+		}
+
+		klog.V(2).Infof("Adding ServiceGateway finalizer to service %s/%s", namespace, name)
+		_, err = servicehelper.PatchService(dt.kubeClient.CoreV1(), currentSvc, updated)
+		if err != nil {
+			lastErr = err
+			klog.V(4).Infof("addServiceGatewayFinalizer: transient error patching service %s/%s, will retry: %v", namespace, name, err)
+			return false, nil // Retry
+		}
+
+		return true, nil // Success
+	})
+
+	if retryErr != nil {
+		return fmt.Errorf("failed to add finalizer after retries: %v (last error: %v)", retryErr, lastErr)
 	}
-
-	klog.V(2).Infof("Adding ServiceGateway finalizer to service %s/%s", service.Namespace, service.Name)
-	_, err := servicehelper.PatchService(dt.kubeClient.CoreV1(), service, updated)
-	return err
+	return nil
 }
 
 // removeServiceGatewayFinalizer removes the ServiceGateway cleanup finalizer from the service
 // This allows Kubernetes to complete the service deletion after Azure resources are cleaned up
 // NOTE: We also remove the K8s LoadBalancerCleanupFinalizer that we added in addServiceGatewayFinalizer
+// Implements retry with exponential backoff for resilience against transient API failures.
 func (dt *DiffTracker) removeServiceGatewayFinalizer(ctx context.Context, service *v1.Service) error {
 	if !hasServiceGatewayFinalizer(service) {
 		return nil
 	}
 
-	// Make a copy so we don't mutate the shared informer cache
-	updated := service.DeepCopy()
-	updated.ObjectMeta.Finalizers = removeFinalizerString(updated.ObjectMeta.Finalizers, ServiceGatewayServiceCleanupFinalizer)
-	// Also remove the K8s LoadBalancerCleanupFinalizer that we added
-	updated.ObjectMeta.Finalizers = removeFinalizerString(updated.ObjectMeta.Finalizers, servicehelper.LoadBalancerCleanupFinalizer)
+	namespace := service.Namespace
+	name := service.Name
+	var lastErr error
 
-	klog.V(2).Infof("Removing ServiceGateway finalizer from service %s/%s", service.Namespace, service.Name)
-	_, err := servicehelper.PatchService(dt.kubeClient.CoreV1(), service, updated)
-	return err
+	retryErr := wait.ExponentialBackoff(finalizerRetryBackoff, func() (bool, error) {
+		// Get fresh service to avoid conflicts
+		currentSvc, err := dt.kubeClient.CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				// Service already deleted, finalizer effectively removed
+				return true, nil
+			}
+			lastErr = err
+			klog.V(4).Infof("removeServiceGatewayFinalizer: transient error getting service %s/%s, will retry: %v", namespace, name, err)
+			return false, nil // Retry
+		}
+
+		// Check if finalizer already removed (may have been removed by concurrent operation)
+		if !hasServiceGatewayFinalizer(currentSvc) {
+			return true, nil
+		}
+
+		// Make a copy so we don't mutate the shared informer cache
+		updated := currentSvc.DeepCopy()
+		updated.ObjectMeta.Finalizers = removeFinalizerString(updated.ObjectMeta.Finalizers, ServiceGatewayServiceCleanupFinalizer)
+		// Also remove the K8s LoadBalancerCleanupFinalizer that we added
+		updated.ObjectMeta.Finalizers = removeFinalizerString(updated.ObjectMeta.Finalizers, servicehelper.LoadBalancerCleanupFinalizer)
+
+		klog.V(2).Infof("Removing ServiceGateway finalizer from service %s/%s", namespace, name)
+		_, err = servicehelper.PatchService(dt.kubeClient.CoreV1(), currentSvc, updated)
+		if err != nil {
+			lastErr = err
+			klog.V(4).Infof("removeServiceGatewayFinalizer: transient error patching service %s/%s, will retry: %v", namespace, name, err)
+			return false, nil // Retry
+		}
+
+		return true, nil // Success
+	})
+
+	if retryErr != nil {
+		return fmt.Errorf("failed to remove finalizer after retries: %v (last error: %v)", retryErr, lastErr)
+	}
+	return nil
 }
 
 // ================================================================================================
@@ -298,6 +379,9 @@ func (dt *DiffTracker) CheckPendingPodDeletions(ctx context.Context) {
 		remaining := len(dt.pendingPodDeletions)
 		dt.mu.Unlock()
 
+		// Update metric after cleanup
+		updatePendingPodDeletionsMetric(dt)
+
 		klog.V(2).Infof("CheckPendingPodDeletions: processed %d pod deletions, %d remaining",
 			len(processed), remaining)
 	}
@@ -330,6 +414,7 @@ func (dt *DiffTracker) isAddressInNRPLocked(serviceUID, location, address string
 // RemoveLastPodFinalizers removes finalizers from pods that were marked as "last pod" for a service.
 // This is called after the NAT Gateway has been successfully deleted.
 // It uses the collect-unlock-process-relock pattern to avoid holding the mutex during API calls.
+// Implements retry with exponential backoff for resilience against transient failures.
 func (dt *DiffTracker) RemoveLastPodFinalizers(ctx context.Context, serviceUID string) {
 	// Phase 1: Collect last-pod entries to process (with lock)
 	dt.mu.Lock()
@@ -363,38 +448,62 @@ func (dt *DiffTracker) RemoveLastPodFinalizers(ctx context.Context, serviceUID s
 		return
 	}
 
-	// Phase 2: Remove finalizers without holding lock (API calls)
+	// Phase 2: Remove finalizers without holding lock (API calls with retry)
 	var processed []string
+	var failed []string
 
 	for _, p := range toProcess {
-		// Get the pod and remove finalizer
-		pod, err := dt.getPodByNamespaceName(ctx, p.Namespace, p.Name)
-		if err != nil {
-			// Pod not found - already deleted, clean up tracking
-			klog.V(3).Infof("RemoveLastPodFinalizers: last pod %s not found, cleaning up tracking", p.Key)
-			processed = append(processed, p.Key)
-			continue
-		}
+		var lastErr error
 
-		if err := dt.removePodFinalizer(ctx, pod); err != nil {
-			klog.Warningf("RemoveLastPodFinalizers: failed to remove finalizer from last pod %s: %v", p.Key, err)
-			// Still add to processed - best effort, pod can be manually cleaned up
+		// Retry with exponential backoff
+		retryErr := wait.ExponentialBackoff(finalizerRetryBackoff, func() (bool, error) {
+			// Get the pod fresh each attempt
+			pod, err := dt.getPodByNamespaceName(ctx, p.Namespace, p.Name)
+			if err != nil {
+				if apierrors.IsNotFound(err) {
+					// Pod already deleted, finalizer effectively removed
+					klog.V(3).Infof("RemoveLastPodFinalizers: last pod %s not found, cleaning up tracking", p.Key)
+					return true, nil
+				}
+				lastErr = err
+				klog.V(4).Infof("RemoveLastPodFinalizers: transient error getting pod %s, will retry: %v", p.Key, err)
+				return false, nil // Retry
+			}
+
+			if err := dt.removePodFinalizer(ctx, pod); err != nil {
+				lastErr = err
+				klog.V(4).Infof("RemoveLastPodFinalizers: transient error removing finalizer from pod %s, will retry: %v", p.Key, err)
+				return false, nil // Retry
+			}
+
+			return true, nil // Success
+		})
+
+		if retryErr != nil {
+			// Exhausted retries
+			klog.Warningf("RemoveLastPodFinalizers: failed to remove finalizer from last pod %s after retries: %v (last error: %v)",
+				p.Key, retryErr, lastErr)
+			failed = append(failed, p.Key)
 		} else {
 			klog.V(2).Infof("RemoveLastPodFinalizers: successfully removed finalizer from last pod %s", p.Key)
+			processed = append(processed, p.Key)
 		}
-
-		processed = append(processed, p.Key)
 	}
 
 	// Phase 3: Clean up processed entries (with lock)
+	// Only remove successfully processed entries; failed ones will be retried on next cycle
 	if len(processed) > 0 {
 		dt.mu.Lock()
 		for _, podKey := range processed {
 			delete(dt.pendingPodDeletions, podKey)
 		}
+		remaining := len(dt.pendingPodDeletions)
 		dt.mu.Unlock()
 
-		klog.V(2).Infof("RemoveLastPodFinalizers: removed finalizers from %d last-pod entries for service %s",
-			len(processed), serviceUID)
+		// Update metric after cleanup
+		updatePendingPodDeletionsMetric(dt)
+
+		klog.V(2).Infof("RemoveLastPodFinalizers: removed finalizers from %d last-pod entries for service %s (%d failed, %d remaining)",
+			len(processed), serviceUID, len(failed), remaining)
 	}
 }

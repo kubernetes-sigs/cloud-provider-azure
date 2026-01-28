@@ -19,6 +19,7 @@ package network
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -27,14 +28,58 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-// Constants for CLB tests
+// Environment variable names for CLB configuration
 const (
-	clbTestLabel       = "CLB"
-	subscriptionID     = "3dc13b6d-6896-40ac-98f7-f18cbce2a405"
-	resourceGroupName  = "MC_enechitebld149025306_e2e-enechitoaia-67_eastus2euap"
-	serviceGatewayName = "my-service-gateway"
-	apiVersion         = "2025-01-01"
+	clbTestLabel = "CLB"
+
+	// Environment variable names
+	envServiceGatewayName       = "AZURE_SERVICE_GATEWAY_NAME"
+	envServiceGatewayAPIVersion = "AZURE_SERVICE_GATEWAY_API_VERSION"
+
+	// Default values
+	defaultServiceGatewayName = "my-service-gateway"
+	defaultAPIVersion         = "2025-01-01"
 )
+
+// Package-level variables populated from environment or AzureTestClient
+var (
+	subscriptionID     string
+	resourceGroupName  string
+	serviceGatewayName string
+	apiVersion         string
+)
+
+// initCLBConfig initializes the CLB test configuration from environment variables
+// and AzureTestClient. This should be called in BeforeSuite.
+func initCLBConfig() error {
+	// Try to get subscription and resource group from AzureTestClient
+	tc, err := utils.CreateAzureTestClient()
+	if err != nil {
+		return fmt.Errorf("failed to create AzureTestClient: %w", err)
+	}
+
+	subscriptionID = tc.GetSubscriptionID()
+	resourceGroupName = tc.GetResourceGroup()
+
+	// Get CLB-specific config from environment with defaults
+	serviceGatewayName = os.Getenv(envServiceGatewayName)
+	if serviceGatewayName == "" {
+		serviceGatewayName = defaultServiceGatewayName
+	}
+
+	apiVersion = os.Getenv(envServiceGatewayAPIVersion)
+	if apiVersion == "" {
+		apiVersion = defaultAPIVersion
+	}
+
+	utils.Logf("CLB Test Configuration:")
+	utils.Logf("  Subscription ID: %s", subscriptionID)
+	utils.Logf("  Resource Group: %s", resourceGroupName)
+	utils.Logf("  Service Gateway: %s", serviceGatewayName)
+	utils.Logf("  API Version: %s", apiVersion)
+
+	return nil
+}
 
 // AzurePublicIP represents a Public IP resource in Azure
 type AzurePublicIP struct {
@@ -112,8 +157,53 @@ type Address struct {
 
 // Helper functions for CLB tests
 
+// ensureCLBConfigInitialized ensures the CLB config is initialized.
+// This should be called before using any CLB config variables.
+func ensureCLBConfigInitialized() {
+	// Try to get subscription and resource group from environment first
+	if subscriptionID == "" {
+		subscriptionID = os.Getenv("AZURE_SUBSCRIPTION_ID")
+	}
+	if resourceGroupName == "" {
+		resourceGroupName = os.Getenv("AZURE_RESOURCE_GROUP")
+	}
+
+	// Initialize subscription and resource group from AzureTestClient if not set
+	if subscriptionID == "" || resourceGroupName == "" {
+		tc, err := utils.CreateAzureTestClient()
+		if err == nil {
+			if subscriptionID == "" {
+				subscriptionID = tc.GetSubscriptionID()
+			}
+			if resourceGroupName == "" {
+				resourceGroupName = tc.GetResourceGroup()
+			}
+		} else {
+			utils.Logf("Warning: Could not create AzureTestClient: %v", err)
+		}
+	}
+
+	// Initialize Service Gateway config from environment with defaults
+	if serviceGatewayName == "" {
+		serviceGatewayName = os.Getenv(envServiceGatewayName)
+		if serviceGatewayName == "" {
+			serviceGatewayName = defaultServiceGatewayName
+		}
+	}
+	if apiVersion == "" {
+		apiVersion = os.Getenv(envServiceGatewayAPIVersion)
+		if apiVersion == "" {
+			apiVersion = defaultAPIVersion
+		}
+	}
+
+	utils.Logf("CLB Config: SubscriptionID=%s, ResourceGroup=%s, ServiceGateway=%s, APIVersion=%s",
+		subscriptionID, resourceGroupName, serviceGatewayName, apiVersion)
+}
+
 // buildServiceGatewayURL constructs the Service Gateway API URL for a given path
 func buildServiceGatewayURL(path string) string {
+	ensureCLBConfigInitialized()
 	return fmt.Sprintf(
 		"https://management.azure.com/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/serviceGateways/%s/%s?api-version=%s",
 		subscriptionID, resourceGroupName, serviceGatewayName, path, apiVersion,

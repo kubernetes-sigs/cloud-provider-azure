@@ -106,6 +106,15 @@ var (
 		},
 	)
 
+	pendingPodDeletions = metrics.NewGauge(
+		&metrics.GaugeOpts{
+			Subsystem:      diffTrackerSubsystem,
+			Name:           "pending_pod_deletions",
+			Help:           "Number of pods pending deletion waiting for finalizer removal",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
 	deletionCheckDuration = metrics.NewHistogram(
 		&metrics.HistogramOpts{
 			Subsystem:      diffTrackerSubsystem,
@@ -209,6 +218,7 @@ func registerMetrics() {
 	legacyregistry.MustRegister(serviceOperationDuration)
 	legacyregistry.MustRegister(serviceOperationRetries)
 	legacyregistry.MustRegister(pendingServiceDeletions)
+	legacyregistry.MustRegister(pendingPodDeletions)
 	legacyregistry.MustRegister(deletionCheckDuration)
 	legacyregistry.MustRegister(servicesBlockedByLocations)
 	legacyregistry.MustRegister(serviceUpdaterConcurrentOps)
@@ -306,6 +316,13 @@ func updatePendingServiceDeletionsMetric(dt *DiffTracker) {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 	pendingServiceDeletions.Set(float64(len(dt.pendingServiceDeletions)))
+}
+
+// updatePendingPodDeletionsMetric updates the gauge for pending pod deletions
+func updatePendingPodDeletionsMetric(dt *DiffTracker) {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	pendingPodDeletions.Set(float64(len(dt.pendingPodDeletions)))
 }
 
 // recordDeletionCheck records a deletion checker run

@@ -23,6 +23,12 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+var _ = BeforeSuite(func() {
+	// Initialize CLB configuration (subscription, resource group, service gateway name, api version)
+	// This is done in BeforeSuite so all tests have access to these package-level variables
+	ensureCLBConfigInitialized()
+})
+
 func TestCLB(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Container Load Balancer Suite")

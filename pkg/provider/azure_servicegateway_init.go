@@ -9,7 +9,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// TODO(enechitoaia): remove when aks-rp
+// TODO(enechitoaia): remove after added aks-rp support
 func (az *Cloud) attachServiceGatewayToSubnet(ctx context.Context) error {
 	klog.Infof("Attaching Service Gateway %s to subnet in VNet %s", az.ServiceGatewayResourceName, az.VnetName)
 	subnetName := "aks-subnet"
@@ -39,7 +39,7 @@ func (az *Cloud) attachServiceGatewayToSubnet(ctx context.Context) error {
 	return nil
 }
 
-// TODO(enechitoaia): remove when aks-rp
+// TODO(enechitoaia): remove after added aks-rp support
 func (az *Cloud) ensureDefaultOutboundServiceExists(ctx context.Context) error {
 	klog.Infof("ensureDefaultOutboundServiceExists: Ensuring default outbound service exists in Service Gateway %s", az.ServiceGatewayResourceName)
 

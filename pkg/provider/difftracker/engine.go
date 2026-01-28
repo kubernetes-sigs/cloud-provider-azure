@@ -699,6 +699,8 @@ func (dt *DiffTracker) DeletePod(serviceUID, location, address, namespace, name 
 			Timestamp:  time.Now().Format(time.RFC3339),
 		}
 		klog.V(3).Infof("Engine.DeletePod: Added pending last pod deletion for %s", podKey)
+		// Update metric after adding
+		pendingPodDeletions.Set(float64(len(dt.pendingPodDeletions)))
 	}
 	// Note: Counter is managed by UpdateK8sPod for both last pod and non-last pod cases
 

@@ -173,12 +173,12 @@ func TestPodHasIdentities(t *testing.T) {
 func TestDeepEqual(t *testing.T) {
 	tests := []struct {
 		name     string
-		dt       DiffTracker
+		dt       *DiffTracker
 		expected bool
 	}{
 		{
 			name: "in sync - matching services and load balancers",
-			dt: DiffTracker{
+			dt: &DiffTracker{
 				K8sResources: K8s_State{
 					Services: sets.NewString("svc1", "svc2"),
 					Egresses: sets.NewString(),
@@ -194,7 +194,7 @@ func TestDeepEqual(t *testing.T) {
 		},
 		{
 			name: "not in sync - service count mismatch",
-			dt: DiffTracker{
+			dt: &DiffTracker{
 				K8sResources: K8s_State{
 					Services: sets.NewString("svc1"),
 					Egresses: sets.NewString(),
@@ -210,7 +210,7 @@ func TestDeepEqual(t *testing.T) {
 		},
 		{
 			name: "not in sync - service name mismatch",
-			dt: DiffTracker{
+			dt: &DiffTracker{
 				K8sResources: K8s_State{
 					Services: sets.NewString("svc1"),
 					Egresses: sets.NewString(),
@@ -226,7 +226,7 @@ func TestDeepEqual(t *testing.T) {
 		},
 		{
 			name: "in sync - matching egresses and NAT gateways",
-			dt: DiffTracker{
+			dt: &DiffTracker{
 				K8sResources: K8s_State{
 					Services: sets.NewString(),
 					Egresses: sets.NewString("egress1", "egress2"),
@@ -242,7 +242,7 @@ func TestDeepEqual(t *testing.T) {
 		},
 		{
 			name: "not in sync - egress count mismatch",
-			dt: DiffTracker{
+			dt: &DiffTracker{
 				K8sResources: K8s_State{
 					Services: sets.NewString(),
 					Egresses: sets.NewString("egress1"),
@@ -369,20 +369,20 @@ func TestLocationDataEquals(t *testing.T) {
 func TestDiffTrackerEquals(t *testing.T) {
 	tests := []struct {
 		name     string
-		dt1      DiffTracker
-		dt2      DiffTracker
+		dt1      *DiffTracker
+		dt2      *DiffTracker
 		expected bool
 	}{
 		{
 			name: "equal diff trackers",
-			dt1: DiffTracker{
+			dt1: &DiffTracker{
 				K8sResources: K8s_State{
 					Services: sets.NewString("svc1"),
 					Egresses: sets.NewString("egress1"),
 					Nodes:    map[string]Node{},
 				},
 			},
-			dt2: DiffTracker{
+			dt2: &DiffTracker{
 				K8sResources: K8s_State{
 					Services: sets.NewString("svc1"),
 					Egresses: sets.NewString("egress1"),
@@ -393,14 +393,14 @@ func TestDiffTrackerEquals(t *testing.T) {
 		},
 		{
 			name: "different services",
-			dt1: DiffTracker{
+			dt1: &DiffTracker{
 				K8sResources: K8s_State{
 					Services: sets.NewString("svc1"),
 					Egresses: sets.NewString(),
 					Nodes:    map[string]Node{},
 				},
 			},
-			dt2: DiffTracker{
+			dt2: &DiffTracker{
 				K8sResources: K8s_State{
 					Services: sets.NewString("svc2"),
 					Egresses: sets.NewString(),
@@ -411,14 +411,14 @@ func TestDiffTrackerEquals(t *testing.T) {
 		},
 		{
 			name: "different egresses",
-			dt1: DiffTracker{
+			dt1: &DiffTracker{
 				K8sResources: K8s_State{
 					Services: sets.NewString(),
 					Egresses: sets.NewString("egress1"),
 					Nodes:    map[string]Node{},
 				},
 			},
-			dt2: DiffTracker{
+			dt2: &DiffTracker{
 				K8sResources: K8s_State{
 					Services: sets.NewString(),
 					Egresses: sets.NewString("egress2"),
@@ -429,14 +429,14 @@ func TestDiffTrackerEquals(t *testing.T) {
 		},
 		{
 			name: "different node count",
-			dt1: DiffTracker{
+			dt1: &DiffTracker{
 				K8sResources: K8s_State{
 					Services: sets.NewString(),
 					Egresses: sets.NewString(),
 					Nodes:    map[string]Node{"node1": {}},
 				},
 			},
-			dt2: DiffTracker{
+			dt2: &DiffTracker{
 				K8sResources: K8s_State{
 					Services: sets.NewString(),
 					Egresses: sets.NewString(),
@@ -447,7 +447,7 @@ func TestDiffTrackerEquals(t *testing.T) {
 		},
 		{
 			name: "different pod count in node",
-			dt1: DiffTracker{
+			dt1: &DiffTracker{
 				K8sResources: K8s_State{
 					Services: sets.NewString(),
 					Egresses: sets.NewString(),
@@ -456,7 +456,7 @@ func TestDiffTrackerEquals(t *testing.T) {
 					},
 				},
 			},
-			dt2: DiffTracker{
+			dt2: &DiffTracker{
 				K8sResources: K8s_State{
 					Services: sets.NewString(),
 					Egresses: sets.NewString(),
@@ -471,7 +471,7 @@ func TestDiffTrackerEquals(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, tt.dt1.Equals(&tt.dt2))
+			assert.Equal(t, tt.expected, tt.dt1.Equals(tt.dt2))
 		})
 	}
 }

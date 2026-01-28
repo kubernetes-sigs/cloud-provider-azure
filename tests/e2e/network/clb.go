@@ -29,6 +29,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -43,13 +44,74 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
+// Environment variable names for CLB configuration
 const (
-	clbTestLabel       = "CLB"
-	subscriptionID     = "3dc13b6d-6896-40ac-98f7-f18cbce2a405"
-	resourceGroupName  = "MC_enechitebld149025306_e2e-enechitoaia-67_eastus2euap"
-	serviceGatewayName = "my-service-gateway"
-	apiVersion         = "2025-01-01"
+	clbTestLabel = "CLB"
+
+	// Environment variable names
+	envCLBSubscriptionID        = "AZURE_SUBSCRIPTION_ID"
+	envCLBResourceGroup         = "AZURE_CLB_RESOURCE_GROUP"
+	envServiceGatewayName       = "AZURE_SERVICE_GATEWAY_NAME"
+	envServiceGatewayAPIVersion = "AZURE_SERVICE_GATEWAY_API_VERSION"
+
+	// Default values
+	defaultServiceGatewayName = "my-service-gateway"
+	defaultAPIVersion         = "2025-01-01"
 )
+
+// Package-level variables populated from environment or AzureTestClient
+var (
+	subscriptionID     string
+	resourceGroupName  string
+	serviceGatewayName string
+	apiVersion         string
+	clbConfigInit      bool
+)
+
+// initCLBTestConfig initializes the CLB test configuration from environment variables
+// and AzureTestClient. This is called lazily when needed.
+func initCLBTestConfig() error {
+	if clbConfigInit {
+		return nil
+	}
+
+	// Try to get subscription and resource group from AzureTestClient
+	tc, err := utils.CreateAzureTestClient()
+	if err != nil {
+		return fmt.Errorf("failed to create AzureTestClient: %w", err)
+	}
+
+	subscriptionID = tc.GetSubscriptionID()
+	resourceGroupName = tc.GetResourceGroup()
+
+	// Allow override from environment
+	if envSub := os.Getenv(envCLBSubscriptionID); envSub != "" {
+		subscriptionID = envSub
+	}
+	if envRG := os.Getenv(envCLBResourceGroup); envRG != "" {
+		resourceGroupName = envRG
+	}
+
+	// Get CLB-specific config from environment with defaults
+	serviceGatewayName = os.Getenv(envServiceGatewayName)
+	if serviceGatewayName == "" {
+		serviceGatewayName = defaultServiceGatewayName
+	}
+
+	apiVersion = os.Getenv(envServiceGatewayAPIVersion)
+	if apiVersion == "" {
+		apiVersion = defaultAPIVersion
+	}
+
+	utils.Logf("CLB Test Configuration:")
+	utils.Logf("  Subscription ID: %s", subscriptionID)
+	utils.Logf("  Resource Group: %s", resourceGroupName)
+	utils.Logf("  Service Gateway: %s", serviceGatewayName)
+	utils.Logf("  API Version: %s", apiVersion)
+
+	clbConfigInit = true
+	return nil
+}
 
 type AzurePublicIP struct {
 	Name      string            `json:"name"`
@@ -451,10 +513,7 @@ var _ = Describe("Container Load Balancer", Label(clbTestLabel), func() {
 
 		By("Verifying Service exists in Service Gateway")
 
-		subscriptionID := "3dc13b6d-6896-40ac-98f7-f18cbce2a405"
-		serviceGatewayName := "my-service-gateway"
-		apiVersion := "2025-01-01"
-
+		// Use package-level variables initialized from env/AzureTestClient
 		serviceGatewayURL := fmt.Sprintf(
 			"https://management.azure.com/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/serviceGateways/%s/services?api-version=%s",
 			subscriptionID,

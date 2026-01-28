@@ -70,7 +70,6 @@ func InitializeFromCluster(
 		return nil, fmt.Errorf("failed to build K8s state: %w", err)
 	}
 
-	// TODO(enechitoaia): remove after testing
 	// Build NRP state from Azure (includes pipNameToIP for External IP recovery)
 	// We keep currentLoadBalancersInNRP and currentNATGatewaysInNRP to identify and clean up orphaned Azure resources
 	nrp, currentLoadBalancersInNRP, currentNATGatewaysInNRP, _, pipNameToIP, err := buildNRPState(ctx, config, networkClientFactory)
@@ -445,6 +444,9 @@ func recoverStuckFinalizers(
 			dt.pendingPodDeletions[key] = val
 		}
 		dt.mu.Unlock()
+
+		// Update metric after batch insert
+		updatePendingPodDeletionsMetric(dt)
 	}
 
 	// NOTE: We do NOT trigger LocationsUpdater here because it's not started yet.
