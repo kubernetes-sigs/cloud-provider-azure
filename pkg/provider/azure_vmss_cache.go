@@ -68,6 +68,7 @@ const (
 func (ss *ScaleSet) newVMSSCache() (azcache.Resource, error) {
 	getter := func(ctx context.Context, _ string) (interface{}, error) {
 		logger := log.FromContextOrBackground(ctx).WithName("newVMSSCache")
+		logger.V(2).Info("vmss cache getter invoked, fetching from Azure API")
 		localCache := &sync.Map{} // [vmssName]*vmssEntry
 
 		allResourceGroups, err := ss.GetResourceGroups()

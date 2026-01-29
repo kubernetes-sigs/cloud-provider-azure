@@ -191,6 +191,7 @@ func (ss *ScaleSet) getVMSS(ctx context.Context, vmssName string, crt azcache.Az
 		return nil, err
 	}
 	if vmss != nil {
+		logger.V(2).Info("getVMSS: fetched vmss from cache", "vmssName", vmssName, "etag", ptr.Deref(vmss.Etag, ""))
 		return vmss, nil
 	}
 
@@ -204,6 +205,7 @@ func (ss *ScaleSet) getVMSS(ctx context.Context, vmssName string, crt azcache.Az
 	if vmss == nil {
 		return nil, cloudprovider.InstanceNotFound
 	}
+	logger.V(2).Info("getVMSS: fetched vmss after cache refresh", "vmssName", vmssName, "etag", ptr.Deref(vmss.Etag, ""))
 	return vmss, nil
 }
 
@@ -1091,7 +1093,7 @@ func (ss *ScaleSet) EnsureHostInPool(ctx context.Context, _ *v1.Service, nodeNam
 		return "", "", "", nil, nil
 	}
 
-	logger.V(2).Info("ensuring the vmss node in LB backendpool", "vmss name", vm.VMSSName)
+	logger.V(2).Info("ensuring the vmss node in LB backendpool", "vmss name", vm.VMSSName, "vmName", vmName, "etag", ptr.Deref(vm.Etag, ""))
 
 	// Check scale set name:
 	// - For basic SKU load balancer, return nil if the node's scale set is mismatched with vmSetNameOfLB.
@@ -1354,10 +1356,11 @@ func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes [
 		//    - when the vmss is updated, the vmss cache invalid
 		//    - when the vmss update failed, we want to get fresh-new vmss in the next round of update, especially for EtagMismatch error
 		defer func() {
+			logger.V(2).Info("invalidating vmss cache after update", "vmss", vmssName, "reason", "vmss pool update")
 			_ = ss.vmssCache.Delete(consts.VMSSKey)
 		}()
 
-		logger.V(2).Info("begins to update vmss with new backendPoolID", "vmss", vmssName, "backendPoolID", backendPoolID)
+		logger.V(2).Info("begins to update vmss with new backendPoolID", "vmss", vmssName, "backendPoolID", backendPoolID, "etag", ptr.Deref(vmss.Etag, ""))
 		rerr := ss.CreateOrUpdateVMSS(ss.ResourceGroup, vmssName, newVMSS)
 		if rerr != nil {
 			klog.Errorf("ensureVMSSInPool CreateOrUpdateVMSS(%s) with new backendPoolID %s, err: %v", vmssName, backendPoolID, rerr)
@@ -1466,6 +1469,7 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 
 		// Invalidate the cache since the VMSS VM would be updated.
 		defer func() {
+			logger.V(2).Info("invalidating vm cache after pool update", "nodeName", localNodeName, "reason", "vm added to backend pool")
 			_ = ss.DeleteCacheForNode(ctx, localNodeName)
 		}()
 	}
@@ -1498,6 +1502,9 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 					errs = append(errs, err)
 				}
 			}
+			// Invalidate vmss cache after updating VMs, as the VMSS etag changes when VMs are updated.
+			logger.V(2).Info("invalidating vmss cache after updating vms", "vmss", meta.vmssName, "reason", "vmss vms updated")
+			_ = ss.vmssCache.Delete(consts.VMSSKey)
 			return utilerrors.NewAggregate(errs)
 		})
 	}
@@ -1948,6 +1955,7 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 
 		// Invalidate the cache since the VMSS VM would be updated.
 		defer func() {
+			logger.V(2).Info("invalidating vm cache after pool deletion", "nodeName", nodeName, "reason", "vm removed from backend pool")
 			_ = ss.DeleteCacheForNode(ctx, nodeName)
 		}()
 	}
@@ -1979,6 +1987,9 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 					errs = append(errs, err)
 				}
 			}
+			// Invalidate vmss cache after updating VMs, as the VMSS etag changes when VMs are updated.
+			klog.V(2).InfoS("invalidating vmss cache after updating vms", "vmss", meta.vmssName, "reason", "vmss vms updated")
+			_ = ss.vmssCache.Delete(consts.VMSSKey)
 			err = utilerrors.NewAggregate(errs)
 			if err != nil {
 				klog.ErrorS(err, "Failed to update VMs for VMSS", logFields...)
@@ -2251,10 +2262,11 @@ func (ss *ScaleSet) EnsureBackendPoolDeletedFromVMSets(ctx context.Context, vmss
 			}
 
 			defer func() {
+				logger.V(2).Info("invalidating vmss cache after update", "vmss", vmssName, "reason", "backend pool deletion")
 				_ = ss.vmssCache.Delete(consts.VMSSKey)
 			}()
 
-			logger.V(2).Info("begins to update vmss with backendPoolIDs", "vmss", vmssName, "backendPoolIDs", backendPoolIDs)
+			logger.V(2).Info("begins to update vmss with backendPoolIDs", "vmss", vmssName, "backendPoolIDs", backendPoolIDs, "etag", ptr.Deref(vmss.Etag, ""))
 			rerr := ss.CreateOrUpdateVMSS(ss.ResourceGroup, vmssName, newVMSS)
 			if rerr != nil {
 				klog.Errorf("EnsureBackendPoolDeletedFromVMSets CreateOrUpdateVMSS(%s) with new backendPoolIDs %q, err: %v", vmssName, backendPoolIDs, rerr)
@@ -2380,6 +2392,7 @@ func (ss *ScaleSet) VMSSBatchSize(ctx context.Context, vmssName string) (int, er
 func (ss *ScaleSet) UpdateVMSSVMsInBatch(ctx context.Context, meta vmssMetaInfo, update map[string]armcompute.VirtualMachineScaleSetVM, batchSize int) <-chan error {
 	logger := klog.FromContext(ctx)
 	patchVMFn := func(ctx context.Context, instanceID string, vm *armcompute.VirtualMachineScaleSetVM) (*runtime.Poller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse], error) {
+		logger.V(2).Info("UpdateVMSSVMsInBatch: updating vm", "vmss", meta.vmssName, "instanceID", instanceID, "requestEtag", ptr.Deref(vm.Etag, ""))
 		return ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().BeginUpdate(ctx, meta.resourceGroup, meta.vmssName, instanceID, *vm, &armcompute.VirtualMachineScaleSetVMsClientBeginUpdateOptions{
 			IfMatch: vm.Etag,
 		})
@@ -2405,12 +2418,14 @@ func (ss *ScaleSet) UpdateVMSSVMsInBatch(ctx context.Context, meta vmssMetaInfo,
 				pollerGroup.Add(1)
 				go func() {
 					defer pollerGroup.Done()
-					_, err := poller.PollUntilDone(ctx, &runtime.PollUntilDoneOptions{
+					resp, err := poller.PollUntilDone(ctx, &runtime.PollUntilDoneOptions{
 						Frequency: 10 * time.Second,
 					})
 					if err != nil {
 						logger.Error(err, "Failed to update VMs for VMSS with new vm config")
 						errChan <- err
+					} else {
+						logger.V(2).Info("UpdateVMSSVMsInBatch: vm updated successfully", "responseEtag", ptr.Deref(resp.Etag, ""))
 					}
 				}()
 			case <-ctx.Done():

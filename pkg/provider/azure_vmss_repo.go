@@ -21,6 +21,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
@@ -41,15 +42,20 @@ func (az *Cloud) CreateOrUpdateVMSS(resourceGroupName string, VMScaleSetName str
 		klog.Errorf("CreateOrUpdateVMSS: error getting vmss(%s): %v", VMScaleSetName, err)
 		return err
 	}
+	logger.V(2).Info("CreateOrUpdateVMSS: fetched current vmss from Azure", "vmss", VMScaleSetName, "currentAzureEtag", ptr.Deref(vmss.Etag, ""))
 	if vmss.Properties.ProvisioningState != nil && strings.EqualFold(*vmss.Properties.ProvisioningState, consts.ProvisionStateDeleting) {
 		logger.V(3).Info("found vmss being deleted, skipping", "vmss", VMScaleSetName)
 		return nil
 	}
 
-	_, err = az.ComputeClientFactory.GetVirtualMachineScaleSetClient().CreateOrUpdate(ctx, resourceGroupName, VMScaleSetName, parameters)
+	logger.V(2).Info("CreateOrUpdateVMSS: updating vmss", "vmss", VMScaleSetName, "resourceGroup", resourceGroupName, "requestEtag", ptr.Deref(parameters.Etag, ""))
+	resp, err := az.ComputeClientFactory.GetVirtualMachineScaleSetClient().CreateOrUpdate(ctx, resourceGroupName, VMScaleSetName, parameters)
 	if err != nil {
 		klog.Errorf("CreateOrUpdateVMSS: error CreateOrUpdate vmss(%s): %v", VMScaleSetName, err)
 		return err
+	}
+	if resp != nil {
+		logger.V(2).Info("CreateOrUpdateVMSS: vmss updated successfully", "vmss", VMScaleSetName, "responseEtag", ptr.Deref(resp.Etag, ""))
 	}
 
 	return nil
