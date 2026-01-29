@@ -3024,6 +3024,11 @@ func TestEnsureHostsInPool(t *testing.T) {
 
 				err = ss.EnsureHostsInPool(context.Background(), &v1.Service{}, test.nodes, test.backendpoolID, test.vmSetName)
 				assert.Equal(t, test.expectedErr, err != nil, test.description+errMsgSuffix)
+
+				if test.expectedVMSSVMPutTimes > 0 && !test.expectedErr {
+					_, exists, _ := ss.vmssCache.GetStore().GetByKey(consts.VMSSKey)
+					assert.False(t, exists, "vmssCache should be invalidated after VMs are updated")
+				}
 			})
 		}
 	}
@@ -3703,6 +3708,8 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 				assert.Equal(t, test.expectedErr, err != nil, test.description+errMsgSuffix)
 				if !test.expectedErr && test.expectedVMSSVMPutTimes > 0 {
 					assert.True(t, updated, test.description)
+					_, exists, _ := ss.vmssCache.GetStore().GetByKey(consts.VMSSKey)
+					assert.False(t, exists, "vmssCache should be invalidated after VMs are updated")
 				}
 			})
 		}
