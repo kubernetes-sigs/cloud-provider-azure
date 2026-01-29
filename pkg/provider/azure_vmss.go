@@ -1502,6 +1502,9 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 					errs = append(errs, err)
 				}
 			}
+			// Invalidate vmss cache after updating VMs, as the VMSS etag changes when VMs are updated.
+			logger.V(2).Info("invalidating vmss cache after updating vms", "vmss", meta.vmssName, "reason", "vmss vms updated")
+			_ = ss.vmssCache.Delete(consts.VMSSKey)
 			return utilerrors.NewAggregate(errs)
 		})
 	}
@@ -1984,6 +1987,9 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 					errs = append(errs, err)
 				}
 			}
+			// Invalidate vmss cache after updating VMs, as the VMSS etag changes when VMs are updated.
+			klog.V(2).InfoS("invalidating vmss cache after updating vms", "vmss", meta.vmssName, "reason", "vmss vms updated")
+			_ = ss.vmssCache.Delete(consts.VMSSKey)
 			err = utilerrors.NewAggregate(errs)
 			if err != nil {
 				klog.ErrorS(err, "Failed to update VMs for VMSS", logFields...)
