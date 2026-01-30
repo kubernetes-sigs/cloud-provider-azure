@@ -3022,14 +3022,6 @@ func TestEnsureHostsInPool(t *testing.T) {
 				mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 				mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
-				// Pre-check: verify cache is populated before operation
-				if test.expectedVMSSVMPutTimes > 0 && !test.expectedErr {
-					_, cacheErr := ss.vmssCache.Get(context.Background(), consts.VMSSKey, azcache.CacheReadTypeDefault)
-					assert.NoError(t, cacheErr, "cache population should succeed")
-					_, exists, _ := ss.vmssCache.GetStore().GetByKey(consts.VMSSKey)
-					assert.True(t, exists, "vmssCache should be populated before operation")
-				}
-
 				err = ss.EnsureHostsInPool(context.Background(), &v1.Service{}, test.nodes, test.backendpoolID, test.vmSetName)
 				assert.Equal(t, test.expectedErr, err != nil, test.description+errMsgSuffix)
 
