@@ -3022,6 +3022,14 @@ func TestEnsureHostsInPool(t *testing.T) {
 				mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 				mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
+				// Pre-check: verify cache is populated before operation
+				if test.expectedVMSSVMPutTimes > 0 && !test.expectedErr {
+					_, cacheErr := ss.vmssCache.Get(context.Background(), consts.VMSSKey, azcache.CacheReadTypeDefault)
+					assert.NoError(t, cacheErr, "cache population should succeed")
+					_, exists, _ := ss.vmssCache.GetStore().GetByKey(consts.VMSSKey)
+					assert.True(t, exists, "vmssCache should be populated before operation")
+				}
+
 				err = ss.EnsureHostsInPool(context.Background(), &v1.Service{}, test.nodes, test.backendpoolID, test.vmSetName)
 				assert.Equal(t, test.expectedErr, err != nil, test.description+errMsgSuffix)
 
@@ -3704,6 +3712,14 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 				mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 				mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
 
+				// Pre-check: verify cache is populated before operation
+				if test.expectedVMSSVMPutTimes > 0 && !test.expectedErr {
+					_, cacheErr := ss.vmssCache.Get(context.TODO(), consts.VMSSKey, azcache.CacheReadTypeDefault)
+					assert.NoError(t, cacheErr, "cache population should succeed")
+					_, exists, _ := ss.vmssCache.GetStore().GetByKey(consts.VMSSKey)
+					assert.True(t, exists, "vmssCache should be populated before operation")
+				}
+
 				updated, err := ss.EnsureBackendPoolDeleted(context.TODO(), &v1.Service{}, []string{test.backendpoolID}, testVMSSName, test.backendAddressPools, true)
 				assert.Equal(t, test.expectedErr, err != nil, test.description+errMsgSuffix)
 				if !test.expectedErr && test.expectedVMSSVMPutTimes > 0 {
@@ -4271,5 +4287,125 @@ func TestScaleSet_VMSSBatchSize(t *testing.T) {
 		batchSize, err := ss.VMSSBatchSize(context.TODO(), ptr.Deref(scaleSet.Name, ""))
 		assert.NoError(t, err)
 		assert.Equal(t, 1, batchSize)
+	})
+}
+
+// TestVMSSCacheInvalidationAfterVMUpdates verifies that vmssCache is properly
+// invalidated after VM updates, even when per-node defers try to repopulate it.
+// This tests the fix for the cache repopulation bug where DeleteCacheForNode
+// would repopulate the cache after it was deleted.
+func TestVMSSCacheInvalidationAfterVMUpdates(t *testing.T) {
+	t.Run("ensureHostsInPool", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		ss, err := NewTestScaleSet(ctrl)
+		assert.NoError(t, err)
+		ss.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+
+		// Setup minimal mocks for 1 node
+		expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
+		mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+		mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+		mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName, nil).Return(expectedVMSS, nil).MaxTimes(1)
+		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(nil, nil).MaxTimes(1)
+
+		expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000"}, "", false)
+		mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+		mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+		mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, _, _, _ string, _ armcompute.VirtualMachineScaleSetVM, _ *armcompute.VirtualMachineScaleSetVMsClientBeginUpdateOptions) (*runtime.Poller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse], error) {
+				poller, err := runtime.NewPoller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse](
+					&http.Response{
+						Header: http.Header{"Fake-Poller-Status": []string{"https://fake/operation"}},
+					},
+					runtime.Pipeline{},
+					&runtime.NewPollerOptions[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse]{
+						Handler: &vmssvmMockPutHandler{
+							resp: &http.Response{
+								StatusCode: http.StatusAccepted,
+							},
+						},
+					},
+				)
+				assert.NoError(t, err)
+				return poller, nil
+			}).Times(1)
+
+		mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+		mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
+		// Pre-check: populate cache and verify it exists
+		_, cacheErr := ss.vmssCache.Get(context.Background(), consts.VMSSKey, azcache.CacheReadTypeDefault)
+		assert.NoError(t, cacheErr, "cache population should succeed")
+		_, exists, _ := ss.vmssCache.GetStore().GetByKey(consts.VMSSKey)
+		assert.True(t, exists, "vmssCache should be populated before operation")
+
+		// Execute operation
+		nodes := []*v1.Node{
+			{
+				ObjectMeta: metav1.ObjectMeta{Name: "vmss-vm-000000"},
+				Spec: v1.NodeSpec{
+					ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+				},
+			},
+		}
+		err = ss.EnsureHostsInPool(context.Background(), &v1.Service{}, nodes, testLBBackendpoolID1, testVMSSName)
+		assert.NoError(t, err)
+
+		// Post-check: verify cache is invalidated
+		_, exists, _ = ss.vmssCache.GetStore().GetByKey(consts.VMSSKey)
+		assert.False(t, exists, "vmssCache should be invalidated after VMs are updated")
+	})
+
+	t.Run("ensureBackendPoolDeleted", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		ss, err := NewTestScaleSet(ctrl)
+		assert.NoError(t, err)
+
+		// Setup minimal mocks for 1 node
+		expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
+		mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+		mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+		mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName, nil).Return(expectedVMSS, nil).MaxTimes(1)
+		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(nil, nil).Times(1)
+
+		expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000"}, "", false)
+		mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+		mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+		mockVMSSVMClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
+
+		mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+		mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
+
+		// Pre-check: populate cache and verify it exists
+		_, cacheErr := ss.vmssCache.Get(context.TODO(), consts.VMSSKey, azcache.CacheReadTypeDefault)
+		assert.NoError(t, cacheErr, "cache population should succeed")
+		_, exists, _ := ss.vmssCache.GetStore().GetByKey(consts.VMSSKey)
+		assert.True(t, exists, "vmssCache should be populated before operation")
+
+		// Execute operation
+		backendAddressPools := []*armnetwork.BackendAddressPool{
+			{
+				ID: ptr.To(testLBBackendpoolID0),
+				Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+					BackendIPConfigurations: []*armnetwork.InterfaceIPConfiguration{
+						{
+							Name: ptr.To("ip-1"),
+							ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0/networkInterfaces/nic"),
+						},
+					},
+				},
+			},
+		}
+		updated, err := ss.EnsureBackendPoolDeleted(context.TODO(), &v1.Service{}, []string{testLBBackendpoolID0}, testVMSSName, backendAddressPools, true)
+		assert.NoError(t, err)
+		assert.True(t, updated)
+
+		// Post-check: verify cache is invalidated
+		_, exists, _ = ss.vmssCache.GetStore().GetByKey(consts.VMSSKey)
+		assert.False(t, exists, "vmssCache should be invalidated after VMs are updated")
 	})
 }
