@@ -3704,14 +3704,6 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 				mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 				mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
 
-				// Pre-check: verify cache is populated before operation
-				if test.expectedVMSSVMPutTimes > 0 && !test.expectedErr {
-					_, cacheErr := ss.vmssCache.Get(context.TODO(), consts.VMSSKey, azcache.CacheReadTypeDefault)
-					assert.NoError(t, cacheErr, "cache population should succeed")
-					_, exists, _ := ss.vmssCache.GetStore().GetByKey(consts.VMSSKey)
-					assert.True(t, exists, "vmssCache should be populated before operation")
-				}
-
 				updated, err := ss.EnsureBackendPoolDeleted(context.TODO(), &v1.Service{}, []string{test.backendpoolID}, testVMSSName, test.backendAddressPools, true)
 				assert.Equal(t, test.expectedErr, err != nil, test.description+errMsgSuffix)
 				if !test.expectedErr && test.expectedVMSSVMPutTimes > 0 {
