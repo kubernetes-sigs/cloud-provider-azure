@@ -133,7 +133,7 @@ func getPublicIPDomainNameLabel(service *v1.Service) (string, bool) {
 
 // reconcileService reconcile the LoadBalancer service. It returns LoadBalancerStatus on success.
 func (az *Cloud) reconcileService(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
-	logger := log.FromContextOrBackground(ctx)
+	logger := log.FromContextOrBackground(ctx).WithName("reconcileService")
 
 	logger.V(2).Info("Start reconciling Service", "lb", az.GetLoadBalancerName(ctx, clusterName, service))
 
@@ -788,7 +788,7 @@ func (az *Cloud) getServiceLoadBalancer(
 	wantLb bool,
 	existingLBs []*armnetwork.LoadBalancer,
 ) (lb *armnetwork.LoadBalancer, refreshedLBs []*armnetwork.LoadBalancer, status *v1.LoadBalancerStatus, lbIPsPrimaryPIPs []string, exists, deletedPLS bool, err error) {
-	logger := log.FromContextOrBackground(ctx)
+	logger := log.FromContextOrBackground(ctx).WithName("getServiceLoadBalancer")
 
 	isInternal := requiresInternalLoadBalancer(service)
 	var defaultLB *armnetwork.LoadBalancer
