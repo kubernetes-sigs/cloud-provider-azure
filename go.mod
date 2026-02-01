@@ -1,6 +1,6 @@
 module sigs.k8s.io/cloud-provider-azure
 
-go 1.24.6
+go 1.25.0
 
 godebug default=go1.24.6
 
@@ -30,10 +30,10 @@ require (
 	golang.org/x/sync v0.19.0
 	golang.org/x/sys v0.40.0
 	golang.org/x/text v0.33.0
-	k8s.io/api v0.34.3
-	k8s.io/apimachinery v0.34.3
+	k8s.io/api v0.35.0
+	k8s.io/apimachinery v0.35.0
 	k8s.io/apiserver v0.34.3
-	k8s.io/client-go v0.34.3
+	k8s.io/client-go v0.35.0
 	k8s.io/cloud-provider v0.34.3
 	k8s.io/component-base v0.34.3
 	k8s.io/component-helpers v0.34.3
@@ -41,9 +41,9 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubelet v0.34.3
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.14.0
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.10.0
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.11.0
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.14.3
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.11.0
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.12.1
 	sigs.k8s.io/yaml v1.6.0
 )
 
@@ -51,6 +51,7 @@ require (
 	cel.dev/expr v0.24.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.11.2 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/authorization/armauthorization/v2 v2.2.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7 v7.3.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerregistry/armcontainerregistry v1.2.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v6 v6.6.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault v1.5.0 // indirect
