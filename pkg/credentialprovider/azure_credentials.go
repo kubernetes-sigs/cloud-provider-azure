@@ -69,6 +69,7 @@ type acrProvider struct {
 type getTokenCredentialFunc func(req *v1.CredentialProviderRequest, config *providerconfig.AzureClientConfig) (azcore.TokenCredential, error)
 
 func NewAcrProvider(req *v1.CredentialProviderRequest, registryMirrorStr string, configFile string) (CredentialProvider, error) {
+	logger := log.Background().WithName("NewAcrProvider")
 	config, err := configloader.Load[providerconfig.AzureClientConfig](context.Background(), nil, &configloader.FileLoaderConfig{FilePath: configFile})
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
@@ -88,10 +89,10 @@ func NewAcrProvider(req *v1.CredentialProviderRequest, registryMirrorStr string,
 	// kubelet is responsible for checking the service account token emptiness when service account token is enabled, and only when service account token provide is enabled,
 	// service account token is set in the request, so we can safely check the service account token emptiness to decide which credential to use.
 	if len(req.ServiceAccountToken) != 0 {
-		klog.V(2).Infof("Using service account token to authenticate ACR for image %s", req.Image)
+		logger.V(2).Info("Using service account token to authenticate ACR for image", "image", req.Image)
 		getTokenCredential = getServiceAccountTokenCredential
 	} else {
-		klog.V(2).Infof("Using managed identity to authenticate ACR for image %s", req.Image)
+		logger.V(2).Info("Using managed identity to authenticate ACR for image", "image", req.Image)
 		getTokenCredential = getManagedIdentityCredential
 	}
 	credential, err := getTokenCredential(req, config)
