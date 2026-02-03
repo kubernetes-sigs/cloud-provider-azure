@@ -1506,7 +1506,7 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 				"resourceGroup", meta.resourceGroup,
 				"backendPoolID", backendPoolID,
 			}
-			logger := klog.LoggerWithValues(klog.FromContext(ctx), logFields...)
+			logger := klog.LoggerWithValues(klog.FromContext(ctx).WithName("ensureHostsInPool.hostUpdates"), logFields...)
 			batchSize, err := ss.VMSSBatchSize(ctx, meta.vmssName)
 			if err != nil {
 				logger.Error(err, "Failed to get vmss batch size")
@@ -2425,7 +2425,7 @@ func (ss *ScaleSet) VMSSBatchSize(ctx context.Context, vmssName string) (int, er
 }
 
 func (ss *ScaleSet) UpdateVMSSVMsInBatch(ctx context.Context, meta vmssMetaInfo, update map[string]armcompute.VirtualMachineScaleSetVM, batchSize int) <-chan error {
-	logger := klog.FromContext(ctx)
+	logger := klog.FromContext(ctx).WithName("UpdateVMSSVMsInBatch")
 	patchVMFn := func(ctx context.Context, instanceID string, vm *armcompute.VirtualMachineScaleSetVM) (*runtime.Poller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse], error) {
 		logger.V(4).Info("UpdateVMSSVMsInBatch: updating vm", "vmss", meta.vmssName, "instanceID", instanceID, "requestEtag", ptr.Deref(vm.Etag, ""))
 		return ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().BeginUpdate(ctx, meta.resourceGroup, meta.vmssName, instanceID, *vm, &armcompute.VirtualMachineScaleSetVMsClientBeginUpdateOptions{
