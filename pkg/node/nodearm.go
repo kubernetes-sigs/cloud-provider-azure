@@ -25,6 +25,7 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	azureprovider "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 )
 
@@ -35,11 +36,13 @@ type ARMNodeProvider struct {
 
 // NewARMNodeProvider creates a new ARMNodeProvider.
 func NewARMNodeProvider(ctx context.Context, cloudConfigFilePath string) *ARMNodeProvider {
+	logger := log.FromContextOrBackground(ctx).WithName("NewARMNodeProvider")
 	var err error
 	var az cloudprovider.Interface
 	az, err = azureprovider.NewCloudFromConfigFile(ctx, nil, cloudConfigFilePath, false)
 	if err != nil {
-		klog.Fatalf("Failed to initialize Azure cloud provider: %v", err)
+		logger.Error(err, "Failed to initialize Azure cloud provider")
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
 	return &ARMNodeProvider{

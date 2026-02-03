@@ -72,9 +72,11 @@ const (
 
 // NewCloudControllerManagerCommand creates a *cobra.Command object with default parameters
 func NewCloudControllerManagerCommand() *cobra.Command {
+	logger := log.Background().WithName("NewCloudControllerManagerCommand")
 	s, err := options.NewCloudControllerManagerOptions()
 	if err != nil {
-		klog.Fatalf("unable to initialize command options: %v", err)
+		logger.Error(err, "unable to initialize command options")
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 	controllerAliases := names.CCMControllerAliases()
 
@@ -89,7 +91,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 
 			c, err := s.Config(KnownControllers(), ControllersDisabledByDefault.List(), controllerAliases)
 			if err != nil {
-				klog.Errorf("Run: failed to configure cloud controller manager: %v", err)
+				logger.Error(err, "Run: failed to configure cloud controller manager")
 				os.Exit(1)
 			}
 
@@ -98,7 +100,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 				var err error
 				traceProvider, err = trace.New()
 				if err != nil {
-					log.Background().Error(err, "Failed to create trace provider")
+					logger.Error(err, "Failed to create trace provider")
 					os.Exit(1)
 				}
 
@@ -107,26 +109,26 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 					defer cancel()
 					if err := traceProvider.Stop(ctx); err != nil {
-						log.Background().Error(err, "Failed to stop trace provider")
+						logger.Error(err, "Failed to stop trace provider")
 					}
 				}()
 
 				trace.SetGlobalProvider(traceProvider)
 
 				if err := metrics.Setup(traceProvider.DefaultMeter()); err != nil {
-					log.Background().Error(err, "Failed to setup cloud-provider metrics")
+					logger.Error(err, "Failed to setup cloud-provider metrics")
 					os.Exit(1)
 				}
 
 				if err := armmetrics.Setup(traceProvider.DefaultMeter()); err != nil {
-					log.Background().Error(err, "Failed to setup ARM SDK metrics")
+					logger.Error(err, "Failed to setup ARM SDK metrics")
 					os.Exit(1)
 				}
 			}
 
 			healthHandler, err := StartHTTPServer(cmd.Context(), c.Complete(), traceProvider)
 			if err != nil {
-				klog.Errorf("Run: railed to start HTTP server: %v", err)
+				logger.Error(err, "Run: failed to start HTTP server")
 				os.Exit(1)
 			}
 
@@ -134,7 +136,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 				// Identity used to distinguish between multiple cloud controller manager instances
 				id, err := os.Hostname()
 				if err != nil {
-					klog.Errorf("Run: failed to get host name: %v", err)
+					logger.Error(err, "Run: failed to get host name")
 					os.Exit(1)
 				}
 				// add a uniquifier so that two processes on the same host don't accidentally both become active
@@ -151,7 +153,8 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 					c.Kubeconfig,
 					c.ComponentConfig.Generic.LeaderElection.RenewDeadline.Duration)
 				if err != nil {
-					klog.Fatalf("error creating lock: %v", err)
+					logger.Error(err, "error creating lock")
+					klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 				}
 
 				// Try and become the leader and start cloud controller manager loops
@@ -168,7 +171,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 					Callbacks: leaderelection.LeaderCallbacks{
 						OnStartedLeading: RunWrapper(s, c, healthHandler),
 						OnStoppedLeading: func() {
-							klog.ErrorS(nil, "leaderelection lost")
+							logger.Error(nil, "leaderelection lost")
 							klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 						},
 					},
@@ -216,7 +219,7 @@ func RunWrapper(s *options.CloudControllerManagerOptions, c *cloudcontrollerconf
 		if !c.DynamicReloadingConfig.EnableDynamicReloading {
 			logger.V(1).Info("using static initialization from config file", "cloudConfigFile", c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile)
 			if err := Run(ctx, c.Complete(), h); err != nil {
-				klog.Errorf("RunWrapper: failed to start cloud controller manager: %v", err)
+				logger.Error(err, "RunWrapper: failed to start cloud controller manager")
 				os.Exit(1)
 			}
 		}
@@ -249,7 +252,8 @@ func RunWrapper(s *options.CloudControllerManagerOptions, c *cloudcontrollerconf
 					// start new goroutines if needed when using config file
 					shouldRemainStopped, err = shouldDisableCloudProvider(cloudConfigFile)
 					if err != nil {
-						klog.Fatalf("RunWrapper: failed to determine if it is needed to restart all controllers: %s", err.Error())
+						logger.Error(err, "failed to determine if it is needed to restart all controllers")
+						klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 					}
 				}
 
@@ -261,7 +265,7 @@ func RunWrapper(s *options.CloudControllerManagerOptions, c *cloudcontrollerconf
 				}
 
 			case err := <-errCh:
-				klog.Errorf("RunWrapper: failed to start cloud controller manager: %v", err)
+				logger.Error(err, "RunWrapper: failed to start cloud controller manager")
 				os.Exit(1)
 			}
 		}
@@ -272,7 +276,7 @@ func shouldDisableCloudProvider(configFilePath string) (bool, error) {
 	logger := log.Background().WithName("shouldDisableCloudProvider")
 	configBytes, err := os.ReadFile(configFilePath)
 	if err != nil {
-		klog.Errorf("shouldDisableCloudProvider: failed to read %s  %s", configFilePath, err.Error())
+		logger.Error(err, "shouldDisableCloudProvider: failed to read", "configFilePath", configFilePath)
 		return false, err
 	}
 
@@ -280,7 +284,7 @@ func shouldDisableCloudProvider(configFilePath string) (bool, error) {
 		DisableCloudProvider bool `json:"disableCloudProvider,omitempty"`
 	}
 	if err = json.Unmarshal(configBytes, &c); err != nil {
-		klog.Errorf("shouldDisableCloudProvider: failed to unmarshal configBytes to struct: %s", err.Error())
+		logger.Error(err, "shouldDisableCloudProvider: failed to unmarshal configBytes to struct")
 		return false, err
 	}
 
@@ -295,12 +299,12 @@ func runAsync(s *options.CloudControllerManagerOptions, errCh chan error, h *con
 	go func() {
 		c, err := s.Config(KnownControllers(), ControllersDisabledByDefault.List(), names.CCMControllerAliases())
 		if err != nil {
-			klog.Errorf("RunAsync: failed to configure cloud controller manager: %v", err)
+			logger.Error(err, "RunAsync: failed to configure cloud controller manager")
 			os.Exit(1)
 		}
 
 		if err := Run(ctx, c.Complete(), h); err != nil {
-			klog.Errorf("RunAsync: failed to run cloud controller manager: %v", err)
+			logger.Error(err, "RunAsync: failed to run cloud controller manager")
 			errCh <- err
 		}
 
@@ -356,24 +360,28 @@ func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig, h *contr
 	if c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile != "" {
 		cloud, err = provider.NewCloudFromConfigFile(ctx, c.ClientBuilder, c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile, true)
 		if err != nil {
-			klog.Fatalf("Cloud provider azure could not be initialized: %v", err)
+			logger.Error(err, "Cloud provider azure could not be initialized")
+			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 		}
 	} else if c.DynamicReloadingConfig.EnableDynamicReloading && c.DynamicReloadingConfig.CloudConfigSecretName != "" {
 		cloud, err = provider.NewCloudFromSecret(ctx, c.ClientBuilder, c.DynamicReloadingConfig.CloudConfigSecretName, c.DynamicReloadingConfig.CloudConfigSecretNamespace, c.DynamicReloadingConfig.CloudConfigKey)
 		if err != nil {
-			klog.Fatalf("Run: Cloud provider azure could not be initialized dynamically from secret %s/%s: %v", c.DynamicReloadingConfig.CloudConfigSecretNamespace, c.DynamicReloadingConfig.CloudConfigSecretName, err)
+			logger.Error(err, "Cloud provider azure could not be initialized dynamically from secret", "namespace", c.DynamicReloadingConfig.CloudConfigSecretNamespace, "name", c.DynamicReloadingConfig.CloudConfigSecretName)
+			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 		}
 	}
 
 	if cloud == nil {
-		klog.Fatalf("cloud provider is nil, please check if the --cloud-config is set properly")
+		logger.Error(nil, "cloud provider is nil, please check if the --cloud-config is set properly")
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
 	if !cloud.HasClusterID() {
 		if c.ComponentConfig.KubeCloudShared.AllowUntaggedCloud {
 			klog.Warning("detected a cluster without a ClusterID.  A ClusterID will be required in the future.  Please tag your cluster to avoid any future issues")
 		} else {
-			klog.Fatalf("no ClusterID found.  A ClusterID is required for the cloud provider to function properly.  This check can be bypassed by setting the allow-untagged-cloud option")
+			logger.Error(nil, "no ClusterID found.  A ClusterID is required for the cloud provider to function properly.  This check can be bypassed by setting the allow-untagged-cloud option")
+			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 		}
 	}
 
@@ -381,18 +389,20 @@ func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig, h *contr
 	if cz, err := configz.New(ConfigzName); err == nil {
 		cz.Set(c.ComponentConfig)
 	} else {
-		klog.Errorf("unable to register configz: %v", err)
+		logger.Error(err, "unable to register configz")
 	}
 	clientBuilder := clientbuilder.SimpleControllerClientBuilder{
 		ClientConfig: c.Kubeconfig,
 	}
 	controllerContext, err := CreateControllerContext(c, clientBuilder, ctx.Done())
 	if err != nil {
-		klog.Fatalf("error building controller context: %v", err)
+		logger.Error(err, "error building controller context")
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
 	if err := startControllers(ctx, controllerContext, c, cloud, newControllerInitializers(), h); err != nil {
-		klog.Fatalf("error running controllers: %v", err)
+		logger.Error(err, "error running controllers")
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
 	return nil
@@ -419,7 +429,7 @@ func startControllers(ctx context.Context, controllerContext genericcontrollerma
 		logger.V(1).Info("Starting controller", "controller", controllerName)
 		ctrl, started, err := initFn(ctx, controllerContext, completedConfig, cloud)
 		if err != nil {
-			klog.Errorf("Error starting %q: %s", controllerName, err.Error())
+			logger.Error(err, "Error starting", "controller", controllerName)
 			return err
 		}
 		if !started {
@@ -446,7 +456,8 @@ func startControllers(ctx context.Context, controllerContext genericcontrollerma
 	// If apiserver is not running we should wait for some time and fail only then. This is particularly
 	// important when we start apiserver and controller manager at the same time.
 	if err := genericcontrollermanager.WaitForAPIServer(completedConfig.VersionedClient, 10*time.Second); err != nil {
-		klog.Fatalf("Failed to wait for apiserver being healthy: %v", err)
+		logger.Error(err, "Failed to wait for apiserver being healthy")
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
 	logger.V(2).Info("startControllers: starting shared informers")

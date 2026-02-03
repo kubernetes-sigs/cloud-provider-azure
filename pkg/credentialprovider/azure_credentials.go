@@ -33,7 +33,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog/v2"
 	v1 "k8s.io/kubelet/pkg/apis/credentialprovider/v1"
 )
 
@@ -70,6 +69,7 @@ type acrProvider struct {
 type getTokenCredentialFunc func(req *v1.CredentialProviderRequest, config *providerconfig.AzureClientConfig) (azcore.TokenCredential, error)
 
 func NewAcrProvider(req *v1.CredentialProviderRequest, registryMirrorStr string, configFile string) (CredentialProvider, error) {
+	logger := log.Background().WithName("NewAcrProvider")
 	config, err := configloader.Load[providerconfig.AzureClientConfig](context.Background(), nil, &configloader.FileLoaderConfig{FilePath: configFile})
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
@@ -89,10 +89,10 @@ func NewAcrProvider(req *v1.CredentialProviderRequest, registryMirrorStr string,
 	// kubelet is responsible for checking the service account token emptiness when service account token is enabled, and only when service account token provide is enabled,
 	// service account token is set in the request, so we can safely check the service account token emptiness to decide which credential to use.
 	if len(req.ServiceAccountToken) != 0 {
-		klog.V(2).Infof("Using service account token to authenticate ACR for image %s", req.Image)
+		logger.V(2).Info("Using service account token to authenticate ACR for image", "image", req.Image)
 		getTokenCredential = getServiceAccountTokenCredential
 	} else {
-		klog.V(2).Infof("Using managed identity to authenticate ACR for image %s", req.Image)
+		logger.V(2).Info("Using managed identity to authenticate ACR for image", "image", req.Image)
 		getTokenCredential = getManagedIdentityCredential
 	}
 	credential, err := getTokenCredential(req, config)
@@ -204,7 +204,7 @@ func (a *acrProvider) GetCredentials(ctx context.Context, image string, _ []stri
 	if a.config.UseManagedIdentityExtension {
 		username, password, err := a.getFromACR(ctx, targetloginServer)
 		if err != nil {
-			klog.Errorf("error getting credentials from ACR for %s: %s", targetloginServer, err)
+			logger.Error(err, "error getting credentials from ACR", "targetLoginServer", targetloginServer)
 			return nil, err
 		}
 
@@ -261,21 +261,21 @@ func (a *acrProvider) getFromACR(ctx context.Context, loginServer string) (strin
 			fmt.Sprintf("%s/%s", AcrAudience, ".default"),
 		},
 	}); err != nil {
-		klog.Errorf("Failed to ensure fresh service principal token: %v", err)
+		logger.Error(err, "Failed to ensure fresh service principal token")
 		return "", "", err
 	}
 
 	logger.V(4).Info("discovering auth redirects", "loginServer", loginServer)
 	directive, err := receiveChallengeFromLoginServer(loginServer, "https")
 	if err != nil {
-		klog.Errorf("failed to receive challenge: %s", err)
+		logger.Error(err, "failed to receive challenge")
 		return "", "", err
 	}
 
 	logger.V(4).Info("exchanging an acr refresh_token")
 	registryRefreshToken, err := performTokenExchange(directive, a.config.TenantID, armAccessToken.Token)
 	if err != nil {
-		klog.Errorf("failed to perform token exchange: %s", err)
+		logger.Error(err, "failed to perform token exchange")
 		return "", "", err
 	}
 
@@ -331,6 +331,7 @@ func (a *acrProvider) processImageWithRegistryMirror(image string) (string, stri
 // parseRegistryMirror input format: "--registry-mirror=aaa:bbb,ccc:ddd"
 // output format: map[string]string{"aaa": "bbb", "ccc": "ddd"}
 func parseRegistryMirror(registryMirrorStr string) map[string]string {
+	logger := log.Background().WithName("parseRegistryMirror")
 	registryMirror := map[string]string{}
 
 	registryMirrorStr = strings.TrimSpace(registryMirrorStr)
@@ -342,7 +343,7 @@ func parseRegistryMirror(registryMirrorStr string) map[string]string {
 	for _, mapping := range strings.Split(registryMirrorStr, ",") {
 		parts := strings.Split(mapping, ":")
 		if len(parts) != 2 {
-			klog.Errorf("Invalid registry mirror format: %s", mapping)
+			logger.Error(nil, "Invalid registry mirror format", "mapping", mapping)
 			continue
 		}
 		registryMirror[parts[0]] = parts[1]

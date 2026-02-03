@@ -110,9 +110,9 @@ func (ss *ScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName, dis
 	logger.V(2).Info("azureDisk - update: rg vm - attach disk list", "resourceGroup", nodeResourceGroup, "nodeName", nodeName, "diskMap", diskMap)
 	result, rerr := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().Update(ctx, nodeResourceGroup, vm.VMSSName, vm.InstanceID, *newVM)
 	if rerr != nil {
-		klog.Errorf("azureDisk - attach disk list(%+v) on rg(%s) vm(%s) failed, err: %v", diskMap, nodeResourceGroup, nodeName, rerr)
+		logger.Error(rerr, "azureDisk - attach disk list failed", "diskMap", diskMap, "resourceGroup", nodeResourceGroup, "nodeName", nodeName)
 		if exists, err := errutils.CheckResourceExistsFromAzcoreError(rerr); !exists && !strings.Contains(rerr.Error(), consts.ParentResourceNotFoundMessageCode) && err == nil {
-			klog.Errorf("azureDisk - begin to filterNonExistingDisks(%v) on rg(%s) vm(%s)", diskMap, nodeResourceGroup, nodeName)
+			logger.Error(err, "azureDisk - begin to filterNonExistingDisks", "diskMap", diskMap, "resourceGroup", nodeResourceGroup, "nodeName", nodeName)
 			disks := FilterNonExistingDisks(ctx, ss.ComputeClientFactory, newVM.Properties.StorageProfile.DataDisks)
 			newVM.Properties.StorageProfile.DataDisks = disks
 			result, rerr = ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().Update(ctx, nodeResourceGroup, vm.VMSSName, vm.InstanceID, *newVM)
@@ -123,7 +123,7 @@ func (ss *ScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName, dis
 
 	if rerr == nil && result != nil && result.Properties != nil {
 		if err := ss.updateCache(ctx, vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, result); err != nil {
-			klog.Errorf("updateCache(%s, %s, %s, %s) failed with error: %v", vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, err)
+			logger.Error(err, "updateCache failed", "vmName", vmName, "resourceGroup", nodeResourceGroup, "vmssName", vm.VMSSName, "instanceID", vm.InstanceID)
 		}
 	} else {
 		_ = ss.DeleteCacheForNode(ctx, vmName)
@@ -205,9 +205,9 @@ func (ss *ScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName, dis
 	logger.V(2).Info("azureDisk - update: vm - detach disk list", "resourceGroup", nodeResourceGroup, "nodeName", nodeName, "diskMap", diskMap)
 	result, rerr := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().Update(ctx, nodeResourceGroup, vm.VMSSName, vm.InstanceID, *newVM)
 	if rerr != nil {
-		klog.Errorf("azureDisk - detach disk list(%+v) on rg(%s) vm(%s) failed, err: %v", diskMap, nodeResourceGroup, nodeName, rerr)
+		logger.Error(rerr, "azureDisk - detach disk list failed", "diskMap", diskMap, "resourceGroup", nodeResourceGroup, "nodeName", nodeName)
 		if exists, err := errutils.CheckResourceExistsFromAzcoreError(rerr); !exists && !strings.Contains(rerr.Error(), consts.ParentResourceNotFoundMessageCode) && err == nil {
-			klog.Errorf("azureDisk - begin to filterNonExistingDisks(%v) on rg(%s) vm(%s)", diskMap, nodeResourceGroup, nodeName)
+			logger.Error(err, "azureDisk - begin to filterNonExistingDisks", "diskMap", diskMap, "resourceGroup", nodeResourceGroup, "nodeName", nodeName)
 			disks := FilterNonExistingDisks(ctx, ss.ComputeClientFactory, newVM.Properties.StorageProfile.DataDisks)
 			newVM.Properties.StorageProfile.DataDisks = disks
 			result, rerr = ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().Update(ctx, nodeResourceGroup, vm.VMSSName, vm.InstanceID, *newVM)
@@ -217,7 +217,7 @@ func (ss *ScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName, dis
 	if rerr == nil && result != nil && result.Properties != nil {
 		logger.V(2).Info("azureDisk - update: vm - detach disk returned successfully", "resourceGroup", nodeResourceGroup, "nodeName", nodeName, "diskMap", diskMap)
 		if err := ss.updateCache(ctx, vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, result); err != nil {
-			klog.Errorf("updateCache(%s, %s, %s, %s) failed with error: %v", vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, err)
+			logger.Error(err, "updateCache failed", "vmName", vmName, "resourceGroup", nodeResourceGroup, "vmssName", vm.VMSSName, "instanceID", vm.InstanceID)
 		}
 	} else {
 		logger.V(2).Info("azureDisk - update: vm - detach disk returned with error", "resourceGroup", nodeResourceGroup, "nodeName", nodeName, "diskMap", diskMap, "error", rerr)

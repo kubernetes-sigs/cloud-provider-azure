@@ -101,7 +101,7 @@ func (az *Cloud) getRegionZonesBackoff(ctx context.Context, region string) ([]*s
 	err := wait.ExponentialBackoffWithContext(ctx, az.RequestBackoff(), func(ctx context.Context) (done bool, err error) {
 		zones, innerErr = az.zoneRepo.ListZones(ctx)
 		if innerErr != nil {
-			klog.ErrorS(err, "Failed to list zones")
+			logger.Error(innerErr, "Failed to list zones")
 			return false, nil
 		}
 

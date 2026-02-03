@@ -61,7 +61,8 @@ func TestAzureTest(t *testing.T) {
 	}
 	if reportDir != "" {
 		if err := os.MkdirAll(reportDir, 0755); err != nil {
-			klog.Fatalf("Failed creating report directory: %v", err)
+			logger.Error(err, "Failed creating report directory")
+			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 		}
 	}
 
@@ -115,6 +116,6 @@ func TestAzureTest(t *testing.T) {
 
 	logger.Info("Ingesting test result to kusto")
 	if err := utils.KustoIngest(passed, suiteConfig.LabelFilter, os.Getenv(utils.AKSClusterType), reporterConfig.JUnitReport); err != nil {
-		klog.Error(err)
+		logger.Error(err, "Failed to ingest test result to kusto")
 	}
 }

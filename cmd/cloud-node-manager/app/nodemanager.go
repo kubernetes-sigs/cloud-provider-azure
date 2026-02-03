@@ -43,9 +43,11 @@ import (
 
 // NewCloudNodeManagerCommand creates a *cobra.Command object with default parameters
 func NewCloudNodeManagerCommand() *cobra.Command {
+	logger := log.Background().WithName("NewCloudNodeManagerCommand")
 	s, err := options.NewCloudNodeManagerOptions()
 	if err != nil {
-		klog.Fatalf("unable to initialize command options: %v", err)
+		logger.Error(err, "unable to initialize command options")
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
 	cmd := &cobra.Command{
@@ -114,7 +116,8 @@ func Run(ctx context.Context, c *cloudnodeconfig.Config) error {
 
 	run := func(ctx context.Context) {
 		if err := startControllers(ctx, c, healthzHandler); err != nil {
-			klog.Fatalf("error running controllers: %v", err)
+			logger.Error(err, "error running controllers")
+			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 		}
 	}
 
@@ -148,7 +151,8 @@ func startControllers(ctx context.Context, c *cloudnodeconfig.Config, healthzHan
 	// If apiserver is not running we should wait for some time and fail only then. This is particularly
 	// important when we start node manager before apiserver starts.
 	if err := genericcontrollermanager.WaitForAPIServer(c.VersionedClient, 10*time.Second); err != nil {
-		klog.Fatalf("Failed to wait for apiserver being healthy: %v", err)
+		logger.Error(err, "Failed to wait for apiserver being healthy")
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
 	c.SharedInformers.Start(ctx.Done())
