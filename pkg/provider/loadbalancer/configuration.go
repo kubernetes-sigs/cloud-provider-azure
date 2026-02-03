@@ -165,9 +165,6 @@ func parseIPRangesAnnotation(svc *v1.Service, key string) ([]netip.Prefix, []str
 	)
 	for _, p := range strings.Split(strings.TrimSpace(value), Sep) {
 		p = strings.TrimSpace(p)
-		if p == "" { // skip empty segments (e.g., trailing comma)
-			continue
-		}
 		prefix, err := iputil.ParsePrefix(p)
 		if err != nil {
 			errsByKey = append(errsByKey, err)

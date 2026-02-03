@@ -466,17 +466,6 @@ func TestParseIPRangesAnnotation(t *testing.T) {
 			wantInvalid: []string{"foo", "bar"},
 			wantErr:     true,
 		},
-		{
-			name:          "trailing comma and empty segments skipped",
-			annotationKey: consts.ServiceAnnotationAllowedIPRanges,
-			annotationVal: "10.3.0.0/24,2001:db8:3::/64,",
-			wantPrefixes: []netip.Prefix{
-				netip.MustParsePrefix("10.3.0.0/24"),
-				netip.MustParsePrefix("2001:db8:3::/64"),
-			},
-			wantInvalid: nil,
-			wantErr:     false,
-		},
 	}
 
 	for _, tt := range tests {
