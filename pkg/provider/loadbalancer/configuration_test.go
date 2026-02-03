@@ -267,6 +267,26 @@ func TestBlockedIPRanges(t *testing.T) {
 		assert.Equal(t, []netip.Prefix{netip.MustParsePrefix("2001:db8::/32")}, actual)
 		assert.Empty(t, invalid)
 	})
+	t.Run("with multiple IP ranges", func(t *testing.T) {
+		actual, invalid, err := BlockedIPRanges(&v1.Service{
+			Spec: v1.ServiceSpec{
+				Type: v1.ServiceTypeLoadBalancer,
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					consts.ServiceAnnotationBlockedIPRanges: " 10.10.0.0/24, 10.20.0.0/16, 2001:db8::/32, 2002:db8::/64 ",
+				},
+			},
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, []netip.Prefix{
+			netip.MustParsePrefix("10.10.0.0/24"),
+			netip.MustParsePrefix("10.20.0.0/16"),
+			netip.MustParsePrefix("2001:db8::/32"),
+			netip.MustParsePrefix("2002:db8::/64"),
+		}, actual)
+		assert.Empty(t, invalid)
+	})
 	t.Run("with invalid IP range", func(t *testing.T) {
 		_, invalid, err := BlockedIPRanges(&v1.Service{
 			Spec: v1.ServiceSpec{
