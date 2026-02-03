@@ -124,7 +124,7 @@ func NewAccessControl(logger logr.Logger, svc *v1.Service, sg *armnetwork.Securi
 		eventEmitter(svc, v1.EventTypeWarning, "ConflictConfiguration", EventMessageOfConflictLoadBalancerSourceRangesAndAllowedIPRanges())
 	}
 
-	invalidRanges := slices.Concat(invalidSourceRanges, invalidAllowedIPRanges, invalidBlockedIPRanges)
+	invalidRanges := slices.Concat(invalidSourceRanges, invalidAllowedIPRanges)
 
 	return &AccessControl{
 		logger:                                 logger,

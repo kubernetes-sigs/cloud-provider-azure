@@ -43,7 +43,7 @@ func EventMessageOfInvalidAllowedIPRanges(allowedIPRanges []string) string {
 }
 
 func EventMessageOfInvalidBlockedIPRanges(blockedIPRanges []string) string {
-	return fmt.Sprintf("Found invalid %s %q, ignoring and adding a default DenyAll rule in security group.",
+	return fmt.Sprintf("Found invalid %s %q, ignoring.",
 		consts.ServiceAnnotationBlockedIPRanges,
 		blockedIPRanges,
 	)
