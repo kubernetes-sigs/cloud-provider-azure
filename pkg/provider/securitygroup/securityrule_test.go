@@ -22,6 +22,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/stretchr/testify/assert"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/iputil"
 )
 
 func TestSetDestinationPortRanges(t *testing.T) {
@@ -163,4 +164,72 @@ func TestSetAsteriskDestinationPortRanges(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGenerateDenyBlockedSecurityRuleName(t *testing.T) {
+	t.Run("should be protocol-specific", func(t *testing.T) {
+		var (
+			ipFamily    = iputil.IPv4
+			srcPrefixes = []string{"foo", "bar"}
+			dstPorts    = []int32{80, 443}
+		)
+
+		assert.Len(t, map[string]bool{
+			GenerateDenyBlockedSecurityRuleName(armnetwork.SecurityRuleProtocolTCP, ipFamily, srcPrefixes, dstPorts):      true,
+			GenerateDenyBlockedSecurityRuleName(armnetwork.SecurityRuleProtocolUDP, ipFamily, srcPrefixes, dstPorts):      true,
+			GenerateDenyBlockedSecurityRuleName(armnetwork.SecurityRuleProtocolAsterisk, ipFamily, srcPrefixes, dstPorts): true,
+		}, 3)
+	})
+	t.Run("should be IPFamily-specific", func(t *testing.T) {
+		var (
+			protocol    = armnetwork.SecurityRuleProtocolTCP
+			srcPrefixes = []string{"foo", "bar"}
+			dstPorts    = []int32{80, 443}
+		)
+
+		assert.Len(t, map[string]bool{
+			GenerateDenyBlockedSecurityRuleName(protocol, iputil.IPv4, srcPrefixes, dstPorts): true,
+			GenerateDenyBlockedSecurityRuleName(protocol, iputil.IPv6, srcPrefixes, dstPorts): true,
+		}, 2)
+	})
+
+	t.Run("should be SrcPrefixes-specific", func(t *testing.T) {
+		var (
+			protocol = armnetwork.SecurityRuleProtocolTCP
+			ipFamily = iputil.IPv4
+			dstPorts = []int32{80, 443}
+		)
+
+		assert.Len(t, map[string]bool{
+			GenerateDenyBlockedSecurityRuleName(protocol, ipFamily, []string{"foo"}, dstPorts): true,
+			GenerateDenyBlockedSecurityRuleName(protocol, ipFamily, []string{"bar"}, dstPorts): true,
+		}, 2)
+
+		t.Run("order-insensitive", func(t *testing.T) {
+			assert.Equal(t,
+				GenerateDenyBlockedSecurityRuleName(protocol, ipFamily, []string{"foo", "bar"}, dstPorts),
+				GenerateDenyBlockedSecurityRuleName(protocol, ipFamily, []string{"bar", "foo"}, dstPorts),
+			)
+		})
+	})
+
+	t.Run("should be DstPorts-specific", func(t *testing.T) {
+		var (
+			protocol    = armnetwork.SecurityRuleProtocolTCP
+			ipFamily    = iputil.IPv4
+			srcPrefixes = []string{"foo", "bar"}
+		)
+
+		assert.Len(t, map[string]bool{
+			GenerateDenyBlockedSecurityRuleName(protocol, ipFamily, srcPrefixes, []int32{80}):  true,
+			GenerateDenyBlockedSecurityRuleName(protocol, ipFamily, srcPrefixes, []int32{443}): true,
+		}, 2)
+
+		t.Run("order-insensitive", func(t *testing.T) {
+			assert.Equal(t,
+				GenerateDenyBlockedSecurityRuleName(protocol, ipFamily, srcPrefixes, []int32{80, 443}),
+				GenerateDenyBlockedSecurityRuleName(protocol, ipFamily, srcPrefixes, []int32{443, 80}),
+			)
+		})
+	})
 }
