@@ -91,7 +91,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 
 			c, err := s.Config(KnownControllers(), ControllersDisabledByDefault.List(), controllerAliases)
 			if err != nil {
-				logger.Error(err, "Run: failed to configure cloud controller manager")
+				logger.Error(err, "Failed to configure cloud controller manager")
 				os.Exit(1)
 			}
 
@@ -128,7 +128,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 
 			healthHandler, err := StartHTTPServer(cmd.Context(), c.Complete(), traceProvider)
 			if err != nil {
-				logger.Error(err, "Run: failed to start HTTP server")
+				logger.Error(err, "Failed to start HTTP server")
 				os.Exit(1)
 			}
 
@@ -136,7 +136,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 				// Identity used to distinguish between multiple cloud controller manager instances
 				id, err := os.Hostname()
 				if err != nil {
-					logger.Error(err, "Run: failed to get host name")
+					logger.Error(err, "Failed to get host name")
 					os.Exit(1)
 				}
 				// add a uniquifier so that two processes on the same host don't accidentally both become active
@@ -219,7 +219,7 @@ func RunWrapper(s *options.CloudControllerManagerOptions, c *cloudcontrollerconf
 		if !c.DynamicReloadingConfig.EnableDynamicReloading {
 			logger.V(1).Info("using static initialization from config file", "cloudConfigFile", c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile)
 			if err := Run(ctx, c.Complete(), h); err != nil {
-				logger.Error(err, "RunWrapper: failed to start cloud controller manager")
+				logger.Error(err, "Failed to start cloud controller manager")
 				os.Exit(1)
 			}
 		}
@@ -258,14 +258,14 @@ func RunWrapper(s *options.CloudControllerManagerOptions, c *cloudcontrollerconf
 				}
 
 				if !shouldRemainStopped {
-					logger.Info("RunWrapper: restarting all controllers")
+					logger.Info("Restarting all controllers")
 					cancelFunc = runAsync(s, errCh, h)
 				} else {
 					klog.Warningf("All controllers are stopped!")
 				}
 
 			case err := <-errCh:
-				logger.Error(err, "RunWrapper: failed to start cloud controller manager")
+				logger.Error(err, "Failed to start cloud controller manager")
 				os.Exit(1)
 			}
 		}
@@ -276,7 +276,7 @@ func shouldDisableCloudProvider(configFilePath string) (bool, error) {
 	logger := log.Background().WithName("shouldDisableCloudProvider")
 	configBytes, err := os.ReadFile(configFilePath)
 	if err != nil {
-		logger.Error(err, "shouldDisableCloudProvider: failed to read", "configFilePath", configFilePath)
+		logger.Error(err, "Failed to read config file", "configFilePath", configFilePath)
 		return false, err
 	}
 
@@ -284,7 +284,7 @@ func shouldDisableCloudProvider(configFilePath string) (bool, error) {
 		DisableCloudProvider bool `json:"disableCloudProvider,omitempty"`
 	}
 	if err = json.Unmarshal(configBytes, &c); err != nil {
-		logger.Error(err, "shouldDisableCloudProvider: failed to unmarshal configBytes to struct")
+		logger.Error(err, "Failed to unmarshal configBytes to struct")
 		return false, err
 	}
 
@@ -299,12 +299,12 @@ func runAsync(s *options.CloudControllerManagerOptions, errCh chan error, h *con
 	go func() {
 		c, err := s.Config(KnownControllers(), ControllersDisabledByDefault.List(), names.CCMControllerAliases())
 		if err != nil {
-			logger.Error(err, "RunAsync: failed to configure cloud controller manager")
+			logger.Error(err, "Failed to configure cloud controller manager")
 			os.Exit(1)
 		}
 
 		if err := Run(ctx, c.Complete(), h); err != nil {
-			logger.Error(err, "RunAsync: failed to run cloud controller manager")
+			logger.Error(err, "Failed to run cloud controller manager")
 			errCh <- err
 		}
 
@@ -460,11 +460,11 @@ func startControllers(ctx context.Context, controllerContext genericcontrollerma
 		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
-	logger.V(2).Info("startControllers: starting shared informers")
+	logger.V(2).Info("Starting shared informers")
 	completedConfig.SharedInformers.Start(ctx.Done())
 	controllerContext.InformerFactory.Start(ctx.Done())
 	<-ctx.Done()
-	logger.V(1).Info("startControllers: received stopping signal, exiting")
+	logger.V(1).Info("Received stopping signal, exiting")
 
 	return nil
 }
