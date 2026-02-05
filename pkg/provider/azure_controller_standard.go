@@ -128,9 +128,9 @@ func (as *availabilitySet) DeleteCacheForNode(ctx context.Context, nodeName stri
 	logger := log.FromContextOrBackground(ctx).WithName("DeleteCacheForNode")
 	err := as.vmCache.Delete(nodeName)
 	if err == nil {
-		logger.V(2).Info("DeleteCacheForNode successfully", "nodeName", nodeName)
+		logger.V(2).Info("Succeed", "nodeName", nodeName)
 	} else {
-		logger.Error(err, "DeleteCacheForNode failed", "node", nodeName)
+		logger.Error(err, "Failed", "nodeName", nodeName)
 	}
 	return err
 }

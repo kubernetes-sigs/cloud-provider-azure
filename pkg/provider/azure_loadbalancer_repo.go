@@ -437,7 +437,7 @@ func (az *Cloud) cleanupBasicLoadBalancer(
 		if lb != nil && lb.SKU != nil && lb.SKU.Name != nil && *lb.SKU.Name == armnetwork.LoadBalancerSKUNameBasic {
 			logger.V(2).Info("found basic load balancer, removing it", "loadBalancerName", *lb.Name)
 			if err := az.safeDeleteLoadBalancer(ctx, *lb, clusterName, service); err != nil {
-				logger.Error(err, "cleanupBasicLoadBalancer: failed to delete outdated basic load balancer", "loadBalancerName", *lb.Name)
+				logger.Error(err, "Failed to delete outdated basic load balancer", "loadBalancerName", *lb.Name)
 				return nil, err
 			}
 			existingLBs = append(existingLBs[:i], existingLBs[i+1:]...)
@@ -452,7 +452,7 @@ func (az *Cloud) cleanupBasicLoadBalancer(
 		var err error
 		az.pipCache, err = az.newPIPCache()
 		if err != nil {
-			logger.Error(err, "cleanupBasicLoadBalancer: failed to refresh pip cache")
+			logger.Error(err, "Failed to refresh pip cache")
 			return nil, err
 		}
 	}
