@@ -45,6 +45,12 @@ generate() {
     --required-author='' \
     --output=${OUTPUT}
 
+  if [[ ! -s "${OUTPUT}" ]]; then
+    echo "ERROR: release-notes did not produce output at ${OUTPUT}" >&2
+    echo "       verify GITHUB_TOKEN access and release/tag inputs." >&2
+    exit 1
+  fi
+
   read -r -d '' HEAD <<EOF
 Full Changelog: [${FROM_TAG}..${TO_TAG}](https://github.com/kubernetes-sigs/cloud-provider-azure/compare/${FROM_TAG}...${TO_TAG})
 EOF
