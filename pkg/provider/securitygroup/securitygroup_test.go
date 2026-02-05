@@ -1189,7 +1189,7 @@ func TestRuleHelper_RetainDestinationFromRules(t *testing.T) {
 						SourcePortRange:            ptr.To("*"),
 						DestinationAddressPrefixes: to.SliceOfPtrs("8.8.8.8"),
 						DestinationPortRanges:      to.SliceOfPtrs("5000"),
-						Priority:                   ptr.To(int32(300)), // Outside managed priority range
+						Priority:                   ptr.To(int32(400)),
 					},
 				},
 				{
@@ -1245,7 +1245,7 @@ func TestRuleHelper_RetainDestinationFromRules(t *testing.T) {
 					SourcePortRange:            ptr.To("*"),
 					DestinationAddressPrefixes: to.SliceOfPtrs("8.8.8.8"),
 					DestinationPortRanges:      to.SliceOfPtrs("5000"),
-					Priority:                   ptr.To(int32(300)), // Outside managed priority range
+					Priority:                   ptr.To(int32(400)),
 				},
 			},
 			{

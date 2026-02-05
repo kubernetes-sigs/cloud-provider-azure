@@ -38,9 +38,7 @@ func IsManagedSecurityRule(r *armnetwork.SecurityRule) bool {
 		return false
 	}
 	priority := *r.Properties.Priority
-	return strings.HasPrefix(*r.Name, SecurityRuleNamePrefix) &&
-		((consts.IPPrefixBlockingMinimumPriority <= priority && priority <= consts.IPPrefixBlockingMaximumPriority) ||
-			(consts.LoadBalancerMinimumPriority <= priority && priority < consts.LoadBalancerMaximumPriority))
+	return strings.HasPrefix(*r.Name, SecurityRuleNamePrefix) && consts.LoadBalancerMinimumPriority <= priority && priority <= consts.LoadBalancerMaximumPriority
 
 }
 
