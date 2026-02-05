@@ -52,7 +52,7 @@ EOF
   echo -e "${HEAD}\n\n$(cat ${OUTPUT})" > ${OUTPUT}
 
   if [[ "${UPDATE_SITE}" = "true" ]]; then
-    echo "Generating site content for ${TO_TAG}: site/content/en/blog/releases/${TO_TAG}.md"
+    echo "Generating site content for ${TO_TAG}: content/en/blog/releases/${TO_TAG}.md"
     read -r -d '' SITE_HEAD <<EOF
 ---
 title: ${TO_TAG}
@@ -61,7 +61,7 @@ date: $(date '+%Y-%m-%d')
 description: Cloud Provider Azure ${TO_TAG}
 ---
 EOF
-    echo -e "${SITE_HEAD}\n$(cat ${OUTPUT})" > site/content/en/blog/releases/${TO_TAG}.md
+    echo -e "${SITE_HEAD}\n$(cat ${OUTPUT})" > content/en/blog/releases/${TO_TAG}.md
   fi
 }
 
