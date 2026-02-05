@@ -468,6 +468,21 @@ func TestParseIPRangesAnnotation(t *testing.T) {
 			wantErr:     false,
 		},
 		{
+			name:          "multiple valid IP ranges",
+			annotationKey: consts.ServiceAnnotationAllowedIPRanges,
+			annotationVal: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,2001:db8::/32,2001:db8:1::/48,fd00::/8",
+			wantPrefixes: []netip.Prefix{
+				netip.MustParsePrefix("10.0.0.0/8"),
+				netip.MustParsePrefix("172.16.0.0/12"),
+				netip.MustParsePrefix("192.168.0.0/16"),
+				netip.MustParsePrefix("2001:db8::/32"),
+				netip.MustParsePrefix("2001:db8:1::/48"),
+				netip.MustParsePrefix("fd00::/8"),
+			},
+			wantInvalid: nil,
+			wantErr:     false,
+		},
+		{
 			name:          "invalid entries collected",
 			annotationKey: consts.ServiceAnnotationAllowedIPRanges,
 			annotationVal: "foo,10.0.0.1/24,2001:db8::/129,bar",
