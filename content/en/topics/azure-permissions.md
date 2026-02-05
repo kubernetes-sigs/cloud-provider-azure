@@ -109,4 +109,7 @@ Microsoft.Network/privatelinkservices/privateEndpointConnections/delete
 Microsoft.Network/privatelinkservices/read
 Microsoft.Network/privatelinkservices/write
 Microsoft.Network/virtualNetworks/subnets/write
+
+// Required to add resources to subnet
+Microsoft.Network/virtualNetworks/subnets/join/action
 ```
