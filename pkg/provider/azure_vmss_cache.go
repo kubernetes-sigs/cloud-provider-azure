@@ -84,7 +84,7 @@ func (ss *ScaleSet) newVMSSCache() (azcache.Resource, error) {
 					resourceGroupNotFound = true
 					continue
 				}
-				logger.Error(rerr, "ComputeClientFactory.GetVirtualMachineScaleSetClient().List failed")
+				logger.Error(rerr, "ComputeClientFactory.GetVirtualMachineScaleSetClient().List failed", "resourceGroup", resourceGroup)
 				return nil, rerr
 			}
 
