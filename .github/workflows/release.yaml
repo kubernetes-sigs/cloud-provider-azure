@@ -176,6 +176,7 @@ jobs:
       - build-acr-credential-provider
     permissions:
       contents: write  # Required for creating GitHub releases
+      pull-requests: write  # Required for creating PRs
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
@@ -188,7 +189,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: documentation
           fetch-depth: 0
       - name: Discover Go modules
         id: gomods
@@ -198,6 +198,11 @@ jobs:
         with:
           go-version: ${{ steps.gomods.outputs.version }}
           check-latest: true
+      - name: Checkout documentation branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: documentation
+          fetch-depth: 0
       - name: Generate release note
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -237,3 +242,24 @@ jobs:
 
           # Optional. Create given branch name in local and remote repository.
           create_branch: true
+      - name: Create pull request for release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          HEAD_BRANCH="doc/release-note-${{ github.ref_name }}"
+          BASE_BRANCH="documentation"
+          
+          # Check if PR already exists
+          EXISTING_PR=$(gh pr list --head "$HEAD_BRANCH" --base "$BASE_BRANCH" --state open --json number --jq '.[0].number')
+          if [ -n "$EXISTING_PR" ]; then
+            echo "PR #$EXISTING_PR already exists for $HEAD_BRANCH -> $BASE_BRANCH"
+            exit 0
+          fi
+          
+          # Create PR
+          gh pr create \
+            --head "$HEAD_BRANCH" \
+            --base "$BASE_BRANCH" \
+            --title "Update release notes for ${{ github.ref_name }}" \
+            --body "This PR updates the release notes for version ${{ github.ref_name }}." \
+            --label "kind/documentation"
