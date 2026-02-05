@@ -557,7 +557,7 @@ func (as *availabilitySet) GetInstanceTypeByNodeName(ctx context.Context, name s
 	logger := log.FromContextOrBackground(ctx).WithName("GetInstanceTypeByNodeName")
 	machine, err := as.getVirtualMachine(ctx, types.NodeName(name), azcache.CacheReadTypeUnsafe)
 	if err != nil {
-		logger.Error(err, "failed: as.getVirtualMachine failed", "node", name)
+		logger.Error(err, "as.getVirtualMachine failed", "node", name)
 		return "", err
 	}
 
@@ -724,12 +724,12 @@ func (as *availabilitySet) GetVMSetNames(ctx context.Context, service *v1.Servic
 	}
 	availabilitySetNames, err = as.getAgentPoolAvailabilitySets(vms, nodes)
 	if err != nil {
-		logger.Error(err, "as.GetVMSetNames - getAgentPoolAvailabilitySets failed")
+		logger.Error(err, "as.getAgentPoolAvailabilitySets failed")
 		return nil, err
 	}
 	if len(availabilitySetNames) == 0 {
 		err = fmt.Errorf("no availability sets found for nodes, node count(%d)", len(nodes))
-		logger.Error(err, "as.GetVMSetNames - No availability sets found for nodes in the cluster.", "nodeCount", len(nodes))
+		logger.Error(err, "No availability sets found for nodes in the cluster", "nodeCount", len(nodes))
 		return nil, err
 	}
 	if !isAuto {
@@ -742,7 +742,7 @@ func (as *availabilitySet) GetVMSetNames(ctx context.Context, service *v1.Servic
 		}
 		if !found {
 			err = fmt.Errorf("availability set (%s) - not found", serviceAvailabilitySetName)
-			logger.Error(err, "as.GetVMSetNames - Availability set in service annotation not found", "availabilitySetName", serviceAvailabilitySetName)
+			logger.Error(err, "Availability set in service annotation not found", "availabilitySetName", serviceAvailabilitySetName)
 			return nil, err
 		}
 		return []*string{to.Ptr(serviceAvailabilitySetName)}, nil
@@ -765,13 +765,13 @@ func (as *availabilitySet) GetNodeVMSetName(ctx context.Context, node *v1.Node) 
 		}
 	}
 	if hostName == "" {
-		klog.Warningf("as.GetNodeVMSetName: cannot get host name from node %s", node.Name)
+		klog.Warningf("Cannot get host name from node %s", node.Name)
 		return "", nil
 	}
 
 	vms, err := as.ListVirtualMachines(ctx, as.ResourceGroup)
 	if err != nil {
-		logger.Error(err, "as.GetNodeVMSetName - ListVirtualMachines failed")
+		logger.Error(err, "ListVirtualMachines failed")
 		return "", err
 	}
 
@@ -783,7 +783,7 @@ func (as *availabilitySet) GetNodeVMSetName(ctx context.Context, node *v1.Node) 
 
 				asName, err = getLastSegment(ptr.Deref(vm.Properties.AvailabilitySet.ID, ""), "/")
 				if err != nil {
-					logger.Error(err, "as.GetNodeVMSetName: failed to get last segment of ID", "ID", ptr.Deref(vm.Properties.AvailabilitySet.ID, ""))
+					logger.Error(err, "Failed to get last segment of ID", "ID", ptr.Deref(vm.Properties.AvailabilitySet.ID, ""))
 					return "", err
 				}
 			}
@@ -1298,7 +1298,7 @@ func (as *availabilitySet) GetAgentPoolVMSetNames(ctx context.Context, nodes []*
 	logger := log.FromContextOrBackground(ctx).WithName("as.GetAgentPoolVMSetNames")
 	vms, err := as.ListVirtualMachines(ctx, as.ResourceGroup)
 	if err != nil {
-		logger.Error(err, "as.getNodeAvailabilitySet - ListVirtualMachines failed")
+		logger.Error(err, "ListVirtualMachines failed")
 		return nil, err
 	}
 
