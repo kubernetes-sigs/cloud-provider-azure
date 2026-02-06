@@ -57,7 +57,7 @@ func (az *Cloud) reconcilePrivateLinkService(
 		isIPv6 = *fipIPVersion == armnetwork.IPVersionIPv6
 	} else {
 		if isIPv6, err = az.isFIPIPv6(service, fipConfig); err != nil {
-			logger.Error(err, "Failed to get FIP IP family", "service", serviceName)
+			logger.Error(err, "failed to get FIP IP family", "service", serviceName)
 			return false, err
 		}
 	}
