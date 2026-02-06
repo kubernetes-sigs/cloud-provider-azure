@@ -30,8 +30,13 @@ generate() {
   FROM_TAG=$1
   TO_TAG=$2
   BRANCH=$3
-  FROM_COMMIT=$(git rev-list --no-merges ${FROM_TAG}..${TO_TAG} | tail -1) # exclude the ${FROM_TAG} commit
-  TO_COMMIT=$(git rev-parse ${TO_TAG})
+  FROM_COMMIT=$(git rev-list --no-merges "${FROM_TAG}..${TO_TAG}" | tail -1) # exclude the ${FROM_TAG} commit
+  TO_COMMIT=$(git rev-list -n1 "${TO_TAG}^{commit}")
+
+  if [[ -z "${FROM_COMMIT}" || -z "${TO_COMMIT}" ]]; then
+    echo "ERROR: failed to resolve commit range for ${FROM_TAG}..${TO_TAG}" >&2
+    exit 1
+  fi
 
   echo "Generating release notes for ${FROM_TAG}..${TO_TAG} (${FROM_COMMIT}..${TO_COMMIT}) on branch ${BRANCH}"
 
