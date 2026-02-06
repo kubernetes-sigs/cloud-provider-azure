@@ -94,7 +94,7 @@ func (d *delayedRouteUpdater) run(ctx context.Context) {
 		d.updateRoutes(ctx)
 		return false, nil
 	})
-	logger.Error(err, "Stopped")
+	logger.Error(err, "stopped")
 }
 
 // updateRoutes invokes route table client to update all routes.
@@ -423,13 +423,13 @@ func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, _ string, 
 		logger.V(4).Info("create route instance in dual stack mode", "instance", kubeRoute.TargetNode, "cidr", kubeRoute.DestinationCIDR)
 		nodePrivateIPs, err := az.getPrivateIPsForMachine(ctx, kubeRoute.TargetNode)
 		if nil != err {
-			logger.V(3).Error(err, "Failed(GetPrivateIPsByNodeName)", "instance", kubeRoute.TargetNode, "cidr", kubeRoute.DestinationCIDR)
+			logger.V(3).Error(err, "failed(GetPrivateIPsByNodeName)", "instance", kubeRoute.TargetNode, "cidr", kubeRoute.DestinationCIDR)
 			return err
 		}
 
 		targetIP, err = findFirstIPByFamily(nodePrivateIPs, CIDRv6)
 		if nil != err {
-			logger.V(3).Error(err, "Failed(findFirstIpByFamily)", "instance", kubeRoute.TargetNode, "cidr", kubeRoute.DestinationCIDR)
+			logger.V(3).Error(err, "failed(findFirstIpByFamily)", "instance", kubeRoute.TargetNode, "cidr", kubeRoute.DestinationCIDR)
 			return err
 		}
 	}
@@ -449,7 +449,7 @@ func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, _ string, 
 	// Wait for operation complete.
 	err = op.wait().err
 	if err != nil {
-		logger.Error(err, "Failed for node", "node", kubeRoute.TargetNode)
+		logger.Error(err, "failed for node", "node", kubeRoute.TargetNode)
 		return err
 	}
 
@@ -495,7 +495,7 @@ func (az *Cloud) DeleteRoute(ctx context.Context, clusterName string, kubeRoute 
 	// Wait for operation complete.
 	err = op.wait().err
 	if err != nil {
-		logger.Error(err, "Failed for node", "node", kubeRoute.TargetNode)
+		logger.Error(err, "failed for node", "node", kubeRoute.TargetNode)
 		return err
 	}
 
@@ -512,7 +512,7 @@ func (az *Cloud) DeleteRoute(ctx context.Context, clusterName string, kubeRoute 
 		// Wait for operation complete.
 		err = op.wait().err
 		if err != nil {
-			logger.Error(err, "Failed for node", "node", kubeRoute.TargetNode)
+			logger.Error(err, "failed for node", "node", kubeRoute.TargetNode)
 			return err
 		}
 	}
