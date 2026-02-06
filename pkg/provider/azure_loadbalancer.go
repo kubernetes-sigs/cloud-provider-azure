@@ -850,7 +850,7 @@ func (az *Cloud) getServiceLoadBalancer(
 			}
 			deletedLBName, deletedPLS, err = az.removeFrontendIPConfigurationFromLoadBalancer(ctx, existingLB, existingLBs, fipConfigs, clusterName, service)
 			if err != nil {
-				logger.Error(err, "Failed to remove frontend IP configurations from load balancer", "service", service.Name, "clusterName", clusterName, "wantLb", wantLb, "fipConfigNames", fipConfigNames)
+				logger.Error(err, "failed to remove frontend IP configurations from load balancer", "service", service.Name, "clusterName", clusterName, "wantLb", wantLb, "fipConfigNames", fipConfigNames)
 				return nil, nil, nil, nil, false, false, err
 			}
 			if deletedPLS {
@@ -878,7 +878,7 @@ func (az *Cloud) getServiceLoadBalancer(
 				if deletedLBName == "" {
 					newLBs, err := az.cleanupLocalServiceBackendPool(ctx, service, nodes, existingLBs, clusterName)
 					if err != nil {
-						logger.Error(err, "Failed to cleanup backend pool for local service", "service", service.Name, "clusterName", clusterName, "wantLb", wantLb)
+						logger.Error(err, "failed to cleanup backend pool for local service", "service", service.Name, "clusterName", clusterName, "wantLb", wantLb)
 						return nil, nil, nil, nil, false, false, err
 					}
 					existingLBs = newLBs
@@ -3686,7 +3686,7 @@ func (az *Cloud) safeDeletePublicIP(ctx context.Context, service *v1.Service, pi
 			if frontendIPConfigUpdated || loadBalancerRuleUpdated {
 				err := az.CreateOrUpdateLB(ctx, service, *lb)
 				if err != nil {
-					logger.Error(err, "Failed to CreateOrUpdateLB", "service", getServiceName(service))
+					logger.Error(err, "failed to CreateOrUpdateLB", "service", getServiceName(service))
 					return err
 				}
 			}

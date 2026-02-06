@@ -130,7 +130,7 @@ func (as *availabilitySet) DeleteCacheForNode(ctx context.Context, nodeName stri
 	if err == nil {
 		logger.V(2).Info("Succeed", "nodeName", nodeName)
 	} else {
-		logger.Error(err, "Failed", "nodeName", nodeName)
+		logger.Error(err, "failed", "nodeName", nodeName)
 	}
 	return err
 }
