@@ -32,7 +32,7 @@ func RunFileWatcherOrDie(path string) chan struct{} {
 	logger := log.Background().WithName("RunFileWatcherOrDie")
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		logger.Error(err, "Failed to initialize file watcher")
+		logger.Error(err, "failed to initialize file watcher")
 		os.Exit(1)
 	}
 
@@ -44,7 +44,7 @@ func RunFileWatcherOrDie(path string) chan struct{} {
 			select {
 			case event, ok := <-watcher.Events:
 				if !ok {
-					logger.Error(nil, "Events channel closed unexpectedly")
+					logger.Error(nil, "events channel closed unexpectedly")
 					_ = watcher.Close()
 					os.Exit(1)
 				}
@@ -57,12 +57,12 @@ func RunFileWatcherOrDie(path string) chan struct{} {
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
-					logger.Error(nil, "Errors channel closed unexpectedly")
+					logger.Error(nil, "errors channel closed unexpectedly")
 					_ = watcher.Close()
 					os.Exit(1)
 				}
 
-				logger.Error(err, "Failed to watch file", "path", path)
+				logger.Error(err, "failed to watch file", "path", path)
 				_ = watcher.Close()
 				os.Exit(1)
 			}
@@ -84,7 +84,7 @@ func startWatchingOrDie(watcher *fsnotify.Watcher, path string, maxRetries int) 
 				time.Sleep(time.Second)
 				continue
 			}
-			logger.Error(err, "Failed to watch after retries", "path", path, "maxRetries", maxRetries)
+			logger.Error(err, "failed to watch after retries", "path", path, "maxRetries", maxRetries)
 			_ = watcher.Close()
 			os.Exit(1)
 		}
