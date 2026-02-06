@@ -175,7 +175,7 @@ jobs:
       - build-cloud-node-manager
       - build-acr-credential-provider
     permissions:
-      contents: write
+      contents: write  # Required for creating GitHub releases
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
@@ -188,7 +188,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: documentation
           fetch-depth: 0
       - name: Discover Go modules
         id: gomods
@@ -198,6 +197,11 @@ jobs:
         with:
           go-version: ${{ steps.gomods.outputs.version }}
           check-latest: true
+      - name: Checkout documentation branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: documentation
+          fetch-depth: 0
       - name: Generate release note
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -234,6 +238,6 @@ jobs:
           # - https://git-scm.com/docs/git-add#Documentation/git-add.txt-ltpathspecgt82308203
           # - https://git-scm.com/docs/gitglossary#Documentation/gitglossary.txt-aiddefpathspecapathspec
           file_pattern: './content/en/blog/releases/*.md'
-          
+
           # Optional. Create given branch name in local and remote repository.
           create_branch: true
