@@ -91,7 +91,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 
 			c, err := s.Config(KnownControllers(), ControllersDisabledByDefault.List(), controllerAliases)
 			if err != nil {
-				logger.Error(err, "Failed to configure cloud controller manager")
+				logger.Error(err, "failed to configure cloud controller manager")
 				os.Exit(1)
 			}
 
@@ -128,7 +128,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 
 			healthHandler, err := StartHTTPServer(cmd.Context(), c.Complete(), traceProvider)
 			if err != nil {
-				logger.Error(err, "Failed to start HTTP server")
+				logger.Error(err, "failed to start HTTP server")
 				os.Exit(1)
 			}
 
@@ -136,7 +136,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 				// Identity used to distinguish between multiple cloud controller manager instances
 				id, err := os.Hostname()
 				if err != nil {
-					logger.Error(err, "Failed to get host name")
+					logger.Error(err, "failed to get host name")
 					os.Exit(1)
 				}
 				// add a uniquifier so that two processes on the same host don't accidentally both become active
@@ -219,7 +219,7 @@ func RunWrapper(s *options.CloudControllerManagerOptions, c *cloudcontrollerconf
 		if !c.DynamicReloadingConfig.EnableDynamicReloading {
 			logger.V(1).Info("using static initialization from config file", "cloudConfigFile", c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile)
 			if err := Run(ctx, c.Complete(), h); err != nil {
-				logger.Error(err, "Failed to start cloud controller manager")
+				logger.Error(err, "failed to start cloud controller manager")
 				os.Exit(1)
 			}
 		}
@@ -265,7 +265,7 @@ func RunWrapper(s *options.CloudControllerManagerOptions, c *cloudcontrollerconf
 				}
 
 			case err := <-errCh:
-				logger.Error(err, "Failed to start cloud controller manager")
+				logger.Error(err, "failed to start cloud controller manager")
 				os.Exit(1)
 			}
 		}
@@ -276,7 +276,7 @@ func shouldDisableCloudProvider(configFilePath string) (bool, error) {
 	logger := log.Background().WithName("shouldDisableCloudProvider")
 	configBytes, err := os.ReadFile(configFilePath)
 	if err != nil {
-		logger.Error(err, "Failed to read config file", "configFilePath", configFilePath)
+		logger.Error(err, "failed to read config file", "configFilePath", configFilePath)
 		return false, err
 	}
 
@@ -284,7 +284,7 @@ func shouldDisableCloudProvider(configFilePath string) (bool, error) {
 		DisableCloudProvider bool `json:"disableCloudProvider,omitempty"`
 	}
 	if err = json.Unmarshal(configBytes, &c); err != nil {
-		logger.Error(err, "Failed to unmarshal configBytes to struct")
+		logger.Error(err, "failed to unmarshal configBytes to struct")
 		return false, err
 	}
 
@@ -299,12 +299,12 @@ func runAsync(s *options.CloudControllerManagerOptions, errCh chan error, h *con
 	go func() {
 		c, err := s.Config(KnownControllers(), ControllersDisabledByDefault.List(), names.CCMControllerAliases())
 		if err != nil {
-			logger.Error(err, "Failed to configure cloud controller manager")
+			logger.Error(err, "failed to configure cloud controller manager")
 			os.Exit(1)
 		}
 
 		if err := Run(ctx, c.Complete(), h); err != nil {
-			logger.Error(err, "Failed to run cloud controller manager")
+			logger.Error(err, "failed to run cloud controller manager")
 			errCh <- err
 		}
 
