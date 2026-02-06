@@ -1,0 +1,4 @@
+interface:
+  display_name: "Release Note Docs PR"
+  short_description: "Generate docs release notes and open fork-to-upstream PRs"
+  default_prompt: "Create or update the documentation-site release note for a given tag (e.g., v1.35.7), commit it to a doc/release-note-<tag> branch, push to origin, and open a PR to upstream/documentation with token fallback via env, gh auth, or 1Password."
