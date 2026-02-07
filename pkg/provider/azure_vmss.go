@@ -1077,7 +1077,7 @@ func (ss *ScaleSet) EnsureHostInPool(ctx context.Context, _ *v1.Service, nodeNam
 	vm, err := ss.getVmssVM(ctx, vmName, azcache.CacheReadTypeDefault)
 	if err != nil {
 		if errors.Is(err, cloudprovider.InstanceNotFound) {
-			logger.Info("EnsureHostInPool: skipping node because it is not found", "vmName", vmName)
+			logger.Info("Skipping node because it is not found", "vmName", vmName)
 			return "", "", "", nil, nil
 		}
 
@@ -1584,7 +1584,7 @@ func (ss *ScaleSet) EnsureHostsInPool(ctx context.Context, service *v1.Service, 
 				vmasNodes = append(vmasNodes, node)
 				continue
 			}
-			logger.V(3).Info("EnsureHostsInPool skips node because VMAS nodes couldn't be added to basic LB with VMSS backends", "node", localNodeName)
+			logger.V(3).Info("Skips node because VMAS nodes couldn't be added to basic LB with VMSS backends", "node", localNodeName)
 			continue
 		}
 		if vmManagementType == ManagedByVmssFlex {
@@ -1593,7 +1593,7 @@ func (ss *ScaleSet) EnsureHostsInPool(ctx context.Context, service *v1.Service, 
 				vmssFlexNodes = append(vmssFlexNodes, node)
 				continue
 			}
-			logger.V(3).Info("EnsureHostsInPool skips node because VMSS Flex nodes deos not support Basic Load Balancer", "node", localNodeName)
+			logger.V(3).Info("Skips node because VMSS Flex nodes do not support Basic Load Balancer", "node", localNodeName)
 			continue
 		}
 		vmssUniformNodes = append(vmssUniformNodes, node)
@@ -1626,7 +1626,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromNode(ctx context.Context, nodeNa
 	vm, err := ss.getVmssVM(ctx, nodeName, azcache.CacheReadTypeDefault)
 	if err != nil {
 		if errors.Is(err, cloudprovider.InstanceNotFound) {
-			logger.Info("ensureBackendPoolDeletedFromNode: skipping node because it is not found", "nodeName", nodeName)
+			logger.Info("Skipping node because it is not found", "nodeName", nodeName)
 			return "", "", "", nil, nil
 		}
 
@@ -1643,7 +1643,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromNode(ctx context.Context, nodeNa
 
 	// Find primary network interface configuration.
 	if vm.VirtualMachineScaleSetVMProperties.NetworkProfileConfiguration.NetworkInterfaceConfigurations == nil {
-		logger.V(4).Info("ensureBackendPoolDeletedFromNode: cannot obtain the primary network interface configuration, of vm, "+
+		logger.V(4).Info("Cannot obtain the primary network interface configuration, of vm, "+
 			"probably because the vm's being deleted", "vm", nodeName)
 		return "", "", "", nil, nil
 	}
@@ -2427,7 +2427,7 @@ func (ss *ScaleSet) VMSSBatchSize(ctx context.Context, vmssName string) (int, er
 func (ss *ScaleSet) UpdateVMSSVMsInBatch(ctx context.Context, meta vmssMetaInfo, update map[string]armcompute.VirtualMachineScaleSetVM, batchSize int) <-chan error {
 	logger := klog.FromContext(ctx).WithName("UpdateVMSSVMsInBatch")
 	patchVMFn := func(ctx context.Context, instanceID string, vm *armcompute.VirtualMachineScaleSetVM) (*runtime.Poller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse], error) {
-		logger.V(4).Info("UpdateVMSSVMsInBatch: updating vm", "vmss", meta.vmssName, "instanceID", instanceID, "requestEtag", ptr.Deref(vm.Etag, ""))
+		logger.V(4).Info("Updating vm", "vmss", meta.vmssName, "instanceID", instanceID, "requestEtag", ptr.Deref(vm.Etag, ""))
 		return ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().BeginUpdate(ctx, meta.resourceGroup, meta.vmssName, instanceID, *vm, &armcompute.VirtualMachineScaleSetVMsClientBeginUpdateOptions{
 			IfMatch: vm.Etag,
 		})
@@ -2460,7 +2460,7 @@ func (ss *ScaleSet) UpdateVMSSVMsInBatch(ctx context.Context, meta vmssMetaInfo,
 						logger.Error(err, "Failed to update VMs for VMSS with new vm config")
 						errChan <- err
 					} else {
-						logger.V(6).Info("UpdateVMSSVMsInBatch: vm updated successfully", "responseEtag", ptr.Deref(resp.Etag, ""))
+						logger.V(6).Info("Successfully updated vm", "responseEtag", ptr.Deref(resp.Etag, ""))
 					}
 				}()
 			case <-ctx.Done():

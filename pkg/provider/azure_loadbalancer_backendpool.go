@@ -208,7 +208,7 @@ func (bc *backendPoolTypeNodeIPConfig) ReconcileBackendPools(
 					isMigration = true
 					bp.Properties.VirtualNetwork = nil
 					if err := bc.CreateOrUpdateLBBackendPool(ctx, lbName, bp); err != nil {
-						logger.Error(err, "bc.ReconcileBackendPools: failed to cleanup IP based backend pool", "service", serviceName, "backendPoolName", lbBackendPoolNames[isIPv6])
+						logger.Error(err, "failed to cleanup IP based backend pool", "service", serviceName, "backendPoolName", lbBackendPoolNames[isIPv6])
 						return false, false, nil, fmt.Errorf("bc.ReconcileBackendPools for service (%s): failed to cleanup IP based backend pool %s: %w", serviceName, lbBackendPoolNames[isIPv6], err)
 					}
 					newBackendPools[i] = bp
@@ -237,7 +237,7 @@ func (bc *backendPoolTypeNodeIPConfig) ReconcileBackendPools(
 					// delete them from the pool.
 					shouldExcludeLoadBalancer, err := bc.ShouldNodeExcludedFromLoadBalancer(nodeName)
 					if err != nil {
-						logger.Error(err, "bc.ReconcileBackendPools: ShouldNodeExcludedFromLoadBalancer failed", "node", nodeName)
+						logger.Error(err, "bc.ShouldNodeExcludedFromLoadBalancer failed", "node", nodeName)
 						return false, false, nil, err
 					}
 					if shouldExcludeLoadBalancer {
@@ -360,7 +360,7 @@ func (bc *backendPoolTypeNodeIPConfig) GetBackendPrivateIPs(ctx context.Context,
 					ipConfigID := ptr.Deref(backendIPConfig.ID, "")
 					nodeName, _, err := bc.VMSet.GetNodeNameByIPConfigurationID(ctx, ipConfigID)
 					if err != nil {
-						logger.Error(err, "bc.GetBackendPrivateIPs: GetNodeNameByIPConfigurationID failed", "service", serviceName)
+						logger.Error(err, "failed: GetNodeNameByIPConfigurationID", "service", serviceName)
 						continue
 					}
 					privateIPsSet, ok := bc.nodePrivateIPs[strings.ToLower(nodeName)]
@@ -646,7 +646,7 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(ctx context.Context, clus
 			for _, id := range lbBackendPoolIDsSlice {
 				name, err := getBackendPoolNameFromBackendPoolID(id)
 				if err != nil {
-					logger.Error(err, "bi.ReconcileBackendPools: failed to get LB name from backend pool ID", "service", serviceName)
+					logger.Error(err, "failed to get LB name from backend pool ID", "service", serviceName)
 					return false, false, nil, err
 				}
 				backendPoolNames = append(backendPoolNames, name)
@@ -671,7 +671,7 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(ctx context.Context, clus
 		logger.V(2).Info("ensuring the LB is decoupled from the VMSet", "serviceName", serviceName, "vmSetName", vmSetName)
 		shouldRefreshLB, err = bi.VMSet.EnsureBackendPoolDeleted(ctx, service, lbBackendPoolIDsSlice, vmSetName, lb.Properties.BackendAddressPools, true)
 		if err != nil {
-			logger.Error(err, "bi.ReconcileBackendPools: failed to EnsureBackendPoolDeleted", "service", serviceName)
+			logger.Error(err, "failed to EnsureBackendPoolDeleted", "service", serviceName)
 			return false, false, nil, err
 		}
 
