@@ -65,6 +65,7 @@ func TestGetCredentials(t *testing.T) {
 		},
 		"",
 		configFile.Name(),
+		IdentityBindingsConfig{},
 	)
 
 	if err != nil {
@@ -166,6 +167,7 @@ func TestGetCredentialsConfig(t *testing.T) {
 			},
 			"",
 			configFile.Name(),
+			IdentityBindingsConfig{},
 		)
 		if err != nil && !test.expectError {
 			t.Fatalf("Unexpected error when creating new acr provider: %v", err)
@@ -208,6 +210,7 @@ func TestProcessImageWithMirrorMapping(t *testing.T) {
 		},
 		"mcr.microsoft.com:abc.azurecr.io",
 		configFile.Name(),
+		IdentityBindingsConfig{},
 	)
 
 	assert.Nilf(t, err, "Unexpected error when creating new acr provider")
@@ -264,6 +267,7 @@ func TestParseACRLoginServerFromImage(t *testing.T) {
 		},
 		"mcr.microsoft.com:abc.azurecr.io",
 		configFile.Name(),
+		IdentityBindingsConfig{},
 	)
 	if err != nil {
 		t.Fatalf("Unexpected error when creating new acr provider: %v", err)
@@ -402,7 +406,7 @@ func TestNewAcrProvider_WithEmptyServiceAccountToken(t *testing.T) {
 		ServiceAccountToken: "", // Empty token
 	}
 
-	provider, err := NewAcrProvider(req, "", configFile.Name())
+	provider, err := NewAcrProvider(req, "", configFile.Name(), IdentityBindingsConfig{})
 	assert.NoError(t, err)
 	assert.NotNil(t, provider)
 
@@ -433,7 +437,7 @@ func TestNewAcrProvider_WithServiceAccountToken(t *testing.T) {
 		},
 	}
 
-	provider, err := NewAcrProvider(req, "", configFile.Name())
+	provider, err := NewAcrProvider(req, "", configFile.Name(), IdentityBindingsConfig{})
 	assert.NoError(t, err)
 	assert.NotNil(t, provider)
 
@@ -463,7 +467,7 @@ func TestNewAcrProvider_WithServiceAccountToken_MissingClientIDAnnotation(t *tes
 		},
 	}
 
-	provider, err := NewAcrProvider(req, "", configFile.Name())
+	provider, err := NewAcrProvider(req, "", configFile.Name(), IdentityBindingsConfig{})
 	assert.Error(t, err)
 	assert.Nil(t, provider)
 	assert.Contains(t, err.Error(), "client id annotation")
@@ -491,7 +495,7 @@ func TestNewAcrProvider_WithServiceAccountToken_MissingTenantIDAnnotation(t *tes
 		},
 	}
 
-	provider, err := NewAcrProvider(req, "", configFile.Name())
+	provider, err := NewAcrProvider(req, "", configFile.Name(), IdentityBindingsConfig{})
 	assert.Error(t, err)
 	assert.Nil(t, provider)
 	assert.Contains(t, err.Error(), "tenant id annotation")
@@ -519,7 +523,7 @@ func TestNewAcrProvider_WithServiceAccountToken_EmptyClientID(t *testing.T) {
 		},
 	}
 
-	provider, err := NewAcrProvider(req, "", configFile.Name())
+	provider, err := NewAcrProvider(req, "", configFile.Name(), IdentityBindingsConfig{})
 	assert.Error(t, err)
 	assert.Nil(t, provider)
 	assert.Contains(t, err.Error(), "client id annotation")
@@ -547,7 +551,7 @@ func TestNewAcrProvider_WithServiceAccountToken_EmptyTenantID(t *testing.T) {
 		},
 	}
 
-	provider, err := NewAcrProvider(req, "", configFile.Name())
+	provider, err := NewAcrProvider(req, "", configFile.Name(), IdentityBindingsConfig{})
 	assert.Error(t, err)
 	assert.Nil(t, provider)
 	assert.Contains(t, err.Error(), "tenant id annotation")
@@ -570,7 +574,7 @@ func TestNewAcrProvider_InvalidConfig(t *testing.T) {
 		ServiceAccountToken: "",
 	}
 
-	provider, err := NewAcrProvider(req, "", configFile.Name())
+	provider, err := NewAcrProvider(req, "", configFile.Name(), IdentityBindingsConfig{})
 	assert.Error(t, err)
 	assert.Nil(t, provider)
 	assert.Contains(t, err.Error(), "failed to load config")
