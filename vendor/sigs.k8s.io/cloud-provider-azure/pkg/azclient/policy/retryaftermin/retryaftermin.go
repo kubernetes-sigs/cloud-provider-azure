@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+
 	"k8s.io/klog/v2"
 )
 
@@ -45,6 +46,7 @@ func (p *Policy) GetMinRetryAfter() time.Duration {
 
 // Do implements the policy.Policy interface
 func (p *Policy) Do(req *policy.Request) (*http.Response, error) {
+	logger := klog.Background().WithName("Do")
 	resp, err := req.Next()
 	// If the request failed or the status code is >= 300, return
 	if err != nil || resp == nil || resp.StatusCode >= 300 {
@@ -54,7 +56,7 @@ func (p *Policy) Do(req *policy.Request) (*http.Response, error) {
 	// Check if the response retry-after header is less than the minimum
 	overrideRetryAfter := func(header http.Header, headerName string, retryAfter time.Duration) {
 		if retryAfter < p.minRetryAfter {
-			klog.V(5).Infof("RetryAfterMinPolicy: retry-after value %s is less than minimum %s, removing retry-after header..", retryAfter, p.minRetryAfter)
+			logger.V(5).Info("RetryAfterMinPolicy: retry-after value is less than minimum, removing retry-after header", "retryAfter", retryAfter, "minimum", p.minRetryAfter)
 			header.Del(headerName)
 		}
 	}
@@ -76,7 +78,7 @@ func (p *Policy) Do(req *policy.Request) (*http.Response, error) {
 					// If the retry-after value is less than the minimum, remove it
 					overrideRetryAfter(resp.Header, headerName, retryDuration)
 				} else {
-					klog.V(5).Infof("RetryAfterMinPolicy: not modifying %s header with unrecognized format: %s", headerName, retryAfter)
+					logger.V(5).Info("RetryAfterMinPolicy: not modifying header with unrecognized format", "headerName", headerName, "unrecognized format", retryAfter)
 				}
 			}
 		}
