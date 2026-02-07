@@ -363,7 +363,7 @@ func (fs *FlexScaleSet) DeleteCacheForNode(ctx context.Context, nodeName string)
 	}
 	if cached == nil {
 		err := fmt.Errorf("nil cache returned from %s", vmssFlexID)
-		logger.Error(err, "DeleteCacheForNode failed", "vmssFlexID", vmssFlexID, "node", nodeName)
+		logger.Error(err, "failed", "vmssFlexID", vmssFlexID, "node", nodeName)
 		return err
 	}
 	vmMap := cached.(*sync.Map)
@@ -372,6 +372,6 @@ func (fs *FlexScaleSet) DeleteCacheForNode(ctx context.Context, nodeName string)
 	fs.vmssFlexVMCache.Update(vmssFlexID, vmMap)
 	fs.vmssFlexVMNameToVmssID.Delete(nodeName)
 
-	logger.V(2).Info("successfully", "vmssFlexID", vmssFlexID, "node", nodeName)
+	logger.V(2).Info("Succeeded", "vmssFlexID", vmssFlexID, "node", nodeName)
 	return nil
 }

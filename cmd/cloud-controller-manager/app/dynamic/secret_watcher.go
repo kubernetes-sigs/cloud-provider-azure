@@ -55,7 +55,7 @@ func RunSecretWatcherOrDie(c *cloudcontrollerconfig.Config) chan struct{} {
 	secretWatcher, updateCh := NewSecretWatcher(factory, c.DynamicReloadingConfig.CloudConfigSecretName, c.DynamicReloadingConfig.CloudConfigSecretNamespace)
 	err := secretWatcher.Run(wait.NeverStop)
 	if err != nil {
-		logger.Error(err, "Run: failed to initialize secret watcher")
+		logger.Error(err, "failed to initialize secret watcher")
 		os.Exit(1)
 	}
 
