@@ -30,7 +30,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	v6 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
+	v6 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7"
 	v60 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	gomock "go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
