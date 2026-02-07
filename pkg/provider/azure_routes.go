@@ -88,13 +88,13 @@ func newDelayedRouteUpdater(az *Cloud, interval time.Duration) batchProcessor {
 
 // run starts the updater reconciling loop.
 func (d *delayedRouteUpdater) run(ctx context.Context) {
-	logger := log.FromContextOrBackground(ctx).WithName("delayedRouteUpdater")
-	logger.Info("delayedRouteUpdater: started")
+	logger := log.FromContextOrBackground(ctx).WithName("delayedRouteUpdater.run")
+	logger.Info("Started")
 	err := wait.PollUntilContextCancel(ctx, d.interval, true, func(ctx context.Context) (bool, error) {
 		d.updateRoutes(ctx)
 		return false, nil
 	})
-	logger.Error(err, "delayedRouteUpdater: stopped")
+	logger.Error(err, "stopped")
 }
 
 // updateRoutes invokes route table client to update all routes.
@@ -354,7 +354,7 @@ func processRoutes(ipv6DualStackEnabled bool, routeTable *armnetwork.RouteTable,
 		for i, route := range routeTable.Properties.Routes {
 			instance := MapRouteNameToNodeName(ipv6DualStackEnabled, *route.Name)
 			cidr := *route.Properties.AddressPrefix
-			logger.V(10).Info("ListRoutes: *", "instance", instance, "cidr", cidr)
+			logger.V(10).Info("Got route", "instance", instance, "cidr", cidr)
 
 			kubeRoutes[i] = &cloudprovider.Route{
 				Name:            *route.Name,
@@ -364,7 +364,7 @@ func processRoutes(ipv6DualStackEnabled bool, routeTable *armnetwork.RouteTable,
 		}
 	}
 
-	logger.V(10).Info("ListRoutes: FINISH")
+	logger.V(10).Info("FINISH")
 	return kubeRoutes, nil
 }
 
@@ -423,13 +423,13 @@ func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, _ string, 
 		logger.V(4).Info("create route instance in dual stack mode", "instance", kubeRoute.TargetNode, "cidr", kubeRoute.DestinationCIDR)
 		nodePrivateIPs, err := az.getPrivateIPsForMachine(ctx, kubeRoute.TargetNode)
 		if nil != err {
-			logger.V(3).Error(err, "create route: failed(GetPrivateIPsByNodeName)", "instance", kubeRoute.TargetNode, "cidr", kubeRoute.DestinationCIDR)
+			logger.V(3).Error(err, "failed(GetPrivateIPsByNodeName)", "instance", kubeRoute.TargetNode, "cidr", kubeRoute.DestinationCIDR)
 			return err
 		}
 
 		targetIP, err = findFirstIPByFamily(nodePrivateIPs, CIDRv6)
 		if nil != err {
-			logger.V(3).Error(err, "create route: failed(findFirstIpByFamily)", "instance", kubeRoute.TargetNode, "cidr", kubeRoute.DestinationCIDR)
+			logger.V(3).Error(err, "failed(findFirstIpByFamily)", "instance", kubeRoute.TargetNode, "cidr", kubeRoute.DestinationCIDR)
 			return err
 		}
 	}
@@ -449,7 +449,7 @@ func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, _ string, 
 	// Wait for operation complete.
 	err = op.wait().err
 	if err != nil {
-		logger.Error(err, "CreateRoute failed for node", "node", kubeRoute.TargetNode)
+		logger.Error(err, "failed for node", "node", kubeRoute.TargetNode)
 		return err
 	}
 
@@ -495,7 +495,7 @@ func (az *Cloud) DeleteRoute(ctx context.Context, clusterName string, kubeRoute 
 	// Wait for operation complete.
 	err = op.wait().err
 	if err != nil {
-		logger.Error(err, "DeleteRoute failed for node", "node", kubeRoute.TargetNode)
+		logger.Error(err, "failed for node", "node", kubeRoute.TargetNode)
 		return err
 	}
 
@@ -512,7 +512,7 @@ func (az *Cloud) DeleteRoute(ctx context.Context, clusterName string, kubeRoute 
 		// Wait for operation complete.
 		err = op.wait().err
 		if err != nil {
-			logger.Error(err, "DeleteRoute failed for node", "node", kubeRoute.TargetNode)
+			logger.Error(err, "failed for node", "node", kubeRoute.TargetNode)
 			return err
 		}
 	}

@@ -57,7 +57,7 @@ func (az *Cloud) reconcilePrivateLinkService(
 		isIPv6 = *fipIPVersion == armnetwork.IPVersionIPv6
 	} else {
 		if isIPv6, err = az.isFIPIPv6(service, fipConfig); err != nil {
-			logger.Error(err, "reconcilePrivateLinkService for service failed to get FIP IP family", "service", serviceName)
+			logger.Error(err, "failed to get FIP IP family", "service", serviceName)
 			return false, err
 		}
 	}
@@ -98,7 +98,7 @@ func (az *Cloud) reconcilePrivateLinkService(
 		// Secondly, check if there is a private link service already created
 		existingPLS, err := az.plsRepo.Get(ctx, az.getPLSResourceGroup(service), *fipConfigID, azcache.CacheReadTypeDefault)
 		if err != nil {
-			logger.Error(err, "reconcilePrivateLinkService for service failed: getPrivateLinkService failed", "service", serviceName, "fipConfigID", ptr.Deref(fipConfigID, ""))
+			logger.Error(err, "getPrivateLinkService failed", "service", serviceName, "fipConfigID", ptr.Deref(fipConfigID, ""))
 			return false, err
 		}
 
@@ -158,20 +158,20 @@ func (az *Cloud) reconcilePrivateLinkService(
 			logger.V(2).Info("updating", "service", serviceName, "pls", plsName)
 			err := az.disablePLSNetworkPolicy(ctx, service)
 			if err != nil {
-				logger.Error(err, "reconcilePrivateLinkService for service failed to disable PLS network policy", "service", serviceName, "pls", plsName)
+				logger.Error(err, "Failed to disable PLS network policy", "service", serviceName, "pls", plsName)
 				return false, err
 			}
 			existingPLS.Etag = ptr.To("")
 			_, err = az.plsRepo.CreateOrUpdate(ctx, az.getPLSResourceGroup(service), *existingPLS)
 			if err != nil {
-				logger.Error(err, "reconcilePrivateLinkService for service abort backoff: pls updating", "service", serviceName, "pls", plsName)
+				logger.Error(err, "abort backoff: pls updating", "service", serviceName, "pls", plsName)
 				return false, err
 			}
 		}
 	} else if !wantPLS {
 		existingPLS, err := az.plsRepo.Get(ctx, az.getPLSResourceGroup(service), *fipConfigID, azcache.CacheReadTypeDefault)
 		if err != nil {
-			logger.Error(err, "reconcilePrivateLinkService for service failed: getPrivateLinkService failed", "service", serviceName, "LBFipConfigID", ptr.Deref(fipConfigID, ""))
+			logger.Error(err, "getPrivateLinkService failed", "service", serviceName, "LBFipConfigID", ptr.Deref(fipConfigID, ""))
 			return false, err
 		}
 
@@ -179,7 +179,7 @@ func (az *Cloud) reconcilePrivateLinkService(
 		if exists {
 			deleteErr := az.safeDeletePLS(ctx, existingPLS, service)
 			if deleteErr != nil {
-				logger.Error(deleteErr, "reconcilePrivateLinkService for service failed: deletePLS for frontEnd failed", "service", serviceName, "LBFipConfigID", ptr.Deref(fipConfigID, ""))
+				logger.Error(deleteErr, "deletePLS for frontEnd failed", "service", serviceName, "LBFipConfigID", ptr.Deref(fipConfigID, ""))
 				return false, deleteErr
 			}
 			isOperationSucceeded = true
