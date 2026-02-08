@@ -86,7 +86,7 @@ func (az *Cloud) getPrivateIPsForMachineWithRetry(ctx context.Context, nodeName 
 			if errors.Is(retryErr, cloudprovider.InstanceNotFound) {
 				return true, retryErr
 			}
-			logger.Error(retryErr, "GetPrivateIPsByNodeName: backoff failure, will retry", "node", nodeName)
+			logger.Error(retryErr, "backoff failure, will retry", "node", nodeName)
 			return false, nil
 		}
 		logger.V(3).Info("backoff success", "node", nodeName)
@@ -107,7 +107,7 @@ func (az *Cloud) GetIPForMachineWithRetry(ctx context.Context, name types.NodeNa
 		var retryErr error
 		ip, publicIP, retryErr = az.VMSet.GetIPByNodeName(ctx, string(name))
 		if retryErr != nil {
-			logger.Error(retryErr, "GetIPForMachineWithRetry: backoff failure, will retry", "node", name)
+			logger.Error(retryErr, "backoff failure, will retry", "node", name)
 			return false, nil
 		}
 		logger.V(3).Info("backoff success", "node", name)

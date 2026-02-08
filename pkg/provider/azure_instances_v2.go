@@ -41,7 +41,7 @@ func (az *Cloud) InstanceExists(ctx context.Context, node *v1.Node) (bool, error
 		return false, err
 	}
 	if unmanaged {
-		logger.V(4).Info("omitting unmanaged node", "nodeName", node.Name)
+		logger.V(4).Info("Omitting unmanaged node", "nodeName", node.Name)
 		return true, nil
 	}
 
@@ -54,7 +54,7 @@ func (az *Cloud) InstanceExists(ctx context.Context, node *v1.Node) (bool, error
 				return false, nil
 			}
 
-			logger.Error(err, "InstanceExists: failed to get the provider ID by node name", "node", node.Name)
+			logger.Error(err, "failed to get the provider ID by node name", "node", node.Name)
 			return false, err
 		}
 	}
@@ -87,7 +87,7 @@ func (az *Cloud) InstanceShutdown(ctx context.Context, node *v1.Node) (bool, err
 				return false, nil
 			}
 
-			logger.Error(err, "InstanceShutdown: failed to get the provider ID by node name", "node", node.Name)
+			logger.Error(err, "failed to get the provider ID by node name", "node", node.Name)
 			return false, err
 		}
 	}
@@ -118,7 +118,7 @@ func (az *Cloud) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloudpro
 	} else {
 		providerID, err := cloudprovider.GetInstanceProviderID(ctx, az, types.NodeName(node.Name))
 		if err != nil {
-			logger.Error(err, "InstanceMetadata: failed to get the provider ID by node name", "node", node.Name)
+			logger.Error(err, "failed to get the provider ID by node name", "node", node.Name)
 			return nil, err
 		}
 		meta.ProviderID = providerID
@@ -126,21 +126,21 @@ func (az *Cloud) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloudpro
 
 	instanceType, err := az.InstanceType(ctx, types.NodeName(node.Name))
 	if err != nil {
-		logger.Error(err, "InstanceMetadata: failed to get the instance type", "node", node.Name)
+		logger.Error(err, "failed to get the instance type", "node", node.Name)
 		return &cloudprovider.InstanceMetadata{}, err
 	}
 	meta.InstanceType = instanceType
 
 	nodeAddresses, err := az.NodeAddresses(ctx, types.NodeName(node.Name))
 	if err != nil {
-		logger.Error(err, "InstanceMetadata: failed to get the node address", "node", node.Name)
+		logger.Error(err, "failed to get the node address", "node", node.Name)
 		return &cloudprovider.InstanceMetadata{}, err
 	}
 	meta.NodeAddresses = nodeAddresses
 
 	zone, err := az.GetZoneByNodeName(ctx, types.NodeName(node.Name))
 	if err != nil {
-		logger.Error(err, "InstanceMetadata: failed to get the node zone", "node", node.Name)
+		logger.Error(err, "failed to get the node zone", "node", node.Name)
 		return &cloudprovider.InstanceMetadata{}, err
 	}
 	meta.Zone = zone.FailureDomain
