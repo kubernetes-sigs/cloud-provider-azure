@@ -685,7 +685,7 @@ func (az *Cloud) cleanOrphanedLoadBalancer(ctx context.Context, lb *armnetwork.L
 			}
 		}
 		if !foundLB {
-			logger.V(2).Info("cleanOrphanedLoadBalancer: the LB doesn't exist, will not delete it", "lbName", ptr.Deref(lb.Name, ""))
+			logger.V(2).Info("The LB doesn't exist, will not delete it", "lbName", ptr.Deref(lb.Name, ""))
 			return nil
 		}
 
@@ -850,7 +850,7 @@ func (az *Cloud) getServiceLoadBalancer(
 			}
 			deletedLBName, deletedPLS, err = az.removeFrontendIPConfigurationFromLoadBalancer(ctx, existingLB, existingLBs, fipConfigs, clusterName, service)
 			if err != nil {
-				logger.Error(err, fmt.Sprintf("getServiceLoadBalancer(%s, %s, %v): failed to remove frontend IP configurations %q from load balancer", service.Name, clusterName, wantLb, fipConfigNames))
+				logger.Error(err, "failed to remove frontend IP configurations from load balancer", "service", service.Name, "clusterName", clusterName, "wantLb", wantLb, "fipConfigNames", fipConfigNames)
 				return nil, nil, nil, nil, false, false, err
 			}
 			if deletedPLS {
@@ -878,7 +878,7 @@ func (az *Cloud) getServiceLoadBalancer(
 				if deletedLBName == "" {
 					newLBs, err := az.cleanupLocalServiceBackendPool(ctx, service, nodes, existingLBs, clusterName)
 					if err != nil {
-						logger.Error(err, fmt.Sprintf("getServiceLoadBalancer(%s, %s, %v): failed to cleanup backend pool for local service", service.Name, clusterName, wantLb))
+						logger.Error(err, "failed to cleanup backend pool for local service", "service", service.Name, "clusterName", clusterName, "wantLb", wantLb)
 						return nil, nil, nil, nil, false, false, err
 					}
 					existingLBs = newLBs
@@ -946,13 +946,13 @@ func (az *Cloud) getServiceLoadBalancer(
 // then selects the first one (sorted based on name).
 // Note: this function is only useful for basic LB clusters.
 func (az *Cloud) selectLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, existingLBs []*armnetwork.LoadBalancer, nodes []*v1.Node) (selectedLB *armnetwork.LoadBalancer, existsLb bool, err error) {
-	logger := log.FromContextOrBackground(ctx).WithName("selectLoadBalancer")
+	logger := log.FromContextOrBackground(ctx).WithName("az.selectLoadBalancer")
 	isInternal := requiresInternalLoadBalancer(service)
 	serviceName := getServiceName(service)
 	logger.V(2).Info("start", "serviceName", serviceName, "isInternal", isInternal)
 	vmSetNames, err := az.VMSet.GetVMSetNames(ctx, service, nodes)
 	if err != nil {
-		logger.Error(err, "az.selectLoadBalancer: az.GetVMSetNames failed", "clusterName", clusterName, "serviceName", serviceName, "isInternal", isInternal)
+		logger.Error(err, "az.GetVMSetNames failed", "clusterName", clusterName, "serviceName", serviceName, "isInternal", isInternal)
 		return nil, false, err
 	}
 	logger.V(2).Info("retrieved VM set names", "clusterName", clusterName, "serviceName", serviceName, "isInternal", isInternal, "vmSetNames", vmSetNames)
@@ -1386,7 +1386,7 @@ func reconcileDNSSettings(
 	} else {
 		if pip.Properties.DNSSettings == nil ||
 			pip.Properties.DNSSettings.DomainNameLabel == nil {
-			logger.V(6).Info("ensurePublicIPExists - no existing DNS label on the public IP, create one", "serviceName", serviceName, "pipName", pipName)
+			logger.V(6).Info("No existing DNS label on the public IP, create one", "serviceName", serviceName, "pipName", pipName)
 			pip.Properties.DNSSettings = &armnetwork.PublicIPAddressDNSSettings{
 				DomainNameLabel: &domainNameLabel,
 			}
@@ -2152,7 +2152,7 @@ func (az *Cloud) removeNodeFromLBConfig(nodeNameToLBConfigIDXMap map[string]int,
 	logger := log.Background().WithName("removeNodeFromLBConfig")
 	if idx, ok := nodeNameToLBConfigIDXMap[nodeName]; ok {
 		currentLBConfigName := az.MultipleStandardLoadBalancerConfigurations[idx].Name
-		logger.V(4).Info("reconcileMultipleStandardLoadBalancerBackendNodes: remove node on lb", "node", nodeName, "lb", currentLBConfigName)
+		logger.V(4).Info("Remove node on lb", "node", nodeName, "lb", currentLBConfigName)
 		az.multipleStandardLoadBalancersActiveNodesLock.Lock()
 		az.MultipleStandardLoadBalancerConfigurations[idx].ActiveNodes.Delete(strings.ToLower(nodeName))
 		az.multipleStandardLoadBalancersActiveNodesLock.Unlock()
@@ -2960,7 +2960,7 @@ func (az *Cloud) getExpectedLBRules(
 		consts.IsK8sServiceHasHAModeEnabled(service) {
 
 		lbRuleName := az.getloadbalancerHAmodeRuleName(service, isIPv6)
-		logger.V(2).Info("getExpectedLBRules", "lbName", lbName, "ruleName", lbRuleName)
+		logger.V(2).Info("Got load balancer HA mode rule name", "lbName", lbName, "ruleName", lbRuleName)
 
 		props, err := az.getExpectedHAModeLoadBalancingRuleProperties(service, lbFrontendIPConfigID, lbBackendPoolID)
 		if err != nil {
@@ -3001,7 +3001,7 @@ func (az *Cloud) getExpectedLBRules(
 
 		for _, port := range service.Spec.Ports {
 			lbRuleName := az.getLoadBalancerRuleName(service, port.Protocol, port.Port, isIPv6)
-			logger.V(2).Info("getExpectedLBRules", "lbName", lbName, "ruleName", lbRuleName)
+			logger.V(2).Info("Got load balancer rule name", "lbName", lbName, "ruleName", lbRuleName)
 			isNoLBRuleRequired, err := consts.IsLBRuleOnK8sServicePortDisabled(service.Annotations, port.Port)
 			if err != nil {
 				err := fmt.Errorf("failed to parse annotation %s: %w", consts.BuildAnnotationKeyForPort(port.Port, consts.PortAnnotationNoLBRule), err)
@@ -3485,7 +3485,7 @@ func (az *Cloud) reconcilePublicIP(ctx context.Context, pips []*armnetwork.Publi
 	for _, pip := range pipsToBeUpdated {
 		pipCopy := *pip
 		updateFuncs = append(updateFuncs, func() error {
-			logger.V(2).Info("reconcilePublicIP for service", "service", serviceName, "pip", *pip.Name, "isIPv6", isIPv6, "action", "updating")
+			logger.V(2).Info("Starting az.CreateOrUpdatePIP", "service", serviceName, "pip", *pip.Name, "isIPv6", isIPv6, "action", "updating")
 			return az.CreateOrUpdatePIP(service, pipResourceGroup, &pipCopy)
 		})
 	}
@@ -3503,9 +3503,8 @@ func (az *Cloud) reconcilePublicIP(ctx context.Context, pips []*armnetwork.Publi
 				logger.Error(err, "Failed to get resource group from PIP ID", "pip-id", pipID)
 				return err
 			}
-			logger.V(2).Info("reconcilePublicIP for service",
-				"service", serviceName, "pip", *pip.Name, "rg", rg, "isIPv6", isIPv6, "action", "deleting",
-			)
+			logger.V(2).Info("Starting az.safeDeletePublicIP",
+				"service", serviceName, "pip", *pip.Name, "rg", rg, "isIPv6", isIPv6, "action", "deleting")
 			return az.safeDeletePublicIP(ctx, service, rg, &pipCopy, lb)
 		})
 	}
@@ -3575,7 +3574,7 @@ func (az *Cloud) getPublicIPUpdates(
 				dirtyPIP, toBeDeleted bool
 			)
 			if !wantLb && !isUserAssignedPIP {
-				logger.V(2).Info("reconcilePublicIP for service: unbinding the service from pip", "service", serviceName, "pip", *pip.Name)
+				logger.V(2).Info("Unbinding the service from pip", "service", serviceName, "pip", *pip.Name)
 				if serviceReferences, err = unbindServiceFromPIP(pip, serviceName, isUserAssignedPIP); err != nil {
 					return false, nil, false, nil, err
 				}
@@ -3687,7 +3686,7 @@ func (az *Cloud) safeDeletePublicIP(ctx context.Context, service *v1.Service, pi
 			if frontendIPConfigUpdated || loadBalancerRuleUpdated {
 				err := az.CreateOrUpdateLB(ctx, service, *lb)
 				if err != nil {
-					logger.Error(err, "safeDeletePublicIP for service failed", "service", getServiceName(service))
+					logger.Error(err, "failed to CreateOrUpdateLB", "service", getServiceName(service))
 					return err
 				}
 			}
