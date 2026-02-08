@@ -43,7 +43,7 @@ func (az *Cloud) refreshZones(ctx context.Context, refreshFunc func(ctx context.
 		_ = refreshFunc(ctx)
 		return false, nil
 	})
-	logger.V(2).Error(err, "refreshZones: refresh zones finished with error")
+	logger.V(2).Error(err, "refresh zones finished with error")
 }
 
 func (az *Cloud) syncRegionZonesMap(ctx context.Context) error {
