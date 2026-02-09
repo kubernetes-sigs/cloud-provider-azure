@@ -232,6 +232,214 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		})
 		Expect(err).NotTo(HaveOccurred())
 	})
+
+	It("should place all external services sharing a user-assigned public IP on the same load balancer", func() {
+		By("Creating a user-assigned public IP")
+		ipName := fmt.Sprintf("%s-shared-pip-%s", basename, ns.Name[:8])
+		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName, false))
+		Expect(err).NotTo(HaveOccurred())
+		targetIP := ptr.Deref(pip.Properties.IPAddress, "")
+		utils.Logf("Created user-assigned PIP with address %s", targetIP)
+		defer func() {
+			By("Cleaning up PIP")
+			err = utils.DeletePIPWithRetry(tc, ipName, "")
+			Expect(err).NotTo(HaveOccurred())
+		}()
+
+		var firstLBName string
+		serviceCount := 2
+		serviceNames := []string{}
+
+		for i := range serviceCount {
+			serviceLabels := labels
+			deploymentName := testDeploymentName
+			tcpPort := int32(serverPort + i)
+
+			if i != 0 {
+				deploymentName = fmt.Sprintf("%s-%d", testDeploymentName, i)
+				utils.Logf("Creating deployment %q", deploymentName)
+				serviceLabels = map[string]string{
+					"app": deploymentName,
+				}
+				tcpPortPtr := tcpPort
+				extraDeployment := createDeploymentManifest(deploymentName, serviceLabels, &tcpPortPtr, nil)
+				_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), extraDeployment, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				defer func(name string) {
+					err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), name, metav1.DeleteOptions{})
+					Expect(err).NotTo(HaveOccurred())
+				}(deploymentName)
+			}
+
+			serviceName := fmt.Sprintf("%s-%d", testServiceName, i)
+			serviceNames = append(serviceNames, serviceName)
+			utils.Logf("Creating Service %q with shared IP %s", serviceName, targetIP)
+
+			servicePort := []v1.ServicePort{{
+				Port:       tcpPort,
+				TargetPort: intstr.FromInt(int(tcpPort)),
+			}}
+			service := utils.CreateLoadBalancerServiceManifest(serviceName, nil, serviceLabels, ns.Name, servicePort)
+			service = updateServiceLBIPs(service, false, []*string{&targetIP})
+			_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			defer func(name string) {
+				err = utils.DeleteService(cs, ns.Name, name)
+				Expect(err).NotTo(HaveOccurred())
+			}(serviceName)
+
+			_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []*string{&targetIP})
+			Expect(err).NotTo(HaveOccurred())
+			utils.Logf("Service %q is exposed with IP %s", serviceName, targetIP)
+
+			// Record LB after first service.
+			if i == 0 {
+				lb := getAzureLoadBalancerFromPIP(tc, &targetIP, tc.GetResourceGroup(), tc.GetResourceGroup())
+				firstLBName = ptr.Deref(lb.Name, "")
+				utils.Logf("First service landed on LB: %s", firstLBName)
+			}
+		}
+
+		By("Verifying all services sharing user-assigned IP are on the same load balancer")
+		lb := getAzureLoadBalancerFromPIP(tc, &targetIP, tc.GetResourceGroup(), tc.GetResourceGroup())
+		Expect(ptr.Deref(lb.Name, "")).To(Equal(firstLBName), "All services sharing user-assigned IP should be on the same LB as the first service")
+	})
+
+	It("should place all external services sharing a managed public IP on the same load balancer", func() {
+		var firstLBName string
+		var sharedIP string
+		serviceCount := 2
+		serviceNames := []string{}
+
+		for i := range serviceCount {
+			serviceLabels := labels
+			deploymentName := testDeploymentName
+			tcpPort := int32(serverPort + i)
+
+			if i != 0 {
+				deploymentName = fmt.Sprintf("%s-%d", testDeploymentName, i)
+				utils.Logf("Creating deployment %q", deploymentName)
+				serviceLabels = map[string]string{
+					"app": deploymentName,
+				}
+				tcpPortPtr := tcpPort
+				extraDeployment := createDeploymentManifest(deploymentName, serviceLabels, &tcpPortPtr, nil)
+				_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), extraDeployment, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				defer func(name string) {
+					err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), name, metav1.DeleteOptions{})
+					Expect(err).NotTo(HaveOccurred())
+				}(deploymentName)
+			}
+
+			serviceName := fmt.Sprintf("%s-%d", testServiceName, i)
+			serviceNames = append(serviceNames, serviceName)
+
+			servicePort := []v1.ServicePort{{
+				Port:       tcpPort,
+				TargetPort: intstr.FromInt(int(tcpPort)),
+			}}
+			service := utils.CreateLoadBalancerServiceManifest(serviceName, nil, serviceLabels, ns.Name, servicePort)
+			if sharedIP != "" {
+				service = updateServiceLBIPs(service, false, []*string{&sharedIP})
+				utils.Logf("Creating Service %q with shared managed IP %s", serviceName, sharedIP)
+			} else {
+				utils.Logf("Creating Service %q (will get managed IP)", serviceName)
+			}
+
+			_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			defer func(name string) {
+				err = utils.DeleteService(cs, ns.Name, name)
+				Expect(err).NotTo(HaveOccurred())
+			}(serviceName)
+
+			ips, err := utils.WaitServiceExposureAndGetIPs(cs, ns.Name, serviceName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(ips)).NotTo(BeZero())
+
+			// Record shared IP and LB after first service.
+			if i == 0 {
+				sharedIP = *ips[0]
+				utils.Logf("First service got managed IP: %s", sharedIP)
+				lb := getAzureLoadBalancerFromPIP(tc, &sharedIP, tc.GetResourceGroup(), tc.GetResourceGroup())
+				firstLBName = ptr.Deref(lb.Name, "")
+				utils.Logf("First service landed on LB: %s", firstLBName)
+			}
+		}
+
+		By("Verifying all services sharing managed IP are on the same load balancer")
+		lb := getAzureLoadBalancerFromPIP(tc, &sharedIP, tc.GetResourceGroup(), tc.GetResourceGroup())
+		Expect(ptr.Deref(lb.Name, "")).To(Equal(firstLBName), "All services sharing managed IP should be on the same LB as the first service")
+	})
+
+	It("should place all internal services sharing a private IP on the same load balancer", func() {
+		var firstLBName string
+		var sharedIP string
+		serviceCount := 2
+		serviceNames := []string{}
+
+		for i := range serviceCount {
+			serviceLabels := labels
+			deploymentName := testDeploymentName
+			tcpPort := int32(serverPort + i)
+
+			if i != 0 {
+				deploymentName = fmt.Sprintf("%s-%d", testDeploymentName, i)
+				utils.Logf("Creating deployment %q", deploymentName)
+				serviceLabels = map[string]string{
+					"app": deploymentName,
+				}
+				tcpPortPtr := tcpPort
+				extraDeployment := createDeploymentManifest(deploymentName, serviceLabels, &tcpPortPtr, nil)
+				_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), extraDeployment, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				defer func(name string) {
+					err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), name, metav1.DeleteOptions{})
+					Expect(err).NotTo(HaveOccurred())
+				}(deploymentName)
+			}
+
+			serviceName := fmt.Sprintf("%s-%d", testServiceName, i)
+			serviceNames = append(serviceNames, serviceName)
+
+			servicePort := []v1.ServicePort{{
+				Port:       tcpPort,
+				TargetPort: intstr.FromInt(int(tcpPort)),
+			}}
+			service := utils.CreateLoadBalancerServiceManifest(serviceName, serviceAnnotationLoadBalancerInternalTrue, serviceLabels, ns.Name, servicePort)
+			if sharedIP != "" {
+				service = updateServiceLBIPs(service, true, []*string{&sharedIP})
+				utils.Logf("Creating internal Service %q with shared IP %s", serviceName, sharedIP)
+			} else {
+				utils.Logf("Creating internal Service %q (will get new IP)", serviceName)
+			}
+
+			_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			defer func(name string) {
+				err = utils.DeleteService(cs, ns.Name, name)
+				Expect(err).NotTo(HaveOccurred())
+			}(serviceName)
+
+			ips, err := utils.WaitServiceExposureAndGetIPs(cs, ns.Name, serviceName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(ips)).NotTo(BeZero())
+
+			// Record shared IP and LB after first service.
+			if i == 0 {
+				sharedIP = *ips[0]
+				utils.Logf("First internal service got IP: %s", sharedIP)
+				lb := getAzureInternalLoadBalancerFromPrivateIP(tc, &sharedIP, tc.GetResourceGroup())
+				firstLBName = ptr.Deref(lb.Name, "")
+				utils.Logf("First internal service landed on LB: %s", firstLBName)
+			}
+		}
+
+		By("Verifying all internal services sharing IP are on the same load balancer")
+		lb := getAzureInternalLoadBalancerFromPrivateIP(tc, &sharedIP, tc.GetResourceGroup())
+		Expect(ptr.Deref(lb.Name, "")).To(Equal(firstLBName), "All internal services sharing IP should be on the same LB as the first service")
+	})
 })
 
 // getDeploymentPodsNodeNames returns the node names of the pods in the deployment created in BeforeEach.
