@@ -234,6 +234,8 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 	})
 
 	It("should place all external services sharing a user-assigned public IP on the same load balancer", func() {
+		logAllLoadBalancerStates(tc, "Before creating services (user-assigned PIP test)")
+
 		By("Creating a user-assigned public IP")
 		ipName := fmt.Sprintf("%s-shared-pip-%s", basename, ns.Name[:8])
 		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName, false))
@@ -292,13 +294,16 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(err).NotTo(HaveOccurred())
 			utils.Logf("Service %q is exposed with IP %s", serviceName, targetIP)
 
-			// Record LB after first service.
+			// Log LB state after each service
+			lb := getAzureLoadBalancerFromPIP(tc, &targetIP, tc.GetResourceGroup(), tc.GetResourceGroup())
+			lbName := ptr.Deref(lb.Name, "")
+			utils.Logf("After service %d: IP %s is on LB %q", i, targetIP, lbName)
 			if i == 0 {
-				lb := getAzureLoadBalancerFromPIP(tc, &targetIP, tc.GetResourceGroup(), tc.GetResourceGroup())
-				firstLBName = ptr.Deref(lb.Name, "")
-				utils.Logf("First service landed on LB: %s", firstLBName)
+				firstLBName = lbName
 			}
 		}
+
+		logAllLoadBalancerStates(tc, "After creating all services (user-assigned PIP test)")
 
 		By("Verifying all services sharing user-assigned IP are on the same load balancer")
 		lb := getAzureLoadBalancerFromPIP(tc, &targetIP, tc.GetResourceGroup(), tc.GetResourceGroup())
@@ -306,6 +311,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 	})
 
 	It("should place all external services sharing a managed public IP on the same load balancer", func() {
+		logAllLoadBalancerStates(tc, "Before creating services (managed PIP test)")
 		var firstLBName string
 		var sharedIP string
 		serviceCount := 2
@@ -358,15 +364,22 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(ips)).NotTo(BeZero())
 
-			// Record shared IP and LB after first service.
+			// Record shared IP on first service
 			if i == 0 {
 				sharedIP = *ips[0]
 				utils.Logf("First service got managed IP: %s", sharedIP)
-				lb := getAzureLoadBalancerFromPIP(tc, &sharedIP, tc.GetResourceGroup(), tc.GetResourceGroup())
-				firstLBName = ptr.Deref(lb.Name, "")
-				utils.Logf("First service landed on LB: %s", firstLBName)
+			}
+
+			// Log LB state after each service
+			lb := getAzureLoadBalancerFromPIP(tc, &sharedIP, tc.GetResourceGroup(), tc.GetResourceGroup())
+			lbName := ptr.Deref(lb.Name, "")
+			utils.Logf("After service %d: IP %s is on LB %q", i, sharedIP, lbName)
+			if i == 0 {
+				firstLBName = lbName
 			}
 		}
+
+		logAllLoadBalancerStates(tc, "After creating all services (managed PIP test)")
 
 		By("Verifying all services sharing managed IP are on the same load balancer")
 		lb := getAzureLoadBalancerFromPIP(tc, &sharedIP, tc.GetResourceGroup(), tc.GetResourceGroup())
@@ -374,6 +387,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 	})
 
 	It("should place all internal services sharing a private IP on the same load balancer", func() {
+		logAllLoadBalancerStates(tc, "Before creating services (internal IP test)")
 		var firstLBName string
 		var sharedIP string
 		serviceCount := 2
@@ -426,15 +440,22 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(ips)).NotTo(BeZero())
 
-			// Record shared IP and LB after first service.
+			// Record shared IP on first service
 			if i == 0 {
 				sharedIP = *ips[0]
 				utils.Logf("First internal service got IP: %s", sharedIP)
-				lb := getAzureInternalLoadBalancerFromPrivateIP(tc, &sharedIP, tc.GetResourceGroup())
-				firstLBName = ptr.Deref(lb.Name, "")
-				utils.Logf("First internal service landed on LB: %s", firstLBName)
+			}
+
+			// Log LB state after each service
+			lb := getAzureInternalLoadBalancerFromPrivateIP(tc, &sharedIP, tc.GetResourceGroup())
+			lbName := ptr.Deref(lb.Name, "")
+			utils.Logf("After service %d: IP %s is on LB %q", i, sharedIP, lbName)
+			if i == 0 {
+				firstLBName = lbName
 			}
 		}
+
+		logAllLoadBalancerStates(tc, "After creating all services (internal IP test)")
 
 		By("Verifying all internal services sharing IP are on the same load balancer")
 		lb := getAzureInternalLoadBalancerFromPrivateIP(tc, &sharedIP, tc.GetResourceGroup())
@@ -505,6 +526,63 @@ func getLBsFromPublicIPs(tc *utils.AzureTestClient, pips []*string) sets.Set[str
 		lbNames.Insert(lbName)
 	}
 	return lbNames
+}
+
+// logAllLoadBalancerStates logs the current state of all load balancers in the resource group.
+// It prints LB name, frontend IP count, and load balancing rule count.
+func logAllLoadBalancerStates(tc *utils.AzureTestClient, context string) {
+	lbs, err := tc.ListLoadBalancers(tc.GetResourceGroup())
+	if err != nil {
+		utils.Logf("[%s] Failed to list load balancers: %v", context, err)
+		return
+	}
+	utils.Logf("[%s] Load Balancer State (total: %d LBs):", context, len(lbs))
+	for _, lb := range lbs {
+		lbName := ptr.Deref(lb.Name, "<nil>")
+		fipCount := 0
+		ruleCount := 0
+		if lb.Properties != nil {
+			if lb.Properties.FrontendIPConfigurations != nil {
+				fipCount = len(lb.Properties.FrontendIPConfigurations)
+			}
+			if lb.Properties.LoadBalancingRules != nil {
+				ruleCount = len(lb.Properties.LoadBalancingRules)
+			}
+		}
+		utils.Logf("  LB %q: %d frontend IPs, %d rules", lbName, fipCount, ruleCount)
+		// Log frontend IP details with their associated rules
+		if lb.Properties != nil && lb.Properties.FrontendIPConfigurations != nil {
+			for _, fip := range lb.Properties.FrontendIPConfigurations {
+				fipName := ptr.Deref(fip.Name, "<nil>")
+				var ipAddr string
+				if fip.Properties != nil {
+					if fip.Properties.PrivateIPAddress != nil {
+						ipAddr = *fip.Properties.PrivateIPAddress + " (private)"
+					} else if fip.Properties.PublicIPAddress != nil && fip.Properties.PublicIPAddress.ID != nil {
+						// Extract PIP name from ID
+						parts := strings.Split(*fip.Properties.PublicIPAddress.ID, "/")
+						ipAddr = "pip:" + parts[len(parts)-1]
+					}
+				}
+				// Get rules associated with this FIP
+				var ruleNames []string
+				if fip.Properties != nil && fip.Properties.LoadBalancingRules != nil {
+					for _, ruleRef := range fip.Properties.LoadBalancingRules {
+						if ruleRef.ID != nil {
+							// Extract rule name from ID
+							parts := strings.Split(*ruleRef.ID, "/")
+							ruleNames = append(ruleNames, parts[len(parts)-1])
+						}
+					}
+				}
+				if len(ruleNames) > 0 {
+					utils.Logf("    FIP %q: %s, rules: [%s]", fipName, ipAddr, strings.Join(ruleNames, ", "))
+				} else {
+					utils.Logf("    FIP %q: %s, rules: []", fipName, ipAddr)
+				}
+			}
+		}
+	}
 }
 
 func waitLBCountEqualTo(tc *utils.AzureTestClient, interval, timeout time.Duration, expectedCount int, svcIPs []*string) (sets.Set[string], error) {
