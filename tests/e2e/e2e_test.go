@@ -49,15 +49,6 @@ const (
 
 func TestAzureTest(t *testing.T) {
 	logger := log.Background().WithName("TestAzureTest")
-
-	// Skip tests entirely if TEST_MULTI_SLB is not set to true.
-	// This ensures only the multi-SLB pipeline runs these tests.
-	// TODO: Remove this.
-	if !strings.EqualFold(os.Getenv(testMultiSLB), utils.TrueValue) {
-		t.Skip("Skipping tests: TEST_MULTI_SLB is not set to true")
-		return
-	}
-
 	RegisterFailHandler(Fail)
 	reportDir := os.Getenv(reportDirEnv)
 	if reportDir == "" {

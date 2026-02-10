@@ -233,7 +233,8 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("should place all external services sharing a user-assigned public IP on the same load balancer", func() {
+	// TODO: Remove F prefix before merging
+	FIt("should place all external services sharing a user-assigned public IP on the same load balancer", func() {
 		logAllLoadBalancerStates(tc, "Before creating services (user-assigned PIP test)")
 
 		By("Creating a user-assigned public IP")
@@ -310,7 +311,8 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		Expect(ptr.Deref(lb.Name, "")).To(Equal(firstLBName), "All services sharing user-assigned IP should be on the same LB as the first service")
 	})
 
-	It("should place all external services sharing a managed public IP on the same load balancer", func() {
+	// TODO: Remove F prefix before merging
+	FIt("should place all external services sharing a managed public IP on the same load balancer", func() {
 		logAllLoadBalancerStates(tc, "Before creating services (managed PIP test)")
 		var firstLBName string
 		var sharedIP string
@@ -386,7 +388,8 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		Expect(ptr.Deref(lb.Name, "")).To(Equal(firstLBName), "All services sharing managed IP should be on the same LB as the first service")
 	})
 
-	It("should place all internal services sharing a private IP on the same load balancer", func() {
+	// TODO: Remove F prefix before merging
+	FIt("should place all internal services sharing a private IP on the same load balancer", func() {
 		logAllLoadBalancerStates(tc, "Before creating services (internal IP test)")
 		var firstLBName string
 		var sharedIP string
