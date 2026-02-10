@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -249,14 +251,16 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(err).NotTo(HaveOccurred())
 		}()
 
-		var firstLBName string
+		var firstFIPID string
 		serviceCount := 2
 		serviceNames := []string{}
+		servicePorts := sets.New[int32]()
 
 		for i := range serviceCount {
 			serviceLabels := labels
 			deploymentName := testDeploymentName
 			tcpPort := int32(serverPort + i)
+			servicePorts.Insert(tcpPort)
 
 			if i != 0 {
 				deploymentName = fmt.Sprintf("%s-%d", testDeploymentName, i)
@@ -295,34 +299,35 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(err).NotTo(HaveOccurred())
 			utils.Logf("Service %q is exposed with IP %s", serviceName, targetIP)
 
-			// Log LB state after each service
-			lb := getAzureLoadBalancerFromPIP(tc, &targetIP, tc.GetResourceGroup(), tc.GetResourceGroup())
-			lbName := ptr.Deref(lb.Name, "")
-			utils.Logf("After service %d: IP %s is on LB %q", i, targetIP, lbName)
+			// Log FIP state after each service.
+			fipID := getPIPFrontendConfigurationID(tc, targetIP, tc.GetResourceGroup(), true)
+			utils.Logf("After service %d: IP %s has FIP ID %q", i, targetIP, fipID)
 			if i == 0 {
-				firstLBName = lbName
+				firstFIPID = fipID
 			}
 		}
 
 		logAllLoadBalancerStates(tc, "After creating all services (user-assigned PIP test)")
 
-		By("Verifying all services sharing user-assigned IP are on the same load balancer")
-		lb := getAzureLoadBalancerFromPIP(tc, &targetIP, tc.GetResourceGroup(), tc.GetResourceGroup())
-		Expect(ptr.Deref(lb.Name, "")).To(Equal(firstLBName), "All services sharing user-assigned IP should be on the same LB as the first service")
+		By("Verifying first FIP has all services' rules")
+		err = verifyFIPHasRulesForPorts(tc, firstFIPID, servicePorts, "TCP")
+		Expect(err).NotTo(HaveOccurred(), "First FIP should have rules for all services sharing the IP")
 	})
 
 	// TODO: Remove F prefix before merging
 	FIt("should place all external services sharing a managed public IP on the same load balancer", func() {
 		logAllLoadBalancerStates(tc, "Before creating services (managed PIP test)")
-		var firstLBName string
+		var firstFIPID string
 		var sharedIP string
 		serviceCount := 2
 		serviceNames := []string{}
+		servicePorts := sets.New[int32]()
 
 		for i := range serviceCount {
 			serviceLabels := labels
 			deploymentName := testDeploymentName
 			tcpPort := int32(serverPort + i)
+			servicePorts.Insert(tcpPort)
 
 			if i != 0 {
 				deploymentName = fmt.Sprintf("%s-%d", testDeploymentName, i)
@@ -366,40 +371,41 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(ips)).NotTo(BeZero())
 
-			// Record shared IP on first service
+			// Record shared IP on first service.
 			if i == 0 {
 				sharedIP = *ips[0]
 				utils.Logf("First service got managed IP: %s", sharedIP)
 			}
 
-			// Log LB state after each service
-			lb := getAzureLoadBalancerFromPIP(tc, &sharedIP, tc.GetResourceGroup(), tc.GetResourceGroup())
-			lbName := ptr.Deref(lb.Name, "")
-			utils.Logf("After service %d: IP %s is on LB %q", i, sharedIP, lbName)
+			// Log FIP state after each service.
+			fipID := getPIPFrontendConfigurationID(tc, sharedIP, tc.GetResourceGroup(), true)
+			utils.Logf("After service %d: IP %s has FIP ID %q", i, sharedIP, fipID)
 			if i == 0 {
-				firstLBName = lbName
+				firstFIPID = fipID
 			}
 		}
 
 		logAllLoadBalancerStates(tc, "After creating all services (managed PIP test)")
 
-		By("Verifying all services sharing managed IP are on the same load balancer")
-		lb := getAzureLoadBalancerFromPIP(tc, &sharedIP, tc.GetResourceGroup(), tc.GetResourceGroup())
-		Expect(ptr.Deref(lb.Name, "")).To(Equal(firstLBName), "All services sharing managed IP should be on the same LB as the first service")
+		By("Verifying first FIP has all services' rules")
+		err := verifyFIPHasRulesForPorts(tc, firstFIPID, servicePorts, "TCP")
+		Expect(err).NotTo(HaveOccurred(), "First FIP should have rules for all services sharing the IP")
 	})
 
 	// TODO: Remove F prefix before merging
 	FIt("should place all internal services sharing a private IP on the same load balancer", func() {
 		logAllLoadBalancerStates(tc, "Before creating services (internal IP test)")
-		var firstLBName string
+		var firstFIPID string
 		var sharedIP string
 		serviceCount := 2
 		serviceNames := []string{}
+		servicePorts := sets.New[int32]()
 
 		for i := range serviceCount {
 			serviceLabels := labels
 			deploymentName := testDeploymentName
 			tcpPort := int32(serverPort + i)
+			servicePorts.Insert(tcpPort)
 
 			if i != 0 {
 				deploymentName = fmt.Sprintf("%s-%d", testDeploymentName, i)
@@ -443,26 +449,26 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(ips)).NotTo(BeZero())
 
-			// Record shared IP on first service
+			// Record shared IP on first service.
 			if i == 0 {
 				sharedIP = *ips[0]
 				utils.Logf("First internal service got IP: %s", sharedIP)
 			}
 
-			// Log LB state after each service
+			// Log FIP state after each service.
 			lb := getAzureInternalLoadBalancerFromPrivateIP(tc, &sharedIP, tc.GetResourceGroup())
-			lbName := ptr.Deref(lb.Name, "")
-			utils.Logf("After service %d: IP %s is on LB %q", i, sharedIP, lbName)
+			fipID := getFIPIDForPrivateIP(lb, sharedIP)
+			utils.Logf("After service %d: IP %s has FIP ID %q", i, sharedIP, fipID)
 			if i == 0 {
-				firstLBName = lbName
+				firstFIPID = fipID
 			}
 		}
 
 		logAllLoadBalancerStates(tc, "After creating all services (internal IP test)")
 
-		By("Verifying all internal services sharing IP are on the same load balancer")
-		lb := getAzureInternalLoadBalancerFromPrivateIP(tc, &sharedIP, tc.GetResourceGroup())
-		Expect(ptr.Deref(lb.Name, "")).To(Equal(firstLBName), "All internal services sharing IP should be on the same LB as the first service")
+		By("Verifying first FIP has all internal services' rules")
+		err := verifyFIPHasRulesForPorts(tc, firstFIPID, servicePorts, "TCP")
+		Expect(err).NotTo(HaveOccurred(), "First FIP should have rules for all internal services sharing the IP")
 	})
 })
 
@@ -529,6 +535,74 @@ func getLBsFromPublicIPs(tc *utils.AzureTestClient, pips []*string) sets.Set[str
 		lbNames.Insert(lbName)
 	}
 	return lbNames
+}
+
+// verifyFIPHasRulesForPorts checks that the specified frontend IP config has rules for all expected ports.
+func verifyFIPHasRulesForPorts(tc *utils.AzureTestClient, fipID string, expectedPorts sets.Set[int32], protocol string) error {
+	if fipID == "" {
+		return fmt.Errorf("empty FIP ID")
+	}
+
+	// Extract LB name from FIP ID.
+	match := lbNameRE.FindStringSubmatch(fipID)
+	if len(match) != 2 {
+		return fmt.Errorf("could not parse LB name from FIP ID: %s", fipID)
+	}
+	lbName := match[1]
+
+	lb, err := tc.GetLoadBalancer(tc.GetResourceGroup(), lbName)
+	if err != nil {
+		return fmt.Errorf("failed to get load balancer %q: %w", lbName, err)
+	}
+
+	utils.Logf("Verifying FIP ID %q has rules for ports %v", fipID, expectedPorts.UnsortedList())
+
+	// Find rules that reference the target FIP ID directly.
+	foundPorts := sets.New[int32]()
+	if lb.Properties != nil && lb.Properties.LoadBalancingRules != nil {
+		for _, rule := range lb.Properties.LoadBalancingRules {
+			if rule.Properties == nil || rule.Properties.FrontendIPConfiguration == nil {
+				continue
+			}
+			// Compare rule's FIP ID directly with our target.
+			ruleFIPID := ptr.Deref(rule.Properties.FrontendIPConfiguration.ID, "")
+			if !strings.EqualFold(ruleFIPID, fipID) {
+				continue
+			}
+
+			rulePort := ptr.Deref(rule.Properties.FrontendPort, 0)
+			ruleProtocol := string(ptr.Deref(rule.Properties.Protocol, ""))
+
+			if expectedPorts.Has(rulePort) && strings.EqualFold(ruleProtocol, protocol) {
+				utils.Logf("Found rule %q for port %d/%s on FIP", ptr.Deref(rule.Name, ""), rulePort, ruleProtocol)
+				foundPorts.Insert(rulePort)
+			}
+		}
+	}
+
+	// Check for missing ports
+	missingPorts := expectedPorts.Difference(foundPorts)
+	if missingPorts.Len() > 0 {
+		return fmt.Errorf("FIP %q is missing rules for ports: %v", fipID, missingPorts.UnsortedList())
+	}
+
+	utils.Logf("FIP %q has all expected rules for ports %v", fipID, expectedPorts.UnsortedList())
+	return nil
+}
+
+// getFIPIDForPrivateIP finds the frontend IP configuration ID for a given private IP.
+func getFIPIDForPrivateIP(lb *armnetwork.LoadBalancer, privateIP string) string {
+	if lb.Properties == nil || lb.Properties.FrontendIPConfigurations == nil {
+		return ""
+	}
+	for _, fip := range lb.Properties.FrontendIPConfigurations {
+		if fip.Properties != nil && fip.Properties.PrivateIPAddress != nil {
+			if *fip.Properties.PrivateIPAddress == privateIP {
+				return ptr.Deref(fip.ID, "")
+			}
+		}
+	}
+	return ""
 }
 
 // logAllLoadBalancerStates logs the current state of all load balancers in the resource group.
