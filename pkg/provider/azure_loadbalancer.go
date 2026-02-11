@@ -4113,6 +4113,17 @@ func (az *Cloud) getAzureLoadBalancerName(
 		}
 
 		currentLBName := az.getServiceCurrentLoadBalancerName(service)
+
+		// If service is not currently on any LB, try to find if its IP is on an existing LB.
+		// This detects secondary services sharing an IP with a primary service already on an LB.
+		if currentLBName == "" {
+			if requiresInternalLoadBalancer(service) {
+				currentLBName = az.getLoadBalancerNameByPrivateIP(ctx, service, existingLBs)
+			} else {
+				currentLBName = az.getLoadBalancerNameByPublicIP(ctx, service, clusterName)
+			}
+		}
+
 		lbNamePrefix = getMostEligibleLBForService(currentLBName, eligibleLBs, existingLBs, requiresInternalLoadBalancer(service))
 	}
 
@@ -4120,6 +4131,122 @@ func (az *Cloud) getAzureLoadBalancerName(
 		return fmt.Sprintf("%s%s", lbNamePrefix, consts.InternalLoadBalancerNameSuffix), nil
 	}
 	return lbNamePrefix, nil
+}
+
+// getLoadBalancerNameByPrivateIP finds the LB by scanning frontend IPs for a matching private address.
+func (az *Cloud) getLoadBalancerNameByPrivateIP(
+	ctx context.Context,
+	service *v1.Service,
+	existingLBs []*armnetwork.LoadBalancer,
+) string {
+	logger := log.FromContextOrBackground(ctx).WithName("getLoadBalancerNameByPrivateIP")
+	loadBalancerIPs := getServiceLoadBalancerIPs(service)
+	if len(loadBalancerIPs) == 0 {
+		return ""
+	}
+
+	for _, lb := range existingLBs {
+		if !isInternalLoadBalancer(lb) {
+			continue
+		}
+		if lb.Properties == nil || lb.Properties.FrontendIPConfigurations == nil {
+			continue
+		}
+		for _, fip := range lb.Properties.FrontendIPConfigurations {
+			if fip.Properties == nil || fip.Properties.PrivateIPAddress == nil {
+				continue
+			}
+			for _, ip := range loadBalancerIPs {
+				if ip != "" && strings.EqualFold(*fip.Properties.PrivateIPAddress, ip) {
+					logger.V(2).Info("Found LB from frontend IP by private IP", "service", service.Name, "privateIP", ip, "lbName", ptr.Deref(lb.Name, ""))
+					return trimSuffixIgnoreCase(ptr.Deref(lb.Name, ""), consts.InternalLoadBalancerNameSuffix)
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
+// getLoadBalancerNameByPublicIP finds the LB by reading the PIP's IPConfiguration.
+func (az *Cloud) getLoadBalancerNameByPublicIP(
+	ctx context.Context,
+	service *v1.Service,
+	clusterName string,
+) string {
+	logger := log.FromContextOrBackground(ctx).WithName("getLoadBalancerNameByPublicIP")
+
+	loadBalancerIPs := getServiceLoadBalancerIPs(service)
+	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
+	for _, ip := range loadBalancerIPs {
+		if ip == "" {
+			continue
+		}
+		pip, err := az.findMatchedPIP(ctx, ip, "", pipResourceGroup)
+		if err != nil {
+			logger.V(2).Info("Failed to find PIP by IP", "ip", ip, "error", err)
+			continue
+		}
+		if lbName := az.getLoadBalancerNameFromPIP(pip, clusterName); lbName != "" {
+			logger.V(2).Info("Found LB from PIP by IP", "service", service.Name, "pip", ptr.Deref(pip.Name, ""), "lbName", lbName)
+			return lbName
+		}
+	}
+
+	pipNames := getServicePIPNames(service)
+	for _, pipName := range pipNames {
+		if pipName == "" {
+			continue
+		}
+		pip, err := az.findMatchedPIP(ctx, "", pipName, pipResourceGroup)
+		if err != nil {
+			logger.V(2).Info("Failed to find PIP by name", "pipName", pipName, "error", err)
+			continue
+		}
+		if lbName := az.getLoadBalancerNameFromPIP(pip, clusterName); lbName != "" {
+			logger.V(2).Info("Found LB from PIP by name", "service", service.Name, "pip", pipName, "lbName", lbName)
+			return lbName
+		}
+	}
+
+	return ""
+}
+
+// getLoadBalancerNameFromPIP extracts the LB name from the PIP's IPConfiguration.
+func (az *Cloud) getLoadBalancerNameFromPIP(pip *armnetwork.PublicIPAddress, clusterName string) string {
+	if pip == nil || pip.Properties == nil || pip.Properties.IPConfiguration == nil || pip.Properties.IPConfiguration.ID == nil {
+		return ""
+	}
+
+	if pip.Tags != nil {
+		if clusterTag := getClusterFromPIPClusterTags(pip.Tags); clusterTag != "" && !strings.EqualFold(clusterTag, clusterName) {
+			return ""
+		}
+	}
+
+	return parseLoadBalancerNameFromFrontendConfigID(ptr.Deref(pip.Properties.IPConfiguration.ID, ""))
+}
+
+// parseLoadBalancerNameFromFrontendConfigID extracts the load balancer name from a frontend IP config ID.
+// Example ID: "/subscriptions/{subId}/resourceGroups/{rg}/providers/Microsoft.Network/loadBalancers/{lbName}/frontendIPConfigurations/{fipName}"
+func parseLoadBalancerNameFromFrontendConfigID(id string) string {
+	if id == "" {
+		return ""
+	}
+
+	const marker = "/providers/microsoft.network/loadbalancers/"
+	idx := strings.Index(strings.ToLower(id), marker)
+	if idx == -1 {
+		return ""
+	}
+
+	// rest should be "{lbName}/frontendIPConfigurations/{fipName}".
+	rest := id[idx+len(marker):]
+	before, _, ok := strings.Cut(rest, "/")
+	if !ok {
+		return ""
+	}
+	return before
 }
 
 func getMostEligibleLBForService(
