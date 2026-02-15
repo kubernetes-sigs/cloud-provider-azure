@@ -4,7 +4,7 @@
     publish = "public/"
 
 [build.environment]
-    HUGO_VERSION = "0.147.8"
+    HUGO_VERSION = "0.152.2"
     GO_VERSION = "1.19.2"
 
 # Standard Netlify redirects
