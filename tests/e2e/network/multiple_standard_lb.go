@@ -34,6 +34,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -470,6 +471,400 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		err := verifyFIPHasRulesForPorts(tc, firstFIPID, servicePorts, "TCP")
 		Expect(err).NotTo(HaveOccurred(), "First FIP should have rules for all internal services sharing the IP")
 	})
+
+	// Conflict detection and resolution tests: verify services with IP and conflicting LB config
+	// are blocked, then test both resolution paths (remove LB annotation vs remove IP pin)
+	// TODO: Remove F prefix before merging
+	FDescribe("Conflicting LB Configuration", func() {
+		const (
+			eventTimeout      = 30 * time.Second
+			notExposedTimeout = 30 * time.Second
+
+			svcNamePrimary = "svc-primary"
+			svcNameLBIP    = "svc-lbip"
+			svcNamePIPName = "svc-pipname"
+			svcNameIPv4    = "svc-ipv4"
+		)
+
+		// TODO: Remove F prefix before merging
+		FIt("should block external services with conflicting IP and LB config for user-assigned PIP", func() {
+			By("Creating user-assigned PIP")
+			pipName := "conflict-test-pip"
+			pip, err := utils.WaitCreatePIP(tc, pipName, tc.GetResourceGroup(), defaultPublicIPAddress(pipName, false))
+			Expect(err).NotTo(HaveOccurred())
+			sharedIP := ptr.Deref(pip.Properties.IPAddress, "")
+			Expect(sharedIP).NotTo(BeEmpty())
+			defer func() {
+				utils.Logf("Cleaning up PIP %s", pipName)
+				err := utils.DeletePIPWithRetry(tc, pipName, "")
+				Expect(err).NotTo(HaveOccurred())
+			}()
+
+			By("Creating primary service with azure-load-balancer-ipv4 annotation")
+			primaryPort := int32(serverPort)
+			primaryService := utils.CreateLoadBalancerServiceManifest(svcNamePrimary, nil, labels, ns.Name, []v1.ServicePort{{
+				Port:       primaryPort,
+				TargetPort: intstr.FromInt(int(primaryPort)),
+			}})
+			primaryService = updateServiceLBIPs(primaryService, false, []*string{&sharedIP})
+			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), primaryService, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				err := utils.DeleteService(cs, ns.Name, svcNamePrimary)
+				Expect(err).NotTo(HaveOccurred())
+			}()
+
+			_, err = utils.WaitServiceExposure(cs, ns.Name, svcNamePrimary, []*string{&sharedIP})
+			Expect(err).NotTo(HaveOccurred())
+			primaryFIPID := getPIPFrontendConfigurationID(tc, sharedIP, tc.GetResourceGroup(), true)
+			utils.Logf("Primary service exposed on FIP: %s", primaryFIPID)
+
+			By("Creating service with spec.loadBalancerIP and LB config, expecting blocked")
+			svc1Port := int32(serverPort + 1)
+			svc1 := utils.CreateLoadBalancerServiceManifest(svcNameLBIP, nil, labels, ns.Name, []v1.ServicePort{{
+				Port:       svc1Port,
+				TargetPort: intstr.FromInt(int(svc1Port)),
+			}})
+			svc1.Spec.LoadBalancerIP = sharedIP
+			if svc1.Annotations == nil {
+				svc1.Annotations = map[string]string{}
+			}
+			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
+			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc1, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = verifyServiceNotExposed(cs, ns.Name, svcNameLBIP, notExposedTimeout)
+			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should stay pending")
+			err = waitForServiceWarningEvent(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", eventTimeout)
+			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event for "+svcNameLBIP)
+
+			By("Creating service with azure-pip-name and LB config, expecting blocked")
+			svc2Port := int32(serverPort + 2)
+			svc2 := utils.CreateLoadBalancerServiceManifest(svcNamePIPName, nil, labels, ns.Name, []v1.ServicePort{{
+				Port:       svc2Port,
+				TargetPort: intstr.FromInt(int(svc2Port)),
+			}})
+			svc2 = updateServicePIPNames(tc.IPFamily, svc2, []string{pipName})
+			if svc2.Annotations == nil {
+				svc2.Annotations = map[string]string{}
+			}
+			svc2.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
+			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc2, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = verifyServiceNotExposed(cs, ns.Name, svcNamePIPName, notExposedTimeout)
+			Expect(err).NotTo(HaveOccurred(), svcNamePIPName+" should stay pending")
+			err = waitForServiceWarningEvent(cs, ns.Name, svcNamePIPName, "SyncLoadBalancerFailed", eventTimeout)
+			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event for "+svcNamePIPName)
+
+			By("Creating service with azure-load-balancer-ipv4 and LB config, expecting blocked")
+			svc3Port := int32(serverPort + 3)
+			svc3 := utils.CreateLoadBalancerServiceManifest(svcNameIPv4, nil, labels, ns.Name, []v1.ServicePort{{
+				Port:       svc3Port,
+				TargetPort: intstr.FromInt(int(svc3Port)),
+			}})
+			svc3 = updateServiceLBIPs(svc3, false, []*string{&sharedIP})
+			if svc3.Annotations == nil {
+				svc3.Annotations = map[string]string{}
+			}
+			svc3.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
+			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc3, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = verifyServiceNotExposed(cs, ns.Name, svcNameIPv4, notExposedTimeout)
+			Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should stay pending")
+			err = waitForServiceWarningEvent(cs, ns.Name, svcNameIPv4, "SyncLoadBalancerFailed", eventTimeout)
+			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event for "+svcNameIPv4)
+
+			By("Verifying primary service is still working")
+			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Primary service should still have its rule")
+
+			By("Resolving conflict by removing LB config annotation, expecting service exposed on primary FIP")
+			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			delete(svc1.Annotations, consts.ServiceAnnotationLoadBalancerConfigurations)
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = utils.WaitServiceExposure(cs, ns.Name, svcNameLBIP, []*string{&sharedIP})
+			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should be exposed after removing LB config")
+			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for primary and "+svcNameLBIP)
+
+			By("Re-adding LB config annotation, expecting blocked again")
+			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = waitForServiceWarningEvent(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", eventTimeout)
+			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event on update")
+
+			By("Resolving conflict by removing IP pin, expecting service moves to configured LB")
+			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			svc1.Spec.LoadBalancerIP = ""
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			ips, err := utils.WaitServiceExposureAndGetIPs(cs, ns.Name, svcNameLBIP)
+			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should be exposed after removing IP pin")
+			Expect(len(ips)).NotTo(BeZero())
+			newIP := *ips[0]
+			Expect(newIP).NotTo(Equal(sharedIP), svcNameLBIP+" should get a new IP on the configured LB")
+
+			newFIPID := getPIPFrontendConfigurationID(tc, newIP, tc.GetResourceGroup(), true)
+			utils.Logf("%s moved to new FIP: %s with IP %s", svcNameLBIP, newFIPID, newIP)
+
+			By("Verifying final state with primary on original FIP and test service on new FIP")
+			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Primary FIP should only have primary service rule")
+			err = verifyFIPHasRulesForPorts(tc, newFIPID, sets.New(svc1Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "New FIP should have "+svcNameLBIP+"'s rule")
+
+			By("Cleaning up services")
+			err = utils.DeleteService(cs, ns.Name, svcNameLBIP)
+			Expect(err).NotTo(HaveOccurred())
+			err = utils.DeleteService(cs, ns.Name, svcNamePIPName)
+			Expect(err).NotTo(HaveOccurred())
+			err = utils.DeleteService(cs, ns.Name, svcNameIPv4)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		// TODO: Remove F prefix before merging
+		FIt("should block external services with conflicting IP and LB config for managed PIP", func() {
+			By("Creating primary service that gets a managed PIP")
+			primaryPort := int32(serverPort)
+			primaryService := utils.CreateLoadBalancerServiceManifest(svcNamePrimary, nil, labels, ns.Name, []v1.ServicePort{{
+				Port:       primaryPort,
+				TargetPort: intstr.FromInt(int(primaryPort)),
+			}})
+			_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), primaryService, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				err := utils.DeleteService(cs, ns.Name, svcNamePrimary)
+				Expect(err).NotTo(HaveOccurred())
+			}()
+
+			ips, err := utils.WaitServiceExposureAndGetIPs(cs, ns.Name, svcNamePrimary)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(ips)).NotTo(BeZero())
+			sharedIP := *ips[0]
+			primaryFIPID := getPIPFrontendConfigurationID(tc, sharedIP, tc.GetResourceGroup(), true)
+			utils.Logf("Primary service exposed with managed IP %s on FIP: %s", sharedIP, primaryFIPID)
+
+			By("Creating service with spec.loadBalancerIP and LB config, expecting blocked")
+			svc1Port := int32(serverPort + 1)
+			svc1 := utils.CreateLoadBalancerServiceManifest(svcNameLBIP, nil, labels, ns.Name, []v1.ServicePort{{
+				Port:       svc1Port,
+				TargetPort: intstr.FromInt(int(svc1Port)),
+			}})
+			svc1.Spec.LoadBalancerIP = sharedIP
+			if svc1.Annotations == nil {
+				svc1.Annotations = map[string]string{}
+			}
+			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
+			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc1, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = verifyServiceNotExposed(cs, ns.Name, svcNameLBIP, notExposedTimeout)
+			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should stay pending")
+			err = waitForServiceWarningEvent(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", eventTimeout)
+			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event for "+svcNameLBIP)
+
+			By("Creating service with azure-load-balancer-ipv4 and LB config, expecting blocked")
+			svc2Port := int32(serverPort + 2)
+			svc2 := utils.CreateLoadBalancerServiceManifest(svcNameIPv4, nil, labels, ns.Name, []v1.ServicePort{{
+				Port:       svc2Port,
+				TargetPort: intstr.FromInt(int(svc2Port)),
+			}})
+			svc2 = updateServiceLBIPs(svc2, false, []*string{&sharedIP})
+			if svc2.Annotations == nil {
+				svc2.Annotations = map[string]string{}
+			}
+			svc2.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
+			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc2, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = verifyServiceNotExposed(cs, ns.Name, svcNameIPv4, notExposedTimeout)
+			Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should stay pending")
+			err = waitForServiceWarningEvent(cs, ns.Name, svcNameIPv4, "SyncLoadBalancerFailed", eventTimeout)
+			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event for "+svcNameIPv4)
+
+			By("Verifying primary service is still working")
+			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Primary service should still have its rule")
+
+			By("Resolving conflict by removing LB config annotation, expecting service exposed on primary FIP")
+			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			delete(svc1.Annotations, consts.ServiceAnnotationLoadBalancerConfigurations)
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = utils.WaitServiceExposure(cs, ns.Name, svcNameLBIP, []*string{&sharedIP})
+			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should be exposed after removing LB config")
+			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for primary and "+svcNameLBIP)
+
+			By("Re-adding LB config annotation, expecting blocked again")
+			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = waitForServiceWarningEvent(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", eventTimeout)
+			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event on update")
+
+			By("Resolving conflict by removing IP pin, expecting service moves to configured LB")
+			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			svc1.Spec.LoadBalancerIP = ""
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			ips, err = utils.WaitServiceExposureAndGetIPs(cs, ns.Name, svcNameLBIP)
+			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should be exposed after removing IP pin")
+			Expect(len(ips)).NotTo(BeZero())
+			newIP := *ips[0]
+			Expect(newIP).NotTo(Equal(sharedIP), svcNameLBIP+" should get a new IP on the configured LB")
+
+			newFIPID := getPIPFrontendConfigurationID(tc, newIP, tc.GetResourceGroup(), true)
+			utils.Logf("%s moved to new FIP: %s with IP %s", svcNameLBIP, newFIPID, newIP)
+
+			By("Verifying final state with primary on original FIP and test service on new FIP")
+			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Primary FIP should only have primary service rule")
+			err = verifyFIPHasRulesForPorts(tc, newFIPID, sets.New(svc1Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "New FIP should have "+svcNameLBIP+"'s rule")
+
+			By("Cleaning up services")
+			err = utils.DeleteService(cs, ns.Name, svcNameLBIP)
+			Expect(err).NotTo(HaveOccurred())
+			err = utils.DeleteService(cs, ns.Name, svcNameIPv4)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		// TODO: Remove F prefix before merging
+		FIt("should block internal services with conflicting IP and LB config", func() {
+			By("Creating primary internal service")
+			primaryPort := int32(serverPort)
+			primaryService := utils.CreateLoadBalancerServiceManifest(svcNamePrimary, serviceAnnotationLoadBalancerInternalTrue, labels, ns.Name, []v1.ServicePort{{
+				Port:       primaryPort,
+				TargetPort: intstr.FromInt(int(primaryPort)),
+			}})
+			_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), primaryService, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				err := utils.DeleteService(cs, ns.Name, svcNamePrimary)
+				Expect(err).NotTo(HaveOccurred())
+			}()
+
+			ips, err := utils.WaitServiceExposureAndGetIPs(cs, ns.Name, svcNamePrimary)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(ips)).NotTo(BeZero())
+			sharedIP := *ips[0]
+			lb := getAzureInternalLoadBalancerFromPrivateIP(tc, &sharedIP, tc.GetResourceGroup())
+			primaryFIPID := getFIPIDForPrivateIP(lb, sharedIP)
+			utils.Logf("Primary internal service exposed with IP %s on FIP: %s", sharedIP, primaryFIPID)
+
+			By("Creating service with spec.loadBalancerIP and LB config, expecting blocked")
+			svc1Port := int32(serverPort + 1)
+			svc1 := utils.CreateLoadBalancerServiceManifest(svcNameLBIP, serviceAnnotationLoadBalancerInternalTrue, labels, ns.Name, []v1.ServicePort{{
+				Port:       svc1Port,
+				TargetPort: intstr.FromInt(int(svc1Port)),
+			}})
+			svc1.Spec.LoadBalancerIP = sharedIP
+			if svc1.Annotations == nil {
+				svc1.Annotations = map[string]string{}
+			}
+			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1-internal"
+			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc1, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = verifyServiceNotExposed(cs, ns.Name, svcNameLBIP, notExposedTimeout)
+			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should stay pending")
+			err = waitForServiceWarningEvent(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", eventTimeout)
+			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event for "+svcNameLBIP)
+
+			By("Creating service with azure-load-balancer-ipv4 and LB config, expecting blocked")
+			svc2Port := int32(serverPort + 2)
+			svc2 := utils.CreateLoadBalancerServiceManifest(svcNameIPv4, serviceAnnotationLoadBalancerInternalTrue, labels, ns.Name, []v1.ServicePort{{
+				Port:       svc2Port,
+				TargetPort: intstr.FromInt(int(svc2Port)),
+			}})
+			svc2 = updateServiceLBIPs(svc2, true, []*string{&sharedIP})
+			if svc2.Annotations == nil {
+				svc2.Annotations = map[string]string{}
+			}
+			svc2.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1-internal"
+			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc2, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = verifyServiceNotExposed(cs, ns.Name, svcNameIPv4, notExposedTimeout)
+			Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should stay pending")
+			err = waitForServiceWarningEvent(cs, ns.Name, svcNameIPv4, "SyncLoadBalancerFailed", eventTimeout)
+			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event for "+svcNameIPv4)
+
+			By("Verifying primary service is still working")
+			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Primary service should still have its rule")
+
+			By("Resolving conflict by removing LB config annotation, expecting service exposed on primary FIP")
+			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			delete(svc1.Annotations, consts.ServiceAnnotationLoadBalancerConfigurations)
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = utils.WaitServiceExposure(cs, ns.Name, svcNameLBIP, []*string{&sharedIP})
+			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should be exposed after removing LB config")
+			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for primary and "+svcNameLBIP)
+
+			By("Re-adding LB config annotation, expecting blocked again")
+			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1-internal"
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = waitForServiceWarningEvent(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", eventTimeout)
+			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event on update")
+
+			By("Resolving conflict by removing IP pin, expecting service moves to configured LB")
+			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			svc1.Spec.LoadBalancerIP = ""
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			ips, err = utils.WaitServiceExposureAndGetIPs(cs, ns.Name, svcNameLBIP)
+			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should be exposed after removing IP pin")
+			Expect(len(ips)).NotTo(BeZero())
+			newIP := *ips[0]
+			Expect(newIP).NotTo(Equal(sharedIP), svcNameLBIP+" should get a new IP on the configured LB")
+
+			lb = getAzureInternalLoadBalancerFromPrivateIP(tc, &newIP, tc.GetResourceGroup())
+			newFIPID := getFIPIDForPrivateIP(lb, newIP)
+			utils.Logf("%s moved to new FIP: %s with IP %s", svcNameLBIP, newFIPID, newIP)
+
+			By("Verifying final state with primary on original FIP and test service on new FIP")
+			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Primary FIP should only have primary service rule")
+			err = verifyFIPHasRulesForPorts(tc, newFIPID, sets.New(svc1Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "New FIP should have "+svcNameLBIP+"'s rule")
+
+			By("Cleaning up services")
+			err = utils.DeleteService(cs, ns.Name, svcNameLBIP)
+			Expect(err).NotTo(HaveOccurred())
+			err = utils.DeleteService(cs, ns.Name, svcNameIPv4)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
 })
 
 // getDeploymentPodsNodeNames returns the node names of the pods in the deployment created in BeforeEach.
@@ -673,4 +1068,52 @@ func waitLBCountEqualTo(tc *utils.AzureTestClient, interval, timeout time.Durati
 		return true, nil
 	})
 	return lbNames, err
+}
+
+// waitForServiceWarningEvent waits for a Warning event on the service with the expected Reason.
+func waitForServiceWarningEvent(
+	cs clientset.Interface,
+	ns, serviceName string,
+	expectedReason string,
+	timeout time.Duration,
+) error {
+	return wait.PollUntilContextTimeout(context.Background(), 5*time.Second, timeout, true, func(ctx context.Context) (bool, error) {
+		events, err := cs.CoreV1().Events(ns).List(ctx, metav1.ListOptions{
+			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Service,type=Warning", serviceName),
+		})
+		if err != nil {
+			return false, err
+		}
+		for _, event := range events.Items {
+			if event.Reason == expectedReason {
+				utils.Logf("Found Warning event for service %s: Reason=%s, Message=%s",
+					serviceName, event.Reason, event.Message)
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+}
+
+// verifyServiceNotExposed verifies the service does not have a LoadBalancer IP assigned
+// within a timeout period. If it gets an IP, returns an error.
+// If it stays pending (as expected for blocked services), returns nil after timeout.
+func verifyServiceNotExposed(cs clientset.Interface, ns, serviceName string, timeout time.Duration) error {
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, timeout, true, func(ctx context.Context) (bool, error) {
+		service, err := cs.CoreV1().Services(ns).Get(ctx, serviceName, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		if len(service.Status.LoadBalancer.Ingress) > 0 {
+			return false, fmt.Errorf("service %s unexpectedly got IP: %s",
+				serviceName, service.Status.LoadBalancer.Ingress[0].IP)
+		}
+		return false, nil // Keep polling - we expect it to stay empty.
+	})
+	// Poll timeout is expected (service stays pending) - return nil.
+	if wait.Interrupted(err) {
+		utils.Logf("Service %s correctly stayed pending (no IP assigned)", serviceName)
+		return nil
+	}
+	return err
 }
