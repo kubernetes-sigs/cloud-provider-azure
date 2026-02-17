@@ -478,7 +478,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 	FDescribe("Conflicting LB Configuration", func() {
 		const (
 			eventTimeout      = 30 * time.Second
-			notExposedTimeout = 30 * time.Second
+			notExposedTimeout = 1 * time.Minute
 
 			svcNamePrimary = "svc-primary"
 			svcNameLBIP    = "svc-lbip"
