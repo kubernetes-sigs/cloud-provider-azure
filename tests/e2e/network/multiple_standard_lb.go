@@ -592,19 +592,38 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "Primary service should still have its rule")
 
-			By("Resolving conflict by removing LB config annotation, expecting service exposed on primary FIP")
+			By("Resolving " + svcNameIPv4 + " by removing LB config annotation")
+			svc3, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			delete(svc3.Annotations, consts.ServiceAnnotationLoadBalancerConfigurations)
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc3, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = utils.WaitServiceExposure(cs, ns.Name, svcNameIPv4, []*string{&sharedIP})
+			Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should be exposed after removing LB config")
+
+			By("Resolving " + svcNamePIPName + " by removing LB config annotation")
+			svc2, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNamePIPName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			delete(svc2.Annotations, consts.ServiceAnnotationLoadBalancerConfigurations)
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc2, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = utils.WaitServiceExposure(cs, ns.Name, svcNamePIPName, []*string{&sharedIP})
+			Expect(err).NotTo(HaveOccurred(), svcNamePIPName+" should be exposed after removing LB config")
+
+			By("Resolving " + svcNameLBIP + " by removing LB config annotation")
 			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			delete(svc1.Annotations, consts.ServiceAnnotationLoadBalancerConfigurations)
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-
 			_, err = utils.WaitServiceExposure(cs, ns.Name, svcNameLBIP, []*string{&sharedIP})
 			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should be exposed after removing LB config")
-			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port), "TCP")
-			Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for primary and "+svcNameLBIP)
 
-			By("Re-adding LB config annotation, expecting blocked again")
+			By("Verifying primary FIP has rules for all services")
+			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port, svc2Port, svc3Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for all services sharing the IP")
+
+			By("Re-adding LB config annotation to " + svcNameLBIP + ", expecting blocked again")
 			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
@@ -614,13 +633,12 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			err = waitForServiceWarningEvent(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", eventTimeout)
 			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event on update")
 
-			By("Resolving conflict by removing IP pin, expecting service moves to configured LB")
+			By("Resolving " + svcNameLBIP + " by removing IP pin, expecting service moves to configured LB")
 			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			svc1.Spec.LoadBalancerIP = ""
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-
 			ips, err := utils.WaitServiceExposureAndGetIPs(cs, ns.Name, svcNameLBIP)
 			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should be exposed after removing IP pin")
 			Expect(len(ips)).NotTo(BeZero())
@@ -630,9 +648,9 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			newFIPID := getPIPFrontendConfigurationID(tc, newIP, tc.GetResourceGroup(), true)
 			utils.Logf("%s moved to new FIP: %s with IP %s", svcNameLBIP, newFIPID, newIP)
 
-			By("Verifying final state with primary on original FIP and test service on new FIP")
-			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort), "TCP")
-			Expect(err).NotTo(HaveOccurred(), "Primary FIP should only have primary service rule")
+			By("Verifying final state with primary on original FIP and " + svcNameLBIP + " on new FIP")
+			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc2Port, svc3Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for primary, "+svcNamePIPName+", and "+svcNameIPv4)
 			err = verifyFIPHasRulesForPorts(tc, newFIPID, sets.New(svc1Port), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "New FIP should have "+svcNameLBIP+"'s rule")
 		})
@@ -709,19 +727,29 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "Primary service should still have its rule")
 
-			By("Resolving conflict by removing LB config annotation, expecting service exposed on primary FIP")
+			By("Resolving " + svcNameIPv4 + " by removing LB config annotation")
+			svc2, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			delete(svc2.Annotations, consts.ServiceAnnotationLoadBalancerConfigurations)
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc2, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = utils.WaitServiceExposure(cs, ns.Name, svcNameIPv4, []*string{&sharedIP})
+			Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should be exposed after removing LB config")
+
+			By("Resolving " + svcNameLBIP + " by removing LB config annotation")
 			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			delete(svc1.Annotations, consts.ServiceAnnotationLoadBalancerConfigurations)
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-
 			_, err = utils.WaitServiceExposure(cs, ns.Name, svcNameLBIP, []*string{&sharedIP})
 			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should be exposed after removing LB config")
-			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port), "TCP")
-			Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for primary and "+svcNameLBIP)
 
-			By("Re-adding LB config annotation, expecting blocked again")
+			By("Verifying primary FIP has rules for all services")
+			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port, svc2Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for all services sharing the IP")
+
+			By("Re-adding LB config annotation to " + svcNameLBIP + ", expecting blocked again")
 			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
@@ -731,13 +759,12 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			err = waitForServiceWarningEvent(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", eventTimeout)
 			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event on update")
 
-			By("Resolving conflict by removing IP pin, expecting service moves to configured LB")
+			By("Resolving " + svcNameLBIP + " by removing IP pin, expecting service moves to configured LB")
 			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			svc1.Spec.LoadBalancerIP = ""
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-
 			ips, err = utils.WaitServiceExposureAndGetIPs(cs, ns.Name, svcNameLBIP)
 			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should be exposed after removing IP pin")
 			Expect(len(ips)).NotTo(BeZero())
@@ -747,9 +774,9 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			newFIPID := getPIPFrontendConfigurationID(tc, newIP, tc.GetResourceGroup(), true)
 			utils.Logf("%s moved to new FIP: %s with IP %s", svcNameLBIP, newFIPID, newIP)
 
-			By("Verifying final state with primary on original FIP and test service on new FIP")
-			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort), "TCP")
-			Expect(err).NotTo(HaveOccurred(), "Primary FIP should only have primary service rule")
+			By("Verifying final state with primary on original FIP and " + svcNameLBIP + " on new FIP")
+			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc2Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for primary and "+svcNameIPv4)
 			err = verifyFIPHasRulesForPorts(tc, newFIPID, sets.New(svc1Port), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "New FIP should have "+svcNameLBIP+"'s rule")
 		})
@@ -827,19 +854,29 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "Primary service should still have its rule")
 
-			By("Resolving conflict by removing LB config annotation, expecting service exposed on primary FIP")
+			By("Resolving " + svcNameIPv4 + " by removing LB config annotation")
+			svc2, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			delete(svc2.Annotations, consts.ServiceAnnotationLoadBalancerConfigurations)
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc2, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = utils.WaitServiceExposure(cs, ns.Name, svcNameIPv4, []*string{&sharedIP})
+			Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should be exposed after removing LB config")
+
+			By("Resolving " + svcNameLBIP + " by removing LB config annotation")
 			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			delete(svc1.Annotations, consts.ServiceAnnotationLoadBalancerConfigurations)
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-
 			_, err = utils.WaitServiceExposure(cs, ns.Name, svcNameLBIP, []*string{&sharedIP})
 			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should be exposed after removing LB config")
-			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port), "TCP")
-			Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for primary and "+svcNameLBIP)
 
-			By("Re-adding LB config annotation, expecting blocked again")
+			By("Verifying primary FIP has rules for all services")
+			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port, svc2Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for all services sharing the IP")
+
+			By("Re-adding LB config annotation to " + svcNameLBIP + ", expecting blocked again")
 			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
@@ -849,13 +886,12 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			err = waitForServiceWarningEvent(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", eventTimeout)
 			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event on update")
 
-			By("Resolving conflict by removing IP pin, expecting service moves to configured LB")
+			By("Resolving " + svcNameLBIP + " by removing IP pin, expecting service moves to configured LB")
 			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			svc1.Spec.LoadBalancerIP = ""
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-
 			ips, err = utils.WaitServiceExposureAndGetIPs(cs, ns.Name, svcNameLBIP)
 			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should be exposed after removing IP pin")
 			Expect(len(ips)).NotTo(BeZero())
@@ -866,9 +902,9 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			newFIPID := getFIPIDForPrivateIP(lb, newIP)
 			utils.Logf("%s moved to new FIP: %s with IP %s", svcNameLBIP, newFIPID, newIP)
 
-			By("Verifying final state with primary on original FIP and test service on new FIP")
-			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort), "TCP")
-			Expect(err).NotTo(HaveOccurred(), "Primary FIP should only have primary service rule")
+			By("Verifying final state with primary on original FIP and " + svcNameLBIP + " on new FIP")
+			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc2Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for primary and "+svcNameIPv4)
 			err = verifyFIPHasRulesForPorts(tc, newFIPID, sets.New(svc1Port), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "New FIP should have "+svcNameLBIP+"'s rule")
 		})
