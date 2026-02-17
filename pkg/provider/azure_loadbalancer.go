@@ -4092,6 +4092,7 @@ func (az *Cloud) getAzureLoadBalancerName(
 	clusterName, vmSetName string,
 	isInternal bool,
 ) (string, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("getAzureLoadBalancerName")
 	if az.LoadBalancerName != "" {
 		clusterName = az.LoadBalancerName
 	}
