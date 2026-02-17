@@ -532,6 +532,10 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
 			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc1, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				err := utils.DeleteService(cs, ns.Name, svcNameLBIP)
+				Expect(err).NotTo(HaveOccurred())
+			}()
 
 			err = verifyServiceNotExposed(cs, ns.Name, svcNameLBIP, notExposedTimeout)
 			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should stay pending")
@@ -551,6 +555,10 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svc2.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
 			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc2, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				err := utils.DeleteService(cs, ns.Name, svcNamePIPName)
+				Expect(err).NotTo(HaveOccurred())
+			}()
 
 			err = verifyServiceNotExposed(cs, ns.Name, svcNamePIPName, notExposedTimeout)
 			Expect(err).NotTo(HaveOccurred(), svcNamePIPName+" should stay pending")
@@ -570,6 +578,10 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svc3.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
 			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc3, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				err := utils.DeleteService(cs, ns.Name, svcNameIPv4)
+				Expect(err).NotTo(HaveOccurred())
+			}()
 
 			err = verifyServiceNotExposed(cs, ns.Name, svcNameIPv4, notExposedTimeout)
 			Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should stay pending")
@@ -623,14 +635,6 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(err).NotTo(HaveOccurred(), "Primary FIP should only have primary service rule")
 			err = verifyFIPHasRulesForPorts(tc, newFIPID, sets.New(svc1Port), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "New FIP should have "+svcNameLBIP+"'s rule")
-
-			By("Cleaning up services")
-			err = utils.DeleteService(cs, ns.Name, svcNameLBIP)
-			Expect(err).NotTo(HaveOccurred())
-			err = utils.DeleteService(cs, ns.Name, svcNamePIPName)
-			Expect(err).NotTo(HaveOccurred())
-			err = utils.DeleteService(cs, ns.Name, svcNameIPv4)
-			Expect(err).NotTo(HaveOccurred())
 		})
 
 		// TODO: Remove F prefix before merging
@@ -668,6 +672,10 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
 			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc1, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				err := utils.DeleteService(cs, ns.Name, svcNameLBIP)
+				Expect(err).NotTo(HaveOccurred())
+			}()
 
 			err = verifyServiceNotExposed(cs, ns.Name, svcNameLBIP, notExposedTimeout)
 			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should stay pending")
@@ -687,6 +695,10 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svc2.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
 			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc2, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				err := utils.DeleteService(cs, ns.Name, svcNameIPv4)
+				Expect(err).NotTo(HaveOccurred())
+			}()
 
 			err = verifyServiceNotExposed(cs, ns.Name, svcNameIPv4, notExposedTimeout)
 			Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should stay pending")
@@ -740,12 +752,6 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(err).NotTo(HaveOccurred(), "Primary FIP should only have primary service rule")
 			err = verifyFIPHasRulesForPorts(tc, newFIPID, sets.New(svc1Port), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "New FIP should have "+svcNameLBIP+"'s rule")
-
-			By("Cleaning up services")
-			err = utils.DeleteService(cs, ns.Name, svcNameLBIP)
-			Expect(err).NotTo(HaveOccurred())
-			err = utils.DeleteService(cs, ns.Name, svcNameIPv4)
-			Expect(err).NotTo(HaveOccurred())
 		})
 
 		// TODO: Remove F prefix before merging
@@ -784,6 +790,10 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
 			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc1, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				err := utils.DeleteService(cs, ns.Name, svcNameLBIP)
+				Expect(err).NotTo(HaveOccurred())
+			}()
 
 			err = verifyServiceNotExposed(cs, ns.Name, svcNameLBIP, notExposedTimeout)
 			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should stay pending")
@@ -803,6 +813,10 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svc2.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
 			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc2, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				err := utils.DeleteService(cs, ns.Name, svcNameIPv4)
+				Expect(err).NotTo(HaveOccurred())
+			}()
 
 			err = verifyServiceNotExposed(cs, ns.Name, svcNameIPv4, notExposedTimeout)
 			Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should stay pending")
@@ -857,12 +871,6 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(err).NotTo(HaveOccurred(), "Primary FIP should only have primary service rule")
 			err = verifyFIPHasRulesForPorts(tc, newFIPID, sets.New(svc1Port), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "New FIP should have "+svcNameLBIP+"'s rule")
-
-			By("Cleaning up services")
-			err = utils.DeleteService(cs, ns.Name, svcNameLBIP)
-			Expect(err).NotTo(HaveOccurred())
-			err = utils.DeleteService(cs, ns.Name, svcNameIPv4)
-			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 })
