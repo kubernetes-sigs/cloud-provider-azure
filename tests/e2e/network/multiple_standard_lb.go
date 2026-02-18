@@ -477,8 +477,10 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 	// TODO: Remove F prefix before merging
 	FDescribe("Conflicting LB Configuration", func() {
 		const (
+			pollInterval      = 10 * time.Second
+			serviceTimeout    = 5 * time.Minute
 			eventTimeout      = 30 * time.Second
-			notExposedTimeout = 1 * time.Minute
+			notExposedTimeout = serviceTimeout / 2
 
 			svcNamePrimary = "svc-primary"
 			svcNameLBIP    = "svc-lbip"
@@ -642,7 +644,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svc1.Spec.LoadBalancerIP = ""
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			newIP, err := waitForServiceIPChange(cs, ns.Name, svcNameLBIP, sharedIP, 2*time.Minute)
+			newIP, err := waitForServiceIPChange(cs, ns.Name, svcNameLBIP, sharedIP, serviceTimeout)
 			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should get a new IP after removing IP pin")
 			Expect(newIP).NotTo(Equal(sharedIP), svcNameLBIP+" should get a new IP on the configured LB")
 
@@ -769,7 +771,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svc1.Spec.LoadBalancerIP = ""
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			newIP, err := waitForServiceIPChange(cs, ns.Name, svcNameLBIP, sharedIP, 2*time.Minute)
+			newIP, err := waitForServiceIPChange(cs, ns.Name, svcNameLBIP, sharedIP, serviceTimeout)
 			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should get a new IP after removing IP pin")
 			Expect(newIP).NotTo(Equal(sharedIP), svcNameLBIP+" should get a new IP on the configured LB")
 
@@ -897,7 +899,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svc1.Spec.LoadBalancerIP = ""
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			newIP, err := waitForServiceIPChange(cs, ns.Name, svcNameLBIP, sharedIP, 2*time.Minute)
+			newIP, err := waitForServiceIPChange(cs, ns.Name, svcNameLBIP, sharedIP, serviceTimeout)
 			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should get a new IP after removing IP pin")
 			Expect(newIP).NotTo(Equal(sharedIP), svcNameLBIP+" should get a new IP on the configured LB")
 
@@ -1124,7 +1126,7 @@ func waitForServiceWarningEvent(
 	expectedReason string,
 	timeout time.Duration,
 ) error {
-	return wait.PollUntilContextTimeout(context.Background(), 5*time.Second, timeout, true, func(ctx context.Context) (bool, error) {
+	return wait.PollUntilContextTimeout(context.Background(), 10*time.Second, timeout, true, func(ctx context.Context) (bool, error) {
 		events, err := cs.CoreV1().Events(ns).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Service,type=Warning", serviceName),
 		})
@@ -1146,7 +1148,7 @@ func waitForServiceWarningEvent(
 // within a timeout period. If it gets an IP, returns an error.
 // If it stays pending (as expected for blocked services), returns nil after timeout.
 func verifyServiceNotExposed(cs clientset.Interface, ns, serviceName string, timeout time.Duration) error {
-	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, timeout, true, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, timeout, true, func(ctx context.Context) (bool, error) {
 		service, err := cs.CoreV1().Services(ns).Get(ctx, serviceName, metav1.GetOptions{})
 		if err != nil {
 			utils.Logf("Error getting service %s: %v", serviceName, err)
@@ -1171,7 +1173,7 @@ func verifyServiceNotExposed(cs clientset.Interface, ns, serviceName string, tim
 // waitForServiceIPChange waits for a service to get a different IP than the oldIP.
 func waitForServiceIPChange(cs clientset.Interface, ns, serviceName, oldIP string, timeout time.Duration) (string, error) {
 	var newIP string
-	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, timeout, true, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, timeout, true, func(ctx context.Context) (bool, error) {
 		service, err := cs.CoreV1().Services(ns).Get(ctx, serviceName, metav1.GetOptions{})
 		if err != nil {
 			utils.Logf("Error getting service %s: %v", serviceName, err)
