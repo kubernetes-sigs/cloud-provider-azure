@@ -642,10 +642,8 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svc1.Spec.LoadBalancerIP = ""
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			ips, err := utils.WaitServiceExposureAndGetIPs(cs, ns.Name, svcNameLBIP)
-			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should be exposed after removing IP pin")
-			Expect(len(ips)).NotTo(BeZero())
-			newIP := *ips[0]
+			newIP, err := waitForServiceIPChange(cs, ns.Name, svcNameLBIP, sharedIP, 2*time.Minute)
+			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should get a new IP after removing IP pin")
 			Expect(newIP).NotTo(Equal(sharedIP), svcNameLBIP+" should get a new IP on the configured LB")
 
 			newFIPID := getPIPFrontendConfigurationID(tc, newIP, tc.GetResourceGroup(), true)
@@ -771,10 +769,8 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svc1.Spec.LoadBalancerIP = ""
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			ips, err = utils.WaitServiceExposureAndGetIPs(cs, ns.Name, svcNameLBIP)
-			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should be exposed after removing IP pin")
-			Expect(len(ips)).NotTo(BeZero())
-			newIP := *ips[0]
+			newIP, err := waitForServiceIPChange(cs, ns.Name, svcNameLBIP, sharedIP, 2*time.Minute)
+			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should get a new IP after removing IP pin")
 			Expect(newIP).NotTo(Equal(sharedIP), svcNameLBIP+" should get a new IP on the configured LB")
 
 			newFIPID := getPIPFrontendConfigurationID(tc, newIP, tc.GetResourceGroup(), true)
@@ -901,10 +897,8 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svc1.Spec.LoadBalancerIP = ""
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			ips, err = utils.WaitServiceExposureAndGetIPs(cs, ns.Name, svcNameLBIP)
-			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should be exposed after removing IP pin")
-			Expect(len(ips)).NotTo(BeZero())
-			newIP := *ips[0]
+			newIP, err := waitForServiceIPChange(cs, ns.Name, svcNameLBIP, sharedIP, 2*time.Minute)
+			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should get a new IP after removing IP pin")
 			Expect(newIP).NotTo(Equal(sharedIP), svcNameLBIP+" should get a new IP on the configured LB")
 
 			lb = getAzureInternalLoadBalancerFromPrivateIP(tc, &newIP, tc.GetResourceGroup())
@@ -1172,4 +1166,32 @@ func verifyServiceNotExposed(cs clientset.Interface, ns, serviceName string, tim
 	}
 	utils.Logf("verifyServiceNotExposed for %s returned unexpected error: %v", serviceName, err)
 	return err
+}
+
+// waitForServiceIPChange waits for a service to get a different IP than the oldIP.
+func waitForServiceIPChange(cs clientset.Interface, ns, serviceName, oldIP string, timeout time.Duration) (string, error) {
+	var newIP string
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, timeout, true, func(ctx context.Context) (bool, error) {
+		service, err := cs.CoreV1().Services(ns).Get(ctx, serviceName, metav1.GetOptions{})
+		if err != nil {
+			utils.Logf("Error getting service %s: %v", serviceName, err)
+			return false, nil
+		}
+		if len(service.Status.LoadBalancer.Ingress) == 0 {
+			utils.Logf("Service %s has no IP yet, waiting...", serviceName)
+			return false, nil
+		}
+		currentIP := service.Status.LoadBalancer.Ingress[0].IP
+		if currentIP != oldIP {
+			utils.Logf("Service %s IP changed from %s to %s", serviceName, oldIP, currentIP)
+			newIP = currentIP
+			return true, nil
+		}
+		utils.Logf("Service %s still has old IP %s, waiting for change...", serviceName, oldIP)
+		return false, nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("timeout waiting for service %s IP to change from %s: %w", serviceName, oldIP, err)
+	}
+	return newIP, nil
 }
