@@ -1155,9 +1155,11 @@ func verifyServiceNotExposed(cs clientset.Interface, ns, serviceName string, tim
 	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, timeout, true, func(ctx context.Context) (bool, error) {
 		service, err := cs.CoreV1().Services(ns).Get(ctx, serviceName, metav1.GetOptions{})
 		if err != nil {
+			utils.Logf("Error getting service %s: %v", serviceName, err)
 			return false, err
 		}
 		if len(service.Status.LoadBalancer.Ingress) > 0 {
+			utils.Logf("Service %s unexpectedly got IP: %s", serviceName, service.Status.LoadBalancer.Ingress[0].IP)
 			return false, fmt.Errorf("service %s unexpectedly got IP: %s",
 				serviceName, service.Status.LoadBalancer.Ingress[0].IP)
 		}
@@ -1168,5 +1170,6 @@ func verifyServiceNotExposed(cs clientset.Interface, ns, serviceName string, tim
 		utils.Logf("Service %s correctly stayed pending (no IP assigned)", serviceName)
 		return nil
 	}
+	utils.Logf("verifyServiceNotExposed for %s returned unexpected error: %v", serviceName, err)
 	return err
 }
