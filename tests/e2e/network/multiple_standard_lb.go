@@ -626,6 +626,9 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			By("Re-adding LB config annotation to " + svcNameLBIP + ", expecting blocked again")
 			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			if svc1.Annotations == nil {
+				svc1.Annotations = map[string]string{}
+			}
 			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -752,6 +755,9 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			By("Re-adding LB config annotation to " + svcNameLBIP + ", expecting blocked again")
 			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			if svc1.Annotations == nil {
+				svc1.Annotations = map[string]string{}
+			}
 			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -879,6 +885,9 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			By("Re-adding LB config annotation to " + svcNameLBIP + ", expecting blocked again")
 			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			if svc1.Annotations == nil {
+				svc1.Annotations = map[string]string{}
+			}
 			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
