@@ -631,7 +631,10 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			if svc1.Annotations == nil {
 				svc1.Annotations = map[string]string{}
 			}
-			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
+			// Pick a different LB than the primary so the service actually moves when IP pin is removed.
+			primaryLBName := lbNameRE.FindStringSubmatch(primaryFIPID)[1]
+			lbConfig := map[bool]string{true: "lb-2", false: "lb-1"}[strings.HasPrefix(primaryLBName, "lb-1")]
+			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = lbConfig
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -758,7 +761,10 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			if svc1.Annotations == nil {
 				svc1.Annotations = map[string]string{}
 			}
-			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
+			// Pick a different LB than the primary so the service actually moves when IP pin is removed
+			primaryLBName := lbNameRE.FindStringSubmatch(primaryFIPID)[1]
+			lbConfig := map[bool]string{true: "lb-2", false: "lb-1"}[strings.HasPrefix(primaryLBName, "lb-1")]
+			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = lbConfig
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -886,7 +892,10 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			if svc1.Annotations == nil {
 				svc1.Annotations = map[string]string{}
 			}
-			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
+			// Pick a different LB than the primary so the service actually moves when IP pin is removed.
+			primaryLBName := ptr.Deref(lb.Name, "")
+			lbConfig := map[bool]string{true: "lb-2", false: "lb-1"}[strings.HasPrefix(primaryLBName, "lb-1")]
+			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = lbConfig
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
