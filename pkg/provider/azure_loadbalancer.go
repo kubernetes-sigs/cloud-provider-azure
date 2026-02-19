@@ -793,7 +793,7 @@ func (az *Cloud) getServiceLoadBalancer(
 	isInternal := requiresInternalLoadBalancer(service)
 	var defaultLB *armnetwork.LoadBalancer
 	primaryVMSetName := az.VMSet.GetPrimaryVMSetName()
-	defaultLBName, err := az.getAzureLoadBalancerName(ctx, service, existingLBs, clusterName, primaryVMSetName, isInternal)
+	defaultLBName, err := az.getAzureLoadBalancerName(ctx, service, existingLBs, clusterName, primaryVMSetName, isInternal, wantLb)
 	if err != nil {
 		return nil, nil, nil, nil, false, false, err
 	}
@@ -963,7 +963,8 @@ func (az *Cloud) selectLoadBalancer(ctx context.Context, clusterName string, ser
 	}
 	selectedLBRuleCount := math.MaxInt32
 	for _, currVMSetName := range vmSetNames {
-		currLBName, _ := az.getAzureLoadBalancerName(ctx, service, existingLBs, clusterName, *currVMSetName, isInternal)
+		// selectLoadBalancer is only called when wantLb=true (see caller check), so pass true for wantLb.
+		currLBName, _ := az.getAzureLoadBalancerName(ctx, service, existingLBs, clusterName, *currVMSetName, isInternal, true /* wantLb */)
 		lb, exists := mapExistingLBs[currLBName]
 		if !exists {
 			// select this LB as this is a new LB and will have minimum rules
@@ -4091,6 +4092,7 @@ func (az *Cloud) getAzureLoadBalancerName(
 	existingLBs []*armnetwork.LoadBalancer,
 	clusterName, vmSetName string,
 	isInternal bool,
+	wantLb bool,
 ) (string, error) {
 	logger := log.FromContextOrBackground(ctx).WithName("getAzureLoadBalancerName")
 	if az.LoadBalancerName != "" {
@@ -4108,24 +4110,28 @@ func (az *Cloud) getAzureLoadBalancerName(
 	// 1. Filter out the eligible load balancers.
 	// 2. Choose the most eligible load balancer.
 	if az.UseMultipleStandardLoadBalancers() {
-		// Block the combination of LB configuration annotation and IP spec.
-		// When specifying an IP, the LB is determined by where the IP resides.
-		// Specifying a different LB is contradictory and would cause unexpected outcome.
-		annotatedLBs := consts.GetLoadBalancerConfigurationsNames(service)
-		lbIPs := getServiceLoadBalancerIPs(service)
-		pipNames := getServicePIPNames(service)
-		pinsIP := len(lbIPs) > 0 || lo.ContainsBy(pipNames, func(s string) bool { return s != "" })
-		logger.V(5).Info("checking LB and IP config", "service", service.Name, "annotatedLBs", annotatedLBs, "lbIPs", lbIPs, "pipNames", pipNames, "pinsIP", pinsIP)
-		if len(annotatedLBs) > 0 && pinsIP {
-			return "", fmt.Errorf(
-				"service %q has conflicting load balancer configuration: "+
-					"both a load balancer name (%s) and an IP address are specified. "+
-					"When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), "+
-					"the service must use the load balancer where that IP resides. "+
-					"To fix, either: (1) remove the %s annotation to use the specified IP (and its load balancer), "+
-					"or (2) remove the IP specification to get a new IP on the load balancer specified by the annotation",
-				service.Name, consts.ServiceAnnotationLoadBalancerConfigurations,
-				consts.ServiceAnnotationLoadBalancerConfigurations)
+		// Only block when creating resources (wantLb=true).
+		// Cleanup operations (wantLb=false) don't need this constraint.
+		if wantLb {
+			// Block the combination of LB configuration annotation and IP spec.
+			// When specifying an IP, the LB is determined by where the IP resides.
+			// Specifying a different LB is contradictory and would cause unexpected outcome.
+			annotatedLBs := consts.GetLoadBalancerConfigurationsNames(service)
+			lbIPs := getServiceLoadBalancerIPs(service)
+			pipNames := getServicePIPNames(service)
+			pinsIP := len(lbIPs) > 0 || lo.ContainsBy(pipNames, func(s string) bool { return s != "" })
+			logger.V(5).Info("checking LB and IP config", "service", service.Name, "annotatedLBs", annotatedLBs, "lbIPs", lbIPs, "pipNames", pipNames, "pinsIP", pinsIP)
+			if len(annotatedLBs) > 0 && pinsIP {
+				return "", fmt.Errorf(
+					"service %q has conflicting load balancer configuration: "+
+						"both a load balancer name (%s) and an IP address are specified. "+
+						"When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), "+
+						"the service must use the load balancer where that IP resides. "+
+						"To fix, either: (1) remove the %s annotation to use the specified IP (and its load balancer), "+
+						"or (2) remove the IP specification to get a new IP on the load balancer specified by the annotation",
+					service.Name, consts.ServiceAnnotationLoadBalancerConfigurations,
+					consts.ServiceAnnotationLoadBalancerConfigurations)
+			}
 		}
 
 		eligibleLBs, err := az.getEligibleLoadBalancersForService(ctx, service)
