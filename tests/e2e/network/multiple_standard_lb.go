@@ -990,7 +990,7 @@ func getLBsFromPublicIPs(tc *utils.AzureTestClient, pips []*string) sets.Set[str
 	return lbNames
 }
 
-// verifyFIPHasRulesForPorts checks that the specified frontend IP config has rules for all expected ports.
+// verifyFIPHasRulesForPorts checks that the specified frontend IP config has rules for exactly all expected ports.
 func verifyFIPHasRulesForPorts(tc *utils.AzureTestClient, fipID string, expectedPorts sets.Set[int32], protocol string) error {
 	if fipID == "" {
 		return fmt.Errorf("empty FIP ID")
@@ -1010,8 +1010,8 @@ func verifyFIPHasRulesForPorts(tc *utils.AzureTestClient, fipID string, expected
 
 	utils.Logf("Verifying FIP ID %q has rules for ports %v", fipID, expectedPorts.UnsortedList())
 
-	// Find rules that reference the target FIP ID directly.
-	foundPorts := sets.New[int32]()
+	// Find all rules that reference the target FIP ID with matching protocol.
+	actualPorts := sets.New[int32]()
 	if lb.Properties != nil && lb.Properties.LoadBalancingRules != nil {
 		for _, rule := range lb.Properties.LoadBalancingRules {
 			if rule.Properties == nil || rule.Properties.FrontendIPConfiguration == nil {
@@ -1026,20 +1026,24 @@ func verifyFIPHasRulesForPorts(tc *utils.AzureTestClient, fipID string, expected
 			rulePort := ptr.Deref(rule.Properties.FrontendPort, 0)
 			ruleProtocol := string(ptr.Deref(rule.Properties.Protocol, ""))
 
-			if expectedPorts.Has(rulePort) && strings.EqualFold(ruleProtocol, protocol) {
+			if strings.EqualFold(ruleProtocol, protocol) {
 				utils.Logf("Found rule %q for port %d/%s on FIP", ptr.Deref(rule.Name, ""), rulePort, ruleProtocol)
-				foundPorts.Insert(rulePort)
+				actualPorts.Insert(rulePort)
 			}
 		}
 	}
 
-	// Check for missing ports
-	missingPorts := expectedPorts.Difference(foundPorts)
-	if missingPorts.Len() > 0 {
-		return fmt.Errorf("FIP %q is missing rules for ports: %v", fipID, missingPorts.UnsortedList())
+	// Check for exact match
+	missingPorts := expectedPorts.Difference(actualPorts)
+	extraPorts := actualPorts.Difference(expectedPorts)
+
+	if missingPorts.Len() > 0 || extraPorts.Len() > 0 {
+		return fmt.Errorf("FIP %q port mismatch: missing=%v, extra=%v, expected=%v, actual=%v",
+			fipID, missingPorts.UnsortedList(), extraPorts.UnsortedList(),
+			expectedPorts.UnsortedList(), actualPorts.UnsortedList())
 	}
 
-	utils.Logf("FIP %q has all expected rules for ports %v", fipID, expectedPorts.UnsortedList())
+	utils.Logf("FIP %q has exactly the expected rules for ports %v", fipID, expectedPorts.UnsortedList())
 	return nil
 }
 
