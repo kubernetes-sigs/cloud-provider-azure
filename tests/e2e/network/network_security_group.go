@@ -627,6 +627,117 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		})
 	})
 
+	When("creating a LoadBalancer service with annotation `service.beta.kubernetes.io/azure-blocked-ip-ranges`", func() {
+		It("should add deny rules for blocked IPs", func() {
+			var (
+				serviceIPv4s      []netip.Addr
+				serviceIPv6s      []netip.Addr
+				blockedIPv4Ranges = []string{
+					"10.1.0.0/16", "172.16.0.0/12", "192.168.1.0/24", "203.0.113.0/24",
+				}
+				blockedIPv6Ranges = []string{
+					"fd12:abcd::/48", "fe80:1234::/32", "2001:db8:1::/48", "2001:db8:2::/48",
+				}
+			)
+
+			By("Creating a LoadBalancer service", func() {
+				var (
+					labels = map[string]string{
+						"app": ServiceName,
+					}
+					annotations = map[string]string{
+						consts.ServiceAnnotationBlockedIPRanges: strings.Join(
+							append(blockedIPv4Ranges, blockedIPv6Ranges...),
+							",",
+						),
+					}
+					ports = []v1.ServicePort{{
+						Port:       serverPort,
+						TargetPort: intstr.FromInt32(serverPort),
+					}}
+				)
+				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, ServiceName, namespace.Name, labels, annotations, ports)
+				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+			})
+			logger.Info("Created a LoadBalancer service", "v4-IPs", serviceIPv4s, "v6-IPs", serviceIPv6s)
+
+			var validator *SecurityGroupValidator
+			By("Getting the cluster security groups", func() {
+				rv, err := azureClient.GetClusterSecurityGroups()
+				Expect(err).NotTo(HaveOccurred())
+
+				validator = NewSecurityGroupValidator(rv)
+			})
+
+			By("Checking if the blocked IP range rules exist", func() {
+				var (
+					expectedProtocol = armnetwork.SecurityRuleProtocolTCP
+					expectedDstPorts = []string{strconv.FormatInt(int64(serverPort), 10)}
+				)
+
+				if len(serviceIPv4s) > 0 {
+					actualBlockedIPv4Ranges := validator.GetBlockedIPRanges(expectedProtocol, serviceIPv4s, expectedDstPorts)
+					Expect(actualBlockedIPv4Ranges).NotTo(BeEmpty(), "Should have blocked IP range rules for IPv4")
+					Expect(sets.NewString(actualBlockedIPv4Ranges...).Equal(sets.NewString(blockedIPv4Ranges...))).To(BeTrue(),
+						"Blocked IPv4 ranges should match expected, got: %v, expected: %v", actualBlockedIPv4Ranges, blockedIPv4Ranges)
+				}
+				if len(serviceIPv6s) > 0 {
+					actualBlockedIPv6Ranges := validator.GetBlockedIPRanges(expectedProtocol, serviceIPv6s, expectedDstPorts)
+					Expect(actualBlockedIPv6Ranges).NotTo(BeEmpty(), "Should have blocked IP range rules for IPv6")
+					Expect(sets.NewString(actualBlockedIPv6Ranges...).Equal(sets.NewString(blockedIPv6Ranges...))).To(BeTrue(),
+						"Blocked IPv6 ranges should match expected, got: %v, expected: %v", actualBlockedIPv6Ranges, blockedIPv6Ranges)
+				}
+			})
+		})
+
+		It("should not add blocked IP range rules when no ranges are specified", func() {
+			var (
+				serviceIPv4s []netip.Addr
+				serviceIPv6s []netip.Addr
+			)
+
+			By("Creating a LoadBalancer service without blocked-ip-ranges annotation", func() {
+				var (
+					labels = map[string]string{
+						"app": ServiceName,
+					}
+					annotations = map[string]string{}
+					ports       = []v1.ServicePort{{
+						Port:       serverPort,
+						TargetPort: intstr.FromInt32(serverPort),
+					}}
+				)
+				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, ServiceName, namespace.Name, labels, annotations, ports)
+				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+			})
+			logger.Info("Created a LoadBalancer service", "v4-IPs", serviceIPv4s, "v6-IPs", serviceIPv6s)
+
+			var validator *SecurityGroupValidator
+			By("Getting the cluster security groups", func() {
+				rv, err := azureClient.GetClusterSecurityGroups()
+				Expect(err).NotTo(HaveOccurred())
+
+				validator = NewSecurityGroupValidator(rv)
+			})
+
+			By("Checking that no blocked IP range rules exist", func() {
+				var (
+					expectedProtocol = armnetwork.SecurityRuleProtocolTCP
+					expectedDstPorts = []string{strconv.FormatInt(int64(serverPort), 10)}
+				)
+
+				if len(serviceIPv4s) > 0 {
+					actualBlockedIPv4Ranges := validator.GetBlockedIPRanges(expectedProtocol, serviceIPv4s, expectedDstPorts)
+					Expect(actualBlockedIPv4Ranges).To(BeEmpty(), "Should not have any blocked IP range rule for IPv4, got: %v", actualBlockedIPv4Ranges)
+				}
+				if len(serviceIPv6s) > 0 {
+					actualBlockedIPv6Ranges := validator.GetBlockedIPRanges(expectedProtocol, serviceIPv6s, expectedDstPorts)
+					Expect(actualBlockedIPv6Ranges).To(BeEmpty(), "Should not have any blocked IP range rule for IPv6, got: %v", actualBlockedIPv6Ranges)
+				}
+			})
+		})
+	})
+
 	When("creating a LoadBalancer service with annotation `service.beta.kubernetes.io/azure-allowed-ip-ranges`", func() {
 		It("should add a rule to allow traffic from allowed-IPs only", func() {
 			var (
@@ -1217,6 +1328,21 @@ func (v *SecurityGroupValidator) NotHasRuleForDestination(dstAddresses []netip.A
 	return true
 }
 
+// GetBlockedIPRanges returns the blocked IP ranges for the given destination addresses and ports.
+func (v *SecurityGroupValidator) GetBlockedIPRanges(
+	protocol armnetwork.SecurityRuleProtocol,
+	dstAddresses []netip.Addr,
+	dstPorts []string,
+) []string {
+	for i := range v.nsgs {
+		ranges := SecurityGroupGetBlockedIPRanges(v.nsgs[i], protocol, dstAddresses, dstPorts)
+		if len(ranges) > 0 {
+			return ranges
+		}
+	}
+	return nil
+}
+
 // HasDenyAllRuleForDestination checks if the security group has a rule that denies all traffic to the given destination addresses.
 func (v *SecurityGroupValidator) HasDenyAllRuleForDestination(dstAddresses []netip.Addr) bool {
 	for i := range v.nsgs {
@@ -1349,6 +1475,83 @@ func SecurityGroupHasAllowRuleForDestination(
 	}
 
 	return true
+}
+
+func SecurityGroupGetBlockedIPRanges(
+	nsg *armnetwork.SecurityGroup,
+	protocol armnetwork.SecurityRuleProtocol,
+	dstAddresses []netip.Addr, dstPorts []string,
+) []string {
+	logger := GinkgoLogr.WithName("GetBlockedIPRanges").
+		WithValues("nsg-name", nsg.Name)
+
+	logger.Info("checking",
+		"expected-protocol", protocol,
+		"expected-dst-addresses", dstAddresses,
+		"expected-dst-ports", dstPorts,
+	)
+
+	if len(dstAddresses) == 0 {
+		logger.Info("skip as no destination addresses")
+		return nil
+	}
+
+	var (
+		expectedDstPorts     = sets.NewString(dstPorts...)
+		expectedDstAddresses = sets.NewString()
+	)
+	for _, ip := range dstAddresses {
+		expectedDstAddresses.Insert(ip.String())
+	}
+
+	for _, rule := range nsg.Properties.SecurityRules {
+		if *rule.Properties.Access != armnetwork.SecurityRuleAccessDeny ||
+			*rule.Properties.Direction != armnetwork.SecurityRuleDirectionInbound ||
+			*rule.Properties.Protocol != protocol ||
+			ptr.Deref(rule.Properties.SourcePortRange, "") != "*" ||
+			len(rule.Properties.DestinationPortRanges) != len(dstPorts) {
+			logger.Info("skip rule", "rule", rule)
+			continue
+		}
+		logger.Info("checking rule", "rule", rule)
+
+		{
+			// check destination ports
+			actualDstPorts := sets.NewString()
+			for _, d := range rule.Properties.DestinationPortRanges {
+				actualDstPorts.Insert(*d)
+			}
+			if !actualDstPorts.Equal(expectedDstPorts) {
+				// skip if the rule does not match the expected destination ports
+				continue
+			}
+		}
+
+		// Check if destination addresses match
+		remainingDstAddresses := expectedDstAddresses.Union(nil) // copy
+		if rule.Properties.DestinationAddressPrefix != nil {
+			remainingDstAddresses.Delete(*rule.Properties.DestinationAddressPrefix)
+		}
+		for _, d := range rule.Properties.DestinationAddressPrefixes {
+			remainingDstAddresses.Delete(*d)
+		}
+
+		if remainingDstAddresses.Len() == 0 {
+			// Found matching rule, return the blocked IP ranges
+			var blockedIPRanges []string
+			if rule.Properties.SourceAddressPrefix != nil {
+				blockedIPRanges = append(blockedIPRanges, *rule.Properties.SourceAddressPrefix)
+			}
+			for _, d := range rule.Properties.SourceAddressPrefixes {
+				blockedIPRanges = append(blockedIPRanges, *d)
+			}
+			logger.Info("found blocked IP ranges", "ranges", blockedIPRanges)
+			return blockedIPRanges
+		}
+	}
+
+	logger.Info("no blocked IP range rule for destination addresses")
+	return nil
 }
 
 func SecurityGroupHasDenyAllRuleForDestination(nsg *armnetwork.SecurityGroup, dstAddresses []netip.Addr) bool {
