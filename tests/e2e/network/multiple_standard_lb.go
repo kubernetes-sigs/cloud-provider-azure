@@ -486,6 +486,9 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svcNameLBIP    = "svc-lbip"
 			svcNamePIPName = "svc-pipname"
 			svcNameIPv4    = "svc-ipv4"
+
+			msgConflictingLBConfig       = "conflicting load balancer configuration"
+			msgAssignedButRequestsDiffLB = "assigned but requests a load balancer"
 		)
 
 		// TODO: Remove F prefix before merging
@@ -541,7 +544,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 
 			err = verifyServiceNotExposed(cs, ns.Name, svcNameLBIP, notExposedTimeout)
 			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should stay pending")
-			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", time.Time{}, eventTimeout)
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", msgConflictingLBConfig, time.Time{}, eventTimeout)
 			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event for "+svcNameLBIP)
 
 			By("Creating service with azure-pip-name and LB config, expecting blocked")
@@ -564,7 +567,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 
 			err = verifyServiceNotExposed(cs, ns.Name, svcNamePIPName, notExposedTimeout)
 			Expect(err).NotTo(HaveOccurred(), svcNamePIPName+" should stay pending")
-			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNamePIPName, "SyncLoadBalancerFailed", time.Time{}, eventTimeout)
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNamePIPName, "SyncLoadBalancerFailed", msgConflictingLBConfig, time.Time{}, eventTimeout)
 			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event for "+svcNamePIPName)
 
 			By("Creating service with azure-load-balancer-ipv4 and LB config, expecting blocked")
@@ -587,7 +590,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 
 			err = verifyServiceNotExposed(cs, ns.Name, svcNameIPv4, notExposedTimeout)
 			Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should stay pending")
-			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameIPv4, "SyncLoadBalancerFailed", time.Time{}, eventTimeout)
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameIPv4, "SyncLoadBalancerFailed", msgConflictingLBConfig, time.Time{}, eventTimeout)
 			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event for "+svcNameIPv4)
 
 			By("Verifying primary service is still working")
@@ -641,7 +644,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = otherLBName
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", timeBeforeReAddLB, eventTimeout)
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", msgConflictingLBConfig, timeBeforeReAddLB, eventTimeout)
 			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event on update")
 
 			By("Attempting to remove IP pin from " + svcNameLBIP + ", expecting blocked")
@@ -651,7 +654,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svc1.Spec.LoadBalancerIP = ""
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", timeBeforeRemoveIP, eventTimeout)
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", msgAssignedButRequestsDiffLB, timeBeforeRemoveIP, eventTimeout)
 			Expect(err).NotTo(HaveOccurred(), "Expected new SyncLoadBalancerFailed event when removing IP pin (should be blocked)")
 
 			By("Verifying FIP rules unchanged")
@@ -721,7 +724,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 
 			err = verifyServiceNotExposed(cs, ns.Name, svcNameLBIP, notExposedTimeout)
 			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should stay pending")
-			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", time.Time{}, eventTimeout)
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", msgConflictingLBConfig, time.Time{}, eventTimeout)
 			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event for "+svcNameLBIP)
 
 			By("Creating service with azure-load-balancer-ipv4 and LB config, expecting blocked")
@@ -744,7 +747,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 
 			err = verifyServiceNotExposed(cs, ns.Name, svcNameIPv4, notExposedTimeout)
 			Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should stay pending")
-			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameIPv4, "SyncLoadBalancerFailed", time.Time{}, eventTimeout)
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameIPv4, "SyncLoadBalancerFailed", msgConflictingLBConfig, time.Time{}, eventTimeout)
 			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event for "+svcNameIPv4)
 
 			By("Verifying primary service is still working")
@@ -789,7 +792,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = otherLBName
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", timeBeforeReAddLB, eventTimeout)
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", msgConflictingLBConfig, timeBeforeReAddLB, eventTimeout)
 			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event on update")
 
 			By("Attempting to remove IP pin from " + svcNameLBIP + ", expecting blocked")
@@ -799,7 +802,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svc1.Spec.LoadBalancerIP = ""
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", timeBeforeRemoveIP, eventTimeout)
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", msgAssignedButRequestsDiffLB, timeBeforeRemoveIP, eventTimeout)
 			Expect(err).NotTo(HaveOccurred(), "Expected new SyncLoadBalancerFailed event when removing IP pin (should be blocked)")
 
 			By("Verifying FIP rules unchanged")
@@ -870,7 +873,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 
 			err = verifyServiceNotExposed(cs, ns.Name, svcNameLBIP, notExposedTimeout)
 			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should stay pending")
-			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", time.Time{}, eventTimeout)
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", msgConflictingLBConfig, time.Time{}, eventTimeout)
 			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event for "+svcNameLBIP)
 
 			By("Creating service with azure-load-balancer-ipv4 and LB config, expecting blocked")
@@ -893,7 +896,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 
 			err = verifyServiceNotExposed(cs, ns.Name, svcNameIPv4, notExposedTimeout)
 			Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should stay pending")
-			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameIPv4, "SyncLoadBalancerFailed", time.Time{}, eventTimeout)
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameIPv4, "SyncLoadBalancerFailed", msgConflictingLBConfig, time.Time{}, eventTimeout)
 			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event for "+svcNameIPv4)
 
 			By("Verifying primary service is still working")
@@ -939,7 +942,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = otherLBBaseName
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", timeBeforeReAddLB, eventTimeout)
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", msgConflictingLBConfig, timeBeforeReAddLB, eventTimeout)
 			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event on update")
 
 			By("Attempting to remove IP pin from " + svcNameLBIP + ", expecting blocked")
@@ -949,7 +952,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svc1.Spec.LoadBalancerIP = ""
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", timeBeforeRemoveIP, eventTimeout)
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", msgAssignedButRequestsDiffLB, timeBeforeRemoveIP, eventTimeout)
 			Expect(err).NotTo(HaveOccurred(), "Expected new SyncLoadBalancerFailed event when removing IP pin (should be blocked)")
 
 			By("Verifying FIP rules unchanged")
@@ -1224,11 +1227,12 @@ func waitLBCountEqualTo(tc *utils.AzureTestClient, interval, timeout time.Durati
 }
 
 // waitForServiceWarningEventAfter waits for a Warning event on the service with the expected Reason
-// that occurred after the specified time.
+// that occurred after the specified time and contains the expected message substring.
 func waitForServiceWarningEventAfter(
 	cs clientset.Interface,
 	ns, serviceName string,
 	expectedReason string,
+	messageSubstring string,
 	after time.Time,
 	timeout time.Duration,
 ) error {
@@ -1241,6 +1245,9 @@ func waitForServiceWarningEventAfter(
 		}
 		for _, event := range events.Items {
 			if event.Reason != expectedReason {
+				continue
+			}
+			if messageSubstring != "" && !strings.Contains(event.Message, messageSubstring) {
 				continue
 			}
 			eventTime := event.LastTimestamp.Time
