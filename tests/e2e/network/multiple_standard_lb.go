@@ -634,7 +634,10 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			}
 			// Pick a different LB than the primary so the service would move when IP pin is removed.
 			primaryLBName := lbNameRE.FindStringSubmatch(primaryFIPID)[1]
-			otherLBName := map[bool]string{true: "lb-2", false: "lb-1"}[strings.HasPrefix(primaryLBName, "lb-1")]
+			otherLBName := "lb-1"
+			if strings.EqualFold(primaryLBName, "lb-1") {
+				otherLBName = os.Getenv("CLUSTER_NAME")
+			}
 			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = otherLBName
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -779,7 +782,10 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			}
 			// Pick a different LB than the primary so the service would move when IP pin is removed.
 			primaryLBName := lbNameRE.FindStringSubmatch(primaryFIPID)[1]
-			otherLBName := map[bool]string{true: "lb-2", false: "lb-1"}[strings.HasPrefix(primaryLBName, "lb-1")]
+			otherLBName := "lb-1"
+			if strings.EqualFold(primaryLBName, "lb-1") {
+				otherLBName = os.Getenv("CLUSTER_NAME")
+			}
 			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = otherLBName
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -925,7 +931,10 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			}
 			// Pick a different LB than the primary so the service would move when IP pin is removed.
 			primaryLBName := ptr.Deref(lb.Name, "")
-			otherLBBaseName := map[bool]string{true: "lb-2", false: "lb-1"}[strings.HasPrefix(primaryLBName, "lb-1")]
+			otherLBBaseName := "lb-1"
+			if strings.EqualFold(primaryLBName, "lb-1-internal") {
+				otherLBBaseName = os.Getenv("CLUSTER_NAME")
+			}
 			otherLBName := otherLBBaseName + "-internal"
 			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = otherLBBaseName
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
