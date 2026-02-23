@@ -275,6 +275,19 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 		az.ServiceGatewayEnabled = false
 	}
 
+	// ServiceGateway (ContainerLB) and Multi-SLB are mutually exclusive.
+	// ContainerLB uses PodIP-based backend pools via ServiceGateway, while
+	// Multi-SLB requires NodeIP/NIC-based backend pools.
+	if az.ServiceGatewayEnabled && az.UseMultipleStandardLoadBalancers() {
+		return fmt.Errorf("InitializeCloudFromConfig: ServiceGatewayEnabled and MultipleStandardLoadBalancerConfigurations are mutually exclusive and cannot both be set")
+	}
+
+	// EnableMigrateToIPBasedBackendPoolAPI is only relevant to the legacy
+	// NIC-to-IP migration path and has no meaning when ServiceGateway is enabled.
+	if az.ServiceGatewayEnabled && config.EnableMigrateToIPBasedBackendPoolAPI {
+		return fmt.Errorf("InitializeCloudFromConfig: EnableMigrateToIPBasedBackendPoolAPI cannot be used when ServiceGatewayEnabled is true — ContainerLB already uses PodIP-based backend pools")
+	}
+
 	if config.RouteTableResourceGroup == "" {
 		config.RouteTableResourceGroup = config.ResourceGroup
 	}

@@ -652,4 +652,189 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		utils.Logf("\n✓ Mixed inbound+outbound test passed: %d egress + %d inbound = %d total pods", egressPods, inboundPods, egressPods+inboundPods)
 	})
+
+	It("should handle pods with both inbound LB and outbound NAT Gateway", func() {
+		const (
+			dualPods    = 10
+			egressName  = "dual-egress"
+			serviceName = "dual-inbound-svc"
+			servicePort = int32(8080)
+			targetPort  = 8080
+			waitTime    = 60 * time.Second
+		)
+
+		By("Creating LoadBalancer Service for inbound traffic")
+		serviceLabels := map[string]string{
+			"app": "dual-traffic-pod",
+		}
+
+		service := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      serviceName,
+				Namespace: ns.Name,
+			},
+			Spec: v1.ServiceSpec{
+				Type:                  v1.ServiceTypeLoadBalancer,
+				ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
+				Selector:              serviceLabels,
+				Ports: []v1.ServicePort{
+					{
+						Port:       servicePort,
+						TargetPort: intstr.FromInt(targetPort),
+						Protocol:   v1.ProtocolTCP,
+					},
+				},
+			},
+		}
+
+		createdService, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		serviceUID := string(createdService.UID)
+		utils.Logf("Created LoadBalancer service: %s (UID: %s)", serviceName, serviceUID)
+
+		By("Creating pods with BOTH inbound (LB selector) AND outbound (egress label)")
+		for i := 0; i < dualPods; i++ {
+			pod := &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("dual-pod-%d", i),
+					Namespace: ns.Name,
+					Labels: map[string]string{
+						// Label for LB Service selector (inbound)
+						"app": "dual-traffic-pod",
+						// Label for egress NAT Gateway (outbound)
+						egressLabel: egressName,
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "test-app",
+							Image:           utils.AgnhostImage,
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Args:            []string{"netexec", fmt.Sprintf("--http-port=%d", targetPort)},
+						},
+					},
+				},
+			}
+			_, err := cs.CoreV1().Pods(ns.Name).Create(context.TODO(), pod, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		By("Waiting for all pods to be ready")
+		err = utils.WaitPodsToBeReady(cs, ns.Name)
+		Expect(err).NotTo(HaveOccurred())
+		utils.Logf("All %d dual-traffic pods ready", dualPods)
+
+		By("Waiting for Azure provisioning")
+		time.Sleep(waitTime)
+
+		By("Verifying Service Gateway has both inbound and outbound services")
+		sgResponse, err := queryServiceGatewayServices()
+		Expect(err).NotTo(HaveOccurred())
+
+		foundOutbound := false
+		foundInbound := false
+
+		for _, svc := range sgResponse.Value {
+			if svc.Properties.ServiceType == "Outbound" && svc.Name == egressName {
+				foundOutbound = true
+				utils.Logf("Found outbound service (NAT Gateway): %s", egressName)
+			}
+			if svc.Properties.ServiceType == "Inbound" && svc.Name == serviceUID {
+				foundInbound = true
+				utils.Logf("Found inbound service (LB): %s", serviceUID)
+			}
+		}
+
+		Expect(foundOutbound).To(BeTrue(), "Outbound NAT Gateway service should exist")
+		Expect(foundInbound).To(BeTrue(), "Inbound LB service should exist")
+
+		By("Verifying each pod is registered in BOTH inbound and outbound services")
+		alResponse, err := queryServiceGatewayAddressLocations()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Track which pod IPs are in each service
+		egressPodIPs := make(map[string]bool)
+		inboundPodIPs := make(map[string]bool)
+
+		for _, location := range alResponse.Value {
+			for _, addr := range location.Addresses {
+				for _, svcName := range addr.Services {
+					if svcName == egressName {
+						egressPodIPs[addr.Address] = true
+					}
+					if svcName == serviceUID {
+						inboundPodIPs[addr.Address] = true
+					}
+				}
+			}
+		}
+
+		utils.Logf("Pod IPs in outbound (NAT Gateway): %d", len(egressPodIPs))
+		utils.Logf("Pod IPs in inbound (LB): %d", len(inboundPodIPs))
+
+		Expect(len(egressPodIPs)).To(Equal(dualPods), fmt.Sprintf("Expected %d pods in outbound service, got %d", dualPods, len(egressPodIPs)))
+		Expect(len(inboundPodIPs)).To(Equal(dualPods), fmt.Sprintf("Expected %d pods in inbound service, got %d", dualPods, len(inboundPodIPs)))
+
+		By("Verifying the SAME pod IPs are in both services")
+		dualRegisteredCount := 0
+		for ip := range egressPodIPs {
+			if inboundPodIPs[ip] {
+				dualRegisteredCount++
+				utils.Logf("Pod IP %s is registered in BOTH inbound and outbound services", ip)
+			}
+		}
+
+		Expect(dualRegisteredCount).To(Equal(dualPods), fmt.Sprintf("Expected %d pods in both services, got %d", dualPods, dualRegisteredCount))
+
+		By("Deleting half of the dual-traffic pods")
+		podsToDelete := dualPods / 2
+		for i := 0; i < podsToDelete; i++ {
+			err := cs.CoreV1().Pods(ns.Name).Delete(context.TODO(), fmt.Sprintf("dual-pod-%d", i), metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		By("Waiting for deletion to propagate")
+		time.Sleep(waitTime)
+
+		By("Verifying remaining pods are still in both services")
+		alResponse, err = queryServiceGatewayAddressLocations()
+		Expect(err).NotTo(HaveOccurred())
+
+		remainingEgress := 0
+		remainingInbound := 0
+		remainingDual := 0
+		remainingEgressIPs := make(map[string]bool)
+		remainingInboundIPs := make(map[string]bool)
+
+		for _, location := range alResponse.Value {
+			for _, addr := range location.Addresses {
+				for _, svcName := range addr.Services {
+					if svcName == egressName {
+						remainingEgress++
+						remainingEgressIPs[addr.Address] = true
+					}
+					if svcName == serviceUID {
+						remainingInbound++
+						remainingInboundIPs[addr.Address] = true
+					}
+				}
+			}
+		}
+
+		for ip := range remainingEgressIPs {
+			if remainingInboundIPs[ip] {
+				remainingDual++
+			}
+		}
+
+		expectedRemaining := dualPods - podsToDelete
+		utils.Logf("After deletion: %d pods in outbound, %d pods in inbound, %d in both", remainingEgress, remainingInbound, remainingDual)
+
+		Expect(remainingEgress).To(Equal(expectedRemaining), fmt.Sprintf("Expected %d pods in outbound after deletion, got %d", expectedRemaining, remainingEgress))
+		Expect(remainingInbound).To(Equal(expectedRemaining), fmt.Sprintf("Expected %d pods in inbound after deletion, got %d", expectedRemaining, remainingInbound))
+		Expect(remainingDual).To(Equal(expectedRemaining), fmt.Sprintf("Expected %d pods in both services after deletion, got %d", expectedRemaining, remainingDual))
+
+		utils.Logf("\n✓ Dual inbound+outbound pod test passed: %d pods with both LB and NAT Gateway", dualPods)
+	})
 })
