@@ -4127,8 +4127,7 @@ func (az *Cloud) getAzureLoadBalancerName(
 						"both a load balancer name (%s) and an IP address are specified. "+
 						"When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), "+
 						"the service must use the load balancer where that IP resides. "+
-						"To fix, either: (1) remove the %s annotation to use the specified IP (and its load balancer), "+
-						"or (2) remove the IP specification to get a new IP on the load balancer specified by the annotation",
+						"To fix, remove the %s annotation so the service uses the load balancer where the specified IP resides",
 					service.Name, consts.ServiceAnnotationLoadBalancerConfigurations,
 					consts.ServiceAnnotationLoadBalancerConfigurations)
 			}
