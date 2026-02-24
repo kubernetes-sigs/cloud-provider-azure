@@ -525,15 +525,13 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 
 			By("Creating service with spec.loadBalancerIP and LB config, expecting blocked")
 			svc1Port := int32(serverPort + 1)
-			svc1 := utils.CreateLoadBalancerServiceManifest(svcNameLBIP, nil, labels, ns.Name, []v1.ServicePort{{
+			svc1 := utils.CreateLoadBalancerServiceManifest(svcNameLBIP, map[string]string{
+				consts.ServiceAnnotationLoadBalancerConfigurations: "lb-1",
+			}, labels, ns.Name, []v1.ServicePort{{
 				Port:       svc1Port,
 				TargetPort: intstr.FromInt(int(svc1Port)),
 			}})
 			svc1.Spec.LoadBalancerIP = sharedIP
-			if svc1.Annotations == nil {
-				svc1.Annotations = map[string]string{}
-			}
-			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
 			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc1, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
@@ -553,9 +551,6 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 				TargetPort: intstr.FromInt(int(svc2Port)),
 			}})
 			svc2 = updateServicePIPNames(tc.IPFamily, svc2, []string{pipName})
-			if svc2.Annotations == nil {
-				svc2.Annotations = map[string]string{}
-			}
 			svc2.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
 			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc2, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -576,9 +571,6 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 				TargetPort: intstr.FromInt(int(svc3Port)),
 			}})
 			svc3 = updateServiceLBIPs(svc3, false, []*string{&sharedIP})
-			if svc3.Annotations == nil {
-				svc3.Annotations = map[string]string{}
-			}
 			svc3.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
 			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc3, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -652,15 +644,13 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 
 			By("Creating service with spec.loadBalancerIP and LB config, expecting blocked")
 			svc1Port := int32(serverPort + 1)
-			svc1 := utils.CreateLoadBalancerServiceManifest(svcNameLBIP, nil, labels, ns.Name, []v1.ServicePort{{
+			svc1 := utils.CreateLoadBalancerServiceManifest(svcNameLBIP, map[string]string{
+				consts.ServiceAnnotationLoadBalancerConfigurations: "lb-1",
+			}, labels, ns.Name, []v1.ServicePort{{
 				Port:       svc1Port,
 				TargetPort: intstr.FromInt(int(svc1Port)),
 			}})
 			svc1.Spec.LoadBalancerIP = sharedIP
-			if svc1.Annotations == nil {
-				svc1.Annotations = map[string]string{}
-			}
-			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
 			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc1, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
@@ -680,9 +670,6 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 				TargetPort: intstr.FromInt(int(svc2Port)),
 			}})
 			svc2 = updateServiceLBIPs(svc2, false, []*string{&sharedIP})
-			if svc2.Annotations == nil {
-				svc2.Annotations = map[string]string{}
-			}
 			svc2.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
 			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc2, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -753,9 +740,6 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 				TargetPort: intstr.FromInt(int(svc1Port)),
 			}})
 			svc1.Spec.LoadBalancerIP = sharedIP
-			if svc1.Annotations == nil {
-				svc1.Annotations = map[string]string{}
-			}
 			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
 			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc1, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -776,9 +760,6 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 				TargetPort: intstr.FromInt(int(svc2Port)),
 			}})
 			svc2 = updateServiceLBIPs(svc2, true, []*string{&sharedIP})
-			if svc2.Annotations == nil {
-				svc2.Annotations = map[string]string{}
-			}
 			svc2.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
 			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc2, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -1018,14 +999,12 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			}
 			By(fmt.Sprintf("Creating Service 2 with LB annotation pointing to %s", svc2LBAnnotation))
 			svc2Port := int32(serverPort + 1)
-			svc2 := utils.CreateLoadBalancerServiceManifest(svcNameIPv4, nil, labels, ns.Name, []v1.ServicePort{{
+			svc2 := utils.CreateLoadBalancerServiceManifest(svcNameIPv4, map[string]string{
+				consts.ServiceAnnotationLoadBalancerConfigurations: svc2LBAnnotation,
+			}, labels, ns.Name, []v1.ServicePort{{
 				Port:       svc2Port,
 				TargetPort: intstr.FromInt(int(svc2Port)),
 			}})
-			if svc2.Annotations == nil {
-				svc2.Annotations = map[string]string{}
-			}
-			svc2.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = svc2LBAnnotation
 			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc2, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
@@ -1074,14 +1053,12 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 
 			By("Creating Service 1 with cluster LB annotation")
 			svc1Port := int32(serverPort)
-			svc1 := utils.CreateLoadBalancerServiceManifest(svcNamePrimary, nil, labels, ns.Name, []v1.ServicePort{{
+			svc1 := utils.CreateLoadBalancerServiceManifest(svcNamePrimary, map[string]string{
+				consts.ServiceAnnotationLoadBalancerConfigurations: clusterName,
+			}, labels, ns.Name, []v1.ServicePort{{
 				Port:       svc1Port,
 				TargetPort: intstr.FromInt(int(svc1Port)),
 			}})
-			if svc1.Annotations == nil {
-				svc1.Annotations = map[string]string{}
-			}
-			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = clusterName
 			_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc1, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
@@ -1098,14 +1075,12 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 
 			By("Creating Service 2 with lb-1 annotation")
 			svc2Port := int32(serverPort + 1)
-			svc2 := utils.CreateLoadBalancerServiceManifest(svcNameIPv4, nil, labels, ns.Name, []v1.ServicePort{{
+			svc2 := utils.CreateLoadBalancerServiceManifest(svcNameIPv4, map[string]string{
+				consts.ServiceAnnotationLoadBalancerConfigurations: "lb-1",
+			}, labels, ns.Name, []v1.ServicePort{{
 				Port:       svc2Port,
 				TargetPort: intstr.FromInt(int(svc2Port)),
 			}})
-			if svc2.Annotations == nil {
-				svc2.Annotations = map[string]string{}
-			}
-			svc2.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
 			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc2, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
@@ -1158,9 +1133,6 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 				Port:       svc1Port,
 				TargetPort: intstr.FromInt(int(svc1Port)),
 			}})
-			if svc1.Annotations == nil {
-				svc1.Annotations = map[string]string{}
-			}
 			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = clusterName
 			_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc1, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -1183,9 +1155,6 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 				Port:       svc2Port,
 				TargetPort: intstr.FromInt(int(svc2Port)),
 			}})
-			if svc2.Annotations == nil {
-				svc2.Annotations = map[string]string{}
-			}
 			svc2.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
 			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc2, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
