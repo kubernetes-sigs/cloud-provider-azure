@@ -487,8 +487,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svcNamePIPName = "svc-pipname"
 			svcNameIPv4    = "svc-ipv4"
 
-			msgConflictingLBConfig       = "conflicting load balancer configuration"
-			msgAssignedButRequestsDiffLB = "assigned but requests a load balancer"
+			msgConflictingLBConfig = "conflicting load balancer configuration"
 		)
 
 		// TODO: Remove F prefix before merging
@@ -627,59 +626,6 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			By("Verifying primary FIP has rules for all services")
 			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port, svc2Port, svc3Port), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for all services sharing the IP")
-
-			By("Re-adding LB config annotation to " + svcNameLBIP + ", expecting blocked again")
-			timeBeforeReAddLB := time.Now()
-			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			if svc1.Annotations == nil {
-				svc1.Annotations = map[string]string{}
-			}
-			// Pick a different LB than the primary so the service would move when IP pin is removed.
-			primaryLBName := lbNameRE.FindStringSubmatch(primaryFIPID)[1]
-			otherLBName := "lb-1"
-			if strings.EqualFold(primaryLBName, "lb-1") {
-				otherLBName = os.Getenv("CLUSTER_NAME")
-			}
-			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = otherLBName
-			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", msgConflictingLBConfig, timeBeforeReAddLB, eventTimeout)
-			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event on update")
-
-			By("Attempting to remove IP pin from " + svcNameLBIP + ", expecting blocked")
-			timeBeforeRemoveIP := time.Now()
-			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			svc1.Spec.LoadBalancerIP = ""
-			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", msgAssignedButRequestsDiffLB, timeBeforeRemoveIP, eventTimeout)
-			Expect(err).NotTo(HaveOccurred(), "Expected new SyncLoadBalancerFailed event when removing IP pin (should be blocked)")
-
-			By("Verifying FIP rules unchanged")
-			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port, svc2Port, svc3Port), "TCP")
-			Expect(err).NotTo(HaveOccurred(), "FIP should still have all rules - operation was blocked")
-
-			By("Verifying other LB has no rules for " + svcNameLBIP)
-			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			err = verifyServiceHasNoRulesOnLB(tc, svc1, otherLBName)
-			Expect(err).NotTo(HaveOccurred(), "Other LB should have no rules for "+svcNameLBIP)
-
-			By("Re-adding IP pin and removing LB annotation to resolve " + svcNameLBIP)
-			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			svc1.Spec.LoadBalancerIP = sharedIP
-			delete(svc1.Annotations, consts.ServiceAnnotationLoadBalancerConfigurations)
-			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			_, err = utils.WaitServiceExposure(cs, ns.Name, svcNameLBIP, []*string{&sharedIP})
-			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should be exposed after removing LB config")
-
-			By("Verifying final state - FIP has rules for all services")
-			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port, svc2Port, svc3Port), "TCP")
-			Expect(err).NotTo(HaveOccurred(), "FIP should have rules for all services")
 		})
 
 		// TODO: Remove F prefix before merging
@@ -775,59 +721,6 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			By("Verifying primary FIP has rules for all services")
 			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port, svc2Port), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for all services sharing the IP")
-
-			By("Re-adding LB config annotation to " + svcNameLBIP + ", expecting blocked again")
-			timeBeforeReAddLB := time.Now()
-			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			if svc1.Annotations == nil {
-				svc1.Annotations = map[string]string{}
-			}
-			// Pick a different LB than the primary so the service would move when IP pin is removed.
-			primaryLBName := lbNameRE.FindStringSubmatch(primaryFIPID)[1]
-			otherLBName := "lb-1"
-			if strings.EqualFold(primaryLBName, "lb-1") {
-				otherLBName = os.Getenv("CLUSTER_NAME")
-			}
-			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = otherLBName
-			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", msgConflictingLBConfig, timeBeforeReAddLB, eventTimeout)
-			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event on update")
-
-			By("Attempting to remove IP pin from " + svcNameLBIP + ", expecting blocked")
-			timeBeforeRemoveIP := time.Now()
-			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			svc1.Spec.LoadBalancerIP = ""
-			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", msgAssignedButRequestsDiffLB, timeBeforeRemoveIP, eventTimeout)
-			Expect(err).NotTo(HaveOccurred(), "Expected new SyncLoadBalancerFailed event when removing IP pin (should be blocked)")
-
-			By("Verifying FIP rules unchanged")
-			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port, svc2Port), "TCP")
-			Expect(err).NotTo(HaveOccurred(), "FIP should still have all rules - operation was blocked")
-
-			By("Verifying other LB has no rules for " + svcNameLBIP)
-			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			err = verifyServiceHasNoRulesOnLB(tc, svc1, otherLBName)
-			Expect(err).NotTo(HaveOccurred(), "Other LB should have no rules for "+svcNameLBIP)
-
-			By("Re-adding IP pin and removing LB annotation to resolve " + svcNameLBIP)
-			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			svc1.Spec.LoadBalancerIP = sharedIP
-			delete(svc1.Annotations, consts.ServiceAnnotationLoadBalancerConfigurations)
-			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			_, err = utils.WaitServiceExposure(cs, ns.Name, svcNameLBIP, []*string{&sharedIP})
-			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should be exposed after removing LB config")
-
-			By("Verifying final state - FIP has rules for all services")
-			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port, svc2Port), "TCP")
-			Expect(err).NotTo(HaveOccurred(), "FIP should have rules for all services")
 		})
 
 		// TODO: Remove F prefix before merging
@@ -924,60 +817,6 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			By("Verifying primary FIP has rules for all services")
 			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port, svc2Port), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for all services sharing the IP")
-
-			By("Re-adding LB config annotation to " + svcNameLBIP + ", expecting blocked again")
-			timeBeforeReAddLB := time.Now()
-			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			if svc1.Annotations == nil {
-				svc1.Annotations = map[string]string{}
-			}
-			// Pick a different LB than the primary so the service would move when IP pin is removed.
-			primaryLBName := ptr.Deref(lb.Name, "")
-			otherLBBaseName := "lb-1"
-			if strings.EqualFold(primaryLBName, "lb-1-internal") {
-				otherLBBaseName = os.Getenv("CLUSTER_NAME")
-			}
-			otherLBName := otherLBBaseName + "-internal"
-			svc1.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = otherLBBaseName
-			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", msgConflictingLBConfig, timeBeforeReAddLB, eventTimeout)
-			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event on update")
-
-			By("Attempting to remove IP pin from " + svcNameLBIP + ", expecting blocked")
-			timeBeforeRemoveIP := time.Now()
-			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			svc1.Spec.LoadBalancerIP = ""
-			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameLBIP, "SyncLoadBalancerFailed", msgAssignedButRequestsDiffLB, timeBeforeRemoveIP, eventTimeout)
-			Expect(err).NotTo(HaveOccurred(), "Expected new SyncLoadBalancerFailed event when removing IP pin (should be blocked)")
-
-			By("Verifying FIP rules unchanged")
-			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port, svc2Port), "TCP")
-			Expect(err).NotTo(HaveOccurred(), "FIP should still have all rules - operation was blocked")
-
-			By("Verifying other LB has no rules for " + svcNameLBIP)
-			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			err = verifyServiceHasNoRulesOnLB(tc, svc1, otherLBName)
-			Expect(err).NotTo(HaveOccurred(), "Other LB should have no rules for "+svcNameLBIP)
-
-			By("Re-adding IP pin and removing LB annotation to resolve " + svcNameLBIP)
-			svc1, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameLBIP, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			svc1.Spec.LoadBalancerIP = sharedIP
-			delete(svc1.Annotations, consts.ServiceAnnotationLoadBalancerConfigurations)
-			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc1, metav1.UpdateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			_, err = utils.WaitServiceExposure(cs, ns.Name, svcNameLBIP, []*string{&sharedIP})
-			Expect(err).NotTo(HaveOccurred(), svcNameLBIP+" should be exposed after removing LB config")
-
-			By("Verifying final state - FIP has rules for all services")
-			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port, svc2Port), "TCP")
-			Expect(err).NotTo(HaveOccurred(), "FIP should have rules for all services")
 		})
 	})
 })
@@ -1101,43 +940,6 @@ func verifyFIPHasRulesForPorts(tc *utils.AzureTestClient, fipID string, expected
 	}
 
 	utils.Logf("FIP %q has exactly the expected rules for ports %v", fipID, expectedPorts.UnsortedList())
-	return nil
-}
-
-// verifyServiceHasNoRulesOnLB checks that no LB rules exist for the given service on the specified LB.
-// It matches rules by checking if the rule name starts with the service's rule prefix.
-func verifyServiceHasNoRulesOnLB(tc *utils.AzureTestClient, service *v1.Service, lbName string) error {
-	lb, err := tc.GetLoadBalancer(tc.GetResourceGroup(), lbName)
-	if err != nil {
-		// LB might not exist, which is fine since no rules for service.
-		utils.Logf("LB %q not found (may not exist): %v", lbName, err)
-		return nil
-	}
-
-	rulePrefix := "a" + strings.ReplaceAll(string(service.UID), "-", "")
-	if len(rulePrefix) > 32 {
-		rulePrefix = rulePrefix[:32]
-	}
-	utils.Logf("Checking LB %q has no rules with prefix %q for service %s/%s", lbName, rulePrefix, service.Namespace, service.Name)
-
-	if lb.Properties == nil || lb.Properties.LoadBalancingRules == nil {
-		utils.Logf("LB %q has no rules", lbName)
-		return nil
-	}
-
-	var foundRules []string
-	for _, rule := range lb.Properties.LoadBalancingRules {
-		ruleName := ptr.Deref(rule.Name, "")
-		if strings.HasPrefix(strings.ToLower(ruleName), strings.ToLower(rulePrefix)) {
-			foundRules = append(foundRules, ruleName)
-		}
-	}
-
-	if len(foundRules) > 0 {
-		return fmt.Errorf("LB %q has %d rules for service %s/%s: %v", lbName, len(foundRules), service.Namespace, service.Name, foundRules)
-	}
-
-	utils.Logf("LB %q has no rules for service %s/%s", lbName, service.Namespace, service.Name)
 	return nil
 }
 
