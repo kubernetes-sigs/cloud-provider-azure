@@ -4155,6 +4155,10 @@ func (az *Cloud) getAzureLoadBalancerName(
 	// 1. Filter out the eligible load balancers.
 	// 2. Choose the most eligible load balancer.
 	if az.UseMultipleStandardLoadBalancers() {
+		lbIPs := getServiceLoadBalancerIPs(service)
+		pipNames := getServicePIPNames(service)
+		pinsIP := len(lbIPs) > 0 || lo.ContainsBy(pipNames, func(s string) bool { return s != "" })
+
 		// Only block when creating resources (wantLb=true).
 		// Cleanup operations (wantLb=false) don't need this constraint.
 		if wantLb {
@@ -4162,9 +4166,6 @@ func (az *Cloud) getAzureLoadBalancerName(
 			// When specifying an IP, the LB is determined by where the IP resides.
 			// Specifying a different LB is contradictory and would cause unexpected outcome.
 			annotatedLBs := consts.GetLoadBalancerConfigurationsNames(service)
-			lbIPs := getServiceLoadBalancerIPs(service)
-			pipNames := getServicePIPNames(service)
-			pinsIP := len(lbIPs) > 0 || lo.ContainsBy(pipNames, func(s string) bool { return s != "" })
 			logger.V(5).Info("checking LB and IP config", "service", service.Name, "annotatedLBs", annotatedLBs, "lbIPs", lbIPs, "pipNames", pipNames, "pinsIP", pinsIP)
 			if len(annotatedLBs) > 0 && pinsIP {
 				return "", fmt.Errorf(
@@ -4185,9 +4186,9 @@ func (az *Cloud) getAzureLoadBalancerName(
 
 		currentLBName := az.getServiceCurrentLoadBalancerName(service)
 
-		// If service is not currently on any LB, try to find if its IP is on an existing LB.
-		// This detects secondary services sharing an IP with a primary service already on an LB.
-		if currentLBName == "" {
+		// If service specifies an IP, find which LB has that IP. The service should use the LB where the IP resides.
+		// This also detects secondary services sharing an IP with a primary service already on an LB.
+		if pinsIP {
 			if requiresInternalLoadBalancer(service) {
 				currentLBName = az.getLoadBalancerNameByPrivateIP(ctx, service, existingLBs)
 			} else {
