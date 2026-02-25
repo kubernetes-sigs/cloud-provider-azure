@@ -23,17 +23,17 @@ import (
 	"strings"
 	"time"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
-	"sigs.k8s.io/cloud-provider-azure/pkg/log"
-	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
-
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/kubelet/pkg/apis/credentialprovider/v1"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
+	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 )
 
 // Refer: https://github.com/kubernetes/kubernetes/blob/master/pkg/credentialprovider/azure/azure_credentials.go
@@ -66,9 +66,7 @@ type acrProvider struct {
 	registryMirror map[string]string // Registry mirror relation: source registry -> target registry
 }
 
-type getTokenCredentialFunc func(req *v1.CredentialProviderRequest, config *providerconfig.AzureClientConfig) (azcore.TokenCredential, error)
-
-func NewAcrProvider(req *v1.CredentialProviderRequest, registryMirrorStr string, configFile string) (CredentialProvider, error) {
+func NewAcrProvider(req *v1.CredentialProviderRequest, registryMirrorStr string, configFile string, ibConfig IdentityBindingsConfig) (CredentialProvider, error) {
 	logger := log.Background().WithName("NewAcrProvider")
 	config, err := configloader.Load[providerconfig.AzureClientConfig](context.Background(), nil, &configloader.FileLoaderConfig{FilePath: configFile})
 	if err != nil {
@@ -84,20 +82,27 @@ func NewAcrProvider(req *v1.CredentialProviderRequest, registryMirrorStr string,
 		return nil, err
 	}
 
-	var getTokenCredential getTokenCredentialFunc
-
-	// kubelet is responsible for checking the service account token emptiness when service account token is enabled, and only when service account token provide is enabled,
-	// service account token is set in the request, so we can safely check the service account token emptiness to decide which credential to use.
-	if len(req.ServiceAccountToken) != 0 {
-		logger.V(2).Info("Using service account token to authenticate ACR for image", "image", req.Image)
-		getTokenCredential = getServiceAccountTokenCredential
+	var credential azcore.TokenCredential
+	if ibConfig.SNIName != "" {
+		logger.V(2).Info("Using identity bindings token credential for image", "image", req.Image)
+		credential, err = GetIdentityBindingsTokenCredential(req, config, ibConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get identity bindings token credential for image %s: %w", req.Image, err)
+		}
+	} else if len(req.ServiceAccountToken) != 0 {
+		// Use service account token credential
+		logger.V(2).Info("Using service account token credential for image", "image", req.Image)
+		credential, err = getServiceAccountTokenCredential(req, config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get service account token credential for image %s: %w", req.Image, err)
+		}
 	} else {
+		// Use managed identity
 		logger.V(2).Info("Using managed identity to authenticate ACR for image", "image", req.Image)
-		getTokenCredential = getManagedIdentityCredential
-	}
-	credential, err := getTokenCredential(req, config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get token credential for image %s: %w", req.Image, err)
+		credential, err = getManagedIdentityCredential(req, config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get token credential for image %s: %w", req.Image, err)
+		}
 	}
 
 	return &acrProvider{
@@ -143,7 +148,7 @@ func getServiceAccountTokenCredential(req *v1.CredentialProviderRequest, config 
 	if len(req.ServiceAccountToken) == 0 {
 		return nil, fmt.Errorf("kubernetes Service account token is not provided for image %s", req.Image)
 	}
-	logger.V(2).Info("Kubernetes Service account token is provided", "image", req.Image)
+	logger.V(2).Info("Kubernetes Service account token is provided for image", "image", req.Image)
 
 	clientOption, _, err := azclient.GetAzCoreClientOption(&config.ARMClientConfig)
 	if err != nil {
@@ -178,7 +183,7 @@ func getServiceAccountTokenCredential(req *v1.CredentialProviderRequest, config 
 }
 
 func (a *acrProvider) GetCredentials(ctx context.Context, image string, _ []string) (*v1.CredentialProviderResponse, error) {
-	logger := log.FromContextOrBackground(ctx).WithName("GetCredentials")
+	logger := log.Background().WithName("GetCredentials")
 	targetloginServer, sourceloginServer := a.parseACRLoginServerFromImage(image)
 	if targetloginServer == "" {
 		logger.V(2).Info("image is not from ACR, return empty authentication", "image", image)
@@ -253,7 +258,7 @@ func (a *acrProvider) GetCredentials(ctx context.Context, image string, _ []stri
 
 // getFromACR gets credentials from ACR.
 func (a *acrProvider) getFromACR(ctx context.Context, loginServer string) (string, string, error) {
-	logger := log.FromContextOrBackground(ctx).WithName("getFromACR")
+	logger := log.Background().WithName("getFromACR")
 	var armAccessToken azcore.AccessToken
 	var err error
 	if armAccessToken, err = a.credential.GetToken(ctx, policy.TokenRequestOptions{
