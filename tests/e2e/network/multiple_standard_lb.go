@@ -860,7 +860,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), primaryService, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNamePrimary, "SyncLoadBalancerFailed", "", beforeUpdate, eventTimeout)
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNamePrimary, "SyncLoadBalancerFailed", "cannot migrate", beforeUpdate, eventTimeout)
 			Expect(err).NotTo(HaveOccurred(), "Expected warning event for primary service trying to move")
 
 			By("Verifying both services still share IP on original LB")
@@ -939,7 +939,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), primaryService, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNamePrimary, "SyncLoadBalancerFailed", "", beforeUpdate, eventTimeout)
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNamePrimary, "SyncLoadBalancerFailed", "cannot migrate", beforeUpdate, eventTimeout)
 			Expect(err).NotTo(HaveOccurred(), "Expected warning event for primary service trying to move")
 
 			By("Verifying both services still share IP on original internal LB")
