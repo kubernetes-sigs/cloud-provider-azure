@@ -843,6 +843,24 @@ func (az *Cloud) getServiceLoadBalancer(
 			err           error
 		)
 		if wantLb && az.shouldChangeLoadBalancer(service, ptr.Deref(existingLB.Name, ""), clusterName, defaultLBName) {
+			// Block migration if the frontend IP is shared with other services.
+			if az.UseMultipleStandardLoadBalancers() {
+				for _, fip := range fipConfigs {
+					if az.isFrontendIPShared(fip, service) {
+						logger.Info("Blocking load balancer migration because frontend IP is shared with other services",
+							"service", service.Name,
+							"loadBalancer", ptr.Deref(existingLB.Name, ""),
+							"targetLoadBalancer", defaultLBName,
+							"frontendIP", ptr.Deref(fip.Name, ""))
+						return nil, nil, nil, nil, false, false, fmt.Errorf(
+							"service %q cannot migrate from load balancer %q because frontend IP %q is shared with other services. "+
+								"Remove the %s annotation to stay on load balancer %q",
+							service.Name, ptr.Deref(existingLB.Name, ""), ptr.Deref(fip.Name, ""),
+							consts.ServiceAnnotationLoadBalancerConfigurations, ptr.Deref(existingLB.Name, ""))
+					}
+				}
+			}
+
 			shouldChangeLB = true
 			fipConfigNames := []string{}
 			for _, fipConfig := range fipConfigs {
@@ -1705,6 +1723,33 @@ func (az *Cloud) isFrontendIPConfigUnsafeToDelete(
 	}
 
 	return unsafe, nil
+}
+
+// isFrontendIPShared checks if a frontend IP config is being used by other services.
+// It returns true if there are load balancing rules from other services referencing this frontend.
+func (az *Cloud) isFrontendIPShared(
+	fip *armnetwork.FrontendIPConfiguration,
+	service *v1.Service,
+) bool {
+	if fip == nil || fip.Properties == nil {
+		return false
+	}
+
+	for _, lbRule := range fip.Properties.LoadBalancingRules {
+		if lbRule.ID == nil {
+			continue
+		}
+		// Extract rule name from last segment of the ID path.
+		ruleName, err := getLastSegment(*lbRule.ID, "/")
+		if err != nil {
+			continue
+		}
+		if !az.serviceOwnsRule(service, ruleName) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func findMatchedOutboundRuleFIPConfig(fipConfigID *string, outboundRuleFIPConfigs []*armnetwork.SubResource) bool {
