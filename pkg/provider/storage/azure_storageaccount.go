@@ -744,16 +744,16 @@ func (az *AccountRepo) createPrivateEndpoint(ctx context.Context, accountName st
 	if subnet.Properties == nil {
 		logger.Error(nil, "Properties of subnet is nil", "vnetName", vnetName, "subnetName", subnetName)
 	} else {
-		// Disable the private endpoint network policies before creating private endpoint
-		if subnet.Properties.PrivateEndpointNetworkPolicies == nil || *subnet.Properties.PrivateEndpointNetworkPolicies == armnetwork.VirtualNetworkPrivateEndpointNetworkPoliciesEnabled {
+		// If not explicitly set, disable the private endpoint network policies before creating the private endpoint
+		if subnet.Properties.PrivateEndpointNetworkPolicies == nil {
+			logger.V(2).Info("PrivateEndpointNetworkPolicies is nil for subnet", "vnetName", vnetName, "subnetName", subnetName)
 			subnet.Properties.PrivateEndpointNetworkPolicies = to.Ptr(armnetwork.VirtualNetworkPrivateEndpointNetworkPoliciesDisabled)
+			if err := az.subnetRepo.CreateOrUpdate(ctx, vnetResourceGroup, vnetName, subnetName, *subnet); err != nil {
+				return err
+			}
 		} else {
-			logger.V(2).Info("PrivateEndpointNetworkPolicies is already set for subnet", "policies", *subnet.Properties.PrivateEndpointNetworkPolicies, "vnetName", vnetName, "subnetName", subnetName)
+			logger.V(2).Info("PrivateEndpointNetworkPolicies is already set for subnet", "vnetName", vnetName, "subnetName", subnetName, "PrivateEndpointNetworkPolicies", *subnet.Properties.PrivateEndpointNetworkPolicies)
 		}
-	}
-
-	if err := az.subnetRepo.CreateOrUpdate(ctx, vnetResourceGroup, vnetName, subnetName, *subnet); err != nil {
-		return err
 	}
 
 	//Create private endpoint
