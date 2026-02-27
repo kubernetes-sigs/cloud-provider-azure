@@ -159,6 +159,42 @@ func (f *KubernetesServiceFixture) WithIngressIPs(ips []string) *KubernetesServi
 	return f
 }
 
+func (f *KubernetesServiceFixture) WithOnlyTCPPorts() *KubernetesServiceFixture {
+	f.svc.Spec.Ports = []v1.ServicePort{
+		{
+			Name:     "http",
+			Protocol: v1.ProtocolTCP,
+			Port:     80,
+			NodePort: 50080,
+		},
+		{
+			Name:     "dns-tcp",
+			Protocol: v1.ProtocolTCP,
+			Port:     53,
+			NodePort: 50053,
+		},
+		{
+			Name:     "https",
+			Protocol: v1.ProtocolTCP,
+			Port:     443,
+			NodePort: 50443,
+		},
+	}
+	return f
+}
+
+func (f *KubernetesServiceFixture) WithOnlyUDPPorts() *KubernetesServiceFixture {
+	f.svc.Spec.Ports = []v1.ServicePort{
+		{
+			Name:     "dns-udp",
+			Protocol: v1.ProtocolUDP,
+			Port:     53,
+			NodePort: 50053,
+		},
+	}
+	return f
+}
+
 func (f *KubernetesServiceFixture) Build() v1.Service {
 	return f.svc
 }
