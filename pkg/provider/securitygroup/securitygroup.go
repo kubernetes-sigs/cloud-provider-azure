@@ -372,7 +372,7 @@ func (helper *RuleHelper) RemoveDestinationFromRules(
 	logger.V(10).Info("Cleaning destination from SecurityGroup")
 
 	for _, rule := range helper.rules {
-		if !IsManagedSecurityRule(rule) {
+		if !IsManagedSecurityRule(rule) && !IsManagedPrefixBlockingSecurityRule(rule) {
 			logger.V(4).Info("Skip rule with not-managed priority", "rule-name", *rule.Name)
 			continue
 		}

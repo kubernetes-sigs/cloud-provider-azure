@@ -41,6 +41,15 @@ func IsManagedSecurityRule(r *armnetwork.SecurityRule) bool {
 	return strings.HasPrefix(*r.Name, SecurityRuleNamePrefix) && consts.LoadBalancerMinimumPriority <= priority && priority <= consts.LoadBalancerMaximumPriority
 }
 
+// IsManagedPrefixBlockingSecurityRule returns true if the security rule is a prefix blocking rule managed by the cloud provider.
+func IsManagedPrefixBlockingSecurityRule(r *armnetwork.SecurityRule) bool {
+	if r == nil || r.Name == nil || r.Properties == nil || r.Properties.Priority == nil {
+		return false
+	}
+	priority := *r.Properties.Priority
+	return strings.HasPrefix(*r.Name, SecurityRuleNamePrefix) && consts.IPPrefixBlockingMinimumPriority <= priority && priority <= consts.IPPrefixBlockingMaximumPriority
+}
+
 // GenerateAllowSecurityRuleName returns the AllowInbound rule name based on the given rule properties.
 func GenerateAllowSecurityRuleName(
 	protocol armnetwork.SecurityRuleProtocol,

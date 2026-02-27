@@ -812,12 +812,14 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			By("Verifying blocked IP range rules are removed", func() {
+			By("Getting the cluster security groups after removal", func() {
 				rv, err := azureClient.GetClusterSecurityGroups()
 				Expect(err).NotTo(HaveOccurred())
 
 				validator = NewSecurityGroupValidator(rv)
+			})
 
+			By("Verifying blocked IP range rules are removed", func() {
 				var (
 					expectedProtocol = armnetwork.SecurityRuleProtocolTCP
 					expectedDstPorts = []string{strconv.FormatInt(int64(serverPort), 10)}
