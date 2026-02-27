@@ -807,6 +807,13 @@ func (az *Cloud) getServiceLoadBalancer(
 		existingLBs = lbs
 	}
 
+	lbIPs := getServiceLoadBalancerIPs(service)
+	pipNames := getServicePIPNames(service)
+	pinsIP := len(lbIPs) > 0 || lo.ContainsBy(pipNames, func(s string) bool { return s != "" })
+	isPinnedIPMultiSLB := wantLb && az.UseMultipleStandardLoadBalancers() && pinsIP
+	var defaultLBStatus *v1.LoadBalancerStatus
+	var defaultLBIPsPrimaryPIPs []string
+
 	// check if the service already has a load balancer
 	var shouldChangeLB bool
 	for i := range existingLBs {
@@ -902,47 +909,25 @@ func (az *Cloud) getServiceLoadBalancer(
 					existingLBs = newLBs
 				}
 			}
+
+			if isPinnedIPMultiSLB {
+				continue
+			}
+
 			break
 		}
 
-		// When a service specifies an IP that exists on a different LB, the service moves to that LB.
-		// However, the service's old FIP on the previous LB may remain orphaned.
-		// Clean up any such orphaned FIPs on other LBs.
-		if wantLb && az.UseMultipleStandardLoadBalancers() {
-			for j := range existingLBs {
-				otherLB := existingLBs[j]
-				if strings.EqualFold(ptr.Deref(otherLB.Name, ""), ptr.Deref(existingLB.Name, "")) {
-					continue
-				}
-				if isInternalLoadBalancer(otherLB) != isInternal {
-					continue
-				}
-				_, _, orphanedFipConfigs, err := az.getServiceLoadBalancerStatus(ctx, service, otherLB)
-				if err != nil {
-					logger.Error(err, "failed to get service load balancer status for orphaned FIP cleanup",
-						"service", service.Name, "lb", ptr.Deref(otherLB.Name, ""))
-					continue
-				}
-				if len(orphanedFipConfigs) > 0 {
-					logger.Info("Cleaning up orphaned FIPs from previous load balancer",
-						"service", service.Name,
-						"targetLB", ptr.Deref(existingLB.Name, ""),
-						"orphanedLB", ptr.Deref(otherLB.Name, ""),
-						"orphanedFIPCount", len(orphanedFipConfigs))
-					deletedLBName, _, err := az.removeFrontendIPConfigurationFromLoadBalancer(ctx, otherLB, existingLBs, orphanedFipConfigs, clusterName, service)
-					if err != nil {
-						logger.Error(err, "failed to remove orphaned FIPs from load balancer",
-							"service", service.Name, "lb", ptr.Deref(otherLB.Name, ""))
-						continue
-					}
-					if deletedLBName != "" {
-						removeLBFromList(&existingLBs, deletedLBName)
-					}
-				}
-			}
+		if isPinnedIPMultiSLB {
+			defaultLBStatus = status
+			defaultLBIPsPrimaryPIPs = lbIPsPrimaryPIPs
+			continue
 		}
 
 		return existingLB, existingLBs, status, lbIPsPrimaryPIPs, true, false, nil
+	}
+
+	if isPinnedIPMultiSLB && defaultLB != nil && defaultLBStatus != nil {
+		return defaultLB, existingLBs, defaultLBStatus, defaultLBIPsPrimaryPIPs, true, false, nil
 	}
 
 	// Service does not have a load balancer, select one.
