@@ -736,6 +736,122 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 				}
 			})
 		})
+
+		It("should remove deny rules when blocked IP ranges annotation is removed", func() {
+			var (
+				serviceIPv4s      []netip.Addr
+				serviceIPv6s      []netip.Addr
+				blockedIPv4Ranges = []string{
+					"10.1.0.0/16", "172.16.0.0/12",
+				}
+				blockedIPv6Ranges = []string{
+					"fd12:abcd::/48", "fe80:1234::/32",
+				}
+			)
+
+			By("Creating a LoadBalancer service with blocked-ip-ranges annotation", func() {
+				var (
+					labels = map[string]string{
+						"app": ServiceName,
+					}
+					annotations = map[string]string{
+						consts.ServiceAnnotationBlockedIPRanges: strings.Join(
+							append(blockedIPv4Ranges, blockedIPv6Ranges...),
+							",",
+						),
+					}
+					ports = []v1.ServicePort{{
+						Port:       serverPort,
+						TargetPort: intstr.FromInt32(serverPort),
+					}}
+				)
+				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, ServiceName, namespace.Name, labels, annotations, ports)
+				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+			})
+			logger.Info("Created a LoadBalancer service with blocked IP ranges", "v4-IPs", serviceIPv4s, "v6-IPs", serviceIPv6s)
+
+			var validator *SecurityGroupValidator
+			By("Verifying blocked IP range rules exist", func() {
+				rv, err := azureClient.GetClusterSecurityGroups()
+				Expect(err).NotTo(HaveOccurred())
+
+				validator = NewSecurityGroupValidator(rv)
+
+				var (
+					expectedProtocol = armnetwork.SecurityRuleProtocolTCP
+					expectedDstPorts = []string{strconv.FormatInt(int64(serverPort), 10)}
+				)
+
+				if len(serviceIPv4s) > 0 {
+					actualBlockedIPv4Ranges := validator.GetBlockedIPRanges(expectedProtocol, serviceIPv4s, expectedDstPorts)
+					Expect(actualBlockedIPv4Ranges).NotTo(BeEmpty(), "Should have blocked IP range rules for IPv4")
+					Expect(sets.NewString(actualBlockedIPv4Ranges...).Equal(sets.NewString(blockedIPv4Ranges...))).To(BeTrue(),
+						"Blocked IPv4 ranges should match expected, got: %v, expected: %v", actualBlockedIPv4Ranges, blockedIPv4Ranges)
+				}
+				if len(serviceIPv6s) > 0 {
+					actualBlockedIPv6Ranges := validator.GetBlockedIPRanges(expectedProtocol, serviceIPv6s, expectedDstPorts)
+					Expect(actualBlockedIPv6Ranges).NotTo(BeEmpty(), "Should have blocked IP range rules for IPv6")
+					Expect(sets.NewString(actualBlockedIPv6Ranges...).Equal(sets.NewString(blockedIPv6Ranges...))).To(BeTrue(),
+						"Blocked IPv6 ranges should match expected, got: %v, expected: %v", actualBlockedIPv6Ranges, blockedIPv6Ranges)
+				}
+			})
+
+			By("Removing the blocked-ip-ranges annotation from the service", func() {
+				svc, err := k8sClient.CoreV1().Services(namespace.Name).Get(context.Background(), ServiceName, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				delete(svc.Annotations, consts.ServiceAnnotationBlockedIPRanges)
+
+				_, err = k8sClient.CoreV1().Services(namespace.Name).Update(context.Background(), svc, metav1.UpdateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+			})
+			logger.Info("Removed blocked-ip-ranges annotation from service")
+
+			By("Waiting for the security group rules to be reconciled", func() {
+				_, err := utils.WaitServiceExposureAndValidateConnectivity(k8sClient, azureClient.IPFamily, namespace.Name, ServiceName, nil)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			By("Verifying blocked IP range rules are removed", func() {
+				rv, err := azureClient.GetClusterSecurityGroups()
+				Expect(err).NotTo(HaveOccurred())
+
+				validator = NewSecurityGroupValidator(rv)
+
+				var (
+					expectedProtocol = armnetwork.SecurityRuleProtocolTCP
+					expectedDstPorts = []string{strconv.FormatInt(int64(serverPort), 10)}
+				)
+
+				if len(serviceIPv4s) > 0 {
+					actualBlockedIPv4Ranges := validator.GetBlockedIPRanges(expectedProtocol, serviceIPv4s, expectedDstPorts)
+					Expect(actualBlockedIPv4Ranges).To(BeEmpty(), "Should not have any blocked IP range rule for IPv4 after removal, got: %v", actualBlockedIPv4Ranges)
+				}
+				if len(serviceIPv6s) > 0 {
+					actualBlockedIPv6Ranges := validator.GetBlockedIPRanges(expectedProtocol, serviceIPv6s, expectedDstPorts)
+					Expect(actualBlockedIPv6Ranges).To(BeEmpty(), "Should not have any blocked IP range rule for IPv6 after removal, got: %v", actualBlockedIPv6Ranges)
+				}
+			})
+
+			By("Verifying allow rule from Internet still exists", func() {
+				var (
+					expectedProtocol    = armnetwork.SecurityRuleProtocolTCP
+					expectedSrcPrefixes = []string{"Internet"}
+					expectedDstPorts    = []string{strconv.FormatInt(int64(serverPort), 10)}
+				)
+
+				if len(serviceIPv4s) > 0 {
+					Expect(
+						validator.HasExactAllowRule(expectedProtocol, expectedSrcPrefixes, serviceIPv4s, expectedDstPorts),
+					).To(BeTrue(), "Should have a rule for allowing IPv4 traffic from Internet after blocked IP ranges removal")
+				}
+				if len(serviceIPv6s) > 0 {
+					Expect(
+						validator.HasExactAllowRule(expectedProtocol, expectedSrcPrefixes, serviceIPv6s, expectedDstPorts),
+					).To(BeTrue(), "Should have a rule for allowing IPv6 traffic from Internet after blocked IP ranges removal")
+				}
+			})
+		})
 	})
 
 	When("creating a LoadBalancer service with annotation `service.beta.kubernetes.io/azure-allowed-ip-ranges`", func() {
