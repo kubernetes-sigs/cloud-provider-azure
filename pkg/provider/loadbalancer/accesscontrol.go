@@ -19,6 +19,7 @@ package loadbalancer
 import (
 	"fmt"
 	"net/netip"
+	"slices"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
@@ -46,6 +47,7 @@ type AccessControl struct {
 	// immutable pre-compute states.
 	SourceRanges                           []netip.Prefix
 	AllowedIPRanges                        []netip.Prefix
+	BlockedIPRanges                        []netip.Prefix
 	AllowedServiceTags                     []string
 	invalidRanges                          []string
 	securityRuleDestinationPortsByProtocol map[armnetwork.SecurityRuleProtocol][]int32
@@ -95,6 +97,13 @@ func NewAccessControl(logger logr.Logger, svc *v1.Service, sg *armnetwork.Securi
 		// Backward compatibility: no error but emit a warning event.
 		eventEmitter(svc, v1.EventTypeWarning, "InvalidAllowedIPRanges", EventMessageOfInvalidAllowedIPRanges(invalidAllowedIPRanges))
 	}
+	blockedIPRanges, invalidBlockedIPRanges, err := BlockedIPRanges(svc)
+	if err != nil {
+		logger.Error(err, "Failed to parse BlockedIPRanges configuration")
+
+		// Backward compatibility: no error but emit a warning event.
+		eventEmitter(svc, v1.EventTypeWarning, "InvalidBlockedIPRanges", EventMessageOfInvalidBlockedIPRanges(invalidBlockedIPRanges))
+	}
 	allowedServiceTags := AllowedServiceTags(svc)
 	securityRuleDestinationPortsByProtocol, err := SecurityRuleDestinationPortsByProtocol(svc)
 	if err != nil {
@@ -115,14 +124,17 @@ func NewAccessControl(logger logr.Logger, svc *v1.Service, sg *armnetwork.Securi
 		eventEmitter(svc, v1.EventTypeWarning, "ConflictConfiguration", EventMessageOfConflictLoadBalancerSourceRangesAndAllowedIPRanges())
 	}
 
+	invalidRanges := slices.Concat(invalidSourceRanges, invalidAllowedIPRanges)
+
 	return &AccessControl{
 		logger:                                 logger,
 		svc:                                    svc,
 		sgHelper:                               sgHelper,
 		SourceRanges:                           sourceRanges,
 		AllowedIPRanges:                        allowedIPRanges,
+		BlockedIPRanges:                        blockedIPRanges,
 		AllowedServiceTags:                     allowedServiceTags,
-		invalidRanges:                          append(invalidSourceRanges, invalidAllowedIPRanges...),
+		invalidRanges:                          invalidRanges,
 		securityRuleDestinationPortsByProtocol: securityRuleDestinationPortsByProtocol,
 	}, nil
 }
@@ -233,11 +245,34 @@ func (ac *AccessControl) PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses [
 		armnetwork.SecurityRuleProtocolAsterisk,
 	}
 
+	// First, add deny rules for blocked IP ranges (higher precedence) per IP family.
+	if len(ac.BlockedIPRanges) > 0 {
+		for _, protocol := range protocols {
+			dstPorts, found := ac.securityRuleDestinationPortsByProtocol[protocol]
+			if !found {
+				continue
+			}
+			blockedAggregated := iputil.AggregatePrefixes(ac.BlockedIPRanges)
+			blockedIPv4, blockedIPv6 := iputil.GroupPrefixesByFamily(blockedAggregated)
+			if len(blockedIPv4) > 0 && len(dstIPv4Addresses) > 0 {
+				if err := ac.sgHelper.AddRuleForBlockedIPRanges(blockedIPv4, protocol, dstIPv4Addresses, dstPorts); err != nil {
+					return fmt.Errorf("failed to add a new rule for blocked IPv4 ranges: %w", err)
+				}
+			}
+			if len(blockedIPv6) > 0 && len(dstIPv6Addresses) > 0 {
+				if err := ac.sgHelper.AddRuleForBlockedIPRanges(blockedIPv6, protocol, dstIPv6Addresses, dstPorts); err != nil {
+					return fmt.Errorf("failed to add a new rule for blocked IPv6 ranges: %w", err)
+				}
+			}
+		}
+	}
+
 	for _, protocol := range protocols {
 		dstPorts, found := ac.securityRuleDestinationPortsByProtocol[protocol]
 		if !found {
 			continue
 		}
+
 		if len(dstIPv4Addresses) > 0 {
 			for _, tag := range allowedServiceTags {
 				err := ac.sgHelper.AddRuleForAllowedServiceTag(tag, protocol, dstIPv4Addresses, dstPorts)
