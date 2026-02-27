@@ -2006,22 +2006,6 @@ func TestGetSecurityRuleName(t *testing.T) {
 			"a257b965551374ad2b091ef3f07043ad-TCP-80-10.0.0.1_24",
 		},
 		{
-			"IPv4-shared",
-			&v1.Service{
-				ObjectMeta: meta.ObjectMeta{
-					UID:         "257b9655-5137-4ad2-b091-ef3f07043ad3",
-					Annotations: map[string]string{consts.ServiceAnnotationSharedSecurityRule: "true"},
-				},
-			},
-			v1.ServicePort{
-				Protocol: v1.ProtocolTCP,
-				Port:     80,
-			},
-			"10.0.0.1/24",
-			false,
-			"shared-TCP-80-10.0.0.1_24",
-		},
-		{
 			"IPv6",
 			&v1.Service{
 				ObjectMeta: meta.ObjectMeta{

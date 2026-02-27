@@ -1067,7 +1067,6 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 
 		annotation := map[string]string{
 			consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "true",
-			consts.ServiceAnnotationSharedSecurityRule:            "true",
 		}
 
 		By("Creating BYO public IP prefixes")
