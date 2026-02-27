@@ -541,7 +541,12 @@ func TestEnsureStorageAccount(t *testing.T) {
 
 				subnetRepo := StorageAccountRepo.subnetRepo.(*subnet.MockRepository)
 				subnetRepo.EXPECT().Get(gomock.Any(), vnetResourceGroup, vnetName, subnetName).Return(mockedSubnet, nil).Times(1)
-				subnetRepo.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, vnetName, subnetName, gomock.Any()).Return(nil).Times(1)
+				createOrUpdateCall := subnetRepo.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, vnetName, subnetName, gomock.Any()).Return(nil)
+				if test.SubnetPropertiesFormatNil {
+					createOrUpdateCall.Times(0)
+				} else {
+					createOrUpdateCall.Times(1)
+				}
 
 				mockPrivateDNSClient := mock_privatezoneclient.NewMockInterface(ctrl)
 				StorageAccountRepo.NetworkClientFactory.(*mock_azclient.MockClientFactory).EXPECT().GetPrivateZoneClient().Return(mockPrivateDNSClient).AnyTimes()
