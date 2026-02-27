@@ -7967,6 +7967,9 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 		multiSLBConfigs   []config.MultipleStandardLoadBalancerConfiguration
 		serviceAnnotation map[string]string
 		serviceLabel      map[string]string
+		specLBIP          string
+		existingLBs       []*armnetwork.LoadBalancer
+		existingPIPs      []*armnetwork.PublicIPAddress
 		expected          string
 		expectedErr       error
 	}{
@@ -8090,6 +8093,324 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 			},
 			expectedErr: errors.New(`service "default/test" selects 1 load balancers (a), but 0 of them () have AllowServicePlacement set to false and the service is not using any of them, 1 of them (a) do not match the service label selector, and 0 of them () do not match the service namespace selector`),
 		},
+		{
+			description:   "multi-slb external: IP annotation returns lb2 where IP resides",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "1.2.3.4",
+			},
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("pip1"),
+					ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress: ptr.To("1.2.3.4"),
+						IPConfiguration: &armnetwork.IPConfiguration{
+							ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb2/frontendIPConfigurations/aprimary-svc-uid"),
+						},
+					},
+				},
+			},
+			expected: "lb2",
+		},
+		{
+			description:   "multi-slb external: PIP name annotation returns lb2 where IP resides",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationPIPNameDualStack[false]: "pip1",
+			},
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("pip1"),
+					ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress: ptr.To("1.2.3.4"),
+						IPConfiguration: &armnetwork.IPConfiguration{
+							ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb2/frontendIPConfigurations/aprimary-svc-uid"),
+						},
+					},
+				},
+			},
+			expected: "lb2",
+		},
+		{
+			description:   "multi-slb external: spec.loadBalancerIP returns lb2 where IP resides",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			specLBIP: "1.2.3.4",
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("pip1"),
+					ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress: ptr.To("1.2.3.4"),
+						IPConfiguration: &armnetwork.IPConfiguration{
+							ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb2/frontendIPConfigurations/aprimary-svc-uid"),
+						},
+					},
+				},
+			},
+			expected: "lb2",
+		},
+		{
+			description:   "multi-slb external: LB annotation lb2 returns lb2",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerConfigurations: "lb2",
+			},
+			expected: "lb2",
+		},
+		{
+			description:   "multi-slb external: new IP not on LB returns fewest rules lb2",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "5.6.7.8",
+			},
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("aprimary-svc-uid"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &armnetwork.PublicIPAddress{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("pip1"),
+					ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress: ptr.To("1.2.3.4"),
+					},
+				},
+			},
+			expected: "lb2",
+		},
+		{
+			description:   "multi-slb external: IP annotation and LB annotation conflicts",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "1.2.3.4",
+				consts.ServiceAnnotationLoadBalancerConfigurations:     "lb1",
+			},
+			expectedErr: errors.New(`service "test" has conflicting load balancer configuration: both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), the service must use the load balancer where that IP resides. To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation so the service uses the load balancer where the specified IP resides`),
+		},
+		{
+			description:   "multi-slb external: PIP name annotation and LB annotation conflicts",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationPIPNameDualStack[false]:    "pip1",
+				consts.ServiceAnnotationLoadBalancerConfigurations: "lb1",
+			},
+			expectedErr: errors.New(`service "test" has conflicting load balancer configuration: both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), the service must use the load balancer where that IP resides. To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation so the service uses the load balancer where the specified IP resides`),
+		},
+		{
+			description:   "multi-slb external: spec.loadBalancerIP and LB annotation conflicts",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			specLBIP: "1.2.3.4",
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerConfigurations: "lb1",
+			},
+			expectedErr: errors.New(`service "test" has conflicting load balancer configuration: both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), the service must use the load balancer where that IP resides. To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation so the service uses the load balancer where the specified IP resides`),
+		},
+		{
+			description:   "multi-slb internal: IP annotation returns lb2-internal where IP resides",
+			vmSet:         primary,
+			useStandardLB: true,
+			isInternal:    true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:           "true",
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "10.0.0.5",
+			},
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb2-internal"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("aprimary-svc-uid"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.5"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: "lb2-internal",
+		},
+		{
+			description:   "multi-slb internal: spec.loadBalancerIP returns lb2-internal where IP resides",
+			vmSet:         primary,
+			useStandardLB: true,
+			isInternal:    true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			specLBIP: "10.0.0.5",
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal: "true",
+			},
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb2-internal"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("aprimary-svc-uid"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.5"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: "lb2-internal",
+		},
+		{
+			description:   "multi-slb internal: LB annotation lb2 returns lb2-internal",
+			vmSet:         primary,
+			useStandardLB: true,
+			isInternal:    true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:       "true",
+				consts.ServiceAnnotationLoadBalancerConfigurations: "lb2",
+			},
+			expected: "lb2-internal",
+		},
+		{
+			description:   "multi-slb internal: new IP not on LB returns fewest rules lb2-internal",
+			vmSet:         primary,
+			useStandardLB: true,
+			isInternal:    true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:           "true",
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "10.0.0.99",
+			},
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1-internal"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("aprimary-svc-uid"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.5"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: "lb2-internal",
+		},
+		{
+			description:   "multi-slb internal: IP annotation and LB annotation conflicts",
+			vmSet:         primary,
+			useStandardLB: true,
+			isInternal:    true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:           "true",
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "10.0.0.5",
+				consts.ServiceAnnotationLoadBalancerConfigurations:     "lb1",
+			},
+			expectedErr: errors.New(`service "test" has conflicting load balancer configuration: both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), the service must use the load balancer where that IP resides. To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation so the service uses the load balancer where the specified IP resides`),
+		},
+		{
+			description:   "multi-slb internal: spec.loadBalancerIP and LB annotation conflicts",
+			vmSet:         primary,
+			useStandardLB: true,
+			isInternal:    true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			specLBIP: "10.0.0.5",
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:       "true",
+				consts.ServiceAnnotationLoadBalancerConfigurations: "lb1",
+			},
+			expectedErr: errors.New(`service "test" has conflicting load balancer configuration: both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), the service must use the load balancer where that IP resides. To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation so the service uses the load balancer where the specified IP resides`),
+		},
 	}
 
 	for _, c := range cases {
@@ -8104,12 +8425,25 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 				az.MultipleStandardLoadBalancerConfigurations = c.multiSLBConfigs
 			}
 
+			// Mock PIP client for external LB cases.
+			if len(c.existingPIPs) > 0 {
+				mockPIPsClient := az.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
+				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(c.existingPIPs, nil).MaxTimes(2)
+			}
+
 			az.LoadBalancerName = c.lbName
 			svc := getTestService("test", v1.ProtocolTCP, c.serviceAnnotation, false)
+			if c.specLBIP != "" {
+				svc.Spec.LoadBalancerIP = c.specLBIP
+			}
 			if c.serviceLabel != nil {
 				svc.Labels = c.serviceLabel
 			}
-			loadbalancerName, err := az.getAzureLoadBalancerName(context.TODO(), &svc, []*armnetwork.LoadBalancer{}, c.clusterName, c.vmSet, c.isInternal)
+			existingLBs := c.existingLBs
+			if existingLBs == nil {
+				existingLBs = []*armnetwork.LoadBalancer{}
+			}
+			loadbalancerName, err := az.getAzureLoadBalancerName(context.TODO(), &svc, existingLBs, c.clusterName, c.vmSet, c.isInternal, true /* wantLb */)
 			assert.Equal(t, c.expected, loadbalancerName)
 			if c.expectedErr != nil {
 				assert.EqualError(t, err, c.expectedErr.Error())
