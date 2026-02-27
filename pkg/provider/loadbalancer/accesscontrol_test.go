@@ -1517,7 +1517,7 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 						WithBlockedIPRanges(blockedIPv4Ranges...).
 						Build()
 			originalRules    = azureFx.NoiseSecurityRules()
-			dstIPv4Addresses = []string{}                         // No IPv4 destinations
+			dstIPv4Addresses = []string{}                             // No IPv4 destinations
 			dstIPv6Addresses = []string{"2001:db8::1", "2002:fb8::1"} // Only IPv6 destinations
 			expectedRules    = testutil.CloneInJSON(originalRules)
 		)

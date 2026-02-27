@@ -22,6 +22,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/stretchr/testify/assert"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/iputil"
 )
 
