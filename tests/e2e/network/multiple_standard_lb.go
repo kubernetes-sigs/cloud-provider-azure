@@ -1017,7 +1017,8 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(len(ips2)).NotTo(BeZero())
 			svc2IP := *ips2[0]
 			Expect(svc2IP).NotTo(Equal(sharedIP), "Service 2 should have a different IP on "+svc2LBAnnotation)
-			utils.Logf("Service 2 exposed with IP %s on %s", svc2IP, svc2LBAnnotation)
+			svc2OldFIPID := getPIPFrontendConfigurationID(tc, svc2IP, tc.GetResourceGroup(), true)
+			utils.Logf("Service 2 exposed with IP %s on %s, FIP: %s", svc2IP, svc2LBAnnotation, svc2OldFIPID)
 
 			By("Service 2 adds azure-load-balancer-ipv4 pointing to Service 1's IP, expecting blocked")
 			svc2, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
@@ -1045,6 +1046,10 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			By("Verifying primary FIP has rules for all services")
 			err = verifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port, svc2Port), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "Both services should share the user-assigned PIP on the primary LB")
+
+			By("Verifying Service 2's old FIP has no rules for its port")
+			err = verifyFIPHasNoRulesForPorts(tc, svc2OldFIPID, sets.New(svc2Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Service 2's old FIP should have no rules after moving")
 		})
 
 		// TODO: Remove F prefix before merging
@@ -1093,7 +1098,8 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(len(ips2)).NotTo(BeZero())
 			svc2IP := *ips2[0]
 			Expect(svc2IP).NotTo(Equal(sharedIP), "Service 2 should have a different IP on lb-1")
-			utils.Logf("Service 2 exposed with IP %s on lb-1", svc2IP)
+			svc2OldFIPID := getPIPFrontendConfigurationID(tc, svc2IP, tc.GetResourceGroup(), true)
+			utils.Logf("Service 2 exposed with IP %s on lb-1, FIP: %s", svc2IP, svc2OldFIPID)
 
 			By("Service 2 adds azure-load-balancer-ipv4 annotation pointing to Service 1's IP, expecting blocked")
 			svc2, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
@@ -1121,6 +1127,10 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			By("Verifying primary FIP has rules for all services")
 			err = verifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port, svc2Port), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "Both services should share IP on the primary LB")
+
+			By("Verifying Service 2's old FIP has no rules for its port")
+			err = verifyFIPHasNoRulesForPorts(tc, svc2OldFIPID, sets.New(svc2Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Service 2's old FIP should have no rules after moving")
 		})
 
 		// TODO: Remove F prefix before merging
@@ -1168,7 +1178,9 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(len(ips2)).NotTo(BeZero())
 			svc2IP := *ips2[0]
 			Expect(svc2IP).NotTo(Equal(sharedIP), "Service 2 should have a different IP on lb-1")
-			utils.Logf("Service 2 exposed with internal IP %s on lb-1", svc2IP)
+			svc2OldLB := getAzureInternalLoadBalancerFromPrivateIP(tc, &svc2IP, tc.GetResourceGroup())
+			svc2OldFIPID := getFIPIDForPrivateIP(svc2OldLB, svc2IP)
+			utils.Logf("Service 2 exposed with internal IP %s on lb-1, FIP: %s", svc2IP, svc2OldFIPID)
 
 			By("Service 2 adds azure-load-balancer-ipv4 annotation pointing to Service 1's IP, expecting blocked")
 			svc2, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
@@ -1196,6 +1208,10 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			By("Verifying primary FIP has rules for all services")
 			err = verifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port, svc2Port), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "Both services should share IP on the primary LB")
+
+			By("Verifying Service 2's old FIP has no rules for its port")
+			err = verifyFIPHasNoRulesForPorts(tc, svc2OldFIPID, sets.New(svc2Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Service 2's old FIP should have no rules after moving")
 		})
 	})
 })
@@ -1265,34 +1281,36 @@ func getLBsFromPublicIPs(tc *utils.AzureTestClient, pips []*string) sets.Set[str
 	return lbNames
 }
 
-// verifyFIPHasRulesForPorts checks that the specified frontend IP config has rules for exactly all expected ports.
-func verifyFIPHasRulesForPorts(tc *utils.AzureTestClient, fipID string, expectedPorts sets.Set[int32], protocol string) error {
+// getFIPRulePorts returns all ports that have load balancing rules for the given FIP and protocol.
+// Returns (ports, lbExists, error). If lbExists is false, the LB doesn't exist (ports will be empty).
+func getFIPRulePorts(tc *utils.AzureTestClient, fipID string, protocol string) (sets.Set[int32], bool, error) {
 	if fipID == "" {
-		return fmt.Errorf("empty FIP ID")
+		return nil, false, fmt.Errorf("empty FIP ID")
 	}
 
 	// Extract LB name from FIP ID.
 	match := lbNameRE.FindStringSubmatch(fipID)
 	if len(match) != 2 {
-		return fmt.Errorf("could not parse LB name from FIP ID: %s", fipID)
+		return nil, false, fmt.Errorf("could not parse LB name from FIP ID: %s", fipID)
 	}
 	lbName := match[1]
 
 	lb, err := tc.GetLoadBalancer(tc.GetResourceGroup(), lbName)
 	if err != nil {
-		return fmt.Errorf("failed to get load balancer %q: %w", lbName, err)
+		errStr := err.Error()
+		if strings.Contains(errStr, "NotFound") {
+			return sets.New[int32](), false, nil
+		}
+		return nil, false, fmt.Errorf("failed to get load balancer %s: %w", lbName, err)
 	}
 
-	utils.Logf("Verifying FIP ID %q has rules for ports %v", fipID, expectedPorts.UnsortedList())
-
 	// Find all rules that reference the target FIP ID with matching protocol.
-	actualPorts := sets.New[int32]()
+	ports := sets.New[int32]()
 	if lb.Properties != nil && lb.Properties.LoadBalancingRules != nil {
 		for _, rule := range lb.Properties.LoadBalancingRules {
 			if rule.Properties == nil || rule.Properties.FrontendIPConfiguration == nil {
 				continue
 			}
-			// Compare rule's FIP ID directly with our target.
 			ruleFIPID := ptr.Deref(rule.Properties.FrontendIPConfiguration.ID, "")
 			if !strings.EqualFold(ruleFIPID, fipID) {
 				continue
@@ -1303,12 +1321,27 @@ func verifyFIPHasRulesForPorts(tc *utils.AzureTestClient, fipID string, expected
 
 			if strings.EqualFold(ruleProtocol, protocol) {
 				utils.Logf("Found rule %q for port %d/%s on FIP", ptr.Deref(rule.Name, ""), rulePort, ruleProtocol)
-				actualPorts.Insert(rulePort)
+				ports.Insert(rulePort)
 			}
 		}
 	}
 
-	// Check for exact match
+	return ports, true, nil
+}
+
+// verifyFIPHasRulesForPorts checks that the specified frontend IP config has rules for exactly all expected ports.
+func verifyFIPHasRulesForPorts(tc *utils.AzureTestClient, fipID string, expectedPorts sets.Set[int32], protocol string) error {
+	utils.Logf("Verifying FIP ID %q has rules for ports %v", fipID, expectedPorts.UnsortedList())
+
+	actualPorts, lbExists, err := getFIPRulePorts(tc, fipID, protocol)
+	if err != nil {
+		return err
+	}
+	if !lbExists {
+		return fmt.Errorf("load balancer for FIP %q does not exist", fipID)
+	}
+
+	// Check for exact match.
 	missingPorts := expectedPorts.Difference(actualPorts)
 	extraPorts := actualPorts.Difference(expectedPorts)
 
@@ -1319,6 +1352,30 @@ func verifyFIPHasRulesForPorts(tc *utils.AzureTestClient, fipID string, expected
 	}
 
 	utils.Logf("FIP %q has exactly the expected rules for ports %v", fipID, expectedPorts.UnsortedList())
+	return nil
+}
+
+// verifyFIPHasNoRulesForPorts checks that the specified frontend IP config has no rules for the specified ports.
+// If the LB does not exist, that counts as success (no rules).
+func verifyFIPHasNoRulesForPorts(tc *utils.AzureTestClient, fipID string, absentPorts sets.Set[int32], protocol string) error {
+	utils.Logf("Verifying FIP ID %q has NO rules for ports %v", fipID, absentPorts.UnsortedList())
+
+	actualPorts, lbExists, err := getFIPRulePorts(tc, fipID, protocol)
+	if err != nil {
+		return err
+	}
+	if !lbExists {
+		utils.Logf("LB for FIP %q not found, treating as no rules", fipID)
+		return nil
+	}
+
+	// Check no intersection.
+	foundPorts := absentPorts.Intersection(actualPorts)
+	if foundPorts.Len() > 0 {
+		return fmt.Errorf("FIP %q still has rules for ports %v", fipID, foundPorts.UnsortedList())
+	}
+
+	utils.Logf("FIP %q has no rules for ports %v (as expected)", fipID, absentPorts.UnsortedList())
 	return nil
 }
 
