@@ -7952,11 +7952,6 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 }
 
 func TestGetAzureLoadBalancerName(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	az := GetTestCloud(ctrl)
-	az.PrimaryAvailabilitySetName = primary
-
 	cases := []struct {
 		description       string
 		vmSet             string
@@ -8269,6 +8264,45 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 			expectedErr: errors.New(`service "test" has conflicting load balancer configuration: both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), the service must use the load balancer where that IP resides. To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation so the service uses the load balancer where the specified IP resides`),
 		},
 		{
+			description:   "multi-slb external: IP resides on LB excluded by label selector should error",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceLabelSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"app": "web"},
+						},
+					},
+				},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "1.2.3.4",
+			},
+			serviceLabel: map[string]string{"app": "api"},
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("pip1"),
+					ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress: ptr.To("1.2.3.4"),
+						IPConfiguration: &armnetwork.IPConfiguration{
+							ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/fip1"),
+						},
+					},
+				},
+			},
+			expectedErr: errors.New(
+				`service "test" specifies an IP that resides on load balancer "lb1", ` +
+					`which is not in the eligible set [lb2]; ` +
+					`check or adjust the load balancer eligibility configuration ` +
+					`(ServiceLabelSelector, ServiceNamespaceSelector, or AllowServicePlacement)`,
+			),
+		},
+		{
 			description:   "multi-slb internal: IP annotation returns lb2-internal where IP resides",
 			vmSet:         primary,
 			useStandardLB: true,
@@ -8411,10 +8445,59 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 			},
 			expectedErr: errors.New(`service "test" has conflicting load balancer configuration: both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), the service must use the load balancer where that IP resides. To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation so the service uses the load balancer where the specified IP resides`),
 		},
+		{
+			description:   "multi-slb internal: IP resides on LB excluded by label selector should error",
+			vmSet:         primary,
+			useStandardLB: true,
+			isInternal:    true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceLabelSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"app": "web"},
+						},
+					},
+				},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:           "true",
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "10.0.0.5",
+			},
+			serviceLabel: map[string]string{"app": "api"},
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1-internal"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("fip1"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.5"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedErr: errors.New(
+				`service "test" specifies an IP that resides on load balancer "lb1", ` +
+					`which is not in the eligible set [lb2]; ` +
+					`check or adjust the load balancer eligibility configuration ` +
+					`(ServiceLabelSelector, ServiceNamespaceSelector, or AllowServicePlacement)`,
+			),
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			az := GetTestCloud(ctrl)
+			az.PrimaryAvailabilitySetName = primary
+
 			if c.useStandardLB {
 				az.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 			} else {
