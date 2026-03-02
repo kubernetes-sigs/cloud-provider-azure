@@ -850,10 +850,15 @@ func (az *Cloud) getServiceLoadBalancer(
 			err           error
 		)
 		if wantLb && az.shouldChangeLoadBalancer(service, ptr.Deref(existingLB.Name, ""), clusterName, defaultLBName) {
-			// Block migration if the frontend IP is shared with other services.
+			// Block migration if the frontend IP is unsafe to delete
+			// (shared with other services, or referenced by outbound/NAT rules).
 			if az.UseMultipleStandardLoadBalancers() {
 				for _, fip := range fipConfigs {
-					if az.isFrontendIPShared(fip, service) {
+					unsafe, err := az.isFrontendIPConfigUnsafeToDelete(existingLB, service, fip.ID)
+					if err != nil {
+						return nil, nil, nil, nil, false, false, err
+					}
+					if unsafe {
 						logger.Info("Blocking load balancer migration because frontend IP is shared with other services",
 							"service", service.Name,
 							"loadBalancer", ptr.Deref(existingLB.Name, ""),
@@ -1745,33 +1750,6 @@ func (az *Cloud) isFrontendIPConfigUnsafeToDelete(
 	}
 
 	return unsafe, nil
-}
-
-// isFrontendIPShared checks if a frontend IP config is being used by other services.
-// It returns true if there are load balancing rules from other services referencing this frontend.
-func (az *Cloud) isFrontendIPShared(
-	fip *armnetwork.FrontendIPConfiguration,
-	service *v1.Service,
-) bool {
-	if fip == nil || fip.Properties == nil {
-		return false
-	}
-
-	for _, lbRule := range fip.Properties.LoadBalancingRules {
-		if lbRule.ID == nil {
-			continue
-		}
-		// Extract rule name from last segment of the ID path.
-		ruleName, err := getLastSegment(*lbRule.ID, "/")
-		if err != nil {
-			continue
-		}
-		if !az.serviceOwnsRule(service, ruleName) {
-			return true
-		}
-	}
-
-	return false
 }
 
 func findMatchedOutboundRuleFIPConfig(fipConfigID *string, outboundRuleFIPConfigs []*armnetwork.SubResource) bool {
