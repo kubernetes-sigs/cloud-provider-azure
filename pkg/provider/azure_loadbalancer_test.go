@@ -8231,7 +8231,14 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "1.2.3.4",
 				consts.ServiceAnnotationLoadBalancerConfigurations:     "lb1",
 			},
-			expectedErr: errors.New(`service "test" has conflicting load balancer configuration: both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), the service must use the load balancer where that IP resides. To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation so the service uses the load balancer where the specified IP resides`),
+			expectedErr: errors.New(
+				`service "test" has conflicting load balancer configuration: ` +
+					`both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. ` +
+					`When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), ` +
+					`the service must use the load balancer where that IP resides. ` +
+					`To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation ` +
+					`so the service uses the load balancer where the specified IP resides`,
+			),
 		},
 		{
 			description:   "multi-slb external: PIP name annotation and LB annotation conflicts",
@@ -8246,7 +8253,14 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 				consts.ServiceAnnotationPIPNameDualStack[false]:    "pip1",
 				consts.ServiceAnnotationLoadBalancerConfigurations: "lb1",
 			},
-			expectedErr: errors.New(`service "test" has conflicting load balancer configuration: both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), the service must use the load balancer where that IP resides. To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation so the service uses the load balancer where the specified IP resides`),
+			expectedErr: errors.New(
+				`service "test" has conflicting load balancer configuration: ` +
+					`both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. ` +
+					`When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), ` +
+					`the service must use the load balancer where that IP resides. ` +
+					`To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation ` +
+					`so the service uses the load balancer where the specified IP resides`,
+			),
 		},
 		{
 			description:   "multi-slb external: spec.loadBalancerIP and LB annotation conflicts",
@@ -8261,7 +8275,14 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 			serviceAnnotation: map[string]string{
 				consts.ServiceAnnotationLoadBalancerConfigurations: "lb1",
 			},
-			expectedErr: errors.New(`service "test" has conflicting load balancer configuration: both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), the service must use the load balancer where that IP resides. To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation so the service uses the load balancer where the specified IP resides`),
+			expectedErr: errors.New(
+				`service "test" has conflicting load balancer configuration: ` +
+					`both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. ` +
+					`When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), ` +
+					`the service must use the load balancer where that IP resides. ` +
+					`To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation ` +
+					`so the service uses the load balancer where the specified IP resides`,
+			),
 		},
 		{
 			description:   "multi-slb external: IP resides on LB excluded by label selector should error",
@@ -8426,7 +8447,14 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "10.0.0.5",
 				consts.ServiceAnnotationLoadBalancerConfigurations:     "lb1",
 			},
-			expectedErr: errors.New(`service "test" has conflicting load balancer configuration: both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), the service must use the load balancer where that IP resides. To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation so the service uses the load balancer where the specified IP resides`),
+			expectedErr: errors.New(
+				`service "test" has conflicting load balancer configuration: ` +
+					`both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. ` +
+					`When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), ` +
+					`the service must use the load balancer where that IP resides. ` +
+					`To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation ` +
+					`so the service uses the load balancer where the specified IP resides`,
+			),
 		},
 		{
 			description:   "multi-slb internal: spec.loadBalancerIP and LB annotation conflicts",
@@ -8443,7 +8471,14 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 				consts.ServiceAnnotationLoadBalancerInternal:       "true",
 				consts.ServiceAnnotationLoadBalancerConfigurations: "lb1",
 			},
-			expectedErr: errors.New(`service "test" has conflicting load balancer configuration: both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), the service must use the load balancer where that IP resides. To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation so the service uses the load balancer where the specified IP resides`),
+			expectedErr: errors.New(
+				`service "test" has conflicting load balancer configuration: ` +
+					`both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. ` +
+					`When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), ` +
+					`the service must use the load balancer where that IP resides. ` +
+					`To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation ` +
+					`so the service uses the load balancer where the specified IP resides`,
+			),
 		},
 		{
 			description:   "multi-slb internal: IP resides on LB excluded by label selector should error",
