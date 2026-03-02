@@ -816,8 +816,8 @@ func (az *Cloud) getServiceLoadBalancer(
 
 	// check if the service already has a load balancer
 	var shouldChangeLB bool
-	for i := range existingLBs {
-		existingLB := (existingLBs)[i]
+	for i := len(existingLBs) - 1; i >= 0; i-- {
+		existingLB := existingLBs[i]
 
 		if strings.EqualFold(*existingLB.Name, defaultLBName) {
 			defaultLB = existingLB
