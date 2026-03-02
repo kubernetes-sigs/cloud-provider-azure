@@ -4194,6 +4194,15 @@ func (az *Cloud) getAzureLoadBalancerName(
 			} else {
 				currentLBName = az.getLoadBalancerNameByPublicIP(ctx, service, clusterName)
 			}
+			// Block service if the IP resides on an LB that's not eligible.
+			if currentLBName != "" && !StringInSlice(currentLBName, eligibleLBs) {
+				return "", fmt.Errorf(
+					"service %q specifies an IP that resides on load balancer %q, "+
+						"which is not in the eligible set %v; "+
+						"check or adjust the load balancer eligibility configuration "+
+						"(ServiceLabelSelector, ServiceNamespaceSelector, or AllowServicePlacement)",
+					service.Name, currentLBName, eligibleLBs)
+			}
 		}
 
 		lbNamePrefix = getMostEligibleLBForService(currentLBName, eligibleLBs, existingLBs, requiresInternalLoadBalancer(service))
