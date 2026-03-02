@@ -1213,6 +1213,71 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			err = verifyFIPHasNoRulesForPorts(tc, svc2OldFIPID, sets.New(svc2Port), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "Service 2's old FIP should have no rules after moving")
 		})
+
+		// TODO: Remove F prefix before merging
+		FIt("should block service sharing IP on LB not in eligible set", func() {
+			By("Creating Service 1 with label matching lb-2's ServiceLabelSelector")
+			svc1Port := int32(serverPort)
+			svc1Labels := map[string]string{
+				"app": testServiceName,
+				"a":   "b",
+			}
+			svc1 := utils.CreateLoadBalancerServiceManifest(svcNamePrimary, nil, svc1Labels, ns.Name, []v1.ServicePort{{
+				Port:       svc1Port,
+				TargetPort: intstr.FromInt(int(svc1Port)),
+			}})
+			_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc1, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				err := utils.DeleteService(cs, ns.Name, svcNamePrimary)
+				Expect(err).NotTo(HaveOccurred())
+			}()
+
+			ips1, err := utils.WaitServiceExposureAndGetIPs(cs, ns.Name, svcNamePrimary)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(ips1)).NotTo(BeZero())
+			svc1IP := *ips1[0]
+			svc1LB := getAzureLoadBalancerFromPIP(tc, &svc1IP, tc.GetResourceGroup(), tc.GetResourceGroup())
+			Expect(ptr.Deref(svc1LB.Name, "")).To(Equal("lb-2"), "Service 1 with label a=b should land on lb-2")
+			svc1FIPID := getPIPFrontendConfigurationID(tc, svc1IP, tc.GetResourceGroup(), true)
+			utils.Logf("Service 1 exposed with IP %s on lb-2, FIP: %s", svc1IP, svc1FIPID)
+
+			By("Creating Service 2 without label a=b, pointing to Service 1's IP")
+			svc2Port := int32(serverPort + 1)
+			svc2 := utils.CreateLoadBalancerServiceManifest(svcNameIPv4, map[string]string{
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: svc1IP,
+			}, labels, ns.Name, []v1.ServicePort{{
+				Port:       svc2Port,
+				TargetPort: intstr.FromInt(int(svc2Port)),
+			}})
+			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc2, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				err := utils.DeleteService(cs, ns.Name, svcNameIPv4)
+				Expect(err).NotTo(HaveOccurred())
+			}()
+
+			By("Verifying Service 2 is blocked with not-in-eligible-set error")
+			err = verifyServiceNotExposed(cs, ns.Name, svcNameIPv4, notExposedTimeout)
+			Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should stay pending")
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameIPv4, "SyncLoadBalancerFailed", "not in the eligible set", time.Time{}, eventTimeout)
+			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event for "+svcNameIPv4)
+
+			By("Resolving by adding label a=b to Service 2")
+			svc2, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			svc2.Labels["a"] = "b"
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc2, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying Service 2 is now exposed with Service 1's IP")
+			_, err = utils.WaitServiceExposure(cs, ns.Name, svcNameIPv4, []*string{&svc1IP})
+			Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should be exposed after adding label")
+
+			By("Verifying FIP has rules for both services")
+			err = verifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port, svc2Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Both services should share the FIP on lb-2")
+		})
 	})
 })
 
