@@ -81,13 +81,13 @@ generatecode: build ## Generate client
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerregistry/armcontainerregistry --package-alias armcontainerregistry --resource Registry --client-name RegistriesClient --verbs get,delete,listbyrg
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources --package-alias resources --resource Deployment --client-name DeploymentsClient --verbs delete --ratelimitkey deploymentRateLimit
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources --package-alias resources --resource ResourceGroup --client-name ResourceGroupsClient 
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 --package-alias armcompute --resource Disk --client-name DisksClient --ratelimitkey diskRateLimit
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 --package-alias armcompute --resource AvailabilitySet --client-name AvailabilitySetsClient --verbs get,list --ratelimitkey availabilitySetRateLimit
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 --package-alias armcompute --resource VirtualMachine --client-name VirtualMachinesClient --verbs createorupdate,delete,list --expand --ratelimitkey virtualMachineRateLimit
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 --package-alias armcompute --resource VirtualMachineScaleSet --client-name VirtualMachineScaleSetsClient --verbs get,createorupdate,delete,list --ratelimitkey virtualMachineScaleSetRateLimit --expand
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 --package-alias armcompute --resource VirtualMachineScaleSet --subresource VirtualMachineScaleSetVM --client-name VirtualMachineScaleSetVMsClient --verbs get,delete,list 
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 --package-alias armcompute --resource Snapshot --client-name SnapshotsClient --verbs get,createorupdate,delete --ratelimitkey snapshotRateLimit
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6 --package-alias armcompute --resource SSHPublicKeyResource --client-name SSHPublicKeysClient --verbs get,listbyrg
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7 --package-alias armcompute --resource Disk --client-name DisksClient --ratelimitkey diskRateLimit
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7 --package-alias armcompute --resource AvailabilitySet --client-name AvailabilitySetsClient --verbs get,list --ratelimitkey availabilitySetRateLimit
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7 --package-alias armcompute --resource VirtualMachine --client-name VirtualMachinesClient --verbs createorupdate,delete,list --expand --ratelimitkey virtualMachineRateLimit
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7 --package-alias armcompute --resource VirtualMachineScaleSet --client-name VirtualMachineScaleSetsClient --verbs get,createorupdate,delete,list --ratelimitkey virtualMachineScaleSetRateLimit --expand
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7 --package-alias armcompute --resource VirtualMachineScaleSet --subresource VirtualMachineScaleSetVM --client-name VirtualMachineScaleSetVMsClient --verbs get,delete,list
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7 --package-alias armcompute --resource Snapshot --client-name SnapshotsClient --verbs get,createorupdate,delete --ratelimitkey snapshotRateLimit
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7 --package-alias armcompute --resource SSHPublicKeyResource --client-name SSHPublicKeysClient --verbs get,listbyrg
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6 --package-alias armnetwork --resource VirtualNetwork --subresource Subnet --client-name SubnetsClient --verbs get,createorupdate,delete,list --expand --ratelimitkey subnetsRateLimit
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6 --package-alias armnetwork --resource VirtualNetwork --client-name VirtualNetworksClient --verbs get,createorupdate,delete,list --expand 
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6 --package-alias armnetwork --resource Interface --client-name InterfacesClient --verbs get,createorupdate,delete,list --expand --ratelimitkey interfaceRateLimit
@@ -146,7 +146,7 @@ GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
 .PHONY: golangci-lint
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
-	test -s $(LOCALBIN)/golangci-lint || curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(LOCALBIN) v1.64.8
+	test -s $(LOCALBIN)/golangci-lint || curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(LOCALBIN) v2.5.0
 
 GOIMPORTS ?= $(LOCALBIN)/goimports
 .PHONY: goimports
