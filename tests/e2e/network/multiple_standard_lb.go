@@ -236,8 +236,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	// TODO: Remove F prefix before merging
-	FIt("should place all external services sharing a user-assigned public IP on the same load balancer", func() {
+	It("should place all external services sharing a user-assigned public IP on the same load balancer", func() {
 		logAllLoadBalancerStates(tc, "Before creating services (user-assigned PIP test)")
 
 		By("Creating a user-assigned public IP")
@@ -315,8 +314,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		Expect(err).NotTo(HaveOccurred(), "First FIP should have rules for all services sharing the IP")
 	})
 
-	// TODO: Remove F prefix before merging
-	FIt("should place all external services sharing a managed public IP on the same load balancer", func() {
+	It("should place all external services sharing a managed public IP on the same load balancer", func() {
 		logAllLoadBalancerStates(tc, "Before creating services (managed PIP test)")
 		var firstFIPID string
 		var sharedIP string
@@ -393,8 +391,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		Expect(err).NotTo(HaveOccurred(), "First FIP should have rules for all services sharing the IP")
 	})
 
-	// TODO: Remove F prefix before merging
-	FIt("should place all internal services sharing a private IP on the same load balancer", func() {
+	It("should place all internal services sharing a private IP on the same load balancer", func() {
 		logAllLoadBalancerStates(tc, "Before creating services (internal IP test)")
 		var firstFIPID string
 		var sharedIP string
@@ -474,8 +471,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 
 	// Conflict detection and resolution tests: verify services with IP and conflicting LB config
 	// are blocked, then test both resolution paths (remove LB annotation vs remove IP pin)
-	// TODO: Remove F prefix before merging
-	FDescribe("Conflicting LB Configuration", func() {
+	Describe("Conflicting LB Configuration", func() {
 		const (
 			pollInterval      = 10 * time.Second
 			serviceTimeout    = 5 * time.Minute
@@ -490,8 +486,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			msgConflictingLBConfig = "conflicting load balancer configuration"
 		)
 
-		// TODO: Remove F prefix before merging
-		FIt("should block external services with conflicting IP and LB config for user-assigned PIP", func() {
+		It("should block external services with conflicting IP and LB config for user-assigned PIP", func() {
 			By("Creating user-assigned PIP")
 			pipName := "conflict-test-pip"
 			pip, err := utils.WaitCreatePIP(tc, pipName, tc.GetResourceGroup(), defaultPublicIPAddress(pipName, false))
@@ -620,8 +615,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for all services sharing the IP")
 		})
 
-		// TODO: Remove F prefix before merging
-		FIt("should block external services with conflicting IP and LB config for managed PIP", func() {
+		It("should block external services with conflicting IP and LB config for managed PIP", func() {
 			By("Creating primary service that gets a managed PIP")
 			primaryPort := int32(serverPort)
 			primaryService := utils.CreateLoadBalancerServiceManifest(svcNamePrimary, nil, labels, ns.Name, []v1.ServicePort{{
@@ -710,8 +704,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for all services sharing the IP")
 		})
 
-		// TODO: Remove F prefix before merging
-		FIt("should block internal services with conflicting IP and LB config", func() {
+		It("should block internal services with conflicting IP and LB config", func() {
 			By("Creating primary internal service")
 			primaryPort := int32(serverPort)
 			primaryService := utils.CreateLoadBalancerServiceManifest(svcNamePrimary, serviceAnnotationLoadBalancerInternalTrue, labels, ns.Name, []v1.ServicePort{{
@@ -800,8 +793,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for all services sharing the IP")
 		})
 
-		// TODO: Remove F prefix before merging
-		FIt("should block external primary service from moving LB when there is IP sharing", func() {
+		It("should block external primary service from moving LB when there is IP sharing", func() {
 			By("Creating primary service that gets a managed PIP")
 			primaryPort := int32(serverPort)
 			primaryService := utils.CreateLoadBalancerServiceManifest(svcNamePrimary, nil, labels, ns.Name, []v1.ServicePort{{
@@ -879,8 +871,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(err).NotTo(HaveOccurred(), "Services should still share IP after removing LB annotation")
 		})
 
-		// TODO: Remove F prefix before merging
-		FIt("should block internal primary service from moving LB when there is IP sharing", func() {
+		It("should block internal primary service from moving LB when there is IP sharing", func() {
 			By("Creating primary internal service")
 			primaryPort := int32(serverPort)
 			primaryService := utils.CreateLoadBalancerServiceManifest(svcNamePrimary, serviceAnnotationLoadBalancerInternalTrue, labels, ns.Name, []v1.ServicePort{{
@@ -958,8 +949,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(err).NotTo(HaveOccurred(), "Services should still share IP after removing LB annotation")
 		})
 
-		// TODO: Remove F prefix before merging
-		FIt("should allow external service with no prior IP sharing to share user-assigned PIP", func() {
+		It("should allow external service with no prior IP sharing to share user-assigned PIP", func() {
 			By("Creating user-assigned PIP")
 			pipName := "cross-lb-test-pip"
 			pip, err := utils.WaitCreatePIP(tc, pipName, tc.GetResourceGroup(), defaultPublicIPAddress(pipName, false))
@@ -1052,8 +1042,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(err).NotTo(HaveOccurred(), "Service 2's old FIP should have no rules after moving")
 		})
 
-		// TODO: Remove F prefix before merging
-		FIt("should allow external service with no prior IP sharing to share managed PIP", func() {
+		It("should allow external service with no prior IP sharing to share managed PIP", func() {
 			clusterName := os.Getenv("CLUSTER_NAME")
 
 			By("Creating Service 1 with cluster LB annotation")
@@ -1133,8 +1122,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(err).NotTo(HaveOccurred(), "Service 2's old FIP should have no rules after moving")
 		})
 
-		// TODO: Remove F prefix before merging
-		FIt("should allow internal service with no prior IP sharing to share IP", func() {
+		It("should allow internal service with no prior IP sharing to share IP", func() {
 			clusterName := os.Getenv("CLUSTER_NAME")
 
 			By("Creating Service 1 with cluster LB annotation")
@@ -1214,8 +1202,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(err).NotTo(HaveOccurred(), "Service 2's old FIP should have no rules after moving")
 		})
 
-		// TODO: Remove F prefix before merging
-		FIt("should block service sharing IP on LB not in eligible set", func() {
+		It("should block service sharing IP on LB not in eligible set", func() {
 			By("Creating Service 1 with label matching lb-2's ServiceLabelSelector")
 			svc1Port := int32(serverPort)
 			svc1Labels := map[string]string{
