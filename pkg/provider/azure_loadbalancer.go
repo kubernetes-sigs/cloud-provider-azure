@@ -2014,7 +2014,8 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 		dirtyLb = true
 	}
 
-	if changed := az.reconcileLBRules(lb, service, serviceName, wantLb, expectedRules); changed {
+	lbRulesChanged := az.reconcileLBRules(lb, service, serviceName, wantLb, expectedRules)
+	if lbRulesChanged {
 		dirtyLb = true
 	}
 	if changed := az.ensureLoadBalancerTagged(lb); changed {
@@ -2120,7 +2121,7 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 		}
 	}
 
-	if fipChanged || az.UseMultipleStandardLoadBalancers() {
+	if fipChanged || (az.UseMultipleStandardLoadBalancers() && lbRulesChanged) {
 		az.reconcileMultipleStandardLoadBalancerConfigurationStatus(wantLb, serviceName, lbName)
 	}
 
