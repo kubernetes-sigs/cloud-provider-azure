@@ -469,9 +469,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		Expect(err).NotTo(HaveOccurred(), "First FIP should have rules for all internal services sharing the IP")
 	})
 
-	// Conflict detection and resolution tests: verify services with IP and conflicting LB config
-	// are blocked, then test both resolution paths (remove LB annotation vs remove IP pin)
-	Describe("Conflicting LB Configuration", func() {
+	Describe("LB Placement Conflicts", func() {
 		const (
 			pollInterval      = 10 * time.Second
 			serviceTimeout    = 5 * time.Minute
