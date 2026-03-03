@@ -461,10 +461,8 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 
 	Describe("LB Placement Conflicts", func() {
 		const (
-			pollInterval      = 10 * time.Second
-			serviceTimeout    = 5 * time.Minute
 			eventTimeout      = 30 * time.Second
-			notExposedTimeout = serviceTimeout / 2
+			notExposedTimeout = 150 * time.Second
 
 			svcNamePrimary = "svc-primary"
 			svcNameLBIP    = "svc-lbip"
