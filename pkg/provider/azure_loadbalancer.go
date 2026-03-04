@@ -2121,6 +2121,11 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 		}
 	}
 
+	// Update multi-SLB ActiveServices tracking. Two signals indicate a real change:
+	//   - fipChanged: FIP added/removed (service is sole owner of its IP)
+	//   - lbRulesChanged: rules added/removed but FIP kept (shared-IP scenario)
+	// The "flipped" reconcile pass (wantLb=false for the opposite LB type)
+	// triggers neither, so it won't incorrectly remove the service.
 	if fipChanged || (az.UseMultipleStandardLoadBalancers() && lbRulesChanged) {
 		az.reconcileMultipleStandardLoadBalancerConfigurationStatus(wantLb, serviceName, lbName)
 	}
