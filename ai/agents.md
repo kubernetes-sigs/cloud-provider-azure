@@ -185,3 +185,11 @@ logger.Error(err, "Failed to reconcile LoadBalancer")
 // Debug-level error for investigation (use Info with "err" key, not Error)
 logger.V(4).Info("Could not fetch instance metadata", "err", err, "node", nodeName)
 ```
+
+## Reference Docs
+
+Check these docs when working in the relevant area. These docs should be updated once the logics have been changed.
+
+| Topic | Doc | When to check |
+|-------|-----|---------------|
+| ETag & cache invalidation | [ai/references/etag-cache.md](references/etag-cache.md) | Modifying Azure resource create/update/delete operations, or changing cache logic |
