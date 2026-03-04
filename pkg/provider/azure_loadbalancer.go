@@ -807,6 +807,9 @@ func (az *Cloud) getServiceLoadBalancer(
 		existingLBs = lbs
 	}
 
+	// A service must use the LB that owns its IP. In IP-pinned multi-SLB scenario,
+	// The service may currently exist on a different LB needing migration,
+	// so all LBs should be scanned instead of returning on the first match.
 	lbIPs := getServiceLoadBalancerIPs(service)
 	pipNames := getServicePIPNames(service)
 	pinsIP := len(lbIPs) > 0 || lo.ContainsBy(pipNames, func(s string) bool { return s != "" })
