@@ -307,7 +307,6 @@ func (az *Cloud) GetInterconnectGroupID(ctx context.Context) (string, error) {
 	if az.UseInstanceMetadata {
 		metadata, err := az.Metadata.GetMetadata(ctx, azcache.CacheReadTypeUnsafe)
 		if err != nil {
-			logger.Error(err, "failed to GetMetadata")
 			return "", err
 		}
 		if metadata.Compute == nil {
@@ -316,17 +315,19 @@ func (az *Cloud) GetInterconnectGroupID(ctx context.Context) (string, error) {
 		}
 
 		// Check tagsList for Platform_Interconnect_Group tag
-		if len(metadata.Compute.TagsList) > 0 {
-			for _, tag := range metadata.Compute.TagsList {
-				if tag.Name == consts.TagNameInterconnectGroup && tag.Value != "" {
-					logger.V(2).Info("found Interconnect Group ID from tagsList", "InterconnectGroupID", tag.Value)
-					return tag.Value, nil
+		for _, tag := range metadata.Compute.TagsList {
+			if tag.Name == consts.TagNameInterconnectGroup {
+				if tag.Value == "" {
+					logger.V(4).Info("Interconnect Group tag is present but value is empty")
+					return "", nil
 				}
+				logger.V(2).Info("found Interconnect Group ID from tagsList", "InterconnectGroupID", tag.Value)
+				return tag.Value, nil
 			}
 		}
 
 		// Tag not found - this is normal for VMs without Interconnect Groups
-		logger.V(4).Info("tag not found in IMDS", "TagName", consts.TagNameInterconnectGroup)
+		logger.V(4).Info("Tag not found in IMDS", "tagName", consts.TagNameInterconnectGroup)
 	}
 	return "", nil
 }
