@@ -196,7 +196,7 @@ func (c *identityBindingsTokenCredential) GetToken(ctx context.Context, opts pol
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return azcore.AccessToken{}, fmt.Errorf("token request failed with status %d", resp.StatusCode)
+		return azcore.AccessToken{}, fmt.Errorf("token request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
 	// Parse response
