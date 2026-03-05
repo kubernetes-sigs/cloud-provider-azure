@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Kubernetes Authors.
+Copyright 2026 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,16 +18,10 @@ package credentialprovider
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
-
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
-	"sigs.k8s.io/cloud-provider-azure/pkg/log"
-	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
@@ -35,13 +29,20 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/kubelet/pkg/apis/credentialprovider/v1"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
+	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 )
 
 // Refer: https://github.com/kubernetes/kubernetes/blob/master/pkg/credentialprovider/azure/azure_credentials.go
 
 const (
-	maxReadLength   = 10 * 1 << 20 // 10MB
-	defaultCacheTTL = 5 * time.Minute
+	maxReadLength = 10 * 1 << 20 // 10MB
+	// Since the ACR Refresh token TTL is around 3 hours, too short TTL may cause frequent token exchange and bring
+	// throttleling risk, so we set the cache TTL to 60 minutes, which is a trade-off between security and performance.
+	defaultCacheTTL = 60 * time.Minute
 
 	AcrAudience = "https://containerregistry.azure.net"
 )
@@ -67,29 +68,62 @@ type acrProvider struct {
 	registryMirror map[string]string // Registry mirror relation: source registry -> target registry
 }
 
-func NewAcrProvider(config *providerconfig.AzureClientConfig, environment *azclient.Environment, credential azcore.TokenCredential) CredentialProvider {
-	return &acrProvider{
-		config:      config,
-		credential:  credential,
-		environment: environment,
-	}
-}
-
-// NewAcrProvider creates a new instance of the ACR provider.
-func NewAcrProviderFromConfig(configFile string, registryMirrorStr string) (CredentialProvider, error) {
-	if len(configFile) == 0 {
-		return nil, errors.New("no azure credential file is provided")
-	}
+func NewAcrProvider(req *v1.CredentialProviderRequest, registryMirrorStr string, configFile string, ibConfig IdentityBindingsConfig) (CredentialProvider, error) {
+	logger := log.Background().WithName("NewAcrProvider")
 	config, err := configloader.Load[providerconfig.AzureClientConfig](context.Background(), nil, &configloader.FileLoaderConfig{FilePath: configFile})
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	var managedIdentityCredential azcore.TokenCredential
-
-	clientOption, env, err := azclient.GetAzCoreClientOption(&config.ARMClientConfig)
+	_, env, err := azclient.GetAzCoreClientOption(&config.ARMClientConfig)
 	if err != nil {
 		return nil, err
+	}
+	clientOption, _, err := azclient.GetAzCoreClientOption(&config.ARMClientConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	var credential azcore.TokenCredential
+	if ibConfig.SNIName != "" {
+		logger.V(2).Info("Using identity bindings token credential for image", "image", req.Image)
+		credential, err = GetIdentityBindingsTokenCredential(req, config, ibConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get identity bindings token credential for image %s: %w", req.Image, err)
+		}
+	} else if len(req.ServiceAccountToken) != 0 {
+		// Use service account token credential
+		logger.V(2).Info("Using service account token credential for image", "image", req.Image)
+		credential, err = getServiceAccountTokenCredential(req, config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get service account token credential for image %s: %w", req.Image, err)
+		}
+	} else {
+		// Use managed identity
+		logger.V(2).Info("Using managed identity to authenticate ACR for image", "image", req.Image)
+		credential, err = getManagedIdentityCredential(req, config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get token credential for image %s: %w", req.Image, err)
+		}
+	}
+
+	return &acrProvider{
+		config:         config,
+		credential:     credential,
+		environment:    env,
+		cloudConfig:    clientOption.Cloud,
+		registryMirror: parseRegistryMirror(registryMirrorStr),
+	}, nil
+}
+
+// getManagedIdentityCredential creates a new instance of the ACR provider.
+func getManagedIdentityCredential(_ *v1.CredentialProviderRequest, config *providerconfig.AzureClientConfig) (azcore.TokenCredential, error) {
+
+	var managedIdentityCredential azcore.TokenCredential
+
+	clientOption, _, err := azclient.GetAzCoreClientOption(&config.ARMClientConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Azure client options: %w", err)
 	}
 	if config.UseManagedIdentityExtension {
 		credOptions := &azidentity.ManagedIdentityCredentialOptions{
@@ -108,13 +142,46 @@ func NewAcrProviderFromConfig(configFile string, registryMirrorStr string) (Cred
 		}
 	}
 
-	return &acrProvider{
-		config:         config,
-		credential:     managedIdentityCredential,
-		environment:    env,
-		cloudConfig:    clientOption.Cloud,
-		registryMirror: parseRegistryMirror(registryMirrorStr),
-	}, nil
+	return managedIdentityCredential, nil
+}
+
+func getServiceAccountTokenCredential(req *v1.CredentialProviderRequest, config *providerconfig.AzureClientConfig) (azcore.TokenCredential, error) {
+	logger := log.Background().WithName("getServiceAccountTokenCredential")
+	if len(req.ServiceAccountToken) == 0 {
+		return nil, fmt.Errorf("kubernetes Service account token is not provided for image %s", req.Image)
+	}
+	logger.V(2).Info("Kubernetes Service account token is provided for image", "image", req.Image)
+
+	clientOption, _, err := azclient.GetAzCoreClientOption(&config.ARMClientConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Azure client options for image %s: %w", req.Image, err)
+	}
+
+	// check required annotations
+	clientID, ok := req.ServiceAccountAnnotations[clientIDAnnotation]
+	if !ok || len(clientID) == 0 {
+		return nil, fmt.Errorf("client id annotation %s is not found or the value is empty", clientIDAnnotation)
+	}
+
+	// check required annotations
+	tenantID, ok := req.ServiceAccountAnnotations[tenantIDAnnotation]
+	if !ok || len(tenantID) == 0 {
+		return nil, fmt.Errorf("tenant id annotation %s is not found or the value is empty", tenantIDAnnotation)
+	}
+
+	// Create getAssertion callback that returns the service account token
+	getAssertion := func(_ context.Context) (string, error) {
+		return req.ServiceAccountToken, nil
+	}
+
+	clientAssertCredential, err := azidentity.NewClientAssertionCredential(tenantID, clientID, getAssertion, &azidentity.ClientAssertionCredentialOptions{
+		ClientOptions: *clientOption,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize client assertion credential: %w", err)
+	}
+	return clientAssertCredential, nil
 }
 
 func (a *acrProvider) GetCredentials(ctx context.Context, image string, _ []string) (*v1.CredentialProviderResponse, error) {
@@ -213,8 +280,7 @@ func (a *acrProvider) getFromACR(ctx context.Context, loginServer string) (strin
 	}
 
 	logger.V(4).Info("exchanging an acr refresh_token")
-	registryRefreshToken, err := performTokenExchange(
-		loginServer, directive, a.config.TenantID, armAccessToken.Token)
+	registryRefreshToken, err := performTokenExchange(directive, a.config.TenantID, armAccessToken.Token)
 	if err != nil {
 		logger.Error(err, "failed to perform token exchange")
 		return "", "", err
