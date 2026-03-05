@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -174,11 +175,25 @@ func TestGetInterconnectGroupID(t *testing.T) {
 			expectedErr:         false,
 		},
 		{
+			name:                "InterconnectGroup tag present with empty value",
+			useInstanceMetadata: true,
+			respString:          `{"compute":{"tagsList":[{"name":"Platform_Interconnect_Group","value":""}]}}`,
+			expectedID:          "",
+			expectedErr:         false,
+		},
+		{
 			name:                "Empty tagsList",
 			useInstanceMetadata: true,
 			respString:          `{"compute":{"tagsList":[]}}`,
 			expectedID:          "",
 			expectedErr:         false,
+		},
+		{
+			name:                "Compute metadata is nil",
+			useInstanceMetadata: true,
+			respString:          `{}`,
+			expectedID:          "",
+			expectedErr:         true,
 		},
 		{
 			name:                "UseInstanceMetadata false",
@@ -198,24 +213,14 @@ func TestGetInterconnectGroupID(t *testing.T) {
 				},
 			}
 
-			listener, err := net.Listen("tcp", "127.0.0.1:0")
-			if err != nil {
-				t.Errorf("Test [%s] unexpected error: %v", tc.name, err)
-			}
-
-			mux := http.NewServeMux()
-			mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				fmt.Fprint(w, tc.respString)
 			}))
-			go func() {
-				_ = http.Serve(listener, mux)
-			}()
-			defer listener.Close()
+			defer server.Close()
 
-			cloud.Metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
-			if err != nil {
-				t.Errorf("Test [%s] unexpected error: %v", tc.name, err)
-			}
+			var err error
+			cloud.Metadata, err = NewInstanceMetadataService(server.URL + "/")
+			assert.NoError(t, err)
 
 			id, err := cloud.GetInterconnectGroupID(context.TODO())
 
