@@ -44,6 +44,7 @@ func TestGetIdentityBindingsTokenCredential(t *testing.T) {
 	tests := []struct {
 		name        string
 		ibConfig    IdentityBindingsConfig
+		saToken     string
 		wantErr     bool
 		errContains string
 	}{
@@ -53,6 +54,7 @@ func TestGetIdentityBindingsTokenCredential(t *testing.T) {
 				SNIName:     "api.example.com",
 				APIServerIP: "10.0.0.1",
 			},
+			saToken: "test-sa-token",
 			wantErr: false,
 		},
 		{
@@ -60,6 +62,7 @@ func TestGetIdentityBindingsTokenCredential(t *testing.T) {
 			ibConfig: IdentityBindingsConfig{
 				APIServerIP: "10.0.0.1",
 			},
+			saToken:     "test-sa-token",
 			wantErr:     true,
 			errContains: "SNI name not provided",
 		},
@@ -68,8 +71,19 @@ func TestGetIdentityBindingsTokenCredential(t *testing.T) {
 			ibConfig: IdentityBindingsConfig{
 				SNIName: "api.example.com",
 			},
+			saToken:     "test-sa-token",
 			wantErr:     true,
 			errContains: "API server IP not provided",
+		},
+		{
+			name: "missing service account token",
+			ibConfig: IdentityBindingsConfig{
+				SNIName:     "api.example.com",
+				APIServerIP: "10.0.0.1",
+			},
+			saToken:     "",
+			wantErr:     true,
+			errContains: "service account token not found in request",
 		},
 	}
 
@@ -77,7 +91,7 @@ func TestGetIdentityBindingsTokenCredential(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := &v1.CredentialProviderRequest{
 				Image:               "test.azurecr.io/test:latest",
-				ServiceAccountToken: "test-sa-token",
+				ServiceAccountToken: tt.saToken,
 				ServiceAccountAnnotations: map[string]string{
 					clientIDAnnotation: "test-client-123",
 				},
