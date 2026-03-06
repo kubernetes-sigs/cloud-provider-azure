@@ -61,6 +61,12 @@ type Subnet struct {
 	Prefix  string `json:"prefix"`
 }
 
+// Tag represents a key-value tag in IMDS.
+type Tag struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
 // ComputeMetadata represents compute information
 type ComputeMetadata struct {
 	Environment            string `json:"azEnvironment,omitempty"`
@@ -77,6 +83,7 @@ type ComputeMetadata struct {
 	VMScaleSetName         string `json:"vmScaleSetName,omitempty"`
 	SubscriptionID         string `json:"subscriptionId,omitempty"`
 	ResourceID             string `json:"resourceId,omitempty"`
+	TagsList               []Tag  `json:"tagsList,omitempty"`
 }
 
 // InstanceMetadata represents instance information.
@@ -289,6 +296,38 @@ func (az *Cloud) GetPlatformSubFaultDomain(ctx context.Context) (string, error) 
 			return "", errors.New("failure of getting compute information from instance metadata")
 		}
 		return metadata.Compute.PlatformSubFaultDomain, nil
+	}
+	return "", nil
+}
+
+// GetInterconnectGroupID returns the Platform Interconnect Group ID from IMDS if set.
+// It reads the value from the Platform_Interconnect_Group tag in tagsList.
+func (az *Cloud) GetInterconnectGroupID(ctx context.Context) (string, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("GetInterconnectGroupID")
+	if az.UseInstanceMetadata {
+		metadata, err := az.Metadata.GetMetadata(ctx, azcache.CacheReadTypeUnsafe)
+		if err != nil {
+			return "", err
+		}
+		if metadata.Compute == nil {
+			_ = az.Metadata.imsCache.Delete(consts.MetadataCacheKey)
+			return "", errors.New("failure of getting compute information from instance metadata")
+		}
+
+		// Check tagsList for Platform_Interconnect_Group tag
+		for _, tag := range metadata.Compute.TagsList {
+			if tag.Name == consts.TagNameInterconnectGroup {
+				if tag.Value == "" {
+					logger.V(4).Info("Interconnect Group tag is present but value is empty")
+					return "", nil
+				}
+				logger.V(2).Info("found Interconnect Group ID from tagsList", "InterconnectGroupID", tag.Value)
+				return tag.Value, nil
+			}
+		}
+
+		// Tag not found - this is normal for VMs without Interconnect Groups
+		logger.V(4).Info("Tag not found in IMDS", "tagName", consts.TagNameInterconnectGroup)
 	}
 	return "", nil
 }
