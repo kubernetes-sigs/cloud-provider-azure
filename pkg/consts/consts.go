@@ -43,6 +43,11 @@ const (
 	LabelFailureDomainBetaRegion = "failure-domain.beta.kubernetes.io/region"
 	// LabelPlatformSubFaultDomain is the label key of platformSubFaultDomain
 	LabelPlatformSubFaultDomain = "topology.kubernetes.azure.com/sub-fault-domain"
+	// LabelPlatformInterconnectGroup is the label key of Platform Interconnect Group
+	LabelPlatformInterconnectGroup = "topology.kubernetes.azure.com/interconnect-group"
+
+	// TagNameInterconnectGroup is the tag name in IMDS tagsList for Platform Interconnect Group
+	TagNameInterconnectGroup = "Platform_Interconnect_Group"
 
 	// ADFSIdentitySystem is the override value for tenantID on Azure Stack clouds.
 	ADFSIdentitySystem = "adfs"
