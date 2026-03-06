@@ -3237,7 +3237,7 @@ func (az *Cloud) reconcileSecurityGroup(
 	}
 
 	if wantLb {
-		err := accessControl.PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses)
+		err := accessControl.PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses, nil, nil)
 		if err != nil {
 			logger.Error(err, "Failed to patch security group")
 			return nil, err
