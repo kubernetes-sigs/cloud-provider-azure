@@ -186,6 +186,21 @@ logger.Error(err, "Failed to reconcile LoadBalancer")
 logger.V(4).Info("Could not fetch instance metadata", "err", err, "node", nodeName)
 ```
 
+## Pull Requests
+
+When creating a pull request, use the template at `.github/PULL_REQUEST_TEMPLATE.md`.
+The PR body must include the following sections filled in appropriately:
+
+1. **What type of PR is this?** — add a Prow `/kind` command (`/kind bug`, `/kind cleanup`,
+   `/kind feature`, `/kind documentation`, `/kind design`)
+2. **What this PR does / why we need it** — concise description of the change
+3. **Which issue(s) this PR fixes** — use `Fixes #<number>` to auto-close issues on merge
+4. **Special notes for your reviewer** — anything reviewers should pay attention to
+5. **Does this PR introduce a user-facing change?** — fill the `release-note` block;
+   write `NONE` if there is no user-facing change
+6. **Additional documentation** — link to KEPs, usage docs, or other references in the
+   `docs` block; leave empty if not applicable
+
 ## Reference Docs
 
 Check these docs when working in the relevant area. These docs should be updated once the logics have been changed.
