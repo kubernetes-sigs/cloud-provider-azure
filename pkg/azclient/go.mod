@@ -22,15 +22,15 @@ require (
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
 	github.com/stretchr/testify v1.11.1
-	go.opentelemetry.io/otel v1.40.0
-	go.opentelemetry.io/otel/metric v1.40.0
+	go.opentelemetry.io/otel v1.42.0
+	go.opentelemetry.io/otel/metric v1.42.0
 	go.uber.org/mock v0.6.0
 	golang.org/x/crypto v0.48.0
 	golang.org/x/net v0.51.0
 	golang.org/x/sync v0.19.0
 	golang.org/x/time v0.14.0
 	gopkg.in/dnaeon/go-vcr.v3 v3.2.0
-	k8s.io/klog/v2 v2.130.1
+	k8s.io/klog/v2 v2.140.0
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 )
 
