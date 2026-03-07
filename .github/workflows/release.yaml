@@ -23,7 +23,7 @@ jobs:
             arch: arm64
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
         with:
           egress-policy: audit
       - name: Install arm build toolchains
@@ -36,7 +36,7 @@ jobs:
         id: gomods
         uses: ./.github/actions/discover-go-modules
       - name: Setup Golang
-        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
           go-version: ${{ steps.gomods.outputs.version }}
       - name: Build binary
@@ -44,7 +44,7 @@ jobs:
           rm -rf ./bin
           ARCH=${{ matrix.arch }} make bin/azure-cloud-controller-manager
           mv bin/azure-cloud-controller-manager bin/azure-cloud-controller-manager-${{ matrix.os }}-${{ matrix.arch }}
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: cloud-controller-manager-${{ matrix.os }}-${{ matrix.arch }}
           path: bin/azure-cloud-controller-manager-${{ matrix.os }}-${{ matrix.arch }}
@@ -65,7 +65,7 @@ jobs:
             arch: amd64
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
         with:
           egress-policy: audit
       - name: Install arm build toolchains
@@ -78,7 +78,7 @@ jobs:
         id: gomods
         uses: ./.github/actions/discover-go-modules
       - name: Setup Golang
-        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
           go-version: ${{ steps.gomods.outputs.version }}
           check-latest: true
@@ -97,13 +97,13 @@ jobs:
           mv bin/azure-cloud-node-manager-${{ matrix.arch }}.exe bin/azure-cloud-node-manager-${{ matrix.os }}-${{ matrix.arch }}.exe
       - name: Upload artifact for linux
         if: matrix.os == 'linux'
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: cloud-node-manager-${{ matrix.os }}-${{ matrix.arch }}
           path: bin/azure-cloud-node-manager-${{ matrix.os }}-${{ matrix.arch }}
       - name: Upload artifact for windows
         if: matrix.os == 'windows'
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: cloud-node-manager-${{ matrix.os }}-${{ matrix.arch }}
           path: bin/azure-cloud-node-manager-${{ matrix.os }}-${{ matrix.arch }}.exe
@@ -124,7 +124,7 @@ jobs:
             arch: amd64
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
         with:
           egress-policy: audit
       - name: Install arm build toolchains
@@ -137,7 +137,7 @@ jobs:
         id: gomods
         uses: ./.github/actions/discover-go-modules
       - name: Setup Golang
-        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
           go-version: ${{ steps.gomods.outputs.version }}
           check-latest: true
@@ -156,13 +156,13 @@ jobs:
           mv bin/azure-acr-credential-provider.exe bin/azure-acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}.exe
       - name: Upload artifact for linux
         if: matrix.os == 'linux'
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}
           path: bin/azure-acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}
       - name: Upload artifact for windows
         if: matrix.os == 'windows'
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}
           path: bin/azure-acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}.exe
@@ -179,7 +179,7 @@ jobs:
       pull-requests: write  # Required for creating PRs
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
         with:
           egress-policy: audit
       - name: Install arm build toolchains
@@ -194,7 +194,7 @@ jobs:
         id: gomods
         uses: ./.github/actions/discover-go-modules
       - name: Setup Golang
-        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
           go-version: ${{ steps.gomods.outputs.version }}
           check-latest: true
@@ -209,7 +209,7 @@ jobs:
         run: |
           ./hack/generate-release-note.sh ${GITHUB_REF_NAME} release-notes.md true
       - name: Download artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
           path: ./artifacts
       - name: Publish release
