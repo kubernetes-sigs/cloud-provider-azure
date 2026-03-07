@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -152,15 +153,83 @@ func TestGetPlatformSubFaultDomain(t *testing.T) {
 }
 
 func TestGetInterconnectGroupID(t *testing.T) {
-	// Infrastructure-only test: verifies placeholder implementation returns empty
-	cloud := &Cloud{
-		Config: config.Config{
-			UseInstanceMetadata: true,
+	testCases := []struct {
+		name                string
+		useInstanceMetadata bool
+		respString          string
+		expectedID          string
+		expectedErr         bool
+	}{
+		{
+			name:                "InterconnectGroup tag present",
+			useInstanceMetadata: true,
+			respString:          `{"compute":{"tagsList":[{"name":"Platform_Interconnect_Group","value":"group-123"},{"name":"Other_Tag","value":"other"}]}}`,
+			expectedID:          "group-123",
+			expectedErr:         false,
+		},
+		{
+			name:                "InterconnectGroup tag absent",
+			useInstanceMetadata: true,
+			respString:          `{"compute":{"tagsList":[{"name":"Other_Tag","value":"other"}]}}`,
+			expectedID:          "",
+			expectedErr:         false,
+		},
+		{
+			name:                "InterconnectGroup tag present with empty value",
+			useInstanceMetadata: true,
+			respString:          `{"compute":{"tagsList":[{"name":"Platform_Interconnect_Group","value":""}]}}`,
+			expectedID:          "",
+			expectedErr:         false,
+		},
+		{
+			name:                "Empty tagsList",
+			useInstanceMetadata: true,
+			respString:          `{"compute":{"tagsList":[]}}`,
+			expectedID:          "",
+			expectedErr:         false,
+		},
+		{
+			name:                "Compute metadata is nil",
+			useInstanceMetadata: true,
+			respString:          `{}`,
+			expectedID:          "",
+			expectedErr:         true,
+		},
+		{
+			name:                "UseInstanceMetadata false",
+			useInstanceMetadata: false,
+			respString:          `{"compute":{"tagsList":[{"name":"Platform_Interconnect_Group","value":"group-123"}]}}`,
+			expectedID:          "",
+			expectedErr:         false,
 		},
 	}
 
-	id, err := cloud.GetInterconnectGroupID(context.TODO())
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud := &Cloud{
+				Config: config.Config{
+					Location:            "eastus",
+					UseInstanceMetadata: tc.useInstanceMetadata,
+				},
+			}
 
-	assert.NoError(t, err, "GetInterconnectGroupID should not return error")
-	assert.Equal(t, "", id, "GetInterconnectGroupID should return empty string (placeholder)")
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				fmt.Fprint(w, tc.respString)
+			}))
+			defer server.Close()
+
+			var err error
+			cloud.Metadata, err = NewInstanceMetadataService(server.URL + "/")
+			assert.NoError(t, err)
+
+			id, err := cloud.GetInterconnectGroupID(context.TODO())
+
+			if tc.expectedErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedID, id)
+			}
+		})
+	}
 }
