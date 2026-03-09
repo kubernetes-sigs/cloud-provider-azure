@@ -2,11 +2,72 @@ package difftracker
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
+	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
+
+// extractAzureErrorInfo extracts HTTP status code and a canonical error code from an Azure SDK error.
+// Maps Azure error codes to the canonical codes defined in slb-observability-guide.md Section 7:
+//   - "quota_exceeded": Azure subscription quota limit reached (400/403)
+//   - "throttled": Too many Azure API requests (429)
+//   - "conflict": Resource already exists or is being modified (409)
+//   - "internal_error": Azure internal error (5xx)
+//   - "timeout": Operation timed out
+//   - "not_found": Resource was deleted externally (404)
+//   - "unknown": Unclassified error
+//
+// Returns (0, "") for nil errors.
+func extractAzureErrorInfo(err error) (httpStatus int, errorCode string) {
+	if err == nil {
+		return 0, ""
+	}
+
+	// Check for Azure SDK ResponseError
+	var respErr *azcore.ResponseError
+	if errors.As(err, &respErr) {
+		httpStatus = respErr.StatusCode
+		azureCode := respErr.ErrorCode
+
+		// Map Azure error codes to canonical codes
+		switch {
+		case strings.EqualFold(azureCode, "QuotaExceeded") ||
+			strings.EqualFold(azureCode, "PublicIPCountLimitReached") ||
+			strings.EqualFold(azureCode, "MaxPublicIpCountLimitReached"):
+			return httpStatus, "quota_exceeded"
+		case httpStatus == 429:
+			return httpStatus, "throttled"
+		case httpStatus == 409:
+			return httpStatus, "conflict"
+		case httpStatus == 404:
+			return httpStatus, "not_found"
+		case httpStatus >= 500:
+			return httpStatus, "internal_error"
+		default:
+			return httpStatus, "unknown"
+		}
+	}
+
+	// Check for timeout errors
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return 0, "timeout"
+	}
+
+	// Fallback: check error message for timeout indicators
+	errMsg := err.Error()
+	if strings.Contains(errMsg, "context deadline exceeded") ||
+		strings.Contains(errMsg, "context canceled") {
+		return 0, "timeout"
+	}
+
+	return 0, "unknown"
+}
 
 func (operation Operation) String() string {
 	return [...]string{"ADD", "REMOVE", "UPDATE"}[operation]

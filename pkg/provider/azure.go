@@ -521,6 +521,10 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 
 		// start NRP location and service batch updater.
 		if az.ServiceGatewayEnabled {
+			// Register SLB metrics and mark ServiceGateway as enabled
+			difftracker.RegisterMetrics()
+			difftracker.RecordServiceGatewayEnabled()
+
 			exists, err := az.existsServiceGateway(ctx, az.ServiceGatewayResourceName)
 			if err != nil {
 				return fmt.Errorf("InitializeCloudFromConfig: failed to check if Service Gateway %s exists: %w", az.ServiceGatewayResourceName, err)

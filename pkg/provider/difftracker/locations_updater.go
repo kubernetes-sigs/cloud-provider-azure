@@ -106,7 +106,6 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 	err := lu.diffTracker.updateNRPSGWAddressLocations(ctx, lu.diffTracker.config.ServiceGatewayResourceName, locationsDTO)
 	if err != nil {
 		klog.Errorf("LocationsUpdater: Failed to update locations in NRP: %v", err)
-		recordLocationsUpdate(startTime, numLocations, numAddresses, err)
 		// Return without updating state - will retry on next trigger when new changes occur
 		return
 	}
@@ -114,8 +113,8 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 	duration := time.Since(startTime)
 	klog.V(2).Infof("LocationsUpdater: Successfully synced locations to NRP in %v", duration)
 
-	// Record metrics
-	recordLocationsUpdate(startTime, numLocations, numAddresses, nil)
+	// Update location and address metrics
+	updateLocationsAndAddressesMetric(numLocations, numAddresses)
 
 	// Update NRPResources to reflect the sync
 	lu.diffTracker.UpdateLocationsAddresses(locationData)

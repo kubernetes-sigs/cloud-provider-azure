@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"k8s.io/klog/v2"
@@ -55,6 +56,10 @@ func NewServiceUpdater(ctx context.Context, diffTracker *DiffTracker, onComplete
 func (s *ServiceUpdater) Run() {
 	klog.Infof("ServiceUpdater: starting main loop")
 
+	// Periodic ticker to keep the oldest-age metric fresh even when no new operations arrive
+	ageTicker := time.NewTicker(30 * time.Second)
+	defer ageTicker.Stop()
+
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -64,6 +69,8 @@ func (s *ServiceUpdater) Run() {
 		case <-s.trigger:
 			klog.V(4).Infof("ServiceUpdater: received trigger, processing batch")
 			s.processBatch()
+		case <-ageTicker.C:
+			updatePendingOperationOldestAgeMetric(s.diffTracker)
 		}
 	}
 }
@@ -80,9 +87,12 @@ func (s *ServiceUpdater) Stop() {
 func (s *ServiceUpdater) processBatch() {
 	// Collect work to do while holding lock, then spawn goroutines after releasing lock
 	type workItem struct {
-		serviceUID string
-		config     ServiceConfig
-		state      ResourceState
+		serviceUID             string
+		config                 ServiceConfig
+		state                  ResourceState
+		correlationID          string
+		triggeringPodNamespace string
+		triggeringPodName      string
 	}
 	var workToDo []workItem
 
@@ -101,9 +111,8 @@ func (s *ServiceUpdater) processBatch() {
 		switch opState.State {
 		case StateNotStarted:
 			// Transition to CreationInProgress
-			recordStateTransition(StateNotStarted, StateCreationInProgress)
 			opState.State = StateCreationInProgress
-			workToDo = append(workToDo, workItem{serviceUID, opState.Config, StateCreationInProgress})
+			workToDo = append(workToDo, workItem{serviceUID, opState.Config, StateCreationInProgress, opState.CorrelationID, opState.TriggeringPodNamespace, opState.TriggeringPodName})
 
 		case StateCreationInProgress:
 			// Already being processed by another goroutine, skip
@@ -129,13 +138,10 @@ func (s *ServiceUpdater) processBatch() {
 			klog.V(4).Infof("ServiceUpdater: service %s in StateDeletionPending, waiting for locations to be cleared", serviceUID)
 
 		case StateDeletionInProgress:
-			workToDo = append(workToDo, workItem{serviceUID, opState.Config, StateDeletionInProgress})
+			workToDo = append(workToDo, workItem{serviceUID, opState.Config, StateDeletionInProgress, opState.CorrelationID, opState.TriggeringPodNamespace, opState.TriggeringPodName})
 		}
 	}
 	s.diffTracker.mu.Unlock()
-
-	// Record batch size metric
-	recordServiceUpdaterBatch(len(workToDo))
 
 	if len(workToDo) > 0 {
 		klog.Infof("ServiceUpdater: processBatch collected %d services to process", len(workToDo))
@@ -160,7 +166,7 @@ func (s *ServiceUpdater) processBatch() {
 		switch work.state {
 		case StateCreationInProgress:
 			s.wg.Add(1)
-			go func(uid string, cfg ServiceConfig) {
+			go func(uid string, cfg ServiceConfig, corrID string, podNS string, podName string) {
 				defer s.wg.Done()
 				defer func() {
 					s.mu.Lock()
@@ -171,10 +177,8 @@ func (s *ServiceUpdater) processBatch() {
 				// Acquire semaphore with context awareness
 				select {
 				case s.semaphore <- struct{}{}:
-					updateServiceUpdaterConcurrentOps(len(s.semaphore))
 					defer func() {
 						<-s.semaphore
-						updateServiceUpdaterConcurrentOps(len(s.semaphore))
 					}()
 				case <-s.ctx.Done():
 					klog.V(4).Infof("ServiceUpdater: context cancelled before acquiring semaphore for service %s", uid)
@@ -182,14 +186,14 @@ func (s *ServiceUpdater) processBatch() {
 				}
 
 				if cfg.IsInbound {
-					s.createInboundService(uid, cfg.InboundConfig)
+					s.createInboundService(uid, cfg.InboundConfig, corrID)
 				} else {
-					s.createOutboundService(uid, cfg.OutboundConfig)
+					s.createOutboundService(uid, cfg.OutboundConfig, corrID, podNS, podName)
 				}
-			}(work.serviceUID, work.config)
+			}(work.serviceUID, work.config, work.correlationID, work.triggeringPodNamespace, work.triggeringPodName)
 		case StateDeletionInProgress:
 			s.wg.Add(1)
-			go func(uid string, cfg ServiceConfig) {
+			go func(uid string, cfg ServiceConfig, corrID string) {
 				defer s.wg.Done()
 				defer func() {
 					s.mu.Lock()
@@ -200,10 +204,8 @@ func (s *ServiceUpdater) processBatch() {
 				// Acquire semaphore with context awareness
 				select {
 				case s.semaphore <- struct{}{}:
-					updateServiceUpdaterConcurrentOps(len(s.semaphore))
 					defer func() {
 						<-s.semaphore
-						updateServiceUpdaterConcurrentOps(len(s.semaphore))
 					}()
 				case <-s.ctx.Done():
 					klog.V(4).Infof("ServiceUpdater: context cancelled before acquiring semaphore for service %s", uid)
@@ -211,25 +213,25 @@ func (s *ServiceUpdater) processBatch() {
 				}
 
 				if cfg.IsInbound {
-					s.deleteInboundService(uid)
+					s.deleteInboundService(uid, corrID)
 				} else {
-					s.deleteOutboundService(uid)
+					s.deleteOutboundService(uid, corrID)
 				}
-			}(work.serviceUID, work.config)
+			}(work.serviceUID, work.config, work.correlationID)
 		}
 	}
 }
 
 // createInboundService creates LoadBalancer resources for inbound service
-func (s *ServiceUpdater) createInboundService(serviceUID string, config *InboundConfig) {
-	klog.Infof("ServiceUpdater: createInboundService started for %s", serviceUID)
+func (s *ServiceUpdater) createInboundService(serviceUID string, config *InboundConfig, correlationID string) {
+	klog.Infof("ServiceUpdater: createInboundService started correlationID=%s serviceUID=%s", correlationID, serviceUID)
 
 	ctx := s.ctx
 
 	// Step 0: Add finalizer to K8s service to prevent deletion until Azure resources are cleaned up
 	svc, err := s.diffTracker.getServiceByUID(ctx, serviceUID)
 	if err != nil {
-		klog.Warningf("ServiceUpdater: failed to get service %s for finalizer: %v (continuing anyway)", serviceUID, err)
+		klog.Warningf("ServiceUpdater: failed to get service %s for finalizer correlationID=%s: %v (continuing anyway)", serviceUID, correlationID, err)
 		// Continue - service may have been deleted or this is initialization cleanup
 	} else {
 		if err := s.diffTracker.addServiceGatewayFinalizer(ctx, svc); err != nil {
@@ -246,7 +248,8 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 	// Step 2: Create Public IP and capture the response to get the allocated IP address
 	pipResponse, err := s.diffTracker.createOrUpdatePIPWithResponse(ctx, s.diffTracker.config.ResourceGroup, &pipResource)
 	if err != nil {
-		klog.Errorf("ServiceUpdater: failed to create Public IP for inbound service %s: %v", serviceUID, err)
+		httpStatus, errCode := extractAzureErrorInfo(err)
+		klog.Errorf("ServiceUpdater: failed to create Public IP for inbound service correlationID=%s serviceUID=%s httpStatus=%d errorCode=%s error=%v", correlationID, serviceUID, httpStatus, errCode, err)
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to create Public IP: %w", err))
 		return
 	}
@@ -262,7 +265,8 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 
 	// Step 3: Create LoadBalancer
 	if err := s.diffTracker.createOrUpdateLB(ctx, lbResource); err != nil {
-		klog.Errorf("ServiceUpdater: failed to create LoadBalancer for inbound service %s: %v", serviceUID, err)
+		httpStatus, errCode := extractAzureErrorInfo(err)
+		klog.Errorf("ServiceUpdater: failed to create LoadBalancer for inbound service correlationID=%s serviceUID=%s httpStatus=%d errorCode=%s error=%v", correlationID, serviceUID, httpStatus, errCode, err)
 		// Don't delete PIP here - retry will use existing PIP
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to create LoadBalancer: %w", err))
 		return
@@ -275,12 +279,13 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 
 	// Step 4: Register service with ServiceGateway API
 	if err := s.diffTracker.updateNRPSGWServices(ctx, s.diffTracker.config.ServiceGatewayResourceName, servicesDTO); err != nil {
-		klog.Errorf("ServiceUpdater: failed to register inbound service %s with ServiceGateway: %v", serviceUID, err)
+		httpStatus, errCode := extractAzureErrorInfo(err)
+		klog.Errorf("ServiceUpdater: failed to register inbound service with ServiceGateway correlationID=%s serviceUID=%s httpStatus=%d errorCode=%s error=%v", correlationID, serviceUID, httpStatus, errCode, err)
 		// Don't delete resources - retry will reconcile
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to register with ServiceGateway: %w", err))
 		return
 	}
-	klog.V(3).Infof("ServiceUpdater: registered inbound service %s with ServiceGateway", serviceUID)
+	klog.V(3).Infof("ServiceUpdater: registered inbound service %s with ServiceGateway correlationID=%s", serviceUID, correlationID)
 
 	// Step 5: Update K8s Service status with the external IP
 	// This is critical for ServiceGateway mode since EnsureLoadBalancer returns empty status immediately.
@@ -304,12 +309,12 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 
 	// Step 6: Success callback
 	s.onComplete(serviceUID, true, nil)
-	klog.Infof("ServiceUpdater: createInboundService completed successfully for %s", serviceUID)
+	klog.Infof("ServiceUpdater: createInboundService completed successfully correlationID=%s serviceUID=%s", correlationID, serviceUID)
 }
 
 // createOutboundService creates NAT Gateway resources for outbound service
-func (s *ServiceUpdater) createOutboundService(serviceUID string, config *OutboundConfig) {
-	klog.Infof("ServiceUpdater: createOutboundService started for %s", serviceUID)
+func (s *ServiceUpdater) createOutboundService(serviceUID string, config *OutboundConfig, correlationID string, triggeringPodNS string, triggeringPodName string) {
+	klog.Infof("ServiceUpdater: createOutboundService started correlationID=%s serviceUID=%s triggeredByPod=%s/%s", correlationID, serviceUID, triggeringPodNS, triggeringPodName)
 
 	ctx := s.ctx
 
@@ -318,7 +323,8 @@ func (s *ServiceUpdater) createOutboundService(serviceUID string, config *Outbou
 
 	// Step 2: Create Public IP
 	if err := s.diffTracker.createOrUpdatePIP(ctx, s.diffTracker.config.ResourceGroup, &pipResource); err != nil {
-		klog.Errorf("ServiceUpdater: failed to create Public IP for outbound service %s: %v", serviceUID, err)
+		httpStatus, errCode := extractAzureErrorInfo(err)
+		klog.Errorf("ServiceUpdater: failed to create Public IP for outbound service correlationID=%s serviceUID=%s triggeredByPod=%s/%s httpStatus=%d errorCode=%s error=%v", correlationID, serviceUID, triggeringPodNS, triggeringPodName, httpStatus, errCode, err)
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to create Public IP: %w", err))
 		return
 	}
@@ -327,7 +333,8 @@ func (s *ServiceUpdater) createOutboundService(serviceUID string, config *Outbou
 
 	// Step 3: Create NAT Gateway
 	if err := s.diffTracker.createOrUpdateNatGateway(ctx, s.diffTracker.config.ResourceGroup, natGatewayResource); err != nil {
-		klog.Errorf("ServiceUpdater: failed to create NAT Gateway for outbound service %s: %v", serviceUID, err)
+		httpStatus, errCode := extractAzureErrorInfo(err)
+		klog.Errorf("ServiceUpdater: failed to create NAT Gateway for outbound service correlationID=%s serviceUID=%s triggeredByPod=%s/%s httpStatus=%d errorCode=%s error=%v", correlationID, serviceUID, triggeringPodNS, triggeringPodName, httpStatus, errCode, err)
 		// Don't delete PIP here - retry will use existing PIP
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to create NAT Gateway: %w", err))
 		return
@@ -336,7 +343,8 @@ func (s *ServiceUpdater) createOutboundService(serviceUID string, config *Outbou
 
 	// Step 4: Register service with ServiceGateway API
 	if err := s.diffTracker.updateNRPSGWServices(ctx, s.diffTracker.config.ServiceGatewayResourceName, servicesDTO); err != nil {
-		klog.Errorf("ServiceUpdater: failed to register outbound service %s with ServiceGateway: %v", serviceUID, err)
+		httpStatus, errCode := extractAzureErrorInfo(err)
+		klog.Errorf("ServiceUpdater: failed to register outbound service with ServiceGateway correlationID=%s serviceUID=%s triggeredByPod=%s/%s httpStatus=%d errorCode=%s error=%v", correlationID, serviceUID, triggeringPodNS, triggeringPodName, httpStatus, errCode, err)
 		// Don't delete resources - retry will reconcile
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to register with ServiceGateway: %w", err))
 		return
@@ -351,12 +359,12 @@ func (s *ServiceUpdater) createOutboundService(serviceUID string, config *Outbou
 
 	// Step 4: Success callback
 	s.onComplete(serviceUID, true, nil)
-	klog.Infof("ServiceUpdater: createOutboundService completed successfully for %s", serviceUID)
+	klog.Infof("ServiceUpdater: createOutboundService completed successfully correlationID=%s serviceUID=%s triggeredByPod=%s/%s", correlationID, serviceUID, triggeringPodNS, triggeringPodName)
 }
 
 // deleteInboundService deletes LoadBalancer resources
-func (s *ServiceUpdater) deleteInboundService(serviceUID string) {
-	klog.Infof("ServiceUpdater: deleteInboundService started for %s", serviceUID)
+func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID string) {
+	klog.Infof("ServiceUpdater: deleteInboundService started correlationID=%s serviceUID=%s", correlationID, serviceUID)
 
 	ctx := s.ctx
 	var lastErr error
@@ -381,7 +389,8 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string) {
 
 	// Step 2: Delete LoadBalancer
 	if err := s.diffTracker.deleteLB(ctx, serviceUID); err != nil {
-		klog.Errorf("ServiceUpdater: failed to delete LoadBalancer for inbound service %s: %v", serviceUID, err)
+		httpStatus, errCode := extractAzureErrorInfo(err)
+		klog.Errorf("ServiceUpdater: failed to delete LoadBalancer for inbound service correlationID=%s serviceUID=%s httpStatus=%d errorCode=%s error=%v", correlationID, serviceUID, httpStatus, errCode, err)
 		lastErr = fmt.Errorf("failed to delete LoadBalancer: %w", err)
 		// Continue with PIP deletion
 	} else {
@@ -397,7 +406,8 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string) {
 		if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
 			klog.V(3).Infof("ServiceUpdater: inbound service %s already unregistered from ServiceGateway (404 NotFound)", serviceUID)
 		} else {
-			klog.Errorf("ServiceUpdater: failed to fully unregister inbound service %s from ServiceGateway: %v", serviceUID, err)
+			httpStatus, errCode := extractAzureErrorInfo(err)
+			klog.Errorf("ServiceUpdater: failed to fully unregister inbound service from ServiceGateway correlationID=%s serviceUID=%s httpStatus=%d errorCode=%s error=%v", correlationID, serviceUID, httpStatus, errCode, err)
 			lastErr = fmt.Errorf("failed to unregister from ServiceGateway: %w", err)
 			// Continue with PIP deletion
 		}
@@ -408,18 +418,19 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string) {
 	// Step 4: Delete Public IP
 	_, pipName, _ := buildInboundResourceNames(serviceUID)
 	if err := s.diffTracker.deletePublicIP(ctx, s.diffTracker.config.ResourceGroup, pipName); err != nil {
-		klog.Errorf("ServiceUpdater: failed to delete Public IP %s for inbound service %s: %v", pipName, serviceUID, err)
+		httpStatus, errCode := extractAzureErrorInfo(err)
+		klog.Errorf("ServiceUpdater: failed to delete Public IP %s for inbound service correlationID=%s serviceUID=%s httpStatus=%d errorCode=%s error=%v", pipName, correlationID, serviceUID, httpStatus, errCode, err)
 		lastErr = fmt.Errorf("failed to delete Public IP: %w", err)
 	} else {
-		klog.V(3).Infof("ServiceUpdater: deleted Public IP %s for inbound service %s", pipName, serviceUID)
+		klog.V(3).Infof("ServiceUpdater: deleted Public IP %s for inbound service %s correlationID=%s", pipName, serviceUID, correlationID)
 	}
 
 	// Step 5: Update NRPResources and notify completion
 	if lastErr != nil {
-		klog.Warningf("ServiceUpdater: deleteInboundService completed with errors for %s: %v", serviceUID, lastErr)
+		klog.Warningf("ServiceUpdater: deleteInboundService completed with errors correlationID=%s serviceUID=%s error=%v", correlationID, serviceUID, lastErr)
 		s.onComplete(serviceUID, false, lastErr)
 	} else {
-		klog.Infof("ServiceUpdater: deleteInboundService completed successfully for %s", serviceUID)
+		klog.Infof("ServiceUpdater: deleteInboundService completed successfully correlationID=%s serviceUID=%s", correlationID, serviceUID)
 		// Update NRPResources to reflect the deletion
 		s.diffTracker.UpdateNRPLoadBalancers(SyncServicesReturnType{
 			Additions: nil,
@@ -445,8 +456,8 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string) {
 }
 
 // deleteOutboundService deletes NAT Gateway resources
-func (s *ServiceUpdater) deleteOutboundService(serviceUID string) {
-	klog.Infof("ServiceUpdater: deleteOutboundService started for %s", serviceUID)
+func (s *ServiceUpdater) deleteOutboundService(serviceUID string, correlationID string) {
+	klog.Infof("ServiceUpdater: deleteOutboundService started correlationID=%s serviceUID=%s", correlationID, serviceUID)
 
 	ctx := s.ctx
 	var lastErr error
@@ -468,7 +479,8 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string) {
 		if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
 			klog.V(3).Infof("ServiceUpdater: outbound service %s already unregistered from ServiceGateway (404 NotFound)", serviceUID)
 		} else {
-			klog.Errorf("ServiceUpdater: failed to unregister outbound service %s from ServiceGateway: %v", serviceUID, err)
+			httpStatus, errCode := extractAzureErrorInfo(err)
+			klog.Errorf("ServiceUpdater: failed to unregister outbound service from ServiceGateway correlationID=%s serviceUID=%s httpStatus=%d errorCode=%s error=%v", correlationID, serviceUID, httpStatus, errCode, err)
 			lastErr = fmt.Errorf("failed to unregister from ServiceGateway: %w", err)
 			// Continue with deletion
 		}
@@ -478,7 +490,8 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string) {
 
 	// Step 3: Delete NAT Gateway
 	if err := s.diffTracker.deleteNatGateway(ctx, s.diffTracker.config.ResourceGroup, serviceUID); err != nil {
-		klog.Errorf("ServiceUpdater: failed to delete NAT Gateway for outbound service %s: %v", serviceUID, err)
+		httpStatus, errCode := extractAzureErrorInfo(err)
+		klog.Errorf("ServiceUpdater: failed to delete NAT Gateway for outbound service correlationID=%s serviceUID=%s httpStatus=%d errorCode=%s error=%v", correlationID, serviceUID, httpStatus, errCode, err)
 		lastErr = fmt.Errorf("failed to delete NAT Gateway: %w", err)
 		// Continue with PIP deletion
 	} else {
@@ -488,7 +501,8 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string) {
 	// Step 4: Delete Public IP
 	_, pipName := buildOutboundResourceNames(serviceUID)
 	if err := s.diffTracker.deletePublicIP(ctx, s.diffTracker.config.ResourceGroup, pipName); err != nil {
-		klog.Errorf("ServiceUpdater: failed to delete Public IP %s for outbound service %s: %v", pipName, serviceUID, err)
+		httpStatus, errCode := extractAzureErrorInfo(err)
+		klog.Errorf("ServiceUpdater: failed to delete Public IP %s for outbound service correlationID=%s serviceUID=%s httpStatus=%d errorCode=%s error=%v", pipName, correlationID, serviceUID, httpStatus, errCode, err)
 		lastErr = fmt.Errorf("failed to delete Public IP: %w", err)
 	} else {
 		klog.V(3).Infof("ServiceUpdater: deleted Public IP %s for outbound service %s", pipName, serviceUID)
@@ -496,10 +510,10 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string) {
 
 	// Step 5: Update NRPResources and notify completion
 	if lastErr != nil {
-		klog.Warningf("ServiceUpdater: deleteOutboundService completed with errors for %s: %v", serviceUID, lastErr)
+		klog.Warningf("ServiceUpdater: deleteOutboundService completed with errors correlationID=%s serviceUID=%s error=%v", correlationID, serviceUID, lastErr)
 		s.onComplete(serviceUID, false, lastErr)
 	} else {
-		klog.Infof("ServiceUpdater: deleteOutboundService completed successfully for %s", serviceUID)
+		klog.Infof("ServiceUpdater: deleteOutboundService completed successfully correlationID=%s serviceUID=%s", correlationID, serviceUID)
 		// Update NRPResources to reflect the deletion
 		s.diffTracker.UpdateNRPNATGateways(SyncServicesReturnType{
 			Additions: nil,

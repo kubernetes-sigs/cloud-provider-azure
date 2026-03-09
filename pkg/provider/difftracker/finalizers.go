@@ -379,9 +379,6 @@ func (dt *DiffTracker) CheckPendingPodDeletions(ctx context.Context) {
 		remaining := len(dt.pendingPodDeletions)
 		dt.mu.Unlock()
 
-		// Update metric after cleanup
-		updatePendingPodDeletionsMetric(dt)
-
 		klog.V(2).Infof("CheckPendingPodDeletions: processed %d pod deletions, %d remaining",
 			len(processed), remaining)
 	}
@@ -499,9 +496,6 @@ func (dt *DiffTracker) RemoveLastPodFinalizers(ctx context.Context, serviceUID s
 		}
 		remaining := len(dt.pendingPodDeletions)
 		dt.mu.Unlock()
-
-		// Update metric after cleanup
-		updatePendingPodDeletionsMetric(dt)
 
 		klog.V(2).Infof("RemoveLastPodFinalizers: removed finalizers from %d last-pod entries for service %s (%d failed, %d remaining)",
 			len(processed), serviceUID, len(failed), remaining)

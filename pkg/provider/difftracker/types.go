@@ -3,6 +3,7 @@ package difftracker
 import (
 	"errors"
 	"sync"
+	"time"
 
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
@@ -171,6 +172,21 @@ type ServiceOperationState struct {
 	State       ResourceState
 	RetryCount  int
 	LastAttempt string // timestamp as string for serialization
+
+	// CreatedAt is when this operation was first enqueued. Never overwritten on retry.
+	// Used by the oldest-age metric to detect stuck operations.
+	CreatedAt time.Time
+
+	// IsOrphan indicates this is an orphaned Azure resource being cleaned up at startup.
+	IsOrphan bool
+
+	// CorrelationID is a unique ID for tracing all logs related to this operation.
+	CorrelationID string
+
+	// TriggeringPodNamespace and TriggeringPodName identify which pod triggered
+	// a NAT Gateway creation (outbound services only).
+	TriggeringPodNamespace string
+	TriggeringPodName      string
 }
 
 // PendingEndpointUpdate represents endpoints waiting for their service to be created

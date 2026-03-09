@@ -51,6 +51,7 @@ func InitializeFromCluster(
 	networkClientFactory azclient.ClientFactory,
 	kubeClient kubernetes.Interface,
 ) (*DiffTracker, error) {
+	initStartTime := time.Now()
 	mc := metrics.NewMetricContext("services", "InitializeFromCluster", config.ResourceGroup, config.SubscriptionID, config.ServiceGatewayResourceName)
 	isOperationSucceeded := false
 	defer func() {
@@ -171,6 +172,7 @@ func InitializeFromCluster(
 	// Mark initialization complete
 	diffTracker.InitialSyncDone = true
 	isOperationSucceeded = true
+	recordInitializationDuration(initStartTime)
 	klog.Infof("InitializeFromCluster: completed successfully")
 
 	return diffTracker, nil
@@ -336,6 +338,7 @@ func recoverStuckFinalizers(
 				klog.Infof("recoverStuckFinalizers: found stuck service %s/%s (uid=%s), will be handled by diff mechanism",
 					svc.Namespace, svc.Name, uid)
 				servicesRecovered++
+				recordFinalizerRecovered()
 			} else {
 				// No Azure resource - directly remove finalizer since there's nothing to clean up
 				klog.Warningf("recoverStuckFinalizers: service %s/%s (uid=%s) has finalizer but no Azure resource in NRP, removing finalizer directly",
@@ -345,6 +348,7 @@ func recoverStuckFinalizers(
 						svc.Namespace, svc.Name, err)
 				} else {
 					servicesDirectCleaned++
+					recordFinalizerRecovered()
 				}
 			}
 		}
@@ -404,6 +408,7 @@ func recoverStuckFinalizers(
 
 			klog.Infof("recoverStuckFinalizers: recovering stuck pod %s/%s (egress=%s, location=%s, address=%s)",
 				pod.Namespace, pod.Name, egressLabel, nodeIP, podIP)
+			recordFinalizerRecovered()
 
 			// Collect for batch insertion (Issue 2.4: avoid lock contention)
 			// NOTE: We do NOT call DeletePod() because:
@@ -444,9 +449,6 @@ func recoverStuckFinalizers(
 			dt.pendingPodDeletions[key] = val
 		}
 		dt.mu.Unlock()
-
-		// Update metric after batch insert
-		updatePendingPodDeletionsMetric(dt)
 	}
 
 	// NOTE: We do NOT trigger LocationsUpdater here because it's not started yet.
@@ -1009,12 +1011,14 @@ func scheduleOrphanedResourceDeletions(diffTracker *DiffTracker, currentLBsInAzu
 	for _, lbName := range orphanedLBs {
 		klog.Infof("scheduleOrphanedResourceDeletions: scheduling deletion for orphaned LB %s", lbName)
 		diffTracker.DeleteService(lbName, true, true) // inbound, isOrphan=true
+		recordOrphanedResourceCleaned()
 	}
 
 	// Schedule orphaned NAT Gateways for deletion
 	for _, natName := range orphanedNATs {
 		klog.Infof("scheduleOrphanedResourceDeletions: scheduling deletion for orphaned NAT Gateway %s", natName)
 		diffTracker.DeleteService(natName, false, true) // outbound, isOrphan=true
+		recordOrphanedResourceCleaned()
 	}
 
 	klog.Infof("scheduleOrphanedResourceDeletions: scheduled %d orphaned resources for deletion", totalOrphans)
