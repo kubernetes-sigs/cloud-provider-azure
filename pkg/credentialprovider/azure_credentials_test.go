@@ -387,195 +387,226 @@ func TestProcessMirrorMapping(t *testing.T) {
 	}
 }
 
-func TestNewAcrProvider_WithEmptyServiceAccountToken(t *testing.T) {
-	// Test case when ServiceAccountToken is empty - should use managed identity credential
+// createTempConfigFile creates a temporary config file with the given content and
+// registers cleanup to remove it when the test completes.
+func createTempConfigFile(t *testing.T, content string) string {
+	t.Helper()
 	configFile, err := os.CreateTemp(".", "config.json")
 	assert.NoError(t, err)
-	defer os.Remove(configFile.Name())
+	t.Cleanup(func() { os.Remove(configFile.Name()) })
 
-	configStr := `{
+	_, err = configFile.WriteString(content)
+	assert.NoError(t, err)
+	assert.NoError(t, configFile.Close())
+	return configFile.Name()
+}
+
+const (
+	testTenantIDConfig = `{
+		"tenantID": "test-tenant-id"
+	}`
+	testManagedIdentityConfig = `{
 		"useManagedIdentityExtension": true,
 		"userAssignedIdentityID": "test-client-id"
 	}`
-	_, err = configFile.WriteString(configStr)
-	assert.NoError(t, err)
-	assert.NoError(t, configFile.Close())
+)
 
-	req := &v1.CredentialProviderRequest{
-		Image:               "test.azurecr.io/test:latest",
-		ServiceAccountToken: "", // Empty token
-	}
-
-	provider, err := NewAcrProvider(req, "", configFile.Name(), IdentityBindingsConfig{})
-	assert.NoError(t, err)
-	assert.NotNil(t, provider)
-
-	acrProv := provider.(*acrProvider)
-	assert.NotNil(t, acrProv.credential)
-	assert.Equal(t, true, acrProv.config.UseManagedIdentityExtension)
-}
-
-func TestNewAcrProvider_WithServiceAccountToken(t *testing.T) {
-	// Test case when ServiceAccountToken is provided - should use service account credential
-	configFile, err := os.CreateTemp(".", "config.json")
-	assert.NoError(t, err)
-	defer os.Remove(configFile.Name())
-
-	configStr := `{
-		"tenantID": "test-tenant-id"
-	}`
-	_, err = configFile.WriteString(configStr)
-	assert.NoError(t, err)
-	assert.NoError(t, configFile.Close())
-
-	req := &v1.CredentialProviderRequest{
-		Image:               "test.azurecr.io/test:latest",
-		ServiceAccountToken: "test-service-account-token",
-		ServiceAccountAnnotations: map[string]string{
-			"kubernetes.azure.com/acr-client-id": "test-client-id",
-			"kubernetes.azure.com/acr-tenant-id": "test-tenant-id",
+func TestNewAcrProvider_CredentialSelection(t *testing.T) {
+	tests := []struct {
+		name                      string
+		configStr                 string
+		image                     string
+		serviceAccountToken       string
+		serviceAccountAnnotations map[string]string
+		registryMirror            string
+		ibConfig                  IdentityBindingsConfig
+		expectError               bool
+		errorContains             string
+		expectManagedIdentity     bool
+	}{
+		{
+			name:                  "empty service account token should use managed identity",
+			configStr:             testManagedIdentityConfig,
+			image:                 "test.azurecr.io/test:latest",
+			expectManagedIdentity: true,
+		},
+		{
+			name:                "service account token should use client assertion credential",
+			configStr:           testTenantIDConfig,
+			image:               "test.azurecr.io/test:latest",
+			serviceAccountToken: "test-service-account-token",
+			serviceAccountAnnotations: map[string]string{
+				clientIDAnnotation: "test-client-id",
+				tenantIDAnnotation: "test-tenant-id",
+			},
+		},
+		{
+			name:                "missing client ID annotation should return error",
+			configStr:           testTenantIDConfig,
+			image:               "test.azurecr.io/test:latest",
+			serviceAccountToken: "test-service-account-token",
+			serviceAccountAnnotations: map[string]string{
+				tenantIDAnnotation: "test-tenant-id",
+			},
+			expectError:   true,
+			errorContains: "client id annotation",
+		},
+		{
+			name:                "missing tenant ID annotation should return error",
+			configStr:           testTenantIDConfig,
+			image:               "test.azurecr.io/test:latest",
+			serviceAccountToken: "test-service-account-token",
+			serviceAccountAnnotations: map[string]string{
+				clientIDAnnotation: "test-client-id",
+			},
+			expectError:   true,
+			errorContains: "tenant id annotation",
+		},
+		{
+			name:                "empty client ID annotation should return error",
+			configStr:           testTenantIDConfig,
+			image:               "test.azurecr.io/test:latest",
+			serviceAccountToken: "test-service-account-token",
+			serviceAccountAnnotations: map[string]string{
+				clientIDAnnotation: "",
+				tenantIDAnnotation: "test-tenant-id",
+			},
+			expectError:   true,
+			errorContains: "client id annotation",
+		},
+		{
+			name:                "empty tenant ID annotation should return error",
+			configStr:           testTenantIDConfig,
+			image:               "test.azurecr.io/test:latest",
+			serviceAccountToken: "test-service-account-token",
+			serviceAccountAnnotations: map[string]string{
+				clientIDAnnotation: "test-client-id",
+				tenantIDAnnotation: "",
+			},
+			expectError:   true,
+			errorContains: "tenant id annotation",
+		},
+		{
+			name:          "invalid config should return error",
+			configStr:     `{invalid json`,
+			image:         "test.azurecr.io/test:latest",
+			expectError:   true,
+			errorContains: "failed to load config",
+		},
+		{
+			name:                "MCR image mirrored to ACR should use managed identity even with SA token",
+			configStr:           testManagedIdentityConfig,
+			image:               "mcr.microsoft.com/azure-cli:latest",
+			serviceAccountToken: "test-service-account-token",
+			serviceAccountAnnotations: map[string]string{
+				clientIDAnnotation: "test-client-id",
+				tenantIDAnnotation: "test-tenant-id",
+			},
+			registryMirror:        "mcr.microsoft.com:test.azurecr.io",
+			expectManagedIdentity: true,
+		},
+		{
+			name:                "non-ACR image with registry mirror should use SA token",
+			configStr:           testTenantIDConfig,
+			image:               "docker.io/library/nginx:latest",
+			serviceAccountToken: "test-service-account-token",
+			serviceAccountAnnotations: map[string]string{
+				clientIDAnnotation: "test-client-id",
+				tenantIDAnnotation: "test-tenant-id",
+			},
+			registryMirror: "mcr.microsoft.com:test.azurecr.io",
+		},
+		{
+			name:                "ACR image without registry mirror should use SA token",
+			configStr:           testTenantIDConfig,
+			image:               "test.azurecr.io/test:latest",
+			serviceAccountToken: "test-service-account-token",
+			serviceAccountAnnotations: map[string]string{
+				clientIDAnnotation: "test-client-id",
+				tenantIDAnnotation: "test-tenant-id",
+			},
+		},
+		{
+			name:           "MCR image mirrored to ACR should skip identity bindings and use managed identity",
+			configStr:      testManagedIdentityConfig,
+			image:          "mcr.microsoft.com/azure-cli:latest",
+			registryMirror: "mcr.microsoft.com:test.azurecr.io",
+			ibConfig: IdentityBindingsConfig{
+				SNIName: "test-sni-name",
+			},
+			expectManagedIdentity: true,
+		},
+		{
+			name:                "direct ACR image with registry mirror should use SA token",
+			configStr:           testTenantIDConfig,
+			image:               "test.azurecr.io/myapp:latest",
+			serviceAccountToken: "test-service-account-token",
+			serviceAccountAnnotations: map[string]string{
+				clientIDAnnotation: "test-client-id",
+				tenantIDAnnotation: "test-tenant-id",
+			},
+			registryMirror: "mcr.microsoft.com:mirror.azurecr.io",
+		},
+		{
+			name:           "direct ACR image with registry mirror should use identity bindings if configured",
+			configStr:      testTenantIDConfig,
+			image:          "test.azurecr.io/myapp:latest",
+			registryMirror: "mcr.microsoft.com:mirror.azurecr.io",
+			ibConfig: IdentityBindingsConfig{
+				SNIName: "test-sni-name",
+			},
+			expectError:   true,
+			errorContains: "identity bindings",
+		},
+		{
+			name:           "non-ACR image with registry mirror should use identity bindings if configured",
+			configStr:      testTenantIDConfig,
+			image:          "docker.io/library/nginx:latest",
+			registryMirror: "mcr.microsoft.com:test.azurecr.io",
+			ibConfig: IdentityBindingsConfig{
+				SNIName: "test-sni-name",
+			},
+			expectError:   true,
+			errorContains: "identity bindings",
+		},
+		{
+			name:           "mirror target image directly should use identity bindings if configured",
+			configStr:      testTenantIDConfig,
+			image:          "test.azurecr.io/azure-cli:latest",
+			registryMirror: "mcr.microsoft.com:test.azurecr.io",
+			ibConfig: IdentityBindingsConfig{
+				SNIName: "test-sni-name",
+			},
+			expectError:   true,
+			errorContains: "identity bindings",
 		},
 	}
 
-	provider, err := NewAcrProvider(req, "", configFile.Name(), IdentityBindingsConfig{})
-	assert.NoError(t, err)
-	assert.NotNil(t, provider)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			configPath := createTempConfigFile(t, tc.configStr)
 
-	acrProv := provider.(*acrProvider)
-	assert.NotNil(t, acrProv.credential)
-}
+			req := &v1.CredentialProviderRequest{
+				Image:                     tc.image,
+				ServiceAccountToken:       tc.serviceAccountToken,
+				ServiceAccountAnnotations: tc.serviceAccountAnnotations,
+			}
 
-func TestNewAcrProvider_WithServiceAccountToken_MissingClientIDAnnotation(t *testing.T) {
-	// Test case when ServiceAccountToken is provided but client ID annotation is missing
-	configFile, err := os.CreateTemp(".", "config.json")
-	assert.NoError(t, err)
-	defer os.Remove(configFile.Name())
+			provider, err := NewAcrProvider(req, tc.registryMirror, configPath, tc.ibConfig)
 
-	configStr := `{
-		"tenantID": "test-tenant-id"
-	}`
-	_, err = configFile.WriteString(configStr)
-	assert.NoError(t, err)
-	assert.NoError(t, configFile.Close())
-
-	req := &v1.CredentialProviderRequest{
-		Image:               "test.azurecr.io/test:latest",
-		ServiceAccountToken: "test-service-account-token",
-		ServiceAccountAnnotations: map[string]string{
-			"kubernetes.azure.com/acr-tenant-id": "test-tenant-id",
-			// kubernetes.azure.com/acr-client-id is missing
-		},
+			if tc.expectError {
+				assert.Error(t, err)
+				assert.Nil(t, provider)
+				assert.Contains(t, err.Error(), tc.errorContains)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, provider)
+				acrProv := provider.(*acrProvider)
+				assert.NotNil(t, acrProv.credential)
+				if tc.expectManagedIdentity {
+					assert.True(t, acrProv.config.UseManagedIdentityExtension)
+				}
+			}
+		})
 	}
-
-	provider, err := NewAcrProvider(req, "", configFile.Name(), IdentityBindingsConfig{})
-	assert.Error(t, err)
-	assert.Nil(t, provider)
-	assert.Contains(t, err.Error(), "client id annotation")
-}
-
-func TestNewAcrProvider_WithServiceAccountToken_MissingTenantIDAnnotation(t *testing.T) {
-	// Test case when ServiceAccountToken is provided but tenant ID annotation is missing
-	configFile, err := os.CreateTemp(".", "config.json")
-	assert.NoError(t, err)
-	defer os.Remove(configFile.Name())
-
-	configStr := `{
-		"tenantID": "test-tenant-id"
-	}`
-	_, err = configFile.WriteString(configStr)
-	assert.NoError(t, err)
-	assert.NoError(t, configFile.Close())
-
-	req := &v1.CredentialProviderRequest{
-		Image:               "test.azurecr.io/test:latest",
-		ServiceAccountToken: "test-service-account-token",
-		ServiceAccountAnnotations: map[string]string{
-			"kubernetes.azure.com/acr-client-id": "test-client-id",
-			// kubernetes.azure.com/acr-tenant-id is missing
-		},
-	}
-
-	provider, err := NewAcrProvider(req, "", configFile.Name(), IdentityBindingsConfig{})
-	assert.Error(t, err)
-	assert.Nil(t, provider)
-	assert.Contains(t, err.Error(), "tenant id annotation")
-}
-
-func TestNewAcrProvider_WithServiceAccountToken_EmptyClientID(t *testing.T) {
-	// Test case when ServiceAccountToken is provided but client ID annotation is empty
-	configFile, err := os.CreateTemp(".", "config.json")
-	assert.NoError(t, err)
-	defer os.Remove(configFile.Name())
-
-	configStr := `{
-		"tenantID": "test-tenant-id"
-	}`
-	_, err = configFile.WriteString(configStr)
-	assert.NoError(t, err)
-	assert.NoError(t, configFile.Close())
-
-	req := &v1.CredentialProviderRequest{
-		Image:               "test.azurecr.io/test:latest",
-		ServiceAccountToken: "test-service-account-token",
-		ServiceAccountAnnotations: map[string]string{
-			"kubernetes.azure.com/acr-client-id": "", // Empty client ID
-			"kubernetes.azure.com/acr-tenant-id": "test-tenant-id",
-		},
-	}
-
-	provider, err := NewAcrProvider(req, "", configFile.Name(), IdentityBindingsConfig{})
-	assert.Error(t, err)
-	assert.Nil(t, provider)
-	assert.Contains(t, err.Error(), "client id annotation")
-}
-
-func TestNewAcrProvider_WithServiceAccountToken_EmptyTenantID(t *testing.T) {
-	// Test case when ServiceAccountToken is provided but tenant ID annotation is empty
-	configFile, err := os.CreateTemp(".", "config.json")
-	assert.NoError(t, err)
-	defer os.Remove(configFile.Name())
-
-	configStr := `{
-		"tenantID": "test-tenant-id"
-	}`
-	_, err = configFile.WriteString(configStr)
-	assert.NoError(t, err)
-	assert.NoError(t, configFile.Close())
-
-	req := &v1.CredentialProviderRequest{
-		Image:               "test.azurecr.io/test:latest",
-		ServiceAccountToken: "test-service-account-token",
-		ServiceAccountAnnotations: map[string]string{
-			"kubernetes.azure.com/acr-client-id": "test-client-id",
-			"kubernetes.azure.com/acr-tenant-id": "", // Empty tenant ID
-		},
-	}
-
-	provider, err := NewAcrProvider(req, "", configFile.Name(), IdentityBindingsConfig{})
-	assert.Error(t, err)
-	assert.Nil(t, provider)
-	assert.Contains(t, err.Error(), "tenant id annotation")
-}
-
-func TestNewAcrProvider_InvalidConfig(t *testing.T) {
-	// Test case when config file is invalid
-	configFile, err := os.CreateTemp(".", "config.json")
-	assert.NoError(t, err)
-	defer os.Remove(configFile.Name())
-
-	// Invalid JSON
-	invalidConfigStr := `{invalid json`
-	_, err = configFile.WriteString(invalidConfigStr)
-	assert.NoError(t, err)
-	assert.NoError(t, configFile.Close())
-
-	req := &v1.CredentialProviderRequest{
-		Image:               "test.azurecr.io/test:latest",
-		ServiceAccountToken: "",
-	}
-
-	provider, err := NewAcrProvider(req, "", configFile.Name(), IdentityBindingsConfig{})
-	assert.Error(t, err)
-	assert.Nil(t, provider)
-	assert.Contains(t, err.Error(), "failed to load config")
 }
