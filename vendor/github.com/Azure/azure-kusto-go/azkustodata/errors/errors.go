@@ -354,12 +354,13 @@ func (c *CombinedError) AddError(e error) bool {
 
 	var c2 *CombinedError
 	if errors.As(e, &c2) {
+		anyAdded := false
 		for _, err := range c2.Errors {
 			if c.AddError(err) {
-				return true
+				anyAdded = true
 			}
 		}
-		return false
+		return anyAdded
 	}
 
 	for _, err := range c.Errors {
@@ -371,14 +372,19 @@ func (c *CombinedError) AddError(e error) bool {
 	return true
 }
 
-func (c *CombinedError) Unwrap() error {
+// Returning []error (rather than a single error) allows errors.Is and errors.As
+// to traverse all contained errors when checking for matches.
+func (c *CombinedError) Unwrap() []error {
+	return c.Errors
+}
+
+func (c *CombinedError) GetError() error {
 	if len(c.Errors) == 0 {
 		return nil
 	}
 	if len(c.Errors) == 1 {
 		return c.Errors[0]
 	}
-
 	return c
 }
 
@@ -387,5 +393,5 @@ func CombineErrors(errs ...error) error {
 	for _, err := range errs {
 		combined.AddError(err)
 	}
-	return combined.Unwrap()
+	return combined.GetError()
 }

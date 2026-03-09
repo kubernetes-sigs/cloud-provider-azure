@@ -63,6 +63,6 @@ func GetDefaultResourceClientOption(armConfig *ARMClientConfig) (*policy.ClientO
 		armClientOption.AuxiliaryTenants = []string{armConfig.NetworkResourceTenantID}
 	}
 
-	armClientOption.ClientOptions.Transport = DefaultResourceClientTransport
+	armClientOption.Transport = DefaultResourceClientTransport
 	return &armClientOption, err
 }
