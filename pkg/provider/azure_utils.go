@@ -498,6 +498,16 @@ func StringInSlice(s string, list []string) bool {
 	return false
 }
 
+// StringInSliceIgnoreCase checks if a string is in a list, ignoring case.
+func StringInSliceIgnoreCase(s string, list []string) bool {
+	for _, item := range list {
+		if strings.EqualFold(item, s) {
+			return true
+		}
+	}
+	return false
+}
+
 // IntInSlice checks if an int is in a list
 func IntInSlice(i int, list []int) bool {
 	for _, item := range list {
