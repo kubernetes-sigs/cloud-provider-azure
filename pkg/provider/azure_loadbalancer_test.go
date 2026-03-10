@@ -1998,9 +1998,9 @@ func TestGetServiceLoadBalancerMultiSLB(t *testing.T) {
 				{Name: "lb2"},
 			},
 			expectedError: fmt.Errorf(
-				"service %q cannot migrate from load balancer %q because frontend IP %q is shared with other services. "+
-					"Remove the %s annotation to stay on load balancer %q",
-				"primary", "lb1", "aprimary",
+				"service %q cannot migrate from load balancer %q to %q because frontend IP %q is shared with other services; "+
+					"remove the %s annotation to stay on load balancer %q",
+				"primary", "lb1", "lb2", "aprimary",
 				consts.ServiceAnnotationLoadBalancerConfigurations, "lb1"),
 		},
 		{
@@ -2054,9 +2054,9 @@ func TestGetServiceLoadBalancerMultiSLB(t *testing.T) {
 				{Name: "lb2"},
 			},
 			expectedError: fmt.Errorf(
-				"service %q cannot migrate from load balancer %q because frontend IP %q is shared with other services. "+
-					"Remove the %s annotation to stay on load balancer %q",
-				"primary", "lb1-internal", "aprimary",
+				"service %q cannot migrate from load balancer %q to %q because frontend IP %q is shared with other services; "+
+					"remove the %s annotation to stay on load balancer %q",
+				"primary", "lb1-internal", "lb2-internal", "aprimary",
 				consts.ServiceAnnotationLoadBalancerConfigurations, "lb1-internal"),
 		},
 		{
@@ -2355,9 +2355,9 @@ func TestGetServiceLoadBalancerMultiSLB(t *testing.T) {
 				{Name: "lb2"},
 			},
 			expectedError: fmt.Errorf(
-				"service %q cannot migrate from load balancer %q because frontend IP %q is shared with other services. "+
-					"Remove the %s annotation to stay on load balancer %q",
-				"sharedprimary", "lb1", "asharedprimary",
+				"service %q cannot migrate from load balancer %q to %q because frontend IP %q is shared with other services; "+
+					"remove the %s annotation to stay on load balancer %q",
+				"sharedprimary", "lb1", "lb2", "asharedprimary",
 				consts.ServiceAnnotationLoadBalancerConfigurations, "lb1"),
 		},
 		{
@@ -2557,9 +2557,9 @@ func TestGetServiceLoadBalancerMultiSLB(t *testing.T) {
 				{Name: "lb2"},
 			},
 			expectedError: fmt.Errorf(
-				"service %q cannot migrate from load balancer %q because frontend IP %q is shared with other services. "+
-					"Remove the %s annotation to stay on load balancer %q",
-				"sharedprimary", "lb1-internal", "asharedprimary",
+				"service %q cannot migrate from load balancer %q to %q because frontend IP %q is shared with other services; "+
+					"remove the %s annotation to stay on load balancer %q",
+				"sharedprimary", "lb1-internal", "lb2-internal", "asharedprimary",
 				consts.ServiceAnnotationLoadBalancerConfigurations, "lb1-internal"),
 		},
 		{
