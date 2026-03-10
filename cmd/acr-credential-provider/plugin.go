@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Kubernetes Authors.
+Copyright 2026 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -44,13 +44,20 @@ func init() {
 
 // ExecPlugin implements the exec-based plugin for fetching credentials that is invoked by the kubelet.
 type ExecPlugin struct {
-	plugin credentialprovider.CredentialProvider
+	configFile        string
+	RegistryMirrorStr string
+	IBConfig          credentialprovider.IdentityBindingsConfig
+	plugin            credentialprovider.CredentialProvider
 }
 
 // NewCredentialProvider returns an instance of execPlugin that fetches
 // credentials based on the provided plugin implementing the CredentialProvider interface.
-func NewCredentialProvider(plugin credentialprovider.CredentialProvider) *ExecPlugin {
-	return &ExecPlugin{plugin}
+func NewCredentialProvider(configFile string, registryMirrorStr string, ibConfig credentialprovider.IdentityBindingsConfig) *ExecPlugin {
+	return &ExecPlugin{
+		configFile:        configFile,
+		RegistryMirrorStr: registryMirrorStr,
+		IBConfig:          ibConfig,
+	}
 }
 
 // Run executes the credential provider plugin. Required information for the plugin request (in
@@ -83,6 +90,14 @@ func (e *ExecPlugin) runPlugin(ctx context.Context, r io.Reader, w io.Writer, ar
 
 	if request.Image == "" {
 		return errors.New("image in plugin request was empty")
+	}
+
+	if e.plugin == nil {
+		// acr provider plugin are decided at runtime by the request information.
+		e.plugin, err = credentialprovider.NewAcrProvider(request, e.RegistryMirrorStr, e.configFile, e.IBConfig)
+		if err != nil {
+			return err
+		}
 	}
 
 	response, err := e.plugin.GetCredentials(ctx, request.Image, args)
