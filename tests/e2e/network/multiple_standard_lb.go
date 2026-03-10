@@ -463,6 +463,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		const (
 			eventTimeout      = 30 * time.Second
 			notExposedTimeout = 150 * time.Second
+			ipChangeTimeout   = 150 * time.Second
 
 			svcNamePrimary = "svc-primary"
 			svcNameLBIP    = "svc-lbip"
@@ -599,6 +600,44 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			By("Verifying primary FIP has rules for all services")
 			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port, svc2Port, svc3Port), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for all services sharing the IP")
+
+			By("Adding LB annotation to " + svcNameIPv4 + " while it still shares IP, expecting blocked")
+			primaryLB := getAzureLoadBalancerFromPIP(tc, &sharedIP, tc.GetResourceGroup(), tc.GetResourceGroup())
+			primaryLBName := ptr.Deref(primaryLB.Name, "")
+			targetLBAnnotation := "lb-1"
+			if primaryLBName == "lb-1" {
+				targetLBAnnotation = os.Getenv("CLUSTER_NAME")
+			}
+			beforeUpdate := time.Now()
+			svc3, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			svc3.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = targetLBAnnotation
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc3, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameIPv4, "SyncLoadBalancerFailed", msgConflictingLBConfig, beforeUpdate, eventTimeout)
+			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event for "+svcNameIPv4)
+
+			By("Removing IP annotation from " + svcNameIPv4 + " to resolve conflict and move to " + targetLBAnnotation)
+			svc3, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			delete(svc3.Annotations, consts.ServiceAnnotationLoadBalancerIPDualStack[false])
+			delete(svc3.Annotations, consts.ServiceAnnotationLoadBalancerIPDualStack[true])
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc3, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for " + svcNameIPv4 + " to get a new IP on " + targetLBAnnotation)
+			newIP, err := waitForServiceIPChange(cs, ns.Name, svcNameIPv4, sharedIP, ipChangeTimeout)
+			Expect(err).NotTo(HaveOccurred())
+			newFIPID := getPIPFrontendConfigurationID(tc, newIP, tc.GetResourceGroup(), true)
+			utils.Logf("%s moved to new IP %s on FIP: %s", svcNameIPv4, newIP, newFIPID)
+
+			By("Verifying primary FIP no longer has " + svcNameIPv4 + "'s rules")
+			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port, svc2Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Primary FIP should only have remaining services' rules")
+
+			By("Verifying " + svcNameIPv4 + " has rules on the new FIP")
+			err = verifyFIPHasRulesForPorts(tc, newFIPID, sets.New(svc3Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should have its rule on the new FIP")
 		})
 
 		It("should block external services with conflicting IP and LB config for managed PIP", func() {
@@ -688,6 +727,44 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			By("Verifying primary FIP has rules for all services")
 			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port, svc2Port), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for all services sharing the IP")
+
+			By("Adding LB annotation to " + svcNameIPv4 + " while it still shares IP, expecting blocked")
+			primaryLB := getAzureLoadBalancerFromPIP(tc, &sharedIP, tc.GetResourceGroup(), tc.GetResourceGroup())
+			primaryLBName := ptr.Deref(primaryLB.Name, "")
+			targetLBAnnotation := "lb-1"
+			if primaryLBName == "lb-1" {
+				targetLBAnnotation = os.Getenv("CLUSTER_NAME")
+			}
+			beforeUpdate := time.Now()
+			svc2, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			svc2.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = targetLBAnnotation
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc2, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameIPv4, "SyncLoadBalancerFailed", msgConflictingLBConfig, beforeUpdate, eventTimeout)
+			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event for "+svcNameIPv4)
+
+			By("Removing IP annotation from " + svcNameIPv4 + " to resolve conflict and move to " + targetLBAnnotation)
+			svc2, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			delete(svc2.Annotations, consts.ServiceAnnotationLoadBalancerIPDualStack[false])
+			delete(svc2.Annotations, consts.ServiceAnnotationLoadBalancerIPDualStack[true])
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc2, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for " + svcNameIPv4 + " to get a new IP on " + targetLBAnnotation)
+			newIP, err := waitForServiceIPChange(cs, ns.Name, svcNameIPv4, sharedIP, ipChangeTimeout)
+			Expect(err).NotTo(HaveOccurred())
+			newFIPID := getPIPFrontendConfigurationID(tc, newIP, tc.GetResourceGroup(), true)
+			utils.Logf("%s moved to new IP %s on FIP: %s", svcNameIPv4, newIP, newFIPID)
+
+			By("Verifying primary FIP no longer has " + svcNameIPv4 + "'s rules")
+			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Primary FIP should only have remaining services' rules")
+
+			By("Verifying " + svcNameIPv4 + " has rules on the new FIP")
+			err = verifyFIPHasRulesForPorts(tc, newFIPID, sets.New(svc2Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should have its rule on the new FIP")
 		})
 
 		It("should block internal services with conflicting IP and LB config", func() {
@@ -777,6 +854,45 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			By("Verifying primary FIP has rules for all services")
 			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port, svc2Port), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for all services sharing the IP")
+
+			By("Adding LB annotation to " + svcNameIPv4 + " while it still shares IP, expecting blocked")
+			primaryLB := getAzureInternalLoadBalancerFromPrivateIP(tc, &sharedIP, tc.GetResourceGroup())
+			primaryLBName := ptr.Deref(primaryLB.Name, "")
+			targetLBAnnotation := "lb-1"
+			if primaryLBName == "lb-1-internal" {
+				targetLBAnnotation = os.Getenv("CLUSTER_NAME")
+			}
+			beforeUpdate := time.Now()
+			svc2, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			svc2.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = targetLBAnnotation
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc2, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameIPv4, "SyncLoadBalancerFailed", msgConflictingLBConfig, beforeUpdate, eventTimeout)
+			Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event for "+svcNameIPv4)
+
+			By("Removing IP annotation from " + svcNameIPv4 + " to resolve conflict and move to " + targetLBAnnotation)
+			svc2, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			delete(svc2.Annotations, consts.ServiceAnnotationLoadBalancerIPDualStack[false])
+			delete(svc2.Annotations, consts.ServiceAnnotationLoadBalancerIPDualStack[true])
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc2, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for " + svcNameIPv4 + " to get a new IP on " + targetLBAnnotation)
+			newIP, err := waitForServiceIPChange(cs, ns.Name, svcNameIPv4, sharedIP, ipChangeTimeout)
+			Expect(err).NotTo(HaveOccurred())
+			newLB := getAzureInternalLoadBalancerFromPrivateIP(tc, &newIP, tc.GetResourceGroup())
+			newFIPID := getFIPIDForPrivateIP(newLB, newIP)
+			utils.Logf("%s moved to new IP %s on FIP: %s", svcNameIPv4, newIP, newFIPID)
+
+			By("Verifying primary FIP no longer has " + svcNameIPv4 + "'s rules")
+			err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, svc1Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Primary FIP should only have remaining services' rules")
+
+			By("Verifying " + svcNameIPv4 + " has rules on the new FIP")
+			err = verifyFIPHasRulesForPorts(tc, newFIPID, sets.New(svc2Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should have its rule on the new FIP")
 		})
 
 		It("should block external primary service from moving LB when there is IP sharing", func() {
