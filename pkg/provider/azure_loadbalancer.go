@@ -812,7 +812,7 @@ func (az *Cloud) getServiceLoadBalancer(
 	// so all LBs should be scanned instead of returning on the first match.
 	lbIPs := getServiceLoadBalancerIPs(service)
 	pipNames := getServicePIPNames(service)
-	pinsIP := len(lbIPs) > 0 || lo.ContainsBy(pipNames, func(s string) bool { return s != "" })
+	pinsIP := len(lbIPs) > 0 || len(pipNames) > 0
 	isPinnedIPMultiSLB := wantLb && az.UseMultipleStandardLoadBalancers() && pinsIP
 	var defaultLBStatus *v1.LoadBalancerStatus
 	var defaultLBIPsPrimaryPIPs []string
@@ -4161,7 +4161,7 @@ func (az *Cloud) getAzureLoadBalancerName(
 	if az.UseMultipleStandardLoadBalancers() {
 		lbIPs := getServiceLoadBalancerIPs(service)
 		pipNames := getServicePIPNames(service)
-		pinsIP := len(lbIPs) > 0 || lo.ContainsBy(pipNames, func(s string) bool { return s != "" })
+		pinsIP := len(lbIPs) > 0 || len(pipNames) > 0
 
 		// Only block when creating resources (wantLb=true).
 		// Cleanup operations (wantLb=false) don't need this constraint.

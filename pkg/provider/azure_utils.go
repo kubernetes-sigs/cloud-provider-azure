@@ -397,7 +397,9 @@ func getServicePIPName(service *v1.Service, isIPv6 bool) string {
 func getServicePIPNames(service *v1.Service) []string {
 	var ips []string
 	for _, ipVersion := range []bool{IPVersionIPv4, IPVersionIPv6} {
-		ips = append(ips, getServicePIPName(service, ipVersion))
+		if name := getServicePIPName(service, ipVersion); name != "" {
+			ips = append(ips, name)
+		}
 	}
 	return ips
 }
