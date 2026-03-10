@@ -862,15 +862,10 @@ func (az *Cloud) getServiceLoadBalancer(
 						return nil, nil, nil, nil, false, false, err
 					}
 					if unsafe {
-						logger.Info("Blocking load balancer migration because frontend IP is shared with other services",
-							"service", service.Name,
-							"loadBalancer", ptr.Deref(existingLB.Name, ""),
-							"targetLoadBalancer", defaultLBName,
-							"frontendIP", ptr.Deref(fip.Name, ""))
 						return nil, nil, nil, nil, false, false, fmt.Errorf(
-							"service %q cannot migrate from load balancer %q because frontend IP %q is shared with other services. "+
-								"Remove the %s annotation to stay on load balancer %q",
-							service.Name, ptr.Deref(existingLB.Name, ""), ptr.Deref(fip.Name, ""),
+							"service %q cannot migrate from load balancer %q to %q because frontend IP %q is shared with other services; "+
+								"remove the %s annotation to stay on load balancer %q",
+							service.Name, ptr.Deref(existingLB.Name, ""), defaultLBName, ptr.Deref(fip.Name, ""),
 							consts.ServiceAnnotationLoadBalancerConfigurations, ptr.Deref(existingLB.Name, ""))
 					}
 				}
