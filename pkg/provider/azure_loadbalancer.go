@@ -4173,7 +4173,8 @@ func (az *Cloud) getAzureLoadBalancerName(
 		if wantLb {
 			// Block the combination of LB configuration annotation and IP spec.
 			// When specifying an IP, the LB is determined by where the IP resides.
-			// Specifying a different LB is contradictory and would cause unexpected outcome.
+			// Specifying a different LB is contradictory. This early check also
+			// avoids unnecessary PIP lookups on every reconcile.
 			annotatedLBs := consts.GetLoadBalancerConfigurationsNames(service)
 			logger.V(5).Info("checking LB and IP config", "service", service.Name, "annotatedLBs", annotatedLBs, "lbIPs", lbIPs, "pipNames", pipNames, "pinsIP", pinsIP)
 			if len(annotatedLBs) > 0 && pinsIP {
