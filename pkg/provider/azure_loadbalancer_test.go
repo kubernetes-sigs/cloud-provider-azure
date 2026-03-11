@@ -10880,3 +10880,109 @@ func fakeEnsureHostsInPool() func(context.Context, *v1.Service, []*v1.Node, stri
 		return nil
 	}
 }
+
+func TestLbHasServiceOwnedResources(t *testing.T) {
+	svcUID := "testuid"
+	clusterSvc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{UID: types.UID(svcUID)},
+		Spec:       v1.ServiceSpec{ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster},
+	}
+	localSvc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{UID: types.UID(svcUID)},
+		Spec:       v1.ServiceSpec{ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal},
+	}
+	prefix := "a" + svcUID
+	otherPrefix := "a" + "otheruid"
+
+	tests := []struct {
+		name     string
+		svc      *v1.Service
+		lb       *armnetwork.LoadBalancer
+		expected bool
+	}{
+		{
+			name:     "nil properties",
+			svc:      clusterSvc,
+			lb:       &armnetwork.LoadBalancer{},
+			expected: false,
+		},
+		{
+			name: "empty rules and probes",
+			svc:  clusterSvc,
+			lb: &armnetwork.LoadBalancer{
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{},
+			},
+			expected: false,
+		},
+		{
+			name: "LB only has rules from another service",
+			svc:  clusterSvc,
+			lb: &armnetwork.LoadBalancer{
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{Name: ptr.To(otherPrefix + "-TCP-80")},
+					},
+					Probes: []*armnetwork.Probe{
+						{Name: ptr.To(otherPrefix + "-TCP-80")},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "LB shared by multiple services including ours",
+			svc:  clusterSvc,
+			lb: &armnetwork.LoadBalancer{
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{Name: ptr.To(otherPrefix + "-TCP-80")},
+						{Name: ptr.To(prefix + "-TCP-443")},
+					},
+					Probes: []*armnetwork.Probe{
+						{Name: ptr.To(otherPrefix + "-TCP-80")},
+						{Name: ptr.To(prefix + "-TCP-443")},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "shared probe matches for cluster traffic policy",
+			svc:  clusterSvc,
+			lb: &armnetwork.LoadBalancer{
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{Name: ptr.To(otherPrefix + "-TCP-80")},
+					},
+					Probes: []*armnetwork.Probe{
+						{Name: ptr.To(consts.SharedProbeName)},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "shared probe does not match for local traffic policy",
+			svc:  localSvc,
+			lb: &armnetwork.LoadBalancer{
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{Name: ptr.To(otherPrefix + "-TCP-80")},
+					},
+					Probes: []*armnetwork.Probe{
+						{Name: ptr.To(consts.SharedProbeName)},
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	az := &Cloud{}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := az.lbHasServiceOwnedResources(tc.lb, tc.svc)
+			assert.Equal(t, tc.expected, got)
+		})
+	}
+}
