@@ -76,7 +76,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-pip-client azsdk-go-armnetwork/v6.2.0 (go1.24.2; darwin)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2024-05-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2025-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -89,7 +89,7 @@ interactions:
         body: '{"name":"pip1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"chinaeast2","properties":{"provisioningState":"Updating","resourceGuid":"00000000-0000-0000-0000-000000000000","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","idleTimeoutInMinutes":4,"ipTags":[],"ddosSettings":{"protectionMode":"VirtualNetworkInherited"}},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Standard","tier":"Regional"}}'
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -130,7 +130,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-pip-client azsdk-go-armnetwork/v6.2.0 (go1.24.2; darwin)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -182,7 +182,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-pip-client azsdk-go-armnetwork/v6.2.0 (go1.24.2; darwin)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2024-05-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -240,7 +240,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.2; darwin)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2024-05-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2025-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -253,7 +253,7 @@ interactions:
         body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/natGateways","location":"chinaeast2","properties":{"provisioningState":"Updating","resourceGuid":"00000000-0000-0000-0000-000000000000","idleTimeoutInMinutes":4,"type":"Public","publicIpAddresses":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1"}]},"sku":{"name":"Standard","tier":"Regional"}}'
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -294,7 +294,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.2; darwin)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -346,7 +346,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.2; darwin)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2024-05-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -400,7 +400,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.2; darwin)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2024-05-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -454,7 +454,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.2; darwin)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResourcenotfound?api-version=2024-05-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResourcenotfound?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -507,7 +507,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.2; darwin)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2024-05-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2025-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -520,7 +520,7 @@ interactions:
         body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/natGateways","location":"chinaeast2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","idleTimeoutInMinutes":4,"type":"Public","publicIpAddresses":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1"}]},"sku":{"name":"Standard","tier":"Regional"}}'
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -561,7 +561,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.2; darwin)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2024-05-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -615,7 +615,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.2; darwin)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways?api-version=2024-05-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -669,7 +669,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.2; darwin)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGatewaynotfound/providers/Microsoft.Network/natGateways?api-version=2024-05-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGatewaynotfound/providers/Microsoft.Network/natGateways?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -718,7 +718,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.2; darwin)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2024-05-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2025-05-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -731,7 +731,7 @@ interactions:
         body: ""
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -739,7 +739,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Server:
@@ -772,7 +772,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.2; darwin)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -826,7 +826,7 @@ interactions:
                 - application/json
             User-Agent:
                 - ccm-pip-client azsdk-go-armnetwork/v6.2.0 (go1.24.2; darwin)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2024-05-01
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2025-05-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -839,7 +839,7 @@ interactions:
         body: ""
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -847,7 +847,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Server:
@@ -880,7 +880,7 @@ interactions:
         headers:
             User-Agent:
                 - ccm-pip-client azsdk-go-armnetwork/v6.2.0 (go1.24.2; darwin)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
