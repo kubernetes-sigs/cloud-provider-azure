@@ -73,8 +73,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-SecurityGroup-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource?api-version=2024-05-01
+                - ccm-SecurityGroup-client azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource?api-version=2025-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -87,7 +87,7 @@ interactions:
         body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/networkSecurityGroups","location":"chinaeast2","properties":{"provisioningState":"Updating","resourceGuid":"00000000-0000-0000-0000-000000000000","securityRules":[],"defaultSecurityRules":[{"name":"AllowVnetInBound","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource/defaultSecurityRules/AllowVnetInBound","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/networkSecurityGroups/defaultSecurityRules","properties":{"provisioningState":"Updating","description":"Allow inbound traffic from all VMs in VNET","protocol":"*","sourcePortRange":"*","destinationPortRange":"*","sourceAddressPrefix":"VirtualNetwork","destinationAddressPrefix":"VirtualNetwork","access":"Allow","priority":65000,"direction":"Inbound","sourcePortRanges":[],"destinationPortRanges":[],"sourceAddressPrefixes":[],"destinationAddressPrefixes":[]}},{"name":"AllowAzureLoadBalancerInBound","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource/defaultSecurityRules/AllowAzureLoadBalancerInBound","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/networkSecurityGroups/defaultSecurityRules","properties":{"provisioningState":"Updating","description":"Allow inbound traffic from azure load balancer","protocol":"*","sourcePortRange":"*","destinationPortRange":"*","sourceAddressPrefix":"AzureLoadBalancer","destinationAddressPrefix":"*","access":"Allow","priority":65001,"direction":"Inbound","sourcePortRanges":[],"destinationPortRanges":[],"sourceAddressPrefixes":[],"destinationAddressPrefixes":[]}},{"name":"DenyAllInBound","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource/defaultSecurityRules/DenyAllInBound","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/networkSecurityGroups/defaultSecurityRules","properties":{"provisioningState":"Updating","description":"Deny all inbound traffic","protocol":"*","sourcePortRange":"*","destinationPortRange":"*","sourceAddressPrefix":"*","destinationAddressPrefix":"*","access":"Deny","priority":65500,"direction":"Inbound","sourcePortRanges":[],"destinationPortRanges":[],"sourceAddressPrefixes":[],"destinationAddressPrefixes":[]}},{"name":"AllowVnetOutBound","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource/defaultSecurityRules/AllowVnetOutBound","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/networkSecurityGroups/defaultSecurityRules","properties":{"provisioningState":"Updating","description":"Allow outbound traffic from all VMs to all VMs in VNET","protocol":"*","sourcePortRange":"*","destinationPortRange":"*","sourceAddressPrefix":"VirtualNetwork","destinationAddressPrefix":"VirtualNetwork","access":"Allow","priority":65000,"direction":"Outbound","sourcePortRanges":[],"destinationPortRanges":[],"sourceAddressPrefixes":[],"destinationAddressPrefixes":[]}},{"name":"AllowInternetOutBound","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource/defaultSecurityRules/AllowInternetOutBound","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/networkSecurityGroups/defaultSecurityRules","properties":{"provisioningState":"Updating","description":"Allow outbound traffic from all VMs to Internet","protocol":"*","sourcePortRange":"*","destinationPortRange":"*","sourceAddressPrefix":"*","destinationAddressPrefix":"Internet","access":"Allow","priority":65001,"direction":"Outbound","sourcePortRanges":[],"destinationPortRanges":[],"sourceAddressPrefixes":[],"destinationAddressPrefixes":[]}},{"name":"DenyAllOutBound","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource/defaultSecurityRules/DenyAllOutBound","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/networkSecurityGroups/defaultSecurityRules","properties":{"provisioningState":"Updating","description":"Deny all outbound traffic","protocol":"*","sourcePortRange":"*","destinationPortRange":"*","sourceAddressPrefix":"*","destinationAddressPrefix":"*","access":"Deny","priority":65500,"direction":"Outbound","sourcePortRanges":[],"destinationPortRanges":[],"sourceAddressPrefixes":[],"destinationAddressPrefixes":[]}}]}}'
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -123,8 +123,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-SecurityGroup-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - ccm-SecurityGroup-client azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -171,8 +171,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-SecurityGroup-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource?api-version=2024-05-01
+                - ccm-SecurityGroup-client azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -223,8 +223,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-SecurityGroup-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource?api-version=2024-05-01
+                - ccm-SecurityGroup-client azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -275,8 +275,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-SecurityGroup-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResourcenotfound?api-version=2024-05-01
+                - ccm-SecurityGroup-client azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResourcenotfound?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -328,8 +328,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-SecurityGroup-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource?api-version=2024-05-01
+                - ccm-SecurityGroup-client azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource?api-version=2025-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -342,7 +342,7 @@ interactions:
         body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/networkSecurityGroups","location":"chinaeast2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","securityRules":[],"defaultSecurityRules":[{"name":"AllowVnetInBound","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource/defaultSecurityRules/AllowVnetInBound","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/networkSecurityGroups/defaultSecurityRules","properties":{"provisioningState":"Succeeded","description":"Allow inbound traffic from all VMs in VNET","protocol":"*","sourcePortRange":"*","destinationPortRange":"*","sourceAddressPrefix":"VirtualNetwork","destinationAddressPrefix":"VirtualNetwork","access":"Allow","priority":65000,"direction":"Inbound","sourcePortRanges":[],"destinationPortRanges":[],"sourceAddressPrefixes":[],"destinationAddressPrefixes":[]}},{"name":"AllowAzureLoadBalancerInBound","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource/defaultSecurityRules/AllowAzureLoadBalancerInBound","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/networkSecurityGroups/defaultSecurityRules","properties":{"provisioningState":"Succeeded","description":"Allow inbound traffic from azure load balancer","protocol":"*","sourcePortRange":"*","destinationPortRange":"*","sourceAddressPrefix":"AzureLoadBalancer","destinationAddressPrefix":"*","access":"Allow","priority":65001,"direction":"Inbound","sourcePortRanges":[],"destinationPortRanges":[],"sourceAddressPrefixes":[],"destinationAddressPrefixes":[]}},{"name":"DenyAllInBound","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource/defaultSecurityRules/DenyAllInBound","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/networkSecurityGroups/defaultSecurityRules","properties":{"provisioningState":"Succeeded","description":"Deny all inbound traffic","protocol":"*","sourcePortRange":"*","destinationPortRange":"*","sourceAddressPrefix":"*","destinationAddressPrefix":"*","access":"Deny","priority":65500,"direction":"Inbound","sourcePortRanges":[],"destinationPortRanges":[],"sourceAddressPrefixes":[],"destinationAddressPrefixes":[]}},{"name":"AllowVnetOutBound","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource/defaultSecurityRules/AllowVnetOutBound","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/networkSecurityGroups/defaultSecurityRules","properties":{"provisioningState":"Succeeded","description":"Allow outbound traffic from all VMs to all VMs in VNET","protocol":"*","sourcePortRange":"*","destinationPortRange":"*","sourceAddressPrefix":"VirtualNetwork","destinationAddressPrefix":"VirtualNetwork","access":"Allow","priority":65000,"direction":"Outbound","sourcePortRanges":[],"destinationPortRanges":[],"sourceAddressPrefixes":[],"destinationAddressPrefixes":[]}},{"name":"AllowInternetOutBound","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource/defaultSecurityRules/AllowInternetOutBound","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/networkSecurityGroups/defaultSecurityRules","properties":{"provisioningState":"Succeeded","description":"Allow outbound traffic from all VMs to Internet","protocol":"*","sourcePortRange":"*","destinationPortRange":"*","sourceAddressPrefix":"*","destinationAddressPrefix":"Internet","access":"Allow","priority":65001,"direction":"Outbound","sourcePortRanges":[],"destinationPortRanges":[],"sourceAddressPrefixes":[],"destinationAddressPrefixes":[]}},{"name":"DenyAllOutBound","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource/defaultSecurityRules/DenyAllOutBound","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/networkSecurityGroups/defaultSecurityRules","properties":{"provisioningState":"Succeeded","description":"Deny all outbound traffic","protocol":"*","sourcePortRange":"*","destinationPortRange":"*","sourceAddressPrefix":"*","destinationAddressPrefix":"*","access":"Deny","priority":65500,"direction":"Outbound","sourcePortRanges":[],"destinationPortRanges":[],"sourceAddressPrefixes":[],"destinationAddressPrefixes":[]}}]}}'
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -378,8 +378,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-SecurityGroup-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource?api-version=2024-05-01
+                - ccm-SecurityGroup-client azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -436,8 +436,8 @@ interactions:
             If-Match:
                 - invalid
             User-Agent:
-                - ccm-SecurityGroup-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource?api-version=2024-05-01
+                - ccm-SecurityGroup-client azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource?api-version=2025-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -486,8 +486,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-SecurityGroup-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups?api-version=2024-05-01
+                - ccm-SecurityGroup-client azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -536,8 +536,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-SecurityGroup-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroupnotfound/providers/Microsoft.Network/networkSecurityGroups?api-version=2024-05-01
+                - ccm-SecurityGroup-client azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroupnotfound/providers/Microsoft.Network/networkSecurityGroups?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -585,8 +585,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-SecurityGroup-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource?api-version=2024-05-01
+                - ccm-SecurityGroup-client azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-SecurityGroup/providers/Microsoft.Network/networkSecurityGroups/testResource?api-version=2025-05-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -599,7 +599,7 @@ interactions:
         body: ""
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -607,7 +607,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Server:
@@ -635,8 +635,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-SecurityGroup-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - ccm-SecurityGroup-client azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0

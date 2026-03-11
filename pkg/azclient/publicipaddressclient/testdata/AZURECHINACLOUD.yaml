@@ -73,8 +73,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2024-05-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2025-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -87,7 +87,7 @@ interactions:
         body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"chinaeast2","properties":{"provisioningState":"Updating","resourceGuid":"00000000-0000-0000-0000-000000000000","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Dynamic","idleTimeoutInMinutes":4,"ipTags":[]},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Basic","tier":"Regional"}}'
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -123,8 +123,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -171,8 +171,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2024-05-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -223,8 +223,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2024-05-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -275,8 +275,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResourcenotfound?api-version=2024-05-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResourcenotfound?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -328,8 +328,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2024-05-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2025-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -342,7 +342,7 @@ interactions:
         body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"chinaeast2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Dynamic","idleTimeoutInMinutes":4,"ipTags":[]},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Basic","tier":"Regional"}}'
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -378,8 +378,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2024-05-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -436,8 +436,8 @@ interactions:
             If-Match:
                 - invalid
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2024-05-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2025-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -486,8 +486,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses?api-version=2024-05-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -536,8 +536,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddressnotfound/providers/Microsoft.Network/publicIPAddresses?api-version=2024-05-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddressnotfound/providers/Microsoft.Network/publicIPAddresses?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -585,8 +585,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2024-05-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2025-05-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -599,7 +599,7 @@ interactions:
         body: ""
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -607,7 +607,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Server:
@@ -635,8 +635,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0

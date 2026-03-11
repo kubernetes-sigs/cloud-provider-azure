@@ -73,8 +73,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-network-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/publicIPAddresses/publicip?api-version=2024-05-01
+                - ccm-network-client azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/publicIPAddresses/publicip?api-version=2025-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -87,7 +87,7 @@ interactions:
         body: '{"name":"publicip","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/publicIPAddresses/publicip","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"chinaeast2","properties":{"provisioningState":"Updating","resourceGuid":"00000000-0000-0000-0000-000000000000","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","idleTimeoutInMinutes":4,"ipTags":[],"ddosSettings":{"protectionMode":"VirtualNetworkInherited"}},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Standard","tier":"Regional"}}'
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -123,8 +123,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-network-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - ccm-network-client azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -171,8 +171,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-network-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/publicIPAddresses/publicip?api-version=2024-05-01
+                - ccm-network-client azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/publicIPAddresses/publicip?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -227,8 +227,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-network-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource?api-version=2024-05-01
+                - ccm-network-client azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource?api-version=2025-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -241,7 +241,7 @@ interactions:
         body: '{"name":"testParentResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/loadBalancers","location":"chinaeast2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","frontendIPConfigurations":[{"name":"frontendIPConfiguration","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/frontendIPConfigurations/frontendIPConfiguration","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/loadBalancers/frontendIPConfigurations","properties":{"provisioningState":"Succeeded","privateIPAllocationMethod":"Dynamic","publicIPAddress":{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/publicIPAddresses/publicip"}}}],"backendAddressPools":[],"loadBalancingRules":[],"probes":[],"inboundNatRules":[],"outboundRules":[],"inboundNatPools":[]},"sku":{"name":"Standard","tier":"Regional"}}'
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -277,8 +277,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-network-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource?api-version=2024-05-01
+                - ccm-network-client azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -333,8 +333,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource?api-version=2024-05-01
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource?api-version=2025-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -347,7 +347,7 @@ interactions:
         body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Updating","loadBalancerBackendAddresses":[]},"type":"Microsoft.Network/loadBalancers/backendAddressPools"}'
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -383,8 +383,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -431,8 +431,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource?api-version=2024-05-01
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -483,8 +483,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource?api-version=2024-05-01
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -535,8 +535,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResourcenotfound?api-version=2024-05-01
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResourcenotfound?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -589,8 +589,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource?api-version=2024-05-01
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource?api-version=2025-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -603,7 +603,7 @@ interactions:
         body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","loadBalancerBackendAddresses":[]},"type":"Microsoft.Network/loadBalancers/backendAddressPools"}'
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -639,8 +639,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource?api-version=2024-05-01
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -691,8 +691,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools?api-version=2024-05-01
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -741,8 +741,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPoolnotfound/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools?api-version=2024-05-01
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPoolnotfound/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools?api-version=2025-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -790,8 +790,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource?api-version=2024-05-01
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource/backendAddressPools/testResource?api-version=2025-05-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -804,7 +804,7 @@ interactions:
         body: ""
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -812,7 +812,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Server:
@@ -840,8 +840,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - ccm-BackendAddressPool-c azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -890,8 +890,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-network-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource?api-version=2024-05-01
+                - ccm-network-client azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/loadBalancers/testParentResource?api-version=2025-05-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -904,7 +904,7 @@ interactions:
         body: ""
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -912,7 +912,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Server:
@@ -940,8 +940,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-network-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - ccm-network-client azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -990,8 +990,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-network-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/publicIPAddresses/publicip?api-version=2024-05-01
+                - ccm-network-client azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BackendAddressPool/providers/Microsoft.Network/publicIPAddresses/publicip?api-version=2025-05-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -1004,7 +1004,7 @@ interactions:
         body: ""
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -1012,7 +1012,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Server:
@@ -1040,8 +1040,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-network-client azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2024-05-01&c=c&h=h&s=s&t=t
+                - ccm-network-client azsdk-go-armnetwork/v9.2.0 (go1.24.0; linux)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
