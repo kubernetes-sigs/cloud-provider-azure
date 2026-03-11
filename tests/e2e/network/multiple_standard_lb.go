@@ -1131,6 +1131,38 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			err = verifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "Service 1 should still have its rule")
 
+			By("Service 2 removes IP annotation instead, keeping LB annotation")
+			beforeIPRemove := time.Now()
+			svc2, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			delete(svc2.Annotations, consts.ServiceAnnotationLoadBalancerIPDualStack[false])
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc2, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for successful reconcile after removing IP annotation")
+			err = waitForServiceNormalEventAfter(cs, ns.Name, svcNameIPv4, "EnsuredLoadBalancer", "", beforeIPRemove, eventTimeout)
+			Expect(err).NotTo(HaveOccurred(), "Expected EnsuredLoadBalancer event after removing IP annotation")
+
+			By("Verifying Service 2 stays on its original LB with its original IP")
+			_, err = utils.WaitServiceExposure(cs, ns.Name, svcNameIPv4, []*string{&svc2IP})
+			Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should stay on its original LB after removing IP annotation")
+			err = verifyFIPHasRulesForPorts(tc, svc2OldFIPID, sets.New(svc2Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Service 2 should still have its rule on its original FIP")
+
+			By("Verifying Service 1 is unaffected")
+			err = verifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Service 1 should still have its rule")
+
+			By("Service 2 adds back IP annotation, expecting conflict again")
+			beforeIPReAdd := time.Now()
+			svc2, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			svc2 = updateServiceLBIPs(svc2, false, []*string{&sharedIP})
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc2, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameIPv4, "SyncLoadBalancerFailed", msgConflictingLBConfig, beforeIPReAdd, eventTimeout)
+			Expect(err).NotTo(HaveOccurred(), "Expected conflict warning after re-adding IP annotation")
+
 			By("Service 2 removes LB annotation to resolve conflict")
 			svc2, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -1211,6 +1243,38 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			err = verifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "Service 1 should still have its rule")
 
+			By("Service 2 removes IP annotation instead, keeping LB annotation")
+			beforeIPRemove := time.Now()
+			svc2, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			delete(svc2.Annotations, consts.ServiceAnnotationLoadBalancerIPDualStack[false])
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc2, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for successful reconcile after removing IP annotation")
+			err = waitForServiceNormalEventAfter(cs, ns.Name, svcNameIPv4, "EnsuredLoadBalancer", "", beforeIPRemove, eventTimeout)
+			Expect(err).NotTo(HaveOccurred(), "Expected EnsuredLoadBalancer event after removing IP annotation")
+
+			By("Verifying Service 2 stays on its original LB with its original IP")
+			_, err = utils.WaitServiceExposure(cs, ns.Name, svcNameIPv4, []*string{&svc2IP})
+			Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should stay on its original LB after removing IP annotation")
+			err = verifyFIPHasRulesForPorts(tc, svc2OldFIPID, sets.New(svc2Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Service 2 should still have its rule on its original FIP")
+
+			By("Verifying Service 1 is unaffected")
+			err = verifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Service 1 should still have its rule")
+
+			By("Service 2 adds back IP annotation, expecting conflict again")
+			beforeIPReAdd := time.Now()
+			svc2, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			svc2 = updateServiceLBIPs(svc2, false, []*string{&sharedIP})
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc2, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameIPv4, "SyncLoadBalancerFailed", msgConflictingLBConfig, beforeIPReAdd, eventTimeout)
+			Expect(err).NotTo(HaveOccurred(), "Expected conflict warning after re-adding IP annotation")
+
 			By("Service 2 removes LB annotation to resolve conflict")
 			svc2, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -1290,6 +1354,38 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			By("Verifying Service 1 is still working")
 			err = verifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "Service 1 should still have its rule")
+
+			By("Service 2 removes IP annotation instead, keeping LB annotation")
+			beforeIPRemove := time.Now()
+			svc2, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			delete(svc2.Annotations, consts.ServiceAnnotationLoadBalancerIPDualStack[false])
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc2, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for successful reconcile after removing IP annotation")
+			err = waitForServiceNormalEventAfter(cs, ns.Name, svcNameIPv4, "EnsuredLoadBalancer", "", beforeIPRemove, eventTimeout)
+			Expect(err).NotTo(HaveOccurred(), "Expected EnsuredLoadBalancer event after removing IP annotation")
+
+			By("Verifying Service 2 stays on its original LB with its original IP")
+			_, err = utils.WaitServiceExposure(cs, ns.Name, svcNameIPv4, []*string{&svc2IP})
+			Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should stay on its original LB after removing IP annotation")
+			err = verifyFIPHasRulesForPorts(tc, svc2OldFIPID, sets.New(svc2Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Service 2 should still have its rule on its original FIP")
+
+			By("Verifying Service 1 is unaffected")
+			err = verifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port), "TCP")
+			Expect(err).NotTo(HaveOccurred(), "Service 1 should still have its rule")
+
+			By("Service 2 adds back IP annotation, expecting conflict again")
+			beforeIPReAdd := time.Now()
+			svc2, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			svc2 = updateServiceLBIPs(svc2, true, []*string{&sharedIP})
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc2, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			err = waitForServiceWarningEventAfter(cs, ns.Name, svcNameIPv4, "SyncLoadBalancerFailed", msgConflictingLBConfig, beforeIPReAdd, eventTimeout)
+			Expect(err).NotTo(HaveOccurred(), "Expected conflict warning after re-adding IP annotation")
 
 			By("Service 2 removes LB annotation to resolve conflict")
 			svc2, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), svcNameIPv4, metav1.GetOptions{})
@@ -1566,11 +1662,12 @@ func waitLBCountEqualTo(tc *utils.AzureTestClient, interval, timeout time.Durati
 	return lbNames, err
 }
 
-// waitForServiceWarningEventAfter waits for a Warning event on the service with the expected Reason
+// waitForServiceEventAfter waits for an event of the given type on the service with the expected Reason
 // that occurred after the specified time and contains the expected message substring.
-func waitForServiceWarningEventAfter(
+func waitForServiceEventAfter(
 	cs clientset.Interface,
 	ns, serviceName string,
+	eventType string,
 	expectedReason string,
 	messageSubstring string,
 	after time.Time,
@@ -1578,7 +1675,7 @@ func waitForServiceWarningEventAfter(
 ) error {
 	return wait.PollUntilContextTimeout(context.Background(), 10*time.Second, timeout, true, func(ctx context.Context) (bool, error) {
 		events, err := cs.CoreV1().Events(ns).List(ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Service,type=Warning", serviceName),
+			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Service,type=%s", serviceName, eventType),
 		})
 		if err != nil {
 			return false, err
@@ -1592,13 +1689,39 @@ func waitForServiceWarningEventAfter(
 			}
 			eventTime := event.LastTimestamp.Time
 			if eventTime.After(after) {
-				utils.Logf("Found Warning event for service %s after %v: Reason=%s, LastTimestamp=%v, Message=%s",
-					serviceName, after.Format(time.RFC3339), event.Reason, eventTime.Format(time.RFC3339), event.Message)
+				utils.Logf("Found %s event for service %s after %v: Reason=%s, LastTimestamp=%v, Message=%s",
+					eventType, serviceName, after.Format(time.RFC3339), event.Reason, eventTime.Format(time.RFC3339), event.Message)
 				return true, nil
 			}
 		}
 		return false, nil
 	})
+}
+
+// waitForServiceNormalEventAfter waits for a Normal event on the service with the expected Reason
+// that occurred after the specified time and contains the expected message substring.
+func waitForServiceNormalEventAfter(
+	cs clientset.Interface,
+	ns, serviceName string,
+	expectedReason string,
+	messageSubstring string,
+	after time.Time,
+	timeout time.Duration,
+) error {
+	return waitForServiceEventAfter(cs, ns, serviceName, "Normal", expectedReason, messageSubstring, after, timeout)
+}
+
+// waitForServiceWarningEventAfter waits for a Warning event on the service with the expected Reason
+// that occurred after the specified time and contains the expected message substring.
+func waitForServiceWarningEventAfter(
+	cs clientset.Interface,
+	ns, serviceName string,
+	expectedReason string,
+	messageSubstring string,
+	after time.Time,
+	timeout time.Duration,
+) error {
+	return waitForServiceEventAfter(cs, ns, serviceName, "Warning", expectedReason, messageSubstring, after, timeout)
 }
 
 // verifyServiceNotExposed verifies the service does not have a LoadBalancer IP assigned
