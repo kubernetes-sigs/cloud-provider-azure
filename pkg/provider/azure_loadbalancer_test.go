@@ -9074,8 +9074,8 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 					`both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. ` +
 					`When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), ` +
 					`the service must use the load balancer where that IP resides. ` +
-					`To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation ` +
-					`so the service uses the load balancer where the specified IP resides`,
+					`To fix, either (1) remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation to stay on the load balancer where the IP resides, ` +
+					`or (2) remove the IP annotation to move to the specified load balancer (external services only)`,
 			),
 		},
 		{
@@ -9096,8 +9096,8 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 					`both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. ` +
 					`When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), ` +
 					`the service must use the load balancer where that IP resides. ` +
-					`To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation ` +
-					`so the service uses the load balancer where the specified IP resides`,
+					`To fix, either (1) remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation to stay on the load balancer where the IP resides, ` +
+					`or (2) remove the IP annotation to move to the specified load balancer (external services only)`,
 			),
 		},
 		{
@@ -9118,8 +9118,8 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 					`both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. ` +
 					`When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), ` +
 					`the service must use the load balancer where that IP resides. ` +
-					`To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation ` +
-					`so the service uses the load balancer where the specified IP resides`,
+					`To fix, either (1) remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation to stay on the load balancer where the IP resides, ` +
+					`or (2) remove the IP annotation to move to the specified load balancer (external services only)`,
 			),
 		},
 		{
@@ -9290,8 +9290,8 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 					`both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. ` +
 					`When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), ` +
 					`the service must use the load balancer where that IP resides. ` +
-					`To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation ` +
-					`so the service uses the load balancer where the specified IP resides`,
+					`To fix, either (1) remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation to stay on the load balancer where the IP resides, ` +
+					`or (2) remove the IP annotation to move to the specified load balancer (external services only)`,
 			),
 		},
 		{
@@ -9314,8 +9314,8 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 					`both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. ` +
 					`When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), ` +
 					`the service must use the load balancer where that IP resides. ` +
-					`To fix, remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation ` +
-					`so the service uses the load balancer where the specified IP resides`,
+					`To fix, either (1) remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation to stay on the load balancer where the IP resides, ` +
+					`or (2) remove the IP annotation to move to the specified load balancer (external services only)`,
 			),
 		},
 		{
