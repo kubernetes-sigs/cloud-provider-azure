@@ -835,7 +835,49 @@ func (az *Cloud) getServiceLoadBalancer(
 			return nil, nil, nil, nil, false, false, err
 		}
 		if status == nil {
-			// service is not on this load balancer
+			// Service is not on this LB by frontend IP ownership.
+			// However, if multi-SLB is enabled and the service should move to a
+			// different LB, the old LB may still have stale rules/probes left
+			// from when the service shared a frontend IP. Remove them to
+			// prevent orphaned rules and probes on the old LB.
+			if wantLb && az.UseMultipleStandardLoadBalancers() &&
+				az.shouldChangeLoadBalancer(service, ptr.Deref(existingLB.Name, ""), clusterName, defaultLBName) &&
+				az.lbHasServiceOwnedResources(existingLB, service) {
+
+				if err := az.removeStaleServiceLBResources(ctx, existingLB, service); err != nil {
+					logger.Error(err, "failed to remove stale service resources from old load balancer",
+						"service", service.Name,
+						"oldLB", ptr.Deref(existingLB.Name, ""),
+					)
+					return nil, nil, nil, nil, false, false, err
+				}
+				logger.V(2).Info("Removed stale service resources from old load balancer",
+					"service", service.Name,
+					"oldLB", ptr.Deref(existingLB.Name, ""),
+					"targetLB", defaultLBName,
+				)
+
+				az.reconcileMultipleStandardLoadBalancerConfigurationStatus(
+					false,
+					getServiceName(service),
+					ptr.Deref(existingLB.Name, ""),
+				)
+
+				// Same backend pool cleanup as the normal LB migration path below.
+				if isLocalService(service) {
+					svcName := getServiceName(service)
+					if az.backendPoolUpdater != nil {
+						az.backendPoolUpdater.removeOperation(svcName)
+					}
+					newLBs, err := az.cleanupLocalServiceBackendPool(ctx, service, nodes, existingLBs, clusterName)
+					if err != nil {
+						logger.Error(err, "failed to clean up backend pool for local service",
+							"service", service.Name, "oldLB", ptr.Deref(existingLB.Name, ""))
+						return nil, nil, nil, nil, false, false, err
+					}
+					existingLBs = newLBs
+				}
+			}
 			continue
 		}
 		logger.V(4).Info(
@@ -2488,6 +2530,68 @@ func (az *Cloud) recordExistingNodesOnLoadBalancers(clusterName string, lbs []*a
 					}
 				}
 			}
+		}
+	}
+	return nil
+}
+
+// lbHasServiceOwnedResources returns true if any load-balancing rule or probe
+// on the given LB is owned by the service (matched by name prefix).
+func (az *Cloud) lbHasServiceOwnedResources(lb *armnetwork.LoadBalancer, service *v1.Service) bool {
+	if lb.Properties == nil {
+		return false
+	}
+	for _, rule := range lb.Properties.LoadBalancingRules {
+		if rule.Name != nil && az.serviceOwnsRule(service, *rule.Name) {
+			return true
+		}
+	}
+	for _, probe := range lb.Properties.Probes {
+		if probe.Name != nil && az.serviceOwnsRule(service, *probe.Name) {
+			return true
+		}
+	}
+	return false
+}
+
+// removeStaleServiceLBResources removes only this service's rules and probes
+// from the old LB. If resources changed, the LB is updated and the cache is
+// invalidated.
+func (az *Cloud) removeStaleServiceLBResources(
+	ctx context.Context,
+	lb *armnetwork.LoadBalancer,
+	service *v1.Service,
+) error {
+	logger := log.FromContextOrBackground(ctx).WithName("removeStaleServiceLBResources")
+	serviceName := getServiceName(service)
+
+	dirtyProbes := az.reconcileLBProbes(lb, service, serviceName, false, nil)
+	dirtyRules := az.reconcileLBRules(lb, service, serviceName, false, nil)
+
+	if dirtyProbes || dirtyRules {
+		if err := az.CreateOrUpdateLB(ctx, service, *lb); err != nil {
+			logger.Error(err, "failed to update load balancer to remove stale service resources",
+				"lbName", ptr.Deref(lb.Name, ""),
+				"serviceName", serviceName,
+			)
+			return err
+		}
+		logger.V(2).Info("Updated load balancer to remove stale service resources",
+			"lbName", ptr.Deref(lb.Name, ""),
+			"serviceName", serviceName,
+			"dirtyProbes", dirtyProbes,
+			"dirtyRules", dirtyRules,
+		)
+		lbName := ptr.Deref(lb.Name, "")
+		if err := az.lbCache.Delete(lbName); err != nil {
+			logger.Info("Failed to invalidate load balancer cache",
+				"lbName", lbName,
+				"err", err,
+			)
+		} else {
+			logger.V(5).Info("Invalidated load balancer cache",
+				"lbName", lbName,
+			)
 		}
 	}
 	return nil
