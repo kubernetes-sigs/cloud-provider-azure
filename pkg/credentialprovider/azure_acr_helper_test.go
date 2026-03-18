@@ -136,7 +136,7 @@ func TestPerformTokenExchange(t *testing.T) {
 			}))
 			defer server.Close()
 
-			got, err := performTokenExchange(server.URL, &authDirective{realm: server.URL}, "tenant", "token")
+			got, err := performTokenExchange(&authDirective{realm: server.URL}, "tenant", "token")
 			assert.Equal(t, tt.want, got, tt.name)
 			if tt.wantErr != nil {
 				assert.Contains(t, err.Error(), tt.wantErr.Error(), tt.name)

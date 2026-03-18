@@ -142,7 +142,6 @@ func receiveChallengeFromLoginServer(serverAddress, scheme string) (*authDirecti
 }
 
 func performTokenExchange(
-	_ string,
 	directive *authDirective,
 	tenant string,
 	accessToken string) (string, error) {
