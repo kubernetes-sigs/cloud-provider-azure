@@ -3847,14 +3847,6 @@ func (az *Cloud) getServiceLoadBalancerMode(service *v1.Service) (bool, bool, st
 	return hasMode, isAuto, mode
 }
 
-func useSharedSecurityRule(service *v1.Service) bool {
-	if l, ok := service.Annotations[consts.ServiceAnnotationSharedSecurityRule]; ok {
-		return l == consts.TrueAnnotationValue
-	}
-
-	return false
-}
-
 // serviceOwnsPublicIP checks if the service owns the pip and if the pip is user-created.
 // The pip is user-created if and only if there is no service tags.
 // The service owns the pip if:
