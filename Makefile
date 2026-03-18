@@ -20,16 +20,6 @@ PKG_CONFIG=.pkg_config
 
 AKSENGINE_VERSION ?= master
 ENABLE_GIT_COMMAND ?= true
-GOTOOLCHAIN ?= auto
-# Some build environments set GOTOOLCHAIN=local, which prevents Go from
-# auto-downloading the required toolchain when go.mod requires a newer version.
-# Only override that problematic environment default; allow explicit overrides.
-ifeq ($(origin GOTOOLCHAIN),environment)
-ifeq ($(GOTOOLCHAIN),local)
-GOTOOLCHAIN := auto
-endif
-endif
-export GOTOOLCHAIN
 TEST_RESULTS_DIR=testResults
 # manifest name under tests/e2e/k8s-azure/manifest
 TEST_MANIFEST ?= linux
