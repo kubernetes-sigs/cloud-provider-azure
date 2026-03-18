@@ -1,0 +1,734 @@
+interactions:
+- id: 0
+  request:
+    body: '{"location": "eastus2"}'
+    content_length: 23
+    form: {}
+    headers:
+      Accept:
+      - application/json
+      Content-Length:
+      - '23'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
+    host: management.azure.com
+    method: PUT
+    proto: HTTP/1.1
+    proto_major: 1
+    proto_minor: 1
+    remote_addr: ''
+    request_uri: ''
+    trailer: {}
+    transfer_encoding: []
+    url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ServiceGateway?api-version=2021-04-01
+  response:
+    body: '{"id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ServiceGateway", "name": "aks-cit-ServiceGateway", "type": "Microsoft.Resources/resourceGroups", "location": "eastus2", "properties": {"provisioningState": "Succeeded"}}'
+    code: 201
+    content_length: 252
+    duration: 200ms
+    headers:
+      Cache-Control:
+      - no-cache
+      Content-Length:
+      - '252'
+      Content-Type:
+      - application/json; charset=utf-8
+      Expires:
+      - '-1'
+      Pragma:
+      - no-cache
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      X-Cache:
+      - CONFIG_NOCACHE
+      X-Content-Type-Options:
+      - nosniff
+      X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+      - '11999'
+    proto: HTTP/2.0
+    proto_major: 2
+    proto_minor: 0
+    status: 201 Created
+    trailer: {}
+    transfer_encoding: []
+    uncompressed: false
+- id: 1
+  request:
+    body: '{}'
+    content_length: 2
+    form: {}
+    headers:
+      Accept:
+      - application/json
+      Content-Length:
+      - '2'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - ccm-ServiceGateway-client azsdk-go-armnetwork/v9.0.0 (go1.23.2; linux)
+    host: management.azure.com
+    method: PUT
+    proto: HTTP/1.1
+    proto_major: 1
+    proto_minor: 1
+    remote_addr: ''
+    request_uri: ''
+    trailer: {}
+    transfer_encoding: []
+    url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ServiceGateway/providers/Microsoft.Network/serviceGateways/testResource?api-version=2025-05-01
+  response:
+    body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ServiceGateway/providers/Microsoft.Network/serviceGateways/testResource","type":"Microsoft.Network/serviceGateways","location":"eastus2","properties":{"provisioningState":"Updating"}}'
+    code: 201
+    content_length: 287
+    duration: 200ms
+    headers:
+      Azure-Asyncnotification:
+      - Enabled
+      Azure-Asyncoperation:
+      - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
+      Cache-Control:
+      - no-cache
+      Content-Length:
+      - '287'
+      Content-Type:
+      - application/json; charset=utf-8
+      Expires:
+      - '-1'
+      Pragma:
+      - no-cache
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      X-Cache:
+      - CONFIG_NOCACHE
+      X-Content-Type-Options:
+      - nosniff
+      X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+      - '11999'
+    proto: HTTP/2.0
+    proto_major: 2
+    proto_minor: 0
+    status: 201 Created
+    trailer: {}
+    transfer_encoding: []
+    uncompressed: false
+- id: 2
+  request:
+    body: ''
+    content_length: 0
+    form: {}
+    headers:
+      User-Agent:
+      - ccm-ServiceGateway-client azsdk-go-armnetwork/v9.0.0 (go1.23.2; linux)
+    host: management.azure.com
+    method: GET
+    proto: HTTP/1.1
+    proto_major: 1
+    proto_minor: 1
+    remote_addr: ''
+    request_uri: ''
+    trailer: {}
+    transfer_encoding: []
+    url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
+  response:
+    body: '{"status":"Succeeded"}'
+    code: 200
+    content_length: 22
+    duration: 200ms
+    headers:
+      Cache-Control:
+      - no-cache
+      Content-Length:
+      - '22'
+      Content-Type:
+      - application/json; charset=utf-8
+      Expires:
+      - '-1'
+      Pragma:
+      - no-cache
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      X-Cache:
+      - CONFIG_NOCACHE
+      X-Content-Type-Options:
+      - nosniff
+      X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+      - '16499'
+    proto: HTTP/2.0
+    proto_major: 2
+    proto_minor: 0
+    status: 200 OK
+    trailer: {}
+    transfer_encoding: []
+    uncompressed: false
+- id: 3
+  request:
+    body: ''
+    content_length: 0
+    form: {}
+    headers:
+      User-Agent:
+      - ccm-ServiceGateway-client azsdk-go-armnetwork/v9.0.0 (go1.23.2; linux)
+    host: management.azure.com
+    method: GET
+    proto: HTTP/1.1
+    proto_major: 1
+    proto_minor: 1
+    remote_addr: ''
+    request_uri: ''
+    trailer: {}
+    transfer_encoding: []
+    url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ServiceGateway/providers/Microsoft.Network/serviceGateways/testResource?api-version=2025-05-01
+  response:
+    body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ServiceGateway/providers/Microsoft.Network/serviceGateways/testResource","type":"Microsoft.Network/serviceGateways","location":"eastus2","properties":{"provisioningState":"Succeeded"}}'
+    code: 200
+    content_length: 288
+    duration: 200ms
+    headers:
+      Cache-Control:
+      - no-cache
+      Content-Length:
+      - '288'
+      Content-Type:
+      - application/json; charset=utf-8
+      Etag:
+      - W/"00000000-0000-0000-0000-000000000000"
+      Expires:
+      - '-1'
+      Pragma:
+      - no-cache
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      X-Cache:
+      - CONFIG_NOCACHE
+      X-Content-Type-Options:
+      - nosniff
+      X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+      - '16498'
+    proto: HTTP/2.0
+    proto_major: 2
+    proto_minor: 0
+    status: 200 OK
+    trailer: {}
+    transfer_encoding: []
+    uncompressed: false
+- id: 4
+  request:
+    body: ''
+    content_length: 0
+    form: {}
+    headers:
+      Accept:
+      - application/json
+      User-Agent:
+      - ccm-ServiceGateway-client azsdk-go-armnetwork/v9.0.0 (go1.23.2; linux)
+    host: management.azure.com
+    method: GET
+    proto: HTTP/1.1
+    proto_major: 1
+    proto_minor: 1
+    remote_addr: ''
+    request_uri: ''
+    trailer: {}
+    transfer_encoding: []
+    url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ServiceGateway/providers/Microsoft.Network/serviceGateways/testResource?api-version=2025-05-01
+  response:
+    body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ServiceGateway/providers/Microsoft.Network/serviceGateways/testResource","type":"Microsoft.Network/serviceGateways","location":"eastus2","properties":{"provisioningState":"Succeeded"}}'
+    code: 200
+    content_length: 288
+    duration: 200ms
+    headers:
+      Cache-Control:
+      - no-cache
+      Content-Length:
+      - '288'
+      Content-Type:
+      - application/json; charset=utf-8
+      Etag:
+      - W/"00000000-0000-0000-0000-000000000000"
+      Expires:
+      - '-1'
+      Pragma:
+      - no-cache
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      X-Cache:
+      - CONFIG_NOCACHE
+      X-Content-Type-Options:
+      - nosniff
+      X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+      - '16499'
+    proto: HTTP/2.0
+    proto_major: 2
+    proto_minor: 0
+    status: 200 OK
+    trailer: {}
+    transfer_encoding: []
+    uncompressed: false
+- id: 5
+  request:
+    body: ''
+    content_length: 0
+    form: {}
+    headers:
+      Accept:
+      - application/json
+      User-Agent:
+      - ccm-ServiceGateway-client azsdk-go-armnetwork/v9.0.0 (go1.23.2; linux)
+    host: management.azure.com
+    method: GET
+    proto: HTTP/1.1
+    proto_major: 1
+    proto_minor: 1
+    remote_addr: ''
+    request_uri: ''
+    trailer: {}
+    transfer_encoding: []
+    url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ServiceGateway/providers/Microsoft.Network/serviceGateways/testResourcenotfound?api-version=2025-05-01
+  response:
+    body: '{"error":{"code":"ResourceNotFound","message":"The Resource ''Microsoft.Network/serviceGateways/testResourcenotfound'' under resource group ''aks-cit-ServiceGateway'' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix"}}'
+    code: 404
+    content_length: 248
+    duration: 200ms
+    headers:
+      Cache-Control:
+      - no-cache
+      Content-Length:
+      - '248'
+      Content-Type:
+      - application/json; charset=utf-8
+      Expires:
+      - '-1'
+      Pragma:
+      - no-cache
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      X-Cache:
+      - CONFIG_NOCACHE
+      X-Content-Type-Options:
+      - nosniff
+      X-Ms-Failure-Cause:
+      - gateway
+    proto: HTTP/2.0
+    proto_major: 2
+    proto_minor: 0
+    status: 404 Not Found
+    trailer: {}
+    transfer_encoding: []
+    uncompressed: false
+- id: 6
+  request:
+    body: '{}'
+    content_length: 2
+    form: {}
+    headers:
+      Accept:
+      - application/json
+      Content-Length:
+      - '2'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - ccm-ServiceGateway-client azsdk-go-armnetwork/v9.0.0 (go1.23.2; linux)
+    host: management.azure.com
+    method: PUT
+    proto: HTTP/1.1
+    proto_major: 1
+    proto_minor: 1
+    remote_addr: ''
+    request_uri: ''
+    trailer: {}
+    transfer_encoding: []
+    url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ServiceGateway/providers/Microsoft.Network/serviceGateways/testResource?api-version=2025-05-01
+  response:
+    body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ServiceGateway/providers/Microsoft.Network/serviceGateways/testResource","type":"Microsoft.Network/serviceGateways","location":"eastus2","properties":{"provisioningState":"Succeeded"}}'
+    code: 200
+    content_length: 288
+    duration: 200ms
+    headers:
+      Azure-Asyncnotification:
+      - Enabled
+      Azure-Asyncoperation:
+      - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
+      Cache-Control:
+      - no-cache
+      Content-Length:
+      - '288'
+      Content-Type:
+      - application/json; charset=utf-8
+      Expires:
+      - '-1'
+      Pragma:
+      - no-cache
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      X-Cache:
+      - CONFIG_NOCACHE
+      X-Content-Type-Options:
+      - nosniff
+      X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+      - '11999'
+    proto: HTTP/2.0
+    proto_major: 2
+    proto_minor: 0
+    status: 200 OK
+    trailer: {}
+    transfer_encoding: []
+    uncompressed: false
+- id: 7
+  request:
+    body: ''
+    content_length: 0
+    form: {}
+    headers:
+      User-Agent:
+      - ccm-ServiceGateway-client azsdk-go-armnetwork/v9.0.0 (go1.23.2; linux)
+    host: management.azure.com
+    method: GET
+    proto: HTTP/1.1
+    proto_major: 1
+    proto_minor: 1
+    remote_addr: ''
+    request_uri: ''
+    trailer: {}
+    transfer_encoding: []
+    url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ServiceGateway/providers/Microsoft.Network/serviceGateways/testResource?api-version=2025-05-01
+  response:
+    body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ServiceGateway/providers/Microsoft.Network/serviceGateways/testResource","type":"Microsoft.Network/serviceGateways","location":"eastus2","properties":{"provisioningState":"Succeeded"}}'
+    code: 200
+    content_length: 288
+    duration: 200ms
+    headers:
+      Cache-Control:
+      - no-cache
+      Content-Length:
+      - '288'
+      Content-Type:
+      - application/json; charset=utf-8
+      Etag:
+      - W/"00000000-0000-0000-0000-000000000000"
+      Expires:
+      - '-1'
+      Pragma:
+      - no-cache
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      X-Cache:
+      - CONFIG_NOCACHE
+      X-Content-Type-Options:
+      - nosniff
+      X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+      - '16499'
+    proto: HTTP/2.0
+    proto_major: 2
+    proto_minor: 0
+    status: 200 OK
+    trailer: {}
+    transfer_encoding: []
+    uncompressed: false
+- id: 8
+  request:
+    body: ''
+    content_length: 0
+    form: {}
+    headers:
+      Accept:
+      - application/json
+      User-Agent:
+      - ccm-ServiceGateway-client azsdk-go-armnetwork/v9.0.0 (go1.23.2; linux)
+    host: management.azure.com
+    method: GET
+    proto: HTTP/1.1
+    proto_major: 1
+    proto_minor: 1
+    remote_addr: ''
+    request_uri: ''
+    trailer: {}
+    transfer_encoding: []
+    url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ServiceGateway/providers/Microsoft.Network/serviceGateways?api-version=2025-05-01
+  response:
+    body: '{"value":[{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ServiceGateway/providers/Microsoft.Network/serviceGateways/testResource","type":"Microsoft.Network/serviceGateways","location":"eastus2","properties":{"provisioningState":"Succeeded"}}]}'
+    code: 200
+    content_length: 300
+    duration: 200ms
+    headers:
+      Cache-Control:
+      - no-cache
+      Content-Length:
+      - '300'
+      Content-Type:
+      - application/json; charset=utf-8
+      Expires:
+      - '-1'
+      Pragma:
+      - no-cache
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      X-Cache:
+      - CONFIG_NOCACHE
+      X-Content-Type-Options:
+      - nosniff
+      X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+      - '16499'
+    proto: HTTP/2.0
+    proto_major: 2
+    proto_minor: 0
+    status: 200 OK
+    trailer: {}
+    transfer_encoding: []
+    uncompressed: false
+- id: 9
+  request:
+    body: ''
+    content_length: 0
+    form: {}
+    headers:
+      Accept:
+      - application/json
+      User-Agent:
+      - ccm-ServiceGateway-client azsdk-go-armnetwork/v9.0.0 (go1.23.2; linux)
+    host: management.azure.com
+    method: GET
+    proto: HTTP/1.1
+    proto_major: 1
+    proto_minor: 1
+    remote_addr: ''
+    request_uri: ''
+    trailer: {}
+    transfer_encoding: []
+    url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ServiceGatewaynotfound/providers/Microsoft.Network/serviceGateways?api-version=2025-05-01
+  response:
+    body: '{"error":{"code":"ResourceGroupNotFound","message":"Resource group ''aks-cit-ServiceGatewaynotfound'' could not be found."}}'
+    code: 404
+    content_length: 122
+    duration: 200ms
+    headers:
+      Cache-Control:
+      - no-cache
+      Content-Length:
+      - '122'
+      Content-Type:
+      - application/json; charset=utf-8
+      Expires:
+      - '-1'
+      Pragma:
+      - no-cache
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      X-Cache:
+      - CONFIG_NOCACHE
+      X-Content-Type-Options:
+      - nosniff
+      X-Ms-Failure-Cause:
+      - gateway
+    proto: HTTP/2.0
+    proto_major: 2
+    proto_minor: 0
+    status: 404 Not Found
+    trailer: {}
+    transfer_encoding: []
+    uncompressed: false
+- id: 10
+  request:
+    body: ''
+    content_length: 0
+    form: {}
+    headers:
+      Accept:
+      - application/json
+      User-Agent:
+      - ccm-ServiceGateway-client azsdk-go-armnetwork/v9.0.0 (go1.23.2; linux)
+    host: management.azure.com
+    method: DELETE
+    proto: HTTP/1.1
+    proto_major: 1
+    proto_minor: 1
+    remote_addr: ''
+    request_uri: ''
+    trailer: {}
+    transfer_encoding: []
+    url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ServiceGateway/providers/Microsoft.Network/serviceGateways/testResource?api-version=2025-05-01
+  response:
+    body: ''
+    code: 202
+    content_length: 0
+    duration: 200ms
+    headers:
+      Azure-Asyncnotification:
+      - Enabled
+      Azure-Asyncoperation:
+      - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
+      Cache-Control:
+      - no-cache
+      Content-Length:
+      - '0'
+      Expires:
+      - '-1'
+      Location:
+      - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
+      Pragma:
+      - no-cache
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      X-Cache:
+      - CONFIG_NOCACHE
+      X-Content-Type-Options:
+      - nosniff
+      X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
+      - '11999'
+    proto: HTTP/2.0
+    proto_major: 2
+    proto_minor: 0
+    status: 202 Accepted
+    trailer: {}
+    transfer_encoding: []
+    uncompressed: false
+- id: 11
+  request:
+    body: ''
+    content_length: 0
+    form: {}
+    headers:
+      User-Agent:
+      - ccm-ServiceGateway-client azsdk-go-armnetwork/v9.0.0 (go1.23.2; linux)
+    host: management.azure.com
+    method: GET
+    proto: HTTP/1.1
+    proto_major: 1
+    proto_minor: 1
+    remote_addr: ''
+    request_uri: ''
+    trailer: {}
+    transfer_encoding: []
+    url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-05-01&c=c&h=h&s=s&t=t
+  response:
+    body: '{"status":"Succeeded"}'
+    code: 200
+    content_length: 22
+    duration: 200ms
+    headers:
+      Cache-Control:
+      - no-cache
+      Content-Length:
+      - '22'
+      Content-Type:
+      - application/json; charset=utf-8
+      Expires:
+      - '-1'
+      Pragma:
+      - no-cache
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      X-Cache:
+      - CONFIG_NOCACHE
+      X-Content-Type-Options:
+      - nosniff
+      X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+      - '16498'
+    proto: HTTP/2.0
+    proto_major: 2
+    proto_minor: 0
+    status: 200 OK
+    trailer: {}
+    transfer_encoding: []
+    uncompressed: false
+- id: 12
+  request:
+    body: ''
+    content_length: 0
+    form: {}
+    headers:
+      Accept:
+      - application/json
+      User-Agent:
+      - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
+    host: management.azure.com
+    method: DELETE
+    proto: HTTP/1.1
+    proto_major: 1
+    proto_minor: 1
+    remote_addr: ''
+    request_uri: ''
+    trailer: {}
+    transfer_encoding: []
+    url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ServiceGateway?api-version=2021-04-01
+  response:
+    body: ''
+    code: 202
+    content_length: 0
+    duration: 200ms
+    headers:
+      Cache-Control:
+      - no-cache
+      Content-Length:
+      - '0'
+      Expires:
+      - '-1'
+      Location:
+      - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRTRUNVUklUWUdST1VQLUVBU1RVUyIsImpvYkxvY2F0aW9uIjoiZWFzdHVzIn0?api-version=2021-04-01&c=c&h=h&s=s&t=t
+      Pragma:
+      - no-cache
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      X-Cache:
+      - CONFIG_NOCACHE
+      X-Content-Type-Options:
+      - nosniff
+      X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
+      - '11999'
+    proto: HTTP/2.0
+    proto_major: 2
+    proto_minor: 0
+    status: 202 Accepted
+    trailer: {}
+    transfer_encoding: []
+    uncompressed: false
+- id: 13
+  request:
+    body: ''
+    content_length: 0
+    form: {}
+    headers:
+      User-Agent:
+      - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.23.2; linux)
+    host: management.azure.com
+    method: GET
+    proto: HTTP/1.1
+    proto_major: 1
+    proto_minor: 1
+    remote_addr: ''
+    request_uri: ''
+    trailer: {}
+    transfer_encoding: []
+    url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRTRUNVUklUWUdST1VQLUVBU1RVUyIsImpvYkxvY2F0aW9uIjoiZWFzdHVzIn0?api-version=2021-04-01&c=c&h=h&s=s&t=t
+  response:
+    body: ''
+    code: 200
+    content_length: 0
+    duration: 200ms
+    headers:
+      Cache-Control:
+      - no-cache
+      Content-Length:
+      - '0'
+      Expires:
+      - '-1'
+      Pragma:
+      - no-cache
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      X-Cache:
+      - CONFIG_NOCACHE
+      X-Content-Type-Options:
+      - nosniff
+      X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+      - '16499'
+    proto: HTTP/2.0
+    proto_major: 2
+    proto_minor: 0
+    status: 200 OK
+    trailer: {}
+    transfer_encoding: []
+    uncompressed: false
+version: 2
