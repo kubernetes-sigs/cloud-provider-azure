@@ -208,3 +208,17 @@ Check these docs when working in the relevant area. These docs should be updated
 | Topic | Doc | When to check |
 |-------|-----|---------------|
 | ETag & cache invalidation | [ai/references/etag-cache.md](references/etag-cache.md) | Modifying Azure resource create/update/delete operations, or changing cache logic |
+
+## Shared Skills
+
+Shared reusable skills live under `ai/skills/` and are the only repo-tracked
+skill source.
+
+- Do not commit `.codex/`, `.claude/`, `.github/skills`, or other local
+  agent-specific skill folders.
+- To bootstrap local skill usage, manually link
+  `ai/skills/onboard-local-skills` into the local agent skills directory once.
+- After bootstrap, use the `onboard-local-skills` shared skill or
+  `make link-ai-skills TARGET_DIR=<dir>` to link all or selected shared skills.
+- When a user asks to onboard skills, prefer the shared onboarding script over
+  ad hoc symlink commands.
