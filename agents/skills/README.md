@@ -33,6 +33,10 @@ level small:
 
 - `onboard-local-skills`: bootstrap skill for linking all or selected shared
   skills into a local agent-specific skills directory
+- `create-release-tags`: create and optionally push the next stable release tag
+  from a `release-X.Y` branch
+- `create-release-note-doc-pr`: generate a documentation-site release note for
+  a tag and open a documentation PR
 
 ## How To Use
 
