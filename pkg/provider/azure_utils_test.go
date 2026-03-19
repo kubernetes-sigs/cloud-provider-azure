@@ -954,19 +954,57 @@ func TestGetServicePIPPrefixID(t *testing.T) {
 }
 
 func TestGetServicePIPNames(t *testing.T) {
-	svc := &v1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Annotations: map[string]string{
+	testcases := []struct {
+		desc        string
+		annotations map[string]string
+		ipFamilies  []v1.IPFamily
+		expected    []string
+	}{
+		{
+			desc:       "no annotations returns empty slice",
+			ipFamilies: []v1.IPFamily{v1.IPv4Protocol},
+			expected:   nil,
+		},
+		{
+			desc: "IPv4 only",
+			annotations: map[string]string{
+				consts.ServiceAnnotationPIPNameDualStack[false]: "pip-name-ipv4",
+			},
+			ipFamilies: []v1.IPFamily{v1.IPv4Protocol},
+			expected:   []string{"pip-name-ipv4", "pip-name-ipv4"},
+		},
+		{
+			desc: "IPv6 only",
+			annotations: map[string]string{
 				consts.ServiceAnnotationPIPNameDualStack[true]: "pip-name-ipv6",
 			},
+			ipFamilies: []v1.IPFamily{v1.IPv6Protocol},
+			expected:   []string{"pip-name-ipv6"},
 		},
-		Spec: v1.ServiceSpec{
-			IPFamilies: []v1.IPFamily{v1.IPv6Protocol},
+		{
+			desc: "dual-stack both set",
+			annotations: map[string]string{
+				consts.ServiceAnnotationPIPNameDualStack[false]: "pip-name-ipv4",
+				consts.ServiceAnnotationPIPNameDualStack[true]:  "pip-name-ipv6",
+			},
+			ipFamilies: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
+			expected:   []string{"pip-name-ipv4", "pip-name-ipv6"},
 		},
 	}
 
-	names := getServicePIPNames(svc)
-	assert.Equal(t, []string{"", "pip-name-ipv6"}, names)
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			svc := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: tc.annotations,
+				},
+				Spec: v1.ServiceSpec{
+					IPFamilies: tc.ipFamilies,
+				},
+			}
+			assert.Equal(t, tc.expected, getServicePIPNames(svc))
+		})
+	}
 }
 
 func TestGetResourceByIPFamily(t *testing.T) {
