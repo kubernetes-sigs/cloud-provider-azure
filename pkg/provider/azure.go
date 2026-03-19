@@ -267,7 +267,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 	// 2. lb sku is service
 	// 3. backendPoolType is PodIP
 	if az.ServiceGatewayEnabled && az.IsLBBackendPoolTypePodIPAndUseServiceLoadBalancer() {
-		klog.V(2).Info("InitializeCloudFromConfig: Service Gateway is enabled, using PodIP backend pool type with Service Load Balancer")
+		logger.V(2).Info("Service Gateway is enabled, using PodIP backend pool type with Service Load Balancer")
 		az.ServiceGatewayEnabled = true
 	} else {
 		az.ServiceGatewayEnabled = false
