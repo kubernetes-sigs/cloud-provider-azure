@@ -1,11 +1,11 @@
 # Authoring Shared Skills
 
-Shared skills are written once under `ai/skills/` and consumed from local
+Shared skills are written once under `agents/skills/` and consumed from local
 agent-specific skill folders through symlinks.
 
 ## Rules
 
-- Create each shared skill at `ai/skills/<skill-name>/`.
+- Create each shared skill at `agents/skills/<skill-name>/`.
 - Keep `SKILL.md` agent-agnostic. Do not put Codex-only, Claude-only, or
   Copilot-only metadata in the shared skill body.
 - Do not commit `.codex/`, `.claude/`, `.github/skills`, or other local agent
@@ -17,7 +17,7 @@ agent-specific skill folders through symlinks.
 
 ## Suggested Process
 
-1. Copy `ai/skills/templates/skill/` to `ai/skills/<skill-name>/`.
+1. Copy `agents/skills/templates/skill/` to `agents/skills/<skill-name>/`.
 2. Update `SKILL.md` frontmatter:
    - `name`
    - `description`

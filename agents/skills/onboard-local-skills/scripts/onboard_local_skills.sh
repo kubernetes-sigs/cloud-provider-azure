@@ -22,7 +22,7 @@ Usage:
 
 Options:
   --target <dir>   Local agent skills directory to populate with symlinks
-  --all            Link all shared skills found under ai/skills/
+  --all            Link all shared skills found under agents/skills/
   --skill <name>   Link a specific shared skill. Repeat for multiple skills
   --list           Print available shared skills and exit
   --dry-run        Print planned changes without writing symlinks

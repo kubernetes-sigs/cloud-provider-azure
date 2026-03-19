@@ -1,14 +1,14 @@
 # Shared AI Skills
 
 This directory is the repo-owned source of truth for reusable AI agent skills.
-Only content under `ai/skills/` is committed. Agent-specific skill folders such
+Only content under `agents/skills/` is committed. Agent-specific skill folders such
 as `.codex/skills`, `.claude/skills`, and `.github/skills` are local config and
 must stay untracked.
 
 ## Layout
 
 ```text
-ai/skills/
+agents/skills/
   README.md
   authoring.md
   onboarding.md
@@ -21,7 +21,7 @@ ai/skills/
       onboard_local_skills.sh
 ```
 
-Each shared skill lives in `ai/skills/<skill-name>/` and should keep the top
+Each shared skill lives in `agents/skills/<skill-name>/` and should keep the top
 level small:
 
 - `SKILL.md` for the core instructions

@@ -1,1 +1,1 @@
-ai/agents.md
+agents/agents.md

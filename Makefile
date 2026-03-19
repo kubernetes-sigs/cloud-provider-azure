@@ -100,7 +100,7 @@ CCM_E2E_TEST_RELEASE_IMAGE=docker.pkg.github.com/kubernetes-sigs/cloud-provider-
 
 # cloud build variables
 CLOUD_BUILD_IMAGE ?= ccm
-AI_SKILLS_ONBOARD_SCRIPT := ai/skills/onboard-local-skills/scripts/onboard_local_skills.sh
+AI_SKILLS_ONBOARD_SCRIPT := agents/skills/onboard-local-skills/scripts/onboard_local_skills.sh
 
 ##@ General
 
