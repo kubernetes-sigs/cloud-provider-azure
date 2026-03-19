@@ -1,24 +1,24 @@
 # Onboarding Shared Skills Locally
 
-Shared skills are committed under `ai/skills/`. Agents can only use them after
+Shared skills are committed under `agents/skills/`. Agents can only use them after
 they are linked into a local agent-specific skills directory.
 
 ## One-Time Bootstrap
 
 Before any agent can use the bootstrap skill, manually symlink
-`ai/skills/onboard-local-skills` into the local skills directory for that
+`agents/skills/onboard-local-skills` into the local skills directory for that
 agent.
 
 Examples from the repo root:
 
 ```bash
 mkdir -p .codex/skills
-ln -s ../../ai/skills/onboard-local-skills .codex/skills/onboard-local-skills
+ln -s ../../agents/skills/onboard-local-skills .codex/skills/onboard-local-skills
 ```
 
 ```bash
 mkdir -p .claude/skills
-ln -s ../../ai/skills/onboard-local-skills .claude/skills/onboard-local-skills
+ln -s ../../agents/skills/onboard-local-skills .claude/skills/onboard-local-skills
 ```
 
 After that initial step, ask the agent to use `$onboard-local-skills` to link
@@ -30,13 +30,13 @@ Once the bootstrap skill is available locally, the agent should call the
 bundled script with an explicit target:
 
 ```bash
-bash ai/skills/onboard-local-skills/scripts/onboard_local_skills.sh \
+bash agents/skills/onboard-local-skills/scripts/onboard_local_skills.sh \
   --target .codex/skills \
   --all
 ```
 
 ```bash
-bash ai/skills/onboard-local-skills/scripts/onboard_local_skills.sh \
+bash agents/skills/onboard-local-skills/scripts/onboard_local_skills.sh \
   --target .claude/skills \
   --skill onboard-local-skills
 ```

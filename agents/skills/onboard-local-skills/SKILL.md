@@ -1,6 +1,6 @@
 ---
 name: onboard-local-skills
-description: Link shared skills from ai/skills into a local agent-specific skills directory. Use after the initial manual bootstrap when a user wants to onboard all or selected shared skills into .codex/skills, .claude/skills, or another local skills folder.
+description: Link shared skills from agents/skills into a local agent-specific skills directory. Use after the initial manual bootstrap when a user wants to onboard all or selected shared skills into .codex/skills, .claude/skills, or another local skills folder.
 ---
 
 # Onboard Local Skills
