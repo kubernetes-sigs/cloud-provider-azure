@@ -194,7 +194,7 @@ func (helper *RuleHelper) addAllowRule(
 		// Destination
 		addresses := append(ListDestinationPrefixes(rule), dstPrefixes...)
 		SetDestinationPrefixes(rule, addresses)
-		rule.Properties.DestinationPortRanges = to.SliceOfPtrs(dstPortRanges...)
+		SetDestinationPortRanges(rule, dstPorts)
 	}
 
 	helper.logger.V(4).Info("Patched a rule for allow", "rule-name", name)
@@ -207,28 +207,17 @@ func (helper *RuleHelper) AddRuleForAllowedServiceTag(
 	serviceTag string,
 	protocol armnetwork.SecurityRuleProtocol,
 	dstAddresses []netip.Addr,
-	dstAddressPrefix []netip.Prefix,
 	dstPorts []int32,
 ) error {
-	var (
-		ipFamily    iputil.Family
-		srcPrefixes = []string{serviceTag}
-		dstPrefixes []string
-	)
-
-	if len(dstAddressPrefix) > 0 {
-		ipFamily = iputil.FamilyOfAddr(dstAddressPrefix[0].Addr())
-		dstPrefixes = fnutil.Map(func(prefix netip.Prefix) string {
-			return fmt.Sprintf("%s/%d", prefix.Addr().String(), prefix.Bits())
-		}, dstAddressPrefix)
-	} else {
-		ipFamily = iputil.FamilyOfAddr(dstAddresses[0])
-		dstPrefixes = fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
-
-		if !iputil.AreAddressesFromSameFamily(dstAddresses) {
-			return ErrSecurityRuleDestinationAddressesNotFromSameIPFamily
-		}
+	if !iputil.AreAddressesFromSameFamily(dstAddresses) {
+		return ErrSecurityRuleDestinationAddressesNotFromSameIPFamily
 	}
+
+	var (
+		ipFamily    = iputil.FamilyOfAddr(dstAddresses[0])
+		srcPrefixes = []string{serviceTag}
+		dstPrefixes = fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
+	)
 
 	helper.logger.V(4).Info("Patching a rule for allowed service tag", "ip-family", ipFamily)
 
@@ -240,34 +229,22 @@ func (helper *RuleHelper) AddRuleForAllowedIPRanges(
 	ipRanges []netip.Prefix,
 	protocol armnetwork.SecurityRuleProtocol,
 	dstAddresses []netip.Addr,
-	dstAddressPrefix []netip.Prefix,
 	dstPorts []int32,
 ) error {
 	if !iputil.ArePrefixesFromSameFamily(ipRanges) {
 		return ErrSecurityRuleSourceAddressesNotFromSameIPFamily
 	}
-
-	var dstPrefixes []string
-	if len(dstAddressPrefix) != 0 {
-		if ipRanges[0].Addr().Is4() != dstAddressPrefix[0].Addr().Is4() {
-			return ErrSecurityRuleSourceAndDestinationNotFromSameIPFamily
-		}
-		dstPrefixes = fnutil.Map(func(prefix netip.Prefix) string {
-			return fmt.Sprintf("%s/%d", prefix.Addr().String(), prefix.Bits())
-		}, dstAddressPrefix)
-	} else {
-		if !iputil.AreAddressesFromSameFamily(dstAddresses) {
-			return ErrSecurityRuleDestinationAddressesNotFromSameIPFamily
-		}
-		if ipRanges[0].Addr().Is4() != dstAddresses[0].Is4() {
-			return ErrSecurityRuleSourceAndDestinationNotFromSameIPFamily
-		}
-		dstPrefixes = fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
+	if !iputil.AreAddressesFromSameFamily(dstAddresses) {
+		return ErrSecurityRuleDestinationAddressesNotFromSameIPFamily
+	}
+	if ipRanges[0].Addr().Is4() != dstAddresses[0].Is4() {
+		return ErrSecurityRuleSourceAndDestinationNotFromSameIPFamily
 	}
 
 	var (
 		ipFamily    = iputil.FamilyOfAddr(ipRanges[0].Addr())
 		srcPrefixes = fnutil.Map(func(ip netip.Prefix) string { return ip.String() }, ipRanges)
+		dstPrefixes = fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
 	)
 
 	helper.logger.V(4).Info("Patching a rule for allowed IP ranges", "ip-family", ipFamily)
@@ -279,18 +256,15 @@ func (helper *RuleHelper) AddRuleForAllowedIPRanges(
 // NOTE:
 // This rule is to limit the traffic inside the VNet.
 // The traffic out of the VNet is already limited by rule `DenyAllInBound`.
-func (helper *RuleHelper) AddRuleForDenyAll(dstAddresses []netip.Addr, dstAddressPrefix []netip.Prefix) error {
-
-	var ipFamily iputil.Family
-	if len(dstAddressPrefix) != 0 {
-		ipFamily = iputil.FamilyOfAddr(dstAddressPrefix[0].Addr())
-	} else {
-		if !iputil.AreAddressesFromSameFamily(dstAddresses) {
-			return ErrSecurityRuleDestinationAddressesNotFromSameIPFamily
-		}
-		ipFamily = iputil.FamilyOfAddr(dstAddresses[0])
+func (helper *RuleHelper) AddRuleForDenyAll(dstAddresses []netip.Addr) error {
+	if !iputil.AreAddressesFromSameFamily(dstAddresses) {
+		return ErrSecurityRuleDestinationAddressesNotFromSameIPFamily
 	}
-	ruleName := GenerateDenyAllSecurityRuleName(ipFamily)
+
+	var (
+		ipFamily = iputil.FamilyOfAddr(dstAddresses[0])
+		ruleName = GenerateDenyAllSecurityRuleName(ipFamily)
+	)
 
 	helper.logger.V(4).Info("Patching a rule for deny all", "ip-family", ipFamily)
 
@@ -308,18 +282,10 @@ func (helper *RuleHelper) AddRuleForDenyAll(dstAddresses []netip.Addr, dstAddres
 	}
 	{
 		// Destination
-		var addresses []string
-		if len(dstAddressPrefix) != 0 {
-			addresses = fnutil.Map(func(prefix netip.Prefix) string {
-				return fmt.Sprintf("%s/%d", prefix.Addr().String(), prefix.Bits())
-			}, dstAddressPrefix)
-		} else {
-			addresses = fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
-		}
-
+		addresses := fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
 		addresses = append(addresses, ListDestinationPrefixes(rule)...)
 		SetDestinationPrefixes(rule, addresses)
-		rule.Properties.DestinationPortRange = ptr.To("*")
+		SetAsteriskDestinationPortRange(rule)
 	}
 
 	helper.logger.V(4).Info("Patched a rule for deny all", "rule-name", ptr.To(rule.Name))
@@ -338,12 +304,8 @@ func (helper *RuleHelper) RemoveDestinationFromRules(
 	logger.V(10).Info("Cleaning destination from SecurityGroup")
 
 	for _, rule := range helper.rules {
-		if rule.Properties.Priority == nil {
-			continue
-		}
-		priority := *rule.Properties.Priority
-		if priority < consts.LoadBalancerMinimumPriority || consts.LoadBalancerMaximumPriority < priority {
-			logger.V(4).Info("Skip rule with not-in-range priority", "rule-name", *rule.Name, "priority", priority)
+		if !IsManagedSecurityRule(rule) {
+			logger.V(4).Info("Skip rule with not-managed priority", "rule-name", *rule.Name)
 			continue
 		}
 
@@ -353,6 +315,7 @@ func (helper *RuleHelper) RemoveDestinationFromRules(
 
 		if err := helper.removeDestinationFromRule(rule, dstPrefixes, retainDstPorts); err != nil {
 			logger.Error(err, "Failed to remove destination from rule", "rule-name", *rule.Name)
+			return err
 		}
 	}
 
