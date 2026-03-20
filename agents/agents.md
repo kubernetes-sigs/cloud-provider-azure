@@ -80,6 +80,13 @@ When creating a GitHub pull request for this repository:
   `NONE` in the `release-note` block when there is no user-facing change
 - Use `gh` CLI for PR interactions when working with GitHub from the agent
 
+## File Headers
+
+- Any newly created tracked file must carry the standard Kubernetes Apache 2.0
+  boilerplate header using the appropriate comment style for that file type
+- Run `hack/verify-boilerplate.sh` or `make test-check` after adding new tracked
+  files when there is any doubt about header compliance
+
 ## Code Conventions
 
 - **Constants**: all constants live in `pkg/consts/` — do not scatter magic strings
@@ -229,9 +236,6 @@ skill source.
 
 - Do not commit `.codex/`, `.claude/`, `.github/skills`, or other local
   agent-specific skill folders.
-- Any tracked script added under `agents/skills/*/scripts/` must carry the
-  standard Kubernetes Apache 2.0 boilerplate header after the shebang so
-  `hack/verify-boilerplate.sh` and `make test-check` continue to pass.
 - To bootstrap local skill usage, manually link
   `agents/skills/onboard-local-skills` into the local agent skills directory once.
 - After bootstrap, use the `onboard-local-skills` shared skill or
