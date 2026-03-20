@@ -2,9 +2,9 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SKILL_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-SKILLS_DIR="$(cd "${SKILL_DIR}/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+SKILL_DIR="$(cd "${SCRIPT_DIR}/.." && pwd -P)"
+SKILLS_DIR="$(cd "${SKILL_DIR}/.." && pwd -P)"
 
 TARGET_DIR=""
 DRY_RUN=false
@@ -151,7 +151,7 @@ fi
 [[ ! ("${LINK_ALL}" == true && ${#REQUESTED_SKILLS[@]} -gt 0) ]] || die "use either --all or --skill, not both"
 
 mkdir -p "${TARGET_DIR}"
-TARGET_DIR="$(cd "${TARGET_DIR}" && pwd)"
+TARGET_DIR="$(cd "${TARGET_DIR}" && pwd -P)"
 
 declare -a SKILLS_TO_LINK=()
 
@@ -161,12 +161,19 @@ if [[ "${LINK_ALL}" == true ]]; then
 		SKILLS_TO_LINK+=("${skill_name}")
 	done < <(list_skills)
 else
-	declare -A seen_skills=()
 	for skill_name in "${REQUESTED_SKILLS[@]}"; do
+		local_seen=false
 		skill_exists "${skill_name}" || die "shared skill not found: ${skill_name}"
-		if [[ -z "${seen_skills[${skill_name}]+x}" ]]; then
+		if [[ ${#SKILLS_TO_LINK[@]} -gt 0 ]]; then
+			for seen_skill in "${SKILLS_TO_LINK[@]}"; do
+				if [[ "${seen_skill}" == "${skill_name}" ]]; then
+					local_seen=true
+					break
+				fi
+			done
+		fi
+		if [[ "${local_seen}" == false ]]; then
 			SKILLS_TO_LINK+=("${skill_name}")
-			seen_skills["${skill_name}"]=1
 		fi
 	done
 fi

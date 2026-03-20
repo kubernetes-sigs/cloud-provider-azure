@@ -37,6 +37,9 @@ level small:
   from a `release-X.Y` branch
 - `create-release-note-doc-pr`: generate a documentation-site release note for
   a tag and open a documentation PR
+- `release`: draft-first manual release orchestrator that reuses the shared tag
+  and docs-PR skills while keeping GitHub release publication under explicit
+  user control
 
 ## How To Use
 

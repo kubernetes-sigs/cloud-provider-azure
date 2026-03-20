@@ -38,8 +38,7 @@ Default remote behavior:
 2. Resolves GitHub credentials from environment variables or `gh auth token`
 3. Checks whether an open PR already exists for the branch
 4. Fetches the base branch and creates `doc/release-note-<tag>` from it
-5. Runs `./hack/generate-release-note.sh <tag> release-notes.md true` by
-   default
+5. Runs `./hack/generate-release-note.sh <tag> <temp-output> true` by default
 6. Validates the generated docs content before commit
 7. Commits only `content/en/blog/releases/<tag>.md`, pushes the branch, and
    opens a PR with label `kind/documentation`

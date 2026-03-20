@@ -121,6 +121,13 @@ title="Update release notes for ${tag}"
 body="This PR updates the release notes for version ${tag}."
 label="kind/documentation"
 site_file="content/en/blog/releases/${tag}.md"
+release_notes_output="$(mktemp "${TMPDIR:-/tmp}/cloud-provider-azure-release-notes.${tag}.XXXXXX.md")"
+
+cleanup() {
+  rm -f "${release_notes_output}"
+}
+
+trap cleanup EXIT
 
 run() {
   if [[ "${dry_run}" == "true" ]]; then
@@ -289,7 +296,7 @@ run git fetch "${base_remote}" "${base_branch}"
 run git checkout -B "${head_branch}" "${base_remote}/${base_branch}"
 
 if [[ "${generate}" == "true" ]]; then
-  run ./hack/generate-release-note.sh "${tag}" release-notes.md true
+  run ./hack/generate-release-note.sh "${tag}" "${release_notes_output}" true
 fi
 
 if [[ "${dry_run}" == "false" ]]; then
