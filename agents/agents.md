@@ -229,6 +229,9 @@ skill source.
 
 - Do not commit `.codex/`, `.claude/`, `.github/skills`, or other local
   agent-specific skill folders.
+- Any tracked script added under `agents/skills/*/scripts/` must carry the
+  standard Kubernetes Apache 2.0 boilerplate header after the shebang so
+  `hack/verify-boilerplate.sh` and `make test-check` continue to pass.
 - To bootstrap local skill usage, manually link
   `agents/skills/onboard-local-skills` into the local agent skills directory once.
 - After bootstrap, use the `onboard-local-skills` shared skill or
