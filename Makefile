@@ -100,39 +100,11 @@ CCM_E2E_TEST_RELEASE_IMAGE=docker.pkg.github.com/kubernetes-sigs/cloud-provider-
 
 # cloud build variables
 CLOUD_BUILD_IMAGE ?= ccm
-AI_SKILLS_ONBOARD_SCRIPT := agents/skills/onboard-local-skills/scripts/onboard_local_skills.sh
 
 ##@ General
 
 help: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[.a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
-
-## --------------------------------------
-##@ AI
-## --------------------------------------
-
-.PHONY: link-ai-skills
-link-ai-skills: ## Link shared AI skills into a local agent skills directory.
-	@if [ -z "$(TARGET_DIR)" ]; then \
-		echo "TARGET_DIR is required"; \
-		echo "Usage: make link-ai-skills TARGET_DIR=.codex/skills [SKILLS=\"skill-a skill-b\"] [FORCE=1] [DRY_RUN=1]"; \
-		exit 1; \
-	fi
-	@args=(--target "$(TARGET_DIR)"); \
-	if [ -n "$(SKILLS)" ]; then \
-		for skill in $(SKILLS); do \
-			args+=(--skill "$$skill"); \
-		done; \
-	else \
-		args+=(--all); \
-	fi; \
-	if [ "$(FORCE)" = "1" ] || [ "$(FORCE)" = "true" ]; then \
-		args+=(--force); \
-	fi; \
-	if [ "$(DRY_RUN)" = "1" ] || [ "$(DRY_RUN)" = "true" ]; then \
-		args+=(--dry-run); \
-	fi; \
-	bash "$(AI_SKILLS_ONBOARD_SCRIPT)" "$${args[@]}"
 
 ## --------------------------------------
 ##@ Binaries

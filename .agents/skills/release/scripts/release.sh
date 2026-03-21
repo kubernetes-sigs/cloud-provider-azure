@@ -665,8 +665,8 @@ if ! REPO_ROOT="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-tople
   exit 1
 fi
 
-CREATE_RELEASE_TAGS_SCRIPT="${REPO_ROOT}/agents/skills/create-release-tags/scripts/create_release_tags.py"
-CREATE_RELEASE_NOTE_DOC_PR_SCRIPT="${REPO_ROOT}/agents/skills/create-release-note-doc-pr/scripts/create_release_note_doc_pr.sh"
+CREATE_RELEASE_TAGS_SCRIPT="${REPO_ROOT}/.agents/skills/create-release-tags/scripts/create_release_tags.py"
+CREATE_RELEASE_NOTE_DOC_PR_SCRIPT="${REPO_ROOT}/.agents/skills/create-release-note-doc-pr/scripts/create_release_note_doc_pr.sh"
 DRY_RUN="false"
 EXPECTED_ASSETS=(
   azure-cloud-controller-manager-linux-amd64

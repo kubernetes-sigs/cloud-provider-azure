@@ -1,11 +1,11 @@
 # Authoring Shared Skills
 
-Shared skills are written once under `agents/skills/` and consumed from local
-agent-specific skill folders through symlinks.
+Shared skills are written once under `.agents/skills/` and consumed directly by
+agents that support the shared `.agents` convention.
 
 ## Rules
 
-- Create each shared skill at `agents/skills/<skill-name>/`.
+- Create each shared skill at `.agents/skills/<skill-name>/`.
 - Keep `SKILL.md` agent-agnostic. Do not put Codex-only, Claude-only, or
   Copilot-only metadata in the shared skill body.
 - Do not commit `.codex/`, `.claude/`, `.github/skills`, or other local agent
@@ -17,7 +17,7 @@ agent-specific skill folders through symlinks.
 
 ## Suggested Process
 
-1. Copy `agents/skills/templates/skill/` to `agents/skills/<skill-name>/`.
+1. Copy `.agents/skills/templates/skill/` to `.agents/skills/<skill-name>/`.
 2. Update `SKILL.md` frontmatter:
    - `name`
    - `description`
@@ -29,8 +29,8 @@ agent-specific skill folders through symlinks.
 4. Add supporting files only when they materially reduce ambiguity or repeated
    agent effort.
 5. Update [`README.md`](README.md) so the shared skill catalog stays current.
-6. Validate onboarding with the bootstrap script in a temporary local skills
-   directory before relying on the new skill from an agent.
+6. Verify any bundled scripts or examples still point at `.agents/skills/`
+   paths when they refer to other shared skills.
 
 ## Design Guidance
 
@@ -39,6 +39,3 @@ agent-specific skill folders through symlinks.
   skill itself unless they are part of the agent workflow.
 - Make scripts accept explicit inputs rather than assuming a specific local
   agent path.
-- If a user asks an agent to onboard skills, the agent should use
-  `onboard-local-skills` or its bundled script instead of creating ad hoc
-  symlinks.
