@@ -238,3 +238,6 @@ skill source.
   agent-specific skill folders.
 - Shared skills are intended to be consumed directly from `.agents/skills/` by
   agents that support the shared `.agents` convention.
+- Use Python for bundled shared-skill scripts by default. Only introduce a
+  different script language when Python is genuinely insufficient for the job,
+  and document the exception in the skill.

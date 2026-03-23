@@ -31,20 +31,20 @@ Replace `<SKILL_DIR>` with the path of this skill directory.
 Prepare a draft release from `release-1.35`:
 
 ```bash
-bash <SKILL_DIR>/scripts/release.sh prepare --branch release-1.35
+python3 <SKILL_DIR>/scripts/release.py prepare --branch release-1.35
 ```
 
 Publish an existing draft release and open the docs PR:
 
 ```bash
-bash <SKILL_DIR>/scripts/release.sh publish --tag v1.35.7
+python3 <SKILL_DIR>/scripts/release.py publish --tag v1.35.7
 ```
 
 Preview either phase without changing state:
 
 ```bash
-bash <SKILL_DIR>/scripts/release.sh prepare --branch release-1.35 --tag v1.35.7 --dry-run
-bash <SKILL_DIR>/scripts/release.sh publish --tag v1.35.7 --dry-run
+python3 <SKILL_DIR>/scripts/release.py prepare --branch release-1.35 --tag v1.35.7 --dry-run
+python3 <SKILL_DIR>/scripts/release.py publish --tag v1.35.7 --dry-run
 ```
 
 ## Commands
@@ -52,14 +52,14 @@ bash <SKILL_DIR>/scripts/release.sh publish --tag v1.35.7 --dry-run
 Prepare a draft release:
 
 ```bash
-bash <SKILL_DIR>/scripts/release.sh prepare \
+python3 <SKILL_DIR>/scripts/release.py prepare \
   --branch <release-X.Y> [--tag <vX.Y.Z>] [--remote <name>] [--workflow release.yaml]
 ```
 
 Publish a draft release:
 
 ```bash
-bash <SKILL_DIR>/scripts/release.sh publish \
+python3 <SKILL_DIR>/scripts/release.py publish \
   --tag <vX.Y.Z> [--latest auto|always|never] [--remote <name>] \
   [--base-remote <name>] [--push-remote <name>] [--base-branch <name>]
 ```

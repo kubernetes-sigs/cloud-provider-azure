@@ -22,7 +22,8 @@ level small:
 - `SKILL.md` for the core instructions
 - `references/` for detailed material the agent can load on demand
 - `examples/` for short examples that do not belong in `SKILL.md`
-- `scripts/` for deterministic or repetitive operations
+- `scripts/` for deterministic or repetitive operations, using Python by
+  default
 
 ## Current Shared Skills
 - `create-release-tags`: create and optionally push the next stable release tag

@@ -15,7 +15,7 @@ open a PR targeting the documentation branch.
 Replace `<SKILL_DIR>` with the path of this skill directory.
 
 ```bash
-bash <SKILL_DIR>/scripts/create_release_note_doc_pr.sh --tag v1.35.7
+python3 <SKILL_DIR>/scripts/create_release_note_doc_pr.py --tag v1.35.7
 ```
 
 ## Requirements
@@ -46,7 +46,7 @@ Default remote behavior:
 ## Script Usage
 
 ```bash
-bash <SKILL_DIR>/scripts/create_release_note_doc_pr.sh \
+python3 <SKILL_DIR>/scripts/create_release_note_doc_pr.py \
   --tag <vX.Y.Z> [--no-generate] [--dry-run] [--force-push] \
   [--base-remote <name>] [--push-remote <name>] [--base-branch <name>] \
   [--target-repo <owner/repo>] [--head-owner <owner>]

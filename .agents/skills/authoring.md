@@ -14,6 +14,8 @@ agents that support the shared `.agents` convention.
   or `scripts/`.
 - Prefer bundled scripts for deterministic workflows instead of long procedural
   prose.
+- Standardize bundled scripts on Python unless there is a concrete technical
+  reason another language is necessary.
 
 ## Suggested Process
 
@@ -39,3 +41,5 @@ agents that support the shared `.agents` convention.
   skill itself unless they are part of the agent workflow.
 - Make scripts accept explicit inputs rather than assuming a specific local
   agent path.
+- If you need an exception to the Python-only convention, explain it in
+  `SKILL.md` so later contributors do not reintroduce mixed runtimes casually.
