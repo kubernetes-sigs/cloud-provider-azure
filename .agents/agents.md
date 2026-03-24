@@ -67,6 +67,26 @@ IMAGE_REGISTRY=<registry> IMAGE_TAG=<tag> make build-ccm-image   # Build cloud-c
 IMAGE_REGISTRY=<registry> IMAGE_TAG=<tag> make build-cnm-image   # Build cloud-node-manager image
 ```
 
+## Pull Requests
+
+When creating a GitHub pull request for this repository:
+
+- Read and follow [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md)
+- If using `gh pr create`, use the repository template as the starting point for
+  the PR body instead of replacing it with ad hoc sections
+- Preserve the template structure, including the PR kind, issue reference,
+  reviewer notes, `release-note` block, and `docs` block
+- Follow the template instructions for non-applicable sections. For example, use
+  `NONE` in the `release-note` block when there is no user-facing change
+- Use `gh` CLI for PR interactions when working with GitHub from the agent
+
+## File Headers
+
+- Any newly created tracked file must carry the standard Kubernetes Apache 2.0
+  boilerplate header using the appropriate comment style for that file type
+- Run `hack/verify-boilerplate.sh` or `make test-check` after adding new tracked
+  files when there is any doubt about header compliance
+
 ## Code Conventions
 
 - **Constants**: all constants live in `pkg/consts/` — do not scatter magic strings
@@ -207,4 +227,17 @@ Check these docs when working in the relevant area. These docs should be updated
 
 | Topic | Doc | When to check |
 |-------|-----|---------------|
-| ETag & cache invalidation | [ai/references/etag-cache.md](references/etag-cache.md) | Modifying Azure resource create/update/delete operations, or changing cache logic |
+| ETag & cache invalidation | [.agents/references/etag-cache.md](references/etag-cache.md) | Modifying Azure resource create/update/delete operations, or changing cache logic |
+
+## Shared Skills
+
+Shared reusable skills live under `.agents/skills/` and are the only repo-tracked
+skill source.
+
+- Do not commit `.codex/`, `.claude/`, `.github/skills`, or other local
+  agent-specific skill folders.
+- Shared skills are intended to be consumed directly from `.agents/skills/` by
+  agents that support the shared `.agents` convention.
+- Use Python for bundled shared-skill scripts by default. Only introduce a
+  different script language when Python is genuinely insufficient for the job,
+  and document the exception in the skill.
