@@ -146,6 +146,7 @@ build-ccm-image: buildx-setup ## Build controller-manager image.
 		--output=type=$(OUTPUT_TYPE) \
 		--platform linux/$(ARCH) \
 		--build-arg ENABLE_GIT_COMMAND="$(ENABLE_GIT_COMMAND)" \
+		--build-arg GOEXPERIMENT="$(GOEXPERIMENT)" \
 		--build-arg ARCH="$(ARCH)" \
 		--build-arg VERSION="$(VERSION)" \
 		--file Dockerfile \
@@ -160,6 +161,7 @@ build-node-image-linux: buildx-setup ## Build node-manager image.
 		--output=type=$(OUTPUT_TYPE) \
 		--platform linux/$(ARCH) \
 		--build-arg ENABLE_GIT_COMMAND="$(ENABLE_GIT_COMMAND)" \
+		--build-arg GOEXPERIMENT="$(GOEXPERIMENT)" \
 		--build-arg ARCH="$(ARCH)" \
 		--build-arg VERSION="$(VERSION)" \
 		--file cloud-node-manager.Dockerfile \
