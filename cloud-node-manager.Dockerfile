@@ -17,7 +17,9 @@
 FROM --platform=linux/amd64 mcr.microsoft.com/oss/go/microsoft/golang:1.25.7-bookworm@sha256:7f31d02dec6d256dfcfa0c7fcc54f1002f8a0c71d6a6a60740e193abce6a1181 AS builder
 
 ARG ENABLE_GIT_COMMAND=true
+ARG GOEXPERIMENT
 ARG ARCH=amd64
+ENV GOEXPERIMENT=${GOEXPERIMENT}
 
 RUN if [ "$ARCH" = "arm64" ] ; then \
     apt-get update && apt-get install -y gcc-aarch64-linux-gnu ; \
