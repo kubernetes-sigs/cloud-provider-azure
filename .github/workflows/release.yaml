@@ -2,9 +2,6 @@ name: Release
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*.*.*"
 
 permissions:
   contents: read
@@ -198,16 +195,11 @@ jobs:
         with:
           go-version: ${{ steps.gomods.outputs.version }}
           check-latest: true
-      - name: Checkout documentation branch
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: documentation
-          fetch-depth: 0
       - name: Generate release note
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          ./hack/generate-release-note.sh ${GITHUB_REF_NAME} release-notes.md true
+          ./hack/generate-release-note.sh ${GITHUB_REF_NAME} release-notes.md
       - name: Download artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -221,45 +213,3 @@ jobs:
             ./artifacts/cloud-node-manager-*-*/*
             ./artifacts/cloud-controller-manager-*-*/*
             ./artifacts/acr-credential-provider-*-*/*
-      - name: Update site release note
-        uses: stefanzweifel/git-auto-commit-action@04702edda442b2e678b25b537cec683a1493fcb9 # v7.1.0
-        with:
-          # Optional. Commit message for the created commit.
-          # Defaults to "Apply automatic changes"
-          commit_message: Update release notes for ${{github.ref_name}}
-
-          # Optional. Local and remote branch name where commit is going to be pushed
-          #  to. Defaults to the current branch.
-          #  You might need to set `create_branch: true` if the branch does not exist.
-          branch: doc/release-note-${{github.ref_name}}
-
-          # Optional glob pattern of files which should be added to the commit
-          # Defaults to all (.)
-          # See the `pathspec`-documentation for git
-          # - https://git-scm.com/docs/git-add#Documentation/git-add.txt-ltpathspecgt82308203
-          # - https://git-scm.com/docs/gitglossary#Documentation/gitglossary.txt-aiddefpathspecapathspec
-          file_pattern: './content/en/blog/releases/*.md'
-
-          # Optional. Create given branch name in local and remote repository.
-          create_branch: true
-      - name: Create pull request for release notes
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          HEAD_BRANCH="doc/release-note-${{ github.ref_name }}"
-          BASE_BRANCH="documentation"
-          
-          # Check if PR already exists
-          EXISTING_PR=$(gh pr list --head "$HEAD_BRANCH" --base "$BASE_BRANCH" --state open --json number --jq '.[0].number')
-          if [ -n "$EXISTING_PR" ]; then
-            echo "PR #$EXISTING_PR already exists for $HEAD_BRANCH -> $BASE_BRANCH"
-            exit 0
-          fi
-          
-          # Create PR
-          gh pr create \
-            --head "$HEAD_BRANCH" \
-            --base "$BASE_BRANCH" \
-            --title "Update release notes for ${{ github.ref_name }}" \
-            --body "This PR updates the release notes for version ${{ github.ref_name }}." \
-            --label "kind/documentation"
