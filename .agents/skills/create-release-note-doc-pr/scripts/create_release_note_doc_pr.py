@@ -297,9 +297,12 @@ def main() -> int:
         )
 
         if not args.no_generate:
+            # Reuse the same authenticated environment for release-note
+            # generation so the helper does not depend on ambient shell state.
             run(
                 ["./hack/generate-release-note.sh", args.tag, str(temp_path), "true"],
                 cwd=repo_root,
+                env=github_env,
                 dry_run=args.dry_run,
             )
 
