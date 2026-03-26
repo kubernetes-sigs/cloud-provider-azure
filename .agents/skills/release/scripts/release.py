@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+import os
 import json
 import re
 import shlex
@@ -24,6 +25,7 @@ import shutil
 import subprocess
 import sys
 import time
+import tempfile
 from pathlib import Path
 
 
@@ -67,6 +69,7 @@ def run(
     cmd: list[str],
     *,
     cwd: Path,
+    env: dict[str, str] | None = None,
     dry_run: bool = False,
     capture: bool = False,
 ) -> str:
@@ -74,7 +77,7 @@ def run(
         print_cmd(cmd)
         return ""
 
-    proc = subprocess.run(cmd, cwd=cwd, text=True, capture_output=capture)
+    proc = subprocess.run(cmd, cwd=cwd, env=env, text=True, capture_output=capture)
     if proc.returncode != 0:
         stderr = (proc.stderr or "").strip()
         stdout = (proc.stdout or "").strip()
@@ -86,6 +89,28 @@ def run(
 def ensure_command(name: str) -> None:
     if shutil.which(name) is None:
         raise CommandError(f"Required command not found in PATH: {name}")
+
+
+def load_github_env(repo_root: Path) -> dict[str, str]:
+    # Release-note generation now runs locally in the skill, so resolve the same
+    # GitHub token sources the docs helper uses and prefer automatic toolchain
+    # upgrades over the workflow's fixed runner Go version.
+    env = os.environ.copy()
+    if env.get("GITHUB_TOKEN"):
+        env.setdefault("GOTOOLCHAIN", "auto")
+        return env
+    if env.get("GH_TOKEN"):
+        env["GITHUB_TOKEN"] = env["GH_TOKEN"]
+        env.setdefault("GOTOOLCHAIN", "auto")
+        return env
+
+    token = subprocess.run(["gh", "auth", "token"], cwd=repo_root, text=True, capture_output=True)
+    if token.returncode == 0 and token.stdout.strip():
+        env["GITHUB_TOKEN"] = token.stdout.strip()
+        env.setdefault("GOTOOLCHAIN", "auto")
+        return env
+
+    raise CommandError("Could not resolve GitHub token. Provide GITHUB_TOKEN, GH_TOKEN, or run 'gh auth login'.")
 
 
 def ensure_repo_root() -> Path:
@@ -214,6 +239,24 @@ def gh_json(repo_root: Path, args: list[str]) -> object:
     return json.loads(output)
 
 
+def gh_release_view(repo_root: Path, github_repo: str, tag: str) -> dict[str, object]:
+    output = run(
+        [
+            "gh",
+            "release",
+            "view",
+            tag,
+            "-R",
+            github_repo,
+            "--json",
+            "databaseId,tagName,isDraft,isPrerelease,url,assets",
+        ],
+        cwd=repo_root,
+        capture=True,
+    )
+    return json.loads(output)
+
+
 def find_workflow_run(repo_root: Path, github_repo: str, workflow: str, tag: str, dispatched_after: str) -> tuple[str, str]:
     attempts = 30
     while attempts > 0:
@@ -237,18 +280,30 @@ def find_workflow_run(repo_root: Path, github_repo: str, workflow: str, tag: str
 
 
 def fetch_release_json(repo_root: Path, github_repo: str, tag: str) -> dict[str, object]:
-    output = run(["gh", "api", f"repos/{github_repo}/releases/tags/{tag}"], cwd=repo_root, capture=True)
-    return json.loads(output)
+    return gh_release_view(repo_root, github_repo, tag)
+
+
+def _payload_value(payload: dict[str, object], *keys: str) -> object | None:
+    # `gh release view --json ...` and the REST releases API use different key
+    # names, so normalize both shapes in one place.
+    for key in keys:
+        if key in payload:
+            return payload.get(key)
+    return None
 
 
 def check_release_payload(tag: str, expect_draft: bool, payload: dict[str, object], expected_assets: list[str]) -> tuple[str, str]:
-    if payload.get("tag_name") != tag:
-        raise CommandError(f"Release payload tag mismatch: expected {tag}, got {payload.get('tag_name')}")
-    if bool(payload.get("draft")) != expect_draft:
-        state = "draft" if payload.get("draft") else "published"
+    payload_tag = _payload_value(payload, "tag_name", "tagName")
+    if payload_tag != tag:
+        raise CommandError(f"Release payload tag mismatch: expected {tag}, got {payload_tag}")
+
+    draft = bool(_payload_value(payload, "draft", "isDraft"))
+    if draft != expect_draft:
+        state = "draft" if draft else "published"
         expected = "draft" if expect_draft else "published"
         raise CommandError(f"Release {tag} is {state}, expected {expected}")
-    if payload.get("prerelease"):
+
+    if bool(_payload_value(payload, "prerelease", "isPrerelease")):
         raise CommandError(f"Release {tag} is marked as a prerelease")
 
     asset_names = {asset.get("name") for asset in payload.get("assets", []) if isinstance(asset, dict)}
@@ -256,10 +311,104 @@ def check_release_payload(tag: str, expect_draft: bool, payload: dict[str, objec
     if missing:
         raise CommandError(f"Missing assets: {', '.join(missing)}")
 
-    release_id = payload.get("id")
+    release_id = _payload_value(payload, "databaseId", "id")
     if not release_id:
         raise CommandError(f"Release {tag} does not have an id")
-    return str(release_id), str(payload.get("html_url", ""))
+    release_url = _payload_value(payload, "url", "html_url")
+    if not release_url:
+        raise CommandError(f"Release {tag} does not have a URL")
+    return str(release_id), str(release_url)
+
+
+def find_downloaded_asset(download_dir: Path, asset_name: str) -> Path:
+    for candidate in download_dir.rglob(asset_name):
+        if candidate.is_file():
+            return candidate
+    raise CommandError(f"Missing downloaded asset file: {asset_name}")
+
+
+def download_workflow_artifacts(repo_root: Path, github_repo: str, run_id: str, download_dir: Path, *, dry_run: bool = False) -> None:
+    run(["gh", "run", "download", run_id, "-R", github_repo, "-D", str(download_dir)], cwd=repo_root, dry_run=dry_run)
+
+
+def generate_release_notes(repo_root: Path, tag: str, notes_file: Path, *, github_env: dict[str, str], dry_run: bool = False) -> None:
+    notes_file.parent.mkdir(parents=True, exist_ok=True)
+    run(
+        ["./hack/generate-release-note.sh", tag, str(notes_file)],
+        cwd=repo_root,
+        env=github_env,
+        dry_run=dry_run,
+    )
+
+
+def ensure_draft_release(repo_root: Path, github_repo: str, tag: str, notes_file: Path, *, dry_run: bool = False) -> None:
+    payload = None
+    try:
+        payload = gh_release_view(repo_root, github_repo, tag)
+    except CommandError as exc:
+        if "release not found" not in str(exc).lower():
+            raise
+
+    if payload is None:
+        run(
+            [
+                "gh",
+                "release",
+                "create",
+                tag,
+                "-R",
+                github_repo,
+                "--draft",
+                "--title",
+                tag,
+                "--notes-file",
+                str(notes_file),
+                "--verify-tag",
+            ],
+            cwd=repo_root,
+            dry_run=dry_run,
+        )
+        return
+
+    # Re-running prepare against an existing draft should refresh the notes
+    # instead of forcing operators to delete and recreate the release.
+    if not payload.get("isDraft"):
+        raise CommandError(f"Release {tag} already exists and is not a draft")
+
+    run(
+        [
+            "gh",
+            "release",
+            "edit",
+            tag,
+            "-R",
+            github_repo,
+            "--title",
+            tag,
+            "--notes-file",
+            str(notes_file),
+        ],
+        cwd=repo_root,
+        dry_run=dry_run,
+    )
+
+
+def upload_release_assets(repo_root: Path, github_repo: str, tag: str, asset_paths: list[Path], *, dry_run: bool = False) -> None:
+    for asset_path in asset_paths:
+        run(
+            [
+                "gh",
+                "release",
+                "upload",
+                tag,
+                "-R",
+                github_repo,
+                "--clobber",
+                str(asset_path),
+            ],
+            cwd=repo_root,
+            dry_run=dry_run,
+        )
 
 
 def wait_for_draft_release(repo_root: Path, github_repo: str, tag: str) -> tuple[str, str]:
@@ -345,7 +494,40 @@ def prepare_release(
         info(f"Dry run: prepare {tag} from {branch} in {github_repo}")
         print_cmd(tag_cmd)
         print_cmd(["gh", "workflow", "run", args.workflow, "-R", github_repo, "--ref", tag])
-        print("[OK] Dry run: would wait for the workflow run and verify the draft release assets:")
+        print("[OK] Dry run: would wait for the workflow run, download artifacts, and create or update the draft release:")
+        print_cmd(["gh", "run", "watch", "<run-id>", "-R", github_repo, "--exit-status", "--compact"])
+        print_cmd(["gh", "run", "download", "<run-id>", "-R", github_repo, "-D", "<artifacts-dir>"])
+        print_cmd(["./hack/generate-release-note.sh", tag, "<release-notes.md>"])
+        print_cmd(
+            [
+                "gh",
+                "release",
+                "create",
+                tag,
+                "-R",
+                github_repo,
+                "--draft",
+                "--title",
+                tag,
+                "--notes-file",
+                "<release-notes.md>",
+                "--verify-tag",
+            ]
+        )
+        for asset in EXPECTED_ASSETS:
+            print_cmd(
+                [
+                    "gh",
+                    "release",
+                    "upload",
+                    tag,
+                    "-R",
+                    github_repo,
+                    "--clobber",
+                    f"<artifacts-dir>/{asset}",
+                ]
+            )
+        print("[OK] Dry run: would verify that the draft release contains these assets:")
         for asset in EXPECTED_ASSETS:
             print(f"  - {asset}")
         return 0
@@ -366,6 +548,20 @@ def prepare_release(
     else:
         info(f"Watching workflow run {run_id}")
     run(["gh", "run", "watch", run_id, "-R", github_repo, "--exit-status", "--compact"], cwd=repo_root)
+
+    github_env = load_github_env(repo_root)
+    with tempfile.TemporaryDirectory(prefix=f"release-{tag}-") as temp_dir:
+        # Keep all intermediate files ephemeral; the draft release on GitHub is
+        # the durable handoff between `prepare` and `publish`.
+        temp_root = Path(temp_dir)
+        artifacts_dir = temp_root / "artifacts"
+        notes_file = temp_root / "release-notes.md"
+
+        download_workflow_artifacts(repo_root, github_repo, run_id, artifacts_dir)
+        artifact_paths = [find_downloaded_asset(artifacts_dir, asset) for asset in EXPECTED_ASSETS]
+        generate_release_notes(repo_root, tag, notes_file, github_env=github_env)
+        ensure_draft_release(repo_root, github_repo, tag, notes_file)
+        upload_release_assets(repo_root, github_repo, tag, artifact_paths)
 
     release_id, release_url = wait_for_draft_release(repo_root, github_repo, tag)
     info(f"Draft release {tag} is ready: {release_url}")
