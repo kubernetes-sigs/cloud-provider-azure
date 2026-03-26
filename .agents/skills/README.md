@@ -26,6 +26,8 @@ level small:
   default
 
 ## Current Shared Skills
+- `cherry-pick-pr`: cherry-pick a merged pull request onto a release branch,
+  resolve conflicts, run targeted validation, and open a cherry-pick PR
 - `create-release-tags`: create and optionally push the next stable release tag
   from a `release-X.Y` branch
 - `create-release-note-doc-pr`: generate a documentation-site release note for
