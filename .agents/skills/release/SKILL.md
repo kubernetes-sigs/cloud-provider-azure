@@ -1,6 +1,6 @@
 ---
 name: release
-description: Prepare and publish a stable release in two phases by reusing the shared release-tag and release-note-doc-pr skills, dispatching the GitHub release workflow manually, validating release assets, and controlling latest-release status explicitly.
+description: Prepare and publish a stable release in two phases by reusing the shared release-tag and release-note-doc-pr skills, building artifacts in GitHub, generating release notes and draft releases locally, validating release assets, and controlling latest-release status explicitly.
 ---
 
 # Manual Release
@@ -19,8 +19,10 @@ This skill reuses the shared scripts from:
 ## Workflow
 
 1. `prepare`: create and push the release tag, dispatch the `Release`
-   workflow manually, wait for the workflow to finish, and verify that the
-   draft release contains the expected assets.
+   workflow manually, wait for the workflow to finish, download the workflow
+   artifacts, generate release notes locally, create or update the draft
+   release, upload the assets, and verify that the draft release contains the
+   expected assets.
 2. `publish`: publish the draft release with an explicit latest-release policy
    and then open the documentation PR for the same tag.
 
@@ -66,12 +68,17 @@ python3 <SKILL_DIR>/scripts/release.py publish \
 
 ## Notes
 
-- `prepare` is the phase that pushes the tag. After the repo no longer
-  auto-triggers releases on tag push, it manually dispatches `.github/workflows/release.yaml`.
+- `.github/workflows/release.yaml` now builds artifacts only. It no longer
+  generates release notes or creates/publishes release objects.
+- `prepare` pushes the tag, manually dispatches `.github/workflows/release.yaml`,
+  waits for the build to finish, downloads the workflow artifacts, generates the
+  release notes locally, creates or updates the draft release, uploads the
+  assets, and verifies the draft contents.
 - `publish` keeps latest-release handling explicit. `--latest auto` marks the
   release as latest only when its `major.minor` series is the highest stable
   series currently published.
-- The release description comes from the same `hack/generate-release-note.sh`
-  flow used by the release workflow and the documentation PR workflow.
+- The release description is generated locally by the same
+  `hack/generate-release-note.sh` flow used by the docs workflow, so the skill
+  is no longer coupled to the release GitHub Action for notes generation.
 - The publish phase calls the shared `create-release-note-doc-pr` script after
   the GitHub release is published.
