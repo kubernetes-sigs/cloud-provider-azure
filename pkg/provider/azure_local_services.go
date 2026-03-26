@@ -161,43 +161,24 @@ func (updater *loadBalancerBackendPoolUpdater) removeOperation(serviceName strin
 }
 
 // process processes all operations in the loadBalancerBackendPoolUpdater.
-// It merges operations that have the same loadBalancerName and backendPoolName,
-// and then processes them in batches. If an operation fails, it will be retried
-// if it is retriable, otherwise all operations in the batch targeting to
-// this backend pool will fail.
+// It dequeues and groups operations under the queue lock, then performs
+// ARM operations under serviceReconcileLock to serialize with the main
+// service reconciliation loop (EnsureLoadBalancer / UpdateLoadBalancer /
+// EnsureLoadBalancerDeleted). This prevents ETag conflicts (HTTP 412)
+// between concurrent LB parent PUTs and backend pool child PUTs.
 func (updater *loadBalancerBackendPoolUpdater) process(ctx context.Context) {
 	logger := log.FromContextOrBackground(ctx).WithName("loadBalancerBackendPoolUpdater.process")
-	updater.lock.Lock()
-	defer updater.lock.Unlock()
 
-	if len(updater.operations) == 0 {
-		logger.V(4).Info("no operations to process")
+	// Dequeue and group operations under the queue lock.
+	groups := updater.dequeue(ctx)
+	if len(groups) == 0 {
 		return
 	}
 
-	// Group operations by loadBalancerName:backendPoolName
-	groups := make(map[string][]batchOperation)
-	for _, op := range updater.operations {
-		lbOp := op.(*loadBalancerBackendPoolUpdateOperation)
-		si, found := updater.az.getLocalServiceInfo(strings.ToLower(lbOp.serviceName))
-		if !found {
-			logger.V(4).Info("service is not a local service, skip the operation", "service", lbOp.serviceName)
-			continue
-		}
-		if !strings.EqualFold(si.lbName, lbOp.loadBalancerName) {
-			logger.V(4).Info("service is not associated with the load balancer, skip the operation",
-				"service", lbOp.serviceName,
-				"previous load balancer", lbOp.loadBalancerName,
-				"current load balancer", si.lbName)
-			continue
-		}
-
-		key := fmt.Sprintf("%s:%s", lbOp.loadBalancerName, lbOp.backendPoolName)
-		groups[key] = append(groups[key], op)
-	}
-
-	// Clear all jobs.
-	updater.operations = make([]batchOperation, 0)
+	// Acquire serviceReconcileLock so that backend pool PUTs do not
+	// overlap with LB-level PUTs in the main reconciliation loop.
+	updater.az.serviceReconcileLock.Lock()
+	defer updater.az.serviceReconcileLock.Unlock()
 
 	for key, ops := range groups {
 		parts := strings.Split(key, ":")
@@ -249,6 +230,47 @@ func (updater *loadBalancerBackendPoolUpdater) process(ctx context.Context) {
 		isOperationSucceeded = true // Mark operation as successful before notifying
 		updater.notify(newBatchOperationResult(operationName, true, nil), ops...)
 	}
+}
+
+// dequeue drains the operation queue under the queue lock and returns
+// grouped operations by loadBalancerName:backendPoolName.
+// The queue lock is released before returning so that addOperation() is not
+// blocked during ARM calls.
+func (updater *loadBalancerBackendPoolUpdater) dequeue(ctx context.Context) map[string][]batchOperation {
+	logger := log.FromContextOrBackground(ctx).WithName("loadBalancerBackendPoolUpdater.dequeue")
+	updater.lock.Lock()
+	defer updater.lock.Unlock()
+
+	if len(updater.operations) == 0 {
+		logger.V(4).Info("no operations to process")
+		return nil
+	}
+
+	// Group operations by loadBalancerName:backendPoolName
+	groups := make(map[string][]batchOperation)
+	for _, op := range updater.operations {
+		lbOp := op.(*loadBalancerBackendPoolUpdateOperation)
+		si, found := updater.az.getLocalServiceInfo(strings.ToLower(lbOp.serviceName))
+		if !found {
+			logger.V(4).Info("service is not a local service, skip the operation", "service", lbOp.serviceName)
+			continue
+		}
+		if !strings.EqualFold(si.lbName, lbOp.loadBalancerName) {
+			logger.V(4).Info("service is not associated with the load balancer, skip the operation",
+				"service", lbOp.serviceName,
+				"previous load balancer", lbOp.loadBalancerName,
+				"current load balancer", si.lbName)
+			continue
+		}
+
+		key := fmt.Sprintf("%s:%s", lbOp.loadBalancerName, lbOp.backendPoolName)
+		groups[key] = append(groups[key], op)
+	}
+
+	// Clear all jobs.
+	updater.operations = make([]batchOperation, 0)
+
+	return groups
 }
 
 // processError mark the operations as retriable if the error is retriable,

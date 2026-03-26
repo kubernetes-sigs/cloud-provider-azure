@@ -434,6 +434,122 @@ func getTestEndpointSlice(name, namespace, svcName string, nodeNames ...string) 
 	}
 }
 
+var lockCallbackTimeout = 2 * time.Second
+
+func ensureCallbackHappens(t *testing.T, ch <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-ch:
+	case <-time.After(lockCallbackTimeout):
+		t.Fatal("timed out waiting for callback")
+	}
+}
+
+func ensureNoCallback(t *testing.T, ch <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-ch:
+		t.Fatal("unexpected callback")
+	case <-time.After(lockCallbackTimeout):
+	}
+}
+
+// TestLoadBalancerBackendPoolUpdaterSerialization verifies that process()
+// acquires serviceReconcileLock before performing ARM operations, serializing
+// with the main service reconciliation loop. This prevents the ETag race on ARM calls.
+func TestLoadBalancerBackendPoolUpdaterSerialization(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cloud := GetTestCloud(ctrl)
+	cloud.localServiceNameToServiceInfoMap = sync.Map{}
+	cloud.localServiceNameToServiceInfoMap.Store("ns1/svc1", &serviceInfo{lbName: "lb1"})
+	svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+	client := fake.NewSimpleClientset(&svc)
+	informerFactory := informers.NewSharedInformerFactory(client, 0)
+	cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+
+	existingBP := getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{})
+	expectedBP := getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1"})
+
+	getCalled := make(chan struct{})
+	mockBPClient := cloud.NetworkClientFactory.GetBackendAddressPoolClient().(*mock_backendaddresspoolclient.MockInterface)
+	mockBPClient.EXPECT().Get(
+		gomock.Any(), gomock.Any(), "lb1", "pool1",
+	).DoAndReturn(func(_ context.Context, _, _, _ string) (*armnetwork.BackendAddressPool, error) {
+		close(getCalled)
+		return existingBP, nil
+	})
+	mockBPClient.EXPECT().CreateOrUpdate(
+		gomock.Any(), gomock.Any(), "lb1", "pool1", *expectedBP,
+	).Return(nil, nil)
+
+	u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+
+	// Simulate serviceReconcileLock (e.g., reconcileLoadBalancer in progress).
+	cloud.serviceReconcileLock.Lock()
+
+	processDone := make(chan struct{})
+	go func() {
+		u.process(context.Background())
+		close(processDone)
+	}()
+
+	// process() must NOT perform ARM calls while the lock is held.
+	ensureNoCallback(t, getCalled)
+
+	// Release lock - process() should proceed and complete.
+	cloud.serviceReconcileLock.Unlock()
+	ensureCallbackHappens(t, getCalled)
+	ensureCallbackHappens(t, processDone)
+}
+
+// TestLoadBalancerBackendPoolUpdaterDequeueUnderQueueLock verifies that the
+// queue lock is released before ARM operations, so addOperation() is not
+// blocked while process() is waiting on the Azure API.
+func TestLoadBalancerBackendPoolUpdaterDequeueUnderQueueLock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cloud := GetTestCloud(ctrl)
+	cloud.localServiceNameToServiceInfoMap = sync.Map{}
+	cloud.localServiceNameToServiceInfoMap.Store("ns1/svc1", &serviceInfo{lbName: "lb1"})
+	svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+	client := fake.NewSimpleClientset(&svc)
+	informerFactory := informers.NewSharedInformerFactory(client, 0)
+	cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+
+	existingBP := getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{})
+	expectedBP := getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1"})
+
+	addDone := make(chan struct{})
+	mockBPClient := cloud.NetworkClientFactory.GetBackendAddressPoolClient().(*mock_backendaddresspoolclient.MockInterface)
+	mockBPClient.EXPECT().Get(
+		gomock.Any(), gomock.Any(), "lb1", "pool1",
+	).DoAndReturn(func(_ context.Context, _, _, _ string) (*armnetwork.BackendAddressPool, error) {
+		// While the ARM Get is in-flight, try to enqueue a new operation.
+		// If the queue lock were still held, this would deadlock.
+		go func() {
+			cloud.localServiceNameToServiceInfoMap.Store("ns1/svc2", &serviceInfo{lbName: "lb1"})
+			u := cloud.backendPoolUpdater.(*loadBalancerBackendPoolUpdater)
+			u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc2", "lb1", "pool2", []string{"10.0.0.3"}))
+			close(addDone)
+		}()
+		ensureCallbackHappens(t, addDone)
+		return existingBP, nil
+	})
+	mockBPClient.EXPECT().CreateOrUpdate(
+		gomock.Any(), gomock.Any(), "lb1", "pool1", *expectedBP,
+	).Return(nil, nil)
+
+	u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+	cloud.backendPoolUpdater = u
+	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+
+	u.process(context.Background())
+}
+
 func TestEndpointSlicesInformer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
