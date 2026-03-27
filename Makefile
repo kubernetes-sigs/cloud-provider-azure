@@ -43,7 +43,7 @@ ALL_OS_ARCH.windows = $(foreach arch, $(ALL_ARCH.windows), $(foreach osversion, 
 ARCH ?= amd64
 # OS Version for the Windows images: 1809, 2004, 20H2, ltsc2022
 WINDOWS_OSVERSION ?= 1809
-# The output type for `docker buildx build` could either be docker (local), or registry.
+# The output type for the container build command could either be docker (local), or registry.
 OUTPUT_TYPE ?= docker
 
 BASE.windows := mcr.microsoft.com/windows/nanoserver
@@ -52,18 +52,30 @@ IMAGE_REGISTRY ?= local
 K8S_VERSION ?= v1.18.0-rc.1
 HYPERKUBE_IMAGE ?= gcrio.azureedge.net/google_containers/hyperkube-amd64:$(K8S_VERSION)
 
-# `docker buildx` and `docker manifest` requires enabling DOCKER_CLI_EXPERIMENTAL for docker version < 1.20
-export DOCKER_CLI_EXPERIMENTAL=enabled
-
 ifndef TAG
 	IMAGE_TAG ?= $(shell git rev-parse --short=7 HEAD)
 else
 	IMAGE_TAG ?= $(TAG)
 endif
 
-DOCKER_CLI_EXPERIMENTAL := enabled
+# Container CLI: uses podman if available, otherwise docker
+CONTAINER_CLI ?= $(shell which podman 2>/dev/null || echo "docker")
+MANIFEST_AMEND_FLAG ?= --amend
 
-DOCKER_BUILDX ?= docker buildx
+ifeq ($(notdir $(CONTAINER_CLI)),podman)
+CONTAINER_BUILDX ?= $(CONTAINER_CLI)
+BUILDX_EXTRA_FLAGS ?=
+OUTPUT_FLAG ?=
+MANIFEST_PURGE_FLAG ?= --rm
+MANIFEST_PUSH_FORMAT ?= --format v2s2
+else
+CONTAINER_BUILDX ?= $(CONTAINER_CLI) buildx
+BUILDX_EXTRA_FLAGS ?= --provenance=false --sbom=false
+OUTPUT_FLAG ?= --output=type=$(OUTPUT_TYPE)
+MANIFEST_PURGE_FLAG ?= --purge
+MANIFEST_PUSH_FORMAT ?=
+export DOCKER_CLI_EXPERIMENTAL=enabled
+endif
 
 # cloud controller manager image
 ifeq ($(ARCH), amd64)
@@ -133,17 +145,22 @@ $(BIN_DIR)/azure-acr-credential-provider.exe: $(PKG_CONFIG) $(wildcard cmd/acr-c
 ## --------------------------------------
 .PHONY: buildx-setup
 buildx-setup:
-	$(DOCKER_BUILDX) inspect img-builder > /dev/null 2>&1 || $(DOCKER_BUILDX) create --name img-builder --use
+ifeq ($(notdir $(CONTAINER_CLI)),podman)
+	# podman build handles multi-platform natively; ensure qemu-user-static is registered
+	$(CONTAINER_CLI) run --rm --privileged tonistiigi/binfmt --install all
+else
+	$(CONTAINER_BUILDX) inspect img-builder > /dev/null 2>&1 || $(CONTAINER_BUILDX) create --name img-builder --use
 	# enable qemu for arm64 build
 	# https://github.com/docker/buildx/issues/464#issuecomment-741507760
-	docker run --privileged --rm tonistiigi/binfmt --uninstall qemu-aarch64
-	docker run --rm --privileged tonistiigi/binfmt --install all
+	$(CONTAINER_CLI) run --privileged --rm tonistiigi/binfmt --uninstall qemu-aarch64
+	$(CONTAINER_CLI) run --rm --privileged tonistiigi/binfmt --install all
+endif
 
 .PHONY: build-ccm-image
 build-ccm-image: buildx-setup ## Build controller-manager image.
-	$(DOCKER_BUILDX) build \
+	$(CONTAINER_BUILDX) build \
 		--pull \
-		--output=type=$(OUTPUT_TYPE) \
+		$(OUTPUT_FLAG) \
 		--platform linux/$(ARCH) \
 		--build-arg ENABLE_GIT_COMMAND="$(ENABLE_GIT_COMMAND)" \
 		--build-arg GOEXPERIMENT="$(GOEXPERIMENT)" \
@@ -151,14 +168,13 @@ build-ccm-image: buildx-setup ## Build controller-manager image.
 		--build-arg VERSION="$(VERSION)" \
 		--file Dockerfile \
 		--tag $(CONTROLLER_MANAGER_IMAGE) . \
-		--provenance=false \
-		--sbom=false
+		$(BUILDX_EXTRA_FLAGS)
 
 .PHONY: build-node-image-linux
 build-node-image-linux: buildx-setup ## Build node-manager image.
-	$(DOCKER_BUILDX) build \
+	$(CONTAINER_BUILDX) build \
 		--pull \
-		--output=type=$(OUTPUT_TYPE) \
+		$(OUTPUT_FLAG) \
 		--platform linux/$(ARCH) \
 		--build-arg ENABLE_GIT_COMMAND="$(ENABLE_GIT_COMMAND)" \
 		--build-arg GOEXPERIMENT="$(GOEXPERIMENT)" \
@@ -166,51 +182,48 @@ build-node-image-linux: buildx-setup ## Build node-manager image.
 		--build-arg VERSION="$(VERSION)" \
 		--file cloud-node-manager.Dockerfile \
 		--tag $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH) . \
-		--provenance=false \
-		--sbom=false
+		$(BUILDX_EXTRA_FLAGS)
 
 .PHONY: build-node-image-windows
 build-node-image-windows: buildx-setup $(BIN_DIR)/azure-cloud-node-manager.exe ## Build node-manager image for Windows.
-	$(DOCKER_BUILDX) build --pull \
-		--output=type=$(OUTPUT_TYPE) \
+	$(CONTAINER_BUILDX) build --pull \
+		$(OUTPUT_FLAG) \
 		--platform windows/$(ARCH) \
 		-t $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-$(WINDOWS_OSVERSION)-$(ARCH) \
 		--build-arg OSVERSION=$(WINDOWS_OSVERSION) \
 		--build-arg ARCH=$(ARCH) \
 		-f cloud-node-manager-windows.Dockerfile . \
-		--provenance=false \
-		--sbom=false
+		$(BUILDX_EXTRA_FLAGS)
 
 .PHONY: build-node-image-windows-hpc
 build-node-image-windows-hpc: buildx-setup $(BIN_DIR)/azure-cloud-node-manager.exe ## Build node-manager image for Windows.
-	$(DOCKER_BUILDX) build --pull \
-		--output=type=$(OUTPUT_TYPE) \
+	$(CONTAINER_BUILDX) build --pull \
+		$(OUTPUT_FLAG) \
 		--platform windows/$(ARCH) \
 		-t $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-hpc-$(ARCH) \
 		--build-arg ARCH=$(ARCH) \
 		-f cloud-node-manager-windows-hpc.Dockerfile . \
-		--provenance=false \
-		--sbom=false
+		$(BUILDX_EXTRA_FLAGS)
 
 .PHONY: build-ccm-e2e-test-image
 build-ccm-e2e-test-image: ## Build e2e test image.
-	docker build -t $(CCM_E2E_TEST_IMAGE) -f ./e2e.Dockerfile .
+	$(CONTAINER_CLI) build -t $(CCM_E2E_TEST_IMAGE) -f ./e2e.Dockerfile .
 
 .PHONY: push-ccm-image
 push-ccm-image: ## Push controller-manager image.
-	docker push $(CONTROLLER_MANAGER_IMAGE)
+	$(CONTAINER_CLI) push $(CONTROLLER_MANAGER_IMAGE)
 
 .PHONY: push-node-image-linux
 push-node-image-linux: ## Push node-manager image for Linux.
 	@RETRY_COUNT=0; \
 	MAX_RETRIES=3; \
-	until docker push $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH) || [ $$RETRY_COUNT -ge $$MAX_RETRIES ]; do \
+	until $(CONTAINER_CLI) push $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH) || [ $$RETRY_COUNT -ge $$MAX_RETRIES ]; do \
 		RETRY_COUNT=$$((RETRY_COUNT+1)); \
 		echo "Retrying to push image $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH), attempt #$$RETRY_COUNT"; \
 		sleep 30; \
 	done; \
 	if [ $$? -ne 0 ]; then \
-		echo "docker push failed after $$MAX_RETRIES attempts. Aborting."; \
+		echo "image push failed after $$MAX_RETRIES attempts. Aborting."; \
 		exit 1; \
 	fi; \
 
@@ -219,13 +232,13 @@ push-node-image-linux-push-name-%:
 
 .PHONY: push-node-image-linux-push-name
  push-node-image-linux-push-name:
-	docker tag $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH) $(NODE_MANAGER_IMAGE)
-	docker push $(NODE_MANAGER_IMAGE)
+	$(CONTAINER_CLI) tag $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH) $(NODE_MANAGER_IMAGE)
+	$(CONTAINER_CLI) push $(NODE_MANAGER_IMAGE)
 
 .PHONY: release-ccm-e2e-test-image
 release-ccm-e2e-test-image: ## Build and release e2e test image.
-	docker build -t $(CCM_E2E_TEST_RELEASE_IMAGE) -f ./e2e.Dockerfile .
-	docker push $(CCM_E2E_TEST_RELEASE_IMAGE)
+	$(CONTAINER_CLI) build -t $(CCM_E2E_TEST_RELEASE_IMAGE) -f ./e2e.Dockerfile .
+	$(CONTAINER_CLI) push $(CCM_E2E_TEST_RELEASE_IMAGE)
 
 hyperkube:  ## Build hyperkube image.
 ifneq ($(K8S_BRANCH), )
@@ -254,31 +267,31 @@ push: push-multi-arch-controller-manager-image push-multi-arch-node-manager-imag
 .PHONY: push-multi-arch-controller-manager-image
 push-multi-arch-controller-manager-image: push-all-ccm-images ## Push multi-arch controller-manager image
 	## Linux amd64 ccm image name has no amd64
-	docker tag $(CONTROLLER_MANAGER_FULL_IMAGE_NAME):$(IMAGE_TAG) $(CONTROLLER_MANAGER_FULL_IMAGE_NAME)-amd64:$(IMAGE_TAG)
-	docker push $(CONTROLLER_MANAGER_FULL_IMAGE_NAME)-amd64:$(IMAGE_TAG)
+	$(CONTAINER_CLI) tag $(CONTROLLER_MANAGER_FULL_IMAGE_NAME):$(IMAGE_TAG) $(CONTROLLER_MANAGER_FULL_IMAGE_NAME)-amd64:$(IMAGE_TAG)
+	$(CONTAINER_CLI) push $(CONTROLLER_MANAGER_FULL_IMAGE_NAME)-amd64:$(IMAGE_TAG)
 
-	docker manifest create --amend $(CONTROLLER_MANAGER_IMAGE) $(ALL_CONTROLLER_MANAGER_IMAGES)
+	$(CONTAINER_CLI) manifest create $(MANIFEST_AMEND_FLAG) $(CONTROLLER_MANAGER_IMAGE) $(ALL_CONTROLLER_MANAGER_IMAGES)
 	for arch in $(ALL_ARCH.linux); do \
-		docker manifest annotate --os linux --arch $${arch} $(CONTROLLER_MANAGER_IMAGE) $(CONTROLLER_MANAGER_FULL_IMAGE_NAME)-$${arch}:$(IMAGE_TAG); \
+		$(CONTAINER_CLI) manifest annotate --os linux --arch $${arch} $(CONTROLLER_MANAGER_IMAGE) $(CONTROLLER_MANAGER_FULL_IMAGE_NAME)-$${arch}:$(IMAGE_TAG); \
 	done
-	docker manifest push --purge $(CONTROLLER_MANAGER_IMAGE)
+	$(CONTAINER_CLI) manifest push $(MANIFEST_PUSH_FORMAT) $(MANIFEST_PURGE_FLAG) $(CONTROLLER_MANAGER_IMAGE)
 
 .PHONY: push-multi-arch-node-manager-image
 push-multi-arch-node-manager-image: push-all-node-images ## Push multi-arch node-manager image
-	docker manifest create --amend $(NODE_MANAGER_IMAGE) $(ALL_NODE_MANAGER_IMAGES)
+	$(CONTAINER_CLI) manifest create $(MANIFEST_AMEND_FLAG) $(NODE_MANAGER_IMAGE) $(ALL_NODE_MANAGER_IMAGES)
 	for arch in $(ALL_ARCH.linux); do \
-		docker manifest annotate --os linux --arch $${arch} $(NODE_MANAGER_IMAGE)  $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$${arch}; \
+		$(CONTAINER_CLI) manifest annotate --os linux --arch $${arch} $(NODE_MANAGER_IMAGE)  $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$${arch}; \
 	done
 	# For Windows images, we also need to include the "os.version" in the manifest list, so the Windows node can pull the proper image it needs.
 	# we use awk to also trim the quotes around the OS version string.
 	set -x; \
 	for windowsarch in $(ALL_ARCH.windows); do \
 		for osversion in $(ALL_OSVERSIONS.windows); do \
-			full_version=`docker manifest inspect ${BASE.windows}:$${osversion} | jq -r '.manifests[0].platform["os.version"]'`; \
-			docker manifest annotate --os windows --arch $${windowsarch} --os-version $${full_version} $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-$${osversion}-$${windowsarch}; \
+			full_version=`$(CONTAINER_CLI) manifest inspect ${BASE.windows}:$${osversion} | jq -r '.manifests[0].platform["os.version"]'`; \
+			$(CONTAINER_CLI) manifest annotate --os windows --arch $${windowsarch} --os-version $${full_version} $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-$${osversion}-$${windowsarch}; \
 		done; \
 	done
-	docker manifest push --purge $(NODE_MANAGER_IMAGE)
+	$(CONTAINER_CLI) manifest push $(MANIFEST_PUSH_FORMAT) $(MANIFEST_PURGE_FLAG) $(NODE_MANAGER_IMAGE)
 
 .PHONY: push-all-node-images
 push-all-node-images: push-all-node-images-linux push-all-node-images-windows ## Push node-manager image for os and archs.
@@ -299,10 +312,20 @@ push-node-image-linux-%:
 	$(MAKE) ARCH=$* push-node-image-linux
 
 push-node-image-windows-%:
+ifeq ($(notdir $(CONTAINER_CLI)),podman)
+	$(MAKE) WINDOWS_OSVERSION=$(call word-hyphen,$*,1) ARCH=$(call word-hyphen,$*,2) build-node-image-windows
+	$(CONTAINER_CLI) push $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-$(call word-hyphen,$*,1)-$(call word-hyphen,$*,2)
+else
 	$(MAKE) WINDOWS_OSVERSION=$(call word-hyphen,$*,1) ARCH=$(call word-hyphen,$*,2) OUTPUT_TYPE=registry build-node-image-windows
+endif
 
 push-node-image-windows-hpc-%:
+ifeq ($(notdir $(CONTAINER_CLI)),podman)
+	$(MAKE) ARCH=$(call word-hyphen,$*,1) build-node-image-windows-hpc
+	$(CONTAINER_CLI) push $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-hpc-$(call word-hyphen,$*,1)
+else
 	$(MAKE) ARCH=$(call word-hyphen,$*,1) OUTPUT_TYPE=registry build-node-image-windows-hpc
+endif
 
 .PHONY: build-all-node-images
 build-all-node-images: build-all-node-images-linux build-all-node-images-windows ## Build node-manager image for all OS and archs.
@@ -340,19 +363,19 @@ manifest-node-manager-image-windows-hpc-%:
 .PHONY: manifest-node-manager-image-windows
 manifest-node-manager-image-windows: ## Create and push Windows node-manager manifest.
 	set -x
-	docker manifest create --amend $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH) $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-$(WINDOWS_OSVERSION)-$(ARCH)
-	docker manifest annotate --os linux --arch $(ARCH) $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH)
-	full_version=`docker manifest inspect ${BASE.windows}:$(WINDOWS_OSVERSION) | jq -r '.manifests[0].platform["os.version"]'`; \
-	docker manifest annotate --os windows --arch $(ARCH) --os-version $${full_version} $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-$(WINDOWS_OSVERSION)-$(ARCH)
-	docker manifest push --purge $(NODE_MANAGER_IMAGE)
+	$(CONTAINER_CLI) manifest create $(MANIFEST_AMEND_FLAG) $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH) $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-$(WINDOWS_OSVERSION)-$(ARCH)
+	$(CONTAINER_CLI) manifest annotate --os linux --arch $(ARCH) $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH)
+	full_version=`$(CONTAINER_CLI) manifest inspect ${BASE.windows}:$(WINDOWS_OSVERSION) | jq -r '.manifests[0].platform["os.version"]'`; \
+	$(CONTAINER_CLI) manifest annotate --os windows --arch $(ARCH) --os-version $${full_version} $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-$(WINDOWS_OSVERSION)-$(ARCH)
+	$(CONTAINER_CLI) manifest push $(MANIFEST_PUSH_FORMAT) $(MANIFEST_PURGE_FLAG) $(NODE_MANAGER_IMAGE)
 
 .PHONY: manifest-node-manager-image-windows-hpc
 manifest-node-manager-image-windows-hpc: ## Create and push Windows HPC node-manager manifest.
 	set -x
-	docker manifest create --amend $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH) $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-hpc-$(ARCH)
-	docker manifest annotate --os linux --arch $(ARCH) $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH)
-	docker manifest annotate --os windows --arch $(ARCH) $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-hpc-$(ARCH)
-	docker manifest push --purge $(NODE_MANAGER_IMAGE)
+	$(CONTAINER_CLI) manifest create $(MANIFEST_AMEND_FLAG) $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH) $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-hpc-$(ARCH)
+	$(CONTAINER_CLI) manifest annotate --os linux --arch $(ARCH) $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH)
+	$(CONTAINER_CLI) manifest annotate --os windows --arch $(ARCH) $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-hpc-$(ARCH)
+	$(CONTAINER_CLI) manifest push $(MANIFEST_PUSH_FORMAT) $(MANIFEST_PURGE_FLAG) $(NODE_MANAGER_IMAGE)
 
 ## --------------------------------------
 ##@ Tests
