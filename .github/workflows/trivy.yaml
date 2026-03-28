@@ -58,6 +58,8 @@ jobs:
           make build-ccm-image
           make build-node-image-linux-amd64
           cd health-probe-proxy && make build-health-probe-proxy-image && cd ..
+        env:
+          CONTAINER_CLI: docker
 
       - name: Run Trivy scanner CCM
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # master
