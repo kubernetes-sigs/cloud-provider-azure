@@ -42,7 +42,7 @@ func (s *String) Convert(v reflect.Value) error {
 	t := v.Type()
 	switch {
 	case t.Kind() == reflect.String:
-		v.Set(reflect.ValueOf(s.Value))
+		v.SetString(s.Value)
 		return nil
 	case t.ConvertibleTo(reflect.TypeOf(new(string))):
 		i := &s.Value
