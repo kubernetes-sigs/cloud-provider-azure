@@ -16,6 +16,9 @@ agents that support the shared `.agents` convention.
   prose.
 - Standardize bundled scripts on Python unless there is a concrete technical
   reason another language is necessary.
+- Markdown files (e.g., `SKILL.md`) do not need the Kubernetes Apache 2.0
+  boilerplate header. Only source code files (`.py`, `.sh`, `.go`, etc.)
+  require it.
 
 ## Suggested Process
 
