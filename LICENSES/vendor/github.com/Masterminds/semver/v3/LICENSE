@@ -1,6 +1,6 @@
-= vendor/go.uber.org/automaxprocs licensed under: =
+= vendor/github.com/Masterminds/semver/v3 licensed under: =
 
-Copyright (c) 2017 Uber Technologies, Inc.
+Copyright (C) 2014-2019, Matt Butcher and Matt Farina
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,4 +19,5 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-= vendor/go.uber.org/automaxprocs/LICENSE 513f1cf32c6e4e3236a335fa13bb1c89
+
+= vendor/github.com/Masterminds/semver/v3/LICENSE.txt 4c1ffeeb02e3f8f4af042205e189b3f7
