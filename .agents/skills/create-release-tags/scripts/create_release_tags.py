@@ -99,11 +99,6 @@ def series_from_branch(branch: str) -> Series | None:
     return Series(int(m["major"]), int(m["minor"]))
 
 
-def ensure_clean(repo: Path) -> None:
-    status = run_git(repo, ["status", "--porcelain"])
-    if status.strip():
-        raise GitError("Working tree not clean. Commit/stash changes before tagging.")
-
 
 def ensure_remote(repo: Path, remote: str) -> None:
     if not git_optional(repo, ["remote", "get-url", remote]):
@@ -145,39 +140,19 @@ def ensure_tag_absent(repo: Path, tag: str) -> None:
         raise GitError(f"Tag {tag} already exists locally.")
 
 
-def checkout_and_ff(repo: Path, remote: str, branch: str, *, force_branch: bool) -> None:
-    local_branch_exists = git_optional(
-        repo, ["show-ref", "--verify", "--quiet", f"refs/heads/{branch}"]
-    )
-    if local_branch_exists:
-        run_git(repo, ["checkout", branch], capture=False)
-    else:
-        run_git(repo, ["checkout", "--track", "-b", branch, f"{remote}/{branch}"], capture=False)
-
-    try:
-        run_git(repo, ["merge", "--ff-only", f"{remote}/{branch}"], capture=False)
-    except GitError:
-        if not force_branch:
-            raise GitError(
-                f"Local branch {branch!r} is not a fast-forward of {remote}/{branch}. "
-                "Re-run with --force-branch to hard-reset local branch to the remote."
-            )
-        run_git(repo, ["reset", "--hard", f"{remote}/{branch}"], capture=False)
-
-
-def create_tag(repo: Path, tag: str, *, message: str | None, sign: bool, lightweight: bool) -> None:
+def create_tag(repo: Path, tag: str, commit: str, *, message: str | None, sign: bool, lightweight: bool) -> None:
     if lightweight and sign:
         raise GitError("Cannot combine --lightweight and --sign.")
 
     if lightweight:
-        run_git(repo, ["tag", tag], capture=False)
+        run_git(repo, ["tag", tag, commit], capture=False)
         return
 
     msg = message or tag
     if sign:
-        run_git(repo, ["tag", "-s", tag, "-m", msg], capture=False)
+        run_git(repo, ["tag", "-s", "-m", msg, tag, commit], capture=False)
     else:
-        run_git(repo, ["tag", "-a", tag, "-m", msg], capture=False)
+        run_git(repo, ["tag", "-a", "-m", msg, tag, commit], capture=False)
 
 
 def push_tag(repo: Path, remote: str, tag: str) -> None:
@@ -211,7 +186,7 @@ def main() -> int:
     parser.add_argument(
         "--force-branch",
         action="store_true",
-        help="If local branch diverges, hard-reset it to <remote>/<branch>.",
+        help="No-op (kept for backward compatibility). Previously hard-reset local branch to <remote>/<branch>.",
     )
     parser.add_argument(
         "--message",
@@ -260,19 +235,8 @@ def main() -> int:
             print("Plan only. Re-run with --create to create the tag, or --push to create + push it.")
             return 0
 
-        ensure_clean(repo)
-        checkout_and_ff(repo, args.remote, args.branch, force_branch=args.force_branch)
-
-        head_sha = run_git(repo, ["rev-parse", "HEAD"])
-        remote_head_sha = run_git(repo, ["rev-parse", f"{args.remote}/{args.branch}"])
-        if head_sha != remote_head_sha:
-            raise GitError(
-                f"After sync, HEAD ({head_sha}) != {args.remote}/{args.branch} ({remote_head_sha}). "
-                "Refusing to tag."
-            )
-
-        create_tag(repo, tag, message=args.message, sign=args.sign, lightweight=args.lightweight)
-        print(f"created_tag:   {tag} @ {head_sha}")
+        create_tag(repo, tag, remote_sha, message=args.message, sign=args.sign, lightweight=args.lightweight)
+        print(f"created_tag:   {tag} @ {remote_sha}")
 
         if args.push:
             push_tag(repo, args.remote, tag)
