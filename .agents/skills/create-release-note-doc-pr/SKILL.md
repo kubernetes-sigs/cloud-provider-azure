@@ -41,7 +41,8 @@ Default remote behavior:
 5. Runs `./hack/generate-release-note.sh <tag> <temp-output> true` by default
 6. Validates the generated docs content before commit
 7. Commits only `content/en/blog/releases/<tag>.md`, pushes the branch, and
-   opens a PR with label `kind/documentation`
+   opens a PR with labels `kind/documentation` and `release-note-none`
+8. Restores the original branch after completion
 
 ## Script Usage
 
