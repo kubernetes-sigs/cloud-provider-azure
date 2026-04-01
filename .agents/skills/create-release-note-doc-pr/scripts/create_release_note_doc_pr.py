@@ -257,7 +257,7 @@ def main() -> int:
     head_branch = f"doc/release-note-{args.tag}"
     title = f"Update release notes for {args.tag}"
     body = f"This PR updates the release notes for version {args.tag}."
-    label = "kind/documentation"
+    labels = ["kind/documentation", "release-note-none"]
 
     if not remote_exists(repo_root, args.push_remote):
         raise CommandError(f"Push remote {args.push_remote!r} does not exist.")
@@ -281,6 +281,7 @@ def main() -> int:
         )
         return 0
 
+    original_ref: str | None = None
     temp_path = Path(
         tempfile.NamedTemporaryFile(
             prefix=f"cloud-provider-azure-release-notes.{args.tag}.",
@@ -289,6 +290,23 @@ def main() -> int:
         ).name
     )
     try:
+        # Capture original branch so we can restore it in the finally block.
+        # This is guarded by dry_run because dry-run mode prints checkout
+        # commands without executing them, so no branch switch actually happens
+        # and no restore is needed.
+        if not args.dry_run:
+            _orig = run(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                cwd=repo_root,
+                capture=True,
+            )
+            # --abbrev-ref returns literal "HEAD" when detached; fall back to SHA.
+            original_ref = (
+                _orig
+                if _orig != "HEAD"
+                else run(["git", "rev-parse", "HEAD"], cwd=repo_root, capture=True)
+            )
+
         run(["git", "fetch", base_remote, args.base_branch], cwd=repo_root, dry_run=args.dry_run)
         run(
             ["git", "checkout", "-B", head_branch, f"{base_remote}/{args.base_branch}"],
@@ -347,7 +365,9 @@ def main() -> int:
                 "--body",
                 body,
                 "--label",
-                label,
+                labels[0],
+                "--label",
+                labels[1],
             ],
             cwd=repo_root,
             env=github_env,
@@ -355,6 +375,11 @@ def main() -> int:
         )
     finally:
         temp_path.unlink(missing_ok=True)
+        if original_ref is not None:
+            try:
+                run(["git", "checkout", original_ref], cwd=repo_root)
+            except CommandError as exc:
+                print(f"[WARN] Could not restore original branch {original_ref}: {exc}", file=sys.stderr)
 
     return 0
 
