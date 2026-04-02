@@ -1206,6 +1206,10 @@ func (az *Cloud) ensurePublicIPExists(ctx context.Context, service *v1.Service, 
 			}
 		}
 
+		if !isUserAssignedPIP && ensurePIPIPTagged(service, pip) {
+			changed = true
+		}
+
 		// return if pip exist and dns label is the same
 		if strings.EqualFold(getDomainNameLabel(pip), domainNameLabel) {
 			if existingServiceName := getServiceFromPIPDNSTags(pip.Tags); existingServiceName != "" && strings.EqualFold(existingServiceName, serviceName) {
@@ -3297,13 +3301,11 @@ func (az *Cloud) shouldUpdateLoadBalancer(ctx context.Context, clusterName strin
 }
 
 // Determine if we should release existing owned public IPs
-// FIXME: This function is a bit of a mess, and could use some refactoring.
 func shouldReleaseExistingOwnedPublicIP(
 	existingPip *armnetwork.PublicIPAddress,
 	serviceReferences []string,
 	lbShouldExist, lbIsInternal, isUserAssignedPIP bool,
 	desiredPipName string,
-	ipTagRequest serviceIPTagRequest,
 ) bool {
 	// skip deleting user created pip
 	if isUserAssignedPIP {
@@ -3312,12 +3314,6 @@ func shouldReleaseExistingOwnedPublicIP(
 
 	// Latch some variables for readability purposes.
 	pipName := *existingPip.Name
-
-	// Assume the current IP Tags are empty by default unless properties specify otherwise.
-	currentIPTags := []*armnetwork.IPTag{}
-	if existingPip.Properties != nil {
-		currentIPTags = existingPip.Properties.IPTags
-	}
 
 	// Check whether the public IP is being referenced by other service.
 	// The owned public IP can be released only when there is not other service using it.
@@ -3339,9 +3335,7 @@ func shouldReleaseExistingOwnedPublicIP(
 		// #3 - If the name of this public ip does not match the desired name,
 		// NOTICE: For IPv6 Service created with CCM v1.27.1, the created PIP has IPv6 suffix.
 		// We need to recreate such PIP and current logic to delete needs no change.
-		(pipName != desiredPipName) ||
-		// #4 If the service annotations have specified the ip tags that the public ip must have, but they do not match the ip tags of the existing instance
-		(ipTagRequest.IPTagsRequestedByAnnotation && !areIPTagsEquivalent(currentIPTags, ipTagRequest.IPTags))
+		(pipName != desiredPipName)
 }
 
 // ensurePIPTagged ensures the public IP of the service is tagged as configured
@@ -3386,6 +3380,30 @@ func (az *Cloud) ensurePIPTagged(service *v1.Service, pip *armnetwork.PublicIPAd
 	pip.Tags = tags
 
 	return changed
+}
+
+// ensurePIPIPTagged ensures the PIP has the IP tags specified by the service annotation.
+// When the annotation is absent, existing IP tags are preserved.
+// When the annotation is present but empty, IP tags are cleared.
+func ensurePIPIPTagged(service *v1.Service, pip *armnetwork.PublicIPAddress) bool {
+	ipTagRequest := getServiceIPTagRequestForPublicIP(service)
+	if !ipTagRequest.IPTagsRequestedByAnnotation {
+		return false
+	}
+
+	currentIPTags := []*armnetwork.IPTag{}
+	if pip.Properties != nil {
+		currentIPTags = pip.Properties.IPTags
+	}
+	if areIPTagsEquivalent(currentIPTags, ipTagRequest.IPTags) {
+		return false
+	}
+	if pip.Properties == nil {
+		return false
+	}
+
+	pip.Properties.IPTags = ipTagRequest.IPTags
+	return true
 }
 
 // reconcilePublicIPs reconciles the PublicIP resources similar to how the LB is reconciled.
@@ -3451,7 +3469,6 @@ func (az *Cloud) reconcilePublicIP(ctx context.Context, pips []*armnetwork.Publi
 	logger := klog.FromContext(ctx).WithName("reconcilePublicIP")
 	isInternal := requiresInternalLoadBalancer(service)
 	serviceName := getServiceName(service)
-	serviceIPTagRequest := getServiceIPTagRequestForPublicIP(service)
 	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
 
 	var (
@@ -3476,7 +3493,7 @@ func (az *Cloud) reconcilePublicIP(ctx context.Context, pips []*armnetwork.Publi
 	}
 
 	discoveredDesiredPublicIP, pipsToBeDeleted, deletedDesiredPublicIP, pipsToBeUpdated, err := az.getPublicIPUpdates(
-		clusterName, service, pips, wantLb, isInternal, desiredPipName, serviceName, serviceIPTagRequest, shouldPIPExisted, isIPv6)
+		clusterName, service, pips, wantLb, isInternal, desiredPipName, serviceName, shouldPIPExisted, isIPv6)
 	if err != nil {
 		return nil, err
 	}
@@ -3535,7 +3552,6 @@ func (az *Cloud) getPublicIPUpdates(
 	isInternal bool,
 	desiredPipName string,
 	serviceName string,
-	serviceIPTagRequest serviceIPTagRequest,
 	serviceAnnotationRequestsNamedPublicIP,
 	isIPv6 bool,
 ) (bool, []*armnetwork.PublicIPAddress, bool, []*armnetwork.PublicIPAddress, error) {
@@ -3584,8 +3600,11 @@ func (az *Cloud) getPublicIPUpdates(
 				if az.ensurePIPTagged(service, pip) {
 					dirtyPIP = true
 				}
+				if ensurePIPIPTagged(service, pip) {
+					dirtyPIP = true
+				}
 			}
-			if shouldReleaseExistingOwnedPublicIP(pip, serviceReferences, wantLb, isInternal, isUserAssignedPIP, desiredPipName, serviceIPTagRequest) {
+			if shouldReleaseExistingOwnedPublicIP(pip, serviceReferences, wantLb, isInternal, isUserAssignedPIP, desiredPipName) {
 				// Then, release the public ip
 				pipsToBeDeleted = append(pipsToBeDeleted, pip)
 
