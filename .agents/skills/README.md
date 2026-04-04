@@ -37,6 +37,9 @@ level small:
 - `release`: draft-first manual release orchestrator that reuses the shared tag
   and docs-PR skills while keeping GitHub release publication under explicit
   user control
+- `run-e2e-test`: parse a Go e2e test from `tests/e2e/`, translate each step to
+  `kubectl` and `az` CLI commands, and interactively replay the test against a
+  live cluster
 
 ## How To Use
 
