@@ -32,6 +32,8 @@ level small:
   from a `release-X.Y` branch
 - `create-release-note-doc-pr`: generate a documentation-site release note for
   a tag and open a documentation PR
+- `fix-image-cves`: scan a built image with Trivy, plan fixable Go-module and
+  base-image CVE remediation, apply the source changes, and verify the result
 - `release`: draft-first manual release orchestrator that reuses the shared tag
   and docs-PR skills while keeping GitHub release publication under explicit
   user control
