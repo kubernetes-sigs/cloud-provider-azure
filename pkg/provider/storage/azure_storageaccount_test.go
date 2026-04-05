@@ -1347,14 +1347,14 @@ func TestIsAllowCrossTenantReplicationEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			// account true, options nil (default false) -> mismatch
+			// account true, options nil (don't care) -> match
 			account: &armstorage.Account{
 				Properties: &armstorage.AccountProperties{
 					AllowCrossTenantReplication: ptr.To(true),
 				},
 			},
 			accountOptions: &AccountOptions{},
-			expectedResult: false,
+			expectedResult: true,
 		},
 		{
 			// both true

@@ -77,7 +77,7 @@ type AccountOptions struct {
 	AllowBlobPublicAccess                   *bool
 	RequireInfrastructureEncryption         *bool
 	AllowSharedKeyAccess                    *bool
-	AllowCrossTenantReplication              *bool
+	AllowCrossTenantReplication             *bool
 	IsMultichannelEnabled                   *bool
 	IsSmbOAuthEnabled                       *bool
 	KeyName                                 *string
@@ -1061,7 +1061,10 @@ func isAllowSharedKeyAccessEqual(account *armstorage.Account, accountOptions *Ac
 }
 
 func isAllowCrossTenantReplicationEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
-	return ptr.Deref(accountOptions.AllowCrossTenantReplication, false) == ptr.Deref(account.Properties.AllowCrossTenantReplication, false)
+	if accountOptions.AllowCrossTenantReplication == nil {
+		return true
+	}
+	return *accountOptions.AllowCrossTenantReplication == ptr.Deref(account.Properties.AllowCrossTenantReplication, false)
 }
 
 func isAccessTierEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
