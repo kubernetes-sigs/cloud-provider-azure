@@ -1329,7 +1329,7 @@ func TestIsAllowCrossTenantReplicationEqual(t *testing.T) {
 		expectedResult bool
 	}{
 		{
-			// both nil, default false == default false
+			// options nil (don't care), always match regardless of account value
 			account: &armstorage.Account{
 				Properties: &armstorage.AccountProperties{},
 			},
@@ -1337,7 +1337,7 @@ func TestIsAllowCrossTenantReplicationEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			// account false, options nil (default false)
+			// options nil (don't care), match even when account is false
 			account: &armstorage.Account{
 				Properties: &armstorage.AccountProperties{
 					AllowCrossTenantReplication: ptr.To(false),
@@ -1347,7 +1347,7 @@ func TestIsAllowCrossTenantReplicationEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			// account true, options nil (don't care) -> match
+			// options nil (don't care), match even when account is true
 			account: &armstorage.Account{
 				Properties: &armstorage.AccountProperties{
 					AllowCrossTenantReplication: ptr.To(true),
@@ -1357,7 +1357,7 @@ func TestIsAllowCrossTenantReplicationEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			// both true
+			// both explicitly true
 			account: &armstorage.Account{
 				Properties: &armstorage.AccountProperties{
 					AllowCrossTenantReplication: ptr.To(true),
@@ -1369,7 +1369,7 @@ func TestIsAllowCrossTenantReplicationEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			// account true, options false -> mismatch
+			// options false, account true -> mismatch
 			account: &armstorage.Account{
 				Properties: &armstorage.AccountProperties{
 					AllowCrossTenantReplication: ptr.To(true),
@@ -1381,7 +1381,7 @@ func TestIsAllowCrossTenantReplicationEqual(t *testing.T) {
 			expectedResult: false,
 		},
 		{
-			// account nil (default false), options true -> mismatch
+			// options true, account nil (defaults to false) -> mismatch
 			account: &armstorage.Account{
 				Properties: &armstorage.AccountProperties{},
 			},
