@@ -77,6 +77,7 @@ type AccountOptions struct {
 	AllowBlobPublicAccess                   *bool
 	RequireInfrastructureEncryption         *bool
 	AllowSharedKeyAccess                    *bool
+	AllowCrossTenantReplication             *bool
 	IsMultichannelEnabled                   *bool
 	IsSmbOAuthEnabled                       *bool
 	KeyName                                 *string
@@ -156,7 +157,7 @@ func (az *AccountRepo) getStorageAccounts(ctx context.Context, storageAccountCli
 	accounts := []accountWithLocation{}
 	for _, acct := range result {
 		if acct.Name != nil && acct.Location != nil && acct.SKU != nil {
-			if !isStorageTypeEqual(acct, accountOptions) || !isAccountKindEqual(acct, accountOptions) || !isLocationEqual(acct, accountOptions) || !isLargeFileSharesPropertyEqual(acct, accountOptions) || !isTagsEqual(acct, accountOptions) || !isTaggedWithSkip(acct) || !isHnsPropertyEqual(acct, accountOptions) || !isEnableNfsV3PropertyEqual(acct, accountOptions) || !isEnableHTTPSTrafficOnlyEqual(acct, accountOptions) || !isAllowBlobPublicAccessEqual(acct, accountOptions) || !isRequireInfrastructureEncryptionEqual(acct, accountOptions) || !isAllowSharedKeyAccessEqual(acct, accountOptions) || !isAccessTierEqual(acct, accountOptions) || !AreVNetRulesEqual(acct, accountOptions) || !isPrivateEndpointAsExpected(acct, accountOptions) {
+			if !isStorageTypeEqual(acct, accountOptions) || !isAccountKindEqual(acct, accountOptions) || !isLocationEqual(acct, accountOptions) || !isLargeFileSharesPropertyEqual(acct, accountOptions) || !isTagsEqual(acct, accountOptions) || !isTaggedWithSkip(acct) || !isHnsPropertyEqual(acct, accountOptions) || !isEnableNfsV3PropertyEqual(acct, accountOptions) || !isEnableHTTPSTrafficOnlyEqual(acct, accountOptions) || !isAllowBlobPublicAccessEqual(acct, accountOptions) || !isRequireInfrastructureEncryptionEqual(acct, accountOptions) || !isAllowSharedKeyAccessEqual(acct, accountOptions) || !isAllowCrossTenantReplicationEqual(acct, accountOptions) || !isAccessTierEqual(acct, accountOptions) || !AreVNetRulesEqual(acct, accountOptions) || !isPrivateEndpointAsExpected(acct, accountOptions) {
 				continue
 			}
 
@@ -569,6 +570,10 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 		if accountOptions.AllowBlobPublicAccess != nil {
 			logger.V(2).Info("set AllowBlobPublicAccess for storage account", "AllowBlobPublicAccess", *accountOptions.AllowBlobPublicAccess, "account", accountName)
 			cp.Properties.AllowBlobPublicAccess = accountOptions.AllowBlobPublicAccess
+		}
+		if accountOptions.AllowCrossTenantReplication != nil {
+			logger.V(2).Info("set AllowCrossTenantReplication for storage account", "AllowCrossTenantReplication", *accountOptions.AllowCrossTenantReplication, "account", accountName)
+			cp.Properties.AllowCrossTenantReplication = accountOptions.AllowCrossTenantReplication
 		}
 		if accountOptions.RequireInfrastructureEncryption != nil {
 			logger.V(2).Info("set RequireInfrastructureEncryption for storage account", "RequireInfrastructureEncryption", *accountOptions.RequireInfrastructureEncryption, "account", accountName)
@@ -1053,6 +1058,13 @@ func isRequireInfrastructureEncryptionEqual(account *armstorage.Account, account
 
 func isAllowSharedKeyAccessEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
 	return ptr.Deref(accountOptions.AllowSharedKeyAccess, true) == ptr.Deref(account.Properties.AllowSharedKeyAccess, true)
+}
+
+func isAllowCrossTenantReplicationEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
+	if accountOptions.AllowCrossTenantReplication == nil {
+		return true
+	}
+	return *accountOptions.AllowCrossTenantReplication == ptr.Deref(account.Properties.AllowCrossTenantReplication, false)
 }
 
 func isAccessTierEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
