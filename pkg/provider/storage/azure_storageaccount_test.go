@@ -1322,6 +1322,82 @@ func TestIsAllowSharedKeyAccessEqual(t *testing.T) {
 	}
 }
 
+func TestIsAllowCrossTenantReplicationEqual(t *testing.T) {
+	tests := []struct {
+		account        *armstorage.Account
+		accountOptions *AccountOptions
+		expectedResult bool
+	}{
+		{
+			// both nil, default false == default false
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{},
+			expectedResult: true,
+		},
+		{
+			// account false, options nil (default false)
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					AllowCrossTenantReplication: ptr.To(false),
+				},
+			},
+			accountOptions: &AccountOptions{},
+			expectedResult: true,
+		},
+		{
+			// account true, options nil (default false) -> mismatch
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					AllowCrossTenantReplication: ptr.To(true),
+				},
+			},
+			accountOptions: &AccountOptions{},
+			expectedResult: false,
+		},
+		{
+			// both true
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					AllowCrossTenantReplication: ptr.To(true),
+				},
+			},
+			accountOptions: &AccountOptions{
+				AllowCrossTenantReplication: ptr.To(true),
+			},
+			expectedResult: true,
+		},
+		{
+			// account true, options false -> mismatch
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					AllowCrossTenantReplication: ptr.To(true),
+				},
+			},
+			accountOptions: &AccountOptions{
+				AllowCrossTenantReplication: ptr.To(false),
+			},
+			expectedResult: false,
+		},
+		{
+			// account nil (default false), options true -> mismatch
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				AllowCrossTenantReplication: ptr.To(true),
+			},
+			expectedResult: false,
+		},
+	}
+
+	for _, test := range tests {
+		result := isAllowCrossTenantReplicationEqual(test.account, test.accountOptions)
+		assert.Equal(t, test.expectedResult, result)
+	}
+}
+
 func TestIsRequireInfrastructureEncryptionEqual(t *testing.T) {
 	tests := []struct {
 		account        *armstorage.Account
