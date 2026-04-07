@@ -11023,6 +11023,7 @@ func TestRemoveStaleServiceLBResources(t *testing.T) {
 		lb                    *armnetwork.LoadBalancer
 		setupMocks            func(cloud *Cloud)
 		expectedDeletedLBName string
+		expectedDeletedPLS    bool
 		expectedFIPNames      []string
 		expectedRuleNames     []string
 	}{
@@ -11164,6 +11165,54 @@ func TestRemoveStaleServiceLBResources(t *testing.T) {
 			},
 			expectedDeletedLBName: lbName,
 		},
+		{
+			name: "FIP becomes empty, PLS exists and gets deleted, deletedPLS returned",
+			lb: &armnetwork.LoadBalancer{
+				Name: ptr.To(lbName),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+						{
+							Name:       ptr.To("fip1"),
+							ID:         ptr.To(fipID),
+							Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pipID")}},
+						},
+						{Name: ptr.To("fip2"), ID: ptr.To(fipID2)},
+					},
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{
+							Name: ptr.To(svc2Prefix + "-TCP-443"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+						{
+							Name: ptr.To(otherPrefix + "-TCP-80"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID2)},
+							},
+						},
+					},
+					Probes: []*armnetwork.Probe{
+						{Name: ptr.To(svc2Prefix + "-TCP-443"), Properties: &armnetwork.ProbePropertiesFormat{Port: ptr.To(int32(443))}},
+						{Name: ptr.To(otherPrefix + "-TCP-80"), Properties: &armnetwork.ProbePropertiesFormat{Port: ptr.To(int32(80))}},
+					},
+				},
+			},
+			setupMocks: func(cloud *Cloud) {
+				mockPLSRepo := cloud.plsRepo.(*privatelinkservice.MockRepository)
+				mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{
+					Name: ptr.To("pls-fip1"),
+					ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/privateLinkServices/pls-fip1"),
+					Properties: &armnetwork.PrivateLinkServiceProperties{
+						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{ID: ptr.To(fipID)},
+						},
+					},
+				}, nil).Times(1)
+				mockPLSRepo.EXPECT().Delete(gomock.Any(), gomock.Any(), "pls-fip1", gomock.Any()).Return(nil).Times(1)
+			},
+			expectedDeletedPLS: true,
+		},
 	}
 
 	for _, tc := range tests {
@@ -11175,9 +11224,10 @@ func TestRemoveStaleServiceLBResources(t *testing.T) {
 			tc.setupMocks(cloud)
 			existingLBs := []*armnetwork.LoadBalancer{tc.lb}
 
-			deletedLBName, err := cloud.removeStaleServiceLBResources(context.TODO(), tc.lb, existingLBs, clusterName, svc2)
+			deletedLBName, deletedPLS, err := cloud.removeStaleServiceLBResources(context.TODO(), tc.lb, existingLBs, clusterName, svc2)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedDeletedLBName, deletedLBName)
+			assert.Equal(t, tc.expectedDeletedPLS, deletedPLS)
 
 			if tc.expectedFIPNames != nil {
 				var fipNames []string

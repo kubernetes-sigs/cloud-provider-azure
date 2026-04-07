@@ -844,13 +844,16 @@ func (az *Cloud) getServiceLoadBalancer(
 				az.shouldChangeLoadBalancer(service, ptr.Deref(existingLB.Name, ""), clusterName, defaultLBName) &&
 				az.lbHasServiceOwnedResources(existingLB, service) {
 
-				deletedLBName, err := az.removeStaleServiceLBResources(ctx, existingLB, existingLBs, clusterName, service)
+				deletedLBName, deletedPLS, err := az.removeStaleServiceLBResources(ctx, existingLB, existingLBs, clusterName, service)
 				if err != nil {
 					logger.Error(err, "failed to remove stale service resources from old load balancer",
 						"service", service.Name,
 						"oldLB", ptr.Deref(existingLB.Name, ""),
 					)
 					return nil, nil, nil, nil, false, false, err
+				}
+				if deletedPLS {
+					return nil, nil, nil, nil, false, true, nil
 				}
 				logger.V(2).Info("Removed stale service resources from old load balancer",
 					"service", service.Name,
@@ -2570,7 +2573,7 @@ func (az *Cloud) removeStaleServiceLBResources(
 	existingLBs []*armnetwork.LoadBalancer,
 	clusterName string,
 	service *v1.Service,
-) (string, error) {
+) (string, bool /* deletedPLS */, error) {
 	logger := log.FromContextOrBackground(ctx).WithName("removeStaleServiceLBResources")
 	serviceName := getServiceName(service)
 
@@ -2592,7 +2595,7 @@ func (az *Cloud) removeStaleServiceLBResources(
 	dirtyRules := az.reconcileLBRules(lb, service, serviceName, false, nil)
 
 	if !dirtyProbes && !dirtyRules {
-		return "", nil
+		return "", false, nil
 	}
 
 	// 3. Check if any affected FIPs are now safe to delete.
@@ -2619,21 +2622,15 @@ func (az *Cloud) removeStaleServiceLBResources(
 	// 4. If there are orphaned FIPs, delegate to removeFrontendIPConfigurationFromLoadBalancer
 	// which handles FIP removal, PLS cleanup, empty-LB deletion, and the LB API call.
 	if len(orphanedFIPs) > 0 {
-		deletedLBName, _, err := az.removeFrontendIPConfigurationFromLoadBalancer(ctx, lb, existingLBs, orphanedFIPs, clusterName, service)
+		deletedLBName, deletedPLS, err := az.removeFrontendIPConfigurationFromLoadBalancer(ctx, lb, existingLBs, orphanedFIPs, clusterName, service)
 		if err != nil {
 			logger.Error(err, "failed to remove orphaned frontend IP configurations",
 				"lbName", ptr.Deref(lb.Name, ""),
 				"serviceName", serviceName,
 			)
-			return "", err
+			return "", false, err
 		}
-		logger.V(2).Info("Removed orphaned frontend IP configurations along with stale service resources",
-			"lbName", ptr.Deref(lb.Name, ""),
-			"serviceName", serviceName,
-			"orphanedFIPs", len(orphanedFIPs),
-			"deletedLB", deletedLBName,
-		)
-		return deletedLBName, nil
+		return deletedLBName, deletedPLS, nil
 	}
 
 	// 5. No orphaned FIPs, just update the LB with the rule/probe changes.
@@ -2642,7 +2639,7 @@ func (az *Cloud) removeStaleServiceLBResources(
 			"lbName", ptr.Deref(lb.Name, ""),
 			"serviceName", serviceName,
 		)
-		return "", err
+		return "", false, err
 	}
 	logger.V(2).Info("Updated load balancer to remove stale service resources",
 		"lbName", ptr.Deref(lb.Name, ""),
@@ -2661,7 +2658,7 @@ func (az *Cloud) removeStaleServiceLBResources(
 			"lbName", lbName,
 		)
 	}
-	return "", nil
+	return "", false, nil
 }
 
 func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurationStatus(wantLb bool, svcName, lbName string) {
