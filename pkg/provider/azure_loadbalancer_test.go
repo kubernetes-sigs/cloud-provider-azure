@@ -8803,6 +8803,7 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 		specLBIP          string
 		existingLBs       []*armnetwork.LoadBalancer
 		existingPIPs      []*armnetwork.PublicIPAddress
+		notWantLb         bool
 		expected          string
 		expectedErr       error
 	}{
@@ -9017,7 +9018,7 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 			expected: "lb2",
 		},
 		{
-			description:   "multi-slb external: new IP not on LB returns fewest rules lb2",
+			description:   "multi-slb external: new IP not on LB returns error",
 			vmSet:         primary,
 			useStandardLB: true,
 			clusterName:   "azure",
@@ -9054,7 +9055,30 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 					},
 				},
 			},
-			expected: "lb2",
+			expectedErr: fmt.Errorf(`look up load balancer by public IP for service "test": find public IP by address "5.6.7.8": findMatchedPIPByLoadBalancerIP: cannot find public IP with IP address 5.6.7.8 in resource group rg`),
+		},
+		{
+			description:   "multi-slb external: PIP name not found returns error",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationPIPNameDualStack[false]: "nonexistent",
+			},
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("pip1"),
+					ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress: ptr.To("1.2.3.4"),
+					},
+				},
+			},
+			expectedErr: fmt.Errorf(`look up load balancer by public IP for service "test": find public IP by name "nonexistent": findMatchedPIPByName: failed to find PIP nonexistent in resource group rg`),
 		},
 		{
 			description:   "multi-slb external: IP annotation and LB annotation conflicts",
@@ -9362,6 +9386,53 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 					`(ServiceLabelSelector, ServiceNamespaceSelector, or AllowServicePlacement)`,
 			),
 		},
+		{
+			// Service is originally internal on lb2.
+			// Flipped service removes the internal annotation.
+			// IP annotation has the internal LB's private IP.
+			description:   "multi-slb internal: flip cleanup uses current LB",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{
+					Name: "lb2",
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveServices: utilsets.NewString("default/test"),
+					},
+				},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "10.0.0.5",
+			},
+			notWantLb: true,
+			expected:  "lb2",
+		},
+		{
+			// Service is originally external on lb2.
+			// Flipped service adds the internal annotation.
+			// IP annotation has the external LB's public IP.
+			description:   "multi-slb external: flip cleanup uses current LB",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			isInternal:    true,
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{
+					Name: "lb2",
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveServices: utilsets.NewString("default/test"),
+					},
+				},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "40.1.2.3",
+			},
+			notWantLb: true,
+			expected:  "lb2-internal",
+		},
 	}
 
 	for _, c := range cases {
@@ -9399,7 +9470,7 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 			if existingLBs == nil {
 				existingLBs = []*armnetwork.LoadBalancer{}
 			}
-			loadbalancerName, err := az.getAzureLoadBalancerName(context.TODO(), &svc, existingLBs, c.clusterName, c.vmSet, c.isInternal, true /* wantLb */)
+			loadbalancerName, err := az.getAzureLoadBalancerName(context.TODO(), &svc, existingLBs, c.clusterName, c.vmSet, c.isInternal, !c.notWantLb)
 			assert.Equal(t, c.expected, loadbalancerName)
 			if c.expectedErr != nil {
 				assert.EqualError(t, err, c.expectedErr.Error())

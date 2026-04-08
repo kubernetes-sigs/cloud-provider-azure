@@ -4362,11 +4362,15 @@ func (az *Cloud) getAzureLoadBalancerName(
 
 		// If service specifies an IP, find which LB has that IP. The service should use the LB where the IP resides.
 		// This also detects secondary services sharing an IP with a primary service already on an LB.
-		if pinsIP {
+		// Skip when cleaning up (wantLb=false), ActiveServices should have the correct currentLBName.
+		if wantLb && pinsIP {
 			if requiresInternalLoadBalancer(service) {
 				currentLBName = az.getLoadBalancerNameByPrivateIP(ctx, service, existingLBs)
 			} else {
-				currentLBName = az.getLoadBalancerNameByPublicIP(ctx, service, clusterName)
+				currentLBName, err = az.getLoadBalancerNameByPublicIP(ctx, service, clusterName)
+				if err != nil {
+					return "", fmt.Errorf("look up load balancer by public IP for service %q: %w", service.Name, err)
+				}
 			}
 			// Block service if the IP resides on an LB that's not eligible.
 			if currentLBName != "" && !StringInSliceIgnoreCase(currentLBName, eligibleLBs) {
@@ -4428,7 +4432,7 @@ func (az *Cloud) getLoadBalancerNameByPublicIP(
 	ctx context.Context,
 	service *v1.Service,
 	clusterName string,
-) string {
+) (string, error) {
 	logger := log.FromContextOrBackground(ctx).WithName("getLoadBalancerNameByPublicIP")
 
 	loadBalancerIPs := getServiceLoadBalancerIPs(service)
@@ -4439,12 +4443,11 @@ func (az *Cloud) getLoadBalancerNameByPublicIP(
 		}
 		pip, err := az.findMatchedPIP(ctx, ip, "", pipResourceGroup)
 		if err != nil {
-			logger.V(2).Info("Failed to find PIP by IP", "ip", ip, "error", err)
-			continue
+			return "", fmt.Errorf("find public IP by address %q: %w", ip, err)
 		}
 		if lbName := az.getLoadBalancerNameFromPIP(pip, clusterName); lbName != "" {
 			logger.V(2).Info("Found LB from PIP by IP", "service", service.Name, "pip", ptr.Deref(pip.Name, ""), "lbName", lbName)
-			return lbName
+			return lbName, nil
 		}
 	}
 
@@ -4455,16 +4458,15 @@ func (az *Cloud) getLoadBalancerNameByPublicIP(
 		}
 		pip, err := az.findMatchedPIP(ctx, "", pipName, pipResourceGroup)
 		if err != nil {
-			logger.V(2).Info("Failed to find PIP by name", "pipName", pipName, "error", err)
-			continue
+			return "", fmt.Errorf("find public IP by name %q: %w", pipName, err)
 		}
 		if lbName := az.getLoadBalancerNameFromPIP(pip, clusterName); lbName != "" {
 			logger.V(2).Info("Found LB from PIP by name", "service", service.Name, "pip", pipName, "lbName", lbName)
-			return lbName
+			return lbName, nil
 		}
 	}
 
-	return ""
+	return "", nil
 }
 
 // getLoadBalancerNameFromPIP extracts the LB name from the PIP's IPConfiguration.
