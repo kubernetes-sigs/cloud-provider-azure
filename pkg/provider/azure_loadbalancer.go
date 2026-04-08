@@ -1298,6 +1298,14 @@ func (az *Cloud) ensurePublicIPExists(ctx context.Context, service *v1.Service, 
 			}
 		}
 
+		if !isUserAssignedPIP {
+			if ipTagDirty, ipTagErr := az.ensurePIPIPTagged(service, pip); ipTagErr != nil {
+				return nil, fmt.Errorf("ensurePublicIPExists for service(%s): %w", serviceName, ipTagErr)
+			} else if ipTagDirty {
+				changed = true
+			}
+		}
+
 		// return if pip exist and dns label is the same
 		if strings.EqualFold(getDomainNameLabel(pip), domainNameLabel) {
 			if existingServiceName := getServiceFromPIPDNSTags(pip.Tags); existingServiceName != "" && strings.EqualFold(existingServiceName, serviceName) {
@@ -3507,13 +3515,13 @@ func (az *Cloud) shouldUpdateLoadBalancer(ctx context.Context, clusterName strin
 }
 
 // Determine if we should release existing owned public IPs
-// FIXME: This function is a bit of a mess, and could use some refactoring.
 func shouldReleaseExistingOwnedPublicIP(
 	existingPip *armnetwork.PublicIPAddress,
 	serviceReferences []string,
 	lbShouldExist, lbIsInternal, isUserAssignedPIP bool,
 	desiredPipName string,
 	ipTagRequest serviceIPTagRequest,
+	enableIPTagMutation bool,
 ) bool {
 	// skip deleting user created pip
 	if isUserAssignedPIP {
@@ -3522,12 +3530,6 @@ func shouldReleaseExistingOwnedPublicIP(
 
 	// Latch some variables for readability purposes.
 	pipName := *existingPip.Name
-
-	// Assume the current IP Tags are empty by default unless properties specify otherwise.
-	currentIPTags := []*armnetwork.IPTag{}
-	if existingPip.Properties != nil {
-		currentIPTags = existingPip.Properties.IPTags
-	}
 
 	// Check whether the public IP is being referenced by other service.
 	// The owned public IP can be released only when there is not other service using it.
@@ -3541,6 +3543,12 @@ func shouldReleaseExistingOwnedPublicIP(
 		return false
 	}
 
+	// Determine current IP tags for comparison.
+	currentIPTags := []*armnetwork.IPTag{}
+	if existingPip.Properties != nil {
+		currentIPTags = existingPip.Properties.IPTags
+	}
+
 	// Release the ip under the following criteria -
 	// #1 - If we don't actually want a load balancer,
 	return !lbShouldExist ||
@@ -3550,8 +3558,10 @@ func shouldReleaseExistingOwnedPublicIP(
 		// NOTICE: For IPv6 Service created with CCM v1.27.1, the created PIP has IPv6 suffix.
 		// We need to recreate such PIP and current logic to delete needs no change.
 		(pipName != desiredPipName) ||
-		// #4 If the service annotations have specified the ip tags that the public ip must have, but they do not match the ip tags of the existing instance
-		(ipTagRequest.IPTagsRequestedByAnnotation && !areIPTagsEquivalent(currentIPTags, ipTagRequest.IPTags))
+		// #4 - When in-place mutation is disabled, IP tag mismatch triggers delete-and-recreate
+		(!enableIPTagMutation &&
+			ipTagRequest.IPTagsRequestedByAnnotation &&
+			!areIPTagsEquivalent(currentIPTags, ipTagRequest.IPTags))
 }
 
 // ensurePIPTagged ensures the public IP of the service is tagged as configured
@@ -3596,6 +3606,89 @@ func (az *Cloud) ensurePIPTagged(service *v1.Service, pip *armnetwork.PublicIPAd
 	pip.Tags = tags
 
 	return changed
+}
+
+// ensurePIPIPTagged ensures the PIP has the IP tags specified by the service annotation.
+// When the config is off or annotation is absent, existing IP tags are preserved.
+// When enabled, only FirstPartyUsage-type IP tags can be updated in-place;
+// attempting to change other IP tag types (e.g. RoutingPreference) on an existing PIP
+// produces a reconciliation error.
+// When the annotation is present but empty, all FirstPartyUsage tags are cleared
+// while non-FirstPartyUsage tags are preserved.
+func (az *Cloud) ensurePIPIPTagged(service *v1.Service, pip *armnetwork.PublicIPAddress) (bool, error) {
+	if !az.EnableIPTagMutationForExistingPublicIP {
+		return false, nil
+	}
+
+	ipTagRequest := getServiceIPTagRequestForPublicIP(service)
+	if !ipTagRequest.IPTagsRequestedByAnnotation {
+		return false, nil
+	}
+
+	if pip.Properties == nil {
+		return false, nil
+	}
+
+	const firstPartyUsageType = "FirstPartyUsage"
+
+	// Split current PIP IP tags into FirstPartyUsage and other.
+	var currentFPU, currentOther []*armnetwork.IPTag
+	for _, tag := range pip.Properties.IPTags {
+		if strings.EqualFold(ptr.Deref(tag.IPTagType, ""), firstPartyUsageType) {
+			currentFPU = append(currentFPU, tag)
+		} else {
+			currentOther = append(currentOther, tag)
+		}
+	}
+
+	// Split desired IP tags into FirstPartyUsage and other.
+	var desiredFPU, desiredOther []*armnetwork.IPTag
+	for _, tag := range ipTagRequest.IPTags {
+		if strings.EqualFold(ptr.Deref(tag.IPTagType, ""), firstPartyUsageType) {
+			desiredFPU = append(desiredFPU, tag)
+		} else {
+			desiredOther = append(desiredOther, tag)
+		}
+	}
+
+	// Validate: error if annotation explicitly requests a non-FPU tag that
+	// differs from the current value, or if a new non-FPU tag is requested.
+	pipName := ptr.Deref(pip.Name, "")
+	for _, desired := range desiredOther {
+		desiredType := ptr.Deref(desired.IPTagType, "")
+		desiredTag := ptr.Deref(desired.Tag, "")
+		found := false
+		for _, current := range currentOther {
+			if strings.EqualFold(ptr.Deref(current.IPTagType, ""), desiredType) {
+				found = true
+				if ptr.Deref(current.Tag, "") != desiredTag {
+					return false, fmt.Errorf(
+						"cannot mutate IP tag type %q on existing PIP %q: only FirstPartyUsage tags can be updated in-place",
+						desiredType, pipName,
+					)
+				}
+				break
+			}
+		}
+		if !found {
+			return false, fmt.Errorf(
+				"cannot mutate IP tag type %q on existing PIP %q: only FirstPartyUsage tags can be updated in-place",
+				desiredType, pipName,
+			)
+		}
+	}
+
+	// Check if FPU tags already match.
+	if areIPTagsEquivalent(currentFPU, desiredFPU) {
+		return false, nil
+	}
+
+	// Merge: preserve all non-FPU tags, replace FPU tags with desired.
+	merged := make([]*armnetwork.IPTag, 0, len(currentOther)+len(desiredFPU))
+	merged = append(merged, currentOther...)
+	merged = append(merged, desiredFPU...)
+	pip.Properties.IPTags = merged
+	return true, nil
 }
 
 // reconcilePublicIPs reconciles the PublicIP resources similar to how the LB is reconciled.
@@ -3661,7 +3754,6 @@ func (az *Cloud) reconcilePublicIP(ctx context.Context, pips []*armnetwork.Publi
 	logger := klog.FromContext(ctx).WithName("reconcilePublicIP")
 	isInternal := requiresInternalLoadBalancer(service)
 	serviceName := getServiceName(service)
-	serviceIPTagRequest := getServiceIPTagRequestForPublicIP(service)
 	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
 
 	var (
@@ -3685,8 +3777,10 @@ func (az *Cloud) reconcilePublicIP(ctx context.Context, pips []*armnetwork.Publi
 		}
 	}
 
+	serviceIPTagReq := getServiceIPTagRequestForPublicIP(service)
+
 	discoveredDesiredPublicIP, pipsToBeDeleted, deletedDesiredPublicIP, pipsToBeUpdated, err := az.getPublicIPUpdates(
-		clusterName, service, pips, wantLb, isInternal, desiredPipName, serviceName, serviceIPTagRequest, shouldPIPExisted, isIPv6)
+		clusterName, service, pips, wantLb, isInternal, desiredPipName, serviceName, shouldPIPExisted, isIPv6, serviceIPTagReq)
 	if err != nil {
 		return nil, err
 	}
@@ -3722,7 +3816,6 @@ func (az *Cloud) reconcilePublicIP(ctx context.Context, pips []*armnetwork.Publi
 	if errs != nil {
 		return nil, utilerrors.Flatten(errs)
 	}
-
 	if !isInternal && wantLb {
 		// Confirm desired public ip resource exists
 		var pip *armnetwork.PublicIPAddress
@@ -3745,9 +3838,9 @@ func (az *Cloud) getPublicIPUpdates(
 	isInternal bool,
 	desiredPipName string,
 	serviceName string,
-	serviceIPTagRequest serviceIPTagRequest,
 	serviceAnnotationRequestsNamedPublicIP,
 	isIPv6 bool,
+	ipTagRequest serviceIPTagRequest,
 ) (bool, []*armnetwork.PublicIPAddress, bool, []*armnetwork.PublicIPAddress, error) {
 	logger := log.Background().WithName("getPublicIPUpdates")
 	var (
@@ -3795,7 +3888,8 @@ func (az *Cloud) getPublicIPUpdates(
 					dirtyPIP = true
 				}
 			}
-			if shouldReleaseExistingOwnedPublicIP(pip, serviceReferences, wantLb, isInternal, isUserAssignedPIP, desiredPipName, serviceIPTagRequest) {
+			shouldRelease := shouldReleaseExistingOwnedPublicIP(pip, serviceReferences, wantLb, isInternal, isUserAssignedPIP, desiredPipName, ipTagRequest, az.EnableIPTagMutationForExistingPublicIP)
+			if shouldRelease {
 				// Then, release the public ip
 				pipsToBeDeleted = append(pipsToBeDeleted, pip)
 
@@ -3808,6 +3902,15 @@ func (az *Cloud) getPublicIPUpdates(
 
 				// If the pip is going to be deleted, we do not need to update it
 				toBeDeleted = true
+			}
+
+			// Only mutate IP tags on PIPs that are being kept (not deleted).
+			if !toBeDeleted && !isUserAssignedPIP {
+				if ipTagDirty, ipTagErr := az.ensurePIPIPTagged(service, pip); ipTagErr != nil {
+					return false, nil, false, nil, ipTagErr
+				} else if ipTagDirty {
+					dirtyPIP = true
+				}
 			}
 
 			// Update tags of PIP only instead of deleting it.

@@ -1274,87 +1274,64 @@ func TestShouldReleaseExistingOwnedPublicIP(t *testing.T) {
 		desc                  string
 		desiredPipName        string
 		existingPip           armnetwork.PublicIPAddress
-		ipTagRequest          serviceIPTagRequest
 		lbShouldExist         bool
 		lbIsInternal          bool
 		isUserAssignedPIP     bool
 		serviceReferences     []string
+		ipTagRequest          serviceIPTagRequest
+		enableIPTagMutation   bool
 		expectedShouldRelease bool
 	}{
 		{
-			desc:           "Everything matches, no release",
-			existingPip:    existingPipWithTag,
-			lbShouldExist:  true,
-			lbIsInternal:   false,
-			desiredPipName: *existingPipWithTag.Name,
-			ipTagRequest: serviceIPTagRequest{
-				IPTagsRequestedByAnnotation: true,
-				IPTags:                      existingPipWithTag.Properties.IPTags,
-			},
+			desc:                  "Everything matches, no release",
+			existingPip:           existingPipWithTag,
+			lbShouldExist:         true,
+			lbIsInternal:          false,
+			desiredPipName:        *existingPipWithTag.Name,
 			expectedShouldRelease: false,
 		},
 		{
-			desc:           "nil tags (none-specified by annotation, some are present on object), no release",
-			existingPip:    existingPipWithTag,
-			lbShouldExist:  true,
-			lbIsInternal:   false,
-			desiredPipName: *existingPipWithTag.Name,
-			ipTagRequest: serviceIPTagRequest{
-				IPTagsRequestedByAnnotation: false,
-				IPTags:                      nil,
-			},
+			desc:                  "nil tags (none-specified by annotation, some are present on object), no release",
+			existingPip:           existingPipWithTag,
+			lbShouldExist:         true,
+			lbIsInternal:          false,
+			desiredPipName:        *existingPipWithTag.Name,
 			expectedShouldRelease: false,
 		},
 		{
-			desc:           "existing public ip with no format properties (unit test only?), tags required by annotation, expect release",
-			existingPip:    existingPipWithNoPublicIPAddressFormatProperties,
-			lbShouldExist:  true,
-			lbIsInternal:   false,
-			desiredPipName: *existingPipWithTag.Name,
-			ipTagRequest: serviceIPTagRequest{
-				IPTagsRequestedByAnnotation: true,
-				IPTags:                      existingPipWithTag.Properties.IPTags,
-			},
+			desc:                  "existing public ip with no format properties should not be released for IP tag changes",
+			existingPip:           existingPipWithNoPublicIPAddressFormatProperties,
+			lbShouldExist:         true,
+			lbIsInternal:          false,
+			desiredPipName:        *existingPipWithTag.Name,
+			expectedShouldRelease: false,
+		},
+		{
+			desc:                  "LB no longer desired, expect release",
+			existingPip:           existingPipWithTag,
+			lbShouldExist:         false,
+			lbIsInternal:          false,
+			desiredPipName:        *existingPipWithTag.Name,
 			expectedShouldRelease: true,
 		},
 		{
-			desc:           "LB no longer desired, expect release",
-			existingPip:    existingPipWithTag,
-			lbShouldExist:  false,
-			lbIsInternal:   false,
-			desiredPipName: *existingPipWithTag.Name,
-			ipTagRequest: serviceIPTagRequest{
-				IPTagsRequestedByAnnotation: true,
-				IPTags:                      existingPipWithTag.Properties.IPTags,
-			},
+			desc:                  "LB now internal, expect release",
+			existingPip:           existingPipWithTag,
+			lbShouldExist:         true,
+			lbIsInternal:          true,
+			desiredPipName:        *existingPipWithTag.Name,
 			expectedShouldRelease: true,
 		},
 		{
-			desc:           "LB now internal, expect release",
-			existingPip:    existingPipWithTag,
-			lbShouldExist:  true,
-			lbIsInternal:   true,
-			desiredPipName: *existingPipWithTag.Name,
-			ipTagRequest: serviceIPTagRequest{
-				IPTagsRequestedByAnnotation: true,
-				IPTags:                      existingPipWithTag.Properties.IPTags,
-			},
+			desc:                  "Alternate desired name, expect release",
+			existingPip:           existingPipWithTag,
+			lbShouldExist:         true,
+			lbIsInternal:          false,
+			desiredPipName:        "otherName",
 			expectedShouldRelease: true,
 		},
 		{
-			desc:           "Alternate desired name, expect release",
-			existingPip:    existingPipWithTag,
-			lbShouldExist:  true,
-			lbIsInternal:   false,
-			desiredPipName: "otherName",
-			ipTagRequest: serviceIPTagRequest{
-				IPTagsRequestedByAnnotation: true,
-				IPTags:                      existingPipWithTag.Properties.IPTags,
-			},
-			expectedShouldRelease: true,
-		},
-		{
-			desc:           "mismatching, expect release",
+			desc:           "IP tag mismatch with mutation enabled should NOT trigger release",
 			existingPip:    existingPipWithTag,
 			lbShouldExist:  true,
 			lbIsInternal:   false,
@@ -1362,44 +1339,44 @@ func TestShouldReleaseExistingOwnedPublicIP(t *testing.T) {
 			ipTagRequest: serviceIPTagRequest{
 				IPTagsRequestedByAnnotation: true,
 				IPTags: []*armnetwork.IPTag{
-					{
-						IPTagType: ptr.To("tag2"),
-						Tag:       ptr.To("tag2value"),
-					},
+					{IPTagType: ptr.To("tag2"), Tag: ptr.To("tag2value")},
 				},
 			},
+			enableIPTagMutation:   true,
+			expectedShouldRelease: false,
+		},
+		{
+			desc:           "IP tag mismatch with mutation disabled should trigger release",
+			existingPip:    existingPipWithTag,
+			lbShouldExist:  true,
+			lbIsInternal:   false,
+			desiredPipName: *existingPipWithTag.Name,
+			ipTagRequest: serviceIPTagRequest{
+				IPTagsRequestedByAnnotation: true,
+				IPTags: []*armnetwork.IPTag{
+					{IPTagType: ptr.To("tag2"), Tag: ptr.To("tag2value")},
+				},
+			},
+			enableIPTagMutation:   false,
 			expectedShouldRelease: true,
 		},
 		{
 			// This test is for IPv6 PIP created with CCM v1.27.1 and CCM gets upgraded.
 			// Such PIP should be recreated.
-			desc:           "matching except PIP name (with IPv6 suffix), expect release",
-			existingPip:    existingPipWithTagIPv6Suffix,
-			lbShouldExist:  true,
-			lbIsInternal:   false,
-			desiredPipName: *existingPipWithTag.Name,
-			ipTagRequest: serviceIPTagRequest{
-				IPTagsRequestedByAnnotation: true,
-				IPTags: []*armnetwork.IPTag{
-					{
-						IPTagType: ptr.To("tag1"),
-						Tag:       ptr.To("tag1value"),
-					},
-				},
-			},
+			desc:                  "matching except PIP name (with IPv6 suffix), expect release",
+			existingPip:           existingPipWithTagIPv6Suffix,
+			lbShouldExist:         true,
+			lbIsInternal:          false,
+			desiredPipName:        *existingPipWithTag.Name,
 			expectedShouldRelease: true,
 		},
 		{
-			desc:              "should delete orphaned managed public IP",
-			existingPip:       existingPipWithTag,
-			lbShouldExist:     false,
-			lbIsInternal:      false,
-			desiredPipName:    *existingPipWithTag.Name,
-			serviceReferences: []string{},
-			ipTagRequest: serviceIPTagRequest{
-				IPTagsRequestedByAnnotation: true,
-				IPTags:                      existingPipWithTag.Properties.IPTags,
-			},
+			desc:                  "should delete orphaned managed public IP",
+			existingPip:           existingPipWithTag,
+			lbShouldExist:         false,
+			lbIsInternal:          false,
+			desiredPipName:        *existingPipWithTag.Name,
+			serviceReferences:     []string{},
 			expectedShouldRelease: true,
 		},
 		{
@@ -1409,10 +1386,6 @@ func TestShouldReleaseExistingOwnedPublicIP(t *testing.T) {
 			lbIsInternal:      false,
 			desiredPipName:    *existingPipWithTag.Name,
 			serviceReferences: []string{"svc1"},
-			ipTagRequest: serviceIPTagRequest{
-				IPTagsRequestedByAnnotation: true,
-				IPTags:                      existingPipWithTag.Properties.IPTags,
-			},
 		},
 		{
 			desc:              "should not delete orphaned unmanaged public IP",
@@ -1421,18 +1394,30 @@ func TestShouldReleaseExistingOwnedPublicIP(t *testing.T) {
 			lbIsInternal:      false,
 			desiredPipName:    *existingPipWithTag.Name,
 			serviceReferences: []string{},
+			isUserAssignedPIP: true,
+		},
+		{
+			desc:              "shared PIP with multiple refs + IP tag mismatch + mutation disabled should NOT release",
+			existingPip:       existingPipWithTag,
+			lbShouldExist:     true,
+			lbIsInternal:      false,
+			desiredPipName:    *existingPipWithTag.Name,
+			serviceReferences: []string{"svc1", "svc2"},
 			ipTagRequest: serviceIPTagRequest{
 				IPTagsRequestedByAnnotation: true,
-				IPTags:                      existingPipWithTag.Properties.IPTags,
+				IPTags: []*armnetwork.IPTag{
+					{IPTagType: ptr.To("tag2"), Tag: ptr.To("tag2value")},
+				},
 			},
-			isUserAssignedPIP: true,
+			enableIPTagMutation:   false,
+			expectedShouldRelease: false,
 		},
 	}
 
 	for _, c := range tests {
 		t.Run(c.desc, func(t *testing.T) {
 			existingPip := c.existingPip
-			actualShouldRelease := shouldReleaseExistingOwnedPublicIP(&existingPip, c.serviceReferences, c.lbShouldExist, c.lbIsInternal, c.isUserAssignedPIP, c.desiredPipName, c.ipTagRequest)
+			actualShouldRelease := shouldReleaseExistingOwnedPublicIP(&existingPip, c.serviceReferences, c.lbShouldExist, c.lbIsInternal, c.isUserAssignedPIP, c.desiredPipName, c.ipTagRequest, c.enableIPTagMutation)
 			assert.Equal(t, c.expectedShouldRelease, actualShouldRelease)
 		})
 	}
@@ -5640,11 +5625,13 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 		annotations                 map[string]string
 		existingPIPs                []*armnetwork.PublicIPAddress
 		wantLb                      bool
+		enableIPTagMutation         bool
 		expectedIDs                 []string
 		expectedPIPs                []*armnetwork.PublicIPAddress // len(expectedPIPs) <= 2
 		expectedError               bool
 		expectedCreateOrUpdateCount int
 		expectedDeleteCount         int
+		expectedDeleteCalls         map[string]int
 		expectedClientGet           *func(client *mock_publicipaddressclient.MockInterface)
 	}{
 		{
@@ -5875,12 +5862,13 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 			expectedDeleteCount:         2,
 		},
 		{
-			desc:   "shall delete unwanted pips and existing pips, when the existing pips IP do not match",
-			wantLb: true,
+			desc:                "shall delete unwanted pips and update IP tags on existing pips in-place",
+			wantLb:              true,
+			enableIPTagMutation: true,
 			annotations: map[string]string{
 				consts.ServiceAnnotationPIPNameDualStack[false]: "testPIP",
 				consts.ServiceAnnotationPIPNameDualStack[true]:  "testPIP-IPv6",
-				consts.ServiceAnnotationIPTagsForPublicIP:       "tag1=tag1value",
+				consts.ServiceAnnotationIPTagsForPublicIP:       "FirstPartyUsage=/NonProd",
 			},
 			existingPIPs: []*armnetwork.PublicIPAddress{
 				{
@@ -5909,8 +5897,9 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP"),
 					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
 					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
-						PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
-						IPAddress:              ptr.To("1.2.3.4"),
+						PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
+						PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
+						IPAddress:                ptr.To("1.2.3.4"),
 					},
 				},
 				{
@@ -5932,10 +5921,11 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
 						PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
+						IPAddress:                ptr.To("1.2.3.4"),
 						IPTags: []*armnetwork.IPTag{
 							{
-								IPTagType: ptr.To("tag1"),
-								Tag:       ptr.To("tag1value"),
+								IPTagType: ptr.To("FirstPartyUsage"),
+								Tag:       ptr.To("/NonProd"),
 							},
 						},
 					},
@@ -5947,10 +5937,11 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv6),
 						PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
+						IPAddress:                ptr.To("fd00::eef0"),
 						IPTags: []*armnetwork.IPTag{
 							{
-								IPTagType: ptr.To("tag1"),
-								Tag:       ptr.To("tag1value"),
+								IPTagType: ptr.To("FirstPartyUsage"),
+								Tag:       ptr.To("/NonProd"),
 							},
 						},
 					},
@@ -5958,6 +5949,12 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 			},
 			expectedCreateOrUpdateCount: 2,
 			expectedDeleteCount:         2,
+			expectedDeleteCalls: map[string]int{
+				"testPIP":      0,
+				"testPIP-IPv6": 0,
+				"pip1":         1,
+				"pip2":         1,
+			},
 		},
 		{
 			desc:   "shall preserve existing pips, when the existing pips IP tags do match",
@@ -6163,6 +6160,150 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 			expectedDeleteCount:         0,
 			expectedClientGet:           &getPIPAddMissingOne,
 		},
+		{
+			desc:                "config on + FPU mismatch should update in-place without delete",
+			wantLb:              true,
+			enableIPTagMutation: true,
+			annotations: map[string]string{
+				consts.ServiceAnnotationIPTagsForPublicIP: "FirstPartyUsage=/Unprivileged",
+			},
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("testCluster-atest1"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-atest1"),
+					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress:              ptr.To("1.2.3.4"),
+						PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
+						IPTags: []*armnetwork.IPTag{
+							{IPTagType: ptr.To("FirstPartyUsage"), Tag: ptr.To("/NonProd")},
+						},
+					},
+				},
+				{
+					Name: ptr.To("testCluster-atest1-IPv6"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-atest1-IPv6"),
+					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress:                ptr.To("fd00::eef0"),
+						PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
+						PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv6),
+						IPTags: []*armnetwork.IPTag{
+							{IPTagType: ptr.To("FirstPartyUsage"), Tag: ptr.To("/NonProd")},
+						},
+					},
+				},
+			},
+			expectedPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("testCluster-atest1"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress:              ptr.To("1.2.3.4"),
+						PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
+						IPTags: []*armnetwork.IPTag{
+							{IPTagType: ptr.To("FirstPartyUsage"), Tag: ptr.To("/Unprivileged")},
+						},
+					},
+				},
+				{
+					Name: ptr.To("testCluster-atest1-IPv6"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress:                ptr.To("fd00::eef0"),
+						PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
+						PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv6),
+						IPTags: []*armnetwork.IPTag{
+							{IPTagType: ptr.To("FirstPartyUsage"), Tag: ptr.To("/Unprivileged")},
+						},
+					},
+				},
+			},
+			expectedCreateOrUpdateCount: 2,
+			expectedDeleteCount:         0,
+		},
+		{
+			desc:                "config off + IP tag mismatch should delete and recreate",
+			wantLb:              true,
+			enableIPTagMutation: false,
+			annotations: map[string]string{
+				consts.ServiceAnnotationIPTagsForPublicIP: "FirstPartyUsage=/Unprivileged",
+			},
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("testCluster-atest1"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-atest1"),
+					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress:              ptr.To("1.2.3.4"),
+						PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
+						IPTags: []*armnetwork.IPTag{
+							{IPTagType: ptr.To("FirstPartyUsage"), Tag: ptr.To("/NonProd")},
+						},
+					},
+				},
+				{
+					Name: ptr.To("testCluster-atest1-IPv6"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-atest1-IPv6"),
+					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress:                ptr.To("fd00::eef0"),
+						PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
+						PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv6),
+						IPTags: []*armnetwork.IPTag{
+							{IPTagType: ptr.To("FirstPartyUsage"), Tag: ptr.To("/NonProd")},
+						},
+					},
+				},
+			},
+			expectedIDs: []string{
+				"/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-atest1",
+				"/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-atest1-IPv6",
+			},
+			expectedCreateOrUpdateCount: 2,
+			expectedDeleteCount:         0,
+			expectedDeleteCalls: map[string]int{
+				"testCluster-atest1":      1,
+				"testCluster-atest1-IPv6": 1,
+			},
+			expectedClientGet: &deleteUnwantedPIPsAndCreateANewOneclientGet,
+		},
+		{
+			desc:                "config on + RP mismatch should return error",
+			wantLb:              true,
+			enableIPTagMutation: true,
+			annotations: map[string]string{
+				consts.ServiceAnnotationIPTagsForPublicIP: "RoutingPreference=Invalid",
+			},
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("testCluster-atest1"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-atest1"),
+					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress:              ptr.To("1.2.3.4"),
+						PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
+						IPTags: []*armnetwork.IPTag{
+							{IPTagType: ptr.To("RoutingPreference"), Tag: ptr.To("Internet")},
+						},
+					},
+				},
+				{
+					Name: ptr.To("testCluster-atest1-IPv6"),
+					ID:   ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-atest1-IPv6"),
+					Tags: map[string]*string{consts.ServiceTagKey: ptr.To("default/test1")},
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress:                ptr.To("fd00::eef0"),
+						PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
+						PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv6),
+						IPTags: []*armnetwork.IPTag{
+							{IPTagType: ptr.To("RoutingPreference"), Tag: ptr.To("Internet")},
+						},
+					},
+				},
+			},
+			expectedError:               true,
+			expectedCreateOrUpdateCount: 0,
+			expectedDeleteCount:         0,
+		},
 	}
 
 	for _, test := range testCases {
@@ -6171,10 +6312,12 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 			defer ctrl.Finish()
 
 			deletedPips := make(map[string]bool)
+			deleteCallTracker := make(map[string]int)
 			savedPips := make(map[string]*armnetwork.PublicIPAddress)
 			createOrUpdateCount := 0
 			var m sync.Mutex
 			az := GetTestCloud(ctrl)
+			az.EnableIPTagMutationForExistingPublicIP = test.enableIPTagMutation
 			mockPIPsClient := az.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
 			creator := mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", gomock.Any(), gomock.Any()).AnyTimes()
 			creator.DoAndReturn(func(_ context.Context, _ string, publicIPAddressName string, parameters armnetwork.PublicIPAddress) (result *armnetwork.PublicIPAddress, rerr error) {
@@ -6209,6 +6352,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				deleter := mockPIPsClient.EXPECT().Delete(gomock.Any(), "rg", *pip.Name).Return(nil).AnyTimes()
 				deleter.Do(func(_ context.Context, _ string, publicIPAddressName string) error {
 					m.Lock()
+					deleteCallTracker[publicIPAddressName]++
 					deletedPips[publicIPAddressName] = true
 					m.Unlock()
 					return nil
@@ -6292,6 +6436,9 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				}
 			}
 			assert.Equal(t, test.expectedDeleteCount, deletedCount)
+			for pipName, expectedCount := range test.expectedDeleteCalls {
+				assert.Equal(t, expectedCount, deleteCallTracker[pipName], "delete call count for %q", pipName)
+			}
 		})
 	}
 
@@ -6408,7 +6555,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 		foundDNSLabelAnnotation bool
 		isIPv6                  bool
 		useSLB                  bool
+		enableIPTagMutation     bool
 		shouldPutPIP            bool
+		assertPutPIPCalled      bool
 		expectedError           bool
 	}{
 		{
@@ -6650,6 +6799,58 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			shouldPutPIP: true,
 		},
 		{
+			desc:                "shall update existed PIP IP tags in place before the dns short-circuit",
+			pipName:             "pip1",
+			inputDNSLabel:       "test",
+			enableIPTagMutation: true,
+			existingPIPs: []*armnetwork.PublicIPAddress{{
+				Name: ptr.To("pip1"),
+				Tags: map[string]*string{
+					consts.ServiceUsingDNSKey: ptr.To("default/test1"),
+					consts.ServiceTagKey:      ptr.To("default/test1"),
+				},
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					DNSSettings: &armnetwork.PublicIPAddressDNSSettings{
+						DomainNameLabel: ptr.To("test"),
+					},
+					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
+					PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
+					IPTags: []*armnetwork.IPTag{
+						{
+							IPTagType: ptr.To("FirstPartyUsage"),
+							Tag:       ptr.To("/NonProd"),
+						},
+					},
+				},
+			}},
+			expectedPIP: &armnetwork.PublicIPAddress{
+				Name: ptr.To("pip1"),
+				ID:   ptr.To(expectedPIPID),
+				Tags: map[string]*string{
+					consts.ServiceUsingDNSKey: ptr.To("default/test1"),
+					consts.ServiceTagKey:      ptr.To("default/test1"),
+				},
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					DNSSettings: &armnetwork.PublicIPAddressDNSSettings{
+						DomainNameLabel: ptr.To("test"),
+					},
+					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
+					PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
+					IPTags: []*armnetwork.IPTag{
+						{
+							IPTagType: ptr.To("FirstPartyUsage"),
+							Tag:       ptr.To("/Unprivileged"),
+						},
+					},
+				},
+			},
+			additionalAnnotations: map[string]string{
+				consts.ServiceAnnotationIPTagsForPublicIP: "FirstPartyUsage=/Unprivileged",
+			},
+			shouldPutPIP:       true,
+			assertPutPIPCalled: true,
+		},
+		{
 			desc:                    "shall report an conflict error if the DNS label is conflicted",
 			pipName:                 "pip1",
 			inputDNSLabel:           "test",
@@ -6812,6 +7013,48 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 				consts.ServiceAnnotationAzurePIPTags: "a=c",
 			},
 		},
+		{
+			desc:                "config on + FPU mismatch should update PIP in-place",
+			pipName:             "pip1",
+			enableIPTagMutation: true,
+			existingPIPs: []*armnetwork.PublicIPAddress{{
+				Name: ptr.To("pip1"),
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					IPTags: []*armnetwork.IPTag{
+						{IPTagType: ptr.To("FirstPartyUsage"), Tag: ptr.To("/NonProd")},
+					},
+				},
+			}},
+			additionalAnnotations: map[string]string{
+				consts.ServiceAnnotationIPTagsForPublicIP: "FirstPartyUsage=/Unprivileged",
+			},
+			shouldPutPIP:       true,
+			assertPutPIPCalled: true,
+			expectedID:         expectedPIPID,
+		},
+		{
+			desc:                "config on + RP mismatch should return error",
+			pipName:             "pip1",
+			enableIPTagMutation: true,
+			existingPIPs: []*armnetwork.PublicIPAddress{{
+				Name: ptr.To("pip1"),
+				Tags: map[string]*string{
+					consts.ServiceTagKey: ptr.To("default/test1"),
+				},
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					IPTags: []*armnetwork.IPTag{
+						{IPTagType: ptr.To("RoutingPreference"), Tag: ptr.To("Internet")},
+					},
+				},
+			}},
+			additionalAnnotations: map[string]string{
+				consts.ServiceAnnotationIPTagsForPublicIP: "RoutingPreference=Invalid",
+			},
+			expectedError: true,
+		},
 	}
 
 	for _, test := range testCases {
@@ -6820,12 +7063,15 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			if test.useSLB {
 				az.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 			}
+			az.EnableIPTagMutationForExistingPublicIP = test.enableIPTagMutation
 
 			service := getTestService("test1", v1.ProtocolTCP, nil, test.isIPv6, 80)
 			service.Annotations = test.additionalAnnotations
 			mockPIPsClient := az.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
+			createOrUpdateCount := 0
 			if test.shouldPutPIP {
 				mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ string, parameters armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
+					createOrUpdateCount++
 					if len(test.existingPIPs) != 0 {
 						test.existingPIPs[0] = &parameters
 					} else {
@@ -6866,6 +7112,9 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 
 			pip, err := az.ensurePublicIPExists(context.TODO(), &service, test.pipName, test.inputDNSLabel, "", false, test.foundDNSLabelAnnotation, test.isIPv6)
 			assert.Equal(t, test.expectedError, err != nil, "unexpectedly encountered (or not) error: %v", err)
+			if test.assertPutPIPCalled {
+				assert.Greater(t, createOrUpdateCount, 0)
+			}
 			if test.expectedID != "" {
 				assert.Equal(t, test.expectedID, ptr.Deref(pip.ID, ""))
 			} else {
@@ -7677,6 +7926,174 @@ func TestEnsurePIPTagged(t *testing.T) {
 		assert.True(t, changed)
 		assert.Equal(t, expectedPIP, pip)
 	})
+}
+
+func TestEnsurePIPIPTagged(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	newIPTag := func(tagType, tag string) *armnetwork.IPTag {
+		return &armnetwork.IPTag{
+			IPTagType: ptr.To(tagType),
+			Tag:       ptr.To(tag),
+		}
+	}
+
+	tests := []struct {
+		desc            string
+		enableMutation  bool
+		annotations     map[string]string
+		inputPIP        armnetwork.PublicIPAddress
+		expectedChanged bool
+		expectedErrMsg  string
+		expectedIPTags  []*armnetwork.IPTag
+	}{
+		{
+			// #1: config off — no-op regardless of annotation/tags
+			desc:           "config off should be no-op",
+			enableMutation: false,
+			annotations: map[string]string{
+				consts.ServiceAnnotationIPTagsForPublicIP: "FirstPartyUsage=/Unprivileged",
+			},
+			inputPIP: armnetwork.PublicIPAddress{
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					IPTags: []*armnetwork.IPTag{newIPTag("FirstPartyUsage", "/NonProd")},
+				},
+			},
+			expectedChanged: false,
+			expectedIPTags:  []*armnetwork.IPTag{newIPTag("FirstPartyUsage", "/NonProd")},
+		},
+		{
+			// #2: config on, annotation absent — no-op
+			desc:            "config on annotation absent should be no-op",
+			enableMutation:  true,
+			annotations:     map[string]string{},
+			inputPIP:        armnetwork.PublicIPAddress{Properties: &armnetwork.PublicIPAddressPropertiesFormat{}},
+			expectedChanged: false,
+			expectedIPTags:  nil,
+		},
+		{
+			// #3: config on, FPU match
+			desc:           "config on FPU tags match should be no-op",
+			enableMutation: true,
+			annotations: map[string]string{
+				consts.ServiceAnnotationIPTagsForPublicIP: "FirstPartyUsage=/NonProd",
+			},
+			inputPIP: armnetwork.PublicIPAddress{
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					IPTags: []*armnetwork.IPTag{newIPTag("FirstPartyUsage", "/NonProd")},
+				},
+			},
+			expectedChanged: false,
+			expectedIPTags:  []*armnetwork.IPTag{newIPTag("FirstPartyUsage", "/NonProd")},
+		},
+		{
+			// #4: config on, FPU mismatch — updated
+			desc:           "config on FPU tags mismatch should update",
+			enableMutation: true,
+			annotations: map[string]string{
+				consts.ServiceAnnotationIPTagsForPublicIP: "FirstPartyUsage=/Unprivileged",
+			},
+			inputPIP: armnetwork.PublicIPAddress{
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					IPTags: []*armnetwork.IPTag{newIPTag("FirstPartyUsage", "/NonProd")},
+				},
+			},
+			expectedChanged: true,
+			expectedIPTags:  []*armnetwork.IPTag{newIPTag("FirstPartyUsage", "/Unprivileged")},
+		},
+		{
+			// #5: config on, invalid RP change attempt — error
+			desc:           "config on RoutingPreference invalid change attempt should error",
+			enableMutation: true,
+			annotations: map[string]string{
+				consts.ServiceAnnotationIPTagsForPublicIP: "RoutingPreference=Invalid",
+			},
+			inputPIP: armnetwork.PublicIPAddress{
+				Name: ptr.To("testPIP"),
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					IPTags: []*armnetwork.IPTag{newIPTag("RoutingPreference", "Internet")},
+				},
+			},
+			expectedChanged: false,
+			expectedErrMsg:  `cannot mutate IP tag type "RoutingPreference" on existing PIP "testPIP"`,
+			expectedIPTags:  []*armnetwork.IPTag{newIPTag("RoutingPreference", "Internet")},
+		},
+		{
+			// #6: config on, empty annotation clears FPU tags
+			desc:           "config on empty annotation clears FPU tags",
+			enableMutation: true,
+			annotations: map[string]string{
+				consts.ServiceAnnotationIPTagsForPublicIP: "",
+			},
+			inputPIP: armnetwork.PublicIPAddress{
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					IPTags: []*armnetwork.IPTag{newIPTag("FirstPartyUsage", "/NonProd")},
+				},
+			},
+			expectedChanged: true,
+			expectedIPTags:  []*armnetwork.IPTag{},
+		},
+		{
+			// #7: config on, nil Properties with FPU annotation — no-op
+			desc:           "config on nil Properties should be no-op",
+			enableMutation: true,
+			annotations: map[string]string{
+				consts.ServiceAnnotationIPTagsForPublicIP: "FirstPartyUsage=/NonProd",
+			},
+			inputPIP:        armnetwork.PublicIPAddress{},
+			expectedChanged: false,
+			expectedIPTags:  nil,
+		},
+		{
+			// #8: config on, new non-FPU tag — error
+			desc:           "config on new non-FPU tag should error",
+			enableMutation: true,
+			annotations: map[string]string{
+				consts.ServiceAnnotationIPTagsForPublicIP: "RoutingPreference=Internet",
+			},
+			inputPIP: armnetwork.PublicIPAddress{
+				Name: ptr.To("testPIP"),
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					IPTags: []*armnetwork.IPTag{},
+				},
+			},
+			expectedChanged: false,
+			expectedErrMsg:  `cannot mutate IP tag type "RoutingPreference" on existing PIP "testPIP"`,
+			expectedIPTags:  []*armnetwork.IPTag{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			cloud := GetTestCloud(ctrl)
+			cloud.EnableIPTagMutationForExistingPublicIP = tc.enableMutation
+
+			service := v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: tc.annotations,
+				},
+			}
+			pip := tc.inputPIP
+
+			changed, err := cloud.ensurePIPIPTagged(&service, &pip)
+
+			if tc.expectedErrMsg != "" {
+				assert.Error(t, err)
+				if err != nil {
+					assert.Contains(t, err.Error(), tc.expectedErrMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tc.expectedChanged, changed)
+			if pip.Properties == nil {
+				assert.Nil(t, tc.expectedIPTags)
+				return
+			}
+			assert.Equal(t, tc.expectedIPTags, pip.Properties.IPTags)
+		})
+	}
 }
 
 func TestEnsureLoadBalancerTagged(t *testing.T) {
