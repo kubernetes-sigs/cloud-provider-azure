@@ -3419,12 +3419,10 @@ func (az *Cloud) ensurePIPIPTagged(service *v1.Service, pip *armnetwork.PublicIP
 		return false, nil
 	}
 
-	const firstPartyUsageType = "FirstPartyUsage"
-
 	// Split current PIP IP tags into FirstPartyUsage and other.
 	var currentFPU, currentOther []*armnetwork.IPTag
 	for _, tag := range pip.Properties.IPTags {
-		if strings.EqualFold(ptr.Deref(tag.IPTagType, ""), firstPartyUsageType) {
+		if strings.EqualFold(ptr.Deref(tag.IPTagType, ""), consts.IPTagTypeFirstPartyUsage) {
 			currentFPU = append(currentFPU, tag)
 		} else {
 			currentOther = append(currentOther, tag)
@@ -3434,7 +3432,7 @@ func (az *Cloud) ensurePIPIPTagged(service *v1.Service, pip *armnetwork.PublicIP
 	// Split desired IP tags into FirstPartyUsage and other.
 	var desiredFPU, desiredOther []*armnetwork.IPTag
 	for _, tag := range ipTagRequest.IPTags {
-		if strings.EqualFold(ptr.Deref(tag.IPTagType, ""), firstPartyUsageType) {
+		if strings.EqualFold(ptr.Deref(tag.IPTagType, ""), consts.IPTagTypeFirstPartyUsage) {
 			desiredFPU = append(desiredFPU, tag)
 		} else {
 			desiredOther = append(desiredOther, tag)
