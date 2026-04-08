@@ -85,6 +85,56 @@ def run_result(
     return subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, env=env)
 
 
+def _go_env() -> dict[str, str]:
+    """Return env dict with GOTOOLCHAIN=local to match CI (actions/setup-go)."""
+    return {**os.environ, "GOTOOLCHAIN": "local"}
+
+
+def _check_local_go_version(repo_root: Path, go_env: dict[str, str]) -> None:
+    """Raise CommandError if the local Go is older than the repo requires."""
+    max_required = "0"
+    for module in discover_go_modules(repo_root):
+        mod_file = repo_root / module / "go.mod"
+        if not mod_file.is_file():
+            continue
+        for line in mod_file.read_text(encoding="utf-8").splitlines():
+            parts = line.split()
+            if len(parts) == 2 and parts[0] == "go":
+                if _version_tuple(parts[1]) > _version_tuple(max_required):
+                    max_required = parts[1]
+    if max_required == "0":
+        return
+    proc = subprocess.run(
+        ["go", "version"], text=True, capture_output=True, env=go_env,
+    )
+    if proc.returncode != 0:
+        raise CommandError(f"go version failed: {proc.stderr.strip()}")
+    # Parse "go version go1.25.0 ..." -> "1.25.0"
+    parts = proc.stdout.strip().split()
+    local_ver = "0"
+    for part in parts:
+        if part.startswith("go") and part != "go":
+            local_ver = part[2:]
+            break
+    if _version_tuple(local_ver) < _version_tuple(max_required):
+        raise CommandError(
+            f"Local Go version {local_ver} is older than the repo requires "
+            f"({max_required}). Install Go >= {max_required} or set "
+            f"GOTOOLCHAIN=auto to allow automatic toolchain download."
+        )
+
+
+def _version_tuple(version: str) -> tuple[int, ...]:
+    """Parse a version string like '1.25.0' into a comparable tuple."""
+    parts = []
+    for segment in version.split("."):
+        try:
+            parts.append(int(segment))
+        except ValueError:
+            break
+    return tuple(parts)
+
+
 def ensure_command(name: str) -> None:
     if shutil.which(name) is None:
         raise CommandError(f"Required command not found in PATH: {name}")
@@ -540,6 +590,7 @@ def go_list_module_version(module_dir: Path, module: str) -> str:
         ["go", "list", "-m", "-f", fmt, module],
         cwd=module_dir,
         capture=True,
+        env=_go_env(),
     )
     return output.strip()
 
@@ -623,7 +674,7 @@ def verify_module_consistency(repo_root: Path, results: dict[str, Any]) -> bool:
     ok = True
     for module in discover_go_modules(repo_root):
         module_dir = abs_from_repo(repo_root, module)
-        proc = run_result(["go", "mod", "verify"], cwd=module_dir)
+        proc = run_result(["go", "mod", "verify"], cwd=module_dir, env=_go_env())
         module_result = {
             "module": module,
             "passed": proc.returncode == 0,
@@ -742,7 +793,6 @@ def protect_apply_targets(
 
 def command_apply(args: argparse.Namespace) -> int:
     repo_root = ensure_repo_root(args.repo)
-    ensure_command("go")
     state = load_state(repo_root)
     plan = state.get("plan")
     scan = state.get("scan")
@@ -763,6 +813,12 @@ def command_apply(args: argparse.Namespace) -> int:
         vendor_enabled=vendor_enabled,
     )
 
+    go_env: dict[str, str] | None = None
+    if go_actions:
+        ensure_command("go")
+        go_env = _go_env()
+        _check_local_go_version(repo_root, go_env)
+
     go_commands: list[dict[str, Any]] = []
     for action in go_actions:
         module_dir = abs_from_repo(repo_root, action["module_root"])
@@ -771,7 +827,7 @@ def command_apply(args: argparse.Namespace) -> int:
             print_cmd(cmd, cwd=module_dir)
         else:
             info(f"Running {quote_cmd(cmd)} in {action['module_root']}")
-            run(cmd, cwd=module_dir)
+            run(cmd, cwd=module_dir, env=go_env)
         go_commands.append({"cwd": action["module_root"], "cmd": cmd})
 
     ran_module_consistency = False
@@ -782,8 +838,8 @@ def command_apply(args: argparse.Namespace) -> int:
                 print_cmd(["go", "mod", "tidy"], cwd=module_dir)
                 print_cmd(["go", "mod", "verify"], cwd=module_dir)
             else:
-                run(["go", "mod", "tidy"], cwd=module_dir)
-                run(["go", "mod", "verify"], cwd=module_dir)
+                run(["go", "mod", "tidy"], cwd=module_dir, env=go_env)
+                run(["go", "mod", "verify"], cwd=module_dir, env=go_env)
             go_commands.append({"cwd": module, "cmd": ["go", "mod", "tidy"]})
             go_commands.append({"cwd": module, "cmd": ["go", "mod", "verify"]})
         ran_module_consistency = True
@@ -791,7 +847,7 @@ def command_apply(args: argparse.Namespace) -> int:
             if args.dry_run:
                 print_cmd(["go", "mod", "vendor"], cwd=repo_root)
             else:
-                run(["go", "mod", "vendor"], cwd=repo_root)
+                run(["go", "mod", "vendor"], cwd=repo_root, env=go_env)
             go_commands.append({"cwd": ".", "cmd": ["go", "mod", "vendor"]})
             license_script = repo_root / "hack" / "update-azure-vendor-licenses.sh"
             if license_script.is_file():
@@ -799,7 +855,7 @@ def command_apply(args: argparse.Namespace) -> int:
                     print_cmd(["bash", str(license_script)], cwd=repo_root)
                 else:
                     try:
-                        run(["bash", str(license_script)], cwd=repo_root)
+                        run(["bash", str(license_script)], cwd=repo_root, env=go_env)
                     except CommandError:
                         cleanup_vendor_license_artifacts(repo_root)
                         raise
