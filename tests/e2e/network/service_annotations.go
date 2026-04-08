@@ -1560,8 +1560,12 @@ func waitComparePIPIPTags(tc *utils.AzureTestClient, expectedIPTags []*armnetwor
 	sortPIPIPTags := func(ipTags *[]*armnetwork.IPTag) {
 		if ipTags != nil {
 			sort.Slice(*ipTags, func(i, j int) bool {
-				return ptr.Deref((*ipTags)[i].IPTagType, "") < ptr.Deref((*ipTags)[j].IPTagType, "") ||
-					ptr.Deref((*ipTags)[i].Tag, "") < ptr.Deref((*ipTags)[j].Tag, "")
+				leftType := ptr.Deref((*ipTags)[i].IPTagType, "")
+				rightType := ptr.Deref((*ipTags)[j].IPTagType, "")
+				if leftType != rightType {
+					return leftType < rightType
+				}
+				return ptr.Deref((*ipTags)[i].Tag, "") < ptr.Deref((*ipTags)[j].Tag, "")
 			})
 		}
 	}
