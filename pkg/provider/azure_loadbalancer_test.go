@@ -1755,6 +1755,30 @@ func TestAreIpTagsEquivalent(t *testing.T) {
 			},
 			expected: true,
 		},
+		{
+			desc: "cross-ordered tags should be treated as equal after lexicographic sort",
+			input1: []*armnetwork.IPTag{
+				{
+					IPTagType: ptr.To("B"),
+					Tag:       ptr.To("A"),
+				},
+				{
+					IPTagType: ptr.To("A"),
+					Tag:       ptr.To("B"),
+				},
+			},
+			input2: []*armnetwork.IPTag{
+				{
+					IPTagType: ptr.To("A"),
+					Tag:       ptr.To("B"),
+				},
+				{
+					IPTagType: ptr.To("B"),
+					Tag:       ptr.To("A"),
+				},
+			},
+			expected: true,
+		},
 	}
 	for i, c := range tests {
 		actual := areIPTagsEquivalent(c.input1, c.input2)
