@@ -688,6 +688,7 @@ func TestGetNodeNameByIPConfigurationID(t *testing.T) {
 		expectedNodeName     string
 		expectedScaleSetName string
 		expectError          bool
+		nicWithoutVM         bool
 	}{
 		{
 			description:          "GetNodeNameByIPConfigurationID should get node's Name when the node is existing",
@@ -710,6 +711,15 @@ func TestGetNodeNameByIPConfigurationID(t *testing.T) {
 			ipConfigurationID: "invalid-configuration-id",
 			vmList:            []string{"vmssee6c2000004", "vmssee6c2000005"},
 			expectError:       true,
+		},
+		{
+			description:          "GetNodeNameByIPConfigurationID should return empty strings for NIC without VM attachment",
+			scaleSet:             "scaleset4",
+			ipConfigurationID:    "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/orphaned-nic/ipConfigurations/ipconfig1",
+			vmList:               []string{"vmssee6c2000006", "vmssee6c2000007"},
+			expectedNodeName:     "",
+			expectedScaleSetName: "",
+			nicWithoutVM:         true,
 		},
 	}
 
@@ -737,6 +747,17 @@ func TestGetNodeNameByIPConfigurationID(t *testing.T) {
 					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).AnyTimes()
 				}
 				mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
+
+				if test.nicWithoutVM {
+					mockNICClient := ss.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+					nicWithoutVM := &armnetwork.Interface{
+						Name: ptr.To("orphaned-nic"),
+						Properties: &armnetwork.InterfacePropertiesFormat{
+							VirtualMachine: nil,
+						},
+					}
+					mockNICClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nicWithoutVM, nil).AnyTimes()
+				}
 
 				nodeName, scalesetName, err := ss.GetNodeNameByIPConfigurationID(context.TODO(), test.ipConfigurationID)
 				if test.expectError {
@@ -3667,6 +3688,31 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 				},
 			},
 		},
+		{
+			description:   "EnsureBackendPoolDeleted should skip IP configuration with no attached VM",
+			backendpoolID: testLBBackendpoolID0,
+			backendAddressPools: []*armnetwork.BackendAddressPool{
+				{
+					ID: ptr.To(testLBBackendpoolID0),
+					Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+						BackendIPConfigurations: []*armnetwork.InterfaceIPConfiguration{
+							{
+								Name: ptr.To("ip-vmss"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0/networkInterfaces/nic"),
+							},
+							{
+								Name: ptr.To("ip-orphan"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/orphan-nic/ipConfigurations/ipconfig1"),
+							},
+						},
+					},
+				},
+				{
+					ID: ptr.To(testLBBackendpoolID1),
+				},
+			},
+			expectedVMSSVMPutTimes: 1,
+		},
 	}
 
 	for _, test := range testCases {
@@ -3698,6 +3744,14 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 
 				mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 				mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
+
+				mockInterfaceClient := ss.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+				orphanNIC := &armnetwork.Interface{
+					Properties: &armnetwork.InterfacePropertiesFormat{
+						VirtualMachine: nil,
+					},
+				}
+				mockInterfaceClient.EXPECT().Get(gomock.Any(), "rg", "orphan-nic", nil).Return(orphanNIC, nil).AnyTimes()
 
 				updated, err := ss.EnsureBackendPoolDeleted(context.TODO(), &v1.Service{}, []string{test.backendpoolID}, testVMSSName, test.backendAddressPools, true)
 				assert.Equal(t, test.expectedErr, err != nil, test.description+errMsgSuffix)
