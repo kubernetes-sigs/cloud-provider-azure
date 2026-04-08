@@ -106,3 +106,10 @@ python3 <SKILL_DIR>/scripts/fix_image_cves.py clean
   does not build or push images.
 - `clean` removes the state file and cleans up any temporary helper artifacts
   left behind by vendor-license regeneration.
+- `apply` and `verify` set `GOTOOLCHAIN=local` for all Go subprocess calls to
+  match CI behavior (`actions/setup-go` uses `GOTOOLCHAIN=local`). This
+  prevents toolchain auto-download from producing extra `go.sum` entries that
+  fail the Go Module Consistency check. The skill requires a locally installed
+  Go version that satisfies the repo's `go` directive; `apply` performs a
+  preflight check and fails early with a clear message if the local Go is too
+  old.
