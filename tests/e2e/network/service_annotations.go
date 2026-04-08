@@ -23,6 +23,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -485,6 +486,125 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}
 
 		testPIPTagAnnotationWithTags(cs, tc, ns, serviceName, labels, ports, expectedTags)
+	})
+
+	It("should update FirstPartyUsage IP tags in-place without recreating the PIP", func() {
+		if os.Getenv("ENABLE_IP_TAG_MUTATION") != "true" {
+			Skip("Set ENABLE_IP_TAG_MUTATION=true to run IP tag mutation tests")
+		}
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSKUEnv), string(armnetwork.LoadBalancerSKUNameStandard)) {
+			Skip("azure-pip-ip-tags only work with Standard Load Balancer")
+		}
+		if tc.IPFamily != utils.IPv4 {
+			Skip("azure-pip-ip-tags in-place mutation e2e covers IPv4 only")
+		}
+
+		By("Creating a service with FirstPartyUsage=/NonProd IP tag annotation")
+		annotation := map[string]string{
+			consts.ServiceAnnotationIPTagsForPublicIP: "FirstPartyUsage=/NonProd",
+		}
+		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		defer func() {
+			By("Cleaning up test service")
+			err := utils.DeleteService(cs, ns.Name, serviceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Waiting for the service to expose")
+		publicIPs, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []*string{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(publicIPs).To(HaveLen(1))
+
+		By("Finding the public IP matching the service IP")
+		serviceIP := ptr.Deref(publicIPs[0], "")
+		pips, err := tc.ListPublicIPs(tc.GetResourceGroup())
+		Expect(err).NotTo(HaveOccurred())
+
+		var targetPIP *armnetwork.PublicIPAddress
+		for _, pip := range pips {
+			if pip.Properties == nil {
+				continue
+			}
+			if strings.EqualFold(ptr.Deref(pip.Properties.IPAddress, ""), serviceIP) {
+				targetPIP = pip
+				break
+			}
+		}
+		Expect(targetPIP).NotTo(BeNil())
+		Expect(targetPIP.Properties).NotTo(BeNil())
+
+		recordedName := ptr.Deref(targetPIP.Name, "")
+		recordedID := ptr.Deref(targetPIP.ID, "")
+		recordedIPAddress := ptr.Deref(targetPIP.Properties.IPAddress, "")
+		recordedResourceGUID := ptr.Deref(targetPIP.Properties.ResourceGUID, "")
+
+		By("Verifying the initial IP tags")
+		expectedInitialIPTags := []*armnetwork.IPTag{{
+			IPTagType: ptr.To("FirstPartyUsage"),
+			Tag:       ptr.To("/NonProd"),
+		}}
+		err = waitComparePIPIPTags(tc, expectedInitialIPTags, recordedName)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Updating the FirstPartyUsage IP tag to /Unprivileged")
+		retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
+			if service.Annotations == nil {
+				service.Annotations = map[string]string{}
+			}
+			service.Annotations[consts.ServiceAnnotationIPTagsForPublicIP] = "FirstPartyUsage=/Unprivileged"
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
+			return err
+		})
+		Expect(retryErr).NotTo(HaveOccurred())
+
+		By("Polling until the IP tags were updated in place")
+		expectedUpdatedIPTags := []*armnetwork.IPTag{{
+			IPTagType: ptr.To("FirstPartyUsage"),
+			Tag:       ptr.To("/Unprivileged"),
+		}}
+		err = waitComparePIPIPTags(tc, expectedUpdatedIPTags, recordedName)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Verifying the PIP identity is preserved after update")
+		updatedPIP, err := utils.WaitGetPIP(tc, recordedName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ptr.Deref(updatedPIP.Name, "")).To(Equal(recordedName))
+		Expect(ptr.Deref(updatedPIP.ID, "")).To(Equal(recordedID))
+		Expect(ptr.Deref(updatedPIP.Properties.IPAddress, "")).To(Equal(recordedIPAddress))
+		Expect(ptr.Deref(updatedPIP.Properties.ResourceGUID, "")).To(Equal(recordedResourceGUID))
+
+		By("Clearing the azure-pip-ip-tags annotation")
+		retryErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
+			if service.Annotations == nil {
+				service.Annotations = map[string]string{}
+			}
+			service.Annotations[consts.ServiceAnnotationIPTagsForPublicIP] = ""
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
+			return err
+		})
+		Expect(retryErr).NotTo(HaveOccurred())
+
+		By("Polling until the FirstPartyUsage IP tags were cleared in place")
+		err = waitComparePIPIPTags(tc, []*armnetwork.IPTag{}, recordedName)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Verifying the PIP identity is preserved after clearing")
+		clearedPIP, err := utils.WaitGetPIP(tc, recordedName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ptr.Deref(clearedPIP.Name, "")).To(Equal(recordedName))
+		Expect(ptr.Deref(clearedPIP.ID, "")).To(Equal(recordedID))
+		Expect(ptr.Deref(clearedPIP.Properties.IPAddress, "")).To(Equal(recordedIPAddress))
+		Expect(ptr.Deref(clearedPIP.Properties.ResourceGUID, "")).To(Equal(recordedResourceGUID))
 	})
 
 	It("should support service annotation `service.beta.kubernetes.io/azure-pip-name`", func() {
@@ -1434,6 +1554,47 @@ func waitComparePIPTags(tc *utils.AzureTestClient, expectedTags map[string]*stri
 		return reflect.DeepEqual(tags, expectedTags), nil
 	})
 	return err
+}
+
+func waitComparePIPIPTags(tc *utils.AzureTestClient, expectedIPTags []*armnetwork.IPTag, pipName string) error {
+	sortPIPIPTags := func(ipTags *[]*armnetwork.IPTag) {
+		if ipTags != nil {
+			sort.Slice(*ipTags, func(i, j int) bool {
+				return ptr.Deref((*ipTags)[i].IPTagType, "") < ptr.Deref((*ipTags)[j].IPTagType, "") ||
+					ptr.Deref((*ipTags)[i].Tag, "") < ptr.Deref((*ipTags)[j].Tag, "")
+			})
+		}
+	}
+	formatIPTags := func(ipTags []*armnetwork.IPTag) string {
+		values := []string{}
+		for _, ipTag := range ipTags {
+			values = append(values, fmt.Sprintf("%s=%s", ptr.Deref(ipTag.IPTagType, ""), ptr.Deref(ipTag.Tag, "")))
+		}
+		return strings.Join(values, ",")
+	}
+
+	return wait.PollImmediate(10*time.Second, 10*time.Minute, func() (done bool, err error) {
+		pip, err := utils.WaitGetPIP(tc, pipName)
+		if err != nil {
+			return false, err
+		}
+
+		actualIPTags := []*armnetwork.IPTag{}
+		if pip.Properties != nil && pip.Properties.IPTags != nil {
+			actualIPTags = append(actualIPTags, pip.Properties.IPTags...)
+		}
+
+		expected := []*armnetwork.IPTag{}
+		if expectedIPTags != nil {
+			expected = append(expected, expectedIPTags...)
+		}
+
+		sortPIPIPTags(&actualIPTags)
+		sortPIPIPTags(&expected)
+		utils.Logf("ipTags: [%s]", formatIPTags(actualIPTags))
+		utils.Logf("expectedIPTags: [%s]", formatIPTags(expected))
+		return reflect.DeepEqual(actualIPTags, expected), nil
+	})
 }
 
 func ifPIPDNSLabelDeleted(tc *utils.AzureTestClient, pipName string) (bool, error) {
