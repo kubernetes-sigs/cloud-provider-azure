@@ -846,11 +846,8 @@ func (az *Cloud) getServiceLoadBalancer(
 
 				deletedLBName, deletedPLS, err := az.removeStaleServiceLBResources(ctx, existingLB, existingLBs, clusterName, service)
 				if err != nil {
-					logger.Error(err, "failed to remove stale service resources from old load balancer",
-						"service", service.Name,
-						"oldLB", ptr.Deref(existingLB.Name, ""),
-					)
-					return nil, nil, nil, nil, false, false, err
+					return nil, nil, nil, nil, false, false, fmt.Errorf("remove stale service resources from load balancer %q for service %q: %w",
+						ptr.Deref(existingLB.Name, ""), getServiceName(service), err)
 				}
 				if deletedPLS {
 					return nil, nil, nil, nil, false, true, nil
@@ -877,13 +874,14 @@ func (az *Cloud) getServiceLoadBalancer(
 					if az.backendPoolUpdater != nil {
 						az.backendPoolUpdater.removeOperation(svcName)
 					}
-					newLBs, err := az.cleanupLocalServiceBackendPool(ctx, service, nodes, existingLBs, clusterName)
-					if err != nil {
-						logger.Error(err, "failed to clean up backend pool for local service",
-							"service", service.Name, "oldLB", ptr.Deref(existingLB.Name, ""))
-						return nil, nil, nil, nil, false, false, err
+					if deletedLBName == "" {
+						newLBs, err := az.cleanupLocalServiceBackendPool(ctx, service, nodes, existingLBs, clusterName)
+						if err != nil {
+							return nil, nil, nil, nil, false, false, fmt.Errorf("clean up backend pool for local service %q on load balancer %q: %w",
+								getServiceName(service), ptr.Deref(existingLB.Name, ""), err)
+						}
+						existingLBs = newLBs
 					}
-					existingLBs = newLBs
 				}
 			}
 			continue
@@ -913,7 +911,7 @@ func (az *Cloud) getServiceLoadBalancer(
 					}
 					if unsafe {
 						return nil, nil, nil, nil, false, false, fmt.Errorf(
-							"service %q cannot migrate from load balancer %q to %q because frontend IP %q is shared with other services; "+
+							"service %q cannot migrate from load balancer %q to %q because frontend IP %q is also referenced by other resources; "+
 								"remove the %s annotation to stay on load balancer %q",
 							service.Name, ptr.Deref(existingLB.Name, ""), defaultLBName, ptr.Deref(fip.Name, ""),
 							consts.ServiceAnnotationLoadBalancerConfigurations, ptr.Deref(existingLB.Name, ""))
@@ -2607,11 +2605,8 @@ func (az *Cloud) removeStaleServiceLBResources(
 			}
 			unsafe, err := az.isFrontendIPConfigUnsafeToDelete(lb, service, fip.ID)
 			if err != nil {
-				logger.Error(err, "failed to check if FIP is safe to delete",
-					"fipID", ptr.Deref(fip.ID, ""),
-					"lbName", ptr.Deref(lb.Name, ""),
-				)
-				continue
+				return "", false, fmt.Errorf("check if frontend IP configuration %q on load balancer %q is safe to delete: %w",
+					ptr.Deref(fip.ID, ""), ptr.Deref(lb.Name, ""), err)
 			}
 			if !unsafe {
 				orphanedFIPs = append(orphanedFIPs, fip)
@@ -2624,21 +2619,13 @@ func (az *Cloud) removeStaleServiceLBResources(
 	if len(orphanedFIPs) > 0 {
 		deletedLBName, deletedPLS, err := az.removeFrontendIPConfigurationFromLoadBalancer(ctx, lb, existingLBs, orphanedFIPs, clusterName, service)
 		if err != nil {
-			logger.Error(err, "failed to remove orphaned frontend IP configurations",
-				"lbName", ptr.Deref(lb.Name, ""),
-				"serviceName", serviceName,
-			)
-			return "", false, err
+			return "", false, fmt.Errorf("remove orphaned frontend IP configurations: %w", err)
 		}
 		return deletedLBName, deletedPLS, nil
 	}
 
 	// 5. No orphaned FIPs, just update the LB with the rule/probe changes.
 	if err := az.CreateOrUpdateLB(ctx, service, *lb); err != nil {
-		logger.Error(err, "failed to update load balancer to remove stale service resources",
-			"lbName", ptr.Deref(lb.Name, ""),
-			"serviceName", serviceName,
-		)
 		return "", false, err
 	}
 	logger.V(2).Info("Updated load balancer to remove stale service resources",
@@ -4514,7 +4501,7 @@ func getMostEligibleLBForService(
 ) string {
 	logger := log.Background().WithName("getMostEligibleLBForService")
 	// 1. If the LB is eligible and being used, choose it.
-	if StringInSlice(currentLBName, eligibleLBs) {
+	if StringInSliceIgnoreCase(currentLBName, eligibleLBs) {
 		logger.V(4).Info("choose LB as it is eligible and being used", "currentLBName", currentLBName)
 		return currentLBName
 	}
@@ -4542,7 +4529,7 @@ func getMostEligibleLBForService(
 	ruleCount := 301
 	for i := range existingLBs {
 		existingLB := existingLBs[i]
-		if StringInSlice(trimSuffixIgnoreCase(ptr.Deref(existingLB.Name, ""), consts.InternalLoadBalancerNameSuffix), eligibleLBs) &&
+		if StringInSliceIgnoreCase(trimSuffixIgnoreCase(ptr.Deref(existingLB.Name, ""), consts.InternalLoadBalancerNameSuffix), eligibleLBs) &&
 			isInternalLoadBalancer(existingLB) == isInternal {
 			if existingLB.Properties != nil &&
 				existingLB.Properties.LoadBalancingRules != nil {
