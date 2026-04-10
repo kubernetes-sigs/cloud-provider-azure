@@ -1,6 +1,6 @@
 ---
 name: replace-me
-description: Describe when this shared skill should be used and what it helps an agent do.
+description: Describe what this skill does in one sentence. Use when <triggers that should activate this skill>.
 ---
 
 # Replace Me
