@@ -1,6 +1,6 @@
 ---
 name: fix-image-cves
-description: Scan a built container image with Trivy, classify fixable Go-module and base-image CVEs, apply dependency and Dockerfile fixes, and verify the result with file checks and an optional image rescan.
+description: Scan a built container image with Trivy, classify fixable Go-module and base-image CVEs, apply dependency and Dockerfile fixes, and verify the result with file checks and an optional image rescan. Use when the user wants to fix CVEs in a container image, scan for vulnerabilities, or mentions Trivy, CVE remediation, image security, or dependency vulnerabilities.
 ---
 
 # Fix Image CVEs
