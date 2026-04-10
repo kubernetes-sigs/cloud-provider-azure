@@ -1,6 +1,6 @@
 ---
 name: create-release-tags
-description: Create and optionally push the next Kubernetes-style release tag (vX.Y.Z) from a release-X.Y branch by resolving the remote branch tip, computing the next patch tag, and tagging the commit directly without checking out the branch.
+description: Create and optionally push the next Kubernetes-style release tag (vX.Y.Z) from a release-X.Y branch by resolving the remote branch tip, computing the next patch tag, and tagging the commit directly without checking out the branch. Use when the user wants to tag a release, create a version tag, or mentions release tagging, cutting a release, or bumping a patch version.
 ---
 
 # Push Release Tag
