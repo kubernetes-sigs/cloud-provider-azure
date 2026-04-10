@@ -20,9 +20,7 @@ limitations under the License.
 package main
 
 import (
-	"math/rand"
 	"os"
-	"time"
 
 	_ "k8s.io/component-base/metrics/prometheus/clientgo" // load all the prometheus client-go plugins
 
@@ -32,7 +30,6 @@ import (
 )
 
 func main() {
-	rand.Seed(time.Now().UnixNano()) // FIXME: should use crypto/rand for better randomness
 	defer log.Flush()
 
 	command := app.NewCloudControllerManagerCommand()
