@@ -11128,40 +11128,28 @@ func fakeEnsureHostsInPool() func(context.Context, *v1.Service, []*v1.Node, stri
 
 func TestLbHasServiceOwnedResources(t *testing.T) {
 	svcUID := "testuid"
-	clusterSvc := &v1.Service{
-		ObjectMeta: metav1.ObjectMeta{UID: types.UID(svcUID)},
-		Spec:       v1.ServiceSpec{ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster},
-	}
-	localSvc := &v1.Service{
-		ObjectMeta: metav1.ObjectMeta{UID: types.UID(svcUID)},
-		Spec:       v1.ServiceSpec{ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal},
-	}
 	prefix := "a" + svcUID
 	otherPrefix := "a" + "otheruid"
 
 	tests := []struct {
 		name     string
-		svc      *v1.Service
 		lb       *armnetwork.LoadBalancer
 		expected bool
 	}{
 		{
 			name:     "nil properties",
-			svc:      clusterSvc,
 			lb:       &armnetwork.LoadBalancer{},
 			expected: false,
 		},
 		{
 			name: "empty rules and probes",
-			svc:  clusterSvc,
 			lb: &armnetwork.LoadBalancer{
 				Properties: &armnetwork.LoadBalancerPropertiesFormat{},
 			},
 			expected: false,
 		},
 		{
-			name: "LB only has rules from another service",
-			svc:  clusterSvc,
+			name: "LB has rules and probes only from another service",
 			lb: &armnetwork.LoadBalancer{
 				Properties: &armnetwork.LoadBalancerPropertiesFormat{
 					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
@@ -11176,7 +11164,6 @@ func TestLbHasServiceOwnedResources(t *testing.T) {
 		},
 		{
 			name: "LB shared by multiple services including ours",
-			svc:  clusterSvc,
 			lb: &armnetwork.LoadBalancer{
 				Properties: &armnetwork.LoadBalancerPropertiesFormat{
 					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
@@ -11192,23 +11179,22 @@ func TestLbHasServiceOwnedResources(t *testing.T) {
 			expected: true,
 		},
 		{
-			name: "shared probe matches for cluster traffic policy",
-			svc:  clusterSvc,
+			name: "LB has orphaned service probe without rule",
 			lb: &armnetwork.LoadBalancer{
 				Properties: &armnetwork.LoadBalancerPropertiesFormat{
 					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
 						{Name: ptr.To(otherPrefix + "-TCP-80")},
 					},
 					Probes: []*armnetwork.Probe{
-						{Name: ptr.To(consts.SharedProbeName)},
+						{Name: ptr.To(otherPrefix + "-TCP-80")},
+						{Name: ptr.To(prefix + "-TCP-443")},
 					},
 				},
 			},
 			expected: true,
 		},
 		{
-			name: "shared probe does not match for local traffic policy",
-			svc:  localSvc,
+			name: "shared probe without service rules is not service-owned",
 			lb: &armnetwork.LoadBalancer{
 				Properties: &armnetwork.LoadBalancerPropertiesFormat{
 					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
@@ -11223,12 +11209,22 @@ func TestLbHasServiceOwnedResources(t *testing.T) {
 		},
 	}
 
+	policies := []v1.ServiceExternalTrafficPolicy{
+		v1.ServiceExternalTrafficPolicyTypeCluster,
+		v1.ServiceExternalTrafficPolicyTypeLocal,
+	}
 	az := &Cloud{}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := az.lbHasServiceOwnedResources(tc.lb, tc.svc)
-			assert.Equal(t, tc.expected, got)
-		})
+	for _, policy := range policies {
+		svc := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{UID: types.UID(svcUID)},
+			Spec:       v1.ServiceSpec{ExternalTrafficPolicy: policy},
+		}
+		for _, tc := range tests {
+			t.Run(string(policy)+"/"+tc.name, func(t *testing.T) {
+				got := az.lbHasServiceOwnedResources(tc.lb, svc)
+				assert.Equal(t, tc.expected, got)
+			})
+		}
 	}
 }
 
@@ -11240,37 +11236,25 @@ func TestRemoveStaleServiceLBResources(t *testing.T) {
 	)
 
 	svcUID := "svc2uid"
-	svc2 := &v1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        "svc2",
-			Namespace:   "default",
-			UID:         types.UID(svcUID),
-			Annotations: map[string]string{},
-		},
-		Spec: v1.ServiceSpec{
-			Type:                  v1.ServiceTypeLoadBalancer,
-			ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
-			Ports: []v1.ServicePort{
-				{Name: "port1", Protocol: v1.ProtocolTCP, Port: 443},
-			},
-			IPFamilies: []v1.IPFamily{v1.IPv4Protocol},
-			ClusterIP:  "10.0.0.3",
-		},
-	}
-
 	svc2Prefix := "a" + svcUID
 	otherPrefix := "asvcother"
 	fipID := "/subscriptions/sub/resourceGroups/" + rgName + "/providers/Microsoft.Network/loadBalancers/" + lbName + "/frontendIPConfigurations/fip1"
 	fipID2 := "/subscriptions/sub/resourceGroups/" + rgName + "/providers/Microsoft.Network/loadBalancers/" + lbName + "/frontendIPConfigurations/fip2"
 
+	sharedProbeID := "/subscriptions/sub/resourceGroups/" + rgName + "/providers/Microsoft.Network/loadBalancers/" + lbName + "/probes/" + consts.SharedProbeName
+	svc2RuleID := "/subscriptions/sub/resourceGroups/" + rgName + "/providers/Microsoft.Network/loadBalancers/" + lbName + "/loadBalancingRules/" + svc2Prefix + "-TCP-443"
+	otherRuleID := "/subscriptions/sub/resourceGroups/" + rgName + "/providers/Microsoft.Network/loadBalancers/" + lbName + "/loadBalancingRules/" + otherPrefix + "-TCP-80"
+
 	tests := []struct {
 		name                  string
 		lb                    *armnetwork.LoadBalancer
+		isLocalService        bool
 		setupMocks            func(cloud *Cloud)
 		expectedDeletedLBName string
 		expectedDeletedPLS    bool
 		expectedFIPNames      []string
 		expectedRuleNames     []string
+		expectedProbeNames    []string
 	}{
 		{
 			name: "no dirty rules or probes, no API call",
@@ -11458,6 +11442,243 @@ func TestRemoveStaleServiceLBResources(t *testing.T) {
 			},
 			expectedDeletedPLS: true,
 		},
+		{
+			name: "shared probe kept when other services reference it",
+			lb: &armnetwork.LoadBalancer{
+				Name: ptr.To(lbName),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+						{Name: ptr.To("fip1"), ID: ptr.To(fipID)},
+					},
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{
+							Name: ptr.To(svc2Prefix + "-TCP-443"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+						{
+							Name: ptr.To(otherPrefix + "-TCP-80"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+					},
+					Probes: []*armnetwork.Probe{
+						{
+							Name: ptr.To(consts.SharedProbeName),
+							ID:   ptr.To(sharedProbeID),
+							Properties: &armnetwork.ProbePropertiesFormat{
+								Protocol:          to.Ptr(armnetwork.ProbeProtocolHTTP),
+								IntervalInSeconds: ptr.To(consts.HealthProbeDefaultProbeInterval),
+								ProbeThreshold:    ptr.To(consts.HealthProbeDefaultNumOfProbe),
+								LoadBalancingRules: []*armnetwork.SubResource{
+									{ID: ptr.To(svc2RuleID)},
+									{ID: ptr.To(otherRuleID)},
+								},
+							},
+						},
+					},
+				},
+			},
+			setupMocks: func(cloud *Cloud) {
+				mockLBClient := cloud.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+				mockLBClient.EXPECT().CreateOrUpdate(gomock.Any(), rgName, lbName, gomock.Any()).Return(nil, nil).Times(1)
+			},
+			expectedDeletedLBName: "",
+			expectedFIPNames:      []string{"fip1"},
+			expectedRuleNames:     []string{otherPrefix + "-TCP-80"},
+			expectedProbeNames:    []string{consts.SharedProbeName},
+		},
+		{
+			name: "shared probe removed when departing service is the last one referring to it",
+			lb: &armnetwork.LoadBalancer{
+				Name: ptr.To(lbName),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+						{
+							Name:       ptr.To("fip1"),
+							ID:         ptr.To(fipID),
+							Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pipID")}},
+						},
+					},
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{
+							Name: ptr.To(svc2Prefix + "-TCP-443"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+						{
+							Name: ptr.To(otherPrefix + "-TCP-80"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+					},
+					Probes: []*armnetwork.Probe{
+						{
+							Name: ptr.To(consts.SharedProbeName),
+							ID:   ptr.To(sharedProbeID),
+							Properties: &armnetwork.ProbePropertiesFormat{
+								Protocol:          to.Ptr(armnetwork.ProbeProtocolHTTP),
+								IntervalInSeconds: ptr.To(consts.HealthProbeDefaultProbeInterval),
+								ProbeThreshold:    ptr.To(consts.HealthProbeDefaultNumOfProbe),
+								LoadBalancingRules: []*armnetwork.SubResource{
+									{ID: ptr.To(svc2RuleID)},
+								},
+							},
+						},
+					},
+				},
+			},
+			setupMocks: func(cloud *Cloud) {
+				mockLBClient := cloud.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+				mockLBClient.EXPECT().CreateOrUpdate(gomock.Any(), rgName, lbName, gomock.Any()).Return(nil, nil).Times(1)
+			},
+			expectedDeletedLBName: "",
+			expectedFIPNames:      []string{"fip1"},
+			expectedRuleNames:     []string{otherPrefix + "-TCP-80"},
+			expectedProbeNames:    []string{},
+		},
+		{
+			name: "no API call when service has no rules on LB and shared probe exists",
+			lb: &armnetwork.LoadBalancer{
+				Name: ptr.To(lbName),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+						{Name: ptr.To("fip1"), ID: ptr.To(fipID)},
+					},
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{
+							Name: ptr.To(otherPrefix + "-TCP-80"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+					},
+					Probes: []*armnetwork.Probe{
+						{
+							Name: ptr.To(consts.SharedProbeName),
+							ID:   ptr.To(sharedProbeID),
+							Properties: &armnetwork.ProbePropertiesFormat{
+								Protocol:          to.Ptr(armnetwork.ProbeProtocolHTTP),
+								IntervalInSeconds: ptr.To(consts.HealthProbeDefaultProbeInterval),
+								ProbeThreshold:    ptr.To(consts.HealthProbeDefaultNumOfProbe),
+								LoadBalancingRules: []*armnetwork.SubResource{
+									{ID: ptr.To(otherRuleID)},
+								},
+							},
+						},
+					},
+				},
+			},
+			setupMocks:         func(_ *Cloud) { /* no API calls expected */ },
+			expectedFIPNames:   []string{"fip1"},
+			expectedRuleNames:  []string{otherPrefix + "-TCP-80"},
+			expectedProbeNames: []string{consts.SharedProbeName},
+		},
+		{
+			name:           "shared probe untouched when departing service uses Local traffic policy",
+			isLocalService: true,
+			lb: &armnetwork.LoadBalancer{
+				Name: ptr.To(lbName),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+						{Name: ptr.To("fip1"), ID: ptr.To(fipID)},
+					},
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{
+							Name: ptr.To(svc2Prefix + "-TCP-443"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+						{
+							Name: ptr.To(otherPrefix + "-TCP-80"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+					},
+					Probes: []*armnetwork.Probe{
+						{Name: ptr.To(svc2Prefix + "-TCP-443"), Properties: &armnetwork.ProbePropertiesFormat{Port: ptr.To(int32(443))}},
+						{
+							Name: ptr.To(consts.SharedProbeName),
+							ID:   ptr.To(sharedProbeID),
+							Properties: &armnetwork.ProbePropertiesFormat{
+								Protocol:          to.Ptr(armnetwork.ProbeProtocolHTTP),
+								IntervalInSeconds: ptr.To(consts.HealthProbeDefaultProbeInterval),
+								ProbeThreshold:    ptr.To(consts.HealthProbeDefaultNumOfProbe),
+								LoadBalancingRules: []*armnetwork.SubResource{
+									{ID: ptr.To(otherRuleID)},
+								},
+							},
+						},
+					},
+				},
+			},
+			setupMocks: func(cloud *Cloud) {
+				mockLBClient := cloud.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+				mockLBClient.EXPECT().CreateOrUpdate(gomock.Any(), rgName, lbName, gomock.Any()).Return(nil, nil).Times(1)
+			},
+			expectedDeletedLBName: "",
+			expectedFIPNames:      []string{"fip1"},
+			expectedRuleNames:     []string{otherPrefix + "-TCP-80"},
+			expectedProbeNames:    []string{consts.SharedProbeName},
+		},
+		{
+			name:           "shared probe removed when service switches from Cluster to Local and is the last one referring to it",
+			isLocalService: true,
+			lb: &armnetwork.LoadBalancer{
+				Name: ptr.To(lbName),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+						{
+							Name:       ptr.To("fip1"),
+							ID:         ptr.To(fipID),
+							Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pipID")}},
+						},
+					},
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{
+							Name: ptr.To(svc2Prefix + "-TCP-443"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+						{
+							Name: ptr.To(otherPrefix + "-TCP-80"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+					},
+					Probes: []*armnetwork.Probe{
+						{
+							Name: ptr.To(consts.SharedProbeName),
+							ID:   ptr.To(sharedProbeID),
+							Properties: &armnetwork.ProbePropertiesFormat{
+								Protocol:          to.Ptr(armnetwork.ProbeProtocolHTTP),
+								IntervalInSeconds: ptr.To(consts.HealthProbeDefaultProbeInterval),
+								ProbeThreshold:    ptr.To(consts.HealthProbeDefaultNumOfProbe),
+								LoadBalancingRules: []*armnetwork.SubResource{
+									{ID: ptr.To(svc2RuleID)},
+								},
+							},
+						},
+					},
+				},
+			},
+			setupMocks: func(cloud *Cloud) {
+				mockLBClient := cloud.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+				mockLBClient.EXPECT().CreateOrUpdate(gomock.Any(), rgName, lbName, gomock.Any()).Return(nil, nil).Times(1)
+			},
+			expectedDeletedLBName: "",
+			expectedFIPNames:      []string{"fip1"},
+			expectedRuleNames:     []string{otherPrefix + "-TCP-80"},
+			expectedProbeNames:    []string{},
+		},
 	}
 
 	for _, tc := range tests {
@@ -11465,6 +11686,28 @@ func TestRemoveStaleServiceLBResources(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			cloud := GetTestCloud(ctrl)
+
+			trafficPolicy := v1.ServiceExternalTrafficPolicyTypeCluster
+			if tc.isLocalService {
+				trafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
+			}
+			svc2 := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "svc2",
+					Namespace:   "default",
+					UID:         types.UID(svcUID),
+					Annotations: map[string]string{},
+				},
+				Spec: v1.ServiceSpec{
+					Type:                  v1.ServiceTypeLoadBalancer,
+					ExternalTrafficPolicy: trafficPolicy,
+					Ports: []v1.ServicePort{
+						{Name: "port1", Protocol: v1.ProtocolTCP, Port: 443},
+					},
+					IPFamilies: []v1.IPFamily{v1.IPv4Protocol},
+					ClusterIP:  "10.0.0.3",
+				},
+			}
 
 			tc.setupMocks(cloud)
 			existingLBs := []*armnetwork.LoadBalancer{tc.lb}
@@ -11487,6 +11730,13 @@ func TestRemoveStaleServiceLBResources(t *testing.T) {
 					ruleNames = append(ruleNames, *rule.Name)
 				}
 				assert.Equal(t, tc.expectedRuleNames, ruleNames)
+			}
+			if tc.expectedProbeNames != nil {
+				probeNames := []string{}
+				for _, probe := range tc.lb.Properties.Probes {
+					probeNames = append(probeNames, *probe.Name)
+				}
+				assert.Equal(t, tc.expectedProbeNames, probeNames)
 			}
 		})
 	}

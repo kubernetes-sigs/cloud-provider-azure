@@ -2541,8 +2541,11 @@ func (az *Cloud) recordExistingNodesOnLoadBalancers(clusterName string, lbs []*a
 	return nil
 }
 
-// lbHasServiceOwnedResources returns true if any load-balancing rule or probe
-// on the given LB is owned by the service (matched by name prefix).
+// lbHasServiceOwnedResources returns true if any load-balancing rule or
+// probe on the given LB is owned by the service (matched by name prefix).
+// The shared health probe is skipped: if the service uses it, there must
+// also be a service-owned rule referencing it, which the rule check
+// already catches.
 func (az *Cloud) lbHasServiceOwnedResources(lb *armnetwork.LoadBalancer, service *v1.Service) bool {
 	if lb.Properties == nil {
 		return false
@@ -2553,7 +2556,9 @@ func (az *Cloud) lbHasServiceOwnedResources(lb *armnetwork.LoadBalancer, service
 		}
 	}
 	for _, probe := range lb.Properties.Probes {
-		if probe.Name != nil && az.serviceOwnsRule(service, *probe.Name) {
+		if probe.Name != nil &&
+			!strings.EqualFold(*probe.Name, consts.SharedProbeName) &&
+			az.serviceOwnsRule(service, *probe.Name) {
 			return true
 		}
 	}
