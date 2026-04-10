@@ -1,6 +1,6 @@
 ---
 name: create-release-note-doc-pr
-description: Generate or update the documentation-site release note for a given tag, commit it on a branch, push it to a writable remote, and open a GitHub PR to the docs branch.
+description: Generate or update the documentation-site release note for a given tag, commit it on a branch, push it to a writable remote, and open a GitHub PR to the docs branch. Use when the user wants to create or update release notes, generate a changelog for a tag, or mentions release notes, docs PR, or documentation for a release.
 ---
 
 # Release Note Docs PR
