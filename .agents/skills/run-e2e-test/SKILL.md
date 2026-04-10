@@ -1,6 +1,6 @@
 ---
 name: run-e2e-test
-description: Parse a Go e2e test from tests/e2e/, translate each step to kubectl and az CLI commands, and interactively replay the test against a live cluster.
+description: Parse a Go e2e test from tests/e2e/, translate each step to kubectl and az CLI commands, and interactively replay the test against a live cluster. Use when the user wants to manually run, debug, or reproduce an e2e test case, or when they mention replaying a test, running a test against a cluster, or verifying e2e test behavior with kubectl and az.
 ---
 
 # Run E2E Test
