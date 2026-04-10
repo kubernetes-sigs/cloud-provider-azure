@@ -1,6 +1,6 @@
 ---
 name: cherry-pick-pr
-description: Cherry-pick a merged pull request onto a release branch with Prow-style branch naming, manual conflict resolution, targeted validation, and GitHub PR creation.
+description: Cherry-pick a merged pull request onto a release branch with Prow-style branch naming, manual conflict resolution, targeted validation, and GitHub PR creation. Use when the user wants to backport a PR, cherry-pick a commit to a release branch, or mentions cherry-pick, backport, or porting a fix to an older release.
 ---
 
 # Cherry-Pick Pull Requests
