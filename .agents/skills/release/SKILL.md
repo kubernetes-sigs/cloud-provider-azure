@@ -1,6 +1,6 @@
 ---
 name: release
-description: Prepare and publish a stable release in two phases by reusing the shared release-tag and release-note-doc-pr skills, building artifacts in GitHub, generating release notes and draft releases locally, validating release assets, and controlling latest-release status explicitly.
+description: Prepare and publish a stable release in two phases by reusing the shared release-tag and release-note-doc-pr skills, building artifacts in GitHub, generating release notes and draft releases locally, validating release assets, and controlling latest-release status explicitly. Use when the user wants to perform a full release, publish a new version, or mentions releasing, shipping a version, or the end-to-end release process.
 ---
 
 # Manual Release
