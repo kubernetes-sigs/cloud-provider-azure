@@ -18,12 +18,12 @@ limitations under the License.
 package privatednszonegroupclient
 
 import (
-	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate;delete,resource=PrivateEndpoint,subResource=PrivateDNSZoneGroup,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6,packageAlias=armnetwork,clientName=PrivateDNSZoneGroupsClient,expand=false
+// +azure:client:verbs=get;createorupdate;delete,resource=PrivateEndpoint,subResource=PrivateDNSZoneGroup,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9,packageAlias=armnetwork,clientName=PrivateDNSZoneGroupsClient,expand=false
 type Interface interface {
 	utils.SubResourceGetFunc[armnetwork.PrivateDNSZoneGroup]
 	utils.SubResourceCreateOrUpdateFunc[armnetwork.PrivateDNSZoneGroup]
