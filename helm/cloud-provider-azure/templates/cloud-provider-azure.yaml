@@ -302,6 +302,15 @@ spec:
             - "--use-service-account-credentials={{ .Values.cloudControllerManager.useServiceAccountCredentials }}"
             {{- end }}
             - "--v={{ .Values.cloudControllerManager.logVerbosity }}"
+          env:
+            {{- if .Values.k8sServiceHost }}
+            - name: KUBERNETES_SERVICE_HOST
+              value: {{ .Values.k8sServiceHost }}
+            {{- end }}
+            {{- if .Values.k8sServicePort }}
+            - name: KUBERNETES_SERVICE_PORT
+              value: {{ .Values.k8sServicePort }}
+            {{- end }}
           resources:
             requests:
               cpu: {{ .Values.cloudControllerManager.containerResourceManagement.requestsCPU }}
@@ -489,6 +498,14 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            {{- if .Values.k8sServiceHost }}
+            - name: KUBERNETES_SERVICE_HOST
+              value: {{ .Values.k8sServiceHost }}
+            {{- end }}
+            {{- if .Values.k8sServicePort }}
+            - name: KUBERNETES_SERVICE_PORT
+              value: {{ .Values.k8sServicePort }}
+            {{- end }}
           resources:
             requests:
               cpu: {{ .Values.cloudNodeManager.containerResourceManagement.requestsCPU }}
@@ -634,6 +651,15 @@ spec:
           name: kube-proxy
         - mountPath: /scripts
           name: cloud-provider-azure-scripts
+        env:
+            {{- if .Values.k8sServiceHost }}
+            - name: KUBERNETES_SERVICE_HOST
+              value: {{ .Values.k8sServiceHost }}
+            {{- end }}
+            {{- if .Values.k8sServicePort }}
+            - name: KUBERNETES_SERVICE_PORT
+              value: {{ .Values.k8sServicePort }}
+            {{- end }}
         resources:
           requests:
             cpu: {{ .Values.cloudNodeManager.containerResourceManagement.requestsCPUWin }}
