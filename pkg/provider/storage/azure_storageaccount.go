@@ -381,7 +381,10 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 		if len(accountOptions.StorageEndpointSuffix) == 0 && az.Environment != nil {
 			accountOptions.StorageEndpointSuffix = az.Environment.StorageEndpointSuffix
 		}
-		privateDNSZoneName = fmt.Sprintf(privateDNSZoneNameFmt, privateDNSZoneName, accountOptions.StorageType, accountOptions.StorageEndpointSuffix)
+		// Private Endpoint DNS resolution requires the fixed "privatelink" prefix.
+		// Azure public DNS always returns a CNAME pointing to privatelink.{service}.{suffix},
+		// so using a custom prefix would break the DNS resolution chain.
+		privateDNSZoneName = fmt.Sprintf(privateDNSZoneNameFmt, defaultPrivateDNSZoneName, accountOptions.StorageType, accountOptions.StorageEndpointSuffix)
 	}
 
 	if len(accountOptions.Tags) == 0 {
