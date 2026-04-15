@@ -480,7 +480,7 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 			if strings.Contains(err.Error(), consts.ResourceNotFoundMessageCode) {
 				// Create DNS zone first, this could make sure driver has write permission on privateDNSResourceGroup
 				if err := az.createPrivateDNSZone(ctx, privateDNSResourceGroup, privateDNSZoneName); err != nil {
-					return "", "", fmt.Errorf("create private DNS zone(%s) in resourceGroup(%s): %w", privateDNSZoneName, privateDNSResourceGroup, err)
+					return "", "", fmt.Errorf("create private DNS zone(%s) in privateDNSResourceGroup(%s): %w", privateDNSZoneName, privateDNSResourceGroup, err)
 				}
 			} else {
 				return "", "", fmt.Errorf("get private dns zone %s returned with %v", privateDNSZoneName, err.Error())
@@ -797,9 +797,9 @@ func (az *AccountRepo) createPrivateEndpoint(ctx context.Context, accountName st
 	return err
 }
 
-func (az *AccountRepo) createPrivateDNSZone(ctx context.Context, vnetResourceGroup, privateDNSZoneName string) error {
+func (az *AccountRepo) createPrivateDNSZone(ctx context.Context, privateDNSResourceGroup, privateDNSZoneName string) error {
 	logger := log.FromContextOrBackground(ctx).WithName("createPrivateDNSZone")
-	logger.V(2).Info("Creating private DNS zone", "privateDNSZone", privateDNSZoneName, "ResourceGroup", vnetResourceGroup)
+	logger.V(2).Info("Creating private DNS zone", "privateDNSZone", privateDNSZoneName, "privateDNSResourceGroup", privateDNSResourceGroup)
 	location := LocationGlobal
 	privateDNSZone := privatedns.PrivateZone{Location: &location}
 	clientFactory := az.NetworkClientFactory
@@ -809,9 +809,9 @@ func (az *AccountRepo) createPrivateDNSZone(ctx context.Context, vnetResourceGro
 	}
 	privatednsclient := clientFactory.GetPrivateZoneClient()
 
-	if _, err := privatednsclient.CreateOrUpdate(ctx, vnetResourceGroup, privateDNSZoneName, privateDNSZone); err != nil {
+	if _, err := privatednsclient.CreateOrUpdate(ctx, privateDNSResourceGroup, privateDNSZoneName, privateDNSZone); err != nil {
 		if strings.Contains(err.Error(), "exists already") {
-			logger.V(2).Info("private dns zone in resourceGroup already exists", "privateDNSZone", privateDNSZoneName, "ResourceGroup", vnetResourceGroup)
+			logger.V(2).Info("private dns zone in resourceGroup already exists", "privateDNSZone", privateDNSZoneName, "privateDNSResourceGroup", privateDNSResourceGroup)
 			return nil
 		}
 		return err
