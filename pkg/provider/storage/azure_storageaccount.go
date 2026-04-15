@@ -495,10 +495,10 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 		if _, err := clientFactory.GetVirtualNetworkLinkClient().Get(ctx, privateDNSResourceGroup, privateDNSZoneName, vNetLinkName); err != nil {
 			if strings.Contains(err.Error(), consts.ResourceNotFoundMessageCode) {
 				if err := az.createVNetLink(ctx, vNetLinkName, vnetResourceGroup, privateDNSResourceGroup, vnetName, privateDNSZoneName); err != nil {
-					return "", "", fmt.Errorf("create virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s): %w", vnetName, privateDNSZoneName, privateDNSResourceGroup, err)
+					return "", "", fmt.Errorf("create virtual link for vnet(%s) and DNS Zone(%s) in privateDNSResourceGroup(%s): %w", vnetName, privateDNSZoneName, privateDNSResourceGroup, err)
 				}
 			} else {
-				return "", "", fmt.Errorf("get virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s) returned with %w", vnetName, privateDNSZoneName, privateDNSResourceGroup, err)
+				return "", "", fmt.Errorf("get virtual link for vnet(%s) and DNS Zone(%s) in privateDNSResourceGroup(%s) returned with %w", vnetName, privateDNSZoneName, privateDNSResourceGroup, err)
 			}
 		}
 	}
