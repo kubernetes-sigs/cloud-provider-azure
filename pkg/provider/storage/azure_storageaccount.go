@@ -100,6 +100,8 @@ type AccountOptions struct {
 	SourceAccountName string
 	// default is "privatelink"
 	PrivateDNSZoneName string
+	// resource group for private DNS zone, default is vnetResourceGroup
+	PrivateDNSZoneResourceGroup string
 	// default is vnetName + "-vnetlink"
 	VNetLinkName        string
 	PublicNetworkAccess string
@@ -461,17 +463,24 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 		}
 	}
 
+	// Use a separate resource group for private DNS zone if specified,
+	// otherwise default to vnetResourceGroup for backward compatibility.
+	privateDnsResourceGroup := vnetResourceGroup
+	if accountOptions.PrivateDNSZoneResourceGroup != "" {
+		privateDnsResourceGroup = accountOptions.PrivateDNSZoneResourceGroup
+	}
+
 	if ptr.Deref(accountOptions.CreatePrivateEndpoint, false) {
 		clientFactory := az.NetworkClientFactory
 		if clientFactory == nil {
 			// multi-tenant support
 			clientFactory = az.ComputeClientFactory
 		}
-		if _, err := clientFactory.GetPrivateZoneClient().Get(ctx, vnetResourceGroup, privateDNSZoneName); err != nil {
+		if _, err := clientFactory.GetPrivateZoneClient().Get(ctx, privateDnsResourceGroup, privateDNSZoneName); err != nil {
 			if strings.Contains(err.Error(), consts.ResourceNotFoundMessageCode) {
-				// Create DNS zone first, this could make sure driver has write permission on vnetResourceGroup
-				if err := az.createPrivateDNSZone(ctx, vnetResourceGroup, privateDNSZoneName); err != nil {
-					return "", "", fmt.Errorf("create private DNS zone(%s) in resourceGroup(%s): %w", privateDNSZoneName, vnetResourceGroup, err)
+				// Create DNS zone first, this could make sure driver has write permission on privateDnsResourceGroup
+				if err := az.createPrivateDNSZone(ctx, privateDnsResourceGroup, privateDNSZoneName); err != nil {
+					return "", "", fmt.Errorf("create private DNS zone(%s) in resourceGroup(%s): %w", privateDNSZoneName, privateDnsResourceGroup, err)
 				}
 			} else {
 				return "", "", fmt.Errorf("get private dns zone %s returned with %v", privateDNSZoneName, err.Error())
@@ -483,13 +492,13 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 		if accountOptions.VNetLinkName != "" {
 			vNetLinkName = accountOptions.VNetLinkName
 		}
-		if _, err := clientFactory.GetVirtualNetworkLinkClient().Get(ctx, vnetResourceGroup, privateDNSZoneName, vNetLinkName); err != nil {
+		if _, err := clientFactory.GetVirtualNetworkLinkClient().Get(ctx, privateDnsResourceGroup, privateDNSZoneName, vNetLinkName); err != nil {
 			if strings.Contains(err.Error(), consts.ResourceNotFoundMessageCode) {
-				if err := az.createVNetLink(ctx, vNetLinkName, vnetResourceGroup, vnetName, privateDNSZoneName); err != nil {
-					return "", "", fmt.Errorf("create virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s): %w", vnetName, privateDNSZoneName, vnetResourceGroup, err)
+				if err := az.createVNetLink(ctx, vNetLinkName, privateDnsResourceGroup, vnetName, privateDNSZoneName); err != nil {
+					return "", "", fmt.Errorf("create virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s): %w", vnetName, privateDNSZoneName, privateDnsResourceGroup, err)
 				}
 			} else {
-				return "", "", fmt.Errorf("get virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s) returned with %w", vnetName, privateDNSZoneName, vnetResourceGroup, err)
+				return "", "", fmt.Errorf("get virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s) returned with %w", vnetName, privateDNSZoneName, privateDnsResourceGroup, err)
 			}
 		}
 	}
@@ -724,8 +733,8 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 		if accountOptions.StorageType == StorageTypeBlob {
 			dnsZoneGroupName = dnsZoneGroupName + blobNameSuffix
 		}
-		if err := az.createPrivateDNSZoneGroup(ctx, dnsZoneGroupName, privateEndpointName, vnetResourceGroup, vnetName, privateDNSZoneName); err != nil {
-			return "", "", fmt.Errorf("create private DNS zone group - privateEndpoint(%s), vNetName(%s), resourceGroup(%s): %w", privateEndpointName, vnetName, vnetResourceGroup, err)
+		if err := az.createPrivateDNSZoneGroup(ctx, dnsZoneGroupName, privateEndpointName, privateDnsResourceGroup, vnetName, privateDNSZoneName); err != nil {
+			return "", "", fmt.Errorf("create private DNS zone group - privateEndpoint(%s), vNetName(%s), resourceGroup(%s): %w", privateEndpointName, vnetName, privateDnsResourceGroup, err)
 		}
 	}
 
