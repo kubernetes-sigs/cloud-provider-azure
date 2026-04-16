@@ -414,6 +414,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 		name                            string
 		createAccount                   bool
 		createPrivateEndpoint           *bool
+		privateDNSZoneResourceGroup     string
 		vNetLinkName                    string
 		publicNetworkAccess             string
 		SubnetPropertiesFormatNil       bool
@@ -458,6 +459,19 @@ func TestEnsureStorageAccount(t *testing.T) {
 			setAccountOptions:               true,
 			requireInfrastructureEncryption: ptr.To(true),
 			keyVaultURL:                     ptr.To("keyVaultURL"),
+			resourceGroup:                   "rg",
+			accessTier:                      "AccessTierHot",
+			accountName:                     "",
+			expectedErr:                     "",
+		},
+		{
+			name:                            "[Success] EnsureStorageAccount with createPrivateEndpoint and separate privateDNSZoneResourceGroup",
+			createAccount:                   true,
+			createPrivateEndpoint:           ptr.To(true),
+			privateDNSZoneResourceGroup:     "dns-rg",
+			mockStorageAccountsClient:       true,
+			setAccountOptions:               true,
+			requireInfrastructureEncryption: ptr.To(true),
 			resourceGroup:                   "rg",
 			accessTier:                      "AccessTierHot",
 			accountName:                     "",
@@ -548,21 +562,37 @@ func TestEnsureStorageAccount(t *testing.T) {
 					createOrUpdateCall.Times(1)
 				}
 
+				// DNS operations use privateDNSZoneResourceGroup when set, otherwise vnetResourceGroup
+				dnsRG := vnetResourceGroup
+				if test.privateDNSZoneResourceGroup != "" {
+					dnsRG = test.privateDNSZoneResourceGroup
+				}
+
 				mockPrivateDNSClient := mock_privatezoneclient.NewMockInterface(ctrl)
 				StorageAccountRepo.NetworkClientFactory.(*mock_azclient.MockClientFactory).EXPECT().GetPrivateZoneClient().Return(mockPrivateDNSClient).AnyTimes()
-				mockPrivateDNSClient.EXPECT().Get(gomock.Any(), vnetResourceGroup, gomock.Any()).Return(&privatedns.PrivateZone{}, errors.New("ResourceNotFound")).Times(1)
-				mockPrivateDNSClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
+				mockPrivateDNSClient.EXPECT().Get(gomock.Any(), dnsRG, gomock.Any()).Return(&privatedns.PrivateZone{}, errors.New("ResourceNotFound")).Times(1)
+				mockPrivateDNSClient.EXPECT().CreateOrUpdate(gomock.Any(), dnsRG, gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
 
 				mockPrivateDNSZoneGroup := mock_privatednszonegroupclient.NewMockInterface(ctrl)
 				StorageAccountRepo.NetworkClientFactory.(*mock_azclient.MockClientFactory).EXPECT().GetPrivateDNSZoneGroupClient().Return(mockPrivateDNSZoneGroup).AnyTimes()
-				mockPrivateDNSZoneGroup.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
+				mockPrivateDNSZoneGroup.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), gomock.Cond(func(x any) bool {
+					group, ok := x.(armnetwork.PrivateDNSZoneGroup)
+					if !ok {
+						return false
+					}
+					if group.Properties == nil || len(group.Properties.PrivateDNSZoneConfigs) == 0 {
+						return false
+					}
+					zoneID := *group.Properties.PrivateDNSZoneConfigs[0].Properties.PrivateDNSZoneID
+					return strings.Contains(zoneID, "/resourceGroups/"+dnsRG+"/")
+				})).Return(nil, nil).Times(1)
 				mockPrivateEndpointClient := mock_privateendpointclient.NewMockInterface(ctrl)
 				StorageAccountRepo.NetworkClientFactory.(*mock_azclient.MockClientFactory).EXPECT().GetPrivateEndpointClient().Return(mockPrivateEndpointClient).AnyTimes()
 				mockPrivateEndpointClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
 				mockVirtualNetworkLinksClient := mock_virtualnetworklinkclient.NewMockInterface(ctrl)
 				StorageAccountRepo.NetworkClientFactory.(*mock_azclient.MockClientFactory).EXPECT().GetVirtualNetworkLinkClient().Return(mockVirtualNetworkLinksClient).AnyTimes()
-				mockVirtualNetworkLinksClient.EXPECT().Get(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any()).Return(&privatedns.VirtualNetworkLink{}, errors.New("ResourceNotFound")).Times(1)
-				mockVirtualNetworkLinksClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
+				mockVirtualNetworkLinksClient.EXPECT().Get(gomock.Any(), dnsRG, gomock.Any(), gomock.Any()).Return(&privatedns.VirtualNetworkLink{}, errors.New("ResourceNotFound")).Times(1)
+				mockVirtualNetworkLinksClient.EXPECT().CreateOrUpdate(gomock.Any(), dnsRG, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
 			}
 
 			if test.sourceAccountName != "" {
@@ -574,6 +604,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 				testAccountOptions = &AccountOptions{
 					ResourceGroup:                   test.resourceGroup,
 					CreatePrivateEndpoint:           test.createPrivateEndpoint,
+					PrivateDNSZoneResourceGroup:     test.privateDNSZoneResourceGroup,
 					VNetLinkName:                    test.vNetLinkName,
 					PublicNetworkAccess:             test.publicNetworkAccess,
 					Name:                            test.accountName,
