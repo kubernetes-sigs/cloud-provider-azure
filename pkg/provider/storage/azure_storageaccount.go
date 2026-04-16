@@ -799,7 +799,7 @@ func (az *AccountRepo) createPrivateEndpoint(ctx context.Context, accountName st
 
 func (az *AccountRepo) createPrivateDNSZone(ctx context.Context, privateDNSResourceGroup, privateDNSZoneName string) error {
 	logger := log.FromContextOrBackground(ctx).WithName("createPrivateDNSZone")
-	logger.V(2).Info("Creating private DNS zone", "privateDNSZone", privateDNSZoneName, "ResourceGroup", privateDNSResourceGroup, "privateDNSResourceGroup", privateDNSResourceGroup)
+	logger.V(2).Info("Creating private DNS zone", "privateDNSZone", privateDNSZoneName, "resourceGroup", privateDNSResourceGroup)
 	location := LocationGlobal
 	privateDNSZone := privatedns.PrivateZone{Location: &location}
 	clientFactory := az.NetworkClientFactory
@@ -811,7 +811,7 @@ func (az *AccountRepo) createPrivateDNSZone(ctx context.Context, privateDNSResou
 
 	if _, err := privatednsclient.CreateOrUpdate(ctx, privateDNSResourceGroup, privateDNSZoneName, privateDNSZone); err != nil {
 		if strings.Contains(err.Error(), "exists already") {
-			logger.V(2).Info("private dns zone in resourceGroup already exists", "privateDNSZone", privateDNSZoneName, "ResourceGroup", privateDNSResourceGroup, "privateDNSResourceGroup", privateDNSResourceGroup)
+			logger.V(2).Info("private dns zone in resourceGroup already exists", "privateDNSZone", privateDNSZoneName, "resourceGroup", privateDNSResourceGroup)
 			return nil
 		}
 		return err
