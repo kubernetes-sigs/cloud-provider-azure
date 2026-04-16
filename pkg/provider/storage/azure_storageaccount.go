@@ -483,7 +483,7 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 					return "", "", fmt.Errorf("create private DNS zone(%s) in privateDNSResourceGroup(%s): %w", privateDNSZoneName, privateDNSResourceGroup, err)
 				}
 			} else {
-				return "", "", fmt.Errorf("get private dns zone(%s) in privateDNSResourceGroup(%s): %w", privateDNSZoneName, privateDNSResourceGroup, err)
+				return "", "", fmt.Errorf("get private DNS zone(%s) in privateDNSResourceGroup(%s): %w", privateDNSZoneName, privateDNSResourceGroup, err)
 			}
 		}
 
