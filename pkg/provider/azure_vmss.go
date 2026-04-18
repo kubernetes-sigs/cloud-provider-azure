@@ -1697,6 +1697,11 @@ func (ss *ScaleSet) GetNodeNameByIPConfigurationID(ctx context.Context, ipConfig
 		return "", "", err
 	}
 
+	if vmManagementType == ManagedByNoVM {
+		logger.V(2).Info("No VM attached, skipping node", "ipConfigurationID", ipConfigurationID)
+		return "", "", nil
+	}
+
 	if vmManagementType == ManagedByAvSet {
 		// vm is managed by availability set.
 		return ss.availabilitySet.GetNodeNameByIPConfigurationID(ctx, ipConfigurationID)
@@ -1961,6 +1966,10 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 
 			logger.Error(err, "Failed to GetNodeNameByIPConfigurationID", "ipConfigurationID", ipConfigurationID)
 			allErrs = append(allErrs, err)
+			continue
+		}
+		if nodeName == "" {
+			logger.V(2).Info("Empty nodeName, skipping node", "service", getServiceName(service), "ipConfigurationID", ipConfigurationID)
 			continue
 		}
 
