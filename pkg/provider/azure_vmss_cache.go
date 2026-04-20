@@ -394,6 +394,14 @@ func (ss *ScaleSet) newNonVmssUniformNodesCache() (azcache.Resource, error) {
 
 func (ss *ScaleSet) getVMManagementTypeByNodeName(ctx context.Context, nodeName string, crt azcache.AzureCacheReadType) (VMManagementType, error) {
 	logger := log.FromContextOrBackground(ctx).WithName("getVMManagementTypeByNodeName")
+	// When both AvSet and VmssFlex nodes are disabled, all nodes are VMSS Uniform
+	// unless the cache says otherwise. If the cache is not initialized, fall back
+	// to the legacy short-circuit to avoid nil panics.
+	if ss.DisableAvailabilitySetNodes && !ss.EnableVmssFlexNodes {
+		if ss.nonVmssUniformNodesCache == nil {
+			return ManagedByVmssUniform, nil
+		}
+	}
 	ss.lockMap.LockEntry(consts.VMManagementTypeLockKey)
 	defer ss.lockMap.UnlockEntry(consts.VMManagementTypeLockKey)
 	cached, err := ss.nonVmssUniformNodesCache.Get(ctx, consts.NonVmssUniformNodesKey, crt)
