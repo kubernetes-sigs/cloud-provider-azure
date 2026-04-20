@@ -413,8 +413,17 @@ func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
 			expectedErr:              nil,
 		},
 		{
-			description:                 "getVMManagementTypeByIPConfigurationID should return ManagedByVmssUniform if DisableAvailabilitySetNodes is set to true and EnableVmssFlexNodes is set to false",
+			description:                 "getVMManagementTypeByIPConfigurationID should return ManagedByAvSet for non-VMSS IP config when DisableAvailabilitySetNodes is true",
 			ipConfigurationID:           "anyID",
+			DisableAvailabilitySetNodes: true,
+			EnableVmssFlexNodes:         false,
+			vmListErr:                   nil,
+			expectedVMManagementType:    ManagedByAvSet,
+			expectedErr:                 nil,
+		},
+		{
+			description:                 "getVMManagementTypeByIPConfigurationID should return ManagedByVmssUniform for VMSS IP config when DisableAvailabilitySetNodes is true",
+			ipConfigurationID:           "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0/networkInterfaces/nic/ipConfigurations/ipconfig",
 			DisableAvailabilitySetNodes: true,
 			EnableVmssFlexNodes:         false,
 			vmListErr:                   nil,

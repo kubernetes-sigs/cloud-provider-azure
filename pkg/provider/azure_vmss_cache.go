@@ -490,7 +490,12 @@ func (ss *ScaleSet) getVMManagementTypeByProviderID(ctx context.Context, provide
 //  4. If the VM name obtained from step 3 is in the VMAS cache, returns availability set. Or, returns vmss flex.
 func (ss *ScaleSet) getVMManagementTypeByIPConfigurationID(ctx context.Context, ipConfigurationID string, crt azcache.AzureCacheReadType) (VMManagementType, error) {
 	if ss.DisableAvailabilitySetNodes && !ss.EnableVmssFlexNodes {
-		return ManagedByVmssUniform, nil
+		// Check if the IP configuration actually belongs to a VMSS instance.
+		// Standalone VMs (e.g., Karpenter) should not be short-circuited here.
+		if _, _, err := getScaleSetAndResourceGroupNameByIPConfigurationID(ipConfigurationID); err == nil {
+			return ManagedByVmssUniform, nil
+		}
+		return ManagedByAvSet, nil
 	}
 
 	_, _, err := getScaleSetAndResourceGroupNameByIPConfigurationID(ipConfigurationID)
