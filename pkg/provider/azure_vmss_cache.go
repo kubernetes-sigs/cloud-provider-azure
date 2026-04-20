@@ -450,12 +450,16 @@ func (ss *ScaleSet) getVMManagementTypeByNodeName(ctx context.Context, nodeName 
 }
 
 func (ss *ScaleSet) getVMManagementTypeByProviderID(ctx context.Context, providerID string, crt azcache.AzureCacheReadType) (VMManagementType, error) {
-	if ss.DisableAvailabilitySetNodes && !ss.EnableVmssFlexNodes {
-		return ManagedByVmssUniform, nil
-	}
+	// First check if the providerID matches VMSS format.
 	_, err := extractScaleSetNameByProviderID(providerID)
 	if err == nil {
 		return ManagedByVmssUniform, nil
+	}
+
+	// The providerID is not a VMSS instance (e.g., standalone VM created by Karpenter).
+	// Route to availability set handler which also handles standalone VMs.
+	if ss.DisableAvailabilitySetNodes && !ss.EnableVmssFlexNodes {
+		return ManagedByAvSet, nil
 	}
 
 	ss.lockMap.LockEntry(consts.VMManagementTypeLockKey)
