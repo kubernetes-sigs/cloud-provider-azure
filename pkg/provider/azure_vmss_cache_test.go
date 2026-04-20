@@ -203,7 +203,7 @@ func TestGetVMManagementTypeByNodeName(t *testing.T) {
 			expectedErr:              nil,
 		},
 		{
-			description:                 "getVMManagementTypeByNodeName should return ManagedByVmssUniform when DisableAvailabilitySetNodes is true and cache is not initialized",
+			description:                 "getVMManagementTypeByNodeName should return ManagedByVmssUniform if DisableAvailabilitySetNodes is set to true and EnableVmssFlexNodes is set to false",
 			nodeName:                    "anyName",
 			DisableAvailabilitySetNodes: true,
 			EnableVmssFlexNodes:         false,
