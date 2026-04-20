@@ -282,10 +282,6 @@ const (
 	// ServiceAnnotationIPTagsForPublicIP specifies the iptags used when dynamically creating a public ip
 	ServiceAnnotationIPTagsForPublicIP = "service.beta.kubernetes.io/azure-pip-ip-tags"
 
-	// IPTagTypeFirstPartyUsage is the IP tag type for FirstPartyUsage, the only type
-	// that can be mutated in-place on existing public IPs.
-	IPTagTypeFirstPartyUsage = "FirstPartyUsage"
-
 	// ServiceAnnotationAllowedServiceTags is the annotation used on the service
 	// to specify a list of allowed service tags separated by comma
 	// Refer https://docs.microsoft.com/en-us/azure/virtual-network/security-overview#service-tags for all supported service tags.
