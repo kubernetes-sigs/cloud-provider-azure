@@ -4638,6 +4638,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 		existingPIPs                []*armnetwork.PublicIPAddress
 		wantLb                      bool
 		enableIPTagMutation         bool
+		createOrUpdateErr           error
 		expectedIDs                 []string
 		expectedPIPs                []*armnetwork.PublicIPAddress // len(expectedPIPs) <= 2
 		expectedError               bool
@@ -5173,7 +5174,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 			expectedClientGet:           &getPIPAddMissingOne,
 		},
 		{
-			desc:                "config on + FPU mismatch should update in-place without delete",
+			desc:                "mutation enabled + FirstPartyUsage mismatch should update in-place without delete",
 			wantLb:              true,
 			enableIPTagMutation: true,
 			annotations: map[string]string{
@@ -5233,7 +5234,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 			expectedDeleteCount:         0,
 		},
 		{
-			desc:                "config off + IP tag mismatch should delete and recreate",
+			desc:                "mutation disabled + IP tag mismatch should delete and recreate",
 			wantLb:              true,
 			enableIPTagMutation: false,
 			annotations: map[string]string{
@@ -5279,9 +5280,10 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 			expectedClientGet: &deleteUnwantedPIPsAndCreateANewOneclientGet,
 		},
 		{
-			desc:                "config on + RP mismatch should return error",
+			desc:                "mutation enabled + non-FirstPartyUsage (RoutingPreference) mismatch should return Azure error after attempted PUT",
 			wantLb:              true,
 			enableIPTagMutation: true,
+			createOrUpdateErr:   errors.New("azure rejected iptags mutation"),
 			annotations: map[string]string{
 				consts.ServiceAnnotationIPTagsForPublicIP: "RoutingPreference=Invalid",
 			},
@@ -5313,7 +5315,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				},
 			},
 			expectedError:               true,
-			expectedCreateOrUpdateCount: 0,
+			expectedCreateOrUpdateCount: 1,
 			expectedDeleteCount:         0,
 		},
 	}
@@ -5327,6 +5329,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 			deleteCallTracker := make(map[string]int)
 			savedPips := make(map[string]*armnetwork.PublicIPAddress)
 			createOrUpdateCount := 0
+			primingExistingPIPs := true
 			var m sync.Mutex
 			az := GetTestCloud(ctrl)
 			az.EnableIPTagMutationForExistingPublicIP = test.enableIPTagMutation
@@ -5338,7 +5341,10 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				savedPips[publicIPAddressName] = &parameters
 				createOrUpdateCount++
 				m.Unlock()
-				return nil, nil
+				if primingExistingPIPs {
+					return nil, nil
+				}
+				return nil, test.createOrUpdateErr
 			})
 
 			if test.expectedClientGet != nil {
@@ -5376,6 +5382,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				// Clear create or update count to prepare for main execution
 				createOrUpdateCount = 0
 			}
+			primingExistingPIPs = false
 			lister := mockPIPsClient.EXPECT().List(gomock.Any(), "rg").AnyTimes()
 			lister.DoAndReturn(func(_ context.Context, _ string) (result []*armnetwork.PublicIPAddress, rerr error) {
 				m.Lock()
@@ -5570,6 +5577,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 		enableIPTagMutation     bool
 		shouldPutPIP            bool
 		assertPutPIPCalled      bool
+		putErr                  error
 		expectedError           bool
 	}{
 		{
@@ -5811,7 +5819,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			shouldPutPIP: true,
 		},
 		{
-			desc:                "shall update existed PIP IP tags in place before the dns short-circuit",
+			desc:                "shall update IP tags in place even when DNS label already matches",
 			pipName:             "pip1",
 			inputDNSLabel:       "test",
 			enableIPTagMutation: true,
@@ -6026,7 +6034,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			},
 		},
 		{
-			desc:                "config on + FPU mismatch should update PIP in-place",
+			desc:                "mutation enabled + FirstPartyUsage mismatch should update PIP in-place",
 			pipName:             "pip1",
 			enableIPTagMutation: true,
 			existingPIPs: []*armnetwork.PublicIPAddress{{
@@ -6048,7 +6056,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			expectedID:         expectedPIPID,
 		},
 		{
-			desc:                "config on + RP mismatch should return error",
+			desc:                "mutation enabled + non-FirstPartyUsage (RoutingPreference) mismatch should return Azure error after attempted PUT",
 			pipName:             "pip1",
 			enableIPTagMutation: true,
 			existingPIPs: []*armnetwork.PublicIPAddress{{
@@ -6065,7 +6073,10 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			additionalAnnotations: map[string]string{
 				consts.ServiceAnnotationIPTagsForPublicIP: "RoutingPreference=Invalid",
 			},
-			expectedError: true,
+			shouldPutPIP:       true,
+			assertPutPIPCalled: true,
+			putErr:             errors.New("azure rejected iptags mutation"),
+			expectedError:      true,
 		},
 	}
 
@@ -6089,7 +6100,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					} else {
 						test.existingPIPs = append(test.existingPIPs, &parameters)
 					}
-					return nil, nil
+					return nil, test.putErr
 				}).AnyTimes()
 			}
 			mockPIPsClient.EXPECT().Get(gomock.Any(), "rg", test.pipName, gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ string, _ *string) (*armnetwork.PublicIPAddress, error) {
@@ -6957,12 +6968,10 @@ func TestEnsurePIPIPTagged(t *testing.T) {
 		annotations     map[string]string
 		inputPIP        armnetwork.PublicIPAddress
 		expectedChanged bool
-		expectedErrMsg  string
 		expectedIPTags  []*armnetwork.IPTag
 	}{
 		{
-			// #1: config off — no-op regardless of annotation/tags
-			desc:           "config off should be no-op",
+			desc:           "mutation disabled should be no-op",
 			enableMutation: false,
 			annotations: map[string]string{
 				consts.ServiceAnnotationIPTagsForPublicIP: "FirstPartyUsage=/Unprivileged",
@@ -6976,8 +6985,7 @@ func TestEnsurePIPIPTagged(t *testing.T) {
 			expectedIPTags:  []*armnetwork.IPTag{newIPTag("FirstPartyUsage", "/NonProd")},
 		},
 		{
-			// #2: config on, annotation absent — no-op
-			desc:            "config on annotation absent should be no-op",
+			desc:            "mutation enabled annotation absent should be no-op",
 			enableMutation:  true,
 			annotations:     map[string]string{},
 			inputPIP:        armnetwork.PublicIPAddress{Properties: &armnetwork.PublicIPAddressPropertiesFormat{}},
@@ -6985,8 +6993,7 @@ func TestEnsurePIPIPTagged(t *testing.T) {
 			expectedIPTags:  nil,
 		},
 		{
-			// #3: config on, FPU match
-			desc:           "config on FPU tags match should be no-op",
+			desc:           "mutation enabled FirstPartyUsage tags match should be no-op",
 			enableMutation: true,
 			annotations: map[string]string{
 				consts.ServiceAnnotationIPTagsForPublicIP: "FirstPartyUsage=/NonProd",
@@ -7000,8 +7007,7 @@ func TestEnsurePIPIPTagged(t *testing.T) {
 			expectedIPTags:  []*armnetwork.IPTag{newIPTag("FirstPartyUsage", "/NonProd")},
 		},
 		{
-			// #4: config on, FPU mismatch — updated
-			desc:           "config on FPU tags mismatch should update",
+			desc:           "mutation enabled FirstPartyUsage tags mismatch should update",
 			enableMutation: true,
 			annotations: map[string]string{
 				consts.ServiceAnnotationIPTagsForPublicIP: "FirstPartyUsage=/Unprivileged",
@@ -7015,25 +7021,21 @@ func TestEnsurePIPIPTagged(t *testing.T) {
 			expectedIPTags:  []*armnetwork.IPTag{newIPTag("FirstPartyUsage", "/Unprivileged")},
 		},
 		{
-			// #5: config on, invalid RP change attempt — error
-			desc:           "config on RoutingPreference invalid change attempt should error",
+			desc:           "mutation enabled non-FirstPartyUsage drop should pass through",
 			enableMutation: true,
 			annotations: map[string]string{
-				consts.ServiceAnnotationIPTagsForPublicIP: "RoutingPreference=Invalid",
+				consts.ServiceAnnotationIPTagsForPublicIP: "FirstPartyUsage=/NonProd",
 			},
 			inputPIP: armnetwork.PublicIPAddress{
-				Name: ptr.To("testPIP"),
 				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 					IPTags: []*armnetwork.IPTag{newIPTag("RoutingPreference", "Internet")},
 				},
 			},
-			expectedChanged: false,
-			expectedErrMsg:  `cannot mutate IP tag type "RoutingPreference" on existing PIP "testPIP"`,
-			expectedIPTags:  []*armnetwork.IPTag{newIPTag("RoutingPreference", "Internet")},
+			expectedChanged: true,
+			expectedIPTags:  []*armnetwork.IPTag{newIPTag("FirstPartyUsage", "/NonProd")},
 		},
 		{
-			// #6: config on, empty annotation clears FPU tags
-			desc:           "config on empty annotation clears FPU tags",
+			desc:           "mutation enabled empty annotation clears FirstPartyUsage tags",
 			enableMutation: true,
 			annotations: map[string]string{
 				consts.ServiceAnnotationIPTagsForPublicIP: "",
@@ -7047,8 +7049,7 @@ func TestEnsurePIPIPTagged(t *testing.T) {
 			expectedIPTags:  []*armnetwork.IPTag{},
 		},
 		{
-			// #7: config on, nil Properties with FPU annotation — no-op
-			desc:           "config on nil Properties should be no-op",
+			desc:           "mutation enabled nil Properties should be no-op",
 			enableMutation: true,
 			annotations: map[string]string{
 				consts.ServiceAnnotationIPTagsForPublicIP: "FirstPartyUsage=/NonProd",
@@ -7058,21 +7059,60 @@ func TestEnsurePIPIPTagged(t *testing.T) {
 			expectedIPTags:  nil,
 		},
 		{
-			// #8: config on, new non-FPU tag — error
-			desc:           "config on new non-FPU tag should error",
+			desc:           "mutation enabled non-FirstPartyUsage value change should pass through",
+			enableMutation: true,
+			annotations: map[string]string{
+				consts.ServiceAnnotationIPTagsForPublicIP: "RoutingPreference=Microsoft",
+			},
+			inputPIP: armnetwork.PublicIPAddress{
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					IPTags: []*armnetwork.IPTag{newIPTag("RoutingPreference", "Internet")},
+				},
+			},
+			expectedChanged: true,
+			expectedIPTags:  []*armnetwork.IPTag{newIPTag("RoutingPreference", "Microsoft")},
+		},
+		{
+			desc:           "mutation enabled new non-FirstPartyUsage tag should pass through",
 			enableMutation: true,
 			annotations: map[string]string{
 				consts.ServiceAnnotationIPTagsForPublicIP: "RoutingPreference=Internet",
 			},
 			inputPIP: armnetwork.PublicIPAddress{
-				Name: ptr.To("testPIP"),
 				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 					IPTags: []*armnetwork.IPTag{},
 				},
 			},
+			expectedChanged: true,
+			expectedIPTags:  []*armnetwork.IPTag{newIPTag("RoutingPreference", "Internet")},
+		},
+		{
+			desc:           "mutation enabled equivalent non-FirstPartyUsage tags should be no-op",
+			enableMutation: true,
+			annotations: map[string]string{
+				consts.ServiceAnnotationIPTagsForPublicIP: "RoutingPreference=Internet",
+			},
+			inputPIP: armnetwork.PublicIPAddress{
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					IPTags: []*armnetwork.IPTag{newIPTag("RoutingPreference", "Internet")},
+				},
+			},
 			expectedChanged: false,
-			expectedErrMsg:  `cannot mutate IP tag type "RoutingPreference" on existing PIP "testPIP"`,
-			expectedIPTags:  []*armnetwork.IPTag{},
+			expectedIPTags:  []*armnetwork.IPTag{newIPTag("RoutingPreference", "Internet")},
+		},
+		{
+			desc:           "mutation enabled new FirstPartyUsage tag should update",
+			enableMutation: true,
+			annotations: map[string]string{
+				consts.ServiceAnnotationIPTagsForPublicIP: "FirstPartyUsage=/NonProd",
+			},
+			inputPIP: armnetwork.PublicIPAddress{
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					IPTags: []*armnetwork.IPTag{},
+				},
+			},
+			expectedChanged: true,
+			expectedIPTags:  []*armnetwork.IPTag{newIPTag("FirstPartyUsage", "/NonProd")},
 		},
 	}
 
@@ -7090,14 +7130,7 @@ func TestEnsurePIPIPTagged(t *testing.T) {
 
 			changed, err := cloud.ensurePIPIPTagged(&service, &pip)
 
-			if tc.expectedErrMsg != "" {
-				assert.Error(t, err)
-				if err != nil {
-					assert.Contains(t, err.Error(), tc.expectedErrMsg)
-				}
-			} else {
-				assert.NoError(t, err)
-			}
+			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedChanged, changed)
 			if pip.Properties == nil {
 				assert.Nil(t, tc.expectedIPTags)

@@ -150,6 +150,50 @@ func TestListPIP(t *testing.T) {
 	}
 }
 
+func TestListPIPReturnsDeepCopy(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	az := GetTestCloud(ctrl)
+	original := &armnetwork.PublicIPAddress{
+		Name: ptr.To("pip1"),
+		Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+			IPTags: []*armnetwork.IPTag{
+				{
+					IPTagType: ptr.To("FirstPartyUsage"),
+					Tag:       ptr.To("/NonProd"),
+				},
+			},
+		},
+	}
+
+	pipCache := &sync.Map{}
+	pipCache.Store(ptr.Deref(original.Name, ""), original)
+	az.pipCache.Set(az.ResourceGroup, pipCache)
+
+	first, err := az.listPIP(context.TODO(), az.ResourceGroup, azcache.CacheReadTypeDefault)
+	assert.NoError(t, err)
+	if assert.Len(t, first, 1) {
+		first[0].Properties.IPTags = []*armnetwork.IPTag{
+			{
+				IPTagType: ptr.To("FirstPartyUsage"),
+				Tag:       ptr.To("/Unprivileged"),
+			},
+		}
+	}
+
+	second, err := az.listPIP(context.TODO(), az.ResourceGroup, azcache.CacheReadTypeDefault)
+	assert.NoError(t, err)
+	if assert.Len(t, second, 1) && assert.NotNil(t, second[0].Properties) {
+		assert.Equal(t, []*armnetwork.IPTag{
+			{
+				IPTagType: ptr.To("FirstPartyUsage"),
+				Tag:       ptr.To("/NonProd"),
+			},
+		}, second[0].Properties.IPTags)
+	}
+}
+
 func TestGetPublicIPAddress(t *testing.T) {
 
 	tests := []struct {

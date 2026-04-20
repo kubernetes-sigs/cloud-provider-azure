@@ -159,7 +159,9 @@ func (az *Cloud) listPIP(ctx context.Context, pipResourceGroup string, crt azcac
 	var ret []*armnetwork.PublicIPAddress
 	pips.Range(func(_, value interface{}) bool {
 		pip := value.(*armnetwork.PublicIPAddress)
-		ret = append(ret, pip)
+		// Deep-copy so callers cannot mutate the cache via the returned slice.
+		// This mirrors getPublicIPAddress and keeps failed PUTs from poisoning the cache.
+		ret = append(ret, deepcopy.Copy(pip).(*armnetwork.PublicIPAddress))
 		return true
 	})
 	return ret, nil
