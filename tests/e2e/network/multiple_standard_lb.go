@@ -23,8 +23,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
-
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -325,7 +323,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			}
 
 			By("Verifying first FIP has all services' rules")
-			err := verifyFIPHasRulesForPorts(tc, firstFIPID, servicePorts, "TCP")
+			err := utils.VerifyFIPHasRulesForPorts(tc, firstFIPID, servicePorts, "TCP")
 			Expect(err).NotTo(HaveOccurred(), "First FIP should have rules for all services sharing the IP")
 		},
 		Entry("external with user-assigned PIP", "external-user-pip"),
@@ -453,7 +451,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 				}
 
 				By("Verifying primary service is still working")
-				err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort), "TCP")
+				err = utils.VerifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort), "TCP")
 				Expect(err).NotTo(HaveOccurred(), "Primary service should still have its rule")
 
 				allPorts := sets.New(primaryPort)
@@ -470,7 +468,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 				}
 
 				By("Verifying primary FIP has rules for all services")
-				err = verifyFIPHasRulesForPorts(tc, primaryFIPID, allPorts, "TCP")
+				err = utils.VerifyFIPHasRulesForPorts(tc, primaryFIPID, allPorts, "TCP")
 				Expect(err).NotTo(HaveOccurred(), "Primary FIP should have rules for all services sharing the IP")
 
 				By("Adding LB annotation to " + svcNameIPv4 + " while it still shares IP, expecting blocked")
@@ -514,7 +512,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 					Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should be reconciled after re-adding IP and removing LB annotation")
 
 					By("Verifying primary FIP still has rules for all services")
-					err = verifyFIPHasRulesForPorts(tc, primaryFIPID, allPorts, "TCP")
+					err = utils.VerifyFIPHasRulesForPorts(tc, primaryFIPID, allPorts, "TCP")
 					Expect(err).NotTo(HaveOccurred(), "Primary FIP should still have rules for all services sharing the IP")
 				} else {
 					By("Waiting for " + svcNameIPv4 + " to get a new IP on " + targetLBAnnotation)
@@ -525,11 +523,11 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 
 					By("Verifying primary FIP no longer has " + svcNameIPv4 + "'s rules")
 					remainingPorts := allPorts.Difference(sets.New(svcIPv4Port))
-					err = verifyFIPHasRulesForPorts(tc, primaryFIPID, remainingPorts, "TCP")
+					err = utils.VerifyFIPHasRulesForPorts(tc, primaryFIPID, remainingPorts, "TCP")
 					Expect(err).NotTo(HaveOccurred(), "Primary FIP should only have remaining services' rules")
 
 					By("Verifying " + svcNameIPv4 + " has rules on the new FIP")
-					err = verifyFIPHasRulesForPorts(tc, newFIPID, sets.New(svcIPv4Port), "TCP")
+					err = utils.VerifyFIPHasRulesForPorts(tc, newFIPID, sets.New(svcIPv4Port), "TCP")
 					Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should have its rule on the new FIP")
 				}
 			},
@@ -587,7 +585,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 				Expect(err).NotTo(HaveOccurred())
 
 				By("Verifying both services share the same FIP")
-				err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, secondaryPort), "TCP")
+				err = utils.VerifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, secondaryPort), "TCP")
 				Expect(err).NotTo(HaveOccurred())
 
 				By("Primary service changes LB annotation to lb-1, expecting blocked")
@@ -602,7 +600,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 				Expect(err).NotTo(HaveOccurred(), "Expected warning event for primary service trying to move")
 
 				By("Verifying both services still share IP on original LB")
-				err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, secondaryPort), "TCP")
+				err = utils.VerifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, secondaryPort), "TCP")
 				Expect(err).NotTo(HaveOccurred(), "Services should still share IP on original LB")
 
 				By("Primary service removes LB annotation")
@@ -613,7 +611,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 				Expect(err).NotTo(HaveOccurred())
 
 				By("Verifying primary FIP still has rules for all services after removing LB annotation")
-				err = verifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, secondaryPort), "TCP")
+				err = utils.VerifyFIPHasRulesForPorts(tc, primaryFIPID, sets.New(primaryPort, secondaryPort), "TCP")
 				Expect(err).NotTo(HaveOccurred(), "Services should still share IP after removing LB annotation")
 			},
 			Entry("external", false),
@@ -717,7 +715,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 				Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event for "+svcNameIPv4)
 
 				By("Verifying Service 1 is still working")
-				err = verifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port), "TCP")
+				err = utils.VerifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port), "TCP")
 				Expect(err).NotTo(HaveOccurred(), "Service 1 should still have its rule")
 
 				By("Service 2 removes IP annotation instead, keeping LB annotation")
@@ -735,11 +733,11 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 				By("Verifying Service 2 stays on its original LB with its original IP")
 				_, err = utils.WaitServiceExposure(cs, ns.Name, svcNameIPv4, []*string{&svc2IP})
 				Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should stay on its original LB after removing IP annotation")
-				err = verifyFIPHasRulesForPorts(tc, svc2OldFIPID, sets.New(svc2Port), "TCP")
+				err = utils.VerifyFIPHasRulesForPorts(tc, svc2OldFIPID, sets.New(svc2Port), "TCP")
 				Expect(err).NotTo(HaveOccurred(), "Service 2 should still have its rule on its original FIP")
 
 				By("Verifying Service 1 is unaffected")
-				err = verifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port), "TCP")
+				err = utils.VerifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port), "TCP")
 				Expect(err).NotTo(HaveOccurred(), "Service 1 should still have its rule")
 
 				By("Service 2 adds back IP annotation, expecting conflict again")
@@ -762,11 +760,11 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 				Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should be exposed after removing LB config")
 
 				By("Verifying primary FIP has rules for all services")
-				err = verifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port, svc2Port), "TCP")
+				err = utils.VerifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port, svc2Port), "TCP")
 				Expect(err).NotTo(HaveOccurred(), "Both services should share IP on the primary LB")
 
 				By("Verifying Service 2's old FIP has no rules for its port")
-				err = verifyFIPHasNoRulesForPorts(tc, svc2OldFIPID, sets.New(svc2Port), "TCP")
+				err = utils.VerifyFIPHasNoRulesForPorts(tc, svc2OldFIPID, sets.New(svc2Port), "TCP")
 				Expect(err).NotTo(HaveOccurred(), "Service 2's old FIP should have no rules after moving")
 			},
 			Entry("external with user-assigned PIP", "external-user-pip"),
@@ -849,7 +847,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 				Expect(err).NotTo(HaveOccurred())
 
 				By("Verifying both services have rules on the shared FIP")
-				err = verifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port, svc2Port), "TCP")
+				err = utils.VerifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port, svc2Port), "TCP")
 				Expect(err).NotTo(HaveOccurred(), "Both services should share the FIP")
 
 				By("Deleting Service 1")
@@ -857,7 +855,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 				Expect(err).NotTo(HaveOccurred())
 
 				By("Verifying FIP still has Service 2's rules but not Service 1's")
-				err = verifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc2Port), "TCP")
+				err = utils.VerifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc2Port), "TCP")
 				Expect(err).NotTo(HaveOccurred(), "FIP should retain Service 2's rules after Service 1 deletion")
 
 				targetLBAnnotation := "lb-1"
@@ -892,7 +890,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 				}
 
 				By("Verifying old FIP is removed")
-				err = verifyFIPRemoved(tc, svc1FIPID)
+				err = utils.VerifyFIPRemoved(tc, svc1FIPID)
 				Expect(err).NotTo(HaveOccurred(), "FIP should be removed after last service moved away")
 
 				if useUserPIP {
@@ -977,7 +975,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Expect(err).NotTo(HaveOccurred(), svcNameIPv4+" should be exposed after adding label")
 
 			By("Verifying FIP has rules for both services")
-			err = verifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port, svc2Port), "TCP")
+			err = utils.VerifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port, svc2Port), "TCP")
 			Expect(err).NotTo(HaveOccurred(), "Both services should share the FIP on lb-2")
 		})
 	})
@@ -1048,163 +1046,11 @@ func getLBsFromPublicIPs(tc *utils.AzureTestClient, pips []*string) sets.Set[str
 	return lbNames
 }
 
-// verifyFIPRemoved checks that the specified frontend IP configuration no longer exists on the LB.
-// Returns nil if the FIP is gone (or the entire LB is gone). Returns an error if the FIP still exists.
-func verifyFIPRemoved(tc *utils.AzureTestClient, fipID string) error {
-	if fipID == "" {
-		return fmt.Errorf("empty FIP ID")
-	}
-
-	match := lbNameRE.FindStringSubmatch(fipID)
-	if len(match) != 2 {
-		return fmt.Errorf("could not parse LB name from FIP ID: %s", fipID)
-	}
-	lbName := match[1]
-
-	lb, err := tc.GetLoadBalancer(tc.GetResourceGroup(), lbName)
-	if err != nil {
-		if strings.Contains(err.Error(), "NotFound") {
-			utils.Logf("LB %s not found, FIP %s is removed", lbName, fipID)
-			return nil
-		}
-		return fmt.Errorf("failed to get load balancer %s: %w", lbName, err)
-	}
-
-	if lb.Properties != nil && lb.Properties.FrontendIPConfigurations != nil {
-		for _, fip := range lb.Properties.FrontendIPConfigurations {
-			if strings.EqualFold(ptr.Deref(fip.ID, ""), fipID) {
-				var ruleIDs []string
-				if fip.Properties != nil {
-					for _, r := range fip.Properties.LoadBalancingRules {
-						ruleIDs = append(ruleIDs, ptr.Deref(r.ID, "<unknown>"))
-					}
-				}
-				return fmt.Errorf("FIP %s still exists on LB %s with rules %v", fipID, lbName, ruleIDs)
-			}
-		}
-	}
-
-	utils.Logf("FIP %s has been removed from LB %s", fipID, lbName)
-	return nil
-}
-
-// getFIPRulePorts returns all ports that have load balancing rules for the given FIP and protocol.
-// Returns (ports, lbExists, error). If lbExists is false, the LB doesn't exist (ports will be empty).
-func getFIPRulePorts(tc *utils.AzureTestClient, fipID string, protocol string) (sets.Set[int32], bool, error) {
-	if fipID == "" {
-		return nil, false, fmt.Errorf("empty FIP ID")
-	}
-
-	// Extract LB name from FIP ID.
-	match := lbNameRE.FindStringSubmatch(fipID)
-	if len(match) != 2 {
-		return nil, false, fmt.Errorf("could not parse LB name from FIP ID: %s", fipID)
-	}
-	lbName := match[1]
-
-	lb, err := tc.GetLoadBalancer(tc.GetResourceGroup(), lbName)
-	if err != nil {
-		errStr := err.Error()
-		if strings.Contains(errStr, "NotFound") {
-			return sets.New[int32](), false, nil
-		}
-		return nil, false, fmt.Errorf("failed to get load balancer %s: %w", lbName, err)
-	}
-
-	// Find all rules that reference the target FIP ID with matching protocol.
-	ports := sets.New[int32]()
-	if lb.Properties != nil && lb.Properties.LoadBalancingRules != nil {
-		for _, rule := range lb.Properties.LoadBalancingRules {
-			if rule.Properties == nil || rule.Properties.FrontendIPConfiguration == nil {
-				continue
-			}
-			ruleFIPID := ptr.Deref(rule.Properties.FrontendIPConfiguration.ID, "")
-			if !strings.EqualFold(ruleFIPID, fipID) {
-				continue
-			}
-
-			rulePort := ptr.Deref(rule.Properties.FrontendPort, 0)
-			ruleProtocol := string(ptr.Deref(rule.Properties.Protocol, ""))
-
-			if strings.EqualFold(ruleProtocol, protocol) {
-				utils.Logf("Found rule %q for port %d/%s on FIP", ptr.Deref(rule.Name, ""), rulePort, ruleProtocol)
-				ports.Insert(rulePort)
-			}
-		}
-	}
-
-	return ports, true, nil
-}
-
-// verifyFIPHasRulesForPorts checks that the specified frontend IP config has rules for exactly all expected ports.
-func verifyFIPHasRulesForPorts(tc *utils.AzureTestClient, fipID string, expectedPorts sets.Set[int32], protocol string) error {
-	utils.Logf("Verifying FIP ID %q has rules for ports %v", fipID, expectedPorts.UnsortedList())
-
-	actualPorts, lbExists, err := getFIPRulePorts(tc, fipID, protocol)
-	if err != nil {
-		return err
-	}
-	if !lbExists {
-		return fmt.Errorf("load balancer for FIP %q does not exist", fipID)
-	}
-
-	// Check for exact match.
-	missingPorts := expectedPorts.Difference(actualPorts)
-	extraPorts := actualPorts.Difference(expectedPorts)
-
-	if missingPorts.Len() > 0 || extraPorts.Len() > 0 {
-		return fmt.Errorf("FIP %q port mismatch: missing=%v, extra=%v, expected=%v, actual=%v",
-			fipID, missingPorts.UnsortedList(), extraPorts.UnsortedList(),
-			expectedPorts.UnsortedList(), actualPorts.UnsortedList())
-	}
-
-	utils.Logf("FIP %q has exactly the expected rules for ports %v", fipID, expectedPorts.UnsortedList())
-	return nil
-}
-
-// verifyFIPHasNoRulesForPorts checks that the specified frontend IP config has no rules for the specified ports.
-// If the LB does not exist, that counts as success (no rules).
-func verifyFIPHasNoRulesForPorts(tc *utils.AzureTestClient, fipID string, absentPorts sets.Set[int32], protocol string) error {
-	utils.Logf("Verifying FIP ID %q has NO rules for ports %v", fipID, absentPorts.UnsortedList())
-
-	actualPorts, lbExists, err := getFIPRulePorts(tc, fipID, protocol)
-	if err != nil {
-		return err
-	}
-	if !lbExists {
-		utils.Logf("LB for FIP %q not found, treating as no rules", fipID)
-		return nil
-	}
-
-	// Check no intersection.
-	foundPorts := absentPorts.Intersection(actualPorts)
-	if foundPorts.Len() > 0 {
-		return fmt.Errorf("FIP %q still has rules for ports %v", fipID, foundPorts.UnsortedList())
-	}
-
-	utils.Logf("FIP %q has no rules for ports %v (as expected)", fipID, absentPorts.UnsortedList())
-	return nil
-}
-
-// getFIPIDForPrivateIP finds the frontend IP configuration ID for a given private IP.
-func getFIPIDForPrivateIP(lb *armnetwork.LoadBalancer, privateIP string) string {
-	if lb.Properties == nil || lb.Properties.FrontendIPConfigurations == nil {
-		return ""
-	}
-	for _, fip := range lb.Properties.FrontendIPConfigurations {
-		if fip.Properties != nil && fip.Properties.PrivateIPAddress != nil {
-			if *fip.Properties.PrivateIPAddress == privateIP {
-				return ptr.Deref(fip.ID, "")
-			}
-		}
-	}
-	return ""
-}
-
+// getFIPIDAndLBName returns the frontend IP configuration ID and load balancer name for the given IP.
 func getFIPIDAndLBName(tc *utils.AzureTestClient, ip string, isInternal bool) (fipID, lbName string) {
 	if isInternal {
 		lb := getAzureInternalLoadBalancerFromPrivateIP(tc, &ip, tc.GetResourceGroup())
-		return getFIPIDForPrivateIP(lb, ip), ptr.Deref(lb.Name, "")
+		return utils.GetFIPIDForPrivateIP(lb, ip), ptr.Deref(lb.Name, "")
 	}
 	fipID = getPIPFrontendConfigurationID(tc, ip, tc.GetResourceGroup(), true)
 	lb := getAzureLoadBalancerFromPIP(tc, &ip, tc.GetResourceGroup(), tc.GetResourceGroup())
