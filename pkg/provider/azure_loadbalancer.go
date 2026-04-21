@@ -793,7 +793,7 @@ func (az *Cloud) getServiceLoadBalancer(
 	isInternal := requiresInternalLoadBalancer(service)
 	var defaultLB *armnetwork.LoadBalancer
 	primaryVMSetName := az.VMSet.GetPrimaryVMSetName()
-	defaultLBName, err := az.getAzureLoadBalancerName(ctx, service, existingLBs, clusterName, primaryVMSetName, isInternal)
+	defaultLBName, err := az.getAzureLoadBalancerName(ctx, service, existingLBs, clusterName, primaryVMSetName, isInternal, wantLb)
 	if err != nil {
 		return nil, nil, nil, nil, false, false, err
 	}
@@ -807,10 +807,20 @@ func (az *Cloud) getServiceLoadBalancer(
 		existingLBs = lbs
 	}
 
+	// A service must use the LB that owns its IP. In IP-pinned multi-SLB scenario,
+	// The service may currently exist on a different LB needing migration,
+	// so all LBs should be scanned instead of returning on the first match.
+	lbIPs := getServiceLoadBalancerIPs(service)
+	pipNames := getServicePIPNames(service)
+	pinsIP := len(lbIPs) > 0 || len(pipNames) > 0
+	isPinnedIPMultiSLB := wantLb && az.UseMultipleStandardLoadBalancers() && pinsIP
+	var defaultLBStatus *v1.LoadBalancerStatus
+	var defaultLBIPsPrimaryPIPs []string
+
 	// check if the service already has a load balancer
 	var shouldChangeLB bool
-	for i := range existingLBs {
-		existingLB := (existingLBs)[i]
+	for i := len(existingLBs) - 1; i >= 0; i-- {
+		existingLB := existingLBs[i]
 
 		if strings.EqualFold(*existingLB.Name, defaultLBName) {
 			defaultLB = existingLB
@@ -825,7 +835,55 @@ func (az *Cloud) getServiceLoadBalancer(
 			return nil, nil, nil, nil, false, false, err
 		}
 		if status == nil {
-			// service is not on this load balancer
+			// Service is not on this LB by frontend IP ownership.
+			// However, if multi-SLB is enabled and the service should move to a
+			// different LB, the old LB may still have stale rules/probes left
+			// from when the service shared a frontend IP. Remove them to
+			// prevent orphaned rules and probes on the old LB.
+			if wantLb && az.UseMultipleStandardLoadBalancers() &&
+				az.shouldChangeLoadBalancer(service, ptr.Deref(existingLB.Name, ""), clusterName, defaultLBName) &&
+				az.lbHasServiceOwnedResources(existingLB, service) {
+
+				deletedLBName, deletedPLS, err := az.removeStaleServiceLBResources(ctx, existingLB, existingLBs, clusterName, service)
+				if err != nil {
+					return nil, nil, nil, nil, false, false, fmt.Errorf("remove stale service resources from load balancer %q for service %q: %w",
+						ptr.Deref(existingLB.Name, ""), getServiceName(service), err)
+				}
+				if deletedPLS {
+					return nil, nil, nil, nil, false, true, nil
+				}
+				logger.V(2).Info("Removed stale service resources from old load balancer",
+					"service", service.Name,
+					"oldLB", ptr.Deref(existingLB.Name, ""),
+					"targetLB", defaultLBName,
+				)
+
+				if deletedLBName != "" {
+					removeLBFromList(&existingLBs, deletedLBName)
+				}
+
+				az.reconcileMultipleStandardLoadBalancerConfigurationStatus(
+					false,
+					getServiceName(service),
+					ptr.Deref(existingLB.Name, ""),
+				)
+
+				// Same backend pool cleanup as the normal LB migration path below.
+				if isLocalService(service) {
+					svcName := getServiceName(service)
+					if az.backendPoolUpdater != nil {
+						az.backendPoolUpdater.removeOperation(svcName)
+					}
+					if deletedLBName == "" {
+						newLBs, err := az.cleanupLocalServiceBackendPool(ctx, service, nodes, existingLBs, clusterName)
+						if err != nil {
+							return nil, nil, nil, nil, false, false, fmt.Errorf("clean up backend pool for local service %q on load balancer %q: %w",
+								getServiceName(service), ptr.Deref(existingLB.Name, ""), err)
+						}
+						existingLBs = newLBs
+					}
+				}
+			}
 			continue
 		}
 		logger.V(4).Info(
@@ -843,6 +901,24 @@ func (az *Cloud) getServiceLoadBalancer(
 			err           error
 		)
 		if wantLb && az.shouldChangeLoadBalancer(service, ptr.Deref(existingLB.Name, ""), clusterName, defaultLBName) {
+			// Block migration if the frontend IP is unsafe to delete
+			// (shared with other services, or referenced by outbound/NAT rules).
+			if az.UseMultipleStandardLoadBalancers() {
+				for _, fip := range fipConfigs {
+					unsafe, err := az.isFrontendIPConfigUnsafeToDelete(existingLB, service, fip.ID)
+					if err != nil {
+						return nil, nil, nil, nil, false, false, err
+					}
+					if unsafe {
+						return nil, nil, nil, nil, false, false, fmt.Errorf(
+							"service %q cannot migrate from load balancer %q to %q because frontend IP %q is also referenced by other resources; "+
+								"remove the %s annotation to stay on load balancer %q",
+							service.Name, ptr.Deref(existingLB.Name, ""), defaultLBName, ptr.Deref(fip.Name, ""),
+							consts.ServiceAnnotationLoadBalancerConfigurations, ptr.Deref(existingLB.Name, ""))
+					}
+				}
+			}
+
 			shouldChangeLB = true
 			fipConfigNames := []string{}
 			for _, fipConfig := range fipConfigs {
@@ -884,10 +960,25 @@ func (az *Cloud) getServiceLoadBalancer(
 					existingLBs = newLBs
 				}
 			}
+
+			if isPinnedIPMultiSLB {
+				continue
+			}
+
 			break
 		}
 
+		if isPinnedIPMultiSLB {
+			defaultLBStatus = status
+			defaultLBIPsPrimaryPIPs = lbIPsPrimaryPIPs
+			continue
+		}
+
 		return existingLB, existingLBs, status, lbIPsPrimaryPIPs, true, false, nil
+	}
+
+	if isPinnedIPMultiSLB && defaultLB != nil && defaultLBStatus != nil {
+		return defaultLB, existingLBs, defaultLBStatus, defaultLBIPsPrimaryPIPs, true, false, nil
 	}
 
 	// Service does not have a load balancer, select one.
@@ -963,7 +1054,8 @@ func (az *Cloud) selectLoadBalancer(ctx context.Context, clusterName string, ser
 	}
 	selectedLBRuleCount := math.MaxInt32
 	for _, currVMSetName := range vmSetNames {
-		currLBName, _ := az.getAzureLoadBalancerName(ctx, service, existingLBs, clusterName, *currVMSetName, isInternal)
+		// selectLoadBalancer is only called when wantLb=true (see caller check), so pass true for wantLb.
+		currLBName, _ := az.getAzureLoadBalancerName(ctx, service, existingLBs, clusterName, *currVMSetName, isInternal, true /* wantLb */)
 		lb, exists := mapExistingLBs[currLBName]
 		if !exists {
 			// select this LB as this is a new LB and will have minimum rules
@@ -1968,7 +2060,8 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 		dirtyLb = true
 	}
 
-	if changed := az.reconcileLBRules(lb, service, serviceName, wantLb, expectedRules); changed {
+	lbRulesChanged := az.reconcileLBRules(lb, service, serviceName, wantLb, expectedRules)
+	if lbRulesChanged {
 		dirtyLb = true
 	}
 	if changed := az.ensureLoadBalancerTagged(lb); changed {
@@ -2074,7 +2167,12 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 		}
 	}
 
-	if fipChanged {
+	// Update multi-SLB ActiveServices tracking. Two signals indicate a real change:
+	//   - fipChanged: FIP added/removed (service is sole owner of its IP)
+	//   - lbRulesChanged: rules added/removed but FIP kept (shared-IP scenario)
+	// The "flipped" reconcile pass (wantLb=false for the opposite LB type)
+	// triggers neither, so it won't incorrectly remove the service.
+	if fipChanged || (az.UseMultipleStandardLoadBalancers() && lbRulesChanged) {
 		az.reconcileMultipleStandardLoadBalancerConfigurationStatus(wantLb, serviceName, lbName)
 	}
 
@@ -2441,6 +2539,118 @@ func (az *Cloud) recordExistingNodesOnLoadBalancers(clusterName string, lbs []*a
 		}
 	}
 	return nil
+}
+
+// lbHasServiceOwnedResources returns true if any load-balancing rule or
+// probe on the given LB is owned by the service (matched by name prefix).
+// The shared health probe is skipped: if the service uses it, there must
+// also be a service-owned rule referencing it, which the rule check
+// already catches.
+func (az *Cloud) lbHasServiceOwnedResources(lb *armnetwork.LoadBalancer, service *v1.Service) bool {
+	if lb.Properties == nil {
+		return false
+	}
+	for _, rule := range lb.Properties.LoadBalancingRules {
+		if rule.Name != nil && az.serviceOwnsRule(service, *rule.Name) {
+			return true
+		}
+	}
+	for _, probe := range lb.Properties.Probes {
+		if probe.Name != nil &&
+			!strings.EqualFold(*probe.Name, consts.SharedProbeName) &&
+			az.serviceOwnsRule(service, *probe.Name) {
+			return true
+		}
+	}
+	return false
+}
+
+// removeStaleServiceLBResources removes only this service's rules and probes
+// from the old LB. After removal, if any frontend IP configurations that were
+// referenced by the removed rules are now safe to delete (no remaining references
+// from other services), they are also removed. If the LB has no remaining FIPs,
+// it is deleted entirely. Returns the name of the deleted LB (empty if not deleted).
+func (az *Cloud) removeStaleServiceLBResources(
+	ctx context.Context,
+	lb *armnetwork.LoadBalancer,
+	existingLBs []*armnetwork.LoadBalancer,
+	clusterName string,
+	service *v1.Service,
+) (string, bool /* deletedPLS */, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("removeStaleServiceLBResources")
+	serviceName := getServiceName(service)
+
+	// 1. Collect FIP IDs referenced by this service's rules before removal.
+	affectedFIPIDs := utilsets.NewString()
+	if lb.Properties != nil && lb.Properties.LoadBalancingRules != nil {
+		for _, rule := range lb.Properties.LoadBalancingRules {
+			if rule.Name != nil && az.serviceOwnsRule(service, *rule.Name) &&
+				rule.Properties != nil &&
+				rule.Properties.FrontendIPConfiguration != nil &&
+				rule.Properties.FrontendIPConfiguration.ID != nil {
+				affectedFIPIDs.Insert(*rule.Properties.FrontendIPConfiguration.ID)
+			}
+		}
+	}
+
+	// 2. Remove this service's probes and rules from the in-memory LB.
+	dirtyProbes := az.reconcileLBProbes(lb, service, serviceName, false, nil)
+	dirtyRules := az.reconcileLBRules(lb, service, serviceName, false, nil)
+
+	if !dirtyProbes && !dirtyRules {
+		return "", false, nil
+	}
+
+	// 3. Check if any affected FIPs are now safe to delete.
+	var orphanedFIPs []*armnetwork.FrontendIPConfiguration
+	if lb.Properties != nil && lb.Properties.FrontendIPConfigurations != nil {
+		for _, fip := range lb.Properties.FrontendIPConfigurations {
+			if fip.ID == nil || !affectedFIPIDs.Has(*fip.ID) {
+				continue
+			}
+			unsafe, err := az.isFrontendIPConfigUnsafeToDelete(lb, service, fip.ID)
+			if err != nil {
+				return "", false, fmt.Errorf("check if frontend IP configuration %q on load balancer %q is safe to delete: %w",
+					ptr.Deref(fip.ID, ""), ptr.Deref(lb.Name, ""), err)
+			}
+			if !unsafe {
+				orphanedFIPs = append(orphanedFIPs, fip)
+			}
+		}
+	}
+
+	// 4. If there are orphaned FIPs, delegate to removeFrontendIPConfigurationFromLoadBalancer
+	// which handles FIP removal, PLS cleanup, empty-LB deletion, and the LB API call.
+	if len(orphanedFIPs) > 0 {
+		deletedLBName, deletedPLS, err := az.removeFrontendIPConfigurationFromLoadBalancer(ctx, lb, existingLBs, orphanedFIPs, clusterName, service)
+		if err != nil {
+			return "", false, fmt.Errorf("remove orphaned frontend IP configurations: %w", err)
+		}
+		return deletedLBName, deletedPLS, nil
+	}
+
+	// 5. No orphaned FIPs, just update the LB with the rule/probe changes.
+	if err := az.CreateOrUpdateLB(ctx, service, *lb); err != nil {
+		return "", false, err
+	}
+	logger.V(2).Info("Updated load balancer to remove stale service resources",
+		"lbName", ptr.Deref(lb.Name, ""),
+		"serviceName", serviceName,
+		"dirtyProbes", dirtyProbes,
+		"dirtyRules", dirtyRules,
+	)
+	lbName := ptr.Deref(lb.Name, "")
+	if err := az.lbCache.Delete(lbName); err != nil {
+		logger.Info("Failed to invalidate load balancer cache",
+			"lbName", lbName,
+			"err", err,
+		)
+	} else {
+		logger.V(5).Info("Invalidated load balancer cache",
+			"lbName", lbName,
+		)
+	}
+	return "", false, nil
 }
 
 func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurationStatus(wantLb bool, svcName, lbName string) {
@@ -4091,7 +4301,9 @@ func (az *Cloud) getAzureLoadBalancerName(
 	existingLBs []*armnetwork.LoadBalancer,
 	clusterName, vmSetName string,
 	isInternal bool,
+	wantLb bool,
 ) (string, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("getAzureLoadBalancerName")
 	if az.LoadBalancerName != "" {
 		clusterName = az.LoadBalancerName
 	}
@@ -4107,12 +4319,62 @@ func (az *Cloud) getAzureLoadBalancerName(
 	// 1. Filter out the eligible load balancers.
 	// 2. Choose the most eligible load balancer.
 	if az.UseMultipleStandardLoadBalancers() {
+		lbIPs := getServiceLoadBalancerIPs(service)
+		pipNames := getServicePIPNames(service)
+		pinsIP := len(lbIPs) > 0 || len(pipNames) > 0
+
+		// Only block when creating resources (wantLb=true).
+		// Cleanup operations (wantLb=false) don't need this constraint.
+		if wantLb {
+			// Block the combination of LB configuration annotation and IP spec.
+			// When specifying an IP, the LB is determined by where the IP resides.
+			// Specifying a different LB is contradictory. This early check also
+			// avoids unnecessary PIP lookups on every reconcile.
+			annotatedLBs := consts.GetLoadBalancerConfigurationsNames(service)
+			logger.V(5).Info("checking LB and IP config", "service", service.Name, "annotatedLBs", annotatedLBs, "lbIPs", lbIPs, "pipNames", pipNames, "pinsIP", pinsIP)
+			if len(annotatedLBs) > 0 && pinsIP {
+				return "", fmt.Errorf(
+					"service %q has conflicting load balancer configuration: "+
+						"both a load balancer name (%s) and an IP address are specified. "+
+						"When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), "+
+						"the service must use the load balancer where that IP resides. "+
+						"To fix, either (1) remove the %s annotation to stay on the load balancer where the IP resides, "+
+						"or (2) remove the IP annotation to move to the specified load balancer (external services only)",
+					service.Name, consts.ServiceAnnotationLoadBalancerConfigurations,
+					consts.ServiceAnnotationLoadBalancerConfigurations)
+			}
+		}
+
 		eligibleLBs, err := az.getEligibleLoadBalancersForService(ctx, service)
 		if err != nil {
 			return "", err
 		}
 
 		currentLBName := az.getServiceCurrentLoadBalancerName(service)
+
+		// If service specifies an IP, find which LB has that IP. The service should use the LB where the IP resides.
+		// This also detects secondary services sharing an IP with a primary service already on an LB.
+		// Skip when cleaning up (wantLb=false), ActiveServices should have the correct currentLBName.
+		if wantLb && pinsIP {
+			if requiresInternalLoadBalancer(service) {
+				currentLBName = az.getLoadBalancerNameByPrivateIP(ctx, service, existingLBs)
+			} else {
+				currentLBName, err = az.getLoadBalancerNameByPublicIP(ctx, service, clusterName)
+				if err != nil {
+					return "", fmt.Errorf("look up load balancer by public IP for service %q: %w", service.Name, err)
+				}
+			}
+			// Block service if the IP resides on an LB that's not eligible.
+			if currentLBName != "" && !StringInSliceIgnoreCase(currentLBName, eligibleLBs) {
+				return "", fmt.Errorf(
+					"service %q specifies an IP that resides on load balancer %q, "+
+						"which is not in the eligible set %v; "+
+						"check or adjust the load balancer eligibility configuration "+
+						"(ServiceLabelSelector, ServiceNamespaceSelector, or AllowServicePlacement)",
+					service.Name, currentLBName, eligibleLBs)
+			}
+		}
+
 		lbNamePrefix = getMostEligibleLBForService(currentLBName, eligibleLBs, existingLBs, requiresInternalLoadBalancer(service))
 	}
 
@@ -4120,6 +4382,120 @@ func (az *Cloud) getAzureLoadBalancerName(
 		return fmt.Sprintf("%s%s", lbNamePrefix, consts.InternalLoadBalancerNameSuffix), nil
 	}
 	return lbNamePrefix, nil
+}
+
+// getLoadBalancerNameByPrivateIP finds the LB by scanning frontend IPs for a matching private address.
+func (az *Cloud) getLoadBalancerNameByPrivateIP(
+	ctx context.Context,
+	service *v1.Service,
+	existingLBs []*armnetwork.LoadBalancer,
+) string {
+	logger := log.FromContextOrBackground(ctx).WithName("getLoadBalancerNameByPrivateIP")
+	loadBalancerIPs := getServiceLoadBalancerIPs(service)
+	if len(loadBalancerIPs) == 0 {
+		return ""
+	}
+
+	for _, lb := range existingLBs {
+		if !isInternalLoadBalancer(lb) {
+			continue
+		}
+		if lb.Properties == nil || lb.Properties.FrontendIPConfigurations == nil {
+			continue
+		}
+		for _, fip := range lb.Properties.FrontendIPConfigurations {
+			if fip.Properties == nil || fip.Properties.PrivateIPAddress == nil {
+				continue
+			}
+			for _, ip := range loadBalancerIPs {
+				if ip != "" && strings.EqualFold(*fip.Properties.PrivateIPAddress, ip) {
+					logger.V(2).Info("Found LB from frontend IP by private IP", "service", service.Name, "privateIP", ip, "lbName", ptr.Deref(lb.Name, ""))
+					return trimSuffixIgnoreCase(ptr.Deref(lb.Name, ""), consts.InternalLoadBalancerNameSuffix)
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
+// getLoadBalancerNameByPublicIP finds the LB by reading the PIP's IPConfiguration.
+func (az *Cloud) getLoadBalancerNameByPublicIP(
+	ctx context.Context,
+	service *v1.Service,
+	clusterName string,
+) (string, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("getLoadBalancerNameByPublicIP")
+
+	loadBalancerIPs := getServiceLoadBalancerIPs(service)
+	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
+	for _, ip := range loadBalancerIPs {
+		if ip == "" {
+			continue
+		}
+		pip, err := az.findMatchedPIP(ctx, ip, "", pipResourceGroup)
+		if err != nil {
+			return "", fmt.Errorf("find public IP by address %q: %w", ip, err)
+		}
+		if lbName := az.getLoadBalancerNameFromPIP(pip, clusterName); lbName != "" {
+			logger.V(2).Info("Found LB from PIP by IP", "service", service.Name, "pip", ptr.Deref(pip.Name, ""), "lbName", lbName)
+			return lbName, nil
+		}
+	}
+
+	pipNames := getServicePIPNames(service)
+	for _, pipName := range pipNames {
+		if pipName == "" {
+			continue
+		}
+		pip, err := az.findMatchedPIP(ctx, "", pipName, pipResourceGroup)
+		if err != nil {
+			return "", fmt.Errorf("find public IP by name %q: %w", pipName, err)
+		}
+		if lbName := az.getLoadBalancerNameFromPIP(pip, clusterName); lbName != "" {
+			logger.V(2).Info("Found LB from PIP by name", "service", service.Name, "pip", pipName, "lbName", lbName)
+			return lbName, nil
+		}
+	}
+
+	return "", nil
+}
+
+// getLoadBalancerNameFromPIP extracts the LB name from the PIP's IPConfiguration.
+func (az *Cloud) getLoadBalancerNameFromPIP(pip *armnetwork.PublicIPAddress, clusterName string) string {
+	if pip == nil || pip.Properties == nil || pip.Properties.IPConfiguration == nil || pip.Properties.IPConfiguration.ID == nil {
+		return ""
+	}
+
+	if pip.Tags != nil {
+		if clusterTag := getClusterFromPIPClusterTags(pip.Tags); clusterTag != "" && !strings.EqualFold(clusterTag, clusterName) {
+			return ""
+		}
+	}
+
+	return parseLoadBalancerNameFromFrontendConfigID(ptr.Deref(pip.Properties.IPConfiguration.ID, ""))
+}
+
+// parseLoadBalancerNameFromFrontendConfigID extracts the load balancer name from a frontend IP config ID.
+// Example ID: "/subscriptions/{subId}/resourceGroups/{rg}/providers/Microsoft.Network/loadBalancers/{lbName}/frontendIPConfigurations/{fipName}"
+func parseLoadBalancerNameFromFrontendConfigID(id string) string {
+	if id == "" {
+		return ""
+	}
+
+	const marker = "/providers/microsoft.network/loadbalancers/"
+	idx := strings.Index(strings.ToLower(id), marker)
+	if idx == -1 {
+		return ""
+	}
+
+	// rest should be "{lbName}/frontendIPConfigurations/{fipName}".
+	rest := id[idx+len(marker):]
+	before, _, ok := strings.Cut(rest, "/")
+	if !ok {
+		return ""
+	}
+	return before
 }
 
 func getMostEligibleLBForService(
@@ -4130,7 +4506,7 @@ func getMostEligibleLBForService(
 ) string {
 	logger := log.Background().WithName("getMostEligibleLBForService")
 	// 1. If the LB is eligible and being used, choose it.
-	if StringInSlice(currentLBName, eligibleLBs) {
+	if StringInSliceIgnoreCase(currentLBName, eligibleLBs) {
 		logger.V(4).Info("choose LB as it is eligible and being used", "currentLBName", currentLBName)
 		return currentLBName
 	}
@@ -4158,7 +4534,7 @@ func getMostEligibleLBForService(
 	ruleCount := 301
 	for i := range existingLBs {
 		existingLB := existingLBs[i]
-		if StringInSlice(trimSuffixIgnoreCase(ptr.Deref(existingLB.Name, ""), consts.InternalLoadBalancerNameSuffix), eligibleLBs) &&
+		if StringInSliceIgnoreCase(trimSuffixIgnoreCase(ptr.Deref(existingLB.Name, ""), consts.InternalLoadBalancerNameSuffix), eligibleLBs) &&
 			isInternalLoadBalancer(existingLB) == isInternal {
 			if existingLB.Properties != nil &&
 				existingLB.Properties.LoadBalancingRules != nil {

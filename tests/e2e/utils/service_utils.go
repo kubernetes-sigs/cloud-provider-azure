@@ -249,3 +249,90 @@ func extractSuffix() string {
 func IsInternalEndpoint(ip string) bool {
 	return strings.HasPrefix(ip, "10.")
 }
+
+// WaitForServiceEventAfter waits for an event of the given type on the service with the expected Reason
+// that occurred after the specified time and contains the expected message substring.
+func WaitForServiceEventAfter(
+	cs clientset.Interface,
+	ns, serviceName string,
+	eventType string,
+	expectedReason string,
+	messageSubstring string,
+	after time.Time,
+) error {
+	return wait.PollUntilContextTimeout(context.Background(), 10*time.Second, serviceTimeout, true, func(ctx context.Context) (bool, error) {
+		events, err := cs.CoreV1().Events(ns).List(ctx, metav1.ListOptions{
+			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Service,type=%s", serviceName, eventType),
+		})
+		if err != nil {
+			return false, err
+		}
+		for _, event := range events.Items {
+			if event.Reason != expectedReason {
+				continue
+			}
+			if messageSubstring != "" && !strings.Contains(event.Message, messageSubstring) {
+				continue
+			}
+			eventTime := event.LastTimestamp.Time
+			if eventTime.After(after) {
+				Logf("Found %s event for service %s after %v: Reason=%s, LastTimestamp=%v, Message=%s",
+					eventType, serviceName, after.Format(time.RFC3339), event.Reason, eventTime.Format(time.RFC3339), event.Message)
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+}
+
+// WaitForServiceNormalEventAfter waits for a Normal event on the service with the expected Reason
+// that occurred after the specified time and contains the expected message substring.
+func WaitForServiceNormalEventAfter(
+	cs clientset.Interface,
+	ns, serviceName string,
+	expectedReason string,
+	messageSubstring string,
+	after time.Time,
+) error {
+	return WaitForServiceEventAfter(cs, ns, serviceName, "Normal", expectedReason, messageSubstring, after)
+}
+
+// WaitForServiceWarningEventAfter waits for a Warning event on the service with the expected Reason
+// that occurred after the specified time and contains the expected message substring.
+func WaitForServiceWarningEventAfter(
+	cs clientset.Interface,
+	ns, serviceName string,
+	expectedReason string,
+	messageSubstring string,
+	after time.Time,
+) error {
+	return WaitForServiceEventAfter(cs, ns, serviceName, "Warning", expectedReason, messageSubstring, after)
+}
+
+// WaitForServiceIPChange waits for a service to get a different IP than the oldIP.
+func WaitForServiceIPChange(cs clientset.Interface, ns, serviceName, oldIP string) (string, error) {
+	var newIP string
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, serviceTimeout, true, func(ctx context.Context) (bool, error) {
+		service, err := cs.CoreV1().Services(ns).Get(ctx, serviceName, metav1.GetOptions{})
+		if err != nil {
+			Logf("Error getting service %s: %v", serviceName, err)
+			return false, nil
+		}
+		if len(service.Status.LoadBalancer.Ingress) == 0 {
+			Logf("Service %s has no IP yet, waiting...", serviceName)
+			return false, nil
+		}
+		currentIP := service.Status.LoadBalancer.Ingress[0].IP
+		if currentIP != oldIP {
+			Logf("Service %s IP changed from %s to %s", serviceName, oldIP, currentIP)
+			newIP = currentIP
+			return true, nil
+		}
+		Logf("Service %s still has old IP %s, waiting for change...", serviceName, oldIP)
+		return false, nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("timeout waiting for service %s IP to change from %s: %w", serviceName, oldIP, err)
+	}
+	return newIP, nil
+}
