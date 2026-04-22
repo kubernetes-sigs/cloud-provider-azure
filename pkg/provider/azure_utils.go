@@ -396,7 +396,9 @@ func getServicePIPName(service *v1.Service, isIPv6 bool) string {
 func getServicePIPNames(service *v1.Service) []string {
 	var ips []string
 	for _, ipVersion := range []bool{IPVersionIPv4, IPVersionIPv6} {
-		ips = append(ips, getServicePIPName(service, ipVersion))
+		if name := getServicePIPName(service, ipVersion); name != "" {
+			ips = append(ips, name)
+		}
 	}
 	return ips
 }
@@ -491,6 +493,16 @@ func countIPsOnBackendPool(backendPool *armnetwork.BackendAddressPool) int {
 func StringInSlice(s string, list []string) bool {
 	for _, item := range list {
 		if item == s {
+			return true
+		}
+	}
+	return false
+}
+
+// StringInSliceIgnoreCase checks if a string is in a list, ignoring case.
+func StringInSliceIgnoreCase(s string, list []string) bool {
+	for _, item := range list {
+		if strings.EqualFold(item, s) {
 			return true
 		}
 	}
