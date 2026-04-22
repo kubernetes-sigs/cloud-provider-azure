@@ -20,10 +20,10 @@ package fileshareclient
 import (
 	"context"
 
-	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
+	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage/v2"
 )
 
-// +azure:client:resource=Account,subResource=FileShare,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage,packageAlias=armstorage,clientName=FileSharesClient,expand=true,crossSubFactory=true,mooncakeApiVersion="2023-05-01"
+// +azure:client:resource=Account,subResource=FileShare,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage/v2,packageAlias=armstorage,clientName=FileSharesClient,expand=true,crossSubFactory=true,mooncakeApiVersion="2023-05-01"
 type Interface interface {
 	Get(ctx context.Context, resourceGroupName string, accountName string, resourceName string, option *armstorage.FileSharesClientGetOptions) (result *armstorage.FileShare, rerr error)
 	List(ctx context.Context, resourceGroupName string, accountName string, option *armstorage.FileSharesClientListOptions) (result []*armstorage.FileShareItem, err error)
