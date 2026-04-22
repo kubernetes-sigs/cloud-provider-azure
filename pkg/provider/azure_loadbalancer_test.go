@@ -1940,6 +1940,1016 @@ func TestGetServiceLoadBalancerMultiSLB(t *testing.T) {
 				},
 			},
 		},
+		{
+			description: "remove backend pool when a local secondary service changes its load balancer",
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("aprimary-svc"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/aprimary-svc"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip-primary")},
+								},
+							},
+							{
+								Name: ptr.To("atest2"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/atest2"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip-test2")},
+								},
+							},
+						},
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+							{
+								Name: ptr.To("atest1-TCP-80"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/aprimary-svc"),
+									},
+								},
+							},
+						},
+						Probes: []*armnetwork.Probe{
+							{Name: ptr.To("atest1-TCP-80"), Properties: &armnetwork.ProbePropertiesFormat{Port: ptr.To(int32(80))}},
+						},
+						BackendAddressPools: []*armnetwork.BackendAddressPool{
+							{Name: ptr.To("kubernetes")},
+							{Name: ptr.To("default-test1")},
+						},
+					},
+				},
+				{
+					Name: ptr.To("lb2"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("asvcother"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb2/frontendIPConfigurations/asvcother"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip-other")},
+								},
+							},
+						},
+					},
+				},
+			},
+			refreshedLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("atest2"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/atest2"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip-test2")},
+								},
+							},
+						},
+						BackendAddressPools: []*armnetwork.BackendAddressPool{
+							{Name: ptr.To("kubernetes")},
+						},
+					},
+				},
+				{
+					Name: ptr.To("lb2"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("asvcother"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb2/frontendIPConfigurations/asvcother"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip-other")},
+								},
+							},
+						},
+					},
+				},
+			},
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("pip-primary"),
+					ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip-primary"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress:              ptr.To("1.2.3.4"),
+						PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
+						IPConfiguration: &armnetwork.IPConfiguration{
+							ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/aprimary-svc"),
+						},
+					},
+				},
+				{
+					Name: ptr.To("pip-other"),
+					ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip-other"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress:              ptr.To("5.6.7.8"),
+						PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
+						IPConfiguration: &armnetwork.IPConfiguration{
+							ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb2/frontendIPConfigurations/asvcother"),
+						},
+					},
+				},
+			},
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "5.6.7.8",
+			}, false, 80),
+			local: true,
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveServices: utilsets.NewString("default/test1"),
+					},
+				},
+				{Name: "lb2"},
+			},
+			expectedLB: &armnetwork.LoadBalancer{
+				Name: ptr.To("lb2"),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+						{
+							Name: ptr.To("asvcother"),
+							ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb2/frontendIPConfigurations/asvcother"),
+							Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+								PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip-other")},
+							},
+						},
+					},
+				},
+			},
+			expectedLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("atest2"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/atest2"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip-test2")},
+								},
+							},
+						},
+						BackendAddressPools: []*armnetwork.BackendAddressPool{
+							{Name: ptr.To("kubernetes")},
+						},
+					},
+				},
+				{
+					Name: ptr.To("lb2"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("asvcother"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb2/frontendIPConfigurations/asvcother"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip-other")},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			description: "external: block migration when primary svc shares IP with secondary",
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("aprimary"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/aprimary"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pip1")},
+								},
+							},
+						},
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+							{
+								Name: ptr.To("aprimary-TCP-80"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/aprimary"),
+									},
+								},
+							},
+							{
+								Name: ptr.To("asecondary-TCP-81"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/aprimary"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("pip1"),
+					ID:   ptr.To("pip1"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress: ptr.To("1.2.3.4"),
+					},
+				},
+			},
+			service: getTestService("primary", v1.ProtocolTCP, map[string]string{
+				consts.ServiceAnnotationLoadBalancerConfigurations: "lb2",
+			}, false, 80),
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveServices: utilsets.NewString("default/primary"),
+					},
+				},
+				{Name: "lb2"},
+			},
+			expectedError: fmt.Errorf(
+				"service %q cannot migrate from load balancer %q to %q because frontend IP %q is also referenced by other resources; "+
+					"remove the %s annotation to stay on load balancer %q",
+				"primary", "lb1", "lb2", "aprimary",
+				consts.ServiceAnnotationLoadBalancerConfigurations, "lb1"),
+		},
+		{
+			description: "internal: block migration when primary svc shares IP with secondary",
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1-internal"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("aprimary"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/aprimary"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.1"),
+								},
+							},
+						},
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+							{
+								Name: ptr.To("aprimary-TCP-80"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/aprimary"),
+									},
+								},
+							},
+							{
+								Name: ptr.To("asecondary-TCP-81"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/aprimary"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			service: func() v1.Service {
+				svc := getInternalTestService("primary", 80)
+				svc.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb2"
+				return svc
+			}(),
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveServices: utilsets.NewString("default/primary"),
+					},
+				},
+				{Name: "lb2"},
+			},
+			expectedError: fmt.Errorf(
+				"service %q cannot migrate from load balancer %q to %q because frontend IP %q is also referenced by other resources; "+
+					"remove the %s annotation to stay on load balancer %q",
+				"primary", "lb1-internal", "lb2-internal", "aprimary",
+				consts.ServiceAnnotationLoadBalancerConfigurations, "lb1-internal"),
+		},
+		{
+			description: "external: allow migration when svc has its own frontend",
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("asvc1"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/asvc1"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pip1")},
+								},
+							},
+							{
+								Name: ptr.To("asvc2"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/asvc2"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pip2")},
+								},
+							},
+						},
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+							{
+								Name: ptr.To("asvc1-TCP-80"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/asvc1"),
+									},
+								},
+							},
+							{
+								Name: ptr.To("asvc2-TCP-81"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/asvc2"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			refreshedLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("asvc2"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/asvc2"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pip2")},
+								},
+							},
+						},
+					},
+				},
+			},
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("pip1"),
+					ID:   ptr.To("pip1"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress: ptr.To("1.2.3.4"),
+					},
+				},
+			},
+			service: getTestService("svc1", v1.ProtocolTCP, map[string]string{
+				consts.ServiceAnnotationLoadBalancerConfigurations: "lb2",
+			}, false, 80),
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveServices: utilsets.NewString("default/svc1"),
+					},
+				},
+				{Name: "lb2"},
+			},
+			expectedLB: &armnetwork.LoadBalancer{
+				Name:     ptr.To("lb2"),
+				Location: ptr.To("westus"),
+				SKU: &armnetwork.LoadBalancerSKU{
+					Name: to.Ptr(armnetwork.LoadBalancerSKUNameStandard),
+				},
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{},
+			},
+			expectedLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("asvc2"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/asvc2"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pip2")},
+								},
+							},
+						},
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+							{
+								Name: ptr.To("asvc2-TCP-81"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/asvc2"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			description: "internal: allow migration when svc has its own frontend",
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1-internal"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("asvc1"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/asvc1"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.1"),
+								},
+							},
+							{
+								Name: ptr.To("asvc2"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/asvc2"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.2"),
+								},
+							},
+						},
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+							{
+								Name: ptr.To("asvc1-TCP-80"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/asvc1"),
+									},
+								},
+							},
+							{
+								Name: ptr.To("asvc2-TCP-81"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/asvc2"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			refreshedLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1-internal"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("asvc2"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/asvc2"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.2"),
+								},
+							},
+						},
+					},
+				},
+			},
+			service: func() v1.Service {
+				svc := getInternalTestService("svc1", 80)
+				svc.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb2"
+				return svc
+			}(),
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveServices: utilsets.NewString("default/svc1"),
+					},
+				},
+				{Name: "lb2"},
+			},
+			expectedLB: &armnetwork.LoadBalancer{
+				Name:     ptr.To("lb2-internal"),
+				Location: ptr.To("westus"),
+				SKU: &armnetwork.LoadBalancerSKU{
+					Name: to.Ptr(armnetwork.LoadBalancerSKUNameStandard),
+				},
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{},
+			},
+			expectedLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1-internal"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("asvc2"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/asvc2"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.2"),
+								},
+							},
+						},
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+							{
+								Name: ptr.To("asvc2-TCP-81"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/asvc2"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			description: "external: block shared IP svc migration, same LB has independent svc",
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("asharedprimary"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/asharedprimary"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pip-shared")},
+								},
+							},
+							{
+								Name: ptr.To("aindependent"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/aindependent"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pip-independent")},
+								},
+							},
+						},
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+							{
+								Name: ptr.To("asharedprimary-TCP-80"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/asharedprimary"),
+									},
+								},
+							},
+							{
+								Name: ptr.To("asharedsecondary-TCP-81"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/asharedprimary"),
+									},
+								},
+							},
+							{
+								Name: ptr.To("aindependent-TCP-82"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/aindependent"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("pip-shared"),
+					ID:   ptr.To("pip-shared"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress: ptr.To("1.2.3.4"),
+					},
+				},
+			},
+			service: getTestService("sharedprimary", v1.ProtocolTCP, map[string]string{
+				consts.ServiceAnnotationLoadBalancerConfigurations: "lb2",
+			}, false, 80),
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveServices: utilsets.NewString("default/sharedprimary"),
+					},
+				},
+				{Name: "lb2"},
+			},
+			expectedError: fmt.Errorf(
+				"service %q cannot migrate from load balancer %q to %q because frontend IP %q is also referenced by other resources; "+
+					"remove the %s annotation to stay on load balancer %q",
+				"sharedprimary", "lb1", "lb2", "asharedprimary",
+				consts.ServiceAnnotationLoadBalancerConfigurations, "lb1"),
+		},
+		{
+			description: "external: allow independent svc migration, same LB has shared IP services",
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("asharedprimary"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/asharedprimary"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pip-shared")},
+								},
+							},
+							{
+								Name: ptr.To("aindependent"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/aindependent"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pip-independent")},
+								},
+							},
+						},
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+							{
+								Name: ptr.To("asharedprimary-TCP-80"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/asharedprimary"),
+									},
+								},
+							},
+							{
+								Name: ptr.To("asharedsecondary-TCP-81"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/asharedprimary"),
+									},
+								},
+							},
+							{
+								Name: ptr.To("aindependent-TCP-82"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/aindependent"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			refreshedLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("asharedprimary"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/asharedprimary"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pip-shared")},
+								},
+							},
+						},
+					},
+				},
+			},
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("pip-independent"),
+					ID:   ptr.To("pip-independent"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress: ptr.To("5.6.7.8"),
+					},
+				},
+			},
+			service: getTestService("independent", v1.ProtocolTCP, map[string]string{
+				consts.ServiceAnnotationLoadBalancerConfigurations: "lb2",
+			}, false, 82),
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveServices: utilsets.NewString("default/independent"),
+					},
+				},
+				{Name: "lb2"},
+			},
+			expectedLB: &armnetwork.LoadBalancer{
+				Name:     ptr.To("lb2"),
+				Location: ptr.To("westus"),
+				SKU: &armnetwork.LoadBalancerSKU{
+					Name: to.Ptr(armnetwork.LoadBalancerSKUNameStandard),
+				},
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{},
+			},
+			expectedLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("asharedprimary"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/asharedprimary"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pip-shared")},
+								},
+							},
+						},
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+							{
+								Name: ptr.To("asharedprimary-TCP-80"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/asharedprimary"),
+									},
+								},
+							},
+							{
+								Name: ptr.To("asharedsecondary-TCP-81"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/asharedprimary"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			description: "internal: block shared IP svc migration, same LB has independent svc",
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1-internal"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("asharedprimary"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/asharedprimary"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.1"),
+								},
+							},
+							{
+								Name: ptr.To("aindependent"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/aindependent"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.2"),
+								},
+							},
+						},
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+							{
+								Name: ptr.To("asharedprimary-TCP-80"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/asharedprimary"),
+									},
+								},
+							},
+							{
+								Name: ptr.To("asharedsecondary-TCP-81"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/asharedprimary"),
+									},
+								},
+							},
+							{
+								Name: ptr.To("aindependent-TCP-82"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/aindependent"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			service: func() v1.Service {
+				svc := getInternalTestService("sharedprimary", 80)
+				svc.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb2"
+				return svc
+			}(),
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveServices: utilsets.NewString("default/sharedprimary"),
+					},
+				},
+				{Name: "lb2"},
+			},
+			expectedError: fmt.Errorf(
+				"service %q cannot migrate from load balancer %q to %q because frontend IP %q is also referenced by other resources; "+
+					"remove the %s annotation to stay on load balancer %q",
+				"sharedprimary", "lb1-internal", "lb2-internal", "asharedprimary",
+				consts.ServiceAnnotationLoadBalancerConfigurations, "lb1-internal"),
+		},
+		{
+			description: "internal: allow independent svc migration, same LB has shared IP services",
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1-internal"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("asharedprimary"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/asharedprimary"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.1"),
+								},
+							},
+							{
+								Name: ptr.To("aindependent"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/aindependent"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.2"),
+								},
+							},
+						},
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+							{
+								Name: ptr.To("asharedprimary-TCP-80"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/asharedprimary"),
+									},
+								},
+							},
+							{
+								Name: ptr.To("asharedsecondary-TCP-81"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/asharedprimary"),
+									},
+								},
+							},
+							{
+								Name: ptr.To("aindependent-TCP-82"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/aindependent"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			refreshedLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1-internal"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("asharedprimary"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/asharedprimary"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.1"),
+								},
+							},
+						},
+					},
+				},
+			},
+			service: func() v1.Service {
+				svc := getInternalTestService("independent", 82)
+				svc.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb2"
+				return svc
+			}(),
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveServices: utilsets.NewString("default/independent"),
+					},
+				},
+				{Name: "lb2"},
+			},
+			expectedLB: &armnetwork.LoadBalancer{
+				Name:     ptr.To("lb2-internal"),
+				Location: ptr.To("westus"),
+				SKU: &armnetwork.LoadBalancerSKU{
+					Name: to.Ptr(armnetwork.LoadBalancerSKUNameStandard),
+				},
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{},
+			},
+			expectedLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1-internal"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("asharedprimary"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/asharedprimary"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.1"),
+								},
+							},
+						},
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+							{
+								Name: ptr.To("asharedprimary-TCP-80"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/asharedprimary"),
+									},
+								},
+							},
+							{
+								Name: ptr.To("asharedsecondary-TCP-81"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/asharedprimary"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			// When isPinnedIPMultiSLB is true and the source LB is deleted
+			// during migration (its only FIP removed), removeLBFromList shrinks existingLBs
+			// while the for-range loop still iterates with the original length leads to index panic.
+			description: "internal: pinned IP migration deletes source LB without panic",
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1-internal"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("asvc1"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/asvc1"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.1"),
+								},
+							},
+						},
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+							{
+								Name: ptr.To("asvc1-TCP-80"),
+								Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+									FrontendIPConfiguration: &armnetwork.SubResource{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/frontendIPConfigurations/asvc1"),
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: ptr.To("lb2-internal"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("asvcother"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb2-internal/frontendIPConfigurations/asvcother"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.99"),
+								},
+							},
+						},
+					},
+				},
+			},
+			service: func() v1.Service {
+				svc := getInternalTestService("svc1", 80)
+				svc.Annotations[consts.ServiceAnnotationLoadBalancerIPDualStack[false]] = "10.0.0.99"
+				return svc
+			}(),
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveServices: utilsets.NewString("default/svc1"),
+					},
+				},
+				{Name: "lb2"},
+			},
+			expectedLB: &armnetwork.LoadBalancer{
+				Name: ptr.To("lb2-internal"),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+						{
+							Name: ptr.To("asvcother"),
+							ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb2-internal/frontendIPConfigurations/asvcother"),
+							Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+								PrivateIPAddress: ptr.To("10.0.0.99"),
+							},
+						},
+					},
+				},
+			},
+			expectedLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb2-internal"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("asvcother"),
+								ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb2-internal/frontendIPConfigurations/asvcother"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.99"),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	} {
 		tc := tc
 		t.Run(tc.description, func(t *testing.T) {
@@ -1953,11 +2963,13 @@ func TestGetServiceLoadBalancerMultiSLB(t *testing.T) {
 			lbClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(tc.refreshedLBs, nil).MaxTimes(1)
 			lbClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).MaxTimes(1)
 
-			mockPLSRepo := cloud.plsRepo.(*privatelinkservice.MockRepository)
-			mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil)
+			if tc.expectedError == nil {
+				mockPLSRepo := cloud.plsRepo.(*privatelinkservice.MockRepository)
+				mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil)
+			}
 
 			mockPIPClient := cloud.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
-			mockPIPClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armnetwork.PublicIPAddress{}, nil).MaxTimes(2)
+			mockPIPClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(tc.existingPIPs, nil).MaxTimes(2)
 
 			if tc.local {
 				tc.service.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyLocal
@@ -7952,11 +8964,6 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 }
 
 func TestGetAzureLoadBalancerName(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	az := GetTestCloud(ctrl)
-	az.PrimaryAvailabilitySetName = primary
-
 	cases := []struct {
 		description       string
 		vmSet             string
@@ -7967,6 +8974,10 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 		multiSLBConfigs   []config.MultipleStandardLoadBalancerConfiguration
 		serviceAnnotation map[string]string
 		serviceLabel      map[string]string
+		specLBIP          string
+		existingLBs       []*armnetwork.LoadBalancer
+		existingPIPs      []*armnetwork.PublicIPAddress
+		notWantLb         bool
 		expected          string
 		expectedErr       error
 	}{
@@ -8090,10 +9101,521 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 			},
 			expectedErr: errors.New(`service "default/test" selects 1 load balancers (a), but 0 of them () have AllowServicePlacement set to false and the service is not using any of them, 1 of them (a) do not match the service label selector, and 0 of them () do not match the service namespace selector`),
 		},
+		{
+			description:   "multi-slb external: IP annotation returns lb2 where IP resides",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "1.2.3.4",
+			},
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("pip1"),
+					ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress: ptr.To("1.2.3.4"),
+						IPConfiguration: &armnetwork.IPConfiguration{
+							ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb2/frontendIPConfigurations/aprimary-svc-uid"),
+						},
+					},
+				},
+			},
+			expected: "lb2",
+		},
+		{
+			description:   "multi-slb external: PIP name annotation returns lb2 where IP resides",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationPIPNameDualStack[false]: "pip1",
+			},
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("pip1"),
+					ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress: ptr.To("1.2.3.4"),
+						IPConfiguration: &armnetwork.IPConfiguration{
+							ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb2/frontendIPConfigurations/aprimary-svc-uid"),
+						},
+					},
+				},
+			},
+			expected: "lb2",
+		},
+		{
+			description:   "multi-slb external: spec.loadBalancerIP returns lb2 where IP resides",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			specLBIP: "1.2.3.4",
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("pip1"),
+					ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress: ptr.To("1.2.3.4"),
+						IPConfiguration: &armnetwork.IPConfiguration{
+							ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb2/frontendIPConfigurations/aprimary-svc-uid"),
+						},
+					},
+				},
+			},
+			expected: "lb2",
+		},
+		{
+			description:   "multi-slb external: LB annotation lb2 returns lb2",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerConfigurations: "lb2",
+			},
+			expected: "lb2",
+		},
+		{
+			description:   "multi-slb external: new IP not on LB returns error",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "5.6.7.8",
+			},
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("aprimary-svc-uid"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &armnetwork.PublicIPAddress{
+										ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("pip1"),
+					ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress: ptr.To("1.2.3.4"),
+					},
+				},
+			},
+			expectedErr: fmt.Errorf(`look up load balancer by public IP for service "test": find public IP by address "5.6.7.8": findMatchedPIPByLoadBalancerIP: cannot find public IP with IP address 5.6.7.8 in resource group rg`),
+		},
+		{
+			description:   "multi-slb external: PIP name not found returns error",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationPIPNameDualStack[false]: "nonexistent",
+			},
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("pip1"),
+					ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress: ptr.To("1.2.3.4"),
+					},
+				},
+			},
+			expectedErr: fmt.Errorf(`look up load balancer by public IP for service "test": find public IP by name "nonexistent": findMatchedPIPByName: failed to find PIP nonexistent in resource group rg`),
+		},
+		{
+			description:   "multi-slb external: IP annotation and LB annotation conflicts",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "1.2.3.4",
+				consts.ServiceAnnotationLoadBalancerConfigurations:     "lb1",
+			},
+			expectedErr: errors.New(
+				`service "test" has conflicting load balancer configuration: ` +
+					`both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. ` +
+					`When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), ` +
+					`the service must use the load balancer where that IP resides. ` +
+					`To fix, either (1) remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation to stay on the load balancer where the IP resides, ` +
+					`or (2) remove the IP annotation to move to the specified load balancer (external services only)`,
+			),
+		},
+		{
+			description:   "multi-slb external: PIP name annotation and LB annotation conflicts",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationPIPNameDualStack[false]:    "pip1",
+				consts.ServiceAnnotationLoadBalancerConfigurations: "lb1",
+			},
+			expectedErr: errors.New(
+				`service "test" has conflicting load balancer configuration: ` +
+					`both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. ` +
+					`When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), ` +
+					`the service must use the load balancer where that IP resides. ` +
+					`To fix, either (1) remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation to stay on the load balancer where the IP resides, ` +
+					`or (2) remove the IP annotation to move to the specified load balancer (external services only)`,
+			),
+		},
+		{
+			description:   "multi-slb external: spec.loadBalancerIP and LB annotation conflicts",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			specLBIP: "1.2.3.4",
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerConfigurations: "lb1",
+			},
+			expectedErr: errors.New(
+				`service "test" has conflicting load balancer configuration: ` +
+					`both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. ` +
+					`When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), ` +
+					`the service must use the load balancer where that IP resides. ` +
+					`To fix, either (1) remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation to stay on the load balancer where the IP resides, ` +
+					`or (2) remove the IP annotation to move to the specified load balancer (external services only)`,
+			),
+		},
+		{
+			description:   "multi-slb external: IP resides on LB excluded by label selector should error",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceLabelSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"app": "web"},
+						},
+					},
+				},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "1.2.3.4",
+			},
+			serviceLabel: map[string]string{"app": "api"},
+			existingPIPs: []*armnetwork.PublicIPAddress{
+				{
+					Name: ptr.To("pip1"),
+					ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress: ptr.To("1.2.3.4"),
+						IPConfiguration: &armnetwork.IPConfiguration{
+							ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/fip1"),
+						},
+					},
+				},
+			},
+			expectedErr: errors.New(
+				`service "test" specifies an IP that resides on load balancer "lb1", ` +
+					`which is not in the eligible set [lb2]; ` +
+					`check or adjust the load balancer eligibility configuration ` +
+					`(ServiceLabelSelector, ServiceNamespaceSelector, or AllowServicePlacement)`,
+			),
+		},
+		{
+			description:   "multi-slb internal: IP annotation returns lb2-internal where IP resides",
+			vmSet:         primary,
+			useStandardLB: true,
+			isInternal:    true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:           "true",
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "10.0.0.5",
+			},
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb2-internal"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("aprimary-svc-uid"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.5"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: "lb2-internal",
+		},
+		{
+			description:   "multi-slb internal: spec.loadBalancerIP returns lb2-internal where IP resides",
+			vmSet:         primary,
+			useStandardLB: true,
+			isInternal:    true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			specLBIP: "10.0.0.5",
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal: "true",
+			},
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb2-internal"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("aprimary-svc-uid"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.5"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: "lb2-internal",
+		},
+		{
+			description:   "multi-slb internal: LB annotation lb2 returns lb2-internal",
+			vmSet:         primary,
+			useStandardLB: true,
+			isInternal:    true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:       "true",
+				consts.ServiceAnnotationLoadBalancerConfigurations: "lb2",
+			},
+			expected: "lb2-internal",
+		},
+		{
+			description:   "multi-slb internal: new IP not on LB returns fewest rules lb2-internal",
+			vmSet:         primary,
+			useStandardLB: true,
+			isInternal:    true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:           "true",
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "10.0.0.99",
+			},
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1-internal"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("aprimary-svc-uid"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.5"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: "lb2-internal",
+		},
+		{
+			description:   "multi-slb internal: IP annotation and LB annotation conflicts",
+			vmSet:         primary,
+			useStandardLB: true,
+			isInternal:    true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:           "true",
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "10.0.0.5",
+				consts.ServiceAnnotationLoadBalancerConfigurations:     "lb1",
+			},
+			expectedErr: errors.New(
+				`service "test" has conflicting load balancer configuration: ` +
+					`both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. ` +
+					`When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), ` +
+					`the service must use the load balancer where that IP resides. ` +
+					`To fix, either (1) remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation to stay on the load balancer where the IP resides, ` +
+					`or (2) remove the IP annotation to move to the specified load balancer (external services only)`,
+			),
+		},
+		{
+			description:   "multi-slb internal: spec.loadBalancerIP and LB annotation conflicts",
+			vmSet:         primary,
+			useStandardLB: true,
+			isInternal:    true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			specLBIP: "10.0.0.5",
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:       "true",
+				consts.ServiceAnnotationLoadBalancerConfigurations: "lb1",
+			},
+			expectedErr: errors.New(
+				`service "test" has conflicting load balancer configuration: ` +
+					`both a load balancer name (service.beta.kubernetes.io/azure-load-balancer-configurations) and an IP address are specified. ` +
+					`When an IP address is specified (via spec.loadBalancerIP, azure-load-balancer-ipv4/ipv6, or azure-pip-name), ` +
+					`the service must use the load balancer where that IP resides. ` +
+					`To fix, either (1) remove the service.beta.kubernetes.io/azure-load-balancer-configurations annotation to stay on the load balancer where the IP resides, ` +
+					`or (2) remove the IP annotation to move to the specified load balancer (external services only)`,
+			),
+		},
+		{
+			description:   "multi-slb internal: IP resides on LB excluded by label selector should error",
+			vmSet:         primary,
+			useStandardLB: true,
+			isInternal:    true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceLabelSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"app": "web"},
+						},
+					},
+				},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:           "true",
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "10.0.0.5",
+			},
+			serviceLabel: map[string]string{"app": "api"},
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1-internal"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{
+								Name: ptr.To("fip1"),
+								Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: ptr.To("10.0.0.5"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedErr: errors.New(
+				`service "test" specifies an IP that resides on load balancer "lb1", ` +
+					`which is not in the eligible set [lb2]; ` +
+					`check or adjust the load balancer eligibility configuration ` +
+					`(ServiceLabelSelector, ServiceNamespaceSelector, or AllowServicePlacement)`,
+			),
+		},
+		{
+			// Service is originally internal on lb2.
+			// Flipped service removes the internal annotation.
+			// IP annotation has the internal LB's private IP.
+			description:   "multi-slb internal: flip cleanup uses current LB",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{
+					Name: "lb2",
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveServices: utilsets.NewString("default/test"),
+					},
+				},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "10.0.0.5",
+			},
+			notWantLb: true,
+			expected:  "lb2",
+		},
+		{
+			// Service is originally external on lb2.
+			// Flipped service adds the internal annotation.
+			// IP annotation has the external LB's public IP.
+			description:   "multi-slb external: flip cleanup uses current LB",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			isInternal:    true,
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{
+					Name: "lb2",
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveServices: utilsets.NewString("default/test"),
+					},
+				},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "40.1.2.3",
+			},
+			notWantLb: true,
+			expected:  "lb2-internal",
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			az := GetTestCloud(ctrl)
+			az.PrimaryAvailabilitySetName = primary
+
 			if c.useStandardLB {
 				az.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 			} else {
@@ -8104,12 +9626,25 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 				az.MultipleStandardLoadBalancerConfigurations = c.multiSLBConfigs
 			}
 
+			// Mock PIP client for external LB cases.
+			if len(c.existingPIPs) > 0 {
+				mockPIPsClient := az.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
+				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(c.existingPIPs, nil).MaxTimes(2)
+			}
+
 			az.LoadBalancerName = c.lbName
 			svc := getTestService("test", v1.ProtocolTCP, c.serviceAnnotation, false)
+			if c.specLBIP != "" {
+				svc.Spec.LoadBalancerIP = c.specLBIP
+			}
 			if c.serviceLabel != nil {
 				svc.Labels = c.serviceLabel
 			}
-			loadbalancerName, err := az.getAzureLoadBalancerName(context.TODO(), &svc, []*armnetwork.LoadBalancer{}, c.clusterName, c.vmSet, c.isInternal)
+			existingLBs := c.existingLBs
+			if existingLBs == nil {
+				existingLBs = []*armnetwork.LoadBalancer{}
+			}
+			loadbalancerName, err := az.getAzureLoadBalancerName(context.TODO(), &svc, existingLBs, c.clusterName, c.vmSet, c.isInternal, !c.notWantLb)
 			assert.Equal(t, c.expected, loadbalancerName)
 			if c.expectedErr != nil {
 				assert.EqualError(t, err, c.expectedErr.Error())
@@ -9588,5 +11123,621 @@ func fakeEnsureHostsInPool() func(context.Context, *v1.Service, []*v1.Node, stri
 			},
 		}
 		return nil
+	}
+}
+
+func TestLbHasServiceOwnedResources(t *testing.T) {
+	svcUID := "testuid"
+	prefix := "a" + svcUID
+	otherPrefix := "a" + "otheruid"
+
+	tests := []struct {
+		name     string
+		lb       *armnetwork.LoadBalancer
+		expected bool
+	}{
+		{
+			name:     "nil properties",
+			lb:       &armnetwork.LoadBalancer{},
+			expected: false,
+		},
+		{
+			name: "empty rules and probes",
+			lb: &armnetwork.LoadBalancer{
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{},
+			},
+			expected: false,
+		},
+		{
+			name: "LB has rules and probes only from another service",
+			lb: &armnetwork.LoadBalancer{
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{Name: ptr.To(otherPrefix + "-TCP-80")},
+					},
+					Probes: []*armnetwork.Probe{
+						{Name: ptr.To(otherPrefix + "-TCP-80")},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "LB shared by multiple services including ours",
+			lb: &armnetwork.LoadBalancer{
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{Name: ptr.To(otherPrefix + "-TCP-80")},
+						{Name: ptr.To(prefix + "-TCP-443")},
+					},
+					Probes: []*armnetwork.Probe{
+						{Name: ptr.To(otherPrefix + "-TCP-80")},
+						{Name: ptr.To(prefix + "-TCP-443")},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "LB has orphaned service probe without rule",
+			lb: &armnetwork.LoadBalancer{
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{Name: ptr.To(otherPrefix + "-TCP-80")},
+					},
+					Probes: []*armnetwork.Probe{
+						{Name: ptr.To(otherPrefix + "-TCP-80")},
+						{Name: ptr.To(prefix + "-TCP-443")},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "shared probe without service rules is not service-owned",
+			lb: &armnetwork.LoadBalancer{
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{Name: ptr.To(otherPrefix + "-TCP-80")},
+					},
+					Probes: []*armnetwork.Probe{
+						{Name: ptr.To(consts.SharedProbeName)},
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	policies := []v1.ServiceExternalTrafficPolicy{
+		v1.ServiceExternalTrafficPolicyTypeCluster,
+		v1.ServiceExternalTrafficPolicyTypeLocal,
+	}
+	az := &Cloud{}
+	for _, policy := range policies {
+		svc := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{UID: types.UID(svcUID)},
+			Spec:       v1.ServiceSpec{ExternalTrafficPolicy: policy},
+		}
+		for _, tc := range tests {
+			t.Run(string(policy)+"/"+tc.name, func(t *testing.T) {
+				got := az.lbHasServiceOwnedResources(tc.lb, svc)
+				assert.Equal(t, tc.expected, got)
+			})
+		}
+	}
+}
+
+func TestRemoveStaleServiceLBResources(t *testing.T) {
+	const (
+		rgName      = "rg"
+		lbName      = "lb-1"
+		clusterName = "testCluster"
+	)
+
+	svcUID := "svc2uid"
+	svc2Prefix := "a" + svcUID
+	otherPrefix := "asvcother"
+	fipID := "/subscriptions/sub/resourceGroups/" + rgName + "/providers/Microsoft.Network/loadBalancers/" + lbName + "/frontendIPConfigurations/fip1"
+	fipID2 := "/subscriptions/sub/resourceGroups/" + rgName + "/providers/Microsoft.Network/loadBalancers/" + lbName + "/frontendIPConfigurations/fip2"
+
+	sharedProbeID := "/subscriptions/sub/resourceGroups/" + rgName + "/providers/Microsoft.Network/loadBalancers/" + lbName + "/probes/" + consts.SharedProbeName
+	svc2RuleID := "/subscriptions/sub/resourceGroups/" + rgName + "/providers/Microsoft.Network/loadBalancers/" + lbName + "/loadBalancingRules/" + svc2Prefix + "-TCP-443"
+	otherRuleID := "/subscriptions/sub/resourceGroups/" + rgName + "/providers/Microsoft.Network/loadBalancers/" + lbName + "/loadBalancingRules/" + otherPrefix + "-TCP-80"
+
+	tests := []struct {
+		name                  string
+		lb                    *armnetwork.LoadBalancer
+		isLocalService        bool
+		setupMocks            func(cloud *Cloud)
+		expectedDeletedLBName string
+		expectedDeletedPLS    bool
+		expectedFIPNames      []string
+		expectedRuleNames     []string
+		expectedProbeNames    []string
+	}{
+		{
+			name: "no dirty rules or probes, no API call",
+			lb: &armnetwork.LoadBalancer{
+				Name: ptr.To(lbName),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+						{Name: ptr.To("fip1"), ID: ptr.To(fipID)},
+					},
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{
+							Name: ptr.To(otherPrefix + "-TCP-80"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+					},
+					Probes: []*armnetwork.Probe{
+						{Name: ptr.To(otherPrefix + "-TCP-80")},
+					},
+				},
+			},
+			setupMocks:            func(_ *Cloud) { /* no API calls expected */ },
+			expectedDeletedLBName: "",
+			expectedFIPNames:      []string{"fip1"},
+			expectedRuleNames:     []string{otherPrefix + "-TCP-80"},
+		},
+		{
+			name: "FIP still has other services rules, FIP stays, LB updated with rules only",
+			lb: &armnetwork.LoadBalancer{
+				Name: ptr.To(lbName),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+						{Name: ptr.To("fip1"), ID: ptr.To(fipID)},
+					},
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{
+							Name: ptr.To(svc2Prefix + "-TCP-443"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+						{
+							Name: ptr.To(otherPrefix + "-TCP-80"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+					},
+					Probes: []*armnetwork.Probe{
+						{Name: ptr.To(svc2Prefix + "-TCP-443"), Properties: &armnetwork.ProbePropertiesFormat{Port: ptr.To(int32(443))}},
+						{Name: ptr.To(otherPrefix + "-TCP-80"), Properties: &armnetwork.ProbePropertiesFormat{Port: ptr.To(int32(80))}},
+					},
+				},
+			},
+			setupMocks: func(cloud *Cloud) {
+				mockLBClient := cloud.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+				mockLBClient.EXPECT().CreateOrUpdate(gomock.Any(), rgName, lbName, gomock.Any()).Return(nil, nil).Times(1)
+			},
+			expectedDeletedLBName: "",
+			expectedFIPNames:      []string{"fip1"},
+			expectedRuleNames:     []string{otherPrefix + "-TCP-80"},
+		},
+		{
+			name: "FIP becomes empty and LB has other FIPs, FIP removed, LB updated",
+			lb: &armnetwork.LoadBalancer{
+				Name: ptr.To(lbName),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+						{
+							Name:       ptr.To("fip1"),
+							ID:         ptr.To(fipID),
+							Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pipID")}},
+						},
+						{Name: ptr.To("fip2"), ID: ptr.To(fipID2)},
+					},
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{
+							Name: ptr.To(svc2Prefix + "-TCP-443"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+						{
+							Name: ptr.To(otherPrefix + "-TCP-80"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID2)},
+							},
+						},
+					},
+					Probes: []*armnetwork.Probe{
+						{Name: ptr.To(svc2Prefix + "-TCP-443"), Properties: &armnetwork.ProbePropertiesFormat{Port: ptr.To(int32(443))}},
+						{Name: ptr.To(otherPrefix + "-TCP-80"), Properties: &armnetwork.ProbePropertiesFormat{Port: ptr.To(int32(80))}},
+					},
+				},
+			},
+			setupMocks: func(cloud *Cloud) {
+				mockLBClient := cloud.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+				mockLBClient.EXPECT().CreateOrUpdate(gomock.Any(), rgName, lbName, gomock.Any()).Return(nil, nil).Times(1)
+				mockPLSRepo := cloud.plsRepo.(*privatelinkservice.MockRepository)
+				mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).Times(1)
+			},
+			expectedDeletedLBName: "",
+			expectedFIPNames:      []string{"fip2"},
+			expectedRuleNames:     []string{otherPrefix + "-TCP-80"},
+		},
+		{
+			name: "FIP becomes empty and LB has no other FIPs, LB deleted",
+			lb: &armnetwork.LoadBalancer{
+				Name: ptr.To(lbName),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+						{
+							Name:       ptr.To("fip1"),
+							ID:         ptr.To(fipID),
+							Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pipID")}},
+						},
+					},
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{
+							Name: ptr.To(svc2Prefix + "-TCP-443"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+					},
+					Probes: []*armnetwork.Probe{
+						{Name: ptr.To(svc2Prefix + "-TCP-443"), Properties: &armnetwork.ProbePropertiesFormat{Port: ptr.To(int32(443))}},
+					},
+				},
+			},
+			setupMocks: func(cloud *Cloud) {
+				mockLBClient := cloud.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+				mockLBClient.EXPECT().Delete(gomock.Any(), rgName, lbName).Return(nil).Times(1)
+				mockPLSRepo := cloud.plsRepo.(*privatelinkservice.MockRepository)
+				mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).Times(1)
+			},
+			expectedDeletedLBName: lbName,
+		},
+		{
+			name: "FIP becomes empty, PLS exists and gets deleted, deletedPLS returned",
+			lb: &armnetwork.LoadBalancer{
+				Name: ptr.To(lbName),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+						{
+							Name:       ptr.To("fip1"),
+							ID:         ptr.To(fipID),
+							Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pipID")}},
+						},
+						{Name: ptr.To("fip2"), ID: ptr.To(fipID2)},
+					},
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{
+							Name: ptr.To(svc2Prefix + "-TCP-443"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+						{
+							Name: ptr.To(otherPrefix + "-TCP-80"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID2)},
+							},
+						},
+					},
+					Probes: []*armnetwork.Probe{
+						{Name: ptr.To(svc2Prefix + "-TCP-443"), Properties: &armnetwork.ProbePropertiesFormat{Port: ptr.To(int32(443))}},
+						{Name: ptr.To(otherPrefix + "-TCP-80"), Properties: &armnetwork.ProbePropertiesFormat{Port: ptr.To(int32(80))}},
+					},
+				},
+			},
+			setupMocks: func(cloud *Cloud) {
+				mockPLSRepo := cloud.plsRepo.(*privatelinkservice.MockRepository)
+				mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{
+					Name: ptr.To("pls-fip1"),
+					ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/privateLinkServices/pls-fip1"),
+					Properties: &armnetwork.PrivateLinkServiceProperties{
+						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{ID: ptr.To(fipID)},
+						},
+					},
+				}, nil).Times(1)
+				mockPLSRepo.EXPECT().Delete(gomock.Any(), gomock.Any(), "pls-fip1", gomock.Any()).Return(nil).Times(1)
+			},
+			expectedDeletedPLS: true,
+		},
+		{
+			name: "shared probe kept when other services reference it",
+			lb: &armnetwork.LoadBalancer{
+				Name: ptr.To(lbName),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+						{Name: ptr.To("fip1"), ID: ptr.To(fipID)},
+					},
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{
+							Name: ptr.To(svc2Prefix + "-TCP-443"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+						{
+							Name: ptr.To(otherPrefix + "-TCP-80"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+					},
+					Probes: []*armnetwork.Probe{
+						{
+							Name: ptr.To(consts.SharedProbeName),
+							ID:   ptr.To(sharedProbeID),
+							Properties: &armnetwork.ProbePropertiesFormat{
+								Protocol:          to.Ptr(armnetwork.ProbeProtocolHTTP),
+								IntervalInSeconds: ptr.To(consts.HealthProbeDefaultProbeInterval),
+								ProbeThreshold:    ptr.To(consts.HealthProbeDefaultNumOfProbe),
+								LoadBalancingRules: []*armnetwork.SubResource{
+									{ID: ptr.To(svc2RuleID)},
+									{ID: ptr.To(otherRuleID)},
+								},
+							},
+						},
+					},
+				},
+			},
+			setupMocks: func(cloud *Cloud) {
+				mockLBClient := cloud.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+				mockLBClient.EXPECT().CreateOrUpdate(gomock.Any(), rgName, lbName, gomock.Any()).Return(nil, nil).Times(1)
+			},
+			expectedDeletedLBName: "",
+			expectedFIPNames:      []string{"fip1"},
+			expectedRuleNames:     []string{otherPrefix + "-TCP-80"},
+			expectedProbeNames:    []string{consts.SharedProbeName},
+		},
+		{
+			name: "shared probe removed when departing service is the last one referring to it",
+			lb: &armnetwork.LoadBalancer{
+				Name: ptr.To(lbName),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+						{
+							Name:       ptr.To("fip1"),
+							ID:         ptr.To(fipID),
+							Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pipID")}},
+						},
+					},
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{
+							Name: ptr.To(svc2Prefix + "-TCP-443"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+						{
+							Name: ptr.To(otherPrefix + "-TCP-80"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+					},
+					Probes: []*armnetwork.Probe{
+						{
+							Name: ptr.To(consts.SharedProbeName),
+							ID:   ptr.To(sharedProbeID),
+							Properties: &armnetwork.ProbePropertiesFormat{
+								Protocol:          to.Ptr(armnetwork.ProbeProtocolHTTP),
+								IntervalInSeconds: ptr.To(consts.HealthProbeDefaultProbeInterval),
+								ProbeThreshold:    ptr.To(consts.HealthProbeDefaultNumOfProbe),
+								LoadBalancingRules: []*armnetwork.SubResource{
+									{ID: ptr.To(svc2RuleID)},
+								},
+							},
+						},
+					},
+				},
+			},
+			setupMocks: func(cloud *Cloud) {
+				mockLBClient := cloud.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+				mockLBClient.EXPECT().CreateOrUpdate(gomock.Any(), rgName, lbName, gomock.Any()).Return(nil, nil).Times(1)
+			},
+			expectedDeletedLBName: "",
+			expectedFIPNames:      []string{"fip1"},
+			expectedRuleNames:     []string{otherPrefix + "-TCP-80"},
+			expectedProbeNames:    []string{},
+		},
+		{
+			name: "no API call when service has no rules on LB and shared probe exists",
+			lb: &armnetwork.LoadBalancer{
+				Name: ptr.To(lbName),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+						{Name: ptr.To("fip1"), ID: ptr.To(fipID)},
+					},
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{
+							Name: ptr.To(otherPrefix + "-TCP-80"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+					},
+					Probes: []*armnetwork.Probe{
+						{
+							Name: ptr.To(consts.SharedProbeName),
+							ID:   ptr.To(sharedProbeID),
+							Properties: &armnetwork.ProbePropertiesFormat{
+								Protocol:          to.Ptr(armnetwork.ProbeProtocolHTTP),
+								IntervalInSeconds: ptr.To(consts.HealthProbeDefaultProbeInterval),
+								ProbeThreshold:    ptr.To(consts.HealthProbeDefaultNumOfProbe),
+								LoadBalancingRules: []*armnetwork.SubResource{
+									{ID: ptr.To(otherRuleID)},
+								},
+							},
+						},
+					},
+				},
+			},
+			setupMocks:         func(_ *Cloud) { /* no API calls expected */ },
+			expectedFIPNames:   []string{"fip1"},
+			expectedRuleNames:  []string{otherPrefix + "-TCP-80"},
+			expectedProbeNames: []string{consts.SharedProbeName},
+		},
+		{
+			name:           "shared probe untouched when departing service uses Local traffic policy",
+			isLocalService: true,
+			lb: &armnetwork.LoadBalancer{
+				Name: ptr.To(lbName),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+						{Name: ptr.To("fip1"), ID: ptr.To(fipID)},
+					},
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{
+							Name: ptr.To(svc2Prefix + "-TCP-443"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+						{
+							Name: ptr.To(otherPrefix + "-TCP-80"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+					},
+					Probes: []*armnetwork.Probe{
+						{Name: ptr.To(svc2Prefix + "-TCP-443"), Properties: &armnetwork.ProbePropertiesFormat{Port: ptr.To(int32(443))}},
+						{
+							Name: ptr.To(consts.SharedProbeName),
+							ID:   ptr.To(sharedProbeID),
+							Properties: &armnetwork.ProbePropertiesFormat{
+								Protocol:          to.Ptr(armnetwork.ProbeProtocolHTTP),
+								IntervalInSeconds: ptr.To(consts.HealthProbeDefaultProbeInterval),
+								ProbeThreshold:    ptr.To(consts.HealthProbeDefaultNumOfProbe),
+								LoadBalancingRules: []*armnetwork.SubResource{
+									{ID: ptr.To(otherRuleID)},
+								},
+							},
+						},
+					},
+				},
+			},
+			setupMocks: func(cloud *Cloud) {
+				mockLBClient := cloud.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+				mockLBClient.EXPECT().CreateOrUpdate(gomock.Any(), rgName, lbName, gomock.Any()).Return(nil, nil).Times(1)
+			},
+			expectedDeletedLBName: "",
+			expectedFIPNames:      []string{"fip1"},
+			expectedRuleNames:     []string{otherPrefix + "-TCP-80"},
+			expectedProbeNames:    []string{consts.SharedProbeName},
+		},
+		{
+			name:           "shared probe removed when service switches from Cluster to Local and is the last one referring to it",
+			isLocalService: true,
+			lb: &armnetwork.LoadBalancer{
+				Name: ptr.To(lbName),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+						{
+							Name:       ptr.To("fip1"),
+							ID:         ptr.To(fipID),
+							Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pipID")}},
+						},
+					},
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{
+							Name: ptr.To(svc2Prefix + "-TCP-443"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+						{
+							Name: ptr.To(otherPrefix + "-TCP-80"),
+							Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+								FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+							},
+						},
+					},
+					Probes: []*armnetwork.Probe{
+						{
+							Name: ptr.To(consts.SharedProbeName),
+							ID:   ptr.To(sharedProbeID),
+							Properties: &armnetwork.ProbePropertiesFormat{
+								Protocol:          to.Ptr(armnetwork.ProbeProtocolHTTP),
+								IntervalInSeconds: ptr.To(consts.HealthProbeDefaultProbeInterval),
+								ProbeThreshold:    ptr.To(consts.HealthProbeDefaultNumOfProbe),
+								LoadBalancingRules: []*armnetwork.SubResource{
+									{ID: ptr.To(svc2RuleID)},
+								},
+							},
+						},
+					},
+				},
+			},
+			setupMocks: func(cloud *Cloud) {
+				mockLBClient := cloud.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+				mockLBClient.EXPECT().CreateOrUpdate(gomock.Any(), rgName, lbName, gomock.Any()).Return(nil, nil).Times(1)
+			},
+			expectedDeletedLBName: "",
+			expectedFIPNames:      []string{"fip1"},
+			expectedRuleNames:     []string{otherPrefix + "-TCP-80"},
+			expectedProbeNames:    []string{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			cloud := GetTestCloud(ctrl)
+
+			trafficPolicy := v1.ServiceExternalTrafficPolicyTypeCluster
+			if tc.isLocalService {
+				trafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
+			}
+			svc2 := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "svc2",
+					Namespace:   "default",
+					UID:         types.UID(svcUID),
+					Annotations: map[string]string{},
+				},
+				Spec: v1.ServiceSpec{
+					Type:                  v1.ServiceTypeLoadBalancer,
+					ExternalTrafficPolicy: trafficPolicy,
+					Ports: []v1.ServicePort{
+						{Name: "port1", Protocol: v1.ProtocolTCP, Port: 443},
+					},
+					IPFamilies: []v1.IPFamily{v1.IPv4Protocol},
+					ClusterIP:  "10.0.0.3",
+				},
+			}
+
+			tc.setupMocks(cloud)
+			existingLBs := []*armnetwork.LoadBalancer{tc.lb}
+
+			deletedLBName, deletedPLS, err := cloud.removeStaleServiceLBResources(context.TODO(), tc.lb, existingLBs, clusterName, svc2)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedDeletedLBName, deletedLBName)
+			assert.Equal(t, tc.expectedDeletedPLS, deletedPLS)
+
+			if tc.expectedFIPNames != nil {
+				var fipNames []string
+				for _, fip := range tc.lb.Properties.FrontendIPConfigurations {
+					fipNames = append(fipNames, *fip.Name)
+				}
+				assert.Equal(t, tc.expectedFIPNames, fipNames)
+			}
+			if tc.expectedRuleNames != nil {
+				var ruleNames []string
+				for _, rule := range tc.lb.Properties.LoadBalancingRules {
+					ruleNames = append(ruleNames, *rule.Name)
+				}
+				assert.Equal(t, tc.expectedRuleNames, ruleNames)
+			}
+			if tc.expectedProbeNames != nil {
+				probeNames := []string{}
+				for _, probe := range tc.lb.Properties.Probes {
+					probeNames = append(probeNames, *probe.Name)
+				}
+				assert.Equal(t, tc.expectedProbeNames, probeNames)
+			}
+		})
 	}
 }
