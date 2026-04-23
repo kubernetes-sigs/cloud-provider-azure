@@ -30,8 +30,8 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/text/cases"
@@ -7875,7 +7875,7 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 				},
 			},
 			expectedLBs: []string{},
-			expectedErr: errors.New("values: Invalid value: []string(nil): for 'in', 'notin' operators, values set can't be empty"),
+			expectedErr: errors.New("values: Invalid value: null: for 'in', 'notin' operators, values set can't be empty"),
 		},
 		{
 			description: "should report an error if failed to convert namespace selector as a selector",
@@ -7897,7 +7897,7 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 				},
 			},
 			expectedLBs: []string{},
-			expectedErr: errors.New("values: Invalid value: []string(nil): for 'in', 'notin' operators, values set can't be empty"),
+			expectedErr: errors.New("values: Invalid value: null: for 'in', 'notin' operators, values set can't be empty"),
 		},
 		{
 			description: "should respect allowServicePlacement flag",
