@@ -9,7 +9,7 @@ description: Multiple Standard LoadBalancers.
 
 ## Backgrounds
 
-There will be only a single Standard Load Balancer and a single Internal Load Balancer (if required) per cluster by default. This imposes a number of limits on clusters based on [Azure Load Balancer limits](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/azure-subscription-service-limits#load-balancer), the largest being based on the 300 rules per NIC limitation. Any IP:port combination in a frontEndIPConfiguration that maps to a member of a backend pool counts as one of the 300 rules for that node. This limits any AKS cluster to a maximum of 300 LoadBalancer service IP:port combinations (so a maximum of 300 services with one port, or fewer if services have multiple ports). Load balancers are also limited to no more than 8 private link services targeting a given load balancer. 
+There will be only a single Standard Load Balancer and a single Internal Load Balancer (if required) per cluster by default. This imposes a number of limits on clusters based on [Azure Load Balancer limits](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/azure-subscription-service-limits#load-balancer), the largest being based on the 300 rules per NIC limitation. Any IP:port combination in a frontEndIPConfiguration that maps to a member of a backend pool counts as one of the 300 rules for that node. This limits any AKS cluster to a maximum of 300 LoadBalancer service IP:port combinations (so a maximum of 300 services with one port, or fewer if services have multiple ports). Load balancers are also limited to no more than 8 private link services targeting a given load balancer.
 
 ## Configuration
 
@@ -52,11 +52,12 @@ Introduce a new cloud configuration option `multipleStandardLoadBalancerConfigur
 > To enable the multiple standard load balancers, set `loadBalancerSKU` to `Standard`, `loadBalancerBackendPoolConfigurationType` to `nodeIP` and at least one `multipleStandardLoadBalancerConfiguration`. If one or more conditions are not met, the cloud provider will either throw an error or fall back to the single standard load balancer.
 
 ### default lbs
+
 The default lb `<clustername>` is required in `loadBalancerProfiles`. The cloud provider will check if there is an lb config named `<clustername>`. If not, an error will be reported in the service event.
 
 ### internal lbs
-The behavior of internal lbs remains the same as is. It shares the same config as its public counterpart and will be automatically created if needed with the name `<external-lb-name>-internal`. Internal lbs are not required in the `loadBalancerProfiles`, all lb names in it are considered public ones.
 
+The behavior of internal lbs remains the same as is. It shares the same config as its public counterpart and will be automatically created if needed with the name `<external-lb-name>-internal`. Internal lbs are not required in the `loadBalancerProfiles`, all lb names in it are considered public ones.
 
 ## Service selection
 
@@ -73,6 +74,16 @@ Only services created in namespaces that match the selector will be allowed to s
 4. `ServiceLabelSelector`
 Similar to `ServiceNamespaceSelector`. Services must match this selector to be placed on this load balancer.
 
+## IP sharing across services
+
+When a service specifies an IP address (via `service.beta.kubernetes.io/azure-load-balancer-ipv4`, `service.beta.kubernetes.io/azure-load-balancer-ipv6`, `Service.Spec.LoadBalancerIP`, or `service.beta.kubernetes.io/azure-pip-name`), the cloud provider places the service on the load balancer where that IP already resides, overriding the normal fewest-rules selection. If the IP is not yet on any load balancer, normal eligible load balancer selection applies.
+
+> Note the following restrictions:
+>
+> 1. `service.beta.kubernetes.io/azure-load-balancer-configurations` cannot be combined with an IP specification (via annotations or `Service.Spec.LoadBalancerIP`). When an IP is specified, the load balancer is determined by where the IP resides. If both are set, an error will be reported in the service event.
+> 2. If the IP resides on a load balancer that is not eligible for the service (per `AllowServicePlacement`, `ServiceLabelSelector`, or `ServiceNamespaceSelector`), an error will be reported in the service event.
+> 3. If a service needs to move to a different load balancer but its frontend IP is shared with other services on the current load balancer, the migration is blocked and an error will be reported in the service event.
+
 ## Node selection
 
 When the cluster is initially migrated to or created with multiple standard load balancers, each node will be evaluated to see what load balancer it should be placed into.
@@ -83,7 +94,7 @@ Valid placement targets will be determined as follows (rules match from top to b
 2. If the nodeSelectors on any load balancer configurations match this node, then all load balancer configurations that match it will be potential placement targets.
 3. If no nodeSelectors on any load balancer configurations match this node, then all load balancers that do not have any nodeSelectors will be potential placement targets.
 
-After the list of potential placement targets has been calculated, the node will be placed into the kubernetes backend pool of the load balancer with the fewest number of nodes already assigned. 
+After the list of potential placement targets has been calculated, the node will be placed into the kubernetes backend pool of the load balancer with the fewest number of nodes already assigned.
 
 ## Service with `ExternalTrafficPolicy=Local`
 
