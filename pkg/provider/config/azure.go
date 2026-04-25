@@ -165,6 +165,9 @@ type Config struct {
 	ClusterServiceSharedLoadBalancerHealthProbePort int32 `json:"clusterServiceSharedLoadBalancerHealthProbePort,omitempty" yaml:"clusterServiceSharedLoadBalancerHealthProbePort,omitempty"`
 	// ClusterServiceSharedLoadBalancerHealthProbePath defines the target path of the shared health probe. Default to `/healthz`.
 	ClusterServiceSharedLoadBalancerHealthProbePath string `json:"clusterServiceSharedLoadBalancerHealthProbePath,omitempty" yaml:"clusterServiceSharedLoadBalancerHealthProbePath,omitempty"`
+
+	// ServiceGatewayEnabled indicates whether the service gateway is enabled for the cluster.
+	ServiceGatewayEnabled bool `json:"serviceGatewayEnabled,omitempty" yaml:"serviceGatewayEnabled,omitempty"`
 }
 
 // HasExtendedLocation returns true if extendedlocation prop are specified.
@@ -178,6 +181,18 @@ func (az *Config) IsLBBackendPoolTypeNodeIPConfig() bool {
 
 func (az *Config) IsLBBackendPoolTypeNodeIP() bool {
 	return strings.EqualFold(az.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypeNodeIP)
+}
+
+func (az *Config) IsLBBackendPoolTypePodIP() bool {
+	return strings.EqualFold(az.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePodIP)
+}
+
+func (az *Config) UseServiceLoadBalancer() bool {
+	return strings.EqualFold(az.LoadBalancerSKU, consts.LoadBalancerSKUService)
+}
+
+func (az *Config) IsLBBackendPoolTypePodIPAndUseServiceLoadBalancer() bool {
+	return az.IsLBBackendPoolTypePodIP() && az.UseServiceLoadBalancer()
 }
 
 func (az *Config) GetPutVMSSVMBatchSize() int {
