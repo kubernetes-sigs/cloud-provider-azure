@@ -826,6 +826,53 @@ func (az *Cloud) getServiceLoadBalancer(
 			defaultLB = existingLB
 		}
 		if isInternalLoadBalancer(existingLB) != isInternal {
+			// External<->internal LB cleanup (multi-SLB only): after switching a service
+			// between external and internal, the opposite LB may still have stale
+			// rules/probes from this service. Clean them up here during the wantLb=true
+			// reconcile so that the subsequent wantLb=false reconcile finds nothing to
+			// remove and won't incorrectly evict the service from ActiveServices.
+			if wantLb && az.UseMultipleStandardLoadBalancers() &&
+				az.lbHasServiceOwnedResources(existingLB, service) {
+
+				deletedLBName, deletedPLS, err := az.removeStaleServiceLBResources(ctx, existingLB, existingLBs, clusterName, service)
+				if err != nil {
+					return nil, nil, nil, nil, false, false, fmt.Errorf("remove stale service resources from opposite-type load balancer %q for service %q: %w",
+						ptr.Deref(existingLB.Name, ""), getServiceName(service), err)
+				}
+				if deletedPLS {
+					return nil, nil, nil, nil, false, true, nil
+				}
+				logger.V(2).Info("Removed stale service resources from opposite-type load balancer",
+					"service", service.Name,
+					"oldLB", ptr.Deref(existingLB.Name, ""),
+					"targetLB", defaultLBName,
+				)
+
+				if deletedLBName != "" {
+					removeLBFromList(&existingLBs, deletedLBName)
+				}
+
+				az.reconcileMultipleStandardLoadBalancerConfigurationStatus(
+					false,
+					getServiceName(service),
+					ptr.Deref(existingLB.Name, ""),
+				)
+
+				if isLocalService(service) {
+					svcName := getServiceName(service)
+					if az.backendPoolUpdater != nil {
+						az.backendPoolUpdater.removeOperation(svcName)
+					}
+					if deletedLBName == "" {
+						newLBs, err := az.cleanupLocalServiceBackendPool(ctx, service, nodes, existingLBs, clusterName)
+						if err != nil {
+							return nil, nil, nil, nil, false, false, fmt.Errorf("clean up backend pool for local service %q on opposite-type load balancer %q: %w",
+								getServiceName(service), ptr.Deref(existingLB.Name, ""), err)
+						}
+						existingLBs = newLBs
+					}
+				}
+			}
 			continue
 		}
 
@@ -4322,6 +4369,7 @@ func (az *Cloud) getAzureLoadBalancerName(
 		lbIPs := getServiceLoadBalancerIPs(service)
 		pipNames := getServicePIPNames(service)
 		pinsIP := len(lbIPs) > 0 || len(pipNames) > 0
+		annotatedLBs := consts.GetLoadBalancerConfigurationsNames(service)
 
 		// Only block when creating resources (wantLb=true).
 		// Cleanup operations (wantLb=false) don't need this constraint.
@@ -4330,7 +4378,6 @@ func (az *Cloud) getAzureLoadBalancerName(
 			// When specifying an IP, the LB is determined by where the IP resides.
 			// Specifying a different LB is contradictory. This early check also
 			// avoids unnecessary PIP lookups on every reconcile.
-			annotatedLBs := consts.GetLoadBalancerConfigurationsNames(service)
 			logger.V(5).Info("checking LB and IP config", "service", service.Name, "annotatedLBs", annotatedLBs, "lbIPs", lbIPs, "pipNames", pipNames, "pinsIP", pinsIP)
 			if len(annotatedLBs) > 0 && pinsIP {
 				return "", fmt.Errorf(
@@ -4351,6 +4398,14 @@ func (az *Cloud) getAzureLoadBalancerName(
 		}
 
 		currentLBName := az.getServiceCurrentLoadBalancerName(service)
+
+		// If a service does not pin a specific IP, has no LB annotation, and its primary frontend IP already exists
+		// on a same-kind (internal/external) LB, use that LB.
+		if wantLb && !pinsIP && len(annotatedLBs) == 0 {
+			if fipLBName := az.getLoadBalancerNameByFrontendIPName(ctx, service, existingLBs, isInternal); fipLBName != "" {
+				currentLBName = fipLBName
+			}
+		}
 
 		// If service specifies an IP, find which LB has that IP. The service should use the LB where the IP resides.
 		// This also detects secondary services sharing an IP with a primary service already on an LB.
@@ -4382,6 +4437,36 @@ func (az *Cloud) getAzureLoadBalancerName(
 		return fmt.Sprintf("%s%s", lbNamePrefix, consts.InternalLoadBalancerNameSuffix), nil
 	}
 	return lbNamePrefix, nil
+}
+
+// getLoadBalancerNameByFrontendIPName finds which LB config owns the primary
+// frontend IP for a service, using the same name-prefix check as
+// serviceOwnsFrontendIP. Only LBs matching isInternal are checked.
+// Returns the base config name (without "-internal" suffix) or "" if not found.
+func (az *Cloud) getLoadBalancerNameByFrontendIPName(
+	ctx context.Context,
+	service *v1.Service,
+	existingLBs []*armnetwork.LoadBalancer,
+	isInternal bool,
+) string {
+	logger := log.FromContextOrBackground(ctx).WithName("getLoadBalancerNameByFrontendIPName")
+	baseName := az.GetLoadBalancerName(ctx, "", service)
+	for _, lb := range existingLBs {
+		if isInternalLoadBalancer(lb) != isInternal {
+			continue
+		}
+		if lb.Properties == nil || lb.Properties.FrontendIPConfigurations == nil {
+			continue
+		}
+		for _, fip := range lb.Properties.FrontendIPConfigurations {
+			if strings.HasPrefix(ptr.Deref(fip.Name, ""), baseName) {
+				lbName := trimSuffixIgnoreCase(ptr.Deref(lb.Name, ""), consts.InternalLoadBalancerNameSuffix)
+				logger.V(2).Info("Found LB by frontend IP name prefix", "service", service.Name, "fipNamePrefix", baseName, "lbName", lbName)
+				return lbName
+			}
+		}
+	}
+	return ""
 }
 
 // getLoadBalancerNameByPrivateIP finds the LB by scanning frontend IPs for a matching private address.
