@@ -310,13 +310,8 @@ func (az *Cloud) getSecurityRuleName(service *v1.Service, port v1.ServicePort, s
 	isDualStack := isServiceDualStack(service)
 	safePrefix := strings.ReplaceAll(sourceAddrPrefix, "/", "_")
 	safePrefix = strings.ReplaceAll(safePrefix, ":", ".") // Consider IPv6 address
-	var name string
-	if useSharedSecurityRule(service) {
-		name = fmt.Sprintf("shared-%s-%d-%s", port.Protocol, port.Port, safePrefix)
-	} else {
-		rulePrefix := az.getRulePrefix(service)
-		name = fmt.Sprintf("%s-%s-%d-%s", rulePrefix, port.Protocol, port.Port, safePrefix)
-	}
+	rulePrefix := az.getRulePrefix(service)
+	name := fmt.Sprintf("%s-%s-%d-%s", rulePrefix, port.Protocol, port.Port, safePrefix)
 	return getResourceByIPFamily(name, isDualStack, isIPv6)
 }
 
