@@ -355,6 +355,32 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 			expectedResult:     []accountWithLocation{},
 			expectedError:      nil,
 		},
+		{
+			testCase: "IsSmbOAuthEnabled true should only match OAuth-enabled accounts",
+			testAccountOptions: &AccountOptions{
+				ResourceGroup:    "rg",
+				IsSmbOAuthEnabled: ptr.To(true),
+			},
+			testResourceGroups: []*armstorage.Account{{Name: &name, Kind: to.Ptr(armstorage.Kind("kind")), Location: &location, SKU: sku, Properties: &armstorage.AccountProperties{}}},
+			expectedResult:     []accountWithLocation{},
+			expectedError:      nil,
+		},
+		{
+			testCase: "IsSmbOAuthEnabled true should match OAuth-enabled account",
+			testAccountOptions: &AccountOptions{
+				ResourceGroup:    "rg",
+				IsSmbOAuthEnabled: ptr.To(true),
+			},
+			testResourceGroups: []*armstorage.Account{{Name: &name, Kind: to.Ptr(armstorage.Kind("kind")), Location: &location, SKU: sku, Properties: &armstorage.AccountProperties{
+				AzureFilesIdentityBasedAuthentication: &armstorage.AzureFilesIdentityBasedAuthentication{
+					SmbOAuthSettings: &armstorage.SmbOAuthSettings{
+						IsSmbOAuthEnabled: ptr.To(true),
+					},
+				},
+			}}},
+			expectedResult:     []accountWithLocation{{Name: name, StorageType: "testSku", Location: location}},
+			expectedError:      nil,
+		},
 	}
 
 	for _, test := range tests {
@@ -1704,6 +1730,20 @@ func TestIsSmbOAuthEnabledEqual(t *testing.T) {
 			account:        &armstorage.Account{Properties: &armstorage.AccountProperties{}},
 			accountOptions: &AccountOptions{IsSmbOAuthEnabled: ptr.To(false)},
 			expectedResult: true,
+		},
+		{
+			desc: "option false, account true (OAuth-enabled account should not match non-OAuth request)",
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					AzureFilesIdentityBasedAuthentication: &armstorage.AzureFilesIdentityBasedAuthentication{
+						SmbOAuthSettings: &armstorage.SmbOAuthSettings{
+							IsSmbOAuthEnabled: ptr.To(true),
+						},
+					},
+				},
+			},
+			accountOptions: &AccountOptions{IsSmbOAuthEnabled: ptr.To(false)},
+			expectedResult: false,
 		},
 	}
 
