@@ -1652,6 +1652,69 @@ func TestIsAccessTierEqual(t *testing.T) {
 	}
 }
 
+func TestIsSmbOAuthEnabledEqual(t *testing.T) {
+	tests := []struct {
+		desc           string
+		account        *armstorage.Account
+		accountOptions *AccountOptions
+		expectedResult bool
+	}{
+		{
+			desc:           "option nil should match any account",
+			account:        &armstorage.Account{Properties: &armstorage.AccountProperties{}},
+			accountOptions: &AccountOptions{},
+			expectedResult: true,
+		},
+		{
+			desc: "option true, account true",
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					AzureFilesIdentityBasedAuthentication: &armstorage.AzureFilesIdentityBasedAuthentication{
+						SmbOAuthSettings: &armstorage.SmbOAuthSettings{
+							IsSmbOAuthEnabled: ptr.To(true),
+						},
+					},
+				},
+			},
+			accountOptions: &AccountOptions{IsSmbOAuthEnabled: ptr.To(true)},
+			expectedResult: true,
+		},
+		{
+			desc: "option true, account false",
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					AzureFilesIdentityBasedAuthentication: &armstorage.AzureFilesIdentityBasedAuthentication{
+						SmbOAuthSettings: &armstorage.SmbOAuthSettings{
+							IsSmbOAuthEnabled: ptr.To(false),
+						},
+					},
+				},
+			},
+			accountOptions: &AccountOptions{IsSmbOAuthEnabled: ptr.To(true)},
+			expectedResult: false,
+		},
+		{
+			desc:           "option true, account nil (no SmbOAuth settings)",
+			account:        &armstorage.Account{Properties: &armstorage.AccountProperties{}},
+			accountOptions: &AccountOptions{IsSmbOAuthEnabled: ptr.To(true)},
+			expectedResult: false,
+		},
+		{
+			desc:           "option false, account nil (no SmbOAuth settings)",
+			account:        &armstorage.Account{Properties: &armstorage.AccountProperties{}},
+			accountOptions: &AccountOptions{IsSmbOAuthEnabled: ptr.To(false)},
+			expectedResult: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			result := isSmbOAuthEnabledEqual(test.account, test.accountOptions)
+			assert.Equal(t, test.expectedResult, result)
+		})
+	}
+}
+
 func TestIsMultichannelEnabledEqual(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
