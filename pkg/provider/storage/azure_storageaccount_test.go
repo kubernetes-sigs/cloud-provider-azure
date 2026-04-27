@@ -358,7 +358,7 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 		{
 			testCase: "IsSmbOAuthEnabled true should only match OAuth-enabled accounts",
 			testAccountOptions: &AccountOptions{
-				ResourceGroup:    "rg",
+				ResourceGroup:     "rg",
 				IsSmbOAuthEnabled: ptr.To(true),
 			},
 			testResourceGroups: []*armstorage.Account{{Name: &name, Kind: to.Ptr(armstorage.Kind("kind")), Location: &location, SKU: sku, Properties: &armstorage.AccountProperties{}}},
@@ -368,7 +368,7 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 		{
 			testCase: "IsSmbOAuthEnabled true should match OAuth-enabled account",
 			testAccountOptions: &AccountOptions{
-				ResourceGroup:    "rg",
+				ResourceGroup:     "rg",
 				IsSmbOAuthEnabled: ptr.To(true),
 			},
 			testResourceGroups: []*armstorage.Account{{Name: &name, Kind: to.Ptr(armstorage.Kind("kind")), Location: &location, SKU: sku, Properties: &armstorage.AccountProperties{
