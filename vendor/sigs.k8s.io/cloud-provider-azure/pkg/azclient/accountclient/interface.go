@@ -20,12 +20,12 @@ package accountclient
 import (
 	"context"
 
-	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
+	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=listbyrg,resource=Account,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage,packageAlias=armstorage,clientName=AccountsClient,expand=true,crossSubFactory=true,rateLimitKey=storageAccountRateLimit,azureStackCloudAPIVersion="2018-02-01",mooncakeApiVersion="2023-05-01"
+// +azure:client:verbs=listbyrg,resource=Account,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage/v2,packageAlias=armstorage,clientName=AccountsClient,expand=true,crossSubFactory=true,rateLimitKey=storageAccountRateLimit,azureStackCloudAPIVersion="2018-02-01",mooncakeApiVersion="2023-05-01"
 type Interface interface {
 	utils.ListFunc[armstorage.Account]
 	Create(ctx context.Context, resourceGroupName string, accountName string, resource *armstorage.AccountCreateParameters) (*armstorage.Account, error)

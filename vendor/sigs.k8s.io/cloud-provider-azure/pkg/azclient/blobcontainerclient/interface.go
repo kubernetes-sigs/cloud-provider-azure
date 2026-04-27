@@ -20,12 +20,12 @@ package blobcontainerclient
 import (
 	"context"
 
-	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
+	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get,resource=Account,subResource=BlobContainer,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage,packageAlias=armstorage,clientName=BlobContainersClient,expand=false,crossSubFactory=true,azureStackCloudAPIVersion="2019-06-01",mooncakeApiVersion="2023-05-01"
+// +azure:client:verbs=get,resource=Account,subResource=BlobContainer,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage/v2,packageAlias=armstorage,clientName=BlobContainersClient,expand=false,crossSubFactory=true,azureStackCloudAPIVersion="2019-06-01",mooncakeApiVersion="2023-05-01"
 type Interface interface {
 	utils.SubResourceGetFunc[armstorage.BlobContainer]
 	CreateContainer(ctx context.Context, resourceGroupName, accountName, containerName string, parameters armstorage.BlobContainer) (*armstorage.BlobContainer, error)
