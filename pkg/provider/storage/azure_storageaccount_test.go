@@ -372,6 +372,7 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 				IsSmbOAuthEnabled: ptr.To(true),
 			},
 			testResourceGroups: []*armstorage.Account{{Name: &name, Kind: to.Ptr(armstorage.Kind("kind")), Location: &location, SKU: sku, Properties: &armstorage.AccountProperties{
+				EnableHTTPSTrafficOnly: ptr.To(false),
 				AzureFilesIdentityBasedAuthentication: &armstorage.AzureFilesIdentityBasedAuthentication{
 					SmbOAuthSettings: &armstorage.SmbOAuthSettings{
 						IsSmbOAuthEnabled: ptr.To(true),
