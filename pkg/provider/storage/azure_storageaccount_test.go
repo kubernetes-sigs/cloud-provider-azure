@@ -408,8 +408,10 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 			t.Errorf("unexpected result count: got %d, expected %d", len(accountsWithLocations), len(test.expectedResult))
 		} else {
 			for i, acct := range accountsWithLocations {
-				if acct.Name != test.expectedResult[i].Name {
-					t.Errorf("unexpected account name at index %d: got %q, expected %q", i, acct.Name, test.expectedResult[i].Name)
+				if acct.Name != test.expectedResult[i].Name || acct.StorageType != test.expectedResult[i].StorageType || acct.Location != test.expectedResult[i].Location {
+					t.Errorf("unexpected account at index %d: got {Name:%q, StorageType:%q, Location:%q}, expected {Name:%q, StorageType:%q, Location:%q}",
+						i, acct.Name, acct.StorageType, acct.Location,
+						test.expectedResult[i].Name, test.expectedResult[i].StorageType, test.expectedResult[i].Location)
 				}
 			}
 		}
