@@ -159,7 +159,7 @@ func (az *AccountRepo) getStorageAccounts(ctx context.Context, storageAccountCli
 	accounts := []accountWithLocation{}
 	for _, acct := range result {
 		if acct.Name != nil && acct.Location != nil && acct.SKU != nil {
-			if !isStorageTypeEqual(acct, accountOptions) || !isAccountKindEqual(acct, accountOptions) || !isLocationEqual(acct, accountOptions) || !isLargeFileSharesPropertyEqual(acct, accountOptions) || !isTagsEqual(acct, accountOptions) || !isTaggedWithSkip(acct) || !isHnsPropertyEqual(acct, accountOptions) || !isEnableNfsV3PropertyEqual(acct, accountOptions) || !isEnableHTTPSTrafficOnlyEqual(acct, accountOptions) || !isAllowBlobPublicAccessEqual(acct, accountOptions) || !isRequireInfrastructureEncryptionEqual(acct, accountOptions) || !isAllowSharedKeyAccessEqual(acct, accountOptions) || !isAllowCrossTenantReplicationEqual(acct, accountOptions) || !isAccessTierEqual(acct, accountOptions) || !AreVNetRulesEqual(acct, accountOptions) || !isPrivateEndpointAsExpected(acct, accountOptions) {
+			if !isStorageTypeEqual(acct, accountOptions) || !isAccountKindEqual(acct, accountOptions) || !isLocationEqual(acct, accountOptions) || !isLargeFileSharesPropertyEqual(acct, accountOptions) || !isTagsEqual(acct, accountOptions) || !isTaggedWithSkip(acct) || !isHnsPropertyEqual(acct, accountOptions) || !isEnableNfsV3PropertyEqual(acct, accountOptions) || !isEnableHTTPSTrafficOnlyEqual(acct, accountOptions) || !isAllowBlobPublicAccessEqual(acct, accountOptions) || !isRequireInfrastructureEncryptionEqual(acct, accountOptions) || !isAllowSharedKeyAccessEqual(acct, accountOptions) || !isAllowCrossTenantReplicationEqual(acct, accountOptions) || !isAccessTierEqual(acct, accountOptions) || !AreVNetRulesEqual(acct, accountOptions) || !isPrivateEndpointAsExpected(acct, accountOptions) || !isSmbOAuthEnabledEqual(acct, accountOptions) {
 				continue
 			}
 
@@ -1081,6 +1081,18 @@ func isAccessTierEqual(account *armstorage.Account, accountOptions *AccountOptio
 		return true
 	}
 	return account != nil && account.Properties != nil && account.Properties.AccessTier != nil && accountOptions.AccessTier == string(*account.Properties.AccessTier)
+}
+
+func isSmbOAuthEnabledEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
+	if accountOptions.IsSmbOAuthEnabled == nil {
+		return true
+	}
+	if account == nil || account.Properties == nil || account.Properties.AzureFilesIdentityBasedAuthentication == nil ||
+		account.Properties.AzureFilesIdentityBasedAuthentication.SmbOAuthSettings == nil ||
+		account.Properties.AzureFilesIdentityBasedAuthentication.SmbOAuthSettings.IsSmbOAuthEnabled == nil {
+		return !*accountOptions.IsSmbOAuthEnabled
+	}
+	return *account.Properties.AzureFilesIdentityBasedAuthentication.SmbOAuthSettings.IsSmbOAuthEnabled == *accountOptions.IsSmbOAuthEnabled
 }
 
 func (az *AccountRepo) isMultichannelEnabledEqual(ctx context.Context, account *armstorage.Account, accountOptions *AccountOptions) (bool, error) {

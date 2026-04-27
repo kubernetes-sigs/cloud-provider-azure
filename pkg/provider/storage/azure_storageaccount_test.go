@@ -355,6 +355,44 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 			expectedResult:     []accountWithLocation{},
 			expectedError:      nil,
 		},
+		{
+			testCase: "IsSmbOAuthEnabled true should only match OAuth-enabled accounts",
+			testAccountOptions: &AccountOptions{
+				ResourceGroup:     "rg",
+				IsSmbOAuthEnabled: ptr.To(true),
+			},
+			testResourceGroups: []*armstorage.Account{{Name: &name, Kind: to.Ptr(armstorage.Kind("kind")), Location: &location, SKU: sku, Properties: &armstorage.AccountProperties{
+				EnableHTTPSTrafficOnly: ptr.To(false),
+			}}},
+			expectedResult: []accountWithLocation{},
+			expectedError:  nil,
+		},
+		{
+			testCase: "IsSmbOAuthEnabled true should match OAuth-enabled account among mixed candidates",
+			testAccountOptions: &AccountOptions{
+				ResourceGroup:     "rg",
+				IsSmbOAuthEnabled: ptr.To(true),
+			},
+			testResourceGroups: func() []*armstorage.Account {
+				nonOAuthName := "nonOAuthAccount"
+				oauthName := "oauthAccount"
+				return []*armstorage.Account{
+					{Name: &nonOAuthName, Kind: to.Ptr(armstorage.Kind("kind")), Location: &location, SKU: sku, Properties: &armstorage.AccountProperties{
+						EnableHTTPSTrafficOnly: ptr.To(false),
+					}},
+					{Name: &oauthName, Kind: to.Ptr(armstorage.Kind("kind")), Location: &location, SKU: sku, Properties: &armstorage.AccountProperties{
+						EnableHTTPSTrafficOnly: ptr.To(false),
+						AzureFilesIdentityBasedAuthentication: &armstorage.AzureFilesIdentityBasedAuthentication{
+							SmbOAuthSettings: &armstorage.SmbOAuthSettings{
+								IsSmbOAuthEnabled: ptr.To(true),
+							},
+						},
+					}},
+				}
+			}(),
+			expectedResult: []accountWithLocation{{Name: "oauthAccount", StorageType: "testSku", Location: location}},
+			expectedError:  nil,
+		},
 	}
 
 	for _, test := range tests {
@@ -367,7 +405,15 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 		}
 
 		if len(accountsWithLocations) != len(test.expectedResult) {
-			t.Error("unexpected error as returned accounts slice is not empty")
+			t.Errorf("unexpected result count: got %d, expected %d", len(accountsWithLocations), len(test.expectedResult))
+		} else {
+			for i, acct := range accountsWithLocations {
+				if acct.Name != test.expectedResult[i].Name || acct.StorageType != test.expectedResult[i].StorageType || acct.Location != test.expectedResult[i].Location {
+					t.Errorf("unexpected account at index %d: got {Name:%q, StorageType:%q, Location:%q}, expected {Name:%q, StorageType:%q, Location:%q}",
+						i, acct.Name, acct.StorageType, acct.Location,
+						test.expectedResult[i].Name, test.expectedResult[i].StorageType, test.expectedResult[i].Location)
+				}
+			}
 		}
 	}
 }
@@ -1649,6 +1695,83 @@ func TestIsAccessTierEqual(t *testing.T) {
 	for _, test := range tests {
 		result := isAccessTierEqual(test.account, test.accountOptions)
 		assert.Equal(t, test.expectedResult, result)
+	}
+}
+
+func TestIsSmbOAuthEnabledEqual(t *testing.T) {
+	tests := []struct {
+		desc           string
+		account        *armstorage.Account
+		accountOptions *AccountOptions
+		expectedResult bool
+	}{
+		{
+			desc:           "option nil should match any account",
+			account:        &armstorage.Account{Properties: &armstorage.AccountProperties{}},
+			accountOptions: &AccountOptions{},
+			expectedResult: true,
+		},
+		{
+			desc: "option true, account true",
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					AzureFilesIdentityBasedAuthentication: &armstorage.AzureFilesIdentityBasedAuthentication{
+						SmbOAuthSettings: &armstorage.SmbOAuthSettings{
+							IsSmbOAuthEnabled: ptr.To(true),
+						},
+					},
+				},
+			},
+			accountOptions: &AccountOptions{IsSmbOAuthEnabled: ptr.To(true)},
+			expectedResult: true,
+		},
+		{
+			desc: "option true, account false",
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					AzureFilesIdentityBasedAuthentication: &armstorage.AzureFilesIdentityBasedAuthentication{
+						SmbOAuthSettings: &armstorage.SmbOAuthSettings{
+							IsSmbOAuthEnabled: ptr.To(false),
+						},
+					},
+				},
+			},
+			accountOptions: &AccountOptions{IsSmbOAuthEnabled: ptr.To(true)},
+			expectedResult: false,
+		},
+		{
+			desc:           "option true, account nil (no SmbOAuth settings)",
+			account:        &armstorage.Account{Properties: &armstorage.AccountProperties{}},
+			accountOptions: &AccountOptions{IsSmbOAuthEnabled: ptr.To(true)},
+			expectedResult: false,
+		},
+		{
+			desc:           "option false, account nil (no SmbOAuth settings)",
+			account:        &armstorage.Account{Properties: &armstorage.AccountProperties{}},
+			accountOptions: &AccountOptions{IsSmbOAuthEnabled: ptr.To(false)},
+			expectedResult: true,
+		},
+		{
+			desc: "option false, account true (OAuth-enabled account should not match non-OAuth request)",
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					AzureFilesIdentityBasedAuthentication: &armstorage.AzureFilesIdentityBasedAuthentication{
+						SmbOAuthSettings: &armstorage.SmbOAuthSettings{
+							IsSmbOAuthEnabled: ptr.To(true),
+						},
+					},
+				},
+			},
+			accountOptions: &AccountOptions{IsSmbOAuthEnabled: ptr.To(false)},
+			expectedResult: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			result := isSmbOAuthEnabledEqual(test.account, test.accountOptions)
+			assert.Equal(t, test.expectedResult, result)
+		})
 	}
 }
 
