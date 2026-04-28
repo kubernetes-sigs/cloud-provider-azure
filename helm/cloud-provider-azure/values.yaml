@@ -83,3 +83,5 @@ cloudNodeManager:
   targetPort: 10256
   healthProbeProxyImage: "mcr.microsoft.com/oss/v2/kubernetes/azure-health-probe-proxy:v1.34.3"
   healthProbeProxyImageWindows: "mcr.microsoft.com/oss/v2/kubernetes/azure-health-probe-proxy:v1.34.3"
+k8sServiceHost: ""
+k8sServicePort: ""
