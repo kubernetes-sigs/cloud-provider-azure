@@ -929,6 +929,21 @@ func TestGetNodeNameByIPConfigurationIDVmssFlex(t *testing.T) {
 			expectedVMSetName:              "",
 			expectedErr:                    fmt.Errorf("failed to get resource group and name from ip config ID /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces//ipConfigurations/pipConfig: %w", errors.New("invalid ip config ID /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces//ipConfigurations/pipConfig")),
 		},
+		{
+			description:                    "GetNodeNameByIPConfigurationID should return empty strings when NIC has no attached VM",
+			ipConfigurationID:              "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/orphan-nic/ipConfigurations/pipConfig",
+			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
+			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
+			vmListErr:                      nil,
+			nic: func() *armnetwork.Interface {
+				nic := generateTestNic("orphan-nic", false, to.Ptr(armnetwork.ProvisioningStateSucceeded), "")
+				nic.Properties.VirtualMachine = nil
+				return nic
+			}(),
+			expectedNodeName:  "",
+			expectedVMSetName: "",
+			expectedErr:       nil,
+		},
 	}
 
 	for _, tc := range testCases {

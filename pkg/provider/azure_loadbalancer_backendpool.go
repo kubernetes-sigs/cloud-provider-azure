@@ -231,6 +231,11 @@ func (bc *backendPoolTypeNodeIPConfig) ReconcileBackendPools(
 						}
 					}
 
+					if nodeName == "" {
+						logger.V(2).Info("empty nodeName, skipping ipConfID", "serviceName", serviceName, "ipConfID", ipConfID)
+						continue
+					}
+
 					// If a node is not supposed to be included in the LB, it
 					// would not be in the `nodes` slice. We need to check the nodes that
 					// have been added to the LB's backendpool, find the unwanted ones and
@@ -361,6 +366,10 @@ func (bc *backendPoolTypeNodeIPConfig) GetBackendPrivateIPs(ctx context.Context,
 					nodeName, _, err := bc.VMSet.GetNodeNameByIPConfigurationID(ctx, ipConfigID)
 					if err != nil {
 						logger.Error(err, "failed: GetNodeNameByIPConfigurationID", "service", serviceName)
+						continue
+					}
+					if nodeName == "" {
+						logger.V(2).Info("empty nodeName, skipping ipConfigID", "serviceName", serviceName, "ipConfigID", ipConfigID)
 						continue
 					}
 					privateIPsSet, ok := bc.nodePrivateIPs[strings.ToLower(nodeName)]
