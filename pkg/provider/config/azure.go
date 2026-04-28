@@ -145,6 +145,13 @@ type Config struct {
 	// node IPs, which will introduce service downtime. The downtime increases with the number of nodes in the backend pool.
 	EnableMigrateToIPBasedBackendPoolAPI bool `json:"enableMigrateToIPBasedBackendPoolAPI" yaml:"enableMigrateToIPBasedBackendPoolAPI"`
 
+	// EnableIPTagMutationForExistingPublicIP enables in-place mutation of
+	// FirstPartyUsage IP tags on existing public IPs. When enabled, only
+	// FirstPartyUsage-type IP tags can be updated in-place; attempting to
+	// change other IP tag types (e.g. RoutingPreference) on an existing PIP
+	// produces a reconciliation error.
+	EnableIPTagMutationForExistingPublicIP bool `json:"enableIPTagMutationForExistingPublicIP,omitempty" yaml:"enableIPTagMutationForExistingPublicIP,omitempty"`
+
 	// MultipleStandardLoadBalancerConfigurations stores the properties regarding multiple standard load balancers.
 	// It will be ignored if LoadBalancerBackendPoolConfigurationType is nodeIPConfiguration.
 	// If the length is not 0, it is assumed the multiple standard load balancers mode is on. In this case,
