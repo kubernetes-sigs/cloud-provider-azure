@@ -96,6 +96,11 @@ func (f *KubernetesServiceFixture) WithAllowedIPRanges(parts ...string) *Kuberne
 	return f
 }
 
+func (f *KubernetesServiceFixture) WithBlockedIPRanges(parts ...string) *KubernetesServiceFixture {
+	f.svc.Annotations[consts.ServiceAnnotationBlockedIPRanges] = strings.Join(parts, ",")
+	return f
+}
+
 func (f *KubernetesServiceFixture) WithAllowedServiceTags(parts ...string) *KubernetesServiceFixture {
 	f.svc.Annotations[consts.ServiceAnnotationAllowedServiceTags] = strings.Join(parts, ",")
 	return f

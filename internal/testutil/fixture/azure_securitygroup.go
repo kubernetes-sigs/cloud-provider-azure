@@ -163,6 +163,41 @@ func (f *AzureFixture) DenyAllSecurityRule(ipFamily iputil.Family) *AzureDenyAll
 	}
 }
 
+func (f *AzureFixture) DenyBlockedIPRangeSecurityRule(
+	protocol armnetwork.SecurityRuleProtocol,
+	ipFamily iputil.Family,
+	srcPrefixes []string,
+	dstPorts []int32,
+) *AzureDenyBlockedIPRangeSecurityRuleFixture {
+	name := securitygroup.GenerateDenyBlockedSecurityRuleName(protocol, ipFamily, srcPrefixes, dstPorts)
+	dstPortRanges := fnutil.Map(func(p int32) string { return strconv.FormatInt(int64(p), 10) }, dstPorts)
+	sort.Strings(dstPortRanges)
+
+	rule := &armnetwork.SecurityRule{
+		Name: ptr.To(name),
+		Properties: &armnetwork.SecurityRulePropertiesFormat{
+			Protocol:              to.Ptr(protocol),
+			Access:                to.Ptr(armnetwork.SecurityRuleAccessDeny),
+			Direction:             to.Ptr(armnetwork.SecurityRuleDirectionInbound),
+			SourcePortRange:       ptr.To("*"),
+			DestinationPortRanges: to.SliceOfPtrs(dstPortRanges...),
+			Priority:              ptr.To(int32(consts.IPPrefixBlockingMinimumPriority)),
+		},
+	}
+	if len(dstPorts) == 0 {
+		rule.Properties.DestinationPortRange = ptr.To("*")
+		rule.Properties.DestinationPortRanges = nil
+	}
+
+	if len(srcPrefixes) == 1 {
+		rule.Properties.SourceAddressPrefix = ptr.To(srcPrefixes[0])
+	} else {
+		rule.Properties.SourceAddressPrefixes = to.SliceOfPtrs(srcPrefixes...)
+	}
+
+	return &AzureDenyBlockedIPRangeSecurityRuleFixture{rule: rule}
+}
+
 // AzureSecurityGroupFixture is a fixture for an Azure security group.
 type AzureSecurityGroupFixture struct {
 	sg *armnetwork.SecurityGroup
@@ -231,3 +266,26 @@ func (f *AzureDenyAllSecurityRuleFixture) WithDestination(prefixes ...string) *A
 func (f *AzureDenyAllSecurityRuleFixture) Build() *armnetwork.SecurityRule {
 	return f.rule
 }
+
+// AzureDenyBlockedIPRangeSecurityRuleFixture is a fixture for a deny blocked IP range security rule.
+type AzureDenyBlockedIPRangeSecurityRuleFixture struct {
+	rule *armnetwork.SecurityRule
+}
+
+func (f *AzureDenyBlockedIPRangeSecurityRuleFixture) WithPriority(p int32) *AzureDenyBlockedIPRangeSecurityRuleFixture {
+	f.rule.Properties.Priority = ptr.To(p)
+	return f
+}
+
+func (f *AzureDenyBlockedIPRangeSecurityRuleFixture) WithDestination(prefixes ...string) *AzureDenyBlockedIPRangeSecurityRuleFixture {
+	if len(prefixes) == 1 {
+		f.rule.Properties.DestinationAddressPrefix = ptr.To(prefixes[0])
+		f.rule.Properties.DestinationAddressPrefixes = nil
+	} else if len(prefixes) > 1 {
+		f.rule.Properties.DestinationAddressPrefix = nil
+		f.rule.Properties.DestinationAddressPrefixes = to.SliceOfPtrs(securitygroup.NormalizeSecurityRuleAddressPrefixes(prefixes)...)
+	}
+	return f
+}
+
+func (f *AzureDenyBlockedIPRangeSecurityRuleFixture) Build() *armnetwork.SecurityRule { return f.rule }

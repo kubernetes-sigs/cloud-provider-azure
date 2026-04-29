@@ -42,6 +42,13 @@ func EventMessageOfInvalidAllowedIPRanges(allowedIPRanges []string) string {
 	)
 }
 
+func EventMessageOfInvalidBlockedIPRanges(blockedIPRanges []string) string {
+	return fmt.Sprintf("Found invalid %s %q, ignoring.",
+		consts.ServiceAnnotationBlockedIPRanges,
+		blockedIPRanges,
+	)
+}
+
 func EventMessageOfConflictLoadBalancerSourceRangesAndAllowedIPRanges() string {
 	return fmt.Sprintf(
 		"Please use annotation %s instead of spec.loadBalancerSourceRanges while using %s annotation at the same time.",
