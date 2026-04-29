@@ -26,7 +26,7 @@ import (
 
 // List gets a list of Deployment in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*resources.DeploymentExtended, rerr error) {
-	pager := client.DeploymentsClient.NewListByResourceGroupPager(resourceGroupName, nil)
+	pager := client.NewListByResourceGroupPager(resourceGroupName, nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
 		if err != nil {
@@ -51,7 +51,7 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 
 // CreateOrUpdate creates or updates a Deployment.
 func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource resources.Deployment) (*resources.DeploymentExtended, error) {
-	resp, err := utils.NewPollerWrapper(client.DeploymentsClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
+	resp, err := utils.NewPollerWrapper(client.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
 	if err != nil {
 		return nil, err
 	}

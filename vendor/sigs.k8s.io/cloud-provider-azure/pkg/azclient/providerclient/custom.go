@@ -24,7 +24,7 @@ import (
 )
 
 func (client *Client) ListProviders(ctx context.Context) (result []*armresources.Provider, rerr error) {
-	pager := client.ProvidersClient.NewListPager(nil)
+	pager := client.NewListPager(nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
 		if err != nil {
@@ -35,7 +35,7 @@ func (client *Client) ListProviders(ctx context.Context) (result []*armresources
 	return result, nil
 }
 func (client *Client) GetProvider(ctx context.Context, resourceProviderNamespace string) (*armresources.Provider, error) {
-	resp, err := client.ProvidersClient.Get(ctx, resourceProviderNamespace, nil)
+	resp, err := client.Get(ctx, resourceProviderNamespace, nil)
 	if err != nil {
 		return nil, err
 	}

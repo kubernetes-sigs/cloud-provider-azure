@@ -20,7 +20,7 @@ import (
 	"context"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
-	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
+	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/metrics"
 )
@@ -77,7 +77,7 @@ func (client *Client) List(ctx context.Context, resourceGroupName string, accoun
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
 
-	pager := client.FileSharesClient.NewListPager(resourceGroupName, accountName, option)
+	pager := client.NewListPager(resourceGroupName, accountName, option)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
 		if err != nil {

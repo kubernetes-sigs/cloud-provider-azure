@@ -18,12 +18,12 @@ limitations under the License.
 package privateendpointclient
 
 import (
-	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate,resource=PrivateEndpoint,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6,packageAlias=armnetwork,clientName=PrivateEndpointsClient,expand=true,rateLimitKey=privateEndpointRateLimit
+// +azure:client:verbs=get;createorupdate,resource=PrivateEndpoint,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9,packageAlias=armnetwork,clientName=PrivateEndpointsClient,expand=true,rateLimitKey=privateEndpointRateLimit
 type Interface interface {
 	utils.GetWithExpandFunc[armnetwork.PrivateEndpoint]
 	utils.CreateOrUpdateFunc[armnetwork.PrivateEndpoint]
