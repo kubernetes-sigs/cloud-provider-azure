@@ -241,6 +241,8 @@ const (
 	LoadBalancerSKUBasic = "basic"
 	// LoadBalancerSKUStandard is the load balancer standard SKU
 	LoadBalancerSKUStandard = "standard"
+	// LoadBalancerSKUService is the load balancer service SKU
+	LoadBalancerSKUService = "service"
 
 	// ServiceAnnotationLoadBalancerInternal is the annotation used on the service
 	ServiceAnnotationLoadBalancerInternal = "service.beta.kubernetes.io/azure-load-balancer-internal"
@@ -386,9 +388,8 @@ const (
 	LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration = "nodeIPConfiguration"
 	// LoadBalancerBackendPoolConfigurationTypeNodeIP is the lb backend pool config type node ip
 	LoadBalancerBackendPoolConfigurationTypeNodeIP = "nodeIP"
-	// LoadBalancerBackendPoolConfigurationTypePODIP is the lb backend pool config type pod ip
-	// TODO (nilo19): support pod IP in the future
-	LoadBalancerBackendPoolConfigurationTypePODIP = "podIP"
+	// LoadBalancerBackendPoolConfigurationTypePodIP is the lb backend pool config type pod ip
+	LoadBalancerBackendPoolConfigurationTypePodIP = "podIP"
 )
 
 // error messages
