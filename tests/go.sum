@@ -280,8 +280,8 @@ k8s.io/utils v0.0.0-20251002143259-bc988d571ff4 h1:SjGebBtkBqHFOli+05xYbK8YF1Dzk
 k8s.io/utils v0.0.0-20251002143259-bc988d571ff4/go.mod h1:OLgZIPagt7ERELqWJFomSt595RzquPNLL48iOWgYOg0=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.18.0 h1:RuMG+Vi+tss3+wkWdZijb9Oh06bR1LYpYGx7bCsMays=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.18.0/go.mod h1:3exQL0c2uraRFH64nTYNvTYAeEwyglaj3X/BIvxaDU4=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.13.0 h1:lJR9oMwgaUvKqWp+Pt2F/dpqEpiU8PpxELV5cA65rGE=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.13.0/go.mod h1:xSnyMWmeA+LeCdpM15e56eZZOVjd4SXUVvFrfSQISdI=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.14.0 h1:yjbZWgLUgTnLCGxM8I88l88WgvLRIOcOmAEbacFVLnU=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.14.0/go.mod h1:6NYpRYlC7AyQaDtOQsF62plL1gDQqJwgQUwTdjp8qlU=
 sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 h1:IpInykpT6ceI+QxKBbEflcR5EXP7sU1kvOlxwZh5txg=
 sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730/go.mod h1:mdzfpAEoE6DHQEN0uh9ZbOCuHbLK5wOm7dK4ctXE9Tg=
 sigs.k8s.io/randfill v1.0.0 h1:JfjMILfT8A6RbawdsK2JXGBR5AQVfd+9TbzrlneTyrU=
