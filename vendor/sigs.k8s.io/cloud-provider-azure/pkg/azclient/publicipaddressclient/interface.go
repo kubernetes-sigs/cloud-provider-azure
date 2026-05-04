@@ -20,12 +20,12 @@ package publicipaddressclient
 import (
 	"context"
 
-	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate;delete;list,resource=PublicIPAddress,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6,packageAlias=armnetwork,clientName=PublicIPAddressesClient,expand=true,rateLimitKey=publicIPAddressRateLimit,etag=true,azureStackCloudAPIVersion="2018-11-01"
+// +azure:client:verbs=get;createorupdate;delete;list,resource=PublicIPAddress,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9,packageAlias=armnetwork,clientName=PublicIPAddressesClient,expand=true,rateLimitKey=publicIPAddressRateLimit,etag=true,azureStackCloudAPIVersion="2018-11-01"
 type Interface interface {
 	utils.GetWithExpandFunc[armnetwork.PublicIPAddress]
 	utils.CreateOrUpdateFunc[armnetwork.PublicIPAddress]

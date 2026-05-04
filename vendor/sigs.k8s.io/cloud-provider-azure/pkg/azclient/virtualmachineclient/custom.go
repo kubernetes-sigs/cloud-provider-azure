@@ -20,7 +20,7 @@ import (
 	"context"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7"
 )
 
 // Get gets the VirtualMachine
@@ -48,7 +48,7 @@ func (client *Client) InstanceView(ctx context.Context, resourceGroupName string
 }
 
 func (client *Client) ListVMInstanceView(ctx context.Context, resourceGroupName string) (result []*armcompute.VirtualMachine, rerr error) {
-	pager := client.VirtualMachinesClient.NewListPager(resourceGroupName, &armcompute.VirtualMachinesClientListOptions{Expand: to.Ptr(armcompute.ExpandTypeForListVMsInstanceView)})
+	pager := client.NewListPager(resourceGroupName, &armcompute.VirtualMachinesClientListOptions{Expand: to.Ptr(armcompute.ExpandTypeForListVMsInstanceView)})
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
 		if err != nil {
@@ -60,7 +60,7 @@ func (client *Client) ListVMInstanceView(ctx context.Context, resourceGroupName 
 }
 
 func (client *Client) ListVmssFlexVMsWithOnlyInstanceView(ctx context.Context, resourceGroupName, vmssFlexID string) (result []*armcompute.VirtualMachine, rerr error) {
-	pager := client.VirtualMachinesClient.NewListPager(resourceGroupName, &armcompute.VirtualMachinesClientListOptions{
+	pager := client.NewListPager(resourceGroupName, &armcompute.VirtualMachinesClientListOptions{
 		Expand: to.Ptr(armcompute.ExpandTypeForListVMsInstanceView),
 		Filter: to.Ptr("'virtualMachineScaleSet/id' eq '" + vmssFlexID + "'"),
 	})
@@ -75,7 +75,7 @@ func (client *Client) ListVmssFlexVMsWithOnlyInstanceView(ctx context.Context, r
 }
 
 func (client *Client) ListVmssFlexVMsWithOutInstanceView(ctx context.Context, resourceGroupName, vmssFlexID string) (result []*armcompute.VirtualMachine, rerr error) {
-	pager := client.VirtualMachinesClient.NewListPager(resourceGroupName, &armcompute.VirtualMachinesClientListOptions{
+	pager := client.NewListPager(resourceGroupName, &armcompute.VirtualMachinesClientListOptions{
 		Filter: to.Ptr("'virtualMachineScaleSet/id' eq '" + vmssFlexID + "'"),
 	})
 	for pager.More() {

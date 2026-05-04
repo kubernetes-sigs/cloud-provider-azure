@@ -20,7 +20,7 @@ import (
 	"context"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
-	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
+	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/metrics"
 )
@@ -36,7 +36,7 @@ func (client *Client) List(ctx context.Context, resourceGroupName string, parent
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
 
-	pager := client.BlobContainersClient.NewListPager(resourceGroupName, parentResourceName, nil)
+	pager := client.NewListPager(resourceGroupName, parentResourceName, nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
 		if err != nil {
@@ -53,7 +53,7 @@ func (client *Client) CreateContainer(ctx context.Context, resourceGroupName, ac
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOperationName, client.tracer, nil)
 	defer endSpan(err)
 
-	resp, err := client.BlobContainersClient.Create(ctx, resourceGroupName, accountName, containerName, parameters, nil)
+	resp, err := client.Create(ctx, resourceGroupName, accountName, containerName, parameters, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -66,6 +66,6 @@ func (client *Client) DeleteContainer(ctx context.Context, resourceGroupName, ac
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
 	defer endSpan(err)
 
-	_, err = client.BlobContainersClient.Delete(ctx, resourceGroupName, accountName, containerName, nil)
+	_, err = client.Delete(ctx, resourceGroupName, accountName, containerName, nil)
 	return err
 }
