@@ -319,6 +319,7 @@ spec:
   namespace: tigera-operator
   releaseName: projectcalico
   repoURL: https://docs.tigera.io/calico/charts
+  version: ${CALICO_VERSION}
   valuesTemplate: |-
     installation:
       cni:
