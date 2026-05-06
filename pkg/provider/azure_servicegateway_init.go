@@ -7,11 +7,13 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"k8s.io/klog/v2"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 // TODO(enechitoaia): remove after added aks-rp support
 func (az *Cloud) attachServiceGatewayToSubnet(ctx context.Context) error {
-	klog.Infof("Attaching Service Gateway %s to subnet in VNet %s", az.ServiceGatewayResourceName, az.VnetName)
+	klog.Infof("Attaching Service Gateway %s to subnet in VNet %s", consts.DefaultServiceGatewayResourceName, az.VnetName)
 	subnetName := "aks-subnet"
 
 	subnet, err := az.NetworkClientFactory.GetSubnetClient().Get(ctx, az.ResourceGroup, az.VnetName, subnetName, nil)
@@ -28,20 +30,20 @@ func (az *Cloud) attachServiceGatewayToSubnet(ctx context.Context) error {
 	}
 
 	subnet.Properties.ServiceGateway.ID = to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/serviceGateways/%s",
-		az.SubscriptionID, az.ResourceGroup, az.ServiceGatewayResourceName))
+		az.SubscriptionID, az.ResourceGroup, consts.DefaultServiceGatewayResourceName))
 
 	_, err = az.NetworkClientFactory.GetSubnetClient().CreateOrUpdate(ctx, az.ResourceGroup, az.VnetName, subnetName, *subnet)
 	if err != nil {
 		return fmt.Errorf("failed to attach Service Gateway to subnet: %w", err)
 	}
 
-	klog.Infof("Successfully attached Service Gateway %s to subnet in VNet %s", az.ServiceGatewayResourceName, az.VnetName)
+	klog.Infof("Successfully attached Service Gateway %s to subnet in VNet %s", consts.DefaultServiceGatewayResourceName, az.VnetName)
 	return nil
 }
 
 // TODO(enechitoaia): remove after added aks-rp support
 func (az *Cloud) ensureDefaultOutboundServiceExists(ctx context.Context) error {
-	klog.Infof("ensureDefaultOutboundServiceExists: Ensuring default outbound service exists in Service Gateway %s", az.ServiceGatewayResourceName)
+	klog.Infof("ensureDefaultOutboundServiceExists: Ensuring default outbound service exists in Service Gateway %s", consts.DefaultServiceGatewayResourceName)
 
 	// createOrUpdate pip
 	pipResourceName := "default-natgw-v2-pip"
@@ -82,21 +84,21 @@ func (az *Cloud) ensureDefaultOutboundServiceExists(ctx context.Context) error {
 	}
 	az.createOrUpdateNatGateway(ctx, az.ResourceGroup, natGatewayResource)
 
-	servicesDTO, err := az.GetServices(ctx, az.ServiceGatewayResourceName)
+	servicesDTO, err := az.GetServices(ctx, consts.DefaultServiceGatewayResourceName)
 	if err != nil {
 		return fmt.Errorf("ensureDefaultOutboundServiceExists: failed to get services from ServiceGateway API: %w", err)
 	}
 	serviceExists := false
 	for _, service := range servicesDTO {
 		if *service.Name == "default-natgw-v2" && service.Properties != nil && service.Properties.IsDefault != nil && *service.Properties.IsDefault {
-			klog.Infof("ensureDefaultOutboundServiceExists: Default outbound service already exists in Service Gateway %s", az.ServiceGatewayResourceName)
+			klog.Infof("ensureDefaultOutboundServiceExists: Default outbound service already exists in Service Gateway %s", consts.DefaultServiceGatewayResourceName)
 			serviceExists = true
 			break
 		}
 	}
 
 	if !serviceExists {
-		klog.Infof("ensureDefaultOutboundServiceExists: Creating default outbound service in Service Gateway %s", az.ServiceGatewayResourceName)
+		klog.Infof("ensureDefaultOutboundServiceExists: Creating default outbound service in Service Gateway %s", consts.DefaultServiceGatewayResourceName)
 
 		req := armnetwork.ServiceGatewayUpdateServicesRequest{
 			Action:          to.Ptr(armnetwork.ServiceGatewayUpdateServicesRequestActionPartialUpdate),
@@ -114,11 +116,11 @@ func (az *Cloud) ensureDefaultOutboundServiceExists(ctx context.Context) error {
 				},
 			},
 		})
-		err := az.UpdateServices(ctx, az.ServiceGatewayResourceName, req)
+		err := az.UpdateServices(ctx, consts.DefaultServiceGatewayResourceName, req)
 		if err != nil {
 			return fmt.Errorf("ensureDefaultOutboundServiceExists: failed to create default outbound service in ServiceGateway API: %w", err)
 		}
-		klog.Infof("ensureDefaultOutboundServiceExists: Successfully created default outbound service in Service Gateway %s", az.ServiceGatewayResourceName)
+		klog.Infof("ensureDefaultOutboundServiceExists: Successfully created default outbound service in Service Gateway %s", consts.DefaultServiceGatewayResourceName)
 	}
 
 	return nil

@@ -21,6 +21,7 @@ import (
 	"os"
 	"strings"
 
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
 )
 
@@ -39,6 +40,14 @@ func ParseConfig(configReader io.Reader) (*Config, error) {
 	err = yaml.Unmarshal(configContents, &config)
 	if err != nil {
 		return nil, err
+	}
+
+	// Deprecation: serviceGatewayResourceName is no longer configurable. The
+	// ServiceGateway resource name is hardcoded to consts.DefaultServiceGatewayResourceName
+	// ("aks-servicegateway") whenever ServiceGatewayEnabled is true. Any value
+	// supplied via config is ignored.
+	if strings.Contains(string(configContents), "serviceGatewayResourceName") {
+		klog.Warningf("cloud-provider config contains deprecated key 'serviceGatewayResourceName'; this value is ignored. The ServiceGateway resource name is hardcoded to 'aks-servicegateway'.")
 	}
 
 	// The resource group name may be in different cases from different Azure APIs, hence it is converted to lower here.

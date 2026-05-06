@@ -586,6 +586,14 @@ const (
 	VMPowerStateUnknown      = "unknown"
 )
 
+// ServiceGateway resource defaults
+const (
+	// DefaultServiceGatewayResourceName is the hardcoded name of the ServiceGateway
+	// resource used when ServiceGatewayEnabled=true. This name is fixed and cannot
+	// be configured via cloud-provider config (azure.json).
+	DefaultServiceGatewayResourceName = "aks-servicegateway"
+)
+
 // Azure resource lock
 const (
 	AzureResourceLockHolderNameCloudControllerManager = "cloud-controller-manager"

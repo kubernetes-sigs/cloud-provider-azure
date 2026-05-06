@@ -525,20 +525,21 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 			difftracker.RegisterMetrics()
 			difftracker.RecordServiceGatewayEnabled()
 
-			exists, err := az.existsServiceGateway(ctx, az.ServiceGatewayResourceName)
+			sgwName := consts.DefaultServiceGatewayResourceName
+			exists, err := az.existsServiceGateway(ctx, sgwName)
 			if err != nil {
-				return fmt.Errorf("InitializeCloudFromConfig: failed to check if Service Gateway %s exists: %w", az.ServiceGatewayResourceName, err)
+				return fmt.Errorf("InitializeCloudFromConfig: failed to check if Service Gateway %s exists: %w", sgwName, err)
 			}
 			if !exists {
-				err = az.createServiceGateway(ctx, az.ServiceGatewayResourceName)
+				err = az.createServiceGateway(ctx, sgwName)
 				if err != nil {
-					return fmt.Errorf("InitializeCloudFromConfig: failed to create Service Gateway %s: %w", az.ServiceGatewayResourceName, err)
+					return fmt.Errorf("InitializeCloudFromConfig: failed to create Service Gateway %s: %w", sgwName, err)
 				}
 			}
 
 			err = az.attachServiceGatewayToSubnet(ctx)
 			if err != nil {
-				return fmt.Errorf("InitializeCloudFromConfig: failed to attach Service Gateway %s to subnet %s: %w", az.ServiceGatewayResourceName, az.SubnetName, err)
+				return fmt.Errorf("InitializeCloudFromConfig: failed to attach Service Gateway %s to subnet %s: %w", sgwName, az.SubnetName, err)
 			}
 
 			// Initialize difftracker from cluster state
@@ -547,7 +548,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *config.C
 				ResourceGroup:              az.ResourceGroup,
 				Location:                   az.Location,
 				VNetName:                   az.VnetName,
-				ServiceGatewayResourceName: az.ServiceGatewayResourceName,
+				ServiceGatewayResourceName: sgwName,
 				ServiceGatewayID:           az.GetServiceGatewayID(),
 			}
 			az.diffTracker, err = difftracker.InitializeFromCluster(ctx, dtConfig, az.NetworkClientFactory, az.KubeClient)

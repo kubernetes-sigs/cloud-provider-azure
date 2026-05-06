@@ -205,8 +205,8 @@ func GetTestCloudWithContainerLoadBalancer(ctrl *gomock.Controller) (az *Cloud) 
 		SubscriptionID:             az.SubscriptionID,
 		Location:                   az.Location,
 		VNetName:                   az.VnetName,
-		ServiceGatewayResourceName: "test-sgw",
-		ServiceGatewayID:           "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.ServiceNetworking/serviceGateways/test-sgw",
+		ServiceGatewayResourceName: consts.DefaultServiceGatewayResourceName,
+		ServiceGatewayID:           "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.ServiceNetworking/serviceGateways/" + consts.DefaultServiceGatewayResourceName,
 	}
 	az.diffTracker = difftracker.InitializeDiffTracker(
 		difftracker.K8s_State{

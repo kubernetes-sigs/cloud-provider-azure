@@ -837,7 +837,7 @@ func TestEndpointSlicesInformerContainerLoadBalancer(t *testing.T) {
 				ResourceGroup:              cloud.ResourceGroup,
 				Location:                   cloud.Location,
 				VNetName:                   cloud.VnetName,
-				ServiceGatewayResourceName: cloud.ServiceGatewayResourceName,
+				ServiceGatewayResourceName: consts.DefaultServiceGatewayResourceName,
 				ServiceGatewayID:           cloud.GetServiceGatewayID(),
 			}, cloud.NetworkClientFactory, nil)
 

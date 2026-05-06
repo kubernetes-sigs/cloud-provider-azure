@@ -177,8 +177,10 @@ type Config struct {
 	PodCidrsIPv6 []netip.Prefix `json:"podCidrIPv6" yaml:"podCidrIPv6"`
 
 	// ServiceGatewayEnabled indicates whether the service gateway is enabled for the cluster.
-	ServiceGatewayEnabled      bool   `json:"serviceGatewayEnabled,omitempty" yaml:"serviceGatewayEnabled,omitempty"`
-	ServiceGatewayResourceName string `json:"serviceGatewayResourceName,omitempty" yaml:"serviceGatewayResourceName,omitempty"`
+	// When enabled, the ServiceGateway resource name is hardcoded to
+	// consts.DefaultServiceGatewayResourceName ("aks-servicegateway") and is not
+	// configurable via this Config.
+	ServiceGatewayEnabled bool `json:"serviceGatewayEnabled,omitempty" yaml:"serviceGatewayEnabled,omitempty"`
 }
 
 // HasExtendedLocation returns true if extendedlocation prop are specified.

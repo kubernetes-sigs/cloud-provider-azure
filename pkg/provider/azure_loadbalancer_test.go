@@ -851,7 +851,7 @@ func TestEnsureLoadBalancerContainerLoadBalancer(t *testing.T) {
 				SubscriptionID:             az.SubscriptionID,
 				ResourceGroup:              az.ResourceGroup,
 				Location:                   az.Location,
-				ServiceGatewayResourceName: az.ServiceGatewayResourceName,
+				ServiceGatewayResourceName: consts.DefaultServiceGatewayResourceName,
 				ServiceGatewayID:           az.GetServiceGatewayID(),
 			}, az.NetworkClientFactory, nil)
 
@@ -964,7 +964,7 @@ func TestEnsureLoadBalancerDeleteContainerLoadBalancer(t *testing.T) {
 				ResourceGroup:              az.ResourceGroup,
 				Location:                   az.Location,
 				VNetName:                   az.VnetName,
-				ServiceGatewayResourceName: az.ServiceGatewayResourceName,
+				ServiceGatewayResourceName: consts.DefaultServiceGatewayResourceName,
 				ServiceGatewayID:           az.GetServiceGatewayID(),
 			}, az.NetworkClientFactory, nil)
 
