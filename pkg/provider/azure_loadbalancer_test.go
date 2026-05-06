@@ -10757,6 +10757,65 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 			expected: "lb1",
 		},
 		{
+			description:   "multi-slb external: prefer lb1 with existing primary FIP over ActiveServices on lb2 when both eligible",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{
+					Name: "lb2",
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveServices: utilsets.NewString("default/test"),
+					},
+				},
+			},
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{Name: ptr.To("atest")},
+						},
+					},
+				},
+				{Name: ptr.To("lb2")},
+			},
+			expected: "lb1",
+		},
+		{
+			description:   "multi-slb external: primary FIP on ineligible LB is ignored",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{
+					Name: "lb2",
+					MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
+						AllowServicePlacement: ptr.To(false),
+					},
+				},
+			},
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{},
+					},
+				},
+				{
+					Name: ptr.To("lb2"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{Name: ptr.To("atest")},
+						},
+					},
+				},
+			},
+			expected: "lb1",
+		},
+		{
 			description:   "multi-slb internal: IP annotation returns lb2-internal where IP resides",
 			vmSet:         primary,
 			useStandardLB: true,
@@ -11040,6 +11099,73 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 			existingLBs: []*armnetwork.LoadBalancer{
 				{
 					Name: ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{Name: ptr.To("atest")},
+						},
+					},
+				},
+			},
+			expected: "lb1-internal",
+		},
+		{
+			description:   "multi-slb internal: prefer lb1-internal with existing primary FIP over ActiveServices on lb2 when both eligible",
+			vmSet:         primary,
+			useStandardLB: true,
+			isInternal:    true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{
+					Name: "lb2",
+					MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveServices: utilsets.NewString("default/test"),
+					},
+				},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal: "true",
+			},
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1-internal"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{Name: ptr.To("atest")},
+						},
+					},
+				},
+				{Name: ptr.To("lb2-internal")},
+			},
+			expected: "lb1-internal",
+		},
+		{
+			description:   "multi-slb internal: primary FIP on ineligible LB is ignored",
+			vmSet:         primary,
+			useStandardLB: true,
+			isInternal:    true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{
+					Name: "lb2",
+					MultipleStandardLoadBalancerConfigurationSpec: config.MultipleStandardLoadBalancerConfigurationSpec{
+						AllowServicePlacement: ptr.To(false),
+					},
+				},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal: "true",
+			},
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1-internal"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{},
+					},
+				},
+				{
+					Name: ptr.To("lb2-internal"),
 					Properties: &armnetwork.LoadBalancerPropertiesFormat{
 						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
 							{Name: ptr.To("atest")},
@@ -13226,6 +13352,329 @@ func TestRemoveStaleServiceLBResources(t *testing.T) {
 					probeNames = append(probeNames, *probe.Name)
 				}
 				assert.Equal(t, tc.expectedProbeNames, probeNames)
+			}
+		})
+	}
+}
+
+func TestRemoveServiceFromLB(t *testing.T) {
+	const (
+		fipName = "atest1"
+		fipID   = "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/frontendIPConfigurations/atest1"
+	)
+
+	// sharedLB: FIP kept alive by another service's rule. After removing test1's
+	// rule, the FIP still has aprimary's rule so the LB is updated, not deleted.
+	sharedLB := func() *armnetwork.LoadBalancer {
+		return &armnetwork.LoadBalancer{
+			Name: ptr.To("lb1"),
+			Properties: &armnetwork.LoadBalancerPropertiesFormat{
+				FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+					{
+						Name: ptr.To(fipName),
+						ID:   ptr.To(fipID),
+						Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+							PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pip1")},
+						},
+					},
+				},
+				LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+					{
+						Name: ptr.To("aprimary-TCP-80"),
+						Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+							FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+						},
+					},
+					{
+						Name: ptr.To("atest1-TCP-81"),
+						Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+							FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+						},
+					},
+				},
+				Probes: []*armnetwork.Probe{
+					{Name: ptr.To("aprimary-TCP-80")},
+					{Name: ptr.To("atest1-TCP-81")},
+				},
+			},
+		}
+	}
+
+	// soloLB: only test1's FIP/rule. After removal, the FIP is orphaned
+	// and the LB is deleted entirely.
+	soloLB := func() *armnetwork.LoadBalancer {
+		return &armnetwork.LoadBalancer{
+			Name: ptr.To("lb1"),
+			Properties: &armnetwork.LoadBalancerPropertiesFormat{
+				FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+					{
+						Name: ptr.To(fipName),
+						ID:   ptr.To(fipID),
+						Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+							PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pip1")},
+						},
+					},
+				},
+				LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+					{
+						Name: ptr.To("atest1-TCP-80"),
+						Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
+							FrontendIPConfiguration: &armnetwork.SubResource{ID: ptr.To(fipID)},
+						},
+					},
+				},
+				Probes: []*armnetwork.Probe{
+					{Name: ptr.To("atest1-TCP-80")},
+				},
+			},
+		}
+	}
+
+	fipsToRemove := []*armnetwork.FrontendIPConfiguration{
+		{
+			Name: ptr.To(fipName),
+			ID:   ptr.To(fipID),
+			Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+				PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("pip1")},
+			},
+		},
+	}
+
+	lb0 := &armnetwork.LoadBalancer{
+		Name:       ptr.To("lb0"),
+		Properties: &armnetwork.LoadBalancerPropertiesFormat{},
+	}
+	lb2 := &armnetwork.LoadBalancer{
+		Name:       ptr.To("lb2"),
+		Properties: &armnetwork.LoadBalancerPropertiesFormat{},
+	}
+
+	multiSLBConfig := func() []config.MultipleStandardLoadBalancerConfiguration {
+		return []config.MultipleStandardLoadBalancerConfiguration{
+			{Name: ptr.Deref(lb0.Name, "")},
+			{
+				Name: "lb1",
+				MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+					ActiveServices: utilsets.NewString("default/test1", "default/other"),
+				},
+			},
+			{Name: ptr.Deref(lb2.Name, "")},
+		}
+	}
+
+	for _, tc := range []struct {
+		description string
+		existingLB  *armnetwork.LoadBalancer
+		fipConfigs  []*armnetwork.FrontendIPConfiguration
+		multiSLB    []config.MultipleStandardLoadBalancerConfiguration
+		local       bool
+		plsExists   bool
+
+		expectDeleteLBName         string
+		expectDeleteLBErr          error
+		expectCreateOrUpdateLBName string
+		expectCreateOrUpdateErr    error
+		expectDeleteBPOnLB         string
+		expectDeleteBPName         string
+		expectDeleteBPErr          error
+
+		expectedLBNames     []string
+		expectedDeletedPLS  bool
+		expectedErrContains string
+	}{
+		{
+			description:                "should remove stale rules and probes and update the LB when fipConfigs is nil",
+			existingLB:                 sharedLB(),
+			multiSLB:                   multiSLBConfig(),
+			expectCreateOrUpdateLBName: "lb1",
+			expectedLBNames:            []string{"lb0", "lb1", "lb2"},
+		},
+		{
+			description:        "should remove the frontend IP and delete the LB when fipConfigs is provided",
+			existingLB:         soloLB(),
+			fipConfigs:         fipsToRemove,
+			multiSLB:           multiSLBConfig(),
+			expectDeleteLBName: "lb1",
+			expectedLBNames:    []string{"lb0", "lb2"},
+		},
+		{
+			description:                "should return error when CreateOrUpdate fails on stale resource path",
+			existingLB:                 sharedLB(),
+			multiSLB:                   multiSLBConfig(),
+			expectCreateOrUpdateLBName: "lb1",
+			expectCreateOrUpdateErr:    errors.New("api error"),
+			expectedLBNames:            []string{"lb0", "lb1", "lb2"},
+			expectedErrContains:        "api error",
+		},
+		{
+			description:         "should return error when Delete fails on frontend IP removal path",
+			existingLB:          soloLB(),
+			fipConfigs:          fipsToRemove,
+			multiSLB:            multiSLBConfig(),
+			expectDeleteLBName:  "lb1",
+			expectDeleteLBErr:   errors.New("delete failed"),
+			expectedLBNames:     []string{"lb0", "lb1", "lb2"},
+			expectedErrContains: "delete failed",
+		},
+		{
+			description:                "should wrap error from backend pool cleanup for local service",
+			existingLB:                 sharedLB(),
+			local:                      true,
+			multiSLB:                   multiSLBConfig(),
+			expectCreateOrUpdateLBName: "lb1",
+			expectDeleteBPOnLB:         "lb1",
+			expectDeleteBPName:         "default-test1",
+			expectDeleteBPErr:          errors.New("bp error"),
+			expectedLBNames:            []string{"lb0", "lb1", "lb2"},
+			expectedErrContains:        "clean up backend pool for local service",
+		},
+		{
+			description:        "should return deletedPLS when PLS exists on stale resource path",
+			existingLB:         soloLB(),
+			multiSLB:           multiSLBConfig(),
+			plsExists:          true,
+			expectedLBNames:    []string{"lb0", "lb1", "lb2"},
+			expectedDeletedPLS: true,
+		},
+		{
+			description:        "should return deletedPLS when PLS exists on frontend IP removal path",
+			existingLB:         soloLB(),
+			fipConfigs:         fipsToRemove,
+			multiSLB:           multiSLBConfig(),
+			plsExists:          true,
+			expectedLBNames:    []string{"lb0", "lb1", "lb2"},
+			expectedDeletedPLS: true,
+		},
+		{
+			description:                "should not clean up backend pool for local service on single SLB",
+			existingLB:                 sharedLB(),
+			local:                      true,
+			expectCreateOrUpdateLBName: "lb1",
+			expectedLBNames:            []string{"lb1"},
+		},
+		{
+			description:                "should not clean up backend pool for non-local service on multi-SLB",
+			existingLB:                 sharedLB(),
+			multiSLB:                   multiSLBConfig(),
+			expectCreateOrUpdateLBName: "lb1",
+			expectedLBNames:            []string{"lb0", "lb1", "lb2"},
+		},
+		{
+			description:                "should clean up backend pool for local service when LB is not deleted",
+			existingLB:                 sharedLB(),
+			local:                      true,
+			multiSLB:                   multiSLBConfig(),
+			expectCreateOrUpdateLBName: "lb1",
+			expectDeleteBPOnLB:         "lb1",
+			expectDeleteBPName:         "default-test1",
+			expectedLBNames:            []string{"lb0", "lb1", "lb2"},
+		},
+		{
+			description:        "should skip backend pool cleanup for local service when LB is deleted",
+			existingLB:         soloLB(),
+			fipConfigs:         fipsToRemove,
+			local:              true,
+			multiSLB:           multiSLBConfig(),
+			expectDeleteLBName: "lb1",
+			expectedLBNames:    []string{"lb0", "lb2"},
+		},
+	} {
+		tc := tc
+		t.Run(tc.description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			cloud := GetTestCloud(ctrl)
+			cloud.LoadBalancerSKU = "Standard"
+
+			if tc.local {
+				tc.existingLB.Properties.BackendAddressPools = []*armnetwork.BackendAddressPool{
+					{Name: ptr.To("kubernetes")},
+					{Name: ptr.To("default-test1")},
+				}
+			}
+
+			isMultiSLB := len(tc.multiSLB) > 0
+			var existingLBs []*armnetwork.LoadBalancer
+			if isMultiSLB {
+				cloud.MultipleStandardLoadBalancerConfigurations = tc.multiSLB
+				existingLBs = []*armnetwork.LoadBalancer{lb0, tc.existingLB, lb2}
+			} else {
+				existingLBs = []*armnetwork.LoadBalancer{tc.existingLB}
+			}
+
+			lbClient := cloud.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+			if tc.expectDeleteLBName != "" {
+				lbClient.EXPECT().Delete(gomock.Any(), gomock.Any(), tc.expectDeleteLBName).Return(tc.expectDeleteLBErr).Times(1)
+			}
+			if tc.expectCreateOrUpdateLBName != "" {
+				lbClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), tc.expectCreateOrUpdateLBName, gomock.Any()).Return(nil, tc.expectCreateOrUpdateErr).Times(1)
+			}
+
+			bpClient := cloud.NetworkClientFactory.GetBackendAddressPoolClient().(*mock_backendaddresspoolclient.MockInterface)
+			if tc.expectDeleteBPOnLB != "" {
+				bpClient.EXPECT().Delete(gomock.Any(), gomock.Any(), tc.expectDeleteBPOnLB, tc.expectDeleteBPName).Return(tc.expectDeleteBPErr).Times(1)
+			}
+			// List is called by cleanupLocalServiceBackendPool via ListManagedLBs when
+			// local + multi-SLB + LB not deleted.
+			if tc.local && isMultiSLB && tc.expectDeleteLBName == "" && tc.expectedErrContains == "" {
+				lbClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(existingLBs, nil).Times(1)
+			}
+
+			mockPLSRepo := cloud.plsRepo.(*privatelinkservice.MockRepository)
+			if tc.plsExists {
+				realPLS := &armnetwork.PrivateLinkService{
+					ID:   ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/privateLinkServices/pls1"),
+					Name: ptr.To("pls1"),
+					Properties: &armnetwork.PrivateLinkServiceProperties{
+						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{ID: ptr.To(fipID)},
+						},
+					},
+				}
+				mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(realPLS, nil).Times(1)
+				mockPLSRepo.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+			} else {
+				notExistPLS := &armnetwork.PrivateLinkService{ID: ptr.To(consts.PrivateLinkServiceNotExistID)}
+				mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(notExistPLS, nil).MaxTimes(1)
+			}
+
+			svc := getTestService("test1", v1.ProtocolTCP, nil, false, 81)
+			if tc.local {
+				svc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyLocal
+			}
+
+			lbs, deletedPLS, err := cloud.removeServiceFromLB(
+				context.TODO(), tc.existingLB, existingLBs, testClusterName, &svc, []*v1.Node{}, tc.fipConfigs,
+			)
+
+			// Assert error.
+			if tc.expectedErrContains != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedErrContains)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			// Assert deletedPLS.
+			assert.Equal(t, tc.expectedDeletedPLS, deletedPLS)
+
+			// Assert LB list names and order.
+			var gotNames []string
+			for _, lb := range lbs {
+				gotNames = append(gotNames, ptr.Deref(lb.Name, ""))
+			}
+			assert.Equal(t, tc.expectedLBNames, gotNames)
+
+			// Assert ActiveServices on all successful non-PLS cases.
+			if tc.expectedErrContains == "" && !tc.expectedDeletedPLS && isMultiSLB {
+				for _, cfg := range cloud.MultipleStandardLoadBalancerConfigurations {
+					if cfg.Name == "lb1" {
+						assert.False(t, cfg.ActiveServices.Has("default/test1"),
+							"test1 should be removed from ActiveServices")
+						assert.True(t, cfg.ActiveServices.Has("default/other"),
+							"other services should be preserved in ActiveServices")
+					}
+				}
 			}
 		})
 	}
