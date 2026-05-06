@@ -18,12 +18,12 @@ limitations under the License.
 package publicipprefixclient
 
 import (
-	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate;delete;list,resource=PublicIPPrefix,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6,packageAlias=armnetwork,clientName=PublicIPPrefixesClient,expand=true,etag=true
+// +azure:client:verbs=get;createorupdate;delete;list,resource=PublicIPPrefix,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9,packageAlias=armnetwork,clientName=PublicIPPrefixesClient,expand=true,etag=true
 type Interface interface {
 	utils.GetWithExpandFunc[armnetwork.PublicIPPrefix]
 	utils.CreateOrUpdateFunc[armnetwork.PublicIPPrefix]

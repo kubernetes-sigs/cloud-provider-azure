@@ -18,12 +18,12 @@ limitations under the License.
 package ipgroupclient
 
 import (
-	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate;delete;listbyrg,resource=IPGroup,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6,packageAlias=armnetwork,clientName=IPGroupsClient,expand=true,rateLimitKey=ipGroupRateLimit,mooncakeApiVersion="2024-03-01"
+// +azure:client:verbs=get;createorupdate;delete;listbyrg,resource=IPGroup,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9,packageAlias=armnetwork,clientName=IPGroupsClient,expand=true,rateLimitKey=ipGroupRateLimit,mooncakeApiVersion="2024-03-01"
 type Interface interface {
 	utils.GetWithExpandFunc[armnetwork.IPGroup]
 	utils.CreateOrUpdateFunc[armnetwork.IPGroup]

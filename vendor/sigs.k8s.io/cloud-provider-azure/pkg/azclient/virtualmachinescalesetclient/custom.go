@@ -19,7 +19,7 @@ package virtualmachinescalesetclient
 import (
 	"context"
 
-	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
+	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7"
 )
 
 // Get gets the VirtualMachineScaleSet

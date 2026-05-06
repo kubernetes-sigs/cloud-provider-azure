@@ -150,7 +150,7 @@ func TestDefaultFlags(t *testing.T) {
 		NodeFilterRequirements: "",
 	}
 	if !reflect.DeepEqual(expected, s) {
-		t.Errorf("Got different run options than expected.\nDifference detected on:\n%s", diff.ObjectReflectDiff(expected, s))
+		t.Errorf("Got different run options than expected.\nDifference detected on:\n%s", diff.Diff(expected, s))
 	}
 }
 
@@ -296,7 +296,7 @@ func TestAddFlags(t *testing.T) {
 		},
 	}
 	if !reflect.DeepEqual(expected, s) {
-		t.Errorf("Got different run options than expected.\nDifference detected on:\n%s", diff.ObjectReflectDiff(expected, s))
+		t.Errorf("Got different run options than expected.\nDifference detected on:\n%s", diff.Diff(expected, s))
 	}
 }
 
