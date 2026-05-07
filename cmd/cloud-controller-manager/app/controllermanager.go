@@ -387,7 +387,9 @@ func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig, h *contr
 
 	// setup /configz endpoint
 	if cz, err := configz.New(ConfigzName); err == nil {
-		cz.Set(c.ComponentConfig)
+		if err := cz.Set(&c.ComponentConfig); err != nil {
+			logger.Error(err, "unable to set configz")
+		}
 	} else {
 		logger.Error(err, "unable to register configz")
 	}

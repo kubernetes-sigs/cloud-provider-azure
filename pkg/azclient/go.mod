@@ -31,7 +31,7 @@ require (
 	golang.org/x/time v0.15.0
 	gopkg.in/dnaeon/go-vcr.v3 v3.2.0
 	k8s.io/klog/v2 v2.140.0
-	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
+	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 )
 
 require (
