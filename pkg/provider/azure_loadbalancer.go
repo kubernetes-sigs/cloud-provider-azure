@@ -4445,7 +4445,7 @@ func (az *Cloud) getLoadBalancerNameByFrontendIPName(
 		for _, fip := range lb.Properties.FrontendIPConfigurations {
 			if strings.HasPrefix(ptr.Deref(fip.Name, ""), baseName) {
 				lbName := trimSuffixIgnoreCase(ptr.Deref(lb.Name, ""), consts.InternalLoadBalancerNameSuffix)
-				logger.V(2).Info("Found LB by frontend IP name prefix", "service", service.Name, "fipNamePrefix", baseName, "lbName", lbName)
+				logger.V(4).Info("Found LB by frontend IP name prefix", "service", service.Name, "fipNamePrefix", baseName, "lbName", lbName)
 				return lbName
 			}
 		}
@@ -4478,7 +4478,7 @@ func (az *Cloud) getLoadBalancerNameByPrivateIP(
 			}
 			for _, ip := range loadBalancerIPs {
 				if ip != "" && strings.EqualFold(*fip.Properties.PrivateIPAddress, ip) {
-					logger.V(2).Info("Found LB from frontend IP by private IP", "service", service.Name, "privateIP", ip, "lbName", ptr.Deref(lb.Name, ""))
+					logger.V(4).Info("Found LB from frontend IP by private IP", "service", service.Name, "privateIP", ip, "lbName", ptr.Deref(lb.Name, ""))
 					return trimSuffixIgnoreCase(ptr.Deref(lb.Name, ""), consts.InternalLoadBalancerNameSuffix)
 				}
 			}
@@ -4507,7 +4507,7 @@ func (az *Cloud) getLoadBalancerNameByPublicIP(
 			return "", fmt.Errorf("find public IP by address %q: %w", ip, err)
 		}
 		if lbName := az.getLoadBalancerNameFromPIP(pip, clusterName); lbName != "" {
-			logger.V(2).Info("Found LB from PIP by IP", "service", service.Name, "pip", ptr.Deref(pip.Name, ""), "lbName", lbName)
+			logger.V(4).Info("Found LB from PIP by IP", "service", service.Name, "pip", ptr.Deref(pip.Name, ""), "lbName", lbName)
 			return lbName, nil
 		}
 	}
@@ -4522,7 +4522,7 @@ func (az *Cloud) getLoadBalancerNameByPublicIP(
 			return "", fmt.Errorf("find public IP by name %q: %w", pipName, err)
 		}
 		if lbName := az.getLoadBalancerNameFromPIP(pip, clusterName); lbName != "" {
-			logger.V(2).Info("Found LB from PIP by name", "service", service.Name, "pip", pipName, "lbName", lbName)
+			logger.V(4).Info("Found LB from PIP by name", "service", service.Name, "pip", pipName, "lbName", lbName)
 			return lbName, nil
 		}
 	}
