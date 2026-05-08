@@ -143,10 +143,11 @@ endif
 install-dependencies: golangci-lint goimports mockgen ginkgo## Install all build dependencies.
 
 GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
+GOLANGCI_LINT_VERSION ?= v2.9.0
 .PHONY: golangci-lint
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
-	test -s $(LOCALBIN)/golangci-lint || curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(LOCALBIN) v2.5.0
+	test -s $(LOCALBIN)/golangci-lint || GOBIN=$(LOCALBIN) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
 GOIMPORTS ?= $(LOCALBIN)/goimports
 .PHONY: goimports
