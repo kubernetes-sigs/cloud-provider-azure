@@ -303,6 +303,83 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
+      - "release-1.36"
+    target-branch: "release-1.36"
+    ignore:
+      - dependency-name: "k8s.io/*"
+        versions: [">=0.37.0"]
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: weekly
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    target-branch: "release-1.36"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/testing"
+      - "lgtm"
+      - "approved"
+      - "release-1.36"
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    target-branch: "release-1.36"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/cleanup"
+      - "lgtm"
+      - "approved"
+      - "release-1.36"
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
+
+  - package-ecosystem: "gomod"
+    directory: "/"
+    open-pull-requests-limit: 1
+    schedule:
+      interval: weekly
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/cleanup"
+      - "lgtm"
+      - "approved"
       - "release-1.35"
     target-branch: "release-1.35"
     ignore:
