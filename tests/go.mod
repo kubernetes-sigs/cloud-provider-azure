@@ -20,7 +20,7 @@ require (
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 	sigs.k8s.io/cloud-provider-azure v0.0.0-00010101000000-000000000000
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.19.0
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.20.2
 )
 
 require (
