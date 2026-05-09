@@ -55,8 +55,10 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/iputil"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/taints"
 )
@@ -1294,8 +1296,16 @@ func getTestSecurityGroupCommon(az *Cloud, v4Enabled, v6Enabled bool, services .
 	rules := []*armnetwork.SecurityRule{}
 	for i, service := range services {
 		for _, port := range service.Spec.Ports {
-			getRule := func(svc *v1.Service, port v1.ServicePort, src string, isIPv6 bool) *armnetwork.SecurityRule {
-				ruleName := az.getSecurityRuleName(svc, port, src, isIPv6)
+			getRule := func(port v1.ServicePort, src string, isIPv6 bool) *armnetwork.SecurityRule {
+				_, securityProto, _, err := getProtocolsFromKubernetesProtocol(port.Protocol)
+				if err != nil {
+					panic(err)
+				}
+				ipFamily := iputil.IPv4
+				if isIPv6 {
+					ipFamily = iputil.IPv6
+				}
+				ruleName := securitygroup.GenerateAllowSecurityRuleName(*securityProto, ipFamily, []string{src}, []int32{port.Port})
 				return &armnetwork.SecurityRule{
 					Name: ptr.To(ruleName),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
@@ -1308,11 +1318,11 @@ func getTestSecurityGroupCommon(az *Cloud, v4Enabled, v6Enabled bool, services .
 			sources := getServiceSourceRanges(&services[i])
 			for _, src := range sources {
 				if v4Enabled {
-					rule := getRule(&services[i], port, src, false)
+					rule := getRule(port, src, false)
 					rules = append(rules, rule)
 				}
 				if v6Enabled {
-					rule := getRule(&services[i], port, src, true)
+					rule := getRule(port, src, true)
 					rules = append(rules, rule)
 				}
 			}
