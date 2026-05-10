@@ -55,10 +55,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
-	"sigs.k8s.io/cloud-provider-azure/pkg/util/iputil"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/taints"
 )
@@ -1292,20 +1290,21 @@ func getServiceSourceRanges(service *v1.Service) []string {
 	return service.Spec.LoadBalancerSourceRanges
 }
 
+func (az *Cloud) getSecurityRuleName(service *v1.Service, port v1.ServicePort, sourceAddrPrefix string, isIPv6 bool) string {
+	isDualStack := isServiceDualStack(service)
+	safePrefix := strings.ReplaceAll(sourceAddrPrefix, "/", "_")
+	safePrefix = strings.ReplaceAll(safePrefix, ":", ".")
+	rulePrefix := az.getRulePrefix(service)
+	name := fmt.Sprintf("%s-%s-%d-%s", rulePrefix, port.Protocol, port.Port, safePrefix)
+	return getResourceByIPFamily(name, isDualStack, isIPv6)
+}
+
 func getTestSecurityGroupCommon(az *Cloud, v4Enabled, v6Enabled bool, services ...v1.Service) *armnetwork.SecurityGroup {
 	rules := []*armnetwork.SecurityRule{}
 	for i, service := range services {
 		for _, port := range service.Spec.Ports {
-			getRule := func(port v1.ServicePort, src string, isIPv6 bool) *armnetwork.SecurityRule {
-				_, securityProto, _, err := getProtocolsFromKubernetesProtocol(port.Protocol)
-				if err != nil {
-					panic(err)
-				}
-				ipFamily := iputil.IPv4
-				if isIPv6 {
-					ipFamily = iputil.IPv6
-				}
-				ruleName := securitygroup.GenerateAllowSecurityRuleName(*securityProto, ipFamily, []string{src}, []int32{port.Port})
+			getRule := func(svc *v1.Service, port v1.ServicePort, src string, isIPv6 bool) *armnetwork.SecurityRule {
+				ruleName := az.getSecurityRuleName(svc, port, src, isIPv6)
 				return &armnetwork.SecurityRule{
 					Name: ptr.To(ruleName),
 					Properties: &armnetwork.SecurityRulePropertiesFormat{
@@ -1318,11 +1317,11 @@ func getTestSecurityGroupCommon(az *Cloud, v4Enabled, v6Enabled bool, services .
 			sources := getServiceSourceRanges(&services[i])
 			for _, src := range sources {
 				if v4Enabled {
-					rule := getRule(port, src, false)
+					rule := getRule(&services[i], port, src, false)
 					rules = append(rules, rule)
 				}
 				if v6Enabled {
-					rule := getRule(port, src, true)
+					rule := getRule(&services[i], port, src, true)
 					rules = append(rules, rule)
 				}
 			}
