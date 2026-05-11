@@ -819,6 +819,8 @@ func (az *Cloud) getServiceLoadBalancer(
 
 	// check if the service already has a load balancer
 	var shouldChangeLB bool
+	// This loop iterates backward so that removing existingLBs[i] inside
+	// removeServiceFromLB does not cause the loop to skip items.
 	for i := len(existingLBs) - 1; i >= 0; i-- {
 		existingLB := existingLBs[i]
 
@@ -2627,6 +2629,7 @@ func (az *Cloud) removeStaleServiceLBResources(
 // otherwise it removes the service's stale rules, probes, and orphaned frontend
 // IPs. It then updates the multi-SLB ActiveServices tracking, LB list, and
 // local-service backend pools.
+// Only existingLB may be removed from existingLBs. All other entries must be preserved.
 func (az *Cloud) removeServiceFromLB(
 	ctx context.Context,
 	existingLB *armnetwork.LoadBalancer,
