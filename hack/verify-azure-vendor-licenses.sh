@@ -34,9 +34,13 @@ done
 
 mkdir -p "${REPO_ROOT}/third_party"
 
+# Generate .go-version required by the upstream kubernetes/kubernetes scripts
+go env GOVERSION | sed 's/^go//' > "${REPO_ROOT}/.go-version"
+
 echo "Start verifying vendor licenses"
 "${REPO_ROOT}/hack/verify-vendor-licenses.sh"
 
+rm -f "${REPO_ROOT}/.go-version"
 rm -rf "${REPO_ROOT}/third_party"
 rm -rf "${REPO_ROOT}/hack/lib"
 rm "${REPO_ROOT}/hack/update-vendor-licenses.sh"
