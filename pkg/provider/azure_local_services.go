@@ -160,19 +160,18 @@ func (updater *loadBalancerBackendPoolUpdater) removeOperation(serviceName strin
 	}
 }
 
-// process processes all operations in the loadBalancerBackendPoolUpdater.
-// It merges operations that have the same loadBalancerName and backendPoolName,
-// and then processes them in batches. If an operation fails, it will be retried
-// if it is retriable, otherwise all operations in the batch targeting to
-// this backend pool will fail.
-func (updater *loadBalancerBackendPoolUpdater) process(ctx context.Context) {
-	logger := log.FromContextOrBackground(ctx).WithName("loadBalancerBackendPoolUpdater.process")
+// drainOperations drains all pending operations from the queue, groups them
+// by loadBalancerName:backendPoolName, and returns the groups. The queue is
+// cleared before returning.
+//
+// The caller must not hold updater.lock when calling this method.
+func (updater *loadBalancerBackendPoolUpdater) drainOperations() map[string][]batchOperation {
+	logger := log.Background().WithName("loadBalancerBackendPoolUpdater.drainOperations")
 	updater.lock.Lock()
 	defer updater.lock.Unlock()
 
 	if len(updater.operations) == 0 {
-		logger.V(4).Info("no operations to process")
-		return
+		return nil
 	}
 
 	// Group operations by loadBalancerName:backendPoolName
@@ -198,6 +197,66 @@ func (updater *loadBalancerBackendPoolUpdater) process(ctx context.Context) {
 
 	// Clear all jobs.
 	updater.operations = make([]batchOperation, 0)
+
+	return groups
+}
+
+// requeueOperations puts operations back into the queue so they can be
+// retried on the next tick.
+func (updater *loadBalancerBackendPoolUpdater) requeueOperations(groups map[string][]batchOperation) {
+	updater.lock.Lock()
+	defer updater.lock.Unlock()
+
+	for _, ops := range groups {
+		updater.operations = append(updater.operations, ops...)
+	}
+}
+
+// process processes all operations in the loadBalancerBackendPoolUpdater.
+// It merges operations that have the same loadBalancerName and backendPoolName,
+// and then processes them in batches. If an operation fails, it will be retried
+// if it is retriable, otherwise all operations in the batch targeting to
+// this backend pool will fail.
+func (updater *loadBalancerBackendPoolUpdater) process(ctx context.Context) {
+	logger := log.FromContextOrBackground(ctx).WithName("loadBalancerBackendPoolUpdater.process")
+
+	// Drain under updater.lock first, then acquire serviceReconcileLock.
+	// The reverse order would deadlock because the main reconcile path
+	// holds serviceReconcileLock and calls addOperation, which acquires
+	// updater.lock.
+	groups := updater.drainOperations()
+	if len(groups) == 0 {
+		logger.V(4).Info("no operations to process")
+		return
+	}
+
+	// Serialize with the main service reconciliation loop.
+	updater.az.serviceReconcileLock.Lock()
+	defer updater.az.serviceReconcileLock.Unlock()
+
+	// Serialize across multiple CCM replicas in HA deployments.
+	if updater.az.azureResourceLocker != nil {
+		if err := updater.az.azureResourceLocker.Lock(ctx); err != nil {
+			logger.Error(fmt.Errorf(
+				consts.AzureResourceLockFailedToLockErrorTemplate,
+				"loadBalancerBackendPoolUpdater.process",
+				err,
+			), "Re-queuing operations for retry")
+			updater.requeueOperations(groups)
+			return
+		}
+		defer func() {
+			if unlockErr := updater.az.azureResourceLocker.Unlock(ctx); unlockErr != nil {
+				logger.Error(fmt.Errorf(
+					consts.AzureResourceLockFailedToUnlockErrorTemplate,
+					"loadBalancerBackendPoolUpdater.process",
+					consts.AzureResourceLockLeaseNamespace,
+					consts.AzureResourceLockLeaseName,
+					unlockErr,
+				), "Could not release distributed lease lock")
+			}
+		}()
+	}
 
 	for key, ops := range groups {
 		parts := strings.Split(key, ":")
