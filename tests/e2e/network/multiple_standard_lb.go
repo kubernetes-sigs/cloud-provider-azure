@@ -917,6 +917,204 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Entry("internal", "internal"),
 		)
 
+		DescribeTable("should clean up rules and preserve LB placement when a service sharing IP switches between internal and external",
+			func(startInternal, moveToDifferentLB, switchPrimary bool) {
+				clusterName := os.Getenv("CLUSTER_NAME")
+
+				By("Creating Service 1 (primary)")
+				svc1Port := int32(serverPort)
+				svc1Annotations := map[string]string{}
+				if startInternal {
+					svc1Annotations[consts.ServiceAnnotationLoadBalancerInternal] = "true"
+				}
+				if moveToDifferentLB {
+					svc1Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = clusterName
+				}
+				svc1 := utils.CreateLoadBalancerServiceManifest(svcNamePrimary, svc1Annotations, labels, ns.Name, []v1.ServicePort{{
+					Port:       svc1Port,
+					TargetPort: intstr.FromInt(int(svc1Port)),
+				}})
+				_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc1, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				defer func() {
+					err := utils.DeleteService(cs, ns.Name, svcNamePrimary)
+					Expect(err).NotTo(HaveOccurred())
+				}()
+
+				ips1, err := utils.WaitServiceExposureAndGetIPs(cs, ns.Name, svcNamePrimary)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(ips1)).NotTo(BeZero())
+				sharedIP := *ips1[0]
+
+				svc1FIPID, svc1LBName := getFIPIDAndLBName(tc, sharedIP, startInternal)
+				utils.Logf("Service 1 exposed with IP %s on LB %s, FIP: %s", sharedIP, svc1LBName, svc1FIPID)
+
+				By("Creating Service 2 (secondary) sharing Service 1's IP via IP annotation")
+				svc2Port := int32(serverPort + 1)
+				var svc2Annotations map[string]string
+				if startInternal {
+					svc2Annotations = serviceAnnotationLoadBalancerInternalTrue
+				}
+				svc2 := utils.CreateLoadBalancerServiceManifest(svcNameIPv4, svc2Annotations, labels, ns.Name, []v1.ServicePort{{
+					Port:       svc2Port,
+					TargetPort: intstr.FromInt(int(svc2Port)),
+				}})
+				svc2 = updateServiceLBIPs(svc2, startInternal, []*string{&sharedIP})
+				_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc2, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				defer func() {
+					err := utils.DeleteService(cs, ns.Name, svcNameIPv4)
+					Expect(err).NotTo(HaveOccurred())
+				}()
+
+				_, err = utils.WaitServiceExposure(cs, ns.Name, svcNameIPv4, []*string{&sharedIP})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Verifying both services have rules on the shared FIP")
+				err = utils.VerifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port, svc2Port), "TCP")
+				Expect(err).NotTo(HaveOccurred(), "Both services should share the FIP")
+
+				switchTo := "internal"
+				if startInternal {
+					switchTo = "external"
+				}
+				switchSvcRole := "secondary"
+				switchSvcName := svcNameIPv4
+				if switchPrimary {
+					switchSvcRole = "primary"
+					switchSvcName = svcNamePrimary
+				}
+				switchSvcPort := svc2Port
+				if switchPrimary {
+					switchSvcPort = svc1Port
+				}
+				remainingPort := svc1Port
+				if switchPrimary {
+					remainingPort = svc2Port
+				}
+
+				targetLB := ""
+				if moveToDifferentLB {
+					targetLB = " and moves to lb-1"
+				}
+				By(fmt.Sprintf("%s service switches to %s%s", switchSvcRole, switchTo, targetLB))
+				switchSvc, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), switchSvcName, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				if switchSvc.Annotations == nil {
+					switchSvc.Annotations = map[string]string{}
+				}
+				if startInternal {
+					delete(switchSvc.Annotations, consts.ServiceAnnotationLoadBalancerInternal)
+				} else {
+					switchSvc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = "true"
+				}
+				if moveToDifferentLB {
+					switchSvc.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = "lb-1"
+				}
+				delete(switchSvc.Annotations, consts.ServiceAnnotationLoadBalancerIPDualStack[false])
+				_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), switchSvc, metav1.UpdateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				newIP, err := utils.WaitForServiceIPChange(cs, ns.Name, switchSvcName, sharedIP)
+				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("%s service should get a new %s IP", switchSvcRole, switchTo))
+
+				By(fmt.Sprintf("Verifying %s service is on the correct %s LB", switchSvcRole, switchTo))
+				switchedToInternal := switchTo == "internal"
+				newFIPID, newLBName := getFIPIDAndLBName(tc, newIP, switchedToInternal)
+				utils.Logf("%s service now on LB %s with IP %s, FIP: %s", switchSvcRole, newLBName, newIP, newFIPID)
+				Expect(newFIPID).NotTo(BeEmpty(), switchSvcRole+" service should have a FIP on the new LB")
+
+				var expectedLBAfterSwitch string
+				if moveToDifferentLB {
+					expectedLBAfterSwitch = "lb-1"
+					if switchedToInternal {
+						expectedLBAfterSwitch += consts.InternalLoadBalancerNameSuffix
+					}
+				} else {
+					if switchedToInternal {
+						expectedLBAfterSwitch = svc1LBName + consts.InternalLoadBalancerNameSuffix
+					} else {
+						expectedLBAfterSwitch = strings.TrimSuffix(svc1LBName, consts.InternalLoadBalancerNameSuffix)
+					}
+				}
+				Expect(newLBName).To(Equal(expectedLBAfterSwitch), fmt.Sprintf("%s service should be on LB %s", switchSvcRole, expectedLBAfterSwitch))
+
+				err = utils.VerifyFIPHasRulesForPorts(tc, newFIPID, sets.New(switchSvcPort), "TCP")
+				Expect(err).NotTo(HaveOccurred(), switchSvcRole+" service should have rules on its new FIP")
+
+				By("Verifying old FIP only has the remaining service's rules")
+				err = utils.VerifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(remainingPort), "TCP")
+				Expect(err).NotTo(HaveOccurred(), "Switched service's rules should be cleaned from the old FIP")
+
+				By(fmt.Sprintf("Triggering reconcile and verifying %s service stays on LB %s", switchSvcRole, newLBName))
+				beforeReconcile := time.Now().Add(-1 * time.Second)
+				addDummyAnnotationWithServiceName(cs, ns.Name, switchSvcName)
+				err = utils.WaitForServiceNormalEventAfter(cs, ns.Name, switchSvcName, "EnsuredLoadBalancer", "", beforeReconcile)
+				Expect(err).NotTo(HaveOccurred(), "Reconcile should succeed after dummy annotation")
+				reconFIPID, reconLBName := getFIPIDAndLBName(tc, newIP, switchedToInternal)
+				Expect(reconLBName).To(Equal(newLBName), switchSvcRole+" service should stay on the same LB after reconcile")
+				Expect(reconFIPID).To(Equal(newFIPID), switchSvcRole+" service should keep the same FIP after reconcile")
+
+				switchBack := "external"
+				if startInternal {
+					switchBack = "internal"
+				}
+				By(fmt.Sprintf("%s service switches back to %s", switchSvcRole, switchBack))
+				switchSvc, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), switchSvcName, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				if switchSvc.Annotations == nil {
+					switchSvc.Annotations = map[string]string{}
+				}
+				if startInternal {
+					switchSvc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = "true"
+				} else {
+					delete(switchSvc.Annotations, consts.ServiceAnnotationLoadBalancerInternal)
+				}
+				if moveToDifferentLB {
+					delete(switchSvc.Annotations, consts.ServiceAnnotationLoadBalancerConfigurations)
+				}
+				if !switchPrimary {
+					switchSvc = updateServiceLBIPs(switchSvc, startInternal, []*string{&sharedIP})
+				}
+				_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), switchSvc, metav1.UpdateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = utils.WaitServiceExposure(cs, ns.Name, switchSvcName, []*string{&sharedIP})
+				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("%s service should get back shared IP %s", switchSvcRole, sharedIP))
+
+				By("Verifying service is back on the original LB")
+				switchBackFIPID, switchBackLBName := getFIPIDAndLBName(tc, sharedIP, startInternal)
+				utils.Logf("%s service back on LB %s with IP %s, FIP: %s", switchSvcRole, switchBackLBName, sharedIP, switchBackFIPID)
+				Expect(switchBackLBName).To(Equal(svc1LBName), switchSvcRole+" service should be back on the original LB")
+				Expect(switchBackFIPID).To(Equal(svc1FIPID), "Should be back on the original FIP")
+
+				By("Verifying both services' rules are back on the shared FIP")
+				err = utils.VerifyFIPHasRulesForPorts(tc, svc1FIPID, sets.New(svc1Port, svc2Port), "TCP")
+				Expect(err).NotTo(HaveOccurred(), "Both services should share the FIP again after switch back")
+
+				By(fmt.Sprintf("Verifying rules are cleaned from LB %s after switch back", expectedLBAfterSwitch))
+				err = utils.VerifyFIPHasNoRulesForPorts(tc, newFIPID, sets.New(switchSvcPort), "TCP")
+				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Switched service's rules should be cleaned from LB %s after switch back", expectedLBAfterSwitch))
+
+				By(fmt.Sprintf("Triggering reconcile and verifying %s service stays on LB %s after switch back", switchSvcRole, svc1LBName))
+				beforeReconcile2 := time.Now().Add(-1 * time.Second)
+				addDummyAnnotationWithServiceName(cs, ns.Name, switchSvcName)
+				err = utils.WaitForServiceNormalEventAfter(cs, ns.Name, switchSvcName, "EnsuredLoadBalancer", "", beforeReconcile2)
+				Expect(err).NotTo(HaveOccurred(), "Reconcile should succeed after switch back")
+				finalFIPID, finalLBName := getFIPIDAndLBName(tc, sharedIP, startInternal)
+				Expect(finalLBName).To(Equal(svc1LBName), switchSvcRole+" service should stay on original LB after reconcile")
+				Expect(finalFIPID).To(Equal(svc1FIPID), switchSvcRole+" service should keep original FIP after reconcile")
+			},
+			Entry("secondary: external to internal same LB", false, false, false),
+			Entry("secondary: external to internal different LB", false, true, false),
+			Entry("secondary: internal to external same LB", true, false, false),
+			Entry("secondary: internal to external different LB", true, true, false),
+			Entry("primary: external to internal same LB", false, false, true),
+			Entry("primary: external to internal different LB", false, true, true),
+			Entry("primary: internal to external same LB", true, false, true),
+			Entry("primary: internal to external different LB", true, true, true),
+		)
+
 		It("should block service sharing IP on LB not in eligible set", func() {
 			By("Creating Service 1 with label matching lb-2's ServiceLabelSelector")
 			svc1Port := int32(serverPort)
