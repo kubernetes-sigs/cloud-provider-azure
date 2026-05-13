@@ -1291,6 +1291,15 @@ func getServiceSourceRanges(service *v1.Service) []string {
 	return service.Spec.LoadBalancerSourceRanges
 }
 
+func (az *Cloud) getSecurityRuleName(service *v1.Service, port v1.ServicePort, sourceAddrPrefix string, isIPv6 bool) string {
+	isDualStack := isServiceDualStack(service)
+	safePrefix := strings.ReplaceAll(sourceAddrPrefix, "/", "_")
+	safePrefix = strings.ReplaceAll(safePrefix, ":", ".")
+	rulePrefix := az.getRulePrefix(service)
+	name := fmt.Sprintf("%s-%s-%d-%s", rulePrefix, port.Protocol, port.Port, safePrefix)
+	return getResourceByIPFamily(name, isDualStack, isIPv6)
+}
+
 func getTestSecurityGroupCommon(az *Cloud, v4Enabled, v6Enabled bool, services ...v1.Service) *armnetwork.SecurityGroup {
 	rules := []*armnetwork.SecurityRule{}
 	for i, service := range services {
