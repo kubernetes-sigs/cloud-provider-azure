@@ -1,13 +1,17 @@
 approvers:
 - sig-cloud-provider-leads
 - andyzhangx
+- anndono
 - feiskyer
+- Liunardy
 - nilo19
 
 reviewers:
 - sig-cloud-provider-leads
 - andyzhangx
+- anndono
 - feiskyer
+- Liunardy
 - mainred
 - nilo19
 
