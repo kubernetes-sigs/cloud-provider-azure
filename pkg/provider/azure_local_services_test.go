@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -137,6 +138,30 @@ func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
 			name:       "not on this load balancer",
 			operations: []batchOperation{addOperationPool1},
 			changeLB:   true,
+		},
+		{
+			name:       "empty queue returns without ARM calls",
+			operations: nil,
+		},
+		{
+			name:       "removing non-existent IPs does not trigger CreateOrUpdate",
+			operations: []batchOperation{removeOperationPool1},
+			existingBackendPools: []*armnetwork.BackendAddressPool{
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}),
+			},
+			expectedBackendPools: []*armnetwork.BackendAddressPool{
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}),
+			},
+		},
+		{
+			name:       "adding already-present IPs does not trigger CreateOrUpdate",
+			operations: []batchOperation{addOperationPool1},
+			existingBackendPools: []*armnetwork.BackendAddressPool{
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
+			},
+			expectedBackendPools: []*armnetwork.BackendAddressPool{
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
+			},
 		},
 	}
 
@@ -665,7 +690,132 @@ func TestCheckAndApplyLocalServiceBackendPoolUpdates(t *testing.T) {
 	}
 }
 
+func TestCountOperations(t *testing.T) {
+	op1 := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
+	op2 := getRemoveIPsFromBackendPoolOperation("ns1/svc2", "lb1", "pool1", []string{"10.0.0.2"})
+
+	tests := []struct {
+		name     string
+		ops      []batchOperation
+		expected int
+	}{
+		{name: "empty queue", ops: nil, expected: 0},
+		{name: "one operation", ops: []batchOperation{op1}, expected: 1},
+		{name: "two operations", ops: []batchOperation{op1, op2}, expected: 2},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud := &Cloud{}
+			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+			for _, op := range tc.ops {
+				u.addOperation(op)
+			}
+			assert.Equal(t, tc.expected, u.countOperations())
+		})
+	}
+
+	t.Run("acquires updater lock", func(t *testing.T) {
+		cloud := &Cloud{}
+		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+		u.addOperation(op1)
+
+		u.lock.Lock()
+
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			u.countOperations()
+		}()
+
+		select {
+		case <-done:
+			t.Fatal("countOperations should block while lock is held")
+		case <-time.After(100 * time.Millisecond):
+		}
+
+		u.lock.Unlock()
+
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("countOperations did not complete after lock released")
+		}
+	})
+}
+
 func TestDrainOperations(t *testing.T) {
+	op1 := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
+	op2 := getAddIPsToBackendPoolOperation("ns1/svc2", "lb1", "pool2", []string{"10.0.0.2"})
+
+	testCases := []struct {
+		name       string
+		operations []batchOperation
+		expected   []batchOperation
+	}{
+		{
+			name:     "returns nil when queue is empty",
+			expected: nil,
+		},
+		{
+			name:       "returns single operation",
+			operations: []batchOperation{op1},
+			expected:   []batchOperation{op1},
+		},
+		{
+			name:       "returns all operations in order",
+			operations: []batchOperation{op1, op2},
+			expected:   []batchOperation{op1, op2},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud := &Cloud{}
+			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+			for _, op := range tc.operations {
+				u.addOperation(op)
+			}
+
+			ops := u.drainOperations()
+
+			assert.Equal(t, tc.expected, ops)
+
+			u.lock.Lock()
+			assert.Equal(t, 0, len(u.operations), "queue should be cleared after drain")
+			u.lock.Unlock()
+		})
+	}
+
+	t.Run("acquires updater lock", func(t *testing.T) {
+		cloud := &Cloud{}
+		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+		u.addOperation(op1)
+
+		u.lock.Lock()
+
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			u.drainOperations()
+		}()
+
+		select {
+		case <-done:
+			t.Fatal("drainOperations returned while lock was held")
+		case <-time.After(100 * time.Millisecond):
+		}
+
+		u.lock.Unlock()
+
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("drainOperations did not complete after lock released")
+		}
+	})
+}
+
+func TestGroupOperations(t *testing.T) {
 	addPool1 := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
 	removePool1 := getRemoveIPsFromBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
 	addPool1WithExtra := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})
@@ -678,10 +828,10 @@ func TestDrainOperations(t *testing.T) {
 		expectedGroups map[string][]batchOperation
 	}{
 		{
-			name:           "returns nil when queue is empty",
+			name:           "returns empty map for nil input",
 			operations:     nil,
 			localServices:  map[string]*serviceInfo{"ns1/svc1": {lbName: "lb1"}},
-			expectedGroups: nil,
+			expectedGroups: map[string][]batchOperation{},
 		},
 		{
 			name:           "groups single operation by pool key",
@@ -733,44 +883,18 @@ func TestDrainOperations(t *testing.T) {
 				cloud.localServiceNameToServiceInfoMap.Store(k, v)
 			}
 			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-			for _, op := range tc.operations {
-				u.addOperation(op)
-			}
 
-			groups := u.drainOperations()
+			groups := u.groupOperations(context.Background(), tc.operations)
 
-			if tc.expectedGroups == nil {
-				assert.Nil(t, groups)
-			} else {
-				assert.Equal(t, len(tc.expectedGroups), len(groups))
-				for key, expectedOps := range tc.expectedGroups {
-					assert.Equal(t, len(expectedOps), len(groups[key]), "group %s count", key)
-					for i, expectedOp := range expectedOps {
-						assert.Equal(t, expectedOp, groups[key][i], "group %s op %d", key, i)
-					}
+			assert.Equal(t, len(tc.expectedGroups), len(groups))
+			for key, expectedOps := range tc.expectedGroups {
+				assert.Equal(t, len(expectedOps), len(groups[key]), "group %s count", key)
+				for i, expectedOp := range expectedOps {
+					assert.Equal(t, expectedOp, groups[key][i], "group %s op %d", key, i)
 				}
 			}
-
-			u.lock.Lock()
-			assert.Equal(t, 0, len(u.operations), "queue should be cleared after drain")
-			u.lock.Unlock()
 		})
 	}
-}
-
-func TestRequeueOperationsPreservesExistingOperations(t *testing.T) {
-	u := newLoadBalancerBackendPoolUpdater(&Cloud{}, time.Second)
-
-	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc2", "lb1", "pool2", []string{"10.0.0.2"}))
-
-	groups := map[string][]batchOperation{
-		"lb1:pool1": {getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})},
-	}
-	u.requeueOperations(groups)
-
-	u.lock.Lock()
-	assert.Equal(t, 2, len(u.operations))
-	u.lock.Unlock()
 }
 
 func TestLoadBalancerBackendPoolUpdaterSerializesWithServiceReconcileLock(t *testing.T) {
@@ -903,7 +1027,7 @@ func TestLoadBalancerBackendPoolUpdaterAddOperationNotBlockedDuringProcess(t *te
 	}
 }
 
-func TestLoadBalancerBackendPoolUpdaterRequeuesOnLeaseLockFailure(t *testing.T) {
+func TestLoadBalancerBackendPoolUpdaterPreservesOperationsOnLeaseLockFailure(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -932,8 +1056,163 @@ func TestLoadBalancerBackendPoolUpdaterRequeuesOnLeaseLockFailure(t *testing.T) 
 	// No ARM mock expectations, ARM call should not happen.
 	u.process(context.Background())
 
-	// Verify operations were re-queued.
 	u.lock.Lock()
-	assert.Equal(t, 1, len(u.operations), "Operations should have been re-queued after lease lock failure")
+	assert.Equal(t, 1, len(u.operations), "Operations should be preserved after lease lock failure")
+	u.lock.Unlock()
+}
+
+func TestLoadBalancerBackendPoolUpdaterCompletesOnUnlockFailure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cloud := GetTestCloud(ctrl)
+	cloud.localServiceNameToServiceInfoMap = sync.Map{}
+	cloud.localServiceNameToServiceInfoMap.Store("ns1/svc1", &serviceInfo{lbName: "lb1"})
+
+	svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+	client := fake.NewSimpleClientset(&svc)
+	informerFactory := informers.NewSharedInformerFactory(client, 0)
+	cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+
+	// Fail the second lease update (releaseLease), let the first (acquireLease) pass.
+	var updateCount int32
+	leaseClient := fake.NewSimpleClientset()
+	leaseClient.PrependReactor("update", "leases", func(_ clientgotesting.Action) (bool, runtime.Object, error) {
+		if atomic.AddInt32(&updateCount, 1) >= 2 {
+			return true, nil, fmt.Errorf("simulated unlock failure")
+		}
+		return false, nil, nil
+	})
+
+	cloud.KubeClient = leaseClient
+	cloud.azureResourceLocker = NewAzureResourceLocker(
+		cloud,
+		"test-holder",
+		"test-lease",
+		"test-namespace",
+		15,
+	)
+
+	existingBP := getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{})
+	mockBPClient := cloud.NetworkClientFactory.GetBackendAddressPoolClient().(*mock_backendaddresspoolclient.MockInterface)
+	mockBPClient.EXPECT().Get(
+		gomock.Any(), gomock.Any(), "lb1", "pool1",
+	).Return(existingBP, nil)
+	mockBPClient.EXPECT().CreateOrUpdate(
+		gomock.Any(), gomock.Any(), "lb1", "pool1",
+		*getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1"}),
+	).Return(nil, nil)
+
+	u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+
+	// ARM calls should complete despite unlock failure.
+	u.process(context.Background())
+
+	u.lock.Lock()
+	assert.Equal(t, 0, len(u.operations), "Operations should have been processed despite unlock failure")
+	u.lock.Unlock()
+}
+
+func TestLoadBalancerBackendPoolUpdaterFiltersOperationsWhenLBChangedDuringProcess(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cloud := GetTestCloud(ctrl)
+	cloud.localServiceNameToServiceInfoMap = sync.Map{}
+	cloud.localServiceNameToServiceInfoMap.Store("ns1/svc1", &serviceInfo{lbName: "lb1"})
+
+	svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+	client := fake.NewSimpleClientset(&svc)
+	informerFactory := informers.NewSharedInformerFactory(client, 0)
+	cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+
+	// No ARM mock expectations. The operation targets lb1 but the service moves
+	// to lb2 while process() is blocked on serviceReconcileLock, so groupOperations
+	// filters it.
+
+	u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+
+	// Hold serviceReconcileLock to simulate the main reconcile loop running.
+	cloud.serviceReconcileLock.Lock()
+
+	processDone := make(chan struct{})
+	go func() {
+		defer close(processDone)
+		u.process(context.Background())
+	}()
+
+	// process() is blocked on serviceReconcileLock. The queue has not been drained yet.
+	time.Sleep(200 * time.Millisecond)
+	u.lock.Lock()
+	assert.Equal(t, 1, len(u.operations), "queue should not be drained while process() is blocked")
+	u.lock.Unlock()
+
+	// Simulate the main reconcile loop moving svc1 from lb1 to lb2.
+	cloud.localServiceNameToServiceInfoMap.Store("ns1/svc1", &serviceInfo{lbName: "lb2"})
+
+	// Release the lock. process() will drain and filter the operation via groupOperations.
+	cloud.serviceReconcileLock.Unlock()
+
+	select {
+	case <-processDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("process() did not complete")
+	}
+
+	u.lock.Lock()
+	assert.Equal(t, 0, len(u.operations))
+	u.lock.Unlock()
+}
+
+func TestLoadBalancerBackendPoolUpdaterRemoveOperationCancelsOperationsBeforeDrain(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cloud := GetTestCloud(ctrl)
+	cloud.localServiceNameToServiceInfoMap = sync.Map{}
+	cloud.localServiceNameToServiceInfoMap.Store("ns1/svc1", &serviceInfo{lbName: "lb1"})
+
+	svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+	client := fake.NewSimpleClientset(&svc)
+	informerFactory := informers.NewSharedInformerFactory(client, 0)
+	cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+
+	// No ARM mock expectations. removeOperation cancels the operation
+	// before process() drains the queue.
+
+	u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+
+	// Hold serviceReconcileLock to simulate the main reconcile loop running.
+	cloud.serviceReconcileLock.Lock()
+
+	processDone := make(chan struct{})
+	go func() {
+		defer close(processDone)
+		u.process(context.Background())
+	}()
+
+	// process() is blocked on serviceReconcileLock. The queue has not been drained yet.
+	time.Sleep(200 * time.Millisecond)
+	u.lock.Lock()
+	assert.Equal(t, 1, len(u.operations), "queue should not be drained while process() is blocked")
+	u.lock.Unlock()
+
+	// Simulate the main reconcile loop calling removeOperation to cancel pending operations.
+	u.removeOperation("ns1/svc1")
+
+	// Release the lock. process() should not make ARM calls for the cancelled service.
+	cloud.serviceReconcileLock.Unlock()
+
+	select {
+	case <-processDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("process() did not complete")
+	}
+
+	u.lock.Lock()
+	assert.Equal(t, 0, len(u.operations))
 	u.lock.Unlock()
 }
