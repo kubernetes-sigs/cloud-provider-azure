@@ -180,6 +180,9 @@ type Config struct {
 	// ARM, preventing the cloud-node-lifecycle controller from deleting the node
 	// prematurely. If not set, it defaults to 0, which disables the grace period.
 	NodeInstanceNotFoundGracePeriodInSeconds int `json:"nodeInstanceNotFoundGracePeriodInSeconds,omitempty" yaml:"nodeInstanceNotFoundGracePeriodInSeconds,omitempty"`
+
+	// ServiceGatewayEnabled indicates whether the service gateway is enabled for the cluster.
+	ServiceGatewayEnabled bool `json:"serviceGatewayEnabled,omitempty" yaml:"serviceGatewayEnabled,omitempty"`
 }
 
 // HasExtendedLocation returns true if extendedlocation prop are specified.
@@ -193,6 +196,18 @@ func (az *Config) IsLBBackendPoolTypeNodeIPConfig() bool {
 
 func (az *Config) IsLBBackendPoolTypeNodeIP() bool {
 	return strings.EqualFold(az.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypeNodeIP)
+}
+
+func (az *Config) IsLBBackendPoolTypePodIP() bool {
+	return strings.EqualFold(az.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePodIP)
+}
+
+func (az *Config) UseServiceLoadBalancer() bool {
+	return strings.EqualFold(az.LoadBalancerSKU, consts.LoadBalancerSKUService)
+}
+
+func (az *Config) IsLBBackendPoolTypePodIPAndUseServiceLoadBalancer() bool {
+	return az.IsLBBackendPoolTypePodIP() && az.UseServiceLoadBalancer()
 }
 
 func (az *Config) GetPutVMSSVMBatchSize() int {
