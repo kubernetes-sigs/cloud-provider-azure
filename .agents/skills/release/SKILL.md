@@ -82,3 +82,9 @@ python3 <SKILL_DIR>/scripts/release.py publish \
   is no longer coupled to the release GitHub Action for notes generation.
 - The publish phase calls the shared `create-release-note-doc-pr` script after
   the GitHub release is published.
+
+## Error Handling
+
+If the script or any command fails, **do not make up new scripts to work around
+the error** and **do not fabricate or guess at content**. Instead, report the
+failure and exact error message to the user and let them decide how to proceed.
