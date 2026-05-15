@@ -65,6 +65,12 @@ Common flags:
 - `--target-repo`: Set the PR target repo explicitly
 - `--head-owner`: Set the PR head owner explicitly
 
+## Error Handling
+
+If the script or any command fails, **do not make up new scripts to work around
+the error** and **do not fabricate or guess at content**. Instead, report the
+failure and exact error message to the user and let them decide how to proceed.
+
 ## Troubleshooting
 
 - If repo or owner detection is wrong, pass `--target-repo` and `--head-owner`
