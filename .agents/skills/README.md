@@ -40,6 +40,8 @@ level small:
 - `run-e2e-test`: parse a Go e2e test from `tests/e2e/`, translate each step to
   `kubectl` and `az` CLI commands, and interactively replay the test against a
   live cluster
+- `sync-go-modules`: unblock `go-mod-consistency` by tidying and verifying all
+  tracked Go modules, then refreshing the main module's `vendor/` tree
 
 ## How To Use
 
