@@ -42,6 +42,9 @@ level small:
   live cluster
 - `sync-go-modules`: unblock `go-mod-consistency` by tidying and verifying all
   tracked Go modules, then refreshing the main module's `vendor/` tree
+- `unblock-dependabot-pr`: diagnose failed Dependabot PR CI, reuse the Go module
+  sync workflow, retest Azure public-IP quota e2e flakes, and escalate
+  dependency/toolchain blockers for discussion
 
 ## How To Use
 
