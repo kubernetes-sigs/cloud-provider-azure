@@ -228,14 +228,13 @@ Check these docs when working in the relevant area. These docs should be updated
 | Topic | Doc | When to check |
 |-------|-----|---------------|
 | ETag & cache invalidation | [.agents/references/etag-cache.md](references/etag-cache.md) | Modifying Azure resource create/update/delete operations, or changing cache logic |
+| Shared skill authoring | [.agents/skills/authoring.md](skills/authoring.md) | Changing shared skills under `.agents/skills/`, or creating PRs with shared-skill changes |
 
 ## Shared Skills
 
 Shared reusable skills live under `.agents/skills/` and are the only repo-tracked
 skill source.
 
-- Before changing shared skills, read [.agents/skills/authoring.md](skills/authoring.md)
-  and follow its authoring and pull request guidance.
 - Do not commit `.codex/`, `.claude/`, `.github/skills`, or other local
   agent-specific skill folders.
 - Shared skills are intended to be consumed directly from `.agents/skills/` by
