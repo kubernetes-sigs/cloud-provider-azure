@@ -234,6 +234,8 @@ Check these docs when working in the relevant area. These docs should be updated
 Shared reusable skills live under `.agents/skills/` and are the only repo-tracked
 skill source.
 
+- Before changing shared skills, read [.agents/skills/authoring.md](skills/authoring.md)
+  and follow its authoring and pull request guidance.
 - Do not commit `.codex/`, `.claude/`, `.github/skills`, or other local
   agent-specific skill folders.
 - Shared skills are intended to be consumed directly from `.agents/skills/` by
