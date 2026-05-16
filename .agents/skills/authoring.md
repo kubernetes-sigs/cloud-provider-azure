@@ -36,6 +36,8 @@ agents that support the shared `.agents` convention.
 5. Update [`README.md`](README.md) so the shared skill catalog stays current.
 6. Verify any bundled scripts or examples still point at `.agents/skills/`
    paths when they refer to other shared skills.
+7. When creating a pull request with shared-skill changes, link it to the
+   agent-first workflow issue with `Related: #10054`.
 
 ## Design Guidance
 
