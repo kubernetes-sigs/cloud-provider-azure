@@ -115,11 +115,23 @@ Discuss these with the user before changing code or CI policy:
 - `dependency-review`, vulnerability, or license failures where the resolution
   may require accepting risk, excluding a finding, or changing the dependency
   version
+- The PR is labeled `needs-rebase` or `mergeable` reports `CONFLICTING`
 
-For these cases, collect the failing job names, the smallest representative log
-snippets, current dependency versions, and a proposed narrow fix. Ask before
-changing linter policy, broadening a dependency bump, or editing generated
-Dependabot PR metadata.
+For dependency, toolchain, and policy failures, collect the failing job names,
+the smallest representative log snippets, current dependency versions, and a
+proposed narrow fix. Ask before changing linter policy, broadening a dependency
+bump, or editing generated Dependabot PR metadata.
+
+If the PR still needs a rebase after other common blockers have been fixed,
+ask Dependabot to rebase the branch instead of manually rewriting the generated
+PR branch:
+
+```bash
+gh pr comment <pr> --body "@dependabot rebase"
+```
+
+Do this after local fixes and pushes are complete so Dependabot rebases the
+latest branch state.
 
 ## PR Update Rules
 
@@ -129,6 +141,8 @@ Dependabot PR metadata.
 - Push only the current task's files.
 - Use `/lgtm` after a successful module-sync push when the PR is otherwise ready
   for review.
+- If the PR needs rebase after other blockers are resolved, comment
+  `@dependabot rebase` rather than manually force-pushing a rebase.
 - Use `/retest` only for failures already classified as transient or safe to
   rerun.
 - Report pending jobs and any residual risk clearly instead of claiming the PR
