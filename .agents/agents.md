@@ -228,6 +228,7 @@ Check these docs when working in the relevant area. These docs should be updated
 | Topic | Doc | When to check |
 |-------|-----|---------------|
 | ETag & cache invalidation | [.agents/references/etag-cache.md](references/etag-cache.md) | Modifying Azure resource create/update/delete operations, or changing cache logic |
+| Shared skill authoring | [.agents/skills/authoring.md](skills/authoring.md) | Changing shared skills under `.agents/skills/`, or creating PRs with shared-skill changes |
 
 ## Shared Skills
 
