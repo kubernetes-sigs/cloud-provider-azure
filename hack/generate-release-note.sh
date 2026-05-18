@@ -18,9 +18,10 @@ OUTPUT=${2:-release-notes.md}
 UPDATE_SITE=${3:-false}
 
 install_cli() {
+  export PATH="$(go env GOPATH)/bin:${PATH}"
   if ! [[ -x "$(command -v release-notes)" ]]; then
     echo "CLI release-notes not found, installing..."
-    GO111MODULE=on go install k8s.io/release/cmd/release-notes@latest
+    GO111MODULE=on go install k8s.io/release/cmd/release-notes@v0.21.1
   else
     echo "CLI release-notes found, skip installing. If you want to upgrade, run 'GO111MODULE=on go install k8s.io/release/cmd/release-notes@latest'"
   fi
@@ -30,19 +31,17 @@ generate() {
   FROM_TAG=$1
   TO_TAG=$2
   BRANCH=$3
-  FROM_COMMIT=$(git rev-list --no-merges ${FROM_TAG}..${TO_TAG} | tail -1) # exclude the ${FROM_TAG} commit
-  TO_COMMIT=$(git rev-parse ${TO_TAG}^{commit})
-
-  echo "Generating release notes for ${FROM_TAG}..${TO_TAG} (${FROM_COMMIT}..${TO_COMMIT}) on branch ${BRANCH}"
+  echo "Generating release notes for ${FROM_TAG}..${TO_TAG} on branch ${BRANCH}"
 
   rm -f ${OUTPUT}
-  release-notes --repo=cloud-provider-azure \
+  release-notes generate \
+    --repo=cloud-provider-azure \
     --org=kubernetes-sigs \
     --branch=${BRANCH} \
-    --start-sha=${FROM_COMMIT} \
-    --end-sha=${TO_COMMIT} \
+    --start-rev=${FROM_TAG} \
+    --end-rev=${TO_TAG} \
+    --skip-first-commit \
     --markdown-links=true \
-    --required-author='' \
     --output=${OUTPUT}
 
   if [[ ! -s "${OUTPUT}" ]]; then
