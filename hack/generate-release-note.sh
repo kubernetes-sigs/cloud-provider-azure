@@ -18,9 +18,10 @@ OUTPUT=${2:-release-notes.md}
 UPDATE_SITE=${3:-false}
 
 install_cli() {
+  export PATH="$(go env GOPATH)/bin:${PATH}"
   if ! [[ -x "$(command -v release-notes)" ]]; then
     echo "CLI release-notes not found, installing..."
-    GO111MODULE=on go install k8s.io/release/cmd/release-notes@latest
+    GO111MODULE=on go install k8s.io/release/cmd/release-notes@v0.21.1
   else
     echo "CLI release-notes found, skip installing. If you want to upgrade, run 'GO111MODULE=on go install k8s.io/release/cmd/release-notes@latest'"
   fi
