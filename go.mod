@@ -1,6 +1,6 @@
 module sigs.k8s.io/cloud-provider-azure
 
-go 1.26.0
+go 1.26.3
 
 godebug default=go1.26
 
