@@ -141,7 +141,7 @@ var _ = Describe("Azure Credential Provider", Label(utils.TestSuiteLabelCredenti
 
 		testPull("mcr.microsoft.com/mirror/docker/library/nginx", "1.25", "linux")
 		if tc.HasWindowsNodes {
-			testPull("mcr.microsoft.com/windows/nanoserver", "ltsc2019", "windows")
+			testPull("mcr.microsoft.com/windows/nanoserver", tc.WindowsOSVersion, "windows")
 		}
 	})
 })
