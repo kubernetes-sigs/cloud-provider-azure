@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package difftracker
 
 import (
@@ -5,6 +21,7 @@ import (
 	"strings"
 
 	"k8s.io/klog/v2"
+
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -13,7 +30,10 @@ const (
 	ResourceTypeEgress  = "Egress"
 )
 
-func updateK8Resource(input UpdateK8sResource, set *utilsets.IgnoreCaseSet, resourceType string) error {
+// enqueueK8sResourceOperation applies the requested operation (ADD/REMOVE) to the
+// in-memory K8s resource set. It does not perform any Azure update calls; it only
+// mutates the local desired-state model that will later be reconciled with NRP.
+func enqueueK8sResourceOperation(input UpdateK8sResource, set *utilsets.IgnoreCaseSet, resourceType string) error {
 	if input.ID == "" {
 		return fmt.Errorf("%s: empty ID not allowed", resourceType)
 	}
@@ -29,18 +49,24 @@ func updateK8Resource(input UpdateK8sResource, set *utilsets.IgnoreCaseSet, reso
 	return nil
 }
 
-func (dt *DiffTracker) UpdateK8sService(input UpdateK8sResource) error {
+// EnqueueK8sServiceOperation records a service ADD/REMOVE in the local K8s state set.
+// The change is reconciled with NRP later by the sync operations; this method itself
+// performs no Azure calls.
+func (dt *DiffTracker) EnqueueK8sServiceOperation(input UpdateK8sResource) error {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
-	return updateK8Resource(input, dt.K8sResources.Services, ResourceTypeService)
+	return enqueueK8sResourceOperation(input, dt.K8sResources.Services, ResourceTypeService)
 }
 
-func (dt *DiffTracker) UpdateK8sEgress(input UpdateK8sResource) error {
+// EnqueueK8sEgressOperation records an egress ADD/REMOVE in the local K8s state set.
+// The change is reconciled with NRP later by the sync operations; this method itself
+// performs no Azure calls.
+func (dt *DiffTracker) EnqueueK8sEgressOperation(input UpdateK8sResource) error {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
-	return updateK8Resource(input, dt.K8sResources.Egresses, ResourceTypeEgress)
+	return enqueueK8sResourceOperation(input, dt.K8sResources.Egresses, ResourceTypeEgress)
 }
 
 // updateK8sEndpointsLocked updates K8s endpoints state. Assumes lock is already held.

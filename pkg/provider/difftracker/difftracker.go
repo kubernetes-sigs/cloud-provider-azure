@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package difftracker
 
 import (
@@ -5,25 +21,24 @@ import (
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 // InitializeDiffTracker creates and initializes a new DiffTracker with the given state and configuration.
 // It validates the configuration and ensures all required dependencies are present.
-// Panics if critical dependencies (config, networkClientFactory, kubeClient) are invalid.
-func InitializeDiffTracker(K8s K8s_State, NRP NRP_State, config Config, networkClientFactory azclient.ClientFactory, kubeClient kubernetes.Interface) *DiffTracker {
-	// Validate configuration
+// Returns an error if the configuration is invalid or if any required dependency is nil.
+func InitializeDiffTracker(K8s K8sState, NRP NRPState, config Config, networkClientFactory azclient.ClientFactory, kubeClient kubernetes.Interface) (*DiffTracker, error) {
 	if err := config.Validate(); err != nil {
-		panic(fmt.Sprintf("InitializeDiffTracker: %v", err))
+		return nil, fmt.Errorf("InitializeDiffTracker: %w", err)
 	}
 
-	// Validate required dependencies
 	if networkClientFactory == nil {
-		panic("InitializeDiffTracker: networkClientFactory must not be nil")
+		return nil, fmt.Errorf("InitializeDiffTracker: networkClientFactory must not be nil")
 	}
 	if kubeClient == nil {
-		panic("InitializeDiffTracker: kubeClient must not be nil")
+		return nil, fmt.Errorf("InitializeDiffTracker: kubeClient must not be nil")
 	}
 
 	klog.V(2).Infof("InitializeDiffTracker: initializing with config: subscription=%s, resourceGroup=%s, location=%s",
@@ -59,5 +74,5 @@ func InitializeDiffTracker(K8s K8s_State, NRP NRP_State, config Config, networkC
 		kubeClient:           kubeClient,
 	}
 
-	return diffTracker
+	return diffTracker, nil
 }

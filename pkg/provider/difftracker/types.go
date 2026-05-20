@@ -1,9 +1,26 @@
+/*
+Copyright 2026 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package difftracker
 
 import (
 	"sync"
 
 	"k8s.io/client-go/kubernetes"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
@@ -44,7 +61,7 @@ type NRPLocation struct {
 	Addresses map[string]NRPAddress
 }
 
-type NRP_State struct {
+type NRPState struct {
 	LoadBalancers *utilsets.IgnoreCaseSet
 	NATGateways   *utilsets.IgnoreCaseSet
 	Locations     map[string]NRPLocation
@@ -59,7 +76,7 @@ type Node struct {
 	Pods map[string]Pod
 }
 
-type K8s_State struct {
+type K8sState struct {
 	Services *utilsets.IgnoreCaseSet
 	Egresses *utilsets.IgnoreCaseSet
 	Nodes    map[string]Node
@@ -69,8 +86,8 @@ type K8s_State struct {
 type DiffTracker struct {
 	mu sync.Mutex // Protects concurrent access to DiffTracker
 
-	K8sResources K8s_State
-	NRPResources NRP_State
+	K8sResources K8sState
+	NRPResources NRPState
 
 	LocalServiceNameToNRPServiceMap sync.Map
 
