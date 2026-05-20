@@ -33,7 +33,7 @@ const (
 // enqueueK8sResourceOperation applies the requested operation (ADD/REMOVE) to the
 // in-memory K8s resource set. It does not perform any Azure update calls; it only
 // mutates the local desired-state model that will later be reconciled with NRP.
-func enqueueK8sResourceOperation(input UpdateK8sResource, set *utilsets.IgnoreCaseSet, resourceType string) error {
+func (dt *DiffTracker) enqueueK8sResourceOperation(input UpdateK8sResource, set *utilsets.IgnoreCaseSet, resourceType string) error {
 	if input.ID == "" {
 		return fmt.Errorf("%s: empty ID not allowed", resourceType)
 	}
@@ -56,7 +56,7 @@ func (dt *DiffTracker) EnqueueK8sServiceOperation(input UpdateK8sResource) error
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
-	return enqueueK8sResourceOperation(input, dt.K8sResources.Services, ResourceTypeService)
+	return dt.enqueueK8sResourceOperation(input, dt.K8sResources.Services, ResourceTypeService)
 }
 
 // EnqueueK8sEgressOperation records an egress ADD/REMOVE in the local K8s state set.
@@ -66,7 +66,7 @@ func (dt *DiffTracker) EnqueueK8sEgressOperation(input UpdateK8sResource) error 
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
-	return enqueueK8sResourceOperation(input, dt.K8sResources.Egresses, ResourceTypeEgress)
+	return dt.enqueueK8sResourceOperation(input, dt.K8sResources.Egresses, ResourceTypeEgress)
 }
 
 // updateK8sEndpointsLocked updates K8s endpoints state. Assumes lock is already held.
