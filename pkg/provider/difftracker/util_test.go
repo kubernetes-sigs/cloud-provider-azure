@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package difftracker
 
 import (
@@ -179,12 +195,12 @@ func TestDeepEqual(t *testing.T) {
 		{
 			name: "in sync - matching services and load balancers",
 			dt: &DiffTracker{
-				K8sResources: K8s_State{
+				K8sResources: K8sState{
 					Services: sets.NewString("svc1", "svc2"),
 					Egresses: sets.NewString(),
 					Nodes:    map[string]Node{},
 				},
-				NRPResources: NRP_State{
+				NRPResources: NRPState{
 					LoadBalancers: sets.NewString("svc1", "svc2"),
 					NATGateways:   sets.NewString(),
 					Locations:     map[string]NRPLocation{},
@@ -195,12 +211,12 @@ func TestDeepEqual(t *testing.T) {
 		{
 			name: "not in sync - service count mismatch",
 			dt: &DiffTracker{
-				K8sResources: K8s_State{
+				K8sResources: K8sState{
 					Services: sets.NewString("svc1"),
 					Egresses: sets.NewString(),
 					Nodes:    map[string]Node{},
 				},
-				NRPResources: NRP_State{
+				NRPResources: NRPState{
 					LoadBalancers: sets.NewString("svc1", "svc2"),
 					NATGateways:   sets.NewString(),
 					Locations:     map[string]NRPLocation{},
@@ -211,12 +227,12 @@ func TestDeepEqual(t *testing.T) {
 		{
 			name: "not in sync - service name mismatch",
 			dt: &DiffTracker{
-				K8sResources: K8s_State{
+				K8sResources: K8sState{
 					Services: sets.NewString("svc1"),
 					Egresses: sets.NewString(),
 					Nodes:    map[string]Node{},
 				},
-				NRPResources: NRP_State{
+				NRPResources: NRPState{
 					LoadBalancers: sets.NewString("svc2"),
 					NATGateways:   sets.NewString(),
 					Locations:     map[string]NRPLocation{},
@@ -227,12 +243,12 @@ func TestDeepEqual(t *testing.T) {
 		{
 			name: "in sync - matching egresses and NAT gateways",
 			dt: &DiffTracker{
-				K8sResources: K8s_State{
+				K8sResources: K8sState{
 					Services: sets.NewString(),
 					Egresses: sets.NewString("egress1", "egress2"),
 					Nodes:    map[string]Node{},
 				},
-				NRPResources: NRP_State{
+				NRPResources: NRPState{
 					LoadBalancers: sets.NewString(),
 					NATGateways:   sets.NewString("egress1", "egress2"),
 					Locations:     map[string]NRPLocation{},
@@ -243,12 +259,12 @@ func TestDeepEqual(t *testing.T) {
 		{
 			name: "not in sync - egress count mismatch",
 			dt: &DiffTracker{
-				K8sResources: K8s_State{
+				K8sResources: K8sState{
 					Services: sets.NewString(),
 					Egresses: sets.NewString("egress1"),
 					Nodes:    map[string]Node{},
 				},
-				NRPResources: NRP_State{
+				NRPResources: NRPState{
 					LoadBalancers: sets.NewString(),
 					NATGateways:   sets.NewString("egress1", "egress2"),
 					Locations:     map[string]NRPLocation{},
@@ -376,14 +392,14 @@ func TestDiffTrackerEquals(t *testing.T) {
 		{
 			name: "equal diff trackers",
 			dt1: &DiffTracker{
-				K8sResources: K8s_State{
+				K8sResources: K8sState{
 					Services: sets.NewString("svc1"),
 					Egresses: sets.NewString("egress1"),
 					Nodes:    map[string]Node{},
 				},
 			},
 			dt2: &DiffTracker{
-				K8sResources: K8s_State{
+				K8sResources: K8sState{
 					Services: sets.NewString("svc1"),
 					Egresses: sets.NewString("egress1"),
 					Nodes:    map[string]Node{},
@@ -394,14 +410,14 @@ func TestDiffTrackerEquals(t *testing.T) {
 		{
 			name: "different services",
 			dt1: &DiffTracker{
-				K8sResources: K8s_State{
+				K8sResources: K8sState{
 					Services: sets.NewString("svc1"),
 					Egresses: sets.NewString(),
 					Nodes:    map[string]Node{},
 				},
 			},
 			dt2: &DiffTracker{
-				K8sResources: K8s_State{
+				K8sResources: K8sState{
 					Services: sets.NewString("svc2"),
 					Egresses: sets.NewString(),
 					Nodes:    map[string]Node{},
@@ -412,14 +428,14 @@ func TestDiffTrackerEquals(t *testing.T) {
 		{
 			name: "different egresses",
 			dt1: &DiffTracker{
-				K8sResources: K8s_State{
+				K8sResources: K8sState{
 					Services: sets.NewString(),
 					Egresses: sets.NewString("egress1"),
 					Nodes:    map[string]Node{},
 				},
 			},
 			dt2: &DiffTracker{
-				K8sResources: K8s_State{
+				K8sResources: K8sState{
 					Services: sets.NewString(),
 					Egresses: sets.NewString("egress2"),
 					Nodes:    map[string]Node{},
@@ -430,14 +446,14 @@ func TestDiffTrackerEquals(t *testing.T) {
 		{
 			name: "different node count",
 			dt1: &DiffTracker{
-				K8sResources: K8s_State{
+				K8sResources: K8sState{
 					Services: sets.NewString(),
 					Egresses: sets.NewString(),
 					Nodes:    map[string]Node{"node1": {}},
 				},
 			},
 			dt2: &DiffTracker{
-				K8sResources: K8s_State{
+				K8sResources: K8sState{
 					Services: sets.NewString(),
 					Egresses: sets.NewString(),
 					Nodes:    map[string]Node{},
@@ -448,7 +464,7 @@ func TestDiffTrackerEquals(t *testing.T) {
 		{
 			name: "different pod count in node",
 			dt1: &DiffTracker{
-				K8sResources: K8s_State{
+				K8sResources: K8sState{
 					Services: sets.NewString(),
 					Egresses: sets.NewString(),
 					Nodes: map[string]Node{
@@ -457,7 +473,7 @@ func TestDiffTrackerEquals(t *testing.T) {
 				},
 			},
 			dt2: &DiffTracker{
-				K8sResources: K8s_State{
+				K8sResources: K8sState{
 					Services: sets.NewString(),
 					Egresses: sets.NewString(),
 					Nodes: map[string]Node{
