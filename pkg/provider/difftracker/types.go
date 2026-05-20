@@ -53,18 +53,28 @@ const (
 // --------------------------------------------------------------------------------
 // DiffTracker keeps track of the state of the K8s cluster and NRP
 // --------------------------------------------------------------------------------
+// NRPAddress holds the NRP-side state for a single pod address (pod IP).
 type NRPAddress struct {
-	Services *utilsets.IgnoreCaseSet // all inbound and outbound identities
+	// Services holds the SGW service identities (LBs for inbound, NATGWs for
+	// outbound) currently associated with this address on the NRP side.
+	// These are SGW service identities, not Kubernetes Service names.
+	Services *utilsets.IgnoreCaseSet
 }
 
+// NRPLocation holds the NRP-side state for a single node/VM and groups the
+// pod addresses running on it.
 type NRPLocation struct {
+	// Addresses is keyed by pod IP. Each pod IP is added to the ServiceGateway
+	// as an address under this location once the pod is created.
 	Addresses map[string]NRPAddress
 }
 
 type NRPState struct {
 	LoadBalancers *utilsets.IgnoreCaseSet
 	NATGateways   *utilsets.IgnoreCaseSet
-	Locations     map[string]NRPLocation
+	// Locations is keyed by node/VM IP (e.g. "10.0.0.1"). "Location" here is
+	// an SGW concept identifying a node, not an Azure region (e.g. "eastus2").
+	Locations map[string]NRPLocation
 }
 
 type Pod struct {
