@@ -100,7 +100,8 @@ type AccountOptions struct {
 	PrivateDNSZoneName string
 	// default is vnetName + "-vnetlink"
 	VNetLinkName        string
-	PublicNetworkAccess string
+	PublicNetworkAccess  string
+	IsSmbOAuthEnabled   *bool
 }
 
 type accountWithLocation struct {
