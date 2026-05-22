@@ -101,6 +101,7 @@ type AccountOptions struct {
 	// default is vnetName + "-vnetlink"
 	VNetLinkName        string
 	PublicNetworkAccess string
+	IsSmbOAuthEnabled   *bool
 }
 
 type accountWithLocation struct {
@@ -169,7 +170,8 @@ func (az *AccountRepo) getStorageAccounts(ctx context.Context, storageAccountCli
 				!isAllowSharedKeyAccessEqual(acct, accountOptions) ||
 				!isAccessTierEqual(acct, accountOptions) ||
 				!AreVNetRulesEqual(acct, accountOptions) ||
-				!isPrivateEndpointAsExpected(acct, accountOptions) {
+				!isPrivateEndpointAsExpected(acct, accountOptions) ||
+				!isSmbOAuthEnabledEqual(acct, accountOptions) {
 				continue
 			}
 
@@ -1061,6 +1063,18 @@ func isAccessTierEqual(account *armstorage.Account, accountOptions *AccountOptio
 		return true
 	}
 	return account != nil && account.Properties != nil && account.Properties.AccessTier != nil && accountOptions.AccessTier == string(*account.Properties.AccessTier)
+}
+
+func isSmbOAuthEnabledEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
+	if accountOptions.IsSmbOAuthEnabled == nil {
+		return true
+	}
+	if account == nil || account.Properties == nil || account.Properties.AzureFilesIdentityBasedAuthentication == nil ||
+		account.Properties.AzureFilesIdentityBasedAuthentication.SmbOAuthSettings == nil ||
+		account.Properties.AzureFilesIdentityBasedAuthentication.SmbOAuthSettings.IsSmbOAuthEnabled == nil {
+		return !*accountOptions.IsSmbOAuthEnabled
+	}
+	return *account.Properties.AzureFilesIdentityBasedAuthentication.SmbOAuthSettings.IsSmbOAuthEnabled == *accountOptions.IsSmbOAuthEnabled
 }
 
 func (az *AccountRepo) isMultichannelEnabledEqual(ctx context.Context, account *armstorage.Account, accountOptions *AccountOptions) (bool, error) {
