@@ -102,7 +102,6 @@ type AccountOptions struct {
 	// default is vnetName + "-vnetlink"
 	VNetLinkName        string
 	PublicNetworkAccess string
-	IsSmbOAuthEnabled   *bool
 }
 
 type accountWithLocation struct {
