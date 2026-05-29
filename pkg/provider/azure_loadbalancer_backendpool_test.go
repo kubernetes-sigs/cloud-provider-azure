@@ -905,6 +905,58 @@ func TestRemoveNodeIPAddressFromBackendPool(t *testing.T) {
 		})
 	}
 }
+func TestAddNodeIPAddressesToBackendPoolDeduplicates(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, tc := range []struct {
+		name            string
+		existingIPs     []string
+		inputIPs        []string
+		expectedIPs     []string
+		expectedChanged bool
+	}{
+		{
+			name:            "with duplicate IPs on empty pool",
+			existingIPs:     nil,
+			inputIPs:        []string{"10.0.0.1", "10.0.0.1", "10.0.0.2"},
+			expectedIPs:     []string{"10.0.0.1", "10.0.0.2"},
+			expectedChanged: true,
+		},
+		{
+			name:            "with duplicate IPs and pre-existing addresses",
+			existingIPs:     []string{"10.0.0.1"},
+			inputIPs:        []string{"10.0.0.2", "10.0.0.2", "10.0.0.1"},
+			expectedIPs:     []string{"10.0.0.1", "10.0.0.2"},
+			expectedChanged: true,
+		},
+		{
+			name:            "with all duplicate IPs already in pool",
+			existingIPs:     []string{"10.0.0.1", "10.0.0.2"},
+			inputIPs:        []string{"10.0.0.1", "10.0.0.1", "10.0.0.2"},
+			expectedIPs:     []string{"10.0.0.1", "10.0.0.2"},
+			expectedChanged: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud := GetTestCloud(ctrl)
+			cloud.nodePrivateIPToNodeNameMap = map[string]string{
+				"10.0.0.1": "node1",
+				"10.0.0.2": "node2",
+			}
+
+			bp := buildTestLoadBalancerBackendPoolWithIPs("test-pool", tc.existingIPs)
+			changed := cloud.addNodeIPAddressesToBackendPool(bp, tc.inputIPs)
+			assert.Equal(t, tc.expectedChanged, changed)
+
+			var actualIPs []string
+			for _, addr := range bp.Properties.LoadBalancerBackendAddresses {
+				actualIPs = append(actualIPs, ptr.Deref(addr.Properties.IPAddress, ""))
+			}
+			assert.Equal(t, tc.expectedIPs, actualIPs)
+		})
+	}
+}
 
 func TestGetBackendPrivateIPsNodeIPConfig(t *testing.T) {
 	ctrl := gomock.NewController(t)
