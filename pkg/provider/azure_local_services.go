@@ -373,22 +373,24 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 				}
 				lbName, ipFamily := si.lbName, si.ipFamily
 
-				var previousIPs, currentIPs, previousNodeNames, currentNodeNames []string
+				var previousIPs, currentIPs []string
+				previousNodeNameSet := utilsets.NewString()
+				currentNodeNameSet := utilsets.NewString()
 				if previousES != nil {
 					for _, ep := range previousES.Endpoints {
-						previousNodeNames = append(previousNodeNames, ptr.Deref(ep.NodeName, ""))
+						previousNodeNameSet.Insert(ptr.Deref(ep.NodeName, ""))
 					}
 				}
 				if newES != nil {
 					for _, ep := range newES.Endpoints {
-						currentNodeNames = append(currentNodeNames, ptr.Deref(ep.NodeName, ""))
+						currentNodeNameSet.Insert(ptr.Deref(ep.NodeName, ""))
 					}
 				}
-				for _, previousNodeName := range previousNodeNames {
+				for _, previousNodeName := range previousNodeNameSet.UnsortedList() {
 					nodeIPsSet := az.nodePrivateIPs[strings.ToLower(previousNodeName)]
 					previousIPs = append(previousIPs, nodeIPsSet.UnsortedList()...)
 				}
-				for _, currentNodeName := range currentNodeNames {
+				for _, currentNodeName := range currentNodeNameSet.UnsortedList() {
 					nodeIPsSet := az.nodePrivateIPs[strings.ToLower(currentNodeName)]
 					currentIPs = append(currentIPs, nodeIPsSet.UnsortedList()...)
 				}
