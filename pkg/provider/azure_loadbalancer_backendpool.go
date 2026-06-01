@@ -714,10 +714,10 @@ func (az *Cloud) addNodeIPAddressesToBackendPool(backendPool *armnetwork.Backend
 					IPAddress: ptr.To(ipAddress),
 				},
 			})
+			backendPool.Properties.LoadBalancerBackendAddresses = addresses
 			changed = true
 		}
 	}
-	backendPool.Properties.LoadBalancerBackendAddresses = addresses
 	return changed
 }
 

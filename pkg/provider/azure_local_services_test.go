@@ -163,6 +163,53 @@ func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
 			},
 		},
+		{
+			name: "add operation deduplicates IPs in empty pool",
+			operations: []batchOperation{
+				getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.1", "10.0.0.2"}),
+			},
+			existingBackendPools: []*armnetwork.BackendAddressPool{
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}),
+			},
+			expectedCreateOrUpdateBackendPools: []*armnetwork.BackendAddressPool{
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
+			},
+			expectedBackendPools: []*armnetwork.BackendAddressPool{
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
+			},
+		},
+		{
+			name: "remove-then-add deduplicates IPs",
+			operations: []batchOperation{
+				getRemoveIPsFromBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
+				getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.1", "10.0.0.2", "10.0.0.2"}),
+			},
+			existingBackendPools: []*armnetwork.BackendAddressPool{
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
+			},
+			expectedCreateOrUpdateBackendPools: []*armnetwork.BackendAddressPool{
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
+			},
+			expectedBackendPools: []*armnetwork.BackendAddressPool{
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
+			},
+		},
+		{
+			name: "add-then-remove deduplicates IPs and removes target",
+			operations: []batchOperation{
+				getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.1", "10.0.0.2", "10.0.0.2", "10.0.0.3", "10.0.0.3"}),
+				getRemoveIPsFromBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.2"}),
+			},
+			existingBackendPools: []*armnetwork.BackendAddressPool{
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
+			},
+			expectedCreateOrUpdateBackendPools: []*armnetwork.BackendAddressPool{
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.3"}),
+			},
+			expectedBackendPools: []*armnetwork.BackendAddressPool{
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.3"}),
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -569,6 +616,78 @@ func TestEndpointSlicesInformer(t *testing.T) {
 			close(stopChan)
 			cancel()
 			wg.Wait()
+		})
+	}
+}
+
+func TestEndpointSlicesInformerDeduplicatesNodeIPs(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, tc := range []struct {
+		name        string
+		existingEPS *discovery_v1.EndpointSlice
+		updatedEPS  *discovery_v1.EndpointSlice
+		expectedOps []*loadBalancerBackendPoolUpdateOperation
+	}{
+		{
+			name:        "multiple endpoints on same node produces unique IPs",
+			existingEPS: getTestEndpointSlice("eps1", "test", "svc1", "node1"),
+			updatedEPS:  getTestEndpointSlice("eps1", "test", "svc1", "node2", "node2", "node2"),
+			expectedOps: []*loadBalancerBackendPoolUpdateOperation{
+				getRemoveIPsFromBackendPoolOperation("test/svc1", "lb1", "test-svc1", []string{"10.0.0.1"}),
+				getAddIPsToBackendPoolOperation("test/svc1", "lb1", "test-svc1", []string{"10.0.0.2"}),
+			},
+		},
+		{
+			name:        "unchanged node set with different endpoint counts is a no-op",
+			existingEPS: getTestEndpointSlice("eps1", "test", "svc1", "node1", "node1"),
+			updatedEPS:  getTestEndpointSlice("eps1", "test", "svc1", "node1", "node1", "node1"),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud := GetTestCloud(ctrl)
+			cloud.localServiceNameToServiceInfoMap = sync.Map{}
+			cloud.localServiceNameToServiceInfoMap.Store("test/svc1", newServiceInfo(consts.IPVersionIPv4String, "lb1"))
+			cloud.LoadBalancerBackendPoolUpdateIntervalInSeconds = 1
+			cloud.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+			cloud.MultipleStandardLoadBalancerConfigurations = []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+			}
+			cloud.nodePrivateIPs = map[string]*utilsets.IgnoreCaseSet{
+				"node1": utilsets.NewString("10.0.0.1"),
+				"node2": utilsets.NewString("10.0.0.2"),
+			}
+
+			svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+			client := fake.NewSimpleClientset(&svc, tc.existingEPS)
+			informerFactory := informers.NewSharedInformerFactory(client, 0)
+			cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+
+			// Create updater without starting run() so we can inspect queued operations.
+			u := newLoadBalancerBackendPoolUpdater(cloud, time.Hour)
+			cloud.backendPoolUpdater = u
+
+			cloud.setUpEndpointSlicesInformer(informerFactory)
+			stopChan := make(chan struct{})
+			informerFactory.Start(stopChan)
+			defer close(stopChan)
+
+			// Allow informer to initialize.
+			time.Sleep(100 * time.Millisecond)
+
+			_, err := client.DiscoveryV1().EndpointSlices("test").Update(context.Background(), tc.updatedEPS, metav1.UpdateOptions{})
+			assert.NoError(t, err)
+
+			// Allow the async UpdateFunc to fire and enqueue operations.
+			time.Sleep(500 * time.Millisecond)
+
+			ops := u.drainOperations()
+			var actual []*loadBalancerBackendPoolUpdateOperation
+			for _, op := range ops {
+				actual = append(actual, op.(*loadBalancerBackendPoolUpdateOperation))
+			}
+			assert.Equal(t, tc.expectedOps, actual)
 		})
 	}
 }
