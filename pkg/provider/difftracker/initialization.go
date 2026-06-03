@@ -670,9 +670,18 @@ func fetchServiceGatewayServices(
 		case "Inbound":
 			nrp.LoadBalancers.Insert(*service.Name)
 		case "Outbound":
-			if *service.Name != "default-natgw" {
-				nrp.NATGateways.Insert(*service.Name)
+			// Skip the RP-owned default outbound NAT Gateway. AKS RP provisions
+			// it (name: "default-natgw", IsDefault=true) before CCM starts; if
+			// CCM inserts it here, the diff vs K8s Egresses (count=0) marks it
+			// for removal and the subsequent disassociate call returns
+			// HTTP 400 MultipleDefaultServicesNotAllowedInServiceGateway,
+			// then deletes the NAT GW + PIP and recreates them. Case-insensitive
+			// because Azure may normalize naming differently across endpoints.
+			if strings.EqualFold(*service.Name, "default-natgw") {
+				klog.V(2).Infof("fetchServiceGatewayServices: skipping RP-owned default outbound service %q", *service.Name)
+				continue
 			}
+			nrp.NATGateways.Insert(*service.Name)
 		}
 	}
 	klog.Infof("fetchServiceGatewayServices: fetched %d services (%d LBs, %d NATs)",

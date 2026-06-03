@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
@@ -45,6 +46,27 @@ func (az *Cloud) attachServiceGatewayToSubnet(ctx context.Context) error {
 func (az *Cloud) ensureDefaultOutboundServiceExists(ctx context.Context) error {
 	klog.Infof("ensureDefaultOutboundServiceExists: Ensuring default outbound service exists in Service Gateway %s", consts.DefaultServiceGatewayResourceName)
 
+	// Short-circuit FIRST: if the RP-owned default outbound SGW service is
+	// already present, do nothing — AKS RP pre-provisions it. Identification
+	// by NAME (case-insensitive) is sufficient. This avoids creating
+	// duplicate PIP/NAT/service entries and ~50s of churn on startup.
+	servicesDTO, err := az.GetServices(ctx, consts.DefaultServiceGatewayResourceName)
+	if err != nil {
+		return fmt.Errorf("ensureDefaultOutboundServiceExists: failed to get services from ServiceGateway API: %w", err)
+	}
+	for _, service := range servicesDTO {
+		if service == nil || service.Name == nil {
+			continue
+		}
+		if strings.EqualFold(*service.Name, "default-natgw") {
+			klog.Infof("ensureDefaultOutboundServiceExists: default outbound service %q already exists in Service Gateway %s, skipping initialization",
+				*service.Name, consts.DefaultServiceGatewayResourceName)
+			return nil
+		}
+	}
+
+	klog.Infof("ensureDefaultOutboundServiceExists: no default outbound service found in Service Gateway %s, creating one", consts.DefaultServiceGatewayResourceName)
+
 	// createOrUpdate pip
 	pipResourceName := "default-natgw-pip"
 	pipResource := armnetwork.PublicIPAddress{
@@ -84,44 +106,26 @@ func (az *Cloud) ensureDefaultOutboundServiceExists(ctx context.Context) error {
 	}
 	az.createOrUpdateNatGateway(ctx, az.ResourceGroup, natGatewayResource)
 
-	servicesDTO, err := az.GetServices(ctx, consts.DefaultServiceGatewayResourceName)
-	if err != nil {
-		return fmt.Errorf("ensureDefaultOutboundServiceExists: failed to get services from ServiceGateway API: %w", err)
+	req := armnetwork.ServiceGatewayUpdateServicesRequest{
+		Action:          to.Ptr(armnetwork.ServiceGatewayUpdateServicesRequestActionPartialUpdate),
+		ServiceRequests: []*armnetwork.ServiceGatewayServiceRequest{},
 	}
-	serviceExists := false
-	for _, service := range servicesDTO {
-		if *service.Name == "default-natgw" && service.Properties != nil && service.Properties.IsDefault != nil && *service.Properties.IsDefault {
-			klog.Infof("ensureDefaultOutboundServiceExists: Default outbound service already exists in Service Gateway %s", consts.DefaultServiceGatewayResourceName)
-			serviceExists = true
-			break
-		}
-	}
-
-	if !serviceExists {
-		klog.Infof("ensureDefaultOutboundServiceExists: Creating default outbound service in Service Gateway %s", consts.DefaultServiceGatewayResourceName)
-
-		req := armnetwork.ServiceGatewayUpdateServicesRequest{
-			Action:          to.Ptr(armnetwork.ServiceGatewayUpdateServicesRequestActionPartialUpdate),
-			ServiceRequests: []*armnetwork.ServiceGatewayServiceRequest{},
-		}
-		req.ServiceRequests = append(req.ServiceRequests, &armnetwork.ServiceGatewayServiceRequest{
-			IsDelete: to.Ptr(false),
-			Service: &armnetwork.ServiceGatewayService{
-				Name: &defaultNatGatewayName,
-				Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
-					ServiceType: to.Ptr(armnetwork.ServiceGatewayServicePropertiesFormatServiceTypeOutbound),
-					IsDefault:   to.Ptr(true),
-					PublicNatGatewayID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/natGateways/%s",
-						az.SubscriptionID, az.ResourceGroup, defaultNatGatewayName)),
-				},
+	req.ServiceRequests = append(req.ServiceRequests, &armnetwork.ServiceGatewayServiceRequest{
+		IsDelete: to.Ptr(false),
+		Service: &armnetwork.ServiceGatewayService{
+			Name: &defaultNatGatewayName,
+			Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
+				ServiceType: to.Ptr(armnetwork.ServiceGatewayServicePropertiesFormatServiceTypeOutbound),
+				IsDefault:   to.Ptr(true),
+				PublicNatGatewayID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/natGateways/%s",
+					az.SubscriptionID, az.ResourceGroup, defaultNatGatewayName)),
 			},
-		})
-		err := az.UpdateServices(ctx, consts.DefaultServiceGatewayResourceName, req)
-		if err != nil {
-			return fmt.Errorf("ensureDefaultOutboundServiceExists: failed to create default outbound service in ServiceGateway API: %w", err)
-		}
-		klog.Infof("ensureDefaultOutboundServiceExists: Successfully created default outbound service in Service Gateway %s", consts.DefaultServiceGatewayResourceName)
+		},
+	})
+	if err := az.UpdateServices(ctx, consts.DefaultServiceGatewayResourceName, req); err != nil {
+		return fmt.Errorf("ensureDefaultOutboundServiceExists: failed to create default outbound service in ServiceGateway API: %w", err)
 	}
+	klog.Infof("ensureDefaultOutboundServiceExists: Successfully created default outbound service in Service Gateway %s", consts.DefaultServiceGatewayResourceName)
 
 	return nil
 }
