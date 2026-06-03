@@ -178,7 +178,7 @@ type Config struct {
 
 	// ServiceGatewayEnabled indicates whether the service gateway is enabled for the cluster.
 	// When enabled, the ServiceGateway resource name is hardcoded to
-	// consts.DefaultServiceGatewayResourceName ("aks-servicegateway") and is not
+	// consts.DefaultServiceGatewayResourceName ("servicegateway") and is not
 	// configurable via this Config.
 	ServiceGatewayEnabled bool `json:"serviceGatewayEnabled,omitempty" yaml:"serviceGatewayEnabled,omitempty"`
 }

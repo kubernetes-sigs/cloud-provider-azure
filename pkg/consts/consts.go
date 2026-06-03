@@ -590,8 +590,11 @@ const (
 const (
 	// DefaultServiceGatewayResourceName is the hardcoded name of the ServiceGateway
 	// resource used when ServiceGatewayEnabled=true. This name is fixed and cannot
-	// be configured via cloud-provider config (azure.json).
-	DefaultServiceGatewayResourceName = "aks-servicegateway"
+	// be configured via cloud-provider config (azure.json). It must match the
+	// canonical name used by the AKS RP-side provisioning so cloud-provider and
+	// the rest of the stack reference the same Microsoft.Network/serviceGateways
+	// resource (avoids duplicate-resource creation and orphan-NAT cleanup loops).
+	DefaultServiceGatewayResourceName = "servicegateway"
 )
 
 // Azure resource lock
