@@ -39,6 +39,9 @@ or overwrite unrelated files.
 3. Classify every failing required job. Do not treat a PR as unblocked until all
    non-pending failures have a clear action.
 
+4. If no checks are failing and the only pending status is `tide`, follow the
+   [Only Tide Pending](#only-tide-pending) path.
+
 ## go-mod-consistency Failed
 
 Use the shared `sync-go-modules` skill from this repo.
@@ -71,6 +74,25 @@ gh pr comment <pr> --body "/lgtm"
 
 The push reruns CI. Do not add `/retest` just for the old failed
 `go-mod-consistency` run after pushing a new commit.
+
+## Only Tide Pending
+
+Use this path when the current status rollup has no failed checks and the only
+pending status is `tide`.
+
+Check the PR labels from `gh pr view`. If the PR does not already have the
+`lgtm` label, comment `/lgtm` so Tide can re-evaluate the PR:
+
+```bash
+gh pr comment <pr> --body "/lgtm"
+```
+
+If the PR already has the `lgtm` label, do not post a duplicate `/lgtm`
+comment. Report that no unblock action was needed and Tide is the only
+remaining pending status.
+
+Do not use this path when any non-Tide check is pending or failed. Report those
+checks explicitly and handle them through the matching workflow instead.
 
 ## Azure Public IP Quota e2e Failures
 
@@ -141,9 +163,11 @@ latest branch state.
 - Push only the current task's files.
 - Use `/lgtm` after a successful module-sync push when the PR is otherwise ready
   for review.
+- Use `/lgtm` when no checks are failing, `tide` is the only pending status,
+  and the PR does not already have the `lgtm` label.
 - If the PR needs rebase after other blockers are resolved, comment
   `@dependabot rebase` rather than manually force-pushing a rebase.
 - Use `/retest` only for failures already classified as transient or safe to
   rerun.
-- Report pending jobs and any residual risk clearly instead of claiming the PR
-  is green before CI finishes.
+- Report pending jobs, `tide` status, and any residual risk clearly instead of
+  claiming the PR is green before CI finishes.
