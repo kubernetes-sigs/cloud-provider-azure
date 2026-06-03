@@ -43,8 +43,8 @@ level small:
 - `sync-go-modules`: unblock `go-mod-consistency` by tidying and verifying all
   tracked Go modules, then refreshing the main module's `vendor/` tree
 - `unblock-dependabot-pr`: diagnose failed Dependabot PR CI, reuse the Go module
-  sync workflow, retest Azure public-IP quota e2e flakes, and escalate
-  dependency/toolchain blockers for discussion
+  sync workflow, retest Azure public-IP quota e2e flakes, add `/lgtm` when only
+  Tide is pending, and escalate dependency/toolchain blockers for discussion
 
 ## How To Use
 
