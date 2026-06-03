@@ -46,7 +46,7 @@ func (az *Cloud) ensureDefaultOutboundServiceExists(ctx context.Context) error {
 	klog.Infof("ensureDefaultOutboundServiceExists: Ensuring default outbound service exists in Service Gateway %s", consts.DefaultServiceGatewayResourceName)
 
 	// createOrUpdate pip
-	pipResourceName := "default-natgw-v2-pip"
+	pipResourceName := "default-natgw-pip"
 	pipResource := armnetwork.PublicIPAddress{
 		Name: to.Ptr(pipResourceName),
 		ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
@@ -62,7 +62,7 @@ func (az *Cloud) ensureDefaultOutboundServiceExists(ctx context.Context) error {
 	az.CreateOrUpdatePIPOutbound(ctx, az.ResourceGroup, &pipResource)
 
 	// createOrUpdate nat gateway
-	defaultNatGatewayName := "default-natgw-v2"
+	defaultNatGatewayName := "default-natgw"
 	natGatewayResource := armnetwork.NatGateway{
 		Name: to.Ptr(defaultNatGatewayName),
 		ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/natGateways/%s",
@@ -90,7 +90,7 @@ func (az *Cloud) ensureDefaultOutboundServiceExists(ctx context.Context) error {
 	}
 	serviceExists := false
 	for _, service := range servicesDTO {
-		if *service.Name == "default-natgw-v2" && service.Properties != nil && service.Properties.IsDefault != nil && *service.Properties.IsDefault {
+		if *service.Name == "default-natgw" && service.Properties != nil && service.Properties.IsDefault != nil && *service.Properties.IsDefault {
 			klog.Infof("ensureDefaultOutboundServiceExists: Default outbound service already exists in Service Gateway %s", consts.DefaultServiceGatewayResourceName)
 			serviceExists = true
 			break

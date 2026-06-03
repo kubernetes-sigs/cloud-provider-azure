@@ -670,7 +670,7 @@ func fetchServiceGatewayServices(
 		case "Inbound":
 			nrp.LoadBalancers.Insert(*service.Name)
 		case "Outbound":
-			if *service.Name != "default-natgw-v2" {
+			if *service.Name != "default-natgw" {
 				nrp.NATGateways.Insert(*service.Name)
 			}
 		}
@@ -981,7 +981,7 @@ func scheduleOrphanedResourceDeletions(diffTracker *DiffTracker, currentLBsInAzu
 	if currentNATsInAzure != nil {
 		for _, natName := range currentNATsInAzure.UnsortedList() {
 			// Skip the default NAT Gateway
-			if natName == "default-natgw-v2" {
+			if natName == "default-natgw" {
 				continue
 			}
 			// If NAT is desired in K8s, reconcileServices will handle it - NOT orphaned
@@ -1371,7 +1371,7 @@ func enhanceNRPStateWithOrphans(nrp *NRP_State, currentLBs, currentNATs utilsets
 
 	// Add orphaned NAT Gateways (non-default that exist in Azure but not in ServiceGateway)
 	for _, natName := range currentNATs.UnsortedList() {
-		if natName == "default-natgw-v2" {
+		if natName == "default-natgw" {
 			continue // Skip default NAT Gateway
 		}
 		if !nrp.NATGateways.Has(natName) {
@@ -1597,7 +1597,7 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 		}
 
 		// Skip the default NAT Gateway PIP
-		if pipName == "default-natgw-v2-pip" {
+		if pipName == "default-natgw-pip" {
 			klog.V(4).Infof("cleanupOrphanedPublicIPs: skipping default NAT Gateway PIP")
 			continue
 		}

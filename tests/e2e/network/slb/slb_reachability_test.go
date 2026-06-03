@@ -348,7 +348,7 @@ var _ = Describe("SLB - Multi-Service Reachability", Label(slbTestLabel), func()
 			// Verify each service UID is registered (excluding default outbound service)
 			registeredUIDs := make(map[string]bool)
 			for _, sgSvc := range sgResponse.Value {
-				if sgSvc.Name != "default-natgw-v2" {
+				if sgSvc.Name != "default-natgw" {
 					registeredUIDs[sgSvc.Name] = true
 				}
 			}

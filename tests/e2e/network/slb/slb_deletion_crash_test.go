@@ -504,7 +504,7 @@ var _ = Describe("Container Load Balancer Deletion Crash Recovery Tests", Label(
 		for _, svc := range sgResponse.Value {
 			if svc.Properties.ServiceType == "Inbound" {
 				inboundCount++
-			} else if svc.Properties.ServiceType == "Outbound" && svc.Name != "default-natgw-v2" {
+			} else if svc.Properties.ServiceType == "Outbound" && svc.Name != "default-natgw" {
 				outboundCount++
 			}
 		}
@@ -577,7 +577,7 @@ var _ = Describe("Container Load Balancer Deletion Crash Recovery Tests", Label(
 			if svc.Properties.ServiceType == "Inbound" {
 				inboundCount++
 				utils.Logf("WARNING: Remaining inbound: %s", svc.Name)
-			} else if svc.Properties.ServiceType == "Outbound" && svc.Name != "default-natgw-v2" {
+			} else if svc.Properties.ServiceType == "Outbound" && svc.Name != "default-natgw" {
 				outboundCount++
 				utils.Logf("WARNING: Remaining outbound: %s", svc.Name)
 			}
@@ -657,7 +657,7 @@ func countAzurePublicIPs() (int, error) {
 	}
 
 	// SLB PIPs are named with service UIDs (36-char UUIDs) for inbound services
-	// NAT Gateway PIPs are named with egress name + "-pip" (e.g., "default-natgw-v2-pip")
+	// NAT Gateway PIPs are named with egress name + "-pip" (e.g., "default-natgw-pip")
 	// We count both types but exclude non-SLB PIPs
 	slbPIPCount := 0
 	for _, pip := range pips {
@@ -666,8 +666,8 @@ func countAzurePublicIPs() (int, error) {
 		if len(name) == 36 && strings.Count(name, "-") == 4 {
 			slbPIPCount++
 		}
-		// SLB NAT Gateway PIPs end with "-pip" (but exclude default-natgw-v2-pip)
-		if strings.HasSuffix(name, "-pip") && name != "default-natgw-v2-pip" {
+		// SLB NAT Gateway PIPs end with "-pip" (but exclude default-natgw-pip)
+		if strings.HasSuffix(name, "-pip") && name != "default-natgw-pip" {
 			slbPIPCount++
 		}
 	}
@@ -677,7 +677,7 @@ func countAzurePublicIPs() (int, error) {
 
 // countAzureNATGateways counts the number of SLB-managed NAT Gateways in the resource group
 // SLB creates NAT Gateways named after the egress label value (e.g., namespace name)
-// The default NAT Gateway "default-natgw-v2" is always excluded
+// The default NAT Gateway "default-natgw" is always excluded
 func countAzureNATGateways() (int, error) {
 	cmd := exec.Command("az", "network", "nat", "gateway", "list",
 		"--resource-group", resourceGroupName,
@@ -696,7 +696,7 @@ func countAzureNATGateways() (int, error) {
 	nonDefaultCount := 0
 	for _, nat := range nats {
 		name, _ := nat["name"].(string)
-		if name != "default-natgw-v2" {
+		if name != "default-natgw" {
 			nonDefaultCount++
 		}
 	}

@@ -593,7 +593,7 @@ var _ = Describe("Container Load Balancer Creation Crash Recovery Tests", Label(
 		for _, svc := range sgResponse.Value {
 			if svc.Properties.ServiceType == "Inbound" {
 				inboundCount++
-			} else if svc.Properties.ServiceType == "Outbound" && svc.Name != "default-natgw-v2" {
+			} else if svc.Properties.ServiceType == "Outbound" && svc.Name != "default-natgw" {
 				outboundCount++
 			}
 		}

@@ -256,7 +256,7 @@ func verifyServiceGatewayCleanup() {
 		svc := &sgResponse.Value[i]
 		utils.Logf("  Service: %s (Type: %s)", svc.Name, svc.Properties.ServiceType)
 
-		if svc.Name != "default-natgw-v2" {
+		if svc.Name != "default-natgw" {
 			Fail(fmt.Sprintf("Unexpected service '%s' still exists in Service Gateway after cleanup", svc.Name))
 		}
 		Expect(svc.Properties.ServiceType).To(Equal("Outbound"), "Service should be the default outbound service")

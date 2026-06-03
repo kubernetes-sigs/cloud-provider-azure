@@ -399,9 +399,9 @@ var _ = Describe("Container Load Balancer Finalizer Tests", Label(slbTestLabel, 
 			if err != nil {
 				return false
 			}
-			// Only default-natgw-v2 should remain
+			// Only default-natgw should remain
 			for _, svc := range sgResponse.Value {
-				if svc.Name != "default-natgw-v2" {
+				if svc.Name != "default-natgw" {
 					utils.Logf("Service %s still exists in Service Gateway", svc.Name)
 					return false
 				}

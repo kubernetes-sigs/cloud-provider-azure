@@ -275,7 +275,7 @@ var _ = Describe("Container Load Balancer Outbound Performance Test", Label(slbT
 
 			remaining := 0
 			for _, sgSvc := range sgResponse.Value {
-				if sgSvc.Properties.ServiceType == "Outbound" && sgSvc.Name != "default-natgw-v2" {
+				if sgSvc.Properties.ServiceType == "Outbound" && sgSvc.Name != "default-natgw" {
 					remaining++
 				}
 			}
