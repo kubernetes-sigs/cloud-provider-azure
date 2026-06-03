@@ -1,6 +1,6 @@
 ---
 name: unblock-dependabot-pr
-description: Diagnose and unblock failed Dependabot pull requests in cloud-provider-azure by classifying CI failures, syncing Go modules, retesting quota-flaked e2e jobs, and updating PR status. Use when a Dependabot PR fails go-mod-consistency, pull-cloud-provider-azure-e2e jobs, or dependency/toolchain CI.
+description: Diagnose and unblock failed Dependabot pull requests in cloud-provider-azure by closing Kubernetes minor-version dependency bumps, classifying CI failures, syncing Go modules, retesting quota-flaked e2e jobs, and updating PR status. Use when a Dependabot PR fails go-mod-consistency, pull-cloud-provider-azure-e2e jobs, or dependency/toolchain CI.
 ---
 
 # Unblock Dependabot Pull Requests
@@ -18,14 +18,25 @@ Expected inputs:
 
 ## Triage First
 
-1. Inspect the current PR state before changing files:
+1. Inspect the PR metadata and changed dependencies before checking CI:
+
+```bash
+gh pr view <pr> --json number,title,headRefName,headRepositoryOwner,headRefOid,baseRefName,author,labels,mergeable
+```
+
+2. Run the [Kubernetes Minor Version Guard](#kubernetes-minor-version-guard)
+   immediately for Dependabot Go module PRs. If the guard finds a minor-version
+   change, close the PR and stop before inspecting CI, syncing modules,
+   retesting, commenting `/lgtm`, or reporting that no unblock action is needed.
+
+3. Inspect CI only after the minor version guard passes:
 
 ```bash
 gh pr view <pr> --json number,title,headRefName,headRepositoryOwner,headRefOid,baseRefName,author,labels,mergeable,statusCheckRollup
 gh pr checks <pr>
 ```
 
-2. If the local checkout is needed, fetch and check out the PR head, then check
+4. If the local checkout is needed, fetch and check out the PR head, then check
    for unrelated work:
 
 ```bash
@@ -36,11 +47,47 @@ git status --short
 Stop and report a conflict if unrelated uncommitted changes exist. Do not stage
 or overwrite unrelated files.
 
-3. Classify every failing required job. Do not treat a PR as unblocked until all
+5. Classify every failing required job. Do not treat a PR as unblocked until all
    non-pending failures have a clear action.
 
-4. If no checks are failing and the only pending status is `tide`, follow the
+6. If no checks are failing and the only pending status is `tide`, follow the
    [Only Tide Pending](#only-tide-pending) path.
+
+## Kubernetes Minor Version Guard
+
+Run this guard for every Dependabot Go module PR before inspecting CI or taking
+an unblock action. The goal is to close Kubernetes minor-version bumps early
+instead of spending automation time on checks that should not unblock the PR.
+
+Inspect the PR diff for `go.mod` changes to Kubernetes modules:
+
+```bash
+gh pr diff <pr> --patch | grep -E '^[+-][[:space:]]+(require[[:space:]]+)?(k8s\.io/[[:alnum:]_.\-/]+)[[:space:]]+v0\.[0-9]+\.[0-9]+'
+```
+
+Then apply these rules:
+
+- For a PR targeting `release-1.N`, every added `k8s.io/*` module version must
+  stay in the `v0.N.x` family.
+- For any branch, a changed `k8s.io/*` module must not move from one minor
+  family to another, such as `v0.36.x` to `v0.37.x`, unless the user explicitly
+  asks for that Kubernetes minor bump.
+- The added `k8s.io/*` module versions in one PR must not mix minor families,
+  such as some modules at `v0.36.x` and others at `v0.37.x`.
+
+If the guard finds a minor-version mismatch, comment `/close` and stop for that
+PR:
+
+```bash
+gh pr comment <pr> --body "/close"
+```
+
+Do not inspect CI, run module sync, comment `/lgtm`, post `/retest` or `/test`,
+or report the PR as requiring no action. Report the `/close` comment plus the
+mismatched module lines, the base branch, and the expected minor family.
+
+If the guard finds no `k8s.io/*` module changes, or only patch-level updates
+within the same minor family, continue with the matching workflow below.
 
 ## go-mod-consistency Failed
 
@@ -131,9 +178,6 @@ Discuss these with the user before changing code or CI policy:
   bump
 - Mixed Azure SDK major versions, such as `armcompute/v6` consumers in a PR
   that updated packages to `armcompute/v7`
-- Mixed Kubernetes module families, such as `k8s.io/api`,
-  `k8s.io/apimachinery`, and `k8s.io/client-go` moving ahead of the rest of the
-  Kubernetes dependency set
 - `dependency-review`, vulnerability, or license failures where the resolution
   may require accepting risk, excluding a finding, or changing the dependency
   version
@@ -161,6 +205,10 @@ latest branch state.
   pushed, append a concise reviewer-facing note instead of replacing the body.
 - Use specific staging commands, never `git add .`.
 - Push only the current task's files.
+- Run the Kubernetes minor version guard before inspecting CI, module sync,
+  retest comments, `/lgtm` comments, or no-action reports for Dependabot Go
+  module PRs.
+- If the Kubernetes minor version guard fails, comment `/close` and stop.
 - Use `/lgtm` after a successful module-sync push when the PR is otherwise ready
   for review.
 - Use `/lgtm` when no checks are failing, `tide` is the only pending status,
