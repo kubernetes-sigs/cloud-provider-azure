@@ -4,9 +4,9 @@ go 1.26.0
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.21.1
-	go.opentelemetry.io/otel v1.43.0
-	go.opentelemetry.io/otel/trace v1.43.0
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.20.4
+	go.opentelemetry.io/otel v1.44.0
+	go.opentelemetry.io/otel/trace v1.44.0
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.20.5
 )
 
 require (
@@ -15,7 +15,7 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
-	go.opentelemetry.io/otel/metric v1.43.0 // indirect
-	golang.org/x/net v0.54.0 // indirect
+	go.opentelemetry.io/otel/metric v1.44.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 )
