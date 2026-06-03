@@ -20,12 +20,13 @@ UPDATE_SITE=${3:-false}
 RELEASE_NOTES_VERSION=v0.21.1
 
 install_cli() {
-  export PATH="$(go env GOPATH)/bin:${PATH}"
+  GOPATH_BIN="$(go env GOPATH)/bin"
+  export PATH="${GOPATH_BIN}:${PATH}"
   if ! [[ -x "$(command -v release-notes)" ]] || \
      ! go version -m "$(command -v release-notes)" 2>/dev/null | \
        grep -qE "^[[:space:]]+mod[[:space:]]+k8s.io/release[[:space:]]+${RELEASE_NOTES_VERSION}([[:space:]]|$)"; then
     echo "CLI release-notes ${RELEASE_NOTES_VERSION} not found, installing..."
-    if ! GO111MODULE=on go install "k8s.io/release/cmd/release-notes@${RELEASE_NOTES_VERSION}"; then
+    if ! GOBIN="${GOPATH_BIN}" GO111MODULE=on go install "k8s.io/release/cmd/release-notes@${RELEASE_NOTES_VERSION}"; then
       echo "ERROR: failed to install release-notes ${RELEASE_NOTES_VERSION}" >&2
       exit 1
     fi
