@@ -23,18 +23,18 @@ In scope:
 - Add a new max-retries configuration field for this updater.
 - Emit retry and failure events with bounded event volume.
 - Preserve current stale `404` event behavior. Stop recording `404` as a failure metric.
+- Enrich `ErrTooManyRequest` with a `ThrottleError` type to expose `Retry-After` duration to callers. The `ThrottleError` change in `pkg/azclient/policy/retryrepectthrottled/` requires a separate `azclient` release and dependency bump before the retry implementation can use it.
 - Add unit tests for retry, exhaustion, non-retry, and stale cases.
 
 Out of scope:
 
 - Redesigning multiple standard load balancer selection.
 - Changing main Service reconciliation retries.
-- Changing Azure SDK retry policy.
 - Changing cleanup behavior for local service backend pools.
 
 ## Configuration
 
-Add a new config field near `LoadBalancerBackendPoolUpdateIntervalInSeconds`:
+Add a new config field near `LoadBalancerBackendPoolUpdateIntervalInSeconds` in `pkg/provider/config/azure.go`:
 
 ```go
 // LoadBalancerBackendPoolUpdateMaxRetries is the maximum number of retries for
@@ -79,12 +79,14 @@ On each updater tick:
 6. If any operation in a group has `nextEligibleAt` in the future, requeue the whole group. Do not call ARM, emit an event, record a metric, or increment retry state for skipped groups.
 7. Process each eligible group once.
 8. On retriable failure of a group, increment each constituent operation's `retryCount` uniformly.
-9. Requeue operations whose retry budget remains (acquire `updater.lock` to append back to the live queue).
+9. Requeue operations whose retry budget remains (acquire `updater.lock` to prepend to the live queue, before any fresh operations).
 10. Drop exhausted operations and emit `LoadBalancerBackendPoolUpdateFailed` once per distinct Service in the group.
 
 Retries do not carry over the in-memory backend pool object. The next tick re-issues `Get` for the group before re-applying queued operations, which is required for `CreateOrUpdate` conflicts and stale etags.
 
-The updater must re-acquire the lock only when appending retry operations back to the live queue. New EndpointSlice events can continue adding fresh operations while a previous snapshot is doing Azure calls.
+The updater must re-acquire the lock only when prepending retry operations to the live queue. New EndpointSlice events can continue adding fresh operations while a previous snapshot is doing Azure calls.
+
+New retry-path logging should use `pkg/log` contextual loggers. Do not add new direct `klog` calls while touching this file.
 
 ### Merge Rule
 
@@ -93,6 +95,8 @@ Fresh operations and requeued operations for the same `loadBalancerName/backendP
 The group's eligibility is determined by the most restrictive member: if any operation in the merged group has a future `nextEligibleAt`, the whole group is preserved without ARM calls. When an eligible merged group fails, the ARM error applies to the group, not to an individual operation. Per-operation error attribution is not possible at this layer, so every constituent operation consumes one retry. Exhausted operations are dropped and reported, while operations with remaining budget are requeued.
 
 The throttling delay is group-level. If one operation for `lbName/backendPoolName` is parked by `nextEligibleAt`, all operations in that same group are preserved until the group becomes eligible. This avoids splitting add/remove operations for the same backend pool and preserves batching order. Unrelated groups continue processing normally.
+
+Retried operations are prepended to `updater.operations` so they appear before fresh operations added during processing. This preserves chronological diff ordering: old transitions are applied first, then newer ones, producing the correct final state. Without this, stale retried operations appended after fresh operations can overwrite the desired state.
 
 Before requeueing or emitting retry/failure events, re-check that each operation is still relevant. If the Service is gone or now maps to a different load balancer, drop the stale operation quietly.
 
@@ -107,42 +111,58 @@ Classify updater errors into three categories:
 Rules:
 
 - ARM resource-not-found errors as detected by `errutils.CheckResourceExistsFromAzcoreError` are `stale`.
-- ARM wire `429 TooManyRequests` responses are `retriable`.
-  - Classify them by checking `errors.As(err, &respErr)` for `*azcore.ResponseError` with `StatusCode == http.StatusTooManyRequests`.
-  - Extract `Retry-After` from `respErr.RawResponse.Header` when `RawResponse` is non-nil.
-  - Parse `Retry-After` the same way `retryrepectthrottled.ThrottlingPolicy.processThrottlePolicy` does: integer seconds or RFC1123 time.
-  - If the response has no parseable `Retry-After`, fall back to the next updater tick.
-- Local throttle-gate `retryrepectthrottled.ErrTooManyRequest` is `retriable`.
-  - This path is detected with `errors.Is(err, retryrepectthrottled.ErrTooManyRequest)` when no `*azcore.ResponseError.RawResponse` is available.
-  - The local throttle gate returns the sentinel error without a response, header, or exported gate timestamp, so the updater cannot compute the policy's gate expiry.
-  - Fall back to the next updater tick for this path.
-  - The updater does not read `ThrottlingPolicy.RetryAfterReader` or `RetryAfterWriter` directly. The policy instance is not exposed through the backend-pool client factory.
+- `429 TooManyRequests` is `retriable`. The error reaches the updater through two paths: ARM 429 responses intercepted by `ThrottlingPolicy`, or local gate blocks when the throttle timer is still active. Both paths return `ThrottleError` with `RetryAfter` (see ThrottleError below). If `RetryAfter` is in the future, set `nextEligibleAt` on the requeued operation. Otherwise, fall back to the next updater tick.
 - ARM `409 Conflict` and `412 PreconditionFailed` responses are `retriable`; no special payload handling is needed because the next updater tick already runs through a fresh `Get` before the next `CreateOrUpdate`.
 - ARM response statuses in `retryrepectthrottled.GetRetriableStatusCode()` are `terminal` for this updater. The Azure SDK already retries those statuses inside the individual ARM call, so if the updater sees one of those errors, the SDK retry budget has already been exhausted. The updater emits `LoadBalancerBackendPoolUpdateFailed` and drops the operation instead of adding a second retry layer for the same condition.
-- Non-ARM errors can opt into retry through a small wrapper/helper, such as:
+- Non-ARM errors can opt into retry through a small wrapper/helper in `pkg/provider/azure_local_services.go`. The helper should use `errors.As` and `errors.Is` so wrapped errors remain classifiable.
+- `context.Canceled` and `context.DeadlineExceeded` are `terminal` when `ctx.Err()` is non-nil.
+- Other timeout-like non-ARM errors are `terminal` unless explicitly wrapped by the local retriable-error helper.
+- All other errors are `terminal`.
+
+### ThrottleError
+
+The `ThrottlingPolicy` (a per-retry policy in the SDK pipeline) intercepts 429 responses, reads the `Retry-After` header, sets an internal gate timer, and returns `ErrTooManyRequest`. The SDK pipeline executes per-retry policies inside the retry loop. When ARM returns 429, `ThrottlingPolicy` sets the gate and returns the error. The SDK retry loop makes up to 4 attempts (1 initial + `MaxRetries` 3). If the gate timer has not expired, subsequent retries are blocked by the local gate without reaching ARM. After all attempts are exhausted, the error passes through the generated client to the updater.
+
+Today `ErrTooManyRequest` is a plain sentinel (`errors.New(...)`) with no metadata. The updater cannot extract the `Retry-After` duration from it.
+
+Without enrichment, a long `Retry-After` can exhaust the updater's retry budget against the local gate without ever making a real ARM attempt after the throttle window.
+
+Enrich the existing sentinel with a `ThrottleError` type in `pkg/azclient/policy/retryrepectthrottled/throttle.go`:
 
 ```go
-func newRetriableBackendPoolUpdateError(err error) error
-func isRetriableBackendPoolUpdateError(err error) bool
+type ThrottleError struct {
+    RetryAfter time.Time
+}
+func (e *ThrottleError) Error() string { return ErrTooManyRequest.Error() }
+func (e *ThrottleError) Unwrap() error { return ErrTooManyRequest }
 ```
 
-Keep this helper local to `pkg/provider/azure_local_services.go` unless another caller needs the same marker.
+Both `ThrottlingPolicy` code paths return `&ThrottleError{...}` instead of bare `ErrTooManyRequest`:
 
-- `context.Canceled` and `context.DeadlineExceeded` are terminal when `ctx.Err()` is non-nil.
-- Other timeout-like non-ARM errors are terminal unless explicitly wrapped by the local retriable-error helper.
-- All other errors are terminal.
+- ARM 429 path: `RetryAfter` from the parsed `Retry-After` header (integer seconds or RFC1123 time, already computed as absolute time in `processThrottlePolicy`).
+- Local gate path: `RetryAfter` = the existing gate timer value directly.
 
-The helper should use `errors.As` and `errors.Is` so wrapped errors remain classifiable.
+Existing callers using `errors.Is(err, ErrTooManyRequest)` continue to work unchanged via `Unwrap`.
 
-The call site does not need generated backend-pool client wrappers to return raw `*http.Response` values. It should inspect the returned error directly:
+The updater extracts the retry-after time:
 
 ```go
-var respErr *azcore.ResponseError
-if errors.As(err, &respErr) && respErr.RawResponse != nil {
-    retryAfter := respErr.RawResponse.Header.Get(retryrepectthrottled.HeaderRetryAfter)
-    // parse retryAfter for 429 handling
+var throttleErr *retryrepectthrottled.ThrottleError
+if errors.As(err, &throttleErr) && throttleErr.RetryAfter.After(time.Now()) {
+    op.nextEligibleAt = throttleErr.RetryAfter
 }
 ```
+
+Add unit tests in `pkg/azclient/policy/retryrepectthrottled/throttle_test.go`:
+
+1. ARM 429 with integer seconds `Retry-After` returns `ThrottleError` with matching `RetryAfter`.
+2. ARM 429 with RFC1123 `Retry-After` returns `ThrottleError` with matching `RetryAfter`.
+3. ARM 429 without `Retry-After` header returns `ThrottleError` with `RetryAfter` set to the current time (not in the future).
+4. ARM 429 with unparsable `Retry-After` returns `ThrottleError` with `RetryAfter` unchanged from the previous timer value.
+5. Local gate path with active timer returns `ThrottleError` with `RetryAfter` in the future.
+6. `errors.Is(err, ErrTooManyRequest)` returns true for `ThrottleError`.
+7. `errors.As(err, &ThrottleError{})` extracts the correct `RetryAfter`.
+8. `ThrottleError.Error()` returns the same string as `ErrTooManyRequest.Error()`.
 
 ## Event Behavior
 
@@ -170,12 +190,12 @@ The `process()` method acquires locks in a fixed order that matches the main ser
 3. `updater.lock`: protects `updater.operations`.
    - lock to snapshot and clear `updater.operations` via `drainOperations()`
    - unlock while doing filtering, grouping, and Azure calls
-   - lock to append retry operations back to `updater.operations`
+   - lock to prepend retry operations back to `updater.operations`
    - keep `addOperation` and `removeOperation` protected by the same lock
 
-This lock ordering (`serviceReconcileLock` before `updater.lock`) prevents deadlocks: the main reconcile path holds `serviceReconcileLock` and calls `addOperation()` (which acquires `updater.lock`).
+This lock ordering (`serviceReconcileLock` before `updater.lock`) prevents deadlocks: the main reconcile path holds `serviceReconcileLock` and calls `removeOperation()` (which acquires `updater.lock`).
 
-`addOperation` and `removeOperation` only acquire `updater.lock`. This prevents slow Azure calls from blocking EndpointSlice event handlers that need to enqueue newer operations.
+`addOperation` and `removeOperation` only acquire `updater.lock`. `removeOperation()` is called from the main reconcile path under `serviceReconcileLock`. `addOperation()` is called from both the main reconcile path (under `serviceReconcileLock`) and the EndpointSlice informer (without `serviceReconcileLock`). This prevents slow Azure calls from blocking EndpointSlice event handlers that need to enqueue newer operations.
 
 The `removeOperation(serviceName)` method cannot remove operations already in a processing snapshot. To avoid stale retry behavior, the processing path must re-check service relevance before requeueing and before sending retry/failure events.
 
@@ -183,11 +203,15 @@ Parked operations waiting for `nextEligibleAt` live in `updater.operations`, so 
 
 The relevance re-check depends on the Service cleanup path also removing the Service from `localServiceNameToServiceInfoMap`. The implementation must preserve that invariant: a deleted Service should either be removed from the live queue by `removeOperation(serviceName)` or be rejected by the map-based relevance check before a retry is requeued or reported.
 
-### Queue Growth During Throttling
+### Queue Growth And Stale Operations
 
-The queue is unbounded. During a long `Retry-After` period, EndpointSlice events continue to arrive and `addOperation()` appends new operations to the queue. Operation coalescing or a queue size limit can be added as a follow-up if needed.
+The current operation model is diff-based: each EndpointSlice event enqueues add/remove operations for the IPs that changed. This has two limitations when combined with retry:
 
-New retry-path logging should use `pkg/log` contextual loggers. Do not add new direct `klog` calls while touching this file.
+**Queue growth**: during a long `Retry-After` period, EndpointSlice events continue to arrive and `addOperation()` appends new operations to the queue. The queue grows with each EndpointSlice event.
+
+**Stale state after retry exhaustion**: the informer computes diffs between old and new EndpointSlice states. If a prior write failed and its operations were dropped, the changes from that write are lost. Subsequent diffs only capture newer EndpointSlice changes and do not replicate the lost operations. This is the same behavior as today's no-retry model. The main reconciliation loop corrects the drift on the next Service reconciliation triggered by `EnsureLoadBalancer`.
+
+A stronger model would store the full desired IP set per `(service, loadBalancer, pool)` instead of individual add/remove diffs. `addOperation()` would replace the previous entry for the same `(service, loadBalancer, pool)`, bounding the queue to one entry per `(service, loadBalancer, pool)`. At processing time, `process()` would compute the diff from a fresh `Get` against the desired state, producing the correct result regardless of prior failures. The EndpointSlice informer path would need to compute the desired IP set from all EndpointSlices for the service, not just the one that changed. This can be added as a follow-up.
 
 ## Cancellation And Shutdown
 
@@ -221,25 +245,27 @@ Exponential backoff is not used because the retriable errors at this layer eithe
 
 Add focused unit tests in `pkg/provider/azure_local_services_test.go`:
 
-1. ARM wire `429` from `Get` with a parseable `Retry-After` in `azcore.ResponseError.RawResponse` sets `nextEligibleAt` and emits `LoadBalancerBackendPoolUpdateRetrying`; subsequent ticks before `nextEligibleAt` requeue quietly without ARM calls, retry events, retry-count increments, or metrics.
-2. ARM wire `429` from `CreateOrUpdate` follows the same `Retry-After`, `LoadBalancerBackendPoolUpdateRetrying`, and requeue behavior.
-3. ARM wire `429` without a parseable `Retry-After` requeues, emits `LoadBalancerBackendPoolUpdateRetrying`, then succeeds on the next eligible tick.
-4. Local-gate `retryrepectthrottled.ErrTooManyRequest` without a raw response falls back to the next updater tick and does not panic on nil response.
-5. ARM `409` or `412` from `CreateOrUpdate` requeues, emits `LoadBalancerBackendPoolUpdateRetrying`, then succeeds on the next tick after a fresh `Get`.
-6. If any operation in a `lbName/backendPoolName` group is waiting for `nextEligibleAt`, the whole group is preserved and no same-group operation is processed early.
-7. A fresh operation merged with a requeued operation keeps its own retry counter; on group failure, all operations in the group consume one retry.
-8. A group with mixed retry budgets (one operation at max retries, one fresh): the exhausted operation is dropped and reported while the fresh operation is requeued.
-9. Retry budget exhaustion emits `LoadBalancerBackendPoolUpdateFailed` with guidance text and leaves the queue empty.
-10. Statuses from `retryrepectthrottled.GetRetriableStatusCode()` do not requeue and emit `LoadBalancerBackendPoolUpdateFailed`.
-11. Other non-retriable errors do not requeue and emit `LoadBalancerBackendPoolUpdateFailed`.
-12. ARM resource-not-found does not requeue and emits no event.
-13. Stale service or changed load balancer before requeue is dropped quietly.
-14. A Service that disappears while its operation is parked behind `nextEligibleAt` is dropped quietly on the next relevance check.
-15. Multiple operations for multiple Services in a backend-pool group emit one retry/failure event per distinct Service, covering the current `notify()` break-after-first-operation bug.
-16. `removeOperation(serviceName)` removes parked operations whose `nextEligibleAt` is in the future.
-17. Updater shutdown with parked operations does not emit retry/failure events and does not requeue.
-18. Explicit `LoadBalancerBackendPoolUpdateMaxRetries: 0` remains non-nil through config load and disables updater retry.
-19. A retried-then-succeeded operation records exactly one successful metric observation and no failed metric observations.
+1. `ThrottleError` with `RetryAfter` in the future from `Get` sets `nextEligibleAt` and emits `LoadBalancerBackendPoolUpdateRetrying`; subsequent ticks before `nextEligibleAt` requeue quietly without ARM calls, retry events, retry-count increments, or metrics.
+2. `ThrottleError` with `RetryAfter` in the future from `CreateOrUpdate` follows the same parking and requeue behavior.
+3. `ThrottleError` from the ARM 429 path with `RetryAfter` not in the future (no parseable `Retry-After`) requeues, emits `LoadBalancerBackendPoolUpdateRetrying`, then succeeds on the next eligible tick.
+4. `ThrottleError` from the local gate path (throttle timer still active, no ARM call made) with `RetryAfter` in the future sets `nextEligibleAt` and parks the operation.
+5. `ThrottleError` from the local gate path with `RetryAfter` not in the future (gate expired during SDK retries) falls back to the next updater tick.
+6. ARM `409` or `412` from `CreateOrUpdate` requeues, emits `LoadBalancerBackendPoolUpdateRetrying`, then succeeds on the next tick after a fresh `Get`.
+7. If any operation in a `lbName/backendPoolName` group is waiting for `nextEligibleAt`, the whole group is preserved and no same-group operation is processed early.
+8. A fresh operation merged with a requeued operation keeps its own retry counter; on group failure, all operations in the group consume one retry.
+9. A group with mixed retry budgets (one operation at max retries, one fresh): the exhausted operation is dropped and reported while the fresh operation is requeued.
+10. Retry budget exhaustion emits `LoadBalancerBackendPoolUpdateFailed` with guidance text and leaves the queue empty.
+11. Statuses from `retryrepectthrottled.GetRetriableStatusCode()` do not requeue and emit `LoadBalancerBackendPoolUpdateFailed`.
+12. Other non-retriable errors do not requeue and emit `LoadBalancerBackendPoolUpdateFailed`.
+13. ARM resource-not-found does not requeue and emits no event.
+14. Stale service or changed load balancer before requeue is dropped quietly.
+15. Retry requeue is serialized with service deletion under `serviceReconcileLock`: a retriable failure requeues the operation before the main reconcile path can call `removeOperation()`. After the lock is released, `removeOperation()` removes the requeued operation from the queue.
+16. A Service that disappears while its operation is parked behind `nextEligibleAt` is dropped quietly on the next relevance check.
+17. Multiple operations for multiple Services in a backend-pool group emit one retry/failure event per distinct Service, covering the current `notify()` break-after-first-operation bug.
+18. `removeOperation(serviceName)` removes parked operations whose `nextEligibleAt` is in the future.
+19. Updater shutdown with parked operations does not emit retry/failure events and does not requeue.
+20. Explicit `LoadBalancerBackendPoolUpdateMaxRetries: 0` remains non-nil through config load and disables updater retry.
+21. A retried-then-succeeded operation records exactly one successful metric observation and no failed metric observations.
 
 Use a fake event recorder where needed to assert retrying and failed event reasons precisely.
 
