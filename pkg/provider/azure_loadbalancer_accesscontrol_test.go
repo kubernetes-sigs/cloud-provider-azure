@@ -428,9 +428,11 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			defer ctrl.Finish()
 
 			{
-				kubeClient := fake.NewSimpleClientset(makeNodesByIPs(
+				runtimeObjects := []runtime.Object{&svc}
+				runtimeObjects = append(runtimeObjects, makeNodesByIPs(
 					append(azureFx.LoadBalancer().BackendPoolIPv4Addresses(), azureFx.LoadBalancer().BackendPoolIPv6Addresses()...),
 				)...)
+				kubeClient := fake.NewSimpleClientset(runtimeObjects...)
 				informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
 				az.serviceLister = informerFactory.Core().V1().Services().Lister()
 				az.nodeLister = informerFactory.Core().V1().Nodes().Lister()
@@ -493,6 +495,339 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
 					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
 				).
+				Times(1)
+
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			assert.NoError(t, err)
+		})
+
+		t.Run("with `service.beta.kubernetes.io/azure-allowed-destination-ip-ranges` specified", func(t *testing.T) {
+			var (
+				ctrl                    = gomock.NewController(t)
+				az                      = GetTestCloud(ctrl)
+				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+				loadBalancerClient      = az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
+				loadBalancer            = azureFx.LoadBalancer().Build()
+			)
+			defer ctrl.Finish()
+
+			svc := k8sFx.Service().
+				WithDisableFloatingIP().
+				WithAllowedDestinationIPRanges("10.244.0.0/24", "10.244.1.0/24", "fd00:10:244::/64").
+				Build()
+
+			{
+				runtimeObjects := []runtime.Object{&svc}
+				runtimeObjects = append(runtimeObjects, makeNodesByIPs(
+					append(azureFx.LoadBalancer().BackendPoolIPv4Addresses(), azureFx.LoadBalancer().BackendPoolIPv6Addresses()...),
+				)...)
+				kubeClient := fake.NewSimpleClientset(runtimeObjects...)
+				informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
+				az.serviceLister = informerFactory.Core().V1().Services().Lister()
+				az.nodeLister = informerFactory.Core().V1().Nodes().Lister()
+				informerFactory.Start(wait.NeverStop)
+				informerFactory.WaitForCacheSync(wait.NeverStop)
+			}
+
+			serviceTags := []string{securitygroup.ServiceTagInternet}
+			staleRules := []*armnetwork.SecurityRule{
+				azureFx.
+					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, serviceTags, k8sFx.Service().TCPNodePorts()).
+					WithPriority(500).
+					WithDestination(azureFx.LoadBalancer().BackendPoolIPv4Addresses()...).
+					Build(),
+
+				azureFx.
+					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, serviceTags, k8sFx.Service().TCPNodePorts()).
+					WithPriority(501).
+					WithDestination(azureFx.LoadBalancer().BackendPoolIPv6Addresses()...).
+					Build(),
+
+				azureFx.
+					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, serviceTags, k8sFx.Service().UDPNodePorts()).
+					WithPriority(502).
+					WithDestination(azureFx.LoadBalancer().BackendPoolIPv4Addresses()...).
+					Build(),
+
+				azureFx.
+					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, serviceTags, k8sFx.Service().UDPNodePorts()).
+					WithPriority(503).
+					WithDestination(azureFx.LoadBalancer().BackendPoolIPv6Addresses()...).
+					Build(),
+			}
+			securityGroup := azureFx.SecurityGroup().WithRules(staleRules).Build()
+
+			securityGroupClient.EXPECT().
+				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
+				Return(securityGroup, nil).
+				Times(1)
+			securityGroupClient.EXPECT().
+				CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any()).
+				DoAndReturn(func(
+					_ context.Context,
+					_, _ string,
+					properties armnetwork.SecurityGroup,
+				) (*armnetwork.SecurityGroup, error) {
+					rules := []*armnetwork.SecurityRule{
+						azureFx.
+							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, serviceTags, k8sFx.Service().TCPNodePorts()).
+							WithPriority(500).
+							WithDestination("10.244.0.0/23").
+							Build(),
+
+						azureFx.
+							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, serviceTags, k8sFx.Service().TCPNodePorts()).
+							WithPriority(501).
+							WithDestination("fd00:10:244::/64").
+							Build(),
+
+						azureFx.
+							AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, serviceTags, k8sFx.Service().UDPNodePorts()).
+							WithPriority(502).
+							WithDestination("10.244.0.0/23").
+							Build(),
+
+						azureFx.
+							AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, serviceTags, k8sFx.Service().UDPNodePorts()).
+							WithPriority(503).
+							WithDestination("fd00:10:244::/64").
+							Build(),
+					}
+
+					testutil.ExpectExactSecurityRules(t, &properties, rules)
+					return nil, nil
+				}).Times(1)
+			loadBalancerClient.EXPECT().
+				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
+				Return(loadBalancer, nil).
+				Times(1)
+			loadBalancerBackendPool.EXPECT().
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
+				Return(
+					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
+					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
+				).
+				Times(1)
+
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			assert.NoError(t, err)
+		})
+
+		t.Run("with partial `service.beta.kubernetes.io/azure-allowed-destination-ip-ranges` specified", func(t *testing.T) {
+			var (
+				ctrl                    = gomock.NewController(t)
+				az                      = GetTestCloud(ctrl)
+				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+				loadBalancerClient      = az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
+				loadBalancer            = azureFx.LoadBalancer().Build()
+			)
+			defer ctrl.Finish()
+
+			svc := k8sFx.Service().
+				WithDisableFloatingIP().
+				WithAllowedDestinationIPRanges("10.244.0.0/16").
+				Build()
+
+			{
+				runtimeObjects := []runtime.Object{&svc}
+				runtimeObjects = append(runtimeObjects, makeNodesByIPs(
+					append(azureFx.LoadBalancer().BackendPoolIPv4Addresses(), azureFx.LoadBalancer().BackendPoolIPv6Addresses()...),
+				)...)
+				kubeClient := fake.NewSimpleClientset(runtimeObjects...)
+				informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
+				az.serviceLister = informerFactory.Core().V1().Services().Lister()
+				az.nodeLister = informerFactory.Core().V1().Nodes().Lister()
+				informerFactory.Start(wait.NeverStop)
+				informerFactory.WaitForCacheSync(wait.NeverStop)
+			}
+
+			serviceTags := []string{securitygroup.ServiceTagInternet}
+			staleRules := []*armnetwork.SecurityRule{
+				azureFx.
+					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, serviceTags, k8sFx.Service().TCPNodePorts()).
+					WithPriority(500).
+					WithDestination(azureFx.LoadBalancer().BackendPoolIPv4Addresses()...).
+					Build(),
+
+				azureFx.
+					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, serviceTags, k8sFx.Service().UDPNodePorts()).
+					WithPriority(502).
+					WithDestination(azureFx.LoadBalancer().BackendPoolIPv4Addresses()...).
+					Build(),
+			}
+			securityGroup := azureFx.SecurityGroup().WithRules(staleRules).Build()
+
+			securityGroupClient.EXPECT().
+				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
+				Return(securityGroup, nil).
+				Times(1)
+			securityGroupClient.EXPECT().
+				CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any()).
+				DoAndReturn(func(
+					_ context.Context,
+					_, _ string,
+					properties armnetwork.SecurityGroup,
+				) (*armnetwork.SecurityGroup, error) {
+					rules := []*armnetwork.SecurityRule{
+						azureFx.
+							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, serviceTags, k8sFx.Service().TCPNodePorts()).
+							WithPriority(500).
+							WithDestination("10.244.0.0/16").
+							Build(),
+
+						azureFx.
+							AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, serviceTags, k8sFx.Service().TCPNodePorts()).
+							WithPriority(501).
+							WithDestination(azureFx.LoadBalancer().BackendPoolIPv6Addresses()...).
+							Build(),
+
+						azureFx.
+							AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, serviceTags, k8sFx.Service().UDPNodePorts()).
+							WithPriority(502).
+							WithDestination("10.244.0.0/16").
+							Build(),
+
+						azureFx.
+							AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, serviceTags, k8sFx.Service().UDPNodePorts()).
+							WithPriority(503).
+							WithDestination(azureFx.LoadBalancer().BackendPoolIPv6Addresses()...).
+							Build(),
+					}
+
+					testutil.ExpectExactSecurityRules(t, &properties, rules)
+					return nil, nil
+				}).Times(1)
+			loadBalancerClient.EXPECT().
+				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
+				Return(loadBalancer, nil).
+				Times(1)
+			loadBalancerBackendPool.EXPECT().
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
+				Return(
+					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
+					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
+				).
+				Times(1)
+
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			assert.NoError(t, err)
+		})
+
+		t.Run("with shared backend node destinations for disable floating IP services", func(t *testing.T) {
+			var (
+				ctrl                    = gomock.NewController(t)
+				az                      = GetTestCloud(ctrl)
+				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+				loadBalancerClient      = az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
+				loadBalancer            = azureFx.LoadBalancer().Build()
+			)
+			defer ctrl.Finish()
+
+			svc := k8sFx.Service().
+				WithNamespace("ns-01").
+				WithName("svc-01").
+				WithDisableFloatingIP().
+				Build()
+			svc.Spec.Ports = []v1.ServicePort{
+				{
+					Name:     "http",
+					Protocol: v1.ProtocolTCP,
+					Port:     80,
+					NodePort: 50080,
+				},
+			}
+
+			sharedSvc := k8sFx.Service().
+				WithNamespace("ns-02").
+				WithName("svc-02").
+				WithDisableFloatingIP().
+				Build()
+			sharedSvc.Spec.Ports = []v1.ServicePort{
+				{
+					Name:     "app-1",
+					Protocol: v1.ProtocolTCP,
+					Port:     18000,
+					NodePort: 48000,
+				},
+				{
+					Name:     "app-2",
+					Protocol: v1.ProtocolTCP,
+					Port:     19000,
+					NodePort: 49000,
+				},
+			}
+
+			backendIPv4Addresses := azureFx.LoadBalancer().BackendPoolIPv4Addresses()
+			backendIPv6Addresses := azureFx.LoadBalancer().BackendPoolIPv6Addresses()
+			{
+				runtimeObjects := []runtime.Object{&svc, &sharedSvc}
+				runtimeObjects = append(runtimeObjects, makeNodesByIPs(
+					append(backendIPv4Addresses, backendIPv6Addresses...),
+				)...)
+				kubeClient := fake.NewSimpleClientset(runtimeObjects...)
+				informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
+				az.serviceLister = informerFactory.Core().V1().Services().Lister()
+				az.nodeLister = informerFactory.Core().V1().Nodes().Lister()
+				informerFactory.Start(wait.NeverStop)
+				informerFactory.WaitForCacheSync(wait.NeverStop)
+			}
+
+			serviceTags := []string{securitygroup.ServiceTagInternet}
+			securityGroup := azureFx.SecurityGroup().WithRules([]*armnetwork.SecurityRule{
+				azureFx.
+					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, serviceTags, []int32{48000, 49000, 50080}).
+					WithPriority(500).
+					WithDestination(backendIPv4Addresses...).
+					Build(),
+			}).Build()
+
+			securityGroupClient.EXPECT().
+				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
+				Return(securityGroup, nil).
+				Times(1)
+			securityGroupClient.EXPECT().
+				CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any()).
+				DoAndReturn(func(
+					_ context.Context,
+					_, _ string,
+					properties armnetwork.SecurityGroup,
+				) (*armnetwork.SecurityGroup, error) {
+					assertHasRule := func(ipFamily iputil.Family, dstPrefixes []string, dstPorts []int32) {
+						for _, rule := range properties.Properties.SecurityRules {
+							if rule.Properties == nil ||
+								rule.Properties.Protocol == nil ||
+								*rule.Properties.Protocol != armnetwork.SecurityRuleProtocolTCP ||
+								rule.Properties.Access == nil ||
+								*rule.Properties.Access != armnetwork.SecurityRuleAccessAllow {
+								continue
+							}
+
+							rulePorts, err := securitygroup.ListDestinationPortRanges(rule)
+							assert.NoError(t, err)
+							if assert.ObjectsAreEqualValues([]string{securitygroup.ServiceTagInternet}, securitygroup.ListSourcePrefixes(rule)) &&
+								assert.ObjectsAreEqualValues(dstPrefixes, securitygroup.ListDestinationPrefixes(rule)) &&
+								assert.ObjectsAreEqualValues(dstPorts, rulePorts) {
+								return
+							}
+						}
+						assert.Failf(t, "expected security rule not found", "ipFamily=%s dstPrefixes=%v dstPorts=%v", ipFamily, dstPrefixes, dstPorts)
+					}
+
+					assertHasRule(iputil.IPv4, backendIPv4Addresses, []int32{48000, 49000})
+					assertHasRule(iputil.IPv4, backendIPv4Addresses, []int32{50080})
+					assertHasRule(iputil.IPv6, backendIPv6Addresses, []int32{50080})
+					return nil, nil
+				}).Times(1)
+			loadBalancerClient.EXPECT().
+				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
+				Return(loadBalancer, nil).
+				Times(1)
+			loadBalancerBackendPool.EXPECT().
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
+				Return(backendIPv4Addresses, backendIPv6Addresses).
 				Times(1)
 
 			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
@@ -2704,4 +3039,47 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			assert.Error(t, err)
 		})
 	})
+}
+
+func TestCloud_listAvailableSecurityGroupDestinationPrefixes(t *testing.T) {
+	var (
+		fx    = fixture.NewFixture()
+		k8sFx = fx.Kubernetes()
+		ctrl  = gomock.NewController(t)
+		az    = GetTestCloud(ctrl)
+	)
+	defer ctrl.Finish()
+
+	svc := k8sFx.Service().
+		WithDisableFloatingIP().
+		WithAllowedDestinationIPRanges("10.244.0.0/24", "10.244.1.0/24", "fd00:10:244::/64").
+		WithIngressIPs([]string{"20.0.0.4"}).
+		Build()
+	kubeClient := fake.NewSimpleClientset(
+		&svc,
+		&v1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: "node-0"},
+			Status: v1.NodeStatus{
+				Addresses: []v1.NodeAddress{
+					{Type: v1.NodeInternalIP, Address: "10.0.0.4"},
+					{Type: v1.NodeExternalIP, Address: "52.0.0.4"},
+				},
+			},
+		},
+	)
+	informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
+	az.serviceLister = informerFactory.Core().V1().Services().Lister()
+	az.nodeLister = informerFactory.Core().V1().Nodes().Lister()
+	informerFactory.Start(wait.NeverStop)
+	informerFactory.WaitForCacheSync(wait.NeverStop)
+
+	prefixes, err := az.listAvailableSecurityGroupDestinationPrefixes(context.Background())
+
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, []string{
+		"20.0.0.4",
+		"10.244.0.0/23",
+		"fd00:10:244::/64",
+		"10.0.0.4",
+	}, prefixes)
 }

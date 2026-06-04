@@ -31,8 +31,8 @@ import (
 	fnutil "sigs.k8s.io/cloud-provider-azure/pkg/util/collectionutil"
 )
 
-func filterServicesByIngressIPs(services []*v1.Service, ips []netip.Addr) []*v1.Service {
-	targetIPs := fnutil.Map(func(ip netip.Addr) string { return ip.String() }, ips)
+func filterServicesByIngressIPPrefixes(services []*v1.Service, destinationPrefixes []string) []*v1.Service {
+	targetIPs := fnutil.IndexSet(destinationPrefixes)
 
 	return fnutil.Filter(func(svc *v1.Service) bool {
 
@@ -40,13 +40,28 @@ func filterServicesByIngressIPs(services []*v1.Service, ips []netip.Addr) []*v1.
 
 		ingressIPs = fnutil.Filter(func(ip string) bool { return ip != "" }, ingressIPs)
 
-		return len(fnutil.Intersection(ingressIPs, targetIPs)) > 0
+		return len(targetIPs.Intersection(ingressIPs)) > 0
 	}, services)
 }
 
-func filterServicesByDisableFloatingIP(services []*v1.Service) []*v1.Service {
+func filterServicesByDisableFloatingIP(
+	services []*v1.Service,
+	destinationPrefixes []string,
+	includeDefaultDestinationServices bool,
+) []*v1.Service {
+	targetPrefixes := fnutil.IndexSet(destinationPrefixes)
+
 	return fnutil.Filter(func(svc *v1.Service) bool {
-		return consts.IsK8sServiceDisableLoadBalancerFloatingIP(svc)
+		if !consts.IsK8sServiceDisableLoadBalancerFloatingIP(svc) {
+			return false
+		}
+
+		allowedDestinationIPRanges, _, _ := loadbalancer.AllowedDestinationIPRanges(svc)
+		if len(allowedDestinationIPRanges) == 0 {
+			return includeDefaultDestinationServices
+		}
+
+		return len(targetPrefixes.Intersection(loadbalancer.AggregatedIPRangePrefixes(allowedDestinationIPRanges))) > 0
 	}, services)
 }
 
@@ -56,7 +71,8 @@ func filterServicesByDisableFloatingIP(services []*v1.Service) []*v1.Service {
 func (az *Cloud) listSharedIPPortMapping(
 	ctx context.Context,
 	svc *v1.Service,
-	ingressIPs []netip.Addr,
+	destinationPrefixes []string,
+	includeDefaultDisableFloatingIPServices bool,
 ) (map[armnetwork.SecurityRuleProtocol][]int32, error) {
 	var (
 		logger = log.FromContextOrBackground(ctx).WithName("listSharedIPPortMapping")
@@ -77,10 +93,10 @@ func (az *Cloud) listSharedIPPortMapping(
 		// Filter services by ingress IPs or backend node pool IPs (when disable floating IP)
 		if consts.IsK8sServiceDisableLoadBalancerFloatingIP(svc) {
 			logger.V(5).Info("Filter service by disableFloatingIP")
-			services = filterServicesByDisableFloatingIP(services)
+			services = filterServicesByDisableFloatingIP(services, destinationPrefixes, includeDefaultDisableFloatingIPServices)
 		} else {
 			logger.V(5).Info("Filter service by external IPs")
-			services = filterServicesByIngressIPs(services, ingressIPs)
+			services = filterServicesByIngressIPPrefixes(services, destinationPrefixes)
 		}
 	}
 	logger.V(5).Info("Filtered services", "num-filtered-services", len(services))
@@ -107,7 +123,7 @@ func (az *Cloud) listSharedIPPortMapping(
 	return rv, nil
 }
 
-func (az *Cloud) listAvailableSecurityGroupDestinations(_ context.Context) ([]netip.Addr, error) {
+func (az *Cloud) listAvailableSecurityGroupDestinationPrefixes(_ context.Context) ([]string, error) {
 	services, err := az.serviceLister.List(labels.Everything())
 	if err != nil {
 		return nil, fmt.Errorf("list all services: %w", err)
@@ -118,13 +134,13 @@ func (az *Cloud) listAvailableSecurityGroupDestinations(_ context.Context) ([]ne
 		return nil, fmt.Errorf("list all nodes: %w", err)
 	}
 
-	var rv []netip.Addr
+	var rv []string
 	for _, svc := range services {
 		// Add additional public IPs
 		{
 			ips, err := loadbalancer.AdditionalPublicIPs(svc)
 			if err == nil {
-				rv = append(rv, ips...)
+				rv = append(rv, loadbalancer.AddressPrefixes(ips)...)
 			}
 		}
 
@@ -133,9 +149,14 @@ func (az *Cloud) listAvailableSecurityGroupDestinations(_ context.Context) ([]ne
 			for _, ing := range svc.Status.LoadBalancer.Ingress {
 				ip, err := netip.ParseAddr(ing.IP)
 				if err == nil {
-					rv = append(rv, ip)
+					rv = append(rv, ip.String())
 				}
 			}
+		}
+
+		if consts.IsK8sServiceDisableLoadBalancerFloatingIP(svc) {
+			destinationIPRanges, _, _ := loadbalancer.AllowedDestinationIPRanges(svc)
+			rv = append(rv, loadbalancer.AggregatedIPRangePrefixes(destinationIPRanges)...)
 		}
 	}
 
@@ -151,7 +172,7 @@ func (az *Cloud) listAvailableSecurityGroupDestinations(_ context.Context) ([]ne
 				}
 				ip, err := netip.ParseAddr(addr.Address)
 				if err == nil {
-					rv = append(rv, ip)
+					rv = append(rv, ip.String())
 				}
 			}
 		}

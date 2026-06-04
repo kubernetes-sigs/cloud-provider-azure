@@ -214,10 +214,25 @@ func (helper *RuleHelper) AddRuleForAllowedServiceTag(
 	}
 
 	var (
-		ipFamily    = iputil.FamilyOfAddr(dstAddresses[0])
-		srcPrefixes = []string{serviceTag}
-		dstPrefixes = fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
+		ipFamily = iputil.FamilyOfAddr(dstAddresses[0])
 	)
+
+	return helper.AddRuleForAllowedServiceTagPrefixes(serviceTag, protocol, ipFamily, fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses), dstPorts)
+}
+
+// AddRuleForAllowedServiceTagPrefixes adds a rule for traffic from a certain service tag to destination prefixes.
+func (helper *RuleHelper) AddRuleForAllowedServiceTagPrefixes(
+	serviceTag string,
+	protocol armnetwork.SecurityRuleProtocol,
+	ipFamily iputil.Family,
+	dstPrefixes []string,
+	dstPorts []int32,
+) error {
+	if err := validateDestinationPrefixFamilies(ipFamily, dstPrefixes); err != nil {
+		return err
+	}
+
+	srcPrefixes := []string{serviceTag}
 
 	helper.logger.V(4).Info("Patching a rule for allowed service tag", "ip-family", ipFamily)
 
@@ -242,10 +257,37 @@ func (helper *RuleHelper) AddRuleForAllowedIPRanges(
 	}
 
 	var (
-		ipFamily    = iputil.FamilyOfAddr(ipRanges[0].Addr())
-		srcPrefixes = fnutil.Map(func(ip netip.Prefix) string { return ip.String() }, ipRanges)
-		dstPrefixes = fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
+		ipFamily = iputil.FamilyOfAddr(ipRanges[0].Addr())
 	)
+
+	return helper.AddRuleForAllowedIPRangesWithDestinationPrefixes(
+		ipRanges,
+		protocol,
+		ipFamily,
+		fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses),
+		dstPorts,
+	)
+}
+
+// AddRuleForAllowedIPRangesWithDestinationPrefixes adds a rule for traffic from certain IP ranges to destination prefixes.
+func (helper *RuleHelper) AddRuleForAllowedIPRangesWithDestinationPrefixes(
+	ipRanges []netip.Prefix,
+	protocol armnetwork.SecurityRuleProtocol,
+	ipFamily iputil.Family,
+	dstPrefixes []string,
+	dstPorts []int32,
+) error {
+	if !iputil.ArePrefixesFromSameFamily(ipRanges) {
+		return ErrSecurityRuleSourceAddressesNotFromSameIPFamily
+	}
+	if err := validateDestinationPrefixFamilies(ipFamily, dstPrefixes); err != nil {
+		return err
+	}
+	if iputil.FamilyOfAddr(ipRanges[0].Addr()) != ipFamily {
+		return ErrSecurityRuleSourceAndDestinationNotFromSameIPFamily
+	}
+
+	srcPrefixes := fnutil.Map(func(ip netip.Prefix) string { return ip.String() }, ipRanges)
 
 	helper.logger.V(4).Info("Patching a rule for allowed IP ranges", "ip-family", ipFamily)
 
@@ -263,8 +305,18 @@ func (helper *RuleHelper) AddRuleForDenyAll(dstAddresses []netip.Addr) error {
 
 	var (
 		ipFamily = iputil.FamilyOfAddr(dstAddresses[0])
-		ruleName = GenerateDenyAllSecurityRuleName(ipFamily)
 	)
+
+	return helper.AddRuleForDenyAllPrefixes(ipFamily, fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses))
+}
+
+// AddRuleForDenyAllPrefixes adds a rule to deny all traffic from the given destination prefixes.
+func (helper *RuleHelper) AddRuleForDenyAllPrefixes(ipFamily iputil.Family, dstPrefixes []string) error {
+	if err := validateDestinationPrefixFamilies(ipFamily, dstPrefixes); err != nil {
+		return err
+	}
+
+	ruleName := GenerateDenyAllSecurityRuleName(ipFamily)
 
 	helper.logger.V(4).Info("Patching a rule for deny all", "ip-family", ipFamily)
 
@@ -282,8 +334,7 @@ func (helper *RuleHelper) AddRuleForDenyAll(dstAddresses []netip.Addr) error {
 	}
 	{
 		// Destination
-		addresses := fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
-		addresses = append(addresses, ListDestinationPrefixes(rule)...)
+		addresses := append(dstPrefixes, ListDestinationPrefixes(rule)...)
 		SetDestinationPrefixes(rule, addresses)
 		SetAsteriskDestinationPortRange(rule)
 	}
@@ -399,13 +450,49 @@ func (helper *RuleHelper) removeDestinationFromRule(rule *armnetwork.SecurityRul
 	}
 
 	// There are additional ports are expected, need to create a new rule for them.
-	addr, err := netip.ParseAddr(prefixes[0])
+	ipFamily, err := destinationPrefixFamily(prefixes[0])
 	if err != nil {
-		logger.Error(err, "Failed to parse dst IP address", "dst-ip", prefixes[0])
-		return fmt.Errorf("parse prefix as IP address %q: %w", prefixes[0], err)
+		logger.Error(err, "Failed to parse dst prefix", "dst-prefix", prefixes[0])
+		return fmt.Errorf("parse destination prefix %q: %w", prefixes[0], err)
 	}
-	ipFamily := iputil.FamilyOfAddr(addr)
 	return helper.addAllowRule(*rule.Properties.Protocol, ipFamily, ListSourcePrefixes(rule), prefixes, expectedPorts)
+}
+
+func destinationPrefixFamily(prefix string) (iputil.Family, error) {
+	if addr, err := netip.ParseAddr(prefix); err == nil {
+		return iputil.FamilyOfAddr(addr), nil
+	}
+	ipPrefix, err := netip.ParsePrefix(prefix)
+	if err != nil {
+		return "", err
+	}
+	return iputil.FamilyOfAddr(ipPrefix.Addr()), nil
+}
+
+func validateDestinationPrefixFamilies(ipFamily iputil.Family, dstPrefixes []string) error {
+	if len(dstPrefixes) == 0 {
+		return nil
+	}
+
+	family, err := destinationPrefixFamily(dstPrefixes[0])
+	if err != nil {
+		return fmt.Errorf("parse destination prefix %q: %w", dstPrefixes[0], err)
+	}
+	if family != ipFamily {
+		return ErrSecurityRuleSourceAndDestinationNotFromSameIPFamily
+	}
+
+	for _, prefix := range dstPrefixes[1:] {
+		family, err := destinationPrefixFamily(prefix)
+		if err != nil {
+			return fmt.Errorf("parse destination prefix %q: %w", prefix, err)
+		}
+		if family != ipFamily {
+			return ErrSecurityRuleDestinationAddressesNotFromSameIPFamily
+		}
+	}
+
+	return nil
 }
 
 // SecurityGroup returns the underlying SecurityGroup object and a bool indicating whether any changes were made to the RuleHelper.

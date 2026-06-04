@@ -184,6 +184,27 @@ func TestNewAccessControl(t *testing.T) {
 		assert.Equal(t, 1, called)
 	})
 
+	t.Run("it should emit warning event if invalid azure-allowed-destination-ip-ranges", func(t *testing.T) {
+		svc := k8sFx.Service().
+			WithAllowedDestinationIPRanges("foo", "10.0.0.0/24", "bar").
+			Build()
+
+		called := 0
+		eventEmitter := func(obj runtime.Object, eventType, reason, message string) {
+			called++
+			assert.Equal(t, &svc, obj)
+			assert.Equal(t, v1.EventTypeWarning, eventType)
+			assert.Equal(t, "InvalidAllowedDestinationIPRanges", reason)
+			assert.Equal(t, EventMessageOfInvalidAllowedDestinationIPRanges([]string{"foo", "bar"}), message)
+		}
+
+		ac, err := NewAccessControl(log.Noop(), &svc, sg, WithEventEmitter(eventEmitter))
+		assert.NoError(t, err)
+		assert.True(t, ac.IsAllowFromInternet())
+		assert.False(t, ac.DenyAllExceptSourceRanges())
+		assert.Equal(t, 1, called)
+	})
+
 	t.Run("it should emit warning event if using spec.LoadBalancerSourceRanges and azure-allowed-service-tags", func(t *testing.T) {
 		svc := k8sFx.Service().
 			WithLoadBalancerSourceRanges("20.0.0.1/32").

@@ -3479,21 +3479,74 @@ func (az *Cloud) reconcileSecurityGroup(
 		dstIPv6Addresses = append(dstIPv6Addresses, lbIPv6Addresses...)
 	}
 
+	var (
+		desiredDstIPv4Prefixes                    = loadbalancer.AddressPrefixes(dstIPv4Addresses)
+		desiredDstIPv6Prefixes                    = loadbalancer.AddressPrefixes(dstIPv6Addresses)
+		desiredIncludesDefaultBackendDestinations = disableFloatingIP
+		staleDstIPv4Prefixes                      []string
+		staleDstIPv6Prefixes                      []string
+	)
+	if disableFloatingIP && len(accessControl.AllowedDestinationIPRanges) > 0 {
+		allowedDestinationIPv4Prefixes := loadbalancer.AggregatedIPRangePrefixes(accessControl.AllowedDestinationIPv4Ranges())
+		allowedDestinationIPv6Prefixes := loadbalancer.AggregatedIPRangePrefixes(accessControl.AllowedDestinationIPv6Ranges())
+		backendIPv4Prefixes := loadbalancer.AddressPrefixes(backendIPv4Addresses)
+		backendIPv6Prefixes := loadbalancer.AddressPrefixes(backendIPv6Addresses)
+		desiredIncludesDefaultBackendDestinations = false
+
+		desiredDstIPv4Prefixes = loadbalancer.AddressPrefixes(additionalIPv4Addresses)
+		if len(allowedDestinationIPv4Prefixes) > 0 {
+			desiredDstIPv4Prefixes = append(desiredDstIPv4Prefixes, allowedDestinationIPv4Prefixes...)
+			staleDstIPv4Prefixes = backendIPv4Prefixes
+		} else {
+			desiredDstIPv4Prefixes = append(desiredDstIPv4Prefixes, backendIPv4Prefixes...)
+			desiredIncludesDefaultBackendDestinations = desiredIncludesDefaultBackendDestinations || len(backendIPv4Prefixes) > 0
+		}
+
+		desiredDstIPv6Prefixes = loadbalancer.AddressPrefixes(additionalIPv6Addresses)
+		if len(allowedDestinationIPv6Prefixes) > 0 {
+			desiredDstIPv6Prefixes = append(desiredDstIPv6Prefixes, allowedDestinationIPv6Prefixes...)
+			staleDstIPv6Prefixes = backendIPv6Prefixes
+		} else {
+			desiredDstIPv6Prefixes = append(desiredDstIPv6Prefixes, backendIPv6Prefixes...)
+			desiredIncludesDefaultBackendDestinations = desiredIncludesDefaultBackendDestinations || len(backendIPv6Prefixes) > 0
+		}
+	}
+
 	{
-		retainPortRanges, err := az.listSharedIPPortMapping(ctx, service, append(dstIPv4Addresses, dstIPv6Addresses...))
+		// Include default disable-floating-IP services when the desired destination set
+		// still contains backend node IPs, including per-family fallback cases.
+		retainPortRanges, err := az.listSharedIPPortMapping(
+			ctx,
+			service,
+			append(desiredDstIPv4Prefixes, desiredDstIPv6Prefixes...),
+			desiredIncludesDefaultBackendDestinations,
+		)
 		if err != nil {
 			logger.Error(err, "Failed to list retain port ranges")
 			return nil, err
 		}
 
-		if err := accessControl.CleanSecurityGroup(dstIPv4Addresses, dstIPv6Addresses, retainPortRanges); err != nil {
+		if err := accessControl.CleanSecurityGroupPrefixes(desiredDstIPv4Prefixes, desiredDstIPv6Prefixes, retainPortRanges); err != nil {
 			logger.Error(err, "Failed to clean security group")
 			return nil, err
 		}
 	}
 
+	if len(staleDstIPv4Prefixes) > 0 || len(staleDstIPv6Prefixes) > 0 {
+		retainPortRanges, err := az.listSharedIPPortMapping(ctx, service, append(staleDstIPv4Prefixes, staleDstIPv6Prefixes...), true)
+		if err != nil {
+			logger.Error(err, "Failed to list retain port ranges")
+			return nil, err
+		}
+
+		if err := accessControl.CleanSecurityGroupPrefixes(staleDstIPv4Prefixes, staleDstIPv6Prefixes, retainPortRanges); err != nil {
+			logger.Error(err, "Failed to clean stale backend security group destinations")
+			return nil, err
+		}
+	}
+
 	if wantLb {
-		err := accessControl.PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses)
+		err := accessControl.PatchSecurityGroupPrefixes(desiredDstIPv4Prefixes, desiredDstIPv6Prefixes)
 		if err != nil {
 			logger.Error(err, "Failed to patch security group")
 			return nil, err
@@ -3502,18 +3555,17 @@ func (az *Cloud) reconcileSecurityGroup(
 
 	{
 		// Retain all destinations that are managed by cloud-provider.
-		managedDestinations, err := az.listAvailableSecurityGroupDestinations(ctx)
+		managedDestinations, err := az.listAvailableSecurityGroupDestinationPrefixes(ctx)
 		if err != nil {
 			logger.Error(err, "Failed to list available security group destinations")
 			return nil, err
 		}
 
-		managedDestinations = append(managedDestinations, lbIPAddresses...)
-		managedDestinations = append(managedDestinations, additionalIPs...)
+		managedDestinations = append(managedDestinations, loadbalancer.AddressPrefixes(lbIPAddresses)...)
+		managedDestinations = append(managedDestinations, loadbalancer.AddressPrefixes(additionalIPs)...)
 		logger.Info("Retaining security group", "managed-destinations", managedDestinations)
 
-		ipv4Addresses, ipv6Addresses := iputil.GroupAddressesByFamily(managedDestinations)
-		if err := accessControl.RetainSecurityGroup(ipv4Addresses, ipv6Addresses); err != nil {
+		if err := accessControl.RetainSecurityGroupPrefixes(managedDestinations); err != nil {
 			logger.Error(err, "Failed to retain security group")
 			return nil, err
 		}

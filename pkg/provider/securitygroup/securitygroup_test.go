@@ -131,6 +131,34 @@ func TestSecurityGroupHelper_AddRuleForAllowedIPRanges(t *testing.T) {
 			assert.Error(t, err)
 			assert.ErrorIs(t, err, ErrSecurityRuleSourceAndDestinationNotFromSameIPFamily)
 		})
+		t.Run("when destination prefixes are not from the same IP family", func(t *testing.T) {
+			var (
+				sg     = fx.Azure().SecurityGroup().Build()
+				helper = ExpectNewSecurityGroupHelper(t, sg)
+
+				protocol    = armnetwork.SecurityRuleProtocolTCP
+				srcIPRanges = fx.RandomIPv4Prefixes(2)
+				dstPrefixes = []string{"10.0.0.0/24", "fd00::/64"}
+				dstPorts    = []int32{80, 443}
+			)
+			err := helper.AddRuleForAllowedIPRangesWithDestinationPrefixes(srcIPRanges, protocol, iputil.IPv4, dstPrefixes, dstPorts)
+			assert.Error(t, err)
+			assert.ErrorIs(t, err, ErrSecurityRuleDestinationAddressesNotFromSameIPFamily)
+		})
+		t.Run("when source IP ranges and destination prefixes are not from the same IP family", func(t *testing.T) {
+			var (
+				sg     = fx.Azure().SecurityGroup().Build()
+				helper = ExpectNewSecurityGroupHelper(t, sg)
+
+				protocol    = armnetwork.SecurityRuleProtocolTCP
+				srcIPRanges = fx.RandomIPv4Prefixes(2)
+				dstPrefixes = []string{"fd00::/64"}
+				dstPorts    = []int32{80, 443}
+			)
+			err := helper.AddRuleForAllowedIPRangesWithDestinationPrefixes(srcIPRanges, protocol, iputil.IPv4, dstPrefixes, dstPorts)
+			assert.Error(t, err)
+			assert.ErrorIs(t, err, ErrSecurityRuleSourceAndDestinationNotFromSameIPFamily)
+		})
 	})
 
 	t.Run("when no rule exists, it should add one", func(t *testing.T) {
@@ -463,6 +491,32 @@ func TestSecurityGroupHelper_AddRuleForAllowedServiceTag(t *testing.T) {
 			assert.Error(t, err)
 			assert.ErrorIs(t, err, ErrSecurityRuleDestinationAddressesNotFromSameIPFamily)
 		})
+		t.Run("when destination prefixes are not from the same IP family", func(t *testing.T) {
+			var (
+				sg     = fx.Azure().SecurityGroup().Build()
+				helper = ExpectNewSecurityGroupHelper(t, sg)
+
+				protocol   = armnetwork.SecurityRuleProtocolTCP
+				serviceTag = "AzureCloud"
+				dstPorts   = []int32{80, 443}
+			)
+			err := helper.AddRuleForAllowedServiceTagPrefixes(serviceTag, protocol, iputil.IPv4, []string{"10.0.0.0/24", "fd00::/64"}, dstPorts)
+			assert.Error(t, err)
+			assert.ErrorIs(t, err, ErrSecurityRuleDestinationAddressesNotFromSameIPFamily)
+		})
+		t.Run("when destination prefixes do not match the declared IP family", func(t *testing.T) {
+			var (
+				sg     = fx.Azure().SecurityGroup().Build()
+				helper = ExpectNewSecurityGroupHelper(t, sg)
+
+				protocol   = armnetwork.SecurityRuleProtocolTCP
+				serviceTag = "AzureCloud"
+				dstPorts   = []int32{80, 443}
+			)
+			err := helper.AddRuleForAllowedServiceTagPrefixes(serviceTag, protocol, iputil.IPv4, []string{"fd00::/64"}, dstPorts)
+			assert.Error(t, err)
+			assert.ErrorIs(t, err, ErrSecurityRuleSourceAndDestinationNotFromSameIPFamily)
+		})
 	})
 
 	t.Run("when no rule exists, it should add one", func(t *testing.T) {
@@ -792,6 +846,24 @@ func TestSecurityGroupHelper_AddRuleForDenyAll(t *testing.T) {
 			err := helper.AddRuleForDenyAll(dstAddresses)
 			assert.Error(t, err)
 			assert.ErrorIs(t, err, ErrSecurityRuleDestinationAddressesNotFromSameIPFamily)
+		})
+		t.Run("when destination prefixes are not from the same IP family", func(t *testing.T) {
+			var (
+				sg     = fx.Azure().SecurityGroup().Build()
+				helper = ExpectNewSecurityGroupHelper(t, sg)
+			)
+			err := helper.AddRuleForDenyAllPrefixes(iputil.IPv4, []string{"10.0.0.0/24", "fd00::/64"})
+			assert.Error(t, err)
+			assert.ErrorIs(t, err, ErrSecurityRuleDestinationAddressesNotFromSameIPFamily)
+		})
+		t.Run("when destination prefixes do not match the declared IP family", func(t *testing.T) {
+			var (
+				sg     = fx.Azure().SecurityGroup().Build()
+				helper = ExpectNewSecurityGroupHelper(t, sg)
+			)
+			err := helper.AddRuleForDenyAllPrefixes(iputil.IPv4, []string{"fd00::/64"})
+			assert.Error(t, err)
+			assert.ErrorIs(t, err, ErrSecurityRuleSourceAndDestinationNotFromSameIPFamily)
 		})
 	})
 

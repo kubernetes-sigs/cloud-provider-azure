@@ -93,6 +93,40 @@ func AllowedIPRanges(svc *v1.Service) ([]netip.Prefix, []string, error) {
 	return validRanges, invalidRanges, nil
 }
 
+// AllowedDestinationIPRanges returns the allowed destination IP ranges configured by user through AKS custom annotations:
+// service.beta.kubernetes.io/azure-allowed-destination-ip-ranges.
+func AllowedDestinationIPRanges(svc *v1.Service) ([]netip.Prefix, []string, error) {
+	const (
+		Sep = ","
+		Key = consts.ServiceAnnotationAllowedDestinationIPRanges
+	)
+	var (
+		errs          []error
+		validRanges   []netip.Prefix
+		invalidRanges []string
+	)
+
+	value, found := svc.Annotations[Key]
+	if !found {
+		return nil, nil, nil
+	}
+
+	for _, p := range strings.Split(strings.TrimSpace(value), Sep) {
+		p = strings.TrimSpace(p)
+		prefix, err := iputil.ParsePrefix(p)
+		if err != nil {
+			errs = append(errs, err)
+			invalidRanges = append(invalidRanges, p)
+		} else {
+			validRanges = append(validRanges, prefix)
+		}
+	}
+	if len(errs) > 0 {
+		return validRanges, invalidRanges, NewErrAnnotationValue(Key, value, errors.Join(errs...))
+	}
+	return validRanges, invalidRanges, nil
+}
+
 // SourceRanges returns the allowed IP ranges configured by user through `spec.LoadBalancerSourceRanges`.
 func SourceRanges(svc *v1.Service) ([]netip.Prefix, []string, error) {
 	var (
