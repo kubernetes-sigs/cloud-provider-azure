@@ -46,7 +46,8 @@ func filterServicesByIngressIPs(services []*v1.Service, ips []netip.Addr) []*v1.
 
 func filterServicesByDisableFloatingIP(services []*v1.Service) []*v1.Service {
 	return fnutil.Filter(func(svc *v1.Service) bool {
-		return consts.IsK8sServiceDisableLoadBalancerFloatingIP(svc)
+		return consts.IsK8sServiceDisableLoadBalancerFloatingIP(svc) &&
+			!consts.IsK8sServiceDisableLoadBalancerSecurityGroupRules(svc)
 	}, services)
 }
 

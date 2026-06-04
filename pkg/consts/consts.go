@@ -325,6 +325,10 @@ const (
 	// If omitted, the default value is false
 	ServiceAnnotationDisableLoadBalancerFloatingIP = "service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip"
 
+	// ServiceAnnotationDisableLoadBalancerSecurityGroupRules is the annotation used on the service to disable cloud-provider-managed load balancer security group rules.
+	// If omitted, the default value is false.
+	ServiceAnnotationDisableLoadBalancerSecurityGroupRules = "service.beta.kubernetes.io/azure-disable-load-balancer-security-group-rules"
+
 	// ServiceAnnotationAdditionalPublicIPs sets the additional Public IPs (split by comma) besides the service's Public IP configured on LoadBalancer.
 	// These additional Public IPs would be consumed by kube-proxy to configure the iptables rules on each node. Note they would not be configured
 	// automatically on Azure LoadBalancer. Instead, they need to be configured manually (e.g. on Azure cross-region LoadBalancer by another operator).

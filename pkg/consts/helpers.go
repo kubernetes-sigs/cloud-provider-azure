@@ -40,6 +40,11 @@ func IsK8sServiceDisableLoadBalancerFloatingIP(service *v1.Service) bool {
 	return expectAttributeInSvcAnnotationBeEqualTo(service.Annotations, ServiceAnnotationDisableLoadBalancerFloatingIP, TrueAnnotationValue)
 }
 
+// IsK8sServiceDisableLoadBalancerSecurityGroupRules returns if cloud-provider-managed load balancer security group rules are disabled in kubernetes service annotations.
+func IsK8sServiceDisableLoadBalancerSecurityGroupRules(service *v1.Service) bool {
+	return expectAttributeInSvcAnnotationBeEqualTo(service.Annotations, ServiceAnnotationDisableLoadBalancerSecurityGroupRules, TrueAnnotationValue)
+}
+
 // GetHealthProbeConfigOfPortFromK8sSvcAnnotation get health probe configuration for port
 func GetHealthProbeConfigOfPortFromK8sSvcAnnotation(annotations map[string]string, port int32, key HealthProbeParams, validators ...BusinessValidator) (*string, error) {
 	return GetAttributeValueInSvcAnnotation(annotations, BuildHealthProbeAnnotationKeyForPort(port, key), validators...)

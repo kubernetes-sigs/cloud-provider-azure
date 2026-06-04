@@ -3492,7 +3492,7 @@ func (az *Cloud) reconcileSecurityGroup(
 		}
 	}
 
-	if wantLb {
+	if wantLb && !consts.IsK8sServiceDisableLoadBalancerSecurityGroupRules(service) {
 		err := accessControl.PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses)
 		if err != nil {
 			logger.Error(err, "Failed to patch security group")

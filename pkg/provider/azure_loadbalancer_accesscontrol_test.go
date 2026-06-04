@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/netip"
 	"strings"
 	"testing"
 
@@ -481,6 +482,92 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					}
 
 					testutil.ExpectExactSecurityRules(t, &properties, rules)
+					return nil, nil
+				}).Times(1)
+			loadBalancerClient.EXPECT().
+				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
+				Return(loadBalancer, nil).
+				Times(1)
+			loadBalancerBackendPool.EXPECT().
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, &svc, loadBalancer).
+				Return(
+					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
+					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
+				).
+				Times(1)
+
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			assert.NoError(t, err)
+		})
+
+		t.Run("with `service.beta.kubernetes.io/azure-disable-load-balancer-security-group-rules` specified", func(t *testing.T) {
+			var (
+				ctrl                    = gomock.NewController(t)
+				az                      = GetTestCloud(ctrl)
+				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+				loadBalancerClient      = az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
+				loadBalancer            = azureFx.LoadBalancer().Build()
+			)
+			defer ctrl.Finish()
+
+			svc := k8sFx.Service().
+				WithDisableFloatingIP().
+				WithDisableLoadBalancerSecurityGroupRules().
+				Build()
+
+			{
+				kubeClient := fake.NewSimpleClientset(makeNodesByIPs(
+					append(azureFx.LoadBalancer().BackendPoolIPv4Addresses(), azureFx.LoadBalancer().BackendPoolIPv6Addresses()...),
+				)...)
+				informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
+				az.serviceLister = informerFactory.Core().V1().Services().Lister()
+				az.nodeLister = informerFactory.Core().V1().Nodes().Lister()
+				informerFactory.Start(wait.NeverStop)
+				informerFactory.WaitForCacheSync(wait.NeverStop)
+			}
+
+			serviceTags := []string{securitygroup.ServiceTagInternet}
+			noiseRules := azureFx.NoiseSecurityRules()
+			rules := append(testutil.CloneInJSON(noiseRules),
+				azureFx.
+					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, serviceTags, k8sFx.Service().TCPNodePorts()).
+					WithPriority(500).
+					WithDestination(azureFx.LoadBalancer().BackendPoolIPv4Addresses()...).
+					Build(),
+
+				azureFx.
+					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, serviceTags, k8sFx.Service().TCPNodePorts()).
+					WithPriority(501).
+					WithDestination(azureFx.LoadBalancer().BackendPoolIPv6Addresses()...).
+					Build(),
+
+				azureFx.
+					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, serviceTags, k8sFx.Service().UDPNodePorts()).
+					WithPriority(502).
+					WithDestination(azureFx.LoadBalancer().BackendPoolIPv4Addresses()...).
+					Build(),
+
+				azureFx.
+					AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, serviceTags, k8sFx.Service().UDPNodePorts()).
+					WithPriority(503).
+					WithDestination(azureFx.LoadBalancer().BackendPoolIPv6Addresses()...).
+					Build(),
+			)
+			securityGroup := azureFx.SecurityGroup().WithRules(rules).Build()
+
+			securityGroupClient.EXPECT().
+				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
+				Return(securityGroup, nil).
+				Times(1)
+			securityGroupClient.EXPECT().
+				CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any()).
+				DoAndReturn(func(
+					_ context.Context,
+					_, _ string,
+					properties armnetwork.SecurityGroup,
+				) (*armnetwork.SecurityGroup, error) {
+					testutil.ExpectExactSecurityRules(t, &properties, noiseRules)
 					return nil, nil
 				}).Times(1)
 			loadBalancerClient.EXPECT().
@@ -2704,4 +2791,75 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			assert.Error(t, err)
 		})
 	})
+}
+
+func TestCloud_listSharedIPPortMapping_excludesServicesWithDisabledSecurityGroupRules(t *testing.T) {
+	var (
+		fx    = fixture.NewFixture()
+		k8sFx = fx.Kubernetes()
+		ctx   = log.NewContext(context.Background(), log.Noop())
+		ctrl  = gomock.NewController(t)
+		az    = GetTestCloud(ctrl)
+	)
+	defer ctrl.Finish()
+
+	svc := k8sFx.Service().
+		WithName("current").
+		WithDisableFloatingIP().
+		Build()
+
+	retainedSvc := k8sFx.Service().
+		WithName("retained").
+		WithDisableFloatingIP().
+		Build()
+	retainedSvc.Spec.Ports = []v1.ServicePort{
+		{
+			Name:     "tcp",
+			Protocol: v1.ProtocolTCP,
+			Port:     8080,
+			NodePort: 31080,
+		},
+		{
+			Name:     "udp",
+			Protocol: v1.ProtocolUDP,
+			Port:     5353,
+			NodePort: 31553,
+		},
+	}
+
+	optedOutSvc := k8sFx.Service().
+		WithName("opted-out").
+		WithDisableFloatingIP().
+		WithDisableLoadBalancerSecurityGroupRules().
+		Build()
+	optedOutSvc.Spec.Ports = []v1.ServicePort{
+		{
+			Name:     "tcp",
+			Protocol: v1.ProtocolTCP,
+			Port:     8081,
+			NodePort: 32081,
+		},
+		{
+			Name:     "udp",
+			Protocol: v1.ProtocolUDP,
+			Port:     5354,
+			NodePort: 32554,
+		},
+	}
+
+	{
+		kubeClient := fake.NewSimpleClientset(&svc, &retainedSvc, &optedOutSvc)
+		informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
+		az.serviceLister = informerFactory.Core().V1().Services().Lister()
+		informerFactory.Start(wait.NeverStop)
+		informerFactory.WaitForCacheSync(wait.NeverStop)
+	}
+
+	retainPortRanges, err := az.listSharedIPPortMapping(ctx, &svc, []netip.Addr{netip.MustParseAddr("10.0.0.4")})
+
+	assert.NoError(t, err)
+	assert.Equal(t, map[armnetwork.SecurityRuleProtocol][]int32{
+		armnetwork.SecurityRuleProtocolTCP: []int32{31080},
+		armnetwork.SecurityRuleProtocolUDP: []int32{31553},
+	}, retainPortRanges)
 }
