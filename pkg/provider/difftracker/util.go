@@ -58,7 +58,7 @@ func (updateAction *UpdateAction) UnmarshalJSON(data []byte) error {
 }
 
 func (syncStatus SyncStatus) String() string {
-	return [...]string{"ALREADY_IN_SYNC", "SUCCESS"}[syncStatus]
+	return [...]string{"AlreadyInSync", "Success"}[syncStatus]
 }
 
 func (syncStatus SyncStatus) MarshalJSON() ([]byte, error) {

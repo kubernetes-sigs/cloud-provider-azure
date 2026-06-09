@@ -46,8 +46,8 @@ const (
 type SyncStatus int
 
 const (
-	ALREADY_IN_SYNC SyncStatus = iota
-	SUCCESS
+	AlreadyInSync SyncStatus = iota
+	Success
 )
 
 // --------------------------------------------------------------------------------

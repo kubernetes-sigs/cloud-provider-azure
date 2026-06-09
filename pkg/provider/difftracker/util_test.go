@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -101,8 +102,8 @@ func TestSyncStatusStringAndJSON(t *testing.T) {
 		status   SyncStatus
 		expected string
 	}{
-		{"ALREADY_IN_SYNC", ALREADY_IN_SYNC, "ALREADY_IN_SYNC"},
-		{"SUCCESS", SUCCESS, "SUCCESS"},
+		{"AlreadyInSync", AlreadyInSync, "AlreadyInSync"},
+		{"Success", Success, "Success"},
 	}
 
 	for _, tt := range tests {
@@ -656,9 +657,9 @@ func TestJSONRoundTrip(t *testing.T) {
 	})
 
 	t.Run("SyncStatus round trip", func(t *testing.T) {
-		original := SUCCESS
+		original := Success
 		data, err := json.Marshal(original)
 		assert.NoError(t, err)
-		assert.Equal(t, `"SUCCESS"`, string(data))
+		assert.Equal(t, `"Success"`, string(data))
 	})
 }

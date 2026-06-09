@@ -76,8 +76,8 @@ func (dt *DiffTracker) GetSyncLocationsAddresses() LocationData {
 	}
 
 	// Iterate over all nodes in the K8s state
-	for nodeIp, node := range dt.K8sResources.Nodes {
-		nrpLocation, locationExists := dt.NRPResources.Locations[nodeIp]
+	for nodeIP, node := range dt.K8sResources.Nodes {
+		nrpLocation, locationExists := dt.NRPResources.Locations[nodeIP]
 		location := initializeLocation(locationExists)
 		locationUpdated := false
 
@@ -105,7 +105,7 @@ func (dt *DiffTracker) GetSyncLocationsAddresses() LocationData {
 			locationUpdated = true
 		}
 		if locationUpdated {
-			result.Locations[nodeIp] = location
+			result.Locations[nodeIP] = location
 		}
 	}
 
@@ -196,11 +196,11 @@ func findLocationData(result LocationData, location string) *Location {
 
 func (dt *DiffTracker) GetSyncOperations() *SyncDiffTrackerReturnType {
 	if dt.DeepEqual() {
-		return &SyncDiffTrackerReturnType{SyncStatus: ALREADY_IN_SYNC}
+		return &SyncDiffTrackerReturnType{SyncStatus: AlreadyInSync}
 	}
 
 	return &SyncDiffTrackerReturnType{
-		SyncStatus:          SUCCESS,
+		SyncStatus:          Success,
 		LoadBalancerUpdates: dt.GetSyncLoadBalancerServices(),
 		NATGatewayUpdates:   dt.GetSyncNRPNATGateways(),
 		LocationData:        dt.GetSyncLocationsAddresses(),

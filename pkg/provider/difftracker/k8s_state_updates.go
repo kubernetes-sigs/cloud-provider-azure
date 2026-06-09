@@ -250,6 +250,8 @@ func (dt *DiffTracker) UpdateK8sPod(input UpdatePodInputType) error {
 // This is used during service deletion to proactively clear location/address references
 // so the LocationsUpdater can sync the removal to NRP.
 // Assumes lock is already held.
+//
+//nolint:unused // wired up by the engine in a follow-up PR
 func (dt *DiffTracker) removeServiceFromK8sStateLocked(serviceUID string, isInbound bool) {
 	for nodeIP, node := range dt.K8sResources.Nodes {
 		for podIP, pod := range node.Pods {
