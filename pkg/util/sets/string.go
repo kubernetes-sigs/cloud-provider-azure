@@ -112,20 +112,20 @@ func (s *IgnoreCaseSet) MarshalJSON() ([]byte, error) {
 }
 
 // Equals returns true if the two sets are equal.
-func (s1 *IgnoreCaseSet) Equals(s2 *IgnoreCaseSet) bool {
+func (s *IgnoreCaseSet) Equals(other *IgnoreCaseSet) bool {
 	// Early exit if sizes are different
-	if len(s1.UnsortedList()) != len(s2.UnsortedList()) {
+	if len(s.UnsortedList()) != len(other.UnsortedList()) {
 		return false
 	}
-	// Check if all items in s1 are in s2
-	for _, item := range s1.UnsortedList() {
-		if !s2.Has(item) {
+	// Check if all items in s are in other
+	for _, item := range s.UnsortedList() {
+		if !other.Has(item) {
 			return false
 		}
 	}
-	// Check if all items in s2 are in s1
-	for _, item := range s2.UnsortedList() {
-		if !s1.Has(item) {
+	// Check if all items in other are in s
+	for _, item := range other.UnsortedList() {
+		if !s.Has(item) {
 			return false
 		}
 	}

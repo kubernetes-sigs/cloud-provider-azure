@@ -527,7 +527,7 @@ func TestGetSyncOperations(t *testing.T) {
 					},
 				},
 			},
-			expectedSyncStatus: ALREADY_IN_SYNC,
+			expectedSyncStatus: AlreadyInSync,
 		},
 		{
 			name: "services out of sync",
@@ -551,7 +551,7 @@ func TestGetSyncOperations(t *testing.T) {
 					},
 				},
 			},
-			expectedSyncStatus: SUCCESS,
+			expectedSyncStatus: Success,
 		},
 	}
 
@@ -628,7 +628,7 @@ func TestInitializeDiffTracker(t *testing.T) {
 	diffTracker.UpdateNRPNATGateways(syncOperations.NATGatewayUpdates)
 	diffTracker.UpdateLocationsAddresses(syncOperations.LocationData)
 
-	assert.Equal(t, SUCCESS, syncOperations.SyncStatus)
+	assert.Equal(t, Success, syncOperations.SyncStatus)
 
 	expectedDiffTracker := &DiffTracker{
 		K8sResources: K8sResources,
