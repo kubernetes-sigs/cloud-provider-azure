@@ -15,16 +15,14 @@
 
 """Fetch Prow e2e pipeline artifacts from GCS.
 
-Accepts a Prow URL (any form) or JOB_NAME + BUILD_ID, downloads key
+Accepts a Prow URL (any form), downloads key
 artifacts, discovers cluster topology, and outputs a manifest JSON.
 
 Usage:
     python3 fetch_artifacts.py "<PROW_URL>" [--output-dir <dir>]
-    python3 fetch_artifacts.py <JOB_NAME> <BUILD_ID> [--output-dir <dir>]
 
 Examples:
     python3 fetch_artifacts.py "https://prow.k8s.io/view/gs/kubernetes-ci-logs/logs/cloud-provider-azure-ccm-windows-capz/2056042249866711040"
-    python3 fetch_artifacts.py cloud-provider-azure-master-capz 2056042249644412928
 """
 
 import argparse
@@ -148,10 +146,10 @@ def gcsweb_url(gcs_prefix: str, path: str = "") -> str:
     return f"{base}/"
 
 
-def download_file(url: str, dest: str) -> bool:
-    """Download a URL to a local file. Returns True on success."""
+def download_file(url: str, dest: str) -> None:
+    """Download a URL to a local file. Raises on failure."""
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
     try:
-        os.makedirs(os.path.dirname(dest), exist_ok=True)
         req = urllib.request.Request(
             url, headers={"User-Agent": "debug-e2e-pipeline/1.0"}
         )
@@ -161,10 +159,8 @@ def download_file(url: str, dest: str) -> bool:
                 if not chunk:
                     break
                 f.write(chunk)
-        return True
     except (urllib.error.HTTPError, urllib.error.URLError, OSError) as e:
-        print(f"  Warning: failed to download {url}: {e}", file=sys.stderr)
-        return False
+        raise RuntimeError(f"Failed to download {url}: {e}") from e
 
 
 def fetch_text(url: str) -> str | None:
@@ -360,6 +356,8 @@ def _parse_junit(junit_paths: list[str]) -> dict:
     passed: list[str] = []
     failed: list[dict] = []
     skipped: list[str] = []
+    total_from_suite = 0
+    disabled_from_suite = 0
 
     for path in junit_paths:
         try:
@@ -368,6 +366,14 @@ def _parse_junit(junit_paths: list[str]) -> dict:
         except (ET.ParseError, OSError) as e:
             print(f"  Warning: failed to parse JUnit {path}: {e}", file=sys.stderr)
             continue
+
+        # Collect suite-level counts.
+        for ts in root.iter("testsuite"):
+            try:
+                total_from_suite += int(ts.get("tests", 0))
+                disabled_from_suite += int(ts.get("disabled", 0))
+            except ValueError:
+                pass
 
         for tc in root.iter("testcase"):
             name = tc.get("name", "unknown")
@@ -388,20 +394,6 @@ def _parse_junit(junit_paths: list[str]) -> dict:
                 skipped.append(name)
             else:
                 passed.append(name)
-
-    # Handle suite-level skip counts (Ginkgo marks disabled tests at suite level).
-    # Some JUnit files use the "disabled" attribute on the root testsuite.
-    total_from_suite = 0
-    disabled_from_suite = 0
-    for path in junit_paths:
-        try:
-            tree = ET.parse(path)
-            root = tree.getroot()
-            for ts in root.iter("testsuite"):
-                total_from_suite += int(ts.get("tests", 0))
-                disabled_from_suite += int(ts.get("disabled", 0))
-        except (ET.ParseError, OSError, ValueError):
-            pass
 
     total = len(passed) + len(failed) + len(skipped)
     # If the suite reports more disabled than we found as skipped, trust the suite.
@@ -563,14 +555,8 @@ def main():
         description="Fetch Prow e2e pipeline artifacts from GCS."
     )
     parser.add_argument(
-        "url_or_job",
-        help="Prow URL (any form) or job name",
-    )
-    parser.add_argument(
-        "build_id",
-        nargs="?",
-        default=None,
-        help="Build ID (required when first arg is a job name)",
+        "url",
+        help="Prow URL (any form: prow.k8s.io, gcsweb, or storage.googleapis.com)",
     )
     parser.add_argument(
         "--output-dir",
@@ -586,17 +572,12 @@ def main():
     )
     args = parser.parse_args()
 
-    # Parse inputs.
-    if args.build_id:
-        job_name = args.url_or_job
-        build_id = args.build_id
-        gcs_prefix = f"logs/{job_name}/{build_id}"
-    else:
-        try:
-            job_name, build_id, gcs_prefix = parse_url(args.url_or_job)
-        except ValueError as e:
-            print(str(e), file=sys.stderr)
-            sys.exit(1)
+    # Parse URL.
+    try:
+        job_name, build_id, gcs_prefix = parse_url(args.url)
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        sys.exit(1)
 
     # Set up output directory.
     if args.output_dir:
@@ -635,8 +616,8 @@ def main():
             dest = os.path.join(output_dir, art)
             url = gcs_url(gcs_prefix, art)
             print(f"  Downloading {art}...", file=sys.stderr)
-            if download_file(url, dest):
-                fetch_count += 1
+            download_file(url, dest)
+            fetch_count += 1
         print(file=sys.stderr)
         print(
             f"Done. Downloaded {fetch_count} artifact(s) to {output_dir}",
@@ -645,15 +626,13 @@ def main():
         return
 
     # Download key artifacts.
-    downloaded_files: dict[str, str | None] = {}
+    downloaded_files: dict[str, str] = {}
     for artifact in KEY_ARTIFACTS:
         dest = os.path.join(output_dir, artifact)
         url = gcs_url(gcs_prefix, artifact)
         print(f"  Downloading {artifact}...", file=sys.stderr)
-        if download_file(url, dest):
-            downloaded_files[artifact] = dest
-        else:
-            downloaded_files[artifact] = None
+        download_file(url, dest)
+        downloaded_files[artifact] = dest
 
     # Discover and download JUnit files.
     print("  Discovering JUnit files...", file=sys.stderr)
@@ -663,8 +642,8 @@ def main():
         dest = os.path.join(output_dir, junit_path)
         url = gcs_url(gcs_prefix, junit_path)
         print(f"  Downloading {junit_path}...", file=sys.stderr)
-        if download_file(url, dest):
-            junit_local.append(dest)
+        download_file(url, dest)
+        junit_local.append(dest)
 
     # Discover cluster topology.
     print("  Discovering cluster topology...", file=sys.stderr)
@@ -750,10 +729,10 @@ def main():
             dest = os.path.join(output_dir, art)
             url = gcs_url(gcs_prefix, art)
             print(f"  Downloading {art}...", file=sys.stderr)
-            if download_file(url, dest):
-                fetch_count += 1
+            download_file(url, dest)
+            fetch_count += 1
 
-    file_count = sum(1 for v in downloaded_files.values() if v) + len(junit_local)
+    file_count = sum(1 for v in downloaded_files.values()) + len(junit_local)
     print(file=sys.stderr)
     parts = [f"{file_count} artifact(s)"]
     if fetch_count:
@@ -765,4 +744,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except RuntimeError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)

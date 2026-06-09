@@ -26,7 +26,7 @@ cloud-provider-azure. Trigger on:
 
 | Input | Required | Description |
 |-------|----------|-------------|
-| Pipeline URL or job name + build ID | Yes | Any Prow URL form, or `JOB_NAME BUILD_ID` pair |
+| Pipeline URL | Yes | Any Prow URL form (prow.k8s.io, gcsweb, or storage.googleapis.com) |
 | `--output-dir` | No | Directory for downloaded artifacts (default: `_artifacts/e2e-debug/{JOB}/{BUILD}/` in the repo root) |
 | `--fetch PATTERN [PATTERN ...]` | No | Download artifacts matching glob pattern(s) from available_artifacts (reuses existing manifest if present) |
 
@@ -81,7 +81,7 @@ follow the investigation steps that follow.
 
 **Context to pass the sub-agent:**
 
-- The pipeline URL (or job name + build ID)
+- The pipeline URL
 - The absolute skill directory path (for running the fetch script)
 - The output directory path (default:
   `_artifacts/e2e-debug/{JOB}/{BUILD}/` in the repo root)
@@ -139,12 +139,14 @@ Read the full `manifest.json` from disk. Start with `job_summary`:
 - `job_summary.duration`: how long the job ran
 
 This tells you *what the job does* — which script it runs, which cluster
-template it uses, and how it's configured. Pay special attention to
-`CLUSTER_TEMPLATE`: it controls whether the cluster has OOT credential
-provider, dual-stack networking, machine pools vs machine deployments,
-etc. If `CLUSTER_TEMPLATE` is a URL, fetch it for reference — it
-describes the cluster's networking, CNI, and worker topology, which is
-useful context when tracing cluster-level failures.
+template it uses, and how it's configured. The cluster template determines
+whether the cluster has OOT credential provider, dual-stack networking,
+machine pools vs machine deployments, etc. To find which template was used:
+1. Check `job_summary.env` for `CLUSTER_TEMPLATE`
+2. If not set, search build-log.txt for `"Using cluster template:"`
+3. The rendered resources in `available_artifacts` (e.g.
+   `*/resources/default/KubeadmControlPlane/*.yaml`) show exactly
+   what was applied to the cluster
 
 Check `build_log_summary.node_info` to see the cluster topology — OS
 versions, node roles, and container runtime versions. This is critical for
