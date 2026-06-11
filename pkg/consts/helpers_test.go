@@ -145,6 +145,54 @@ func TestIsK8sServiceUsingInternalLoadBalancer(t *testing.T) {
 	}
 }
 
+func TestIsK8sServiceDisableLoadBalancerNSGRule(t *testing.T) {
+	type args struct {
+		service *v1.Service
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "disable LoadBalancer NSG rule flag is set",
+			args: args{
+				service: &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Annotations: map[string]string{ServiceAnnotationDisableLoadBalancerNSGRule: TrueAnnotationValue},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "disable LoadBalancer NSG rule flag is not set",
+			args: args{
+				service: &v1.Service{},
+			},
+			want: false,
+		},
+		{
+			name: "disable LoadBalancer NSG rule flag is corrupted",
+			args: args{
+				service: &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Annotations: map[string]string{ServiceAnnotationDisableLoadBalancerNSGRule: TrueAnnotationValue + TrueAnnotationValue},
+					},
+				},
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsK8sServiceDisableLoadBalancerNSGRule(tt.args.service); got != tt.want {
+				t.Errorf("IsK8sServiceDisableLoadBalancerNSGRule() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGetHealthProbeConfigOfPortFromK8sSvcAnnotation(t *testing.T) {
 	type args struct {
 		annotations map[string]string

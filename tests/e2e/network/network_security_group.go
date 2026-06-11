@@ -442,6 +442,65 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		})
 	})
 
+	When("creating a LoadBalancer service with annotations `service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip` and `service.beta.kubernetes.io/azure-disable-load-balancer-nsg-rule`", func() {
+		It("should not add a rule to allow traffic from Internet", func() {
+			var (
+				svcNodePort  int32 = 30006
+				serviceIPv4s []netip.Addr
+				serviceIPv6s []netip.Addr
+			)
+
+			By("Creating a LoadBalancer service", func() {
+				var (
+					labels = map[string]string{
+						"app": ServiceName,
+					}
+					annotations = map[string]string{
+						consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "true",
+						consts.ServiceAnnotationDisableLoadBalancerNSGRule:    "true",
+					}
+					ports = []v1.ServicePort{{
+						Port:       serverPort,
+						TargetPort: intstr.FromInt32(serverPort),
+						NodePort:   svcNodePort,
+					}}
+				)
+				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, ServiceName, namespace.Name, labels, annotations, ports)
+				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+			})
+
+			var validator *SecurityGroupValidator
+			By("Getting the cluster security groups", func() {
+				rv, err := azureClient.GetClusterSecurityGroups()
+				Expect(err).NotTo(HaveOccurred())
+
+				validator = NewSecurityGroupValidator(rv)
+			})
+
+			nodeIPv4s, nodeIPv6s, err := listAgentNodeIPs(k8sClient)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(nodeIPv4s)+len(nodeIPv6s)).NotTo(Equal(0), "Should have at least one node IP")
+			logger.Info("Fetched node IPs", "v4-IPs", nodeIPv4s, "v6-IPs", nodeIPv6s)
+
+			By("Checking if the rule for allowing traffic from Internet does not exist", func() {
+				Expect(validator.NotHasRuleForDestination(serviceIPv4s)).To(BeTrue())
+				Expect(validator.NotHasRuleForDestination(serviceIPv6s)).To(BeTrue())
+
+				var (
+					expectedProtocol    = armnetwork.SecurityRuleProtocolTCP
+					expectedSrcPrefixes = []string{"Internet"}
+					expectedDstPorts    = []string{strconv.FormatInt(int64(svcNodePort), 10)}
+				)
+				if len(nodeIPv4s) > 0 {
+					Expect(validator.HasExactAllowRule(expectedProtocol, expectedSrcPrefixes, nodeIPv4s, expectedDstPorts)).To(BeFalse())
+				}
+				if len(nodeIPv6s) > 0 {
+					Expect(validator.HasExactAllowRule(expectedProtocol, expectedSrcPrefixes, nodeIPv6s, expectedDstPorts)).To(BeFalse())
+				}
+			})
+		})
+	})
+
 	When("creating 2 LoadBalancer service with annotation `service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip`", Label(utils.TestSuiteLabelNonMultiSLB), func() {
 		It("should add 2 rule to allow traffic from Internet", func() {
 
