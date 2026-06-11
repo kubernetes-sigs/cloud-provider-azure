@@ -47,6 +47,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+	providererrors "sigs.k8s.io/cloud-provider-azure/pkg/provider/errors"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
 	"sigs.k8s.io/cloud-provider-azure/pkg/trace"
 	"sigs.k8s.io/cloud-provider-azure/pkg/trace/attributes"
@@ -1190,11 +1191,11 @@ func (az *Cloud) determinePublicIPName(ctx context.Context, clusterName string, 
 		return pipName, false, err
 	}
 
-	// For the services with loadBalancerIP set, an existing public IP is required, primary
-	// or secondary, or a public IP not found error would be reported.
+	// For services with loadBalancerIP set, validate the IP and require an existing
+	// public IP, primary or secondary.
 	pip, err := az.findMatchedPIP(ctx, loadBalancerIP, "", pipResourceGroup)
 	if err != nil {
-		return "", false, err
+		return "", false, providererrors.NewExternalServiceLoadBalancerIPError(getServiceName(service), loadBalancerIP, err)
 	}
 
 	if pip != nil && pip.Name != nil {
@@ -4549,6 +4550,9 @@ func (az *Cloud) getLoadBalancerNameByPublicIP(
 		}
 		pip, err := az.findMatchedPIP(ctx, ip, "", pipResourceGroup)
 		if err != nil {
+			if providererrors.IsLoadBalancerIPValidationError(err) {
+				return "", fmt.Errorf("find public IP by address %q: %w", ip, providererrors.NewExternalServiceLoadBalancerIPError(getServiceName(service), ip, err))
+			}
 			return "", fmt.Errorf("find public IP by address %q: %w", ip, err)
 		}
 		if lbName := az.getLoadBalancerNameFromPIP(pip, clusterName); lbName != "" {
@@ -4889,6 +4893,9 @@ func (az *Cloud) serviceOwnsFrontendIP(ctx context.Context, fip *armnetwork.Fron
 		for _, loadBalancerIP := range loadBalancerIPs {
 			pip, err := az.findMatchedPIP(ctx, loadBalancerIP, "", pipResourceGroup)
 			if err != nil {
+				if providererrors.IsLoadBalancerIPValidationError(err) {
+					return false, isPrimaryService, nil
+				}
 				klog.Warningf("serviceOwnsFrontendIP: unexpected error when finding match public IP of the service %s with loadBalancerIP %s: %v", service.Name, loadBalancerIP, err)
 				return false, isPrimaryService, nil
 			}
