@@ -53,6 +53,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+	providererrors "sigs.k8s.io/cloud-provider-azure/pkg/provider/errors"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
@@ -107,6 +108,14 @@ func TestExistsPip(t *testing.T) {
 			func(client *mock_publicipaddressclient.MockInterface) {
 				client.EXPECT().List(gomock.Any(), "rg").Return([]*armnetwork.PublicIPAddress{}, nil).MaxTimes(2)
 			},
+			false,
+		},
+		{
+			"IPv4 non-public LoadBalancer IP does not trigger Public IP list",
+			getTestService("service", v1.ProtocolTCP, map[string]string{
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "10.0.0.5",
+			}, false, 80),
+			func(_ *mock_publicipaddressclient.MockInterface) {},
 			false,
 		},
 		{
@@ -4792,6 +4801,7 @@ func TestDeterminePublicIPName(t *testing.T) {
 		existingPIPs    []*armnetwork.PublicIPAddress
 		expectedPIPName string
 		expectedError   bool
+		expectNoList    bool
 		isIPv6          bool
 		serviceIPv6     bool
 		annotations     map[string]string
@@ -4807,6 +4817,13 @@ func TestDeterminePublicIPName(t *testing.T) {
 			loadBalancerIP:  "1.2.3.4",
 			expectedPIPName: "",
 			expectedError:   true,
+		},
+		{
+			desc:            "determinePublicIpName shall report validation error for non-public LoadBalancer IP",
+			loadBalancerIP:  "10.0.0.5",
+			expectedPIPName: "",
+			expectedError:   true,
+			expectNoList:    true,
 		},
 		{
 			desc: "determinePublicIpName shall return loadBalancerIP in service.Spec if it's in the " +
@@ -4842,7 +4859,9 @@ func TestDeterminePublicIPName(t *testing.T) {
 			setServiceLoadBalancerIP(&service, test.loadBalancerIP)
 
 			mockPIPsClient := az.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
-			mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPIPs, nil).MaxTimes(2)
+			if !test.expectNoList {
+				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPIPs, nil).MaxTimes(2)
+			}
 			mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 			for _, existingPIP := range test.existingPIPs {
 				mockPIPsClient.EXPECT().Get(gomock.Any(), "rg", *existingPIP.Name, gomock.Any()).Return(existingPIP, nil).AnyTimes()
@@ -4852,6 +4871,10 @@ func TestDeterminePublicIPName(t *testing.T) {
 			pipName, _, err := az.determinePublicIPName(context.TODO(), "testCluster", &service, test.isIPv6)
 			assert.Equal(t, test.expectedPIPName, pipName)
 			assert.Equal(t, test.expectedError, err != nil)
+			if test.expectNoList {
+				assert.ErrorIs(t, err, providererrors.ErrNonPublicLoadBalancerIP)
+				assert.Contains(t, err.Error(), `external Service "default/test1" cannot use non-public LoadBalancer IP "10.0.0.5"`)
+			}
 		})
 	}
 }
@@ -6624,7 +6647,11 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 
 			service := test.service
 			setServiceLoadBalancerIP(&service, "1.2.3.4")
-			setServiceLoadBalancerIP(&service, "fd00::eef0")
+			serviceIPv6 := "2603:1030::eef0"
+			if consts.IsK8sServiceUsingInternalLoadBalancer(&service) {
+				serviceIPv6 = "fd00::eef0"
+			}
+			setServiceLoadBalancerIP(&service, serviceIPv6)
 
 			_, err := az.NetworkClientFactory.GetPublicIPAddressClient().CreateOrUpdate(context.TODO(), "rg", "pipName", armnetwork.PublicIPAddress{
 				Name: ptr.To("pipName"),
@@ -6637,7 +6664,7 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 			_, err = az.NetworkClientFactory.GetPublicIPAddressClient().CreateOrUpdate(context.TODO(), "rg", "pipName-IPv6", armnetwork.PublicIPAddress{
 				Name: ptr.To("pipName-IPv6"),
 				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
-					IPAddress:              ptr.To("fd00::eef0"),
+					IPAddress:              ptr.To(serviceIPv6),
 					PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv6),
 				},
 			})
@@ -11021,7 +11048,21 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: fmt.Errorf(`look up load balancer by public IP for service "test": find public IP by address "5.6.7.8": findMatchedPIPByLoadBalancerIP: cannot find public IP with IP address 5.6.7.8 in resource group rg`),
+			expectedErr: fmt.Errorf(`look up load balancer by public IP for service "test": find public IP by address "5.6.7.8": findMatchedPIPByLoadBalancerIP: cannot find public IP with IP address 5.6.7.8 in resource group rg: getExpectedPIPFromListByIPAddress: cannot find public IP with IP address 5.6.7.8`),
+		},
+		{
+			description:   "multi-slb external: non-public LoadBalancer IP returns validation error",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "lb1"},
+				{Name: "lb2"},
+			},
+			serviceAnnotation: map[string]string{
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "10.0.0.5",
+			},
+			expectedErr: fmt.Errorf(`look up load balancer by public IP for service "test": find public IP by address "10.0.0.5": external Service "default/test" cannot use non-public LoadBalancer IP "10.0.0.5"; use an internal LoadBalancer annotation or a valid Azure Public IP address`),
 		},
 		{
 			description:   "multi-slb external: PIP name not found returns error",
@@ -12256,6 +12297,25 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			},
 		},
 		{
+			desc: "serviceOwnsFrontendIP should not list public IPs for non-public LoadBalancer IP during flipped cleanup",
+			fip: &armnetwork.FrontendIPConfiguration{
+				Name: ptr.To("auid"),
+				Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &armnetwork.PublicIPAddress{
+						ID: ptr.To("pip"),
+					},
+				},
+			},
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					UID: types.UID("secondary"),
+					Annotations: map[string]string{
+						consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "10.0.0.5",
+					},
+				},
+			},
+		},
+		{
 			desc: "serviceOwnsFrontendIP should detect the secondary external service",
 			existingPIPs: []*armnetwork.PublicIPAddress{
 				{
@@ -12300,7 +12360,7 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 					ID:   ptr.To("pip1"),
 					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv6),
-						IPAddress:              ptr.To("fd00::eef0"),
+						IPAddress:              ptr.To("2603:1030::eef0"),
 					},
 				},
 			},
@@ -12320,7 +12380,7 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 					UID: types.UID("secondary"),
 					Annotations: map[string]string{
 						consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1",
-						consts.ServiceAnnotationLoadBalancerIPDualStack[true]:  "fd00::eef0",
+						consts.ServiceAnnotationLoadBalancerIPDualStack[true]:  "2603:1030::eef0",
 					},
 				},
 			},
