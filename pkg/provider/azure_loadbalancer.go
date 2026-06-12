@@ -3440,6 +3440,7 @@ func (az *Cloud) reconcileSecurityGroup(
 
 	var (
 		disableFloatingIP                                = consts.IsK8sServiceDisableLoadBalancerFloatingIP(service)
+		disableLoadBalancerNSGRule                       = consts.IsK8sServiceDisableLoadBalancerNSGRule(service)
 		lbIPAddresses, _                                 = iputil.ParseAddresses(lbIPs)
 		lbIPv4Addresses, lbIPv6Addresses                 = iputil.GroupAddressesByFamily(lbIPAddresses)
 		additionalIPv4Addresses, additionalIPv6Addresses = iputil.GroupAddressesByFamily(additionalIPs)
@@ -3493,12 +3494,14 @@ func (az *Cloud) reconcileSecurityGroup(
 		}
 	}
 
-	if wantLb {
+	if wantLb && !disableLoadBalancerNSGRule {
 		err := accessControl.PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses)
 		if err != nil {
 			logger.Error(err, "Failed to patch security group")
 			return nil, err
 		}
+	} else if wantLb {
+		logger.V(2).Info("Skipped patching security group because Service disables LoadBalancer NSG rule management")
 	}
 
 	{

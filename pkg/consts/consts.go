@@ -325,6 +325,11 @@ const (
 	// If omitted, the default value is false
 	ServiceAnnotationDisableLoadBalancerFloatingIP = "service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip"
 
+	// ServiceAnnotationDisableLoadBalancerNSGRule disables cloud-provider-managed NSG rules for the service.
+	// This annotation is not recommended for general use; it is a break-glass option for operators that intentionally
+	// manage the service's NSG rules themselves. If omitted, the default value is false
+	ServiceAnnotationDisableLoadBalancerNSGRule = "service.beta.kubernetes.io/azure-disable-load-balancer-nsg-rule"
+
 	// ServiceAnnotationAdditionalPublicIPs sets the additional Public IPs (split by comma) besides the service's Public IP configured on LoadBalancer.
 	// These additional Public IPs would be consumed by kube-proxy to configure the iptables rules on each node. Note they would not be configured
 	// automatically on Azure LoadBalancer. Instead, they need to be configured manually (e.g. on Azure cross-region LoadBalancer by another operator).
