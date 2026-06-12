@@ -223,6 +223,60 @@ func TestAllowedIPRanges(t *testing.T) {
 	})
 }
 
+func TestAllowedDestinationIPRanges(t *testing.T) {
+	t.Run("no annotation", func(t *testing.T) {
+		actual, invalid, err := AllowedDestinationIPRanges(&v1.Service{
+			Spec: v1.ServiceSpec{
+				Type: v1.ServiceTypeLoadBalancer,
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{},
+			},
+		})
+		assert.NoError(t, err)
+		assert.Empty(t, actual)
+		assert.Empty(t, invalid)
+	})
+
+	t.Run("with multiple destination ranges", func(t *testing.T) {
+		actual, invalid, err := AllowedDestinationIPRanges(&v1.Service{
+			Spec: v1.ServiceSpec{
+				Type: v1.ServiceTypeLoadBalancer,
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					consts.ServiceAnnotationAllowedDestinationIPRanges: " 10.10.0.0/24, 2001:db8::/64 ",
+				},
+			},
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, []netip.Prefix{
+			netip.MustParsePrefix("10.10.0.0/24"),
+			netip.MustParsePrefix("2001:db8::/64"),
+		}, actual)
+		assert.Empty(t, invalid)
+	})
+
+	t.Run("with invalid destination ranges", func(t *testing.T) {
+		actual, invalid, err := AllowedDestinationIPRanges(&v1.Service{
+			Spec: v1.ServiceSpec{
+				Type: v1.ServiceTypeLoadBalancer,
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					consts.ServiceAnnotationAllowedDestinationIPRanges: "foobar,10.0.0.0/24,10.0.0.1/24",
+				},
+			},
+		})
+		assert.Error(t, err)
+
+		var e *ErrAnnotationValue
+		assert.ErrorAs(t, err, &e)
+		assert.Equal(t, []netip.Prefix{netip.MustParsePrefix("10.0.0.0/24")}, actual)
+		assert.Equal(t, []string{"foobar", "10.0.0.1/24"}, invalid)
+	})
+}
+
 func TestSourceRanges(t *testing.T) {
 	t.Run("not specified in spec", func(t *testing.T) {
 		actual, invalid, err := SourceRanges(&v1.Service{

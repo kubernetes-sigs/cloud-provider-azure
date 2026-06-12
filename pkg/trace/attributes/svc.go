@@ -35,6 +35,7 @@ func FeatureOfService(svc *v1.Service) []attribute.KeyValue {
 	return []attribute.KeyValue{
 		attribute.Bool("annotations.allowed_service_tags", hasAnnotation(consts.ServiceAnnotationAllowedServiceTags)),
 		attribute.Bool("annotations.allowed_ip_ranges", hasAnnotation(consts.ServiceAnnotationAllowedIPRanges)),
+		attribute.Bool("annotations.allowed_destination_ip_ranges", hasAnnotation(consts.ServiceAnnotationAllowedDestinationIPRanges)),
 		attribute.Bool("annotations.internal_load_balancer", hasAnnotation(consts.ServiceAnnotationLoadBalancerInternal)),
 		attribute.Bool("annotations.load_balancer_source_ranges", hasAnnotation(v1.AnnotationLoadBalancerSourceRangesKey)),
 		attribute.Bool("annotations.additional_public_ips", hasAnnotation(consts.ServiceAnnotationAdditionalPublicIPs)),

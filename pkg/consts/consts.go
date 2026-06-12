@@ -287,6 +287,11 @@ const (
 	// It is compatible with both IPv4 and IPV6 CIDR formats.
 	ServiceAnnotationAllowedIPRanges = "service.beta.kubernetes.io/azure-allowed-ip-ranges"
 
+	// ServiceAnnotationAllowedDestinationIPRanges is the annotation used on the service
+	// to specify a list of allowed destination IP Ranges separated by comma.
+	// It is compatible with both IPv4 and IPV6 CIDR formats.
+	ServiceAnnotationAllowedDestinationIPRanges = "service.beta.kubernetes.io/azure-allowed-destination-ip-ranges"
+
 	// ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges  denies all traffic to the load balancer except those
 	// within the service.Spec.LoadBalancerSourceRanges. Ref: https://github.com/kubernetes-sigs/cloud-provider-azure/issues/374.
 	ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges = "service.beta.kubernetes.io/azure-deny-all-except-load-balancer-source-ranges"

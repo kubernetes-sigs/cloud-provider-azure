@@ -46,6 +46,7 @@ type AccessControl struct {
 	// immutable pre-compute states.
 	SourceRanges                           []netip.Prefix
 	AllowedIPRanges                        []netip.Prefix
+	AllowedDestinationIPRanges             []netip.Prefix
 	AllowedServiceTags                     []string
 	invalidRanges                          []string
 	securityRuleDestinationPortsByProtocol map[armnetwork.SecurityRuleProtocol][]int32
@@ -95,6 +96,12 @@ func NewAccessControl(logger logr.Logger, svc *v1.Service, sg *armnetwork.Securi
 		// Backward compatibility: no error but emit a warning event.
 		eventEmitter(svc, v1.EventTypeWarning, "InvalidAllowedIPRanges", EventMessageOfInvalidAllowedIPRanges(invalidAllowedIPRanges))
 	}
+	allowedDestinationIPRanges, invalidAllowedDestinationIPRanges, err := AllowedDestinationIPRanges(svc)
+	if err != nil {
+		logger.Error(err, "Failed to parse AllowedDestinationIPRanges configuration")
+
+		eventEmitter(svc, v1.EventTypeWarning, "InvalidAllowedDestinationIPRanges", EventMessageOfInvalidAllowedDestinationIPRanges(invalidAllowedDestinationIPRanges))
+	}
 	allowedServiceTags := AllowedServiceTags(svc)
 	securityRuleDestinationPortsByProtocol, err := SecurityRuleDestinationPortsByProtocol(svc)
 	if err != nil {
@@ -121,6 +128,7 @@ func NewAccessControl(logger logr.Logger, svc *v1.Service, sg *armnetwork.Securi
 		sgHelper:                               sgHelper,
 		SourceRanges:                           sourceRanges,
 		AllowedIPRanges:                        allowedIPRanges,
+		AllowedDestinationIPRanges:             allowedDestinationIPRanges,
 		AllowedServiceTags:                     allowedServiceTags,
 		invalidRanges:                          append(invalidSourceRanges, invalidAllowedIPRanges...),
 		securityRuleDestinationPortsByProtocol: securityRuleDestinationPortsByProtocol,
@@ -194,8 +202,47 @@ func (ac *AccessControl) AllowedIPv6Ranges() []netip.Prefix {
 	return rv
 }
 
+// AllowedDestinationIPv4Ranges returns the IPv4 ranges that should be used as SecurityGroup destinations.
+func (ac *AccessControl) AllowedDestinationIPv4Ranges() []netip.Prefix {
+	var rv []netip.Prefix
+	for _, cidr := range ac.AllowedDestinationIPRanges {
+		if cidr.Addr().Is4() {
+			rv = append(rv, cidr)
+		}
+	}
+	return rv
+}
+
+// AllowedDestinationIPv6Ranges returns the IPv6 ranges that should be used as SecurityGroup destinations.
+func (ac *AccessControl) AllowedDestinationIPv6Ranges() []netip.Prefix {
+	var rv []netip.Prefix
+	for _, cidr := range ac.AllowedDestinationIPRanges {
+		if cidr.Addr().Is6() {
+			rv = append(rv, cidr)
+		}
+	}
+	return rv
+}
+
+func AddressPrefixes(addrs []netip.Addr) []string {
+	return fnutil.Map(func(addr netip.Addr) string { return addr.String() }, addrs)
+}
+
+func IPRangePrefixes(prefixes []netip.Prefix) []string {
+	return fnutil.Map(func(prefix netip.Prefix) string { return prefix.String() }, prefixes)
+}
+
+func AggregatedIPRangePrefixes(prefixes []netip.Prefix) []string {
+	return IPRangePrefixes(iputil.AggregatePrefixes(prefixes))
+}
+
 // PatchSecurityGroup checks and adds rules for the given destination IP addresses.
 func (ac *AccessControl) PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses []netip.Addr) error {
+	return ac.PatchSecurityGroupPrefixes(AddressPrefixes(dstIPv4Addresses), AddressPrefixes(dstIPv6Addresses))
+}
+
+// PatchSecurityGroupPrefixes checks and adds rules for the given destination IP prefixes.
+func (ac *AccessControl) PatchSecurityGroupPrefixes(dstIPv4Prefixes, dstIPv6Prefixes []string) error {
 	logger := ac.logger.WithName("PatchSecurityGroup")
 
 	var (
@@ -238,31 +285,31 @@ func (ac *AccessControl) PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses [
 		if !found {
 			continue
 		}
-		if len(dstIPv4Addresses) > 0 {
+		if len(dstIPv4Prefixes) > 0 {
 			for _, tag := range allowedServiceTags {
-				err := ac.sgHelper.AddRuleForAllowedServiceTag(tag, protocol, dstIPv4Addresses, dstPorts)
+				err := ac.sgHelper.AddRuleForAllowedServiceTagPrefixes(tag, protocol, iputil.IPv4, dstIPv4Prefixes, dstPorts)
 				if err != nil {
 					return fmt.Errorf("add rule for allowed service tag on IPv4: %w", err)
 				}
 			}
 
 			if len(allowedIPv4Ranges) > 0 {
-				err := ac.sgHelper.AddRuleForAllowedIPRanges(allowedIPv4Ranges, protocol, dstIPv4Addresses, dstPorts)
+				err := ac.sgHelper.AddRuleForAllowedIPRangesWithDestinationPrefixes(allowedIPv4Ranges, protocol, iputil.IPv4, dstIPv4Prefixes, dstPorts)
 				if err != nil {
 					return fmt.Errorf("add rule for allowed IP ranges on IPv4: %w", err)
 				}
 			}
 		}
-		if len(dstIPv6Addresses) > 0 {
+		if len(dstIPv6Prefixes) > 0 {
 			for _, tag := range allowedServiceTags {
-				err := ac.sgHelper.AddRuleForAllowedServiceTag(tag, protocol, dstIPv6Addresses, dstPorts)
+				err := ac.sgHelper.AddRuleForAllowedServiceTagPrefixes(tag, protocol, iputil.IPv6, dstIPv6Prefixes, dstPorts)
 				if err != nil {
 					return fmt.Errorf("add rule for allowed service tag on IPv6: %w", err)
 				}
 			}
 
 			if len(allowedIPv6Ranges) > 0 {
-				err := ac.sgHelper.AddRuleForAllowedIPRanges(allowedIPv6Ranges, protocol, dstIPv6Addresses, dstPorts)
+				err := ac.sgHelper.AddRuleForAllowedIPRangesWithDestinationPrefixes(allowedIPv6Ranges, protocol, iputil.IPv6, dstIPv6Prefixes, dstPorts)
 				if err != nil {
 					return fmt.Errorf("add rule for allowed IP ranges on IPv6: %w", err)
 				}
@@ -271,13 +318,13 @@ func (ac *AccessControl) PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses [
 	}
 
 	if ac.DenyAllExceptSourceRanges() {
-		if len(dstIPv4Addresses) > 0 {
-			if err := ac.sgHelper.AddRuleForDenyAll(dstIPv4Addresses); err != nil {
+		if len(dstIPv4Prefixes) > 0 {
+			if err := ac.sgHelper.AddRuleForDenyAllPrefixes(iputil.IPv4, dstIPv4Prefixes); err != nil {
 				return fmt.Errorf("add rule for deny all on IPv4: %w", err)
 			}
 		}
-		if len(dstIPv6Addresses) > 0 {
-			if err := ac.sgHelper.AddRuleForDenyAll(dstIPv6Addresses); err != nil {
+		if len(dstIPv6Prefixes) > 0 {
+			if err := ac.sgHelper.AddRuleForDenyAllPrefixes(iputil.IPv6, dstIPv6Prefixes); err != nil {
 				return fmt.Errorf("add rule for deny all on IPv6: %w", err)
 			}
 		}
@@ -293,15 +340,18 @@ func (ac *AccessControl) CleanSecurityGroup(
 	dstIPv4Addresses, dstIPv6Addresses []netip.Addr,
 	retainPortRanges map[armnetwork.SecurityRuleProtocol][]int32,
 ) error {
-	logger := ac.logger.WithName("CleanSecurityGroup").
-		WithValues("num-dst-ipv4-addresses", len(dstIPv4Addresses)).
-		WithValues("num-dst-ipv6-addresses", len(dstIPv6Addresses))
-	logger.V(10).Info("Start cleaning")
+	return ac.CleanSecurityGroupPrefixes(AddressPrefixes(dstIPv4Addresses), AddressPrefixes(dstIPv6Addresses), retainPortRanges)
+}
 
-	var (
-		ipv4Prefixes = fnutil.Map(func(addr netip.Addr) string { return addr.String() }, dstIPv4Addresses)
-		ipv6Prefixes = fnutil.Map(func(addr netip.Addr) string { return addr.String() }, dstIPv6Addresses)
-	)
+// CleanSecurityGroupPrefixes removes the given IP prefixes from the SecurityGroup.
+func (ac *AccessControl) CleanSecurityGroupPrefixes(
+	dstIPv4Prefixes, dstIPv6Prefixes []string,
+	retainPortRanges map[armnetwork.SecurityRuleProtocol][]int32,
+) error {
+	logger := ac.logger.WithName("CleanSecurityGroup").
+		WithValues("num-dst-ipv4-prefixes", len(dstIPv4Prefixes)).
+		WithValues("num-dst-ipv6-prefixes", len(dstIPv6Prefixes))
+	logger.V(10).Info("Start cleaning")
 
 	protocols := []armnetwork.SecurityRuleProtocol{
 		armnetwork.SecurityRuleProtocolTCP,
@@ -311,12 +361,12 @@ func (ac *AccessControl) CleanSecurityGroup(
 
 	for _, protocol := range protocols {
 		retainDstPorts := retainPortRanges[protocol]
-		if err := ac.sgHelper.RemoveDestinationFromRules(protocol, ipv4Prefixes, retainDstPorts); err != nil {
+		if err := ac.sgHelper.RemoveDestinationFromRules(protocol, dstIPv4Prefixes, retainDstPorts); err != nil {
 			logger.Error(err, "Failed to remove IPv4 destination from rules")
 			return err
 		}
 
-		if err := ac.sgHelper.RemoveDestinationFromRules(protocol, ipv6Prefixes, retainDstPorts); err != nil {
+		if err := ac.sgHelper.RemoveDestinationFromRules(protocol, dstIPv6Prefixes, retainDstPorts); err != nil {
 			logger.Error(err, "Failed to remove IPv6 destination from rules")
 			return err
 		}
@@ -328,17 +378,15 @@ func (ac *AccessControl) CleanSecurityGroup(
 
 // RetainSecurityGroup retains the given destination IP addresses from the SecurityGroup.
 func (ac *AccessControl) RetainSecurityGroup(dstIPv4Addresses, dstIPv6Addresses []netip.Addr) error {
+	return ac.RetainSecurityGroupPrefixes(append(AddressPrefixes(dstIPv4Addresses), AddressPrefixes(dstIPv6Addresses)...))
+}
+
+// RetainSecurityGroupPrefixes retains the given destination IP prefixes from the SecurityGroup.
+func (ac *AccessControl) RetainSecurityGroupPrefixes(retainedPrefixes []string) error {
 	logger := ac.logger.WithName("RetainSecurityGroup").
-		WithValues("num-dst-ipv4-addresses", len(dstIPv4Addresses)).
-		WithValues("num-dst-ipv6-addresses", len(dstIPv6Addresses))
+		WithValues("num-dst-prefixes", len(retainedPrefixes))
 	logger.V(10).Info("Start retaining")
 	defer logger.V(10).Info("Completed retaining")
-
-	var (
-		ipv4Prefixes     = fnutil.Map(func(addr netip.Addr) string { return addr.String() }, dstIPv4Addresses)
-		ipv6Prefixes     = fnutil.Map(func(addr netip.Addr) string { return addr.String() }, dstIPv6Addresses)
-		retainedPrefixes = append(ipv4Prefixes, ipv6Prefixes...)
-	)
 
 	if err := ac.sgHelper.RetainDestinationFromRules(retainedPrefixes); err != nil {
 		logger.Error(err, "Failed to retain destination from rules")
