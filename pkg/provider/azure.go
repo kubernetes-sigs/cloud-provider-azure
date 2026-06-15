@@ -449,7 +449,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 	}
 
 	if az.zoneRepo == nil {
-		az.zoneRepo, err = zone.NewRepo(az.ComputeClientFactory.GetProviderClient())
+		az.zoneRepo, err = zone.NewRepo(az.NetworkClientFactory.GetProviderClient())
 		if err != nil {
 			return err
 		}
