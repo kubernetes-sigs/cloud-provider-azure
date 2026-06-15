@@ -508,9 +508,11 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 			return err
 		}
 
-		az.zoneRepo, err = zone.NewRepo(az.ComputeClientFactory.GetProviderClient())
-		if err != nil {
-			return err
+		if az.zoneRepo == nil {
+			az.zoneRepo, err = zone.NewRepo(az.NetworkClientFactory.GetProviderClient())
+			if err != nil {
+				return err
+			}
 		}
 
 		az.plsRepo, err = privatelinkservice.NewRepo(az.ComputeClientFactory.GetPrivateLinkServiceClient(), time.Duration(az.PlsCacheTTLInSeconds)*time.Second, az.DisableAPICallCache)

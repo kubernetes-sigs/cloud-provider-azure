@@ -30,6 +30,7 @@ import (
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 var _ cloudprovider.Zones = (*Cloud)(nil)
@@ -44,7 +45,8 @@ func (az *Cloud) refreshZones(ctx context.Context, refreshFunc func(ctx context.
 }
 
 func (az *Cloud) syncRegionZonesMap(ctx context.Context) error {
-	klog.V(2).Infof("syncRegionZonesMap: starting to fetch all available zones for the subscription %s", az.SubscriptionID)
+	logger := log.FromContextOrBackground(ctx).WithName("syncRegionZonesMap")
+	logger.V(2).Info("starting to fetch all available zones for the subscription", "subscriptionID", az.getNetworkResourceSubscriptionID())
 	zones, err := az.zoneRepo.ListZones(ctx)
 	if err != nil {
 		return fmt.Errorf("list zones: %w", err)
