@@ -385,8 +385,11 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(slbTestLa
 			config, err := getCloudProviderConfig(ctx, ccmClient)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Get the serviceGatewayResourceName from existing config or use default
-			serviceGatewayName := "my-service-gateway"
+			// Get the serviceGatewayResourceName from existing config or use default.
+			// NOTE: CCM hardcodes the SGW name to "servicegateway" since commit
+			// 33dcfb27 and ignores this config key, but we keep the field populated
+			// for backwards compatibility with older CCM images.
+			serviceGatewayName := "servicegateway"
 			if sgName, ok := config["serviceGatewayResourceName"].(string); ok && sgName != "" {
 				serviceGatewayName = sgName
 			}

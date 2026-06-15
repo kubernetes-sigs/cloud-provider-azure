@@ -174,13 +174,15 @@ func (dt *DiffTracker) createServiceRefFiltered(pod Pod) *utilsets.IgnoreCaseSet
 }
 
 // isServiceReady checks if a service is ready for location sync
-// Returns true if service is StateCreated or exists in NRP (but not tracked)
+// Returns true if service is StateCreated/StateUpdateInProgress or exists in NRP (but not tracked).
+// StateUpdateInProgress is considered ready because the LB and SGW Service entry are
+// already in place; only LB rules are being updated.
 // Must be called with dt.mu held
 func (dt *DiffTracker) isServiceReady(serviceUID string, isInbound bool) bool {
 	// Check if service is tracked in pendingServiceOps
 	if opState, exists := dt.pendingServiceOps[serviceUID]; exists {
-		// Only sync if service is StateCreated
-		return opState.State == StateCreated
+		// Sync if service is StateCreated or in-flight LB update.
+		return opState.State == StateCreated || opState.State == StateUpdateInProgress
 	}
 
 	// Service not tracked - check if it exists in NRP (created outside Engine)

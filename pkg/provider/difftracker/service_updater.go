@@ -83,6 +83,24 @@ func (s *ServiceUpdater) Stop() {
 	klog.Infof("ServiceUpdater: stopped")
 }
 
+// requeueIfMoreWork is fired from a per-service goroutine's defer chain AFTER
+// activeOps[uid] has been cleared. It pokes the dispatcher to re-scan
+// pendingServiceOps. This closes a race where onComplete (running INSIDE the
+// goroutine, while activeOps[uid] was still true) already enqueued a
+// follow-up trigger that the dispatcher consumed during the activeOps-held
+// window — leaving a service stuck with no active worker and no pending trigger.
+//
+// The trigger send is non-blocking; the channel buffer dedupes consecutive
+// triggers, and an empty pendingServiceOps scan is a cheap O(N) no-op.
+func (s *ServiceUpdater) requeueIfMoreWork(uid string) {
+	select {
+	case s.diffTracker.serviceUpdaterTrigger <- true:
+		klog.V(5).Infof("ServiceUpdater: requeueIfMoreWork queued follow-up trigger after %s", uid)
+	default:
+		// Channel buffer full; an upcoming dispatch will already scan this UID.
+	}
+}
+
 // processBatch scans pendingServiceOps and spawns goroutines for services that need processing
 func (s *ServiceUpdater) processBatch() {
 	// Collect work to do while holding lock, then spawn goroutines after releasing lock
@@ -112,7 +130,9 @@ func (s *ServiceUpdater) processBatch() {
 		case StateNotStarted:
 			// Transition to CreationInProgress
 			opState.State = StateCreationInProgress
-			workToDo = append(workToDo, workItem{serviceUID, opState.Config, StateCreationInProgress, opState.CorrelationID, opState.TriggeringPodNamespace, opState.TriggeringPodName})
+			configSnapshot := opState.Config
+			opState.InFlightConfig = &configSnapshot
+			workToDo = append(workToDo, workItem{serviceUID, configSnapshot, StateCreationInProgress, opState.CorrelationID, opState.TriggeringPodNamespace, opState.TriggeringPodName})
 
 		case StateCreationInProgress:
 			// Already being processed by another goroutine, skip
@@ -139,6 +159,12 @@ func (s *ServiceUpdater) processBatch() {
 
 		case StateDeletionInProgress:
 			workToDo = append(workToDo, workItem{serviceUID, opState.Config, StateDeletionInProgress, opState.CorrelationID, opState.TriggeringPodNamespace, opState.TriggeringPodName})
+
+		case StateUpdateInProgress:
+			// Snapshot the desired config so OnServiceCreationComplete can detect drift.
+			configSnapshot := opState.Config
+			opState.InFlightConfig = &configSnapshot
+			workToDo = append(workToDo, workItem{serviceUID, configSnapshot, StateUpdateInProgress, opState.CorrelationID, opState.TriggeringPodNamespace, opState.TriggeringPodName})
 		}
 	}
 	s.diffTracker.mu.Unlock()
@@ -168,6 +194,7 @@ func (s *ServiceUpdater) processBatch() {
 			s.wg.Add(1)
 			go func(uid string, cfg ServiceConfig, corrID string, podNS string, podName string) {
 				defer s.wg.Done()
+				defer s.requeueIfMoreWork(uid)
 				defer func() {
 					s.mu.Lock()
 					delete(s.activeOps, uid)
@@ -195,6 +222,7 @@ func (s *ServiceUpdater) processBatch() {
 			s.wg.Add(1)
 			go func(uid string, cfg ServiceConfig, corrID string) {
 				defer s.wg.Done()
+				defer s.requeueIfMoreWork(uid)
 				defer func() {
 					s.mu.Lock()
 					delete(s.activeOps, uid)
@@ -216,6 +244,34 @@ func (s *ServiceUpdater) processBatch() {
 					s.deleteInboundService(uid, corrID)
 				} else {
 					s.deleteOutboundService(uid, corrID)
+				}
+			}(work.serviceUID, work.config, work.correlationID)
+		case StateUpdateInProgress:
+			s.wg.Add(1)
+			go func(uid string, cfg ServiceConfig, corrID string) {
+				defer s.wg.Done()
+				defer s.requeueIfMoreWork(uid)
+				defer func() {
+					s.mu.Lock()
+					delete(s.activeOps, uid)
+					s.mu.Unlock()
+				}()
+
+				select {
+				case s.semaphore <- struct{}{}:
+					defer func() {
+						<-s.semaphore
+					}()
+				case <-s.ctx.Done():
+					klog.V(4).Infof("ServiceUpdater: context cancelled before acquiring semaphore for service %s", uid)
+					return
+				}
+
+				if cfg.IsInbound {
+					s.updateInboundService(uid, cfg.InboundConfig, corrID)
+				} else {
+					klog.V(2).Infof("ServiceUpdater: outbound update not supported, marking success for %s", uid)
+					s.onComplete(uid, true, nil)
 				}
 			}(work.serviceUID, work.config, work.correlationID)
 		}
@@ -310,6 +366,42 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 	// Step 6: Success callback
 	s.onComplete(serviceUID, true, nil)
 	klog.Infof("ServiceUpdater: createInboundService completed successfully correlationID=%s serviceUID=%s", correlationID, serviceUID)
+}
+
+// updateInboundService re-PUTs the LoadBalancer for an existing inbound service to apply
+// configuration changes (e.g., port edits). It is idempotent: re-running with the same
+// config produces no Azure changes. PIP and ServiceGateway service registration are NOT
+// touched here because:
+//   - the PIP allocation is independent of LB rules
+//   - the SGW Service entry references the LB backend pool (whose ID is stable across
+//     port edits), so the SGW state does not need to be re-pushed for port-only changes.
+//
+// If, in the future, port changes need to surface to NRP (e.g., for backend-port routing
+// metadata in the SGW Service DTO), call updateNRPSGWServices here as well.
+func (s *ServiceUpdater) updateInboundService(serviceUID string, config *InboundConfig, correlationID string) {
+	klog.Infof("ServiceUpdater: updateInboundService started correlationID=%s serviceUID=%s", correlationID, serviceUID)
+
+	ctx := s.ctx
+
+	// Rebuild the LB ARM model from the new config. We discard the PIP and DTO portions
+	// because we are doing a port-only/spec update; the underlying PIP is unchanged and
+	// the SGW service registration (which references the backend pool by ID) is stable.
+	_, lbResource, _ := buildInboundServiceResources(serviceUID, config, s.diffTracker.config)
+
+	if err := s.diffTracker.createOrUpdateLB(ctx, lbResource); err != nil {
+		httpStatus, errCode := extractAzureErrorInfo(err)
+		klog.Errorf("ServiceUpdater: failed to update LoadBalancer for inbound service correlationID=%s serviceUID=%s httpStatus=%d errorCode=%s error=%v", correlationID, serviceUID, httpStatus, errCode, err)
+		s.onComplete(serviceUID, false, fmt.Errorf("failed to update LoadBalancer: %w", err))
+		return
+	}
+	lbRulesCount := 0
+	if lbResource.Properties != nil && lbResource.Properties.LoadBalancingRules != nil {
+		lbRulesCount = len(lbResource.Properties.LoadBalancingRules)
+	}
+	klog.V(3).Infof("ServiceUpdater: updated LoadBalancer with %d rules for inbound service %s", lbRulesCount, serviceUID)
+
+	s.onComplete(serviceUID, true, nil)
+	klog.Infof("ServiceUpdater: updateInboundService completed successfully correlationID=%s serviceUID=%s", correlationID, serviceUID)
 }
 
 // createOutboundService creates NAT Gateway resources for outbound service

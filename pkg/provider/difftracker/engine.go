@@ -169,9 +169,11 @@ func (dt *DiffTracker) UpdateEndpoints(serviceUID string, oldPodIPToNodeIP, newP
 			Timestamp:     time.Now().Format(time.RFC3339),
 		})
 
-	case StateCreated:
-		// Service is ready - update endpoints immediately
-		klog.V(2).Infof("Engine.UpdateEndpoints: Service %s is ready, updating endpoints immediately (old=%d, new=%d)", serviceUID, len(oldPodIPToNodeIP), len(newPodIPToNodeIP))
+	case StateCreated, StateUpdateInProgress:
+		// Service is ready - update endpoints immediately. During an in-flight LB update
+		// (port change) the LB and SGW Service entry are stable; pod-IP endpoint sync
+		// must continue without interruption.
+		klog.V(2).Infof("Engine.UpdateEndpoints: Service %s is ready (state=%v), updating endpoints immediately (old=%d, new=%d)", serviceUID, opState.State, len(oldPodIPToNodeIP), len(newPodIPToNodeIP))
 		errs := dt.updateK8sEndpointsLocked(UpdateK8sEndpointsInputType{
 			InboundIdentity: serviceUID,
 			OldAddresses:    oldPodIPToNodeIP,
@@ -203,6 +205,120 @@ func (dt *DiffTracker) UpdateEndpoints(serviceUID string, oldPodIPToNodeIP, newP
 
 	default:
 		klog.Errorf("Engine.UpdateEndpoints: Unknown state %v for service %s", opState.State, serviceUID)
+	}
+}
+
+// UpdateService handles spec updates (e.g., port changes) for an existing inbound service.
+// Behavior:
+//   - If the service is not yet tracked AND not in NRP: falls through to AddService.
+//   - If currently being created (StateNotStarted/CreationInProgress): the latest config
+//     overwrites the desired config; the in-flight creation will use the newer config when
+//     it picks up the work. (For an already-running creation goroutine, a follow-up update
+//     will be enqueued via StateUpdateInProgress on creation success.)
+//   - If StateCreated: diff the new config against LastAppliedConfig. Equal => no-op.
+//     Different => transition to StateUpdateInProgress and trigger the ServiceUpdater.
+//   - If StateUpdateInProgress: overwrite Config so the next dispatch sees the latest desired
+//     state; an in-flight updater will re-PUT with the freshest config on completion if needed.
+//   - If StateDeletionPending/InProgress: ignore — deletion wins.
+//
+// Outbound services are not currently supported by this path.
+func (dt *DiffTracker) UpdateService(config ServiceConfig) {
+	defer func() {
+		updatePendingServiceOperationsMetric(dt)
+		updateTrackedServicesMetric(dt)
+		updatePendingOperationOldestAgeMetric(dt)
+	}()
+
+	if err := config.Validate(); err != nil {
+		klog.Errorf("Engine.UpdateService: invalid config: %v", err)
+		return
+	}
+
+	if !config.IsInbound {
+		klog.V(2).Infof("Engine.UpdateService: outbound service updates not supported, ignoring serviceUID=%s", config.UID)
+		return
+	}
+
+	serviceUID := config.UID
+
+	dt.mu.Lock()
+
+	opState, exists := dt.pendingServiceOps[serviceUID]
+	existsInNRP := dt.NRPResources.LoadBalancers.Has(serviceUID)
+
+	if !exists && !existsInNRP {
+		// Service is unknown to the engine - treat as a creation.
+		dt.mu.Unlock()
+		klog.V(2).Infof("Engine.UpdateService: service %s not tracked and not in NRP, delegating to AddService", serviceUID)
+		dt.AddService(config)
+		return
+	}
+
+	if !exists && existsInNRP {
+		// LB exists in NRP (e.g., recovered after CCM restart) but no engine tracking entry.
+		// Create one in StateCreated so the update path can take over.
+		klog.V(2).Infof("Engine.UpdateService: service %s exists in NRP but not tracked, creating tracking entry for update", serviceUID)
+		opState = &ServiceOperationState{
+			ServiceUID:    serviceUID,
+			Config:        config,
+			State:         StateCreated,
+			RetryCount:    0,
+			LastAttempt:   time.Now().Format(time.RFC3339),
+			CreatedAt:     time.Now(),
+			CorrelationID: uuid.NewString(),
+		}
+		dt.pendingServiceOps[serviceUID] = opState
+		// Force an update PUT (we have no LastAppliedConfig to compare against).
+		opState.State = StateUpdateInProgress
+		opState.Config = config
+		dt.mu.Unlock()
+		dt.triggerServiceUpdater()
+		return
+	}
+
+	// opState exists - dispatch on current state.
+	switch opState.State {
+	case StateNotStarted, StateCreationInProgress:
+		// Creation hasn't reached Azure yet (or is in flight). Latest config wins; the
+		// running goroutine already captured a snapshot at dispatch time, so we also
+		// queue a follow-up update by leaving the freshly-overwritten Config; if creation
+		// completes with stale data, OnServiceCreationComplete will see Config != LastAppliedConfig
+		// and schedule an UpdateInProgress.
+		klog.V(2).Infof("Engine.UpdateService: service %s in state=%v, overwriting desired config", serviceUID, opState.State)
+		opState.Config = config
+		dt.mu.Unlock()
+
+	case StateCreated:
+		if opState.LastAppliedConfig != nil &&
+			opState.LastAppliedConfig.IsInbound == config.IsInbound &&
+			opState.LastAppliedConfig.InboundConfig.Equals(config.InboundConfig) {
+			dt.mu.Unlock()
+			klog.V(4).Infof("Engine.UpdateService: service %s config unchanged, skipping update", serviceUID)
+			return
+		}
+		klog.V(2).Infof("Engine.UpdateService: service %s config changed, scheduling update", serviceUID)
+		opState.Config = config
+		opState.State = StateUpdateInProgress
+		opState.RetryCount = 0
+		opState.LastAttempt = time.Now().Format(time.RFC3339)
+		dt.mu.Unlock()
+		dt.triggerServiceUpdater()
+
+	case StateUpdateInProgress:
+		// An updater is (or will be) processing this service. Overwrite with the latest desired
+		// config. If equal to the in-flight config, OnServiceCreationComplete will be a no-op;
+		// if different, OnServiceCreationComplete will detect the diff and reschedule.
+		klog.V(2).Infof("Engine.UpdateService: service %s already updating, overwriting desired config", serviceUID)
+		opState.Config = config
+		dt.mu.Unlock()
+
+	case StateDeletionPending, StateDeletionInProgress:
+		dt.mu.Unlock()
+		klog.V(2).Infof("Engine.UpdateService: service %s is being deleted, ignoring update", serviceUID)
+
+	default:
+		dt.mu.Unlock()
+		klog.Errorf("Engine.UpdateService: unknown state %v for service %s", opState.State, serviceUID)
 	}
 }
 
@@ -284,6 +400,14 @@ func (dt *DiffTracker) DeleteService(serviceUID string, isInbound bool, isOrphan
 			klog.V(2).Infof("Engine.DeleteService: Service %s is ready, marking for deletion", serviceUID)
 			opState.State = StateDeletionPending
 
+		case StateUpdateInProgress:
+			// An update is in flight; deletion wins. The currently-running updater
+			// goroutine will complete and OnServiceCreationComplete will see
+			// State == StateDeletionPending in its post-update branch and route to deletion.
+			klog.Warningf("Engine.DeleteService: Service %s is being updated, marking for deletion", serviceUID)
+			opState.State = StateDeletionPending
+			opState.InFlightConfig = nil
+
 		case StateDeletionPending, StateDeletionInProgress:
 			dt.mu.Unlock()
 			klog.V(2).Infof("Engine.DeleteService: Service %s is already being deleted", serviceUID)
@@ -356,8 +480,70 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 		return
 	}
 
-	// Determine if this is creation or deletion based on current state
+	// PRE-EMPT: if a Delete arrived during the in-flight create/update, the state was
+	// changed to StateDeletionPending by DeleteService. Route to the deletion flow
+	// regardless of which operation we were performing or whether it succeeded —
+	// the LB/PIP may exist (success or partial-failure) and must be cleaned up.
+	if opState.State == StateDeletionPending {
+		klog.Warningf("Engine.OnServiceCreationComplete: Service %s in-flight op completed (success=%v) but deletion pending, routing to deletion", serviceUID, success)
+		opState.InFlightConfig = nil
+		// pendingServiceDeletions[serviceUID] is the source of truth and was set by DeleteService.
+		hasLocations := dt.serviceHasLocationsInNRP(serviceUID)
+		if !hasLocations {
+			// Ready for immediate deletion.
+			opState.State = StateDeletionInProgress
+			delete(dt.pendingServiceDeletions, serviceUID)
+			dt.triggerServiceUpdater()
+		} else {
+			// Locations still present; LocationsUpdater will clear them and
+			// CheckPendingServiceDeletions will transition opState.State.
+			dt.triggerLocationsUpdater()
+		}
+		return
+	}
+
+	// Determine if this is creation, update, or deletion based on current state
 	isDeletion := (opState.State == StateDeletionInProgress)
+	isUpdate := (opState.State == StateUpdateInProgress)
+
+	if isUpdate {
+		if success {
+			klog.V(2).Infof("Engine.OnServiceCreationComplete: Service %s updated successfully", serviceUID)
+			recordServiceOperation("update", opState.Config.IsInbound, startTime, nil, "", opState.IsOrphan)
+			// Persist the config that was actually applied (snapshot at dispatch time).
+			if opState.InFlightConfig != nil {
+				applied := *opState.InFlightConfig
+				opState.LastAppliedConfig = &applied
+			}
+			opState.RetryCount = 0
+
+			// If the desired Config drifted while the update was in flight, reschedule.
+			if opState.InFlightConfig != nil && !configsEqualForUpdate(opState.InFlightConfig, &opState.Config) {
+				klog.V(2).Infof("Engine.OnServiceCreationComplete: Service %s desired config drifted during update, rescheduling", serviceUID)
+				opState.State = StateUpdateInProgress
+				opState.LastAttempt = time.Now().Format(time.RFC3339)
+				opState.InFlightConfig = nil
+				dt.triggerServiceUpdater()
+			} else {
+				opState.State = StateCreated
+				opState.InFlightConfig = nil
+			}
+			dt.checkInitializationCompleteLocked()
+		} else {
+			klog.Errorf("Engine.OnServiceCreationComplete: Service %s update failed: %v", serviceUID, err)
+			_, errCode := extractAzureErrorInfo(err)
+			recordServiceOperation("update", opState.Config.IsInbound, startTime, err, errCode, opState.IsOrphan)
+			opState.RetryCount++
+			opState.LastAttempt = time.Now().Format(time.RFC3339)
+			opState.InFlightConfig = nil
+			recordServiceOperationRetry("update", opState.Config.IsInbound, opState.RetryCount)
+
+			klog.V(2).Infof("Engine.OnServiceCreationComplete: Service %s update will be retried (attempt %d)", serviceUID, opState.RetryCount)
+			// Stay in StateUpdateInProgress so dispatcher picks it up again.
+			dt.triggerServiceUpdater()
+		}
+		return
+	}
 
 	if isDeletion {
 		// Handle deletion completion
@@ -387,31 +573,30 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 	} else {
 		// Handle creation completion
 		if success {
-			// RACE CONDITION FIX: Check if deletion was requested while creation was in progress
-			// If StateDeletionPending, don't mark as Created - instead trigger deletion flow
-			if opState.State == StateDeletionPending {
-				klog.Warningf("Engine.OnServiceCreationComplete: Service %s creation completed but deletion pending, triggering deletion", serviceUID)
-				opState.State = StateCreated // Briefly mark as created so deletion flow works correctly
-
-				// Check if locations are already clear (they should be since we clear K8s state in DeleteService)
-				hasLocations := dt.serviceHasLocationsInNRP(serviceUID)
-				if !hasLocations {
-					// Ready for immediate deletion
-					opState.State = StateDeletionInProgress
-					delete(dt.pendingServiceDeletions, serviceUID)
-					dt.triggerServiceUpdater()
-				} else {
-					// Need to wait for locations to clear - trigger LocationsUpdater
-					// CheckPendingServiceDeletions will handle the transition
-					dt.triggerLocationsUpdater()
-				}
-				return
-			}
+			// Note: StateDeletionPending after success is handled by the pre-empt block at
+			// the top of this function, so we know opState.State is still
+			// StateCreationInProgress here.
 
 			klog.V(2).Infof("Engine.OnServiceCreationComplete: Service %s created successfully", serviceUID)
 			recordServiceOperation("create", opState.Config.IsInbound, startTime, nil, "", opState.IsOrphan)
 			opState.State = StateCreated
 			opState.RetryCount = 0
+			// Persist applied config snapshot for future UpdateService diffing.
+			if opState.InFlightConfig != nil {
+				applied := *opState.InFlightConfig
+				opState.LastAppliedConfig = &applied
+			} else {
+				appliedCopy := opState.Config
+				opState.LastAppliedConfig = &appliedCopy
+			}
+
+			// If a config update arrived while creation was in flight, schedule an update now.
+			if opState.InFlightConfig != nil && !configsEqualForUpdate(opState.InFlightConfig, &opState.Config) {
+				klog.V(2).Infof("Engine.OnServiceCreationComplete: Service %s desired config drifted during creation, scheduling update", serviceUID)
+				opState.State = StateUpdateInProgress
+				dt.triggerServiceUpdater()
+			}
+			opState.InFlightConfig = nil
 
 			// Promote any pending endpoints and pods
 			dt.promotePendingEndpointsLocked(serviceUID)
@@ -577,6 +762,23 @@ func (dt *DiffTracker) AddPod(serviceUID, podKey, location, address string) {
 		}
 
 		// Trigger LocationsUpdater to sync the change
+		dt.triggerLocationsUpdater()
+
+	case StateUpdateInProgress:
+		// Outbound updates are currently a fast-path no-op in the ServiceUpdater
+		// (see updateInboundService dispatch); they should not produce a sustained
+		// StateUpdateInProgress for NAT Gateway services. Treat the same as StateCreated
+		// for safety in case the outbound update path is implemented later.
+		klog.V(2).Infof("Engine.AddPod: Service %s is updating, adding pod %s immediately", serviceUID, podKey)
+		err := dt.updateK8sPodLocked(UpdatePodInputType{
+			PodOperation:           ADD,
+			PublicOutboundIdentity: serviceUID,
+			Location:               location,
+			Address:                address,
+		})
+		if err != nil {
+			klog.Errorf("Engine.AddPod: Failed to add pod %s during update: %v", podKey, err)
+		}
 		dt.triggerLocationsUpdater()
 
 	case StateDeletionPending, StateDeletionInProgress:
@@ -901,4 +1103,43 @@ func (dt *DiffTracker) checkInitializationCompleteLocked() {
 		klog.V(4).Infof("Engine.checkInitializationComplete: still initializing (pendingOps=%d, inFlightTriggers=%d)",
 			pendingOps, inFlightTriggers)
 	}
+}
+
+// configsEqualForUpdate returns true if two ServiceConfigs describe the same desired state
+// from the perspective of the update path. Only the inbound shape is compared today.
+func configsEqualForUpdate(a, b *ServiceConfig) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	if a.IsInbound != b.IsInbound {
+		return false
+	}
+	if a.IsInbound {
+		return a.InboundConfig.Equals(b.InboundConfig)
+	}
+	// Outbound update path is not implemented yet; treat as equal so we don't loop.
+	return true
+}
+
+// IsServiceTracked reports whether the engine has any knowledge of this service —
+// either an active operation in pendingServiceOps or an entry in NRPResources
+// indicating the LB/NAT-Gateway already exists in Azure. Callers in the cloud
+// provider use this to decide between AddService (first-time create) and
+// UpdateService (apply spec edits to an existing service).
+func (dt *DiffTracker) IsServiceTracked(serviceUID string) bool {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	if _, ok := dt.pendingServiceOps[serviceUID]; ok {
+		return true
+	}
+	if dt.NRPResources.LoadBalancers != nil && dt.NRPResources.LoadBalancers.Has(serviceUID) {
+		return true
+	}
+	if dt.NRPResources.NATGateways != nil && dt.NRPResources.NATGateways.Has(serviceUID) {
+		return true
+	}
+	return false
 }

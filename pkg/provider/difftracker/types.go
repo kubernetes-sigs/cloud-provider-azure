@@ -39,6 +39,7 @@ const (
 	StateCreated
 	StateDeletionPending
 	StateDeletionInProgress
+	StateUpdateInProgress
 )
 
 type UpdateAction int
@@ -87,6 +88,85 @@ type InboundConfig struct {
 // OutboundConfig contains NAT Gateway configuration for outbound services
 type OutboundConfig struct {
 	// Placeholder for future NAT Gateway options
+}
+
+// Equals returns true if two InboundConfigs describe the same desired LB shape.
+// Used by UpdateService to short-circuit no-op reconciles.
+// Comparison is order-sensitive for FrontendPorts/BackendPorts because the
+// position of a port determines its pairing with a backend port in
+// buildInboundServiceResources.
+func (c *InboundConfig) Equals(other *InboundConfig) bool {
+	if c == nil && other == nil {
+		return true
+	}
+	if c == nil || other == nil {
+		return false
+	}
+	if !portMappingsEqual(c.FrontendPorts, other.FrontendPorts) {
+		return false
+	}
+	if !portMappingsEqual(c.BackendPorts, other.BackendPorts) {
+		return false
+	}
+	if !strPtrEqual(c.Protocol, other.Protocol) {
+		return false
+	}
+	if !int32PtrEqual(c.IdleTimeoutMinutes, other.IdleTimeoutMinutes) {
+		return false
+	}
+	if !strPtrEqual(c.SessionPersistence, other.SessionPersistence) {
+		return false
+	}
+	if !healthProbeEqual(c.HealthProbe, other.HealthProbe) {
+		return false
+	}
+	return true
+}
+
+func portMappingsEqual(a, b []PortMapping) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func strPtrEqual(a, b *string) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
+func int32PtrEqual(a, b *int32) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
+func healthProbeEqual(a, b *HealthProbeConfig) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	if a.Protocol != b.Protocol || a.Port != b.Port ||
+		a.IntervalInSeconds != b.IntervalInSeconds || a.NumberOfProbes != b.NumberOfProbes {
+		return false
+	}
+	return strPtrEqual(a.RequestPath, b.RequestPath)
 }
 
 // ServiceConfig encapsulates all configuration needed for a service
@@ -167,11 +247,22 @@ type K8s_State struct {
 
 // ServiceOperationState tracks the lifecycle state of a service being created or deleted
 type ServiceOperationState struct {
-	ServiceUID  string
-	Config      ServiceConfig // Replaces IsInbound bool - contains full service configuration
-	State       ResourceState
-	RetryCount  int
-	LastAttempt string // timestamp as string for serialization
+	ServiceUID string
+	// Config is the desired configuration. For update flows it is overwritten by
+	// the latest Update call before the updater goroutine picks it up.
+	Config ServiceConfig
+	// InFlightConfig is the configuration snapshot that the currently-running
+	// (or last-dispatched) updater goroutine is applying. Set by the dispatcher
+	// when it picks up the work; consumed by OnServiceCreationComplete to
+	// (a) populate LastAppliedConfig on success and (b) detect whether a newer
+	// Config arrived during the in-flight operation so we can reschedule.
+	InFlightConfig *ServiceConfig
+	// LastAppliedConfig is the configuration last successfully applied to Azure.
+	// Used by UpdateService to short-circuit no-op updates.
+	LastAppliedConfig *ServiceConfig
+	State             ResourceState
+	RetryCount        int
+	LastAttempt       string // timestamp as string for serialization
 
 	// CreatedAt is when this operation was first enqueued. Never overwritten on retry.
 	// Used by the oldest-age metric to detect stuck operations.

@@ -228,7 +228,7 @@ func updatePendingServiceOperationsMetric(dt *DiffTracker) {
 	defer dt.mu.Unlock()
 
 	stateCounts := make(map[ResourceState]map[string]int)
-	for state := StateNotStarted; state <= StateDeletionInProgress; state++ {
+	for state := StateNotStarted; state <= StateUpdateInProgress; state++ {
 		stateCounts[state] = map[string]int{"inbound": 0, "outbound": 0}
 	}
 
@@ -393,6 +393,8 @@ func resourceStateToString(state ResourceState) string {
 		return "deletion_pending"
 	case StateDeletionInProgress:
 		return "deletion_in_progress"
+	case StateUpdateInProgress:
+		return "update_in_progress"
 	default:
 		return "unknown"
 	}

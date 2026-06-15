@@ -389,12 +389,20 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 	// Use Engine for async service creation when ServiceGatewayEnabled
 	if az.ServiceGatewayEnabled {
 		serviceUID := getServiceUID(service)
-		logger.V(2).Info("Using Engine for async service creation", "serviceUID", serviceUID)
+		logger.V(2).Info("Using Engine for async service reconcile", "serviceUID", serviceUID)
 
 		// Extract port configuration from service
 		inboundConfig := az.extractInboundConfigFromService(service)
 		config := difftracker.NewInboundServiceConfig(serviceUID, inboundConfig)
-		az.diffTracker.AddService(config)
+
+		// If the LB already exists in NRP (or engine has a tracking entry), route through
+		// UpdateService so spec edits like port changes are propagated to Azure. Otherwise
+		// AddService creates the LB/PIP/SGW registration.
+		if az.diffTracker.IsServiceTracked(serviceUID) {
+			az.diffTracker.UpdateService(config)
+		} else {
+			az.diffTracker.AddService(config)
+		}
 
 		// Return the existing LoadBalancer status to prevent the service controller from clearing it.
 		// This is critical for crash recovery: after CCM restarts, it recovers IPs from Azure resources,

@@ -36,8 +36,11 @@ const (
 	envServiceGatewayName       = "AZURE_SERVICE_GATEWAY_NAME"
 	envServiceGatewayAPIVersion = "AZURE_SERVICE_GATEWAY_API_VERSION"
 
-	// Default values
-	defaultServiceGatewayName = "my-service-gateway"
+	// Default values.
+	// NOTE: as of commit 33dcfb27 the SGW resource name is hardcoded in the cloud
+	// provider to consts.DefaultServiceGatewayResourceName ("servicegateway").
+	// Override via AZURE_SERVICE_GATEWAY_NAME only if your cluster predates that change.
+	defaultServiceGatewayName = "servicegateway"
 	defaultAPIVersion         = "2025-01-01"
 )
 

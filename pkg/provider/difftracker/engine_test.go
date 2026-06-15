@@ -287,3 +287,345 @@ func TestEngineAddPod_ServiceCreating(t *testing.T) {
 		// Expected
 	}
 }
+
+// makeInboundConfig builds an InboundConfig with the given TCP frontend ports
+// and matching backend ports, for tests.
+func makeInboundConfig(frontendPorts ...int32) *InboundConfig {
+	cfg := &InboundConfig{}
+	for _, p := range frontendPorts {
+		cfg.FrontendPorts = append(cfg.FrontendPorts, PortMapping{Port: p, Protocol: "TCP"})
+		cfg.BackendPorts = append(cfg.BackendPorts, PortMapping{Port: p, Protocol: "TCP"})
+	}
+	return cfg
+}
+
+func TestInboundConfig_Equals(t *testing.T) {
+	a := makeInboundConfig(80, 443)
+	b := makeInboundConfig(80, 443)
+	assert.True(t, a.Equals(b), "identical configs should be equal")
+
+	c := makeInboundConfig(80, 8080)
+	assert.False(t, a.Equals(c), "different ports should be unequal")
+
+	d := makeInboundConfig(443, 80)
+	assert.False(t, a.Equals(d), "ordered comparison: reversed ports must be unequal")
+
+	assert.True(t, (*InboundConfig)(nil).Equals(nil), "nil-nil equal")
+	assert.False(t, a.Equals(nil), "non-nil vs nil unequal")
+}
+
+// TestEngineUpdateService_NewServiceFallsThrough verifies UpdateService delegates
+// to AddService when the service is not yet known.
+func TestEngineUpdateService_NewServiceFallsThrough(t *testing.T) {
+	dt := newTestDiffTracker()
+	uid := "svc-update-new"
+
+	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80)))
+
+	opState, exists := dt.pendingServiceOps[uid]
+	assert.True(t, exists, "service should be tracked via AddService fallthrough")
+	assert.Equal(t, StateNotStarted, opState.State)
+
+	select {
+	case <-dt.serviceUpdaterTrigger:
+	default:
+		t.Error("expected serviceUpdater trigger")
+	}
+}
+
+// TestEngineUpdateService_NoOpWhenConfigUnchanged verifies that an UpdateService call
+// matching LastAppliedConfig does NOT change state and does NOT fire a trigger.
+func TestEngineUpdateService_NoOpWhenConfigUnchanged(t *testing.T) {
+	dt := newTestDiffTracker()
+	uid := "svc-update-noop"
+	cfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
+
+	applied := cfg
+	dt.pendingServiceOps[uid] = &ServiceOperationState{
+		ServiceUID:        uid,
+		Config:            cfg,
+		LastAppliedConfig: &applied,
+		State:             StateCreated,
+	}
+
+	dt.UpdateService(cfg)
+
+	opState := dt.pendingServiceOps[uid]
+	assert.Equal(t, StateCreated, opState.State, "state should remain Created")
+	select {
+	case <-dt.serviceUpdaterTrigger:
+		t.Error("expected NO trigger for no-op update")
+	default:
+	}
+}
+
+// TestEngineUpdateService_PortChangeSchedulesUpdate verifies a port change on a
+// service in StateCreated transitions to StateUpdateInProgress and triggers the updater.
+func TestEngineUpdateService_PortChangeSchedulesUpdate(t *testing.T) {
+	dt := newTestDiffTracker()
+	uid := "svc-update-port"
+	oldCfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
+
+	appliedCopy := oldCfg
+	dt.pendingServiceOps[uid] = &ServiceOperationState{
+		ServiceUID:        uid,
+		Config:            oldCfg,
+		LastAppliedConfig: &appliedCopy,
+		State:             StateCreated,
+	}
+
+	newCfg := NewInboundServiceConfig(uid, makeInboundConfig(8080))
+	dt.UpdateService(newCfg)
+
+	opState := dt.pendingServiceOps[uid]
+	assert.Equal(t, StateUpdateInProgress, opState.State)
+	assert.True(t, opState.Config.InboundConfig.Equals(newCfg.InboundConfig))
+
+	select {
+	case <-dt.serviceUpdaterTrigger:
+	default:
+		t.Error("expected serviceUpdater trigger")
+	}
+}
+
+// TestEngineUpdateService_LBInNRPNoTrackingEntry verifies that when an LB exists in
+// NRP but has no pendingServiceOps entry (e.g., post-restart recovery), UpdateService
+// creates an entry in StateUpdateInProgress and triggers.
+func TestEngineUpdateService_LBInNRPNoTrackingEntry(t *testing.T) {
+	dt := newTestDiffTracker()
+	uid := "svc-update-recovered"
+	dt.NRPResources.LoadBalancers.Insert(uid)
+
+	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80)))
+
+	opState, exists := dt.pendingServiceOps[uid]
+	assert.True(t, exists)
+	assert.Equal(t, StateUpdateInProgress, opState.State)
+	select {
+	case <-dt.serviceUpdaterTrigger:
+	default:
+		t.Error("expected serviceUpdater trigger")
+	}
+}
+
+// TestEngineUpdateService_IgnoredDuringDeletion verifies UpdateService is a no-op when
+// the service is already being deleted.
+func TestEngineUpdateService_IgnoredDuringDeletion(t *testing.T) {
+	dt := newTestDiffTracker()
+	uid := "svc-update-deleting"
+	cfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
+	dt.pendingServiceOps[uid] = &ServiceOperationState{
+		ServiceUID: uid,
+		Config:     cfg,
+		State:      StateDeletionPending,
+	}
+
+	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(8080)))
+
+	opState := dt.pendingServiceOps[uid]
+	assert.Equal(t, StateDeletionPending, opState.State, "deletion state must not be overwritten")
+	select {
+	case <-dt.serviceUpdaterTrigger:
+		t.Error("expected NO trigger when service is being deleted")
+	default:
+	}
+}
+
+// TestEngineUpdateService_OverwritesConfigDuringCreation verifies that an UpdateService
+// call during creation simply overwrites the desired Config, with no state change.
+func TestEngineUpdateService_OverwritesConfigDuringCreation(t *testing.T) {
+	dt := newTestDiffTracker()
+	uid := "svc-update-during-create"
+	oldCfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
+	dt.pendingServiceOps[uid] = &ServiceOperationState{
+		ServiceUID: uid,
+		Config:     oldCfg,
+		State:      StateCreationInProgress,
+	}
+
+	newCfg := NewInboundServiceConfig(uid, makeInboundConfig(8080))
+	dt.UpdateService(newCfg)
+
+	opState := dt.pendingServiceOps[uid]
+	assert.Equal(t, StateCreationInProgress, opState.State)
+	assert.True(t, opState.Config.InboundConfig.Equals(newCfg.InboundConfig),
+		"Config should be overwritten with the latest desired state")
+}
+
+// TestIsServiceTracked covers the four code paths.
+func TestIsServiceTracked(t *testing.T) {
+	dt := newTestDiffTracker()
+	assert.False(t, dt.IsServiceTracked("missing"))
+
+	dt.NRPResources.LoadBalancers.Insert("lb-1")
+	assert.True(t, dt.IsServiceTracked("lb-1"))
+
+	dt.NRPResources.NATGateways.Insert("nat-1")
+	assert.True(t, dt.IsServiceTracked("nat-1"))
+
+	dt.pendingServiceOps["pending-1"] = &ServiceOperationState{ServiceUID: "pending-1"}
+	assert.True(t, dt.IsServiceTracked("pending-1"))
+}
+
+// TestIsServiceReady_StateUpdateInProgress verifies that a service in StateUpdateInProgress
+// is considered ready by the location-sync layer (LB and SGW Service entry are stable
+// during port-only updates).
+func TestIsServiceReady_StateUpdateInProgress(t *testing.T) {
+	dt := newTestDiffTracker()
+	uid := "svc-ready-update"
+	dt.pendingServiceOps[uid] = &ServiceOperationState{
+		ServiceUID: uid,
+		Config:     NewInboundServiceConfig(uid, makeInboundConfig(80)),
+		State:      StateUpdateInProgress,
+	}
+	assert.True(t, dt.isServiceReady(uid, true), "StateUpdateInProgress should be ready for inbound sync")
+
+	// And StateCreated should still work.
+	dt.pendingServiceOps[uid].State = StateCreated
+	assert.True(t, dt.isServiceReady(uid, true), "StateCreated should be ready for inbound sync")
+
+	// StateCreationInProgress should NOT be ready.
+	dt.pendingServiceOps[uid].State = StateCreationInProgress
+	assert.False(t, dt.isServiceReady(uid, true), "StateCreationInProgress should NOT be ready")
+}
+
+// TestEngineDeleteService_DuringUpdate verifies that DeleteService correctly transitions
+// a StateUpdateInProgress service to StateDeletionPending and clears InFlightConfig.
+func TestEngineDeleteService_DuringUpdate(t *testing.T) {
+	dt := newTestDiffTracker()
+	uid := "svc-delete-during-update"
+	cfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
+	inflight := cfg
+	dt.pendingServiceOps[uid] = &ServiceOperationState{
+		ServiceUID:     uid,
+		Config:         cfg,
+		InFlightConfig: &inflight,
+		State:          StateUpdateInProgress,
+	}
+	dt.NRPResources.LoadBalancers.Insert(uid)
+	// Pre-populate a location so deletion goes to pending (vs immediate StateDeletionInProgress)
+	dt.NRPResources.Locations["loc1"] = NRPLocation{
+		Addresses: map[string]NRPAddress{
+			"10.0.0.1": {Services: utilsets.NewString(uid)},
+		},
+	}
+
+	dt.DeleteService(uid, true, false)
+
+	opState := dt.pendingServiceOps[uid]
+	assert.Equal(t, StateDeletionPending, opState.State, "should transition to DeletionPending")
+	assert.Nil(t, opState.InFlightConfig, "InFlightConfig should be cleared")
+
+	_, queued := dt.pendingServiceDeletions[uid]
+	assert.True(t, queued, "service should be queued in pendingServiceDeletions")
+}
+
+// TestEngineOnServiceCreationComplete_DeletionPendingAfterUpdate verifies that when an
+// update completes (success or failure) but DeleteService raced to StateDeletionPending,
+// the deletion flow takes over uniformly via the pre-empt block at the top of
+// OnServiceCreationComplete.
+func TestEngineOnServiceCreationComplete_DeletionPendingAfterUpdate(t *testing.T) {
+	dt := newTestDiffTracker()
+	uid := "svc-update-then-delete"
+	cfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
+	dt.pendingServiceOps[uid] = &ServiceOperationState{
+		ServiceUID: uid,
+		Config:     cfg,
+		State:      StateDeletionPending, // simulating: DeleteService ran during update
+	}
+	// No locations -> immediate deletion should be triggered
+	dt.pendingServiceDeletions[uid] = &PendingServiceDeletion{ServiceUID: uid, IsInbound: true}
+
+	dt.OnServiceCreationComplete(uid, true, nil)
+
+	opState := dt.pendingServiceOps[uid]
+	assert.Equal(t, StateDeletionInProgress, opState.State, "should advance to DeletionInProgress when no locations remain")
+
+	_, stillPending := dt.pendingServiceDeletions[uid]
+	assert.False(t, stillPending, "pendingServiceDeletions entry should be consumed")
+}
+
+// TestEngineOnServiceCreationComplete_UpdateFailureKeepsState verifies that on update
+// failure with state still in StateUpdateInProgress, the state is NOT reset (caller will
+// retry from StateUpdateInProgress).
+func TestEngineOnServiceCreationComplete_UpdateFailureKeepsState(t *testing.T) {
+	dt := newTestDiffTracker()
+	uid := "svc-update-failure"
+	cfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
+	inflight := cfg
+	dt.pendingServiceOps[uid] = &ServiceOperationState{
+		ServiceUID:     uid,
+		Config:         cfg,
+		InFlightConfig: &inflight,
+		State:          StateUpdateInProgress,
+	}
+
+	dt.OnServiceCreationComplete(uid, false, assertErr("simulated"))
+
+	opState := dt.pendingServiceOps[uid]
+	assert.Equal(t, StateUpdateInProgress, opState.State, "state must remain StateUpdateInProgress for retry")
+	assert.Equal(t, 1, opState.RetryCount, "retry count incremented")
+	assert.Nil(t, opState.InFlightConfig, "InFlightConfig cleared on failure")
+}
+
+// TestEngineOnServiceCreationComplete_UpdateSuccessPersistsConfig verifies that on
+// update success, LastAppliedConfig is set to the in-flight snapshot and state returns
+// to StateCreated.
+func TestEngineOnServiceCreationComplete_UpdateSuccessPersistsConfig(t *testing.T) {
+	dt := newTestDiffTracker()
+	uid := "svc-update-success"
+	cfg := NewInboundServiceConfig(uid, makeInboundConfig(8080))
+	inflight := cfg
+	dt.pendingServiceOps[uid] = &ServiceOperationState{
+		ServiceUID:     uid,
+		Config:         cfg,
+		InFlightConfig: &inflight,
+		State:          StateUpdateInProgress,
+	}
+
+	dt.OnServiceCreationComplete(uid, true, nil)
+
+	opState := dt.pendingServiceOps[uid]
+	assert.Equal(t, StateCreated, opState.State)
+	assert.Nil(t, opState.InFlightConfig)
+	if assert.NotNil(t, opState.LastAppliedConfig, "LastAppliedConfig must be persisted") {
+		assert.True(t, opState.LastAppliedConfig.InboundConfig.Equals(makeInboundConfig(8080)))
+	}
+}
+
+// TestEngineOnServiceCreationComplete_UpdateDriftReschedules verifies that when the
+// desired Config drifts during an in-flight update, the completion handler reschedules
+// another StateUpdateInProgress run.
+func TestEngineOnServiceCreationComplete_UpdateDriftReschedules(t *testing.T) {
+	dt := newTestDiffTracker()
+	uid := "svc-update-drift"
+	desired := NewInboundServiceConfig(uid, makeInboundConfig(8080))
+	inflight := NewInboundServiceConfig(uid, makeInboundConfig(80)) // older
+	dt.pendingServiceOps[uid] = &ServiceOperationState{
+		ServiceUID:     uid,
+		Config:         desired,
+		InFlightConfig: &inflight,
+		State:          StateUpdateInProgress,
+	}
+
+	dt.OnServiceCreationComplete(uid, true, nil)
+
+	opState := dt.pendingServiceOps[uid]
+	assert.Equal(t, StateUpdateInProgress, opState.State, "drift should re-enter StateUpdateInProgress")
+	assert.Nil(t, opState.InFlightConfig, "InFlightConfig cleared between dispatch cycles")
+	if assert.NotNil(t, opState.LastAppliedConfig) {
+		// What we last APPLIED is the inflight config (port 80), not the desired (port 8080).
+		assert.True(t, opState.LastAppliedConfig.InboundConfig.Equals(makeInboundConfig(80)))
+	}
+
+	select {
+	case <-dt.serviceUpdaterTrigger:
+	default:
+		t.Error("expected serviceUpdater trigger after drift detection")
+	}
+}
+
+// assertErr is a tiny error helper for tests.
+type assertErr string
+
+func (a assertErr) Error() string { return string(a) }
