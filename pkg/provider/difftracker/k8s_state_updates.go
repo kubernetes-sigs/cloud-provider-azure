@@ -70,10 +70,12 @@ func (dt *DiffTracker) EnqueueK8sEgressOperation(input UpdateK8sResource) error 
 }
 
 // updateK8sEndpointsLocked updates K8s endpoints state. Assumes lock is already held.
+// Terminology: an "endpoint" here is a Kubernetes EndpointSlice endpoint, i.e. a pod IP
+// (the map key "address"), and its "location" is the IP of the node/VM hosting that pod
+// (the map value). Both NewAddresses and OldAddresses are address(podIP) -> location(nodeIP).
 func (dt *DiffTracker) updateK8sEndpointsLocked(input UpdateK8sEndpointsInputType) []error {
 	var errs []error
 	for address, location := range input.NewAddresses {
-
 		if location == "" {
 			errs = append(errs, fmt.Errorf("error UpdateK8sEndpoints, address=%s does not have a node associated", address))
 			continue
@@ -133,7 +135,10 @@ func (dt *DiffTracker) updateK8sEndpointsLocked(input UpdateK8sEndpointsInputTyp
 	return errs
 }
 
-// UpdateK8sEndpoints is a public wrapper that acquires lock before calling updateK8sEndpointsLocked.
+// UpdateK8sEndpoints is the public, lock-acquiring entry point for applying an
+// EndpointSlice change to K8s state. It is called by the EndpointSlice informer
+// handlers (Add/Update/Delete). Use this rather than updateK8sEndpointsLocked
+// unless the caller already holds dt.mu.
 func (dt *DiffTracker) UpdateK8sEndpoints(input UpdateK8sEndpointsInputType) []error {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
@@ -158,25 +163,29 @@ func (dt *DiffTracker) addOrUpdatePod(input UpdatePodInputType) error {
 	return nil
 }
 
-// removePod removes a pod from K8s state. Returns true if the pod was actually removed,
-// false if it didn't exist (already removed by a previous call).
-func (dt *DiffTracker) removePod(input UpdatePodInputType) (removed bool, err error) {
+// removePod removes a pod from K8s state. Returns true and the removed pod's stored
+// PublicOutboundIdentity if the pod was actually removed, or false if it didn't exist
+// (already removed by a previous call). The returned identity is authoritative for
+// reference-counter bookkeeping, independent of whatever the caller passed in input.
+func (dt *DiffTracker) removePod(input UpdatePodInputType) (removed bool, identity string, err error) {
 	node, exists := dt.K8sResources.Nodes[input.Location]
 	if !exists {
-		return false, nil
+		return false, "", nil
 	}
 
 	// Check if pod exists before removing
-	if _, podExists := node.Pods[input.Address]; !podExists {
-		return false, nil
+	pod, podExists := node.Pods[input.Address]
+	if !podExists {
+		return false, "", nil
 	}
+	identity = pod.PublicOutboundIdentity
 
 	delete(node.Pods, input.Address)
 	if !node.HasPods() {
 		delete(dt.K8sResources.Nodes, input.Location)
 	}
 
-	return true, nil
+	return true, identity, nil
 }
 
 // updateK8sPodLocked updates K8s pod state. Assumes lock is already held.
@@ -200,16 +209,16 @@ func (dt *DiffTracker) updateK8sPodLocked(input UpdatePodInputType) error {
 		// Only increment counter if pod doesn't already exist
 		if !alreadyExists {
 			counter := 0
-			if val, ok := dt.LocalServiceNameToNRPServiceMap.Load(strings.ToLower(input.PublicOutboundIdentity)); ok {
+			if val, ok := dt.outboundIdentityPodRefCount.Load(strings.ToLower(input.PublicOutboundIdentity)); ok {
 				counter = val.(int)
 			}
-			dt.LocalServiceNameToNRPServiceMap.Store(strings.ToLower(input.PublicOutboundIdentity), counter+1)
+			dt.outboundIdentityPodRefCount.Store(strings.ToLower(input.PublicOutboundIdentity), counter+1)
 		}
 		return dt.addOrUpdatePod(input)
 	case REMOVE:
 		// First, try to remove the pod from K8s state
 		// This returns false if the pod doesn't exist (duplicate removal)
-		removed, err := dt.removePod(input)
+		removed, identity, err := dt.removePod(input)
 		if err != nil {
 			return err
 		}
@@ -220,16 +229,19 @@ func (dt *DiffTracker) updateK8sPodLocked(input UpdatePodInputType) error {
 			return nil
 		}
 
-		// Pod was actually removed, now decrement the counter
-		if val, ok := dt.LocalServiceNameToNRPServiceMap.Load(strings.ToLower(input.PublicOutboundIdentity)); ok {
+		// Decrement using the pod's stored identity (authoritative), not input.
+		if identity == "" {
+			return nil
+		}
+		if val, ok := dt.outboundIdentityPodRefCount.Load(strings.ToLower(identity)); ok {
 			counter := val.(int)
 			if counter <= 0 {
-				return fmt.Errorf("error - PublicOutboundIdentity %s has a negative count: %d", input.PublicOutboundIdentity, counter)
+				return fmt.Errorf("error - PublicOutboundIdentity %s has a non-positive count: %d", identity, counter)
 			}
 			if counter == 1 {
-				dt.LocalServiceNameToNRPServiceMap.Delete(strings.ToLower(input.PublicOutboundIdentity))
+				dt.outboundIdentityPodRefCount.Delete(strings.ToLower(identity))
 			} else {
-				dt.LocalServiceNameToNRPServiceMap.Store(strings.ToLower(input.PublicOutboundIdentity), counter-1)
+				dt.outboundIdentityPodRefCount.Store(strings.ToLower(identity), counter-1)
 			}
 		}
 		return nil
@@ -239,7 +251,10 @@ func (dt *DiffTracker) updateK8sPodLocked(input UpdatePodInputType) error {
 	}
 }
 
-// UpdateK8sPod is a public wrapper that acquires lock before calling updateK8sPodLocked.
+// UpdateK8sPod is the public, lock-acquiring entry point for applying a pod
+// egress-assignment change to K8s state. It is called by the pod informer
+// handlers (Add/Update/Delete). Use this rather than updateK8sPodLocked unless
+// the caller already holds dt.mu.
 func (dt *DiffTracker) UpdateK8sPod(input UpdatePodInputType) error {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
@@ -250,8 +265,6 @@ func (dt *DiffTracker) UpdateK8sPod(input UpdatePodInputType) error {
 // This is used during service deletion to proactively clear location/address references
 // so the LocationsUpdater can sync the removal to NRP.
 // Assumes lock is already held.
-//
-//nolint:unused // wired up by the engine in a follow-up PR
 func (dt *DiffTracker) removeServiceFromK8sStateLocked(serviceUID string, isInbound bool) {
 	for nodeIP, node := range dt.K8sResources.Nodes {
 		for podIP, pod := range node.Pods {
@@ -277,4 +290,13 @@ func (dt *DiffTracker) removeServiceFromK8sStateLocked(serviceUID string, isInbo
 			}
 		}
 	}
+}
+
+// RemoveServiceFromK8sState is the public, lock-acquiring entry point for
+// removeServiceFromK8sStateLocked. Use it to clear a deleted service's references
+// from pod identities when the caller does not already hold dt.mu.
+func (dt *DiffTracker) RemoveServiceFromK8sState(serviceUID string, isInbound bool) {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	dt.removeServiceFromK8sStateLocked(serviceUID, isInbound)
 }

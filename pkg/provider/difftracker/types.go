@@ -70,15 +70,25 @@ type NRPLocation struct {
 }
 
 type NRPState struct {
+	// LoadBalancers holds the UIDs of inbound services that have a LoadBalancer
+	// registered on the NRP side. These are SGW service identities, not Azure
+	// LoadBalancer resource names.
 	LoadBalancers *utilsets.IgnoreCaseSet
-	NATGateways   *utilsets.IgnoreCaseSet
+	// NATGateways holds the UIDs of outbound/egress services that have a NAT
+	// Gateway registered on the NRP side (SGW service identities, not Azure
+	// resource names).
+	NATGateways *utilsets.IgnoreCaseSet
 	// Locations is keyed by node/VM IP (e.g. "10.0.0.1"). "Location" here is
 	// an SGW concept identifying a node, not an Azure region (e.g. "eastus2").
 	Locations map[string]NRPLocation
 }
 
 type Pod struct {
-	InboundIdentities      *utilsets.IgnoreCaseSet
+	// InboundIdentities holds the UIDs of the inbound ServiceGateway services
+	// (LoadBalancers) this pod backs. A pod may back several, hence a set.
+	InboundIdentities *utilsets.IgnoreCaseSet
+	// PublicOutboundIdentity is the UID of the single outbound/egress ServiceGateway
+	// service (NAT Gateway) this pod uses for egress; empty if the pod has no egress.
 	PublicOutboundIdentity string
 }
 
@@ -99,7 +109,12 @@ type DiffTracker struct {
 	K8sResources K8sState
 	NRPResources NRPState
 
-	LocalServiceNameToNRPServiceMap sync.Map
+	// outboundIdentityPodRefCount counts how many pods reference each outbound
+	// (egress) identity, keyed by lowercased PublicOutboundIdentity. It lets the
+	// engine delete a NAT Gateway when its last egress pod is removed. Inbound
+	// (LoadBalancer) services are not tracked here; their lifecycle follows the
+	// Kubernetes Service object.
+	outboundIdentityPodRefCount sync.Map
 
 	// Configuration and clients
 	config               Config

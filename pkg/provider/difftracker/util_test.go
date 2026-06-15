@@ -80,6 +80,15 @@ func TestUpdateActionStringAndJSON(t *testing.T) {
 	}
 }
 
+// TestEnumStringOutOfRange verifies String() does not panic for out-of-range enum
+// values and returns a descriptive fallback instead.
+func TestEnumStringOutOfRange(t *testing.T) {
+	assert.Equal(t, "Operation(99)", Operation(99).String())
+	assert.Equal(t, "Operation(-1)", Operation(-1).String())
+	assert.Equal(t, "UpdateAction(99)", UpdateAction(99).String())
+	assert.Equal(t, "SyncStatus(99)", SyncStatus(99).String())
+}
+
 // TestUpdateActionUnmarshalJSON_InvalidValue tests error handling
 func TestUpdateActionUnmarshalJSON_InvalidValue(t *testing.T) {
 	var action UpdateAction

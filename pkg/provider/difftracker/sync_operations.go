@@ -23,9 +23,9 @@ import (
 )
 
 // GetServicesToSync handles the synchronization of services between K8s and NRP
-func GetServicesToSync(k8sServices, Services *utilsets.IgnoreCaseSet) SyncServicesReturnType {
-	klog.Infof("GetServicesToSync: K8s services (%d): %v", k8sServices.Len(), k8sServices.UnsortedList())
-	klog.Infof("GetServicesToSync: NRP services (%d): %v", Services.Len(), Services.UnsortedList())
+func GetServicesToSync(k8sServices, nrpServices *utilsets.IgnoreCaseSet) SyncServicesReturnType {
+	klog.V(2).Infof("GetServicesToSync: K8s services (%d): %v", k8sServices.Len(), k8sServices.UnsortedList())
+	klog.V(2).Infof("GetServicesToSync: NRP services (%d): %v", nrpServices.Len(), nrpServices.UnsortedList())
 
 	syncServices := SyncServicesReturnType{
 		Additions: utilsets.NewString(),
@@ -33,22 +33,22 @@ func GetServicesToSync(k8sServices, Services *utilsets.IgnoreCaseSet) SyncServic
 	}
 
 	for _, service := range k8sServices.UnsortedList() {
-		if Services.Has(service) {
+		if nrpServices.Has(service) {
 			continue
 		}
 		syncServices.Additions.Insert(service)
-		klog.Infof("GetServicesToSync: Added service %s to additions", service)
+		klog.V(4).Infof("GetServicesToSync: Added service %s to additions", service)
 	}
 
-	for _, service := range Services.UnsortedList() {
+	for _, service := range nrpServices.UnsortedList() {
 		if k8sServices.Has(service) {
 			continue
 		}
 		syncServices.Removals.Insert(service)
-		klog.Infof("GetServicesToSync: Added service %s to removals", service)
+		klog.V(4).Infof("GetServicesToSync: Added service %s to removals", service)
 	}
 
-	klog.Infof("GetServicesToSync: Result - Additions: %d, Removals: %d", syncServices.Additions.Len(), syncServices.Removals.Len())
+	klog.V(2).Infof("GetServicesToSync: Result - Additions: %d, Removals: %d", syncServices.Additions.Len(), syncServices.Removals.Len())
 	return syncServices
 }
 
@@ -56,6 +56,11 @@ func (dt *DiffTracker) GetSyncLoadBalancerServices() SyncServicesReturnType {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
+	return dt.getSyncLoadBalancerServicesLocked()
+}
+
+// getSyncLoadBalancerServicesLocked is the lock-free body. Callers must hold dt.mu.
+func (dt *DiffTracker) getSyncLoadBalancerServicesLocked() SyncServicesReturnType {
 	return GetServicesToSync(dt.K8sResources.Services, dt.NRPResources.LoadBalancers)
 }
 
@@ -63,6 +68,11 @@ func (dt *DiffTracker) GetSyncNRPNATGateways() SyncServicesReturnType {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
+	return dt.getSyncNRPNATGatewaysLocked()
+}
+
+// getSyncNRPNATGatewaysLocked is the lock-free body. Callers must hold dt.mu.
+func (dt *DiffTracker) getSyncNRPNATGatewaysLocked() SyncServicesReturnType {
 	return GetServicesToSync(dt.K8sResources.Egresses, dt.NRPResources.NATGateways)
 }
 
@@ -70,6 +80,11 @@ func (dt *DiffTracker) GetSyncLocationsAddresses() LocationData {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
+	return dt.getSyncLocationsAddressesLocked()
+}
+
+// getSyncLocationsAddressesLocked is the lock-free body. Callers must hold dt.mu.
+func (dt *DiffTracker) getSyncLocationsAddressesLocked() LocationData {
 	result := LocationData{
 		Action:    PartialUpdate,
 		Locations: make(map[string]Location),
@@ -185,24 +200,27 @@ func (dt *DiffTracker) isServiceReady(serviceUID string, isInbound bool) bool {
 
 // Helper function to find LocationData in result
 func findLocationData(result LocationData, location string) *Location {
-	for keyCurrentLocation := range result.Locations {
-		if keyCurrentLocation == location {
-			loc := result.Locations[keyCurrentLocation]
-			return &loc
-		}
+	if loc, ok := result.Locations[location]; ok {
+		return &loc
 	}
 	return nil
 }
 
 func (dt *DiffTracker) GetSyncOperations() *SyncDiffTrackerReturnType {
-	if dt.DeepEqual() {
+	// Take the lock once so DeepEqual and all three sync computations observe a
+	// single consistent snapshot of the state (avoids a data race with mutating
+	// methods and inconsistency between the individual GetSync* results).
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
+	if dt.deepEqualLocked() {
 		return &SyncDiffTrackerReturnType{SyncStatus: AlreadyInSync}
 	}
 
 	return &SyncDiffTrackerReturnType{
 		SyncStatus:          Success,
-		LoadBalancerUpdates: dt.GetSyncLoadBalancerServices(),
-		NATGatewayUpdates:   dt.GetSyncNRPNATGateways(),
-		LocationData:        dt.GetSyncLocationsAddresses(),
+		LoadBalancerUpdates: dt.getSyncLoadBalancerServicesLocked(),
+		NATGatewayUpdates:   dt.getSyncNRPNATGatewaysLocked(),
+		LocationData:        dt.getSyncLocationsAddressesLocked(),
 	}
 }

@@ -207,6 +207,39 @@ func TestUpdateK8sPod(t *testing.T) {
 	assert.NotContains(t, dt.K8sResources.Nodes["node1"].Pods, "10.0.0.1")
 }
 
+// TestUpdateK8sPodRemoveUsesStoredIdentity verifies that a REMOVE whose input omits
+// (or mismatches) PublicOutboundIdentity still decrements the counter of the identity
+// actually stored on the pod, rather than corrupting a different ("" or wrong) counter.
+func TestUpdateK8sPodRemoveUsesStoredIdentity(t *testing.T) {
+	dt := &DiffTracker{
+		K8sResources: K8sState{Nodes: map[string]Node{}},
+	}
+
+	// Add a pod with outbound identity "public1".
+	assert.NoError(t, dt.UpdateK8sPod(UpdatePodInputType{
+		PodOperation:           ADD,
+		PublicOutboundIdentity: "public1",
+		Location:               "node1",
+		Address:                "10.0.0.1",
+	}))
+	val, ok := dt.outboundIdentityPodRefCount.Load("public1")
+	assert.True(t, ok)
+	assert.Equal(t, 1, val.(int))
+
+	// Remove with the identity omitted from the input (the problematic case).
+	assert.NoError(t, dt.UpdateK8sPod(UpdatePodInputType{
+		PodOperation: REMOVE,
+		Location:     "node1",
+		Address:      "10.0.0.1",
+	}))
+
+	// The stored identity's counter must be cleared, and no bogus "" entry created.
+	_, ok = dt.outboundIdentityPodRefCount.Load("public1")
+	assert.False(t, ok, "counter for stored identity public1 should be removed")
+	_, ok = dt.outboundIdentityPodRefCount.Load("")
+	assert.False(t, ok, "no counter should be created for an empty identity")
+}
+
 func TestGetSyncLocationsAddresses(t *testing.T) {
 	dt := &DiffTracker{
 		K8sResources: K8sState{
