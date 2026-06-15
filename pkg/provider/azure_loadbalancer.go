@@ -4629,22 +4629,34 @@ func getMostEligibleLBForService(
 		return currentLBName
 	}
 
-	// 2. If the LB is eligible and not created yet, choose it because it has the fewest rules.
+	// 2. If the LB is eligible and has no load balancing rules or is not created yet,
+	// choose it because it has the fewest rules.
+	// Prefer existing LBs with no rules over non-existent ones.
+	var firstNonExistent string
 	for _, eligibleLB := range eligibleLBs {
-		var found bool
+		var found, hasRules bool
 		for i := range existingLBs {
 			existingLB := (existingLBs)[i]
 			if strings.EqualFold(trimSuffixIgnoreCase(ptr.Deref(existingLB.Name, ""), consts.InternalLoadBalancerNameSuffix), eligibleLB) &&
 				isInternalLoadBalancer(existingLB) == isInternal {
 				found = true
+				hasRules = existingLB.Properties != nil && len(existingLB.Properties.LoadBalancingRules) > 0
 				break
 			}
 		}
 
-		if !found {
-			logger.V(4).Info("choose LB as it is eligible and not existing", "eligibleLB", eligibleLB)
+		if found && !hasRules {
+			logger.V(4).Info("choose LB as it is eligible and has no load balancing rules", "eligibleLB", eligibleLB)
 			return eligibleLB
 		}
+		if !found && firstNonExistent == "" {
+			firstNonExistent = eligibleLB
+		}
+	}
+
+	if firstNonExistent != "" {
+		logger.V(4).Info("choose LB as it is eligible and not existing", "eligibleLB", firstNonExistent)
+		return firstNonExistent
 	}
 
 	// 3. If all eligible LBs are existing, choose the one with the fewest rules.
