@@ -24,7 +24,11 @@ import (
 )
 
 func (operation Operation) String() string {
-	return [...]string{"ADD", "REMOVE", "UPDATE"}[operation]
+	names := [...]string{"ADD", "REMOVE", "UPDATE"}
+	if int(operation) < 0 || int(operation) >= len(names) {
+		return fmt.Sprintf("Operation(%d)", int(operation))
+	}
+	return names[operation]
 }
 
 func (operation Operation) MarshalJSON() ([]byte, error) {
@@ -32,7 +36,11 @@ func (operation Operation) MarshalJSON() ([]byte, error) {
 }
 
 func (updateAction UpdateAction) String() string {
-	return [...]string{"PartialUpdate", "FullUpdate"}[updateAction]
+	names := [...]string{"PartialUpdate", "FullUpdate"}
+	if int(updateAction) < 0 || int(updateAction) >= len(names) {
+		return fmt.Sprintf("UpdateAction(%d)", int(updateAction))
+	}
+	return names[updateAction]
 }
 
 func (updateAction UpdateAction) MarshalJSON() ([]byte, error) {
@@ -58,7 +66,11 @@ func (updateAction *UpdateAction) UnmarshalJSON(data []byte) error {
 }
 
 func (syncStatus SyncStatus) String() string {
-	return [...]string{"AlreadyInSync", "Success"}[syncStatus]
+	names := [...]string{"AlreadyInSync", "Success"}
+	if int(syncStatus) < 0 || int(syncStatus) >= len(names) {
+		return fmt.Sprintf("SyncStatus(%d)", int(syncStatus))
+	}
+	return names[syncStatus]
 }
 
 func (syncStatus SyncStatus) MarshalJSON() ([]byte, error) {
@@ -71,69 +83,77 @@ func (pod *Pod) HasIdentities() bool {
 	return pod.InboundIdentities.Len() > 0 || pod.PublicOutboundIdentity != ""
 }
 
-// DeepEqual compares the K8s and NRP states to check if they are in sync
+// DeepEqual compares the K8s and NRP states to check if they are in sync.
+// It acquires dt.mu so callers get a consistent snapshot.
 func (dt *DiffTracker) DeepEqual() bool {
-	klog.Infof("DeepEqual: Checking equality - K8s Services=%d, NRP LoadBalancers=%d, K8s Egresses=%d, NRP NATGateways=%d",
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	return dt.deepEqualLocked()
+}
+
+// deepEqualLocked is the lock-free body of DeepEqual. Callers must hold dt.mu.
+func (dt *DiffTracker) deepEqualLocked() bool {
+	klog.V(4).Infof("DeepEqual: Checking equality - K8s Services=%d, NRP LoadBalancers=%d, K8s Egresses=%d, NRP NATGateways=%d",
 		dt.K8sResources.Services.Len(), dt.NRPResources.LoadBalancers.Len(),
 		dt.K8sResources.Egresses.Len(), dt.NRPResources.NATGateways.Len())
 
 	// Compare Services with LoadBalancers
 	if dt.K8sResources.Services.Len() != dt.NRPResources.LoadBalancers.Len() {
-		klog.Infof("DeepEqual: Services and LoadBalancers length mismatch")
+		klog.V(4).Infof("DeepEqual: Services and LoadBalancers length mismatch")
 		return false
 	}
 	for _, service := range dt.K8sResources.Services.UnsortedList() {
 		if !dt.NRPResources.LoadBalancers.Has(service) {
-			klog.Infof("DeepEqual: Service %s not found in LoadBalancers", service)
+			klog.V(4).Infof("DeepEqual: Service %s not found in LoadBalancers", service)
 			return false
 		}
 	}
 	for _, service := range dt.NRPResources.LoadBalancers.UnsortedList() {
 		if !dt.K8sResources.Services.Has(service) {
-			klog.Infof("DeepEqual: LoadBalancer %s not found in Services", service)
+			klog.V(4).Infof("DeepEqual: LoadBalancer %s not found in Services", service)
 			return false
 		}
 	}
 
 	// Compare Egresses with NATGateways
 	if dt.K8sResources.Egresses.Len() != dt.NRPResources.NATGateways.Len() {
-		klog.Infof("DeepEqual: Egresses and NATGateways length mismatch")
+		klog.V(4).Infof("DeepEqual: Egresses and NATGateways length mismatch")
 		return false
 	}
 	for _, egress := range dt.K8sResources.Egresses.UnsortedList() {
 		if !dt.NRPResources.NATGateways.Has(egress) {
-			klog.Infof("DeepEqual: Egress %s not found in NATGateways", egress)
+			klog.V(4).Infof("DeepEqual: Egress %s not found in NATGateways", egress)
 			return false
 		}
 	}
 	for _, egress := range dt.NRPResources.NATGateways.UnsortedList() {
 		if !dt.K8sResources.Egresses.Has(egress) {
-			klog.Infof("DeepEqual: NATGateway %s not found in Egresses", egress)
+			klog.V(4).Infof("DeepEqual: NATGateway %s not found in Egresses", egress)
 			return false
 		}
 	}
 
 	// Compare Nodes with Locations
 	if len(dt.K8sResources.Nodes) != len(dt.NRPResources.Locations) {
-		klog.V(2).Infof("DeepEqual: Nodes and Locations length mismatch")
+		klog.V(4).Infof("DeepEqual: Nodes and Locations length mismatch")
 		return false
 	}
 	for nodeKey, node := range dt.K8sResources.Nodes {
 		nrpLocation, exists := dt.NRPResources.Locations[nodeKey]
 		if !exists {
-			klog.V(2).Infof("DeepEqual: Node %s not found in Locations\n", nodeKey)
+			klog.V(4).Infof("DeepEqual: Node %s not found in Locations\n", nodeKey)
 			return false
 		}
 
 		// Compare Pods with Addresses
 		if len(node.Pods) != len(nrpLocation.Addresses) {
-			klog.V(2).Infof("DeepEqual: Pods and Addresses length mismatch for node %s\n", nodeKey)
+			klog.V(4).Infof("DeepEqual: Pods and Addresses length mismatch for node %s\n", nodeKey)
 			return false
 		}
 		for podKey, pod := range node.Pods {
 			nrpAddress, exists := nrpLocation.Addresses[podKey]
 			if !exists {
-				klog.V(2).Infof("DeepEqual: Pod %s not found in Addresses for node %s\n", podKey, nodeKey)
+				klog.V(4).Infof("DeepEqual: Pod %s not found in Addresses for node %s\n", podKey, nodeKey)
 				return false
 			}
 
@@ -145,13 +165,13 @@ func (dt *DiffTracker) DeepEqual() bool {
 			}
 
 			if len(combinedIdentities) != nrpAddress.Services.Len() {
-				klog.V(2).Infof("DeepEqual: Combined identities length mismatch for pod %s in node %s\n", podKey, nodeKey)
+				klog.V(4).Infof("DeepEqual: Combined identities length mismatch for pod %s in node %s\n", podKey, nodeKey)
 				return false
 			}
 
 			for _, identity := range combinedIdentities {
 				if !nrpAddress.Services.Has(identity) {
-					klog.V(2).Infof("DeepEqual: Identity %s not found in Services for pod %s in node %s\n", identity, podKey, nodeKey)
+					klog.V(4).Infof("DeepEqual: Identity %s not found in Services for pod %s in node %s\n", identity, podKey, nodeKey)
 					return false
 				}
 			}

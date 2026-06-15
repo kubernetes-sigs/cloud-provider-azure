@@ -28,7 +28,8 @@ type Config struct {
 	// Azure resource group name
 	ResourceGroup string
 
-	// Azure location/region
+	// Azure location/region (e.g. "eastus2"). Distinct from the difftracker
+	// Location type, which identifies a node by IP.
 	Location string
 
 	// Service Gateway resource name

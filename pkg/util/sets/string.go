@@ -113,19 +113,13 @@ func (s *IgnoreCaseSet) MarshalJSON() ([]byte, error) {
 
 // Equals returns true if the two sets are equal.
 func (s *IgnoreCaseSet) Equals(other *IgnoreCaseSet) bool {
-	// Early exit if sizes are different
-	if len(s.UnsortedList()) != len(other.UnsortedList()) {
+	// Two sets of equal size are equal iff every item in one is contained in the
+	// other, so a single containment check in one direction is sufficient.
+	if s.Len() != other.Len() {
 		return false
 	}
-	// Check if all items in s are in other
 	for _, item := range s.UnsortedList() {
 		if !other.Has(item) {
-			return false
-		}
-	}
-	// Check if all items in other are in s
-	for _, item := range other.UnsortedList() {
-		if !s.Has(item) {
 			return false
 		}
 	}
