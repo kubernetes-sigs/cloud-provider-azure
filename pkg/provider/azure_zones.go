@@ -48,7 +48,7 @@ func (az *Cloud) refreshZones(ctx context.Context, refreshFunc func(ctx context.
 
 func (az *Cloud) syncRegionZonesMap(ctx context.Context) error {
 	logger := log.FromContextOrBackground(ctx).WithName("syncRegionZonesMap")
-	logger.V(2).Info("starting to fetch all available zones for the subscription", "subscriptionID", az.SubscriptionID)
+	logger.V(2).Info("starting to fetch all available zones for the subscription", "subscriptionID", az.getNetworkResourceSubscriptionID())
 	zones, err := az.zoneRepo.ListZones(ctx)
 	if err != nil {
 		return fmt.Errorf("list zones: %w", err)
