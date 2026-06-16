@@ -193,8 +193,8 @@ func setMockPublicIP(az *Cloud, mockPIPsClient *mock_publicipaddressclient.MockI
 	if isIPv6 {
 		suffix = "-" + consts.IPVersionIPv6String
 		ipVer = to.Ptr(armnetwork.IPVersionIPv6)
-		ipAddr1 = "fd00::eef0"
-		ipAddra = "fd00::eef1"
+		ipAddr1 = "2603:1030::eef0"
+		ipAddra = "2603:1030::eef1"
 	}
 
 	a := 'a'
