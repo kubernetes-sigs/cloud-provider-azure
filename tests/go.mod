@@ -10,17 +10,17 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerregistry/armcontainerregistry v1.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9 v9.0.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v1.2.0
-	github.com/onsi/ginkgo/v2 v2.29.0
-	github.com/onsi/gomega v1.41.0
+	github.com/onsi/ginkgo/v2 v2.31.0
+	github.com/onsi/gomega v1.42.0
 	github.com/stretchr/testify v1.11.1
-	k8s.io/api v0.36.1
-	k8s.io/apimachinery v0.36.1
-	k8s.io/client-go v0.36.1
-	k8s.io/cloud-provider v0.36.1
+	k8s.io/api v0.36.2
+	k8s.io/apimachinery v0.36.2
+	k8s.io/client-go v0.36.2
+	k8s.io/cloud-provider v0.36.2
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 	sigs.k8s.io/cloud-provider-azure v0.0.0-00010101000000-000000000000
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.20.7
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.20.9
 )
 
 require (
@@ -94,7 +94,7 @@ require (
 	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93 // indirect
 	golang.org/x/mod v0.36.0 // indirect
-	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
@@ -106,8 +106,8 @@ require (
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/component-base v0.36.1 // indirect
-	k8s.io/component-helpers v0.36.1 // indirect
+	k8s.io/component-base v0.36.2 // indirect
+	k8s.io/component-helpers v0.36.2 // indirect
 	k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a // indirect
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.15.2 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
