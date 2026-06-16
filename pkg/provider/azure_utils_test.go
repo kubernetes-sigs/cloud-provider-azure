@@ -898,6 +898,21 @@ func TestGetServicePIPPrefixID(t *testing.T) {
 			"pip-prefix-id",
 		},
 		{
+			"From ServiceAnnotationPIPPrefixIDDualStack IPv6 request on IPv4 single stack",
+			&v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						consts.ServiceAnnotationPIPPrefixIDDualStack[false]: "pip-prefix-id",
+					},
+				},
+				Spec: v1.ServiceSpec{
+					IPFamilies: []v1.IPFamily{v1.IPv4Protocol},
+				},
+			},
+			true,
+			"",
+		},
+		{
 			"From ServiceAnnotationPIPPrefixIDDualStack IPv6 single stack",
 			&v1.Service{
 				ObjectMeta: metav1.ObjectMeta{
