@@ -24,11 +24,16 @@ import (
 )
 
 func (operation Operation) String() string {
-	names := [...]string{"ADD", "REMOVE", "UPDATE"}
-	if int(operation) < 0 || int(operation) >= len(names) {
+	switch operation {
+	case ADD:
+		return "ADD"
+	case REMOVE:
+		return "REMOVE"
+	case UPDATE:
+		return "UPDATE"
+	default:
 		return fmt.Sprintf("Operation(%d)", int(operation))
 	}
-	return names[operation]
 }
 
 func (operation Operation) MarshalJSON() ([]byte, error) {
@@ -36,11 +41,14 @@ func (operation Operation) MarshalJSON() ([]byte, error) {
 }
 
 func (updateAction UpdateAction) String() string {
-	names := [...]string{"PartialUpdate", "FullUpdate"}
-	if int(updateAction) < 0 || int(updateAction) >= len(names) {
+	switch updateAction {
+	case PartialUpdate:
+		return "PartialUpdate"
+	case FullUpdate:
+		return "FullUpdate"
+	default:
 		return fmt.Sprintf("UpdateAction(%d)", int(updateAction))
 	}
-	return names[updateAction]
 }
 
 func (updateAction UpdateAction) MarshalJSON() ([]byte, error) {
@@ -66,11 +74,14 @@ func (updateAction *UpdateAction) UnmarshalJSON(data []byte) error {
 }
 
 func (syncStatus SyncStatus) String() string {
-	names := [...]string{"AlreadyInSync", "Success"}
-	if int(syncStatus) < 0 || int(syncStatus) >= len(names) {
+	switch syncStatus {
+	case AlreadyInSync:
+		return "AlreadyInSync"
+	case Success:
+		return "Success"
+	default:
 		return fmt.Sprintf("SyncStatus(%d)", int(syncStatus))
 	}
-	return names[syncStatus]
 }
 
 func (syncStatus SyncStatus) MarshalJSON() ([]byte, error) {
