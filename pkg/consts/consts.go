@@ -367,6 +367,8 @@ const (
 	FrontendIPConfigIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/frontendIPConfigurations/%s"
 	// BackendPoolIDTemplate is the template of the backend pool
 	BackendPoolIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s"
+	// NatGatewayIDTemplate is the template of the nat gateway
+	NatGatewayIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/natGateways/%s"
 	// LoadBalancerProbeIDTemplate is the template of the load balancer probe
 	LoadBalancerProbeIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/probes/%s"
 
