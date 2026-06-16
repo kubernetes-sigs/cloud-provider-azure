@@ -41,7 +41,7 @@ require (
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/kubelet v0.36.1
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.20.7
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.20.9
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache v0.14.2
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.15.2
 	sigs.k8s.io/yaml v1.6.0
@@ -117,7 +117,7 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93 // indirect
-	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/term v0.44.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
