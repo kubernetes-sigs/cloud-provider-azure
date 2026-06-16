@@ -45,6 +45,8 @@ const (
 	LabelPlatformSubFaultDomain = "topology.kubernetes.azure.com/sub-fault-domain"
 	// LabelPlatformInterconnectGroup is the label key of Platform Interconnect Group
 	LabelPlatformInterconnectGroup = "topology.kubernetes.azure.com/interconnect-group"
+	// LabelPlatformInterconnectSubgroup is the label key of Platform Interconnect Subgroup
+	LabelPlatformInterconnectSubgroup = "topology.kubernetes.azure.com/interconnect-subgroup"
 
 	// TagNameInterconnectGroup is the tag name in IMDS tagsList for Platform Interconnect Group
 	TagNameInterconnectGroup = "Platform_Interconnect_Group"

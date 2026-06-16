@@ -74,6 +74,21 @@ func (mr *MockNodeProviderMockRecorder) GetInterconnectGroupID(ctx any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterconnectGroupID", reflect.TypeOf((*MockNodeProvider)(nil).GetInterconnectGroupID), ctx)
 }
 
+// GetInterconnectSubgroupID mocks base method.
+func (m *MockNodeProvider) GetInterconnectSubgroupID(ctx context.Context) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetInterconnectSubgroupID", ctx)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetInterconnectSubgroupID indicates an expected call of GetInterconnectSubgroupID.
+func (mr *MockNodeProviderMockRecorder) GetInterconnectSubgroupID(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterconnectSubgroupID", reflect.TypeOf((*MockNodeProvider)(nil).GetInterconnectSubgroupID), ctx)
+}
+
 // GetPlatformSubFaultDomain mocks base method.
 func (m *MockNodeProvider) GetPlatformSubFaultDomain(ctx context.Context) (string, error) {
 	m.ctrl.T.Helper()
