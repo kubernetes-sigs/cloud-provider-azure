@@ -419,6 +419,9 @@ func getServicePIPPrefixID(service *v1.Service, isIPv6 bool) string {
 				return id
 			}
 		}
+		if isIPv6 && !v6Enabled {
+			return ""
+		}
 		return service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[false]]
 	}
 
