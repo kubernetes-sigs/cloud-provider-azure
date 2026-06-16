@@ -790,6 +790,21 @@ func TestGetServicePIPName(t *testing.T) {
 			"pip-name",
 		},
 		{
+			"From ServiceAnnotationPIPName IPv6 request on IPv4 single stack",
+			&v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						consts.ServiceAnnotationPIPNameDualStack[false]: "pip-name",
+					},
+				},
+				Spec: v1.ServiceSpec{
+					IPFamilies: []v1.IPFamily{v1.IPv4Protocol},
+				},
+			},
+			true,
+			"",
+		},
+		{
 			"From ServiceAnnotationPIPName IPv6 single stack",
 			&v1.Service{
 				ObjectMeta: metav1.ObjectMeta{
@@ -971,7 +986,7 @@ func TestGetServicePIPNames(t *testing.T) {
 				consts.ServiceAnnotationPIPNameDualStack[false]: "pip-name-ipv4",
 			},
 			ipFamilies: []v1.IPFamily{v1.IPv4Protocol},
-			expected:   []string{"pip-name-ipv4", "pip-name-ipv4"},
+			expected:   []string{"pip-name-ipv4"},
 		},
 		{
 			desc: "IPv6 only",
