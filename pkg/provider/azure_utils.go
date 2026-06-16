@@ -388,6 +388,9 @@ func getServicePIPName(service *v1.Service, isIPv6 bool) string {
 				return name
 			}
 		}
+		if isIPv6 && !v6Enabled {
+			return ""
+		}
 		return service.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]]
 	}
 
