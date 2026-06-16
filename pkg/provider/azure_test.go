@@ -49,6 +49,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/providerclient/mock_providerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient/mock_virtualmachineclient"
@@ -2606,6 +2608,63 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 
 		err := az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, true)
 		assert.NoError(t, err)
+	})
+
+	t.Run("zoneRepo should be initialized with network subscription provider client", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		az := GetTestCloud(ctrl)
+
+		const (
+			tenantID              = "tenant-id"
+			networkSubscriptionID = "network-subscription-id"
+			computeSubscriptionID = "compute-subscription-id"
+		)
+
+		az.ComputeClientFactory = nil
+		az.NetworkClientFactory = nil
+		az.zoneRepo = nil
+
+		azureconfig := providerconfig.Config{}
+		azureconfig.TenantID = tenantID
+		azureconfig.NetworkResourceTenantID = tenantID
+		azureconfig.NetworkResourceSubscriptionID = networkSubscriptionID
+		azureconfig.SubscriptionID = computeSubscriptionID
+
+		networkFactory := mock_azclient.NewMockClientFactory(ctrl)
+		computeFactory := mock_azclient.NewMockClientFactory(ctrl)
+
+		// zoneRepo should be initialized from the network factory's provider client,
+		// not the compute factory's. Set expectation only on the network factory.
+		mockProviderClient := mock_providerclient.NewMockInterface(ctrl)
+		networkFactory.EXPECT().GetProviderClient().Return(mockProviderClient).Times(1)
+
+		nCall := 0
+		newARMClientFactory = func(
+			_ *azclient.ClientFactoryConfig,
+			_ *azclient.ARMClientConfig,
+			_ cloud.Configuration,
+			_ azcore.TokenCredential,
+			_ ...func(option *arm.ClientOptions),
+		) (azclient.ClientFactory, error) {
+			defer func() { nCall++ }()
+			switch nCall {
+			case 0:
+				return networkFactory, nil
+			case 1:
+				return computeFactory, nil
+			default:
+				panic("unexpected call")
+			}
+		}
+		defer func() {
+			newARMClientFactory = azclient.NewClientFactory
+		}()
+
+		err := az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, false)
+		assert.NoError(t, err)
+		assert.NotNil(t, az.zoneRepo)
 	})
 }
 
