@@ -28,25 +28,13 @@ func GetServicesToSync(k8sServices, nrpServices *utilsets.IgnoreCaseSet) SyncSer
 	klog.V(2).Infof("GetServicesToSync: NRP services (%d): %v", nrpServices.Len(), nrpServices.UnsortedList())
 
 	syncServices := SyncServicesReturnType{
-		Additions: utilsets.NewString(),
-		Removals:  utilsets.NewString(),
+		// Additions are in K8s but not yet in NRP; removals are in NRP but no
+		// longer in K8s.
+		Additions: k8sServices.Difference(nrpServices),
+		Removals:  nrpServices.Difference(k8sServices),
 	}
-
-	for _, service := range k8sServices.UnsortedList() {
-		if nrpServices.Has(service) {
-			continue
-		}
-		syncServices.Additions.Insert(service)
-		klog.V(4).Infof("GetServicesToSync: Added service %s to additions", service)
-	}
-
-	for _, service := range nrpServices.UnsortedList() {
-		if k8sServices.Has(service) {
-			continue
-		}
-		syncServices.Removals.Insert(service)
-		klog.V(4).Infof("GetServicesToSync: Added service %s to removals", service)
-	}
+	klog.V(4).Infof("GetServicesToSync: additions=%v, removals=%v",
+		syncServices.Additions.UnsortedList(), syncServices.Removals.UnsortedList())
 
 	klog.V(2).Infof("GetServicesToSync: Result - Additions: %d, Removals: %d", syncServices.Additions.Len(), syncServices.Removals.Len())
 	return syncServices
@@ -101,16 +89,16 @@ func (dt *DiffTracker) getSyncLocationsAddressesLocked() LocationData {
 			serviceRef := dt.createServiceRefFiltered(pod)
 
 			// Check if address exists in NRP and if service list changed
-			nrpAddressData, addressExists := nrpLocation.Addresses[address]
+			nrpAddressData, nrpAddrExists := nrpLocation.Addresses[address]
 
 			// Skip this address if:
 			// 1. No ready services AND address doesn't exist in NRP (nothing to sync)
 			// 2. ServiceRef matches what's already in NRP (no change)
-			if serviceRef.Len() == 0 && !addressExists {
+			if serviceRef.Len() == 0 && !nrpAddrExists {
 				continue
 			}
 
-			if addressExists && serviceRef.Equals(nrpAddressData.Services) {
+			if nrpAddrExists && serviceRef.Equals(nrpAddressData.Services) {
 				continue
 			}
 
@@ -198,9 +186,10 @@ func (dt *DiffTracker) isServiceReady(serviceUID string, isInbound bool) bool {
 	return dt.NRPResources.NATGateways.Has(serviceUID)
 }
 
-// Helper function to find LocationData in result
-func findLocationData(result LocationData, location string) *Location {
-	if loc, ok := result.Locations[location]; ok {
+// findLocationData returns a pointer to the Location stored under the given key
+// in data, or nil if no such location exists.
+func findLocationData(data LocationData, location string) *Location {
+	if loc, ok := data.Locations[location]; ok {
 		return &loc
 	}
 	return nil

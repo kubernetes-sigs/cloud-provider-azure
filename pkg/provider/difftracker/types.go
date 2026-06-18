@@ -31,22 +31,25 @@ import (
 type Operation int
 
 const (
-	ADD Operation = iota
-	REMOVE
-	UPDATE
+	UnknownOperation Operation = iota
+	Add
+	Remove
+	Update
 )
 
 type UpdateAction int
 
 const (
-	PartialUpdate UpdateAction = iota
+	UnknownUpdateAction UpdateAction = iota
+	PartialUpdate
 	FullUpdate
 )
 
 type SyncStatus int
 
 const (
-	AlreadyInSync SyncStatus = iota
+	UnknownSyncStatus SyncStatus = iota
+	AlreadyInSync
 	Success
 )
 
@@ -92,8 +95,18 @@ type Pod struct {
 	PublicOutboundIdentity string
 }
 
+// newPod returns a Pod with its InboundIdentities set initialized.
+func newPod() Pod {
+	return Pod{InboundIdentities: utilsets.NewString()}
+}
+
 type Node struct {
 	Pods map[string]Pod
+}
+
+// newNode returns a Node with its Pods map initialized.
+func newNode() Node {
+	return Node{Pods: make(map[string]Pod)}
 }
 
 type K8sState struct {
@@ -157,12 +170,12 @@ type Address struct {
 // Location uses a map for Addresses
 type Location struct {
 	AddressUpdateAction UpdateAction
-	Addresses           map[string]Address // key is Address.Address
+	Addresses           map[string]Address // key is the pod IP
 }
 
 type LocationData struct {
 	Action    UpdateAction
-	Locations map[string]Location // key is Location.Location
+	Locations map[string]Location // key is the node IP
 }
 
 type SyncServicesReturnType struct {
