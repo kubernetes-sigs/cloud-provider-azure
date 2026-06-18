@@ -259,13 +259,14 @@ Add focused unit tests in `pkg/provider/azure_local_services_test.go`:
 12. Other non-retriable errors do not requeue and emit `LoadBalancerBackendPoolUpdateFailed`.
 13. ARM resource-not-found does not requeue and emits no event.
 14. Stale service or changed load balancer before requeue is dropped quietly.
-15. Retry requeue is serialized with service deletion under `serviceReconcileLock`: a retriable failure requeues the operation before the main reconcile path can call `removeOperation()`. After the lock is released, `removeOperation()` removes the requeued operation from the queue.
-16. A Service that disappears while its operation is parked behind `nextEligibleAt` is dropped quietly on the next relevance check.
-17. Multiple operations for multiple Services in a backend-pool group emit one retry/failure event per distinct Service, covering the current `notify()` break-after-first-operation bug.
-18. `removeOperation(serviceName)` removes parked operations whose `nextEligibleAt` is in the future.
-19. Updater shutdown with parked operations does not emit retry/failure events and does not requeue.
-20. Explicit `LoadBalancerBackendPoolUpdateMaxRetries: 0` remains non-nil through config load and disables updater retry.
-21. A retried-then-succeeded operation records exactly one successful metric observation and no failed metric observations.
+15. Retry requeue is serialized with LB migration under `serviceReconcileLock`: a retriable failure requeues the operation before the main reconcile path can call `removeOperation()`. After the lock is released, `removeOperation()` removes the requeued operation from the queue.
+16. Retry requeue is serialized with service deletion under `serviceReconcileLock`: a retriable failure requeues the operation before the main reconcile path can delete from `localServiceNameToServiceInfoMap`. The requeued operation is dropped by `groupOperations()` on the next tick.
+17. A Service that disappears while its operation is parked behind `nextEligibleAt` is dropped quietly on the next relevance check.
+18. Multiple operations for multiple Services in a backend-pool group emit one retry/failure event per distinct Service, covering the current `notify()` break-after-first-operation bug.
+19. `removeOperation(serviceName)` removes parked operations whose `nextEligibleAt` is in the future.
+20. Updater shutdown with parked operations does not emit retry/failure events and does not requeue.
+21. Explicit `LoadBalancerBackendPoolUpdateMaxRetries: 0` remains non-nil through config load and disables updater retry.
+22. A retried-then-succeeded operation records exactly one successful metric observation and no failed metric observations.
 
 Use a fake event recorder where needed to assert retrying and failed event reasons precisely.
 
