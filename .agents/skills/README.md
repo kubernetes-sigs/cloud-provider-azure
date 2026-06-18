@@ -26,6 +26,7 @@ level small:
   default
 
 ## Current Shared Skills
+
 - `cherry-pick-pr`: cherry-pick a merged pull request onto a release branch,
   resolve conflicts, run targeted validation, and open a cherry-pick PR
 - `create-release-tags`: create and optionally push the next stable release tag
@@ -46,6 +47,9 @@ level small:
   sync workflow, close Kubernetes minor-version bumps, retest Azure public-IP
   quota e2e flakes, add `/lgtm` when only Tide is pending, and escalate
   dependency/toolchain blockers for discussion
+- `debug-e2e-pipeline`: fetch and analyze Prow e2e pipeline failures by
+  downloading build logs, JUnit reports, and node artifacts from GCS, then
+  matching errors against known failure patterns
 
 ## How To Use
 
