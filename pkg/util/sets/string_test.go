@@ -425,22 +425,77 @@ func TestEquals(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.s1 == nil && tt.s2 == nil {
-				// Special case for nil sets
-				if !tt.want {
-					t.Errorf("Equals() = true, want %v", tt.want)
-				}
-				return
-			}
-			if tt.s1 == nil || tt.s2 == nil {
-				// One set is nil, they can't be equal
-				if tt.want {
-					t.Errorf("Equals() = false, want %v", tt.want)
-				}
-				return
-			}
+			// Equals is nil-safe on both the receiver and the argument, so call it
+			// directly for every case (including the nil ones) to exercise the
+			// production code path rather than asserting an expectation against itself.
 			if got := tt.s1.Equals(tt.s2); got != tt.want {
 				t.Errorf("Equals() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDifference(t *testing.T) {
+	tests := []struct {
+		name  string
+		s     *IgnoreCaseSet
+		other *IgnoreCaseSet
+		want  *IgnoreCaseSet
+	}{
+		{
+			name:  "disjoint sets",
+			s:     NewString("foo", "bar"),
+			other: NewString("baz"),
+			want:  NewString("foo", "bar"),
+		},
+		{
+			name:  "partial overlap",
+			s:     NewString("foo", "bar", "baz"),
+			other: NewString("bar"),
+			want:  NewString("foo", "baz"),
+		},
+		{
+			name:  "all removed",
+			s:     NewString("foo", "bar"),
+			other: NewString("foo", "bar"),
+			want:  NewString(),
+		},
+		{
+			name:  "case-insensitive",
+			s:     NewString("Foo", "BAR"),
+			other: NewString("foo"),
+			want:  NewString("bar"),
+		},
+		{
+			name:  "other empty",
+			s:     NewString("foo", "bar"),
+			other: NewString(),
+			want:  NewString("foo", "bar"),
+		},
+		{
+			name:  "s empty",
+			s:     NewString(),
+			other: NewString("foo"),
+			want:  NewString(),
+		},
+		{
+			name:  "other nil",
+			s:     NewString("foo"),
+			other: nil,
+			want:  NewString("foo"),
+		},
+		{
+			name:  "s nil",
+			s:     nil,
+			other: NewString("foo"),
+			want:  NewString(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.s.Difference(tt.other)
+			if !got.Equals(tt.want) {
+				t.Errorf("Difference() = %v, want %v", got.UnsortedList(), tt.want.UnsortedList())
 			}
 		})
 	}

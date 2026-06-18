@@ -99,17 +99,17 @@ func TestEnqueueK8sServiceOperation(t *testing.T) {
 		},
 	}
 
-	// Test ADD operation
+	// Test Add operation
 	err := dt.EnqueueK8sServiceOperation(UpdateK8sResource{
-		Operation: ADD,
+		Operation: Add,
 		ID:        "service1",
 	})
 	assert.NoError(t, err)
 	assert.True(t, dt.K8sResources.Services.Has("service1"))
 
-	// Test REMOVE operation
+	// Test Remove operation
 	err = dt.EnqueueK8sServiceOperation(UpdateK8sResource{
-		Operation: REMOVE,
+		Operation: Remove,
 		ID:        "service1",
 	})
 	assert.NoError(t, err)
@@ -117,7 +117,7 @@ func TestEnqueueK8sServiceOperation(t *testing.T) {
 
 	// Test invalid operation
 	err = dt.EnqueueK8sServiceOperation(UpdateK8sResource{
-		Operation: UPDATE,
+		Operation: Update,
 		ID:        "service1",
 	})
 	assert.Error(t, err)
@@ -183,7 +183,7 @@ func TestUpdateK8sPod(t *testing.T) {
 
 	// Test adding new egress assignment
 	input := UpdatePodInputType{
-		PodOperation:           ADD,
+		PodOperation:           Add,
 		PublicOutboundIdentity: "public1",
 		Location:               "node1",
 		Address:                "10.0.0.1",
@@ -197,7 +197,7 @@ func TestUpdateK8sPod(t *testing.T) {
 
 	// Test removing egress assignment
 	input = UpdatePodInputType{
-		PodOperation: REMOVE,
+		PodOperation: Remove,
 		Location:     "node1",
 		Address:      "10.0.0.1",
 	}
@@ -207,17 +207,74 @@ func TestUpdateK8sPod(t *testing.T) {
 	assert.NotContains(t, dt.K8sResources.Nodes["node1"].Pods, "10.0.0.1")
 }
 
-// TestUpdateK8sPodRemoveUsesStoredIdentity verifies that a REMOVE whose input omits
-// (or mismatches) PublicOutboundIdentity still decrements the counter of the identity
-// actually stored on the pod, rather than corrupting a different ("" or wrong) counter.
-func TestUpdateK8sPodRemoveUsesStoredIdentity(t *testing.T) {
+// TestUpdateK8sPodIdentityChangeDecrementsOld verifies that when a pod's egress
+// identity changes (X -> Y), the old identity's ref-counter is decremented so it
+// doesn't leak, while the new identity is counted.
+func TestUpdateK8sPodIdentityChangeDecrementsOld(t *testing.T) {
+	dt := &DiffTracker{K8sResources: K8sState{Nodes: map[string]Node{}}}
+
+	// Pod starts using egress "X".
+	assert.NoError(t, dt.UpdateK8sPod(UpdatePodInputType{
+		PodOperation:           Add,
+		PublicOutboundIdentity: "X",
+		Location:               "node1",
+		Address:                "10.0.0.1",
+	}))
+	val, ok := dt.outboundIdentityPodRefCount.Load("x")
+	assert.True(t, ok)
+	assert.Equal(t, 1, val.(int))
+
+	// Pod's egress changes to "Y": X must be released, Y counted.
+	assert.NoError(t, dt.UpdateK8sPod(UpdatePodInputType{
+		PodOperation:           Update,
+		PublicOutboundIdentity: "Y",
+		Location:               "node1",
+		Address:                "10.0.0.1",
+	}))
+	_, ok = dt.outboundIdentityPodRefCount.Load("x")
+	assert.False(t, ok, "old identity X must be decremented on identity change, not leaked")
+	val, ok = dt.outboundIdentityPodRefCount.Load("y")
+	assert.True(t, ok)
+	assert.Equal(t, 1, val.(int))
+}
+
+// TestUpdateK8sPodCaseInsensitiveReAdd verifies that re-adding the same pod with a
+// different-cased identity is treated as the same identity (no double counting),
+// since the counter is keyed case-insensitively.
+func TestUpdateK8sPodCaseInsensitiveReAdd(t *testing.T) {
+	dt := &DiffTracker{K8sResources: K8sState{Nodes: map[string]Node{}}}
+
+	assert.NoError(t, dt.UpdateK8sPod(UpdatePodInputType{
+		PodOperation:           Add,
+		PublicOutboundIdentity: "Svc1",
+		Location:               "node1",
+		Address:                "10.0.0.1",
+	}))
+	// Informer resync delivers the same identity with different casing.
+	assert.NoError(t, dt.UpdateK8sPod(UpdatePodInputType{
+		PodOperation:           Add,
+		PublicOutboundIdentity: "svc1",
+		Location:               "node1",
+		Address:                "10.0.0.1",
+	}))
+
+	val, ok := dt.outboundIdentityPodRefCount.Load("svc1")
+	assert.True(t, ok)
+	assert.Equal(t, 1, val.(int), "case-only re-ADD must not double-count the identity")
+}
+
+// TestUpdateK8sPodRemoveDecrementsCounter verifies that removing a pod decrements
+// the outbound-identity ref-counter for the identity passed in the remove input
+// (matching the engine's DeletePod, which always passes the service UID), clearing
+// the entry when the last pod for that identity is removed.
+func TestUpdateK8sPodRemoveDecrementsCounter(t *testing.T) {
 	dt := &DiffTracker{
 		K8sResources: K8sState{Nodes: map[string]Node{}},
 	}
 
 	// Add a pod with outbound identity "public1".
 	assert.NoError(t, dt.UpdateK8sPod(UpdatePodInputType{
-		PodOperation:           ADD,
+		PodOperation:           Add,
 		PublicOutboundIdentity: "public1",
 		Location:               "node1",
 		Address:                "10.0.0.1",
@@ -226,16 +283,16 @@ func TestUpdateK8sPodRemoveUsesStoredIdentity(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, 1, val.(int))
 
-	// Remove with the identity omitted from the input (the problematic case).
+	// Remove passing the same identity; the counter must be cleared.
 	assert.NoError(t, dt.UpdateK8sPod(UpdatePodInputType{
-		PodOperation: REMOVE,
-		Location:     "node1",
-		Address:      "10.0.0.1",
+		PodOperation:           Remove,
+		PublicOutboundIdentity: "public1",
+		Location:               "node1",
+		Address:                "10.0.0.1",
 	}))
 
-	// The stored identity's counter must be cleared, and no bogus "" entry created.
 	_, ok = dt.outboundIdentityPodRefCount.Load("public1")
-	assert.False(t, ok, "counter for stored identity public1 should be removed")
+	assert.False(t, ok, "counter for public1 should be removed after the last pod is removed")
 	_, ok = dt.outboundIdentityPodRefCount.Load("")
 	assert.False(t, ok, "no counter should be created for an empty identity")
 }
@@ -283,9 +340,9 @@ func TestGetSyncLocationsAddresses(t *testing.T) {
 }
 
 func TestOperation_String(t *testing.T) {
-	assert.Equal(t, "ADD", ADD.String())
-	assert.Equal(t, "REMOVE", REMOVE.String())
-	assert.Equal(t, "UPDATE", UPDATE.String())
+	assert.Equal(t, "Add", Add.String())
+	assert.Equal(t, "Remove", Remove.String())
+	assert.Equal(t, "Update", Update.String())
 }
 
 func TestUpdateNRPLoadBalancers(t *testing.T) {
@@ -340,17 +397,17 @@ func TestEnqueueK8sEgressOperation(t *testing.T) {
 		},
 	}
 
-	err := dt.EnqueueK8sEgressOperation(UpdateK8sResource{Operation: ADD, ID: "egress1"})
+	err := dt.EnqueueK8sEgressOperation(UpdateK8sResource{Operation: Add, ID: "egress1"})
 	assert.NoError(t, err)
 	assert.True(t, dt.K8sResources.Egresses.Has("egress1"))
 
-	err = dt.EnqueueK8sEgressOperation(UpdateK8sResource{Operation: REMOVE, ID: "egress1"})
+	err = dt.EnqueueK8sEgressOperation(UpdateK8sResource{Operation: Remove, ID: "egress1"})
 	assert.NoError(t, err)
 	assert.False(t, dt.K8sResources.Egresses.Has("egress1"))
 
-	err = dt.EnqueueK8sEgressOperation(UpdateK8sResource{Operation: UPDATE, ID: "egress1"})
+	err = dt.EnqueueK8sEgressOperation(UpdateK8sResource{Operation: Update, ID: "egress1"})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "error - ResourceType=Egress, Operation=UPDATE and ID=egress1")
+	assert.Contains(t, err.Error(), "error - ResourceType=Egress, Operation=Update and ID=egress1")
 }
 
 func TestGetSyncNRPNATGateways(t *testing.T) {
@@ -599,7 +656,7 @@ func TestGetSyncOperations(t *testing.T) {
 // Real Scenario: CloudProvider is down and K8s Cluster is subject to continuous updates.
 // This test verifies if the DiffTracker is able to sync K8s Cluster and NRP correctly
 // when there is a huge discrepancy between K8s Cluster and NRP.
-func TestInitializeDiffTracker(t *testing.T) {
+func TestNew(t *testing.T) {
 	K8sResources := K8sState{
 		Services: sets.NewString("Service0", "Service1", "Service2"),
 		Egresses: sets.NewString("Egress0", "Egress1", "Egress2"),
@@ -653,7 +710,7 @@ func TestInitializeDiffTracker(t *testing.T) {
 	defer ctrl.Finish()
 	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
 	mockKubeClient := fake.NewSimpleClientset()
-	diffTracker, err := InitializeDiffTracker(K8sResources, NRPResources, config, mockFactory, mockKubeClient)
+	diffTracker, err := New(K8sResources, NRPResources, config, mockFactory, mockKubeClient)
 	assert.NoError(t, err)
 	syncOperations := diffTracker.GetSyncOperations()
 
@@ -681,4 +738,291 @@ func TestInitializeDiffTracker(t *testing.T) {
 
 	assert.True(t, diffTracker.Equals(expectedDiffTracker),
 		"DiffTracker does not match expected state")
+}
+
+func validTestConfig() Config {
+	return Config{
+		SubscriptionID:             "test-subscription",
+		ResourceGroup:              "test-rg",
+		Location:                   "eastus",
+		VNetName:                   "test-vnet",
+		ServiceGatewayResourceName: "test-sgw",
+		ServiceGatewayID:           "/subscriptions/test-subscription/resourceGroups/test-rg/providers/Microsoft.Network/serviceGateways/test-sgw",
+	}
+}
+
+func emptyK8sState() K8sState {
+	return K8sState{
+		Services: sets.NewString(),
+		Egresses: sets.NewString(),
+		Nodes:    make(map[string]Node),
+	}
+}
+
+func emptyNRPState() NRPState {
+	return NRPState{
+		LoadBalancers: sets.NewString(),
+		NATGateways:   sets.NewString(),
+		Locations:     make(map[string]NRPLocation),
+	}
+}
+
+// TestNewErrorPaths covers the validation/error branches of
+// New and the successful initialization path.
+func TestNewErrorPaths(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockKubeClient := fake.NewSimpleClientset()
+
+	// Invalid config (empty) -> validation error.
+	_, err := New(K8sState{}, NRPState{}, Config{}, mockFactory, mockKubeClient)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "New")
+
+	// Nil networkClientFactory.
+	_, err = New(K8sState{}, NRPState{}, validTestConfig(), nil, mockKubeClient)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "networkClientFactory must not be nil")
+
+	// Nil kubeClient.
+	_, err = New(K8sState{}, NRPState{}, validTestConfig(), mockFactory, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "kubeClient must not be nil")
+
+	// Uninitialized state field -> error out instead of silently initializing.
+	k8sMissingServices := emptyK8sState()
+	k8sMissingServices.Services = nil
+	_, err = New(k8sMissingServices, emptyNRPState(), validTestConfig(), mockFactory, mockKubeClient)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "k8s.Services must not be nil")
+
+	nrpMissingLocations := emptyNRPState()
+	nrpMissingLocations.Locations = nil
+	_, err = New(emptyK8sState(), nrpMissingLocations, validTestConfig(), mockFactory, mockKubeClient)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "nrp.Locations must not be nil")
+
+	// Valid call with fully initialized (empty) states.
+	dt, err := New(emptyK8sState(), emptyNRPState(), validTestConfig(), mockFactory, mockKubeClient)
+	assert.NoError(t, err)
+	assert.NotNil(t, dt)
+	assert.NotNil(t, dt.K8sResources.Services)
+	assert.NotNil(t, dt.K8sResources.Egresses)
+	assert.NotNil(t, dt.K8sResources.Nodes)
+	assert.NotNil(t, dt.NRPResources.LoadBalancers)
+	assert.NotNil(t, dt.NRPResources.NATGateways)
+	assert.NotNil(t, dt.NRPResources.Locations)
+}
+
+// TestEnqueueK8sResourceOperationErrors covers the empty-ID and invalid-operation
+// branches of enqueueK8sResourceOperation (via the public wrappers).
+func TestEnqueueK8sResourceOperationErrors(t *testing.T) {
+	dt := &DiffTracker{
+		K8sResources: K8sState{Services: sets.NewString(), Egresses: sets.NewString()},
+	}
+
+	// Empty ID.
+	err := dt.EnqueueK8sServiceOperation(UpdateK8sResource{Operation: Add, ID: ""})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "empty ID")
+
+	// Invalid operation (UPDATE is not valid for the resource set).
+	err = dt.EnqueueK8sEgressOperation(UpdateK8sResource{Operation: Update, ID: "egress1"})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Operation=Update")
+
+	// Successful Add then Remove.
+	assert.NoError(t, dt.EnqueueK8sServiceOperation(UpdateK8sResource{Operation: Add, ID: "svc1"}))
+	assert.True(t, dt.K8sResources.Services.Has("svc1"))
+	assert.NoError(t, dt.EnqueueK8sServiceOperation(UpdateK8sResource{Operation: Remove, ID: "svc1"}))
+	assert.False(t, dt.K8sResources.Services.Has("svc1"))
+}
+
+// TestUpdateK8sPodInvalidOperation covers the default branch of updateK8sPodLocked.
+func TestUpdateK8sPodInvalidOperation(t *testing.T) {
+	dt := &DiffTracker{K8sResources: K8sState{Nodes: map[string]Node{}}}
+	err := dt.UpdateK8sPod(UpdatePodInputType{
+		PodOperation: Operation(99),
+		Location:     "node1",
+		Address:      "10.0.0.1",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid pod operation")
+}
+
+// TestUpdateK8sPodRemoveNonExistent covers the duplicate-removal branch.
+func TestUpdateK8sPodRemoveNonExistent(t *testing.T) {
+	dt := &DiffTracker{K8sResources: K8sState{Nodes: map[string]Node{}}}
+	// Removing a pod that was never added is a no-op (no error, no counter change).
+	err := dt.UpdateK8sPod(UpdatePodInputType{
+		PodOperation:           Remove,
+		PublicOutboundIdentity: "public1",
+		Location:               "node1",
+		Address:                "10.0.0.1",
+	})
+	assert.NoError(t, err)
+	_, ok := dt.outboundIdentityPodRefCount.Load("public1")
+	assert.False(t, ok)
+}
+
+// TestUpdateK8sEndpointsMissingLocation covers the error branch where an address
+// has no associated node location.
+func TestUpdateK8sEndpointsMissingLocation(t *testing.T) {
+	dt := &DiffTracker{K8sResources: K8sState{Nodes: map[string]Node{}}}
+	errs := dt.UpdateK8sEndpoints(UpdateK8sEndpointsInputType{
+		InboundIdentity: "svc1",
+		NewAddresses:    map[string]string{"10.0.0.1": ""},
+	})
+	assert.NotEmpty(t, errs)
+	assert.Contains(t, errs[0].Error(), "does not have a node associated")
+}
+
+// TestRemoveServiceFromK8sStateLocked covers removeServiceFromK8sStateLocked for
+// both inbound and outbound identities, including empty-pod/node cleanup.
+func TestRemoveServiceFromK8sStateLocked(t *testing.T) {
+	t.Run("inbound removal cleans up empty pods and nodes", func(t *testing.T) {
+		dt := &DiffTracker{
+			K8sResources: K8sState{
+				Nodes: map[string]Node{
+					"node1": {Pods: map[string]Pod{
+						// Pod backs only svc1 inbound -> becomes empty and is removed.
+						"10.0.0.1": {InboundIdentities: sets.NewString("svc1")},
+						// Pod backs svc1 and svc2 -> keeps svc2.
+						"10.0.0.2": {InboundIdentities: sets.NewString("svc1", "svc2")},
+					}},
+				},
+			},
+		}
+		dt.removeServiceFromK8sStateLocked("svc1", true)
+
+		// 10.0.0.1 had only svc1 -> removed.
+		_, ok := dt.K8sResources.Nodes["node1"].Pods["10.0.0.1"]
+		assert.False(t, ok)
+		// 10.0.0.2 still has svc2.
+		pod, ok := dt.K8sResources.Nodes["node1"].Pods["10.0.0.2"]
+		assert.True(t, ok)
+		assert.True(t, pod.InboundIdentities.Has("svc2"))
+		assert.False(t, pod.InboundIdentities.Has("svc1"))
+	})
+
+	t.Run("outbound removal clears identity and removes empty node", func(t *testing.T) {
+		dt := &DiffTracker{
+			K8sResources: K8sState{
+				Nodes: map[string]Node{
+					"node1": {Pods: map[string]Pod{
+						"10.0.0.1": {InboundIdentities: sets.NewString(), PublicOutboundIdentity: "egress1"},
+					}},
+				},
+			},
+		}
+		dt.removeServiceFromK8sStateLocked("egress1", false)
+
+		// Pod had only the outbound identity -> pod and node removed.
+		_, nodeOK := dt.K8sResources.Nodes["node1"]
+		assert.False(t, nodeOK)
+	})
+
+	t.Run("public wrapper acquires lock and removes inbound identity", func(t *testing.T) {
+		dt := &DiffTracker{
+			K8sResources: K8sState{
+				Nodes: map[string]Node{
+					"node1": {Pods: map[string]Pod{
+						"10.0.0.1": {InboundIdentities: sets.NewString("svc1")},
+					}},
+				},
+			},
+		}
+		dt.RemoveServiceFromK8sState("svc1", true)
+
+		_, nodeOK := dt.K8sResources.Nodes["node1"]
+		assert.False(t, nodeOK)
+	})
+
+	t.Run("outbound service removal decrements ref-counter", func(t *testing.T) {
+		dt := &DiffTracker{K8sResources: K8sState{Nodes: map[string]Node{}}}
+		// Add an egress pod so the counter is seeded.
+		assert.NoError(t, dt.UpdateK8sPod(UpdatePodInputType{
+			PodOperation:           Add,
+			PublicOutboundIdentity: "egress1",
+			Location:               "node1",
+			Address:                "10.0.0.1",
+		}))
+		val, ok := dt.outboundIdentityPodRefCount.Load("egress1")
+		assert.True(t, ok)
+		assert.Equal(t, 1, val.(int))
+
+		// Removing the egress service must release the counter, not leak it.
+		dt.RemoveServiceFromK8sState("egress1", false)
+		_, ok = dt.outboundIdentityPodRefCount.Load("egress1")
+		assert.False(t, ok, "service removal must decrement the outbound ref-counter")
+	})
+}
+
+// TestUpdateK8sPodAddNoOutboundIdentity verifies that adding a pod with no
+// outbound access (empty PublicOutboundIdentity) tracks the pod in state but
+// does not create a bogus ref-counter entry under the empty-string key. This
+// keeps the Add path symmetric with the Remove path, which skips the decrement
+// for an empty identity.
+func TestUpdateK8sPodAddNoOutboundIdentity(t *testing.T) {
+	dt := &DiffTracker{K8sResources: K8sState{Nodes: map[string]Node{}}}
+	in := UpdatePodInputType{
+		PodOperation:           Add,
+		PublicOutboundIdentity: "",
+		Location:               "node1",
+		Address:                "10.0.0.1",
+	}
+	assert.NoError(t, dt.UpdateK8sPod(in))
+
+	// The pod must be tracked in state.
+	pod, ok := dt.K8sResources.Nodes["node1"].Pods["10.0.0.1"]
+	assert.True(t, ok)
+	assert.Equal(t, "", pod.PublicOutboundIdentity)
+
+	// No counter entry should be created for the empty identity.
+	_, ok = dt.outboundIdentityPodRefCount.Load("")
+	assert.False(t, ok, "no counter should be created for an empty outbound identity")
+}
+
+// TestUpdateK8sPodAddIdempotent covers the alreadyExists branch of updateK8sPodLocked:
+// a repeated Add for the same pod+identity must not double-count the counter.
+func TestUpdateK8sPodAddIdempotent(t *testing.T) {
+	dt := &DiffTracker{K8sResources: K8sState{Nodes: map[string]Node{}}}
+	in := UpdatePodInputType{
+		PodOperation:           Add,
+		PublicOutboundIdentity: "public1",
+		Location:               "node1",
+		Address:                "10.0.0.1",
+	}
+	assert.NoError(t, dt.UpdateK8sPod(in))
+	// Second identical Add (e.g. informer resync) must be a no-op for the counter.
+	assert.NoError(t, dt.UpdateK8sPod(in))
+
+	val, ok := dt.outboundIdentityPodRefCount.Load("public1")
+	assert.True(t, ok)
+	assert.Equal(t, 1, val.(int))
+}
+
+// TestUpdateK8sEndpointsAddThenRemove covers the OldAddresses removal path of
+// updateK8sEndpointsLocked, including empty-pod/node cleanup.
+func TestUpdateK8sEndpointsAddThenRemove(t *testing.T) {
+	dt := &DiffTracker{K8sResources: K8sState{Nodes: map[string]Node{}}}
+
+	// Add endpoint for svc1 at pod 10.0.0.1 on node1.
+	errs := dt.UpdateK8sEndpoints(UpdateK8sEndpointsInputType{
+		InboundIdentity: "svc1",
+		NewAddresses:    map[string]string{"10.0.0.1": "node1"},
+	})
+	assert.Empty(t, errs)
+	assert.True(t, dt.K8sResources.Nodes["node1"].Pods["10.0.0.1"].InboundIdentities.Has("svc1"))
+
+	// Remove the same endpoint (now in OldAddresses, absent from NewAddresses).
+	errs = dt.UpdateK8sEndpoints(UpdateK8sEndpointsInputType{
+		InboundIdentity: "svc1",
+		OldAddresses:    map[string]string{"10.0.0.1": "node1"},
+	})
+	assert.Empty(t, errs)
+	// Pod had only svc1 -> pod and node cleaned up.
+	_, ok := dt.K8sResources.Nodes["node1"]
+	assert.False(t, ok)
 }
