@@ -195,7 +195,7 @@ func TestPodHasIdentities(t *testing.T) {
 	}
 }
 
-// TestDeepEqual tests DiffTracker.DeepEqual()
+// TestDeepEqual tests DiffTracker.deepEqualLocked()
 func TestDeepEqual(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -286,7 +286,7 @@ func TestDeepEqual(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, tt.dt.DeepEqual())
+			assert.Equal(t, tt.expected, tt.dt.deepEqualLocked())
 		})
 	}
 }
@@ -912,25 +912,25 @@ func TestDeepEqualMoreCases(t *testing.T) {
 		}
 	}
 
-	assert.True(t, inSync().DeepEqual())
+	assert.True(t, inSync().deepEqualLocked())
 
 	// LoadBalancer present in NRP but not in K8s Services (reverse-direction check).
 	d := inSync()
 	d.NRPResources.LoadBalancers = sets.NewString("svc1", "extra")
 	d.K8sResources.Services = sets.NewString("svc1", "different")
-	assert.False(t, d.DeepEqual())
+	assert.False(t, d.deepEqualLocked())
 
 	// Egress name mismatch (reverse direction): lengths equal (1==1) but names
 	// differ -> mismatch.
 	d = inSync()
 	d.K8sResources.Egresses = sets.NewString("egr2")
 	d.NRPResources.NATGateways = sets.NewString("egr2x")
-	assert.False(t, d.DeepEqual())
+	assert.False(t, d.deepEqualLocked())
 
 	// Nodes vs Locations length mismatch.
 	d = inSync()
 	d.NRPResources.Locations["node2"] = NRPLocation{Addresses: map[string]NRPAddress{}}
-	assert.False(t, d.DeepEqual())
+	assert.False(t, d.deepEqualLocked())
 
 	// Node missing in Locations (same count, different key).
 	d = inSync()
@@ -938,30 +938,30 @@ func TestDeepEqualMoreCases(t *testing.T) {
 	d.NRPResources.Locations["nodeX"] = NRPLocation{Addresses: map[string]NRPAddress{
 		"10.0.0.1": {Services: sets.NewString("svc1", "egr1")},
 	}}
-	assert.False(t, d.DeepEqual())
+	assert.False(t, d.deepEqualLocked())
 
 	// Pods vs Addresses length mismatch.
 	d = inSync()
 	loc := d.NRPResources.Locations["node1"]
 	loc.Addresses["10.0.0.2"] = NRPAddress{Services: sets.NewString("svc1")}
-	assert.False(t, d.DeepEqual())
+	assert.False(t, d.deepEqualLocked())
 
 	// Pod missing in Addresses (same count, different key).
 	d = inSync()
 	loc = d.NRPResources.Locations["node1"]
 	delete(loc.Addresses, "10.0.0.1")
 	loc.Addresses["10.0.0.9"] = NRPAddress{Services: sets.NewString("svc1", "egr1")}
-	assert.False(t, d.DeepEqual())
+	assert.False(t, d.deepEqualLocked())
 
 	// Combined identities length mismatch.
 	d = inSync()
 	loc = d.NRPResources.Locations["node1"]
 	loc.Addresses["10.0.0.1"] = NRPAddress{Services: sets.NewString("svc1")}
-	assert.False(t, d.DeepEqual())
+	assert.False(t, d.deepEqualLocked())
 
 	// Identity not found in Services (same count, different identity).
 	d = inSync()
 	loc = d.NRPResources.Locations["node1"]
 	loc.Addresses["10.0.0.1"] = NRPAddress{Services: sets.NewString("svc1", "egrX")}
-	assert.False(t, d.DeepEqual())
+	assert.False(t, d.deepEqualLocked())
 }
