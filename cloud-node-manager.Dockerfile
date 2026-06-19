@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=linux/amd64 mcr.microsoft.com/oss/go/microsoft/golang:1.24.11-bookworm@sha256:522d54080ec5358575fd84485ebf81a073e1c5cd6a77fae6dd05d40e6967d2ce AS builder
+FROM --platform=linux/amd64 mcr.microsoft.com/oss/go/microsoft/golang:1.25.10-bookworm@sha256:be019132e08df4bbbf4edfaffbc8101209f82b2ab7a13bd742dbe5bc6c3c0342 AS builder
 
 ARG ENABLE_GIT_COMMAND=true
 ARG ARCH=amd64
@@ -31,9 +31,9 @@ COPY . .
 # Build the Go app
 RUN make bin/azure-cloud-node-manager ENABLE_GIT_COMMAND=${ENABLE_GIT_COMMAND} ARCH=${ARCH}
 
-# Use distroless static image for a lean production container.
+# Use distroless base image for a lean production container.
 # Start a new build stage.
-FROM gcr.io/distroless/static:latest@sha256:4b2a093ef4649bccd586625090a3c668b254cfe180dee54f4c94f3e9bd7e381e
+FROM gcr.io/distroless/base@sha256:f2df8702d4dcc45ce76df6cbc14ad1975fcf88a04bd0e8947b6194264f9ab75e
 
 # Create a group and user
 USER 65532:65532
