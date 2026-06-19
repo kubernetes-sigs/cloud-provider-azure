@@ -103,15 +103,8 @@ func (pod *Pod) HasIdentities() bool {
 	return pod.InboundIdentities.Len() > 0 || pod.PublicOutboundIdentity != ""
 }
 
-// DeepEqual compares the K8s and NRP states to check if they are in sync.
-// It acquires dt.mu so callers get a consistent snapshot.
-func (dt *DiffTracker) DeepEqual() bool {
-	dt.mu.Lock()
-	defer dt.mu.Unlock()
-	return dt.deepEqualLocked()
-}
-
-// deepEqualLocked is the lock-free body of DeepEqual. Callers must hold dt.mu.
+// deepEqualLocked compares the K8s and NRP states to check if they are in sync.
+// Callers must hold dt.mu.
 func (dt *DiffTracker) deepEqualLocked() bool {
 	klog.V(4).Infof("DeepEqual: Checking equality - K8s Services=%d, NRP LoadBalancers=%d, K8s Egresses=%d, NRP NATGateways=%d, K8s Nodes=%d, NRP Locations=%d",
 		dt.K8sResources.Services.Len(), dt.NRPResources.LoadBalancers.Len(),
