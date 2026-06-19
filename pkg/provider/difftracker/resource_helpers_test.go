@@ -159,11 +159,7 @@ func TestExtractInboundConfigFromService_NamedTargetPort(t *testing.T) {
 	}
 
 	config := ExtractInboundConfigFromService(service)
-	assert.NotNil(t, config)
-
-	// Named ports should fall back to Port
-	assert.Equal(t, int32(80), config.FrontendPorts[0].Port)
-	assert.Equal(t, int32(80), config.BackendPorts[0].Port)
+	assert.Nil(t, config)
 }
 
 func TestExtractInboundConfigFromService_EmptyProtocol(t *testing.T) {
@@ -211,7 +207,8 @@ func TestBuildInboundServiceResources_WithConfig(t *testing.T) {
 		ServiceGatewayID:           "/subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Network/serviceGateways/test-sgw",
 	}
 
-	pip, lb, servicesDTO := buildInboundServiceResources("service-uid-123", config, dtConfig)
+	pip, lb, servicesDTO, err := buildInboundServiceResources("service-uid-123", config, dtConfig)
+	assert.NoError(t, err)
 
 	// Verify PIP
 	assert.NotNil(t, pip.Name)
@@ -261,7 +258,8 @@ func TestBuildInboundServiceResources_NilConfig(t *testing.T) {
 		ServiceGatewayID:           "/subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Network/serviceGateways/test-sgw",
 	}
 
-	pip, lb, servicesDTO := buildInboundServiceResources("service-uid-123", nil, dtConfig)
+	pip, lb, servicesDTO, err := buildInboundServiceResources("service-uid-123", nil, dtConfig)
+	assert.NoError(t, err)
 
 	// Should still create LB, just without rules
 	assert.NotNil(t, lb.Name)
@@ -297,7 +295,8 @@ func TestBuildInboundServiceResources_UDPProtocol(t *testing.T) {
 		ServiceGatewayID:           "/subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Network/serviceGateways/test-sgw",
 	}
 
-	_, lb, _ := buildInboundServiceResources("service-uid-udp", config, dtConfig)
+	_, lb, _, err := buildInboundServiceResources("service-uid-udp", config, dtConfig)
+	assert.NoError(t, err)
 
 	// Verify UDP rule
 	assert.Len(t, lb.Properties.LoadBalancingRules, 1)
@@ -305,6 +304,7 @@ func TestBuildInboundServiceResources_UDPProtocol(t *testing.T) {
 	assert.Equal(t, "rule-udp-53", *rule.Name)
 	assert.Equal(t, armnetwork.TransportProtocolUDP, *rule.Properties.Protocol)
 	assert.Equal(t, int32(53), *rule.Properties.FrontendPort)
+	assert.Nil(t, rule.Properties.EnableTCPReset)
 	assert.Equal(t, int32(5353), *rule.Properties.BackendPort)
 }
 
@@ -376,7 +376,8 @@ func TestBuildInboundServiceResources_BackendPoolNaming(t *testing.T) {
 		ServiceGatewayID:           "/subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Network/serviceGateways/test-sgw",
 	}
 
-	_, lb, _ := buildInboundServiceResources("my-service-uid", config, dtConfig)
+	_, lb, _, err := buildInboundServiceResources("my-service-uid", config, dtConfig)
+	assert.NoError(t, err)
 
 	// Backend pool name must match serviceUID for SLB mode
 	assert.Len(t, lb.Properties.BackendAddressPools, 1)
@@ -402,7 +403,8 @@ func TestBuildInboundServiceResources_NoProbesForPodIPBackend(t *testing.T) {
 		ServiceGatewayID:           "/subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Network/serviceGateways/test-sgw",
 	}
 
-	_, lb, _ := buildInboundServiceResources("service-uid", config, dtConfig)
+	_, lb, _, err := buildInboundServiceResources("service-uid", config, dtConfig)
+	assert.NoError(t, err)
 
 	// For PodIP backend pools, no health probes should be created
 	assert.Empty(t, lb.Properties.Probes)
@@ -426,7 +428,8 @@ func TestBuildInboundServiceResources_ResourceIDs(t *testing.T) {
 		ServiceGatewayID:           "/subscriptions/sub-123/resourceGroups/rg-456/providers/Microsoft.Network/serviceGateways/sgw-789",
 	}
 
-	pip, lb, _ := buildInboundServiceResources("svc-abc", config, dtConfig)
+	pip, lb, _, err := buildInboundServiceResources("svc-abc", config, dtConfig)
+	assert.NoError(t, err)
 
 	// Verify PIP ID format
 	expectedPIPID := "/subscriptions/sub-123/resourceGroups/rg-456/providers/Microsoft.Network/publicIPAddresses/svc-abc-pip"
@@ -440,4 +443,94 @@ func TestBuildInboundServiceResources_ResourceIDs(t *testing.T) {
 	rule := lb.Properties.LoadBalancingRules[0]
 	expectedBackendPoolID := "/subscriptions/sub-123/resourceGroups/rg-456/providers/Microsoft.Network/loadBalancers/svc-abc/backendAddressPools/svc-abc"
 	assert.Equal(t, expectedBackendPoolID, *rule.Properties.BackendAddressPool.ID)
+}
+
+func TestBuildInboundServiceResources_LowercaseUDP(t *testing.T) {
+	config := &InboundConfig{
+		FrontendPorts: []PortMapping{{Port: 53, Protocol: "udp"}},
+		BackendPorts:  []PortMapping{{Port: 5353, Protocol: "udp"}},
+	}
+	dtConfig := Config{SubscriptionID: "sub", ResourceGroup: "rg", Location: "westus"}
+
+	_, lb, _, err := buildInboundServiceResources("svc", config, dtConfig)
+	assert.NoError(t, err)
+	assert.Len(t, lb.Properties.LoadBalancingRules, 1)
+	assert.Equal(t, armnetwork.TransportProtocolUDP, *lb.Properties.LoadBalancingRules[0].Properties.Protocol)
+}
+
+func TestBuildInboundServiceResources_UnsupportedProtocolErrors(t *testing.T) {
+	config := &InboundConfig{
+		FrontendPorts: []PortMapping{{Port: 53, Protocol: "SCTP"}},
+	}
+	dtConfig := Config{SubscriptionID: "sub", ResourceGroup: "rg", Location: "westus"}
+
+	_, _, _, err := buildInboundServiceResources("svc", config, dtConfig)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported protocol")
+}
+
+func TestBuildInboundServiceResources_PortOutOfRangeErrors(t *testing.T) {
+	config := &InboundConfig{
+		FrontendPorts: []PortMapping{{Port: 65535, Protocol: "TCP"}},
+	}
+	dtConfig := Config{SubscriptionID: "sub", ResourceGroup: "rg", Location: "westus"}
+
+	_, _, _, err := buildInboundServiceResources("svc", config, dtConfig)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "out of range")
+}
+
+func TestBuildInboundServiceResources_TCPHasResetEnabled(t *testing.T) {
+	config := &InboundConfig{
+		FrontendPorts: []PortMapping{{Port: 80, Protocol: "TCP"}},
+		BackendPorts:  []PortMapping{{Port: 8080, Protocol: "TCP"}},
+	}
+	dtConfig := Config{SubscriptionID: "sub", ResourceGroup: "rg", Location: "westus"}
+
+	_, lb, _, err := buildInboundServiceResources("svc", config, dtConfig)
+	assert.NoError(t, err)
+	assert.Len(t, lb.Properties.LoadBalancingRules, 1)
+	if assert.NotNil(t, lb.Properties.LoadBalancingRules[0].Properties.EnableTCPReset) {
+		assert.True(t, *lb.Properties.LoadBalancingRules[0].Properties.EnableTCPReset)
+	}
+}
+
+func TestBuildInboundServiceResources_BackendPortOutOfRangeErrors(t *testing.T) {
+	config := &InboundConfig{
+		FrontendPorts: []PortMapping{{Port: 80, Protocol: "TCP"}},
+		BackendPorts:  []PortMapping{{Port: 65535, Protocol: "TCP"}},
+	}
+	dtConfig := Config{SubscriptionID: "sub", ResourceGroup: "rg", Location: "westus"}
+
+	_, _, _, err := buildInboundServiceResources("svc", config, dtConfig)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "backend port")
+}
+
+func TestBuildInboundServiceResources_AppliesIdleTimeout(t *testing.T) {
+	idle := int32(30)
+	config := &InboundConfig{
+		FrontendPorts:      []PortMapping{{Port: 80, Protocol: "TCP"}},
+		BackendPorts:       []PortMapping{{Port: 8080, Protocol: "TCP"}},
+		IdleTimeoutMinutes: &idle,
+	}
+	dtConfig := Config{SubscriptionID: "sub", ResourceGroup: "rg", Location: "westus"}
+
+	_, lb, _, err := buildInboundServiceResources("svc", config, dtConfig)
+	assert.NoError(t, err)
+	assert.Len(t, lb.Properties.LoadBalancingRules, 1)
+	assert.Equal(t, int32(30), *lb.Properties.LoadBalancingRules[0].Properties.IdleTimeoutInMinutes)
+}
+
+func TestBuildInboundServiceResources_IdleTimeoutOutOfRangeErrors(t *testing.T) {
+	idle := int32(99)
+	config := &InboundConfig{
+		FrontendPorts:      []PortMapping{{Port: 80, Protocol: "TCP"}},
+		IdleTimeoutMinutes: &idle,
+	}
+	dtConfig := Config{SubscriptionID: "sub", ResourceGroup: "rg", Location: "westus"}
+
+	_, _, _, err := buildInboundServiceResources("svc", config, dtConfig)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "idle timeout")
 }

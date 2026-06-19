@@ -303,7 +303,6 @@ func healthProbeEqual(a, b *HealthProbeConfig) bool {
 	return strPtrEqual(a.RequestPath, b.RequestPath)
 }
 
-
 // --------------------------------------------------------------------------------
 // Data Transfer Objects (DTOs) for LocationData (following the ServiceGateway API documentation)
 // --------------------------------------------------------------------------------
