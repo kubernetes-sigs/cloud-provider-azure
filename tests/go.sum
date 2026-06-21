@@ -280,8 +280,8 @@ k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a h1:xCeOEAOoGYl2jnJoHkC3hk
 k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a/go.mod h1:uGBT7iTA6c6MvqUvSXIaYZo9ukscABYi2btjhvgKGZ0=
 k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2 h1:AZYQSJemyQB5eRxqcPky+/7EdBj0xi3g0ZcxxJ7vbWU=
 k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2/go.mod h1:xDxuJ0whA3d0I4mf/C4ppKHxXynQ+fxnkmQH0vTHnuk=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.20.9 h1:r+rYaP4LruK4B5ehxHyCQVH9Swxg0siqmMc9gPA0Oo4=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.20.9/go.mod h1:nvT7njky0cliFSfD/V4f1ggxSV7qIOwvtlajWVMC8bc=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.21.0 h1:Wc+0EuDqehOYz/o7cqY0vEQuzkrG69xG+M2AG+LVFTo=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.21.0/go.mod h1:nvT7njky0cliFSfD/V4f1ggxSV7qIOwvtlajWVMC8bc=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.15.2 h1:be6PmylCocI/CZTamSn9uQpchsXcb4SCaH9jl3KDxkQ=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.15.2/go.mod h1:bFd+YoGg9on0uMr5Y4HjFiBovY1y6GbmokVl35+zQAA=
 sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 h1:IpInykpT6ceI+QxKBbEflcR5EXP7sU1kvOlxwZh5txg=
