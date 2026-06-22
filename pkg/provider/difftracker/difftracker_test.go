@@ -815,6 +815,40 @@ func TestNewErrorPaths(t *testing.T) {
 	assert.NotNil(t, dt.NRPResources.Locations)
 }
 
+// TestNewSeedsOutboundRefCount verifies New seeds the outbound ref-counter from
+// the egress pods already present in the initial state, so the counter is
+// non-zero for identities that have backing pods at construction time.
+func TestNewSeedsOutboundRefCount(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockKubeClient := fake.NewSimpleClientset()
+
+	k8s := emptyK8sState()
+	k8s.Nodes["node1"] = Node{Pods: map[string]Pod{
+		"10.0.0.1": {InboundIdentities: sets.NewString(), PublicOutboundIdentity: "egress1"},
+		"10.0.0.2": {InboundIdentities: sets.NewString(), PublicOutboundIdentity: "egress1"},
+		"10.0.0.3": {InboundIdentities: sets.NewString("svc1"), PublicOutboundIdentity: ""},
+	}}
+	k8s.Nodes["node2"] = Node{Pods: map[string]Pod{
+		"10.0.1.1": {InboundIdentities: sets.NewString(), PublicOutboundIdentity: "Egress2"},
+	}}
+
+	dt, err := New(k8s, emptyNRPState(), validTestConfig(), mockFactory, mockKubeClient)
+	assert.NoError(t, err)
+
+	val, ok := dt.outboundIdentityPodRefCount.Load("egress1")
+	assert.True(t, ok)
+	assert.Equal(t, 2, val.(int))
+
+	val, ok = dt.outboundIdentityPodRefCount.Load("egress2")
+	assert.True(t, ok, "identity key is lowercased")
+	assert.Equal(t, 1, val.(int))
+
+	_, ok = dt.outboundIdentityPodRefCount.Load("")
+	assert.False(t, ok, "pods without an egress identity are not counted")
+}
+
 // TestEnqueueK8sResourceOperationErrors covers the empty-ID and invalid-operation
 // branches of enqueueK8sResourceOperation (via the public wrappers).
 func TestEnqueueK8sResourceOperationErrors(t *testing.T) {
@@ -1025,4 +1059,45 @@ func TestUpdateK8sEndpointsAddThenRemove(t *testing.T) {
 	// Pod had only svc1 -> pod and node cleaned up.
 	_, ok := dt.K8sResources.Nodes["node1"]
 	assert.False(t, ok)
+}
+
+// TestUpdateK8sEndpointsRelocation covers the case where the same pod IP appears
+// in both OldAddresses and NewAddresses but on a different node (relocation): the
+// pod must be removed from the old node and added to the new one.
+func TestUpdateK8sEndpointsRelocation(t *testing.T) {
+	dt := &DiffTracker{K8sResources: K8sState{Nodes: map[string]Node{}}}
+
+	errs := dt.UpdateK8sEndpoints(UpdateK8sEndpointsInputType{
+		InboundIdentity: "svc1",
+		NewAddresses:    map[string]string{"10.0.0.1": "node1"},
+	})
+	assert.Empty(t, errs)
+	assert.True(t, dt.K8sResources.Nodes["node1"].Pods["10.0.0.1"].InboundIdentities.Has("svc1"))
+
+	// Same pod IP moves from node1 to node2.
+	errs = dt.UpdateK8sEndpoints(UpdateK8sEndpointsInputType{
+		InboundIdentity: "svc1",
+		OldAddresses:    map[string]string{"10.0.0.1": "node1"},
+		NewAddresses:    map[string]string{"10.0.0.1": "node2"},
+	})
+	assert.Empty(t, errs)
+
+	// Old node is gone, new node holds the pod with svc1.
+	_, ok := dt.K8sResources.Nodes["node1"]
+	assert.False(t, ok, "pod must be removed from the old node")
+	pod, ok := dt.K8sResources.Nodes["node2"].Pods["10.0.0.1"]
+	assert.True(t, ok, "pod must be added to the new node")
+	assert.True(t, pod.InboundIdentities.Has("svc1"))
+}
+
+func TestUpdateK8sPodRejectsEmptyLocationOrAddress(t *testing.T) {
+	dt := &DiffTracker{K8sResources: K8sState{Nodes: map[string]Node{}}}
+
+	err := dt.UpdateK8sPod(UpdatePodInputType{PodOperation: Add, Location: "", Address: "10.0.0.1"})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "must not be empty")
+
+	err = dt.UpdateK8sPod(UpdatePodInputType{PodOperation: Add, Location: "node1", Address: ""})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "must not be empty")
 }

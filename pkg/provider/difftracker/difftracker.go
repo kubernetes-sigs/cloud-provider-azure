@@ -74,5 +74,13 @@ func New(k8s K8sState, nrp NRPState, config Config, networkClientFactory azclien
 		kubeClient:           kubeClient,
 	}
 
+	// Seed the outbound ref-counter from egress pods already in the initial state
+	// so a later REMOVE can drive the counter to zero.
+	for _, node := range k8s.Nodes {
+		for _, pod := range node.Pods {
+			diffTracker.incrementOutboundRefCount(pod.PublicOutboundIdentity)
+		}
+	}
+
 	return diffTracker, nil
 }

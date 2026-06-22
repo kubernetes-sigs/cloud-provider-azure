@@ -500,3 +500,14 @@ func TestDifference(t *testing.T) {
 		})
 	}
 }
+
+func TestInsertOnUninitializedSet(t *testing.T) {
+	s := &IgnoreCaseSet{}
+	s.Insert("Foo", "BAR")
+	if !s.Has("foo") || !s.Has("bar") {
+		t.Errorf("Insert on uninitialized set should lazily initialize and add items, got %v", s.UnsortedList())
+	}
+	if s.Len() != 2 {
+		t.Errorf("expected len 2, got %d", s.Len())
+	}
+}
