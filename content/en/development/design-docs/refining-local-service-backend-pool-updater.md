@@ -25,6 +25,7 @@ In scope:
 - Preserve current stale `404` event behavior. Stop recording `404` as a failure metric.
 - Enrich `ErrTooManyRequest` with a `ThrottleError` type to expose `Retry-After` duration to callers. The `ThrottleError` change in `pkg/azclient/policy/retryrepectthrottled/` requires a separate `azclient` release and dependency bump before the retry implementation can use it.
 - Add unit tests for retry, exhaustion, non-retry, and stale cases.
+- Update the multi-SLB documentation (`topics/multislb`) to document retry behavior, error classification, and recovery guidance. The implementation should include a code comment linking to the user-facing documentation.
 
 Out of scope:
 
@@ -169,7 +170,7 @@ Add unit tests in `pkg/azclient/policy/retryrepectthrottled/throttle_test.go`:
 Use distinct events for retry and final failure:
 
 - `LoadBalancerBackendPoolUpdateRetrying`: emitted on every retryable failed attempt that will be requeued.
-- `LoadBalancerBackendPoolUpdateFailed`: emitted when a terminal error occurs or the retry budget is exhausted. The event message should include the error and guidance: *"Backend pool update failed: \<error\>. To retrigger, cause an endpoint change for the Service (e.g., restart or scale a backing pod)."*
+- `LoadBalancerBackendPoolUpdateFailed`: emitted when a terminal error occurs or the retry budget is exhausted. For terminal errors, the event message should include the error: *"Backend pool update failed (non-retriable): \<error\>."* For retry exhaustion, the message should include the retry count and guidance: *"Backend pool update failed after \<N\> retries: \<error\>. To retrigger, cause an endpoint change for the Service (e.g., restart or scale a backing pod)."*
 - `LoadBalancerBackendPoolUpdated`: keep existing success behavior.
 - ARM resource-not-found: no event.
 
@@ -252,21 +253,22 @@ Add focused unit tests in `pkg/provider/azure_local_services_test.go`:
 5. `ThrottleError` from the local gate path with `RetryAfter` not in the future (gate expired during SDK retries) falls back to the next updater tick.
 6. ARM `409` or `412` from `CreateOrUpdate` requeues, emits `LoadBalancerBackendPoolUpdateRetrying`, then succeeds on the next tick after a fresh `Get`.
 7. If any operation in a `lbName/backendPoolName` group is waiting for `nextEligibleAt`, the whole group is preserved and no same-group operation is processed early.
-8. A fresh operation merged with a requeued operation keeps its own retry counter; on group failure, all operations in the group consume one retry.
-9. A group with mixed retry budgets (one operation at max retries, one fresh): the exhausted operation is dropped and reported while the fresh operation is requeued.
-10. Retry budget exhaustion emits `LoadBalancerBackendPoolUpdateFailed` with guidance text and leaves the queue empty.
-11. Statuses from `retryrepectthrottled.GetRetriableStatusCode()` do not requeue and emit `LoadBalancerBackendPoolUpdateFailed`.
-12. Other non-retriable errors do not requeue and emit `LoadBalancerBackendPoolUpdateFailed`.
-13. ARM resource-not-found does not requeue and emits no event.
-14. Stale service or changed load balancer before requeue is dropped quietly.
-15. Retry requeue is serialized with LB migration under `serviceReconcileLock`: a retriable failure requeues the operation before the main reconcile path can call `removeOperation()`. After the lock is released, `removeOperation()` removes the requeued operation from the queue.
-16. Retry requeue is serialized with service deletion under `serviceReconcileLock`: a retriable failure requeues the operation before the main reconcile path can delete from `localServiceNameToServiceInfoMap`. The requeued operation is dropped by `groupOperations()` on the next tick.
-17. A Service that disappears while its operation is parked behind `nextEligibleAt` is dropped quietly on the next relevance check.
-18. Multiple operations for multiple Services in a backend-pool group emit one retry/failure event per distinct Service, covering the current `notify()` break-after-first-operation bug.
-19. `removeOperation(serviceName)` removes parked operations whose `nextEligibleAt` is in the future.
-20. Updater shutdown with parked operations does not emit retry/failure events and does not requeue.
-21. Explicit `LoadBalancerBackendPoolUpdateMaxRetries: 0` remains non-nil through config load and disables updater retry.
-22. A retried-then-succeeded operation records exactly one successful metric observation and no failed metric observations.
+8. Fresh operations for the same pool added while an older operation is parked behind `nextEligibleAt` are processed in order (parked first, fresh second) on the next eligible tick, ensuring the correct desired state.
+9. A fresh operation merged with a requeued operation keeps its own retry counter; on group failure, all operations in the group consume one retry.
+10. A group with mixed retry budgets (one operation at max retries, one fresh): the exhausted operation is dropped and reported while the fresh operation is requeued.
+11. Retry budget exhaustion emits `LoadBalancerBackendPoolUpdateFailed` with guidance text and leaves the queue empty.
+12. Statuses from `retryrepectthrottled.GetRetriableStatusCode()` do not requeue and emit `LoadBalancerBackendPoolUpdateFailed`.
+13. Other non-retriable errors do not requeue and emit `LoadBalancerBackendPoolUpdateFailed`.
+14. ARM resource-not-found does not requeue and emits no event.
+15. Stale service or changed load balancer before requeue is dropped quietly.
+16. Retry requeue is serialized with LB migration under `serviceReconcileLock`: a retriable failure requeues the operation before the main reconcile path can call `removeOperation()`. After the lock is released, `removeOperation()` removes the requeued operation from the queue.
+17. Retry requeue is serialized with service deletion under `serviceReconcileLock`: a retriable failure requeues the operation before the main reconcile path can delete from `localServiceNameToServiceInfoMap`. The requeued operation is dropped by `groupOperations()` on the next tick.
+18. A Service that disappears while its operation is parked behind `nextEligibleAt` is dropped quietly on the next relevance check.
+19. Multiple operations for multiple Services in a backend-pool group emit one retry/failure event per distinct Service, covering the current `notify()` break-after-first-operation bug.
+20. `removeOperation(serviceName)` removes parked operations whose `nextEligibleAt` is in the future.
+21. Updater shutdown with parked operations does not emit retry/failure events and does not requeue.
+22. Explicit `LoadBalancerBackendPoolUpdateMaxRetries: 0` remains non-nil through config load and disables updater retry.
+23. A retried-then-succeeded operation records exactly one successful metric observation and no failed metric observations.
 
 Use a fake event recorder where needed to assert retrying and failed event reasons precisely.
 
