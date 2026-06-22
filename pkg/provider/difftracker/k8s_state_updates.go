@@ -83,7 +83,7 @@ func (dt *DiffTracker) updateK8sEndpointsLocked(input UpdateK8sEndpointsInputTyp
 			continue
 		}
 
-		if _, exists := input.OldAddresses[address]; exists {
+		if oldLocation, exists := input.OldAddresses[address]; exists && oldLocation == location {
 			continue
 		}
 
@@ -103,7 +103,7 @@ func (dt *DiffTracker) updateK8sEndpointsLocked(input UpdateK8sEndpointsInputTyp
 	}
 
 	for address, location := range input.OldAddresses {
-		if _, exists := input.NewAddresses[address]; exists {
+		if newLocation, exists := input.NewAddresses[address]; exists && newLocation == location {
 			continue
 		}
 
@@ -146,7 +146,7 @@ func (dt *DiffTracker) UpdateK8sEndpoints(input UpdateK8sEndpointsInputType) []e
 	return dt.updateK8sEndpointsLocked(input)
 }
 
-func (dt *DiffTracker) addOrUpdatePod(input UpdatePodInputType) error {
+func (dt *DiffTracker) addOrUpdatePod(input UpdatePodInputType) {
 	node, exists := dt.K8sResources.Nodes[input.Location]
 	if !exists {
 		node = newNode()
@@ -161,8 +161,6 @@ func (dt *DiffTracker) addOrUpdatePod(input UpdatePodInputType) error {
 	pod.PublicOutboundIdentity = input.PublicOutboundIdentity
 	node.Pods[input.Address] = pod
 	klog.V(2).Infof("addOrUpdatePod: Set outbound identity %q for pod %s on node %s", input.PublicOutboundIdentity, input.Address, input.Location)
-
-	return nil
 }
 
 // removePod removes a pod from K8s state. Returns true if the pod was actually
@@ -226,6 +224,9 @@ func (dt *DiffTracker) decrementOutboundRefCount(identity string) error {
 
 // updateK8sPodLocked updates K8s pod state. Assumes lock is already held.
 func (dt *DiffTracker) updateK8sPodLocked(input UpdatePodInputType) error {
+	if input.Location == "" || input.Address == "" {
+		return fmt.Errorf("updateK8sPodLocked: Location and Address must not be empty (location=%q, address=%q)", input.Location, input.Address)
+	}
 	switch input.PodOperation {
 	case Add, Update:
 		// Determine the pod's current (old) outbound identity, if any, and whether
@@ -257,7 +258,8 @@ func (dt *DiffTracker) updateK8sPodLocked(input UpdatePodInputType) error {
 			}
 			dt.incrementOutboundRefCount(input.PublicOutboundIdentity)
 		}
-		return dt.addOrUpdatePod(input)
+		dt.addOrUpdatePod(input)
+		return nil
 	case Remove:
 		// First, try to remove the pod from K8s state.
 		// removePod returns false if the pod doesn't exist (duplicate removal).

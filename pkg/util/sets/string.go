@@ -38,14 +38,13 @@ func NewString(items ...string) *IgnoreCaseSet {
 	return &IgnoreCaseSet{set: set}
 }
 
-// Insert adds the given items to the set. It only works if the set is initialized.
+// Insert adds the given items to the set, initializing the underlying set if needed.
 func (s *IgnoreCaseSet) Insert(items ...string) {
-	var lowerItems []string
-	for _, item := range items {
-		lowerItems = append(lowerItems, strings.ToLower(item))
+	if s.set == nil {
+		s.set = sets.New[string]()
 	}
-	for _, item := range lowerItems {
-		s.set.Insert(item)
+	for _, item := range items {
+		s.set.Insert(strings.ToLower(item))
 	}
 }
 
