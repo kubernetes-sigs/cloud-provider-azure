@@ -2,9 +2,6 @@ name: Release
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*.*.*"
 
 permissions:
   contents: read
@@ -158,70 +155,3 @@ jobs:
           name: acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}
           path: bin/azure-acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}.exe
           if-no-files-found: error
-
-  publish:
-    runs-on: ubuntu-latest
-    needs:
-      - build-cloud-controller-manager
-      - build-cloud-node-manager
-      - build-acr-credential-provider
-    permissions:
-      contents: write
-    steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
-        with:
-          egress-policy: audit
-
-      - name: Checkout
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
-        with:
-          ref: documentation
-          fetch-depth: 0
-      - name: Discover Go modules
-        id: gomods
-        uses: ./.github/actions/discover-go-modules
-      - name: Setup Golang
-        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
-        with:
-          go-version: ${{ steps.gomods.outputs.version }}
-          check-latest: true
-      - name: Generate release note
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          ./hack/generate-release-note.sh ${GITHUB_REF_NAME} release-notes.md true
-      - name: Download artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
-        with:
-          path: ./artifacts
-      - name: Publish release
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
-        with:
-          body_path: release-notes.md
-          draft: true
-          files: |
-            ./artifacts/cloud-node-manager-*-*/*
-            ./artifacts/cloud-controller-manager-*-*/*
-            ./artifacts/acr-credential-provider-*-*/*
-      - name: Update site release note
-        uses: stefanzweifel/git-auto-commit-action@v7
-        with:
-          # Optional. Commit message for the created commit.
-          # Defaults to "Apply automatic changes"
-          commit_message: Update release notes for ${{github.ref_name}}
-
-          # Optional. Local and remote branch name where commit is going to be pushed
-          #  to. Defaults to the current branch.
-          #  You might need to set `create_branch: true` if the branch does not exist.
-          branch: doc/release-note-${{github.ref_name}}
-
-          # Optional glob pattern of files which should be added to the commit
-          # Defaults to all (.)
-          # See the `pathspec`-documentation for git
-          # - https://git-scm.com/docs/git-add#Documentation/git-add.txt-ltpathspecgt82308203
-          # - https://git-scm.com/docs/gitglossary#Documentation/gitglossary.txt-aiddefpathspecapathspec
-          file_pattern: './content/en/blog/releases/*.md'
-          
-          # Optional. Create given branch name in local and remote repository.
-          create_branch: true
