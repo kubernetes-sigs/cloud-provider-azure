@@ -197,9 +197,10 @@ func TestUpdateK8sPod(t *testing.T) {
 
 	// Test removing egress assignment
 	input = UpdatePodInputType{
-		PodOperation: Remove,
-		Location:     "node1",
-		Address:      "10.0.0.1",
+		PodOperation:           Remove,
+		PublicOutboundIdentity: "public1",
+		Location:               "node1",
+		Address:                "10.0.0.1",
 	}
 
 	err = dt.UpdateK8sPod(input)
@@ -1100,4 +1101,95 @@ func TestUpdateK8sPodRejectsEmptyLocationOrAddress(t *testing.T) {
 	err = dt.UpdateK8sPod(UpdatePodInputType{PodOperation: Add, Location: "node1", Address: ""})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "must not be empty")
+}
+
+// TestUpdateK8sPodRemovePreservesInboundIdentities verifies that removing a pod's
+// egress assignment clears only the outbound identity and keeps the pod while it
+// still backs an inbound (LoadBalancer) service, whereas an egress-only pod is
+// removed entirely and its ref-counter released.
+func TestUpdateK8sPodRemovePreservesInboundIdentities(t *testing.T) {
+	dt := &DiffTracker{K8sResources: K8sState{Nodes: map[string]Node{}}}
+
+	errs := dt.UpdateK8sEndpoints(UpdateK8sEndpointsInputType{
+		InboundIdentity: "lb1",
+		NewAddresses:    map[string]string{"10.0.0.1": "node1"},
+	})
+	assert.Empty(t, errs)
+	assert.NoError(t, dt.UpdateK8sPod(UpdatePodInputType{
+		PodOperation:           Add,
+		PublicOutboundIdentity: "egressA",
+		Location:               "node1",
+		Address:                "10.0.0.1",
+	}))
+	val, ok := dt.outboundIdentityPodRefCount.Load("egressa")
+	assert.True(t, ok)
+	assert.Equal(t, 1, val.(int))
+
+	assert.NoError(t, dt.UpdateK8sPod(UpdatePodInputType{
+		PodOperation:           Remove,
+		PublicOutboundIdentity: "egressA",
+		Location:               "node1",
+		Address:                "10.0.0.1",
+	}))
+	pod, ok := dt.K8sResources.Nodes["node1"].Pods["10.0.0.1"]
+	assert.True(t, ok, "pod backing an inbound service must be kept")
+	assert.True(t, pod.InboundIdentities.Has("lb1"))
+	assert.Equal(t, "", pod.PublicOutboundIdentity)
+	_, ok = dt.outboundIdentityPodRefCount.Load("egressa")
+	assert.False(t, ok, "egress ref-counter must be released")
+
+	assert.NoError(t, dt.UpdateK8sPod(UpdatePodInputType{
+		PodOperation:           Add,
+		PublicOutboundIdentity: "egressB",
+		Location:               "node2",
+		Address:                "10.0.0.2",
+	}))
+	assert.NoError(t, dt.UpdateK8sPod(UpdatePodInputType{
+		PodOperation:           Remove,
+		PublicOutboundIdentity: "egressB",
+		Location:               "node2",
+		Address:                "10.0.0.2",
+	}))
+	_, nodeOK := dt.K8sResources.Nodes["node2"]
+	assert.False(t, nodeOK, "egress-only pod and its empty node must be removed")
+	_, ok = dt.outboundIdentityPodRefCount.Load("egressb")
+	assert.False(t, ok)
+}
+
+// TestGetSyncLocationsAddressesRemovesGoneNodeAddresses verifies that when a node
+// is gone from K8s but still present in NRP, every address is emitted with an empty
+// ServiceRef so the PartialUpdate removes them on the Service Gateway, and applying
+// the result drops the location locally.
+func TestGetSyncLocationsAddressesRemovesGoneNodeAddresses(t *testing.T) {
+	dt := &DiffTracker{
+		K8sResources: K8sState{Nodes: map[string]Node{}},
+		NRPResources: NRPState{
+			LoadBalancers: sets.NewString("service1", "service2"),
+			NATGateways:   sets.NewString(),
+			Locations: map[string]NRPLocation{
+				"node1": {
+					Addresses: map[string]NRPAddress{
+						"10.0.0.1": {Services: sets.NewString("service1")},
+						"10.0.0.2": {Services: sets.NewString("service2")},
+					},
+				},
+			},
+		},
+	}
+
+	result := dt.GetSyncLocationsAddresses()
+
+	loc, ok := result.Locations["node1"]
+	assert.True(t, ok)
+	assert.Equal(t, PartialUpdate, loc.AddressUpdateAction)
+	assert.Len(t, loc.Addresses, 2)
+	for _, addr := range []string{"10.0.0.1", "10.0.0.2"} {
+		a, ok := loc.Addresses[addr]
+		assert.True(t, ok, "address %s must be enumerated for removal", addr)
+		assert.Equal(t, 0, a.ServiceRef.Len(), "address %s must have empty ServiceRef", addr)
+	}
+
+	dt.UpdateLocationsAddresses(result)
+	_, ok = dt.NRPResources.Locations["node1"]
+	assert.False(t, ok, "gone node's location must be removed locally")
 }
