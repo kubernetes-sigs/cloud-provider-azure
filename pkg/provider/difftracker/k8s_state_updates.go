@@ -163,25 +163,36 @@ func (dt *DiffTracker) addOrUpdatePod(input UpdatePodInputType) {
 	klog.V(2).Infof("addOrUpdatePod: Set outbound identity %q for pod %s on node %s", input.PublicOutboundIdentity, input.Address, input.Location)
 }
 
-// removePod removes a pod from K8s state. Returns true if the pod was actually
-// removed, or false if it didn't exist (already removed by a previous call).
-func (dt *DiffTracker) removePod(input UpdatePodInputType) bool {
-	node, exists := dt.K8sResources.Nodes[input.Location]
-	if !exists {
-		return false
+// removePod clears the pod's outbound identity when it matches the input and
+// deletes the pod only once it has no identities left, so an egress removal never
+// drops a pod's inbound (LoadBalancer) backing. It returns whether the pod existed
+// and any error from decrementing the ref-counter.
+func (dt *DiffTracker) removePod(input UpdatePodInputType) (existed bool, err error) {
+	node, nodeExists := dt.K8sResources.Nodes[input.Location]
+	if !nodeExists {
+		return false, nil
 	}
 
-	if _, podExists := node.Pods[input.Address]; !podExists {
-		return false
+	pod, podExists := node.Pods[input.Address]
+	if !podExists {
+		return false, nil
 	}
 
-	delete(node.Pods, input.Address)
-	if !node.HasPods() {
-		delete(dt.K8sResources.Nodes, input.Location)
+	if pod.PublicOutboundIdentity != "" && strings.EqualFold(pod.PublicOutboundIdentity, input.PublicOutboundIdentity) {
+		pod.PublicOutboundIdentity = ""
+		node.Pods[input.Address] = pod
+		err = dt.decrementOutboundRefCount(input.PublicOutboundIdentity)
 	}
-	klog.V(2).Infof("removePod: Removed pod %s from node %s", input.Address, input.Location)
 
-	return true
+	if !pod.HasIdentities() {
+		delete(node.Pods, input.Address)
+		if !node.HasPods() {
+			delete(dt.K8sResources.Nodes, input.Location)
+		}
+		klog.V(2).Infof("removePod: Removed pod %s from node %s", input.Address, input.Location)
+	}
+
+	return true, err
 }
 
 // incrementOutboundRefCount increments the ref-counter for a pod's outbound
@@ -261,18 +272,13 @@ func (dt *DiffTracker) updateK8sPodLocked(input UpdatePodInputType) error {
 		dt.addOrUpdatePod(input)
 		return nil
 	case Remove:
-		// First, try to remove the pod from K8s state.
-		// removePod returns false if the pod doesn't exist (duplicate removal).
-		if !dt.removePod(input) {
+		existed, err := dt.removePod(input)
+		if !existed {
 			klog.V(4).Infof("updateK8sPodLocked: Pod at %s:%s was already removed (duplicate delete), skipping counter decrement",
 				input.Location, input.Address)
 			return nil
 		}
-
-		// Decrement the ref-counter for the outbound identity passed in the
-		// remove input. A missing key (e.g. an empty identity, which is never
-		// counted) is a no-op.
-		return dt.decrementOutboundRefCount(input.PublicOutboundIdentity)
+		return err
 	default:
 		return fmt.Errorf("invalid pod operation: %s for pod at %s:%s",
 			input.PodOperation, input.Location, input.Address)

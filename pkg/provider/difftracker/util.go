@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"k8s.io/klog/v2"
 
@@ -280,7 +281,7 @@ func (dt *DiffTracker) Equals(other *DiffTracker) bool {
 				return false
 			}
 
-			if pod.PublicOutboundIdentity != otherPod.PublicOutboundIdentity {
+			if !strings.EqualFold(pod.PublicOutboundIdentity, otherPod.PublicOutboundIdentity) {
 				return false
 			}
 		}
