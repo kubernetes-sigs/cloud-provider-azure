@@ -1156,11 +1156,11 @@ func TestUpdateK8sPodRemovePreservesInboundIdentities(t *testing.T) {
 	assert.False(t, ok)
 }
 
-// TestGetSyncLocationsAddressesRemovesGoneNodeAddresses verifies that when a node
-// is gone from K8s but still present in NRP, every address is emitted with an empty
-// ServiceRef so the PartialUpdate removes them on the Service Gateway, and applying
-// the result drops the location locally.
-func TestGetSyncLocationsAddressesRemovesGoneNodeAddresses(t *testing.T) {
+// TestGetSyncLocationsAddressesRemovesGoneNode verifies that when a node is gone
+// from K8s but still present in NRP, the location is emitted with an empty
+// Addresses map (a PartialUpdate that deletes the whole location on the Service
+// Gateway), and applying the result drops the location locally.
+func TestGetSyncLocationsAddressesRemovesGoneNode(t *testing.T) {
 	dt := &DiffTracker{
 		K8sResources: K8sState{Nodes: map[string]Node{}},
 		NRPResources: NRPState{
@@ -1182,12 +1182,7 @@ func TestGetSyncLocationsAddressesRemovesGoneNodeAddresses(t *testing.T) {
 	loc, ok := result.Locations["node1"]
 	assert.True(t, ok)
 	assert.Equal(t, PartialUpdate, loc.AddressUpdateAction)
-	assert.Len(t, loc.Addresses, 2)
-	for _, addr := range []string{"10.0.0.1", "10.0.0.2"} {
-		a, ok := loc.Addresses[addr]
-		assert.True(t, ok, "address %s must be enumerated for removal", addr)
-		assert.Equal(t, 0, a.ServiceRef.Len(), "address %s must have empty ServiceRef", addr)
-	}
+	assert.Empty(t, loc.Addresses)
 
 	dt.UpdateLocationsAddresses(result)
 	_, ok = dt.NRPResources.Locations["node1"]
