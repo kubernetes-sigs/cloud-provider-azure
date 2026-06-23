@@ -161,14 +161,14 @@ func (dt *DiffTracker) createServiceRefFiltered(pod Pod) *utilsets.IgnoreCaseSet
 
 	// Check inbound services (LoadBalancers)
 	for _, serviceUID := range pod.InboundIdentities.UnsortedList() {
-		if dt.isServiceReady(serviceUID, true) {
+		if dt.isServiceReadyToSync(serviceUID, true) {
 			serviceRef.Insert(serviceUID)
 		}
 	}
 
 	// Check outbound service (NAT Gateway)
 	if pod.PublicOutboundIdentity != "" {
-		if dt.isServiceReady(pod.PublicOutboundIdentity, false) {
+		if dt.isServiceReadyToSync(pod.PublicOutboundIdentity, false) {
 			serviceRef.Insert(pod.PublicOutboundIdentity)
 		}
 	}
@@ -176,10 +176,9 @@ func (dt *DiffTracker) createServiceRefFiltered(pod Pod) *utilsets.IgnoreCaseSet
 	return serviceRef
 }
 
-// isServiceReady checks if a service is ready for location sync.
-// Returns true if the service exists in NRP.
-// Must be called with dt.mu held.
-func (dt *DiffTracker) isServiceReady(serviceUID string, isInbound bool) bool {
+// isServiceReadyToSync reports whether a service is ready to be synced to the
+// Service Gateway, i.e. its NRP resource exists. Must be called with dt.mu held.
+func (dt *DiffTracker) isServiceReadyToSync(serviceUID string, isInbound bool) bool {
 	if isInbound {
 		return dt.NRPResources.LoadBalancers.Has(serviceUID)
 	}
