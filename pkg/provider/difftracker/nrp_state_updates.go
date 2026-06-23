@@ -76,9 +76,7 @@ func (dt *DiffTracker) UpdateLocationsAddresses(locationData LocationData) {
 		for addressKey, addressValue := range locationValue.Addresses {
 			// Remove empty addresses
 			if addressValue.ServiceRef.Len() == 0 {
-				if !isFullUpdate {
-					delete(nrpLocation.Addresses, addressKey)
-				}
+				delete(nrpLocation.Addresses, addressKey)
 				continue
 			}
 
