@@ -116,10 +116,17 @@ func (dt *DiffTracker) getSyncLocationsAddressesLocked() LocationData {
 	for location, nrpLocation := range dt.NRPResources.Locations {
 		node, exists := dt.K8sResources.Nodes[location]
 		if !exists {
-			result.Locations[location] = Location{
+			// Node gone from K8s but still in NRP: enumerate each address with an
+			// empty ServiceRef so the PartialUpdate removes them on the SGW. An empty
+			// Addresses map under PartialUpdate is a no-op that would leak them.
+			loc := Location{
 				AddressUpdateAction: PartialUpdate,
 				Addresses:           make(map[string]Address),
 			}
+			for address := range nrpLocation.Addresses {
+				loc.Addresses[address] = Address{ServiceRef: utilsets.NewString()}
+			}
+			result.Locations[location] = loc
 		} else {
 			locationData := findLocationData(result, location)
 			if locationData == nil {
