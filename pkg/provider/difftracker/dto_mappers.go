@@ -38,7 +38,6 @@ func MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(loadBalancerUpdates Sy
 						resourceGroup,
 						service,
 						service,
-						// fmt.Sprintf("%s-backendpool", service),
 					),
 				},
 			},

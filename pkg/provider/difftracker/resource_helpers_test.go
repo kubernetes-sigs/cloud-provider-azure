@@ -3,8 +3,6 @@ package difftracker
 import (
 	"testing"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
@@ -159,7 +157,12 @@ func TestExtractInboundConfigFromService_NamedTargetPort(t *testing.T) {
 	}
 
 	config := ExtractInboundConfigFromService(service)
-	assert.Nil(t, config)
+	assert.NotNil(t, config)
+	assert.Len(t, config.FrontendPorts, 1)
+	assert.Len(t, config.BackendPorts, 1)
+
+	assert.Equal(t, int32(80), config.FrontendPorts[0].Port)
+	assert.Equal(t, config.FrontendPorts[0].Port, config.BackendPorts[0].Port)
 }
 
 func TestExtractInboundConfigFromService_EmptyProtocol(t *testing.T) {
@@ -219,7 +222,7 @@ func TestBuildInboundServiceResources_WithConfig(t *testing.T) {
 	// Verify LoadBalancer
 	assert.NotNil(t, lb.Name)
 	assert.Equal(t, "service-uid-123", *lb.Name)
-	assert.Equal(t, armnetwork.LoadBalancerSKUName(consts.LoadBalancerSKUService), *lb.SKU.Name)
+	assert.Equal(t, "Service", string(*lb.SKU.Name))
 	assert.Equal(t, "eastus", *lb.Location)
 
 	// Verify backend pool
@@ -343,23 +346,6 @@ func TestBuildOutboundServiceResources_Basic(t *testing.T) {
 	assert.Len(t, servicesDTO.Services, 1)
 	assert.Contains(t, servicesDTO.Services[0].Service, "egress-uid-456")
 	assert.Equal(t, Outbound, servicesDTO.Services[0].ServiceType)
-}
-
-func TestNewIgnoreCaseSetFromSlice_Empty(t *testing.T) {
-	set := newIgnoreCaseSetFromSlice([]string{})
-	assert.NotNil(t, set)
-	assert.Equal(t, 0, set.Len())
-}
-
-func TestNewIgnoreCaseSetFromSlice_WithItems(t *testing.T) {
-	items := []string{"service1", "service2", "SERVICE3"}
-	set := newIgnoreCaseSetFromSlice(items)
-
-	assert.Equal(t, 3, set.Len())
-	assert.True(t, set.Has("service1"))
-	assert.True(t, set.Has("service2"))
-	assert.True(t, set.Has("service3")) // Case insensitive
-	assert.True(t, set.Has("SERVICE3"))
 }
 
 func TestBuildInboundServiceResources_BackendPoolNaming(t *testing.T) {
@@ -495,10 +481,24 @@ func TestBuildInboundServiceResources_TCPHasResetEnabled(t *testing.T) {
 	}
 }
 
-func TestBuildInboundServiceResources_BackendPortOutOfRangeErrors(t *testing.T) {
+func TestBuildInboundServiceResources_BackendPortMaxIsValid(t *testing.T) {
 	config := &InboundConfig{
 		FrontendPorts: []PortMapping{{Port: 80, Protocol: "TCP"}},
 		BackendPorts:  []PortMapping{{Port: 65535, Protocol: "TCP"}},
+	}
+	dtConfig := Config{SubscriptionID: "sub", ResourceGroup: "rg", Location: "westus"}
+
+	_, lb, _, err := buildInboundServiceResources("svc", config, dtConfig)
+	assert.NoError(t, err)
+	if assert.Len(t, lb.Properties.LoadBalancingRules, 1) {
+		assert.Equal(t, int32(65535), *lb.Properties.LoadBalancingRules[0].Properties.BackendPort)
+	}
+}
+
+func TestBuildInboundServiceResources_BackendPortOutOfRangeErrors(t *testing.T) {
+	config := &InboundConfig{
+		FrontendPorts: []PortMapping{{Port: 80, Protocol: "TCP"}},
+		BackendPorts:  []PortMapping{{Port: 65536, Protocol: "TCP"}},
 	}
 	dtConfig := Config{SubscriptionID: "sub", ResourceGroup: "rg", Location: "westus"}
 

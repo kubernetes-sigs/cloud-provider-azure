@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package difftracker
 
 import (
@@ -55,9 +71,9 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 		},
 	}
 
-	// Build LB rules and probes from config
+	// Build LB rules from config. No health probes are created: PodIP backend pools
+	// don't support them, so the LB's Probes field is left nil.
 	var lbRules []*armnetwork.LoadBalancingRule
-	var probes []*armnetwork.Probe
 
 	if config != nil && len(config.FrontendPorts) > 0 {
 		idleTimeout := int32(4)
@@ -76,8 +92,8 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 			if frontendPort.Port < 1 || frontendPort.Port > 65534 {
 				return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: frontend port %d out of range (1-65534) for service %s", frontendPort.Port, serviceUID)
 			}
-			if backendPort < 1 || backendPort > 65534 {
-				return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: backend port %d out of range (1-65534) for service %s", backendPort, serviceUID)
+			if backendPort < 1 || backendPort > 65535 {
+				return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: backend port %d out of range (1-65535) for service %s", backendPort, serviceUID)
 			}
 
 			var protocol armnetwork.TransportProtocol
@@ -127,7 +143,7 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 		ID:       to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s", dtConfig.SubscriptionID, dtConfig.ResourceGroup, serviceUID)),
 		Location: to.Ptr(dtConfig.Location),
 		SKU: &armnetwork.LoadBalancerSKU{
-			Name: to.Ptr(armnetwork.LoadBalancerSKUName(consts.LoadBalancerSKUService)),
+			Name: to.Ptr(armnetwork.LoadBalancerSKUName(consts.LoadBalancerSKUNameService)),
 		},
 		Properties: &armnetwork.LoadBalancerPropertiesFormat{
 			Scope: to.Ptr(armnetwork.LoadBalancerScopePublic),
@@ -144,14 +160,13 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 			},
 			BackendAddressPools: backendPools,
 			LoadBalancingRules:  lbRules,
-			Probes:              probes,
 		},
 	}
 
 	// Build ServicesDTO for ServiceGateway registration
 	servicesDTO = MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
 		SyncServicesReturnType{
-			Additions: newIgnoreCaseSetFromSlice([]string{serviceUID}),
+			Additions: utilsets.NewString(serviceUID),
 			Removals:  nil,
 		},
 		SyncServicesReturnType{
@@ -217,7 +232,7 @@ func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dt
 			Removals:  nil,
 		},
 		SyncServicesReturnType{
-			Additions: newIgnoreCaseSetFromSlice([]string{serviceUID}),
+			Additions: utilsets.NewString(serviceUID),
 			Removals:  nil,
 		},
 		dtConfig.SubscriptionID,
@@ -225,15 +240,6 @@ func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dt
 	)
 
 	return pip, natGateway, servicesDTO
-}
-
-// newIgnoreCaseSetFromSlice creates an IgnoreCaseSet from a slice of strings
-func newIgnoreCaseSetFromSlice(items []string) *utilsets.IgnoreCaseSet {
-	set := utilsets.NewString()
-	for _, item := range items {
-		set.Insert(item)
-	}
-	return set
 }
 
 // ExtractInboundConfigFromService creates InboundConfig from a Kubernetes Service
@@ -271,9 +277,9 @@ func ExtractInboundConfigFromService(service *v1.Service) *InboundConfig {
 				backendPort = port.TargetPort.IntVal
 			}
 		case intstr.String:
-			klog.Warningf("ExtractInboundConfigFromService: named targetPort %q is not supported for service %s/%s; rejecting",
-				port.TargetPort.StrVal, service.Namespace, service.Name)
-			return nil
+			klog.Warningf("ExtractInboundConfigFromService: named targetPort %q is not supported for service %s/%s; falling back to port %d",
+				port.TargetPort.StrVal, service.Namespace, service.Name, port.Port)
+			backendPort = port.Port
 		}
 
 		config.BackendPorts = append(config.BackendPorts, PortMapping{
@@ -301,7 +307,7 @@ func buildServiceGatewayRemovalDTO(serviceUID string, isInbound bool, dtConfig C
 		return MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
 			SyncServicesReturnType{
 				Additions: nil,
-				Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
+				Removals:  utilsets.NewString(serviceUID),
 			},
 			SyncServicesReturnType{
 				Additions: nil,
@@ -318,7 +324,7 @@ func buildServiceGatewayRemovalDTO(serviceUID string, isInbound bool, dtConfig C
 		},
 		SyncServicesReturnType{
 			Additions: nil,
-			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
+			Removals:  utilsets.NewString(serviceUID),
 		},
 		dtConfig.SubscriptionID,
 		dtConfig.ResourceGroup,

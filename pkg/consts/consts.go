@@ -243,6 +243,9 @@ const (
 	LoadBalancerSKUStandard = "standard"
 	// LoadBalancerSKUService is the load balancer service SKU
 	LoadBalancerSKUService = "service"
+	// LoadBalancerSKUNameService is the case-sensitive ARM SKU name for the
+	// ServiceGateway inbound load balancer; it must be sent as "Service".
+	LoadBalancerSKUNameService = "Service"
 
 	// ServiceAnnotationLoadBalancerInternal is the annotation used on the service
 	ServiceAnnotationLoadBalancerInternal = "service.beta.kubernetes.io/azure-load-balancer-internal"
