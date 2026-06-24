@@ -534,3 +534,40 @@ func TestBuildInboundServiceResources_IdleTimeoutOutOfRangeErrors(t *testing.T) 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "idle timeout")
 }
+
+func TestBuildInboundResourceNames(t *testing.T) {
+	lbName, pipName, backendPoolName := buildInboundResourceNames("uid")
+	assert.Equal(t, "uid", lbName)
+	assert.Equal(t, "uid-pip", pipName)
+	assert.Equal(t, "uid", backendPoolName)
+}
+
+func TestBuildOutboundResourceNames(t *testing.T) {
+	natGatewayName, pipName := buildOutboundResourceNames("uid")
+	assert.Equal(t, "uid", natGatewayName)
+	assert.Equal(t, "uid-pip", pipName)
+}
+
+func TestBuildServiceGatewayRemovalDTO(t *testing.T) {
+	dtConfig := Config{SubscriptionID: "sub", ResourceGroup: "rg"}
+
+	t.Run("inbound removal", func(t *testing.T) {
+		dto := buildServiceGatewayRemovalDTO("uid", true, dtConfig)
+		assert.Equal(t, PartialUpdate, dto.Action)
+		if assert.Len(t, dto.Services, 1) {
+			assert.Equal(t, "uid", dto.Services[0].Service)
+			assert.Equal(t, Inbound, dto.Services[0].ServiceType)
+			assert.True(t, dto.Services[0].IsDelete)
+		}
+	})
+
+	t.Run("outbound removal", func(t *testing.T) {
+		dto := buildServiceGatewayRemovalDTO("uid", false, dtConfig)
+		assert.Equal(t, PartialUpdate, dto.Action)
+		if assert.Len(t, dto.Services, 1) {
+			assert.Equal(t, "uid", dto.Services[0].Service)
+			assert.Equal(t, Outbound, dto.Services[0].ServiceType)
+			assert.True(t, dto.Services[0].IsDelete)
+		}
+	})
+}
