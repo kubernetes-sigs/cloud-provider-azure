@@ -2616,7 +2616,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		az.NetworkClientFactory = nil
 		az.zoneRepo = nil
 
-		azureconfig := providerconfig.Config{}
+		azureconfig := config.Config{}
 		azureconfig.TenantID = tenantID
 		azureconfig.NetworkResourceTenantID = tenantID
 		azureconfig.NetworkResourceSubscriptionID = networkSubscriptionID
