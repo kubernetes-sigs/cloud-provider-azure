@@ -463,12 +463,17 @@ func convertLocationDTOsToAddressLocations(locations []LocationDTO) []*armnetwor
 			AddressLocation: ptr.To(loc.Location),
 		}
 
-		// Set address update action
+		// Set address update action. Mirror the service/location action converters by
+		// defaulting an unknown (e.g. unset/zero) value to PartialUpdate instead of
+		// leaving it nil, so NRP always receives an explicit action.
 		switch loc.AddressUpdateAction {
 		case PartialUpdate:
 			armLoc.AddressUpdateAction = ptr.To(armnetwork.AddressUpdateActionPartialUpdate)
 		case FullUpdate:
 			armLoc.AddressUpdateAction = ptr.To(armnetwork.AddressUpdateActionFullUpdate)
+		default:
+			klog.Warningf("convertLocationDTOsToAddressLocations: unknown AddressUpdateAction %v for location %q, defaulting to PartialUpdate", loc.AddressUpdateAction, loc.Location)
+			armLoc.AddressUpdateAction = ptr.To(armnetwork.AddressUpdateActionPartialUpdate)
 		}
 
 		// Convert addresses - always initialize the slice to avoid null in JSON

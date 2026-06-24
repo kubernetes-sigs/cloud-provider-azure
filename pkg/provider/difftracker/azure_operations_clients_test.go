@@ -375,4 +375,16 @@ func TestConvertLocationDTOsToAddressLocations(t *testing.T) {
 		assert.Empty(t, locs[0].Addresses[0].Services)
 		assert.Equal(t, "10.0.0.5", *locs[0].Addresses[0].Address)
 	})
+
+	t.Run("unknown AddressUpdateAction defaults to PartialUpdate", func(t *testing.T) {
+		// A LocationDTO whose AddressUpdateAction is left unset (zero value
+		// UnknownUpdateAction) must still produce an explicit action, matching the
+		// service/location action converters, rather than a nil AddressUpdateAction.
+		locs := convertLocationDTOsToAddressLocations([]LocationDTO{
+			{Location: "node1", Addresses: []AddressDTO{}},
+		})
+		assert.Len(t, locs, 1)
+		assert.NotNil(t, locs[0].AddressUpdateAction)
+		assert.Equal(t, armnetwork.AddressUpdateActionPartialUpdate, *locs[0].AddressUpdateAction)
+	})
 }
