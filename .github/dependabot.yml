@@ -19,6 +19,7 @@ updates:
         update-types:
           - "version-update:semver-minor"
           - "version-update:semver-major"
+      - dependency-name: "sigs.k8s.io/cloud-provider-azure/pkg/azclient*"
       - dependency-name: "go"
     groups:
       all:
@@ -48,6 +49,7 @@ updates:
         update-types:
           - "version-update:semver-minor"
           - "version-update:semver-major"
+      - dependency-name: "sigs.k8s.io/cloud-provider-azure/pkg/azclient*"
       - dependency-name: "go"
     groups:
       all:
@@ -346,6 +348,8 @@ updates:
         update-types:
           - "version-update:semver-minor"
           - "version-update:semver-major"
+      - dependency-name: "sigs.k8s.io/cloud-provider-azure/pkg/azclient*"
+      - dependency-name: "go"
     groups:
       all:
         applies-to: version-updates
@@ -425,6 +429,8 @@ updates:
         update-types:
           - "version-update:semver-minor"
           - "version-update:semver-major"
+      - dependency-name: "sigs.k8s.io/cloud-provider-azure/pkg/azclient*"
+      - dependency-name: "go"
     groups:
       all:
         applies-to: version-updates
@@ -504,6 +510,8 @@ updates:
         update-types:
           - "version-update:semver-minor"
           - "version-update:semver-major"
+      - dependency-name: "sigs.k8s.io/cloud-provider-azure/pkg/azclient*"
+      - dependency-name: "go"
     groups:
       all:
         applies-to: version-updates
@@ -582,6 +590,7 @@ updates:
         update-types:
           - "version-update:semver-minor"
           - "version-update:semver-major"
+      - dependency-name: "sigs.k8s.io/cloud-provider-azure/pkg/azclient*"
       - dependency-name: "go"
     groups:
       all:
