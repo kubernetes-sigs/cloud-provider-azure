@@ -25,9 +25,10 @@ gh pr view <pr> --json number,title,headRefName,headRepositoryOwner,headRefOid,b
 ```
 
 2. Run the [Kubernetes Minor Version Guard](#kubernetes-minor-version-guard)
-   immediately for Dependabot Go module PRs. If the guard finds a minor-version
-   change, close the PR and stop before inspecting CI, syncing modules,
-   retesting, commenting `/lgtm`, or reporting that no unblock action is needed.
+   immediately for Dependabot Go module PRs. If the guard finds a disallowed
+   minor-family change, close the PR and stop before inspecting CI, syncing
+   modules, retesting, commenting `/lgtm`, or reporting that no unblock action
+   is needed.
 
 3. Inspect CI only after the minor version guard passes:
 
@@ -67,24 +68,42 @@ gh pr diff <pr> --patch | grep -E '^[+-][[:space:]]+(require[[:space:]]+)?(k8s\.
 
 Then apply these rules:
 
-- For a PR targeting `release-1.N`, every added `k8s.io/*` module version must
-  stay in the `v0.N.x` family.
-- For any branch, a changed `k8s.io/*` module must not move from one minor
+- Compare removed and added lines by module path. A patch-only bump within the
+  same minor family is allowed, even when that minor family was already
+  mismatched with the release branch before the PR. For example, on
+  `release-1.34`, `k8s.io/api v0.35.4` to `v0.35.6` is allowed because the PR
+  did not introduce the `v0.35.x` family.
+- For any branch, an existing `k8s.io/*` module must not move from one minor
   family to another, such as `v0.36.x` to `v0.37.x`, unless the user explicitly
   asks for that Kubernetes minor bump.
-- The added `k8s.io/*` module versions in one PR must not mix minor families,
-  such as some modules at `v0.36.x` and others at `v0.37.x`.
+- For a PR targeting `release-1.N`, a newly added `k8s.io/*` module that has no
+  removed counterpart in the diff must use the `v0.N.x` family unless the user
+  explicitly asks for a different Kubernetes minor family.
+- The PR must not introduce a new mixed minor-family set. Existing mixed
+  families may receive patch bumps, but a new module or changed module must not
+  add a minor family that was not already present in the corresponding removed
+  `k8s.io/*` lines.
 
-If the guard finds a minor-version mismatch, comment `/close` and stop for that
-PR:
+If the guard finds a disallowed minor-family change, comment `/close` and stop
+for that PR. Put `/close` on the first line so Prow can parse it, then include
+the base branch, mismatched module lines, and expected minor family:
 
 ```bash
-gh pr comment <pr> --body "/close"
+gh pr comment <pr> --body-file - <<'EOF'
+/close
+
+Reason: closing because this Dependabot PR introduces a disallowed Kubernetes minor-family change.
+Base branch: release-1.N; expected new k8s.io modules to use v0.N.x, or existing modules to stay in their removed minor family.
+Mismatched modules:
+- k8s.io/example v0.X.Y -> v0.Z.W
+EOF
 ```
 
 Do not inspect CI, run module sync, comment `/lgtm`, post `/retest` or `/test`,
 or report the PR as requiring no action. Report the `/close` comment plus the
-mismatched module lines, the base branch, and the expected minor family.
+mismatched module lines, the base branch, and the expected minor family. For a
+changed existing module, the expected minor family is the module's removed
+version; for a newly added module on `release-1.N`, it is `v0.N.x`.
 
 If the guard finds no `k8s.io/*` module changes, or only patch-level updates
 within the same minor family, continue with the matching workflow below.
@@ -113,10 +132,19 @@ git commit -m "Update Go modules"
 git push
 ```
 
-5. After the push succeeds, comment `/lgtm` on the PR:
+5. After the push succeeds, comment `/lgtm` on the PR. Put `/lgtm` on the first
+   line so Prow can parse it, then name the pushed commit, changed module files,
+   and validation that passed:
 
 ```bash
-gh pr comment <pr> --body "/lgtm"
+gh pr comment <pr> --body-file - <<'EOF'
+/lgtm
+
+Reason: pushed a go-mod-consistency fix for this Dependabot PR.
+Commit: <sha>
+Files: <go.mod/go.sum/vendor files changed>
+Validation: <sync-go-modules check command> passed.
+EOF
 ```
 
 The push reruns CI. Do not add `/retest` just for the old failed
@@ -128,10 +156,16 @@ Use this path when the current status rollup has no failed checks and the only
 pending status is `tide`.
 
 Check the PR labels from `gh pr view`. If the PR does not already have the
-`lgtm` label, comment `/lgtm` so Tide can re-evaluate the PR:
+`lgtm` label, comment `/lgtm` so Tide can re-evaluate the PR. Put `/lgtm` on the
+first line, then say that Tide is the only pending status and no checks are
+failing:
 
 ```bash
-gh pr comment <pr> --body "/lgtm"
+gh pr comment <pr> --body-file - <<'EOF'
+/lgtm
+
+Reason: no checks are failing, Tide is the only pending status, and the PR does not already have the lgtm label.
+EOF
 ```
 
 If the PR already has the `lgtm` label, do not post a duplicate `/lgtm`
@@ -155,14 +189,27 @@ also failed, handle that failure separately before blanket retesting.
 Retest options:
 
 ```bash
-gh pr comment <pr> --body "/test <job-name>"
+gh pr comment <pr> --body-file - <<'EOF'
+/test <job-name>
+
+Reason: rerunning this failed e2e job because its current Prow log contains <PublicIPCountLimitReached or PublicIPPrefixCountLimitReached> and no non-e2e failure remains.
+EOF
 ```
 
 Use one `/test <job-name>` comment per failed e2e job when you want a narrow
-rerun. Use `/retest` only when all current failed jobs are safe to rerun:
+rerun. Put `/test <job-name>` on the first line, then include the quota marker
+found in that job's current Prow log.
+
+Use `/retest` only when all current failed jobs are safe to rerun. Put `/retest`
+on the first line, then say every current failure was confirmed as an e2e
+public-IP quota flake and no non-e2e failure remains:
 
 ```bash
-gh pr comment <pr> --body "/retest"
+gh pr comment <pr> --body-file - <<'EOF'
+/retest
+
+Reason: rerunning all failed jobs because every current failure is an e2e public-IP quota flake confirmed in Prow logs, and no non-e2e failure remains.
+EOF
 ```
 
 If you are already pushing a commit for another fix, prefer the push-triggered
@@ -190,10 +237,15 @@ bump, or editing generated Dependabot PR metadata.
 
 If the PR still needs a rebase after other common blockers have been fixed,
 ask Dependabot to rebase the branch instead of manually rewriting the generated
-PR branch:
+PR branch. Put `@dependabot rebase` on the first line, then say the local
+blockers are resolved and the remaining blocker is rebase state:
 
 ```bash
-gh pr comment <pr> --body "@dependabot rebase"
+gh pr comment <pr> --body-file - <<'EOF'
+@dependabot rebase
+
+Reason: local blockers are resolved, but the PR still needs rebase before Tide can merge it.
+EOF
 ```
 
 Do this after local fixes and pushes are complete so Dependabot rebases the
@@ -202,7 +254,9 @@ latest branch state.
 ## PR Update Rules
 
 - Preserve the generated Dependabot PR body. If a manual compatibility fix was
-  pushed, append a concise reviewer-facing note instead of replacing the body.
+  pushed, append a concise reviewer-facing note instead of replacing the body;
+  include why the note is needed and the smallest useful evidence, such as the
+  compatibility issue, commit SHA, changed files, and validation result.
 - Use specific staging commands, never `git add .`.
 - Push only the current task's files.
 - Run the Kubernetes minor version guard before inspecting CI, module sync,
