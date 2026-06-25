@@ -11434,6 +11434,7 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 								},
 							},
 						},
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{{}},
 					},
 				},
 			},
@@ -11845,7 +11846,9 @@ func TestGetMostEligibleLBName(t *testing.T) {
 				{
 					Name: ptr.To("lb3"),
 					Properties: &armnetwork.LoadBalancerPropertiesFormat{
-						LoadBalancingRules: []*armnetwork.LoadBalancingRule{},
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+							{},
+						},
 					},
 				},
 			},
@@ -11878,6 +11881,79 @@ func TestGetMostEligibleLBName(t *testing.T) {
 			},
 			expectedLBName: "lb2",
 			isInternal:     true,
+		},
+		{
+			description: "should return the first eligible LB if it exists with no rules",
+			eligibleLBs: []string{"lb1", "lb2"},
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{},
+					},
+				},
+			},
+			expectedLBName: "lb1",
+		},
+		{
+			description: "should return the first eligible LB if it exists with nil properties",
+			eligibleLBs: []string{"lb1", "lb2"},
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+				},
+			},
+			expectedLBName: "lb1",
+		},
+		{
+			description: "should return the first eligible LB for internal service when only external LBs exist with no rules",
+			eligibleLBs: []string{"lb1", "lb2"},
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{},
+					},
+				},
+			},
+			isInternal:     true,
+			expectedLBName: "lb1",
+		},
+		{
+			description: "should skip existing LB with rules and return the one with no rules",
+			eligibleLBs: []string{"lb1", "lb2", "lb3"},
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+							{},
+							{},
+							{},
+						},
+					},
+				},
+				{
+					Name: ptr.To("lb2"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{},
+					},
+				},
+			},
+			expectedLBName: "lb2",
+		},
+		{
+			description: "should prefer existing LB with no rules over non-existent one",
+			eligibleLBs: []string{"lb1", "lb2", "lb3"},
+			existingLBs: []*armnetwork.LoadBalancer{
+				{
+					Name: ptr.To("lb3"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						LoadBalancingRules: []*armnetwork.LoadBalancingRule{},
+					},
+				},
+			},
+			expectedLBName: "lb3",
 		},
 	} {
 		t.Run(tc.description, func(t *testing.T) {
