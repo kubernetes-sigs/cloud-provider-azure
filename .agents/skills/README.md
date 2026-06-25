@@ -50,6 +50,9 @@ level small:
 - `debug-e2e-pipeline`: fetch and analyze Prow e2e pipeline failures by
   downloading build logs, JUnit reports, and node artifacts from GCS, then
   matching errors against known failure patterns
+- `build-images`: build cloud-provider-azure CCM, CNM, health-probe-proxy,
+  CCM e2e, or root CCM/CNM aggregate images with explicit tag/registry inputs
+  and optional make flag overrides
 
 ## How To Use
 

@@ -19,11 +19,12 @@ over `make test-unit` for faster feedback.
 
 ## Building Images
 
-Before building images, ask the user for `IMAGE_REGISTRY` and `IMAGE_TAG`.
+Before building images, ask the user for `IMAGE_REGISTRY` and `IMAGE_TAG`. For
+the reusable agent workflow, use `.agents/skills/build-images/`.
 
 ```sh
 IMAGE_REGISTRY=<registry> IMAGE_TAG=<tag> make build-ccm-image
-IMAGE_REGISTRY=<registry> IMAGE_TAG=<tag> make build-cnm-image
+IMAGE_REGISTRY=<registry> IMAGE_TAG=<tag> make build-node-image-linux
 ```
 
 ## File Headers
