@@ -48,11 +48,8 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/providerclient/mock_providerclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
@@ -3020,7 +3017,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		az.NetworkClientFactory = nil
 		az.zoneRepo = nil
 
-		azureconfig := providerconfig.Config{}
+		azureconfig := config.Config{}
 		azureconfig.TenantID = tenantID
 		azureconfig.NetworkResourceTenantID = tenantID
 		azureconfig.NetworkResourceSubscriptionID = networkSubscriptionID
