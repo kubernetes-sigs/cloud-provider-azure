@@ -1048,14 +1048,14 @@ func TestCloud_InstanceExists(t *testing.T) {
 	})
 	t.Run("should report a recently created node as not existing when the grace period is disabled", func(t *testing.T) {
 		cloud := GetTestCloud(ctrl)
-		cloud.NodeInstanceNotFoundGracePeriodInSeconds = -1
+		cloud.NodeInstanceNotFoundGracePeriodInSeconds = 0
 		cloud.VMSet = NewMockVMSet(ctrl)
 
 		ctx := context.Background()
 		node := &v1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:              "foo",
-				CreationTimestamp: metav1.NewTime(time.Now().Add(-1 * time.Minute)),
+				CreationTimestamp: metav1.NewTime(time.Now().Add(-1 * time.Second)),
 			},
 		}
 
