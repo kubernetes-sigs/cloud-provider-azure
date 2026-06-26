@@ -63,6 +63,12 @@ type Config struct {
 
 	// Node filtering configuration
 	NodeFilterRequirements string
+
+	// NodeInstanceNotFoundGracePeriodInSeconds is the period, measured from a node's
+	// creation timestamp, during which a node whose backing VM/VMSS instance is not
+	// yet visible in ARM is still reported as existing, preventing premature node
+	// deletion by the cloud-node-lifecycle controller.
+	NodeInstanceNotFoundGracePeriodInSeconds int
 }
 
 type DynamicReloadingConfig struct {

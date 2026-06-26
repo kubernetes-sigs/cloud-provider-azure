@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -1006,5 +1007,62 @@ func TestCloud_InstanceExists(t *testing.T) {
 		exist, err := cloud.InstanceExists(ctx, node)
 		assert.NoError(t, err)
 		assert.True(t, exist)
+	})
+	t.Run("should report a recently created node as existing when its instance is not yet in ARM", func(t *testing.T) {
+		cloud := GetTestCloud(ctrl)
+		cloud.NodeInstanceNotFoundGracePeriodInSeconds = 300
+		cloud.VMSet = NewMockVMSet(ctrl)
+
+		ctx := context.Background()
+		node := &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "foo",
+				CreationTimestamp: metav1.NewTime(time.Now().Add(-1 * time.Minute)),
+			},
+		}
+
+		cloud.VMSet.(*MockVMSet).EXPECT().GetInstanceIDByNodeName(gomock.Any(), "foo").Return("", cloudprovider.InstanceNotFound)
+
+		exist, err := cloud.InstanceExists(ctx, node)
+		assert.NoError(t, err)
+		assert.True(t, exist)
+	})
+	t.Run("should report a node as not existing when its instance is not in ARM after the grace period", func(t *testing.T) {
+		cloud := GetTestCloud(ctrl)
+		cloud.NodeInstanceNotFoundGracePeriodInSeconds = 300
+		cloud.VMSet = NewMockVMSet(ctrl)
+
+		ctx := context.Background()
+		node := &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "foo",
+				CreationTimestamp: metav1.NewTime(time.Now().Add(-10 * time.Minute)),
+			},
+		}
+
+		cloud.VMSet.(*MockVMSet).EXPECT().GetInstanceIDByNodeName(gomock.Any(), "foo").Return("", cloudprovider.InstanceNotFound)
+
+		exist, err := cloud.InstanceExists(ctx, node)
+		assert.NoError(t, err)
+		assert.False(t, exist)
+	})
+	t.Run("should report a recently created node as not existing when the grace period is disabled", func(t *testing.T) {
+		cloud := GetTestCloud(ctrl)
+		cloud.NodeInstanceNotFoundGracePeriodInSeconds = -1
+		cloud.VMSet = NewMockVMSet(ctrl)
+
+		ctx := context.Background()
+		node := &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "foo",
+				CreationTimestamp: metav1.NewTime(time.Now().Add(-1 * time.Minute)),
+			},
+		}
+
+		cloud.VMSet.(*MockVMSet).EXPECT().GetInstanceIDByNodeName(gomock.Any(), "foo").Return("", cloudprovider.InstanceNotFound)
+
+		exist, err := cloud.InstanceExists(ctx, node)
+		assert.NoError(t, err)
+		assert.False(t, exist)
 	})
 }

@@ -447,6 +447,18 @@ const (
 	DefaultRouteUpdateIntervalInSeconds = 30
 )
 
+// node instance existence check
+const (
+	// DefaultNodeInstanceNotFoundGracePeriodInSeconds defines the default value of
+	// the --node-instance-not-found-grace-period-in-seconds flag. Within this grace
+	// period (measured from a node's creation timestamp) a node whose VM/VMSS
+	// instance is not yet visible in ARM is reported as existing so that the
+	// cloud-node-lifecycle controller does not delete it before the instance has
+	// propagated into ARM. It defaults to 0, which disables the grace period.
+	// See https://github.com/kubernetes-sigs/cloud-provider-azure/issues/10604.
+	DefaultNodeInstanceNotFoundGracePeriodInSeconds = 0
+)
+
 // cloud provider config secret
 const (
 	DefaultCloudProviderConfigSecName      = "azure-cloud-provider"

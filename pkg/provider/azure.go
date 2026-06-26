@@ -94,6 +94,16 @@ type Cloud struct {
 	VMSet                   VMSet
 	LoadBalancerBackendPool BackendPool
 
+	// NodeInstanceNotFoundGracePeriodInSeconds is the period, measured from a node's
+	// creation timestamp, during which a node whose VM/VMSS instance is not yet
+	// visible in ARM is still reported as existing. This tolerates the delay
+	// between a node registering itself in the cluster and its backing instance
+	// propagating into ARM, preventing the cloud-node-lifecycle controller from
+	// deleting the node prematurely. It is configured via the
+	// --node-instance-not-found-grace-period-in-seconds command-line flag and
+	// defaults to 0 (disabled).
+	NodeInstanceNotFoundGracePeriodInSeconds int
+
 	// ipv6DualStack allows overriding for unit testing.  It's normally initialized from featuregates
 	ipv6DualStackEnabled bool
 	// Lock for access to node caches, includes nodeZones, nodeResourceGroups, and unmanagedNodes.
