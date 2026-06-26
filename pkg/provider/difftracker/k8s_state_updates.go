@@ -52,6 +52,11 @@ func (dt *DiffTracker) enqueueK8sResourceOperation(input UpdateK8sResource, set 
 // EnqueueK8sServiceOperation records a service Add/Remove in the local K8s state set.
 // The change is reconciled with NRP later by the sync operations; this method itself
 // performs no Azure calls.
+//
+// Deletion is a two-step protocol: a Remove here only updates the top-level Services
+// set (which drives LoadBalancer add/remove). It does NOT clear the service from pod
+// InboundIdentities; that cleanup (which drives the location/address sync) must be done
+// separately via RemoveServiceFromK8sState. A full service deletion must do both.
 func (dt *DiffTracker) EnqueueK8sServiceOperation(input UpdateK8sResource) error {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
@@ -62,6 +67,11 @@ func (dt *DiffTracker) EnqueueK8sServiceOperation(input UpdateK8sResource) error
 // EnqueueK8sEgressOperation records an egress Add/Remove in the local K8s state set.
 // The change is reconciled with NRP later by the sync operations; this method itself
 // performs no Azure calls.
+//
+// Deletion is a two-step protocol: a Remove here only updates the top-level Egresses
+// set (which drives NAT Gateway add/remove). It does NOT clear the egress identity from
+// pods; that cleanup must be done separately via RemoveServiceFromK8sState. A full
+// egress deletion must do both.
 func (dt *DiffTracker) EnqueueK8sEgressOperation(input UpdateK8sResource) error {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
@@ -233,6 +243,11 @@ func (dt *DiffTracker) decrementOutboundRefCount(identity string) error {
 
 // updateK8sPodLocked updates K8s pod state. Assumes lock is already held.
 func (dt *DiffTracker) updateK8sPodLocked(input UpdatePodInputType) error {
+	// Validate the identifying fields. Location and Address must be non-empty as they
+	// key the node/pod maps. PodOperation is validated by the switch below (the default
+	// case rejects UnknownOperation and any invalid value). PublicOutboundIdentity is
+	// intentionally NOT required: an empty value is a valid "pod has no egress identity"
+	// state, and the ref-count helpers (increment/decrementOutboundRefCount) no-op on "".
 	if input.Location == "" || input.Address == "" {
 		return fmt.Errorf("updateK8sPodLocked: Location and Address must not be empty (location=%q, address=%q)", input.Location, input.Address)
 	}
@@ -332,6 +347,13 @@ func (dt *DiffTracker) removeServiceFromK8sStateLocked(serviceUID string, isInbo
 // RemoveServiceFromK8sState is the public, lock-acquiring entry point for
 // removeServiceFromK8sStateLocked. Use it to clear a deleted service's references
 // from pod identities when the caller does not already hold dt.mu.
+//
+// This is the second step of the deletion protocol: EnqueueK8sServiceOperation /
+// EnqueueK8sEgressOperation with Remove updates the top-level set, while this method
+// clears the per-pod identity references. A full service/egress deletion must call
+// both. The two stay separate because they feed different sync paths (set membership
+// drives LoadBalancer/NAT Gateway removal; identity cleanup drives the location/address
+// sync), and a later PR adds the engine entry point that sequences them under one lock.
 func (dt *DiffTracker) RemoveServiceFromK8sState(serviceUID string, isInbound bool) {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
