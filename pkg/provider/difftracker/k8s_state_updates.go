@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"strings"
 
-	"k8s.io/klog/v2"
-
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -41,10 +39,10 @@ func (dt *DiffTracker) enqueueK8sResourceOperation(input UpdateK8sResource, set 
 	switch input.Operation {
 	case Add:
 		set.Insert(input.ID)
-		klog.V(2).Infof("enqueueK8sResourceOperation: Added %s %s to K8s state", resourceType, input.ID)
+		dt.logger.V(5).Info("Added resource to K8s state", "resourceType", resourceType, "id", input.ID)
 	case Remove:
 		set.Delete(input.ID)
-		klog.V(2).Infof("enqueueK8sResourceOperation: Removed %s %s from K8s state", resourceType, input.ID)
+		dt.logger.V(5).Info("Removed resource from K8s state", "resourceType", resourceType, "id", input.ID)
 	default:
 		return fmt.Errorf("error - ResourceType=%s, Operation=%s and ID=%s", resourceType, input.Operation, input.ID)
 	}
@@ -99,7 +97,7 @@ func (dt *DiffTracker) updateK8sEndpointsLocked(input UpdateK8sEndpointsInputTyp
 			nodeState.Pods[address] = pod
 		}
 		pod.InboundIdentities.Insert(input.InboundIdentity)
-		klog.V(2).Infof("updateK8sEndpointsLocked: Added inbound identity %s to pod %s on node %s", input.InboundIdentity, address, location)
+		dt.logger.V(5).Info("Added inbound identity to pod", "identity", input.InboundIdentity, "pod", address, "node", location)
 	}
 
 	for address, location := range input.OldAddresses {
@@ -123,7 +121,7 @@ func (dt *DiffTracker) updateK8sEndpointsLocked(input UpdateK8sEndpointsInputTyp
 		}
 
 		pod.InboundIdentities.Delete(input.InboundIdentity)
-		klog.V(2).Infof("updateK8sEndpointsLocked: Removed inbound identity %s from pod %s on node %s", input.InboundIdentity, address, location)
+		dt.logger.V(5).Info("Removed inbound identity from pod", "identity", input.InboundIdentity, "pod", address, "node", location)
 
 		if !pod.HasIdentities() {
 			delete(node.Pods, address)
@@ -160,7 +158,7 @@ func (dt *DiffTracker) addOrUpdatePod(input UpdatePodInputType) {
 
 	pod.PublicOutboundIdentity = input.PublicOutboundIdentity
 	node.Pods[input.Address] = pod
-	klog.V(2).Infof("addOrUpdatePod: Set outbound identity %q for pod %s on node %s", input.PublicOutboundIdentity, input.Address, input.Location)
+	dt.logger.V(5).Info("Set outbound identity for pod", "identity", input.PublicOutboundIdentity, "pod", input.Address, "node", input.Location)
 }
 
 // removePod clears the pod's outbound identity when it matches the input and
@@ -189,7 +187,7 @@ func (dt *DiffTracker) removePod(input UpdatePodInputType) (existed bool, err er
 		if !node.HasPods() {
 			delete(dt.K8sResources.Nodes, input.Location)
 		}
-		klog.V(2).Infof("removePod: Removed pod %s from node %s", input.Address, input.Location)
+		dt.logger.V(5).Info("Removed pod from node", "pod", input.Address, "node", input.Location)
 	}
 
 	return true, err
@@ -251,8 +249,8 @@ func (dt *DiffTracker) updateK8sPodLocked(input UpdatePodInputType) error {
 				oldIdentity = pod.PublicOutboundIdentity
 				if strings.EqualFold(oldIdentity, input.PublicOutboundIdentity) {
 					alreadyExists = true
-					klog.V(4).Infof("updateK8sPodLocked: Pod at %s:%s already exists for service %s, skipping counter update",
-						input.Location, input.Address, input.PublicOutboundIdentity)
+					dt.logger.V(4).Info("Pod already exists for service, skipping counter update",
+						"node", input.Location, "pod", input.Address, "service", input.PublicOutboundIdentity)
 				}
 			}
 		}
@@ -274,8 +272,8 @@ func (dt *DiffTracker) updateK8sPodLocked(input UpdatePodInputType) error {
 	case Remove:
 		existed, err := dt.removePod(input)
 		if !existed {
-			klog.V(4).Infof("updateK8sPodLocked: Pod at %s:%s was already removed (duplicate delete), skipping counter decrement",
-				input.Location, input.Address)
+			dt.logger.V(4).Info("Pod was already removed, skipping counter decrement",
+				"node", input.Location, "pod", input.Address)
 			return nil
 		}
 		return err
@@ -315,7 +313,7 @@ func (dt *DiffTracker) removeServiceFromK8sStateLocked(serviceUID string, isInbo
 					pod.PublicOutboundIdentity = ""
 					node.Pods[podIP] = pod
 					if err := dt.decrementOutboundRefCount(serviceUID); err != nil {
-						klog.Warningf("removeServiceFromK8sStateLocked: %v", err)
+						dt.logger.V(4).Info("Could not decrement outbound ref-count", "err", err, "service", serviceUID)
 					}
 				}
 			}
