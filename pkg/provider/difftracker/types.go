@@ -19,6 +19,7 @@ package difftracker
 import (
 	"sync"
 
+	"github.com/go-logr/logr"
 	"k8s.io/client-go/kubernetes"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
@@ -133,6 +134,10 @@ type DiffTracker struct {
 	config               Config
 	networkClientFactory azclient.ClientFactory
 	kubeClient           kubernetes.Interface
+
+	// logger is the component logger, backed by klog via pkg/log. It is supplied
+	// to New and enriched with WithName("difftracker").
+	logger logr.Logger
 }
 
 // --------------------------------------------------------------------------------

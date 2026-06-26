@@ -19,8 +19,8 @@ package difftracker
 import (
 	"fmt"
 
+	"github.com/go-logr/logr"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 )
@@ -28,7 +28,7 @@ import (
 // New creates and initializes a new DiffTracker with the given state and configuration.
 // It validates the configuration and ensures all required dependencies are present.
 // Returns an error if the configuration is invalid or if any required dependency is nil.
-func New(k8s K8sState, nrp NRPState, config Config, networkClientFactory azclient.ClientFactory, kubeClient kubernetes.Interface) (*DiffTracker, error) {
+func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkClientFactory azclient.ClientFactory, kubeClient kubernetes.Interface) (*DiffTracker, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("difftracker.New: %w", err)
 	}
@@ -40,8 +40,7 @@ func New(k8s K8sState, nrp NRPState, config Config, networkClientFactory azclien
 		return nil, fmt.Errorf("difftracker.New: kubeClient must not be nil")
 	}
 
-	klog.V(2).Infof("difftracker.New: initializing with config: subscription=%s, resourceGroup=%s, location=%s, serviceGatewayResourceName=%s, serviceGatewayID=%s, vNetName=%s",
-		config.SubscriptionID, config.ResourceGroup, config.Location, config.ServiceGatewayResourceName, config.ServiceGatewayID, config.VNetName)
+	logger = logger.WithName("difftracker")
 
 	// The caller is expected to pass fully initialized state structs. A nil
 	// field is unexpected and indicates a programming error, so error out.
@@ -68,6 +67,8 @@ func New(k8s K8sState, nrp NRPState, config Config, networkClientFactory azclien
 		K8sResources: k8s,
 		NRPResources: nrp,
 
+		logger: logger,
+
 		// Configuration and clients
 		config:               config,
 		networkClientFactory: networkClientFactory,
@@ -81,6 +82,14 @@ func New(k8s K8sState, nrp NRPState, config Config, networkClientFactory azclien
 			diffTracker.incrementOutboundRefCount(pod.PublicOutboundIdentity)
 		}
 	}
+
+	logger.V(2).Info("Initialized DiffTracker",
+		"subscription", config.SubscriptionID,
+		"resourceGroup", config.ResourceGroup,
+		"location", config.Location,
+		"serviceGatewayResourceName", config.ServiceGatewayResourceName,
+		"serviceGatewayID", config.ServiceGatewayID,
+		"vnetName", config.VNetName)
 
 	return diffTracker, nil
 }

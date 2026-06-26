@@ -16,22 +16,18 @@ limitations under the License.
 
 package difftracker
 
-import (
-	"k8s.io/klog/v2"
-)
-
 func (dt *DiffTracker) UpdateNRPLoadBalancers(syncServicesReturnType SyncServicesReturnType) {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
 	for _, service := range syncServicesReturnType.Additions.UnsortedList() {
 		dt.NRPResources.LoadBalancers.Insert(service)
-		klog.V(2).Infof("UpdateNRPLoadBalancers: Added service %s to NRP LoadBalancers", service)
+		dt.logger.V(5).Info("Added service to NRP LoadBalancers", "service", service)
 	}
 
 	for _, service := range syncServicesReturnType.Removals.UnsortedList() {
 		dt.NRPResources.LoadBalancers.Delete(service)
-		klog.V(2).Infof("UpdateNRPLoadBalancers: Removed service %s from NRP LoadBalancers", service)
+		dt.logger.V(5).Info("Removed service from NRP LoadBalancers", "service", service)
 	}
 }
 
@@ -41,12 +37,12 @@ func (dt *DiffTracker) UpdateNRPNATGateways(syncServicesReturnType SyncServicesR
 
 	for _, service := range syncServicesReturnType.Additions.UnsortedList() {
 		dt.NRPResources.NATGateways.Insert(service)
-		klog.V(2).Infof("UpdateNRPNATGateways: Added service %s to NRP NATGateways", service)
+		dt.logger.V(5).Info("Added service to NRP NATGateways", "service", service)
 	}
 
 	for _, service := range syncServicesReturnType.Removals.UnsortedList() {
 		dt.NRPResources.NATGateways.Delete(service)
-		klog.V(2).Infof("UpdateNRPNATGateways: Removed service %s from NRP NATGateways", service)
+		dt.logger.V(5).Info("Removed service from NRP NATGateways", "service", service)
 	}
 }
 
