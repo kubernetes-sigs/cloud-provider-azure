@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -711,7 +712,7 @@ func TestNew(t *testing.T) {
 	defer ctrl.Finish()
 	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
 	mockKubeClient := fake.NewSimpleClientset()
-	diffTracker, err := New(K8sResources, NRPResources, config, mockFactory, mockKubeClient)
+	diffTracker, err := New(log.Noop(), K8sResources, NRPResources, config, mockFactory, mockKubeClient)
 	assert.NoError(t, err)
 	syncOperations := diffTracker.GetSyncOperations()
 
@@ -777,35 +778,35 @@ func TestNewErrorPaths(t *testing.T) {
 	mockKubeClient := fake.NewSimpleClientset()
 
 	// Invalid config (empty) -> validation error.
-	_, err := New(K8sState{}, NRPState{}, Config{}, mockFactory, mockKubeClient)
+	_, err := New(log.Noop(), K8sState{}, NRPState{}, Config{}, mockFactory, mockKubeClient)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "New")
 
 	// Nil networkClientFactory.
-	_, err = New(K8sState{}, NRPState{}, validTestConfig(), nil, mockKubeClient)
+	_, err = New(log.Noop(), K8sState{}, NRPState{}, validTestConfig(), nil, mockKubeClient)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "networkClientFactory must not be nil")
 
 	// Nil kubeClient.
-	_, err = New(K8sState{}, NRPState{}, validTestConfig(), mockFactory, nil)
+	_, err = New(log.Noop(), K8sState{}, NRPState{}, validTestConfig(), mockFactory, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "kubeClient must not be nil")
 
 	// Uninitialized state field -> error out instead of silently initializing.
 	k8sMissingServices := emptyK8sState()
 	k8sMissingServices.Services = nil
-	_, err = New(k8sMissingServices, emptyNRPState(), validTestConfig(), mockFactory, mockKubeClient)
+	_, err = New(log.Noop(), k8sMissingServices, emptyNRPState(), validTestConfig(), mockFactory, mockKubeClient)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "k8s.Services must not be nil")
 
 	nrpMissingLocations := emptyNRPState()
 	nrpMissingLocations.Locations = nil
-	_, err = New(emptyK8sState(), nrpMissingLocations, validTestConfig(), mockFactory, mockKubeClient)
+	_, err = New(log.Noop(), emptyK8sState(), nrpMissingLocations, validTestConfig(), mockFactory, mockKubeClient)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "nrp.Locations must not be nil")
 
 	// Valid call with fully initialized (empty) states.
-	dt, err := New(emptyK8sState(), emptyNRPState(), validTestConfig(), mockFactory, mockKubeClient)
+	dt, err := New(log.Noop(), emptyK8sState(), emptyNRPState(), validTestConfig(), mockFactory, mockKubeClient)
 	assert.NoError(t, err)
 	assert.NotNil(t, dt)
 	assert.NotNil(t, dt.K8sResources.Services)
@@ -835,7 +836,7 @@ func TestNewSeedsOutboundRefCount(t *testing.T) {
 		"10.0.1.1": {InboundIdentities: sets.NewString(), PublicOutboundIdentity: "Egress2"},
 	}}
 
-	dt, err := New(k8s, emptyNRPState(), validTestConfig(), mockFactory, mockKubeClient)
+	dt, err := New(log.Noop(), k8s, emptyNRPState(), validTestConfig(), mockFactory, mockKubeClient)
 	assert.NoError(t, err)
 
 	val, ok := dt.outboundIdentityPodRefCount.Load("egress1")

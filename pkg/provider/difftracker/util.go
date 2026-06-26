@@ -22,8 +22,6 @@ import (
 	"reflect"
 	"strings"
 
-	"k8s.io/klog/v2"
-
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -107,42 +105,42 @@ func (pod *Pod) HasIdentities() bool {
 // deepEqualLocked compares the K8s and NRP states to check if they are in sync.
 // Callers must hold dt.mu.
 func (dt *DiffTracker) deepEqualLocked() bool {
-	klog.V(4).Infof("DeepEqual: Checking equality - K8s Services=%d, NRP LoadBalancers=%d, K8s Egresses=%d, NRP NATGateways=%d, K8s Nodes=%d, NRP Locations=%d",
-		dt.K8sResources.Services.Len(), dt.NRPResources.LoadBalancers.Len(),
-		dt.K8sResources.Egresses.Len(), dt.NRPResources.NATGateways.Len(),
-		len(dt.K8sResources.Nodes), len(dt.NRPResources.Locations))
+	dt.logger.V(5).Info("Comparing K8s and NRP state for equality",
+		"k8sServices", dt.K8sResources.Services.Len(), "nrpLoadBalancers", dt.NRPResources.LoadBalancers.Len(),
+		"k8sEgresses", dt.K8sResources.Egresses.Len(), "nrpNATGateways", dt.NRPResources.NATGateways.Len(),
+		"k8sNodes", len(dt.K8sResources.Nodes), "nrpLocations", len(dt.NRPResources.Locations))
 
 	// Compare Services with LoadBalancers and Egresses with NATGateways.
 	if !dt.K8sResources.Services.Equals(dt.NRPResources.LoadBalancers) {
-		klog.V(4).Infof("DeepEqual: Services and LoadBalancers mismatch")
+		dt.logger.V(4).Info("Services did not match LoadBalancers")
 		return false
 	}
 	if !dt.K8sResources.Egresses.Equals(dt.NRPResources.NATGateways) {
-		klog.V(4).Infof("DeepEqual: Egresses and NATGateways mismatch")
+		dt.logger.V(4).Info("Egresses did not match NATGateways")
 		return false
 	}
 
 	// Compare Nodes with Locations.
 	if len(dt.K8sResources.Nodes) != len(dt.NRPResources.Locations) {
-		klog.V(4).Infof("DeepEqual: Nodes and Locations length mismatch")
+		dt.logger.V(4).Info("Node count did not match Location count")
 		return false
 	}
 	for nodeKey, node := range dt.K8sResources.Nodes {
 		nrpLocation, exists := dt.NRPResources.Locations[nodeKey]
 		if !exists {
-			klog.V(4).Infof("DeepEqual: Node %s not found in Locations", nodeKey)
+			dt.logger.V(4).Info("Could not find node in Locations", "node", nodeKey)
 			return false
 		}
 
 		// Compare Pods with Addresses.
 		if len(node.Pods) != len(nrpLocation.Addresses) {
-			klog.V(4).Infof("DeepEqual: Pods and Addresses length mismatch for node %s", nodeKey)
+			dt.logger.V(4).Info("Pod count did not match Address count for node", "node", nodeKey)
 			return false
 		}
 		for podKey, pod := range node.Pods {
 			nrpAddress, exists := nrpLocation.Addresses[podKey]
 			if !exists {
-				klog.V(4).Infof("DeepEqual: Pod %s not found in Addresses for node %s", podKey, nodeKey)
+				dt.logger.V(4).Info("Could not find pod in Addresses for node", "pod", podKey, "node", nodeKey)
 				return false
 			}
 
@@ -152,7 +150,7 @@ func (dt *DiffTracker) deepEqualLocked() bool {
 				combinedIdentities.Insert(pod.PublicOutboundIdentity)
 			}
 			if !combinedIdentities.Equals(nrpAddress.Services) {
-				klog.V(4).Infof("DeepEqual: Identities and Services mismatch for pod %s in node %s", podKey, nodeKey)
+				dt.logger.V(4).Info("Identities did not match Services for pod", "pod", podKey, "node", nodeKey)
 				return false
 			}
 		}

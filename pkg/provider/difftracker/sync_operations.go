@@ -17,15 +17,16 @@ limitations under the License.
 package difftracker
 
 import (
-	"k8s.io/klog/v2"
+	"github.com/go-logr/logr"
 
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 // GetServicesToSync handles the synchronization of services between K8s and NRP
-func GetServicesToSync(k8sServices, nrpServices *utilsets.IgnoreCaseSet) SyncServicesReturnType {
-	klog.V(2).Infof("GetServicesToSync: K8s services (%d): %v", k8sServices.Len(), k8sServices.UnsortedList())
-	klog.V(2).Infof("GetServicesToSync: NRP services (%d): %v", nrpServices.Len(), nrpServices.UnsortedList())
+func GetServicesToSync(logger logr.Logger, k8sServices, nrpServices *utilsets.IgnoreCaseSet) SyncServicesReturnType {
+	logger.V(5).Info("Comparing services for sync",
+		"k8sCount", k8sServices.Len(), "k8sServices", k8sServices.UnsortedList(),
+		"nrpCount", nrpServices.Len(), "nrpServices", nrpServices.UnsortedList())
 
 	syncServices := SyncServicesReturnType{
 		// Additions are in K8s but not yet in NRP; removals are in NRP but no
@@ -33,10 +34,11 @@ func GetServicesToSync(k8sServices, nrpServices *utilsets.IgnoreCaseSet) SyncSer
 		Additions: k8sServices.Difference(nrpServices),
 		Removals:  nrpServices.Difference(k8sServices),
 	}
-	klog.V(4).Infof("GetServicesToSync: additions=%v, removals=%v",
-		syncServices.Additions.UnsortedList(), syncServices.Removals.UnsortedList())
+	logger.V(5).Info("Computed service sync sets",
+		"additions", syncServices.Additions.UnsortedList(), "removals", syncServices.Removals.UnsortedList())
 
-	klog.V(2).Infof("GetServicesToSync: Result - Additions: %d, Removals: %d", syncServices.Additions.Len(), syncServices.Removals.Len())
+	logger.V(4).Info("Computed services to sync",
+		"additions", syncServices.Additions.Len(), "removals", syncServices.Removals.Len())
 	return syncServices
 }
 
@@ -49,7 +51,7 @@ func (dt *DiffTracker) GetSyncLoadBalancerServices() SyncServicesReturnType {
 
 // getSyncLoadBalancerServicesLocked is the lock-free body. Callers must hold dt.mu.
 func (dt *DiffTracker) getSyncLoadBalancerServicesLocked() SyncServicesReturnType {
-	return GetServicesToSync(dt.K8sResources.Services, dt.NRPResources.LoadBalancers)
+	return GetServicesToSync(dt.logger, dt.K8sResources.Services, dt.NRPResources.LoadBalancers)
 }
 
 func (dt *DiffTracker) GetSyncNRPNATGateways() SyncServicesReturnType {
@@ -61,7 +63,7 @@ func (dt *DiffTracker) GetSyncNRPNATGateways() SyncServicesReturnType {
 
 // getSyncNRPNATGatewaysLocked is the lock-free body. Callers must hold dt.mu.
 func (dt *DiffTracker) getSyncNRPNATGatewaysLocked() SyncServicesReturnType {
-	return GetServicesToSync(dt.K8sResources.Egresses, dt.NRPResources.NATGateways)
+	return GetServicesToSync(dt.logger, dt.K8sResources.Egresses, dt.NRPResources.NATGateways)
 }
 
 func (dt *DiffTracker) GetSyncLocationsAddresses() LocationData {
