@@ -17,7 +17,6 @@ limitations under the License.
 package sets
 
 import (
-	"encoding/json"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -97,17 +96,6 @@ func (s *IgnoreCaseSet) Len() int {
 		return 0
 	}
 	return s.set.Len()
-}
-
-// MarshalJSON marshals the set to JSON as an array of strings.
-func (s *IgnoreCaseSet) MarshalJSON() ([]byte, error) {
-	if s == nil {
-		return []byte("null"), nil
-	}
-	if s.Len() == 0 {
-		return []byte("[]"), nil
-	}
-	return json.Marshal(s.UnsortedList())
 }
 
 // Equals returns true if the two sets are equal.

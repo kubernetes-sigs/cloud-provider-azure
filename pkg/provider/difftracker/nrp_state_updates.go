@@ -58,8 +58,8 @@ func (dt *DiffTracker) UpdateLocationsAddresses(locationData LocationData) {
 		}
 
 		// Get or create location
-		nrpLocation, exists := dt.NRPResources.Locations[locationKey]
-		isFullUpdate := !exists || locationValue.AddressUpdateAction == FullUpdate
+		nrpLocation := dt.NRPResources.Locations[locationKey]
+		isFullUpdate := locationValue.AddressUpdateAction == FullUpdate
 
 		// For full updates, start with a fresh location
 		if isFullUpdate {
