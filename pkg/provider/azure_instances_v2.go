@@ -95,7 +95,7 @@ func (az *Cloud) tolerateInstanceNotFoundForNewNode(logger logr.Logger, node *v1
 		return false
 	}
 
-	logger.Info("Instance not found in ARM but the node is still within the grace period; reporting it as existing to avoid premature deletion",
+	logger.V(2).Info("Instance not found in ARM but the node is still within the grace period; reporting it as existing to avoid premature deletion",
 		"nodeName", node.Name, "nodeAge", nodeAge.String(), "gracePeriod", gracePeriod.String())
 	return true
 }
