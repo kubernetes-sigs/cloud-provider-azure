@@ -69,8 +69,7 @@ func (dt *DiffTracker) enqueueK8sResourceOperation(input UpdateK8sResource, reso
 // InboundIdentities; that cleanup (which drives the location/address sync) must be done
 // separately via RemoveServiceFromK8sState. A full service deletion must do both.
 func (dt *DiffTracker) EnqueueK8sServiceOperation(input UpdateK8sResource) error {
-	dt.mu.Lock()
-	defer dt.mu.Unlock()
+	defer dt.lockWithLatency("EnqueueK8sServiceOperation")()
 
 	return dt.enqueueK8sResourceOperation(input, ResourceTypeService)
 }
@@ -84,8 +83,7 @@ func (dt *DiffTracker) EnqueueK8sServiceOperation(input UpdateK8sResource) error
 // pods; that cleanup must be done separately via RemoveServiceFromK8sState. A full
 // egress deletion must do both.
 func (dt *DiffTracker) EnqueueK8sEgressOperation(input UpdateK8sResource) error {
-	dt.mu.Lock()
-	defer dt.mu.Unlock()
+	defer dt.lockWithLatency("EnqueueK8sEgressOperation")()
 
 	return dt.enqueueK8sResourceOperation(input, ResourceTypeEgress)
 }
@@ -160,8 +158,7 @@ func (dt *DiffTracker) updateK8sEndpointsLocked(input UpdateK8sEndpointsInputTyp
 // handlers (Add/Update/Delete). Use this rather than updateK8sEndpointsLocked
 // unless the caller already holds dt.mu.
 func (dt *DiffTracker) UpdateK8sEndpoints(input UpdateK8sEndpointsInputType) []error {
-	dt.mu.Lock()
-	defer dt.mu.Unlock()
+	defer dt.lockWithLatency("UpdateK8sEndpoints")()
 	return dt.updateK8sEndpointsLocked(input)
 }
 
@@ -314,8 +311,7 @@ func (dt *DiffTracker) updateK8sPodLocked(input UpdatePodInputType) error {
 // handlers (Add/Update/Delete). Use this rather than updateK8sPodLocked unless
 // the caller already holds dt.mu.
 func (dt *DiffTracker) UpdateK8sPod(input UpdatePodInputType) error {
-	dt.mu.Lock()
-	defer dt.mu.Unlock()
+	defer dt.lockWithLatency("UpdateK8sPod")()
 	return dt.updateK8sPodLocked(input)
 }
 
@@ -366,7 +362,6 @@ func (dt *DiffTracker) removeServiceFromK8sStateLocked(serviceUID string, isInbo
 // drives LoadBalancer/NAT Gateway removal; identity cleanup drives the location/address
 // sync), and a later PR adds the engine entry point that sequences them under one lock.
 func (dt *DiffTracker) RemoveServiceFromK8sState(serviceUID string, isInbound bool) {
-	dt.mu.Lock()
-	defer dt.mu.Unlock()
+	defer dt.lockWithLatency("RemoveServiceFromK8sState")()
 	dt.removeServiceFromK8sStateLocked(serviceUID, isInbound)
 }
