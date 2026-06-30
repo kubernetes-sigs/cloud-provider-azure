@@ -49,6 +49,7 @@ azure-cloud-controller-manager should be run as Deployment with multiple replica
 |`--cloud-config`|/etc/kubernetes/cloud-config/azure.json| Path for [cloud provider config](../configs) |
 |`--controllers`|*,-cloud-node | cloud node controller should be disabled     |
 |`--configure-cloud-routes`| "false" for Azure CNI and "true" for other network plugins| Used for non-AzureCNI clusters               |
+|`--node-instance-not-found-grace-period-in-seconds`| 0 | Grace period in seconds, measured from a node's creation timestamp, during which a node whose backing VM/VMSS instance is not yet visible in ARM is still reported as existing to avoid premature deletion. Defaults to 0 (disabled). |
 
 For other flags such as `--allocate-node-cidrs`, `--cluster-cidr` and `--cluster-name`, they are moved from kube-controller-manager. If you are migrating from kube-controller-manager, they should be set to same value.
 
