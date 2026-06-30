@@ -66,7 +66,7 @@ func (dt *DiffTracker) createOrUpdatePIPWithResponse(ctx context.Context, pipRes
 	if pipName == "" {
 		return nil, fmt.Errorf("createOrUpdatePIPWithResponse: pip name is empty")
 	}
-	dt.logger.V(5).Info("Creating or updating public IP", "pip", pipName, "resourceGroup", pipResourceGroup)
+	dt.logger.V(2).Info("Creating or updating public IP", "pip", pipName, "resourceGroup", pipResourceGroup)
 
 	response, err := dt.networkClientFactory.GetPublicIPAddressClient().CreateOrUpdate(ctx, pipResourceGroup, pipName, *pip)
 	if err != nil {
@@ -81,7 +81,7 @@ func (dt *DiffTracker) deletePublicIP(ctx context.Context, pipResourceGroup stri
 	if pipName == "" {
 		return fmt.Errorf("deletePublicIP: pipName is empty")
 	}
-	dt.logger.V(5).Info("Deleting public IP", "pip", pipName, "resourceGroup", pipResourceGroup)
+	dt.logger.V(2).Info("Deleting public IP", "pip", pipName, "resourceGroup", pipResourceGroup)
 
 	err := dt.networkClientFactory.GetPublicIPAddressClient().Delete(ctx, pipResourceGroup, pipName)
 	if _, err := errutils.CheckResourceExistsFromAzcoreError(err); err != nil {
@@ -97,7 +97,7 @@ func (dt *DiffTracker) createOrUpdateLB(ctx context.Context, lb armnetwork.LoadB
 	if lbName == "" {
 		return fmt.Errorf("createOrUpdateLB: load balancer name is empty")
 	}
-	dt.logger.V(5).Info("Creating or updating LoadBalancer", "loadBalancer", lbName)
+	dt.logger.V(2).Info("Creating or updating LoadBalancer", "loadBalancer", lbName)
 
 	_, err := dt.networkClientFactory.GetLoadBalancerClient().CreateOrUpdate(ctx, dt.config.ResourceGroup, lbName, lb)
 	if err != nil {
@@ -110,7 +110,7 @@ func (dt *DiffTracker) createOrUpdateLB(ctx context.Context, lb armnetwork.LoadB
 // deleteLB deletes a load balancer by service UID
 func (dt *DiffTracker) deleteLB(ctx context.Context, uid string) error {
 	uid = strings.ToLower(uid)
-	dt.logger.V(5).Info("Deleting LoadBalancer", "loadBalancer", uid)
+	dt.logger.V(2).Info("Deleting LoadBalancer", "loadBalancer", uid)
 
 	err := dt.networkClientFactory.GetLoadBalancerClient().Delete(ctx, dt.config.ResourceGroup, uid)
 	if _, err := errutils.CheckResourceExistsFromAzcoreError(err); err != nil {
@@ -126,7 +126,7 @@ func (dt *DiffTracker) createOrUpdateNatGateway(ctx context.Context, natGatewayR
 	if natGatewayName == "" {
 		return fmt.Errorf("createOrUpdateNatGateway: NAT gateway name is empty")
 	}
-	dt.logger.V(5).Info("Creating or updating NAT Gateway", "natGateway", natGatewayName, "resourceGroup", natGatewayResourceGroup)
+	dt.logger.V(2).Info("Creating or updating NAT Gateway", "natGateway", natGatewayName, "resourceGroup", natGatewayResourceGroup)
 
 	_, err := dt.networkClientFactory.GetNatGatewayClient().CreateOrUpdate(ctx, natGatewayResourceGroup, natGatewayName, natGateway)
 	if err != nil {
@@ -141,7 +141,7 @@ func (dt *DiffTracker) deleteNatGateway(ctx context.Context, natGatewayResourceG
 	if natGatewayName == "" {
 		return fmt.Errorf("deleteNatGateway: NAT gateway name is empty")
 	}
-	dt.logger.V(5).Info("Deleting NAT Gateway", "natGateway", natGatewayName, "resourceGroup", natGatewayResourceGroup)
+	dt.logger.V(2).Info("Deleting NAT Gateway", "natGateway", natGatewayName, "resourceGroup", natGatewayResourceGroup)
 
 	err := dt.networkClientFactory.GetNatGatewayClient().Delete(ctx, natGatewayResourceGroup, natGatewayName)
 	if _, err := errutils.CheckResourceExistsFromAzcoreError(err); err != nil {
@@ -154,7 +154,7 @@ func (dt *DiffTracker) deleteNatGateway(ctx context.Context, natGatewayResourceG
 // disassociateNatGatewayFromServiceGateway removes the NAT gateway association from the Service Gateway
 // This should be called before deleting the NAT gateway to properly clean up the references
 func (dt *DiffTracker) disassociateNatGatewayFromServiceGateway(ctx context.Context, serviceGatewayName string, natGatewayName string) error {
-	dt.logger.V(5).Info("Disassociating NAT Gateway from Service Gateway", "natGateway", natGatewayName, "serviceGateway", serviceGatewayName, "resourceGroup", dt.config.ResourceGroup)
+	dt.logger.V(2).Info("Disassociating NAT Gateway from Service Gateway", "natGateway", natGatewayName, "serviceGateway", serviceGatewayName, "resourceGroup", dt.config.ResourceGroup)
 
 	// Step 1: clear the ServiceGateway-side reference if it still has one.
 	services, err := dt.networkClientFactory.GetServiceGatewayClient().GetServices(ctx, dt.config.ResourceGroup, serviceGatewayName)
@@ -215,7 +215,7 @@ func (dt *DiffTracker) updateNRPSGWServices(ctx context.Context, serviceGatewayN
 		return nil
 	}
 
-	dt.logger.V(5).Info("Updating Service Gateway services", "serviceGateway", serviceGatewayName)
+	dt.logger.V(2).Info("Updating Service Gateway services", "serviceGateway", serviceGatewayName)
 
 	// Convert DTO to ARM SDK request
 	serviceRequests, err := convertServiceDTOsToServiceRequests(updateServicesRequestDTO.Services, dt.config)
@@ -237,7 +237,7 @@ func (dt *DiffTracker) updateNRPSGWServices(ctx context.Context, serviceGatewayN
 
 // updateNRPSGWAddressLocations updates address locations in the Service Gateway
 func (dt *DiffTracker) updateNRPSGWAddressLocations(ctx context.Context, serviceGatewayName string, locationsDTO LocationsDataDTO) error {
-	dt.logger.V(5).Info("Updating Service Gateway address locations", "serviceGateway", serviceGatewayName)
+	dt.logger.V(2).Info("Updating Service Gateway address locations", "serviceGateway", serviceGatewayName)
 
 	// Convert DTO to ARM SDK request
 	req := armnetwork.ServiceGatewayUpdateAddressLocationsRequest{
@@ -330,7 +330,7 @@ func (dt *DiffTracker) updateServiceLoadBalancerStatus(ctx context.Context, serv
 			return fmt.Errorf("updateServiceLoadBalancerStatus: failed to patch service: %w", err)
 		}
 
-		dt.logger.V(4).Info("Updated Service with LoadBalancer IP", "namespace", svc.Namespace, "service", svc.Name, "ip", ip)
+		dt.logger.V(2).Info("Updated Service with LoadBalancer IP", "namespace", svc.Namespace, "service", svc.Name, "ip", ip)
 		return nil
 	})
 }
