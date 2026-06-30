@@ -17,8 +17,7 @@ limitations under the License.
 package difftracker
 
 func (dt *DiffTracker) UpdateNRPLoadBalancers(syncServicesReturnType SyncServicesReturnType) {
-	dt.mu.Lock()
-	defer dt.mu.Unlock()
+	defer dt.lockWithLatency("UpdateNRPLoadBalancers")()
 
 	for _, service := range syncServicesReturnType.Additions.UnsortedList() {
 		dt.NRPResources.LoadBalancers.Insert(service)
@@ -32,8 +31,7 @@ func (dt *DiffTracker) UpdateNRPLoadBalancers(syncServicesReturnType SyncService
 }
 
 func (dt *DiffTracker) UpdateNRPNATGateways(syncServicesReturnType SyncServicesReturnType) {
-	dt.mu.Lock()
-	defer dt.mu.Unlock()
+	defer dt.lockWithLatency("UpdateNRPNATGateways")()
 
 	for _, service := range syncServicesReturnType.Additions.UnsortedList() {
 		dt.NRPResources.NATGateways.Insert(service)
@@ -47,8 +45,7 @@ func (dt *DiffTracker) UpdateNRPNATGateways(syncServicesReturnType SyncServicesR
 }
 
 func (dt *DiffTracker) UpdateLocationsAddresses(locationData LocationData) {
-	dt.mu.Lock()
-	defer dt.mu.Unlock()
+	defer dt.lockWithLatency("UpdateLocationsAddresses")()
 
 	for locationKey, locationValue := range locationData.Locations {
 		// Remove empty locations
