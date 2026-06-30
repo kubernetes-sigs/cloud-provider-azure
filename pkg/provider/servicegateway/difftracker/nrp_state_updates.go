@@ -61,8 +61,10 @@ func (dt *DiffTracker) UpdateLocationsAddresses(locationData LocationData) {
 		nrpLocation := dt.NRPResources.Locations[locationKey]
 		isFullUpdate := locationValue.AddressUpdateAction == FullUpdate
 
-		// For full updates, start with a fresh location
-		if isFullUpdate {
+		// For full updates, start with a fresh location. For partial updates,
+		// the location may be absent from NRP (zero value with a nil Addresses
+		// map), so initialize it to keep the writes below nil-safe.
+		if isFullUpdate || nrpLocation.Addresses == nil {
 			nrpLocation = NRPLocation{
 				Addresses: make(map[string]NRPAddress),
 			}
