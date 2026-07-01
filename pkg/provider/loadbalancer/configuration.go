@@ -56,9 +56,6 @@ func AllowedServiceTags(svc *v1.Service) []string {
 // AllowedIPRanges returns the allowed IP ranges configured by user through AKS custom annotations:
 // service.beta.kubernetes.io/azure-allowed-ip-ranges and service.beta.kubernetes.io/load-balancer-source-ranges
 func AllowedIPRanges(svc *v1.Service) ([]netip.Prefix, []string, error) {
-	const (
-		Sep = ","
-	)
 	var (
 		errs          []error
 		validRanges   []netip.Prefix
@@ -66,24 +63,11 @@ func AllowedIPRanges(svc *v1.Service) ([]netip.Prefix, []string, error) {
 	)
 
 	for _, key := range []string{consts.ServiceAnnotationAllowedIPRanges, v1.AnnotationLoadBalancerSourceRangesKey} {
-		value, found := svc.Annotations[key]
-		if !found {
-			continue
-		}
-
-		var errsByKey []error
-		for _, p := range strings.Split(strings.TrimSpace(value), Sep) {
-			p = strings.TrimSpace(p)
-			prefix, err := iputil.ParsePrefix(p)
-			if err != nil {
-				errsByKey = append(errsByKey, err)
-				invalidRanges = append(invalidRanges, p)
-			} else {
-				validRanges = append(validRanges, prefix)
-			}
-		}
-		if len(errsByKey) > 0 {
-			errs = append(errs, NewErrAnnotationValue(key, value, errors.Join(errsByKey...)))
+		valid, invalid, err := parseIPRangesAnnotation(svc, key)
+		validRanges = append(validRanges, valid...)
+		invalidRanges = append(invalidRanges, invalid...)
+		if err != nil {
+			errs = append(errs, err)
 		}
 	}
 
@@ -91,6 +75,12 @@ func AllowedIPRanges(svc *v1.Service) ([]netip.Prefix, []string, error) {
 		return validRanges, invalidRanges, errors.Join(errs...)
 	}
 	return validRanges, invalidRanges, nil
+}
+
+// BlockedIPRanges returns the blocked IP ranges configured by user through the AKS custom annotation:
+// service.beta.kubernetes.io/azure-blocked-ip-ranges
+func BlockedIPRanges(svc *v1.Service) ([]netip.Prefix, []string, error) {
+	return parseIPRangesAnnotation(svc, consts.ServiceAnnotationBlockedIPRanges)
 }
 
 // SourceRanges returns the allowed IP ranges configured by user through `spec.LoadBalancerSourceRanges`.
@@ -152,4 +142,41 @@ func NewErrAnnotationValue(key, value string, inner error) *ErrAnnotationValue {
 
 func (err *ErrAnnotationValue) Error() string {
 	return fmt.Sprintf("invalid service annotation %s:%s: %s", err.AnnotationKey, err.AnnotationValue, err.Inner)
+}
+
+// parseIPRangesAnnotation parses a comma separated list of IP prefixes from the given annotation key.
+// It returns the successfully parsed prefixes, a slice of invalid raw strings, and an error wrapping
+// all parse failures for that annotation (annotated with ErrAnnotationValue). If the annotation is
+// absent, all returned values are zero-value (nil, nil, nil).
+func parseIPRangesAnnotation(svc *v1.Service, key string) ([]netip.Prefix, []string, error) {
+	const (
+		Sep = ","
+	)
+
+	value, found := svc.Annotations[key]
+	if !found {
+		return nil, nil, nil
+	}
+
+	var (
+		validRanges   []netip.Prefix
+		invalidRanges []string
+		errsByKey     []error
+	)
+	for _, p := range strings.Split(strings.TrimSpace(value), Sep) {
+		p = strings.TrimSpace(p)
+		prefix, err := iputil.ParsePrefix(p)
+		if err != nil {
+			errsByKey = append(errsByKey, err)
+			invalidRanges = append(invalidRanges, p)
+		} else {
+			validRanges = append(validRanges, prefix)
+		}
+	}
+
+	if len(errsByKey) > 0 {
+		return validRanges, invalidRanges, NewErrAnnotationValue(key, value, errors.Join(errsByKey...))
+	}
+
+	return validRanges, invalidRanges, nil
 }
