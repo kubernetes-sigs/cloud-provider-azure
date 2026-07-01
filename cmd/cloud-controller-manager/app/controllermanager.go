@@ -376,10 +376,6 @@ func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig, h *contr
 		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
-	if azureCloud, ok := cloud.(*provider.Cloud); ok {
-		azureCloud.NodeInstanceNotFoundGracePeriodInSeconds = c.NodeInstanceNotFoundGracePeriodInSeconds
-	}
-
 	if !cloud.HasClusterID() {
 		if c.ComponentConfig.KubeCloudShared.AllowUntaggedCloud {
 			klog.Warning("detected a cluster without a ClusterID.  A ClusterID will be required in the future.  Please tag your cluster to avoid any future issues")

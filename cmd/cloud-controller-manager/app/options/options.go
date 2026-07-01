@@ -84,12 +84,6 @@ type CloudControllerManagerOptions struct {
 
 	// Node filtering requirement
 	NodeFilterRequirements string
-
-	// NodeInstanceNotFoundGracePeriodInSeconds is the period, measured from a node's
-	// creation timestamp, during which a node whose VM/VMSS instance is not yet
-	// visible in ARM is still reported as existing, preventing premature node
-	// deletion by the cloud-node-lifecycle controller.
-	NodeInstanceNotFoundGracePeriodInSeconds int
 }
 
 // NewCloudControllerManagerOptions creates a new ExternalCMServer with a default config.
@@ -111,8 +105,6 @@ func NewCloudControllerManagerOptions() (*CloudControllerManagerOptions, error) 
 		Authorization:             apiserveroptions.NewDelegatingAuthorizationOptions(),
 		NodeStatusUpdateFrequency: componentConfig.NodeStatusUpdateFrequency,
 		DynamicReloading:          defaultDynamicReloadingOptions(),
-
-		NodeInstanceNotFoundGracePeriodInSeconds: consts.DefaultNodeInstanceNotFoundGracePeriodInSeconds,
 	}
 
 	s.Authentication.RemoteKubeConfigFileOptional = true
@@ -166,7 +158,6 @@ func (o *CloudControllerManagerOptions) Flags(allControllers, disabledByDefaultC
 	// Node filtering flags
 	nodeFilterFs := fss.FlagSet("node filtering")
 	nodeFilterFs.StringVar(&o.NodeFilterRequirements, "node-filter-requirements", o.NodeFilterRequirements, "Label selector for nodes to be managed by CCM (e.g., 'foo=bar' or 'foo in (bar,baz)')")
-	nodeFilterFs.IntVar(&o.NodeInstanceNotFoundGracePeriodInSeconds, "node-instance-not-found-grace-period-in-seconds", o.NodeInstanceNotFoundGracePeriodInSeconds, "Grace period in seconds, measured from a node's creation timestamp, during which a node whose backing VM/VMSS instance is not yet visible in ARM is still reported as existing to avoid premature deletion. Defaults to 0 (disabled).")
 
 	utilfeature.DefaultMutableFeatureGate.AddFlag(fss.FlagSet("generic"))
 
@@ -201,7 +192,6 @@ func (o *CloudControllerManagerOptions) ApplyTo(
 
 	// Apply node filtering configuration
 	c.NodeFilterRequirements = o.NodeFilterRequirements
-	c.NodeInstanceNotFoundGracePeriodInSeconds = o.NodeInstanceNotFoundGracePeriodInSeconds
 
 	if o.SecureServing.BindPort != 0 || o.SecureServing.Listener != nil {
 		o.Authentication.RemoteKubeConfigFile = o.Kubeconfig
