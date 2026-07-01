@@ -19,6 +19,9 @@ package provider
 import (
 	"context"
 	"strings"
+	"time"
+
+	"github.com/go-logr/logr"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -51,7 +54,7 @@ func (az *Cloud) InstanceExists(ctx context.Context, node *v1.Node) (bool, error
 		providerID, err = cloudprovider.GetInstanceProviderID(ctx, az, types.NodeName(node.Name))
 		if err != nil {
 			if strings.Contains(err.Error(), cloudprovider.InstanceNotFound.Error()) {
-				return false, nil
+				return az.tolerateInstanceNotFoundForNewNode(logger, node), nil
 			}
 
 			logger.Error(err, "failed to get the provider ID by node name", "node", node.Name)
@@ -59,7 +62,42 @@ func (az *Cloud) InstanceExists(ctx context.Context, node *v1.Node) (bool, error
 		}
 	}
 
-	return az.InstanceExistsByProviderID(ctx, providerID)
+	exists, err := az.InstanceExistsByProviderID(ctx, providerID)
+	if err != nil {
+		return false, err
+	}
+	if !exists {
+		return az.tolerateInstanceNotFoundForNewNode(logger, node), nil
+	}
+	return true, nil
+}
+
+// tolerateInstanceNotFoundForNewNode reports whether a node whose backing
+// VM/VMSS instance cannot be found in ARM should still be treated as existing.
+// A newly registered node may bootstrap and join the cluster before its
+// instance has propagated into ARM. Deleting such a node based on a transient
+// "instance not found" result is incorrect, so within
+// NodeInstanceNotFoundGracePeriodInSeconds (measured from the node's creation
+// timestamp) the node is reported as existing.
+// See https://github.com/kubernetes-sigs/cloud-provider-azure/issues/10604.
+func (az *Cloud) tolerateInstanceNotFoundForNewNode(logger logr.Logger, node *v1.Node) bool {
+	gracePeriod := time.Duration(az.NodeInstanceNotFoundGracePeriodInSeconds) * time.Second
+	if gracePeriod <= 0 {
+		return false
+	}
+
+	if node.CreationTimestamp.IsZero() {
+		return false
+	}
+
+	nodeAge := time.Since(node.CreationTimestamp.Time)
+	if nodeAge >= gracePeriod {
+		return false
+	}
+
+	logger.V(2).Info("Instance not found in ARM but the node is still within the grace period; reporting it as existing to avoid premature deletion",
+		"nodeName", node.Name, "nodeAge", nodeAge.String(), "gracePeriod", gracePeriod.String())
+	return true
 }
 
 // InstanceShutdown returns true if the instance is shutdown according to the cloud provider.
