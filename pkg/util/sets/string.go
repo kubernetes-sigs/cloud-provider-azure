@@ -37,14 +37,13 @@ func NewString(items ...string) *IgnoreCaseSet {
 	return &IgnoreCaseSet{set: set}
 }
 
-// Insert adds the given items to the set. It only works if the set is initialized.
+// Insert adds the given items to the set, initializing the underlying set if needed.
 func (s *IgnoreCaseSet) Insert(items ...string) {
-	var lowerItems []string
-	for _, item := range items {
-		lowerItems = append(lowerItems, strings.ToLower(item))
+	if s.set == nil {
+		s.set = sets.New[string]()
 	}
-	for _, item := range lowerItems {
-		s.set.Insert(item)
+	for _, item := range items {
+		s.set.Insert(strings.ToLower(item))
 	}
 }
 
@@ -97,4 +96,32 @@ func (s *IgnoreCaseSet) Len() int {
 		return 0
 	}
 	return s.set.Len()
+}
+
+// Equals returns true if the two sets are equal.
+func (s *IgnoreCaseSet) Equals(other *IgnoreCaseSet) bool {
+	// Two sets of equal size are equal iff every item in one is contained in the
+	// other, so a single containment check in one direction is sufficient.
+	if s.Len() != other.Len() {
+		return false
+	}
+	for _, item := range s.UnsortedList() {
+		if !other.Has(item) {
+			return false
+		}
+	}
+	return true
+}
+
+// Difference returns a new IgnoreCaseSet containing the items in s that are not
+// present in other (i.e. the set difference s \ other). It is safe to call on
+// nil or uninitialized sets.
+func (s *IgnoreCaseSet) Difference(other *IgnoreCaseSet) *IgnoreCaseSet {
+	result := NewString()
+	for _, item := range s.UnsortedList() {
+		if !other.Has(item) {
+			result.Insert(item)
+		}
+	}
+	return result
 }
