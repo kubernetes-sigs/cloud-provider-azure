@@ -18,7 +18,6 @@ package provider
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"testing"
@@ -391,11 +390,11 @@ func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
 			expectedVMManagementType: ManagedByAvSet,
 		},
 		{
-			description:              "getVMManagementTypeByIPConfigurationID should return an error if nic.VirtualMachine.ID is empty",
+			description:              "getVMManagementTypeByIPConfigurationID should return ManagedByNoVM if nic.VirtualMachine.ID is empty",
 			ipConfigurationID:        "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm3-interface/ipConfigurations/pipConfig",
 			expectedNIC:              "testvm3",
-			expectedVMManagementType: ManagedByUnknownVMSet,
-			expectedErr:              fmt.Errorf("failed to get vm name by ip config ID /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm3-interface/ipConfigurations/pipConfig: %w", errors.New("failed to get vm ID of nic testvm3")),
+			expectedVMManagementType: ManagedByNoVM,
+			expectedErr:              nil,
 		},
 		{
 			description:              "getVMManagementTypeByIPConfigurationID should return an error if failed to get nic",
