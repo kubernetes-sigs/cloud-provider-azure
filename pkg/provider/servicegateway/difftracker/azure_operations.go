@@ -164,7 +164,7 @@ func (dt *DiffTracker) disassociateNatGatewayFromServiceGateway(ctx context.Cont
 
 	var serviceToBeUpdated *armnetwork.ServiceGatewayService
 	for _, service := range services {
-		if service.Name != nil && *service.Name == natGatewayName {
+		if service.Name != nil && strings.EqualFold(*service.Name, natGatewayName) {
 			serviceToBeUpdated = service
 			break
 		}
@@ -258,9 +258,12 @@ func (dt *DiffTracker) getServiceByUID(ctx context.Context, uid string) (*v1.Ser
 	// This lists all Services and scans for a UID match, which is expensive. It is
 	// acceptable for now since it runs once per service operation (plus conflict retries),
 	// not in a hot path.
-	// TODO: maintain a UID -> namespace/name map from the Service informer events so this
-	// becomes an O(1) lookup plus a direct Services(ns).Get(name) (or lister-cache read)
-	// instead of a NamespaceAll list.
+	// TODO: carry the Service namespace/name into ServiceConfig (EnsureLoadBalancer already
+	// holds the *v1.Service) and resolve it through the provider's existing serviceLister
+	// (az.serviceLister, already backed by a SharedInformer), i.e. serviceLister.Services(ns).
+	// Get(name) with the UID kept only as a consistency check. That makes this an O(1),
+	// zero-apiserver, zero-extra-memory cached read instead of a NamespaceAll list. Wiring
+	// the lister and ServiceConfig into the engine lands in the PR that connects this path.
 	svcList, err := dt.kubeClient.CoreV1().Services(v1.NamespaceAll).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("getServiceByUID: list failed: %w", err)
