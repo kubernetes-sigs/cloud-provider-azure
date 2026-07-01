@@ -965,3 +965,72 @@ func TestDeepEqualMoreCases(t *testing.T) {
 	loc.Addresses["10.0.0.1"] = NRPAddress{Services: sets.NewString("svc1", "egrX")}
 	assert.False(t, d.deepEqualLocked())
 }
+
+func TestDiffTracker_DeepEqual(t *testing.T) {
+	tests := []struct {
+		name     string
+		dt       *DiffTracker
+		expected bool
+	}{
+		{
+			name: "equal empty states",
+			dt: &DiffTracker{
+				K8sResources: K8sState{
+					Services: sets.NewString(),
+					Egresses: sets.NewString(),
+					Nodes:    map[string]Node{},
+				},
+				NRPResources: NRPState{
+					LoadBalancers: sets.NewString(),
+					NATGateways:   sets.NewString(),
+					Locations:     map[string]NRPLocation{},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "equal states with services",
+			dt: &DiffTracker{
+				K8sResources: K8sState{
+					Services: sets.NewString("service1", "service2"),
+					Egresses: sets.NewString(),
+					Nodes:    map[string]Node{},
+				},
+				NRPResources: NRPState{
+					LoadBalancers: sets.NewString("service1", "service2"),
+					NATGateways:   sets.NewString(),
+					Locations:     map[string]NRPLocation{},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "services not equal",
+			dt: &DiffTracker{
+				K8sResources: K8sState{
+					Services: sets.NewString("service1", "service2"),
+					Egresses: sets.NewString(),
+					Nodes:    map[string]Node{},
+				},
+				NRPResources: NRPState{
+					LoadBalancers: sets.NewString("service1"),
+					NATGateways:   sets.NewString(),
+					Locations:     map[string]NRPLocation{},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.dt.deepEqualLocked()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+func TestOperation_String(t *testing.T) {
+	assert.Equal(t, "Add", Add.String())
+	assert.Equal(t, "Remove", Remove.String())
+	assert.Equal(t, "Update", Update.String())
+}

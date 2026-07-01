@@ -18,6 +18,7 @@ package difftracker
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
 	"k8s.io/client-go/kubernetes"
@@ -92,4 +93,27 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 		"vnetName", config.VNetName)
 
 	return diffTracker, nil
+}
+
+// lockWithLatency acquires dt.mu and returns a release function that unlocks it and,
+// at V(4), logs how long the caller waited to acquire the lock and how long it was
+// held. It is the instrumented equivalent of `dt.mu.Lock(); defer dt.mu.Unlock()`:
+//
+//	defer dt.lockWithLatency("MethodName")()
+//
+// The critical sections it guards are in-memory map mutations with no Azure calls, so
+// these durations are expected to be in the microsecond range.
+func (dt *DiffTracker) lockWithLatency(method string) func() {
+	waitStart := time.Now()
+	dt.mu.Lock()
+	wait := time.Since(waitStart)
+	holdStart := time.Now()
+	return func() {
+		hold := time.Since(holdStart)
+		dt.mu.Unlock()
+		dt.logger.V(4).Info("DiffTracker state update latency",
+			"method", method,
+			"lockWaitMicros", wait.Microseconds(),
+			"lockHoldMicros", hold.Microseconds())
+	}
 }
