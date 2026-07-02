@@ -3018,11 +3018,15 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		az.NetworkClientFactory = nil
 		az.zoneRepo = nil
 
-		azureconfig := providerconfig.Config{}
+		azureconfig := Config{}
 		azureconfig.TenantID = tenantID
 		azureconfig.NetworkResourceTenantID = tenantID
 		azureconfig.NetworkResourceSubscriptionID = networkSubscriptionID
 		azureconfig.SubscriptionID = computeSubscriptionID
+		// Provide AAD client credentials so GetServicePrincipalToken returns a non-nil
+		// token and InitializeCloudFromConfig proceeds past the early-return path.
+		azureconfig.AADClientID = "client-id"
+		azureconfig.AADClientSecret = "client-secret"
 
 		networkFactory := mock_azclient.NewMockClientFactory(ctrl)
 		computeFactory := mock_azclient.NewMockClientFactory(ctrl)
