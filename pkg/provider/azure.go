@@ -713,25 +713,34 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 
 		networkClientFactory := az.NetworkClientFactory
 
-		az.nsgRepo, err = securitygroup.NewSecurityGroupRepo(
-			az.SecurityGroupResourceGroup,
-			az.SecurityGroupName, az.NsgCacheTTLInSeconds, az.DisableAPICallCache, networkClientFactory.GetSecurityGroupClient())
-		if err != nil {
-			return err
+		if az.nsgRepo == nil {
+			az.nsgRepo, err = securitygroup.NewSecurityGroupRepo(
+				az.SecurityGroupResourceGroup,
+				az.SecurityGroupName, az.NsgCacheTTLInSeconds, az.DisableAPICallCache, networkClientFactory.GetSecurityGroupClient())
+			if err != nil {
+				return err
+			}
 		}
 
-		az.zoneRepo, err = zone.NewRepo(az.ComputeClientFactory.GetProviderClient())
-		if err != nil {
-			return err
+		if az.zoneRepo == nil {
+			az.zoneRepo, err = zone.NewRepo(az.NetworkClientFactory.GetProviderClient())
+			if err != nil {
+				return err
+			}
 		}
 
-		az.plsRepo, err = privatelinkservice.NewRepo(az.ComputeClientFactory.GetPrivateLinkServiceClient(), time.Duration(az.PlsCacheTTLInSeconds)*time.Second, az.DisableAPICallCache)
-		if err != nil {
-			return err
+		if az.plsRepo == nil {
+			az.plsRepo, err = privatelinkservice.NewRepo(az.ComputeClientFactory.GetPrivateLinkServiceClient(), time.Duration(az.PlsCacheTTLInSeconds)*time.Second, az.DisableAPICallCache)
+			if err != nil {
+				return err
+			}
 		}
-		az.subnetRepo, err = subnet.NewRepo(networkClientFactory.GetSubnetClient())
-		if err != nil {
-			return err
+
+		if az.subnetRepo == nil {
+			az.subnetRepo, err = subnet.NewRepo(networkClientFactory.GetSubnetClient())
+			if err != nil {
+				return err
+			}
 		}
 	}
 	err = az.initCaches()
