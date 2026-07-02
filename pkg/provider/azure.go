@@ -503,9 +503,11 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 
 		networkClientFactory := az.NetworkClientFactory
 
-		az.nsgRepo, err = securitygroup.NewSecurityGroupRepo(az.SecurityGroupResourceGroup, az.SecurityGroupName, az.NsgCacheTTLInSeconds, az.DisableAPICallCache, networkClientFactory.GetSecurityGroupClient())
-		if err != nil {
-			return err
+		if az.nsgRepo == nil {
+			az.nsgRepo, err = securitygroup.NewSecurityGroupRepo(az.SecurityGroupResourceGroup, az.SecurityGroupName, az.NsgCacheTTLInSeconds, az.DisableAPICallCache, networkClientFactory.GetSecurityGroupClient())
+			if err != nil {
+				return err
+			}
 		}
 
 		if az.zoneRepo == nil {
@@ -515,19 +517,25 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 			}
 		}
 
-		az.plsRepo, err = privatelinkservice.NewRepo(az.ComputeClientFactory.GetPrivateLinkServiceClient(), time.Duration(az.PlsCacheTTLInSeconds)*time.Second, az.DisableAPICallCache)
-		if err != nil {
-			return err
+		if az.plsRepo == nil {
+			az.plsRepo, err = privatelinkservice.NewRepo(az.ComputeClientFactory.GetPrivateLinkServiceClient(), time.Duration(az.PlsCacheTTLInSeconds)*time.Second, az.DisableAPICallCache)
+			if err != nil {
+				return err
+			}
 		}
 
-		az.subnetRepo, err = subnet.NewRepo(networkClientFactory.GetSubnetClient())
-		if err != nil {
-			return err
+		if az.subnetRepo == nil {
+			az.subnetRepo, err = subnet.NewRepo(networkClientFactory.GetSubnetClient())
+			if err != nil {
+				return err
+			}
 		}
 
-		az.routeTableRepo, err = routetable.NewRepo(networkClientFactory.GetRouteTableClient(), az.RouteTableResourceGroup, time.Duration(az.RouteTableCacheTTLInSeconds)*time.Second, az.DisableAPICallCache)
-		if err != nil {
-			return err
+		if az.routeTableRepo == nil {
+			az.routeTableRepo, err = routetable.NewRepo(networkClientFactory.GetRouteTableClient(), az.RouteTableResourceGroup, time.Duration(az.RouteTableCacheTTLInSeconds)*time.Second, az.DisableAPICallCache)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	err = az.initCaches()
