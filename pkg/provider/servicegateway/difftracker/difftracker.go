@@ -14,17 +14,57 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package difftracker contains the ServiceGateway state-diffing API and LoadBalancer adapter.
+// The reconciliation-engine methods in difftracker.go are temporary no-op stubs; the adapter is
+// functional and receives its initialized DiffTracker from the ServiceGateway runtime.
 package difftracker
 
 import (
+	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
+	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/client-go/kubernetes"
+	corelisters "k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/tools/record"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 )
+
+const publicIPNameSuffix = "-pip"
+
+// ServiceUID returns the canonical ServiceGateway identity for a Kubernetes Service.
+func ServiceUID(service *v1.Service) string {
+	if service == nil {
+		return ""
+	}
+	return strings.ToLower(string(service.UID))
+}
+
+// PublicIPName returns the Public IP resource name associated with a ServiceGateway identity.
+func PublicIPName(identity string) string {
+	return identity + publicIPNameSuffix
+}
+
+// ServiceGatewayResourceID returns the Azure resource ID for a ServiceGateway.
+func ServiceGatewayResourceID(subscriptionID, resourceGroup, name string) string {
+	return fmt.Sprintf(
+		"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/serviceGateways/%s",
+		subscriptionID,
+		resourceGroup,
+		name,
+	)
+}
+
+// WarningEventError describes an error that the provider should surface as a Kubernetes warning Event.
+type WarningEventError interface {
+	error
+	WarningEvent() (reason, message string)
+}
 
 // New creates and initializes a new DiffTracker with the given state and configuration.
 // It validates the configuration and ensures all required dependencies are present.
@@ -70,14 +110,11 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 
 		logger: logger,
 
-		// Configuration and clients
 		config:               config,
 		networkClientFactory: networkClientFactory,
 		kubeClient:           kubeClient,
 	}
 
-	// Seed the outbound ref-counter from egress pods already in the initial state
-	// so a later REMOVE can drive the counter to zero.
 	for _, node := range k8s.Nodes {
 		for _, pod := range node.Pods {
 			diffTracker.incrementOutboundRefCount(pod.PublicOutboundIdentity)
@@ -97,12 +134,7 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 
 // lockWithLatency acquires dt.mu and returns a release function that unlocks it and,
 // at V(4), logs how long the caller waited to acquire the lock and how long it was
-// held. It is the instrumented equivalent of `dt.mu.Lock(); defer dt.mu.Unlock()`:
-//
-//	defer dt.lockWithLatency("MethodName")()
-//
-// The critical sections it guards are in-memory map mutations with no Azure calls, so
-// these durations are expected to be in the microsecond range.
+// held.
 func (dt *DiffTracker) lockWithLatency(method string) func() {
 	waitStart := time.Now()
 	dt.mu.Lock()
@@ -117,3 +149,46 @@ func (dt *DiffTracker) lockWithLatency(method string) func() {
 			"lockHoldMicros", hold.Microseconds())
 	}
 }
+
+// InitializeFromCluster builds a DiffTracker from current cluster and NRP state.
+func InitializeFromCluster(_ context.Context, _ Config, _ azclient.ClientFactory, _ kubernetes.Interface) (*DiffTracker, error) {
+	return &DiffTracker{}, nil
+}
+
+// SetEventRecorder publishes the recorder used to emit ServiceGateway pod events.
+func (dt *DiffTracker) SetEventRecorder(recorder record.EventRecorder) {
+	dt.eventRecorder = recorder
+}
+
+// SetServiceLister publishes the provider's Service lister for cached UID resolution.
+func (dt *DiffTracker) SetServiceLister(_ corelisters.ServiceLister) {}
+
+// SetNodeLister publishes the provider's Node lister for cached InternalIP resolution.
+func (dt *DiffTracker) SetNodeLister(_ corelisters.NodeLister) {}
+
+// SetUpPodInformer starts the egress pod informer using the runtime lifecycle.
+func (dt *DiffTracker) SetUpPodInformer(_ <-chan struct{}) error { return nil }
+
+// ReconcileEndpointSlice converts an EndpointSlice informer event into an endpoint delta.
+func (dt *DiffTracker) ReconcileEndpointSlice(_, _ *discoveryv1.EndpointSlice) {}
+
+// ReconcileNodeIPChange replays a node's endpoints when its InternalIP set changes.
+func (dt *DiffTracker) ReconcileNodeIPChange(_ string, _, _ []string) {}
+
+// IsServiceTracked reports whether the engine currently tracks the given service UID.
+func (dt *DiffTracker) IsServiceTracked(_ string) bool { return false }
+
+// ReconcileInboundService validates and submits a LoadBalancer Service to the engine.
+func (dt *DiffTracker) ReconcileInboundService(_ *v1.Service) error { return nil }
+
+// DeleteInboundService submits a LoadBalancer Service deletion to the engine.
+func (dt *DiffTracker) DeleteInboundService(_ *v1.Service) error { return nil }
+
+// UpdateEndpoints applies an inbound service's endpoint delta.
+func (dt *DiffTracker) UpdateEndpoints(_ string, _, _ map[string]string) {}
+
+// RegisterMetrics registers the ServiceGateway metrics with the component-base registry.
+func RegisterMetrics() {}
+
+// RecordServiceGatewayEnabled marks ServiceGateway as enabled for the cluster.
+func RecordServiceGatewayEnabled() {}

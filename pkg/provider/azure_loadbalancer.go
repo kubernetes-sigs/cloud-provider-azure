@@ -49,6 +49,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	providererrors "sigs.k8s.io/cloud-provider-azure/pkg/provider/errors"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/servicegateway/difftracker"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/trace"
 	"sigs.k8s.io/cloud-provider-azure/pkg/trace/attributes"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
@@ -109,10 +111,22 @@ func (az *Cloud) GetLoadBalancer(ctx context.Context, clusterName string, servic
 		return status, existsLb || az.existsPip(ctx, clusterName, service), err
 	}
 
-	flippedService := flipServiceInternalAnnotation(service)
-	_, _, status, _, existsLb, _, err = az.getServiceLoadBalancer(ctx, flippedService, clusterName, nil, false, existingLBs)
-	if err != nil || existsLb {
-		return status, existsLb || az.existsPip(ctx, clusterName, service), err
+	// ServiceGateway uses a single per-service LB, so skip the flipped-service check.
+	if !az.ServiceGatewayEnabled {
+		flippedService := flipServiceInternalAnnotation(service)
+		_, _, status, _, existsLb, _, err = az.getServiceLoadBalancer(ctx, flippedService, clusterName, nil, false, existingLBs)
+		if err != nil || existsLb {
+			return status, existsLb || az.existsPip(ctx, clusterName, service), err
+		}
+	}
+
+	// A ServiceGateway-tracked service may have no Azure LB/PIP yet (e.g. parked after a terminal
+	// build rejection). Report it as existing so the service controller routes deletion through
+	// EnsureLoadBalancerDeleted -> difftracker.DeleteService, which removes our finalizer; otherwise
+	// the Service is stranded Terminating.
+	if az.ServiceGatewayEnabled && az.diffTracker != nil && az.diffTracker.IsServiceTracked(getServiceUID(service)) {
+		logger.V(5).Info("ServiceGateway-tracked service has no Azure LB/PIP; reporting as existing so deletion is engine-driven")
+		return nil, true, nil
 	}
 
 	// Return exists = false only if the load balancer and the public IP are not found on Azure
@@ -173,10 +187,13 @@ func (az *Cloud) reconcileService(ctx context.Context, clusterName string, servi
 	}
 
 	updateService := updateServiceLoadBalancerIPs(service, lbIPsPrimaryPIPs)
-	flippedService := flipServiceInternalAnnotation(updateService)
-	if _, _, err := az.reconcileLoadBalancer(ctx, clusterName, flippedService, nil, false /* wantLb */); err != nil {
-		logger.Error(err, "Failed to reconcile flipped LoadBalancer")
-		return nil, err
+	// ServiceGateway uses a single per-service LB, so skip the flipped-service reconcile.
+	if !az.ServiceGatewayEnabled {
+		flippedService := flipServiceInternalAnnotation(updateService)
+		if _, _, err := az.reconcileLoadBalancer(ctx, clusterName, flippedService, nil, false /* wantLb */); err != nil {
+			logger.Error(err, "Failed to reconcile flipped LoadBalancer")
+			return nil, err
+		}
 	}
 
 	// lb is not reused here because the ETAG may be changed in above operations, hence reconcilePublicIP() would get lb again from cache.
@@ -188,7 +205,7 @@ func (az *Cloud) reconcileService(ctx context.Context, clusterName string, servi
 
 	lbName := strings.ToLower(ptr.Deref(lb.Name, ""))
 	key := strings.ToLower(getServiceName(service))
-	if az.UseMultipleStandardLoadBalancers() && isLocalService(service) {
+	if az.UseMultipleStandardLoadBalancers() && (isLocalService(service) || az.ServiceGatewayEnabled) {
 		az.localServiceNameToServiceInfoMap.Store(key, newServiceInfo(getServiceIPFamily(service), lbName))
 		// There are chances that the endpointslice changes after EnsureHostsInPool, so
 		// need to check endpointslice for a second time.
@@ -279,6 +296,55 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 		}
 	}()
 
+	// Use the engine for async service reconcile when ServiceGatewayEnabled.
+	if az.ServiceGatewayEnabled {
+		serviceUID := getServiceUID(service)
+		logger.V(2).Info("Using Engine for async service reconcile", "serviceUID", serviceUID)
+
+		// Internal load balancers are not supported; every ServiceGateway LB is public.
+		if requiresInternalLoadBalancer(service) {
+			err = fmt.Errorf("internal load balancer is not supported when ServiceGateway is enabled; remove the %q annotation", consts.ServiceAnnotationLoadBalancerInternal)
+			az.Event(service, v1.EventTypeWarning, "UnsupportedInternalLoadBalancer", err.Error())
+			return nil, err
+		}
+
+		inboundConfig := az.extractInboundConfigFromService(service)
+		if inboundConfig == nil {
+			// A port-less Service has no PodIP backend; return current status unchanged.
+			return service.Status.LoadBalancer.DeepCopy(), nil
+		}
+
+		// Fail fast on unsupported specs and surface the reason on the Service.
+		if verr := difftracker.ValidateInboundConfig(inboundConfig); verr != nil {
+			var ve *difftracker.InboundConfigValidationError
+			if errors.As(verr, &ve) {
+				az.Event(service, v1.EventTypeWarning, ve.Reason, ve.Message)
+			}
+			return nil, verr
+		}
+
+		config := difftracker.NewInboundServiceConfig(serviceUID, inboundConfig)
+		config.Namespace = service.Namespace
+		config.Name = service.Name
+
+		// Existing tracked service -> UpdateService; otherwise AddService creates the LB/PIP/SGW entry.
+		if az.diffTracker.IsServiceTracked(serviceUID) {
+			az.diffTracker.UpdateService(config)
+			// A type flip during an in-flight delete recreates without a slice event; re-seed endpoints.
+			if az.diffTracker.IsServiceRecreating(serviceUID) {
+				az.seedInboundEndpointsFromCache(serviceUID)
+			}
+		} else {
+			az.diffTracker.AddService(config)
+			// Seed current endpoints so a re-registered service without a slice event still gets its backend.
+			az.seedInboundEndpointsFromCache(serviceUID)
+		}
+
+		// Return the existing status so the service controller does not clear IPs recovered on restart.
+		isOperationSucceeded = true
+		return service.Status.LoadBalancer.DeepCopy(), nil
+	}
+
 	lbStatus, err = az.reconcileService(ctx, clusterName, service, nodes)
 	if err != nil {
 		return nil, err
@@ -311,6 +377,12 @@ func (az *Cloud) getLatestService(serviceName string, deepcopy bool) (*v1.Servic
 // parameters as read-only and not modify them.
 // Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
 func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
+	// ServiceGateway propagates node changes via the Location Update API on endpoint-slice events;
+	// NRP updates the backend pool, so no reconcileLB is needed here.
+	if az.ServiceGatewayEnabled {
+		return nil
+	}
+
 	const Operation = "UpdateLoadBalancer"
 
 	var err error
@@ -429,6 +501,16 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 		isOperationSucceeded = false
 	)
 	ctx = log.NewContext(ctx, logger)
+
+	// Use the engine for async service deletion; check early to avoid unnecessary Azure calls.
+	if az.ServiceGatewayEnabled {
+		serviceUID := getServiceUID(service)
+		logger.V(2).Info("Using Engine for async service deletion", "serviceUID", serviceUID)
+		az.diffTracker.DeleteService(serviceUID, true, false) // inbound service, not orphan
+		mc.ObserveOperationWithResult(true)
+		return nil
+	}
+
 	if az.azureResourceLocker != nil {
 		err = az.azureResourceLocker.Lock(ctx)
 		if err != nil {
@@ -983,7 +1065,26 @@ func (az *Cloud) getServiceLoadBalancer(
 			Location:   &az.Location,
 			Properties: &armnetwork.LoadBalancerPropertiesFormat{},
 		}
-		if az.UseStandardLoadBalancer() {
+		if az.ServiceGatewayEnabled {
+			defaultLB.Properties = &armnetwork.LoadBalancerPropertiesFormat{
+				Scope: to.Ptr(armnetwork.LoadBalancerScopePublic),
+			}
+			// The per-service backend pool is only needed when ensuring the LB. On wantLb=false
+			// (deletion/existence check) skip it: getBackendPoolNameForSLBService rejects dual-stack,
+			// and that error would block cleanup of a rejected dual-stack service.
+			if wantLb {
+				backendPoolName, err := az.getBackendPoolNameForSLBService(service)
+				if err != nil {
+					return nil, existingLBs, nil, nil, false, false, fmt.Errorf("getServiceLoadBalancer: failed to get per-service backend pool name: %w", err)
+				}
+				defaultLB.Properties.BackendAddressPools = []*armnetwork.BackendAddressPool{
+					{Name: &backendPoolName},
+				}
+			}
+			defaultLB.SKU = &armnetwork.LoadBalancerSKU{
+				Name: to.Ptr(armnetwork.LoadBalancerSKUName(consts.LoadBalancerSKUNameService)),
+			}
+		} else if az.UseStandardLoadBalancer() {
 			defaultLB.SKU = &armnetwork.LoadBalancerSKU{
 				Name: to.Ptr(armnetwork.LoadBalancerSKUNameStandard),
 			}
@@ -1033,7 +1134,9 @@ func (az *Cloud) selectLoadBalancer(ctx context.Context, clusterName string, ser
 			// select this LB as this is a new LB and will have minimum rules
 			// create tmp lb struct to hold metadata for the new load-balancer
 			var loadBalancerSKU *armnetwork.LoadBalancerSKUName
-			if az.UseStandardLoadBalancer() {
+			if az.ServiceGatewayEnabled {
+				loadBalancerSKU = to.Ptr(armnetwork.LoadBalancerSKUName(consts.LoadBalancerSKUNameService))
+			} else if az.UseStandardLoadBalancer() {
 				loadBalancerSKU = to.Ptr(armnetwork.LoadBalancerSKUNameStandard)
 			} else {
 				loadBalancerSKU = to.Ptr(armnetwork.LoadBalancerSKUNameBasic)
@@ -1043,6 +1146,18 @@ func (az *Cloud) selectLoadBalancer(ctx context.Context, clusterName string, ser
 				Location:   &az.Location,
 				SKU:        &armnetwork.LoadBalancerSKU{Name: loadBalancerSKU},
 				Properties: &armnetwork.LoadBalancerPropertiesFormat{},
+			}
+			if az.ServiceGatewayEnabled {
+				selectedLB.Properties = &armnetwork.LoadBalancerPropertiesFormat{
+					Scope: to.Ptr(armnetwork.LoadBalancerScopePublic),
+				}
+				backendPoolName, err := az.getBackendPoolNameForSLBService(service)
+				if err != nil {
+					return nil, false, fmt.Errorf("selectLoadBalancer: failed to get per-service backend pool name: %w", err)
+				}
+				selectedLB.Properties.BackendAddressPools = []*armnetwork.BackendAddressPool{
+					{Name: &backendPoolName},
+				}
 			}
 			if az.HasExtendedLocation() {
 				var typ *armnetwork.ExtendedLocationTypes
@@ -1245,6 +1360,15 @@ func (az *Cloud) ensurePublicIPExists(ctx context.Context, service *v1.Service, 
 
 	var changed, owns, isUserAssignedPIP bool
 	if existsPip {
+		// ServiceGateway PIPs follow the <serviceUID>-pip pattern; reject a mismatch to avoid
+		// cross-contamination with default LB PIPs.
+		if az.ServiceGatewayEnabled {
+			expectedPIPPrefix := fmt.Sprintf("%s-pip", string(service.UID))
+			if !strings.HasPrefix(pipName, expectedPIPPrefix) {
+				return nil, fmt.Errorf("PIP %s does not match Service Gateway naming pattern for service %s", pipName, serviceName)
+			}
+		}
+
 		// ensure that the service tag is good for managed pips
 		owns, isUserAssignedPIP = serviceOwnsPublicIP(service, pip, clusterName)
 		if owns && !isUserAssignedPIP {
@@ -1258,7 +1382,14 @@ func (az *Cloud) ensurePublicIPExists(ctx context.Context, service *v1.Service, 
 			pip.Tags = make(map[string]*string)
 		}
 
-		if az.UseStandardLoadBalancer() {
+		if az.ServiceGatewayEnabled {
+			if pip.SKU == nil || !strings.EqualFold(string(*pip.SKU.Name), string(armnetwork.PublicIPAddressSKUNameStandardV2)) {
+				pip.SKU = &armnetwork.PublicIPAddressSKU{
+					Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
+				}
+				changed = true
+			}
+		} else if az.UseStandardLoadBalancer() {
 			if pip.SKU == nil {
 				pip.SKU = &armnetwork.PublicIPAddressSKU{
 					Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandard),
@@ -1342,7 +1473,23 @@ func (az *Cloud) ensurePublicIPExists(ctx context.Context, service *v1.Service, 
 			return nil, err
 		}
 
-		if az.UseStandardLoadBalancer() {
+		if az.ServiceGatewayEnabled {
+			pip.SKU = &armnetwork.PublicIPAddressSKU{
+				Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
+			}
+			if id := getServicePIPPrefixID(service, isIPv6); id != "" {
+				pip.Properties.PublicIPPrefix = &armnetwork.SubResource{ID: ptr.To(id)}
+			}
+			if !az.HasExtendedLocation() {
+				zones, err := az.getRegionZonesBackoff(ctx, ptr.Deref(pip.Location, ""))
+				if err != nil {
+					return nil, err
+				}
+				if len(zones) > 0 {
+					pip.Zones = zones
+				}
+			}
+		} else if az.UseStandardLoadBalancer() {
 			pip.SKU = &armnetwork.PublicIPAddressSKU{
 				Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandard),
 			}
@@ -1837,6 +1984,10 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurations(
 		return nil
 	}
 
+	if az.ServiceGatewayEnabled {
+		return fmt.Errorf("multiple standard load balancers are enabled but the backend pool type is set to podIP")
+	}
+
 	if az.multipleStandardLoadBalancerConfigurationsSynced {
 		return nil
 	}
@@ -1924,8 +2075,9 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 
 	// Delete backend pools for local service if:
 	// 1. the cluster is migrating from multi-slb to single-slb,
-	// 2. the service is changed from local to cluster.
-	if !az.UseMultipleStandardLoadBalancers() || !isLocalService(service) {
+	// 2. the service is changed from local to cluster,
+	// 3. ServiceGateway is not enabled.
+	if !az.ServiceGatewayEnabled && (!az.UseMultipleStandardLoadBalancers() || !isLocalService(service)) {
 		existingLBs, err = az.cleanupLocalServiceBackendPool(ctx, service, nodes, existingLBs, clusterName)
 		if err != nil {
 			logger.Error(err, "failed to cleanup local service backend pool for service", "service", serviceName)
@@ -2678,7 +2830,7 @@ func (az *Cloud) removeServiceFromLB(
 		ptr.Deref(existingLB.Name, ""),
 	)
 
-	if isLocalService(service) && az.UseMultipleStandardLoadBalancers() {
+	if !az.ServiceGatewayEnabled && isLocalService(service) && az.UseMultipleStandardLoadBalancers() {
 		// No need for the endpoint slice informer to update the backend pool
 		// for the service because the main loop will delete the old backend pool
 		// and create a new one in the new load balancer.
@@ -3175,6 +3327,13 @@ func (az *Cloud) getExpectedLBRules(
 	isIPv6 bool,
 ) ([]*armnetwork.Probe, []*armnetwork.LoadBalancingRule, error) {
 	logger := log.Background().WithName("getExpectedLBRules")
+
+	// PodIP backend pools are programmed by ServiceGateway and never reach this legacy path;
+	// reaching here means ServiceGateway is inactive, an unsupported configuration.
+	if az.IsLBBackendPoolTypePodIP() {
+		return nil, nil, fmt.Errorf("PodIP backend pool type is not supported without ServiceGateway for service %q", service.Name)
+	}
+
 	var expectedRules []*armnetwork.LoadBalancingRule
 	var expectedProbes []*armnetwork.Probe
 
@@ -3680,6 +3839,12 @@ func (az *Cloud) ensurePIPIPTagged(service *v1.Service, pip *armnetwork.PublicIP
 func (az *Cloud) reconcilePublicIPs(ctx context.Context, clusterName string, service *v1.Service, lbName string, wantLb bool) ([]*armnetwork.PublicIPAddress, error) {
 	logger := klog.FromContext(ctx).WithName("reconcilePublicIPs").
 		WithValues("loadBalancer", lbName)
+
+	// ServiceGateway PIP lifecycle is engine-driven; skip PIP reconciliation on delete.
+	if az.ServiceGatewayEnabled && !wantLb {
+		logger.V(2).Info("Skipping PIP reconciliation for Service Gateway deletion")
+		return nil, nil
+	}
 
 	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
 
@@ -4384,6 +4549,10 @@ func (az *Cloud) getAzureLoadBalancerName(
 	wantLb bool,
 ) (string, error) {
 	logger := log.FromContextOrBackground(ctx).WithName("getAzureLoadBalancerName")
+	if az.ServiceGatewayEnabled {
+		// ServiceGateway uses the Service UID as the per-service LB name to avoid conflicts.
+		return getServiceUID(service), nil
+	}
 	if az.LoadBalancerName != "" {
 		clusterName = az.LoadBalancerName
 	}
