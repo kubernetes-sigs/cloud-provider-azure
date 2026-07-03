@@ -2747,6 +2747,52 @@ func TestCheckEnableMultipleStandardLoadBalancers(t *testing.T) {
 	assert.Equal(t, "duplicated primary VMSet vmss-2 in multiple standard load balancer configurations lb2", err.Error())
 }
 
+func TestLoadBalancerBackendPoolUpdateMaxRetriesNormalization(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		input    *int
+		expected int
+	}{
+		{"nil defaults to 3", nil, 3},
+		{"explicit 0 stays 0", ptr.To(0), 0},
+		{"explicit 5 stays 5", ptr.To(5), 5},
+		{"negative value is normalized to 0", ptr.To(-1), 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			az := GetTestCloud(ctrl)
+			az.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypeNodeIP
+			az.MultipleStandardLoadBalancerConfigurations = []providerconfig.MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "kubernetes",
+					MultipleStandardLoadBalancerConfigurationSpec: providerconfig.MultipleStandardLoadBalancerConfigurationSpec{
+						PrimaryVMSet: "vmss-0",
+					},
+				},
+			}
+			az.LoadBalancerBackendPoolUpdateMaxRetries = tc.input
+
+			err := az.checkEnableMultipleStandardLoadBalancers()
+			assert.NoError(t, err)
+			assert.NotNil(t, az.LoadBalancerBackendPoolUpdateMaxRetries)
+			assert.Equal(t, tc.expected, *az.LoadBalancerBackendPoolUpdateMaxRetries)
+		})
+	}
+}
+
+func TestParseConfigPreservesMaxRetriesZero(t *testing.T) {
+	// Explicit 0 is preserved as non-nil pointer.
+	cfg, err := providerconfig.ParseConfig(strings.NewReader(`{"loadBalancerBackendPoolUpdateMaxRetries": 0}`))
+	assert.NoError(t, err)
+	assert.NotNil(t, cfg.LoadBalancerBackendPoolUpdateMaxRetries)
+	assert.Equal(t, 0, *cfg.LoadBalancerBackendPoolUpdateMaxRetries)
+
+	// Absent field results in nil pointer.
+	cfg, err = providerconfig.ParseConfig(strings.NewReader(`{}`))
+	assert.NoError(t, err)
+	assert.Nil(t, cfg.LoadBalancerBackendPoolUpdateMaxRetries)
+}
+
 func TestIsNodeReady(t *testing.T) {
 	tests := []struct {
 		name     string
