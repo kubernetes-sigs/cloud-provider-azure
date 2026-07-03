@@ -18,15 +18,20 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	discovery_v1 "k8s.io/api/discovery/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
@@ -35,6 +40,7 @@ import (
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/retryrepectthrottled"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
@@ -62,10 +68,13 @@ type batchOperation interface {
 // loadBalancerBackendPoolUpdateOperation is an operation that updates the backend pool of a load balancer.
 type loadBalancerBackendPoolUpdateOperation struct {
 	serviceName      string
+	serviceUID       types.UID
 	loadBalancerName string
 	backendPoolName  string
 	kind             consts.LoadBalancerBackendPoolUpdateOperation
 	nodeIPs          []string
+	retryAttempts    int
+	nextEligibleAt   time.Time
 }
 
 func (op *loadBalancerBackendPoolUpdateOperation) wait() batchOperationResult {
@@ -102,9 +111,10 @@ func (updater *loadBalancerBackendPoolUpdater) run(ctx context.Context) {
 
 // getAddIPsToBackendPoolOperation creates a new loadBalancerBackendPoolUpdateOperation
 // that adds nodeIPs to the backend pool.
-func getAddIPsToBackendPoolOperation(serviceName, loadBalancerName, backendPoolName string, nodeIPs []string) *loadBalancerBackendPoolUpdateOperation {
+func getAddIPsToBackendPoolOperation(serviceName string, serviceUID types.UID, loadBalancerName, backendPoolName string, nodeIPs []string) *loadBalancerBackendPoolUpdateOperation {
 	return &loadBalancerBackendPoolUpdateOperation{
 		serviceName:      serviceName,
+		serviceUID:       serviceUID,
 		loadBalancerName: loadBalancerName,
 		backendPoolName:  backendPoolName,
 		kind:             consts.LoadBalancerBackendPoolUpdateOperationAdd,
@@ -114,9 +124,10 @@ func getAddIPsToBackendPoolOperation(serviceName, loadBalancerName, backendPoolN
 
 // getRemoveIPsFromBackendPoolOperation creates a new loadBalancerBackendPoolUpdateOperation
 // that removes nodeIPs from the backend pool.
-func getRemoveIPsFromBackendPoolOperation(serviceName, loadBalancerName, backendPoolName string, nodeIPs []string) *loadBalancerBackendPoolUpdateOperation {
+func getRemoveIPsFromBackendPoolOperation(serviceName string, serviceUID types.UID, loadBalancerName, backendPoolName string, nodeIPs []string) *loadBalancerBackendPoolUpdateOperation {
 	return &loadBalancerBackendPoolUpdateOperation{
 		serviceName:      serviceName,
+		serviceUID:       serviceUID,
 		loadBalancerName: loadBalancerName,
 		backendPoolName:  backendPoolName,
 		kind:             consts.LoadBalancerBackendPoolUpdateOperationRemove,
@@ -134,6 +145,7 @@ func (updater *loadBalancerBackendPoolUpdater) addOperation(operation batchOpera
 	logger.V(4).Info("Add operation to load balancer backend pool updater",
 		"kind", op.kind,
 		"serviceName", op.serviceName,
+		"serviceUID", op.serviceUID,
 		"loadBalancerName", op.loadBalancerName,
 		"backendPoolName", op.backendPoolName,
 		"nodeIPs", strings.Join(op.nodeIPs, ","))
@@ -191,6 +203,21 @@ func (updater *loadBalancerBackendPoolUpdater) groupOperations(ctx context.Conte
 	groups := make(map[string][]batchOperation)
 	for _, op := range ops {
 		lbOp := op.(*loadBalancerBackendPoolUpdateOperation)
+
+		// Skip if deleted, deleting, or replaced; the map entry persists until EnsureLoadBalancerDeleted completes.
+		if svc, exists, err := updater.az.getLatestService(lbOp.serviceName, false); err == nil &&
+			(!exists || (svc != nil && (svc.DeletionTimestamp != nil || svc.UID != lbOp.serviceUID))) {
+			var currentServiceUID types.UID
+			if svc != nil {
+				currentServiceUID = svc.UID
+			}
+			logger.V(4).Info("Service deleted, deleting, or replaced, skipped operation",
+				"service", lbOp.serviceName, "operationServiceUID", lbOp.serviceUID, "currentServiceUID", currentServiceUID,
+				"serviceExists", exists, "serviceDeleting", svc != nil && svc.DeletionTimestamp != nil,
+				"loadBalancer", lbOp.loadBalancerName)
+			continue
+		}
+
 		si, found := updater.az.getLocalServiceInfo(strings.ToLower(lbOp.serviceName))
 		if !found {
 			logger.V(4).Info("service is not a local service, skip the operation", "service", lbOp.serviceName)
@@ -209,6 +236,25 @@ func (updater *loadBalancerBackendPoolUpdater) groupOperations(ctx context.Conte
 	}
 
 	return groups
+}
+
+// hasParkedOperations returns true if any operation has a nextEligibleAt in the future.
+func (updater *loadBalancerBackendPoolUpdater) hasParkedOperations(ops []batchOperation) bool {
+	now := time.Now()
+	for _, op := range ops {
+		lbOp := op.(*loadBalancerBackendPoolUpdateOperation)
+		if lbOp.nextEligibleAt.After(now) {
+			return true
+		}
+	}
+	return false
+}
+
+// requeueOperations prepends operations back to the front of the queue.
+func (updater *loadBalancerBackendPoolUpdater) requeueOperations(ops []batchOperation) {
+	updater.lock.Lock()
+	defer updater.lock.Unlock()
+	updater.operations = append(ops, updater.operations...)
 }
 
 // process processes all operations in the loadBalancerBackendPoolUpdater.
@@ -243,9 +289,20 @@ func (updater *loadBalancerBackendPoolUpdater) process(ctx context.Context) {
 	groups := updater.groupOperations(ctx, ops)
 
 	for key, ops := range groups {
+		if ctx.Err() != nil {
+			break
+		}
+
 		parts := strings.Split(key, ":")
 		lbName, poolName := parts[0], parts[1]
 		operationName := fmt.Sprintf("%s/%s", lbName, poolName)
+
+		// If any op in the group has nextEligibleAt in the future,
+		// requeue the entire group without making ARM calls or emitting events.
+		if updater.hasParkedOperations(ops) {
+			updater.requeueOperations(ops)
+			continue
+		}
 
 		mc := metrics.NewMetricContext(
 			"services_local",      // prefix name, differ from "services" in main reconciliation loop
@@ -257,8 +314,7 @@ func (updater *loadBalancerBackendPoolUpdater) process(ctx context.Context) {
 
 		bp, err := updater.az.NetworkClientFactory.GetBackendAddressPoolClient().Get(ctx, updater.az.ResourceGroup, lbName, poolName)
 		if err != nil {
-			mc.ObserveOperationWithResult(false)
-			updater.processError(err, operationName, ops...)
+			updater.handleGroupError(ctx, mc, err, operationName, ops)
 			continue
 		}
 
@@ -282,39 +338,193 @@ func (updater *loadBalancerBackendPoolUpdater) process(ctx context.Context) {
 			logger.V(2).Info("updating backend pool", "loadBalancer", lbName, "backendPool", poolName)
 			_, err = updater.az.NetworkClientFactory.GetBackendAddressPoolClient().CreateOrUpdate(ctx, updater.az.ResourceGroup, lbName, poolName, *bp)
 			if err != nil {
-				mc.ObserveOperationWithResult(false)
-				updater.processError(err, operationName, ops...)
+				updater.handleGroupError(ctx, mc, err, operationName, ops)
 				continue
 			}
 		}
 		mc.ObserveOperationWithResult(true)
-		updater.notify(newBatchOperationResult(operationName, true, nil), ops...)
+		updater.notify(ctx, v1.EventTypeNormal, consts.LoadBalancerBackendPoolUpdated, "Load balancer backend pool updated successfully", ops...)
 	}
 }
 
-// processError mark the operations as retriable if the error is retriable,
-// and fail all operations if the error is not retriable.
-func (updater *loadBalancerBackendPoolUpdater) processError(
-	rerr error,
-	operationName string,
-	operations ...batchOperation,
-) {
-	logger := log.Background().WithName("loadBalancerBackendPoolUpdater.processError")
-	if exists, err := errutils.CheckResourceExistsFromAzcoreError(rerr); !exists && err == nil {
-		logger.V(4).Info("backend pool not found for operation, skip updating", "operation", operationName)
+type updaterErrorClass int
+
+const (
+	errClassStale updaterErrorClass = iota
+	errClassRetriable
+	errClassSDKExhausted
+	errClassTerminal
+)
+
+// classifyUpdaterError classifies an error for retry decisions.
+func classifyUpdaterError(err error) updaterErrorClass {
+	if exists, checkErr := errutils.CheckResourceExistsFromAzcoreError(err); !exists && checkErr == nil {
+		return errClassStale
+	}
+
+	var throttleErr *retryrepectthrottled.ThrottleError
+	if errors.As(err, &throttleErr) {
+		return errClassRetriable
+	}
+
+	var respErr *azcore.ResponseError
+	if errors.As(err, &respErr) {
+		if respErr.StatusCode == http.StatusConflict || respErr.StatusCode == http.StatusPreconditionFailed {
+			return errClassRetriable
+		}
+		// SDK-retriable statuses are terminal because the SDK already retried.
+		if slices.Contains(retryrepectthrottled.GetRetriableStatusCode(), respErr.StatusCode) {
+			return errClassSDKExhausted
+		}
+	}
+
+	return errClassTerminal
+}
+
+// handleGroupError classifies the error and either drops, retries, or fails the group.
+// For user-facing documentation of retry behavior, see
+// https://cloud-provider-azure.sigs.k8s.io/topics/multislb/#retry-behavior
+func (updater *loadBalancerBackendPoolUpdater) handleGroupError(ctx context.Context, mc *metrics.MetricContext, err error, operationName string, ops []batchOperation) {
+	logger := log.FromContextOrBackground(ctx).WithName("loadBalancerBackendPoolUpdater.handleGroupError")
+
+	// On shutdown, drop silently.
+	if ctx.Err() != nil {
+		logger.V(4).Info("Context canceled, dropping operations", "operation", operationName, "ops", len(ops))
 		return
 	}
 
-	// Fail all operations if not retriable.
-	updater.notify(newBatchOperationResult(operationName, false, rerr), operations...)
+	class := classifyUpdaterError(err)
+	switch class {
+	case errClassStale:
+		logger.V(4).Info("Backend pool not found, skipped update", "operation", operationName)
 
+	case errClassSDKExhausted, errClassTerminal:
+		allStale := true
+		seen := make(map[types.UID]string)
+		currentServices := make(map[types.UID]*v1.Service)
+		for _, op := range ops {
+			lbOp := op.(*loadBalancerBackendPoolUpdateOperation)
+			key := strings.ToLower(lbOp.serviceName)
+			if _, checked := seen[lbOp.serviceUID]; checked {
+				continue
+			}
+			seen[lbOp.serviceUID] = key
+			svc, exists, err := updater.az.getLatestService(key, false)
+			if err != nil || (exists && svc != nil && svc.DeletionTimestamp == nil && svc.UID == lbOp.serviceUID) {
+				allStale = false
+				break
+			}
+			if exists {
+				currentServices[lbOp.serviceUID] = svc
+			}
+		}
+		if allStale {
+			for operationServiceUID, serviceName := range seen {
+				svc, exists := currentServices[operationServiceUID]
+				var currentServiceUID types.UID
+				if svc != nil {
+					currentServiceUID = svc.UID
+				}
+				logger.V(4).Info("Service deleted, deleting, or replaced, dropping error",
+					"operation", operationName, "service", serviceName, "operationServiceUID", operationServiceUID, "currentServiceUID", currentServiceUID,
+					"serviceExists", exists, "serviceDeleting", svc != nil && svc.DeletionTimestamp != nil)
+			}
+			return
+		}
+		msg := fmt.Sprintf("Backend pool update failed (non-retriable): %v.", err)
+		if class == errClassSDKExhausted {
+			msg = fmt.Sprintf("Backend pool update failed (SDK retries exhausted): %v.", err)
+		}
+		mc.ObserveOperationWithResult(false)
+		updater.notify(ctx, v1.EventTypeWarning, consts.LoadBalancerBackendPoolUpdateFailed, msg, ops...)
+
+	case errClassRetriable:
+		var throttleErr *retryrepectthrottled.ThrottleError
+		errors.As(err, &throttleErr)
+
+		var opsToRequeue []batchOperation
+		var exhaustedOps []batchOperation
+		for _, op := range ops {
+			lbOp := op.(*loadBalancerBackendPoolUpdateOperation)
+
+			// Re-check relevance before requeue.
+			if svc, exists, err := updater.az.getLatestService(lbOp.serviceName, false); err == nil &&
+				(!exists || (svc != nil && (svc.DeletionTimestamp != nil || svc.UID != lbOp.serviceUID))) {
+				var currentServiceUID types.UID
+				if svc != nil {
+					currentServiceUID = svc.UID
+				}
+				logger.V(4).Info("Service deleted, deleting, or replaced, dropped before requeue",
+					"service", lbOp.serviceName, "operationServiceUID", lbOp.serviceUID, "currentServiceUID", currentServiceUID,
+					"serviceExists", exists, "serviceDeleting", svc != nil && svc.DeletionTimestamp != nil,
+					"loadBalancer", lbOp.loadBalancerName)
+				continue
+			}
+			si, found := updater.az.getLocalServiceInfo(strings.ToLower(lbOp.serviceName))
+			if !found {
+				logger.V(4).Info("Service is not a local service, dropped before requeue",
+					"service", lbOp.serviceName, "loadBalancer", lbOp.loadBalancerName)
+				continue
+			}
+			if !strings.EqualFold(si.lbName, lbOp.loadBalancerName) {
+				logger.V(4).Info("Service is not associated with the load balancer, dropped before requeue",
+					"service", lbOp.serviceName,
+					"previous load balancer", lbOp.loadBalancerName,
+					"current load balancer", si.lbName)
+				continue
+			}
+
+			if lbOp.retryAttempts >= *updater.az.LoadBalancerBackendPoolUpdateMaxRetries {
+				exhaustedOps = append(exhaustedOps, op)
+			} else {
+				lbOp.retryAttempts++
+				if throttleErr != nil && throttleErr.RetryAfter.After(time.Now()) {
+					lbOp.nextEligibleAt = throttleErr.RetryAfter
+				}
+				opsToRequeue = append(opsToRequeue, op)
+			}
+		}
+
+		// TODO: The desired-state model (one op per service/pool) would eliminate
+		// the case where a single Service receives both Failed and Retrying events
+		// in the same tick.
+
+		if len(exhaustedOps) > 0 {
+			mc.ObserveOperationWithResult(false)
+			updater.notify(ctx, v1.EventTypeWarning, consts.LoadBalancerBackendPoolUpdateFailed,
+				fmt.Sprintf("Backend pool update failed after %d retries: %v. To retrigger, cause a reconciliation for the Service (e.g., add or update any annotation on the Service).", *updater.az.LoadBalancerBackendPoolUpdateMaxRetries, err), exhaustedOps...)
+		}
+
+		if len(opsToRequeue) > 0 {
+			updater.notify(ctx, v1.EventTypeWarning, consts.LoadBalancerBackendPoolUpdateRetrying,
+				fmt.Sprintf("Backend pool update failed, will retry: %v.", err), opsToRequeue...)
+			updater.requeueOperations(opsToRequeue)
+		}
+	}
 }
 
-// notify notifies the operations with the result.
-func (updater *loadBalancerBackendPoolUpdater) notify(res batchOperationResult, operations ...batchOperation) {
+// notify emits an event for each distinct Service among the provided operations.
+func (updater *loadBalancerBackendPoolUpdater) notify(ctx context.Context, eventType, reason, msg string, operations ...batchOperation) {
+	logger := log.FromContextOrBackground(ctx).WithName("loadBalancerBackendPoolUpdater.notify")
+	seen := make(map[types.UID]struct{})
 	for _, op := range operations {
-		updater.az.processBatchOperationResult(op, res)
-		break
+		lbOp := op.(*loadBalancerBackendPoolUpdateOperation)
+		if _, dup := seen[lbOp.serviceUID]; dup {
+			continue
+		}
+		seen[lbOp.serviceUID] = struct{}{}
+		svc, exists, _ := updater.az.getLatestService(lbOp.serviceName, false)
+		if svc == nil || svc.DeletionTimestamp != nil || svc.UID != lbOp.serviceUID {
+			var currentServiceUID types.UID
+			if svc != nil {
+				currentServiceUID = svc.UID
+			}
+			logger.V(4).Info("Service not found, deleting, or replaced, skipped event",
+				"service", lbOp.serviceName, "operationServiceUID", lbOp.serviceUID, "currentServiceUID", currentServiceUID,
+				"serviceExists", exists, "serviceDeleting", svc != nil && svc.DeletionTimestamp != nil)
+			continue
+		}
+		updater.az.Event(svc, eventType, reason, msg)
 	}
 }
 
@@ -389,6 +599,29 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 					return
 				}
 				lbName, ipFamily := si.lbName, si.ipFamily
+				serviceUID := getServiceUIDOfEndpointSlice(newES)
+				if serviceUID == "" {
+					// Without a matching Service owner reference, use the UID of the current
+					// Service identified by the EndpointSlice's namespace and service-name label.
+					// Kubernetes documents manually created EndpointSlices linked by the service-name
+					// label without a Service owner reference:
+					// https://kubernetes.io/docs/concepts/services-networking/service/#services-without-selectors
+					// The mirroring controller copies legacy Endpoints objects into EndpointSlices,
+					// setting ownerReferences to the source Endpoints object, not the Service:
+					// https://github.com/kubernetes/kubernetes/blob/v1.36.0/pkg/controller/endpointslicemirroring/utils.go#L54
+					// An EndpointSlice update generated for a deleted Service can therefore
+					// be queued with the UID of a new Service with the same namespace and name.
+					svc, exists, err := az.getLatestService(key, false)
+					if err != nil || !exists || svc == nil || svc.DeletionTimestamp != nil {
+						logger.V(4).Info("Skipped queuing backend pool update operations because the Service lookup failed or the Service is missing or deleting",
+							"namespace", newES.Namespace, "name", newES.Name, "service", key,
+							"serviceExists", exists, "serviceDeleting", svc != nil && svc.DeletionTimestamp != nil, "err", err)
+						return
+					}
+					serviceUID = svc.UID
+					logger.V(4).Info("Used current Service UID because EndpointSlice has no matching Service owner reference",
+						"namespace", newES.Namespace, "name", newES.Name, "service", key, "currentServiceUID", serviceUID)
+				}
 
 				var previousIPs, currentIPs []string
 				previousNodeNameSet := utilsets.NewString()
@@ -428,7 +661,7 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 					for _, bpName := range bpNames {
 						currentIPsInBackendPools[bpName] = previousIPs
 					}
-					az.applyIPChangesAmongLocalServiceBackendPoolsByIPFamily(lbName, key, currentIPsInBackendPools, currentIPs)
+					az.applyIPChangesAmongLocalServiceBackendPoolsByIPFamily(lbName, key, serviceUID, currentIPsInBackendPools, currentIPs)
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
@@ -441,29 +674,21 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 		})
 }
 
-func (az *Cloud) processBatchOperationResult(op batchOperation, res batchOperationResult) {
-	lbOp := op.(*loadBalancerBackendPoolUpdateOperation)
-	var svc *v1.Service
-	svc, _, _ = az.getLatestService(lbOp.serviceName, false)
-	if svc == nil {
-		klog.Warningf("Service %s not found, skip sending event", lbOp.serviceName)
-		return
-	}
-	if !res.success {
-		var errStr string
-		if res.err != nil {
-			errStr = res.err.Error()
-		}
-		az.Event(svc, v1.EventTypeWarning, "LoadBalancerBackendPoolUpdateFailed", errStr)
-	} else {
-		az.Event(svc, v1.EventTypeNormal, "LoadBalancerBackendPoolUpdated", "Load balancer backend pool updated successfully")
-	}
-}
-
 // getServiceNameOfEndpointSlice gets the service name of an EndpointSlice.
 func getServiceNameOfEndpointSlice(es *discovery_v1.EndpointSlice) string {
 	if es.Labels != nil {
 		return es.Labels[consts.ServiceNameLabel]
+	}
+	return ""
+}
+
+// getServiceUIDOfEndpointSlice returns the UID of the first v1 Service owner
+// whose name matches the service-name label, or an empty UID if none matches.
+func getServiceUIDOfEndpointSlice(es *discovery_v1.EndpointSlice) types.UID {
+	for _, owner := range es.OwnerReferences {
+		if owner.APIVersion == "v1" && owner.Kind == "Service" && owner.Name == getServiceNameOfEndpointSlice(es) {
+			return owner.UID
+		}
 	}
 	return ""
 }
@@ -548,8 +773,10 @@ func (az *Cloud) getLocalServiceEndpointsNodeNames(service *v1.Service) *utilset
 	var eps []*discovery_v1.EndpointSlice
 	az.endpointSlicesCache.Range(func(_, value interface{}) bool {
 		endpointSlice := value.(*discovery_v1.EndpointSlice)
+		ownerUID := getServiceUIDOfEndpointSlice(endpointSlice)
 		if strings.EqualFold(getServiceNameOfEndpointSlice(endpointSlice), service.Name) &&
-			strings.EqualFold(endpointSlice.Namespace, service.Namespace) {
+			strings.EqualFold(endpointSlice.Namespace, service.Namespace) &&
+			(ownerUID == "" || ownerUID == service.UID) {
 			eps = append(eps, endpointSlice)
 		}
 		return true
@@ -632,7 +859,7 @@ func (az *Cloud) checkAndApplyLocalServiceBackendPoolUpdates(lb armnetwork.LoadB
 			currentIPsInBackendPools[bpName] = currentIPs
 		}
 	}
-	az.applyIPChangesAmongLocalServiceBackendPoolsByIPFamily(*lb.Name, serviceName, currentIPsInBackendPools, expectedIPs)
+	az.applyIPChangesAmongLocalServiceBackendPoolsByIPFamily(*lb.Name, serviceName, service.UID, currentIPsInBackendPools, expectedIPs)
 
 	return nil
 }
@@ -641,6 +868,7 @@ func (az *Cloud) checkAndApplyLocalServiceBackendPoolUpdates(lb armnetwork.LoadB
 // amone the backend pools of a local service.
 func (az *Cloud) applyIPChangesAmongLocalServiceBackendPoolsByIPFamily(
 	lbName, serviceName string,
+	serviceUID types.UID,
 	currentIPsInBackendPools map[string][]string,
 	expectedIPs []string,
 ) {
@@ -662,13 +890,14 @@ func (az *Cloud) applyIPChangesAmongLocalServiceBackendPoolsByIPFamily(
 			ipv4 = append(ipv4, ip)
 		}
 	}
-	az.reconcileIPsInLocalServiceBackendPoolsAsync(lbName, serviceName, currentIPsInBackendPoolsIPv6, ipv6)
-	az.reconcileIPsInLocalServiceBackendPoolsAsync(lbName, serviceName, currentIPsInBackendPoolsIPv4, ipv4)
+	az.reconcileIPsInLocalServiceBackendPoolsAsync(lbName, serviceName, serviceUID, currentIPsInBackendPoolsIPv6, ipv6)
+	az.reconcileIPsInLocalServiceBackendPoolsAsync(lbName, serviceName, serviceUID, currentIPsInBackendPoolsIPv4, ipv4)
 }
 
 // reconcileIPsInLocalServiceBackendPoolsAsync reconciles IPs in the backend pools of a local service.
 func (az *Cloud) reconcileIPsInLocalServiceBackendPoolsAsync(
 	lbName, serviceName string,
+	serviceUID types.UID,
 	currentIPsInBackendPools map[string][]string,
 	expectedIPs []string,
 ) {
@@ -680,10 +909,10 @@ func (az *Cloud) reconcileIPsInLocalServiceBackendPoolsAsync(
 			return
 		}
 		if len(ipsToBeDeleted) > 0 {
-			az.backendPoolUpdater.addOperation(getRemoveIPsFromBackendPoolOperation(serviceName, lbName, bpName, ipsToBeDeleted))
+			az.backendPoolUpdater.addOperation(getRemoveIPsFromBackendPoolOperation(serviceName, serviceUID, lbName, bpName, ipsToBeDeleted))
 		}
 		if len(expectedIPs) > 0 {
-			az.backendPoolUpdater.addOperation(getAddIPsToBackendPoolOperation(serviceName, lbName, bpName, expectedIPs))
+			az.backendPoolUpdater.addOperation(getAddIPsToBackendPoolOperation(serviceName, serviceUID, lbName, bpName, expectedIPs))
 		}
 	}
 }
