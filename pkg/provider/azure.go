@@ -49,6 +49,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/servicegateway/difftracker"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -157,6 +158,8 @@ type Cloud struct {
 	endpointSlicesCache                             sync.Map
 
 	azureResourceLocker *AzureResourceLocker
+
+	diffTracker *difftracker.DiffTracker
 }
 
 // NewCloud returns a Cloud with initialized clients
@@ -273,6 +276,21 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 		az.ServiceGatewayEnabled = true
 	} else {
 		az.ServiceGatewayEnabled = false
+	}
+
+	// PodIP backend pools require ServiceGateway to populate them; reject otherwise.
+	if az.IsLBBackendPoolTypePodIP() && !az.ServiceGatewayEnabled {
+		return fmt.Errorf("InitializeCloudFromConfig: PodIP backend pool type requires ServiceGateway (loadBalancerBackendPoolConfigurationType=podIP needs ServiceGatewayEnabled=true and loadBalancerSku=service)")
+	}
+
+	// ServiceGateway (PodIP backend pools) and Multi-SLB (NodeIP/NIC backend pools) are mutually exclusive.
+	if az.ServiceGatewayEnabled && az.UseMultipleStandardLoadBalancers() {
+		return fmt.Errorf("InitializeCloudFromConfig: ServiceGatewayEnabled and MultipleStandardLoadBalancerConfigurations are mutually exclusive and cannot both be set")
+	}
+
+	// EnableMigrateToIPBasedBackendPoolAPI has no meaning when ServiceGateway is enabled.
+	if az.ServiceGatewayEnabled && config.EnableMigrateToIPBasedBackendPoolAPI {
+		return fmt.Errorf("InitializeCloudFromConfig: EnableMigrateToIPBasedBackendPoolAPI cannot be used when ServiceGatewayEnabled is true — ContainerLB already uses PodIP-based backend pools")
 	}
 
 	if config.RouteTableResourceGroup == "" {
@@ -505,6 +523,40 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 			go az.backendPoolUpdater.run(ctx)
 		}
 
+		// start NRP location and service batch updater.
+		if az.ServiceGatewayEnabled {
+			// Register SLB metrics and mark ServiceGateway as enabled
+			difftracker.RegisterMetrics()
+			difftracker.RecordServiceGatewayEnabled()
+
+			// ServiceGateway resources are provisioned externally before CCM starts.
+			// Initialize difftracker from cluster state.
+			sgwName := consts.DefaultServiceGatewayResourceName
+			dtConfig := difftracker.Config{
+				SubscriptionID:             az.SubscriptionID,
+				ResourceGroup:              az.ResourceGroup,
+				Location:                   az.Location,
+				VNetName:                   az.VnetName,
+				VNetResourceGroup:          az.VnetResourceGroup,
+				ServiceGatewayResourceName: sgwName,
+				ServiceGatewayID:           az.GetServiceGatewayID(),
+			}
+			az.diffTracker, err = difftracker.InitializeFromCluster(ctx, dtConfig, az.NetworkClientFactory, az.KubeClient)
+			if err != nil {
+				klog.Errorf("InitializeCloudFromConfig: failed to initialize difftracker: %s", err.Error())
+				return err
+			}
+
+			// Publish the deps the difftracker needs (event recorder and shared EndpointSlice cache).
+			az.diffTracker.SetEventRecorder(az.eventRecorder)
+			az.diffTracker.SetEndpointSlicesCache(&az.endpointSlicesCache)
+
+			// If SetInformers already ran, hand the existing lister to the difftracker now.
+			if az.serviceLister != nil {
+				az.diffTracker.SetServiceLister(az.serviceLister)
+			}
+		}
+
 		// Azure Stack does not support zone at the moment
 		// https://docs.microsoft.com/en-us/azure-stack/user/azure-stack-network-differences?view=azs-2102
 		if !az.IsStackCloud() {
@@ -708,12 +760,25 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 			node := obj.(*v1.Node)
 			az.updateNodeCaches(nil, node)
 			az.updateNodeTaint(node)
+			if az.ServiceGatewayEnabled && az.diffTracker != nil {
+				// Replay this node's slices now its IPs are known (the EndpointSlice handler drops pods on uncached nodes).
+				az.diffTracker.ReconcileNodeIPChange(node.Name, nil, getNodePrivateIPAddresses(node))
+			}
 		},
 		UpdateFunc: func(prev, obj interface{}) {
 			prevNode := prev.(*v1.Node)
 			newNode := obj.(*v1.Node)
 			az.updateNodeCaches(prevNode, newNode)
 			az.updateNodeTaint(newNode)
+			if az.ServiceGatewayEnabled && az.diffTracker != nil {
+				// A node IP change fires no slice event; move resident pods off the old IP.
+				oldIPs := getNodePrivateIPAddresses(prevNode)
+				newIPs := getNodePrivateIPAddresses(newNode)
+				oldSet, newSet := utilsets.NewString(oldIPs...), utilsets.NewString(newIPs...)
+				if oldSet.Difference(newSet).Len() != 0 || newSet.Difference(oldSet).Len() != 0 {
+					az.diffTracker.ReconcileNodeIPChange(newNode.Name, oldIPs, newIPs)
+				}
+			}
 		},
 		DeleteFunc: func(obj interface{}) {
 			node, isNode := obj.(*v1.Node)
@@ -735,6 +800,11 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 
 			logger.V(4).Info("Removing node from VMSet cache", "node", node.Name)
 			_ = az.VMSet.DeleteCacheForNode(context.Background(), node.Name)
+
+			if az.ServiceGatewayEnabled && az.diffTracker != nil {
+				// The cache is cleared before slice-removal events arrive; drain resident pods using the deleted node's IPs.
+				az.diffTracker.ReconcileNodeIPChange(node.Name, getNodePrivateIPAddresses(node), nil)
+			}
 		},
 	})
 	az.nodeInformerSynced = nodeInformer.HasSynced
@@ -742,7 +812,16 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 	az.serviceLister = informerFactory.Core().V1().Services().Lister()
 	az.nodeLister = informerFactory.Core().V1().Nodes().Lister()
 
+	// Publish the Service lister so the difftracker can resolve UIDs via cached reads.
+	if az.diffTracker != nil {
+		az.diffTracker.SetServiceLister(az.serviceLister)
+	}
+
 	az.setUpEndpointSlicesInformer(informerFactory)
+
+	if az.ServiceGatewayEnabled && az.diffTracker != nil {
+		az.diffTracker.SetUpPodInformer()
+	}
 }
 
 // updateNodeCaches updates local cache for node's zones and external resource groups.
@@ -903,6 +982,16 @@ func (az *Cloud) GetActiveZones() (*utilsets.IgnoreCaseSet, error) {
 // GetLocation returns the location in which k8s cluster is currently running.
 func (az *Cloud) GetLocation() string {
 	return az.Location
+}
+
+// nodePrivateIPsForNode returns the cached private IPs of the given node.
+func (az *Cloud) nodePrivateIPsForNode(nodeName string) []string {
+	az.nodeCachesLock.RLock()
+	defer az.nodeCachesLock.RUnlock()
+	if set := az.nodePrivateIPs[strings.ToLower(nodeName)]; set != nil {
+		return set.UnsortedList()
+	}
+	return nil
 }
 
 // GetNodeResourceGroup gets resource group for given node.

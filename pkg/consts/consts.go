@@ -243,6 +243,9 @@ const (
 	LoadBalancerSKUStandard = "standard"
 	// LoadBalancerSKUService is the load balancer service SKU
 	LoadBalancerSKUService = "service"
+	// LoadBalancerSKUNameService is the case-sensitive ARM SKU name ("Service") for the
+	// ServiceGateway inbound load balancer.
+	LoadBalancerSKUNameService = "Service"
 
 	// ServiceAnnotationLoadBalancerInternal is the annotation used on the service
 	ServiceAnnotationLoadBalancerInternal = "service.beta.kubernetes.io/azure-load-balancer-internal"
@@ -582,6 +585,13 @@ const (
 	VMPowerStateDeallocated  = "deallocated"
 	VMPowerStateDeallocating = "deallocating"
 	VMPowerStateUnknown      = "unknown"
+)
+
+// ServiceGateway resource defaults
+const (
+	// DefaultServiceGatewayResourceName is the fixed ServiceGateway resource name used when
+	// ServiceGatewayEnabled=true. It is not configurable via cloud-provider config.
+	DefaultServiceGatewayResourceName = "servicegateway"
 )
 
 // Azure resource lock
