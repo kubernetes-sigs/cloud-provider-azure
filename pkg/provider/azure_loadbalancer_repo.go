@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -39,6 +40,9 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
+
+// perServiceLBNameRegex matches a UUID-named per-service ServiceGateway load balancer.
+var perServiceLBNameRegex = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 // DeleteLB invokes az.NetworkClientFactory.GetLoadBalancerClient().Delete with exponential backoff retry
 func (az *Cloud) DeleteLB(ctx context.Context, service *v1.Service, lbName string) error {
@@ -88,6 +92,9 @@ func (az *Cloud) ListManagedLBs(ctx context.Context, service *v1.Service, nodes 
 	}
 
 	managedLBNames := utilsets.NewString(clusterName)
+	if az.ServiceGatewayEnabled && service != nil {
+		managedLBNames.Insert(strings.ToLower(string(service.UID)))
+	}
 	managedLBs := make([]*armnetwork.LoadBalancer, 0)
 	if strings.EqualFold(az.LoadBalancerSKU, consts.LoadBalancerSKUBasic) {
 		// return early if wantLb=false
@@ -121,9 +128,17 @@ func (az *Cloud) ListManagedLBs(ctx context.Context, service *v1.Service, nodes 
 	}
 
 	for _, lb := range allLBs {
-		if managedLBNames.Has(trimSuffixIgnoreCase(ptr.Deref(lb.Name, ""), consts.InternalLoadBalancerNameSuffix)) {
+		trimmed := trimSuffixIgnoreCase(ptr.Deref(lb.Name, ""), consts.InternalLoadBalancerNameSuffix)
+		if managedLBNames.Has(trimmed) {
 			managedLBs = append(managedLBs, lb)
 			logger.V(4).Info("found managed LB", "loadBalancerName", ptr.Deref(lb.Name, ""))
+			continue
+		}
+		// ServiceGateway mode: without a specific Service, treat any UUID-named LB as a managed
+		// per-service LB (supports global sync / GC / diff-tracker flows).
+		if az.ServiceGatewayEnabled && service == nil && perServiceLBNameRegex.MatchString(strings.ToLower(trimmed)) {
+			managedLBs = append(managedLBs, lb)
+			logger.V(4).Info("inferred managed per-service LB", "loadBalancerName", ptr.Deref(lb.Name, ""))
 		}
 	}
 
@@ -397,7 +412,8 @@ func isBackendPoolOnSameLB(newBackendPoolID string, existingBackendPools []strin
 }
 
 func (az *Cloud) serviceOwnsRule(service *v1.Service, rule string) bool {
-	if !strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyTypeLocal)) &&
+	if !az.ServiceGatewayEnabled &&
+		!strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyTypeLocal)) &&
 		rule == consts.SharedProbeName {
 		return true
 	}

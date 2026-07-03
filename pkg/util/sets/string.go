@@ -98,3 +98,14 @@ func (s *IgnoreCaseSet) Len() int {
 	}
 	return s.set.Len()
 }
+
+// Difference returns a new set with the items in s that are not in other.
+func (s *IgnoreCaseSet) Difference(other *IgnoreCaseSet) *IgnoreCaseSet {
+	result := NewString()
+	for _, item := range s.UnsortedList() {
+		if !other.Has(item) {
+			result.Insert(item)
+		}
+	}
+	return result
+}

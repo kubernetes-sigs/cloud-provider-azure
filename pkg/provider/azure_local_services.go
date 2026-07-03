@@ -19,6 +19,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -37,6 +38,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/servicegateway/difftracker"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
@@ -351,6 +353,23 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 			AddFunc: func(obj interface{}) {
 				es := obj.(*discovery_v1.EndpointSlice)
 				az.endpointSlicesCache.Store(strings.ToLower(fmt.Sprintf("%s/%s", es.Namespace, es.Name)), es)
+
+				if az.ServiceGatewayEnabled {
+					serviceUID, loaded := getServiceUIDOfEndpointSlice(es)
+					if !loaded {
+						klog.V(4).Infof("EndpointSlice %s/%s does not have service UID, skip updating", es.Namespace, es.Name)
+						return
+					}
+					if es.DeletionTimestamp != nil {
+						return
+					}
+					ipv6 := es.AddressType == discovery_v1.AddressTypeIPv6
+					newAddresses := az.getPodIPToNodeIPMapFromEndpointSlice(es, ipv6)
+					if len(newAddresses) == 0 {
+						return
+					}
+					az.diffTracker.UpdateEndpoints(serviceUID, nil, newAddresses)
+				}
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
 				previousES := oldObj.(*discovery_v1.EndpointSlice)
@@ -367,7 +386,7 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 
 				key := strings.ToLower(fmt.Sprintf("%s/%s", newES.Namespace, svcName))
 				si, found := az.getLocalServiceInfo(key)
-				if !found {
+				if !found && !az.ServiceGatewayEnabled {
 					logger.V(4).Info("EndpointSlice belongs to service, but the service is not a local service, or has not finished the initial reconciliation loop. Skip updating load balancer backend pool", "namespace", newES.Namespace, "name", newES.Name, "service", key)
 					return
 				}
@@ -395,7 +414,7 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 					currentIPs = append(currentIPs, nodeIPsSet.UnsortedList()...)
 				}
 
-				if az.backendPoolUpdater != nil {
+				if !az.ServiceGatewayEnabled && az.backendPoolUpdater != nil {
 					var bpNames []string
 					bpNameIPv4 := getLocalServiceBackendPoolName(key, false)
 					bpNameIPv6 := getLocalServiceBackendPoolName(key, true)
@@ -412,6 +431,32 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 						currentIPsInBackendPools[bpName] = previousIPs
 					}
 					az.applyIPChangesAmongLocalServiceBackendPoolsByIPFamily(lbName, key, currentIPsInBackendPools, currentIPs)
+				}
+
+				if az.ServiceGatewayEnabled {
+					serviceUID, loaded := getServiceUIDOfEndpointSlice(newES)
+					if !loaded {
+						klog.V(4).Infof("EndpointSlice %s/%s does not have service UID, skip updating", newES.Namespace, newES.Name)
+						return
+					}
+
+					// A slice entering deletion clears its addresses from K8s state.
+					if newES.DeletionTimestamp != nil {
+						if previousES.DeletionTimestamp == nil {
+							ipv6 := newES.AddressType == discovery_v1.AddressTypeIPv6
+							oldAddresses := az.getPodIPToNodeIPMapFromEndpointSlice(previousES, ipv6)
+							az.diffTracker.UpdateEndpoints(serviceUID, oldAddresses, nil)
+						}
+						return
+					}
+
+					ipv6 := newES.AddressType == discovery_v1.AddressTypeIPv6
+					oldAddresses := az.getPodIPToNodeIPMapFromEndpointSlice(previousES, ipv6)
+					newAddresses := az.getPodIPToNodeIPMapFromEndpointSlice(newES, ipv6)
+					if len(oldAddresses) == 0 && len(newAddresses) == 0 {
+						return
+					}
+					az.diffTracker.UpdateEndpoints(serviceUID, oldAddresses, newAddresses)
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
@@ -433,6 +478,17 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 				}
 
 				az.endpointSlicesCache.Delete(strings.ToLower(fmt.Sprintf("%s/%s", es.Namespace, es.Name)))
+
+				if az.ServiceGatewayEnabled {
+					serviceUID, loaded := getServiceUIDOfEndpointSlice(es)
+					if !loaded {
+						klog.V(4).Infof("EndpointSlice %s/%s does not have service UID, skip updating", es.Namespace, es.Name)
+						return
+					}
+					ipv6 := es.AddressType == discovery_v1.AddressTypeIPv6
+					oldAddresses := az.getPodIPToNodeIPMapFromEndpointSlice(es, ipv6)
+					az.diffTracker.UpdateEndpoints(serviceUID, oldAddresses, nil)
+				}
 			},
 		})
 }
@@ -464,6 +520,91 @@ func getServiceNameOfEndpointSlice(es *discovery_v1.EndpointSlice) string {
 	return ""
 }
 
+// getServiceUIDOfEndpointSlice gets the owning Service UID of an EndpointSlice.
+func getServiceUIDOfEndpointSlice(es *discovery_v1.EndpointSlice) (uid string, loaded bool) {
+	for _, owner := range es.ObjectMeta.OwnerReferences {
+		if owner.Kind == "Service" {
+			return string(owner.UID), true
+		}
+	}
+	return "", false
+}
+
+// seedInboundEndpointsFromCache pushes the current ready endpoints of an inbound service into the
+// engine from the EndpointSlice cache, so a service re-registered without a slice event (e.g. a
+// ClusterIP<->LoadBalancer type flip keeps the same, unchanged slices) still gets its backend.
+// UpdateEndpoints is idempotent, so re-adding already-registered addresses is a no-op.
+func (az *Cloud) seedInboundEndpointsFromCache(serviceUID string) {
+	if serviceUID == "" {
+		return
+	}
+	combined := make(map[string]string)
+	az.endpointSlicesCache.Range(func(_, value interface{}) bool {
+		es, ok := value.(*discovery_v1.EndpointSlice)
+		if !ok || es == nil || es.DeletionTimestamp != nil {
+			return true
+		}
+		uid, loaded := getServiceUIDOfEndpointSlice(es)
+		if !loaded || uid != serviceUID {
+			return true
+		}
+		ipv6 := es.AddressType == discovery_v1.AddressTypeIPv6
+		for podIP, nodeIP := range az.getPodIPToNodeIPMapFromEndpointSlice(es, ipv6) {
+			combined[podIP] = nodeIP
+		}
+		return true
+	})
+	if len(combined) == 0 {
+		return
+	}
+	klog.V(2).Infof("seedInboundEndpointsFromCache: seeding %d endpoint(s) for service %s", len(combined), serviceUID)
+	az.diffTracker.UpdateEndpoints(serviceUID, nil, combined)
+}
+
+// getPodIPToNodeIPMapFromEndpointSlice maps ready pod IPs to their same-family node IP for the
+// requested family, skipping not-ready endpoints, nodeless endpoints, and malformed addresses.
+func (az *Cloud) getPodIPToNodeIPMapFromEndpointSlice(es *discovery_v1.EndpointSlice, ipv6 bool) map[string]string {
+	podIPToNodeIPMap := make(map[string]string)
+	if es == nil {
+		return podIPToNodeIPMap
+	}
+	expectedAddressType := discovery_v1.AddressTypeIPv4
+	if ipv6 {
+		expectedAddressType = discovery_v1.AddressTypeIPv6
+	}
+	if es.AddressType != expectedAddressType {
+		return podIPToNodeIPMap
+	}
+	for _, ep := range es.Endpoints {
+		// A nil Ready condition means "true" per the EndpointSlice API; only exclude explicit false.
+		if !ptr.Deref(ep.Conditions.Ready, true) {
+			continue
+		}
+		nodeName := ptr.Deref(ep.NodeName, "")
+		if nodeName == "" {
+			continue
+		}
+		nodeIPs := az.nodePrivateIPsForNode(nodeName)
+		if len(nodeIPs) == 0 {
+			continue
+		}
+		// Deterministic same-family node key, shared with the init path so a restart diff stays empty.
+		matchingNodeIP, ok := difftracker.SelectSameFamilyNodeIP(nodeIPs, ipv6)
+		if !ok {
+			continue
+		}
+		for _, podIP := range ep.Addresses {
+			addr, err := netip.ParseAddr(podIP)
+			if err != nil {
+				klog.Warningf("EndpointSlice %s/%s has a malformed endpoint address %q; skipping", es.Namespace, es.Name, podIP)
+				continue
+			}
+			podIPToNodeIPMap[addr.String()] = matchingNodeIP
+		}
+	}
+	return podIPToNodeIPMap
+}
+
 // compareNodeIPs compares the previous and current node IPs and returns the IPs to be deleted.
 func compareNodeIPs(previousIPs, currentIPs []string) []string {
 	previousIPSet := sets.NewString(previousIPs...)
@@ -483,7 +624,7 @@ func getLocalServiceBackendPoolName(serviceName string, ipv6 bool) string {
 // getBackendPoolNameForService determine the expected backend pool name
 // by checking the external traffic policy of the service.
 func (az *Cloud) getBackendPoolNameForService(service *v1.Service, clusterName string, ipv6 bool) string {
-	if !isLocalService(service) || !az.UseMultipleStandardLoadBalancers() {
+	if (!isLocalService(service) && !az.ServiceGatewayEnabled) || !az.UseMultipleStandardLoadBalancers() {
 		return getBackendPoolName(clusterName, ipv6)
 	}
 	return getLocalServiceBackendPoolName(getServiceName(service), ipv6)
@@ -492,7 +633,7 @@ func (az *Cloud) getBackendPoolNameForService(service *v1.Service, clusterName s
 // getBackendPoolNamesForService determine the expected backend pool names
 // by checking the external traffic policy of the service.
 func (az *Cloud) getBackendPoolNamesForService(service *v1.Service, clusterName string) map[bool]string {
-	if !isLocalService(service) || !az.UseMultipleStandardLoadBalancers() {
+	if (!isLocalService(service) && !az.ServiceGatewayEnabled) || !az.UseMultipleStandardLoadBalancers() {
 		return getBackendPoolNames(clusterName)
 	}
 	return map[bool]string{
@@ -504,6 +645,21 @@ func (az *Cloud) getBackendPoolNamesForService(service *v1.Service, clusterName 
 // getBackendPoolIDsForService determine the expected backend pool IDs
 // by checking the external traffic policy of the service.
 func (az *Cloud) getBackendPoolIDsForService(service *v1.Service, clusterName, lbName string) map[bool]string {
+	if az.ServiceGatewayEnabled {
+		// PodIP backend pools are single-stack: pick the pool by the Service's single IP family.
+		if len(service.Spec.IPFamilies) == 0 {
+			name := string(service.GetUID())
+			return map[bool]string{consts.IPVersionIPv4: az.getBackendPoolID(lbName, name)}
+		}
+		switch service.Spec.IPFamilies[0] {
+		case v1.IPv4Protocol:
+			name := string(service.GetUID())
+			return map[bool]string{consts.IPVersionIPv4: az.getBackendPoolID(lbName, name)}
+		case v1.IPv6Protocol:
+			name := fmt.Sprintf("%s-%s", service.GetUID(), consts.IPVersionIPv6StringLower)
+			return map[bool]string{consts.IPVersionIPv6: az.getBackendPoolID(lbName, name)}
+		}
+	}
 	if !isLocalService(service) || !az.UseMultipleStandardLoadBalancers() {
 		return az.getBackendPoolIDs(clusterName, lbName)
 	}
@@ -516,6 +672,25 @@ func (az *Cloud) getBackendPoolIDsForService(service *v1.Service, clusterName, l
 // getLocalServiceBackendPoolID gets the ID of the backend pool of a local service.
 func (az *Cloud) getLocalServiceBackendPoolID(serviceName string, lbName string, ipv6 bool) string {
 	return az.getBackendPoolID(lbName, getLocalServiceBackendPoolName(serviceName, ipv6))
+}
+
+// getBackendPoolNameForSLBService returns the per-service (Service UID) backend pool name for a
+// ServiceGateway inbound LB. Dual-stack is unsupported, so the name is keyed on the single family.
+func (az *Cloud) getBackendPoolNameForSLBService(service *v1.Service) (string, error) {
+	if isServiceDualStack(service) {
+		return "", fmt.Errorf("dual-stack services are not supported when LB backend pool type is PodIP")
+	}
+	if len(service.Spec.IPFamilies) == 0 {
+		return "", fmt.Errorf("service %s has no IP family; cannot determine backend pool name", service.GetUID())
+	}
+	switch service.Spec.IPFamilies[0] {
+	case v1.IPv4Protocol:
+		return string(service.GetUID()), nil
+	case v1.IPv6Protocol:
+		return fmt.Sprintf("%s-%s", service.GetUID(), consts.IPVersionIPv6StringLower), nil
+	default:
+		return "", fmt.Errorf("unknown IP family %s", service.Spec.IPFamilies[0])
+	}
 }
 
 // localServiceOwnsBackendPool checks if a backend pool is owned by a local service.
