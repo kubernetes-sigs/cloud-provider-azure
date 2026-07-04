@@ -63,9 +63,22 @@ Below is a list of annotations supported for Kubernetes services with type `Load
 Please note that
 
 * When `loadBalancerSourceRanges` have been set on service spec, `service.beta.kubernetes.io/azure-allowed-service-tags` won't work because of DROP iptables rules from kube-proxy. The CIDRs from service tags should be merged into `loadBalancerSourceRanges` to make it work.
-* When `allocateLoadBalancerNodePorts` is set to `false`, ensure the following conditions are met:
-  * Set `externalTrafficPolicy` to `Local`.
-  * And enable the FloatingIP feature by either not setting annotation `service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip`, or setting its value to false.
+
+### `allocateLoadBalancerNodePorts=false` and Floating IP
+
+When `spec.allocateLoadBalancerNodePorts` is set to `false`, Kubernetes does not automatically allocate `spec.ports[*].nodePort` for a `LoadBalancer` Service. The Azure cloud provider can only reconcile this shape when the load balancer rule and health probe do not require a per-Service `nodePort`, or when the Service port explicitly sets a non-zero `nodePort`.
+
+For Service ports without an explicit `nodePort`, use the following combinations:
+
+| `externalTrafficPolicy` | Floating IP configuration | Shared load balancer health probe status | Supported | Reason |
+| ----------------------- | ------------------------- | ---------------------------------------- | --------- | ------ |
+| `Local` | Enabled. Do not set `service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip`, or set it to `false`. | Not applicable. `Local` Services use `spec.healthCheckNodePort`. | Yes | The load balancer rule can use the Service port as the backend port. The health probe uses `spec.healthCheckNodePort`, which Kubernetes still allocates for `externalTrafficPolicy: Local`. |
+| `Local` | Disabled with `service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip: "true"`. | Not applicable. `Local` Services use `spec.healthCheckNodePort`. | No | Disabling Floating IP makes the load balancer rule use `nodeIP:nodePort`. Without an allocated or explicit Service port `nodePort`, the provider cannot create a valid load balancer rule. |
+| `Cluster` | Enabled. Do not set `service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip`, or set it to `false`. | Enabled with `clusterServiceLoadBalancerHealthProbeMode: "shared"`. | Yes | Floating IP allows the load balancer rule to avoid the Service port `nodePort`. Shared load balancer health probe mode avoids per-Service health probes that otherwise use the Service port `nodePort`. |
+| `Cluster` | Enabled. Do not set `service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip`, or set it to `false`. | Not enabled with `clusterServiceLoadBalancerHealthProbeMode: "servicenodeport"`, or a per-Service health probe uses the Service port `nodePort`. | No | Floating IP removes the load balancer rule dependency on the Service port `nodePort`, but the per-Service health probe still needs a valid probe port. Without an allocated or explicit Service port `nodePort`, the provider cannot create a valid health probe. |
+| `Cluster` | Disabled with `service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip: "true"`. | Enabled or not enabled. | No | Shared load balancer health probe mode can remove the per-Service probe dependency, but disabling Floating IP still makes the load balancer rule use `nodeIP:nodePort`. Without an allocated or explicit Service port `nodePort`, the provider cannot create a valid load balancer rule. |
+
+If a Service sets explicit non-zero `nodePort` values, those values can still be used even when `spec.allocateLoadBalancerNodePorts` is `false`. This table describes the common case where `nodePort` values are omitted and Kubernetes is asked not to allocate them automatically.
 
 ### Setting LoadBalancer IP
 
