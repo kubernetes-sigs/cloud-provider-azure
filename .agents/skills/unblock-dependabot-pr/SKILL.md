@@ -20,36 +20,35 @@ Expected inputs:
 
 Load the catalog at [`references/failure-patterns.md`](references/failure-patterns.md);
 it is the source of truth for which failure patterns exist. The engine never
-hard-codes a pattern — it walks the catalog by the phased algorithm below.
+hard-codes a pattern — it walks the catalog by the staged algorithm below.
 
-Fetch PR metadata and changed dependencies first; these feed Phase 0 before any
+Fetch PR metadata and changed dependencies first; these feed guard rows before any
 CI or log I/O:
 
 ```bash
 gh pr view <pr> --json number,title,headRefName,headRepositoryOwner,headRefOid,baseRefName,author,labels,mergeable
 ```
 
-Then walk the catalog as an explicit phased algorithm:
+Then walk the catalog as an explicit staged algorithm:
 
-> **Phase 0 — Guard (metadata/diff only).** Before running `gh pr checks`,
-> reading `statusCheckRollup`, or fetching any Prow log, evaluate every Phase-0
-> row whose Signal is computable from PR metadata and the `go.mod` diff alone.
-> If a Phase-0 row matches and is marked Stop, follow its linked Details action
+> **Guard stage — metadata/diff only.** Before running `gh pr checks`, reading
+> `statusCheckRollup`, or fetching any Prow log, evaluate every guard row whose
+> Signal is computable from PR metadata and the `go.mod` diff alone. If a guard
+> row matches and is marked Stop, follow its linked Details action
 > (e.g. `/close`) and **end triage immediately** — do not inspect CI, sync
 > modules, retest, `/lgtm`, or report no-action.
 >
-> **Phase 1 — Classify.** Only if no Phase-0 stop fired: fetch CI status and
+> **Classification gate.** Only if no guard Stop fired: fetch CI status and
 > checkout as needed, then classify every failing required job. A PR is not
-> "unblocked" until every failing job maps to a matched row.
+> "unblocked" until every failing required job maps to a matched act row.
 >
-> **Phase 2 — Act.** Walk matched Phase-2 rows by ascending Priority, honoring
+> **Act stage.** Walk matched act rows by ascending Priority, honoring
 > each row's linked Details preconditions and exclusions. Track the actions
 > already taken this triage: if an action reruns CI (a push), skip any later row
 > whose only effect would be to retest jobs that the push will rerun. Prefer the
-> push-triggered rerun. A Phase-2 row marked Stop ends triage after it is
-> handled.
+> push-triggered rerun. An act row marked Stop ends triage after it is handled.
 
-Phase 1 inspects CI only after no Phase-0 stop fired:
+Classification inspects CI only after no guard Stop fired:
 
 ```bash
 gh pr view <pr> --json number,title,headRefName,headRepositoryOwner,headRefOid,baseRefName,author,labels,mergeable,statusCheckRollup
@@ -75,21 +74,21 @@ or overwrite unrelated files.
   compatibility issue, commit SHA, changed files, and validation result.
 - Use specific staging commands, never `git add .`.
 - Push only the current task's files.
-- Resolve Phase-0 guard rows from PR metadata and the `go.mod` diff before any
-  CI or log I/O. When a Phase-0 row marked Stop matches, follow its linked
+- Resolve guard rows from PR metadata and the `go.mod` diff before any CI or log
+  I/O. When a guard row marked Stop matches, follow its linked
   Details action and end triage immediately — do not inspect CI, sync modules,
   retest, comment `/lgtm`, or report that no action is needed.
-- Act on matched rows in ascending Priority within each phase, and take a row's
+- Act on matched rows in ascending Priority within each stage, and take a row's
   linked Details action only when its Details preconditions and exclusions hold.
 - When a row's Details action reruns CI (a push), skip any later row whose only
   effect would be to retest the jobs that push will rerun; prefer the
   push-triggered rerun.
-- Stamp every non-final action (a Phase-2 `Stop=no` comment or push that leaves
+- Stamp every non-final action (an act-stage `Stop=no` comment or push that leaves
   the PR for another CI round) with this triage's attempt number, counted from
   the PR's own comment history. Once the automated retry budget is spent, an
   `escalate` row makes no change to the PR — no comment, no checks, no push — and
   the PR is reported as needing human review in the final output. All of this is
-  catalog-driven: the Phase-0 retry-budget guard reads the stamps before any
+  catalog-driven: the retry-budget guard reads the stamps before any
   CI/log I/O, and the shared attempt-stamp rule writes them. Do not invent a
   separate counter.
 - A row marked Stop ends triage after it is handled.

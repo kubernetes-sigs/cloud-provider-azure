@@ -2,7 +2,7 @@
 
 This catalog is the pluggable pattern list for the
 [`unblock-dependabot-pr`](../SKILL.md) engine. The engine never hard-codes a
-pattern; it walks the table below by the phased algorithm in `SKILL.md`. Adding
+pattern; it walks the table below by the staged algorithm in `SKILL.md`. Adding
 a newly discovered failure pattern is a single-file edit here: append a row to
 the table and add a matching `## Details: <name>` subsection.
 
@@ -13,10 +13,10 @@ or acting on a row.
 
 | Column | Purpose |
 |--------|---------|
-| **Priority** | Gap-numbered (10, 20, 30…). Within a phase, the engine acts on matched rows low→high. New patterns slot into gaps without renumbering. |
-| **Phase** | `0` (guard, metadata/diff only) / `1` (classify) / `2` (act). Binds the row to an engine phase so guard rows are resolved before any CI/log I/O. |
+| **Priority** | Gap-numbered (10, 20, 30…). Within a stage, the engine acts on matched rows low→high. New patterns slot into gaps without renumbering. |
+| **Stage** | `guard` (metadata/diff/comment-history only) or `act` (CI/log/artifact-based action). Classification is an engine gate between these stages, not a catalog row. |
 | **Pattern** | Short human name. |
-| **Signal** | Compact routing hint: the diff marker, failing job name, or log fingerprint. A Phase-0 signal must be computable before CI/log I/O. |
+| **Signal** | Compact routing hint: the diff marker, failing job name, or log fingerprint. A guard signal must be computable before CI/log I/O. |
 | **Autonomy** | `close` / `auto-fix` / `escalate` / `bot-rebase`. Governs whether the agent acts alone (see Autonomy values below). |
 | **Stop** | `yes` = short-circuit; end triage after this row is handled. |
 | **Details** | Markdown anchor link to the pattern's `## Details: <name>` subsection in the same file. Details are **normative** and contain the full match criteria, preconditions, exclusions, and action. |
@@ -29,30 +29,30 @@ or acting on a row.
 - `escalate` — the agent makes no automated change: it posts no PR comment, runs
   no checks, syncs no modules, and does not touch code, CI policy, or dependency
   versions. It stops working the PR and reports it as needing human review in its
-  final output. Used both as a Phase-0 guard when the automated retry budget is
-  spent (Retry budget exhausted) and as a Phase-2 flag when a blocker needs a
+  final output. Used both as a guard when the automated retry budget is spent
+  (Retry budget exhausted) and as an act-stage flag when a blocker needs a
   human policy or toolchain decision (Toolchain / SDK / policy).
 - `bot-rebase` — post a bot directive (`@dependabot rebase`) that regenerates
   the branch, then stop; distinct from `escalate` because it directs another
   bot to regenerate the branch rather than handing the PR to a human reviewer.
-  The needs-rebase row uses this as a Phase-0 guard: a conflicting branch is
-  detected from metadata and handed to Dependabot before any CI/log I/O, since a
-  rebase invalidates a stale CI run anyway.
+  The needs-rebase row uses this as a guard: a conflicting branch is detected
+  from metadata and handed to Dependabot before any CI/log I/O, since a rebase
+  invalidates a stale CI run anyway.
 
 ## Catalog
 
-| Pri | Phase | Pattern | Signal | Autonomy | Stop | Details |
+| Pri | Stage | Pattern | Signal | Autonomy | Stop | Details |
 |-----|-------|---------|--------|----------|------|---------|
-| 10 | 0 | K8s minor-version bump | `k8s.io/*` `go.mod` minor-family change | close | yes | [Details: K8s minor-version guard](#details-k8s-minor-version-guard) |
-| 15 | 0 | Needs rebase | `needs-rebase` label or `mergeable` = CONFLICTING | bot-rebase | yes | [Details: Needs rebase](#details-needs-rebase) |
-| 17 | 0 | Retry budget exhausted | Highest `Unblock attempt: N` is `>= 3` | escalate | yes | [Details: Retry budget exhausted](#details-retry-budget-exhausted) |
-| 20 | 2 | go-mod-consistency failed | `go-mod-consistency` failed | auto-fix | no | [Details: go-mod-consistency](#details-go-mod-consistency) |
-| 30 | 2 | Public-IP quota e2e flake | Public-IP quota marker in e2e log | auto-fix | no | [Details: Public-IP quota e2e](#details-public-ip-quota-e2e) |
-| 35 | 2 | Image-build registry flake e2e | Registry 5xx during pre-test image build | auto-fix | no | [Details: Image-build registry flake](#details-image-build-registry-flake) |
-| 37 | 2 | Cluster-provisioning node-readiness timeout e2e | Node readiness timeout during pre-test cluster provisioning | auto-fix | no | [Details: Cluster-provisioning node-readiness timeout](#details-cluster-provisioning-node-readiness-timeout) |
-| 39 | 2 | Prow pod scheduling timeout e2e | Prow job pod never schedules | auto-fix | no | [Details: Prow pod scheduling timeout](#details-prow-pod-scheduling-timeout) |
-| 40 | 2 | Only Tide pending | No failed checks; only `tide` pending | auto-fix | no | [Details: Only Tide pending](#details-only-tide-pending) |
-| 50 | 2 | Toolchain / SDK / policy blocker | Toolchain, typecheck, SDK-major, or dependency-policy blocker | escalate | yes | [Details: Toolchain / SDK / policy](#details-toolchain--sdk--policy) |
+| 10 | guard | K8s minor-version bump | `k8s.io/*` `go.mod` minor-family change | close | yes | [Details: K8s minor-version guard](#details-k8s-minor-version-guard) |
+| 15 | guard | Needs rebase | `needs-rebase` label or `mergeable` = CONFLICTING | bot-rebase | yes | [Details: Needs rebase](#details-needs-rebase) |
+| 17 | guard | Retry budget exhausted | Highest `Unblock attempt: N` is `>= 3` | escalate | yes | [Details: Retry budget exhausted](#details-retry-budget-exhausted) |
+| 20 | act | go-mod-consistency failed | `go-mod-consistency` failed | auto-fix | no | [Details: go-mod-consistency](#details-go-mod-consistency) |
+| 30 | act | Public-IP quota e2e flake | Public-IP quota marker in e2e log | auto-fix | no | [Details: Public-IP quota e2e](#details-public-ip-quota-e2e) |
+| 35 | act | Image-build registry flake e2e | Registry 5xx during pre-test image build | auto-fix | no | [Details: Image-build registry flake](#details-image-build-registry-flake) |
+| 37 | act | Cluster-provisioning node-readiness timeout e2e | Node readiness timeout during pre-test cluster provisioning | auto-fix | no | [Details: Cluster-provisioning node-readiness timeout](#details-cluster-provisioning-node-readiness-timeout) |
+| 39 | act | Prow pod scheduling timeout e2e | Prow job pod never schedules | auto-fix | no | [Details: Prow pod scheduling timeout](#details-prow-pod-scheduling-timeout) |
+| 40 | act | Only Tide pending | No failed checks; only `tide` pending | auto-fix | no | [Details: Only Tide pending](#details-only-tide-pending) |
+| 50 | act | Toolchain / SDK / policy blocker | Toolchain, typecheck, SDK-major, or dependency-policy blocker | escalate | yes | [Details: Toolchain / SDK / policy](#details-toolchain--sdk--policy) |
 
 The **Details** cell links to the pattern's `## Details: <name>` subsection
 below (a GitHub-style slug of the heading). Appending a pattern adds a row plus
@@ -184,7 +184,7 @@ failed run after pushing a new commit; the push-triggered rerun supersedes it.
 
 ## Details: Attempt stamp
 
-Shared rule for any Phase-2 non-final action — a `Stop=no` row whose action
+Shared rule for any act-stage non-final action — a `Stop=no` row whose action
 posts a comment or push that leaves the PR for another CI round rather than
 terminating triage. Today that is [go-mod-consistency](#details-go-mod-consistency)
 (push + `/lgtm`) and the [Shared e2e flake rerun](#details-shared-e2e-flake-rerun)
@@ -199,7 +199,7 @@ The skill keeps no state between runs, so the attempt count lives in the PR's
 own comment history. Count triage **rounds**, not comments: one triage may push
 a module-sync fix and rerun three e2e jobs, but that is a single attempt.
 
-Compute the next attempt number once, at the start of Phase 2, before posting
+Compute the next attempt number once, at the start of the act stage, before posting
 any non-final comment this round:
 
 ```bash
@@ -220,8 +220,8 @@ after the existing Reason text:
 Unblock attempt: <N+1>
 ```
 
-The stamp is what the Phase-0 [Retry budget exhausted](#details-retry-budget-exhausted)
-guard reads on the next run. Terminal actions do not stamp: `/close`
+The stamp is what the guard-stage [Retry budget exhausted](#details-retry-budget-exhausted)
+row reads on the next run. Terminal actions do not stamp: `/close`
 (K8s guard), `@dependabot rebase` (needs-rebase), the `escalate`
 [Toolchain / SDK / policy](#details-toolchain--sdk--policy) and
 [Retry budget exhausted](#details-retry-budget-exhausted) handoffs (which post no
@@ -231,7 +231,7 @@ automated retry round.
 
 ## Details: Shared e2e flake rerun
 
-Shared action for Phase-2 e2e rows that are classified as safe transient
+Shared action for act-stage e2e rows that are classified as safe transient
 failures. Pattern-specific Details must supply the fingerprint evidence and any
 extra exclusions before using this rule.
 
@@ -423,7 +423,7 @@ rebased branch and a fresh CI run to triage next time.
 
 ## Details: Retry budget exhausted
 
-Evaluate this guard from PR comment metadata as a Phase-0 step, right after the
+Evaluate this guard from PR comment metadata as a guard-stage step, right after the
 [Needs rebase](#details-needs-rebase) guard and before reading CI status or any
 Prow log. Its purpose is to cap automated churn: once this skill has already
 tried to unblock a PR three times without success, a fourth automated attempt is
