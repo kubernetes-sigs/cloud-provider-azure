@@ -25,7 +25,7 @@ INSTALL_DIR?=$(GOPATH)/bin
 BINARY_NAME?=kubetest2-aks
 BINARY_PATH?=.
 # the container cli to use e.g. docker,podman
-DOCKER?=$(shell which docker || which podman || echo "docker")
+DOCKER?=$(shell which podman 2>/dev/null || which docker 2>/dev/null || echo "docker")
 export DOCKER
 # ========================= Setup Go With Gimme ================================
 # go version to use for build etc.

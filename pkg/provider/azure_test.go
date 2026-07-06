@@ -31,7 +31,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
@@ -49,6 +49,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/providerclient/mock_providerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient/mock_virtualmachineclient"
@@ -193,8 +195,8 @@ func setMockPublicIP(az *Cloud, mockPIPsClient *mock_publicipaddressclient.MockI
 	if isIPv6 {
 		suffix = "-" + consts.IPVersionIPv6String
 		ipVer = to.Ptr(armnetwork.IPVersionIPv6)
-		ipAddr1 = "fd00::eef0"
-		ipAddra = "fd00::eef1"
+		ipAddr1 = "2603:1030::eef0"
+		ipAddra = "2603:1030::eef1"
 	}
 
 	a := 'a'
@@ -1288,6 +1290,15 @@ func getServiceSourceRanges(service *v1.Service) []string {
 	}
 
 	return service.Spec.LoadBalancerSourceRanges
+}
+
+func (az *Cloud) getSecurityRuleName(service *v1.Service, port v1.ServicePort, sourceAddrPrefix string, isIPv6 bool) string {
+	isDualStack := isServiceDualStack(service)
+	safePrefix := strings.ReplaceAll(sourceAddrPrefix, "/", "_")
+	safePrefix = strings.ReplaceAll(safePrefix, ":", ".")
+	rulePrefix := az.getRulePrefix(service)
+	name := fmt.Sprintf("%s-%s-%d-%s", rulePrefix, port.Protocol, port.Port, safePrefix)
+	return getResourceByIPFamily(name, isDualStack, isIPv6)
 }
 
 func getTestSecurityGroupCommon(az *Cloud, v4Enabled, v6Enabled bool, services ...v1.Service) *armnetwork.SecurityGroup {
@@ -2596,6 +2607,63 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 
 		err := az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, true)
 		assert.NoError(t, err)
+	})
+
+	t.Run("zoneRepo should be initialized with network subscription provider client", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		az := GetTestCloud(ctrl)
+
+		const (
+			tenantID              = "tenant-id"
+			networkSubscriptionID = "network-subscription-id"
+			computeSubscriptionID = "compute-subscription-id"
+		)
+
+		az.ComputeClientFactory = nil
+		az.NetworkClientFactory = nil
+		az.zoneRepo = nil
+
+		azureconfig := providerconfig.Config{}
+		azureconfig.TenantID = tenantID
+		azureconfig.NetworkResourceTenantID = tenantID
+		azureconfig.NetworkResourceSubscriptionID = networkSubscriptionID
+		azureconfig.SubscriptionID = computeSubscriptionID
+
+		networkFactory := mock_azclient.NewMockClientFactory(ctrl)
+		computeFactory := mock_azclient.NewMockClientFactory(ctrl)
+
+		// zoneRepo should be initialized from the network factory's provider client,
+		// not the compute factory's. Set expectation only on the network factory.
+		mockProviderClient := mock_providerclient.NewMockInterface(ctrl)
+		networkFactory.EXPECT().GetProviderClient().Return(mockProviderClient).Times(1)
+
+		nCall := 0
+		newARMClientFactory = func(
+			_ *azclient.ClientFactoryConfig,
+			_ *azclient.ARMClientConfig,
+			_ cloud.Configuration,
+			_ azcore.TokenCredential,
+			_ ...func(option *arm.ClientOptions),
+		) (azclient.ClientFactory, error) {
+			defer func() { nCall++ }()
+			switch nCall {
+			case 0:
+				return networkFactory, nil
+			case 1:
+				return computeFactory, nil
+			default:
+				panic("unexpected call")
+			}
+		}
+		defer func() {
+			newARMClientFactory = azclient.NewClientFactory
+		}()
+
+		err := az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, false)
+		assert.NoError(t, err)
+		assert.NotNil(t, az.zoneRepo)
 	})
 }
 

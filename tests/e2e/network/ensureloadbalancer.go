@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -222,6 +222,37 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 			By("test if the tags are changed")
 			Expect(pip.Tags).To(Equal(expectedTags))
 		}
+	})
+
+	It("should reject an external service with a non-public LoadBalancer IP", func() {
+		lbIP := "10.0.0.5"
+		isIPv6 := false
+		if tc.IPFamily == utils.IPv6 {
+			lbIP = "fd00::5"
+			isIPv6 = true
+		}
+
+		By("creating an external LoadBalancer Service with a non-public IP")
+		service := utils.CreateLoadBalancerServiceManifest(testServiceName, map[string]string{
+			consts.ServiceAnnotationLoadBalancerIPDualStack[isIPv6]: lbIP,
+		}, labels, ns.Name, ports)
+		beforeCreate := time.Now()
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			By("Cleaning up Service")
+			err := utils.DeleteService(cs, ns.Name, testServiceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+
+		By("verifying the Service is blocked with a non-public IP validation error")
+		expectedMessage := fmt.Sprintf("cannot use non-public LoadBalancer IP %q", lbIP)
+		err = utils.WaitForServiceWarningEventAfter(cs, ns.Name, testServiceName, "SyncLoadBalancerFailed", expectedMessage, beforeCreate)
+		Expect(err).NotTo(HaveOccurred(), "Expected SyncLoadBalancerFailed event for "+testServiceName)
+
+		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(service.Status.LoadBalancer.Ingress).To(BeEmpty())
 	})
 
 	// Public w/o IP -> Public w/ IP
@@ -1067,7 +1098,6 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 
 		annotation := map[string]string{
 			consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "true",
-			consts.ServiceAnnotationSharedSecurityRule:            "true",
 		}
 
 		By("Creating BYO public IP prefixes")

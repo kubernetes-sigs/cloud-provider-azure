@@ -23,7 +23,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
@@ -388,6 +388,9 @@ func getServicePIPName(service *v1.Service, isIPv6 bool) string {
 				return name
 			}
 		}
+		if isIPv6 && !v6Enabled {
+			return ""
+		}
 		return service.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]]
 	}
 
@@ -397,7 +400,9 @@ func getServicePIPName(service *v1.Service, isIPv6 bool) string {
 func getServicePIPNames(service *v1.Service) []string {
 	var ips []string
 	for _, ipVersion := range []bool{IPVersionIPv4, IPVersionIPv6} {
-		ips = append(ips, getServicePIPName(service, ipVersion))
+		if name := getServicePIPName(service, ipVersion); name != "" {
+			ips = append(ips, name)
+		}
 	}
 	return ips
 }
@@ -413,6 +418,9 @@ func getServicePIPPrefixID(service *v1.Service, isIPv6 bool) string {
 			if id := service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[true]]; id != "" {
 				return id
 			}
+		}
+		if isIPv6 && !v6Enabled {
+			return ""
 		}
 		return service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[false]]
 	}
@@ -492,6 +500,16 @@ func countIPsOnBackendPool(backendPool *armnetwork.BackendAddressPool) int {
 func StringInSlice(s string, list []string) bool {
 	for _, item := range list {
 		if item == s {
+			return true
+		}
+	}
+	return false
+}
+
+// StringInSliceIgnoreCase checks if a string is in a list, ignoring case.
+func StringInSliceIgnoreCase(s string, list []string) bool {
+	for _, item := range list {
+		if strings.EqualFold(item, s) {
 			return true
 		}
 	}

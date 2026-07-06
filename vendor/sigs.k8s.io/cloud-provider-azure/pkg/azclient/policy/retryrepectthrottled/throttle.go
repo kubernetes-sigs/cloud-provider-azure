@@ -32,6 +32,15 @@ var (
 	ErrTooManyRequest = errors.New("throttled due to too many requests")
 )
 
+// ThrottleError wraps ErrTooManyRequest with the RetryAfter time parsed from
+// the ARM response or read from the local gate timer.
+type ThrottleError struct {
+	RetryAfter time.Time
+}
+
+func (e *ThrottleError) Error() string { return ErrTooManyRequest.Error() }
+func (e *ThrottleError) Unwrap() error { return ErrTooManyRequest }
+
 func NewThrottlingPolicy() policy.Policy {
 	return &ThrottlingPolicy{
 		RetryAfterReader: time.Now(),
@@ -65,7 +74,7 @@ func (p *ThrottlingPolicy) Do(req *policy.Request) (*http.Response, error) {
 
 func (p *ThrottlingPolicy) processThrottlePolicy(timer *time.Time, req *policy.Request) (*http.Response, error) {
 	if timer.After(time.Now()) {
-		return nil, ErrTooManyRequest
+		return nil, &ThrottleError{RetryAfter: *timer}
 	}
 	resp, err := req.Next()
 	if err != nil {
@@ -86,7 +95,7 @@ func (p *ThrottlingPolicy) processThrottlePolicy(timer *time.Time, req *policy.R
 			*timer = t
 		}
 
-		return resp, ErrTooManyRequest
+		return resp, &ThrottleError{RetryAfter: *timer}
 	}
 	return resp, nil
 }

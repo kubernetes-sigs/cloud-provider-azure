@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	v1 "k8s.io/api/core/v1"
 	discovery_v1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -160,24 +160,35 @@ func (updater *loadBalancerBackendPoolUpdater) removeOperation(serviceName strin
 	}
 }
 
-// process processes all operations in the loadBalancerBackendPoolUpdater.
-// It merges operations that have the same loadBalancerName and backendPoolName,
-// and then processes them in batches. If an operation fails, it will be retried
-// if it is retriable, otherwise all operations in the batch targeting to
-// this backend pool will fail.
-func (updater *loadBalancerBackendPoolUpdater) process(ctx context.Context) {
-	logger := log.FromContextOrBackground(ctx).WithName("loadBalancerBackendPoolUpdater.process")
+// countOperations returns the number of pending operations in the queue.
+func (updater *loadBalancerBackendPoolUpdater) countOperations() int {
+	updater.lock.Lock()
+	defer updater.lock.Unlock()
+	return len(updater.operations)
+}
+
+// drainOperations drains all pending operations from the queue and clears it.
+func (updater *loadBalancerBackendPoolUpdater) drainOperations() []batchOperation {
 	updater.lock.Lock()
 	defer updater.lock.Unlock()
 
 	if len(updater.operations) == 0 {
-		logger.V(4).Info("no operations to process")
-		return
+		return nil
 	}
 
-	// Group operations by loadBalancerName:backendPoolName
+	ops := updater.operations
+	updater.operations = make([]batchOperation, 0)
+	return ops
+}
+
+// groupOperations filters and groups operations by loadBalancerName:backendPoolName.
+// Must be called under serviceReconcileLock so that
+// localServiceNameToServiceInfoMap reads are consistent.
+func (updater *loadBalancerBackendPoolUpdater) groupOperations(ctx context.Context, ops []batchOperation) map[string][]batchOperation {
+	logger := log.FromContextOrBackground(ctx).WithName("loadBalancerBackendPoolUpdater.groupOperations")
+
 	groups := make(map[string][]batchOperation)
-	for _, op := range updater.operations {
+	for _, op := range ops {
 		lbOp := op.(*loadBalancerBackendPoolUpdateOperation)
 		si, found := updater.az.getLocalServiceInfo(strings.ToLower(lbOp.serviceName))
 		if !found {
@@ -196,8 +207,39 @@ func (updater *loadBalancerBackendPoolUpdater) process(ctx context.Context) {
 		groups[key] = append(groups[key], op)
 	}
 
-	// Clear all jobs.
-	updater.operations = make([]batchOperation, 0)
+	return groups
+}
+
+// process processes all operations in the loadBalancerBackendPoolUpdater.
+// It merges operations that have the same loadBalancerName and backendPoolName,
+// and then processes them in batches. If an operation fails, it will be retried
+// if it is retriable, otherwise all operations in the batch targeting to
+// this backend pool will fail.
+func (updater *loadBalancerBackendPoolUpdater) process(ctx context.Context) {
+	logger := log.FromContextOrBackground(ctx).WithName("loadBalancerBackendPoolUpdater.process")
+
+	// Acquire serviceReconcileLock before draining operations so that
+	// removeOperation can cancel queued operations and localServiceNameToServiceInfoMap
+	// reads in groupOperations are consistent. The lock ordering
+	// (serviceReconcileLock, azureResourceLocker, updater.lock) matches
+	// the main reconciliation loop.
+	updater.az.serviceReconcileLock.Lock()
+	defer updater.az.serviceReconcileLock.Unlock()
+
+	if updater.countOperations() == 0 {
+		return
+	}
+
+	// Serialize with other components that may update Azure load balancer resources.
+	if updater.az.azureResourceLocker != nil {
+		if err := updater.az.azureResourceLocker.Lock(ctx); err != nil {
+			return
+		}
+		defer func() { _ = updater.az.azureResourceLocker.Unlock(ctx) }()
+	}
+
+	ops := updater.drainOperations()
+	groups := updater.groupOperations(ctx, ops)
 
 	for key, ops := range groups {
 		parts := strings.Split(key, ":")
@@ -211,15 +253,12 @@ func (updater *loadBalancerBackendPoolUpdater) process(ctx context.Context) {
 			updater.az.getNetworkResourceSubscriptionID(),
 			"local_service_backend_pool_updater", // source name, use a constant source name for aggregation
 		)
-		isOperationSucceeded := false
-		defer func() {
-			mc.ObserveOperationWithResult(isOperationSucceeded)
-		}()
 
 		bp, err := updater.az.NetworkClientFactory.GetBackendAddressPoolClient().Get(ctx, updater.az.ResourceGroup, lbName, poolName)
 		if err != nil {
+			mc.ObserveOperationWithResult(false)
 			updater.processError(err, operationName, ops...)
-			continue // Metric will be recorded as failure via defer
+			continue
 		}
 
 		var changed bool
@@ -242,11 +281,12 @@ func (updater *loadBalancerBackendPoolUpdater) process(ctx context.Context) {
 			logger.V(2).Info("updating backend pool", "loadBalancer", lbName, "backendPool", poolName)
 			_, err = updater.az.NetworkClientFactory.GetBackendAddressPoolClient().CreateOrUpdate(ctx, updater.az.ResourceGroup, lbName, poolName, *bp)
 			if err != nil {
+				mc.ObserveOperationWithResult(false)
 				updater.processError(err, operationName, ops...)
-				continue // Metric will be recorded as failure via defer
+				continue
 			}
 		}
-		isOperationSucceeded = true // Mark operation as successful before notifying
+		mc.ObserveOperationWithResult(true)
 		updater.notify(newBatchOperationResult(operationName, true, nil), ops...)
 	}
 }
@@ -333,22 +373,24 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 				}
 				lbName, ipFamily := si.lbName, si.ipFamily
 
-				var previousIPs, currentIPs, previousNodeNames, currentNodeNames []string
+				var previousIPs, currentIPs []string
+				previousNodeNameSet := utilsets.NewString()
+				currentNodeNameSet := utilsets.NewString()
 				if previousES != nil {
 					for _, ep := range previousES.Endpoints {
-						previousNodeNames = append(previousNodeNames, ptr.Deref(ep.NodeName, ""))
+						previousNodeNameSet.Insert(ptr.Deref(ep.NodeName, ""))
 					}
 				}
 				if newES != nil {
 					for _, ep := range newES.Endpoints {
-						currentNodeNames = append(currentNodeNames, ptr.Deref(ep.NodeName, ""))
+						currentNodeNameSet.Insert(ptr.Deref(ep.NodeName, ""))
 					}
 				}
-				for _, previousNodeName := range previousNodeNames {
+				for _, previousNodeName := range previousNodeNameSet.UnsortedList() {
 					nodeIPsSet := az.nodePrivateIPs[strings.ToLower(previousNodeName)]
 					previousIPs = append(previousIPs, nodeIPsSet.UnsortedList()...)
 				}
-				for _, currentNodeName := range currentNodeNames {
+				for _, currentNodeName := range currentNodeNameSet.UnsortedList() {
 					nodeIPsSet := az.nodePrivateIPs[strings.ToLower(currentNodeName)]
 					currentIPs = append(currentIPs, nodeIPsSet.UnsortedList()...)
 				}

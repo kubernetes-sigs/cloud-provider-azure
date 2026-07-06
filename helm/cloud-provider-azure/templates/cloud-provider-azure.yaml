@@ -21,11 +21,15 @@
 {{- else if eq .Capabilities.KubeVersion.Minor "31" -}}
   {{- $_ := set . "cloudProviderAzureVersion" "v1.31.12" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "32" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.32.11" }}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.32.17" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "33" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.33.6" }}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.33.12" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "34" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.34.3" }}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.34.9" }}
+{{- else if eq .Capabilities.KubeVersion.Minor "35" -}}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.35.4" }}
+{{- else if eq .Capabilities.KubeVersion.Minor "36" -}}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.36.0" }}
 {{- end -}}
 {{- if ge .Capabilities.KubeVersion.Minor "32" -}}
   {{- if eq .Values.cloudNodeManager.imageRepository "mcr.microsoft.com/oss/kubernetes" -}}

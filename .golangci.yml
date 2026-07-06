@@ -41,6 +41,13 @@ linters:
       - std-error-handling
     rules:
       - linters:
+          - gosec
+        path: ^(pkg/provider/azure_test|pkg/util/iputil/bits)\.go$
+        text: "G602: slice index out of range"
+      - linters:
+          - revive
+        text: "var-naming: avoid package names that conflict with Go standard library package names"
+      - linters:
           - revive
         path: tests/e2e
     paths:

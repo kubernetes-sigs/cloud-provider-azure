@@ -21,11 +21,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/netip"
 	"sync"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	"github.com/stretchr/testify/assert"
 
 	"go.uber.org/mock/gomock"
@@ -36,6 +37,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	providererrors "sigs.k8s.io/cloud-provider-azure/pkg/provider/errors"
 )
 
 func TestCreateOrUpdatePIP(t *testing.T) {
@@ -150,6 +152,50 @@ func TestListPIP(t *testing.T) {
 	}
 }
 
+func TestListPIPReturnsDeepCopy(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	az := GetTestCloud(ctrl)
+	original := &armnetwork.PublicIPAddress{
+		Name: ptr.To("pip1"),
+		Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+			IPTags: []*armnetwork.IPTag{
+				{
+					IPTagType: ptr.To("FirstPartyUsage"),
+					Tag:       ptr.To("/NonProd"),
+				},
+			},
+		},
+	}
+
+	pipCache := &sync.Map{}
+	pipCache.Store(ptr.Deref(original.Name, ""), original)
+	az.pipCache.Set(az.ResourceGroup, pipCache)
+
+	first, err := az.listPIP(context.TODO(), az.ResourceGroup, azcache.CacheReadTypeDefault)
+	assert.NoError(t, err)
+	if assert.Len(t, first, 1) {
+		first[0].Properties.IPTags = []*armnetwork.IPTag{
+			{
+				IPTagType: ptr.To("FirstPartyUsage"),
+				Tag:       ptr.To("/Unprivileged"),
+			},
+		}
+	}
+
+	second, err := az.listPIP(context.TODO(), az.ResourceGroup, azcache.CacheReadTypeDefault)
+	assert.NoError(t, err)
+	if assert.Len(t, second, 1) && assert.NotNil(t, second[0].Properties) {
+		assert.Equal(t, []*armnetwork.IPTag{
+			{
+				IPTagType: ptr.To("FirstPartyUsage"),
+				Tag:       ptr.To("/NonProd"),
+			},
+		}, second[0].Properties.IPTags)
+	}
+}
+
 func TestGetPublicIPAddress(t *testing.T) {
 
 	tests := []struct {
@@ -240,12 +286,13 @@ func TestFindMatchedPIP(t *testing.T) {
 			shouldRefreshCache: true,
 			loadBalancerIP:     "2.3.4.5",
 			pipName:            "pipName",
-			expectedError:      errors.New("findMatchedPIPByLoadBalancerIP: cannot find public IP with IP address 2.3.4.5 in resource group rg"),
+			expectedError: errors.New("findMatchedPIPByLoadBalancerIP: cannot find public IP with IP address 2.3.4.5 in resource group rg: " +
+				"getExpectedPIPFromListByIPAddress: cannot find public IP with IP address 2.3.4.5"),
 		},
 		{
 			description:   "should report an error if failed to list pip",
 			listError:     &azcore.ResponseError{ErrorCode: "list error"},
-			expectedError: errors.New("list error"),
+			expectedError: errors.New("findMatchedPIP: failed to listPIP"),
 		},
 		{
 			description:        "should refresh the cache if failed to search by name",
@@ -282,6 +329,129 @@ func TestFindMatchedPIP(t *testing.T) {
 			if tc.expectedError != nil {
 				assert.Contains(t, err.Error(), tc.expectedError.Error())
 			}
+		})
+	}
+}
+
+func TestFindMatchedPIPSkipsListForInvalidOrNonPublicLoadBalancerIP(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, tc := range []struct {
+		description    string
+		loadBalancerIP string
+		expectedErr    error
+	}{
+		{
+			description:    "invalid load balancer IP",
+			loadBalancerIP: "not-an-ip",
+			expectedErr:    providererrors.ErrInvalidLoadBalancerIP,
+		},
+		{
+			description:    "non-public load balancer IP",
+			loadBalancerIP: "10.0.0.5",
+			expectedErr:    providererrors.ErrNonPublicLoadBalancerIP,
+		},
+		{
+			description:    "RFC1918 172.16/12 load balancer IP",
+			loadBalancerIP: "172.16.0.5",
+			expectedErr:    providererrors.ErrNonPublicLoadBalancerIP,
+		},
+		{
+			description:    "RFC1918 192.168/16 load balancer IP",
+			loadBalancerIP: "192.168.0.5",
+			expectedErr:    providererrors.ErrNonPublicLoadBalancerIP,
+		},
+		{
+			description:    "IPv6 unique local address load balancer IP",
+			loadBalancerIP: "fd00::5",
+			expectedErr:    providererrors.ErrNonPublicLoadBalancerIP,
+		},
+		{
+			description:    "Azure shared address space load balancer IP",
+			loadBalancerIP: "100.100.0.202",
+			expectedErr:    providererrors.ErrNonPublicLoadBalancerIP,
+		},
+		{
+			description:    "Azure internal DNS load balancer IP",
+			loadBalancerIP: "168.63.129.16",
+			expectedErr:    providererrors.ErrNonPublicLoadBalancerIP,
+		},
+		{
+			description:    "IPv4-mapped RFC1918 load balancer IP",
+			loadBalancerIP: "::ffff:a00:5",
+			expectedErr:    providererrors.ErrNonPublicLoadBalancerIP,
+		},
+		{
+			description:    "IPv4-mapped Azure shared address space load balancer IP",
+			loadBalancerIP: "::ffff:100.100.0.202",
+			expectedErr:    providererrors.ErrNonPublicLoadBalancerIP,
+		},
+		{
+			description:    "IPv4-mapped Azure internal DNS load balancer IP",
+			loadBalancerIP: "::ffff:168.63.129.16",
+			expectedErr:    providererrors.ErrNonPublicLoadBalancerIP,
+		},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			az := GetTestCloud(ctrl)
+			_, err := az.findMatchedPIP(context.TODO(), tc.loadBalancerIP, "", "rg")
+
+			assert.ErrorIs(t, err, tc.expectedErr)
+			assert.Contains(t, err.Error(), tc.loadBalancerIP)
+		})
+	}
+}
+
+func TestIsAzureReservedIP(t *testing.T) {
+	for _, tc := range []struct {
+		description string
+		ip          string
+		expected    bool
+	}{
+		{
+			description: "RFC1918 10/8",
+			ip:          "10.0.0.5",
+			expected:    false,
+		},
+		{
+			description: "RFC1918 172.16/12",
+			ip:          "172.16.0.5",
+			expected:    false,
+		},
+		{
+			description: "RFC1918 192.168/16",
+			ip:          "192.168.0.5",
+			expected:    false,
+		},
+		{
+			description: "RFC6598 shared address space",
+			ip:          "100.100.0.202",
+			expected:    true,
+		},
+		{
+			description: "Azure internal DNS",
+			ip:          "168.63.129.16",
+			expected:    true,
+		},
+		{
+			description: "public IP",
+			ip:          "1.2.3.4",
+			expected:    false,
+		},
+		{
+			description: "IPv6 unique local address",
+			ip:          "fd00::5",
+			expected:    false,
+		},
+		{
+			description: "IPv6 global unicast",
+			ip:          "2001:4860:4860::8888",
+			expected:    false,
+		},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			assert.Equal(t, tc.expected, isAzureReservedIP(netip.MustParseAddr(tc.ip)))
 		})
 	}
 }

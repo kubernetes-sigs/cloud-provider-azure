@@ -30,7 +30,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	gomock "go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 )
@@ -57,45 +57,6 @@ func NewMockBackendPool(ctrl *gomock.Controller) *MockBackendPool {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockBackendPool) EXPECT() *MockBackendPoolMockRecorder {
 	return m.recorder
-}
-
-// CleanupVMSetFromBackendPoolByCondition mocks base method.
-func (m *MockBackendPool) CleanupVMSetFromBackendPoolByCondition(ctx context.Context, slb *armnetwork.LoadBalancer, service *v1.Service, nodes []*v1.Node, clusterName string, shouldRemoveVMSetFromSLB func(string) bool) (*armnetwork.LoadBalancer, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CleanupVMSetFromBackendPoolByCondition", ctx, slb, service, nodes, clusterName, shouldRemoveVMSetFromSLB)
-	ret0, _ := ret[0].(*armnetwork.LoadBalancer)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CleanupVMSetFromBackendPoolByCondition indicates an expected call of CleanupVMSetFromBackendPoolByCondition.
-func (mr *MockBackendPoolMockRecorder) CleanupVMSetFromBackendPoolByCondition(ctx, slb, service, nodes, clusterName, shouldRemoveVMSetFromSLB any) *MockBackendPoolCleanupVMSetFromBackendPoolByConditionCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CleanupVMSetFromBackendPoolByCondition", reflect.TypeOf((*MockBackendPool)(nil).CleanupVMSetFromBackendPoolByCondition), ctx, slb, service, nodes, clusterName, shouldRemoveVMSetFromSLB)
-	return &MockBackendPoolCleanupVMSetFromBackendPoolByConditionCall{Call: call}
-}
-
-// MockBackendPoolCleanupVMSetFromBackendPoolByConditionCall wrap *gomock.Call
-type MockBackendPoolCleanupVMSetFromBackendPoolByConditionCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockBackendPoolCleanupVMSetFromBackendPoolByConditionCall) Return(arg0 *armnetwork.LoadBalancer, arg1 error) *MockBackendPoolCleanupVMSetFromBackendPoolByConditionCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockBackendPoolCleanupVMSetFromBackendPoolByConditionCall) Do(f func(context.Context, *armnetwork.LoadBalancer, *v1.Service, []*v1.Node, string, func(string) bool) (*armnetwork.LoadBalancer, error)) *MockBackendPoolCleanupVMSetFromBackendPoolByConditionCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockBackendPoolCleanupVMSetFromBackendPoolByConditionCall) DoAndReturn(f func(context.Context, *armnetwork.LoadBalancer, *v1.Service, []*v1.Node, string, func(string) bool) (*armnetwork.LoadBalancer, error)) *MockBackendPoolCleanupVMSetFromBackendPoolByConditionCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
 }
 
 // EnsureHostsInPool mocks base method.

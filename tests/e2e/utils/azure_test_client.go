@@ -41,6 +41,7 @@ import (
 
 var (
 	azureResourceGroupNameRE = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/(?:.*)`)
+	windowsServerYearRE      = regexp.MustCompile(`\b20\d{2}\b`)
 	nodeLabelLocation        = "failure-domain.beta.kubernetes.io/region"
 	defaultLocation          = "eastus2"
 )
@@ -54,6 +55,7 @@ type AzureTestClient struct {
 	azFactoryConfig *azclient.ClientFactoryConfig
 	IPFamily        IPFamily
 	HasWindowsNodes bool
+	WindowsOSVersion string
 }
 
 // CreateAzureTestClient makes a new AzureTestClient
@@ -91,9 +93,11 @@ func CreateAzureTestClient() (*AzureTestClient, error) {
 	}
 
 	hasWindowsNodes := false
+	windowsOSVersion := ""
 	for _, node := range nodes {
 		if os, ok := node.Labels["kubernetes.io/os"]; ok && os == "windows" {
 			hasWindowsNodes = true
+			windowsOSVersion = nanoserverTagFromOSImage(node.Status.NodeInfo.OSImage)
 			break
 		}
 	}
@@ -113,8 +117,9 @@ func CreateAzureTestClient() (*AzureTestClient, error) {
 		location:        location,
 		resourceGroup:   resourceGroup,
 		IPFamily:        ipFamily,
-		HasWindowsNodes: hasWindowsNodes,
-		authConfig:      authConfig,
+		HasWindowsNodes:  hasWindowsNodes,
+		WindowsOSVersion: windowsOSVersion,
+		authConfig:       authConfig,
 		azFactoryConfig: clientFactoryConfig,
 		client:          azFactory,
 	}
@@ -227,4 +232,13 @@ func getLocationFromNodeLabels(node *v1.Node) string {
 		return location
 	}
 	return defaultLocation
+}
+
+// nanoserverTagFromOSImage extracts the Windows Server year from the node's OSImage
+// (e.g. "Windows Server 2022 Datacenter") and returns the nanoserver tag (e.g. "ltsc2022").
+func nanoserverTagFromOSImage(osImage string) string {
+	if year := windowsServerYearRE.FindString(osImage); year != "" {
+		return "ltsc" + year
+	}
+	return "ltsc2022"
 }

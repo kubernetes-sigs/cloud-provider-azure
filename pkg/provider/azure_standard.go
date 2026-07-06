@@ -30,7 +30,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	"github.com/samber/lo"
 
 	v1 "k8s.io/api/core/v1"
@@ -304,20 +304,6 @@ func (az *Cloud) getLoadBalancerRuleName(service *v1.Service, protocol v1.Protoc
 
 func (az *Cloud) getloadbalancerHAmodeRuleName(service *v1.Service, isIPv6 bool) string {
 	return az.getLoadBalancerRuleName(service, service.Spec.Ports[0].Protocol, service.Spec.Ports[0].Port, isIPv6)
-}
-
-func (az *Cloud) getSecurityRuleName(service *v1.Service, port v1.ServicePort, sourceAddrPrefix string, isIPv6 bool) string {
-	isDualStack := isServiceDualStack(service)
-	safePrefix := strings.ReplaceAll(sourceAddrPrefix, "/", "_")
-	safePrefix = strings.ReplaceAll(safePrefix, ":", ".") // Consider IPv6 address
-	var name string
-	if useSharedSecurityRule(service) {
-		name = fmt.Sprintf("shared-%s-%d-%s", port.Protocol, port.Port, safePrefix)
-	} else {
-		rulePrefix := az.getRulePrefix(service)
-		name = fmt.Sprintf("%s-%s-%d-%s", rulePrefix, port.Protocol, port.Port, safePrefix)
-	}
-	return getResourceByIPFamily(name, isDualStack, isIPv6)
 }
 
 // This returns a human-readable version of the Service used to tag some resources.

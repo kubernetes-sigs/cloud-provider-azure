@@ -27,7 +27,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	privatedns "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns"
 	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage/v2"
 	"github.com/google/uuid"
@@ -77,6 +77,7 @@ type AccountOptions struct {
 	AllowBlobPublicAccess                   *bool
 	RequireInfrastructureEncryption         *bool
 	AllowSharedKeyAccess                    *bool
+	AllowCrossTenantReplication             *bool
 	IsMultichannelEnabled                   *bool
 	IsSmbOAuthEnabled                       *bool
 	KeyName                                 *string
@@ -99,6 +100,8 @@ type AccountOptions struct {
 	SourceAccountName string
 	// default is "privatelink"
 	PrivateDNSZoneName string
+	// resource group for private DNS zone, default is vnetResourceGroup
+	PrivateDNSZoneResourceGroup string
 	// default is vnetName + "-vnetlink"
 	VNetLinkName        string
 	PublicNetworkAccess string
@@ -156,7 +159,7 @@ func (az *AccountRepo) getStorageAccounts(ctx context.Context, storageAccountCli
 	accounts := []accountWithLocation{}
 	for _, acct := range result {
 		if acct.Name != nil && acct.Location != nil && acct.SKU != nil {
-			if !isStorageTypeEqual(acct, accountOptions) || !isAccountKindEqual(acct, accountOptions) || !isLocationEqual(acct, accountOptions) || !isLargeFileSharesPropertyEqual(acct, accountOptions) || !isTagsEqual(acct, accountOptions) || !isTaggedWithSkip(acct) || !isHnsPropertyEqual(acct, accountOptions) || !isEnableNfsV3PropertyEqual(acct, accountOptions) || !isEnableHTTPSTrafficOnlyEqual(acct, accountOptions) || !isAllowBlobPublicAccessEqual(acct, accountOptions) || !isRequireInfrastructureEncryptionEqual(acct, accountOptions) || !isAllowSharedKeyAccessEqual(acct, accountOptions) || !isAccessTierEqual(acct, accountOptions) || !AreVNetRulesEqual(acct, accountOptions) || !isPrivateEndpointAsExpected(acct, accountOptions) {
+			if !isStorageTypeEqual(acct, accountOptions) || !isAccountKindEqual(acct, accountOptions) || !isLocationEqual(acct, accountOptions) || !isLargeFileSharesPropertyEqual(acct, accountOptions) || !isTagsEqual(acct, accountOptions) || !isTaggedWithSkip(acct) || !isHnsPropertyEqual(acct, accountOptions) || !isEnableNfsV3PropertyEqual(acct, accountOptions) || !isEnableHTTPSTrafficOnlyEqual(acct, accountOptions) || !isAllowBlobPublicAccessEqual(acct, accountOptions) || !isRequireInfrastructureEncryptionEqual(acct, accountOptions) || !isAllowSharedKeyAccessEqual(acct, accountOptions) || !isAllowCrossTenantReplicationEqual(acct, accountOptions) || !isAccessTierEqual(acct, accountOptions) || !AreVNetRulesEqual(acct, accountOptions) || !isPrivateEndpointAsExpected(acct, accountOptions) || !isSmbOAuthEnabledEqual(acct, accountOptions) {
 				continue
 			}
 
@@ -460,20 +463,27 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 		}
 	}
 
+	// Use a separate resource group for private DNS zone if specified,
+	// otherwise default to vnetResourceGroup for backward compatibility.
+	privateDNSResourceGroup := vnetResourceGroup
+	if accountOptions.PrivateDNSZoneResourceGroup != "" {
+		privateDNSResourceGroup = accountOptions.PrivateDNSZoneResourceGroup
+	}
+
 	if ptr.Deref(accountOptions.CreatePrivateEndpoint, false) {
 		clientFactory := az.NetworkClientFactory
 		if clientFactory == nil {
 			// multi-tenant support
 			clientFactory = az.ComputeClientFactory
 		}
-		if _, err := clientFactory.GetPrivateZoneClient().Get(ctx, vnetResourceGroup, privateDNSZoneName); err != nil {
+		if _, err := clientFactory.GetPrivateZoneClient().Get(ctx, privateDNSResourceGroup, privateDNSZoneName); err != nil {
 			if strings.Contains(err.Error(), consts.ResourceNotFoundMessageCode) {
-				// Create DNS zone first, this could make sure driver has write permission on vnetResourceGroup
-				if err := az.createPrivateDNSZone(ctx, vnetResourceGroup, privateDNSZoneName); err != nil {
-					return "", "", fmt.Errorf("create private DNS zone(%s) in resourceGroup(%s): %w", privateDNSZoneName, vnetResourceGroup, err)
+				// Create DNS zone first, this could make sure driver has write permission on privateDNSResourceGroup
+				if err := az.createPrivateDNSZone(ctx, privateDNSResourceGroup, privateDNSZoneName); err != nil {
+					return "", "", fmt.Errorf("create private DNS zone(%s) in privateDNSResourceGroup(%s): %w", privateDNSZoneName, privateDNSResourceGroup, err)
 				}
 			} else {
-				return "", "", fmt.Errorf("get private dns zone %s returned with %v", privateDNSZoneName, err.Error())
+				return "", "", fmt.Errorf("get private DNS zone(%s) in privateDNSResourceGroup(%s): %w", privateDNSZoneName, privateDNSResourceGroup, err)
 			}
 		}
 
@@ -482,13 +492,13 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 		if accountOptions.VNetLinkName != "" {
 			vNetLinkName = accountOptions.VNetLinkName
 		}
-		if _, err := clientFactory.GetVirtualNetworkLinkClient().Get(ctx, vnetResourceGroup, privateDNSZoneName, vNetLinkName); err != nil {
+		if _, err := clientFactory.GetVirtualNetworkLinkClient().Get(ctx, privateDNSResourceGroup, privateDNSZoneName, vNetLinkName); err != nil {
 			if strings.Contains(err.Error(), consts.ResourceNotFoundMessageCode) {
-				if err := az.createVNetLink(ctx, vNetLinkName, vnetResourceGroup, vnetName, privateDNSZoneName); err != nil {
-					return "", "", fmt.Errorf("create virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s): %w", vnetName, privateDNSZoneName, vnetResourceGroup, err)
+				if err := az.createVNetLink(ctx, vNetLinkName, vnetResourceGroup, privateDNSResourceGroup, vnetName, privateDNSZoneName); err != nil {
+					return "", "", fmt.Errorf("create virtual link for vnet(%s) and DNS Zone(%s) in privateDNSResourceGroup(%s): %w", vnetName, privateDNSZoneName, privateDNSResourceGroup, err)
 				}
 			} else {
-				return "", "", fmt.Errorf("get virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s) returned with %w", vnetName, privateDNSZoneName, vnetResourceGroup, err)
+				return "", "", fmt.Errorf("get virtual link for vnet(%s) and DNS Zone(%s) in privateDNSResourceGroup(%s) returned with %w", vnetName, privateDNSZoneName, privateDNSResourceGroup, err)
 			}
 		}
 	}
@@ -569,6 +579,10 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 		if accountOptions.AllowBlobPublicAccess != nil {
 			logger.V(2).Info("set AllowBlobPublicAccess for storage account", "AllowBlobPublicAccess", *accountOptions.AllowBlobPublicAccess, "account", accountName)
 			cp.Properties.AllowBlobPublicAccess = accountOptions.AllowBlobPublicAccess
+		}
+		if accountOptions.AllowCrossTenantReplication != nil {
+			logger.V(2).Info("set AllowCrossTenantReplication for storage account", "AllowCrossTenantReplication", *accountOptions.AllowCrossTenantReplication, "account", accountName)
+			cp.Properties.AllowCrossTenantReplication = accountOptions.AllowCrossTenantReplication
 		}
 		if accountOptions.RequireInfrastructureEncryption != nil {
 			logger.V(2).Info("set RequireInfrastructureEncryption for storage account", "RequireInfrastructureEncryption", *accountOptions.RequireInfrastructureEncryption, "account", accountName)
@@ -719,8 +733,8 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 		if accountOptions.StorageType == StorageTypeBlob {
 			dnsZoneGroupName = dnsZoneGroupName + blobNameSuffix
 		}
-		if err := az.createPrivateDNSZoneGroup(ctx, dnsZoneGroupName, privateEndpointName, vnetResourceGroup, vnetName, privateDNSZoneName); err != nil {
-			return "", "", fmt.Errorf("create private DNS zone group - privateEndpoint(%s), vNetName(%s), resourceGroup(%s): %w", privateEndpointName, vnetName, vnetResourceGroup, err)
+		if err := az.createPrivateDNSZoneGroup(ctx, dnsZoneGroupName, privateEndpointName, vnetResourceGroup, privateDNSResourceGroup, vnetName, privateDNSZoneName); err != nil {
+			return "", "", fmt.Errorf("create private DNS zone group - privateEndpoint(%s), vNetName(%s), privateEndpointResourceGroup(%s), privateDNSZoneResourceGroup(%s): %w", privateEndpointName, vnetName, vnetResourceGroup, privateDNSResourceGroup, err)
 		}
 	}
 
@@ -783,9 +797,9 @@ func (az *AccountRepo) createPrivateEndpoint(ctx context.Context, accountName st
 	return err
 }
 
-func (az *AccountRepo) createPrivateDNSZone(ctx context.Context, vnetResourceGroup, privateDNSZoneName string) error {
+func (az *AccountRepo) createPrivateDNSZone(ctx context.Context, privateDNSResourceGroup, privateDNSZoneName string) error {
 	logger := log.FromContextOrBackground(ctx).WithName("createPrivateDNSZone")
-	logger.V(2).Info("Creating private DNS zone", "privateDNSZone", privateDNSZoneName, "ResourceGroup", vnetResourceGroup)
+	logger.V(2).Info("Creating private DNS zone", "privateDNSZone", privateDNSZoneName, "resourceGroup", privateDNSResourceGroup)
 	location := LocationGlobal
 	privateDNSZone := privatedns.PrivateZone{Location: &location}
 	clientFactory := az.NetworkClientFactory
@@ -795,9 +809,9 @@ func (az *AccountRepo) createPrivateDNSZone(ctx context.Context, vnetResourceGro
 	}
 	privatednsclient := clientFactory.GetPrivateZoneClient()
 
-	if _, err := privatednsclient.CreateOrUpdate(ctx, vnetResourceGroup, privateDNSZoneName, privateDNSZone); err != nil {
+	if _, err := privatednsclient.CreateOrUpdate(ctx, privateDNSResourceGroup, privateDNSZoneName, privateDNSZone); err != nil {
 		if strings.Contains(err.Error(), "exists already") {
-			logger.V(2).Info("private dns zone in resourceGroup already exists", "privateDNSZone", privateDNSZoneName, "ResourceGroup", vnetResourceGroup)
+			logger.V(2).Info("private dns zone in resourceGroup already exists", "privateDNSZone", privateDNSZoneName, "resourceGroup", privateDNSResourceGroup)
 			return nil
 		}
 		return err
@@ -805,9 +819,9 @@ func (az *AccountRepo) createPrivateDNSZone(ctx context.Context, vnetResourceGro
 	return nil
 }
 
-func (az *AccountRepo) createVNetLink(ctx context.Context, vNetLinkName, vnetResourceGroup, vnetName, privateDNSZoneName string) error {
+func (az *AccountRepo) createVNetLink(ctx context.Context, vNetLinkName, vnetResourceGroup, privateDNSResourceGroup, vnetName, privateDNSZoneName string) error {
 	logger := log.FromContextOrBackground(ctx).WithName("createVNetLink")
-	logger.V(2).Info("Creating virtual network link", "vNetLinkName", vNetLinkName, "privateDNSZone", privateDNSZoneName, "ResourceGroup", vnetResourceGroup)
+	logger.V(2).Info("Creating virtual network link", "vNetLinkName", vNetLinkName, "privateDNSZone", privateDNSZoneName, "vnetResourceGroup", vnetResourceGroup, "privateDNSResourceGroup", privateDNSResourceGroup)
 	clientFactory := az.NetworkClientFactory
 	if clientFactory == nil {
 		// multi-tenant support
@@ -823,20 +837,20 @@ func (az *AccountRepo) createVNetLink(ctx context.Context, vNetLinkName, vnetRes
 			VirtualNetwork:      &privatedns.SubResource{ID: &vnetID},
 			RegistrationEnabled: ptr.To(false)},
 	}
-	_, err := vnetLinkClient.CreateOrUpdate(ctx, vnetResourceGroup, privateDNSZoneName, vNetLinkName, parameters)
+	_, err := vnetLinkClient.CreateOrUpdate(ctx, privateDNSResourceGroup, privateDNSZoneName, vNetLinkName, parameters)
 	return err
 }
 
-func (az *AccountRepo) createPrivateDNSZoneGroup(ctx context.Context, dnsZoneGroupName, privateEndpointName, vnetResourceGroup, vnetName, privateDNSZoneName string) error {
+func (az *AccountRepo) createPrivateDNSZoneGroup(ctx context.Context, dnsZoneGroupName, privateEndpointName, privateEndpointResourceGroup, privateDNSResourceGroup, vnetName, privateDNSZoneName string) error {
 	logger := log.FromContextOrBackground(ctx).WithName("createPrivateDNSZoneGroup")
-	logger.V(2).Info("Creating private DNS zone group", "dnsZoneGroup", dnsZoneGroupName, "privateEndpoint", privateEndpointName, "vnetName", vnetName, "ResourceGroup", vnetResourceGroup)
+	logger.V(2).Info("Creating private DNS zone group", "dnsZoneGroup", dnsZoneGroupName, "privateEndpoint", privateEndpointName, "vnetName", vnetName, "privateEndpointResourceGroup", privateEndpointResourceGroup, "privateDNSResourceGroup", privateDNSResourceGroup)
 	privateDNSZoneGroup := &armnetwork.PrivateDNSZoneGroup{
 		Properties: &armnetwork.PrivateDNSZoneGroupPropertiesFormat{
 			PrivateDNSZoneConfigs: []*armnetwork.PrivateDNSZoneConfig{
 				{
 					Name: &privateDNSZoneName,
 					Properties: &armnetwork.PrivateDNSZonePropertiesFormat{
-						PrivateDNSZoneID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/privateDnsZones/%s", az.SubscriptionID, vnetResourceGroup, privateDNSZoneName)),
+						PrivateDNSZoneID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/privateDnsZones/%s", az.SubscriptionID, privateDNSResourceGroup, privateDNSZoneName)),
 					},
 				},
 			},
@@ -847,7 +861,7 @@ func (az *AccountRepo) createPrivateDNSZoneGroup(ctx context.Context, dnsZoneGro
 		clientFactory = az.ComputeClientFactory
 	}
 	privatednsgroupClient := clientFactory.GetPrivateDNSZoneGroupClient()
-	_, err := privatednsgroupClient.CreateOrUpdate(ctx, vnetResourceGroup, privateEndpointName, dnsZoneGroupName, *privateDNSZoneGroup)
+	_, err := privatednsgroupClient.CreateOrUpdate(ctx, privateEndpointResourceGroup, privateEndpointName, dnsZoneGroupName, *privateDNSZoneGroup)
 	return err
 }
 
@@ -1055,11 +1069,30 @@ func isAllowSharedKeyAccessEqual(account *armstorage.Account, accountOptions *Ac
 	return ptr.Deref(accountOptions.AllowSharedKeyAccess, true) == ptr.Deref(account.Properties.AllowSharedKeyAccess, true)
 }
 
+func isAllowCrossTenantReplicationEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
+	if accountOptions.AllowCrossTenantReplication == nil {
+		return true
+	}
+	return *accountOptions.AllowCrossTenantReplication == ptr.Deref(account.Properties.AllowCrossTenantReplication, false)
+}
+
 func isAccessTierEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
 	if accountOptions.AccessTier == "" {
 		return true
 	}
 	return account != nil && account.Properties != nil && account.Properties.AccessTier != nil && accountOptions.AccessTier == string(*account.Properties.AccessTier)
+}
+
+func isSmbOAuthEnabledEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
+	if accountOptions.IsSmbOAuthEnabled == nil {
+		return true
+	}
+	if account == nil || account.Properties == nil || account.Properties.AzureFilesIdentityBasedAuthentication == nil ||
+		account.Properties.AzureFilesIdentityBasedAuthentication.SmbOAuthSettings == nil ||
+		account.Properties.AzureFilesIdentityBasedAuthentication.SmbOAuthSettings.IsSmbOAuthEnabled == nil {
+		return !*accountOptions.IsSmbOAuthEnabled
+	}
+	return *account.Properties.AzureFilesIdentityBasedAuthentication.SmbOAuthSettings.IsSmbOAuthEnabled == *accountOptions.IsSmbOAuthEnabled
 }
 
 func (az *AccountRepo) isMultichannelEnabledEqual(ctx context.Context, account *armstorage.Account, accountOptions *AccountOptions) (bool, error) {

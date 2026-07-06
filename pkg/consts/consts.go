@@ -241,6 +241,8 @@ const (
 	LoadBalancerSKUBasic = "basic"
 	// LoadBalancerSKUStandard is the load balancer standard SKU
 	LoadBalancerSKUStandard = "standard"
+	// LoadBalancerSKUService is the load balancer service SKU
+	LoadBalancerSKUService = "service"
 
 	// ServiceAnnotationLoadBalancerInternal is the annotation used on the service
 	ServiceAnnotationLoadBalancerInternal = "service.beta.kubernetes.io/azure-load-balancer-internal"
@@ -267,13 +269,6 @@ const (
 	// ServiceAnnotationDNSLabelName is the annotation used on the service
 	// to specify the DNS label name for the service.
 	ServiceAnnotationDNSLabelName = "service.beta.kubernetes.io/azure-dns-label-name"
-
-	// ServiceAnnotationSharedSecurityRule is the annotation used on the service
-	// to specify that the service should be exposed using an Azure security rule
-	// that may be shared with other service, trading specificity of rules for an
-	// increase in the number of services that can be exposed. This relies on the
-	// Azure "augmented security rules" feature.
-	ServiceAnnotationSharedSecurityRule = "service.beta.kubernetes.io/azure-shared-securityrule"
 
 	// ServiceAnnotationLoadBalancerResourceGroup is the annotation used on the service
 	// to specify the resource group of load balancer objects that are not in the same resource group as the cluster.
@@ -329,6 +324,11 @@ const (
 	// ServiceAnnotationDisableLoadBalancerFloatingIP is the annotation used on the service to disable floating IP in load balancer rule.
 	// If omitted, the default value is false
 	ServiceAnnotationDisableLoadBalancerFloatingIP = "service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip"
+
+	// ServiceAnnotationDisableLoadBalancerNSGRule disables cloud-provider-managed NSG rules for the service.
+	// This annotation is not recommended for general use; it is a break-glass option for operators that intentionally
+	// manage the service's NSG rules themselves. If omitted, the default value is false
+	ServiceAnnotationDisableLoadBalancerNSGRule = "service.beta.kubernetes.io/azure-disable-load-balancer-nsg-rule"
 
 	// ServiceAnnotationAdditionalPublicIPs sets the additional Public IPs (split by comma) besides the service's Public IP configured on LoadBalancer.
 	// These additional Public IPs would be consumed by kube-proxy to configure the iptables rules on each node. Note they would not be configured
@@ -386,9 +386,8 @@ const (
 	LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration = "nodeIPConfiguration"
 	// LoadBalancerBackendPoolConfigurationTypeNodeIP is the lb backend pool config type node ip
 	LoadBalancerBackendPoolConfigurationTypeNodeIP = "nodeIP"
-	// LoadBalancerBackendPoolConfigurationTypePODIP is the lb backend pool config type pod ip
-	// TODO (nilo19): support pod IP in the future
-	LoadBalancerBackendPoolConfigurationTypePODIP = "podIP"
+	// LoadBalancerBackendPoolConfigurationTypePodIP is the lb backend pool config type pod ip
+	LoadBalancerBackendPoolConfigurationTypePodIP = "podIP"
 )
 
 // error messages

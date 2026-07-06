@@ -22,10 +22,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"os"
 	"os/signal"
-	"time"
 
 	"github.com/spf13/cobra"
 	"k8s.io/component-base/logs"
@@ -37,7 +35,6 @@ import (
 
 func main() {
 	logger := log.Background().WithName("main")
-	rand.Seed(time.Now().UnixNano())
 
 	var (
 		RegistryMirrorStr string

@@ -4,7 +4,8 @@ steps:
       version: '1.21.5'
   - bash: |
       git show --stat
-      echo $REGISTRY_PASSWORD | docker login $REGISTRY_URL -u $REGISTRY_USERNAME --password-stdin
+      CONTAINER_CLI="${CONTAINER_CLI:-$(which podman 2>/dev/null || echo docker)}"
+      echo $REGISTRY_PASSWORD | $CONTAINER_CLI login $REGISTRY_URL -u $REGISTRY_USERNAME --password-stdin
       export IMAGE_REGISTRY=$REGISTRY_URL
       USER="cloudtest"
       if [[ -n "${RELEASE_PIPELINE:-}" ]]; then
