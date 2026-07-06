@@ -50,6 +50,7 @@ or acting on a row.
 | 30 | 2 | Public-IP quota e2e flake | Public-IP quota marker in e2e log | auto-fix | no | [Details: Public-IP quota e2e](#details-public-ip-quota-e2e) |
 | 35 | 2 | Image-build registry flake e2e | Registry 5xx during pre-test image build | auto-fix | no | [Details: Image-build registry flake](#details-image-build-registry-flake) |
 | 37 | 2 | Cluster-provisioning node-readiness timeout e2e | Node readiness timeout during pre-test cluster provisioning | auto-fix | no | [Details: Cluster-provisioning node-readiness timeout](#details-cluster-provisioning-node-readiness-timeout) |
+| 39 | 2 | Prow pod scheduling timeout e2e | Prow job pod never schedules | auto-fix | no | [Details: Prow pod scheduling timeout](#details-prow-pod-scheduling-timeout) |
 | 40 | 2 | Only Tide pending | No failed checks; only `tide` pending | auto-fix | no | [Details: Only Tide pending](#details-only-tide-pending) |
 | 50 | 2 | Toolchain / SDK / policy blocker | Toolchain, typecheck, SDK-major, or dependency-policy blocker | escalate | yes | [Details: Toolchain / SDK / policy](#details-toolchain--sdk--policy) |
 
@@ -189,7 +190,8 @@ terminating triage. Today that is [go-mod-consistency](#details-go-mod-consisten
 (push + `/lgtm`) and the [Shared e2e flake rerun](#details-shared-e2e-flake-rerun)
 rule used by [Public-IP quota e2e](#details-public-ip-quota-e2e),
 [Image-build registry flake](#details-image-build-registry-flake), and
-[Cluster-provisioning node-readiness timeout](#details-cluster-provisioning-node-readiness-timeout)
+[Cluster-provisioning node-readiness timeout](#details-cluster-provisioning-node-readiness-timeout),
+and [Prow pod scheduling timeout](#details-prow-pod-scheduling-timeout)
 (each `/test <job-name>`). Link here from a new non-final pattern instead of
 copying the stamp recipe.
 
@@ -230,27 +232,28 @@ automated retry round.
 ## Details: Shared e2e flake rerun
 
 Shared action for Phase-2 e2e rows that are classified as safe transient
-failures. Pattern-specific Details must supply the log fingerprint and any extra
-exclusions before using this rule.
+failures. Pattern-specific Details must supply the fingerprint evidence and any
+extra exclusions before using this rule.
 
 Before rerunning:
 
 - The failed jobs are exclusively `pull-*-e2e-*`; no non-e2e failure remains.
-- Each job being rerun has the pattern-specific fingerprint in its current Prow
-  log.
+- Each job being rerun has the pattern-specific fingerprint in current Prow
+  evidence: build log, `prowjob.json`, `podinfo.json`, or another listed
+  artifact.
 - The pattern-specific exclusions do not apply.
 - A push in this triage has not already rerun the same job; prefer the
   push-triggered CI rerun when there is one.
 
 Rerun each failed e2e job with its own `/test <job-name>` comment. Put
 `/test <job-name>` on the first line, then include the fingerprint evidence from
-that job's current Prow log:
+that job's current Prow artifacts:
 
 ```bash
 gh pr comment <pr> --body-file - <<'EOF'
 /test <job-name>
 
-Reason: rerunning this failed e2e job because its current Prow log shows <pattern-specific evidence> and no non-flake failure remains.
+Reason: rerunning this failed e2e job because its current Prow artifacts show <pattern-specific evidence> and no non-flake failure remains.
 Unblock attempt: <N+1>
 EOF
 ```
@@ -320,6 +323,32 @@ failure separately instead of retesting.
 If the row matches, follow [Shared e2e flake rerun](#details-shared-e2e-flake-rerun)
 and fill the evidence with the node-timeout marker, `EXIT_VALUE=124`, and the
 fact that no test ran.
+
+## Details: Prow pod scheduling timeout
+
+Use this path only when a failed `pull-*-e2e-*` job never starts because Prow
+cannot schedule the job pod. This is a Prow infrastructure/capacity failure, not
+a cloud-provider-azure test failure.
+
+Confirm from the current Prow artifacts before retesting:
+
+- `prowjob.json` has `status.state` = `error` and `status.description` =
+  `Pod scheduling timeout.`
+- The artifact root has no `build-log.txt`, or the build log never reaches the
+  job entrypoint or any Ginkgo output.
+- `finished.json` has `result` = `error`.
+- `podinfo.json` shows the job pod stayed `Pending`, with `PodScheduled=False`
+  and `reason=Unschedulable`, or `FailedScheduling` events such as
+  `Insufficient cpu`, `Insufficient memory`, `No preemption victims`, or
+  `all available instance types exceed limits`.
+
+If the job pod starts and the build log reaches cluster provisioning or test
+execution, use a more specific pattern instead. If any non-e2e job failed,
+handle that failure separately instead of retesting.
+
+If the row matches, follow [Shared e2e flake rerun](#details-shared-e2e-flake-rerun)
+and fill the evidence with `Pod scheduling timeout.` plus the `podinfo.json`
+Unschedulable / FailedScheduling capacity marker.
 
 ## Details: Only Tide pending
 
