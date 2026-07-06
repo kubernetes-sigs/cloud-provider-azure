@@ -16,12 +16,10 @@ or acting on a row.
 | **Priority** | Gap-numbered (10, 20, 30…). Within a phase, the engine acts on matched rows low→high. New patterns slot into gaps without renumbering. |
 | **Phase** | `0` (guard, metadata/diff only) / `1` (classify) / `2` (act). Binds the row to an engine phase so guard rows are resolved before any CI/log I/O. |
 | **Pattern** | Short human name. |
-| **Detection signal** | What to match — the diff grep, the failing job name, or the log marker. A Phase-0 row's signal must be computable from metadata and the `go.mod` diff alone. |
-| **Preconditions / Exclusions** | Negative and dependency guards that must hold for the Action to be valid (e.g. "only e2e jobs failed", "no non-Tide check pending", "after other blockers resolved"). Never dropped into prose only. |
+| **Signal** | Compact routing hint: the diff marker, failing job name, or log fingerprint. A Phase-0 signal must be computable before CI/log I/O. |
 | **Autonomy** | `close` / `auto-fix` / `escalate` / `bot-rebase`. Governs whether the agent acts alone (see Autonomy values below). |
-| **Action** | One-line summary of the fix or Prow comment. |
 | **Stop** | `yes` = short-circuit; end triage after this row is handled. |
-| **Details** | Markdown anchor link to the pattern's `## Details: <name>` subsection in the same file. Details are **normative** — the agent must read them before matching/acting. `—` only when the Action and Preconditions cells are complete on their own. |
+| **Details** | Markdown anchor link to the pattern's `## Details: <name>` subsection in the same file. Details are **normative** and contain the full match criteria, preconditions, exclusions, and action. |
 
 ## Autonomy values
 
@@ -43,22 +41,23 @@ or acting on a row.
 
 ## Catalog
 
-| Pri | Phase | Pattern | Detection signal | Preconditions / Exclusions | Autonomy | Action | Stop | Details |
-|-----|-------|---------|------------------|----------------------------|----------|--------|------|---------|
-| 10 | 0 | K8s minor-version bump | `go.mod` diff moves a `k8s.io/*` module across minor families (guard rules) | Computed from metadata + diff only, before any CI/log read | close | Comment `/close` + reason | yes | [Details: K8s minor-version guard](#details-k8s-minor-version-guard) |
-| 15 | 0 | Needs rebase | `needs-rebase` label or `mergeable` = CONFLICTING | Computed from metadata only, before any CI/log read; evaluate after the K8s close-guard | bot-rebase | Comment `@dependabot rebase` | yes | [Details: Needs rebase](#details-needs-rebase) |
-| 17 | 0 | Retry budget exhausted | Highest `Unblock attempt: N` stamp in PR comment history is `>= 3` (a 4th attempt would exceed the budget of 3) | Computed from comment metadata only, before any CI/log read; evaluate after the needs-rebase guard | escalate | Do nothing; report the PR as needing human review in the final output | yes | [Details: Retry budget exhausted](#details-retry-budget-exhausted) |
-| 20 | 2 | go-mod-consistency failed | `go-mod-consistency` job failed | Clean tree, or dirty only because of the dependency bump; stage only sync output | auto-fix | Run `sync-go-modules`, push, `/lgtm` | no | [Details: go-mod-consistency](#details-go-mod-consistency) |
-| 30 | 2 | Public-IP quota e2e flake | Failing log has `PublicIPCountLimitReached` / `PublicIPPrefixCountLimitReached` | Only `pull-*-e2e-*` failed; no non-e2e failure remains; skip if a push this triage already reruns the job | auto-fix | `/test <job>` per failed job | no | [Details: Public-IP quota e2e](#details-public-ip-quota-e2e) |
-| 35 | 2 | Image-build registry flake e2e | Failing e2e log has a container-registry 5xx during image build before any test runs, e.g. `502 Bad Gateway` from `registry-1.docker.io` resolving the BuildKit `docker/dockerfile` frontend | Only `pull-*-e2e-*` failed and the failure is in the image-build phase (no Ginkgo spec ran); no non-flake failure remains; skip if a push this triage already reruns the job | auto-fix | `/test <job>` per failed job | no | [Details: Image-build registry flake](#details-image-build-registry-flake) |
-| 37 | 2 | Cluster-provisioning node-readiness timeout e2e | Failing e2e log has `timed out waiting for the condition on nodes/<name>` during CAPZ cluster bring-up and ends with `EXIT_VALUE=124`, before any Ginkgo spec ran | Only `pull-*-e2e-*` failed and the timeout is in the cluster-provisioning phase (no Ginkgo spec ran); no non-flake failure remains; skip if a push this triage already reruns the job | auto-fix | `/test <job>` per failed job | no | [Details: Cluster-provisioning node-readiness timeout](#details-cluster-provisioning-node-readiness-timeout) |
-| 40 | 2 | Only Tide pending | No failed checks; only `tide` pending | PR does not already have `lgtm` label; no non-Tide check pending or failed | auto-fix | `/lgtm` | no | [Details: Only Tide pending](#details-only-tide-pending) |
-| 50 | 2 | Toolchain / SDK / policy blocker | Go-version panic, typecheck, mixed SDK majors, or dependency-review/license failure | Needs a human policy, toolchain, or dependency-version decision the agent must not make autonomously | escalate | Do nothing; report the PR as needing human review in the final output | no | [Details: Toolchain / SDK / policy](#details-toolchain--sdk--policy) |
+| Pri | Phase | Pattern | Signal | Autonomy | Stop | Details |
+|-----|-------|---------|--------|----------|------|---------|
+| 10 | 0 | K8s minor-version bump | `k8s.io/*` `go.mod` minor-family change | close | yes | [Details: K8s minor-version guard](#details-k8s-minor-version-guard) |
+| 15 | 0 | Needs rebase | `needs-rebase` label or `mergeable` = CONFLICTING | bot-rebase | yes | [Details: Needs rebase](#details-needs-rebase) |
+| 17 | 0 | Retry budget exhausted | Highest `Unblock attempt: N` is `>= 3` | escalate | yes | [Details: Retry budget exhausted](#details-retry-budget-exhausted) |
+| 20 | 2 | go-mod-consistency failed | `go-mod-consistency` failed | auto-fix | no | [Details: go-mod-consistency](#details-go-mod-consistency) |
+| 30 | 2 | Public-IP quota e2e flake | Public-IP quota marker in e2e log | auto-fix | no | [Details: Public-IP quota e2e](#details-public-ip-quota-e2e) |
+| 35 | 2 | Image-build registry flake e2e | Registry 5xx during pre-test image build | auto-fix | no | [Details: Image-build registry flake](#details-image-build-registry-flake) |
+| 37 | 2 | Cluster-provisioning node-readiness timeout e2e | Node readiness timeout during pre-test cluster provisioning | auto-fix | no | [Details: Cluster-provisioning node-readiness timeout](#details-cluster-provisioning-node-readiness-timeout) |
+| 40 | 2 | Only Tide pending | No failed checks; only `tide` pending | auto-fix | no | [Details: Only Tide pending](#details-only-tide-pending) |
+| 50 | 2 | Toolchain / SDK / policy blocker | Toolchain, typecheck, SDK-major, or dependency-policy blocker | escalate | yes | [Details: Toolchain / SDK / policy](#details-toolchain--sdk--policy) |
 
 The **Details** cell links to the pattern's `## Details: <name>` subsection
-below (a GitHub-style slug of the heading), or is `—` when the Action cell is a
-complete instruction. Appending a pattern adds a row plus a subsection and
-points the row at the new slug; no existing links move.
+below (a GitHub-style slug of the heading). Appending a pattern adds a row plus
+a subsection and points the row at the new slug; no existing links move. Keep
+the table short: put full match criteria, preconditions, exclusions, and action
+steps in Details, not in routing columns.
 
 ## Details: K8s minor-version guard
 
@@ -69,7 +68,7 @@ instead of spending automation time on checks that should not unblock the PR.
 Inspect the PR diff for `go.mod` changes to Kubernetes modules:
 
 ```bash
-gh pr diff <pr> --patch | grep -E '^[+-][[:space:]]+(require[[:space:]]+)?(k8s\.io/[[:alnum:]_.\-/]+)[[:space:]]+v0\.[0-9]+\.[0-9]+'
+gh pr diff <pr> --patch | rg '^[+-][[:space:]]+(require[[:space:]]+)?(k8s\.io/[[:alnum:]_.\/-]+)[[:space:]]+v0\.[0-9]+\.[0-9]+' || true
 ```
 
 Then apply these rules:
@@ -145,7 +144,7 @@ git push
 
 ## Details: Post-push /lgtm
 
-Shared rule for any pattern whose Action pushes a commit to the PR branch
+Shared rule for any pattern whose action pushes a commit to the PR branch
 (today: [go-mod-consistency](#details-go-mod-consistency)). Link here from a new
 push-based pattern instead of copying the `/lgtm` recipe.
 
@@ -153,7 +152,7 @@ Readiness gate — post `/lgtm` only when the push leaves the PR otherwise ready
 for review:
 
 - Every other failing required job this triage is already resolved or maps to a
-  matched row whose Action has been taken.
+  matched row whose action has been taken.
 - No `escalate` blocker (e.g. the Pri 50
   [Toolchain / SDK / policy](#details-toolchain--sdk--policy) row) matched this
   triage. If one did, the PR needs human review and must not be approved — a
@@ -162,7 +161,7 @@ for review:
 
 When the gate holds, put `/lgtm` on the first line so Prow can parse it, then
 give a Reason naming the pushed commit, the changed files, and the validation
-that passed. Because this Action pushes a commit and leaves the PR for another
+that passed. Because this action pushes a commit and leaves the PR for another
 CI round, it is a non-final action: stamp it with this round's attempt number per
 the [Attempt stamp](#details-attempt-stamp) rule (`Unblock attempt: <N+1>`,
 using the same `N + 1` as any other non-final comment this round):
@@ -184,10 +183,11 @@ failed run after pushing a new commit; the push-triggered rerun supersedes it.
 
 ## Details: Attempt stamp
 
-Shared rule for any Phase-2 non-final action — a `Stop=no` row whose Action
+Shared rule for any Phase-2 non-final action — a `Stop=no` row whose action
 posts a comment or push that leaves the PR for another CI round rather than
 terminating triage. Today that is [go-mod-consistency](#details-go-mod-consistency)
-(push + `/lgtm`), [Public-IP quota e2e](#details-public-ip-quota-e2e),
+(push + `/lgtm`) and the [Shared e2e flake rerun](#details-shared-e2e-flake-rerun)
+rule used by [Public-IP quota e2e](#details-public-ip-quota-e2e),
 [Image-build registry flake](#details-image-build-registry-flake), and
 [Cluster-provisioning node-readiness timeout](#details-cluster-provisioning-node-readiness-timeout)
 (each `/test <job-name>`). Link here from a new non-final pattern instead of
@@ -227,6 +227,37 @@ comment at all), and the [Only Tide pending](#details-only-tide-pending) `/lgtm`
 carry no `Unblock attempt:` line, because none of them hand the PR to another
 automated retry round.
 
+## Details: Shared e2e flake rerun
+
+Shared action for Phase-2 e2e rows that are classified as safe transient
+failures. Pattern-specific Details must supply the log fingerprint and any extra
+exclusions before using this rule.
+
+Before rerunning:
+
+- The failed jobs are exclusively `pull-*-e2e-*`; no non-e2e failure remains.
+- Each job being rerun has the pattern-specific fingerprint in its current Prow
+  log.
+- The pattern-specific exclusions do not apply.
+- A push in this triage has not already rerun the same job; prefer the
+  push-triggered CI rerun when there is one.
+
+Rerun each failed e2e job with its own `/test <job-name>` comment. Put
+`/test <job-name>` on the first line, then include the fingerprint evidence from
+that job's current Prow log:
+
+```bash
+gh pr comment <pr> --body-file - <<'EOF'
+/test <job-name>
+
+Reason: rerunning this failed e2e job because its current Prow log shows <pattern-specific evidence> and no non-flake failure remains.
+Unblock attempt: <N+1>
+EOF
+```
+
+Post one such comment per failed e2e job. Do not use `/retest`; rerun each
+failed job by name so a still-broken required job is never blanket-rerun.
+
 ## Details: Public-IP quota e2e
 
 Use this path only when the failed jobs are exclusively
@@ -235,27 +266,9 @@ Use this path only when the failed jobs are exclusively
 - `PublicIPCountLimitReached`
 - `PublicIPPrefixCountLimitReached`
 
-Confirm the failure text from the job logs before retesting. If any non-e2e job
-also failed, handle that failure separately before blanket retesting.
-
-Rerun each failed e2e job with its own `/test <job-name>` comment. Put
-`/test <job-name>` on the first line, then include the quota marker found in that
-job's current Prow log:
-
-```bash
-gh pr comment <pr> --body-file - <<'EOF'
-/test <job-name>
-
-Reason: rerunning this failed e2e job because its current Prow log contains <PublicIPCountLimitReached or PublicIPPrefixCountLimitReached> and no non-e2e failure remains.
-Unblock attempt: <N+1>
-EOF
-```
-
-Post one such comment per failed e2e job. Do not use `/retest`; rerun each
-failed job by name so a still-broken required job is never blanket-rerun.
-
-If you are already pushing a commit for another fix, prefer the push-triggered
-CI rerun instead of adding a separate `/test` comment.
+Confirm the failure text from each job's current Prow log before retesting. If
+the row matches, follow [Shared e2e flake rerun](#details-shared-e2e-flake-rerun)
+and fill the evidence with the quota marker found in that job's log.
 
 ## Details: Image-build registry flake
 
@@ -278,24 +291,8 @@ Confirm from the job log before retesting:
 If any Ginkgo spec ran and failed, or any non-e2e job failed, handle that
 failure separately instead of retesting.
 
-Rerun each failed e2e job with its own `/test <job-name>` comment. Put
-`/test <job-name>` on the first line, then include the registry error and the
-image-build phase marker found in that job's current Prow log:
-
-```bash
-gh pr comment <pr> --body-file - <<'EOF'
-/test <job-name>
-
-Reason: rerunning this failed e2e job because its current Prow log shows a transient container-registry 5xx during the image-build phase (before any test ran) and no non-flake failure remains.
-Unblock attempt: <N+1>
-EOF
-```
-
-Post one such comment per failed e2e job. Do not use `/retest`; rerun each
-failed job by name so a still-broken required job is never blanket-rerun.
-
-If you are already pushing a commit for another fix, prefer the push-triggered
-CI rerun instead of adding a separate `/test` comment.
+If the row matches, follow [Shared e2e flake rerun](#details-shared-e2e-flake-rerun)
+and fill the evidence with the registry 5xx plus the image-build phase marker.
 
 ## Details: Cluster-provisioning node-readiness timeout
 
@@ -320,24 +317,9 @@ Confirm from the job log before retesting:
 If any Ginkgo spec ran and failed, or any non-e2e job failed, handle that
 failure separately instead of retesting.
 
-Rerun each failed e2e job with its own `/test <job-name>` comment. Put
-`/test <job-name>` on the first line, then include the node-timeout marker and
-the provisioning-phase evidence found in that job's current Prow log:
-
-```bash
-gh pr comment <pr> --body-file - <<'EOF'
-/test <job-name>
-
-Reason: rerunning this failed e2e job because its current Prow log shows a cluster-provisioning node-readiness timeout (`timed out waiting for the condition on nodes/...`, EXIT_VALUE=124, before any test ran) and no non-flake failure remains.
-Unblock attempt: <N+1>
-EOF
-```
-
-Post one such comment per failed e2e job. Do not use `/retest`; rerun each
-failed job by name so a still-broken required job is never blanket-rerun.
-
-If you are already pushing a commit for another fix, prefer the push-triggered
-CI rerun instead of adding a separate `/test` comment.
+If the row matches, follow [Shared e2e flake rerun](#details-shared-e2e-flake-rerun)
+and fill the evidence with the node-timeout marker, `EXIT_VALUE=124`, and the
+fact that no test ran.
 
 ## Details: Only Tide pending
 
