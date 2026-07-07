@@ -83,19 +83,21 @@ or overwrite unrelated files.
 - When a row's Details action reruns CI (a push), skip any later row whose only
   effect would be to retest the jobs that push will rerun; prefer the
   push-triggered rerun.
-- Stamp every non-final action (an act-stage `Stop=no` comment or push that leaves
-  the PR for another CI round) with this triage's attempt number, counted from
-  the PR's own comment history. Once the automated retry budget is spent, an
-  `escalate` row makes no change to the PR — no comment, no checks, no push — and
-  the PR is reported as needing human review in the final output. All of this is
-  catalog-driven: the retry-budget guard reads the stamps before any
+- Stamp every non-final action (an act-stage `Stop=no` comment, push, or GitHub
+  Actions rerun that leaves the PR for another CI round) with this triage's
+  attempt number, counted from the PR's own comment history. Once the automated
+  retry budget is spent, an `escalate` row makes no change to the PR — no
+  comment, no checks, no push — and the PR is reported as needing human review
+  in the final output. All of this is catalog-driven: the retry-budget guard
+  reads the stamps before any
   CI/log I/O, and the shared attempt-stamp rule writes them. Do not invent a
   separate counter.
 - A row marked Stop ends triage after it is handled.
-- Rerun a failed job only with a per-job `/test <job-name>` comment, and only
-  for failures already classified as transient or safe to rerun. Do not use
-  `/retest`; rerun each failed job by name so a still-broken required job is
-  never blanket-rerun.
+- Use the retry mechanism for the CI system that produced the failure, and only
+  after the failure is classified as transient or safe to rerun. For Prow jobs,
+  rerun with a per-job `/test <job-name>` comment; never use `/retest`. For
+  GitHub Actions check runs, rerun through GitHub Actions (`gh run rerun`), not
+  through a PR slash command.
 - Report pending jobs, `tide` status, and any residual risk clearly instead of
   claiming the PR is green before CI finishes. When an `escalate` row matched
   (retry budget spent, or a toolchain / SDK / policy blocker), report the PR as

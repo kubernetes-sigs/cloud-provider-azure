@@ -24,7 +24,8 @@ or acting on a row.
 ## Autonomy values
 
 - `close` — comment `/close` and stop (disallowed change).
-- `auto-fix` — the agent may act alone (push, `/lgtm`, `/test <job-name>`)
+- `auto-fix` — the agent may act alone (push, `/lgtm`, `/test <job-name>`,
+  `gh run rerun`)
   because the fix is deterministic and low-risk.
 - `escalate` — the agent makes no automated change: it posts no PR comment, runs
   no checks, syncs no modules, and does not touch code, CI policy, or dependency
@@ -52,6 +53,7 @@ or acting on a row.
 | 37 | act | Cluster-provisioning node-readiness timeout e2e | Node readiness timeout during pre-test cluster provisioning | auto-fix | no | [Details: Cluster-provisioning node-readiness timeout](#details-cluster-provisioning-node-readiness-timeout) |
 | 39 | act | Prow pod scheduling timeout e2e | Prow job pod never schedules | auto-fix | no | [Details: Prow pod scheduling timeout](#details-prow-pod-scheduling-timeout) |
 | 40 | act | Only Tide pending | No failed checks; only `tide` pending | auto-fix | no | [Details: Only Tide pending](#details-only-tide-pending) |
+| 45 | act | GitHub Actions transient failure | Failed GitHub Actions `CheckRun` with runner/service transient evidence | auto-fix | no | [Details: GitHub Actions transient failure](#details-github-actions-transient-failure) |
 | 50 | act | Toolchain / SDK / policy blocker | Toolchain, typecheck, SDK-major, or dependency-policy blocker | escalate | yes | [Details: Toolchain / SDK / policy](#details-toolchain--sdk--policy) |
 
 The **Details** cell links to the pattern's `## Details: <name>` subsection
@@ -185,15 +187,18 @@ failed run after pushing a new commit; the push-triggered rerun supersedes it.
 ## Details: Attempt stamp
 
 Shared rule for any act-stage non-final action — a `Stop=no` row whose action
-posts a comment or push that leaves the PR for another CI round rather than
-terminating triage. Today that is [go-mod-consistency](#details-go-mod-consistency)
-(push + `/lgtm`) and the [Shared e2e flake rerun](#details-shared-e2e-flake-rerun)
-rule used by [Public-IP quota e2e](#details-public-ip-quota-e2e),
-[Image-build registry flake](#details-image-build-registry-flake), and
+posts a comment, pushes, or triggers a CI rerun that leaves the PR for another
+CI round rather than terminating triage. Today that is
+[go-mod-consistency](#details-go-mod-consistency) (push + `/lgtm`),
+the [Shared e2e flake rerun](#details-shared-e2e-flake-rerun) rule used by
+[Public-IP quota e2e](#details-public-ip-quota-e2e),
+[Image-build registry flake](#details-image-build-registry-flake),
 [Cluster-provisioning node-readiness timeout](#details-cluster-provisioning-node-readiness-timeout),
 and [Prow pod scheduling timeout](#details-prow-pod-scheduling-timeout)
-(each `/test <job-name>`). Link here from a new non-final pattern instead of
-copying the stamp recipe.
+(each `/test <job-name>`), and
+[GitHub Actions transient failure](#details-github-actions-transient-failure)
+(`gh run rerun`). Link here from a new non-final pattern instead of copying the
+stamp recipe.
 
 The skill keeps no state between runs, so the attempt count lives in the PR's
 own comment history. Count triage **rounds**, not comments: one triage may push
@@ -214,7 +219,9 @@ fix and reruns three jobs stamps `Unblock attempt: <N+1>` on all four comments
 rather than incrementing per comment.
 
 Add the stamp as its own line in the `Reason` block of each non-final comment,
-after the existing Reason text:
+after the existing Reason text. GitHub Actions reruns are triggered by API rather
+than by PR slash command; after the rerun succeeds, record the attempt with a
+plain informational comment that has no slash command.
 
 ```
 Unblock attempt: <N+1>
@@ -375,6 +382,58 @@ remaining pending status.
 Do not use this path when any non-Tide check is pending or failed. Report those
 checks explicitly and handle them through the matching workflow instead.
 
+## Details: GitHub Actions transient failure
+
+Use this path only for failed GitHub Actions `CheckRun` entries, not Prow
+`StatusContext` jobs. The failure must be retryable infrastructure or GitHub
+Actions service noise, not a deterministic repository command failure.
+
+Confirm from `gh pr view --json statusCheckRollup`, `gh run view`, and the
+current GitHub Actions logs before rerunning:
+
+- The failed item is a GitHub Actions `CheckRun` with a `detailsUrl` under
+  `https://github.com/.../actions/runs/...`.
+- The failed job log shows runner, service, download, cache, or network evidence
+  that is outside the repository's code path, such as a GitHub Actions service
+  error, runner shutdown, action download failure, cache service 5xx, or
+  transient network failure before the checked command produced a meaningful
+  project error.
+- No failed step contains a deterministic compile, test, lint, module, license,
+  vulnerability, or policy failure. Those must use a more specific row or the
+  [Toolchain / SDK / policy](#details-toolchain--sdk--policy) escalation row.
+- Every other failing required job either matches this row or another act row
+  whose action has been taken. Do not rerun one GitHub Actions job while leaving
+  another failing required job unclassified.
+
+Rerun through GitHub Actions, not through a PR slash command:
+
+```bash
+# Rerun every failed job in the workflow run when all failed jobs are retryable.
+gh run rerun <run-id> --failed
+```
+
+If only one failed job in the workflow is retryable, rerun that specific job.
+Use the job's `databaseId`, not the numeric job id from the browser URL:
+
+```bash
+gh run view <run-id> --json jobs --jq '.jobs[] | {name, databaseId, conclusion}'
+gh run rerun <run-id> --job <databaseId>
+```
+
+Do not comment `/retest`, `/test <job-name>`, or any other Prow directive for a
+GitHub Actions check. Record the retry-budget attempt with a plain informational
+comment after `gh run rerun` succeeds:
+
+```bash
+gh pr comment <pr> --body-file - <<'EOF'
+Reason: reran GitHub Actions check <check-name> because its current logs show <transient evidence>.
+Run: <run-url>
+Unblock attempt: <N+1>
+EOF
+```
+
+Report the rerun command, workflow run id, and target job(s) in the final output.
+
 ## Details: Toolchain / SDK / policy
 
 These blockers need a human policy, toolchain, or dependency-version decision the
@@ -386,6 +445,9 @@ agent must not make on its own:
   bump
 - Mixed Azure SDK major versions, such as `armcompute/v6` consumers in a PR
   that updated packages to `armcompute/v7`
+- GitHub Actions failures where the failed step reached a deterministic
+  repository command error instead of matching
+  [GitHub Actions transient failure](#details-github-actions-transient-failure)
 - `dependency-review`, vulnerability, or license failures where the resolution
   may require accepting risk, excluding a finding, or changing the dependency
   version
