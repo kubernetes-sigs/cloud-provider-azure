@@ -33,15 +33,17 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-// CreateContainerRegistry creates a test acr
+// CreateContainerRegistry creates a Premium test acr. Premium is used for all tests
+// so they share a single SKU, and so features such as regional (geo) endpoints, which
+// require the Premium SKU, can be enabled on the same registry.
 func (tc *AzureTestClient) CreateContainerRegistry() (acr.Registry, error) {
 	acrClient := tc.createACRClient()
 	rgName, location := tc.GetResourceGroup(), tc.GetLocation()
 	acrName := "e2eacr" + string(uuid.NewUUID())[0:4]
 	template := acr.Registry{
 		SKU: &acr.SKU{
-			Name: to.Ptr(acr.SKUNameStandard),
-			Tier: to.Ptr(acr.SKUTierStandard),
+			Name: to.Ptr(acr.SKUNamePremium),
+			Tier: to.Ptr(acr.SKUTierPremium),
 		},
 		Name:     ptr.To(acrName),
 		Location: ptr.To(location),
@@ -175,4 +177,40 @@ func printAZVersion() {
 		Logf("az version failed with output %s\n error: %w", string(output), err)
 	}
 	Logf("az version success: %s", string(output))
+}
+
+// AZACREnableRegionalEndpoints enables regional (geo) endpoints on the given acr,
+// exposing per-geo-replica login servers of the form <registry>.<region>.geo.azurecr.io.
+func AZACREnableRegionalEndpoints(acrName, rg string) (err error) {
+	printAZVersion()
+	Logf("Attempting az acr update --regional-endpoints enabled for acr %q.", acrName)
+	cmd := exec.Command("az", "acr", "update",
+		"-n", acrName,
+		"-g", rg,
+		"--regional-endpoints", "enabled")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("az acr update --regional-endpoints enabled failed with output %s\n error: %w", string(output), err)
+	}
+	Logf("az acr update --regional-endpoints enabled success.")
+	return nil
+}
+
+// GetACRRegionalEndpoint returns the regional (geo) login server hostname for the
+// given acr, for example <registry>.<region>.geo.azurecr.io.
+func GetACRRegionalEndpoint(acrName string) (string, error) {
+	Logf("Attempting az acr show-endpoints for acr %q.", acrName)
+	cmd := exec.Command("az", "acr", "show-endpoints",
+		"-n", acrName,
+		"--query", "regionalEndpoints[0].endpoint",
+		"-o", "tsv")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("az acr show-endpoints failed for acr %s with error: %w", acrName, err)
+	}
+	endpoint := strings.TrimSpace(string(output))
+	if endpoint == "" {
+		return "", fmt.Errorf("no regional endpoint found for acr %s", acrName)
+	}
+	Logf("Regional endpoint for acr %s is %q.", acrName, endpoint)
+	return endpoint, nil
 }
