@@ -307,6 +307,31 @@ func TestParseACRLoginServerFromImage(t *testing.T) {
 			expected: "foo.azurecr.us",
 		},
 		{
+			// regional endpoint (geo-replicated Premium registry)
+			image:    "foo.eastus2.geo.azurecr.io/bar/image:version",
+			expected: "foo.eastus2.geo.azurecr.io",
+		},
+		{
+			// regional endpoint in a sovereign cloud
+			image:    "foo.chinaeast2.geo.azurecr.cn/bar/image:version",
+			expected: "foo.chinaeast2.geo.azurecr.cn",
+		},
+		{
+			// regional-looking host with a trailing suffix must not match
+			image:    "foo.eastus2.geo.azurecr.io.example/bar/image:version",
+			expected: "",
+		},
+		{
+			// dedicated data endpoints are not login servers and must not match
+			image:    "foo.eastus2.data.azurecr.io/bar/image:version",
+			expected: "",
+		},
+		{
+			// dedicated data endpoint in a sovereign cloud must not match either
+			image:    "foo.chinaeast2.data.azurecr.cn/bar/image:version",
+			expected: "",
+		},
+		{
 			image:    "foo.azurecr.my.cloud/bar/image:version",
 			expected: "foo.azurecr.my.cloud",
 		},
