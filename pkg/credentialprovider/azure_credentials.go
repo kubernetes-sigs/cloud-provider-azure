@@ -49,8 +49,12 @@ const (
 
 var (
 	containerRegistryUrls = []string{"*.azurecr.io", "*.azurecr.cn", "*.azurecr.de", "*.azurecr.us"}
-	// a valid acr image starts with alphanumerics, followed by corresponding acr domain name.
-	acrRE = regexp.MustCompile(`^[a-zA-Z0-9]+\.(azurecr\.io|azurecr\.cn|azurecr\.de|azurecr\.us)`)
+	// a valid acr image starts with alphanumerics, followed by an optional
+	// regional login server segment (.<region>.geo), then the corresponding
+	// acr domain name. Examples:
+	//   foo.azurecr.io                 (global login server)
+	//   foo.eastus2.geo.azurecr.io     (regional login server)
+	acrRE = regexp.MustCompile(`^[a-zA-Z0-9]+(\.[a-zA-Z0-9]+\.geo)?\.(azurecr\.io|azurecr\.cn|azurecr\.de|azurecr\.us)`)
 )
 
 // CredentialProvider is an interface implemented by the kubelet credential provider plugin to fetch
