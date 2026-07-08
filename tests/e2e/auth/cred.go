@@ -91,6 +91,51 @@ var _ = Describe("Azure Credential Provider", Label(utils.TestSuiteLabelCredenti
 		Expect(err).NotTo(HaveOccurred())
 	})
 
+	It("should be able to pull private images from an acr regional (geo) endpoint without docker secrets set explicitly", func() {
+		if os.Getenv(utils.AKSTestCCM) != "" {
+			Skip("Skip the regional endpoint test on the AKS pipeline: the node credential-provider matchImages config is managed by AgentBaker (tracked in Azure/AgentBaker#8862), not by this repo")
+		}
+
+		// Regional endpoints are per-geo-replica login servers of the form
+		// <registry>.<region>.geo.azurecr.io. They require the Premium SKU and can be
+		// enabled even without geo-replication. This verifies that the ACR credential
+		// provider authenticates pulls from a regional endpoint, not only the global one.
+		err = utils.AZACRLogin()
+		Expect(err).NotTo(HaveOccurred())
+
+		registry, err := tc.CreateContainerRegistry()
+		Expect(err).NotTo(HaveOccurred())
+
+		defer func() {
+			err = tc.DeleteContainerRegistry(*registry.Name)
+			if err != nil {
+				utils.Logf("failed to cleanup registry with error: %w", err)
+			}
+		}()
+
+		// Enable regional (geo) endpoints on the Premium registry.
+		err = utils.AZACREnableRegionalEndpoints(*registry.Name, tc.GetResourceGroup())
+		Expect(err).NotTo(HaveOccurred())
+
+		image := "nginx"
+		tag, err := tc.PushImageToACR(*registry.Name, image)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(tag).NotTo(Equal(""))
+
+		regionalEndpoint, err := utils.GetACRRegionalEndpoint(*registry.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(regionalEndpoint).NotTo(Equal(""))
+
+		acrImageURL := fmt.Sprintf("%s/%s:%s", regionalEndpoint, image, tag)
+		podTemplate := createPodPullingFromACR(image, acrImageURL, "linux")
+		err = utils.CreatePod(cs, ns.Name, podTemplate)
+		Expect(err).NotTo(HaveOccurred())
+
+		result, err := utils.WaitPodTo(v1.PodRunning, cs, podTemplate, ns.Name)
+		Expect(result).To(BeTrue())
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 	It("should be able to create an ACR cache and pull images from it", func() {
 		if os.Getenv(utils.AKSTestCCM) != "" {
 			Skip("Skip the test for AKS pipeline for now")
