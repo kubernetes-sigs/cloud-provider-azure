@@ -173,6 +173,18 @@ var _ = ginkgo.Describe("Cloud", func() {
 			})
 		})
 	})
+	ginkgo.Context("EnvironmentFromName IL6", func() {
+		ginkgo.When("cloud name is AzureUSSecCloud", func() {
+			ginkgo.It("should return the USSecCloud placeholder", func() {
+				env := azclient.EnvironmentFromName("AzureUSSecCloud")
+				gomega.Expect(env).ToNot(gomega.BeNil())
+				gomega.Expect(env.Name).To(gomega.Equal("AzureUSSecCloud"))
+				gomega.Expect(env).To(gomega.Equal(azclient.USSecCloud))
+				gomega.Expect(env.ResourceManagerEndpoint).To(gomega.BeEmpty())
+				gomega.Expect(env.ActiveDirectoryEndpoint).To(gomega.BeEmpty())
+			})
+		})
+	})
 	ginkgo.Context("AzureCloudFromEnvironment", func() {
 		ginkgo.When("the environment is empty", func() {
 			ginkgo.It("should return the default cloud", func() {
@@ -262,5 +274,94 @@ var _ = ginkgo.Describe("Cloud", func() {
 			})
 		})
 
+		ginkgo.When("cloud name is AzureUSSecCloud with env file set", func() {
+			ginkgo.It("should populate config and environment from file", func() {
+				configFile, err := os.CreateTemp("", "azure-il6.json")
+				gomega.Expect(err).ToNot(gomega.HaveOccurred())
+				defer os.Remove(configFile.Name())
+
+				err = os.WriteFile(configFile.Name(), []byte(`
+				{
+					"name": "AzureUSSecCloud",
+					"resourceManagerEndpoint":"https://management.azure.microsoft.scloud/",
+					"activeDirectoryEndpoint":"https://login.microsoftonline.microsoft.scloud/",
+					"tokenAudience":"https://management.azure.microsoft.scloud/",
+					"storageEndpointSuffix":"core.microsoft.scloud",
+					"keyVaultDNSSuffix":"vault.microsoft.scloud",
+					"containerRegistryDNSSuffix":"azurecr.microsoft.scloud"
+				}`), 0600)
+				gomega.Expect(err).ToNot(gomega.HaveOccurred())
+				os.Setenv(azclient.EnvironmentFilepathName, configFile.Name())
+				env := &azclient.Environment{Name: "AzureUSSecCloud"}
+				cloudConfig := &cloud.Configuration{
+					Services: map[cloud.ServiceName]cloud.ServiceConfiguration{},
+				}
+				err = azclient.OverrideAzureCloudConfigFromEnv(utils.AzureUSSecCloudName, cloudConfig, env)
+				gomega.Expect(err).ToNot(gomega.HaveOccurred())
+				gomega.Expect(cloudConfig).ToNot(gomega.BeNil())
+				gomega.Expect(cloudConfig.ActiveDirectoryAuthorityHost).To(gomega.Equal("https://login.microsoftonline.microsoft.scloud/"))
+				gomega.Expect(cloudConfig.Services).NotTo(gomega.BeEmpty())
+				gomega.Expect(cloudConfig.Services[cloud.ResourceManager].Endpoint).To(gomega.Equal("https://management.azure.microsoft.scloud/"))
+				gomega.Expect(cloudConfig.Services[cloud.ResourceManager].Audience).To(gomega.Equal("https://management.azure.microsoft.scloud/"))
+				gomega.Expect(env).ToNot(gomega.BeNil())
+				gomega.Expect(env.ResourceManagerEndpoint).To(gomega.Equal("https://management.azure.microsoft.scloud/"))
+				gomega.Expect(env.ActiveDirectoryEndpoint).To(gomega.Equal("https://login.microsoftonline.microsoft.scloud/"))
+				gomega.Expect(env.StorageEndpointSuffix).To(gomega.Equal("core.microsoft.scloud"))
+				gomega.Expect(env.KeyVaultDNSSuffix).To(gomega.Equal("vault.microsoft.scloud"))
+				gomega.Expect(env.ContainerRegistryDNSSuffix).To(gomega.Equal("azurecr.microsoft.scloud"))
+				os.Unsetenv(azclient.EnvironmentFilepathName)
+			})
+		})
+
+		ginkgo.When("cloud name is AzureUSSecCloud without env file", func() {
+			ginkgo.It("should return no error and leave config unchanged", func() {
+				os.Unsetenv(azclient.EnvironmentFilepathName)
+				env := &azclient.Environment{Name: "AzureUSSecCloud"}
+				cloudConfig := &cloud.Configuration{
+					Services: map[cloud.ServiceName]cloud.ServiceConfiguration{},
+				}
+				err := azclient.OverrideAzureCloudConfigFromEnv(utils.AzureUSSecCloudName, cloudConfig, env)
+				gomega.Expect(err).ToNot(gomega.HaveOccurred())
+				gomega.Expect(cloudConfig.ActiveDirectoryAuthorityHost).To(gomega.BeEmpty())
+				gomega.Expect(cloudConfig.Services).To(gomega.BeEmpty())
+				gomega.Expect(env.ResourceManagerEndpoint).To(gomega.BeEmpty())
+			})
+		})
+
+	})
+
+	ginkgo.Context("GetAzureCloudConfigAndEnvConfig IL6 full flow", func() {
+		ginkgo.When("cloud is AzureUSSecCloud with env file", func() {
+			ginkgo.It("should return fully populated config and environment", func() {
+				configFile, err := os.CreateTemp("", "azure-il6-flow.json")
+				gomega.Expect(err).ToNot(gomega.HaveOccurred())
+				defer os.Remove(configFile.Name())
+
+				err = os.WriteFile(configFile.Name(), []byte(`
+				{
+					"name": "AzureUSSecCloud",
+					"resourceManagerEndpoint":"https://management.azure.microsoft.scloud/",
+					"activeDirectoryEndpoint":"https://login.microsoftonline.microsoft.scloud/",
+					"tokenAudience":"https://management.azure.microsoft.scloud/",
+					"storageEndpointSuffix":"core.microsoft.scloud",
+					"containerRegistryDNSSuffix":"azurecr.microsoft.scloud"
+				}`), 0600)
+				gomega.Expect(err).ToNot(gomega.HaveOccurred())
+				os.Setenv(azclient.EnvironmentFilepathName, configFile.Name())
+				defer os.Unsetenv(azclient.EnvironmentFilepathName)
+
+				armConfig := &azclient.ARMClientConfig{
+					Cloud: "AzureUSSecCloud",
+				}
+				cloudConfig, env, err := azclient.GetAzureCloudConfigAndEnvConfig(armConfig)
+				gomega.Expect(err).ToNot(gomega.HaveOccurred())
+				gomega.Expect(cloudConfig.ActiveDirectoryAuthorityHost).To(gomega.Equal("https://login.microsoftonline.microsoft.scloud/"))
+				gomega.Expect(cloudConfig.Services[cloud.ResourceManager].Endpoint).To(gomega.Equal("https://management.azure.microsoft.scloud/"))
+				gomega.Expect(env).ToNot(gomega.BeNil())
+				gomega.Expect(env.Name).To(gomega.Equal("AzureUSSecCloud"))
+				gomega.Expect(env.StorageEndpointSuffix).To(gomega.Equal("core.microsoft.scloud"))
+				gomega.Expect(env.ContainerRegistryDNSSuffix).To(gomega.Equal("azurecr.microsoft.scloud"))
+			})
+		})
 	})
 })
