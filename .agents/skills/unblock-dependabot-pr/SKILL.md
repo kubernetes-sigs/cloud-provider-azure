@@ -39,13 +39,16 @@ Then walk the catalog as an explicit staged algorithm:
 > modules, retest, `/lgtm`, or report no-action.
 >
 > **Classification gate.** Only if no guard Stop fired: fetch CI status and
-> checkout as needed, then classify every failing required job. A PR is not
-> "unblocked" until every failing required job maps to a matched act row.
+> checkout as needed, then build the current failed required job list. Do not
+> require a full up-front classification before acting.
 >
-> **Act stage.** Walk matched act rows by ascending Priority, honoring
-> each row's linked Details preconditions and exclusions. Track the actions
-> already taken this triage: if an action reruns CI (a push), skip any later row
-> whose only effect would be to retest jobs that the push will rerun. Prefer the
+> **Act stage.** Process failed required jobs one at a time. For one failed job,
+> walk act rows by ascending Priority, inspect only enough current evidence to
+> match a row or escalate, take that row's linked Details action, then move to
+> the next failed job. Continue until every failed required job is examined,
+> resolved, rerun, superseded by a push, or escalated. Track the actions already
+> taken this triage: if an action reruns CI (a push), skip any later row whose
+> only effect would be to retest jobs that the push will rerun. Prefer the
 > push-triggered rerun. An act row marked Stop ends triage after it is handled.
 
 Classification inspects CI only after no guard Stop fired:
@@ -78,8 +81,11 @@ or overwrite unrelated files.
   I/O. When a guard row marked Stop matches, follow its linked
   Details action and end triage immediately — do not inspect CI, sync modules,
   retest, comment `/lgtm`, or report that no action is needed.
-- Act on matched rows in ascending Priority within each stage, and take a row's
-  linked Details action only when its Details preconditions and exclusions hold.
+- After the guard stage, handle failed required jobs one by one. For each failed
+  job, walk act rows in ascending Priority and take a row's linked Details
+  action only when its Details preconditions and exclusions hold. Do not stop
+  after the first fixed or rerun job unless a Stop row fired, a push made the
+  remaining failures stale, or every failed required job has been examined.
 - When a row's Details action reruns CI (a push), skip any later row whose only
   effect would be to retest the jobs that push will rerun; prefer the
   push-triggered rerun.

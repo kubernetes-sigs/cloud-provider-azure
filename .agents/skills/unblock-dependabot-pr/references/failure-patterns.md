@@ -14,7 +14,7 @@ or acting on a row.
 | Column | Purpose |
 |--------|---------|
 | **Priority** | Gap-numbered (10, 20, 30…). Within a stage, the engine acts on matched rows low→high. New patterns slot into gaps without renumbering. |
-| **Stage** | `guard` (metadata/diff/comment-history only) or `act` (CI/log/artifact-based action). Classification is an engine gate between these stages, not a catalog row. |
+| **Stage** | `guard` (metadata/diff/comment-history only) or `act` (CI/log/artifact-based action). After the guard stage, the engine processes failed required jobs one at a time instead of classifying every failure up front. |
 | **Pattern** | Short human name. |
 | **Signal** | Compact routing hint: the diff marker, failing job name, or log fingerprint. A guard signal must be computable before CI/log I/O. |
 | **Autonomy** | `close` / `auto-fix` / `escalate` / `bot-rebase`. Governs whether the agent acts alone (see Autonomy values below). |
@@ -51,7 +51,7 @@ or acting on a row.
 | 30 | act | Public-IP quota e2e flake | Public-IP quota marker in e2e log | auto-fix | no | [Details: Public-IP quota e2e](#details-public-ip-quota-e2e) |
 | 35 | act | Image-build registry flake e2e | Registry 5xx during pre-test image build | auto-fix | no | [Details: Image-build registry flake](#details-image-build-registry-flake) |
 | 37 | act | Cluster-provisioning node-readiness timeout e2e | Node readiness timeout during pre-test cluster provisioning | auto-fix | no | [Details: Cluster-provisioning node-readiness timeout](#details-cluster-provisioning-node-readiness-timeout) |
-| 39 | act | Prow pod scheduling timeout e2e | Prow job pod never schedules | auto-fix | no | [Details: Prow pod scheduling timeout](#details-prow-pod-scheduling-timeout) |
+| 39 | act | Prow job did not start | Prow job never reaches entrypoint | auto-fix | no | [Details: Prow job did not start](#details-prow-job-did-not-start) |
 | 40 | act | Only Tide pending | No failed checks; only `tide` pending | auto-fix | no | [Details: Only Tide pending](#details-only-tide-pending) |
 | 45 | act | GitHub Actions transient failure | Failed GitHub Actions `CheckRun` with runner/service transient evidence | auto-fix | no | [Details: GitHub Actions transient failure](#details-github-actions-transient-failure) |
 | 50 | act | Toolchain / SDK / policy blocker | Toolchain, typecheck, SDK-major, or dependency-policy blocker | escalate | yes | [Details: Toolchain / SDK / policy](#details-toolchain--sdk--policy) |
@@ -192,10 +192,11 @@ CI round rather than terminating triage. Today that is
 [go-mod-consistency](#details-go-mod-consistency) (push + `/lgtm`),
 the [Shared e2e flake rerun](#details-shared-e2e-flake-rerun) rule used by
 [Public-IP quota e2e](#details-public-ip-quota-e2e),
-[Image-build registry flake](#details-image-build-registry-flake),
-[Cluster-provisioning node-readiness timeout](#details-cluster-provisioning-node-readiness-timeout),
-and [Prow pod scheduling timeout](#details-prow-pod-scheduling-timeout)
-(each `/test <job-name>`), and
+[Image-build registry flake](#details-image-build-registry-flake), and
+[Cluster-provisioning node-readiness timeout](#details-cluster-provisioning-node-readiness-timeout)
+(each `/test <job-name>`),
+[Prow job did not start](#details-prow-job-did-not-start)
+(`/test <job-name>`), and
 [GitHub Actions transient failure](#details-github-actions-transient-failure)
 (`gh run rerun`). Link here from a new non-final pattern instead of copying the
 stamp recipe.
@@ -244,15 +245,17 @@ extra exclusions before using this rule.
 
 Before rerunning:
 
-- The failed jobs are exclusively `pull-*-e2e-*`; no non-e2e failure remains.
+- The job being rerun is a failed `pull-*-e2e-*` job.
 - Each job being rerun has the pattern-specific fingerprint in current Prow
   evidence: build log, `prowjob.json`, `podinfo.json`, or another listed
   artifact.
 - The pattern-specific exclusions do not apply.
+- Other failed required jobs are still processed by the per-failure loop; this
+  rerun is not a substitute for examining them.
 - A push in this triage has not already rerun the same job; prefer the
   push-triggered CI rerun when there is one.
 
-Rerun each failed e2e job with its own `/test <job-name>` comment. Put
+Rerun each matched failed e2e job with its own `/test <job-name>` comment. Put
 `/test <job-name>` on the first line, then include the fingerprint evidence from
 that job's current Prow artifacts:
 
@@ -260,33 +263,32 @@ that job's current Prow artifacts:
 gh pr comment <pr> --body-file - <<'EOF'
 /test <job-name>
 
-Reason: rerunning this failed e2e job because its current Prow artifacts show <pattern-specific evidence> and no non-flake failure remains.
+Reason: rerunning this failed e2e job because its current Prow artifacts show <pattern-specific evidence> and the pattern-specific exclusions do not apply.
 Unblock attempt: <N+1>
 EOF
 ```
 
-Post one such comment per failed e2e job. Do not use `/retest`; rerun each
+Post one such comment per matched failed e2e job. Do not use `/retest`; rerun each
 failed job by name so a still-broken required job is never blanket-rerun.
 
 ## Details: Public-IP quota e2e
 
-Use this path only when the failed jobs are exclusively
-`pull-cloud-provider-azure-e2e-*` jobs and the failing logs show one of:
+Use this path only for a failed `pull-cloud-provider-azure-e2e-*` job whose log
+shows one of:
 
 - `PublicIPCountLimitReached`
 - `PublicIPPrefixCountLimitReached`
 
-Confirm the failure text from each job's current Prow log before retesting. If
+Confirm the failure text from the job's current Prow log before retesting. If
 the row matches, follow [Shared e2e flake rerun](#details-shared-e2e-flake-rerun)
 and fill the evidence with the quota marker found in that job's log.
 
 ## Details: Image-build registry flake
 
-Use this path only when the failed jobs are exclusively
-`pull-cloud-provider-azure-e2e-*` jobs and the failure happened in the
-pre-test image-build phase — before any Ginkgo spec ran — because a container
-registry returned a transient 5xx while BuildKit resolved a frontend or pulled
-a base image. The canonical fingerprint is a `502 Bad Gateway` from
+Use this path only for a failed `pull-cloud-provider-azure-e2e-*` job whose
+failure happened in the pre-test image-build phase — before any Ginkgo spec ran
+— because a container registry returned a transient 5xx while BuildKit resolved
+a frontend or pulled a base image. The canonical fingerprint is a `502 Bad Gateway` from
 `registry-1.docker.io` while resolving the `docker/dockerfile` frontend, ending
 the build with a non-zero `make` exit (for example `make ... Error 2`,
 `EXIT_VALUE=2`) and no test output.
@@ -298,16 +300,16 @@ Confirm from the job log before retesting:
 - No Ginkgo spec started — there is no `Running Suite` / `[It]` / spec summary,
   so the failure cannot be a real test regression.
 
-If any Ginkgo spec ran and failed, or any non-e2e job failed, handle that
-failure separately instead of retesting.
+If any Ginkgo spec ran and failed, handle that failure separately instead of
+retesting. Continue the per-failure loop for other failed required jobs.
 
 If the row matches, follow [Shared e2e flake rerun](#details-shared-e2e-flake-rerun)
 and fill the evidence with the registry 5xx plus the image-build phase marker.
 
 ## Details: Cluster-provisioning node-readiness timeout
 
-Use this path only when the failed jobs are exclusively
-`pull-cloud-provider-azure-e2e-*` jobs and the failure is a CAPZ
+Use this path only for a failed `pull-cloud-provider-azure-e2e-*` job whose
+failure is a CAPZ
 cluster-provisioning timeout — the harness gave up waiting for workload nodes to
 become Ready before any test ran. The canonical fingerprint is one or more
 `timed out waiting for the condition on nodes/<node-name>` lines during cluster
@@ -324,25 +326,26 @@ Confirm from the job log before retesting:
 - No Ginkgo spec started — there is no `Running Suite` / `[It]` / spec summary,
   so the failure cannot be a real test regression.
 
-If any Ginkgo spec ran and failed, or any non-e2e job failed, handle that
-failure separately instead of retesting.
+If any Ginkgo spec ran and failed, handle that failure separately instead of
+retesting. Continue the per-failure loop for other failed required jobs.
 
 If the row matches, follow [Shared e2e flake rerun](#details-shared-e2e-flake-rerun)
 and fill the evidence with the node-timeout marker, `EXIT_VALUE=124`, and the
 fact that no test ran.
 
-## Details: Prow pod scheduling timeout
+## Details: Prow job did not start
 
-Use this path only when a failed `pull-*-e2e-*` job never starts because Prow
-cannot schedule the job pod. This is a Prow infrastructure/capacity failure, not
-a cloud-provider-azure test failure.
+Use this path when a failed Prow job never reaches the job entrypoint because
+Prow infrastructure or capacity prevented the job pod from starting. This covers
+pod scheduling timeouts and similar pre-entrypoint failures. It is a Prow
+infrastructure/capacity failure, not a cloud-provider-azure test failure.
 
 Confirm from the current Prow artifacts before retesting:
 
-- `prowjob.json` has `status.state` = `error` and `status.description` =
-  `Pod scheduling timeout.`
+- `prowjob.json` has `status.state` = `error` and a pre-entrypoint
+  infrastructure description such as `Pod scheduling timeout.`
 - The artifact root has no `build-log.txt`, or the build log never reaches the
-  job entrypoint or any Ginkgo output.
+  job entrypoint.
 - `finished.json` has `result` = `error`.
 - `podinfo.json` shows the job pod stayed `Pending`, with `PodScheduled=False`
   and `reason=Unschedulable`, or `FailedScheduling` events such as
@@ -350,12 +353,24 @@ Confirm from the current Prow artifacts before retesting:
   `all available instance types exceed limits`.
 
 If the job pod starts and the build log reaches cluster provisioning or test
-execution, use a more specific pattern instead. If any non-e2e job failed,
-handle that failure separately instead of retesting.
+execution, use a more specific pattern instead.
 
-If the row matches, follow [Shared e2e flake rerun](#details-shared-e2e-flake-rerun)
-and fill the evidence with `Pod scheduling timeout.` plus the `podinfo.json`
-Unschedulable / FailedScheduling capacity marker.
+If the row matches, rerun that failed Prow job with its own `/test <job-name>`
+comment. Put `/test <job-name>` on the first line, then include the artifact
+evidence proving the job never reached its entrypoint:
+
+```bash
+gh pr comment <pr> --body-file - <<'EOF'
+/test <job-name>
+
+Reason: rerunning this failed Prow job because its current artifacts show <pre-entrypoint infrastructure evidence>.
+Unblock attempt: <N+1>
+EOF
+```
+
+Continue the per-failure loop for other failed required jobs. Do not use
+`/retest`; rerun each failed Prow job by name so a still-broken required job is
+never blanket-rerun.
 
 ## Details: Only Tide pending
 
@@ -401,9 +416,8 @@ current GitHub Actions logs before rerunning:
 - No failed step contains a deterministic compile, test, lint, module, license,
   vulnerability, or policy failure. Those must use a more specific row or the
   [Toolchain / SDK / policy](#details-toolchain--sdk--policy) escalation row.
-- Every other failing required job either matches this row or another act row
-  whose action has been taken. Do not rerun one GitHub Actions job while leaving
-  another failing required job unclassified.
+- Continue the per-failure loop after the rerun. Do not report the PR as
+  unblocked while another failed required job remains unexamined.
 
 Rerun through GitHub Actions, not through a PR slash command:
 
