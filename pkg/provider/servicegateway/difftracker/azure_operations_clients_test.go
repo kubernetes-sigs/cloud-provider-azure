@@ -21,6 +21,7 @@ import (
 	"errors"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
@@ -387,4 +388,56 @@ func TestConvertLocationDTOsToAddressLocations(t *testing.T) {
 		assert.NotNil(t, locs[0].AddressUpdateAction)
 		assert.Equal(t, armnetwork.AddressUpdateActionPartialUpdate, *locs[0].AddressUpdateAction)
 	})
+}
+
+// TestARMPrimitivesDoNotHoldStateLock enforces the package concurrency invariant: ARM
+// primitives never hold dt.mu across I/O. It blocks inside an in-flight ARM call and
+// asserts dt.mu is still acquirable; a regression that took the state lock around an ARM
+// call would serialize state access behind network latency and deadlock this test.
+func TestARMPrimitivesDoNotHoldStateLock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	inARM := make(chan struct{})
+	releaseARM := make(chan struct{})
+
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+	mockPIP.EXPECT().
+		CreateOrUpdate(gomock.Any(), "rg", "svc-pip", gomock.Any()).
+		DoAndReturn(func(context.Context, string, string, armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
+			close(inARM)
+			<-releaseARM
+			return &armnetwork.PublicIPAddress{Name: ptr.To("svc-pip")}, nil
+		})
+
+	dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
+
+	armDone := make(chan struct{})
+	go func() {
+		_ = dt.createOrUpdatePIP(context.Background(), "rg", &armnetwork.PublicIPAddress{Name: ptr.To("svc-pip")})
+		close(armDone)
+	}()
+
+	<-inARM // ARM call is now in flight
+
+	locked := make(chan struct{})
+	go func() {
+		dt.mu.Lock()
+		_ = dt.NRPResources // touch lock-guarded state
+		dt.mu.Unlock()
+		close(locked)
+	}()
+
+	select {
+	case <-locked:
+	case <-time.After(2 * time.Second):
+		close(releaseARM)
+		<-armDone
+		t.Fatal("dt.mu was held during an in-flight ARM call; ARM primitives must not hold the state lock across I/O")
+	}
+
+	close(releaseARM)
+	<-armDone
 }

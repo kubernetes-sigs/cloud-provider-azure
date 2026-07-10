@@ -27,6 +27,13 @@ limitations under the License.
 // errors immediately. Retry logic is the responsibility of the callers (ServiceUpdater,
 // LocationsUpdater) which implement appropriate retry strategies based on their use cases.
 //
+// Concurrency invariant:
+// ARM primitives in this file never acquire the DiffTracker mutex (dt.mu); the lock is
+// released before any I/O. Lock-guarded state lives in the in-memory files and its helpers
+// carry the "Locked" suffix, while the public snapshot methods (GetSync*) take the lock,
+// compute the diff, and return it by value so callers act on it lock-free. Enforced by
+// TestARMPrimitivesDoNotHoldStateLock.
+//
 // Error Handling:
 // Transient errors (throttling, timeouts) should be retried by callers.
 // Permanent errors (authentication, resource not found) should not be retried.
@@ -42,6 +49,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/util/retry"
 	servicehelper "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/utils/ptr"
@@ -255,16 +263,19 @@ func (dt *DiffTracker) updateNRPSGWAddressLocations(ctx context.Context, service
 
 // getServiceByUID returns the Service whose UID matches the given uid
 func (dt *DiffTracker) getServiceByUID(ctx context.Context, uid string) (*v1.Service, error) {
-	// This lists all Services and scans for a UID match, which is expensive. It is
+	// This lists Services and scans for a UID match, which is expensive. It is
 	// acceptable for now since it runs once per service operation (plus conflict retries),
-	// not in a hot path.
+	// not in a hot path. The spec.type field selector narrows the server-side result to
+	// LoadBalancer Services only, which is the sole type the difftracker manages.
 	// TODO: carry the Service namespace/name into ServiceConfig (EnsureLoadBalancer already
 	// holds the *v1.Service) and resolve it through the provider's existing serviceLister
 	// (az.serviceLister, already backed by a SharedInformer), i.e. serviceLister.Services(ns).
 	// Get(name) with the UID kept only as a consistency check. That makes this an O(1),
-	// zero-apiserver, zero-extra-memory cached read instead of a NamespaceAll list. Wiring
-	// the lister and ServiceConfig into the engine lands in the PR that connects this path.
-	svcList, err := dt.kubeClient.CoreV1().Services(v1.NamespaceAll).List(ctx, metav1.ListOptions{})
+	// zero-apiserver, zero-extra-memory cached read instead of a list. Wiring the lister and
+	// ServiceConfig into the engine lands in the PR that connects this path.
+	svcList, err := dt.kubeClient.CoreV1().Services(v1.NamespaceAll).List(ctx, metav1.ListOptions{
+		FieldSelector: fields.OneTermEqualSelector("spec.type", string(v1.ServiceTypeLoadBalancer)).String(),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("getServiceByUID: list failed: %w", err)
 	}
