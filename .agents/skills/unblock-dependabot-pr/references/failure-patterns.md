@@ -164,10 +164,8 @@ for review:
 
 When the gate holds, put `/lgtm` on the first line so Prow can parse it, then
 give a Reason naming the pushed commit, the changed files, and the validation
-that passed. Because this action pushes a commit and leaves the PR for another
-CI round, it is a non-final action: stamp it with this round's attempt number per
-the [Attempt stamp](#details-attempt-stamp) rule (`Unblock attempt: <N+1>`,
-using the same `N + 1` as any other non-final comment this round):
+that passed. Do not add an attempt marker here; record this push in the single
+end-of-triage [Attempt stamp](#details-attempt-stamp) summary:
 
 ```bash
 gh pr comment <pr> --body-file - <<'EOF'
@@ -177,7 +175,6 @@ Reason: pushed a fix for this Dependabot PR and the PR is otherwise ready for re
 Commit: <sha>
 Files: <files changed by the push>
 Validation: <check command> passed.
-Unblock attempt: <N+1>
 EOF
 ```
 
@@ -186,9 +183,9 @@ failed run after pushing a new commit; the push-triggered rerun supersedes it.
 
 ## Details: Attempt stamp
 
-Shared rule for any act-stage non-final action — a `Stop=no` row whose action
-posts a comment, pushes, or triggers a CI rerun that leaves the PR for another
-CI round rather than terminating triage. Today that is
+Shared rule for a triage round with one or more act-stage non-final actions — a
+`Stop=no` row whose action posts a comment, pushes, or triggers a CI rerun that
+leaves the PR for another CI round rather than terminating triage. Today that is
 [go-mod-consistency](#details-go-mod-consistency) (push + `/lgtm`),
 the [Shared e2e flake rerun](#details-shared-e2e-flake-rerun) rule used by
 [Public-IP quota e2e](#details-public-ip-quota-e2e),
@@ -202,11 +199,12 @@ the [Shared e2e flake rerun](#details-shared-e2e-flake-rerun) rule used by
 stamp recipe.
 
 The skill keeps no state between runs, so the attempt count lives in the PR's
-own comment history. Count triage **rounds**, not comments: one triage may push
-a module-sync fix and rerun three e2e jobs, but that is a single attempt.
+own comment history. Count triage **rounds**, not actions or comments: one
+triage may push a module-sync fix and rerun three e2e jobs, but it is a single
+attempt with one summary comment.
 
-Compute the next attempt number once, at the start of the act stage, before posting
-any non-final comment this round:
+Compute the next attempt number once, at the start of the act stage, before
+taking any non-final action this round:
 
 ```bash
 # Highest existing "Unblock attempt: N" stamp across all PR comments; 0 if none.
@@ -214,28 +212,27 @@ gh pr view <pr> --json comments \
   --jq '[.comments[].body | capture("Unblock attempt: (?<n>[0-9]+)"; "g").n | tonumber] | max // 0'
 ```
 
-Let `N` be that maximum. This round's attempt number is `N + 1`. Use the **same**
-`N + 1` for every non-final comment posted this round, so a round that pushes a
-fix and reruns three jobs stamps `Unblock attempt: <N+1>` on all four comments
-rather than incrementing per comment.
+Let `N` be that maximum. This round's attempt number is `N + 1`. Do not add
+`Unblock attempt: <N+1>` to an individual `/test`, `/lgtm`, or GitHub Actions
+action comment. After all non-final actions taken this triage have completed,
+post exactly one plain informational comment that summarizes them:
 
-Add the stamp as its own line in the `Reason` block of each non-final comment,
-after the existing Reason text. GitHub Actions reruns are triggered by API rather
-than by PR slash command; after the rerun succeeds, record the attempt with a
-plain informational comment that has no slash command.
-
-```
+```bash
+gh pr comment <pr> --body-file - <<'EOF'
+Reason: completed this triage's automatic unblock actions:
+- <action 1>
+- <action 2>
 Unblock attempt: <N+1>
+EOF
 ```
 
-The stamp is what the guard-stage [Retry budget exhausted](#details-retry-budget-exhausted)
-row reads on the next run. Terminal actions do not stamp: `/close`
-(K8s guard), `@dependabot rebase` (needs-rebase), the `escalate`
+Post no summary when the triage takes no non-final action. The summary is what
+the guard-stage [Retry budget exhausted](#details-retry-budget-exhausted) row
+reads on the next run. Terminal actions do not cause a summary on their own:
+`/close` (K8s guard), `@dependabot rebase` (needs-rebase), the `escalate`
 [Toolchain / SDK / policy](#details-toolchain--sdk--policy) and
-[Retry budget exhausted](#details-retry-budget-exhausted) handoffs (which post no
-comment at all), and the [Only Tide pending](#details-only-tide-pending) `/lgtm`
-carry no `Unblock attempt:` line, because none of them hand the PR to another
-automated retry round.
+[Retry budget exhausted](#details-retry-budget-exhausted) handoffs, and the
+[Only Tide pending](#details-only-tide-pending) `/lgtm`.
 
 ## Details: Shared e2e flake rerun
 
@@ -264,7 +261,6 @@ gh pr comment <pr> --body-file - <<'EOF'
 /test <job-name>
 
 Reason: rerunning this failed e2e job because its current Prow artifacts show <pattern-specific evidence> and the pattern-specific exclusions do not apply.
-Unblock attempt: <N+1>
 EOF
 ```
 
@@ -364,7 +360,6 @@ gh pr comment <pr> --body-file - <<'EOF'
 /test <job-name>
 
 Reason: rerunning this failed Prow job because its current artifacts show <pre-entrypoint infrastructure evidence>.
-Unblock attempt: <N+1>
 EOF
 ```
 
@@ -435,16 +430,9 @@ gh run rerun <run-id> --job <databaseId>
 ```
 
 Do not comment `/retest`, `/test <job-name>`, or any other Prow directive for a
-GitHub Actions check. Record the retry-budget attempt with a plain informational
-comment after `gh run rerun` succeeds:
-
-```bash
-gh pr comment <pr> --body-file - <<'EOF'
-Reason: reran GitHub Actions check <check-name> because its current logs show <transient evidence>.
-Run: <run-url>
-Unblock attempt: <N+1>
-EOF
-```
+GitHub Actions check. After `gh run rerun` succeeds, include the rerun and its
+current evidence in the single end-of-triage [Attempt stamp](#details-attempt-stamp)
+summary rather than posting a separate retry comment.
 
 Report the rerun command, workflow run id, and target job(s) in the final output.
 
@@ -506,9 +494,9 @@ tried to unblock a PR three times without success, a fourth automated attempt is
 unlikely to help, so the PR goes to human reviewers instead of burning more
 CI on the same failing jobs.
 
-The count comes from the `Unblock attempt: N` stamps that non-final actions
-leave on the PR (see [Attempt stamp](#details-attempt-stamp)). Read the highest
-stamp already present:
+The count comes from the one `Unblock attempt: N` summary that each completed
+non-final triage leaves on the PR (see [Attempt stamp](#details-attempt-stamp)).
+Read the highest stamp already present:
 
 ```bash
 gh pr view <pr> --json comments \
@@ -517,9 +505,9 @@ gh pr view <pr> --json comments \
 
 Let `N` be that maximum. The budget is three attempts, so:
 
-- `N < 3` — budget remains. Do not escalate; continue triage. A new non-final
-  action this run will stamp `Unblock attempt: <N+1>` per the
-  [Attempt stamp](#details-attempt-stamp) rule.
+- `N < 3` — budget remains. Do not escalate; continue triage. If this triage
+  completes one or more non-final actions, post one `Unblock attempt: <N+1>`
+  summary per the [Attempt stamp](#details-attempt-stamp) rule.
 - `N >= 3` — the budget is spent (a fourth attempt would exceed three). Stop
   working the PR: make no automated change and report it as needing human review
   in the final output.
