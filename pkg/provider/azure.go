@@ -175,6 +175,10 @@ func NewCloud(ctx context.Context, clientBuilder cloudprovider.ControllerClientB
 		nodePrivateIPToNodeNameMap: map[string]string{},
 	}
 
+	if clientBuilder != nil {
+		az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
+	}
+
 	err := az.InitializeCloudFromConfig(ctx, config, false, callFromCCM)
 	if err != nil {
 		return nil, err
@@ -182,9 +186,6 @@ func NewCloud(ctx context.Context, clientBuilder cloudprovider.ControllerClientB
 
 	az.ipv6DualStackEnabled = true
 
-	if clientBuilder != nil {
-		az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
-	}
 	az.azureResourceLocker = NewAzureResourceLocker(
 		az,
 		consts.AzureResourceLockHolderNameCloudControllerManager,
@@ -345,24 +346,20 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 		return err
 	}
 
-	// Use a single flag to determine if the service gateway is enabled.
-	// All 3 conditions must be true:
-	// 1. ServiceGatewayEnabled is true
-	// 2. lb sku is service
-	// 3. backendPoolType is PodIP
-	if config.ServiceGatewayEnabled && config.IsLBBackendPoolTypePodIPAndUseServiceLoadBalancer() {
-		logger.V(2).Info("Service Gateway is enabled, using PodIP backend pool type with Service Load Balancer")
-	} else {
-		config.ServiceGatewayEnabled = false
+	serviceGatewayConfigured := config.ServiceGatewayEnabled ||
+		config.IsLBBackendPoolTypePodIP() ||
+		config.UseServiceLoadBalancer()
+	serviceGatewayEnabled := config.ServiceGatewayEnabled &&
+		config.IsLBBackendPoolTypePodIPAndUseServiceLoadBalancer()
+	if serviceGatewayConfigured && !serviceGatewayEnabled {
+		return fmt.Errorf("InitializeCloudFromConfig: ServiceGateway requires serviceGatewayEnabled=true, loadBalancerBackendPoolConfigurationType=podIP, and loadBalancerSku=service to be configured together")
 	}
-
-	// PodIP backend pools require ServiceGateway to populate them; reject otherwise.
-	if config.IsLBBackendPoolTypePodIP() && !config.ServiceGatewayEnabled {
-		return fmt.Errorf("InitializeCloudFromConfig: PodIP backend pool type requires ServiceGateway (loadBalancerBackendPoolConfigurationType=podIP needs ServiceGatewayEnabled=true and loadBalancerSku=service)")
+	if serviceGatewayEnabled {
+		logger.V(2).Info("Service Gateway is enabled, using PodIP backend pool type with Service Load Balancer")
 	}
 
 	// ServiceGateway (PodIP backend pools) and Multi-SLB (NodeIP/NIC backend pools) are mutually exclusive.
-	if config.ServiceGatewayEnabled && config.UseMultipleStandardLoadBalancers() {
+	if config.ServiceGatewayEnabled && len(config.MultipleStandardLoadBalancerConfigurations) > 0 {
 		return fmt.Errorf("InitializeCloudFromConfig: ServiceGatewayEnabled and MultipleStandardLoadBalancerConfigurations are mutually exclusive and cannot both be set")
 	}
 
