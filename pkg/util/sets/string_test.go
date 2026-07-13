@@ -367,6 +367,7 @@ func TestLen(t *testing.T) {
 		})
 	}
 }
+
 func TestEquals(t *testing.T) {
 	tests := []struct {
 		name string
@@ -434,7 +435,6 @@ func TestEquals(t *testing.T) {
 		})
 	}
 }
-
 func TestDifference(t *testing.T) {
 	tests := []struct {
 		name  string
