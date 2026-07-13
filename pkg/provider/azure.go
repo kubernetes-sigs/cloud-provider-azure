@@ -304,8 +304,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 		}
 	}
 
-	if config.LoadBalancerBackendPoolConfigurationType == "" ||
-		strings.EqualFold(config.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePodIP) {
+	if config.LoadBalancerBackendPoolConfigurationType == "" {
 		config.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration
 	} else {
 		supportedLoadBalancerBackendPoolConfigurationTypes := utilsets.NewString(
@@ -405,6 +404,8 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIPConfig(az)
 	} else if az.IsLBBackendPoolTypeNodeIP() {
 		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIP(az)
+	} else if az.IsLBBackendPoolTypePodIP() {
+		az.LoadBalancerBackendPool = newBackendPoolTypePodIP(az)
 	}
 
 	if az.UseMultipleStandardLoadBalancers() {
