@@ -266,33 +266,6 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 		return fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config")
 	}
 
-	// Use a single flag to determine if the service gateway is enabled.
-	// All 3 conditions must be true:
-	// 1. ServiceGatewayEnabled is true
-	// 2. lb sku is service
-	// 3. backendPoolType is PodIP
-	if az.ServiceGatewayEnabled && az.IsLBBackendPoolTypePodIPAndUseServiceLoadBalancer() {
-		logger.V(2).Info("Service Gateway is enabled, using PodIP backend pool type with Service Load Balancer")
-		az.ServiceGatewayEnabled = true
-	} else {
-		az.ServiceGatewayEnabled = false
-	}
-
-	// PodIP backend pools require ServiceGateway to populate them; reject otherwise.
-	if az.IsLBBackendPoolTypePodIP() && !az.ServiceGatewayEnabled {
-		return fmt.Errorf("InitializeCloudFromConfig: PodIP backend pool type requires ServiceGateway (loadBalancerBackendPoolConfigurationType=podIP needs ServiceGatewayEnabled=true and loadBalancerSku=service)")
-	}
-
-	// ServiceGateway (PodIP backend pools) and Multi-SLB (NodeIP/NIC backend pools) are mutually exclusive.
-	if az.ServiceGatewayEnabled && az.UseMultipleStandardLoadBalancers() {
-		return fmt.Errorf("InitializeCloudFromConfig: ServiceGatewayEnabled and MultipleStandardLoadBalancerConfigurations are mutually exclusive and cannot both be set")
-	}
-
-	// EnableMigrateToIPBasedBackendPoolAPI has no meaning when ServiceGateway is enabled.
-	if az.ServiceGatewayEnabled && config.EnableMigrateToIPBasedBackendPoolAPI {
-		return fmt.Errorf("InitializeCloudFromConfig: EnableMigrateToIPBasedBackendPoolAPI cannot be used when ServiceGatewayEnabled is true — ContainerLB already uses PodIP-based backend pools")
-	}
-
 	if config.RouteTableResourceGroup == "" {
 		config.RouteTableResourceGroup = config.ResourceGroup
 	}
@@ -371,6 +344,32 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 	err = az.setLBDefaults(config)
 	if err != nil {
 		return err
+	}
+
+	// Use a single flag to determine if the service gateway is enabled.
+	// All 3 conditions must be true:
+	// 1. ServiceGatewayEnabled is true
+	// 2. lb sku is service
+	// 3. backendPoolType is PodIP
+	if config.ServiceGatewayEnabled && config.IsLBBackendPoolTypePodIPAndUseServiceLoadBalancer() {
+		logger.V(2).Info("Service Gateway is enabled, using PodIP backend pool type with Service Load Balancer")
+	} else {
+		config.ServiceGatewayEnabled = false
+	}
+
+	// PodIP backend pools require ServiceGateway to populate them; reject otherwise.
+	if config.IsLBBackendPoolTypePodIP() && !config.ServiceGatewayEnabled {
+		return fmt.Errorf("InitializeCloudFromConfig: PodIP backend pool type requires ServiceGateway (loadBalancerBackendPoolConfigurationType=podIP needs ServiceGatewayEnabled=true and loadBalancerSku=service)")
+	}
+
+	// ServiceGateway (PodIP backend pools) and Multi-SLB (NodeIP/NIC backend pools) are mutually exclusive.
+	if config.ServiceGatewayEnabled && config.UseMultipleStandardLoadBalancers() {
+		return fmt.Errorf("InitializeCloudFromConfig: ServiceGatewayEnabled and MultipleStandardLoadBalancerConfigurations are mutually exclusive and cannot both be set")
+	}
+
+	// EnableMigrateToIPBasedBackendPoolAPI has no meaning when ServiceGateway is enabled.
+	if config.ServiceGatewayEnabled && config.EnableMigrateToIPBasedBackendPoolAPI {
+		return fmt.Errorf("InitializeCloudFromConfig: EnableMigrateToIPBasedBackendPoolAPI cannot be used when ServiceGatewayEnabled is true — ContainerLB already uses PodIP-based backend pools")
 	}
 
 	az.Config = *config
