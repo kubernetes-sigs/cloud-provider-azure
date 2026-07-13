@@ -121,10 +121,16 @@ within the same minor family, continue with the matching workflow below.
 Use the shared `sync-go-modules` skill from this repo.
 
 1. Read `.agents/skills/sync-go-modules/SKILL.md`.
-2. Run the helper from the PR checkout. If the Dependabot branch is already
+2. Before preparing a push-based fix, verify that the acting identity is allowed
+   to leave commits on the PR branch under the repository's commit-authorship
+   and CLA policy. If the repo is known to reject agent-authored commits, or if a
+   trial push would add a failing policy check such as EasyCLA and make the PR
+   less mergeable, do not continue with the push path. Escalate through
+   [Toolchain / SDK / policy](#details-toolchain--sdk--policy) instead.
+3. Run the helper from the PR checkout. If the Dependabot branch is already
    dirty only because of the dependency bump you are fixing, pass
    `--allow-dirty` as that skill describes.
-3. Inspect the diff and stage only files produced by the sync:
+4. Inspect the diff and stage only files produced by the sync:
 
 ```bash
 git diff --stat
@@ -133,14 +139,14 @@ git add <specific go.mod/go.sum/vendor files>
 git diff --cached --stat
 ```
 
-4. Commit and push the fix to the PR branch:
+5. Commit and push the fix to the PR branch:
 
 ```bash
 git commit -m "Update Go modules"
 git push
 ```
 
-5. After the push succeeds, post `/lgtm` following the shared
+6. After the push succeeds, post `/lgtm` following the shared
    [Post-push /lgtm](#details-post-push-lgtm) rule. Fill its Reason with the
    go-mod-consistency context: the pushed commit, the changed
    `go.mod`/`go.sum`/vendor files, and the `sync-go-modules` check that passed.
@@ -451,6 +457,9 @@ agent must not make on its own:
 - `dependency-review`, vulnerability, or license failures where the resolution
   may require accepting risk, excluding a finding, or changing the dependency
   version
+- Commit-authorship or CLA policy restrictions that reject the acting identity's
+  pushed commit, or would leave the PR less mergeable by introducing a failing
+  policy check such as EasyCLA
 
 When one of these matches, make no automated change: do not push code, do not
 change linter policy, do not broaden a dependency bump, do not edit generated

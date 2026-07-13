@@ -74,6 +74,12 @@ or overwrite unrelated files.
   compatibility issue, commit SHA, changed files, and validation result.
 - Use specific staging commands, never `git add .`.
 - Push only the current task's files.
+- Before any push-based fix, verify that the acting identity is allowed to leave
+  commits on the PR branch under the repository's commit-authorship and CLA
+  policy. If the repo or branch rejects the agent-authored commit, or would make
+  the PR less mergeable by adding a failing policy check such as EasyCLA, treat
+  it as the Pri 50 `Toolchain / SDK / policy blocker` row instead of leaving the
+  pushed commit in place.
 - Resolve guard rows from PR metadata and the `go.mod` diff before any CI or log
   I/O. When a guard row marked Stop matches, follow its linked
   Details action and end triage immediately — do not inspect CI, sync modules,
