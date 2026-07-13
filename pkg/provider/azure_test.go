@@ -2665,6 +2665,26 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, az.zoneRepo)
 	})
+
+	t.Run("ServiceGatewayEnabled is refined off because podIP is normalized away", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		az := GetTestCloud(ctrl)
+		zoneMock := az.zoneRepo.(*zone.MockRepository)
+		zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
+
+		// podIP backend pools are normalized to NodeIPConfiguration here, so ServiceGateway can never
+		// activate. A config that requests it must be refined to false from the normalized config, not
+		// left enabled by the raw flag. callFromCCM=false keeps the assertion on the config-derived flag.
+		azureconfig := providerconfig.Config{
+			ServiceGatewayEnabled:                    true,
+			LoadBalancerSKU:                          consts.LoadBalancerSKUService,
+			LoadBalancerBackendPoolConfigurationType: consts.LoadBalancerBackendPoolConfigurationTypePodIP,
+		}
+		err := az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, false)
+		assert.NoError(t, err)
+		assert.False(t, az.ServiceGatewayEnabled)
+	})
 }
 
 func TestSetLBDefaults(t *testing.T) {
