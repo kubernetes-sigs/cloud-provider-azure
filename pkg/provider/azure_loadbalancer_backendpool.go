@@ -799,32 +799,3 @@ func removeNodeIPAddressesFromBackendPool(
 
 	return changed
 }
-
-func getBackendPoolIPs(serviceName string, backendPools []*armnetwork.BackendAddressPool, isBackendPoolMatch func(string) bool) *utilsets.IgnoreCaseSet {
-	backendPrivateIPs := utilsets.NewString()
-
-	for _, bp := range backendPools {
-		if bp.Name == nil {
-			continue
-		}
-
-		found := isBackendPoolMatch(*bp.Name)
-		if found {
-			klog.V(10).Infof("GetBackendPrivateIPs for service (%s): found wanted backendpool %s", serviceName, *bp.Name)
-			if bp.Properties != nil && bp.Properties.LoadBalancerBackendAddresses != nil {
-				for _, backendAddress := range bp.Properties.LoadBalancerBackendAddresses {
-					ipAddress := backendAddress.Properties.IPAddress
-					if ipAddress != nil {
-						klog.V(2).Infof("GetBackendPrivateIPs for service (%s): lb backendpool - found private IP %q", serviceName, *ipAddress)
-						backendPrivateIPs.Insert(*ipAddress)
-					} else {
-						klog.V(4).Infof("GetBackendPrivateIPs for service (%s): lb backendpool - found null private IP", serviceName)
-					}
-				}
-			}
-		} else {
-			klog.V(10).Infof("GetBackendPrivateIPs for service (%s): found unmanaged backendpool %s", serviceName, *bp.Name)
-		}
-	}
-	return backendPrivateIPs
-}
