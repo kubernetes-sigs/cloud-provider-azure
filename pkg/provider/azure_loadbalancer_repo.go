@@ -121,8 +121,7 @@ func (az *Cloud) ListManagedLBs(ctx context.Context, service *v1.Service, nodes 
 	}
 
 	for _, lb := range allLBs {
-		trimmed := trimSuffixIgnoreCase(ptr.Deref(lb.Name, ""), consts.InternalLoadBalancerNameSuffix)
-		if managedLBNames.Has(trimmed) {
+		if managedLBNames.Has(trimSuffixIgnoreCase(ptr.Deref(lb.Name, ""), consts.InternalLoadBalancerNameSuffix)) {
 			managedLBs = append(managedLBs, lb)
 			logger.V(4).Info("found managed LB", "loadBalancerName", ptr.Deref(lb.Name, ""))
 		}

@@ -321,7 +321,7 @@ func (az *Cloud) keepSharedProbe(
 								"ruleName", *probe.Properties.LoadBalancingRules[0].ID, "healthProbe", *probe.ID)
 						} else {
 							// If the service owns the rule and is now a local service,
-							// it means the service was switched from Cluster to Local.
+							// it means the service was switched from Cluster to Local
 							if az.serviceOwnsRule(service, ruleName) && isLocalService(service) {
 								logger.V(2).Info("service has switched from Cluster to Local, removing shared probe",
 									"serviceName", getServiceName(service))

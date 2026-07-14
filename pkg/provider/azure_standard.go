@@ -44,7 +44,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/servicegateway/difftracker"
 	vmutil "sigs.k8s.io/cloud-provider-azure/pkg/util/vm"
 )
 
@@ -318,27 +317,14 @@ func (az *Cloud) getRulePrefix(service *v1.Service) string {
 	return az.GetLoadBalancerName(context.TODO(), "", service)
 }
 
-// extractInboundConfigFromService delegates to difftracker.ExtractInboundConfigFromService.
-func (az *Cloud) extractInboundConfigFromService(service *v1.Service) *difftracker.InboundConfig {
-	return difftracker.ExtractInboundConfigFromService(service)
-}
-
-// getServiceUID returns the lowercased Service UID used as the ServiceGateway per-service identity.
-func getServiceUID(service *v1.Service) string {
-	return strings.ToLower(string(service.UID))
-}
-
 func (az *Cloud) getPublicIPName(clusterName string, service *v1.Service, isIPv6 bool) (string, error) {
+	if az.ServiceGatewayEnabled {
+		return fmt.Sprintf("%s-pip", getServiceUID(service)), nil
+	}
+
 	logger := log.Background().WithName("getPublicIPName")
 	isDualStack := isServiceDualStack(service)
-	var pipName string
-	if az.ServiceGatewayEnabled {
-		// ServiceGateway: per-service deterministic PIP name.
-		pipName = fmt.Sprintf("%s-pip", getServiceUID(service))
-	} else {
-		// Legacy: per-cluster PIP name.
-		pipName = fmt.Sprintf("%s-%s", clusterName, az.GetLoadBalancerName(context.TODO(), clusterName, service))
-	}
+	pipName := fmt.Sprintf("%s-%s", clusterName, az.GetLoadBalancerName(context.TODO(), clusterName, service))
 	if id := getServicePIPPrefixID(service, isIPv6); id != "" {
 		id, err := getLastSegment(id, "/")
 		if err == nil {
