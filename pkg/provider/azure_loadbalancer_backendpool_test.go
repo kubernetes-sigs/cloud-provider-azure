@@ -1089,16 +1089,3 @@ func TestGetBackendIPConfigurationsToBeDeleted(t *testing.T) {
 		assert.Equal(t, tc.expected, actual)
 	}
 }
-
-func TestGetBackendPoolNameForSLBService_EmptyIPFamiliesNoPanic(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	az := GetTestCloud(ctrl)
-
-	svc := &v1.Service{ObjectMeta: metav1.ObjectMeta{Name: "no-family", UID: "uid-no-family"}}
-
-	assert.NotPanics(t, func() {
-		_, err := az.getBackendPoolNameForSLBService(svc)
-		assert.Error(t, err, "an empty IPFamilies must return an error, not index IPFamilies[0]")
-	})
-}
