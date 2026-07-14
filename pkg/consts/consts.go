@@ -247,6 +247,9 @@ const (
 	// ServiceGateway inbound load balancer.
 	LoadBalancerSKUNameService = "Service"
 
+	// PodLabelServiceEgressGateway is the label used on the pod
+	PodLabelServiceEgressGateway = "kubernetes.azure.com/service-egress-gateway"
+
 	// ServiceAnnotationLoadBalancerInternal is the annotation used on the service
 	ServiceAnnotationLoadBalancerInternal = "service.beta.kubernetes.io/azure-load-balancer-internal"
 
@@ -370,6 +373,8 @@ const (
 	FrontendIPConfigIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/frontendIPConfigurations/%s"
 	// BackendPoolIDTemplate is the template of the backend pool
 	BackendPoolIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s"
+	// NatGatewayIDTemplate is the template of the nat gateway
+	NatGatewayIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/natGateways/%s"
 	// LoadBalancerProbeIDTemplate is the template of the load balancer probe
 	LoadBalancerProbeIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/probes/%s"
 
