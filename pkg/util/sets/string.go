@@ -129,23 +129,13 @@ func (s *IgnoreCaseSet) Difference(other *IgnoreCaseSet) *IgnoreCaseSet {
 
 // Equals returns true if the two sets are equal.
 func (s1 *IgnoreCaseSet) Equals(s2 *IgnoreCaseSet) bool {
-	// Early exit if sizes are different
-	if len(s1.UnsortedList()) != len(s2.UnsortedList()) {
+	if s1.Len() != s2.Len() {
 		return false
 	}
-	// Check if all items in s1 are in s2
-	for _, item := range s1.UnsortedList() {
-		if !s2.Has(item) {
-			return false
-		}
+	if s1.Len() == 0 {
+		return true
 	}
-	// Check if all items in s2 are in s1
-	for _, item := range s2.UnsortedList() {
-		if !s1.Has(item) {
-			return false
-		}
-	}
-	return true
+	return s1.set.Equal(s2.set)
 }
 
 func (s *IgnoreCaseSet) MarshalJSON() ([]byte, error) {

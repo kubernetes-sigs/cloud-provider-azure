@@ -375,63 +375,8 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 				previousES := oldObj.(*discovery_v1.EndpointSlice)
 				newES := newObj.(*discovery_v1.EndpointSlice)
 
-				svcName := getServiceNameOfEndpointSlice(newES)
-				if svcName == "" {
-					logger.V(4).Info("EndpointSlice does not have service name label, skip updating load balancer backend pool", "namespace", newES.Namespace, "name", newES.Name)
-					return
-				}
-
 				logger.V(4).Info("Detecting EndpointSlice update", "namespace", newES.Namespace, "name", newES.Name)
 				az.endpointSlicesCache.Store(strings.ToLower(fmt.Sprintf("%s/%s", newES.Namespace, newES.Name)), newES)
-
-				key := strings.ToLower(fmt.Sprintf("%s/%s", newES.Namespace, svcName))
-				si, found := az.getLocalServiceInfo(key)
-				if !found && !az.ServiceGatewayEnabled {
-					logger.V(4).Info("EndpointSlice belongs to service, but the service is not a local service, or has not finished the initial reconciliation loop. Skip updating load balancer backend pool", "namespace", newES.Namespace, "name", newES.Name, "service", key)
-					return
-				}
-				lbName, ipFamily := si.lbName, si.ipFamily
-
-				var previousIPs, currentIPs []string
-				previousNodeNameSet := utilsets.NewString()
-				currentNodeNameSet := utilsets.NewString()
-				if previousES != nil {
-					for _, ep := range previousES.Endpoints {
-						previousNodeNameSet.Insert(ptr.Deref(ep.NodeName, ""))
-					}
-				}
-				if newES != nil {
-					for _, ep := range newES.Endpoints {
-						currentNodeNameSet.Insert(ptr.Deref(ep.NodeName, ""))
-					}
-				}
-				for _, previousNodeName := range previousNodeNameSet.UnsortedList() {
-					nodeIPsSet := az.nodePrivateIPs[strings.ToLower(previousNodeName)]
-					previousIPs = append(previousIPs, nodeIPsSet.UnsortedList()...)
-				}
-				for _, currentNodeName := range currentNodeNameSet.UnsortedList() {
-					nodeIPsSet := az.nodePrivateIPs[strings.ToLower(currentNodeName)]
-					currentIPs = append(currentIPs, nodeIPsSet.UnsortedList()...)
-				}
-
-				if !az.ServiceGatewayEnabled && az.backendPoolUpdater != nil {
-					var bpNames []string
-					bpNameIPv4 := getLocalServiceBackendPoolName(key, false)
-					bpNameIPv6 := getLocalServiceBackendPoolName(key, true)
-					switch strings.ToLower(ipFamily) {
-					case strings.ToLower(consts.IPVersionIPv4String):
-						bpNames = append(bpNames, bpNameIPv4)
-					case strings.ToLower(consts.IPVersionIPv6String):
-						bpNames = append(bpNames, bpNameIPv6)
-					default:
-						bpNames = append(bpNames, bpNameIPv4, bpNameIPv6)
-					}
-					currentIPsInBackendPools := make(map[string][]string)
-					for _, bpName := range bpNames {
-						currentIPsInBackendPools[bpName] = previousIPs
-					}
-					az.applyIPChangesAmongLocalServiceBackendPoolsByIPFamily(lbName, key, currentIPsInBackendPools, currentIPs)
-				}
 
 				if az.ServiceGatewayEnabled {
 					serviceUID, loaded := getServiceUIDOfEndpointSlice(newES)
@@ -457,6 +402,62 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 						return
 					}
 					az.diffTracker.UpdateEndpoints(serviceUID, oldAddresses, newAddresses)
+					return
+				}
+
+				svcName := getServiceNameOfEndpointSlice(newES)
+				if svcName == "" {
+					logger.V(4).Info("EndpointSlice does not have service name label, skip updating load balancer backend pool", "namespace", newES.Namespace, "name", newES.Name)
+					return
+				}
+
+				key := strings.ToLower(fmt.Sprintf("%s/%s", newES.Namespace, svcName))
+				si, found := az.getLocalServiceInfo(key)
+				if !found {
+					logger.V(4).Info("EndpointSlice belongs to service, but the service is not a local service, or has not finished the initial reconciliation loop. Skip updating load balancer backend pool", "namespace", newES.Namespace, "name", newES.Name, "service", key)
+					return
+				}
+
+				var previousIPs, currentIPs []string
+				previousNodeNameSet := utilsets.NewString()
+				currentNodeNameSet := utilsets.NewString()
+				if previousES != nil {
+					for _, ep := range previousES.Endpoints {
+						previousNodeNameSet.Insert(ptr.Deref(ep.NodeName, ""))
+					}
+				}
+				if newES != nil {
+					for _, ep := range newES.Endpoints {
+						currentNodeNameSet.Insert(ptr.Deref(ep.NodeName, ""))
+					}
+				}
+				for _, previousNodeName := range previousNodeNameSet.UnsortedList() {
+					nodeIPsSet := az.nodePrivateIPs[strings.ToLower(previousNodeName)]
+					previousIPs = append(previousIPs, nodeIPsSet.UnsortedList()...)
+				}
+				for _, currentNodeName := range currentNodeNameSet.UnsortedList() {
+					nodeIPsSet := az.nodePrivateIPs[strings.ToLower(currentNodeName)]
+					currentIPs = append(currentIPs, nodeIPsSet.UnsortedList()...)
+				}
+
+				if az.backendPoolUpdater != nil {
+					lbName, ipFamily := si.lbName, si.ipFamily
+					var bpNames []string
+					bpNameIPv4 := getLocalServiceBackendPoolName(key, false)
+					bpNameIPv6 := getLocalServiceBackendPoolName(key, true)
+					switch strings.ToLower(ipFamily) {
+					case strings.ToLower(consts.IPVersionIPv4String):
+						bpNames = append(bpNames, bpNameIPv4)
+					case strings.ToLower(consts.IPVersionIPv6String):
+						bpNames = append(bpNames, bpNameIPv6)
+					default:
+						bpNames = append(bpNames, bpNameIPv4, bpNameIPv6)
+					}
+					currentIPsInBackendPools := make(map[string][]string)
+					for _, bpName := range bpNames {
+						currentIPsInBackendPools[bpName] = previousIPs
+					}
+					az.applyIPChangesAmongLocalServiceBackendPoolsByIPFamily(lbName, key, currentIPsInBackendPools, currentIPs)
 				}
 			},
 			DeleteFunc: func(obj interface{}) {

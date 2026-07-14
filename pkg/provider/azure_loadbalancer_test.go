@@ -860,6 +860,27 @@ func TestEnsureLoadBalancerLock(t *testing.T) {
 	assert.Contains(t, err.Error(), "list lb failed")
 }
 
+func TestEnsureLoadBalancerServiceGatewaySkipsAzureResourceLock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	az := GetTestCloudWithContainerLoadBalancer(ctrl)
+	kubeClient := fake.NewSimpleClientset()
+	kubeClient.PrependReactor(
+		"get", "leases",
+		func(_ k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			return true, nil, errors.New("get lease should not be called")
+		})
+	az.KubeClient = kubeClient
+	az.azureResourceLocker = NewAzureResourceLocker(
+		az, "holder", "aks-managed-resource-locker", "kube-system", 900,
+	)
+
+	svc := getTestService("service", v1.ProtocolTCP, nil, false, 80)
+	_, err := az.EnsureLoadBalancer(context.Background(), testClusterName, &svc, nil)
+	assert.NoError(t, err)
+}
+
 func TestEnsureLoadBalancerDeletedLock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
