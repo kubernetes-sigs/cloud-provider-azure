@@ -225,5 +225,6 @@ func GetTestCloudWithContainerLoadBalancer(ctrl *gomock.Controller) (az *Cloud) 
 	if err != nil {
 		panic("GetTestCloudWithContainerLoadBalancer: failed to initialize diffTracker: " + err.Error())
 	}
+	az.diffTracker.SetEventRecorder(az.eventRecorder)
 	return az
 }

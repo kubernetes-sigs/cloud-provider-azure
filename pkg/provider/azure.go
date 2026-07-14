@@ -175,7 +175,10 @@ func NewCloud(ctx context.Context, clientBuilder cloudprovider.ControllerClientB
 		nodePrivateIPToNodeNameMap: map[string]string{},
 	}
 
-	if clientBuilder != nil {
+	if config != nil && config.ServiceGatewayEnabled && callFromCCM {
+		if clientBuilder == nil {
+			return nil, fmt.Errorf("NewCloud: ServiceGateway requires a clientBuilder")
+		}
 		az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
 	}
 
@@ -402,7 +405,8 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 	} else if az.IsLBBackendPoolTypeNodeIP() {
 		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIP(az)
 	} else if az.IsLBBackendPoolTypePodIP() {
-		az.LoadBalancerBackendPool = newBackendPoolTypePodIP(az)
+		// ServiceGateway owns PodIP backend pools through difftracker.
+		az.LoadBalancerBackendPool = nil
 	}
 
 	if az.UseMultipleStandardLoadBalancers() {
@@ -544,8 +548,6 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 				return err
 			}
 
-			// Publish the deps the difftracker needs (event recorder and shared EndpointSlice cache).
-			az.diffTracker.SetEventRecorder(az.eventRecorder)
 			az.diffTracker.SetEndpointSlicesCache(&az.endpointSlicesCache)
 
 			// If SetInformers already ran, hand the existing lister to the difftracker now.
@@ -691,10 +693,15 @@ func (az *Cloud) setCloudProviderBackoffDefaults(config *azureconfig.Config) wai
 
 // Initialize passes a Kubernetes clientBuilder interface to the cloud provider
 func (az *Cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, _ <-chan struct{}) {
-	az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
+	if az.KubeClient == nil {
+		az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
+	}
 	az.eventBroadcaster = record.NewBroadcaster()
 	az.eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: az.KubeClient.CoreV1().Events("")})
 	az.eventRecorder = az.eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "azure-cloud-provider"})
+	if az.ServiceGatewayEnabled && az.diffTracker != nil {
+		az.diffTracker.SetEventRecorder(az.eventRecorder)
+	}
 }
 
 // LoadBalancer returns a balancer interface. Also returns true if the interface is supported, false otherwise.
@@ -772,7 +779,7 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 				oldIPs := getNodePrivateIPAddresses(prevNode)
 				newIPs := getNodePrivateIPAddresses(newNode)
 				oldSet, newSet := utilsets.NewString(oldIPs...), utilsets.NewString(newIPs...)
-				if oldSet.Difference(newSet).Len() != 0 || newSet.Difference(oldSet).Len() != 0 {
+				if !oldSet.Equals(newSet) {
 					az.diffTracker.ReconcileNodeIPChange(newNode.Name, oldIPs, newIPs)
 				}
 			}
@@ -809,14 +816,10 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 	az.serviceLister = informerFactory.Core().V1().Services().Lister()
 	az.nodeLister = informerFactory.Core().V1().Nodes().Lister()
 
-	// Publish the Service lister so the difftracker can resolve UIDs via cached reads.
-	if az.diffTracker != nil {
-		az.diffTracker.SetServiceLister(az.serviceLister)
-	}
-
 	az.setUpEndpointSlicesInformer(informerFactory)
 
 	if az.ServiceGatewayEnabled && az.diffTracker != nil {
+		az.diffTracker.SetServiceLister(az.serviceLister)
 		az.diffTracker.SetUpPodInformer()
 	}
 }
