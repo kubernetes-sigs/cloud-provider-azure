@@ -625,7 +625,7 @@ func getLocalServiceBackendPoolName(serviceName string, ipv6 bool) string {
 // getBackendPoolNameForService determine the expected backend pool name
 // by checking the external traffic policy of the service.
 func (az *Cloud) getBackendPoolNameForService(service *v1.Service, clusterName string, ipv6 bool) string {
-	if (!isLocalService(service) && !az.ServiceGatewayEnabled) || !az.UseMultipleStandardLoadBalancers() {
+	if !isLocalService(service) || !az.UseMultipleStandardLoadBalancers() {
 		return getBackendPoolName(clusterName, ipv6)
 	}
 	return getLocalServiceBackendPoolName(getServiceName(service), ipv6)
@@ -634,7 +634,7 @@ func (az *Cloud) getBackendPoolNameForService(service *v1.Service, clusterName s
 // getBackendPoolNamesForService determine the expected backend pool names
 // by checking the external traffic policy of the service.
 func (az *Cloud) getBackendPoolNamesForService(service *v1.Service, clusterName string) map[bool]string {
-	if (!isLocalService(service) && !az.ServiceGatewayEnabled) || !az.UseMultipleStandardLoadBalancers() {
+	if !isLocalService(service) || !az.UseMultipleStandardLoadBalancers() {
 		return getBackendPoolNames(clusterName)
 	}
 	return map[bool]string{
@@ -646,21 +646,6 @@ func (az *Cloud) getBackendPoolNamesForService(service *v1.Service, clusterName 
 // getBackendPoolIDsForService determine the expected backend pool IDs
 // by checking the external traffic policy of the service.
 func (az *Cloud) getBackendPoolIDsForService(service *v1.Service, clusterName, lbName string) map[bool]string {
-	if az.ServiceGatewayEnabled {
-		// PodIP backend pools are single-stack: pick the pool by the Service's single IP family.
-		if len(service.Spec.IPFamilies) == 0 {
-			name := string(service.GetUID())
-			return map[bool]string{consts.IPVersionIPv4: az.getBackendPoolID(lbName, name)}
-		}
-		switch service.Spec.IPFamilies[0] {
-		case v1.IPv4Protocol:
-			name := string(service.GetUID())
-			return map[bool]string{consts.IPVersionIPv4: az.getBackendPoolID(lbName, name)}
-		case v1.IPv6Protocol:
-			name := fmt.Sprintf("%s-%s", service.GetUID(), consts.IPVersionIPv6StringLower)
-			return map[bool]string{consts.IPVersionIPv6: az.getBackendPoolID(lbName, name)}
-		}
-	}
 	if !isLocalService(service) || !az.UseMultipleStandardLoadBalancers() {
 		return az.getBackendPoolIDs(clusterName, lbName)
 	}
@@ -673,25 +658,6 @@ func (az *Cloud) getBackendPoolIDsForService(service *v1.Service, clusterName, l
 // getLocalServiceBackendPoolID gets the ID of the backend pool of a local service.
 func (az *Cloud) getLocalServiceBackendPoolID(serviceName string, lbName string, ipv6 bool) string {
 	return az.getBackendPoolID(lbName, getLocalServiceBackendPoolName(serviceName, ipv6))
-}
-
-// getBackendPoolNameForSLBService returns the per-service (Service UID) backend pool name for a
-// ServiceGateway inbound LB. Dual-stack is unsupported, so the name is keyed on the single family.
-func (az *Cloud) getBackendPoolNameForSLBService(service *v1.Service) (string, error) {
-	if isServiceDualStack(service) {
-		return "", fmt.Errorf("dual-stack services are not supported when LB backend pool type is PodIP")
-	}
-	if len(service.Spec.IPFamilies) == 0 {
-		return "", fmt.Errorf("service %s has no IP family; cannot determine backend pool name", service.GetUID())
-	}
-	switch service.Spec.IPFamilies[0] {
-	case v1.IPv4Protocol:
-		return string(service.GetUID()), nil
-	case v1.IPv6Protocol:
-		return fmt.Sprintf("%s-%s", service.GetUID(), consts.IPVersionIPv6StringLower), nil
-	default:
-		return "", fmt.Errorf("unknown IP family %s", service.Spec.IPFamilies[0])
-	}
 }
 
 // localServiceOwnsBackendPool checks if a backend pool is owned by a local service.

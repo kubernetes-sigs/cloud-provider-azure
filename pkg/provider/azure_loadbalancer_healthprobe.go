@@ -320,9 +320,9 @@ func (az *Cloud) keepSharedProbe(
 							logger.Error(err, "failed to parse load balancing rule name attached to health probe",
 								"ruleName", *probe.Properties.LoadBalancingRules[0].ID, "healthProbe", *probe.ID)
 						} else {
-							// If the service owns the rule and is now a local service or ServiceGateway,
-							// it means the service was switched from Cluster to Local/ServiceGateway.
-							if az.serviceOwnsRule(service, ruleName) && (isLocalService(service) || az.ServiceGatewayEnabled) {
+							// If the service owns the rule and is now a local service,
+							// it means the service was switched from Cluster to Local.
+							if az.serviceOwnsRule(service, ruleName) && isLocalService(service) {
 								logger.V(2).Info("service has switched from Cluster to Local, removing shared probe",
 									"serviceName", getServiceName(service))
 								// Remove the shared probe from the load balancer directly
