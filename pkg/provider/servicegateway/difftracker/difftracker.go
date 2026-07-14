@@ -102,7 +102,9 @@ type InboundConfigValidationError struct {
 func (e *InboundConfigValidationError) Error() string { return e.Message }
 
 // DiffTracker reconciles Kubernetes service/endpoint state into ServiceGateway (NRP) state.
-type DiffTracker struct{}
+type DiffTracker struct {
+	eventRecorder record.EventRecorder
+}
 
 // New returns an empty API-surface tracker for shared provider tests.
 func New(_ logr.Logger, _ K8sState, _ NRPState, _ Config, _ azclient.ClientFactory, _ kubernetes.Interface) (*DiffTracker, error) {
@@ -115,7 +117,9 @@ func InitializeFromCluster(_ context.Context, _ Config, _ azclient.ClientFactory
 }
 
 // SetEventRecorder publishes the recorder used to emit ServiceGateway pod events.
-func (dt *DiffTracker) SetEventRecorder(_ record.EventRecorder) {}
+func (dt *DiffTracker) SetEventRecorder(recorder record.EventRecorder) {
+	dt.eventRecorder = recorder
+}
 
 // SetEndpointSlicesCache publishes the provider's shared EndpointSlice cache.
 func (dt *DiffTracker) SetEndpointSlicesCache(_ *sync.Map) {}

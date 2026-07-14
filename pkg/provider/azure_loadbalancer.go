@@ -205,7 +205,7 @@ func (az *Cloud) reconcileService(ctx context.Context, clusterName string, servi
 
 	lbName := strings.ToLower(ptr.Deref(lb.Name, ""))
 	key := strings.ToLower(getServiceName(service))
-	if az.UseMultipleStandardLoadBalancers() && (isLocalService(service) || az.ServiceGatewayEnabled) {
+	if az.UseMultipleStandardLoadBalancers() && isLocalService(service) {
 		az.localServiceNameToServiceInfoMap.Store(key, newServiceInfo(getServiceIPFamily(service), lbName))
 		// There are chances that the endpointslice changes after EnsureHostsInPool, so
 		// need to check endpointslice for a second time.
@@ -250,7 +250,7 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 		isOperationSucceeded = false
 	)
 
-	if az.azureResourceLocker != nil {
+	if !az.ServiceGatewayEnabled && az.azureResourceLocker != nil {
 		err = az.azureResourceLocker.Lock(ctx)
 		if err != nil {
 			logger.Error(err, "failed to lock azure resources")
@@ -1065,26 +1065,7 @@ func (az *Cloud) getServiceLoadBalancer(
 			Location:   &az.Location,
 			Properties: &armnetwork.LoadBalancerPropertiesFormat{},
 		}
-		if az.ServiceGatewayEnabled {
-			defaultLB.Properties = &armnetwork.LoadBalancerPropertiesFormat{
-				Scope: to.Ptr(armnetwork.LoadBalancerScopePublic),
-			}
-			// The per-service backend pool is only needed when ensuring the LB. On wantLb=false
-			// (deletion/existence check) skip it: getBackendPoolNameForSLBService rejects dual-stack,
-			// and that error would block cleanup of a rejected dual-stack service.
-			if wantLb {
-				backendPoolName, err := az.getBackendPoolNameForSLBService(service)
-				if err != nil {
-					return nil, existingLBs, nil, nil, false, false, fmt.Errorf("getServiceLoadBalancer: failed to get per-service backend pool name: %w", err)
-				}
-				defaultLB.Properties.BackendAddressPools = []*armnetwork.BackendAddressPool{
-					{Name: &backendPoolName},
-				}
-			}
-			defaultLB.SKU = &armnetwork.LoadBalancerSKU{
-				Name: to.Ptr(armnetwork.LoadBalancerSKUName(consts.LoadBalancerSKUNameService)),
-			}
-		} else if az.UseStandardLoadBalancer() {
+		if az.UseStandardLoadBalancer() {
 			defaultLB.SKU = &armnetwork.LoadBalancerSKU{
 				Name: to.Ptr(armnetwork.LoadBalancerSKUNameStandard),
 			}
