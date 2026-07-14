@@ -1987,6 +1987,7 @@ func TestGetPublicIPName(t *testing.T) {
 		svc             *v1.Service
 		pips            []*armnetwork.PublicIPAddress
 		isIPv6          bool
+		serviceGateway  bool
 		expectedPIPName string
 	}{
 		{
@@ -2076,6 +2077,22 @@ func TestGetPublicIPName(t *testing.T) {
 			isIPv6:          true,
 			expectedPIPName: "azure-auid-IPv6",
 		},
+		{
+			desc: "ServiceGateway uses engine PIP name even with a legacy PIP prefix annotation",
+			svc: &v1.Service{
+				ObjectMeta: meta.ObjectMeta{
+					UID: types.UID("UID"),
+					Annotations: map[string]string{
+						consts.ServiceAnnotationPIPPrefixIDDualStack[false]: "prefix-id",
+					},
+				},
+				Spec: v1.ServiceSpec{
+					IPFamilies: []v1.IPFamily{v1.IPv4Protocol},
+				},
+			},
+			serviceGateway:  true,
+			expectedPIPName: "uid-pip",
+		},
 	}
 
 	ctrl := gomock.NewController(t)
@@ -2083,6 +2100,7 @@ func TestGetPublicIPName(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
+			az.ServiceGatewayEnabled = tc.serviceGateway
 			name, err := az.getPublicIPName("azure", tc.svc, tc.isIPv6)
 			assert.Nil(t, err)
 			assert.Equal(t, tc.expectedPIPName, name)

@@ -984,16 +984,6 @@ func (az *Cloud) GetLocation() string {
 	return az.Location
 }
 
-// nodePrivateIPsForNode returns the cached private IPs of the given node.
-func (az *Cloud) nodePrivateIPsForNode(nodeName string) []string {
-	az.nodeCachesLock.RLock()
-	defer az.nodeCachesLock.RUnlock()
-	if set := az.nodePrivateIPs[strings.ToLower(nodeName)]; set != nil {
-		return set.UnsortedList()
-	}
-	return nil
-}
-
 // GetNodeResourceGroup gets resource group for given node.
 func (az *Cloud) GetNodeResourceGroup(nodeName string) (string, error) {
 	// Kubelet won't set az.nodeInformerSynced, always return configured resourceGroup.
