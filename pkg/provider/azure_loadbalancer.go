@@ -50,7 +50,6 @@ import (
 	providererrors "sigs.k8s.io/cloud-provider-azure/pkg/provider/errors"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/servicegateway/difftracker"
-
 	"sigs.k8s.io/cloud-provider-azure/pkg/trace"
 	"sigs.k8s.io/cloud-provider-azure/pkg/trace/attributes"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
@@ -305,7 +304,7 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 			return nil, err
 		}
 
-		inboundConfig := az.extractInboundConfigFromService(service)
+		inboundConfig := difftracker.ExtractInboundConfigFromService(service)
 		if inboundConfig == nil {
 			// A port-less Service has no PodIP backend; return current status unchanged.
 			return service.Status.LoadBalancer.DeepCopy(), nil
@@ -3254,7 +3253,6 @@ func (az *Cloud) getExpectedLBRules(
 	isIPv6 bool,
 ) ([]*armnetwork.Probe, []*armnetwork.LoadBalancingRule, error) {
 	logger := log.Background().WithName("getExpectedLBRules")
-
 	var expectedRules []*armnetwork.LoadBalancingRule
 	var expectedProbes []*armnetwork.Probe
 

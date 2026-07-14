@@ -375,6 +375,15 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 				previousES := oldObj.(*discovery_v1.EndpointSlice)
 				newES := newObj.(*discovery_v1.EndpointSlice)
 
+				var svcName string
+				if !az.ServiceGatewayEnabled {
+					svcName = getServiceNameOfEndpointSlice(newES)
+					if svcName == "" {
+						logger.V(4).Info("EndpointSlice does not have service name label, skip updating load balancer backend pool", "namespace", newES.Namespace, "name", newES.Name)
+						return
+					}
+				}
+
 				logger.V(4).Info("Detecting EndpointSlice update", "namespace", newES.Namespace, "name", newES.Name)
 				az.endpointSlicesCache.Store(strings.ToLower(fmt.Sprintf("%s/%s", newES.Namespace, newES.Name)), newES)
 
@@ -405,18 +414,13 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 					return
 				}
 
-				svcName := getServiceNameOfEndpointSlice(newES)
-				if svcName == "" {
-					logger.V(4).Info("EndpointSlice does not have service name label, skip updating load balancer backend pool", "namespace", newES.Namespace, "name", newES.Name)
-					return
-				}
-
 				key := strings.ToLower(fmt.Sprintf("%s/%s", newES.Namespace, svcName))
 				si, found := az.getLocalServiceInfo(key)
 				if !found {
 					logger.V(4).Info("EndpointSlice belongs to service, but the service is not a local service, or has not finished the initial reconciliation loop. Skip updating load balancer backend pool", "namespace", newES.Namespace, "name", newES.Name, "service", key)
 					return
 				}
+				lbName, ipFamily := si.lbName, si.ipFamily
 
 				var previousIPs, currentIPs []string
 				previousNodeNameSet := utilsets.NewString()
@@ -441,7 +445,6 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 				}
 
 				if az.backendPoolUpdater != nil {
-					lbName, ipFamily := si.lbName, si.ipFamily
 					var bpNames []string
 					bpNameIPv4 := getLocalServiceBackendPoolName(key, false)
 					bpNameIPv6 := getLocalServiceBackendPoolName(key, true)
