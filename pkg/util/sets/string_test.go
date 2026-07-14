@@ -446,3 +446,80 @@ func TestEquals(t *testing.T) {
 		})
 	}
 }
+
+func TestDifference(t *testing.T) {
+	tests := []struct {
+		name  string
+		s     *IgnoreCaseSet
+		other *IgnoreCaseSet
+		want  *IgnoreCaseSet
+	}{
+		{
+			name:  "disjoint sets",
+			s:     NewString("foo", "bar"),
+			other: NewString("baz"),
+			want:  NewString("foo", "bar"),
+		},
+		{
+			name:  "partial overlap",
+			s:     NewString("foo", "bar", "baz"),
+			other: NewString("bar"),
+			want:  NewString("foo", "baz"),
+		},
+		{
+			name:  "all removed",
+			s:     NewString("foo", "bar"),
+			other: NewString("foo", "bar"),
+			want:  NewString(),
+		},
+		{
+			name:  "case-insensitive",
+			s:     NewString("Foo", "BAR"),
+			other: NewString("foo"),
+			want:  NewString("bar"),
+		},
+		{
+			name:  "other empty",
+			s:     NewString("foo", "bar"),
+			other: NewString(),
+			want:  NewString("foo", "bar"),
+		},
+		{
+			name:  "s empty",
+			s:     NewString(),
+			other: NewString("foo"),
+			want:  NewString(),
+		},
+		{
+			name:  "other nil",
+			s:     NewString("foo"),
+			other: nil,
+			want:  NewString("foo"),
+		},
+		{
+			name:  "s nil",
+			s:     nil,
+			other: NewString("foo"),
+			want:  NewString(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.s.Difference(tt.other)
+			if !got.Equals(tt.want) {
+				t.Errorf("Difference() = %v, want %v", got.UnsortedList(), tt.want.UnsortedList())
+			}
+		})
+	}
+}
+
+func TestInsertOnUninitializedSet(t *testing.T) {
+	s := &IgnoreCaseSet{}
+	s.Insert("Foo", "BAR")
+	if !s.Has("foo") || !s.Has("bar") {
+		t.Errorf("Insert on uninitialized set should lazily initialize and add items, got %v", s.UnsortedList())
+	}
+	if s.Len() != 2 {
+		t.Errorf("expected len 2, got %d", s.Len())
+	}
+}

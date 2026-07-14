@@ -21,14 +21,17 @@ package difftracker
 
 import (
 	"context"
+	"net/netip"
 	"sync"
 
+	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/record"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 // Config holds the ServiceGateway resource coordinates the diff tracker initializes from.
@@ -54,6 +57,41 @@ type ServiceConfig struct {
 	Name          string
 }
 
+// NRPAddress holds the NRP-side service identities associated with a pod address.
+type NRPAddress struct {
+	Services *utilsets.IgnoreCaseSet
+}
+
+// NRPLocation groups the NRP-side pod addresses running on a node.
+type NRPLocation struct {
+	Addresses map[string]NRPAddress
+}
+
+// NRPState is the NRP-side state supplied to New by provider tests.
+type NRPState struct {
+	LoadBalancers *utilsets.IgnoreCaseSet
+	NATGateways   *utilsets.IgnoreCaseSet
+	Locations     map[string]NRPLocation
+}
+
+// Pod is the Kubernetes pod state supplied to New by provider tests.
+type Pod struct {
+	InboundIdentities      *utilsets.IgnoreCaseSet
+	PublicOutboundIdentity string
+}
+
+// Node is the Kubernetes node state supplied to New by provider tests.
+type Node struct {
+	Pods map[string]Pod
+}
+
+// K8sState is the Kubernetes-side state supplied to New by provider tests.
+type K8sState struct {
+	Services *utilsets.IgnoreCaseSet
+	Egresses *utilsets.IgnoreCaseSet
+	Nodes    map[string]Node
+}
+
 // InboundConfigValidationError reports an inbound Service spec the PodIP backend pool cannot
 // support. Reason is the Kubernetes Event reason the caller surfaces on the Service.
 type InboundConfigValidationError struct {
@@ -65,6 +103,11 @@ func (e *InboundConfigValidationError) Error() string { return e.Message }
 
 // DiffTracker reconciles Kubernetes service/endpoint state into ServiceGateway (NRP) state.
 type DiffTracker struct{}
+
+// New returns an empty API-surface tracker for shared provider tests.
+func New(_ logr.Logger, _ K8sState, _ NRPState, _ Config, _ azclient.ClientFactory, _ kubernetes.Interface) (*DiffTracker, error) {
+	return &DiffTracker{}, nil
+}
 
 // InitializeFromCluster builds a DiffTracker from current cluster and NRP state.
 func InitializeFromCluster(_ context.Context, _ Config, _ azclient.ClientFactory, _ kubernetes.Interface) (*DiffTracker, error) {
@@ -121,5 +164,17 @@ func NewInboundServiceConfig(uid string, inboundConfig *InboundConfig) ServiceCo
 	return ServiceConfig{UID: uid, IsInbound: true, InboundConfig: inboundConfig}
 }
 
-// SelectSameFamilyNodeIP returns the node IP matching the requested address family.
-func SelectSameFamilyNodeIP(_ []string, _ bool) (string, bool) { return "", false }
+// SelectSameFamilyNodeIP returns a deterministic, canonical node IP matching the requested family.
+func SelectSameFamilyNodeIP(nodeIPs []string, wantIPv6 bool) (string, bool) {
+	best := ""
+	for _, ip := range nodeIPs {
+		addr, err := netip.ParseAddr(ip)
+		if err != nil || addr.Is6() != wantIPv6 {
+			continue
+		}
+		if canonical := addr.String(); best == "" || canonical < best {
+			best = canonical
+		}
+	}
+	return best, best != ""
+}
