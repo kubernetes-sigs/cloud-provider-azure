@@ -85,21 +85,39 @@ python3 <SKILL_DIR>/scripts/fix_image_cves.py clean
 - `scan` runs `trivy image --detection-priority comprehensive --format json`
   and only records findings that include a non-empty `FixedVersion`.
 - Findings are classified as:
-  `GO_MODULE` for `Class="lang-pkgs"` and `Type="gobinary"`,
+  `GO_MODULE` for `Class="lang-pkgs"` and `Type="gobinary"`, except for the
+  `stdlib` and `toolchain` pseudo-packages,
+  `GO_TOOLCHAIN` for the `stdlib` and `toolchain` Go runtime pseudo-packages,
   `BASE_IMAGE` for `Class="os-pkgs"`,
   `OTHER` for everything else.
-- `plan` groups multiple GO_MODULE CVEs by module path and chooses the highest
-  `FixedVersion` across them. BASE_IMAGE findings are grouped into a
-  recommendation that requires an explicit `--base-image-target`.
-- `apply` updates Go modules in the selected module root, then mirrors the repo
-  CI behavior by discovering all tracked `go.mod` files and running
-  `go mod tidy` plus `go mod verify` in every module before `go mod vendor`.
+- GO_TOOLCHAIN findings are report-only because they require upgrading the Go
+  compiler or pinned builder image and rebuilding the affected image. They are
+  never passed to `go mod edit`, `go list -m`, or module verification.
+  `apply`, `verify`, and rescan also filter these pseudo-packages defensively
+  when reading a plan saved by an older version of the skill.
+- `plan` groups multiple GO_MODULE CVEs by module path, chooses the highest
+  `FixedVersion` as the minimum required version, and adds Go's required `v`
+  prefix when Trivy reports a digit-leading version. BASE_IMAGE findings are
+  grouped into a recommendation that requires an explicit
+  `--base-image-target`.
+- `apply` stages every unresolved Go module minimum for the same module root in
+  one `go mod edit` command, then lets `go mod tidy` resolve the complete module
+  graph using Minimal Version Selection. This avoids treating command-line
+  versions as conflicting exact `go get` requests. It then mirrors the repo CI
+  behavior by discovering all tracked `go.mod` files and running `go mod tidy`
+  plus `go mod verify` in every module before `go mod vendor`.
 - When vendoring is enabled at the repo root, `apply` also runs
   `hack/update-azure-vendor-licenses.sh` so `LICENSES/` stays in sync with
   `vendor/` and the resulting PR is self-contained.
-- `verify` does not assume a clean worktree. It compares the current repo diff
-  against the pre-existing changed files plus the files recorded during `apply`
-  so unrelated user edits do not trigger false failures.
+- `verify` accepts resolved and vendored Go module versions that are equal to or
+  higher than each planned minimum. It does not assume a clean worktree and
+  compares the current repo diff against the pre-existing changed files plus
+  the files recorded during `apply` so unrelated user edits do not trigger
+  false failures.
+- `apply` refuses planned Go modules with `replace` directives, and `verify`
+  fails resolved or vendored replacements. A replacement module's version does
+  not prove that the original module meets its CVE fix threshold; update or
+  remove the replacement explicitly before using this workflow.
 - The state file lives under `.git/fix-image-cves.json` intentionally so it
   stays untracked.
 - `verify --rescan` expects the agent to rebuild the image first. The skill

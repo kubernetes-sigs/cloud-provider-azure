@@ -31,6 +31,18 @@ from typing import Any
 STATE_FILE = Path(".git/fix-image-cves.json")
 STATE_VERSION = 1
 TRIVY_DB_STALE_SECONDS = 24 * 60 * 60
+GO_TOOLCHAIN_PACKAGES = {"stdlib", "toolchain"}
+GO_SEMVER_RE = re.compile(
+    r"^v"
+    r"(?P<major>0|[1-9]\d*)"
+    r"(?:\.(?P<minor>0|[1-9]\d*)"
+    r"(?:\.(?P<patch>0|[1-9]\d*)"
+    r"(?P<prerelease>-(?:(?:0|[1-9]\d*)|(?:[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))"
+    r"(?:\.(?:(?:0|[1-9]\d*)|(?:[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)))*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+    r")?)?"
+    r"$"
+)
 
 
 class CommandError(RuntimeError):
@@ -231,21 +243,151 @@ def version_key(value: str) -> list[tuple[int, Any]]:
     return key
 
 
+def normalize_go_version(value: str) -> str:
+    text = value.strip()
+    if text and text[0].isdigit():
+        return f"v{text}"
+    return text
+
+
+def is_go_toolchain_package(package: str) -> bool:
+    return package.strip() in GO_TOOLCHAIN_PACKAGES
+
+
+def actionable_go_module_actions(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        action
+        for action in plan.get("go_module_actions") or []
+        if not is_go_toolchain_package(str(action.get("module") or ""))
+    ]
+
+
+def actionable_vulnerability_keys(plan: dict[str, Any]) -> set[str]:
+    keys: set[str] = set()
+    for key in plan.get("planned_vulnerability_keys") or []:
+        parts = str(key).split("::", 2)
+        if (
+            len(parts) == 3
+            and parts[0] == "GO_MODULE"
+            and is_go_toolchain_package(parts[2])
+        ):
+            continue
+        keys.add(str(key))
+    return keys
+
+
+def compare_values(left: Any, right: Any) -> int:
+    if left == right:
+        return 0
+    return -1 if left < right else 1
+
+
+def parse_go_semver(value: str) -> tuple[int, int, int, str] | None:
+    match = GO_SEMVER_RE.match(normalize_go_version(value))
+    if not match:
+        return None
+    return (
+        int(match.group("major")),
+        int(match.group("minor") or "0"),
+        int(match.group("patch") or "0"),
+        match.group("prerelease") or "",
+    )
+
+
+def compare_prerelease(left: str, right: str) -> int:
+    if left == right:
+        return 0
+    if left == "":
+        return 1
+    if right == "":
+        return -1
+
+    left_parts = left[1:].split(".")
+    right_parts = right[1:].split(".")
+    for left_part, right_part in zip(left_parts, right_parts):
+        if left_part == right_part:
+            continue
+        left_is_num = left_part.isdigit()
+        right_is_num = right_part.isdigit()
+        if left_is_num and right_is_num:
+            return compare_values(int(left_part), int(right_part))
+        if left_is_num != right_is_num:
+            return -1 if left_is_num else 1
+        return compare_values(left_part, right_part)
+
+    return compare_values(len(left_parts), len(right_parts))
+
+
+def compare_fixed_versions(left: str, right: str) -> int:
+    left_semver = parse_go_semver(left)
+    right_semver = parse_go_semver(right)
+    if left_semver and right_semver:
+        for left_part, right_part in zip(left_semver[:3], right_semver[:3]):
+            compared = compare_values(left_part, right_part)
+            if compared != 0:
+                return compared
+        return compare_prerelease(left_semver[3], right_semver[3])
+    if left_semver:
+        return 1
+    if right_semver:
+        return -1
+
+    return compare_values(version_key(left), version_key(right))
+
+
 def highest_fixed_version(values: list[str]) -> str:
     candidates: list[str] = []
     for value in values:
-        candidates.extend(parse_fixed_version_candidates(value))
+        candidates.extend(normalize_go_version(item) for item in parse_fixed_version_candidates(value))
     if not candidates:
         raise CommandError("No fixed versions available to compare")
-    return max(candidates, key=version_key)
+    highest = candidates[0]
+    for candidate in candidates[1:]:
+        if compare_fixed_versions(candidate, highest) > 0:
+            highest = candidate
+    return highest
+
+
+def version_at_least(actual: str, minimum: str) -> bool:
+    normalized_actual = normalize_go_version(actual)
+    normalized_minimum = normalize_go_version(minimum)
+    if not normalized_actual or not normalized_minimum:
+        return False
+    return compare_fixed_versions(normalized_actual, normalized_minimum) >= 0
+
+
+def build_go_requirement_commands(
+    go_actions: list[dict[str, Any]],
+    resolved_versions: dict[tuple[str, str], str],
+) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, str]] = {}
+    for action in go_actions:
+        module_root = action["module_root"]
+        module = action["module"]
+        fixed_version = normalize_go_version(action["fixed_version"])
+        resolved_version = resolved_versions.get((module_root, module), "")
+        if version_at_least(resolved_version, fixed_version):
+            continue
+        versions = grouped.setdefault(module_root, {})
+        current = versions.get(module)
+        if current is None or compare_fixed_versions(fixed_version, current) > 0:
+            versions[module] = fixed_version
+
+    commands = []
+    for module_root, versions in sorted(grouped.items()):
+        requirements = [f"-require={module}@{versions[module]}" for module in sorted(versions)]
+        commands.append({"cwd": module_root, "cmd": ["go", "mod", "edit", *requirements]})
+    return commands
 
 
 def sanitize_dockerfile_stage(result: dict[str, Any]) -> str:
     return "runtime" if result.get("Class") == "os-pkgs" else "unknown"
 
 
-def classify_result(result: dict[str, Any]) -> str:
+def classify_result(result: dict[str, Any], package: str = "") -> str:
     if result.get("Class") == "lang-pkgs" and result.get("Type") == "gobinary":
+        if is_go_toolchain_package(package):
+            return "GO_TOOLCHAIN"
         return "GO_MODULE"
     if result.get("Class") == "os-pkgs":
         return "BASE_IMAGE"
@@ -275,7 +417,6 @@ def parse_scan_findings(
 ) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
     for result in payload.get("Results") or []:
-        classification = classify_result(result)
         target = str(result.get("Target") or "")
         class_name = str(result.get("Class") or "")
         type_name = str(result.get("Type") or "")
@@ -283,12 +424,13 @@ def parse_scan_findings(
             fixed_version = str(vuln.get("FixedVersion") or "").strip()
             if not fixed_version:
                 continue
+            package = str(vuln.get("PkgName") or "")
             finding = {
-                "category": classification,
+                "category": classify_result(result, package),
                 "class": class_name,
                 "type": type_name,
                 "target": target,
-                "package": str(vuln.get("PkgName") or ""),
+                "package": package,
                 "installed_version": str(vuln.get("InstalledVersion") or ""),
                 "fixed_version": fixed_version,
                 "id": str(vuln.get("VulnerabilityID") or ""),
@@ -303,12 +445,13 @@ def parse_scan_findings(
 
 
 def summarize_scan(findings: list[dict[str, Any]]) -> None:
-    counts = {"GO_MODULE": 0, "BASE_IMAGE": 0, "OTHER": 0}
+    counts = {"GO_MODULE": 0, "GO_TOOLCHAIN": 0, "BASE_IMAGE": 0, "OTHER": 0}
     for finding in findings:
         counts[finding["category"]] = counts.get(finding["category"], 0) + 1
     print("Scan Summary")
     print("============")
     print(f"GO_MODULE: {counts.get('GO_MODULE', 0)}")
+    print(f"GO_TOOLCHAIN: {counts.get('GO_TOOLCHAIN', 0)}")
     print(f"BASE_IMAGE: {counts.get('BASE_IMAGE', 0)}")
     print(f"OTHER: {counts.get('OTHER', 0)}")
     if not findings:
@@ -331,9 +474,13 @@ def build_plan(scan: dict[str, Any]) -> dict[str, Any]:
     base_groups: dict[tuple[str, str], dict[str, Any]] = {}
     other_findings: list[dict[str, Any]] = []
     evidence: list[dict[str, Any]] = []
+    planned_vulnerability_keys: set[str] = set()
 
     for finding in findings:
         category = finding["category"]
+        if category == "GO_MODULE" and is_go_toolchain_package(finding["package"]):
+            category = "GO_TOOLCHAIN"
+            finding = {**finding, "category": category}
         if category == "GO_MODULE":
             package = finding["package"]
             group = go_groups.setdefault(
@@ -360,6 +507,7 @@ def build_plan(scan: dict[str, Any]) -> dict[str, Any]:
                     "target_file": str(Path(finding["module_root"]) / "go.mod"),
                 }
             )
+            planned_vulnerability_keys.add(vuln_key(finding))
         elif category == "BASE_IMAGE":
             key = (finding["dockerfile"], finding["stage"])
             group = base_groups.setdefault(
@@ -392,6 +540,7 @@ def build_plan(scan: dict[str, Any]) -> dict[str, Any]:
                     "target_file": finding["dockerfile"],
                 }
             )
+            planned_vulnerability_keys.add(vuln_key(finding))
         else:
             other_findings.append(finding)
 
@@ -427,13 +576,7 @@ def build_plan(scan: dict[str, Any]) -> dict[str, Any]:
         "base_image_actions": base_actions,
         "other_findings": other_findings,
         "evidence": evidence,
-        "planned_vulnerability_keys": sorted(
-            {
-                vuln_key(finding)
-                for finding in findings
-                if finding["category"] in {"GO_MODULE", "BASE_IMAGE"}
-            }
-        ),
+        "planned_vulnerability_keys": sorted(planned_vulnerability_keys),
     }
 
 
@@ -441,6 +584,9 @@ def summarize_plan(plan: dict[str, Any]) -> None:
     go_actions = plan.get("go_module_actions") or []
     base_actions = plan.get("base_image_actions") or []
     other_findings = plan.get("other_findings") or []
+    toolchain_findings = [
+        finding for finding in other_findings if finding.get("category") == "GO_TOOLCHAIN"
+    ]
 
     print("Plan Summary")
     print("============")
@@ -464,6 +610,19 @@ def summarize_plan(plan: dict[str, Any]) -> None:
             print(
                 f"{action['dockerfile']} [{action['stage']}] "
                 f"packages={len(action['packages'])} requires --base-image-target"
+            )
+    if toolchain_findings:
+        print("")
+        print("Go Toolchain Findings (Manual Action Required)")
+        print("----------------------------------------------")
+        print(
+            "Upgrade the Go build toolchain or pinned builder image to an applicable fixed "
+            "Go release, then rebuild the image."
+        )
+        for finding in toolchain_findings:
+            print(
+                f"{finding['package']} {finding['installed_version']} -> "
+                f"{finding['fixed_version']} ({finding['id']})"
             )
 
 
@@ -570,29 +729,71 @@ def replace_dockerfile_from(repo_root: Path, dockerfile: str, stage: str, target
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def parse_vendor_modules(repo_root: Path) -> dict[str, str]:
+def parse_vendor_modules(repo_root: Path) -> dict[str, dict[str, str]]:
     path = repo_root / "vendor" / "modules.txt"
     if not path.is_file():
         return {}
-    modules: dict[str, str] = {}
+    modules: dict[str, dict[str, str]] = {}
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.startswith("# "):
             continue
         parts = line.split()
-        if len(parts) >= 3 and parts[2] != "=>":
-            modules[parts[1]] = parts[2]
+        if len(parts) < 2:
+            continue
+        module = parts[1]
+        index = 2
+        version = ""
+        if index < len(parts) and parts[index] != "=>":
+            version = parts[index]
+            index += 1
+        replacement_path = ""
+        replacement_version = ""
+        if index < len(parts) and parts[index] == "=>":
+            index += 1
+            if index < len(parts):
+                replacement_path = parts[index]
+                index += 1
+            if index < len(parts):
+                replacement_version = parts[index]
+        modules[module] = {
+            "path": module,
+            "version": version,
+            "replacement_path": replacement_path,
+            "replacement_version": replacement_version,
+        }
     return modules
 
 
-def go_list_module_version(module_dir: Path, module: str) -> str:
-    fmt = "{{if .Replace}}{{.Replace.Version}}{{else}}{{.Version}}{{end}}"
+def go_list_module_info(module_dir: Path, module: str) -> dict[str, str]:
     output = run(
-        ["go", "list", "-m", "-f", fmt, module],
+        ["go", "list", "-m", "-json", module],
         cwd=module_dir,
         capture=True,
         env=_go_env(),
     )
-    return output.strip()
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError as exc:
+        raise CommandError(f"go list returned invalid JSON for module {module}: {exc}") from exc
+    replacement = payload.get("Replace") or {}
+    return {
+        "path": str(payload.get("Path") or module),
+        "version": str(payload.get("Version") or ""),
+        "replacement_path": str(replacement.get("Path") or ""),
+        "replacement_version": str(replacement.get("Version") or ""),
+    }
+
+
+def require_unreplaced_module(module: str, module_info: dict[str, str]) -> None:
+    replacement = module_info["replacement_path"]
+    if not replacement:
+        return
+    if module_info["replacement_version"]:
+        replacement += f"@{module_info['replacement_version']}"
+    raise CommandError(
+        f"Cannot safely apply Go module minimum for {module}: "
+        f"the module is replaced by {replacement}. Update or remove the replacement explicitly."
+    )
 
 
 def normalize_path_set(values: list[str]) -> set[str]:
@@ -628,21 +829,30 @@ def vuln_key(finding: dict[str, Any]) -> str:
 def verify_go_module_actions(repo_root: Path, plan: dict[str, Any], results: dict[str, Any]) -> bool:
     ok = True
     vendor_versions = parse_vendor_modules(repo_root)
-    for action in plan.get("go_module_actions") or []:
+    for action in actionable_go_module_actions(plan):
         module_dir = abs_from_repo(repo_root, action["module_root"])
         module = action["module"]
-        expected = action["fixed_version"]
-        actual = go_list_module_version(module_dir, module)
+        minimum = normalize_go_version(action["fixed_version"])
+        module_info = go_list_module_info(module_dir, module)
+        replacement_path = module_info["replacement_path"]
+        actual = module_info["version"]
         item = {
             "module": module,
             "module_root": action["module_root"],
-            "expected_version": expected,
+            "expected_version": minimum,
             "resolved_version": actual,
-            "go_list_ok": actual == expected,
+            "replacement_path": replacement_path,
+            "replacement_version": module_info["replacement_version"],
+            "go_list_ok": not replacement_path and version_at_least(actual, minimum),
         }
         if has_vendor_tree(repo_root) and action["module_root"] == ".":
-            item["vendor_version"] = vendor_versions.get(module, "")
-            item["vendor_ok"] = item["vendor_version"] == expected
+            vendor_info = vendor_versions.get(module) or {}
+            item["vendor_version"] = vendor_info.get("version", "")
+            item["vendor_replacement_path"] = vendor_info.get("replacement_path", "")
+            item["vendor_replacement_version"] = vendor_info.get("replacement_version", "")
+            item["vendor_ok"] = not item["vendor_replacement_path"] and version_at_least(
+                item["vendor_version"], minimum
+            )
         results.setdefault("go_module_checks", []).append(item)
         if not item["go_list_ok"] or ("vendor_ok" in item and not item["vendor_ok"]):
             ok = False
@@ -799,7 +1009,7 @@ def command_apply(args: argparse.Namespace) -> int:
     if not plan or not scan:
         raise CommandError("State file must contain scan and plan results. Run scan and plan first.")
 
-    go_actions = plan.get("go_module_actions") or []
+    go_actions = actionable_go_module_actions(plan)
     base_actions = plan.get("base_image_actions") or []
     targets = parse_base_image_targets(args.base_image_target or [])
     preexisting_paths = git_status_paths(repo_root)
@@ -819,16 +1029,28 @@ def command_apply(args: argparse.Namespace) -> int:
         go_env = _go_env()
         _check_local_go_version(repo_root, go_env)
 
-    go_commands: list[dict[str, Any]] = []
+    resolved_versions: dict[tuple[str, str], str] = {}
     for action in go_actions:
-        module_dir = abs_from_repo(repo_root, action["module_root"])
-        cmd = ["go", "get", f"{action['module']}@{action['fixed_version']}"]
+        module_root = action["module_root"]
+        module = action["module"]
+        key = (module_root, module)
+        if key in resolved_versions:
+            continue
+        module_dir = abs_from_repo(repo_root, module_root)
+        module_info = go_list_module_info(module_dir, module)
+        require_unreplaced_module(module, module_info)
+        resolved_versions[key] = module_info["version"]
+
+    go_commands: list[dict[str, Any]] = []
+    for command in build_go_requirement_commands(go_actions, resolved_versions):
+        module_dir = abs_from_repo(repo_root, command["cwd"])
+        cmd = command["cmd"]
         if args.dry_run:
             print_cmd(cmd, cwd=module_dir)
         else:
-            info(f"Running {quote_cmd(cmd)} in {action['module_root']}")
+            info(f"Running {quote_cmd(cmd)} in {command['cwd']}")
             run(cmd, cwd=module_dir, env=go_env)
-        go_commands.append({"cwd": action["module_root"], "cmd": cmd})
+        go_commands.append(command)
 
     ran_module_consistency = False
     if go_actions:
@@ -948,7 +1170,7 @@ def command_verify(args: argparse.Namespace) -> int:
     if args.rescan:
         if not args.image:
             raise CommandError("--image is required when using --rescan")
-        planned_keys = set(plan.get("planned_vulnerability_keys") or [])
+        planned_keys = actionable_vulnerability_keys(plan)
         if not run_rescan(
             repo_root,
             image=args.image,
@@ -965,12 +1187,24 @@ def command_verify(args: argparse.Namespace) -> int:
     print("Verify Summary")
     print("==============")
     for item in results.get("go_module_checks", []):
+        replacement_note = ""
+        if item.get("replacement_path"):
+            replacement = item["replacement_path"]
+            if item.get("replacement_version"):
+                replacement += f"@{item['replacement_version']}"
+            replacement_note = f", replacement={replacement}"
         vendor_note = ""
         if "vendor_ok" in item:
             vendor_note = f", vendor_ok={item['vendor_ok']}"
+            if item.get("vendor_replacement_path"):
+                vendor_replacement = item["vendor_replacement_path"]
+                if item.get("vendor_replacement_version"):
+                    vendor_replacement += f"@{item['vendor_replacement_version']}"
+                vendor_note += f", vendor_replacement={vendor_replacement}"
         print(
-            f"{item['module']} expected={item['expected_version']} "
-            f"resolved={item['resolved_version']} go_list_ok={item['go_list_ok']}{vendor_note}"
+            f"{item['module']} minimum={item['expected_version']} "
+            f"resolved={item['resolved_version']} go_list_ok={item['go_list_ok']}"
+            f"{replacement_note}{vendor_note}"
         )
     if results.get("dockerfile_checks"):
         for item in results["dockerfile_checks"]:
