@@ -17,32 +17,11 @@ limitations under the License.
 package provider
 
 import (
-	"fmt"
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
-
-	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 func getServiceUID(service *v1.Service) string {
 	return strings.ToLower(string(service.UID))
-}
-
-func (az *Cloud) nodePrivateIPsForNode(nodeName string) []string {
-	az.nodeCachesLock.RLock()
-	defer az.nodeCachesLock.RUnlock()
-	if set := az.nodePrivateIPs[strings.ToLower(nodeName)]; set != nil {
-		return set.UnsortedList()
-	}
-	return nil
-}
-
-func (az *Cloud) GetServiceGatewayID() string {
-	return fmt.Sprintf(
-		"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/serviceGateways/%s",
-		az.SubscriptionID,
-		az.ResourceGroup,
-		consts.DefaultServiceGatewayResourceName,
-	)
 }
