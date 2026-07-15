@@ -21,6 +21,7 @@ package difftracker
 
 import (
 	"context"
+	"strings"
 
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
@@ -33,6 +34,21 @@ import (
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
+const publicIPNameSuffix = "-pip"
+
+// ServiceUID returns the canonical ServiceGateway identity for a Kubernetes Service.
+func ServiceUID(service *v1.Service) string {
+	if service == nil {
+		return ""
+	}
+	return strings.ToLower(string(service.UID))
+}
+
+// PublicIPName returns the Public IP resource name associated with a ServiceGateway identity.
+func PublicIPName(identity string) string {
+	return identity + publicIPNameSuffix
+}
+
 // Config holds the ServiceGateway resource coordinates the diff tracker initializes from.
 type Config struct {
 	SubscriptionID             string
@@ -41,18 +57,6 @@ type Config struct {
 	VNetName                   string
 	VNetResourceGroup          string
 	ServiceGatewayResourceName string
-}
-
-// InboundConfig is the resolved port/protocol shape of an inbound (LoadBalancer) Service.
-type InboundConfig struct{}
-
-// ServiceConfig is the desired-state descriptor the engine tracks for a single service.
-type ServiceConfig struct {
-	UID           string
-	IsInbound     bool
-	InboundConfig *InboundConfig
-	Namespace     string
-	Name          string
 }
 
 // NRPAddress holds the NRP-side service identities associated with a pod address.
@@ -90,14 +94,11 @@ type K8sState struct {
 	Nodes    map[string]Node
 }
 
-// InboundConfigValidationError reports an inbound Service spec the PodIP backend pool cannot
-// support. Reason is the Kubernetes Event reason the caller surfaces on the Service.
-type InboundConfigValidationError struct {
-	Reason  string
-	Message string
+// WarningEventError describes an error that the provider should surface as a Kubernetes warning Event.
+type WarningEventError interface {
+	error
+	WarningEvent() (reason, message string)
 }
-
-func (e *InboundConfigValidationError) Error() string { return e.Message }
 
 // DiffTracker reconciles Kubernetes service/endpoint state into ServiceGateway (NRP) state.
 type DiffTracker struct {
@@ -137,14 +138,11 @@ func (dt *DiffTracker) ReconcileNodeIPChange(_ string, _, _ []string) {}
 // IsServiceTracked reports whether the engine currently tracks the given service UID.
 func (dt *DiffTracker) IsServiceTracked(_ string) bool { return false }
 
-// AddService registers a new service for asynchronous creation.
-func (dt *DiffTracker) AddService(_ ServiceConfig) {}
+// ReconcileInboundService validates and submits a LoadBalancer Service to the engine.
+func (dt *DiffTracker) ReconcileInboundService(_ *v1.Service) error { return nil }
 
-// UpdateService propagates a desired-config change to an already-tracked service.
-func (dt *DiffTracker) UpdateService(_ ServiceConfig) {}
-
-// DeleteService queues asynchronous deletion of a service.
-func (dt *DiffTracker) DeleteService(_ string, _ bool, _ bool) {}
+// DeleteInboundService submits a LoadBalancer Service deletion to the engine.
+func (dt *DiffTracker) DeleteInboundService(_ *v1.Service) error { return nil }
 
 // UpdateEndpoints applies an inbound service's endpoint delta.
 func (dt *DiffTracker) UpdateEndpoints(_ string, _, _ map[string]string) {}
@@ -154,14 +152,3 @@ func RegisterMetrics() {}
 
 // RecordServiceGatewayEnabled marks ServiceGateway as enabled for the cluster.
 func RecordServiceGatewayEnabled() {}
-
-// ExtractInboundConfigFromService resolves an inbound Service's port/protocol configuration.
-func ExtractInboundConfigFromService(_ *v1.Service) *InboundConfig { return &InboundConfig{} }
-
-// ValidateInboundConfig rejects inbound Service specs the PodIP backend pool cannot support.
-func ValidateInboundConfig(_ *InboundConfig) error { return nil }
-
-// NewInboundServiceConfig builds a ServiceConfig for an inbound service.
-func NewInboundServiceConfig(uid string, inboundConfig *InboundConfig) ServiceConfig {
-	return ServiceConfig{UID: uid, IsInbound: true, InboundConfig: inboundConfig}
-}

@@ -123,7 +123,7 @@ func (az *Cloud) GetLoadBalancer(ctx context.Context, clusterName string, servic
 	// build rejection). Report it as existing so the service controller routes deletion through
 	// EnsureLoadBalancerDeleted -> difftracker.DeleteService, which removes our finalizer; otherwise
 	// the Service is stranded Terminating.
-	if az.ServiceGatewayEnabled && az.diffTracker != nil && az.diffTracker.IsServiceTracked(getServiceUID(service)) {
+	if az.ServiceGatewayEnabled && az.diffTracker != nil && az.diffTracker.IsServiceTracked(difftracker.ServiceUID(service)) {
 		logger.V(5).Info("ServiceGateway-tracked service has no Azure LB/PIP; reporting as existing so deletion is engine-driven")
 		return nil, true, nil
 	}
@@ -292,42 +292,15 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 		}
 	}()
 
-	// Use the engine for async service reconcile when ServiceGatewayEnabled.
+	// ServiceGateway owns its asynchronous Service reconciliation in the diff tracker.
 	if az.ServiceGatewayEnabled {
-		serviceUID := getServiceUID(service)
-		logger.V(2).Info("Using Engine for async service reconcile", "serviceUID", serviceUID)
-
-		// Internal load balancers are not supported; every ServiceGateway LB is public.
-		if requiresInternalLoadBalancer(service) {
-			err = fmt.Errorf("internal load balancer is not supported when ServiceGateway is enabled; remove the %q annotation", consts.ServiceAnnotationLoadBalancerInternal)
-			az.Event(service, v1.EventTypeWarning, "UnsupportedInternalLoadBalancer", err.Error())
-			return nil, err
-		}
-
-		inboundConfig := difftracker.ExtractInboundConfigFromService(service)
-		if inboundConfig == nil {
-			// A port-less Service has no PodIP backend; return current status unchanged.
-			return service.Status.LoadBalancer.DeepCopy(), nil
-		}
-
-		// Fail fast on unsupported specs and surface the reason on the Service.
-		if verr := difftracker.ValidateInboundConfig(inboundConfig); verr != nil {
-			var ve *difftracker.InboundConfigValidationError
-			if errors.As(verr, &ve) {
-				az.Event(service, v1.EventTypeWarning, ve.Reason, ve.Message)
+		if err = az.diffTracker.ReconcileInboundService(service); err != nil {
+			var warningErr difftracker.WarningEventError
+			if errors.As(err, &warningErr) {
+				reason, message := warningErr.WarningEvent()
+				az.Event(service, v1.EventTypeWarning, reason, message)
 			}
-			return nil, verr
-		}
-
-		config := difftracker.NewInboundServiceConfig(serviceUID, inboundConfig)
-		config.Namespace = service.Namespace
-		config.Name = service.Name
-
-		// Existing tracked service -> UpdateService; otherwise AddService creates the LB/PIP/SGW entry.
-		if az.diffTracker.IsServiceTracked(serviceUID) {
-			az.diffTracker.UpdateService(config)
-		} else {
-			az.diffTracker.AddService(config)
+			return nil, err
 		}
 
 		// Return the existing status so the service controller does not clear IPs recovered on restart.
@@ -494,11 +467,9 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 
 	// Use the engine for async service deletion; check early to avoid unnecessary Azure calls.
 	if az.ServiceGatewayEnabled {
-		serviceUID := getServiceUID(service)
-		logger.V(2).Info("Using Engine for async service deletion", "serviceUID", serviceUID)
-		az.diffTracker.DeleteService(serviceUID, true, false) // inbound service, not orphan
-		mc.ObserveOperationWithResult(true)
-		return nil
+		err = az.diffTracker.DeleteInboundService(service)
+		mc.ObserveOperationWithResult(err == nil)
+		return err
 	}
 
 	if az.azureResourceLocker != nil {
@@ -4456,10 +4427,6 @@ func (az *Cloud) getAzureLoadBalancerName(
 	wantLb bool,
 ) (string, error) {
 	logger := log.FromContextOrBackground(ctx).WithName("getAzureLoadBalancerName")
-	if az.ServiceGatewayEnabled {
-		// ServiceGateway uses the Service UID as the per-service LB name to avoid conflicts.
-		return getServiceUID(service), nil
-	}
 	if az.LoadBalancerName != "" {
 		clusterName = az.LoadBalancerName
 	}
