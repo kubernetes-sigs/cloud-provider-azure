@@ -21,7 +21,9 @@ package difftracker
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
@@ -31,7 +33,6 @@ import (
 	"k8s.io/client-go/tools/record"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
-	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 const publicIPNameSuffix = "-pip"
@@ -49,49 +50,14 @@ func PublicIPName(identity string) string {
 	return identity + publicIPNameSuffix
 }
 
-// Config holds the ServiceGateway resource coordinates the diff tracker initializes from.
-type Config struct {
-	SubscriptionID             string
-	ResourceGroup              string
-	Location                   string
-	VNetName                   string
-	VNetResourceGroup          string
-	ServiceGatewayResourceName string
-}
-
-// NRPAddress holds the NRP-side service identities associated with a pod address.
-type NRPAddress struct {
-	Services *utilsets.IgnoreCaseSet
-}
-
-// NRPLocation groups the NRP-side pod addresses running on a node.
-type NRPLocation struct {
-	Addresses map[string]NRPAddress
-}
-
-// NRPState is the NRP-side state supplied to New by provider tests.
-type NRPState struct {
-	LoadBalancers *utilsets.IgnoreCaseSet
-	NATGateways   *utilsets.IgnoreCaseSet
-	Locations     map[string]NRPLocation
-}
-
-// Pod is the Kubernetes pod state supplied to New by provider tests.
-type Pod struct {
-	InboundIdentities      *utilsets.IgnoreCaseSet
-	PublicOutboundIdentity string
-}
-
-// Node is the Kubernetes node state supplied to New by provider tests.
-type Node struct {
-	Pods map[string]Pod
-}
-
-// K8sState is the Kubernetes-side state supplied to New by provider tests.
-type K8sState struct {
-	Services *utilsets.IgnoreCaseSet
-	Egresses *utilsets.IgnoreCaseSet
-	Nodes    map[string]Node
+// ServiceGatewayResourceID returns the Azure resource ID for a ServiceGateway.
+func ServiceGatewayResourceID(subscriptionID, resourceGroup, name string) string {
+	return fmt.Sprintf(
+		"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/serviceGateways/%s",
+		subscriptionID,
+		resourceGroup,
+		name,
+	)
 }
 
 // WarningEventError describes an error that the provider should surface as a Kubernetes warning Event.
@@ -100,14 +66,67 @@ type WarningEventError interface {
 	WarningEvent() (reason, message string)
 }
 
-// DiffTracker reconciles Kubernetes service/endpoint state into ServiceGateway (NRP) state.
-type DiffTracker struct {
-	eventRecorder record.EventRecorder
+// New initializes the state container used by shared provider tests.
+func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkClientFactory azclient.ClientFactory, kubeClient kubernetes.Interface) (*DiffTracker, error) {
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("difftracker.New: %w", err)
+	}
+	if networkClientFactory == nil {
+		return nil, fmt.Errorf("difftracker.New: networkClientFactory must not be nil")
+	}
+	if kubeClient == nil {
+		return nil, fmt.Errorf("difftracker.New: kubeClient must not be nil")
+	}
+	if k8s.Services == nil {
+		return nil, fmt.Errorf("difftracker.New: k8s.Services must not be nil")
+	}
+	if k8s.Egresses == nil {
+		return nil, fmt.Errorf("difftracker.New: k8s.Egresses must not be nil")
+	}
+	if k8s.Nodes == nil {
+		return nil, fmt.Errorf("difftracker.New: k8s.Nodes must not be nil")
+	}
+	if nrp.LoadBalancers == nil {
+		return nil, fmt.Errorf("difftracker.New: nrp.LoadBalancers must not be nil")
+	}
+	if nrp.NATGateways == nil {
+		return nil, fmt.Errorf("difftracker.New: nrp.NATGateways must not be nil")
+	}
+	if nrp.Locations == nil {
+		return nil, fmt.Errorf("difftracker.New: nrp.Locations must not be nil")
+	}
+
+	diffTracker := &DiffTracker{
+		K8sResources:         k8s,
+		NRPResources:         nrp,
+		logger:               logger.WithName("difftracker"),
+		config:               config,
+		networkClientFactory: networkClientFactory,
+		kubeClient:           kubeClient,
+	}
+	for _, node := range k8s.Nodes {
+		for _, pod := range node.Pods {
+			diffTracker.incrementOutboundRefCount(pod.PublicOutboundIdentity)
+		}
+	}
+	return diffTracker, nil
 }
 
-// New returns an empty API-surface tracker for shared provider tests.
-func New(_ logr.Logger, _ K8sState, _ NRPState, _ Config, _ azclient.ClientFactory, _ kubernetes.Interface) (*DiffTracker, error) {
-	return &DiffTracker{}, nil
+func (dt *DiffTracker) lockWithLatency(method string) func() {
+	waitStart := time.Now()
+	dt.mu.Lock()
+	wait := time.Since(waitStart)
+	holdStart := time.Now()
+	return func() {
+		hold := time.Since(holdStart)
+		dt.mu.Unlock()
+		dt.logger.V(4).Info(
+			"DiffTracker state update latency",
+			"method", method,
+			"lockWaitMicros", wait.Microseconds(),
+			"lockHoldMicros", hold.Microseconds(),
+		)
+	}
 }
 
 // InitializeFromCluster builds a DiffTracker from current cluster and NRP state.
