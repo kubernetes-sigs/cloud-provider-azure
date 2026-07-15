@@ -508,213 +508,6 @@ func getTestEndpointSlice(name, namespace, svcName string, nodeNames ...string) 
 	}
 }
 
-func TestGetPodIPToNodeIPMapFromEndpointSlice_NodeCacheRace(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	az := GetTestCloud(ctrl)
-
-	const nodeName = "race-node"
-	node := &v1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: nodeName},
-		Status: v1.NodeStatus{Addresses: []v1.NodeAddress{
-			{Type: v1.NodeInternalIP, Address: "10.0.0.5"},
-		}},
-	}
-	es := getTestEndpointSlice("es-race", "default", "svc-race", nodeName)
-	es.AddressType = discovery_v1.AddressTypeIPv4
-
-	const iterations = 2000
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		for i := 0; i < iterations; i++ {
-			az.updateNodeCaches(nil, node)
-			az.updateNodeCaches(node, nil)
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		for i := 0; i < iterations; i++ {
-			_ = az.getPodIPToNodeIPMapFromEndpointSlice(es, false)
-		}
-	}()
-	wg.Wait()
-}
-
-func TestGetPodIPToNodeIPMapFromEndpointSlice_ReadinessFiltering(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	trueVal := true
-	falseVal := false
-
-	testCases := []struct {
-		name           string
-		endpointSlice  *discovery_v1.EndpointSlice
-		ipv6           bool
-		nodePrivateIPs map[string]*utilsets.IgnoreCaseSet
-		expectedResult map[string]string
-	}{
-		{
-			name: "Ready=true endpoints are included",
-			endpointSlice: &discovery_v1.EndpointSlice{
-				ObjectMeta:  metav1.ObjectMeta{Name: "eps1", Namespace: "default"},
-				AddressType: discovery_v1.AddressTypeIPv4,
-				Endpoints: []discovery_v1.Endpoint{{
-					Addresses:  []string{"10.0.0.1"},
-					NodeName:   ptr.To("node1"),
-					Conditions: discovery_v1.EndpointConditions{Ready: &trueVal},
-				}},
-			},
-			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{
-				"node1": utilsets.NewString("192.168.1.1"),
-			},
-			expectedResult: map[string]string{"10.0.0.1": "192.168.1.1"},
-		},
-		{
-			name: "Ready=false endpoints are filtered out",
-			endpointSlice: &discovery_v1.EndpointSlice{
-				ObjectMeta:  metav1.ObjectMeta{Name: "eps1", Namespace: "default"},
-				AddressType: discovery_v1.AddressTypeIPv4,
-				Endpoints: []discovery_v1.Endpoint{{
-					Addresses:  []string{"10.0.0.1"},
-					NodeName:   ptr.To("node1"),
-					Conditions: discovery_v1.EndpointConditions{Ready: &falseVal},
-				}},
-			},
-			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{
-				"node1": utilsets.NewString("192.168.1.1"),
-			},
-			expectedResult: map[string]string{},
-		},
-		{
-			name: "Ready=nil endpoints are included",
-			endpointSlice: &discovery_v1.EndpointSlice{
-				ObjectMeta:  metav1.ObjectMeta{Name: "eps1", Namespace: "default"},
-				AddressType: discovery_v1.AddressTypeIPv4,
-				Endpoints: []discovery_v1.Endpoint{{
-					Addresses:  []string{"10.0.0.1"},
-					NodeName:   ptr.To("node1"),
-					Conditions: discovery_v1.EndpointConditions{Ready: nil},
-				}},
-			},
-			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{
-				"node1": utilsets.NewString("192.168.1.1"),
-			},
-			expectedResult: map[string]string{"10.0.0.1": "192.168.1.1"},
-		},
-		{
-			name: "Mixed readiness states",
-			endpointSlice: &discovery_v1.EndpointSlice{
-				ObjectMeta:  metav1.ObjectMeta{Name: "eps1", Namespace: "default"},
-				AddressType: discovery_v1.AddressTypeIPv4,
-				Endpoints: []discovery_v1.Endpoint{
-					{Addresses: []string{"10.0.0.1"}, NodeName: ptr.To("node1"), Conditions: discovery_v1.EndpointConditions{Ready: &trueVal}},
-					{Addresses: []string{"10.0.0.2"}, NodeName: ptr.To("node2"), Conditions: discovery_v1.EndpointConditions{Ready: &falseVal}},
-					{Addresses: []string{"10.0.0.3"}, NodeName: ptr.To("node3"), Conditions: discovery_v1.EndpointConditions{Ready: nil}},
-					{Addresses: []string{"10.0.0.4"}, NodeName: ptr.To("node1"), Conditions: discovery_v1.EndpointConditions{Ready: &trueVal}},
-				},
-			},
-			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{
-				"node1": utilsets.NewString("192.168.1.1"),
-				"node2": utilsets.NewString("192.168.1.2"),
-				"node3": utilsets.NewString("192.168.1.3"),
-			},
-			expectedResult: map[string]string{
-				"10.0.0.1": "192.168.1.1",
-				"10.0.0.3": "192.168.1.3",
-				"10.0.0.4": "192.168.1.1",
-			},
-		},
-		{
-			name:           "Nil EndpointSlice returns empty map",
-			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{},
-			expectedResult: map[string]string{},
-		},
-		{
-			name: "IPv6 endpoints with Ready=true are included",
-			endpointSlice: &discovery_v1.EndpointSlice{
-				ObjectMeta:  metav1.ObjectMeta{Name: "eps1", Namespace: "default"},
-				AddressType: discovery_v1.AddressTypeIPv6,
-				Endpoints: []discovery_v1.Endpoint{{
-					Addresses:  []string{"fd00::1"},
-					NodeName:   ptr.To("node1"),
-					Conditions: discovery_v1.EndpointConditions{Ready: &trueVal},
-				}},
-			},
-			ipv6: true,
-			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{
-				"node1": utilsets.NewString("fd00::100"),
-			},
-			expectedResult: map[string]string{"fd00::1": "fd00::100"},
-		},
-		{
-			name: "Endpoint without NodeName is skipped",
-			endpointSlice: &discovery_v1.EndpointSlice{
-				ObjectMeta:  metav1.ObjectMeta{Name: "eps1", Namespace: "default"},
-				AddressType: discovery_v1.AddressTypeIPv4,
-				Endpoints: []discovery_v1.Endpoint{{
-					Addresses:  []string{"10.0.0.1"},
-					Conditions: discovery_v1.EndpointConditions{Ready: &trueVal},
-				}},
-			},
-			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{
-				"node1": utilsets.NewString("192.168.1.1"),
-			},
-			expectedResult: map[string]string{},
-		},
-		{
-			name: "Malformed addresses are skipped",
-			endpointSlice: &discovery_v1.EndpointSlice{
-				ObjectMeta:  metav1.ObjectMeta{Name: "eps1", Namespace: "default"},
-				AddressType: discovery_v1.AddressTypeIPv4,
-				Endpoints: []discovery_v1.Endpoint{{
-					Addresses:  []string{"10.0.0.1", "not-an-ip"},
-					NodeName:   ptr.To("node1"),
-					Conditions: discovery_v1.EndpointConditions{Ready: &trueVal},
-				}},
-			},
-			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{
-				"node1": utilsets.NewString("192.168.1.1"),
-			},
-			expectedResult: map[string]string{"10.0.0.1": "192.168.1.1"},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			cloud := GetTestCloud(ctrl)
-			cloud.nodePrivateIPs = tc.nodePrivateIPs
-			assert.Equal(t, tc.expectedResult, cloud.getPodIPToNodeIPMapFromEndpointSlice(tc.endpointSlice, tc.ipv6))
-		})
-	}
-}
-
-func TestGetPodIPToNodeIPMapFromEndpointSlice_CanonicalizesIPv6(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	trueVal := true
-	es := &discovery_v1.EndpointSlice{
-		ObjectMeta:  metav1.ObjectMeta{Name: "eps1", Namespace: "default"},
-		AddressType: discovery_v1.AddressTypeIPv6,
-		Endpoints: []discovery_v1.Endpoint{{
-			Addresses:  []string{"2001:DB8::0001"},
-			NodeName:   ptr.To("node1"),
-			Conditions: discovery_v1.EndpointConditions{Ready: &trueVal},
-		}},
-	}
-
-	cloud := GetTestCloud(ctrl)
-	cloud.nodePrivateIPs = map[string]*utilsets.IgnoreCaseSet{
-		"node1": utilsets.NewString("2001:DB8::00AB"),
-	}
-
-	assert.Equal(t, map[string]string{"2001:db8::1": "2001:db8::ab"},
-		cloud.getPodIPToNodeIPMapFromEndpointSlice(es, true))
-}
-
 func TestEndpointSlicesInformer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -899,7 +692,7 @@ func TestEndpointSlicesInformerDeduplicatesNodeIPs(t *testing.T) {
 	}
 }
 
-func TestServiceGatewayEndpointSliceUpdateWithoutLocalServiceInfo(t *testing.T) {
+func TestServiceGatewayEndpointSliceUpdateDoesNotUseProviderCache(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -934,14 +727,10 @@ func TestServiceGatewayEndpointSliceUpdateWithoutLocalServiceInfo(t *testing.T) 
 	_, err := client.DiscoveryV1().EndpointSlices("test").Update(context.Background(), updatedEPS, metav1.UpdateOptions{})
 	assert.NoError(t, err)
 
-	assert.Eventually(t, func() bool {
-		value, loaded := cloud.endpointSlicesCache.Load("test/eps-sgw")
-		if !loaded {
-			return false
-		}
-		es, ok := value.(*discovery_v1.EndpointSlice)
-		return ok && es.ResourceVersion == "2"
-	}, time.Second, 10*time.Millisecond)
+	assert.Never(t, func() bool {
+		_, loaded := cloud.endpointSlicesCache.Load("test/eps-sgw")
+		return loaded
+	}, 200*time.Millisecond, 10*time.Millisecond)
 }
 
 func TestGetBackendPoolNamesAndIDsForService(t *testing.T) {

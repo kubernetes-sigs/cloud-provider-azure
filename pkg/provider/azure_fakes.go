@@ -203,7 +203,6 @@ func GetTestCloudWithContainerLoadBalancer(ctrl *gomock.Controller) (az *Cloud) 
 		VNetName:                   az.VnetName,
 		VNetResourceGroup:          az.VnetResourceGroup,
 		ServiceGatewayResourceName: consts.DefaultServiceGatewayResourceName,
-		ServiceGatewayID:           az.GetServiceGatewayID(),
 	}
 	var err error
 	az.diffTracker, err = difftracker.New(

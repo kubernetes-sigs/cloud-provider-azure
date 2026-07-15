@@ -326,14 +326,8 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 		// Existing tracked service -> UpdateService; otherwise AddService creates the LB/PIP/SGW entry.
 		if az.diffTracker.IsServiceTracked(serviceUID) {
 			az.diffTracker.UpdateService(config)
-			// A type flip during an in-flight delete recreates without a slice event; re-seed endpoints.
-			if az.diffTracker.IsServiceRecreating(serviceUID) {
-				az.seedInboundEndpointsFromCache(serviceUID)
-			}
 		} else {
 			az.diffTracker.AddService(config)
-			// Seed current endpoints so a re-registered service without a slice event still gets its backend.
-			az.seedInboundEndpointsFromCache(serviceUID)
 		}
 
 		// Return the existing status so the service controller does not clear IPs recovered on restart.
