@@ -540,7 +540,6 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 				VNetName:                   az.VnetName,
 				VNetResourceGroup:          az.VnetResourceGroup,
 				ServiceGatewayResourceName: sgwName,
-				ServiceGatewayID:           az.GetServiceGatewayID(),
 			}
 			az.diffTracker, err = difftracker.InitializeFromCluster(ctx, dtConfig, az.NetworkClientFactory, az.KubeClient)
 			if err != nil {
@@ -548,11 +547,12 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 				return err
 			}
 
-			az.diffTracker.SetEndpointSlicesCache(&az.endpointSlicesCache)
-
-			// If SetInformers already ran, hand the existing lister to the difftracker now.
+			// If SetInformers already ran, hand the existing listers to the difftracker now.
 			if az.serviceLister != nil {
 				az.diffTracker.SetServiceLister(az.serviceLister)
+			}
+			if az.nodeLister != nil {
+				az.diffTracker.SetNodeLister(az.nodeLister)
 			}
 		}
 
@@ -820,6 +820,7 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 
 	if az.ServiceGatewayEnabled && az.diffTracker != nil {
 		az.diffTracker.SetServiceLister(az.serviceLister)
+		az.diffTracker.SetNodeLister(az.nodeLister)
 		az.diffTracker.SetUpPodInformer()
 	}
 }

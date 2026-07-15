@@ -21,11 +21,10 @@ package difftracker
 
 import (
 	"context"
-	"net/netip"
-	"sync"
 
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
+	discovery_v1 "k8s.io/api/discovery/v1"
 	"k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/record"
@@ -42,7 +41,6 @@ type Config struct {
 	VNetName                   string
 	VNetResourceGroup          string
 	ServiceGatewayResourceName string
-	ServiceGatewayID           string
 }
 
 // InboundConfig is the resolved port/protocol shape of an inbound (LoadBalancer) Service.
@@ -121,23 +119,23 @@ func (dt *DiffTracker) SetEventRecorder(recorder record.EventRecorder) {
 	dt.eventRecorder = recorder
 }
 
-// SetEndpointSlicesCache publishes the provider's shared EndpointSlice cache.
-func (dt *DiffTracker) SetEndpointSlicesCache(_ *sync.Map) {}
-
 // SetServiceLister publishes the provider's Service lister for cached UID resolution.
 func (dt *DiffTracker) SetServiceLister(_ corelisters.ServiceLister) {}
 
+// SetNodeLister publishes the provider's Node lister for cached InternalIP resolution.
+func (dt *DiffTracker) SetNodeLister(_ corelisters.NodeLister) {}
+
 // SetUpPodInformer starts the egress pod informer.
 func (dt *DiffTracker) SetUpPodInformer() {}
+
+// ReconcileEndpointSlice converts an EndpointSlice informer event into an endpoint delta.
+func (dt *DiffTracker) ReconcileEndpointSlice(_, _ *discovery_v1.EndpointSlice) {}
 
 // ReconcileNodeIPChange replays a node's endpoints when its InternalIP set changes.
 func (dt *DiffTracker) ReconcileNodeIPChange(_ string, _, _ []string) {}
 
 // IsServiceTracked reports whether the engine currently tracks the given service UID.
 func (dt *DiffTracker) IsServiceTracked(_ string) bool { return false }
-
-// IsServiceRecreating reports whether a service is being recreated after a deletion.
-func (dt *DiffTracker) IsServiceRecreating(_ string) bool { return false }
 
 // AddService registers a new service for asynchronous creation.
 func (dt *DiffTracker) AddService(_ ServiceConfig) {}
@@ -166,19 +164,4 @@ func ValidateInboundConfig(_ *InboundConfig) error { return nil }
 // NewInboundServiceConfig builds a ServiceConfig for an inbound service.
 func NewInboundServiceConfig(uid string, inboundConfig *InboundConfig) ServiceConfig {
 	return ServiceConfig{UID: uid, IsInbound: true, InboundConfig: inboundConfig}
-}
-
-// SelectSameFamilyNodeIP returns a deterministic, canonical node IP matching the requested family.
-func SelectSameFamilyNodeIP(nodeIPs []string, wantIPv6 bool) (string, bool) {
-	best := ""
-	for _, ip := range nodeIPs {
-		addr, err := netip.ParseAddr(ip)
-		if err != nil || addr.Is6() != wantIPv6 {
-			continue
-		}
-		if canonical := addr.String(); best == "" || canonical < best {
-			best = canonical
-		}
-	}
-	return best, best != ""
 }
