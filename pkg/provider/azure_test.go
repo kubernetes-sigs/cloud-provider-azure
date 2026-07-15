@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -40,6 +41,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	cloudprovider "k8s.io/cloud-provider"
 	cloudproviderapi "k8s.io/cloud-provider/api"
@@ -1694,6 +1696,65 @@ func TestProtocolTranslationUDP(t *testing.T) {
 	}
 }
 
+type trackingControllerClientBuilder struct {
+	cloudprovider.ControllerClientBuilder
+	client kubernetes.Interface
+	calls  int
+}
+
+func (b *trackingControllerClientBuilder) ClientOrDie(string) kubernetes.Interface {
+	b.calls++
+	return b.client
+}
+
+func serviceGatewayConfig() *providerconfig.Config {
+	return &providerconfig.Config{
+		ServiceGatewayEnabled:                    true,
+		LoadBalancerSKU:                          consts.LoadBalancerSKUService,
+		LoadBalancerBackendPoolConfigurationType: consts.LoadBalancerBackendPoolConfigurationTypePodIP,
+	}
+}
+
+func TestNewCloudPreinitializesKubeClientOnlyForServiceGatewayCCM(t *testing.T) {
+	t.Run("ServiceGateway CCM", func(t *testing.T) {
+		builder := &trackingControllerClientBuilder{client: fake.NewSimpleClientset()}
+		config := serviceGatewayConfig()
+		config.MultipleStandardLoadBalancerConfigurations = []providerconfig.MultipleStandardLoadBalancerConfiguration{{}}
+
+		_, err := NewCloud(context.Background(), builder, config, true)
+
+		assert.ErrorContains(t, err, "mutually exclusive")
+		assert.Equal(t, 1, builder.calls)
+	})
+
+	t.Run("non-ServiceGateway CCM", func(t *testing.T) {
+		builder := &trackingControllerClientBuilder{client: fake.NewSimpleClientset()}
+		config := &providerconfig.Config{LoadBalancerBackendPoolConfigurationType: "invalid"}
+
+		_, err := NewCloud(context.Background(), builder, config, true)
+
+		assert.ErrorContains(t, err, "is not supported")
+		assert.Zero(t, builder.calls)
+	})
+
+	t.Run("ServiceGateway non-CCM", func(t *testing.T) {
+		builder := &trackingControllerClientBuilder{client: fake.NewSimpleClientset()}
+		config := serviceGatewayConfig()
+		config.MultipleStandardLoadBalancerConfigurations = []providerconfig.MultipleStandardLoadBalancerConfiguration{{}}
+
+		_, err := NewCloud(context.Background(), builder, config, false)
+
+		assert.ErrorContains(t, err, "mutually exclusive")
+		assert.Zero(t, builder.calls)
+	})
+
+	t.Run("ServiceGateway CCM requires builder", func(t *testing.T) {
+		_, err := NewCloud(context.Background(), nil, serviceGatewayConfig(), true)
+
+		assert.EqualError(t, err, "NewCloud: ServiceGateway requires a clientBuilder")
+	})
+}
+
 // Test Configuration deserialization (json)
 func TestNewCloudFromJSON(t *testing.T) {
 	// Fake values for testing.
@@ -2437,6 +2498,22 @@ func TestGetActiveZones(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestInitializePublishesServiceGatewayDependencies(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	az := GetTestCloudWithContainerLoadBalancer(ctrl)
+	kubeClient := az.KubeClient
+	az.diffTracker.SetEventRecorder(nil)
+
+	az.Initialize(nil, nil)
+	t.Cleanup(az.eventBroadcaster.Shutdown)
+
+	assert.Same(t, kubeClient, az.KubeClient, "Initialize must preserve the client retained by the difftracker")
+
+	recorder := reflect.ValueOf(az.diffTracker).Elem().FieldByName("eventRecorder")
+	assert.True(t, recorder.IsValid(), "difftracker must retain its event recorder dependency")
+	assert.False(t, recorder.IsNil(), "Initialize must publish the event recorder to the difftracker")
+}
+
 func TestInitializeCloudFromConfig(t *testing.T) {
 
 	t.Run("cannot initialize from nil config", func(t *testing.T) {
@@ -2461,6 +2538,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 			DisableAvailabilitySetNodes: true,
 			VMType:                      consts.VMTypeStandard,
 		}
+
 		err := az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, true)
 		expectedErr := fmt.Errorf("disableAvailabilitySetNodes true is only supported when vmType is 'vmss'")
 		assert.Equal(t, expectedErr, err)
