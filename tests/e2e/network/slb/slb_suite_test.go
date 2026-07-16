@@ -1,0 +1,600 @@
+/*
+Copyright 2025 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package network
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
+)
+
+// Environment variable names for SLB configuration
+const (
+	slbTestLabel = "SLB"
+
+	// Environment variable names
+	envServiceGatewayName       = "AZURE_SERVICE_GATEWAY_NAME"
+	envServiceGatewayAPIVersion = "AZURE_SERVICE_GATEWAY_API_VERSION"
+
+	// Default values.
+	// NOTE: as of commit 33dcfb27 the SGW resource name is hardcoded in the cloud
+	// provider to consts.DefaultServiceGatewayResourceName ("servicegateway").
+	// Override via AZURE_SERVICE_GATEWAY_NAME only if your cluster predates that change.
+	defaultServiceGatewayName = "servicegateway"
+	defaultAPIVersion         = "2025-01-01"
+)
+
+// Package-level variables populated from environment or AzureTestClient
+var (
+	subscriptionID     string
+	resourceGroupName  string
+	serviceGatewayName string
+	apiVersion         string
+)
+
+// initSLBConfig initializes the SLB test configuration from environment variables
+// and AzureTestClient. This should be called in BeforeSuite.
+func initSLBConfig() error {
+	// Try to get subscription and resource group from AzureTestClient
+	tc, err := utils.CreateAzureTestClient()
+	if err != nil {
+		return fmt.Errorf("failed to create AzureTestClient: %w", err)
+	}
+
+	subscriptionID = tc.GetSubscriptionID()
+	resourceGroupName = tc.GetResourceGroup()
+
+	// Get SLB-specific config from environment with defaults
+	serviceGatewayName = os.Getenv(envServiceGatewayName)
+	if serviceGatewayName == "" {
+		serviceGatewayName = defaultServiceGatewayName
+	}
+
+	apiVersion = os.Getenv(envServiceGatewayAPIVersion)
+	if apiVersion == "" {
+		apiVersion = defaultAPIVersion
+	}
+
+	utils.Logf("SLB Test Configuration:")
+	utils.Logf("  Subscription ID: %s", subscriptionID)
+	utils.Logf("  Resource Group: %s", resourceGroupName)
+	utils.Logf("  Service Gateway: %s", serviceGatewayName)
+	utils.Logf("  API Version: %s", apiVersion)
+
+	return nil
+}
+
+// AzurePublicIP represents a Public IP resource in Azure
+type AzurePublicIP struct {
+	Name      string            `json:"name"`
+	IPAddress string            `json:"ipAddress"`
+	Tags      map[string]string `json:"tags"`
+	ID        string            `json:"id"`
+	Location  string            `json:"location"`
+}
+
+// AzureLoadBalancer represents a Load Balancer resource in Azure
+type AzureLoadBalancer struct {
+	Name     string `json:"name"`
+	ID       string `json:"id"`
+	Location string `json:"location"`
+	SKU      struct {
+		Name string `json:"name"`
+	} `json:"sku"`
+	// Azure CLI returns these at root level, not under "properties"
+	FrontendIPConfigurations []struct {
+		Name string `json:"name"`
+		// publicIPAddress is at root level in Azure CLI JSON
+		PublicIPAddress struct {
+			ID string `json:"id"`
+		} `json:"publicIPAddress"`
+	} `json:"frontendIPConfigurations"`
+	LoadBalancingRules []struct {
+		Name string `json:"name"`
+	} `json:"loadBalancingRules"`
+	BackendAddressPools []struct {
+		Name string `json:"name"`
+		ID   string `json:"id"`
+	} `json:"backendAddressPools"`
+}
+
+// ServiceGatewayServicesResponse represents the response from Service Gateway services API
+type ServiceGatewayServicesResponse struct {
+	Value []ServiceGatewayService `json:"value"`
+}
+
+// ServiceGatewayService represents a service in the Service Gateway
+type ServiceGatewayService struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	Etag       string `json:"etag"`
+	Properties struct {
+		ProvisioningState        string `json:"provisioningState"`
+		ServiceType              string `json:"serviceType"`
+		IsDefault                bool   `json:"isDefault,omitempty"`
+		PublicNatGatewayID       string `json:"publicNatGatewayId,omitempty"`
+		LoadBalancerBackendPools []struct {
+			ID string `json:"id"`
+		} `json:"loadBalancerBackendPools"`
+	} `json:"properties"`
+}
+
+// ServiceGatewayAddressLocationsResponse represents the response from Service Gateway address locations API
+type ServiceGatewayAddressLocationsResponse struct {
+	Value []ServiceGatewayAddressLocation `json:"value"`
+}
+
+// ServiceGatewayAddressLocation represents an address location in the Service Gateway
+type ServiceGatewayAddressLocation struct {
+	AddressLocation     string    `json:"addressLocation"`
+	AddressUpdateAction string    `json:"addressUpdateAction"`
+	Addresses           []Address `json:"addresses"`
+}
+
+// Address represents an IP address and its associated services
+type Address struct {
+	Address  string   `json:"address"`
+	Services []string `json:"services"`
+}
+
+// Helper functions for SLB tests
+
+// ensureSLBConfigInitialized ensures the SLB config is initialized.
+// This should be called before using any SLB config variables.
+func ensureSLBConfigInitialized() {
+	// Try to get subscription and resource group from environment first
+	if subscriptionID == "" {
+		subscriptionID = os.Getenv("AZURE_SUBSCRIPTION_ID")
+	}
+	if resourceGroupName == "" {
+		resourceGroupName = os.Getenv("AZURE_RESOURCE_GROUP")
+	}
+
+	// Initialize subscription and resource group from AzureTestClient if not set
+	if subscriptionID == "" || resourceGroupName == "" {
+		tc, err := utils.CreateAzureTestClient()
+		if err == nil {
+			if subscriptionID == "" {
+				subscriptionID = tc.GetSubscriptionID()
+			}
+			if resourceGroupName == "" {
+				resourceGroupName = tc.GetResourceGroup()
+			}
+		} else {
+			utils.Logf("Warning: Could not create AzureTestClient: %v", err)
+		}
+	}
+
+	// Initialize Service Gateway config from environment with defaults
+	if serviceGatewayName == "" {
+		serviceGatewayName = os.Getenv(envServiceGatewayName)
+		if serviceGatewayName == "" {
+			serviceGatewayName = defaultServiceGatewayName
+		}
+	}
+	if apiVersion == "" {
+		apiVersion = os.Getenv(envServiceGatewayAPIVersion)
+		if apiVersion == "" {
+			apiVersion = defaultAPIVersion
+		}
+	}
+
+	utils.Logf("SLB Config: SubscriptionID=%s, ResourceGroup=%s, ServiceGateway=%s, APIVersion=%s",
+		subscriptionID, resourceGroupName, serviceGatewayName, apiVersion)
+}
+
+// buildServiceGatewayURL constructs the Service Gateway API URL for a given path
+func buildServiceGatewayURL(path string) string {
+	ensureSLBConfigInitialized()
+	return fmt.Sprintf(
+		"https://management.azure.com/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/serviceGateways/%s/%s?api-version=%s",
+		subscriptionID, resourceGroupName, serviceGatewayName, path, apiVersion,
+	)
+}
+
+// queryServiceGatewayServices queries all services in the Service Gateway
+func queryServiceGatewayServices() (ServiceGatewayServicesResponse, error) {
+	url := buildServiceGatewayURL("services")
+	cmd := exec.Command("az", "rest", "--method", "get", "--url", url)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return ServiceGatewayServicesResponse{}, fmt.Errorf("failed to query Service Gateway services: %w, output: %s", err, string(output))
+	}
+
+	var response ServiceGatewayServicesResponse
+	if err := json.Unmarshal(output, &response); err != nil {
+		return ServiceGatewayServicesResponse{}, fmt.Errorf("failed to parse Service Gateway services response: %w", err)
+	}
+
+	return response, nil
+}
+
+// queryServiceGatewayAddressLocations queries all address locations in the Service Gateway
+func queryServiceGatewayAddressLocations() (ServiceGatewayAddressLocationsResponse, error) {
+	url := buildServiceGatewayURL("addressLocations")
+	cmd := exec.Command("az", "rest", "--method", "get", "--url", url)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return ServiceGatewayAddressLocationsResponse{}, fmt.Errorf("failed to query Service Gateway address locations: %w, output: %s", err, string(output))
+	}
+
+	var response ServiceGatewayAddressLocationsResponse
+	if err := json.Unmarshal(output, &response); err != nil {
+		return ServiceGatewayAddressLocationsResponse{}, fmt.Errorf("failed to parse Service Gateway address locations response: %w", err)
+	}
+
+	return response, nil
+}
+
+// verifyServiceGatewayCleanup verifies that only the default outbound service remains in the Service Gateway
+func verifyServiceGatewayCleanup() {
+	utils.Logf("Verifying Service Gateway services only contain default outbound service")
+
+	sgResponse, err := queryServiceGatewayServices()
+	Expect(err).NotTo(HaveOccurred(), "Should be able to query Service Gateway services after cleanup")
+
+	utils.Logf("Found %d service(s) in Service Gateway after cleanup", len(sgResponse.Value))
+	for i := range sgResponse.Value {
+		svc := &sgResponse.Value[i]
+		utils.Logf("  Service: %s (Type: %s)", svc.Name, svc.Properties.ServiceType)
+
+		if svc.Name != "default-natgw" {
+			Fail(fmt.Sprintf("Unexpected service '%s' still exists in Service Gateway after cleanup", svc.Name))
+		}
+		Expect(svc.Properties.ServiceType).To(Equal("Outbound"), "Service should be the default outbound service")
+	}
+	utils.Logf("  ✓ Only default outbound service remains in Service Gateway")
+}
+
+// verifyAddressLocationsCleanup verifies that no addresses reference any services in the Service Gateway
+func verifyAddressLocationsCleanup() {
+	utils.Logf("Verifying Service Gateway address locations are empty")
+
+	alResponse, err := queryServiceGatewayAddressLocations()
+	Expect(err).NotTo(HaveOccurred(), "Should be able to query Service Gateway address locations after cleanup")
+
+	utils.Logf("Found %d address location(s) in Service Gateway after cleanup", len(alResponse.Value))
+	for _, location := range alResponse.Value {
+		utils.Logf("  Address Location: %s with %d addresses", location.AddressLocation, len(location.Addresses))
+
+		for _, addr := range location.Addresses {
+			if len(addr.Services) > 0 {
+				Fail(fmt.Sprintf("Address %s in location %s still has %d service reference(s) after cleanup",
+					addr.Address, location.AddressLocation, len(addr.Services)))
+			}
+		}
+	}
+	utils.Logf("  ✓ No addresses reference any services in Service Gateway")
+}
+
+// verifyNATGatewayCleanup verifies that test-created NAT Gateways are cleaned up
+func verifyNATGatewayCleanup(egressNames []string) {
+	if len(egressNames) == 0 {
+		return // No egress gateways to verify
+	}
+
+	utils.Logf("Verifying NAT Gateway cleanup for %d egress gateway(s)", len(egressNames))
+
+	sgResponse, err := queryServiceGatewayServices()
+	Expect(err).NotTo(HaveOccurred(), "Should be able to query Service Gateway services")
+
+	for _, egressName := range egressNames {
+		found := false
+		for _, svc := range sgResponse.Value {
+			if svc.Properties.ServiceType == "Outbound" && svc.Name == egressName {
+				found = true
+				Fail(fmt.Sprintf("Outbound service '%s' still exists in Service Gateway after cleanup", egressName))
+			}
+		}
+		if !found {
+			utils.Logf("  ✓ Outbound service '%s' cleaned up", egressName)
+		}
+	}
+}
+
+// serviceGatewayCleanupErr returns nil only when the Service Gateway contains just the
+// default outbound service (i.e. all test services have been cleaned up). It is the
+// error-returning core used to poll for cleanup via Eventually, so a spec waits exactly
+// as long as Azure actually needs instead of a fixed, conservative sleep.
+func serviceGatewayCleanupErr() error {
+	sgResponse, err := queryServiceGatewayServices()
+	if err != nil {
+		return fmt.Errorf("query Service Gateway services: %w", err)
+	}
+	for i := range sgResponse.Value {
+		svc := &sgResponse.Value[i]
+		if svc.Name != "default-natgw" {
+			return fmt.Errorf("unexpected service %q (type %s) still exists in Service Gateway after cleanup", svc.Name, svc.Properties.ServiceType)
+		}
+	}
+	return nil
+}
+
+// addressLocationsCleanupErr returns nil only when no address in the Service Gateway still
+// references a service. Error-returning core for polling address-location cleanup.
+func addressLocationsCleanupErr() error {
+	alResponse, err := queryServiceGatewayAddressLocations()
+	if err != nil {
+		return fmt.Errorf("query Service Gateway address locations: %w", err)
+	}
+	for _, location := range alResponse.Value {
+		for _, addr := range location.Addresses {
+			if len(addr.Services) > 0 {
+				return fmt.Errorf("address %s in location %s still has %d service reference(s) after cleanup",
+					addr.Address, location.AddressLocation, len(addr.Services))
+			}
+		}
+	}
+	return nil
+}
+
+// natGatewayCleanupErr returns nil only when none of the named egress (outbound) services
+// remain in the Service Gateway. Error-returning core for polling NAT Gateway cleanup.
+func natGatewayCleanupErr(egressNames []string) error {
+	if len(egressNames) == 0 {
+		return nil
+	}
+	sgResponse, err := queryServiceGatewayServices()
+	if err != nil {
+		return fmt.Errorf("query Service Gateway services: %w", err)
+	}
+	for _, egressName := range egressNames {
+		for _, svc := range sgResponse.Value {
+			if svc.Properties.ServiceType == "Outbound" && svc.Name == egressName {
+				return fmt.Errorf("outbound service %q still exists in Service Gateway after cleanup", egressName)
+			}
+		}
+	}
+	return nil
+}
+
+// verifyAzureResources verifies Public IP, Load Balancer, and Service Gateway for a given service
+func verifyAzureResources(serviceUID string) error {
+	publicIPName := fmt.Sprintf("%s-pip", serviceUID)
+	loadBalancerName := serviceUID
+
+	// Verify Public IP in Azure
+	pipCmd := exec.Command("az", "network", "public-ip", "list",
+		"--resource-group", resourceGroupName,
+		"--output", "json")
+	pipOutput, err := pipCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to query Azure for Public IPs: %w", err)
+	}
+
+	var publicIPs []AzurePublicIP
+	if err := json.Unmarshal(pipOutput, &publicIPs); err != nil {
+		return fmt.Errorf("failed to parse Public IP JSON: %w", err)
+	}
+
+	var servicePublicIP *AzurePublicIP
+	for i := range publicIPs {
+		if publicIPs[i].Name == publicIPName {
+			servicePublicIP = &publicIPs[i]
+			break
+		}
+	}
+	if servicePublicIP == nil {
+		return fmt.Errorf("public IP not found: %s", publicIPName)
+	}
+
+	// Verify Load Balancer in Azure
+	lbCmd := exec.Command("az", "network", "lb", "show",
+		"--resource-group", resourceGroupName,
+		"--name", loadBalancerName,
+		"--output", "json")
+	lbOutput, err := lbCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to query Azure for Load Balancer: %w", err)
+	}
+
+	var serviceLB AzureLoadBalancer
+	if err := json.Unmarshal(lbOutput, &serviceLB); err != nil {
+		return fmt.Errorf("failed to parse Load Balancer JSON: %w", err)
+	}
+
+	if serviceLB.SKU.Name != "Service" {
+		return fmt.Errorf("load Balancer SKU should be 'Service', got '%s'", serviceLB.SKU.Name)
+	}
+
+	// Verify Load Balancer has backend address pools
+	if len(serviceLB.BackendAddressPools) == 0 {
+		return fmt.Errorf("load Balancer %s has no backend address pools", loadBalancerName)
+	}
+
+	// Verify Service Gateway has this service
+	sgResponse, err := queryServiceGatewayServices()
+	if err != nil {
+		return fmt.Errorf("failed to query Service Gateway services: %w", err)
+	}
+
+	var foundService bool
+	for _, sgSvc := range sgResponse.Value {
+		if sgSvc.Name == serviceUID {
+			foundService = true
+			break
+		}
+	}
+	if !foundService {
+		return fmt.Errorf("service %s not found in Service Gateway", serviceUID)
+	}
+
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Shared polling helpers
+//
+// These wrap the common "wait until Azure and the Service Gateway converge"
+// checks behind error-returning predicates (suitable for Eventually) and thin
+// Eventually wrappers. They let specs poll for convergence instead of sleeping a
+// fixed, conservative amount of time, which is both faster and far less flaky.
+//
+// Predicates (return nil on success) are composable inside a caller's own
+// Eventually loop (e.g. when polling several services at once); the eventually*
+// wrappers are convenience one-liners for the common single-resource case.
+// ---------------------------------------------------------------------------
+
+// defaultPollInterval is the polling cadence used by the eventually* wrappers.
+const defaultPollInterval = 10 * time.Second
+
+// countRegisteredEndpoints returns the number of Service Gateway address-location
+// entries that reference the given service/egress identifier (its registered pod
+// IP count). It works for both inbound services and outbound egress, since both
+// are referenced by identifier in an address's Services list.
+func countRegisteredEndpoints(serviceID string) (int, error) {
+	alResponse, err := queryServiceGatewayAddressLocations()
+	if err != nil {
+		return 0, fmt.Errorf("query Service Gateway address locations: %w", err)
+	}
+	count := 0
+	for _, location := range alResponse.Value {
+		for _, addr := range location.Addresses {
+			for _, svc := range addr.Services {
+				if svc == serviceID {
+					count++
+				}
+			}
+		}
+	}
+	return count, nil
+}
+
+// serviceReconciledErr returns nil once the inbound service's Azure resources exist
+// (PIP, LB with SKU=Service and a backend pool, and a Service Gateway entry) and,
+// when wantEndpoints >= 0, exactly wantEndpoints pod IPs are registered for it. Pass
+// a negative wantEndpoints to skip the endpoint-count assertion.
+func serviceReconciledErr(serviceUID string, wantEndpoints int) error {
+	if err := verifyAzureResources(serviceUID); err != nil {
+		return err
+	}
+	if wantEndpoints < 0 {
+		return nil
+	}
+	got, err := countRegisteredEndpoints(serviceUID)
+	if err != nil {
+		return err
+	}
+	if got != wantEndpoints {
+		return fmt.Errorf("service %s has %d registered endpoints, want %d", serviceUID, got, wantEndpoints)
+	}
+	return nil
+}
+
+// serviceDeletedErr returns nil once the inbound service is gone from the Service
+// Gateway and no address location still references it.
+func serviceDeletedErr(serviceUID string) error {
+	sgResponse, err := queryServiceGatewayServices()
+	if err != nil {
+		return fmt.Errorf("query Service Gateway services: %w", err)
+	}
+	for _, svc := range sgResponse.Value {
+		if svc.Name == serviceUID {
+			return fmt.Errorf("service %s still registered in Service Gateway", serviceUID)
+		}
+	}
+	got, err := countRegisteredEndpoints(serviceUID)
+	if err != nil {
+		return err
+	}
+	if got > 0 {
+		return fmt.Errorf("service %s still has %d registered endpoint(s)", serviceUID, got)
+	}
+	return nil
+}
+
+// egressRegisteredErr returns nil once the named egress (outbound) service exists in
+// the Service Gateway with a NAT Gateway and, when wantPods >= 0, exactly wantPods pod
+// IPs registered for it. Pass a negative wantPods to skip the pod-count assertion.
+func egressRegisteredErr(egressName string, wantPods int) error {
+	sgResponse, err := queryServiceGatewayServices()
+	if err != nil {
+		return fmt.Errorf("query Service Gateway services: %w", err)
+	}
+	found := false
+	for _, svc := range sgResponse.Value {
+		if svc.Properties.ServiceType == "Outbound" && svc.Name == egressName {
+			found = true
+			if svc.Properties.PublicNatGatewayID == "" {
+				return fmt.Errorf("egress %s has no NAT Gateway ID yet", egressName)
+			}
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("egress %s not registered in Service Gateway yet", egressName)
+	}
+	if wantPods < 0 {
+		return nil
+	}
+	got, err := countRegisteredEndpoints(egressName)
+	if err != nil {
+		return err
+	}
+	if got != wantPods {
+		return fmt.Errorf("egress %s has %d registered pod(s), want %d", egressName, got, wantPods)
+	}
+	return nil
+}
+
+// eventuallyServiceReconciled polls until the inbound service is fully reconciled in
+// Azure and the Service Gateway. Pass a negative wantEndpoints to skip the count check.
+func eventuallyServiceReconciled(serviceUID string, wantEndpoints int, timeout time.Duration) {
+	Eventually(func() error {
+		return serviceReconciledErr(serviceUID, wantEndpoints)
+	}, timeout, defaultPollInterval).Should(Succeed(),
+		"service %s should be reconciled in Azure and the Service Gateway", serviceUID)
+}
+
+// eventuallyServiceDeleted polls until the inbound service is fully removed from the
+// Service Gateway and its address locations.
+func eventuallyServiceDeleted(serviceUID string, timeout time.Duration) {
+	Eventually(func() error {
+		return serviceDeletedErr(serviceUID)
+	}, timeout, defaultPollInterval).Should(Succeed(),
+		"service %s should be removed from the Service Gateway", serviceUID)
+}
+
+// eventuallyEgressRegistered polls until the egress service is reconciled with its NAT
+// Gateway and registered pods. Pass a negative wantPods to skip the count check.
+func eventuallyEgressRegistered(egressName string, wantPods int, timeout time.Duration) {
+	Eventually(func() error {
+		return egressRegisteredErr(egressName, wantPods)
+	}, timeout, defaultPollInterval).Should(Succeed(),
+		"egress %s should be registered with %d pod(s) in the Service Gateway", egressName, wantPods)
+}
+
+// eventuallyAzureCleanup polls until the Service Gateway and its address locations are
+// free of all test services (only the default outbound service remains). Use it in
+// AfterEach in place of a fixed post-delete sleep.
+func eventuallyAzureCleanup(timeout time.Duration) {
+	Eventually(func() error {
+		if err := serviceGatewayCleanupErr(); err != nil {
+			return err
+		}
+		return addressLocationsCleanupErr()
+	}, timeout, defaultPollInterval).Should(Succeed(),
+		"Service Gateway and address locations should be free of test services after cleanup")
+}

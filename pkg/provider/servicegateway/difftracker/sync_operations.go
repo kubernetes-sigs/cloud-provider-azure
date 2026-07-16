@@ -87,7 +87,7 @@ func (dt *DiffTracker) getSyncLocationsAddressesLocked() LocationData {
 		locationUpdated := false
 
 		for address, pod := range node.Pods {
-			// Filter services: only include services that exist in NRP
+			// Filter services: only include services that are StateCreated or exist in NRP
 			serviceRef := dt.createServiceRefFiltered(pod)
 
 			// Check if address exists in NRP and if service list changed
@@ -142,6 +142,20 @@ func (dt *DiffTracker) getSyncLocationsAddressesLocked() LocationData {
 	return result
 }
 
+// countTrackedLocationsAndAddresses returns the total number of locations (nodes) and pod IP
+// addresses currently tracked in NRP. These back the locations_total / addresses_total gauges,
+// which are documented and alerted on as live totals (not per-sync diff sizes). It acquires
+// dt.mu, so callers must not already hold it.
+func (dt *DiffTracker) countTrackedLocationsAndAddresses() (locations int, addresses int) {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	locations = len(dt.NRPResources.Locations)
+	for _, loc := range dt.NRPResources.Locations {
+		addresses += len(loc.Addresses)
+	}
+	return locations, addresses
+}
+
 // Helper function to initialize Location based on existence in NRP
 func initializeLocation(exists bool) Location {
 	if !exists {
@@ -156,8 +170,9 @@ func initializeLocation(exists bool) Location {
 	}
 }
 
-// createServiceRefFiltered creates ServiceRef but only includes services that exist in NRP.
-// Must be called with dt.mu held.
+// createServiceRefFiltered creates ServiceRef but only includes services that are StateCreated
+// This prevents LocationsUpdater from trying to sync locations for services still being created
+// Must be called with dt.mu held
 func (dt *DiffTracker) createServiceRefFiltered(pod Pod) *utilsets.IgnoreCaseSet {
 	serviceRef := utilsets.NewString()
 
@@ -178,13 +193,32 @@ func (dt *DiffTracker) createServiceRefFiltered(pod Pod) *utilsets.IgnoreCaseSet
 	return serviceRef
 }
 
-// isServiceReadyToSync reports whether a service is ready to be synced to the
-// Service Gateway, i.e. its NRP resource exists. Must be called with dt.mu held.
+// isServiceReadyToSync reports whether a service is ready for location sync. A service is ready when
+// its LB/NAT is live in NRP, even if its engine op is parked (e.g. StateNotStarted after a terminal
+// update) or still being created, so the live resource keeps tracking endpoint changes instead of
+// having its backend pool drained. A service with no NRP resource yet is not synced.
+// Must be called with dt.mu held
 func (dt *DiffTracker) isServiceReadyToSync(serviceUID string, isInbound bool) bool {
-	if isInbound {
-		return dt.NRPResources.LoadBalancers.Has(serviceUID)
+	existsInNRP := (isInbound && dt.NRPResources.LoadBalancers.Has(serviceUID)) ||
+		(!isInbound && dt.NRPResources.NATGateways.Has(serviceUID))
+
+	if opState, exists := dt.pendingServiceOps[serviceUID]; exists {
+		switch opState.State {
+		case StateCreated, StateUpdateInProgress:
+			return true
+		case StateNotStarted, StateCreationInProgress:
+			// A live LB parked after a terminal update, or one still being created, must keep
+			// syncing its backends rather than have them drained; a not-yet-provisioned service
+			// has no NRP resource and is not synced.
+			return existsInNRP
+		default:
+			// Deletion states: addresses should drain, not sync.
+			return false
+		}
 	}
-	return dt.NRPResources.NATGateways.Has(serviceUID)
+
+	// Service not tracked - ready iff it exists in NRP (created outside the Engine).
+	return existsInNRP
 }
 
 // findLocationData returns a pointer to the Location stored under the given key

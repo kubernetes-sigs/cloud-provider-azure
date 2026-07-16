@@ -51,7 +51,7 @@ func TestDiffTrackerConfig(t *testing.T) {
 	assert.Equal(t, "eastus", diffTrackerConfig.Location)
 	assert.Equal(t, "vnet", diffTrackerConfig.VNetName)
 	assert.Equal(t, "vnet-resource-group", diffTrackerConfig.VNetResourceGroup)
-	assert.Contains(t, diffTrackerConfig.ServiceGatewayID, "/subscriptions/network-subscription/")
+	assert.Contains(t, diffTrackerConfig.ServiceGatewayResourceID(), "/subscriptions/network-subscription/")
 }
 
 func TestRuntimeEnablementAndLoadBalancer(t *testing.T) {
@@ -133,6 +133,7 @@ func TestRuntimeStart(t *testing.T) {
 	loadBalancer, supported := runtime.LoadBalancer()
 	assert.True(t, supported)
 	service := new(v1.Service)
+	service.UID = "service-uid"
 	_, err := loadBalancer.EnsureLoadBalancer(context.Background(), "cluster", service, nil)
 	assert.NoError(t, err)
 
