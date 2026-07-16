@@ -341,28 +341,58 @@ func (az *Cloud) getLocalServiceInfo(serviceName string) (*serviceInfo, bool) {
 	return data.(*serviceInfo), true
 }
 
-// setUpEndpointSlicesInformer creates an informer for EndpointSlices of local services.
-// It watches the update events and send backend pool update operations to the batch updater.
+func endpointSliceFromDeleteEvent(obj interface{}) (*discovery_v1.EndpointSlice, error) {
+	switch value := obj.(type) {
+	case *discovery_v1.EndpointSlice:
+		return value, nil
+	case cache.DeletedFinalStateUnknown:
+		endpointSlice, ok := value.Obj.(*discovery_v1.EndpointSlice)
+		if !ok {
+			return nil, fmt.Errorf("cannot convert tombstone object %T to *discovery_v1.EndpointSlice", value.Obj)
+		}
+		return endpointSlice, nil
+	default:
+		return nil, fmt.Errorf("cannot convert %T to *discovery_v1.EndpointSlice", value)
+	}
+}
+
+// setUpEndpointSlicesInformer registers either ServiceGateway forwarding handlers or the legacy
+// local-service backend-pool handlers.
 func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInformerFactory) {
 	logger := log.Background().WithName("setUpEndpointSlicesInformer")
 	endpointSlicesInformer := informerFactory.Discovery().V1().EndpointSlices().Informer()
+	if az.ServiceGatewayEnabled {
+		_, _ = endpointSlicesInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				az.diffTracker.ReconcileEndpointSlice(nil, obj.(*discovery_v1.EndpointSlice))
+			},
+			UpdateFunc: func(oldObj, newObj interface{}) {
+				az.diffTracker.ReconcileEndpointSlice(
+					oldObj.(*discovery_v1.EndpointSlice),
+					newObj.(*discovery_v1.EndpointSlice),
+				)
+			},
+			DeleteFunc: func(obj interface{}) {
+				endpointSlice, err := endpointSliceFromDeleteEvent(obj)
+				if err != nil {
+					logger.Error(err, "Cannot process EndpointSlice deletion")
+					return
+				}
+				az.diffTracker.ReconcileEndpointSlice(endpointSlice, nil)
+			},
+		})
+		return
+	}
+
 	_, _ = endpointSlicesInformer.AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				es := obj.(*discovery_v1.EndpointSlice)
-				if az.ServiceGatewayEnabled {
-					az.diffTracker.ReconcileEndpointSlice(nil, es)
-					return
-				}
 				az.endpointSlicesCache.Store(strings.ToLower(fmt.Sprintf("%s/%s", es.Namespace, es.Name)), es)
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
 				previousES := oldObj.(*discovery_v1.EndpointSlice)
 				newES := newObj.(*discovery_v1.EndpointSlice)
-				if az.ServiceGatewayEnabled {
-					az.diffTracker.ReconcileEndpointSlice(previousES, newES)
-					return
-				}
 
 				svcName := getServiceNameOfEndpointSlice(newES)
 				if svcName == "" {
@@ -423,28 +453,12 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
-				var es *discovery_v1.EndpointSlice
-				switch v := obj.(type) {
-				case *discovery_v1.EndpointSlice:
-					es = v
-				case cache.DeletedFinalStateUnknown:
-					// We may miss the deletion event if the watch stream is disconnected and the object is deleted.
-					var ok bool
-					es, ok = v.Obj.(*discovery_v1.EndpointSlice)
-					if !ok {
-						logger.Error(nil, "Cannot convert to *discovery_v1.EndpointSlice", "obj", v.Obj)
-						return
-					}
-				default:
-					logger.Error(nil, "Cannot convert to *discovery_v1.EndpointSlice", "obj.(type)", v)
+				endpointSlice, err := endpointSliceFromDeleteEvent(obj)
+				if err != nil {
+					logger.Error(err, "Cannot process EndpointSlice deletion")
 					return
 				}
-
-				if az.ServiceGatewayEnabled {
-					az.diffTracker.ReconcileEndpointSlice(es, nil)
-					return
-				}
-				az.endpointSlicesCache.Delete(strings.ToLower(fmt.Sprintf("%s/%s", es.Namespace, es.Name)))
+				az.endpointSlicesCache.Delete(strings.ToLower(fmt.Sprintf("%s/%s", endpointSlice.Namespace, endpointSlice.Name)))
 			},
 		})
 }

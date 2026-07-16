@@ -336,23 +336,10 @@ func TestGetLoadBalancer(t *testing.T) {
 	}
 }
 
-func TestServiceGatewayGetLoadBalancerSkipsFlippedServiceLookup(t *testing.T) {
+func TestServiceGatewayGetLoadBalancerBypassesLegacyLookup(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	az := GetTestCloudWithContainerLoadBalancer(ctrl)
 	service := getTestService("servicegateway-get", v1.ProtocolTCP, nil, false, 80)
-
-	mockLBsClient := az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
-	mockLBsClient.EXPECT().
-		List(gomock.Any(), az.Config.ResourceGroup).
-		Return([]*armnetwork.LoadBalancer{}, nil).
-		MinTimes(1).
-		MaxTimes(2)
-
-	mockPIPsClient := az.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
-	mockPIPsClient.EXPECT().
-		List(gomock.Any(), az.Config.ResourceGroup).
-		Return([]*armnetwork.PublicIPAddress{}, nil).
-		AnyTimes()
 
 	status, exists, err := az.GetLoadBalancer(context.Background(), testClusterName, &service)
 	assert.NoError(t, err)
