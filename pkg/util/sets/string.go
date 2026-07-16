@@ -128,14 +128,14 @@ func (s *IgnoreCaseSet) Difference(other *IgnoreCaseSet) *IgnoreCaseSet {
 }
 
 // Equals returns true if the two sets are equal.
-func (s1 *IgnoreCaseSet) Equals(s2 *IgnoreCaseSet) bool {
-	if s1.Len() != s2.Len() {
+func (s *IgnoreCaseSet) Equals(other *IgnoreCaseSet) bool {
+	if s.Len() != other.Len() {
 		return false
 	}
-	if s1.Len() == 0 {
+	if s.Len() == 0 {
 		return true
 	}
-	return s1.set.Equal(s2.set)
+	return s.set.Equal(other.set)
 }
 
 func (s *IgnoreCaseSet) MarshalJSON() ([]byte, error) {
