@@ -3,7 +3,7 @@ module health-probe-proxy
 go 1.26.0
 
 require (
-	github.com/pires/go-proxyproto v0.12.0
+	github.com/pires/go-proxyproto v0.15.0
 	k8s.io/component-base v0.36.2
 	k8s.io/klog/v2 v2.140.0
 )
