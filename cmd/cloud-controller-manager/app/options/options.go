@@ -65,10 +65,11 @@ const (
 
 // CloudControllerManagerOptions is the main context object for the controller manager.
 type CloudControllerManagerOptions struct {
-	Generic            *cmoptions.GenericControllerManagerConfigurationOptions
-	KubeCloudShared    *cpoptions.KubeCloudSharedOptions
-	ServiceController  *cpoptions.ServiceControllerOptions
-	NodeIPAMController *NodeIPAMControllerOptions
+	Generic                 *cmoptions.GenericControllerManagerConfigurationOptions
+	KubeCloudShared         *cpoptions.KubeCloudSharedOptions
+	NodeLifecycleController *cpoptions.NodeLifecycleControllerOptions
+	ServiceController       *cpoptions.ServiceControllerOptions
+	NodeIPAMController      *NodeIPAMControllerOptions
 
 	SecureServing  *apiserveroptions.SecureServingOptionsWithLoopback
 	Authentication *apiserveroptions.DelegatingAuthenticationOptions
@@ -96,6 +97,9 @@ func NewCloudControllerManagerOptions() (*CloudControllerManagerOptions, error) 
 	s := CloudControllerManagerOptions{
 		Generic:         cmoptions.NewGenericControllerManagerConfigurationOptions(&componentConfig.Generic),
 		KubeCloudShared: cpoptions.NewKubeCloudSharedOptions(&componentConfig.KubeCloudShared),
+		NodeLifecycleController: &cpoptions.NodeLifecycleControllerOptions{
+			NodeLifecycleControllerConfiguration: &componentConfig.NodeLifecycleController,
+		},
 		ServiceController: &cpoptions.ServiceControllerOptions{
 			ServiceControllerConfiguration: &componentConfig.ServiceController,
 		},
@@ -141,6 +145,7 @@ func (o *CloudControllerManagerOptions) Flags(allControllers, disabledByDefaultC
 	fss := cliflag.NamedFlagSets{}
 	o.Generic.AddFlags(&fss, allControllers, disabledByDefaultControllers, names.CCMControllerAliases())
 	o.KubeCloudShared.AddFlags(fss.FlagSet("generic"))
+	o.NodeLifecycleController.AddFlags(fss.FlagSet("node lifecycle controller"))
 	o.ServiceController.AddFlags(fss.FlagSet("service controller"))
 	o.NodeIPAMController.AddFlags(fss.FlagSet("node ipam controller"))
 
@@ -175,6 +180,9 @@ func (o *CloudControllerManagerOptions) ApplyTo(
 		return err
 	}
 	if err = o.KubeCloudShared.ApplyTo(&c.ComponentConfig.KubeCloudShared); err != nil {
+		return err
+	}
+	if err = o.NodeLifecycleController.ApplyTo(&c.ComponentConfig.NodeLifecycleController); err != nil {
 		return err
 	}
 	if err = o.ServiceController.ApplyTo(&c.ComponentConfig.ServiceController); err != nil {
@@ -254,6 +262,7 @@ func (o *CloudControllerManagerOptions) Validate(allControllers, disabledByDefau
 
 	errors = append(errors, o.Generic.Validate(allControllers, disabledByDefaultControllers, controllerAliases)...)
 	errors = append(errors, o.KubeCloudShared.Validate()...)
+	errors = append(errors, o.NodeLifecycleController.Validate()...)
 	errors = append(errors, o.ServiceController.Validate()...)
 	errors = append(errors, o.NodeIPAMController.Validate()...)
 	errors = append(errors, o.SecureServing.Validate()...)
