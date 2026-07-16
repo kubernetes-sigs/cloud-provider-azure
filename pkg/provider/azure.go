@@ -189,6 +189,9 @@ func NewCloud(ctx context.Context, clientBuilder cloudprovider.ControllerClientB
 
 	az.ipv6DualStackEnabled = true
 
+	if az.KubeClient == nil && clientBuilder != nil {
+		az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
+	}
 	az.azureResourceLocker = NewAzureResourceLocker(
 		az,
 		consts.AzureResourceLockHolderNameCloudControllerManager,
@@ -700,7 +703,7 @@ func (az *Cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder,
 	az.eventBroadcaster = record.NewBroadcaster()
 	az.eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: az.KubeClient.CoreV1().Events("")})
 	az.eventRecorder = az.eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "azure-cloud-provider"})
-	if az.ServiceGatewayEnabled && az.diffTracker != nil {
+	if az.ServiceGatewayEnabled {
 		az.diffTracker.SetEventRecorder(az.eventRecorder)
 	}
 }
@@ -765,7 +768,7 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 			node := obj.(*v1.Node)
 			az.updateNodeCaches(nil, node)
 			az.updateNodeTaint(node)
-			if az.ServiceGatewayEnabled && az.diffTracker != nil {
+			if az.ServiceGatewayEnabled {
 				// Replay this node's slices now its IPs are known (the EndpointSlice handler drops pods on uncached nodes).
 				az.diffTracker.ReconcileNodeIPChange(node.Name, nil, getNodePrivateIPAddresses(node))
 			}
@@ -775,7 +778,7 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 			newNode := obj.(*v1.Node)
 			az.updateNodeCaches(prevNode, newNode)
 			az.updateNodeTaint(newNode)
-			if az.ServiceGatewayEnabled && az.diffTracker != nil {
+			if az.ServiceGatewayEnabled {
 				// A node IP change fires no slice event; move resident pods off the old IP.
 				oldIPs := getNodePrivateIPAddresses(prevNode)
 				newIPs := getNodePrivateIPAddresses(newNode)
@@ -806,7 +809,7 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 			logger.V(4).Info("Removing node from VMSet cache", "node", node.Name)
 			_ = az.VMSet.DeleteCacheForNode(context.Background(), node.Name)
 
-			if az.ServiceGatewayEnabled && az.diffTracker != nil {
+			if az.ServiceGatewayEnabled {
 				// The cache is cleared before slice-removal events arrive; drain resident pods using the deleted node's IPs.
 				az.diffTracker.ReconcileNodeIPChange(node.Name, getNodePrivateIPAddresses(node), nil)
 			}
@@ -819,7 +822,7 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 
 	az.setUpEndpointSlicesInformer(informerFactory)
 
-	if az.ServiceGatewayEnabled && az.diffTracker != nil {
+	if az.ServiceGatewayEnabled {
 		az.diffTracker.SetServiceLister(az.serviceLister)
 		az.diffTracker.SetNodeLister(az.nodeLister)
 		az.diffTracker.SetUpPodInformer()
