@@ -373,6 +373,14 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 	// ServiceUpdater semaphore slot forever (see nrpOperationTimeout).
 	ctx, cancel := context.WithTimeout(s.ctx, getNRPOperationTimeout())
 	defer cancel()
+	dropGoneService := func() {
+		s.diffTracker.mu.Lock()
+		delete(s.diffTracker.pendingServiceOps, serviceUID)
+		delete(s.diffTracker.pendingEndpoints, serviceUID)
+		delete(s.diffTracker.pendingPods, serviceUID)
+		s.diffTracker.checkInitializationCompleteLocked()
+		s.diffTracker.mu.Unlock()
+	}
 
 	// Step 0: Add finalizer to K8s service to prevent deletion until Azure resources are cleaned up
 	svc, err := s.diffTracker.getServiceByUID(ctx, serviceUID)
@@ -394,18 +402,17 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 		// onComplete here: onComplete(false) would re-hit NotFound and loop, and onComplete(true)
 		// would falsely report the service as Created.
 		s.logger.V(4).Info("Service gone (NotFound) before create; aborting to avoid orphaned resources", "serviceUID", serviceUID, "correlationID", correlationID)
-		s.diffTracker.mu.Lock()
-		delete(s.diffTracker.pendingServiceOps, serviceUID)
-		// Drop buffers for the gone Service too; otherwise they leak until restart.
-		delete(s.diffTracker.pendingEndpoints, serviceUID)
-		delete(s.diffTracker.pendingPods, serviceUID)
-		s.diffTracker.checkInitializationCompleteLocked()
-		s.diffTracker.mu.Unlock()
+		dropGoneService()
 		return
 	}
 
 	// Service exists: add the cleanup finalizers before creating any Azure resources.
 	if err := s.diffTracker.addServiceGatewayFinalizer(ctx, svc); err != nil {
+		if errors.Is(err, ErrServiceGoneOrReplaced) {
+			s.logger.V(4).Info("Service gone or replaced before finalizer add; aborting to avoid orphaned resources", "serviceUID", serviceUID, "correlationID", correlationID)
+			dropGoneService()
+			return
+		}
 		s.logger.V(4).Info("Could not add finalizer to service", "serviceUID", serviceUID, "err", err)
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to add finalizer: %w", err))
 		return

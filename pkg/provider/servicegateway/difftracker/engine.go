@@ -849,6 +849,27 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 				recordOrphanedResourceCleaned()
 			}
 
+			// RemoveLastPodFinalizers performs API calls without holding dt.mu. A pod delete
+			// can therefore add a last-pod record after that worker has taken its snapshot
+			// but before this completion callback acquires the lock. Keep the operation
+			// alive and re-dispatch the idempotent delete so the next finalizer sweep handles
+			// the late record before service tracking is removed.
+			for _, pending := range dt.pendingPodDeletions {
+				if pending.ServiceUID != serviceUID || !pending.IsLastPod {
+					continue
+				}
+
+				dt.logger.V(5).Info("Re-dispatching service deletion for late last-pod finalizer", "service", serviceUID, "pod", pending.Namespace+"/"+pending.Name)
+				opState.State = StateDeletionInProgress
+				opState.RetryCount = 0
+				opState.CreationFailedTerminal = false
+				opState.RetriesExhausted = false
+				opState.NextRetryAt = time.Time{}
+				opState.LastAttempt = time.Now().Format(time.RFC3339)
+				dt.triggerServiceUpdater()
+				return
+			}
+
 			// If pods arrived while the deletion was in flight (buffered by the
 			// StateDeletionInProgress branch of AddPod), or a re-create was requested
 			// during deletion, the service must be re-created rather than torn down —
@@ -1252,11 +1273,22 @@ func (dt *DiffTracker) deletePodAddressLocked(serviceUID, location, address, pod
 	// If the pod is still buffered for an in-flight service creation, it never reached live state or
 	// the ref-counter. Cancel the buffered add so it is not resurrected on promotion. Match on podKey
 	// (when known) so a same-IP replacement buffered under a different pod is not cancelled too.
+	opState, opExists := dt.pendingServiceOps[serviceUID]
+	mayHaveReachedNRP := (opExists && opState.State != StateNotStarted) ||
+		dt.NRPResources.NATGateways.Has(serviceUID) ||
+		dt.serviceHasLocationsInNRP(serviceUID)
 	if dt.cancelBufferedPodLocked(serviceUID, location, address, podKey) {
 		dt.logger.V(5).Info("Cancelled buffered pod before service creation", "service", serviceUID, "location", location, "address", address)
 		// If that was the service's only pod, tear down the pod-less NAT Gateway so it is not leaked.
-		dt.handleEmptyOutboundServiceLocked(serviceUID)
-		return deletePodAddressOutcome{}
+		// Once creation was dispatched, the address may already be visible in NRP even though the
+		// completion callback has not promoted the pod into live state. Keep the finalizer until the
+		// resulting service deletion completes.
+		isLastPod := dt.handleEmptyOutboundServiceLocked(serviceUID)
+		return deletePodAddressOutcome{
+			drainGated:  mayHaveReachedNRP,
+			isLastPod:   isLastPod,
+			triggerSync: mayHaveReachedNRP,
+		}
 	}
 
 	// A stale or duplicate delete (informer double-delivery, or a pod that already moved/was removed)
@@ -1448,17 +1480,19 @@ func (dt *DiffTracker) resolveOutboundAddressLocationLocked(serviceUID, hintLoca
 // handleEmptyOutboundServiceLocked tears down an outbound (NAT Gateway) service whose
 // last buffered pod was just cancelled, so a service whose only pod disappeared before
 // promotion does not leak an orphaned, pod-less NAT Gateway. It is a no-op if any buffered
-// or live pods remain. Must be called with dt.mu held.
-func (dt *DiffTracker) handleEmptyOutboundServiceLocked(serviceUID string) {
+// or live pods remain. It returns true when Azure cleanup is already in flight or was scheduled, so
+// the deleting pod's finalizer must remain until RemoveLastPodFinalizers runs. Must be called with
+// dt.mu held.
+func (dt *DiffTracker) handleEmptyOutboundServiceLocked(serviceUID string) bool {
 	if len(dt.pendingPods[serviceUID]) > 0 {
-		return
+		return false
 	}
 	if v, ok := dt.outboundIdentityPodRefCount.Load(strings.ToLower(serviceUID)); ok && v.(int) > 0 {
-		return
+		return false
 	}
 	opState, exists := dt.pendingServiceOps[serviceUID]
 	if !exists {
-		return
+		return false
 	}
 	switch opState.State {
 	case StateNotStarted:
@@ -1469,6 +1503,7 @@ func (dt *DiffTracker) handleEmptyOutboundServiceLocked(serviceUID string) {
 		delete(dt.pendingPods, serviceUID)
 		delete(dt.pendingServiceDeletions, serviceUID)
 		dt.checkInitializationCompleteLocked()
+		return false
 	case StateCreationInProgress:
 		// The NAT Gateway create is in flight. Mark the service for deletion: when the create
 		// completes, OnServiceCreationComplete's pre-empt (StateDeletionInProgress with
@@ -1480,7 +1515,13 @@ func (dt *DiffTracker) handleEmptyOutboundServiceLocked(serviceUID string) {
 			IsInbound:  opState.Config.IsInbound,
 			Timestamp:  time.Now().Format(time.RFC3339),
 		}
+		return true
+	case StateDeletionInProgress:
+		// The pod was buffered while an earlier deletion was in flight. With no buffered pods left,
+		// the delete will finish without recreating the service; retain the pod finalizer until then.
+		return true
 	}
+	return false
 }
 
 // cancelBufferedPodLocked removes buffered (not-yet-promoted) pod entries for a service that match

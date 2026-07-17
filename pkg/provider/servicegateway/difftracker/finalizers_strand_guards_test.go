@@ -14,9 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Regression guards for egress pod-finalizer strand conditions. Each pins the required behaviour;
-// the buffered-pod case (TestGuardDeletePod_PodDeletedWhileBuffered_FinalizerNotStranded) remains
-// skipped pending its fix.
+// Regression guards for egress pod-finalizer strand conditions.
 
 package difftracker
 
@@ -109,6 +107,68 @@ func TestGuardDeletePod_PodDeletedWhileBuffered_EnqueuesNoRecord(t *testing.T) {
 	_, tracked := dt.pendingPodDeletions[ns+"/"+name]
 	assert.False(t, tracked,
 		"a buffered pod must not be drain-gated, else its finalizer is stranded (no NRP address will ever release it)")
+}
+
+// Once outbound creation has been dispatched, NRP can publish the service/address before the
+// completion callback promotes the buffered pod. A deletion in that window must keep the pod
+// finalizer until the scheduled NAT Gateway cleanup completes.
+func TestGuardDeletePod_PodDeletedAfterCreateDispatchIsDrainGated(t *testing.T) {
+	dt := newTestDiffTracker()
+	const svc, ns, name, location, address = "egress-buffered", "default", "pod-buf", "10.0.0.1", "10.244.0.7"
+
+	config := NewOutboundServiceConfig(svc, nil)
+	dt.pendingServiceOps[svc] = &ServiceOperationState{
+		ServiceUID:     svc,
+		Config:         config,
+		InFlightConfig: &config,
+		State:          StateCreationInProgress,
+	}
+	dt.pendingPods[svc] = []PendingPodUpdate{{
+		PodKey:    ns + "/" + name,
+		Location:  location,
+		Address:   address,
+		Timestamp: time.Now().Format(time.RFC3339),
+	}}
+
+	res := dt.DeletePod(svc, location, []string{address}, ns, name, "pod-uid")
+
+	assert.True(t, res.Enqueued)
+	assert.True(t, res.IsLastPod)
+	assert.Equal(t, StateDeletionInProgress, dt.pendingServiceOps[svc].State)
+	pending, tracked := dt.pendingPodDeletions[ns+"/"+name]
+	if assert.True(t, tracked) {
+		assert.True(t, pending.IsLastPod)
+		assert.Equal(t, "pod-uid", pending.UID)
+	}
+}
+
+func TestGuardDeletePod_NonLastBufferedPodAfterCreateDispatchIsDrainGated(t *testing.T) {
+	dt := newTestDiffTracker()
+	const svc, ns, location = "egress-buffered", "default", "10.0.0.1"
+
+	config := NewOutboundServiceConfig(svc, nil)
+	dt.pendingServiceOps[svc] = &ServiceOperationState{
+		ServiceUID:     svc,
+		Config:         config,
+		InFlightConfig: &config,
+		State:          StateCreationInProgress,
+	}
+	dt.pendingPods[svc] = []PendingPodUpdate{
+		{PodKey: ns + "/deleted", Location: location, Address: "10.244.0.7"},
+		{PodKey: ns + "/survivor", Location: location, Address: "10.244.0.8"},
+	}
+
+	res := dt.DeletePod(svc, location, []string{"10.244.0.7"}, ns, "deleted", "deleted-uid")
+
+	assert.True(t, res.Enqueued)
+	assert.False(t, res.IsLastPod)
+	assert.Equal(t, StateCreationInProgress, dt.pendingServiceOps[svc].State)
+	assert.Len(t, dt.pendingPods[svc], 1)
+	pending, tracked := dt.pendingPodDeletions[ns+"/deleted"]
+	if assert.True(t, tracked) {
+		assert.False(t, pending.IsLastPod)
+		assert.Equal(t, []string{"10.244.0.7"}, pending.Addresses)
+	}
 }
 
 // TestGuardLocationsUpdaterReschedulesOnReadyFinalizerRemovalFailure verifies that when a ready

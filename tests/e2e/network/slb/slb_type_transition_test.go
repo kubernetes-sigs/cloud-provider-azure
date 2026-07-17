@@ -295,6 +295,16 @@ var _ = Describe("SLB - Service Type Transition", Label(slbTestLabel), func() {
 		By("Verifying the recreated LoadBalancer registers all backend pods (not an empty pool)")
 		eventuallyServiceReconciled(serviceUID, numPods, provisionTimeout)
 
+		By("Verifying the recreated LoadBalancer regained both cleanup finalizers")
+		Eventually(func() ([]string, error) {
+			return getServiceFinalizers(cs, ns.Name, rapidService)
+		}, 30*time.Second, defaultPollInterval).Should(
+			And(
+				ContainElement(serviceGatewayCleanupFinalizer),
+				ContainElement(loadBalancerCleanupFinalizer),
+			),
+			"a rapidly recreated LoadBalancer must regain both cleanup finalizers")
+
 		utils.Logf("\n✓ Rapid LoadBalancer→ClusterIP→LoadBalancer toggle preserved all %d endpoints", numPods)
 	})
 })

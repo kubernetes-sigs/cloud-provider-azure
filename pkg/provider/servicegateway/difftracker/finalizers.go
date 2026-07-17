@@ -82,6 +82,10 @@ func hasFinalizer(finalizers []string, finalizer string) bool {
 // SERVICE FINALIZER OPERATIONS
 // ================================================================================================
 
+// ErrServiceGoneOrReplaced means the Service targeted by an async operation no longer exists under
+// its original UID. Callers must stop that operation rather than create resources without finalizers.
+var ErrServiceGoneOrReplaced = errors.New("service gone or replaced by a same-name UID")
+
 // hasServiceGatewayFinalizer checks if service has the ServiceGateway cleanup finalizer
 func hasServiceGatewayFinalizer(service *v1.Service) bool {
 	return hasFinalizer(service.ObjectMeta.Finalizers, ServiceGatewayServiceCleanupFinalizer)
@@ -94,20 +98,18 @@ func hasServiceGatewayFinalizer(service *v1.Service) bool {
 // This ensures EnsureLoadBalancerDeleted is called, which triggers our async deletion flow.
 // Implements retry with exponential backoff for resilience against transient API failures.
 func (dt *DiffTracker) addServiceGatewayFinalizer(ctx context.Context, service *v1.Service) error {
-	if hasServiceGatewayFinalizer(service) {
-		return nil
-	}
-
 	namespace := service.Namespace
 	name := service.Name
+	intendedUID := string(service.UID)
 	var lastErr error
+	goneOrReplaced := false
 
 	retryErr := wait.ExponentialBackoff(finalizerRetryBackoff, func() (bool, error) {
 		// Get fresh service to avoid conflicts
 		currentSvc, err := dt.kubeClient.CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				// Service deleted, nothing to do
+				goneOrReplaced = true
 				return true, nil
 			}
 			lastErr = err
@@ -115,14 +117,23 @@ func (dt *DiffTracker) addServiceGatewayFinalizer(ctx context.Context, service *
 			return false, nil // Retry
 		}
 
-		// Check if already has finalizer (may have been added by concurrent operation)
-		if hasServiceGatewayFinalizer(currentSvc) {
+		if intendedUID != "" && string(currentSvc.UID) != intendedUID {
+			dt.logger.V(4).Info("Service UID changed (replacement Service); not adding finalizers", "namespace", namespace, "name", name, "wantUID", intendedUID, "gotUID", string(currentSvc.UID))
+			goneOrReplaced = true
+			return true, nil
+		}
+
+		// Decide from the fresh object, not the informer snapshot passed by the caller. During a
+		// rapid delete/recreate the cache can still show finalizers that the live Service lost.
+		if hasServiceGatewayFinalizer(currentSvc) && servicehelper.HasLBFinalizer(currentSvc) {
 			return true, nil
 		}
 
 		// Make a copy so we don't mutate the shared informer cache
 		updated := currentSvc.DeepCopy()
-		updated.ObjectMeta.Finalizers = append(updated.ObjectMeta.Finalizers, ServiceGatewayServiceCleanupFinalizer)
+		if !hasServiceGatewayFinalizer(currentSvc) {
+			updated.ObjectMeta.Finalizers = append(updated.ObjectMeta.Finalizers, ServiceGatewayServiceCleanupFinalizer)
+		}
 
 		// Also add the K8s LoadBalancerCleanupFinalizer if not present.
 		// This is critical: the upstream K8s service controller uses HasLBFinalizer()
@@ -134,10 +145,12 @@ func (dt *DiffTracker) addServiceGatewayFinalizer(ctx context.Context, service *
 		}
 
 		dt.logger.V(5).Info("Adding ServiceGateway finalizer to service", "namespace", namespace, "name", name)
-		_, err = servicehelper.PatchService(dt.kubeClient.CoreV1(), currentSvc, updated)
+		// Update carries the fresh object's resourceVersion, so a concurrent same-name
+		// replacement or metadata change is rejected atomically instead of patching it.
+		_, err = dt.kubeClient.CoreV1().Services(namespace).Update(ctx, updated, metav1.UpdateOptions{})
 		if err != nil {
 			lastErr = err
-			dt.logger.V(4).Info("Transient error patching service, will retry", "namespace", namespace, "name", name, "err", err)
+			dt.logger.V(4).Info("Transient error updating service, will retry", "namespace", namespace, "name", name, "err", err)
 			return false, nil // Retry
 		}
 
@@ -147,6 +160,9 @@ func (dt *DiffTracker) addServiceGatewayFinalizer(ctx context.Context, service *
 	if retryErr != nil {
 		return fmt.Errorf("failed to add finalizer after retries: %v (last error: %v)", retryErr, lastErr)
 	}
+	if goneOrReplaced {
+		return ErrServiceGoneOrReplaced
+	}
 	return nil
 }
 
@@ -155,12 +171,9 @@ func (dt *DiffTracker) addServiceGatewayFinalizer(ctx context.Context, service *
 // NOTE: We also remove the K8s LoadBalancerCleanupFinalizer that we added in addServiceGatewayFinalizer
 // Implements retry with exponential backoff for resilience against transient API failures.
 func (dt *DiffTracker) removeServiceGatewayFinalizer(ctx context.Context, service *v1.Service) error {
-	if !hasServiceGatewayFinalizer(service) {
-		return nil
-	}
-
 	namespace := service.Namespace
 	name := service.Name
+	intendedUID := string(service.UID)
 	var lastErr error
 
 	retryErr := wait.ExponentialBackoff(finalizerRetryBackoff, func() (bool, error) {
@@ -176,8 +189,14 @@ func (dt *DiffTracker) removeServiceGatewayFinalizer(ctx context.Context, servic
 			return false, nil // Retry
 		}
 
-		// Check if finalizer already removed (may have been removed by concurrent operation)
-		if !hasServiceGatewayFinalizer(currentSvc) {
+		if intendedUID != "" && string(currentSvc.UID) != intendedUID {
+			dt.logger.V(4).Info("Service UID changed (replacement Service); not removing finalizers", "namespace", namespace, "name", name, "wantUID", intendedUID, "gotUID", string(currentSvc.UID))
+			return true, nil
+		}
+
+		// Decide from the fresh object. A stale lister object can omit finalizers that still exist on
+		// the live Service, and treating that as success would strand the Service in Terminating.
+		if !hasServiceGatewayFinalizer(currentSvc) && !servicehelper.HasLBFinalizer(currentSvc) {
 			return true, nil
 		}
 
@@ -188,10 +207,12 @@ func (dt *DiffTracker) removeServiceGatewayFinalizer(ctx context.Context, servic
 		updated.ObjectMeta.Finalizers = removeFinalizerString(updated.ObjectMeta.Finalizers, servicehelper.LoadBalancerCleanupFinalizer)
 
 		dt.logger.V(5).Info("Removing ServiceGateway finalizer from service", "namespace", namespace, "name", name)
-		_, err = servicehelper.PatchService(dt.kubeClient.CoreV1(), currentSvc, updated)
+		// Update carries the fresh object's resourceVersion, so a concurrent same-name
+		// replacement or metadata change is rejected atomically instead of patching it.
+		_, err = dt.kubeClient.CoreV1().Services(namespace).Update(ctx, updated, metav1.UpdateOptions{})
 		if err != nil {
 			lastErr = err
-			dt.logger.V(4).Info("Transient error patching service, will retry", "namespace", namespace, "name", name, "err", err)
+			dt.logger.V(4).Info("Transient error updating service, will retry", "namespace", namespace, "name", name, "err", err)
 			return false, nil // Retry
 		}
 

@@ -1028,6 +1028,65 @@ func TestEngineOnServiceCreationComplete_GenuineDeletionCleansUp(t *testing.T) {
 	assert.False(t, tracked, "a genuine delete success must clear tracking")
 }
 
+// TestEngineOnServiceCreationComplete_LateLastPodFinalizerRedispatches verifies that a last-pod
+// record inserted after the deletion worker's finalizer snapshot cannot be lost when the successful
+// completion callback clears service state. The idempotent delete must run again and sweep it first.
+func TestEngineOnServiceCreationComplete_LateLastPodFinalizerRedispatches(t *testing.T) {
+	for _, tc := range []struct {
+		name              string
+		bufferReplacement bool
+	}{
+		{name: "without replacement pod"},
+		{name: "before recreating for a replacement pod", bufferReplacement: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dt := newTestDiffTracker()
+			uid := "svc-late-last-pod"
+			dt.pendingServiceOps[uid] = &ServiceOperationState{
+				ServiceUID: uid,
+				Config:     NewOutboundServiceConfig(uid, nil),
+				State:      StateDeletionInProgress,
+			}
+			dt.pendingPodDeletions["ns/deleted"] = &PendingPodDeletion{
+				Namespace:  "ns",
+				Name:       "deleted",
+				ServiceUID: uid,
+				IsLastPod:  true,
+			}
+			if tc.bufferReplacement {
+				dt.pendingPods[uid] = []PendingPodUpdate{{
+					PodKey:   "ns/replacement",
+					Location: "10.0.0.1",
+					Address:  "10.244.0.8",
+				}}
+			}
+
+			dt.OnServiceCreationComplete(uid, true, nil)
+
+			op, tracked := dt.pendingServiceOps[uid]
+			if assert.True(t, tracked, "late last-pod work must keep service tracking alive") {
+				assert.Equal(t, StateDeletionInProgress, op.State)
+			}
+			assert.Len(t, dt.pendingPodDeletions, 1)
+			assert.Len(t, dt.serviceUpdaterTrigger, 1, "the idempotent delete must be re-dispatched for a final sweep")
+
+			drainTrigger(dt.serviceUpdaterTrigger)
+			delete(dt.pendingPodDeletions, "ns/deleted") // Simulate the re-dispatched worker's successful sweep.
+			dt.OnServiceCreationComplete(uid, true, nil)
+
+			op, tracked = dt.pendingServiceOps[uid]
+			if tc.bufferReplacement {
+				if assert.True(t, tracked, "the replacement pod must be recreated after the final sweep") {
+					assert.Equal(t, StateNotStarted, op.State)
+				}
+				assert.Len(t, dt.serviceUpdaterTrigger, 1)
+			} else {
+				assert.False(t, tracked, "tracking can be removed once no late last-pod work remains")
+			}
+		})
+	}
+}
+
 // TestEngineDeletePod_StaleDuplicateRemovalIsNoOp verifies that a delete event for a pod that
 // is not in live state (a stale or duplicate informer delivery) is a no-op even when another
 // pod still holds the ref-count at one, instead of being mistaken for the last-pod removal.

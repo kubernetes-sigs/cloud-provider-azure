@@ -320,6 +320,121 @@ func TestAddServiceGatewayFinalizer(t *testing.T) {
 		}
 		assert.Equal(t, 1, count, "K8s LB finalizer should not be duplicated")
 	})
+
+	t.Run("repairs live finalizers when the passed cache object is stale", func(t *testing.T) {
+		liveSvc := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-service",
+				Namespace: "default",
+				UID:       types.UID("test-uid"),
+			},
+		}
+		staleSvc := liveSvc.DeepCopy()
+		staleSvc.Finalizers = []string{
+			ServiceGatewayServiceCleanupFinalizer,
+			"service.kubernetes.io/load-balancer-cleanup",
+		}
+
+		kubeClient := fake.NewSimpleClientset(liveSvc)
+		dt := &DiffTracker{kubeClient: kubeClient}
+
+		err := dt.addServiceGatewayFinalizer(ctx, staleSvc)
+		assert.NoError(t, err)
+
+		updatedSvc, err := kubeClient.CoreV1().Services("default").Get(ctx, "test-service", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.Contains(t, updatedSvc.Finalizers, ServiceGatewayServiceCleanupFinalizer)
+		assert.Contains(t, updatedSvc.Finalizers, "service.kubernetes.io/load-balancer-cleanup")
+	})
+
+	t.Run("repairs a missing K8s finalizer when the ServiceGateway finalizer exists", func(t *testing.T) {
+		svc := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "test-service",
+				Namespace:  "default",
+				UID:        types.UID("test-uid"),
+				Finalizers: []string{ServiceGatewayServiceCleanupFinalizer},
+			},
+		}
+
+		kubeClient := fake.NewSimpleClientset(svc)
+		dt := &DiffTracker{kubeClient: kubeClient}
+
+		err := dt.addServiceGatewayFinalizer(ctx, svc)
+		assert.NoError(t, err)
+
+		updatedSvc, err := kubeClient.CoreV1().Services("default").Get(ctx, "test-service", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.Contains(t, updatedSvc.Finalizers, ServiceGatewayServiceCleanupFinalizer)
+		assert.Contains(t, updatedSvc.Finalizers, "service.kubernetes.io/load-balancer-cleanup")
+	})
+
+	t.Run("does not add finalizers to a same-name replacement Service", func(t *testing.T) {
+		staleSvc := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-service",
+				Namespace: "default",
+				UID:       types.UID("old-uid"),
+			},
+		}
+		replacement := staleSvc.DeepCopy()
+		replacement.UID = types.UID("new-uid")
+
+		kubeClient := fake.NewSimpleClientset(replacement)
+		dt := &DiffTracker{kubeClient: kubeClient}
+
+		err := dt.addServiceGatewayFinalizer(ctx, staleSvc)
+		assert.ErrorIs(t, err, ErrServiceGoneOrReplaced)
+
+		updatedSvc, getErr := kubeClient.CoreV1().Services("default").Get(ctx, "test-service", metav1.GetOptions{})
+		assert.NoError(t, getErr)
+		assert.Empty(t, updatedSvc.Finalizers)
+	})
+
+	t.Run("does not add finalizers when the Service is replaced between get and update", func(t *testing.T) {
+		original := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "test-service",
+				Namespace:       "default",
+				UID:             types.UID("old-uid"),
+				ResourceVersion: "1",
+			},
+		}
+		replacement := original.DeepCopy()
+		replacement.UID = types.UID("new-uid")
+		replacement.ResourceVersion = "2"
+
+		kubeClient := fake.NewSimpleClientset(original)
+		replaced := false
+		kubeClient.PrependReactor("update", "services", func(_ ktesting.Action) (bool, runtime.Object, error) {
+			if replaced {
+				return false, nil, nil
+			}
+			replaced = true
+			err := kubeClient.Tracker().Update(
+				schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"},
+				replacement,
+				"default",
+			)
+			if err != nil {
+				return true, nil, err
+			}
+			return true, nil, apierrors.NewConflict(
+				schema.GroupResource{Group: "", Resource: "services"},
+				"test-service",
+				fmt.Errorf("service replaced"),
+			)
+		})
+		dt := &DiffTracker{kubeClient: kubeClient}
+
+		err := dt.addServiceGatewayFinalizer(ctx, original)
+		assert.ErrorIs(t, err, ErrServiceGoneOrReplaced)
+
+		updatedSvc, getErr := kubeClient.CoreV1().Services("default").Get(ctx, "test-service", metav1.GetOptions{})
+		assert.NoError(t, getErr)
+		assert.Equal(t, types.UID("new-uid"), updatedSvc.UID)
+		assert.Empty(t, updatedSvc.Finalizers)
+	})
 }
 
 func TestRemoveServiceGatewayFinalizer(t *testing.T) {
@@ -348,6 +463,56 @@ func TestRemoveServiceGatewayFinalizer(t *testing.T) {
 		assert.NoError(t, err)
 		assert.False(t, hasServiceGatewayFinalizer(updatedSvc))
 		assert.Contains(t, updatedSvc.Finalizers, "other-finalizer")
+	})
+
+	t.Run("does not remove finalizers when the Service is replaced between get and update", func(t *testing.T) {
+		original := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "test-service",
+				Namespace:       "default",
+				UID:             types.UID("old-uid"),
+				ResourceVersion: "1",
+				Finalizers: []string{
+					ServiceGatewayServiceCleanupFinalizer,
+					"service.kubernetes.io/load-balancer-cleanup",
+				},
+			},
+		}
+		replacement := original.DeepCopy()
+		replacement.UID = types.UID("new-uid")
+		replacement.ResourceVersion = "2"
+		replacement.Finalizers = []string{"replacement-finalizer"}
+
+		kubeClient := fake.NewSimpleClientset(original)
+		replaced := false
+		kubeClient.PrependReactor("update", "services", func(_ ktesting.Action) (bool, runtime.Object, error) {
+			if replaced {
+				return false, nil, nil
+			}
+			replaced = true
+			err := kubeClient.Tracker().Update(
+				schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"},
+				replacement,
+				"default",
+			)
+			if err != nil {
+				return true, nil, err
+			}
+			return true, nil, apierrors.NewConflict(
+				schema.GroupResource{Group: "", Resource: "services"},
+				"test-service",
+				fmt.Errorf("service replaced"),
+			)
+		})
+		dt := &DiffTracker{kubeClient: kubeClient}
+
+		err := dt.removeServiceGatewayFinalizer(ctx, original)
+		assert.NoError(t, err)
+
+		updatedSvc, getErr := kubeClient.CoreV1().Services("default").Get(ctx, "test-service", metav1.GetOptions{})
+		assert.NoError(t, getErr)
+		assert.Equal(t, types.UID("new-uid"), updatedSvc.UID)
+		assert.Equal(t, []string{"replacement-finalizer"}, updatedSvc.Finalizers)
 	})
 
 	t.Run("handles service without finalizer gracefully", func(t *testing.T) {
@@ -410,6 +575,59 @@ func TestRemoveServiceGatewayFinalizer(t *testing.T) {
 
 		// But other finalizers should remain
 		assert.Contains(t, updatedSvc.Finalizers, "other-finalizer")
+	})
+
+	t.Run("removes live finalizers when the passed cache object is stale", func(t *testing.T) {
+		liveSvc := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-service",
+				Namespace: "default",
+				UID:       types.UID("test-uid"),
+				Finalizers: []string{
+					"other-finalizer",
+					ServiceGatewayServiceCleanupFinalizer,
+					"service.kubernetes.io/load-balancer-cleanup",
+				},
+			},
+		}
+		staleSvc := liveSvc.DeepCopy()
+		staleSvc.Finalizers = []string{"other-finalizer"}
+
+		kubeClient := fake.NewSimpleClientset(liveSvc)
+		dt := &DiffTracker{kubeClient: kubeClient}
+
+		err := dt.removeServiceGatewayFinalizer(ctx, staleSvc)
+		assert.NoError(t, err)
+
+		updatedSvc, err := kubeClient.CoreV1().Services("default").Get(ctx, "test-service", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"other-finalizer"}, updatedSvc.Finalizers)
+	})
+
+	t.Run("does not remove finalizers from a same-name replacement Service", func(t *testing.T) {
+		staleSvc := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-service",
+				Namespace: "default",
+				UID:       types.UID("old-uid"),
+			},
+		}
+		replacement := staleSvc.DeepCopy()
+		replacement.UID = types.UID("new-uid")
+		replacement.Finalizers = []string{
+			ServiceGatewayServiceCleanupFinalizer,
+			"service.kubernetes.io/load-balancer-cleanup",
+		}
+
+		kubeClient := fake.NewSimpleClientset(replacement)
+		dt := &DiffTracker{kubeClient: kubeClient}
+
+		err := dt.removeServiceGatewayFinalizer(ctx, staleSvc)
+		assert.NoError(t, err)
+
+		updatedSvc, getErr := kubeClient.CoreV1().Services("default").Get(ctx, "test-service", metav1.GetOptions{})
+		assert.NoError(t, getErr)
+		assert.Equal(t, replacement.Finalizers, updatedSvc.Finalizers)
 	})
 }
 
