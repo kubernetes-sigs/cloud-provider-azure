@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 
-STATE_FILE = Path(".git/fix-image-cves.json")
+STATE_FILE_NAME = "fix-image-cves.json"
 STATE_VERSION = 1
 TRIVY_DB_STALE_SECONDS = 24 * 60 * 60
 GO_TOOLCHAIN_PACKAGES = {"stdlib", "toolchain"}
@@ -165,7 +165,17 @@ def ensure_repo_root(repo_arg: str) -> Path:
 
 
 def git_path(repo_root: Path) -> Path:
-    return repo_root / STATE_FILE
+    raw_path = run(
+        ["git", "rev-parse", "--git-path", STATE_FILE_NAME],
+        cwd=repo_root,
+        capture=True,
+    ).strip()
+    if not raw_path:
+        raise CommandError("git rev-parse returned an empty CVE state path")
+    path = Path(raw_path)
+    if not path.is_absolute():
+        path = repo_root / path
+    return path.resolve()
 
 
 def save_state(repo_root: Path, state: dict[str, Any]) -> None:
@@ -422,8 +432,6 @@ def parse_scan_findings(
         type_name = str(result.get("Type") or "")
         for vuln in result.get("Vulnerabilities") or []:
             fixed_version = str(vuln.get("FixedVersion") or "").strip()
-            if not fixed_version:
-                continue
             package = str(vuln.get("PkgName") or "")
             finding = {
                 "category": classify_result(result, package),
@@ -446,25 +454,31 @@ def parse_scan_findings(
 
 def summarize_scan(findings: list[dict[str, Any]]) -> None:
     counts = {"GO_MODULE": 0, "GO_TOOLCHAIN": 0, "BASE_IMAGE": 0, "OTHER": 0}
+    no_fixed_version = 0
     for finding in findings:
-        counts[finding["category"]] = counts.get(finding["category"], 0) + 1
+        if finding.get("fixed_version"):
+            counts[finding["category"]] = counts.get(finding["category"], 0) + 1
+        else:
+            no_fixed_version += 1
     print("Scan Summary")
     print("============")
     print(f"GO_MODULE: {counts.get('GO_MODULE', 0)}")
     print(f"GO_TOOLCHAIN: {counts.get('GO_TOOLCHAIN', 0)}")
     print(f"BASE_IMAGE: {counts.get('BASE_IMAGE', 0)}")
     print(f"OTHER: {counts.get('OTHER', 0)}")
+    print(f"NO_FIXED_VERSION: {no_fixed_version}")
     if not findings:
         print("")
-        print("No fixable vulnerabilities with FixedVersion were found.")
+        print("No vulnerabilities were found.")
         return
     print("")
     print("Findings")
     print("--------")
     for finding in findings:
+        fixed_version = finding["fixed_version"] or "<no fixed version>"
         print(
             f"{finding['category']:10s} {finding['id']:18s} "
-            f"{finding['package']} {finding['installed_version']} -> {finding['fixed_version']}"
+            f"{finding['package']} {finding['installed_version']} -> {fixed_version}"
         )
 
 
@@ -473,10 +487,14 @@ def build_plan(scan: dict[str, Any]) -> dict[str, Any]:
     go_groups: dict[str, dict[str, Any]] = {}
     base_groups: dict[tuple[str, str], dict[str, Any]] = {}
     other_findings: list[dict[str, Any]] = []
+    unfixable_findings: list[dict[str, Any]] = []
     evidence: list[dict[str, Any]] = []
     planned_vulnerability_keys: set[str] = set()
 
     for finding in findings:
+        if not str(finding.get("fixed_version") or "").strip():
+            unfixable_findings.append(finding)
+            continue
         category = finding["category"]
         if category == "GO_MODULE" and is_go_toolchain_package(finding["package"]):
             category = "GO_TOOLCHAIN"
@@ -575,9 +593,18 @@ def build_plan(scan: dict[str, Any]) -> dict[str, Any]:
         "go_module_actions": go_actions,
         "base_image_actions": base_actions,
         "other_findings": other_findings,
+        "unfixable_findings": unfixable_findings,
         "evidence": evidence,
         "planned_vulnerability_keys": sorted(planned_vulnerability_keys),
     }
+
+
+def unsupported_fixable_findings(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        finding
+        for finding in plan.get("other_findings") or []
+        if finding.get("category") != "GO_TOOLCHAIN" and finding.get("fixed_version")
+    ]
 
 
 def summarize_plan(plan: dict[str, Any]) -> None:
@@ -587,12 +614,16 @@ def summarize_plan(plan: dict[str, Any]) -> None:
     toolchain_findings = [
         finding for finding in other_findings if finding.get("category") == "GO_TOOLCHAIN"
     ]
+    unsupported_findings = unsupported_fixable_findings(plan)
+    unfixable_findings = plan.get("unfixable_findings") or []
 
     print("Plan Summary")
     print("============")
     print(f"Go module actions: {len(go_actions)}")
     print(f"Base image actions: {len(base_actions)}")
-    print(f"Report-only findings: {len(other_findings)}")
+    print(f"Go toolchain findings: {len(toolchain_findings)}")
+    print(f"Unsupported fixable findings: {len(unsupported_findings)}")
+    print(f"Findings without a fixed version: {len(unfixable_findings)}")
     if go_actions:
         print("")
         print("Go Module Bumps")
@@ -623,6 +654,25 @@ def summarize_plan(plan: dict[str, Any]) -> None:
             print(
                 f"{finding['package']} {finding['installed_version']} -> "
                 f"{finding['fixed_version']} ({finding['id']})"
+            )
+    if unsupported_findings:
+        print("")
+        print("Unsupported Fixable Findings (Manual Action Required)")
+        print("------------------------------------------------------")
+        for finding in unsupported_findings:
+            print(
+                f"{finding['category']} {finding['package']} "
+                f"{finding['installed_version']} -> {finding['fixed_version']} "
+                f"({finding['id']})"
+            )
+    if unfixable_findings:
+        print("")
+        print("Findings Without a Fixed Version (Residual Risk)")
+        print("------------------------------------------------")
+        for finding in unfixable_findings:
+            print(
+                f"{finding['category']} {finding['package']} "
+                f"{finding['installed_version']} ({finding['id']})"
             )
 
 
@@ -1083,6 +1133,19 @@ def command_apply(args: argparse.Namespace) -> int:
                         raise
                     cleanup_vendor_license_artifacts(repo_root)
                 go_commands.append({"cwd": ".", "cmd": ["bash", "hack/update-azure-vendor-licenses.sh"]})
+
+                # The upstream license generator runs `go list -m all`, which can
+                # add otherwise-unused go.mod checksums after the CI-equivalent
+                # tidy pass above. Normalize the root module again so the
+                # generated checkpoint is already clean under go-mod-consistency.
+                if args.dry_run:
+                    print_cmd(["go", "mod", "tidy"], cwd=repo_root)
+                    print_cmd(["go", "mod", "verify"], cwd=repo_root)
+                else:
+                    run(["go", "mod", "tidy"], cwd=repo_root, env=go_env)
+                    run(["go", "mod", "verify"], cwd=repo_root, env=go_env)
+                go_commands.append({"cwd": ".", "cmd": ["go", "mod", "tidy"]})
+                go_commands.append({"cwd": ".", "cmd": ["go", "mod", "verify"]})
 
     base_image_updates: list[dict[str, Any]] = []
     allow_default_base_target = len(base_actions) <= 1

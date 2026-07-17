@@ -83,7 +83,10 @@ class BuildImageTest(unittest.TestCase):
                 )
 
                 self.assertEqual(plan.cwd, cwd)
-                self.assertEqual(plan.cmd, ["make", make_target])
+                expected_cmd = ["make", make_target]
+                if image in {"hpp", "hpp-windows"}:
+                    expected_cmd.insert(1, "-B")
+                self.assertEqual(plan.cmd, expected_cmd)
                 self.assertEqual(plan.env["IMAGE_TAG"], "dev")
                 self.assertEqual(plan.env["IMAGE_REGISTRY"], "example.azurecr.io/cpa")
                 self.assertEqual(plan.env["ENABLE_GIT_COMMAND"], "false")
@@ -122,6 +125,29 @@ class BuildImageTest(unittest.TestCase):
         )
 
         self.assertEqual(plan.env["GOEXPERIMENT"], "nosystemcrypto")
+
+    def test_can_force_safe_local_amd64_output(self) -> None:
+        plan = build_image.build_plan(
+            image="ccm",
+            tag="dev",
+            registry="local",
+            repo_root=self.repo,
+            set_values=["ARCH=amd64", "OUTPUT_TYPE=docker"],
+            unset_values=["OUTPUT_FLAG", "BUILDX_EXTRA_FLAGS"],
+            inherited_env={
+                "ARCH": "arm64",
+                "OUTPUT_TYPE": "registry",
+                "OUTPUT_FLAG": "--output=type=registry",
+                "BUILDX_EXTRA_FLAGS": "--push",
+            },
+        )
+
+        self.assertEqual(plan.env["ARCH"], "amd64")
+        self.assertEqual(plan.env["OUTPUT_TYPE"], "docker")
+        self.assertIn("OUTPUT_FLAG", plan.unset_env)
+        self.assertIn("BUILDX_EXTRA_FLAGS", plan.unset_env)
+        self.assertNotIn("OUTPUT_FLAG", plan.env)
+        self.assertNotIn("BUILDX_EXTRA_FLAGS", plan.env)
 
     def test_rejects_unknown_image_alias(self) -> None:
         with self.assertRaisesRegex(ValueError, "unknown image alias"):
@@ -234,6 +260,34 @@ class BuildImageTest(unittest.TestCase):
             "make build-ccm-image",
         )
 
+    def test_main_can_target_an_explicit_checkout(self) -> None:
+        stdout = StringIO()
+        with tempfile.TemporaryDirectory() as temp_dir, mock.patch.object(
+            build_image, "find_repo_root"
+        ) as find_repo_root, mock.patch.object(
+            build_image.subprocess, "run"
+        ) as run_mock, redirect_stdout(stdout):
+            self.assertEqual(
+                build_image.main(
+                    [
+                        "--image",
+                        "ccm",
+                        "--tag",
+                        "dev",
+                        "--registry",
+                        "local",
+                        "--repo",
+                        temp_dir,
+                        "--dry-run",
+                    ]
+                ),
+                0,
+            )
+
+        find_repo_root.assert_not_called()
+        run_mock.assert_not_called()
+        self.assertIn(f"cwd: {Path(temp_dir).resolve()}\n", stdout.getvalue())
+
     def test_run_plan_prints_command_and_cleans_env(self) -> None:
         plan = build_image.build_plan(
             image="hpp",
@@ -260,11 +314,12 @@ class BuildImageTest(unittest.TestCase):
             "cwd: /repo/health-probe-proxy\n"
             "command: env -u ENABLE_GIT_COMMAND -u GOEXPERIMENT "
             "IMAGE_TAG=dev IMAGE_REGISTRY=example.azurecr.io/cpa "
-            "make build-health-probe-proxy-image\n",
+            "make -B build-health-probe-proxy-image\n",
         )
         _, kwargs = run_mock.call_args
         self.assertEqual(
-            run_mock.call_args.args[0], ["make", "build-health-probe-proxy-image"]
+            run_mock.call_args.args[0],
+            ["make", "-B", "build-health-probe-proxy-image"],
         )
         self.assertEqual(kwargs["cwd"], self.repo / "health-probe-proxy")
         self.assertFalse(kwargs.get("shell", False))

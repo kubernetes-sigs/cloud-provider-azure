@@ -83,7 +83,9 @@ python3 <SKILL_DIR>/scripts/fix_image_cves.py clean
   and `clean` so the agent can inspect the planned dependency and base-image
   changes before mutating files.
 - `scan` runs `trivy image --detection-priority comprehensive --format json`
-  and only records findings that include a non-empty `FixedVersion`.
+  and records both fixable findings and findings without a `FixedVersion`.
+  `plan` preserves findings without a fixed version as residual risks and never
+  turns them into apply actions.
 - Findings are classified as:
   `GO_MODULE` for `Class="lang-pkgs"` and `Type="gobinary"`, except for the
   `stdlib` and `toolchain` pseudo-packages,
@@ -95,6 +97,9 @@ python3 <SKILL_DIR>/scripts/fix_image_cves.py clean
   never passed to `go mod edit`, `go list -m`, or module verification.
   `apply`, `verify`, and rescan also filter these pseudo-packages defensively
   when reading a plan saved by an older version of the skill.
+- OTHER findings with a non-empty `FixedVersion` are unsupported fixable
+  findings. They require manual remediation and must not be treated as a clean
+  verification result.
 - `plan` groups multiple GO_MODULE CVEs by module path, chooses the highest
   `FixedVersion` as the minimum required version, and adds Go's required `v`
   prefix when Trivy reports a digit-leading version. BASE_IMAGE findings are
@@ -108,7 +113,11 @@ python3 <SKILL_DIR>/scripts/fix_image_cves.py clean
   plus `go mod verify` in every module before `go mod vendor`.
 - When vendoring is enabled at the repo root, `apply` also runs
   `hack/update-azure-vendor-licenses.sh` so `LICENSES/` stays in sync with
-  `vendor/` and the resulting PR is self-contained.
+  `vendor/` and the resulting PR is self-contained. The upstream license
+  generator runs `go list -m all`, which can add otherwise-unused checksums to
+  the root `go.sum`, so `apply` reruns root `go mod tidy` and `go mod verify`
+  after license generation. This keeps the recorded changes clean under the
+  repository's `go-mod-consistency` workflow.
 - `verify` accepts resolved and vendored Go module versions that are equal to or
   higher than each planned minimum. It does not assume a clean worktree and
   compares the current repo diff against the pre-existing changed files plus
@@ -118,8 +127,9 @@ python3 <SKILL_DIR>/scripts/fix_image_cves.py clean
   fails resolved or vendored replacements. A replacement module's version does
   not prove that the original module meets its CVE fix threshold; update or
   remove the replacement explicitly before using this workflow.
-- The state file lives under `.git/fix-image-cves.json` intentionally so it
-  stays untracked.
+- The state file is resolved with
+  `git rev-parse --git-path fix-image-cves.json` so it stays untracked and each
+  linked worktree gets isolated scan, plan, apply, and verification state.
 - `verify --rescan` expects the agent to rebuild the image first. The skill
   does not build or push images.
 - `clean` removes the state file and cleans up any temporary helper artifacts

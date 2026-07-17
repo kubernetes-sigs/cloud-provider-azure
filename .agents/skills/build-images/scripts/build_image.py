@@ -45,6 +45,7 @@ class ImageTarget:
     make_target: str
     subdir: str = "."
     default_goexperiment: bool = False
+    force_rebuild: bool = False
 
 
 @dataclass(frozen=True)
@@ -65,9 +66,15 @@ IMAGE_TARGETS = {
     "cnm-linux": ImageTarget("build-node-image-linux", default_goexperiment=True),
     "cnm-windows": ImageTarget("build-node-image-windows"),
     "cnm-windows-hpc": ImageTarget("build-node-image-windows-hpc"),
-    "hpp": ImageTarget("build-health-probe-proxy-image", "health-probe-proxy"),
+    "hpp": ImageTarget(
+        "build-health-probe-proxy-image",
+        "health-probe-proxy",
+        force_rebuild=True,
+    ),
     "hpp-windows": ImageTarget(
-        "build-health-probe-proxy-image-windows", "health-probe-proxy"
+        "build-health-probe-proxy-image-windows",
+        "health-probe-proxy",
+        force_rebuild=True,
     ),
 }
 
@@ -155,9 +162,13 @@ def build_plan(
     unset_env.update(unset_managed_env)
     if inherited_env is not None:
         unset_env.update(key for key in MAKE_CONTROL_ENV if key in inherited_env)
+    cmd = ["make"]
+    if target.force_rebuild:
+        cmd.append("-B")
+    cmd.append(target.make_target)
     return BuildPlan(
         cwd=repo_root / target.subdir,
-        cmd=["make", target.make_target],
+        cmd=cmd,
         env=env,
         unset_env=frozenset(unset_env),
     )
@@ -196,6 +207,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--tag", required=True, help="IMAGE_TAG value to use")
     parser.add_argument("--registry", required=True, help="IMAGE_REGISTRY value to use")
     parser.add_argument(
+        "--repo",
+        help="Target cloud-provider-azure checkout (default: checkout containing this skill)",
+    )
+    parser.add_argument(
         "--set",
         dest="set_values",
         action="append",
@@ -233,11 +248,17 @@ def run_plan(plan: BuildPlan) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     try:
+        if args.repo is None:
+            repo_root = find_repo_root(Path.cwd())
+        else:
+            repo_root = Path(args.repo).resolve()
+            if not repo_root.is_dir():
+                raise ValueError(f"--repo is not a directory: {repo_root}")
         plan = build_plan(
             image=args.image,
             tag=args.tag,
             registry=args.registry,
-            repo_root=find_repo_root(Path.cwd()),
+            repo_root=repo_root,
             set_values=args.set_values,
             unset_values=args.unset_values,
             inherited_env=os.environ,
