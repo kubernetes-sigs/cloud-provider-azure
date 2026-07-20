@@ -99,21 +99,6 @@ func (s *IgnoreCaseSet) Len() int {
 	return s.set.Len()
 }
 
-// Equals returns true if the two sets are equal.
-func (s *IgnoreCaseSet) Equals(other *IgnoreCaseSet) bool {
-	// Two sets of equal size are equal iff every item in one is contained in the
-	// other, so a single containment check in one direction is sufficient.
-	if s.Len() != other.Len() {
-		return false
-	}
-	for _, item := range s.UnsortedList() {
-		if !other.Has(item) {
-			return false
-		}
-	}
-	return true
-}
-
 // Difference returns a new IgnoreCaseSet containing the items in s that are not
 // present in other (i.e. the set difference s \ other). It is safe to call on
 // nil or uninitialized sets.

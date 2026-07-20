@@ -42,12 +42,11 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient/mock_virtualnetworklinkclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/servicegateway/difftracker"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/servicegateway"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -196,34 +195,6 @@ func GetTestCloudWithContainerLoadBalancer(ctrl *gomock.Controller) (az *Cloud) 
 	az.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypePodIP
 	az.LoadBalancerSKU = consts.LoadBalancerSKUService
 	az.ServiceGatewayEnabled = true
-	dtConfig := difftracker.Config{
-		ResourceGroup:              az.ResourceGroup,
-		SubscriptionID:             az.SubscriptionID,
-		Location:                   az.Location,
-		VNetName:                   az.VnetName,
-		VNetResourceGroup:          az.VnetResourceGroup,
-		ServiceGatewayResourceName: consts.DefaultServiceGatewayResourceName,
-	}
-	var err error
-	az.diffTracker, err = difftracker.New(
-		log.Noop(),
-		difftracker.K8sState{
-			Services: utilsets.NewString(),
-			Egresses: utilsets.NewString(),
-			Nodes:    make(map[string]difftracker.Node),
-		},
-		difftracker.NRPState{
-			LoadBalancers: utilsets.NewString(),
-			NATGateways:   utilsets.NewString(),
-			Locations:     make(map[string]difftracker.NRPLocation),
-		},
-		dtConfig,
-		az.NetworkClientFactory,
-		az.KubeClient,
-	)
-	if err != nil {
-		panic("GetTestCloudWithContainerLoadBalancer: failed to initialize diffTracker: " + err.Error())
-	}
-	az.diffTracker.SetEventRecorder(az.eventRecorder)
+	az.serviceGatewayRuntime = servicegateway.NewRuntime(az.Config, az.NetworkClientFactory, az.KubeClient)
 	return az
 }
