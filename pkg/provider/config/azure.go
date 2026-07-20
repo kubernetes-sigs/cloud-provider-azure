@@ -206,10 +206,6 @@ func (az *Config) UseServiceLoadBalancer() bool {
 	return strings.EqualFold(az.LoadBalancerSKU, consts.LoadBalancerSKUService)
 }
 
-func (az *Config) IsLBBackendPoolTypePodIPAndUseServiceLoadBalancer() bool {
-	return az.IsLBBackendPoolTypePodIP() && az.UseServiceLoadBalancer()
-}
-
 func (az *Config) GetPutVMSSVMBatchSize() int {
 	return az.PutVMSSVMBatchSize
 }

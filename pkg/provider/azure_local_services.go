@@ -356,34 +356,10 @@ func endpointSliceFromDeleteEvent(obj interface{}) (*discovery_v1.EndpointSlice,
 	}
 }
 
-// setUpEndpointSlicesInformer registers either ServiceGateway forwarding handlers or the legacy
-// local-service backend-pool handlers.
+// setUpEndpointSlicesInformer registers the legacy local-service backend-pool handlers.
 func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInformerFactory) {
 	logger := log.Background().WithName("setUpEndpointSlicesInformer")
 	endpointSlicesInformer := informerFactory.Discovery().V1().EndpointSlices().Informer()
-	if az.ServiceGatewayEnabled {
-		_, _ = endpointSlicesInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
-				az.diffTracker.ReconcileEndpointSlice(nil, obj.(*discovery_v1.EndpointSlice))
-			},
-			UpdateFunc: func(oldObj, newObj interface{}) {
-				az.diffTracker.ReconcileEndpointSlice(
-					oldObj.(*discovery_v1.EndpointSlice),
-					newObj.(*discovery_v1.EndpointSlice),
-				)
-			},
-			DeleteFunc: func(obj interface{}) {
-				endpointSlice, err := endpointSliceFromDeleteEvent(obj)
-				if err != nil {
-					logger.Error(err, "Cannot process EndpointSlice deletion")
-					return
-				}
-				az.diffTracker.ReconcileEndpointSlice(endpointSlice, nil)
-			},
-		})
-		return
-	}
-
 	_, _ = endpointSlicesInformer.AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {

@@ -414,6 +414,12 @@ func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig, h *contr
 func startControllers(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig,
 	cloud cloudprovider.Interface, controllers map[string]initFunc, healthzHandler *controllerhealthz.MutableHealthzHandler) error {
 	logger := log.FromContextOrBackground(ctx).WithName("startControllers")
+
+	// Validate whether Service Gateway config is not conflicting with controller config.
+	if err := validateServiceGatewayControllerConfiguration(cloud, completedConfig.ComponentConfig.Generic.Controllers); err != nil {
+		return err
+	}
+
 	// Initialize the cloud provider with a reference to the clientBuilder
 	cloud.Initialize(completedConfig.ClientBuilder, ctx.Done())
 	// Set the informer on the user cloud object
@@ -469,6 +475,21 @@ func startControllers(ctx context.Context, controllerContext genericcontrollerma
 	logger.V(1).Info("Received stopping signal, exiting")
 
 	return nil
+}
+
+func validateServiceGatewayControllerConfiguration(cloud any, controllers []string) error {
+	runtimeProvider, ok := cloud.(serviceGatewayRuntimeProvider)
+	if !ok {
+		return nil
+	}
+	runtime := runtimeProvider.ServiceGatewayRuntime()
+	if runtime == nil || !runtime.Enabled() {
+		return nil
+	}
+	if genericcontrollermanager.IsControllerEnabled(names.ServiceLBController, ControllersDisabledByDefault, controllers) {
+		return nil
+	}
+	return fmt.Errorf("ServiceGateway requires %q to be enabled", names.ServiceLBController)
 }
 
 // initFunc is used to launch a particular controller.  It may run additional "should I activate checks".
