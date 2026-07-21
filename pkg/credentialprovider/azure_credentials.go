@@ -244,6 +244,21 @@ func (a *acrProvider) GetCredentials(ctx context.Context, image string, _ []stri
 			response.Auth[url] = cred
 		}
 
+		// The static wildcard patterns above (e.g. *.azurecr.io) only match a
+		// single label before the ACR suffix, so they do not cover regional
+		// (geo-replica) login servers such as foo.eastus2.geo.azurecr.io. Add an
+		// explicit entry for the exact parsed login server(s) so service-principal
+		// pulls from regional endpoints are authenticated, mirroring the managed
+		// identity path above.
+		spCred := v1.AuthConfig{
+			Username: a.config.AADClientID,
+			Password: a.config.AADClientSecret,
+		}
+		response.Auth[targetloginServer] = spCred
+		if sourceloginServer != "" {
+			response.Auth[sourceloginServer] = spCred
+		}
+
 		// Handle the custom cloud case
 		// In clouds where ACR is not yet deployed, the string will be empty
 		if a.environment != nil && strings.Contains(a.environment.ContainerRegistryDNSSuffix, ".azurecr.") {

@@ -77,8 +77,11 @@ func TestGetCredentials(t *testing.T) {
 		t.Fatalf("Unexpected error when fetching acr credentials: %v", err)
 	}
 
-	if credResponse == nil || len(credResponse.Auth) != len(result)+1 {
-		t.Errorf("Unexpected credential response: %v, expected length %d", credResponse, len(result)+1)
+	// Expected entries: the anonymous "*.azurecr.*" wildcard, one entry per
+	// containerRegistryUrls wildcard (len(result)), and one explicit entry for
+	// the exact parsed login server (foo.azurecr.io).
+	if credResponse == nil || len(credResponse.Auth) != len(result)+2 {
+		t.Errorf("Unexpected credential response: %v, expected length %d", credResponse, len(result)+2)
 	}
 	for _, cred := range credResponse.Auth {
 		if cred.Username != "" && cred.Username != "foo" {
@@ -92,6 +95,60 @@ func TestGetCredentials(t *testing.T) {
 		if _, found := credResponse.Auth[registryName]; !found {
 			t.Errorf("Missing expected registry: %s", registryName)
 		}
+	}
+	// The exact parsed login server must have an explicit entry with the
+	// service-principal credentials.
+	if cred, found := credResponse.Auth["foo.azurecr.io"]; !found {
+		t.Errorf("Missing explicit entry for parsed login server foo.azurecr.io")
+	} else if cred.Username != "foo" || cred.Password != "bar" {
+		t.Errorf("Unexpected credentials for foo.azurecr.io: %v", cred)
+	}
+}
+
+// TestGetCredentialsRegionalServicePrincipal verifies that on the service
+// principal path a pull from an ACR regional (geo-replica) login server, whose
+// 5-label host is not matched by the static *.azurecr.io wildcard patterns,
+// still receives an explicit auth entry keyed on the exact regional host.
+func TestGetCredentialsRegionalServicePrincipal(t *testing.T) {
+	configFile, err := os.CreateTemp(".", "config.json")
+	if err != nil {
+		t.Fatalf("Unexpected error when creating temp file: %v", err)
+	}
+	defer os.Remove(configFile.Name())
+
+	_, err = configFile.WriteString(`
+    {
+        "aadClientId": "foo",
+        "aadClientSecret": "bar"
+    }`)
+	if err != nil {
+		t.Fatalf("Unexpected error when writing to temp file: %v", err)
+	}
+
+	regionalImage := "foo.eastus2.geo.azurecr.io/nginx:v1"
+	provider, err := NewAcrProvider(
+		&v1.CredentialProviderRequest{
+			Image: regionalImage,
+		},
+		"",
+		configFile.Name(),
+		IdentityBindingsConfig{},
+	)
+	if err != nil {
+		t.Fatalf("Unexpected error when creating acr provider: %v", err)
+	}
+
+	credResponse, err := provider.GetCredentials(context.TODO(), regionalImage, nil)
+	if err != nil {
+		t.Fatalf("Unexpected error when fetching acr credentials: %v", err)
+	}
+
+	cred, found := credResponse.Auth["foo.eastus2.geo.azurecr.io"]
+	if !found {
+		t.Fatalf("Missing explicit entry for regional login server foo.eastus2.geo.azurecr.io; auth keys: %v", credResponse.Auth)
+	}
+	if cred.Username != "foo" || cred.Password != "bar" {
+		t.Errorf("Unexpected credentials for regional login server: %v", cred)
 	}
 }
 func TestGetCredentialsConfig(t *testing.T) {
@@ -132,7 +189,7 @@ func TestGetCredentialsConfig(t *testing.T) {
         "aadClientId": "foo",
         "aadClientSecret": "bar"
     }`,
-			expectedCredsLength: 5,
+			expectedCredsLength: 6,
 		},
 		{
 			desc:  "0 credential should be returned for non-ACR image using Managed Identity",
