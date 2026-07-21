@@ -1,15 +1,21 @@
-# Cloud Provider Azure Release Context
+# Cloud Provider Azure Image CVE Remediation Context
 
-This glossary defines the project-specific language used by release and
-pre-release security automation.
+This glossary defines the project-specific language used by default-branch and
+release-branch image security automation.
 
 ## Language
 
 **CVE verification image**:
-A disposable container image built to detect fixable vulnerabilities and
-validate their remediation before a release. It is not published and is
-removed after the verification workflow finishes.
+A disposable container image built from a supported target branch to detect
+fixable vulnerabilities and validate their remediation. It is not published
+and is removed after the verification workflow finishes.
 _Avoid_: Release image, published image
+
+**CVE remediation target branch**:
+The input branch whose images are verified and whose remediation PR receives
+the changes. It is exactly `master` or matches
+`^release-[0-9]+\.[0-9]+$`.
+_Avoid_: Release branch when referring to both supported branch types
 
 **CVE verification set**:
 The Linux CCM, CNM, and health-probe-proxy CVE verification images. All three

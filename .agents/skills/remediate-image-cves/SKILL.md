@@ -1,16 +1,17 @@
 ---
 name: remediate-image-cves
-description: Orchestrate end-to-end CVE remediation for the Linux CCM, CNM, and health-probe-proxy images on a cloud-provider-azure release branch, including builds, repeated Trivy verification, checkpoint commits, cleanup, validation, push, and pull-request creation. Use when the user wants to verify or fix release-branch CVE verification images, run the three-image CVE workflow, or open a CVE remediation PR for a release branch.
+description: Orchestrate end-to-end CVE remediation for the Linux CCM, CNM, and health-probe-proxy images on cloud-provider-azure master or a release-X.Y branch, including builds, repeated Trivy verification, checkpoint commits, cleanup, validation, push, and pull-request creation. Use when the user wants to verify or fix CVEs on master or a release branch, run the three-image CVE workflow, or open a CVE remediation PR for either supported target branch.
 ---
 
 # Remediate Image CVEs
 
 Remediate actionable fixable vulnerabilities in the Linux CCM, CNM, and
-health-probe-proxy images for one input release branch.
+health-probe-proxy images for one input target branch.
 
-Require the caller to provide an input branch named `release-X.Y`. Operate only
-on the current checkout; callers may run this skill concurrently in separate
-worktrees for separate release branches.
+Require the caller to provide an input branch that is exactly `master` or
+matches `^release-[0-9]+\.[0-9]+$`. Operate only on the current checkout;
+callers may run this skill concurrently in separate worktrees for separate
+input branches.
 
 ## Sources of Truth
 
@@ -30,7 +31,7 @@ report the blocker.
 Before checking out the input branch, copy this complete skill directory and
 all three dependency skill directories into a unique run-scoped temporary
 directory outside the repository. Use that exact tooling snapshot for the
-entire run; do not depend on skill files present on the target release branch.
+entire run; do not depend on skill files present on the target branch.
 Invoke both image helpers and the module-sync helper with their explicit
 `--repo` input pointing at the current worktree. Remove the temporary tooling
 snapshot during final cleanup.
@@ -59,11 +60,14 @@ snapshot during final cleanup.
 
 ## Branch and Image Identity
 
-Fetch and check out the current input branch tip from `upstream`, using only a
-fast-forward update if a local branch already exists. Never hard-reset a local
-branch; stop if it cannot be fast-forwarded safely. Then create a branch named
-`cve-fix-<release-branch>-<UTC timestamp>`, for example
-`cve-fix-release-1.36-20260717T013000Z`.
+Validate that the input branch is exactly `master` or matches
+`^release-[0-9]+\.[0-9]+$`. Fetch and check out its current tip from `upstream`,
+using only a fast-forward update if a local branch already exists. Never
+hard-reset a local branch; stop if it cannot be fast-forwarded safely. Then
+create a branch named
+`cve-fix-<input-branch>-<UTC timestamp>`, for example
+`cve-fix-master-20260721T013000Z` or
+`cve-fix-release-1.36-20260721T013000Z`.
 
 Use the build skill with:
 
@@ -211,7 +215,7 @@ When source changes exist and every final gate passes:
 3. Read `.github/PULL_REQUEST_TEMPLATE.md` and preserve every section heading,
    the issue field, and the fenced `release-note` and `docs` blocks. HTML
    guidance comments may be removed after following their instructions.
-4. Use title `chore: fix cves for <release-branch>`, `/kind cleanup`, no issue
+4. Use title `chore: fix cves for <input-branch>`, `/kind cleanup`, no issue
    closure unless the caller supplied one, and `NONE` in the release-note
    block. Replace the issue placeholder with `NONE` when no issue was supplied.
 5. Put the per-image baseline findings, applied fixes, final scan results,
