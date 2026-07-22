@@ -49,9 +49,7 @@ snapshot during final cleanup.
 4. Require `upstream` to contain the input branch and verify, before any build,
    that the current authenticated account can push to `origin` and open a pull
    request against `upstream`. Check repository permissions rather than
-   hard-coding classic-token scope names. A missing `workflow` scope is not a
-   blocker unless the resulting commit actually changes `.github/workflows/`.
-   Never switch GitHub accounts automatically.
+   hard-coding classic-token scope names.
 5. Check for an existing open CVE-remediation pull request targeting the input
    branch. If one exists, stop and report its URL instead of creating a
    duplicate.
@@ -212,15 +210,31 @@ When source changes exist and every final gate passes:
 1. Push the CVE-fix branch to `origin`.
 2. Open a ready-for-review PR in `kubernetes-sigs/cloud-provider-azure`
    targeting the input branch.
-3. Read `.github/PULL_REQUEST_TEMPLATE.md` and preserve every section heading,
-   the issue field, and the fenced `release-note` and `docs` blocks. HTML
-   guidance comments may be removed after following their instructions.
-4. Use title `chore: fix cves for <input-branch>`, `/kind cleanup`, no issue
-   closure unless the caller supplied one, and `NONE` in the release-note
-   block. Replace the issue placeholder with `NONE` when no issue was supplied.
-5. Put the per-image baseline findings, applied fixes, final scan results,
-   module-consistency result, unit-test result, checkpoint commits, and residual
-   risks in the reviewer notes.
+3. Treat `.github/PULL_REQUEST_TEMPLATE.md` in the target checkout as
+   authoritative. Start from its exact contents and preserve every section
+   heading, the issue field, the fenced `release-note` and `docs` blocks, and
+   any additional sections it contains. HTML guidance comments may be removed
+   only after following their instructions. Never replace or drop repository
+   template structure to match the skill asset; stop if the two cannot be
+   merged without losing required content.
+4. Use title `chore: fix cves for <input-branch>`. Read
+   `assets/pull-request-template.md` from the run-scoped snapshot of this skill,
+   and replace every placeholder. Under `What this PR does / why we need it`,
+   use `Remediates actionable fixable vulnerabilities in the Linux CCM, CNM,
+   and health-probe-proxy images for <input-branch>.`, followed by the populated
+   results table and validation block from the asset. Under `Special notes for
+   your reviewer`, use only the populated residual-risk details block from the
+   asset. Do not use the asset as the complete PR body or copy its content into
+   any other section.
+5. Preserve the repository template's heading text and order. Before opening
+   the PR, verify that every `####` heading from the repository template appears
+   exactly once in the same order and that its `release-note` and `docs` fences
+   remain. Use `/kind cleanup`, no issue closure unless the caller supplied one,
+   and `NONE` in the release-note block. Replace the issue placeholder with
+   `NONE` when no issue was supplied. Count vulnerability findings rather than
+   grouped remediation actions in the baseline column. Use `None` instead of
+   omitting an empty fix or residual-risk entry. For a shared root-module fix,
+   identify the checkpoint that covers both CCM and CNM.
 
 ## Cleanup and Output
 
@@ -236,7 +250,7 @@ branch.
 
 Output:
 
-| Image | Baseline actionable CVEs | Applied fixes | Final status | Residual risks |
+| Image | Baseline findings | Applied fixes | Final verification | Residual risks |
 |---|---|---|---|---|
 
 Then report the module-consistency result, unit-test result, checkpoint commits,
