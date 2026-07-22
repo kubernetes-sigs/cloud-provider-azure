@@ -203,6 +203,25 @@ func TestNewAccessControl(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, called)
 	})
+
+	t.Run("it should emit warning event if invalid azure-blocked-ip-ranges", func(t *testing.T) {
+		svc := k8sFx.Service().
+			WithBlockedIPRanges("foo", "10.0.0.1/32", "bar").
+			Build()
+
+		called := 0
+		eventEmitter := func(obj runtime.Object, eventType, reason, message string) {
+			called++
+			assert.Equal(t, &svc, obj)
+			assert.Equal(t, v1.EventTypeWarning, eventType)
+			assert.Equal(t, "InvalidBlockedIPRanges", reason)
+			assert.Equal(t, EventMessageOfInvalidBlockedIPRanges([]string{"foo", "bar"}), message)
+		}
+
+		_, err := NewAccessControl(log.Noop(), &svc, sg, WithEventEmitter(eventEmitter))
+		assert.NoError(t, err)
+		assert.Equal(t, 1, called)
+	})
 }
 
 func TestAccessControl_DenyAllExceptSourceRanges(t *testing.T) {
@@ -1131,6 +1150,382 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 				DenyAllSecurityRule(iputil.IPv6).WithPriority(4094).
 				WithDestination(dstIPv6Addresses...).
 				Build(),
+		)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
+	})
+
+	t.Run("patch service with blockedIPRanges only (deny before internet allow)", func(t *testing.T) {
+		var (
+			k8sFx             = fixture.NewFixture().Kubernetes()
+			blockedIPv4Ranges = []string{"10.1.0.0/16"}
+			blockedIPv6Ranges = []string{"fd12:abcd::/48"}
+			svc               = k8sFx.Service().
+						WithBlockedIPRanges(append(blockedIPv4Ranges, blockedIPv6Ranges...)...).
+						Build()
+			originalRules    = azureFx.NoiseSecurityRules()
+			dstIPv4Addresses = []string{"52.0.0.1"}
+			dstIPv6Addresses = []string{"2001:db8::1"}
+			expectedRules    = testutil.CloneInJSON(originalRules)
+		)
+		// Expected: deny blocked IPv4/IPv6 rules first, then internet allow rules
+		expectedRules = append(expectedRules,
+			// Deny rules for TCP
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, blockedIPv4Ranges, k8sFx.Service().TCPPorts()).WithPriority(400).WithDestination(dstIPv4Addresses...).Build(),
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, blockedIPv6Ranges, k8sFx.Service().TCPPorts()).WithPriority(401).WithDestination(dstIPv6Addresses...).Build(),
+			// Deny rules for UDP
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, blockedIPv4Ranges, k8sFx.Service().UDPPorts()).WithPriority(402).WithDestination(dstIPv4Addresses...).Build(),
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, blockedIPv6Ranges, k8sFx.Service().UDPPorts()).WithPriority(403).WithDestination(dstIPv6Addresses...).Build(),
+			// Allow rules
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{securitygroup.ServiceTagInternet}, k8sFx.Service().TCPPorts()).WithPriority(500).WithDestination(dstIPv4Addresses...).Build(),
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, []string{securitygroup.ServiceTagInternet}, k8sFx.Service().TCPPorts()).WithPriority(501).WithDestination(dstIPv6Addresses...).Build(),
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{securitygroup.ServiceTagInternet}, k8sFx.Service().UDPPorts()).WithPriority(502).WithDestination(dstIPv4Addresses...).Build(),
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, []string{securitygroup.ServiceTagInternet}, k8sFx.Service().UDPPorts()).WithPriority(503).WithDestination(dstIPv6Addresses...).Build(),
+		)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
+	})
+
+	t.Run("patch service with blockedIPRanges and allowedServiceTags", func(t *testing.T) {
+		var (
+			k8sFx             = fixture.NewFixture().Kubernetes()
+			serviceTags       = azureFx.ServiceTags(1)
+			blockedIPv4Ranges = []string{"10.1.0.0/16"}
+			svc               = k8sFx.Service().
+						WithBlockedIPRanges(blockedIPv4Ranges...).
+						WithAllowedServiceTags(serviceTags...).
+						Build()
+			originalRules    = azureFx.NoiseSecurityRules()
+			dstIPv4Addresses = []string{"52.0.0.1"}
+			dstIPv6Addresses = []string{}
+			expectedRules    = testutil.CloneInJSON(originalRules)
+		)
+		// Expected: deny blocked IPv4 rule then service tag allow (no internet tag since service tag specified)
+		expectedRules = append(expectedRules,
+			// Deny rules for TCP
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, blockedIPv4Ranges, k8sFx.Service().TCPPorts()).WithPriority(400).WithDestination(dstIPv4Addresses...).Build(),
+			// Deny rules for UDP
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, blockedIPv4Ranges, k8sFx.Service().UDPPorts()).WithPriority(401).WithDestination(dstIPv4Addresses...).Build(),
+			// Allow rules
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{serviceTags[0]}, k8sFx.Service().TCPPorts()).WithPriority(500).WithDestination(dstIPv4Addresses...).Build(),
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{serviceTags[0]}, k8sFx.Service().UDPPorts()).WithPriority(501).WithDestination(dstIPv4Addresses...).Build(),
+		)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
+	})
+
+	t.Run("patch service with blockedIPRanges on IPv4 only", func(t *testing.T) {
+		var (
+			k8sFx             = fixture.NewFixture().Kubernetes()
+			blockedIPv4Ranges = []string{"10.1.0.0/16", "172.16.0.0/12"}
+			svc               = k8sFx.Service().
+						WithBlockedIPRanges(blockedIPv4Ranges...).
+						Build()
+			originalRules    = azureFx.NoiseSecurityRules()
+			dstIPv4Addresses = []string{"52.0.0.1", "52.0.0.2"}
+			dstIPv6Addresses = []string{}
+			expectedRules    = testutil.CloneInJSON(originalRules)
+		)
+		// Expected: deny blocked IPv4 rules first, then internet allow rules for IPv4
+		expectedRules = append(expectedRules,
+			// Deny rules for TCP IPv4
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, blockedIPv4Ranges, k8sFx.Service().TCPPorts()).WithPriority(400).WithDestination(dstIPv4Addresses...).Build(),
+			// Deny rules for UDP IPv4
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, blockedIPv4Ranges, k8sFx.Service().UDPPorts()).WithPriority(401).WithDestination(dstIPv4Addresses...).Build(),
+			// Allow rules for IPv4
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{securitygroup.ServiceTagInternet}, k8sFx.Service().TCPPorts()).WithPriority(500).WithDestination(dstIPv4Addresses...).Build(),
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{securitygroup.ServiceTagInternet}, k8sFx.Service().UDPPorts()).WithPriority(501).WithDestination(dstIPv4Addresses...).Build(),
+		)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
+	})
+
+	t.Run("patch service with blockedIPRanges on IPv6 only", func(t *testing.T) {
+		var (
+			k8sFx             = fixture.NewFixture().Kubernetes()
+			blockedIPv6Ranges = []string{"fd12:abcd::/48", "fe80:1234::/32"}
+			svc               = k8sFx.Service().
+						WithBlockedIPRanges(blockedIPv6Ranges...).
+						Build()
+			originalRules    = azureFx.NoiseSecurityRules()
+			dstIPv4Addresses = []string{}
+			dstIPv6Addresses = []string{"2001:db8::1", "2001:db8::2"}
+			expectedRules    = testutil.CloneInJSON(originalRules)
+		)
+		// Expected: deny blocked IPv6 rules first, then internet allow rules for IPv6
+		expectedRules = append(expectedRules,
+			// Deny rules for TCP IPv6
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, blockedIPv6Ranges, k8sFx.Service().TCPPorts()).WithPriority(400).WithDestination(dstIPv6Addresses...).Build(),
+			// Deny rules for UDP IPv6
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, blockedIPv6Ranges, k8sFx.Service().UDPPorts()).WithPriority(401).WithDestination(dstIPv6Addresses...).Build(),
+			// Allow rules for IPv6
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, []string{securitygroup.ServiceTagInternet}, k8sFx.Service().TCPPorts()).WithPriority(500).WithDestination(dstIPv6Addresses...).Build(),
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, []string{securitygroup.ServiceTagInternet}, k8sFx.Service().UDPPorts()).WithPriority(501).WithDestination(dstIPv6Addresses...).Build(),
+		)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
+	})
+
+	t.Run("patch service with blockedIPRanges on IPv4 and IPv6", func(t *testing.T) {
+		var (
+			k8sFx             = fixture.NewFixture().Kubernetes()
+			blockedIPv4Ranges = []string{"10.1.0.0/16", "172.16.0.0/12"}
+			blockedIPv6Ranges = []string{"fd12:abcd::/48"}
+			svc               = k8sFx.Service().
+						WithBlockedIPRanges(append(blockedIPv4Ranges, blockedIPv6Ranges...)...).
+						Build()
+			originalRules    = azureFx.NoiseSecurityRules()
+			dstIPv4Addresses = []string{"52.0.0.1"}
+			dstIPv6Addresses = []string{"2001:db8::1"}
+			expectedRules    = testutil.CloneInJSON(originalRules)
+		)
+		// Expected: deny blocked IPv4/IPv6 rules first, then internet allow rules
+		expectedRules = append(expectedRules,
+			// Deny rules for TCP
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, blockedIPv4Ranges, k8sFx.Service().TCPPorts()).WithPriority(400).WithDestination(dstIPv4Addresses...).Build(),
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, blockedIPv6Ranges, k8sFx.Service().TCPPorts()).WithPriority(401).WithDestination(dstIPv6Addresses...).Build(),
+			// Deny rules for UDP
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, blockedIPv4Ranges, k8sFx.Service().UDPPorts()).WithPriority(402).WithDestination(dstIPv4Addresses...).Build(),
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, blockedIPv6Ranges, k8sFx.Service().UDPPorts()).WithPriority(403).WithDestination(dstIPv6Addresses...).Build(),
+			// Allow rules
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{securitygroup.ServiceTagInternet}, k8sFx.Service().TCPPorts()).WithPriority(500).WithDestination(dstIPv4Addresses...).Build(),
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, []string{securitygroup.ServiceTagInternet}, k8sFx.Service().TCPPorts()).WithPriority(501).WithDestination(dstIPv6Addresses...).Build(),
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{securitygroup.ServiceTagInternet}, k8sFx.Service().UDPPorts()).WithPriority(502).WithDestination(dstIPv4Addresses...).Build(),
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, []string{securitygroup.ServiceTagInternet}, k8sFx.Service().UDPPorts()).WithPriority(503).WithDestination(dstIPv6Addresses...).Build(),
+		)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
+	})
+
+	t.Run("patch service with blockedIPRanges and allowedIPRanges", func(t *testing.T) {
+		var (
+			k8sFx             = fixture.NewFixture().Kubernetes()
+			blockedIPv4Ranges = []string{"10.1.0.0/16"}
+			allowedIPv4Ranges = []string{"192.168.0.0/16", "20.0.0.1/32"}
+			svc               = k8sFx.Service().
+						WithBlockedIPRanges(blockedIPv4Ranges...).
+						WithAllowedIPRanges(allowedIPv4Ranges...).
+						Build()
+			originalRules    = azureFx.NoiseSecurityRules()
+			dstIPv4Addresses = []string{"52.0.0.1"}
+			dstIPv6Addresses = []string{}
+			expectedRules    = testutil.CloneInJSON(originalRules)
+		)
+		// Expected: deny blocked first, then allow specific IP ranges (no internet tag since allowedIPRanges specified)
+		expectedRules = append(expectedRules,
+			// Deny rules for TCP
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, blockedIPv4Ranges, k8sFx.Service().TCPPorts()).WithPriority(400).WithDestination(dstIPv4Addresses...).Build(),
+			// Deny rules for UDP
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, blockedIPv4Ranges, k8sFx.Service().UDPPorts()).WithPriority(401).WithDestination(dstIPv4Addresses...).Build(),
+			// Allow rules for specific IP ranges
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).WithPriority(500).WithDestination(dstIPv4Addresses...).Build(),
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().UDPPorts()).WithPriority(501).WithDestination(dstIPv4Addresses...).Build(),
+		)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
+	})
+
+	t.Run("patch service with blockedIPRanges and loadBalancerSourceRanges", func(t *testing.T) {
+		var (
+			k8sFx             = fixture.NewFixture().Kubernetes()
+			blockedIPv4Ranges = []string{"10.1.0.0/16"}
+			sourceRanges      = []string{"192.168.0.0/16", "20.0.0.1/32"}
+			svc               = k8sFx.Service().
+						WithBlockedIPRanges(blockedIPv4Ranges...).
+						WithLoadBalancerSourceRanges(sourceRanges...).
+						Build()
+			originalRules    = azureFx.NoiseSecurityRules()
+			dstIPv4Addresses = []string{"52.0.0.1"}
+			dstIPv6Addresses = []string{}
+			expectedRules    = testutil.CloneInJSON(originalRules)
+		)
+		// Expected: deny blocked first, then allow source ranges (no internet tag since sourceRanges specified)
+		expectedRules = append(expectedRules,
+			// Deny rules for TCP
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, blockedIPv4Ranges, k8sFx.Service().TCPPorts()).WithPriority(400).WithDestination(dstIPv4Addresses...).Build(),
+			// Deny rules for UDP
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, blockedIPv4Ranges, k8sFx.Service().UDPPorts()).WithPriority(401).WithDestination(dstIPv4Addresses...).Build(),
+			// Allow rules for source ranges
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, sourceRanges, k8sFx.Service().TCPPorts()).WithPriority(500).WithDestination(dstIPv4Addresses...).Build(),
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, sourceRanges, k8sFx.Service().UDPPorts()).WithPriority(501).WithDestination(dstIPv4Addresses...).Build(),
+		)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
+	})
+
+	t.Run("patch service with invalid blockedIPRanges should only use valid ones", func(t *testing.T) {
+		var (
+			k8sFx = fixture.NewFixture().Kubernetes()
+			// 10.1.0.1/16 is invalid (not network address), only 10.2.0.0/16 should be used
+			inputBlockedRanges = []string{"10.1.0.1/16", "10.2.0.0/16"}
+			validBlockedRanges = []string{"10.2.0.0/16"}
+			svc                = k8sFx.Service().
+						WithBlockedIPRanges(inputBlockedRanges...).
+						Build()
+			originalRules    = azureFx.NoiseSecurityRules()
+			dstIPv4Addresses = []string{"52.0.0.1"}
+			dstIPv6Addresses = []string{}
+			expectedRules    = testutil.CloneInJSON(originalRules)
+		)
+		// Expected: only valid blocked IP ranges should be used
+		expectedRules = append(expectedRules,
+			// Deny rules for TCP with only valid ranges
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, validBlockedRanges, k8sFx.Service().TCPPorts()).WithPriority(400).WithDestination(dstIPv4Addresses...).Build(),
+			// Deny rules for UDP with only valid ranges
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, validBlockedRanges, k8sFx.Service().UDPPorts()).WithPriority(401).WithDestination(dstIPv4Addresses...).Build(),
+			// Allow rules
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{securitygroup.ServiceTagInternet}, k8sFx.Service().TCPPorts()).WithPriority(500).WithDestination(dstIPv4Addresses...).Build(),
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{securitygroup.ServiceTagInternet}, k8sFx.Service().UDPPorts()).WithPriority(501).WithDestination(dstIPv4Addresses...).Build(),
+		)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
+	})
+
+	t.Run("patch service with blockedIPRanges and denyAllExceptSourceRanges", func(t *testing.T) {
+		var (
+			k8sFx             = fixture.NewFixture().Kubernetes()
+			blockedIPv4Ranges = []string{"10.1.0.0/16"}
+			allowedIPv4Ranges = []string{"192.168.0.0/16"}
+			svc               = k8sFx.Service().
+						WithBlockedIPRanges(blockedIPv4Ranges...).
+						WithAllowedIPRanges(allowedIPv4Ranges...).
+						WithDenyAllExceptLoadBalancerSourceRanges().
+						Build()
+			originalRules    = azureFx.NoiseSecurityRules()
+			dstIPv4Addresses = []string{"52.0.0.1"}
+			dstIPv6Addresses = []string{}
+			expectedRules    = testutil.CloneInJSON(originalRules)
+		)
+		// Expected: deny blocked first, allow specific ranges, then deny all
+		expectedRules = append(expectedRules,
+			// Deny rules for blocked IP ranges
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, blockedIPv4Ranges, k8sFx.Service().TCPPorts()).WithPriority(400).WithDestination(dstIPv4Addresses...).Build(),
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, blockedIPv4Ranges, k8sFx.Service().UDPPorts()).WithPriority(401).WithDestination(dstIPv4Addresses...).Build(),
+			// Allow rules for specific IP ranges
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).WithPriority(500).WithDestination(dstIPv4Addresses...).Build(),
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().UDPPorts()).WithPriority(501).WithDestination(dstIPv4Addresses...).Build(),
+			// Deny ALL at the end
+			azureFx.DenyAllSecurityRule(iputil.IPv4).WithPriority(4095).WithDestination(dstIPv4Addresses...).Build(),
+		)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
+	})
+
+	t.Run("patch service with blockedIPRanges, allowedIPRanges and allowedServiceTags", func(t *testing.T) {
+		var (
+			k8sFx             = fixture.NewFixture().Kubernetes()
+			serviceTags       = azureFx.ServiceTags(1)
+			blockedIPv4Ranges = []string{"10.1.0.0/16"}
+			allowedIPv4Ranges = []string{"192.168.0.0/16"}
+			svc               = k8sFx.Service().
+						WithBlockedIPRanges(blockedIPv4Ranges...).
+						WithAllowedIPRanges(allowedIPv4Ranges...).
+						WithAllowedServiceTags(serviceTags...).
+						Build()
+			originalRules    = azureFx.NoiseSecurityRules()
+			dstIPv4Addresses = []string{"52.0.0.1"}
+			dstIPv6Addresses = []string{}
+			expectedRules    = testutil.CloneInJSON(originalRules)
+		)
+		// Expected: deny blocked first, then allow service tags and IP ranges
+		expectedRules = append(expectedRules,
+			// Deny rules for blocked IP ranges
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, blockedIPv4Ranges, k8sFx.Service().TCPPorts()).WithPriority(400).WithDestination(dstIPv4Addresses...).Build(),
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, blockedIPv4Ranges, k8sFx.Service().UDPPorts()).WithPriority(401).WithDestination(dstIPv4Addresses...).Build(),
+			// Allow rules for service tag
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{serviceTags[0]}, k8sFx.Service().TCPPorts()).WithPriority(500).WithDestination(dstIPv4Addresses...).Build(),
+			// Allow rules for IP ranges
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).WithPriority(501).WithDestination(dstIPv4Addresses...).Build(),
+			// UDP for service tag
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{serviceTags[0]}, k8sFx.Service().UDPPorts()).WithPriority(502).WithDestination(dstIPv4Addresses...).Build(),
+			// UDP for IP ranges
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().UDPPorts()).WithPriority(503).WithDestination(dstIPv4Addresses...).Build(),
+		)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
+	})
+
+	t.Run("patch internal LB with blockedIPRanges and allowedIPRanges", func(t *testing.T) {
+		var (
+			k8sFx             = fixture.NewFixture().Kubernetes()
+			blockedIPv4Ranges = []string{"10.1.0.0/16"}
+			allowedIPv4Ranges = []string{"192.168.0.0/16"}
+			svc               = k8sFx.Service().
+						WithInternalEnabled().
+						WithBlockedIPRanges(blockedIPv4Ranges...).
+						WithAllowedIPRanges(allowedIPv4Ranges...).
+						Build()
+			originalRules    = azureFx.NoiseSecurityRules()
+			dstIPv4Addresses = []string{"10.0.0.1"}
+			dstIPv6Addresses = []string{}
+			expectedRules    = testutil.CloneInJSON(originalRules)
+		)
+		// Internal LB with blocked and allowed IP ranges
+		expectedRules = append(expectedRules,
+			// Deny rules for blocked IP ranges
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, blockedIPv4Ranges, k8sFx.Service().TCPPorts()).WithPriority(400).WithDestination(dstIPv4Addresses...).Build(),
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, blockedIPv4Ranges, k8sFx.Service().UDPPorts()).WithPriority(401).WithDestination(dstIPv4Addresses...).Build(),
+			// Allow rules for specific IP ranges
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).WithPriority(500).WithDestination(dstIPv4Addresses...).Build(),
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().UDPPorts()).WithPriority(501).WithDestination(dstIPv4Addresses...).Build(),
+		)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
+	})
+
+	t.Run("patch service with multiple overlapping blockedIPRanges should aggregate", func(t *testing.T) {
+		var (
+			k8sFx = fixture.NewFixture().Kubernetes()
+			// 10.0.0.0/8 contains 10.1.0.0/16, so they should be aggregated
+			blockedIPv4Ranges   = []string{"10.0.0.0/8", "10.1.0.0/16"}
+			aggregatedBlockedIP = []string{"10.0.0.0/8"}
+			svc                 = k8sFx.Service().
+						WithBlockedIPRanges(blockedIPv4Ranges...).
+						Build()
+			originalRules    = azureFx.NoiseSecurityRules()
+			dstIPv4Addresses = []string{"52.0.0.1"}
+			dstIPv6Addresses = []string{}
+			expectedRules    = testutil.CloneInJSON(originalRules)
+		)
+		// Expected: overlapping ranges should be aggregated
+		expectedRules = append(expectedRules,
+			// Deny rules for TCP with aggregated ranges
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, aggregatedBlockedIP, k8sFx.Service().TCPPorts()).WithPriority(400).WithDestination(dstIPv4Addresses...).Build(),
+			// Deny rules for UDP with aggregated ranges
+			azureFx.DenyBlockedIPRangeSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, aggregatedBlockedIP, k8sFx.Service().UDPPorts()).WithPriority(401).WithDestination(dstIPv4Addresses...).Build(),
+			// Allow rules
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{securitygroup.ServiceTagInternet}, k8sFx.Service().TCPPorts()).WithPriority(500).WithDestination(dstIPv4Addresses...).Build(),
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{securitygroup.ServiceTagInternet}, k8sFx.Service().UDPPorts()).WithPriority(501).WithDestination(dstIPv4Addresses...).Build(),
+		)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
+	})
+
+	t.Run("patch service with blockedIPRanges but no destination addresses for that IP family", func(t *testing.T) {
+		var (
+			k8sFx             = fixture.NewFixture().Kubernetes()
+			blockedIPv6Ranges = []string{"fd12:abcd::/48"}
+			svc               = k8sFx.Service().
+						WithBlockedIPRanges(blockedIPv6Ranges...).
+						Build()
+			originalRules    = azureFx.NoiseSecurityRules()
+			dstIPv4Addresses = []string{"52.0.0.1"} // Only IPv4 destinations
+			dstIPv6Addresses = []string{}           // No IPv6 destinations
+			expectedRules    = testutil.CloneInJSON(originalRules)
+		)
+		// No IPv6 deny rules should be added since there are no IPv6 destinations
+		// Only IPv4 allow rules should be added
+		expectedRules = append(expectedRules,
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{securitygroup.ServiceTagInternet}, k8sFx.Service().TCPPorts()).WithPriority(500).WithDestination(dstIPv4Addresses...).Build(),
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{securitygroup.ServiceTagInternet}, k8sFx.Service().UDPPorts()).WithPriority(501).WithDestination(dstIPv4Addresses...).Build(),
+		)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
+	})
+
+	t.Run("patch service with blockedIPRanges but no destination addresses for that IP family (IPv4 blocked, IPv6 destinations)", func(t *testing.T) {
+		var (
+			k8sFx             = fixture.NewFixture().Kubernetes()
+			blockedIPv4Ranges = []string{"10.1.0.0/16"}
+			svc               = k8sFx.Service().
+						WithBlockedIPRanges(blockedIPv4Ranges...).
+						Build()
+			originalRules    = azureFx.NoiseSecurityRules()
+			dstIPv4Addresses = []string{}                             // No IPv4 destinations
+			dstIPv6Addresses = []string{"2001:db8::1", "2002:fb8::1"} // Only IPv6 destinations
+			expectedRules    = testutil.CloneInJSON(originalRules)
+		)
+		// No IPv4 deny rules should be added since there are no IPv4 destinations
+		// Only IPv6 allow rules should be added
+		expectedRules = append(expectedRules,
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, []string{securitygroup.ServiceTagInternet}, k8sFx.Service().TCPPorts()).WithPriority(500).WithDestination(dstIPv6Addresses...).Build(),
+			azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, []string{securitygroup.ServiceTagInternet}, k8sFx.Service().UDPPorts()).WithPriority(501).WithDestination(dstIPv6Addresses...).Build(),
 		)
 		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
 	})
