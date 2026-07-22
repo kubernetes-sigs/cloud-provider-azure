@@ -54,6 +54,7 @@ or acting on a row.
 | 39 | act | Prow job did not start | Prow job never reaches entrypoint | auto-fix | no | [Details: Prow job did not start](#details-prow-job-did-not-start) |
 | 40 | act | Only Tide pending | No failed checks; only `tide` pending | auto-fix | no | [Details: Only Tide pending](#details-only-tide-pending) |
 | 45 | act | GitHub Actions transient failure | Failed GitHub Actions `CheckRun` with runner/service transient evidence | auto-fix | no | [Details: GitHub Actions transient failure](#details-github-actions-transient-failure) |
+| 47 | act | Deterministic test / spec failure | Current logs name a failing test, spec, or assertion after test execution started | escalate | yes | [Details: Deterministic test / spec failure](#details-deterministic-test--spec-failure) |
 | 50 | act | Toolchain / SDK / policy blocker | Toolchain, typecheck, SDK-major, or dependency-policy blocker | escalate | yes | [Details: Toolchain / SDK / policy](#details-toolchain--sdk--policy) |
 
 The **Details** cell links to the pattern's `## Details: <name>` subsection
@@ -435,6 +436,32 @@ current evidence in the single end-of-triage [Attempt stamp](#details-attempt-st
 summary rather than posting a separate retry comment.
 
 Report the rerun command, workflow run id, and target job(s) in the final output.
+
+## Details: Deterministic test / spec failure
+
+Use this path when a failed required job reached real test execution and the
+current logs show a named failing test, spec, or assertion that does not match
+an earlier safe auto-fix row.
+
+Typical evidence includes:
+
+- Ginkgo or test-suite summaries such as `Summarizing 1 Failure:`, `[FAIL]`,
+  `FAIL! --`, `--- FAIL:`, or `Unexpected error:` with a concrete spec name,
+  test name, or source file/line
+- JUnit or test output that identifies a specific failing case rather than
+  infrastructure noise
+- Prow or GitHub Actions logs showing tests actually ran (`Running Suite`,
+  `Ran <n> of <m> Specs`, individual test names, or equivalent)
+
+Do not use this path when an earlier catalog row already matched, such as a
+quota flake, pre-test image-build registry 5xx, cluster-provisioning node
+readiness timeout, pod scheduling timeout, or transient GitHub Actions runner
+failure. Those rows are the only safe retry paths.
+
+When this row matches, make no automated change: do not rerun the job, do not
+comment `/test`, do not push code, and do not `/lgtm`. Stop working the PR and
+report it as needing human review in the final output, naming the failing job(s)
+and the concrete failing test/spec evidence so a reviewer knows where to look.
 
 ## Details: Toolchain / SDK / policy
 
