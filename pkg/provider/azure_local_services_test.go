@@ -692,6 +692,47 @@ func TestEndpointSlicesInformerDeduplicatesNodeIPs(t *testing.T) {
 	}
 }
 
+func TestServiceGatewayEndpointSliceUpdateDoesNotUseProviderCache(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cloud := GetTestCloudWithContainerLoadBalancer(ctrl)
+	cloud.localServiceNameToServiceInfoMap = sync.Map{}
+	cloud.nodePrivateIPs = map[string]*utilsets.IgnoreCaseSet{
+		"node1": utilsets.NewString("10.0.0.1"),
+		"node2": utilsets.NewString("10.0.0.2"),
+	}
+
+	existingEPS := getTestEndpointSlice("eps-sgw", "test", "svc-sgw", "node1")
+	existingEPS.AddressType = discovery_v1.AddressTypeIPv4
+	updatedEPS := getTestEndpointSlice("eps-sgw", "test", "svc-sgw", "node2")
+	updatedEPS.AddressType = discovery_v1.AddressTypeIPv4
+	updatedEPS.ResourceVersion = "2"
+	for _, endpointSlice := range []*discovery_v1.EndpointSlice{existingEPS, updatedEPS} {
+		endpointSlice.Labels = nil
+		endpointSlice.OwnerReferences = []metav1.OwnerReference{
+			{Kind: "Service", UID: "service-uid"},
+		}
+	}
+
+	client := fake.NewSimpleClientset(existingEPS)
+	informerFactory := informers.NewSharedInformerFactory(client, 0)
+	cloud.setUpEndpointSlicesInformer(informerFactory)
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	informerFactory.Start(stopCh)
+	informerFactory.WaitForCacheSync(stopCh)
+
+	_, err := client.DiscoveryV1().EndpointSlices("test").Update(context.Background(), updatedEPS, metav1.UpdateOptions{})
+	assert.NoError(t, err)
+
+	assert.Never(t, func() bool {
+		_, loaded := cloud.endpointSlicesCache.Load("test/eps-sgw")
+		return loaded
+	}, 200*time.Millisecond, 10*time.Millisecond)
+}
+
 func TestGetBackendPoolNamesAndIDsForService(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

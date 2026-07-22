@@ -40,6 +40,9 @@ type Config struct {
 
 	// Virtual Network name (required for backend pool configuration)
 	VNetName string
+
+	// Virtual Network resource group
+	VNetResourceGroup string
 }
 
 // Validate checks if the configuration has all required fields

@@ -49,6 +49,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/servicegateway/difftracker"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -157,6 +158,8 @@ type Cloud struct {
 	endpointSlicesCache                             sync.Map
 
 	azureResourceLocker *AzureResourceLocker
+
+	diffTracker *difftracker.DiffTracker
 }
 
 // NewCloud returns a Cloud with initialized clients
@@ -172,6 +175,13 @@ func NewCloud(ctx context.Context, clientBuilder cloudprovider.ControllerClientB
 		nodePrivateIPToNodeNameMap: map[string]string{},
 	}
 
+	if config != nil && config.ServiceGatewayEnabled && callFromCCM {
+		if clientBuilder == nil {
+			return nil, fmt.Errorf("NewCloud: ServiceGateway requires a clientBuilder")
+		}
+		az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
+	}
+
 	err := az.InitializeCloudFromConfig(ctx, config, false, callFromCCM)
 	if err != nil {
 		return nil, err
@@ -179,7 +189,7 @@ func NewCloud(ctx context.Context, clientBuilder cloudprovider.ControllerClientB
 
 	az.ipv6DualStackEnabled = true
 
-	if clientBuilder != nil {
+	if az.KubeClient == nil && clientBuilder != nil {
 		az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
 	}
 	az.azureResourceLocker = NewAzureResourceLocker(
@@ -263,18 +273,6 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 		return fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config")
 	}
 
-	// Use a single flag to determine if the service gateway is enabled.
-	// All 3 conditions must be true:
-	// 1. ServiceGatewayEnabled is true
-	// 2. lb sku is service
-	// 3. backendPoolType is PodIP
-	if az.ServiceGatewayEnabled && az.IsLBBackendPoolTypePodIPAndUseServiceLoadBalancer() {
-		logger.V(2).Info("Service Gateway is enabled, using PodIP backend pool type with Service Load Balancer")
-		az.ServiceGatewayEnabled = true
-	} else {
-		az.ServiceGatewayEnabled = false
-	}
-
 	if config.RouteTableResourceGroup == "" {
 		config.RouteTableResourceGroup = config.ResourceGroup
 	}
@@ -313,8 +311,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 		}
 	}
 
-	if config.LoadBalancerBackendPoolConfigurationType == "" ||
-		strings.EqualFold(config.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePodIP) {
+	if config.LoadBalancerBackendPoolConfigurationType == "" {
 		config.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration
 	} else {
 		supportedLoadBalancerBackendPoolConfigurationTypes := utilsets.NewString(
@@ -355,6 +352,28 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 		return err
 	}
 
+	serviceGatewayConfigured := config.ServiceGatewayEnabled ||
+		config.IsLBBackendPoolTypePodIP() ||
+		config.UseServiceLoadBalancer()
+	serviceGatewayEnabled := config.ServiceGatewayEnabled &&
+		config.IsLBBackendPoolTypePodIPAndUseServiceLoadBalancer()
+	if serviceGatewayConfigured && !serviceGatewayEnabled {
+		return fmt.Errorf("InitializeCloudFromConfig: ServiceGateway requires serviceGatewayEnabled=true, loadBalancerBackendPoolConfigurationType=podIP, and loadBalancerSku=service to be configured together")
+	}
+	if serviceGatewayEnabled {
+		logger.V(2).Info("Service Gateway is enabled, using PodIP backend pool type with Service Load Balancer")
+	}
+
+	// ServiceGateway (PodIP backend pools) and Multi-SLB (NodeIP/NIC backend pools) are mutually exclusive.
+	if config.ServiceGatewayEnabled && len(config.MultipleStandardLoadBalancerConfigurations) > 0 {
+		return fmt.Errorf("InitializeCloudFromConfig: ServiceGatewayEnabled and MultipleStandardLoadBalancerConfigurations are mutually exclusive and cannot both be set")
+	}
+
+	// EnableMigrateToIPBasedBackendPoolAPI has no meaning when ServiceGateway is enabled.
+	if config.ServiceGatewayEnabled && config.EnableMigrateToIPBasedBackendPoolAPI {
+		return fmt.Errorf("InitializeCloudFromConfig: EnableMigrateToIPBasedBackendPoolAPI cannot be used when ServiceGatewayEnabled is true — ContainerLB already uses PodIP-based backend pools")
+	}
+
 	az.Config = *config
 	az.Environment = env
 	az.ResourceRequestBackoff = resourceRequestBackoff
@@ -388,6 +407,9 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIPConfig(az)
 	} else if az.IsLBBackendPoolTypeNodeIP() {
 		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIP(az)
+	} else if az.IsLBBackendPoolTypePodIP() {
+		// ServiceGateway owns PodIP backend pools through difftracker.
+		az.LoadBalancerBackendPool = nil
 	}
 
 	if az.UseMultipleStandardLoadBalancers() {
@@ -503,6 +525,39 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 		if az.UseMultipleStandardLoadBalancers() {
 			az.backendPoolUpdater = newLoadBalancerBackendPoolUpdater(az, time.Duration(az.LoadBalancerBackendPoolUpdateIntervalInSeconds)*time.Second)
 			go az.backendPoolUpdater.run(ctx)
+		}
+
+		// start NRP location and service batch updater.
+		if az.ServiceGatewayEnabled {
+			// Register SLB metrics and mark ServiceGateway as enabled
+			difftracker.RegisterMetrics()
+			difftracker.RecordServiceGatewayEnabled()
+
+			// ServiceGateway resources are provisioned externally before CCM starts.
+			// Initialize difftracker from cluster state.
+			sgwName := consts.DefaultServiceGatewayResourceName
+			dtConfig := difftracker.Config{
+				SubscriptionID:             az.SubscriptionID,
+				ResourceGroup:              az.ResourceGroup,
+				Location:                   az.Location,
+				VNetName:                   az.VnetName,
+				VNetResourceGroup:          az.VnetResourceGroup,
+				ServiceGatewayResourceName: sgwName,
+				ServiceGatewayID:           difftracker.ServiceGatewayResourceID(az.SubscriptionID, az.ResourceGroup, sgwName),
+			}
+			az.diffTracker, err = difftracker.InitializeFromCluster(ctx, dtConfig, az.NetworkClientFactory, az.KubeClient)
+			if err != nil {
+				klog.Errorf("InitializeCloudFromConfig: failed to initialize difftracker: %s", err.Error())
+				return err
+			}
+
+			// If SetInformers already ran, hand the existing listers to the difftracker now.
+			if az.serviceLister != nil {
+				az.diffTracker.SetServiceLister(az.serviceLister)
+			}
+			if az.nodeLister != nil {
+				az.diffTracker.SetNodeLister(az.nodeLister)
+			}
 		}
 
 		// Azure Stack does not support zone at the moment
@@ -642,10 +697,15 @@ func (az *Cloud) setCloudProviderBackoffDefaults(config *azureconfig.Config) wai
 
 // Initialize passes a Kubernetes clientBuilder interface to the cloud provider
 func (az *Cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, _ <-chan struct{}) {
-	az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
+	if az.KubeClient == nil {
+		az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
+	}
 	az.eventBroadcaster = record.NewBroadcaster()
 	az.eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: az.KubeClient.CoreV1().Events("")})
 	az.eventRecorder = az.eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "azure-cloud-provider"})
+	if az.ServiceGatewayEnabled {
+		az.diffTracker.SetEventRecorder(az.eventRecorder)
+	}
 }
 
 // LoadBalancer returns a balancer interface. Also returns true if the interface is supported, false otherwise.
@@ -708,12 +768,25 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 			node := obj.(*v1.Node)
 			az.updateNodeCaches(nil, node)
 			az.updateNodeTaint(node)
+			if az.ServiceGatewayEnabled {
+				// Replay this node's slices now its IPs are known (the EndpointSlice handler drops pods on uncached nodes).
+				az.diffTracker.ReconcileNodeIPChange(node.Name, nil, getNodePrivateIPAddresses(node))
+			}
 		},
 		UpdateFunc: func(prev, obj interface{}) {
 			prevNode := prev.(*v1.Node)
 			newNode := obj.(*v1.Node)
 			az.updateNodeCaches(prevNode, newNode)
 			az.updateNodeTaint(newNode)
+			if az.ServiceGatewayEnabled {
+				// A node IP change fires no slice event; move resident pods off the old IP.
+				oldIPs := getNodePrivateIPAddresses(prevNode)
+				newIPs := getNodePrivateIPAddresses(newNode)
+				oldSet, newSet := utilsets.NewString(oldIPs...), utilsets.NewString(newIPs...)
+				if !oldSet.Equals(newSet) {
+					az.diffTracker.ReconcileNodeIPChange(newNode.Name, oldIPs, newIPs)
+				}
+			}
 		},
 		DeleteFunc: func(obj interface{}) {
 			node, isNode := obj.(*v1.Node)
@@ -735,6 +808,11 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 
 			logger.V(4).Info("Removing node from VMSet cache", "node", node.Name)
 			_ = az.VMSet.DeleteCacheForNode(context.Background(), node.Name)
+
+			if az.ServiceGatewayEnabled {
+				// The cache is cleared before slice-removal events arrive; drain resident pods using the deleted node's IPs.
+				az.diffTracker.ReconcileNodeIPChange(node.Name, getNodePrivateIPAddresses(node), nil)
+			}
 		},
 	})
 	az.nodeInformerSynced = nodeInformer.HasSynced
@@ -743,6 +821,12 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 	az.nodeLister = informerFactory.Core().V1().Nodes().Lister()
 
 	az.setUpEndpointSlicesInformer(informerFactory)
+
+	if az.ServiceGatewayEnabled {
+		az.diffTracker.SetServiceLister(az.serviceLister)
+		az.diffTracker.SetNodeLister(az.nodeLister)
+		az.diffTracker.SetUpPodInformer()
+	}
 }
 
 // updateNodeCaches updates local cache for node's zones and external resource groups.

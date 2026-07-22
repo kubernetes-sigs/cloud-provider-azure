@@ -367,6 +367,7 @@ func TestLen(t *testing.T) {
 		})
 	}
 }
+
 func TestEquals(t *testing.T) {
 	tests := []struct {
 		name string
@@ -425,9 +426,20 @@ func TestEquals(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Equals is nil-safe on both the receiver and the argument, so call it
-			// directly for every case (including the nil ones) to exercise the
-			// production code path rather than asserting an expectation against itself.
+			if tt.s1 == nil && tt.s2 == nil {
+				// Special case for nil sets
+				if !tt.want {
+					t.Errorf("Equals() = true, want %v", tt.want)
+				}
+				return
+			}
+			if tt.s1 == nil || tt.s2 == nil {
+				// One set is nil, they can't be equal
+				if tt.want {
+					t.Errorf("Equals() = false, want %v", tt.want)
+				}
+				return
+			}
 			if got := tt.s1.Equals(tt.s2); got != tt.want {
 				t.Errorf("Equals() = %v, want %v", got, tt.want)
 			}

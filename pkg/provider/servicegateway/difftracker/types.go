@@ -21,6 +21,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/record"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -134,6 +135,7 @@ type DiffTracker struct {
 	config               Config
 	networkClientFactory azclient.ClientFactory
 	kubeClient           kubernetes.Interface
+	eventRecorder        record.EventRecorder
 
 	// logger is the component logger, backed by klog via pkg/log. It is supplied
 	// to New and enriched with WithName("difftracker").
