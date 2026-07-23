@@ -35,6 +35,10 @@ level small:
   a tag and open a documentation PR
 - `fix-image-cves`: scan a built image with Trivy, plan fixable Go-module and
   base-image CVE remediation, apply the source changes, and verify the result
+- `remediate-image-cves`: orchestrate builds, repeated CVE remediation and
+  verification for CCM, CNM, and health-probe-proxy on `master` or a
+  `release-X.Y` branch, then validate, clean up, push, and open the remediation
+  PR
 - `release`: draft-first manual release orchestrator that reuses the shared tag
   and docs-PR skills while keeping GitHub release publication under explicit
   user control

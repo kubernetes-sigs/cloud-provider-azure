@@ -43,6 +43,46 @@ def module_info(
 
 
 class FixImageCVEsTest(unittest.TestCase):
+    def test_git_path_resolves_main_checkout_state(self) -> None:
+        repo_root = Path("/repo")
+        with mock.patch.object(
+            fix_image_cves,
+            "run",
+            return_value=".git/fix-image-cves.json",
+        ) as run:
+            self.assertEqual(
+                fix_image_cves.git_path(repo_root),
+                Path("/repo/.git/fix-image-cves.json"),
+            )
+
+        run.assert_called_once_with(
+            ["git", "rev-parse", "--git-path", "fix-image-cves.json"],
+            cwd=repo_root,
+            capture=True,
+        )
+
+    def test_git_path_preserves_linked_worktree_state(self) -> None:
+        worktree_path = Path(
+            "/repo/.git/worktrees/cloud-provider-azure1/fix-image-cves.json"
+        )
+        with mock.patch.object(
+            fix_image_cves,
+            "run",
+            return_value=str(worktree_path),
+        ):
+            self.assertEqual(
+                fix_image_cves.git_path(Path("/worktree")),
+                worktree_path,
+            )
+
+    def test_git_path_rejects_empty_output(self) -> None:
+        with mock.patch.object(fix_image_cves, "run", return_value=""):
+            with self.assertRaisesRegex(
+                fix_image_cves.CommandError,
+                "empty CVE state path",
+            ):
+                fix_image_cves.git_path(Path("/repo"))
+
     def test_classify_result_treats_go_runtime_packages_as_toolchain(self) -> None:
         result = {"Class": "lang-pkgs", "Type": "gobinary"}
 
@@ -102,6 +142,90 @@ class FixImageCVEsTest(unittest.TestCase):
             ["GO_MODULE::CVE-2026-0002::golang.org/x/net"],
         )
 
+    def test_plan_preserves_unfixable_and_unsupported_findings(self) -> None:
+        findings = fix_image_cves.parse_scan_findings(
+            {
+                "Results": [
+                    {
+                        "Class": "os-pkgs",
+                        "Type": "debian",
+                        "Target": "runtime",
+                        "Vulnerabilities": [
+                            {
+                                "PkgName": "libc6",
+                                "InstalledVersion": "2.36-9",
+                                "FixedVersion": "",
+                                "VulnerabilityID": "CVE-2026-0004",
+                            }
+                        ],
+                    },
+                    {
+                        "Class": "custom",
+                        "Type": "application",
+                        "Target": "config",
+                        "Vulnerabilities": [
+                            {
+                                "PkgName": "example-package",
+                                "InstalledVersion": "v1.0.0",
+                                "FixedVersion": "v1.0.1",
+                                "VulnerabilityID": "CVE-2026-0005",
+                            }
+                        ],
+                    },
+                ]
+            },
+            module_root=".",
+            dockerfile="Dockerfile",
+        )
+
+        plan = fix_image_cves.build_plan({"findings": findings})
+
+        self.assertEqual(
+            [finding["id"] for finding in plan["unfixable_findings"]],
+            ["CVE-2026-0004"],
+        )
+        self.assertEqual(
+            [finding["id"] for finding in plan["other_findings"]],
+            ["CVE-2026-0005"],
+        )
+        self.assertEqual(
+            [
+                finding["id"]
+                for finding in fix_image_cves.unsupported_fixable_findings(plan)
+            ],
+            ["CVE-2026-0005"],
+        )
+
+    def test_summaries_report_findings_without_fixed_versions(self) -> None:
+        finding = {
+            "category": "BASE_IMAGE",
+            "package": "libc6",
+            "installed_version": "2.36-9",
+            "fixed_version": "",
+            "id": "CVE-2026-0004",
+        }
+        scan_output = io.StringIO()
+        plan_output = io.StringIO()
+
+        with mock.patch("sys.stdout", scan_output):
+            fix_image_cves.summarize_scan([finding])
+        with mock.patch("sys.stdout", plan_output):
+            fix_image_cves.summarize_plan(
+                {
+                    "go_module_actions": [],
+                    "base_image_actions": [],
+                    "other_findings": [],
+                    "unfixable_findings": [finding],
+                }
+            )
+
+        self.assertIn("NO_FIXED_VERSION: 1", scan_output.getvalue())
+        self.assertIn("<no fixed version>", scan_output.getvalue())
+        self.assertIn(
+            "Findings Without a Fixed Version (Residual Risk)",
+            plan_output.getvalue(),
+        )
+
     def test_build_plan_reclassifies_toolchain_from_older_scan_state(self) -> None:
         finding = {
             "category": "GO_MODULE",
@@ -153,6 +277,85 @@ class FixImageCVEsTest(unittest.TestCase):
         go_list.assert_not_called()
         ensure_command.assert_not_called()
         discover_modules.assert_not_called()
+
+    def test_apply_retidies_root_after_vendor_license_update(self) -> None:
+        state = {
+            "scan": {"module_root": ".", "dockerfile": "Dockerfile"},
+            "plan": {
+                "go_module_actions": [
+                    {
+                        "module": "golang.org/x/net",
+                        "module_root": ".",
+                        "fixed_version": "v0.56.0",
+                    }
+                ],
+                "base_image_actions": [],
+            },
+        }
+        args = Namespace(repo=".", base_image_target=[], dry_run=False)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir)
+            (repo_root / "vendor").mkdir()
+            (repo_root / "vendor" / "modules.txt").write_text("", encoding="utf-8")
+            (repo_root / "hack").mkdir()
+            (repo_root / "hack" / "update-azure-vendor-licenses.sh").write_text(
+                "#!/bin/bash\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch.object(
+                fix_image_cves, "ensure_repo_root", return_value=repo_root
+            ), mock.patch.object(
+                fix_image_cves, "load_state", return_value=state
+            ), mock.patch.object(
+                fix_image_cves, "save_state"
+            ) as save_state, mock.patch.object(
+                fix_image_cves,
+                "git_status_paths",
+                side_effect=[set(), {"go.mod", "go.sum"}],
+            ), mock.patch.object(
+                fix_image_cves,
+                "discover_go_modules",
+                return_value=[".", "health-probe-proxy"],
+            ), mock.patch.object(
+                fix_image_cves,
+                "go_list_module_info",
+                return_value=module_info("v0.55.0"),
+            ), mock.patch.object(
+                fix_image_cves, "ensure_command"
+            ), mock.patch.object(
+                fix_image_cves, "_check_local_go_version"
+            ), mock.patch.object(
+                fix_image_cves, "cleanup_vendor_license_artifacts"
+            ), mock.patch.object(
+                fix_image_cves, "run", return_value=""
+            ) as run, mock.patch("sys.stdout", io.StringIO()):
+                self.assertEqual(fix_image_cves.command_apply(args), 0)
+
+        commands = [call.args[0] for call in run.call_args_list]
+        license_index = commands.index(
+            ["bash", str(repo_root / "hack" / "update-azure-vendor-licenses.sh")]
+        )
+        root_tidy_indices = [
+            index
+            for index, command in enumerate(commands)
+            if command == ["go", "mod", "tidy"]
+            and run.call_args_list[index].kwargs["cwd"] == repo_root
+        ]
+        root_verify_indices = [
+            index
+            for index, command in enumerate(commands)
+            if command == ["go", "mod", "verify"]
+            and run.call_args_list[index].kwargs["cwd"] == repo_root
+        ]
+
+        self.assertEqual(len(root_tidy_indices), 2)
+        self.assertEqual(len(root_verify_indices), 2)
+        self.assertGreater(root_tidy_indices[-1], license_index)
+        self.assertGreater(root_verify_indices[-1], root_tidy_indices[-1])
+        applied = save_state.call_args.args[1]["apply"]
+        self.assertEqual(applied["modified_files"], ["go.mod", "go.sum"])
 
     def test_verify_ignores_toolchain_action_from_older_plan_state(self) -> None:
         plan = {

@@ -62,6 +62,12 @@ aggregate only; it does not build `hpp`, `hpp-windows`, or `ccm-e2e`.
 aggregate includes Windows image targets with host-side Go builds, the helper
 does not default `GOEXPERIMENT` for `cnm-all`.
 
+The helper invokes health-probe-proxy builds with `make -B` so each `hpp` or
+`hpp-windows` image rebuilds its host binary before invoking Buildx. This
+prevents a binary left by an earlier branch or remediation cycle from being
+reused in a verification image, including when the target checkout has an older
+Makefile.
+
 Do not use this skill for acr-credential-provider images. This repo exposes the
 acr-credential-provider as a binary build, not an image build target.
 
@@ -107,6 +113,15 @@ python3 <SKILL_DIR>/scripts/build_image.py \
 `IMAGE_TAG` and `IMAGE_REGISTRY` are required inputs and cannot be unset.
 They also cannot be overridden with `--set`; use `--tag` and `--registry`.
 Passing the same key to both `--set` and `--unset` is rejected.
+
+For a deterministic local Linux amd64 verification build, explicitly set
+`ARCH=amd64` and `OUTPUT_TYPE=docker`, then unset inherited `OUTPUT_FLAG` and
+`BUILDX_EXTRA_FLAGS`. This prevents caller environment from selecting another
+architecture, registry output, or push-oriented Buildx flags.
+
+Use `--repo` when the target checkout differs from the checkout containing the
+skill. This is required when a caller snapshots the skill before switching the
+target worktree to another branch.
 
 Make control variables that can override command-line or environment values are
 reserved. Do not pass `MAKEFLAGS`, `MFLAGS`, `GNUMAKEFLAGS`, `MAKEOVERRIDES`,
