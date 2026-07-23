@@ -1633,6 +1633,7 @@ func TestProtocolTranslationUDP(t *testing.T) {
 	}
 }
 
+// trackingControllerClientBuilder is a wrapper around ControllerClientBuilder that tracks the number of times ClientOrDie is called.
 type trackingControllerClientBuilder struct {
 	cloudprovider.ControllerClientBuilder
 	client kubernetes.Interface
@@ -1653,7 +1654,7 @@ func serviceGatewayConfig() *providerconfig.Config {
 }
 
 func TestNewCloudInitializesKubeClientAtRequiredStage(t *testing.T) {
-	t.Run("ServiceGateway CCM", func(t *testing.T) {
+	t.Run("invalid ServiceGateway CCM", func(t *testing.T) {
 		builder := &trackingControllerClientBuilder{client: fake.NewSimpleClientset()}
 		config := serviceGatewayConfig()
 		config.MultipleStandardLoadBalancerConfigurations = []providerconfig.MultipleStandardLoadBalancerConfiguration{{}}
@@ -2455,7 +2456,7 @@ func TestGetActiveZones(t *testing.T) {
 
 func TestInitializePublishesServiceGatewayDependencies(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	az := GetTestCloudWithContainerLoadBalancer(ctrl)
+	az := GetTestCloudWithServiceLoadBalancer(ctrl)
 	kubeClient := az.KubeClient
 
 	az.Initialize(nil, nil)
