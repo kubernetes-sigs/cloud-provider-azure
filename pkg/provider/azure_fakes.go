@@ -46,6 +46,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/servicegateway"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -170,6 +171,7 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 
 	{
 		kubeClient := fake.NewSimpleClientset() // FIXME: inject kubeClient
+		az.KubeClient = kubeClient
 		informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
 		az.serviceLister = informerFactory.Core().V1().Services().Lister()
 		az.nodeLister = informerFactory.Core().V1().Nodes().Lister()
@@ -184,5 +186,15 @@ func GetTestCloudWithExtendedLocation(ctrl *gomock.Controller) (az *Cloud) {
 	az = GetTestCloud(ctrl)
 	az.ExtendedLocationName = "microsoftlosangeles1"
 	az.ExtendedLocationType = "EdgeZone"
+	return az
+}
+
+// GetTestCloudWithServiceLoadBalancer returns a fake azure cloud for unit tests in Azure supporting service load balancer.
+func GetTestCloudWithServiceLoadBalancer(ctrl *gomock.Controller) (az *Cloud) {
+	az = GetTestCloud(ctrl)
+	az.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypePodIP
+	az.LoadBalancerSKU = consts.LoadBalancerSKUService
+	az.ServiceGatewayEnabled = true
+	az.serviceGatewayRuntime = servicegateway.NewRuntime(az.Config, az.NetworkClientFactory, az.KubeClient)
 	return az
 }

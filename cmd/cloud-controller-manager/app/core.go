@@ -42,7 +42,12 @@ import (
 	nodeipamcontroller "sigs.k8s.io/cloud-provider-azure/pkg/nodeipam"
 	nodeipamconfig "sigs.k8s.io/cloud-provider-azure/pkg/nodeipam/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/nodeipam/ipam"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/servicegateway"
 )
+
+type serviceGatewayRuntimeProvider interface {
+	ServiceGatewayRuntime() *servicegateway.Runtime
+}
 
 func startCloudNodeController(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface) (http.Handler, bool, error) {
 	// Start the CloudNodeController
@@ -86,6 +91,15 @@ func startCloudNodeLifecycleController(ctx context.Context, controllerContext ge
 
 func startServiceController(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface) (http.Handler, bool, error) {
 	logger := log.FromContextOrBackground(ctx).WithName("startServiceController")
+	if runtimeProvider, ok := cloud.(serviceGatewayRuntimeProvider); ok {
+		runtime := runtimeProvider.ServiceGatewayRuntime()
+		if runtime != nil && runtime.Enabled() {
+			if err := runtime.Start(ctx, completedConfig.SharedInformers); err != nil {
+				return nil, false, fmt.Errorf("failed to start ServiceGateway runtime: %w", err)
+			}
+		}
+	}
+
 	// Start the service controller
 	serviceController, err := servicecontroller.New(
 		cloud,

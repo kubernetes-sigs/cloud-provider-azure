@@ -341,8 +341,22 @@ func (az *Cloud) getLocalServiceInfo(serviceName string) (*serviceInfo, bool) {
 	return data.(*serviceInfo), true
 }
 
-// setUpEndpointSlicesInformer creates an informer for EndpointSlices of local services.
-// It watches the update events and send backend pool update operations to the batch updater.
+func endpointSliceFromDeleteEvent(obj interface{}) (*discovery_v1.EndpointSlice, error) {
+	switch value := obj.(type) {
+	case *discovery_v1.EndpointSlice:
+		return value, nil
+	case cache.DeletedFinalStateUnknown:
+		endpointSlice, ok := value.Obj.(*discovery_v1.EndpointSlice)
+		if !ok {
+			return nil, fmt.Errorf("cannot convert tombstone object %T to *discovery_v1.EndpointSlice", value.Obj)
+		}
+		return endpointSlice, nil
+	default:
+		return nil, fmt.Errorf("cannot convert %T to *discovery_v1.EndpointSlice", value)
+	}
+}
+
+// setUpEndpointSlicesInformer registers the legacy local-service backend-pool handlers.
 func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInformerFactory) {
 	logger := log.Background().WithName("setUpEndpointSlicesInformer")
 	endpointSlicesInformer := informerFactory.Discovery().V1().EndpointSlices().Informer()
@@ -415,24 +429,12 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
-				var es *discovery_v1.EndpointSlice
-				switch v := obj.(type) {
-				case *discovery_v1.EndpointSlice:
-					es = v
-				case cache.DeletedFinalStateUnknown:
-					// We may miss the deletion event if the watch stream is disconnected and the object is deleted.
-					var ok bool
-					es, ok = v.Obj.(*discovery_v1.EndpointSlice)
-					if !ok {
-						logger.Error(nil, "Cannot convert to *discovery_v1.EndpointSlice", "obj", v.Obj)
-						return
-					}
-				default:
-					logger.Error(nil, "Cannot convert to *discovery_v1.EndpointSlice", "obj.(type)", v)
+				endpointSlice, err := endpointSliceFromDeleteEvent(obj)
+				if err != nil {
+					logger.Error(err, "Cannot process EndpointSlice deletion")
 					return
 				}
-
-				az.endpointSlicesCache.Delete(strings.ToLower(fmt.Sprintf("%s/%s", es.Namespace, es.Name)))
+				az.endpointSlicesCache.Delete(strings.ToLower(fmt.Sprintf("%s/%s", endpointSlice.Namespace, endpointSlice.Name)))
 			},
 		})
 }

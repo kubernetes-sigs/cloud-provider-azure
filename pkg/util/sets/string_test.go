@@ -17,6 +17,7 @@ limitations under the License.
 package sets
 
 import (
+	"encoding/json"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -367,6 +368,7 @@ func TestLen(t *testing.T) {
 		})
 	}
 }
+
 func TestEquals(t *testing.T) {
 	tests := []struct {
 		name string
@@ -430,6 +432,59 @@ func TestEquals(t *testing.T) {
 			// production code path rather than asserting an expectation against itself.
 			if got := tt.s1.Equals(tt.s2); got != tt.want {
 				t.Errorf("Equals() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMarshalJSON(t *testing.T) {
+	tests := []struct {
+		name      string
+		set       *IgnoreCaseSet
+		wantJSON  string
+		wantItems sets.Set[string]
+	}{
+		{
+			name:     "nil set",
+			set:      nil,
+			wantJSON: "null",
+		},
+		{
+			name:     "empty set with nil inner set",
+			set:      &IgnoreCaseSet{},
+			wantJSON: "[]",
+		},
+		{
+			name:     "empty set",
+			set:      NewString(),
+			wantJSON: "[]",
+		},
+		{
+			name:      "non-empty set",
+			set:       NewString("Foo", "BAR"),
+			wantItems: sets.New[string]("foo", "bar"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.set.MarshalJSON()
+			if err != nil {
+				t.Fatalf("MarshalJSON() error = %v", err)
+			}
+			if tt.wantJSON != "" {
+				if string(got) != tt.wantJSON {
+					t.Errorf("MarshalJSON() = %s, want %s", got, tt.wantJSON)
+				}
+				return
+			}
+
+			var gotItems []string
+			if err := json.Unmarshal(got, &gotItems); err != nil {
+				t.Fatalf("json.Unmarshal() error = %v", err)
+			}
+			if !sets.New[string](gotItems...).Equal(tt.wantItems) {
+				t.Errorf("MarshalJSON() = %v, want %v", gotItems, tt.wantItems.UnsortedList())
 			}
 		})
 	}

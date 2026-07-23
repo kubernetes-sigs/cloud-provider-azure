@@ -17,6 +17,7 @@ limitations under the License.
 package sets
 
 import (
+	"encoding/json"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -98,21 +99,6 @@ func (s *IgnoreCaseSet) Len() int {
 	return s.set.Len()
 }
 
-// Equals returns true if the two sets are equal.
-func (s *IgnoreCaseSet) Equals(other *IgnoreCaseSet) bool {
-	// Two sets of equal size are equal iff every item in one is contained in the
-	// other, so a single containment check in one direction is sufficient.
-	if s.Len() != other.Len() {
-		return false
-	}
-	for _, item := range s.UnsortedList() {
-		if !other.Has(item) {
-			return false
-		}
-	}
-	return true
-}
-
 // Difference returns a new IgnoreCaseSet containing the items in s that are not
 // present in other (i.e. the set difference s \ other). It is safe to call on
 // nil or uninitialized sets.
@@ -124,4 +110,25 @@ func (s *IgnoreCaseSet) Difference(other *IgnoreCaseSet) *IgnoreCaseSet {
 		}
 	}
 	return result
+}
+
+// Equals returns true if the two sets are equal.
+func (s *IgnoreCaseSet) Equals(other *IgnoreCaseSet) bool {
+	if s.Len() != other.Len() {
+		return false
+	}
+	if s.Len() == 0 {
+		return true
+	}
+	return s.set.Equal(other.set)
+}
+
+func (s *IgnoreCaseSet) MarshalJSON() ([]byte, error) {
+	if s == nil {
+		return []byte("null"), nil
+	}
+	if s.Len() == 0 {
+		return []byte("[]"), nil
+	}
+	return json.Marshal(s.UnsortedList())
 }

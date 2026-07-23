@@ -39,6 +39,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	cloudprovider "k8s.io/cloud-provider"
 	cloudproviderapi "k8s.io/cloud-provider/api"
@@ -1632,6 +1633,84 @@ func TestProtocolTranslationUDP(t *testing.T) {
 	}
 }
 
+// trackingControllerClientBuilder is a wrapper around ControllerClientBuilder that tracks the number of times ClientOrDie is called.
+type trackingControllerClientBuilder struct {
+	cloudprovider.ControllerClientBuilder
+	client kubernetes.Interface
+	calls  int
+}
+
+func (b *trackingControllerClientBuilder) ClientOrDie(string) kubernetes.Interface {
+	b.calls++
+	return b.client
+}
+
+func serviceGatewayConfig() *providerconfig.Config {
+	return &providerconfig.Config{
+		ServiceGatewayEnabled:                    true,
+		LoadBalancerSKU:                          consts.LoadBalancerSKUService,
+		LoadBalancerBackendPoolConfigurationType: consts.LoadBalancerBackendPoolConfigurationTypePodIP,
+	}
+}
+
+func TestNewCloudInitializesKubeClientAtRequiredStage(t *testing.T) {
+	t.Run("invalid ServiceGateway CCM", func(t *testing.T) {
+		builder := &trackingControllerClientBuilder{client: fake.NewSimpleClientset()}
+		config := serviceGatewayConfig()
+		config.MultipleStandardLoadBalancerConfigurations = []providerconfig.MultipleStandardLoadBalancerConfiguration{{}}
+
+		_, err := NewCloud(context.Background(), builder, config, true)
+
+		assert.ErrorContains(t, err, "mutually exclusive")
+		assert.Zero(t, builder.calls)
+	})
+
+	t.Run("invalid non-ServiceGateway CCM", func(t *testing.T) {
+		builder := &trackingControllerClientBuilder{client: fake.NewSimpleClientset()}
+		config := &providerconfig.Config{LoadBalancerBackendPoolConfigurationType: "invalid"}
+
+		_, err := NewCloud(context.Background(), builder, config, true)
+
+		assert.ErrorContains(t, err, "is not supported")
+		assert.Zero(t, builder.calls)
+	})
+
+	t.Run("non-ServiceGateway non-CCM", func(t *testing.T) {
+		kubeClient := fake.NewSimpleClientset()
+		builder := &trackingControllerClientBuilder{client: kubeClient}
+
+		cloud, err := NewCloud(context.Background(), builder, &providerconfig.Config{}, false)
+
+		assert.NoError(t, err)
+		if err != nil {
+			return
+		}
+		assert.Same(t, kubeClient, cloud.(*Cloud).KubeClient)
+		assert.Nil(t, cloud.(*Cloud).ServiceGatewayRuntime())
+		assert.Equal(t, 1, builder.calls)
+	})
+
+	t.Run("ServiceGateway non-CCM", func(t *testing.T) {
+		builder := &trackingControllerClientBuilder{client: fake.NewSimpleClientset()}
+		config := serviceGatewayConfig()
+		config.MultipleStandardLoadBalancerConfigurations = []providerconfig.MultipleStandardLoadBalancerConfiguration{{}}
+
+		_, err := NewCloud(context.Background(), builder, config, false)
+
+		assert.ErrorContains(t, err, "mutually exclusive")
+		assert.Zero(t, builder.calls)
+	})
+
+	t.Run("ServiceGateway CCM defers builder requirement", func(t *testing.T) {
+		config := serviceGatewayConfig()
+		config.MultipleStandardLoadBalancerConfigurations = []providerconfig.MultipleStandardLoadBalancerConfiguration{{}}
+
+		_, err := NewCloud(context.Background(), nil, config, true)
+
+		assert.ErrorContains(t, err, "mutually exclusive")
+	})
+}
+
 // Test Configuration deserialization (json)
 func TestNewCloudFromJSON(t *testing.T) {
 	// Fake values for testing.
@@ -2375,6 +2454,34 @@ func TestGetActiveZones(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestInitializePublishesServiceGatewayDependencies(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	az := GetTestCloudWithServiceLoadBalancer(ctrl)
+	kubeClient := az.KubeClient
+
+	az.Initialize(nil, nil)
+	t.Cleanup(az.eventBroadcaster.Shutdown)
+
+	assert.Same(t, kubeClient, az.KubeClient)
+	assert.NotNil(t, az.eventRecorder)
+
+	runtime := az.ServiceGatewayRuntime()
+	assert.NotNil(t, runtime)
+	loadBalancer, supported := az.LoadBalancer()
+	assert.True(t, supported)
+	service := getTestService("servicegateway-lifecycle", v1.ProtocolTCP, nil, false, 80)
+	_, err := loadBalancer.EnsureLoadBalancer(context.Background(), testClusterName, &service, nil)
+	assert.EqualError(t, err, "ServiceGateway LoadBalancer is not initialized")
+
+	informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	assert.NoError(t, runtime.Start(ctx, informerFactory))
+
+	_, err = loadBalancer.EnsureLoadBalancer(context.Background(), testClusterName, &service, nil)
+	assert.NoError(t, err)
+}
+
 func TestInitializeCloudFromConfig(t *testing.T) {
 
 	t.Run("cannot initialize from nil config", func(t *testing.T) {
@@ -2399,6 +2506,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 			DisableAvailabilitySetNodes: true,
 			VMType:                      consts.VMTypeStandard,
 		}
+
 		err := az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, true)
 		expectedErr := fmt.Errorf("disableAvailabilitySetNodes true is only supported when vmType is 'vmss'")
 		assert.Equal(t, expectedErr, err)
@@ -2665,6 +2773,115 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, az.zoneRepo)
 	})
+
+	t.Run("incomplete ServiceGateway configuration is rejected", func(t *testing.T) {
+		tests := []struct {
+			name                     string
+			serviceGatewayEnabled    bool
+			loadBalancerSKU          string
+			backendPoolConfiguration string
+		}{
+			{
+				name:                     "missing ServiceGatewayEnabled",
+				loadBalancerSKU:          consts.LoadBalancerSKUService,
+				backendPoolConfiguration: consts.LoadBalancerBackendPoolConfigurationTypePodIP,
+			},
+			{
+				name:                     "missing service SKU",
+				serviceGatewayEnabled:    true,
+				loadBalancerSKU:          consts.LoadBalancerSKUStandard,
+				backendPoolConfiguration: consts.LoadBalancerBackendPoolConfigurationTypePodIP,
+			},
+			{
+				name:                     "missing PodIP backend pool",
+				serviceGatewayEnabled:    true,
+				loadBalancerSKU:          consts.LoadBalancerSKUService,
+				backendPoolConfiguration: consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration,
+			},
+			{
+				name:                     "ServiceGatewayEnabled only",
+				serviceGatewayEnabled:    true,
+				loadBalancerSKU:          consts.LoadBalancerSKUStandard,
+				backendPoolConfiguration: consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration,
+			},
+			{
+				name:                     "service SKU only",
+				loadBalancerSKU:          consts.LoadBalancerSKUService,
+				backendPoolConfiguration: consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration,
+			},
+			{
+				name:                     "PodIP backend pool only",
+				loadBalancerSKU:          consts.LoadBalancerSKUStandard,
+				backendPoolConfiguration: consts.LoadBalancerBackendPoolConfigurationTypePodIP,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+				az := GetTestCloud(ctrl)
+				zoneMock := az.zoneRepo.(*zone.MockRepository)
+				zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
+
+				azureconfig := providerconfig.Config{
+					ServiceGatewayEnabled:                    tt.serviceGatewayEnabled,
+					LoadBalancerSKU:                          tt.loadBalancerSKU,
+					LoadBalancerBackendPoolConfigurationType: tt.backendPoolConfiguration,
+				}
+				err := az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, false)
+				assert.Error(t, err)
+				if err != nil {
+					assert.Contains(t, err.Error(), "ServiceGateway requires serviceGatewayEnabled=true, loadBalancerBackendPoolConfigurationType=podIP, and loadBalancerSku=service")
+				}
+			})
+		}
+	})
+
+	t.Run("loadBalancerBackendPoolConfigurationType is set to podIP keeps ServiceGateway enabled", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		az := GetTestCloud(ctrl)
+		zoneMock := az.zoneRepo.(*zone.MockRepository)
+		zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
+
+		// A valid ServiceGateway configuration (serviceGatewayEnabled + service SKU + podIP) supplied
+		// through the config argument must survive normalization: podIP is preserved and ServiceGateway
+		// stays enabled. callFromCCM=false skips the CCM-only difftracker cluster init.
+		azureconfig := providerconfig.Config{
+			ServiceGatewayEnabled:                    true,
+			LoadBalancerSKU:                          consts.LoadBalancerSKUService,
+			LoadBalancerBackendPoolConfigurationType: consts.LoadBalancerBackendPoolConfigurationTypePodIP,
+		}
+		err := az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, false)
+		assert.NoError(t, err)
+		assert.Equal(t, consts.LoadBalancerBackendPoolConfigurationTypePodIP, az.LoadBalancerBackendPoolConfigurationType)
+		assert.True(t, az.ServiceGatewayEnabled)
+		assert.Nil(t, az.LoadBalancerBackendPool)
+	})
+
+	t.Run("ServiceGateway rejects multiple standard load balancer configurations", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		az := GetTestCloud(ctrl)
+		zoneMock := az.zoneRepo.(*zone.MockRepository)
+		zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
+
+		azureconfig := providerconfig.Config{
+			ServiceGatewayEnabled:                    true,
+			LoadBalancerSKU:                          consts.LoadBalancerSKUService,
+			LoadBalancerBackendPoolConfigurationType: consts.LoadBalancerBackendPoolConfigurationTypePodIP,
+			MultipleStandardLoadBalancerConfigurations: []providerconfig.MultipleStandardLoadBalancerConfiguration{
+				{},
+			},
+		}
+		err := az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, false)
+		assert.Error(t, err)
+		if err != nil {
+			assert.Contains(t, err.Error(), "ServiceGatewayEnabled and MultipleStandardLoadBalancerConfigurations are mutually exclusive")
+		}
+	})
+
 }
 
 func TestSetLBDefaults(t *testing.T) {

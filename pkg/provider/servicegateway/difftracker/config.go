@@ -25,6 +25,9 @@ type Config struct {
 	// Azure subscription ID
 	SubscriptionID string
 
+	// Subscription that hosts network resources. Defaults to SubscriptionID.
+	NetworkResourceSubscriptionID string
+
 	// Azure resource group name
 	ResourceGroup string
 
@@ -40,6 +43,16 @@ type Config struct {
 
 	// Virtual Network name (required for backend pool configuration)
 	VNetName string
+
+	// Virtual Network resource group
+	VNetResourceGroup string
+}
+
+func (c *Config) networkResourceSubscriptionID() string {
+	if c.NetworkResourceSubscriptionID != "" {
+		return c.NetworkResourceSubscriptionID
+	}
+	return c.SubscriptionID
 }
 
 // Validate checks if the configuration has all required fields
