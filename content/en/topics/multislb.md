@@ -103,3 +103,34 @@ Each local service owns a backend pool named after the service name. The backend
 Besides the service reconciliation loop, an endpointslice informer is also responsible for updating the dedicated backend pools. It watches all endpointslices of local services, monitors any updating events, and updates the corresponding backend pool when service endpoints changes. Considering local services may churn quickly, the informer will send backend pool updating operations to a buffer queue. The queue merges operations targeting to the same backend pool, and updates them every 30s by default. The updating interval can be adjusted by changing `loadBalancerBackendPoolUpdateIntervalInSeconds` in cloud configurations.
 
 > Local service dedicated backend pool and `<clusterName>` backend pool cannot be reconciled in one loop. Hence, the operation triggered by the update of local service or its endpoints will not affect `<clusterName>` backend pool.
+
+### Retry behavior
+
+If a backend pool update fails with a retriable error, the cloud provider will automatically retry the operation on subsequent update cycles. The maximum number of retries is controlled by `loadBalancerBackendPoolUpdateMaxRetries` in cloud configurations, which defaults to 3. With the default value, the updater makes up to 4 total attempts (1 initial attempt plus 3 retries) before giving up. Setting this field to 0 disables retry.
+
+Retries use the same update interval configured by `loadBalancerBackendPoolUpdateIntervalInSeconds` (default 30 seconds). With defaults, a continuously failing retriable error results in the final failure event approximately 90 seconds after the first observed failure.
+
+If Azure responds with 429 (Too Many Requests) and a `Retry-After` header, the updater waits for the requested duration before the next attempt. Waiting does not consume retry budget or emit events.
+
+Errors from Azure API calls are handled as follows:
+
+| Error | Behavior | Event |
+| ----- | -------- | ----- |
+| Backend pool not found (404) | Dropped silently (stale resource) | None |
+| 429 Too Many Requests | Retried; respects `Retry-After` delay | `LoadBalancerBackendPoolUpdateRetrying` / `LoadBalancerBackendPoolUpdateFailed` on final attempt |
+| 409 Conflict / 412 Precondition Failed | Retried on next update cycle | `LoadBalancerBackendPoolUpdateRetrying` / `LoadBalancerBackendPoolUpdateFailed` on final attempt |
+| 408, 500, 502, 503, 504 | Failed immediately (the Azure SDK has already retried these internally) | `LoadBalancerBackendPoolUpdateFailed` |
+| All other errors | Failed immediately | `LoadBalancerBackendPoolUpdateFailed` |
+
+The cloud provider emits Kubernetes events on the affected Service: `LoadBalancerBackendPoolUpdateRetrying` when a failed operation will be retried, `LoadBalancerBackendPoolUpdateFailed` when the retry budget is exhausted or a non-retriable error occurs, and `LoadBalancerBackendPoolUpdated` on success.
+
+During controller shutdown, pending operations are discarded without emitting events or retries.
+
+### Recovery after failure
+
+If a backend pool update exhausts its retry budget, the operation is dropped. A new update operation will be enqueued by any of the following:
+
+- The set of nodes hosting the Service's pods changes (e.g., pods are scheduled on a new node or evacuated from an existing one).
+- An update to the Service object (e.g., annotation or spec change).
+
+During sustained Azure throttling, reduce `loadBalancerBackendPoolUpdateMaxRetries` or increase `loadBalancerBackendPoolUpdateIntervalInSeconds` to avoid retry amplification.
