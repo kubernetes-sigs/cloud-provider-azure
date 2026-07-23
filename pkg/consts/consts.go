@@ -554,12 +554,7 @@ const (
 	VMSSTagForBatchOperation = "aks-managed-coordination"
 )
 
-type LoadBalancerBackendPoolUpdateOperation string
-
 const (
-	LoadBalancerBackendPoolUpdateOperationAdd    LoadBalancerBackendPoolUpdateOperation = "add"
-	LoadBalancerBackendPoolUpdateOperationRemove LoadBalancerBackendPoolUpdateOperation = "remove"
-
 	DefaultLoadBalancerBackendPoolUpdateIntervalInSeconds = 30
 	DefaultLoadBalancerBackendPoolUpdateMaxRetries        = 3
 

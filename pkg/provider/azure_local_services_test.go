@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -77,13 +78,6 @@ func getBackendPoolUpdaterMetrics(t *testing.T) (latencyCount uint64, failureCou
 }
 
 func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	addOperationPool1 := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})
-	removeOperationPool1 := getRemoveIPsFromBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})
-	addOperationPool2 := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool2", []string{"10.0.0.1", "10.0.0.2"})
-
 	testCases := []struct {
 		name                               string
 		operations                         []batchOperation
@@ -94,54 +88,53 @@ func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
 		changeLB                           bool
 		removeOperationServiceName         string
 		expectedCreateOrUpdateBackendPools []*armnetwork.BackendAddressPool
-		expectedBackendPools               []*armnetwork.BackendAddressPool
+		expectedEventReasons               []string
 	}{
 		{
 			name:       "Add node IPs to backend pool",
-			operations: []batchOperation{addOperationPool1},
+			operations: []batchOperation{getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})},
 			existingBackendPools: []*armnetwork.BackendAddressPool{
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}),
 			},
 			expectedCreateOrUpdateBackendPools: []*armnetwork.BackendAddressPool{
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
 			},
-			expectedBackendPools: []*armnetwork.BackendAddressPool{
-				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
-			},
+			expectedEventReasons: []string{consts.LoadBalancerBackendPoolUpdated},
 		},
 		{
 			name:       "Remove node IPs from backend pool",
-			operations: []batchOperation{addOperationPool1, removeOperationPool1},
+			operations: []batchOperation{getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{})},
 			existingBackendPools: []*armnetwork.BackendAddressPool{
-				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}),
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
 			},
 			expectedCreateOrUpdateBackendPools: []*armnetwork.BackendAddressPool{
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}),
 			},
-			expectedBackendPools: []*armnetwork.BackendAddressPool{
-				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}),
-			},
+			expectedEventReasons: []string{consts.LoadBalancerBackendPoolUpdated},
 		},
 		{
-			name:       "Multiple operations targeting different backend pools",
-			operations: []batchOperation{addOperationPool1, addOperationPool2, removeOperationPool1},
+			name: "Multiple operations targeting different backend pools",
+			operations: []batchOperation{
+				getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
+				getDesiredStateOperation("ns1/svc1", "lb1", "pool2", []string{"10.0.0.1", "10.0.0.2"}),
+			},
 			existingBackendPools: []*armnetwork.BackendAddressPool{
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}),
 				getTestBackendAddressPoolWithIPs("lb1", "pool2", []string{}),
 			},
 			expectedCreateOrUpdateBackendPools: []*armnetwork.BackendAddressPool{
-				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}),
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
 				getTestBackendAddressPoolWithIPs("lb1", "pool2", []string{"10.0.0.1", "10.0.0.2"}),
 			},
-			expectedBackendPools: []*armnetwork.BackendAddressPool{
-				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}),
-				getTestBackendAddressPoolWithIPs("lb1", "pool2", []string{"10.0.0.1", "10.0.0.2"}),
-			},
+			expectedEventReasons: []string{consts.LoadBalancerBackendPoolUpdated, consts.LoadBalancerBackendPoolUpdated},
 		},
 		{
-			name:       "Multiple operations in two batches",
-			operations: []batchOperation{addOperationPool1, removeOperationPool1},
-			extraWait:  true,
+			name: "Multiple operations in two batches",
+			operations: []batchOperation{
+				getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
+				getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{}),
+			},
+			extraWait: true,
 			existingBackendPools: []*armnetwork.BackendAddressPool{
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}),
 			},
@@ -150,23 +143,21 @@ func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}),
 			},
 			expectedGetBackendPool: getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
-			expectedBackendPools: []*armnetwork.BackendAddressPool{
-				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}),
-			},
+			expectedEventReasons:   []string{consts.LoadBalancerBackendPoolUpdated, consts.LoadBalancerBackendPoolUpdated},
 		},
 		{
 			name:                       "remove operations by service name",
-			operations:                 []batchOperation{addOperationPool1, removeOperationPool1},
+			operations:                 []batchOperation{getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})},
 			removeOperationServiceName: "ns1/svc1",
 		},
 		{
 			name:       "not local service",
-			operations: []batchOperation{addOperationPool1},
+			operations: []batchOperation{getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})},
 			notLocal:   true,
 		},
 		{
 			name:       "not on this load balancer",
-			operations: []batchOperation{addOperationPool1},
+			operations: []batchOperation{getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})},
 			changeLB:   true,
 		},
 		{
@@ -174,29 +165,23 @@ func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
 			operations: nil,
 		},
 		{
-			name:       "removing non-existent IPs does not trigger CreateOrUpdate",
-			operations: []batchOperation{removeOperationPool1},
+			name:       "empty desired state on empty pool does not trigger CreateOrUpdate",
+			operations: []batchOperation{getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{})},
 			existingBackendPools: []*armnetwork.BackendAddressPool{
-				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}),
-			},
-			expectedBackendPools: []*armnetwork.BackendAddressPool{
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}),
 			},
 		},
 		{
 			name:       "adding already-present IPs does not trigger CreateOrUpdate",
-			operations: []batchOperation{addOperationPool1},
+			operations: []batchOperation{getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})},
 			existingBackendPools: []*armnetwork.BackendAddressPool{
-				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
-			},
-			expectedBackendPools: []*armnetwork.BackendAddressPool{
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
 			},
 		},
 		{
-			name: "add operation deduplicates IPs in empty pool",
+			name: "desired state deduplicates IPs in empty pool",
 			operations: []batchOperation{
-				getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.1", "10.0.0.2"}),
+				getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.1", "10.0.0.2"}),
 			},
 			existingBackendPools: []*armnetwork.BackendAddressPool{
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}),
@@ -204,47 +189,28 @@ func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
 			expectedCreateOrUpdateBackendPools: []*armnetwork.BackendAddressPool{
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
 			},
-			expectedBackendPools: []*armnetwork.BackendAddressPool{
-				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
-			},
+			expectedEventReasons: []string{consts.LoadBalancerBackendPoolUpdated},
 		},
 		{
-			name: "remove-then-add deduplicates IPs",
-			operations: []batchOperation{
-				getRemoveIPsFromBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
-				getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.1", "10.0.0.2", "10.0.0.2"}),
-			},
-			existingBackendPools: []*armnetwork.BackendAddressPool{
-				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
-			},
-			expectedCreateOrUpdateBackendPools: []*armnetwork.BackendAddressPool{
-				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
-			},
-			expectedBackendPools: []*armnetwork.BackendAddressPool{
-				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
-			},
-		},
-		{
-			name: "add-then-remove deduplicates IPs and removes target",
-			operations: []batchOperation{
-				getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.1", "10.0.0.2", "10.0.0.2", "10.0.0.3", "10.0.0.3"}),
-				getRemoveIPsFromBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.2"}),
-			},
+			name:       "desired state with mixed add and remove",
+			operations: []batchOperation{getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.3"})},
 			existingBackendPools: []*armnetwork.BackendAddressPool{
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
 			},
 			expectedCreateOrUpdateBackendPools: []*armnetwork.BackendAddressPool{
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.3"}),
 			},
-			expectedBackendPools: []*armnetwork.BackendAddressPool{
-				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.3"}),
-			},
+			expectedEventReasons: []string{consts.LoadBalancerBackendPoolUpdated},
 		},
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(_ *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 			cloud := GetTestCloud(ctrl)
+			recorder := record.NewFakeRecorder(100)
+			cloud.eventRecorder = recorder
 			cloud.localServiceNameToServiceInfoMap = sync.Map{}
 			if !tc.notLocal {
 				cloud.localServiceNameToServiceInfoMap.Store("ns1/svc1", &serviceInfo{lbName: "lb1"})
@@ -262,52 +228,21 @@ func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
 			informerFactory.Start(stopCh)
 			informerFactory.WaitForCacheSync(stopCh)
 			mockbpClient := cloud.NetworkClientFactory.GetBackendAddressPoolClient().(*mock_backendaddresspoolclient.MockInterface)
-			if len(tc.existingBackendPools) > 0 {
-				mockbpClient.EXPECT().Get(
-					gomock.Any(),
-					gomock.Any(),
-					"lb1",
-					*tc.existingBackendPools[0].Name,
-				).Return(tc.existingBackendPools[0], nil)
-			}
-			if len(tc.existingBackendPools) == 2 {
-				mockbpClient.EXPECT().Get(
-					gomock.Any(),
-					gomock.Any(),
-					"lb1",
-					*tc.existingBackendPools[1].Name,
-				).Return(tc.existingBackendPools[1], nil)
+			for _, bp := range tc.existingBackendPools {
+				mockbpClient.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", *bp.Name).Return(bp, nil)
 			}
 			if tc.extraWait {
-				mockbpClient.EXPECT().Get(
-					gomock.Any(),
-					gomock.Any(),
-					"lb1",
-					*tc.expectedGetBackendPool.Name,
-				).Return(tc.expectedGetBackendPool, nil)
+				mockbpClient.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", *tc.expectedGetBackendPool.Name).Return(tc.expectedGetBackendPool, nil)
 			}
-			if len(tc.expectedCreateOrUpdateBackendPools) > 0 {
-				mockbpClient.EXPECT().CreateOrUpdate(
-					gomock.Any(),
-					gomock.Any(),
-					"lb1",
-					*tc.expectedCreateOrUpdateBackendPools[0].Name,
-					*tc.expectedCreateOrUpdateBackendPools[0],
-				).Return(nil, nil)
-			}
-			if len(tc.existingBackendPools) == 2 || tc.extraWait {
-				mockbpClient.EXPECT().CreateOrUpdate(
-					gomock.Any(),
-					gomock.Any(),
-					"lb1",
-					*tc.expectedCreateOrUpdateBackendPools[1].Name,
-					*tc.expectedCreateOrUpdateBackendPools[1],
-				).Return(nil, nil)
+			for _, expectedBP := range tc.expectedCreateOrUpdateBackendPools {
+				mockbpClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", *expectedBP.Name, *expectedBP).Return(nil, nil)
 			}
 
 			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
+
+			latencyBefore, _ := getBackendPoolUpdaterMetrics(t)
 
 			// Use WaitGroup to properly synchronize goroutine completion
 			var wg sync.WaitGroup
@@ -317,7 +252,6 @@ func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
 				u.run(ctx)
 			}()
 
-			results := sync.Map{}
 			operationsDone := make(chan struct{})
 			var operationsWg sync.WaitGroup
 
@@ -327,8 +261,6 @@ func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
 				go func() {
 					defer operationsWg.Done()
 					u.addOperation(op)
-					result := op.wait()
-					results.Store(result, true)
 				}()
 				// Small delay to ensure operations are properly queued
 				time.Sleep(50 * time.Millisecond)
@@ -361,12 +293,16 @@ func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
 			// Ensure proper cleanup - cancel context and wait for goroutine
 			cancel()
 			wg.Wait()
+
+			assertEventReasons(t, drainEvents(recorder), tc.expectedEventReasons...)
+			latencyAfter, _ := getBackendPoolUpdaterMetrics(t)
+			assert.Equal(t, uint64(len(tc.expectedEventReasons)), latencyAfter-latencyBefore)
 		})
 	}
 }
 
 func TestLoadBalancerBackendPoolUpdaterFailed(t *testing.T) {
-	addOperationPool1 := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})
+	desiredOpPool1 := getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})
 
 	testCases := []struct {
 		name                               string
@@ -380,7 +316,7 @@ func TestLoadBalancerBackendPoolUpdaterFailed(t *testing.T) {
 	}{
 		{
 			name:       "Non-retriable error when getting backend pool",
-			operations: []batchOperation{addOperationPool1},
+			operations: []batchOperation{desiredOpPool1},
 			existingBackendPools: []*armnetwork.BackendAddressPool{
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}),
 			},
@@ -391,7 +327,7 @@ func TestLoadBalancerBackendPoolUpdaterFailed(t *testing.T) {
 		},
 		{
 			name:       "Non-retriable error when updating backend pool",
-			operations: []batchOperation{addOperationPool1},
+			operations: []batchOperation{desiredOpPool1},
 			existingBackendPools: []*armnetwork.BackendAddressPool{
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}),
 			},
@@ -403,7 +339,7 @@ func TestLoadBalancerBackendPoolUpdaterFailed(t *testing.T) {
 		},
 		{
 			name:       "Backend pool not found",
-			operations: []batchOperation{addOperationPool1},
+			operations: []batchOperation{desiredOpPool1},
 			existingBackendPools: []*armnetwork.BackendAddressPool{
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}),
 			},
@@ -412,7 +348,7 @@ func TestLoadBalancerBackendPoolUpdaterFailed(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(_ *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
@@ -665,50 +601,123 @@ func TestEndpointSlicesInformer(t *testing.T) {
 	}
 }
 
-func TestEndpointSlicesInformerDeduplicatesNodeIPs(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
+func TestEndpointSlicesInformerDesiredState(t *testing.T) {
 	for _, tc := range []struct {
-		name        string
-		existingEPS *discovery_v1.EndpointSlice
-		updatedEPS  *discovery_v1.EndpointSlice
-		expectedOps []*loadBalancerBackendPoolUpdateOperation
+		name                string
+		ipFamily            string
+		updatedEPS          *discovery_v1.EndpointSlice
+		otherEndpointSlices []*discovery_v1.EndpointSlice
+		existingQueueOps    []*loadBalancerBackendPoolUpdateOperation
+		nodePrivateIPs      map[string]*utilsets.IgnoreCaseSet
+		expectedOps         []*loadBalancerBackendPoolUpdateOperation
 	}{
 		{
-			name:        "multiple endpoints on same node produces unique IPs",
-			existingEPS: getTestEndpointSlice("eps1", "test", "svc1", "node1"),
-			updatedEPS:  getTestEndpointSlice("eps1", "test", "svc1", "node2", "node2", "node2"),
+			name:       "multiple endpoints on same node produces unique IPs",
+			updatedEPS: getTestEndpointSlice("eps1", "test", "svc1", "node2", "node2", "node2"),
+			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{
+				"node2": utilsets.NewString("10.0.0.2"),
+			},
 			expectedOps: []*loadBalancerBackendPoolUpdateOperation{
-				getRemoveIPsFromBackendPoolOperation("test/svc1", "lb1", "test-svc1", []string{"10.0.0.1"}),
-				getAddIPsToBackendPoolOperation("test/svc1", "lb1", "test-svc1", []string{"10.0.0.2"}),
+				getDesiredStateOperation("test/svc1", "lb1", "test-svc1", []string{"10.0.0.2"}),
 			},
 		},
 		{
-			name:        "unchanged node set with different endpoint counts is a no-op",
-			existingEPS: getTestEndpointSlice("eps1", "test", "svc1", "node1", "node1"),
-			updatedEPS:  getTestEndpointSlice("eps1", "test", "svc1", "node1", "node1", "node1"),
+			name:       "unchanged node set preserves retry state on existing op",
+			updatedEPS: getTestEndpointSlice("eps1", "test", "svc1", "node1", "node1", "node1"),
+			existingQueueOps: []*loadBalancerBackendPoolUpdateOperation{
+				{serviceName: "test/svc1", loadBalancerName: "lb1", backendPoolName: "test-svc1", nodeIPs: []string{"10.0.0.1"}, retryAttempts: 2},
+			},
+			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{
+				"node1": utilsets.NewString("10.0.0.1"),
+			},
+			expectedOps: []*loadBalancerBackendPoolUpdateOperation{
+				{serviceName: "test/svc1", loadBalancerName: "lb1", backendPoolName: "test-svc1", nodeIPs: []string{"10.0.0.1"}, retryAttempts: 2},
+			},
+		},
+		{
+			name:       "update includes IPs from all EndpointSlices for the service",
+			updatedEPS: getTestEndpointSlice("eps1", "test", "svc1", "node1", "node3"),
+			otherEndpointSlices: []*discovery_v1.EndpointSlice{
+				getTestEndpointSlice("eps2", "test", "svc1", "node2"),
+			},
+			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{
+				"node1": utilsets.NewString("10.0.0.1"),
+				"node2": utilsets.NewString("10.0.0.2"),
+				"node3": utilsets.NewString("10.0.0.3"),
+			},
+			expectedOps: []*loadBalancerBackendPoolUpdateOperation{
+				getDesiredStateOperation("test/svc1", "lb1", "test-svc1", []string{"10.0.0.1", "10.0.0.2", "10.0.0.3"}),
+			},
+		},
+		{
+			name:       "removing endpoints excludes their node IPs",
+			updatedEPS: getTestEndpointSlice("eps1", "test", "svc1", "node1"),
+			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{
+				"node1": utilsets.NewString("10.0.0.1"),
+			},
+			expectedOps: []*loadBalancerBackendPoolUpdateOperation{
+				getDesiredStateOperation("test/svc1", "lb1", "test-svc1", []string{"10.0.0.1"}),
+			},
+		},
+		{
+			name:       "node with multiple IPs includes all",
+			updatedEPS: getTestEndpointSlice("eps1", "test", "svc1", "node1"),
+			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{
+				"node1": utilsets.NewString("10.0.0.1", "10.0.0.2"),
+			},
+			expectedOps: []*loadBalancerBackendPoolUpdateOperation{
+				getDesiredStateOperation("test/svc1", "lb1", "test-svc1", []string{"10.0.0.1", "10.0.0.2"}),
+			},
+		},
+		{
+			name:       "scale to zero endpoints enqueues empty desired state",
+			updatedEPS: getTestEndpointSlice("eps1", "test", "svc1"),
+			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{
+				"node1": utilsets.NewString("10.0.0.1"),
+			},
+			expectedOps: []*loadBalancerBackendPoolUpdateOperation{
+				getDesiredStateOperation("test/svc1", "lb1", "test-svc1", []string{}),
+			},
+		},
+		{
+			name:       "dual-stack service produces one op per pool",
+			ipFamily:   consts.IPVersionDualStackString,
+			updatedEPS: getTestEndpointSlice("eps1", "test", "svc1", "node1"),
+			nodePrivateIPs: map[string]*utilsets.IgnoreCaseSet{
+				"node1": utilsets.NewString("10.0.0.1", "fd00::1"),
+			},
+			expectedOps: []*loadBalancerBackendPoolUpdateOperation{
+				getDesiredStateOperation("test/svc1", "lb1", "test-svc1-ipv6", []string{"fd00::1"}),
+				getDesiredStateOperation("test/svc1", "lb1", "test-svc1", []string{"10.0.0.1"}),
+			},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 			cloud := GetTestCloud(ctrl)
 			cloud.localServiceNameToServiceInfoMap = sync.Map{}
-			cloud.localServiceNameToServiceInfoMap.Store("test/svc1", newServiceInfo(consts.IPVersionIPv4String, "lb1"))
+			ipFamily := tc.ipFamily
+			if ipFamily == "" {
+				ipFamily = consts.IPVersionIPv4String
+			}
+			cloud.localServiceNameToServiceInfoMap.Store("test/svc1", newServiceInfo(ipFamily, "lb1"))
 			cloud.LoadBalancerBackendPoolUpdateIntervalInSeconds = 1
 			cloud.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 			cloud.MultipleStandardLoadBalancerConfigurations = []config.MultipleStandardLoadBalancerConfiguration{
 				{Name: "lb1"},
 			}
-			cloud.nodePrivateIPs = map[string]*utilsets.IgnoreCaseSet{
-				"node1": utilsets.NewString("10.0.0.1"),
-				"node2": utilsets.NewString("10.0.0.2"),
-			}
+			cloud.nodePrivateIPs = tc.nodePrivateIPs
 
 			svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
 			svc.Namespace = "test"
-			client := fake.NewSimpleClientset(&svc, tc.existingEPS)
+			client := fake.NewSimpleClientset(&svc, getTestEndpointSlice("eps1", "test", "svc1"))
 			informerFactory := informers.NewSharedInformerFactory(client, 0)
 			cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+			for _, eps := range tc.otherEndpointSlices {
+				cloud.endpointSlicesCache.Store(
+					fmt.Sprintf("%s/%s", eps.Namespace, eps.Name), eps)
+			}
 			stopCh := make(chan struct{})
 			t.Cleanup(func() { close(stopCh) })
 			informerFactory.Start(stopCh)
@@ -717,6 +726,10 @@ func TestEndpointSlicesInformerDeduplicatesNodeIPs(t *testing.T) {
 			// Create updater without starting run() so we can inspect queued operations.
 			u := newLoadBalancerBackendPoolUpdater(cloud, time.Hour)
 			cloud.backendPoolUpdater = u
+
+			for _, op := range tc.existingQueueOps {
+				u.addOperation(op)
+			}
 
 			cloud.setUpEndpointSlicesInformer(informerFactory)
 			stopChan := make(chan struct{})
@@ -736,6 +749,13 @@ func TestEndpointSlicesInformerDeduplicatesNodeIPs(t *testing.T) {
 			var actual []*loadBalancerBackendPoolUpdateOperation
 			for _, op := range ops {
 				actual = append(actual, op.(*loadBalancerBackendPoolUpdateOperation))
+			}
+			// Sort nodeIPs for stable comparison; order is not significant at runtime.
+			for _, op := range actual {
+				slices.Sort(op.nodeIPs)
+			}
+			for _, op := range tc.expectedOps {
+				slices.Sort(op.nodeIPs)
 			}
 			assert.Equal(t, tc.expectedOps, actual)
 		})
@@ -761,15 +781,45 @@ func TestCheckAndApplyLocalServiceBackendPoolUpdates(t *testing.T) {
 	defer ctrl.Finish()
 
 	for _, tc := range []struct {
-		description string
-		existingEPS *discovery_v1.EndpointSlice
+		description  string
+		existingEPS  *discovery_v1.EndpointSlice
+		existingIPv4 []string
+		existingIPv6 []string
+		expectedIPv4 []string
+		expectedIPv6 []string
 	}{
 		{
-			description: "should update backend pool as expected",
-			existingEPS: getTestEndpointSlice("eps1", "default", "svc1", "node2"),
+			description:  "should update backend pool as expected",
+			existingEPS:  getTestEndpointSlice("eps1", "default", "svc1", "node2"),
+			existingIPv4: []string{"10.0.0.1"},
+			existingIPv6: []string{"fd00::1"},
+			expectedIPv4: []string{"10.0.0.2"},
+			expectedIPv6: []string{"fd00::2"},
 		},
 		{
-			description: "should not report an error if failed to get the endpointslice",
+			description:  "should not report an error if failed to get the endpointslice",
+			existingIPv4: []string{"10.0.0.1"},
+			existingIPv6: []string{"fd00::1"},
+		},
+		{
+			description:  "should not update backend pool when IPs already match",
+			existingEPS:  getTestEndpointSlice("eps1", "default", "svc1", "node1"),
+			existingIPv4: []string{"10.0.0.1"},
+			existingIPv6: []string{"fd00::1"},
+		},
+		{
+			description:  "should remove all IPs when endpoints scale to zero",
+			existingEPS:  getTestEndpointSlice("eps1", "default", "svc1"),
+			existingIPv4: []string{"10.0.0.1"},
+			existingIPv6: []string{"fd00::1"},
+			expectedIPv4: []string{},
+			expectedIPv6: []string{},
+		},
+		{
+			description:  "should not update when empty pool and empty endpoints",
+			existingEPS:  getTestEndpointSlice("eps1", "default", "svc1"),
+			existingIPv4: []string{},
+			existingIPv6: []string{},
 		},
 	} {
 		t.Run(tc.description, func(t *testing.T) {
@@ -800,8 +850,8 @@ func TestCheckAndApplyLocalServiceBackendPoolUpdates(t *testing.T) {
 				cloud.endpointSlicesCache.Store(fmt.Sprintf("%s/%s", tc.existingEPS.Name, tc.existingEPS.Namespace), tc.existingEPS)
 			}
 
-			existingBackendPool := getTestBackendAddressPoolWithIPs("lb1", "default-svc1", []string{"10.0.0.1"})
-			existingBackendPoolIPv6 := getTestBackendAddressPoolWithIPs("lb1", "default-svc1-ipv6", []string{"fd00::1"})
+			existingBackendPool := getTestBackendAddressPoolWithIPs("lb1", "default-svc1", tc.existingIPv4)
+			existingBackendPoolIPv6 := getTestBackendAddressPoolWithIPs("lb1", "default-svc1-ipv6", tc.existingIPv6)
 			existingLB := armnetwork.LoadBalancer{
 				Name: ptr.To("lb1"),
 				Properties: &armnetwork.LoadBalancerPropertiesFormat{
@@ -811,13 +861,15 @@ func TestCheckAndApplyLocalServiceBackendPoolUpdates(t *testing.T) {
 					},
 				},
 			}
-			expectedBackendPool := getTestBackendAddressPoolWithIPs("lb1", "default-svc1", []string{"10.0.0.2"})
-			expectedBackendPoolIPv6 := getTestBackendAddressPoolWithIPs("lb1", "default-svc1-ipv6", []string{"fd00::2"})
 			mockLBClient := cloud.NetworkClientFactory.GetBackendAddressPoolClient().(*mock_backendaddresspoolclient.MockInterface)
-			if tc.existingEPS != nil {
+			if tc.expectedIPv4 != nil {
+				expectedBackendPool := getTestBackendAddressPoolWithIPs("lb1", "default-svc1", tc.expectedIPv4)
 				mockLBClient.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "default-svc1").Return(existingBackendPool, nil)
-				mockLBClient.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "default-svc1-ipv6").Return(existingBackendPoolIPv6, nil)
 				mockLBClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "default-svc1", *expectedBackendPool).Return(nil, nil)
+			}
+			if tc.expectedIPv6 != nil {
+				expectedBackendPoolIPv6 := getTestBackendAddressPoolWithIPs("lb1", "default-svc1-ipv6", tc.expectedIPv6)
+				mockLBClient.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "default-svc1-ipv6").Return(existingBackendPoolIPv6, nil)
 				mockLBClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "default-svc1-ipv6", *expectedBackendPoolIPv6).Return(nil, nil)
 			}
 
@@ -861,11 +913,194 @@ func TestCheckAndApplyLocalServiceBackendPoolUpdates(t *testing.T) {
 			wg.Wait()
 		})
 	}
+
+	t.Run("should not panic on nil address properties", func(t *testing.T) {
+		cloud := GetTestCloud(ctrl)
+		cloud.localServiceNameToServiceInfoMap.Store("default/svc1", newServiceInfo(consts.IPVersionIPv4String, "lb1"))
+		cloud.nodePrivateIPs = map[string]*utilsets.IgnoreCaseSet{
+			"node1": utilsets.NewString("10.0.0.1"),
+		}
+		cloud.endpointSlicesCache.Store("eps1/default", getTestEndpointSlice("eps1", "default", "svc1", "node1"))
+		cloud.backendPoolUpdater = newLoadBalancerBackendPoolUpdater(cloud, time.Hour)
+
+		svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+		bp := getTestBackendAddressPoolWithIPs("lb1", "default-svc1", []string{"10.0.0.1"})
+		bp.Properties.LoadBalancerBackendAddresses = append(
+			bp.Properties.LoadBalancerBackendAddresses,
+			&armnetwork.LoadBalancerBackendAddress{Properties: nil},
+		)
+		existingLB := armnetwork.LoadBalancer{
+			Name: ptr.To("lb1"),
+			Properties: &armnetwork.LoadBalancerPropertiesFormat{
+				BackendAddressPools: []*armnetwork.BackendAddressPool{bp},
+			},
+		}
+
+		err := cloud.checkAndApplyLocalServiceBackendPoolUpdates(existingLB, &svc)
+		assert.NoError(t, err)
+	})
+}
+
+func TestAreNodeIPsEqual(t *testing.T) {
+	for _, tc := range []struct {
+		desc                    string
+		currentIPs, expectedIPs []string
+		equal                   bool
+	}{
+		{
+			desc:        "same IPs same order",
+			currentIPs:  []string{"10.0.0.1", "10.0.0.2"},
+			expectedIPs: []string{"10.0.0.1", "10.0.0.2"},
+			equal:       true,
+		},
+		{
+			desc:        "same IPs different order",
+			currentIPs:  []string{"10.0.0.2", "10.0.0.1"},
+			expectedIPs: []string{"10.0.0.1", "10.0.0.2"},
+			equal:       true,
+		},
+		{
+			desc:        "expected IPs need add and delete",
+			currentIPs:  []string{"10.0.0.1"},
+			expectedIPs: []string{"10.0.0.2"},
+			equal:       false,
+		},
+		{
+			desc:        "expected IPs need add",
+			currentIPs:  []string{"10.0.0.1"},
+			expectedIPs: []string{"10.0.0.1", "10.0.0.2"},
+			equal:       false,
+		},
+		{
+			desc:        "expected IPs need delete",
+			currentIPs:  []string{"10.0.0.1", "10.0.0.2"},
+			expectedIPs: []string{"10.0.0.1"},
+			equal:       false,
+		},
+		{
+			desc:  "no IPs",
+			equal: true,
+		},
+		{
+			desc:       "expected IPs are empty",
+			currentIPs: []string{"10.0.0.1"},
+			equal:      false,
+		},
+		{
+			desc:        "nil current with expected IPs",
+			currentIPs:  nil,
+			expectedIPs: []string{"10.0.0.1"},
+			equal:       false,
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.equal, areNodeIPsEqual(tc.currentIPs, tc.expectedIPs))
+		})
+	}
+}
+
+func TestAddOperation(t *testing.T) {
+	futureTime := time.Now().Add(1 * time.Hour)
+
+	for _, tc := range []struct {
+		name        string
+		ops         []*loadBalancerBackendPoolUpdateOperation
+		expectedOps []*loadBalancerBackendPoolUpdateOperation
+	}{
+		{
+			name: "replaces op for same target with latest IPs",
+			ops: []*loadBalancerBackendPoolUpdateOperation{
+				{serviceName: "ns1/svc1", loadBalancerName: "lb1", backendPoolName: "pool1", nodeIPs: []string{"10.0.0.1", "10.0.0.2"}},
+				{serviceName: "ns1/svc1", loadBalancerName: "lb1", backendPoolName: "pool1", nodeIPs: []string{"10.0.0.3", "10.0.0.4"}},
+			},
+			expectedOps: []*loadBalancerBackendPoolUpdateOperation{
+				{serviceName: "ns1/svc1", loadBalancerName: "lb1", backendPoolName: "pool1", nodeIPs: []string{"10.0.0.3", "10.0.0.4"}},
+			},
+		},
+		{
+			name: "different services are independent",
+			ops: []*loadBalancerBackendPoolUpdateOperation{
+				{serviceName: "ns1/svc1", loadBalancerName: "lb1", backendPoolName: "pool1", nodeIPs: []string{"10.0.0.1"}},
+				{serviceName: "ns1/svc2", loadBalancerName: "lb1", backendPoolName: "pool2", nodeIPs: []string{"10.0.0.2"}},
+			},
+			expectedOps: []*loadBalancerBackendPoolUpdateOperation{
+				{serviceName: "ns1/svc1", loadBalancerName: "lb1", backendPoolName: "pool1", nodeIPs: []string{"10.0.0.1"}},
+				{serviceName: "ns1/svc2", loadBalancerName: "lb1", backendPoolName: "pool2", nodeIPs: []string{"10.0.0.2"}},
+			},
+		},
+		{
+			name: "different pools are independent",
+			ops: []*loadBalancerBackendPoolUpdateOperation{
+				{serviceName: "ns1/svc1", loadBalancerName: "lb1", backendPoolName: "poolA", nodeIPs: []string{"10.0.0.1"}},
+				{serviceName: "ns1/svc1", loadBalancerName: "lb1", backendPoolName: "poolB", nodeIPs: []string{"10.0.0.2"}},
+			},
+			expectedOps: []*loadBalancerBackendPoolUpdateOperation{
+				{serviceName: "ns1/svc1", loadBalancerName: "lb1", backendPoolName: "poolA", nodeIPs: []string{"10.0.0.1"}},
+				{serviceName: "ns1/svc1", loadBalancerName: "lb1", backendPoolName: "poolB", nodeIPs: []string{"10.0.0.2"}},
+			},
+		},
+		{
+			name: "preserves nextEligibleAt on replace",
+			ops: []*loadBalancerBackendPoolUpdateOperation{
+				{serviceName: "ns1/svc1", loadBalancerName: "lb1", backendPoolName: "pool1", nodeIPs: []string{"10.0.0.1"}, nextEligibleAt: futureTime},
+				{serviceName: "ns1/svc1", loadBalancerName: "lb1", backendPoolName: "pool1", nodeIPs: []string{"10.0.0.3"}},
+			},
+			expectedOps: []*loadBalancerBackendPoolUpdateOperation{
+				{serviceName: "ns1/svc1", loadBalancerName: "lb1", backendPoolName: "pool1", nodeIPs: []string{"10.0.0.3"}, nextEligibleAt: futureTime},
+			},
+		},
+		{
+			name: "resets retryAttempts on replace",
+			ops: []*loadBalancerBackendPoolUpdateOperation{
+				{serviceName: "ns1/svc1", loadBalancerName: "lb1", backendPoolName: "pool1", nodeIPs: []string{"10.0.0.1"}, retryAttempts: 2},
+				{serviceName: "ns1/svc1", loadBalancerName: "lb1", backendPoolName: "pool1", nodeIPs: []string{"10.0.0.3"}},
+			},
+			expectedOps: []*loadBalancerBackendPoolUpdateOperation{
+				{serviceName: "ns1/svc1", loadBalancerName: "lb1", backendPoolName: "pool1", nodeIPs: []string{"10.0.0.3"}},
+			},
+		},
+		{
+			name: "skips when IPs unchanged",
+			ops: []*loadBalancerBackendPoolUpdateOperation{
+				{serviceName: "ns1/svc1", loadBalancerName: "lb1", backendPoolName: "pool1", nodeIPs: []string{"10.0.0.1", "10.0.0.2"}, retryAttempts: 2, nextEligibleAt: futureTime},
+				{serviceName: "ns1/svc1", loadBalancerName: "lb1", backendPoolName: "pool1", nodeIPs: []string{"10.0.0.1", "10.0.0.2"}},
+			},
+			expectedOps: []*loadBalancerBackendPoolUpdateOperation{
+				{serviceName: "ns1/svc1", loadBalancerName: "lb1", backendPoolName: "pool1", nodeIPs: []string{"10.0.0.1", "10.0.0.2"}, retryAttempts: 2, nextEligibleAt: futureTime},
+			},
+		},
+		{
+			name: "replace with empty desired state",
+			ops: []*loadBalancerBackendPoolUpdateOperation{
+				{serviceName: "ns1/svc1", loadBalancerName: "lb1", backendPoolName: "pool1", nodeIPs: []string{"10.0.0.1", "10.0.0.2"}},
+				{serviceName: "ns1/svc1", loadBalancerName: "lb1", backendPoolName: "pool1", nodeIPs: []string{}},
+			},
+			expectedOps: []*loadBalancerBackendPoolUpdateOperation{
+				{serviceName: "ns1/svc1", loadBalancerName: "lb1", backendPoolName: "pool1", nodeIPs: []string{}},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud := &Cloud{}
+			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+
+			for _, op := range tc.ops {
+				u.addOperation(op)
+			}
+
+			drained := u.drainOperations()
+			var actual []*loadBalancerBackendPoolUpdateOperation
+			for _, op := range drained {
+				actual = append(actual, op.(*loadBalancerBackendPoolUpdateOperation))
+			}
+			assert.Equal(t, tc.expectedOps, actual)
+		})
+	}
 }
 
 func TestCountOperations(t *testing.T) {
-	op1 := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
-	op2 := getRemoveIPsFromBackendPoolOperation("ns1/svc2", "lb1", "pool1", []string{"10.0.0.2"})
+	op1 := getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
+	op2 := getDesiredStateOperation("ns1/svc2", "lb1", "pool1", []string{"10.0.0.2"})
 
 	tests := []struct {
 		name     string
@@ -917,8 +1152,8 @@ func TestCountOperations(t *testing.T) {
 }
 
 func TestDrainOperations(t *testing.T) {
-	op1 := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
-	op2 := getAddIPsToBackendPoolOperation("ns1/svc2", "lb1", "pool2", []string{"10.0.0.2"})
+	op1 := getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
+	op2 := getDesiredStateOperation("ns1/svc2", "lb1", "pool2", []string{"10.0.0.2"})
 
 	testCases := []struct {
 		name       string
@@ -999,21 +1234,21 @@ func TestHasParkedOperations(t *testing.T) {
 	}{
 		{name: "empty slice", ops: nil, expected: false},
 		{name: "zero nextEligibleAt", ops: []batchOperation{
-			getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}),
+			getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}),
 		}, expected: false},
 		{name: "past nextEligibleAt", ops: func() []batchOperation {
-			op := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
+			op := getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
 			op.nextEligibleAt = time.Now().Add(-time.Minute)
 			return []batchOperation{op}
 		}(), expected: false},
 		{name: "future nextEligibleAt", ops: func() []batchOperation {
-			op := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
+			op := getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
 			op.nextEligibleAt = time.Now().Add(5 * time.Minute)
 			return []batchOperation{op}
 		}(), expected: true},
 		{name: "mix of past and future", ops: func() []batchOperation {
-			op1 := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
-			op2 := getAddIPsToBackendPoolOperation("ns1/svc2", "lb1", "pool1", []string{"10.0.0.2"})
+			op1 := getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
+			op2 := getDesiredStateOperation("ns1/svc2", "lb1", "pool1", []string{"10.0.0.2"})
 			op2.nextEligibleAt = time.Now().Add(5 * time.Minute)
 			return []batchOperation{op1, op2}
 		}(), expected: true},
@@ -1025,9 +1260,9 @@ func TestHasParkedOperations(t *testing.T) {
 }
 
 func TestRequeueOperations(t *testing.T) {
-	op1 := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
-	op2 := getAddIPsToBackendPoolOperation("ns1/svc2", "lb1", "pool1", []string{"10.0.0.2"})
-	op3 := getAddIPsToBackendPoolOperation("ns1/svc3", "lb1", "pool1", []string{"10.0.0.3"})
+	op1 := getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
+	op2 := getDesiredStateOperation("ns1/svc2", "lb1", "pool1", []string{"10.0.0.2"})
+	op3 := getDesiredStateOperation("ns1/svc3", "lb1", "pool1", []string{"10.0.0.3"})
 
 	t.Run("requeue to empty queue", func(t *testing.T) {
 		cloud := &Cloud{}
@@ -1076,13 +1311,73 @@ func TestRequeueOperations(t *testing.T) {
 			t.Fatal("requeueOperations did not complete after lock released")
 		}
 	})
+
+	t.Run("requeue drops op if op for same target already exists", func(t *testing.T) {
+		cloud := &Cloud{}
+		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+
+		u.addOperation(op1)
+
+		// Stale op being requeued after failure.
+		staleOp := getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.5"})
+		staleOp.retryAttempts = 1
+		u.requeueOperations([]batchOperation{staleOp})
+
+		// Only the fresh op should remain.
+		ops := u.drainOperations()
+		assert.Equal(t, 1, len(ops))
+		assert.Equal(t, op1, ops[0])
+	})
+
+	for _, tc := range []struct {
+		name                   string
+		freshNextEligibleAt    time.Time
+		staleNextEligibleAt    time.Time
+		expectedNextEligibleAt time.Time
+	}{
+		{
+			name:                   "transfers nextEligibleAt to fresh op",
+			staleNextEligibleAt:    time.Now().Add(1 * time.Hour),
+			expectedNextEligibleAt: time.Now().Add(1 * time.Hour),
+		},
+		{
+			name:                   "transfers nextEligibleAt to fresh op when its value is earlier",
+			freshNextEligibleAt:    time.Now().Add(1 * time.Hour),
+			staleNextEligibleAt:    time.Now().Add(2 * time.Hour),
+			expectedNextEligibleAt: time.Now().Add(2 * time.Hour),
+		},
+		{
+			name:                   "preserves fresh op nextEligibleAt when it is already later",
+			freshNextEligibleAt:    time.Now().Add(2 * time.Hour),
+			staleNextEligibleAt:    time.Now().Add(1 * time.Hour),
+			expectedNextEligibleAt: time.Now().Add(2 * time.Hour),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud := &Cloud{}
+			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+
+			freshOp := getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.3"})
+			freshOp.nextEligibleAt = tc.freshNextEligibleAt
+			u.addOperation(freshOp)
+
+			staleOp := getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
+			staleOp.nextEligibleAt = tc.staleNextEligibleAt
+			staleOp.retryAttempts = 1
+			u.requeueOperations([]batchOperation{staleOp})
+
+			ops := u.drainOperations()
+			assert.Equal(t, 1, len(ops))
+			op := ops[0].(*loadBalancerBackendPoolUpdateOperation)
+			assert.ElementsMatch(t, []string{"10.0.0.3"}, op.nodeIPs, "fresh op IPs should be kept")
+			assert.InDelta(t, tc.expectedNextEligibleAt.UnixNano(), op.nextEligibleAt.UnixNano(), float64(time.Second), "nextEligibleAt should use max")
+		})
+	}
 }
 
 func TestGroupOperations(t *testing.T) {
-	addPool1 := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
-	removePool1 := getRemoveIPsFromBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
-	addPool1WithExtra := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})
-	addPool2 := getAddIPsToBackendPoolOperation("ns1/svc2", "lb1", "pool2", []string{"10.0.0.2"})
+	opPool1 := getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
+	opPool2 := getDesiredStateOperation("ns1/svc2", "lb1", "pool2", []string{"10.0.0.2"})
 
 	testCases := []struct {
 		name           string
@@ -1098,43 +1393,37 @@ func TestGroupOperations(t *testing.T) {
 		},
 		{
 			name:           "groups single operation by pool key",
-			operations:     []batchOperation{addPool1},
+			operations:     []batchOperation{opPool1},
 			localServices:  map[string]*serviceInfo{"ns1/svc1": {lbName: "lb1"}},
-			expectedGroups: map[string][]batchOperation{"lb1:pool1": {addPool1}},
-		},
-		{
-			name:           "groups operations targeting same pool together",
-			operations:     []batchOperation{removePool1, addPool1WithExtra},
-			localServices:  map[string]*serviceInfo{"ns1/svc1": {lbName: "lb1"}},
-			expectedGroups: map[string][]batchOperation{"lb1:pool1": {removePool1, addPool1WithExtra}},
+			expectedGroups: map[string][]batchOperation{"lb1:pool1": {opPool1}},
 		},
 		{
 			name:       "groups operations targeting different pools separately",
-			operations: []batchOperation{addPool1, addPool2},
+			operations: []batchOperation{opPool1, opPool2},
 			localServices: map[string]*serviceInfo{
 				"ns1/svc1": {lbName: "lb1"},
 				"ns1/svc2": {lbName: "lb1"},
 			},
-			expectedGroups: map[string][]batchOperation{"lb1:pool1": {addPool1}, "lb1:pool2": {addPool2}},
+			expectedGroups: map[string][]batchOperation{"lb1:pool1": {opPool1}, "lb1:pool2": {opPool2}},
 		},
 		{
 			name:           "skips operations for non-local services",
-			operations:     []batchOperation{addPool1},
+			operations:     []batchOperation{opPool1},
 			localServices:  map[string]*serviceInfo{},
 			expectedGroups: map[string][]batchOperation{},
 		},
 		{
 			name:           "skips operations targeting stale load balancer",
-			operations:     []batchOperation{addPool1},
+			operations:     []batchOperation{opPool1},
 			localServices:  map[string]*serviceInfo{"ns1/svc1": {lbName: "lb2"}},
 			expectedGroups: map[string][]batchOperation{},
 		},
 		{
 			name:          "keeps valid operation when another is filtered",
-			operations:    []batchOperation{addPool1, addPool2},
+			operations:    []batchOperation{opPool1, opPool2},
 			localServices: map[string]*serviceInfo{"ns1/svc1": {lbName: "lb1"}},
 			expectedGroups: map[string][]batchOperation{
-				"lb1:pool1": {addPool1},
+				"lb1:pool1": {opPool1},
 			},
 		},
 	}
@@ -1186,7 +1475,7 @@ func TestGroupOperations(t *testing.T) {
 		informerFactory.WaitForCacheSync(stopCh)
 
 		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-		op := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
+		op := getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
 
 		groups := u.groupOperations(context.Background(), []batchOperation{op})
 
@@ -1229,7 +1518,7 @@ func TestLoadBalancerBackendPoolUpdaterSerializesWithServiceReconcileLock(t *tes
 	).Return(nil, nil)
 
 	u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+	u.addOperation(getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 	// Hold serviceReconcileLock to simulate the main reconcile path.
 	cloud.serviceReconcileLock.Lock()
@@ -1295,7 +1584,7 @@ func TestLoadBalancerBackendPoolUpdaterAddOperationNotBlockedDuringProcess(t *te
 	).Return(nil, nil)
 
 	u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+	u.addOperation(getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 	processDone := make(chan struct{})
 	go func() {
@@ -1314,7 +1603,7 @@ func TestLoadBalancerBackendPoolUpdaterAddOperationNotBlockedDuringProcess(t *te
 	addDone := make(chan struct{})
 	go func() {
 		defer close(addDone)
-		u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.2"}))
+		u.addOperation(getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.2"}))
 	}()
 
 	select {
@@ -1358,7 +1647,7 @@ func TestLoadBalancerBackendPoolUpdaterPreservesOperationsOnLeaseLockFailure(t *
 	)
 
 	u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+	u.addOperation(getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 	// No ARM mock expectations, ARM call should not happen.
 	u.process(context.Background())
@@ -1416,7 +1705,7 @@ func TestLoadBalancerBackendPoolUpdaterCompletesOnUnlockFailure(t *testing.T) {
 	).Return(nil, nil)
 
 	u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+	u.addOperation(getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 	// ARM calls should complete despite unlock failure.
 	u.process(context.Background())
@@ -1449,7 +1738,7 @@ func TestLoadBalancerBackendPoolUpdaterFiltersOperationsWhenLBChangedDuringProce
 	// filters it.
 
 	u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+	u.addOperation(getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 	// Hold serviceReconcileLock to simulate the main reconcile loop running.
 	cloud.serviceReconcileLock.Lock()
@@ -1505,7 +1794,7 @@ func TestLoadBalancerBackendPoolUpdaterRemoveOperationCancelsOperationsBeforeDra
 	// before process() drains the queue.
 
 	u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+	u.addOperation(getDesiredStateOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 	// Hold serviceReconcileLock to simulate the main reconcile loop running.
 	cloud.serviceReconcileLock.Lock()
@@ -1722,7 +2011,7 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 			}
 
 			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-			u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+			u.addOperation(getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 			latencyBefore, failureBefore := getBackendPoolUpdaterMetrics(t)
 
@@ -1816,7 +2105,7 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 			}
 
 			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-			u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+			u.addOperation(getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 			// Tick 1: ThrottleError, requeues with backoff.
 			u.process(context.Background())
@@ -1870,7 +2159,7 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 			mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).Return(nil, nil).Times(1)
 
 			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-			u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+			u.addOperation(getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 			u.process(context.Background())
 			assert.Equal(t, 1, u.countOperations())
@@ -1884,17 +2173,18 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 
 	// Parking Behavior
 	t.Run("parked op in group blocks entire group from processing", func(t *testing.T) {
-		cloud, recorder, _ := setupRetryTest(t, 3)
+		cloud, recorder, _ := setupRetryTest(t, 3, "svc1", "svc2")
 
 		// No ARM mock expectations: parked ops should not make ARM calls.
 		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
 
-		parkedOp := getAddIPsToBackendPoolOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"})
+		parkedOp := getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"})
 		parkedOp.nextEligibleAt = time.Now().Add(5 * time.Minute)
 		parkedOp.retryAttempts = 1
 		u.addOperation(parkedOp)
 
-		u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.2"}))
+		// Different service, same pool name (fabricated) grouped together.
+		u.addOperation(getDesiredStateOperation("default/svc2", "lb1", "pool1", []string{"10.0.0.2"}))
 
 		u.process(context.Background())
 
@@ -1911,41 +2201,6 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 		}
 
 		assert.Empty(t, drainEvents(recorder), "expected no events")
-	})
-
-	t.Run("fresh op added while group is parked is applied after parked op on eligible tick", func(t *testing.T) {
-		cloud, _, mockBP := setupRetryTest(t, 3)
-
-		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-		u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
-
-		// Tick 1: fresh remove added during call, ThrottleError parks.
-		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").DoAndReturn(
-			func(_ context.Context, _, _, _ string) (*armnetwork.BackendAddressPool, error) {
-				u.addOperation(getRemoveIPsFromBackendPoolOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
-				return nil, &retryrepectthrottled.ThrottleError{RetryAfter: time.Now().Add(100 * time.Millisecond)}
-			},
-		).Times(1)
-		// Tick 2: both ops applied in order, succeeds.
-		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
-			getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
-		).Times(1)
-		mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).DoAndReturn(
-			func(_ context.Context, _, _, _ string, bp armnetwork.BackendAddressPool) (*armnetwork.BackendAddressPool, error) {
-				assert.Empty(t, bp.Properties.LoadBalancerBackendAddresses,
-					"expected empty pool: parked add should be applied before fresh remove")
-				return nil, nil
-			},
-		).Times(1)
-
-		u.process(context.Background())
-		assert.Equal(t, 2, u.countOperations())
-
-		// Sleep so nextEligibleAt passes.
-		time.Sleep(150 * time.Millisecond)
-
-		u.process(context.Background())
-		assert.Equal(t, 0, u.countOperations())
 	})
 
 	// Retry Budget
@@ -1969,7 +2224,7 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 		).Times(1)
 
 		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-		u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+		u.addOperation(getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 		u.process(context.Background())
 		assert.Equal(t, 1, u.countOperations())
@@ -1987,7 +2242,7 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 	})
 
 	t.Run("each op in group maintains its own retry counter across failures", func(t *testing.T) {
-		cloud, _, mockBP := setupRetryTest(t, 3)
+		cloud, _, mockBP := setupRetryTest(t, 3, "svc1", "svc2")
 
 		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
 			getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
@@ -1998,11 +2253,11 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 
 		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
 
-		opA := getAddIPsToBackendPoolOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"})
+		opA := getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"})
 		opA.retryAttempts = 1
 		u.addOperation(opA)
 
-		opB := getAddIPsToBackendPoolOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.2"})
+		opB := getDesiredStateOperation("default/svc2", "lb1", "pool1", []string{"10.0.0.2"})
 		u.addOperation(opB)
 
 		u.process(context.Background())
@@ -2034,11 +2289,11 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 
 		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
 
-		opA := getAddIPsToBackendPoolOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"})
+		opA := getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"})
 		opA.retryAttempts = 2
 		u.addOperation(opA)
 
-		opB := getAddIPsToBackendPoolOperation("default/svc2", "lb1", "pool1", []string{"10.0.0.2"})
+		opB := getDesiredStateOperation("default/svc2", "lb1", "pool1", []string{"10.0.0.2"})
 		u.addOperation(opB)
 
 		u.process(context.Background())
@@ -2065,7 +2320,7 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 		mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).Return(nil, nil).Times(1)
 
 		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-		u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+		u.addOperation(getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 		latencyBefore, failureBefore := getBackendPoolUpdaterMetrics(t)
 
@@ -2106,16 +2361,6 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 			expectedReasons: []string{consts.LoadBalancerBackendPoolUpdateRetrying, consts.LoadBalancerBackendPoolUpdateRetrying},
 		},
 		{
-			name:       "multiple ops for same service produce only one event",
-			maxRetries: 3,
-			ops: []opSpec{
-				{svcKey: "default/svc1", ips: []string{"10.0.0.1"}},
-				{svcKey: "default/svc1", ips: []string{"10.0.0.2"}},
-			},
-			expectedQueue:   2,
-			expectedReasons: []string{consts.LoadBalancerBackendPoolUpdateRetrying},
-		},
-		{
 			name:       "two exhausted ops for same service produce only one failed event",
 			maxRetries: 0,
 			ops: []opSpec{
@@ -2124,18 +2369,6 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 			},
 			expectedQueue:   0,
 			expectedReasons: []string{consts.LoadBalancerBackendPoolUpdateFailed},
-		},
-		{
-			// This edge case (same service receiving both events) is a consequence of the
-			// diff-based operation model and will be eliminated by the desired-state follow-up.
-			name:       "same service with mixed budgets emits Failed before Retrying",
-			maxRetries: 2,
-			ops: []opSpec{
-				{svcKey: "default/svc1", ips: []string{"10.0.0.1"}, retryAttempts: 2},
-				{svcKey: "default/svc1", ips: []string{"10.0.0.2"}},
-			},
-			expectedQueue:   1,
-			expectedReasons: []string{consts.LoadBalancerBackendPoolUpdateFailed, consts.LoadBalancerBackendPoolUpdateRetrying},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2150,7 +2383,7 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 
 			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
 			for _, op := range tc.ops {
-				o := getAddIPsToBackendPoolOperation(op.svcKey, "lb1", "pool1", op.ips)
+				o := getDesiredStateOperation(op.svcKey, "lb1", "pool1", op.ips)
 				o.retryAttempts = op.retryAttempts
 				u.addOperation(o)
 			}
@@ -2161,6 +2394,173 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 			assertEventReasons(t, drainEvents(recorder), tc.expectedReasons...)
 		})
 	}
+
+	// Desired-state replace interaction with retry
+	t.Run("fresh desired state after 409 resets retryAttempts and uses new IPs", func(t *testing.T) {
+		cloud, _, mockBP := setupRetryTest(t, 3)
+
+		// Tick 1: 409, requeues.
+		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+			getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+		).Times(1)
+		mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).Return(
+			nil, &azcore.ResponseError{StatusCode: http.StatusConflict},
+		).Times(1)
+
+		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+		u.addOperation(getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}))
+
+		u.process(context.Background())
+		assert.Equal(t, 1, u.countOperations())
+		ops := u.drainOperations()
+		assert.Equal(t, 1, ops[0].(*loadBalancerBackendPoolUpdateOperation).retryAttempts)
+		u.requeueOperations(ops)
+
+		// New event replaces with fresh desired state.
+		u.addOperation(getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2", "10.0.0.3"}))
+		assert.Equal(t, 1, u.countOperations())
+		ops = u.drainOperations()
+		assert.Equal(t, 0, ops[0].(*loadBalancerBackendPoolUpdateOperation).retryAttempts)
+		assert.ElementsMatch(t, []string{"10.0.0.1", "10.0.0.2", "10.0.0.3"}, ops[0].(*loadBalancerBackendPoolUpdateOperation).nodeIPs)
+		u.requeueOperations(ops)
+
+		// Tick 2: succeeds with fresh desired state.
+		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+			getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+		).Times(1)
+		mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1",
+			*getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2", "10.0.0.3"}),
+		).Return(nil, nil).Times(1)
+
+		u.process(context.Background())
+		assert.Equal(t, 0, u.countOperations())
+	})
+
+	t.Run("desired state updated during Retry-After preserves nextEligibleAt and uses latest IPs", func(t *testing.T) {
+		cloud, _, mockBP := setupRetryTest(t, 3)
+
+		// Tick 1: ThrottleError parks the operation.
+		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+			nil, &retryrepectthrottled.ThrottleError{RetryAfter: time.Now().Add(1 * time.Hour)},
+		).Times(1)
+
+		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+		u.addOperation(getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+
+		u.process(context.Background())
+		assert.Equal(t, 1, u.countOperations())
+		ops := u.drainOperations()
+		assert.True(t, ops[0].(*loadBalancerBackendPoolUpdateOperation).nextEligibleAt.After(time.Now()))
+		u.requeueOperations(ops)
+
+		// Fresh op replaces IPs but keeps nextEligibleAt.
+		u.addOperation(getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}))
+		assert.Equal(t, 1, u.countOperations())
+		ops = u.drainOperations()
+		op := ops[0].(*loadBalancerBackendPoolUpdateOperation)
+		assert.ElementsMatch(t, []string{"10.0.0.1", "10.0.0.2"}, op.nodeIPs)
+		assert.True(t, op.nextEligibleAt.After(time.Now()), "nextEligibleAt should still be in future")
+
+		// Simulate time passing.
+		op.nextEligibleAt = time.Now().Add(-1 * time.Second)
+		u.requeueOperations(ops)
+
+		// Tick 2: succeeds with latest desired state.
+		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+			getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+		).Times(1)
+		mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1",
+			*getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
+		).Return(nil, nil).Times(1)
+
+		u.process(context.Background())
+		assert.Equal(t, 0, u.countOperations())
+	})
+
+	t.Run("two services replaced independently", func(t *testing.T) {
+		cloud, _, mockBP := setupRetryTest(t, 3, "svc1", "svc2")
+
+		// Both fail with 409.
+		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+			getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+		).Times(1)
+		mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).Return(
+			nil, &azcore.ResponseError{StatusCode: http.StatusConflict},
+		).Times(1)
+		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool2").Return(
+			getTestBackendAddressPoolWithIPs("lb1", "pool2", []string{}), nil,
+		).Times(1)
+		mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool2", gomock.Any()).Return(
+			nil, &azcore.ResponseError{StatusCode: http.StatusConflict},
+		).Times(1)
+
+		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+		u.addOperation(getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+		u.addOperation(getDesiredStateOperation("default/svc2", "lb1", "pool2", []string{"10.0.0.2"}))
+
+		u.process(context.Background())
+		assert.Equal(t, 2, u.countOperations())
+
+		// Replace svc1 only.
+		u.addOperation(getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.3"}))
+
+		ops := u.drainOperations()
+		for _, o := range ops {
+			lbOp := o.(*loadBalancerBackendPoolUpdateOperation)
+			if lbOp.serviceName == "default/svc1" {
+				assert.ElementsMatch(t, []string{"10.0.0.1", "10.0.0.3"}, lbOp.nodeIPs)
+				assert.Equal(t, 0, lbOp.retryAttempts)
+			} else {
+				assert.ElementsMatch(t, []string{"10.0.0.2"}, lbOp.nodeIPs)
+				assert.Equal(t, 1, lbOp.retryAttempts)
+			}
+		}
+	})
+
+	t.Run("failed op is dropped when fresher op arrives during ARM call", func(t *testing.T) {
+		cloud, _, mockBP := setupRetryTest(t, 3)
+
+		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+		u.addOperation(getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}))
+
+		// Tick 1: fresh op added during call, ThrottleError parks.
+		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").DoAndReturn(
+			func(_ context.Context, _, _, _ string) (*armnetwork.BackendAddressPool, error) {
+				u.addOperation(getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.3", "10.0.0.4"}))
+				return nil, &retryrepectthrottled.ThrottleError{RetryAfter: time.Now().Add(1 * time.Hour)}
+			},
+		).Times(1)
+
+		u.process(context.Background())
+
+		// Stale op dropped, fresh op remains with transferred nextEligibleAt.
+		ops := u.drainOperations()
+		assert.Equal(t, 1, len(ops))
+		op := ops[0].(*loadBalancerBackendPoolUpdateOperation)
+		assert.Equal(t, 0, op.retryAttempts)
+		assert.True(t, op.nextEligibleAt.After(time.Now()), "fresh op should inherit throttle delay")
+
+		// Tick 2: op is parked (nextEligibleAt in future), no ARM calls.
+		u.requeueOperations(ops)
+		u.process(context.Background())
+		assert.Equal(t, 1, u.countOperations())
+
+		// Simulate time passing.
+		ops = u.drainOperations()
+		ops[0].(*loadBalancerBackendPoolUpdateOperation).nextEligibleAt = time.Now().Add(-1 * time.Second)
+		u.requeueOperations(ops)
+
+		// Tick 3: op is eligible, succeeds.
+		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+			getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+		).Times(1)
+		mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1",
+			*getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.3", "10.0.0.4"}),
+		).Return(nil, nil).Times(1)
+
+		u.process(context.Background())
+		assert.Equal(t, 0, u.countOperations())
+	})
 
 	// Staleness
 	for _, tc := range []struct {
@@ -2194,7 +2594,7 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 			).Times(1)
 
 			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-			u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+			u.addOperation(getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 			latencyBefore, failureBefore := getBackendPoolUpdaterMetrics(t)
 
@@ -2220,7 +2620,7 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 		).Times(1)
 
 		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-		u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+		u.addOperation(getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 		latencyBefore, failureBefore := getBackendPoolUpdaterMetrics(t)
 
@@ -2250,7 +2650,7 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
 
 		// Add op with nextEligibleAt in the near future.
-		op := getAddIPsToBackendPoolOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"})
+		op := getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"})
 		op.nextEligibleAt = time.Now().Add(50 * time.Millisecond)
 		op.retryAttempts = 1
 		u.addOperation(op)
@@ -2302,7 +2702,7 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 			).Times(1)
 
 			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-			u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+			u.addOperation(getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 			u.process(context.Background())
 			assert.Equal(t, 1, u.countOperations())
@@ -2329,7 +2729,7 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 		).Times(1)
 
 		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-		u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+		u.addOperation(getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 		// Start process() in goroutine; it acquires serviceReconcileLock.
 		processDone := make(chan struct{})
@@ -2392,7 +2792,7 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 		).Times(1)
 
 		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-		u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+		u.addOperation(getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 		// Start process() in goroutine; it acquires serviceReconcileLock.
 		processDone := make(chan struct{})
@@ -2470,7 +2870,7 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 			).Times(1)
 
 			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-			u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+			u.addOperation(getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 			latencyBefore, failureBefore := getBackendPoolUpdaterMetrics(t)
 
@@ -2491,7 +2891,7 @@ func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
 		// No ARM mock expectations: parked ops with canceled context should never reach ARM.
 		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
 
-		op := getAddIPsToBackendPoolOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"})
+		op := getDesiredStateOperation("default/svc1", "lb1", "pool1", []string{"10.0.0.1"})
 		op.nextEligibleAt = time.Now().Add(5 * time.Minute)
 		op.retryAttempts = 1
 		u.addOperation(op)
