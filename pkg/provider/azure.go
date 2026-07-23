@@ -359,7 +359,6 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 	}
 
 	if serviceGatewayFullyEnabled {
-		config.ServiceGatewayEnabled = true
 		logger.V(2).Info("Service Gateway is enabled, using PodIP backend pool type with Service Load Balancer")
 
 		// ServiceGateway (PodIP backend pools) and Multi-SLB (NodeIP/NIC backend pools) are mutually exclusive.
@@ -669,8 +668,10 @@ func (az *Cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder,
 	az.eventBroadcaster = record.NewBroadcaster()
 	az.eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: az.KubeClient.CoreV1().Events("")})
 	az.eventRecorder = az.eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "azure-cloud-provider"})
-	az.serviceGatewayRuntime.SetKubeClient(az.KubeClient)
-	az.serviceGatewayRuntime.SetEventRecorder(az.eventRecorder)
+	if az.serviceGatewayRuntime != nil {
+		az.serviceGatewayRuntime.SetKubeClient(az.KubeClient)
+		az.serviceGatewayRuntime.SetEventRecorder(az.eventRecorder)
+	}
 }
 
 // ServiceGatewayRuntime returns the ServiceGateway runtime used by the Service controller.
