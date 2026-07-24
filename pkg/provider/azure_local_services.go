@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
+	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	discovery_v1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -341,18 +342,20 @@ func (az *Cloud) getLocalServiceInfo(serviceName string) (*serviceInfo, bool) {
 	return data.(*serviceInfo), true
 }
 
-func endpointSliceFromDeleteEvent(obj interface{}) (*discovery_v1.EndpointSlice, error) {
+func endpointSliceFromDeleteEvent(logger logr.Logger, obj interface{}) *discovery_v1.EndpointSlice {
 	switch value := obj.(type) {
 	case *discovery_v1.EndpointSlice:
-		return value, nil
+		return value
 	case cache.DeletedFinalStateUnknown:
 		endpointSlice, ok := value.Obj.(*discovery_v1.EndpointSlice)
 		if !ok {
-			return nil, fmt.Errorf("cannot convert tombstone object %T to *discovery_v1.EndpointSlice", value.Obj)
+			logger.Error(nil, "Cannot convert to *discovery_v1.EndpointSlice", "obj", value.Obj)
+			return nil
 		}
-		return endpointSlice, nil
+		return endpointSlice
 	default:
-		return nil, fmt.Errorf("cannot convert %T to *discovery_v1.EndpointSlice", value)
+		logger.Error(nil, "Cannot convert to *discovery_v1.EndpointSlice", "obj.(type)", value)
+		return nil
 	}
 }
 
@@ -429,9 +432,8 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
-				endpointSlice, err := endpointSliceFromDeleteEvent(obj)
-				if err != nil {
-					logger.Error(err, "Cannot process EndpointSlice deletion")
+				endpointSlice := endpointSliceFromDeleteEvent(logger, obj)
+				if endpointSlice == nil {
 					return
 				}
 				az.endpointSlicesCache.Delete(strings.ToLower(fmt.Sprintf("%s/%s", endpointSlice.Namespace, endpointSlice.Name)))
