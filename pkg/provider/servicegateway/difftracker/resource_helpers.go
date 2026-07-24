@@ -103,7 +103,7 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 	pip = armnetwork.PublicIPAddress{
 		Name: to.Ptr(pipName),
 		ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
-			dtConfig.SubscriptionID, dtConfig.ResourceGroup, pipName)),
+			dtConfig.networkResourceSubscriptionID(), dtConfig.ResourceGroup, pipName)),
 		SKU: &armnetwork.PublicIPAddressSKU{
 			Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
 		},
@@ -117,9 +117,9 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 	// Build LoadBalancer with backend pool and rules
 	backendPoolName := serviceUID
 	frontendIPConfigID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/frontendIPConfigurations/frontend",
-		dtConfig.SubscriptionID, dtConfig.ResourceGroup, serviceUID)
+		dtConfig.networkResourceSubscriptionID(), dtConfig.ResourceGroup, serviceUID)
 	backendPoolID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s",
-		dtConfig.SubscriptionID, dtConfig.ResourceGroup, serviceUID, backendPoolName)
+		dtConfig.networkResourceSubscriptionID(), dtConfig.ResourceGroup, serviceUID, backendPoolName)
 
 	// Build backend pool
 	backendPools := []*armnetwork.BackendAddressPool{
@@ -212,7 +212,7 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 
 	lb = armnetwork.LoadBalancer{
 		Name:     to.Ptr(serviceUID),
-		ID:       to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s", dtConfig.SubscriptionID, dtConfig.ResourceGroup, serviceUID)),
+		ID:       to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s", dtConfig.networkResourceSubscriptionID(), dtConfig.ResourceGroup, serviceUID)),
 		Location: to.Ptr(dtConfig.Location),
 		SKU: &armnetwork.LoadBalancerSKU{
 			Name: to.Ptr(armnetwork.LoadBalancerSKUName(consts.LoadBalancerARMSKUService)),
@@ -225,7 +225,7 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 					Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
 						PublicIPAddress: &armnetwork.PublicIPAddress{
 							ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
-								dtConfig.SubscriptionID, dtConfig.ResourceGroup, pipName)),
+								dtConfig.networkResourceSubscriptionID(), dtConfig.ResourceGroup, pipName)),
 						},
 					},
 				},
@@ -245,7 +245,7 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 			Additions: nil,
 			Removals:  nil,
 		},
-		dtConfig.SubscriptionID,
+		dtConfig.networkResourceSubscriptionID(),
 		dtConfig.ResourceGroup,
 	)
 
@@ -265,7 +265,7 @@ func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dt
 	pip = armnetwork.PublicIPAddress{
 		Name: to.Ptr(pipName),
 		ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
-			dtConfig.SubscriptionID, dtConfig.ResourceGroup, pipName)),
+			dtConfig.networkResourceSubscriptionID(), dtConfig.ResourceGroup, pipName)),
 		SKU: &armnetwork.PublicIPAddressSKU{
 			Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
 		},
@@ -279,7 +279,7 @@ func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dt
 	natGateway = armnetwork.NatGateway{
 		Name: to.Ptr(serviceUID),
 		ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/natGateways/%s",
-			dtConfig.SubscriptionID, dtConfig.ResourceGroup, serviceUID)),
+			dtConfig.networkResourceSubscriptionID(), dtConfig.ResourceGroup, serviceUID)),
 		SKU: &armnetwork.NatGatewaySKU{
 			Name: to.Ptr(armnetwork.NatGatewaySKUNameStandardV2),
 		},
@@ -291,7 +291,7 @@ func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dt
 			PublicIPAddresses: []*armnetwork.SubResource{
 				{
 					ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
-						dtConfig.SubscriptionID, dtConfig.ResourceGroup, pipName)),
+						dtConfig.networkResourceSubscriptionID(), dtConfig.ResourceGroup, pipName)),
 				},
 			},
 		},
@@ -307,7 +307,7 @@ func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dt
 			Additions: newIgnoreCaseSetFromSlice([]string{serviceUID}),
 			Removals:  nil,
 		},
-		dtConfig.SubscriptionID,
+		dtConfig.networkResourceSubscriptionID(),
 		dtConfig.ResourceGroup,
 	)
 
@@ -486,7 +486,7 @@ func buildServiceGatewayRemovalDTO(serviceUID string, isInbound bool, dtConfig C
 				Additions: nil,
 				Removals:  nil,
 			},
-			dtConfig.SubscriptionID,
+			dtConfig.networkResourceSubscriptionID(),
 			dtConfig.ResourceGroup,
 		)
 	}
@@ -499,7 +499,7 @@ func buildServiceGatewayRemovalDTO(serviceUID string, isInbound bool, dtConfig C
 			Additions: nil,
 			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
 		},
-		dtConfig.SubscriptionID,
+		dtConfig.networkResourceSubscriptionID(),
 		dtConfig.ResourceGroup,
 	)
 }

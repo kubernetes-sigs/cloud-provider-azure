@@ -2,14 +2,9 @@ package provider
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/mock/gomock"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/client-go/tools/record"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
@@ -43,12 +38,13 @@ func seededProviderDiffTracker(t *testing.T, az *Cloud, kubeClient kubernetes.In
 		k8s,
 		nrp,
 		difftracker.Config{
-			SubscriptionID:             az.SubscriptionID,
-			ResourceGroup:              az.ResourceGroup,
-			Location:                   az.Location,
-			VNetName:                   az.VnetName,
-			VNetResourceGroup:          az.VnetResourceGroup,
-			ServiceGatewayResourceName: consts.DefaultServiceGatewayResourceName,
+			SubscriptionID:                az.SubscriptionID,
+			NetworkResourceSubscriptionID: az.getNetworkResourceSubscriptionID(),
+			ResourceGroup:                 az.ResourceGroup,
+			Location:                      az.Location,
+			VNetName:                      az.VnetName,
+			VNetResourceGroup:             az.VnetResourceGroup,
+			ServiceGatewayResourceName:    consts.DefaultServiceGatewayResourceName,
 		},
 		az.NetworkClientFactory,
 		kubeClient,
@@ -57,27 +53,4 @@ func seededProviderDiffTracker(t *testing.T, az *Cloud, kubeClient kubernetes.In
 		t.FailNow()
 	}
 	return dt
-}
-
-func newSGWCloudWithServiceAndRecorder(t *testing.T, ctrl *gomock.Controller, svc v1.Service) (*Cloud, *record.FakeRecorder) {
-	t.Helper()
-
-	az := GetTestCloudWithContainerLoadBalancer(ctrl)
-	kubeClient := fake.NewSimpleClientset(&svc)
-	az.KubeClient = kubeClient
-	az.diffTracker = newProviderDiffTracker(t, az, kubeClient)
-	rec := record.NewFakeRecorder(10)
-	az.eventRecorder = rec
-
-	return az, rec
-}
-
-func assertNoEvent(t *testing.T, rec *record.FakeRecorder) {
-	t.Helper()
-
-	select {
-	case ev := <-rec.Events:
-		t.Fatalf("expected no warning event, got: %s", ev)
-	case <-time.After(100 * time.Millisecond):
-	}
 }

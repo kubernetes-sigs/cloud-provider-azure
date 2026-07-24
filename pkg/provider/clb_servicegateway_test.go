@@ -34,14 +34,19 @@ func TestServiceGatewayEnsureLoadBalancerTracksExternalService(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	az := GetTestCloudWithContainerLoadBalancer(ctrl)
+	az := GetTestCloudWithServiceLoadBalancer(ctrl)
 	svc := getTestService("servicegateway-external", v1.ProtocolTCP, nil, false, 80)
 	kubeClient := fake.NewSimpleClientset(&svc)
 	az.KubeClient = kubeClient
-	az.diffTracker = newProviderDiffTracker(t, az, kubeClient)
+	tracker := newProviderDiffTracker(t, az, kubeClient)
+	loadBalancer, supported := az.LoadBalancer()
+	assert.True(t, supported)
+	adapter, ok := loadBalancer.(*difftracker.LoadBalancer)
+	assert.True(t, ok)
+	assert.NoError(t, adapter.SetTracker(tracker))
 
-	status, err := az.EnsureLoadBalancer(context.Background(), testClusterName, &svc, nil)
+	status, err := loadBalancer.EnsureLoadBalancer(context.Background(), testClusterName, &svc, nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, status)
-	assert.True(t, az.diffTracker.IsServiceTracked(difftracker.ServiceUID(&svc)))
+	assert.True(t, tracker.IsServiceTracked(difftracker.ServiceUID(&svc)))
 }

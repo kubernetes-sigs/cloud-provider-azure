@@ -58,6 +58,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/servicegateway/difftracker"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -2472,6 +2473,14 @@ func TestInitializePublishesServiceGatewayDependencies(t *testing.T) {
 	service := getTestService("servicegateway-lifecycle", v1.ProtocolTCP, nil, false, 80)
 	_, err := loadBalancer.EnsureLoadBalancer(context.Background(), testClusterName, &service, nil)
 	assert.EqualError(t, err, "ServiceGateway LoadBalancer is not initialized")
+
+	tracker := newProviderDiffTracker(t, az, kubeClient)
+	adapter, ok := loadBalancer.(*difftracker.LoadBalancer)
+	assert.True(t, ok)
+	assert.NoError(t, adapter.SetTracker(tracker))
+
+	_, err = loadBalancer.EnsureLoadBalancer(context.Background(), testClusterName, &service, nil)
+	assert.NoError(t, err)
 }
 
 func TestInitializeCloudFromConfig(t *testing.T) {

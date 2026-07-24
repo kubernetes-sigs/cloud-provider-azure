@@ -95,7 +95,7 @@ func (lu *LocationsUpdater) Stop() {
 // process computes location/address diff and syncs to NRP
 func (lu *LocationsUpdater) process(ctx context.Context) {
 	mc := metrics.NewMetricContext("locations", "LocationsUpdater.process",
-		lu.diffTracker.config.ResourceGroup, lu.diffTracker.config.SubscriptionID, "sync")
+		lu.diffTracker.config.ResourceGroup, lu.diffTracker.config.networkResourceSubscriptionID(), "sync")
 	isOperationSucceeded := false
 	// terminalSyncErr is set when NRP rejects the batch with a deterministic error that retrying the
 	// identical payload cannot fix; it suppresses the self-rescheduling backoff below.

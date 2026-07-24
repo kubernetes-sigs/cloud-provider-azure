@@ -56,7 +56,7 @@ func InitializeFromCluster(
 ) (*DiffTracker, error) {
 	logger := log.FromContextOrBackground(ctx)
 	initStartTime := time.Now()
-	mc := metrics.NewMetricContext("services", "InitializeFromCluster", config.ResourceGroup, config.SubscriptionID, config.ServiceGatewayResourceName)
+	mc := metrics.NewMetricContext("services", "InitializeFromCluster", config.ResourceGroup, config.networkResourceSubscriptionID(), config.ServiceGatewayResourceName)
 	isOperationSucceeded := false
 	defer func() {
 		mc.ObserveOperationWithResult(isOperationSucceeded)

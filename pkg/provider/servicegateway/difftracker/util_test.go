@@ -715,6 +715,11 @@ func TestConfigServiceGatewayResourceID(t *testing.T) {
 	assert.Equal(t,
 		"/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.Network/serviceGateways/sgw",
 		config.ServiceGatewayResourceID())
+
+	config.NetworkResourceSubscriptionID = "network-sub"
+	assert.Equal(t,
+		"/subscriptions/network-sub/resourceGroups/rg1/providers/Microsoft.Network/serviceGateways/sgw",
+		config.ServiceGatewayResourceID())
 }
 
 // TestJSONRoundTrip tests JSON marshaling/unmarshaling for various types

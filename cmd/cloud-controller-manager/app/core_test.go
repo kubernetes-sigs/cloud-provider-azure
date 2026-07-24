@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
@@ -39,7 +38,8 @@ import (
 
 type fakeServiceGatewayRuntimeProvider struct {
 	cloudprovider.Interface
-	runtime *servicegateway.Runtime
+	runtime        *servicegateway.Runtime
+	onLoadBalancer func()
 }
 
 func (f *fakeServiceGatewayRuntimeProvider) ServiceGatewayRuntime() *servicegateway.Runtime {
@@ -47,6 +47,9 @@ func (f *fakeServiceGatewayRuntimeProvider) ServiceGatewayRuntime() *servicegate
 }
 
 func (f *fakeServiceGatewayRuntimeProvider) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
+	if f.onLoadBalancer != nil {
+		f.onLoadBalancer()
+	}
 	if f.runtime == nil {
 		return nil, false
 	}
@@ -147,7 +150,12 @@ func TestValidateServiceGatewayControllerConfiguration(t *testing.T) {
 	}
 }
 
-func TestStartServiceControllerPropagatesServiceGatewayStartFailure(t *testing.T) {
+func TestStartServiceControllerBootstrapsServiceGatewayBeforeLoadBalancerCapture(t *testing.T) {
+	originalStartRuntime := startServiceGatewayRuntime
+	t.Cleanup(func() {
+		startServiceGatewayRuntime = originalStartRuntime
+	})
+
 	kubeClient := fake.NewSimpleClientset()
 	config := (&cloudcontrollerconfig.Config{
 		LoopbackClientConfig: &rest.Config{},
@@ -156,12 +164,17 @@ func TestStartServiceControllerPropagatesServiceGatewayStartFailure(t *testing.T
 	}).Complete()
 	runtime := servicegateway.NewRuntime(providerconfig.Config{ServiceGatewayEnabled: true}, nil, kubeClient)
 	runtime.SetEventRecorder(record.NewFakeRecorder(1))
-	cloud := &fakeServiceGatewayRuntimeProvider{runtime: runtime}
-	loadBalancer, supported := runtime.LoadBalancer()
-	assert.True(t, supported)
-	service := &v1.Service{}
-	_, err := loadBalancer.EnsureLoadBalancer(context.Background(), "cluster", service, nil)
-	assert.EqualError(t, err, "ServiceGateway LoadBalancer is not initialized")
+	runtimeStarted := false
+	startServiceGatewayRuntime = func(context.Context, *servicegateway.Runtime, informers.SharedInformerFactory) error {
+		runtimeStarted = true
+		return nil
+	}
+	cloud := &fakeServiceGatewayRuntimeProvider{
+		runtime: runtime,
+		onLoadBalancer: func() {
+			assert.True(t, runtimeStarted, "ServiceGateway runtime must start before the Service controller captures the LoadBalancer")
+		},
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -174,13 +187,7 @@ func TestStartServiceControllerPropagatesServiceGatewayStartFailure(t *testing.T
 		cloud,
 	)
 
-	// This fixture builds the runtime with a nil Azure client factory, which
-	// InitializeFromCluster now rejects, so the ServiceGateway runtime fails to start. The
-	// failure must surface from startServiceController and leave the LoadBalancer unpublished
-	// rather than being swallowed. Runtime.Start's success path is covered by TestRuntimeStart
-	// in pkg/provider/servicegateway.
-	assert.ErrorContains(t, err, "failed to start ServiceGateway runtime")
-	assert.False(t, started)
-	_, err = loadBalancer.EnsureLoadBalancer(context.Background(), "cluster", service, nil)
-	assert.EqualError(t, err, "ServiceGateway LoadBalancer is not initialized")
+	assert.NoError(t, err)
+	assert.True(t, started)
+	assert.True(t, runtimeStarted)
 }

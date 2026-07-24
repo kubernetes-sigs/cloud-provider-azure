@@ -455,7 +455,7 @@ func convertServiceDTOsToServiceRequests(services []ServiceDTO, config Config) (
 	// in a separate resource group, so resolve it via VNetResourceGroupOrDefault rather than
 	// assuming the cluster ResourceGroup.
 	vnetID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/virtualNetworks/%s",
-		config.SubscriptionID, config.VNetResourceGroupOrDefault(), config.VNetName)
+		config.networkResourceSubscriptionID(), config.VNetResourceGroupOrDefault(), config.VNetName)
 
 	for _, svc := range services {
 		// Build backend pools with full details

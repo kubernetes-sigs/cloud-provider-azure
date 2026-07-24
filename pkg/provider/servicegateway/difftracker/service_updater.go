@@ -616,7 +616,7 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID s
 			Additions: nil,
 			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
 		},
-		s.diffTracker.config.SubscriptionID,
+		s.diffTracker.config.networkResourceSubscriptionID(),
 		s.diffTracker.config.ResourceGroup,
 	)
 

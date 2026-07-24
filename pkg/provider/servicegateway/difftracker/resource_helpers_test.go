@@ -291,10 +291,11 @@ func TestBuildInboundServiceResources_WithConfig(t *testing.T) {
 	}
 
 	dtConfig := Config{
-		SubscriptionID:             "test-sub",
-		ResourceGroup:              "test-rg",
-		Location:                   "eastus",
-		ServiceGatewayResourceName: "test-sgw",
+		SubscriptionID:                "test-sub",
+		NetworkResourceSubscriptionID: "network-sub",
+		ResourceGroup:                 "test-rg",
+		Location:                      "eastus",
+		ServiceGatewayResourceName:    "test-sgw",
 	}
 
 	pip, lb, servicesDTO, err := buildInboundServiceResources("service-uid-123", config, dtConfig)
@@ -303,12 +304,14 @@ func TestBuildInboundServiceResources_WithConfig(t *testing.T) {
 	// Verify PIP
 	assert.NotNil(t, pip.Name)
 	assert.Equal(t, "service-uid-123-pip", *pip.Name)
+	assert.Contains(t, *pip.ID, "/subscriptions/network-sub/")
 	assert.Equal(t, armnetwork.PublicIPAddressSKUNameStandardV2, *pip.SKU.Name)
 	assert.Equal(t, "eastus", *pip.Location)
 
 	// Verify LoadBalancer
 	assert.NotNil(t, lb.Name)
 	assert.Equal(t, "service-uid-123", *lb.Name)
+	assert.Contains(t, *lb.ID, "/subscriptions/network-sub/")
 	assert.Equal(t, "Service", string(*lb.SKU.Name))
 	assert.Equal(t, "eastus", *lb.Location)
 
@@ -335,6 +338,7 @@ func TestBuildInboundServiceResources_WithConfig(t *testing.T) {
 
 	// Verify ServicesDTO
 	assert.Len(t, servicesDTO.Services, 1)
+	assert.Contains(t, servicesDTO.Services[0].LoadBalancerBackendPools[0].Id, "/subscriptions/network-sub/")
 	assert.Contains(t, servicesDTO.Services[0].Service, "service-uid-123")
 	assert.Equal(t, Inbound, servicesDTO.Services[0].ServiceType)
 }
@@ -398,10 +402,11 @@ func TestBuildInboundServiceResources_UDPProtocol(t *testing.T) {
 
 func TestBuildOutboundServiceResources_Basic(t *testing.T) {
 	dtConfig := Config{
-		SubscriptionID:             "test-sub",
-		ResourceGroup:              "test-rg",
-		Location:                   "centralus",
-		ServiceGatewayResourceName: "test-sgw",
+		SubscriptionID:                "test-sub",
+		NetworkResourceSubscriptionID: "network-sub",
+		ResourceGroup:                 "test-rg",
+		Location:                      "centralus",
+		ServiceGatewayResourceName:    "test-sgw",
 	}
 
 	pip, natGw, servicesDTO := buildOutboundServiceResources("egress-uid-456", nil, dtConfig)
@@ -409,12 +414,14 @@ func TestBuildOutboundServiceResources_Basic(t *testing.T) {
 	// Verify PIP
 	assert.NotNil(t, pip.Name)
 	assert.Equal(t, "egress-uid-456-pip", *pip.Name)
+	assert.Contains(t, *pip.ID, "/subscriptions/network-sub/")
 	assert.Equal(t, armnetwork.PublicIPAddressSKUNameStandardV2, *pip.SKU.Name)
 	assert.Equal(t, "centralus", *pip.Location)
 
 	// Verify NAT Gateway
 	assert.NotNil(t, natGw.Name)
 	assert.Equal(t, "egress-uid-456", *natGw.Name)
+	assert.Contains(t, *natGw.ID, "/subscriptions/network-sub/")
 	assert.Equal(t, armnetwork.NatGatewaySKUNameStandardV2, *natGw.SKU.Name)
 	assert.Equal(t, "centralus", *natGw.Location)
 
@@ -428,6 +435,7 @@ func TestBuildOutboundServiceResources_Basic(t *testing.T) {
 
 	// Verify ServicesDTO
 	assert.Len(t, servicesDTO.Services, 1)
+	assert.Contains(t, servicesDTO.Services[0].PublicNatGateway.Id, "/subscriptions/network-sub/")
 	assert.Contains(t, servicesDTO.Services[0].Service, "egress-uid-456")
 	assert.Equal(t, Outbound, servicesDTO.Services[0].ServiceType)
 }
