@@ -39,6 +39,7 @@ import (
 	cloudnodeutil "k8s.io/cloud-provider/node/helpers"
 	nodeutil "k8s.io/component-helpers/node/util"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
@@ -547,6 +548,12 @@ func (az *Cloud) checkEnableMultipleStandardLoadBalancers() error {
 
 	if az.LoadBalancerBackendPoolUpdateIntervalInSeconds == 0 {
 		az.LoadBalancerBackendPoolUpdateIntervalInSeconds = consts.DefaultLoadBalancerBackendPoolUpdateIntervalInSeconds
+	}
+
+	if az.LoadBalancerBackendPoolUpdateMaxRetries == nil {
+		az.LoadBalancerBackendPoolUpdateMaxRetries = ptr.To(consts.DefaultLoadBalancerBackendPoolUpdateMaxRetries)
+	} else if *az.LoadBalancerBackendPoolUpdateMaxRetries < 0 {
+		az.LoadBalancerBackendPoolUpdateMaxRetries = ptr.To(0)
 	}
 
 	return nil

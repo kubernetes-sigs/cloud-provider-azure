@@ -554,13 +554,14 @@ const (
 	VMSSTagForBatchOperation = "aks-managed-coordination"
 )
 
-type LoadBalancerBackendPoolUpdateOperation string
-
 const (
-	LoadBalancerBackendPoolUpdateOperationAdd    LoadBalancerBackendPoolUpdateOperation = "add"
-	LoadBalancerBackendPoolUpdateOperationRemove LoadBalancerBackendPoolUpdateOperation = "remove"
-
 	DefaultLoadBalancerBackendPoolUpdateIntervalInSeconds = 30
+	DefaultLoadBalancerBackendPoolUpdateMaxRetries        = 3
+
+	// Event reason constants for loadBalancerBackendPoolUpdater.
+	LoadBalancerBackendPoolUpdateRetrying = "LoadBalancerBackendPoolUpdateRetrying"
+	LoadBalancerBackendPoolUpdateFailed   = "LoadBalancerBackendPoolUpdateFailed"
+	LoadBalancerBackendPoolUpdated        = "LoadBalancerBackendPoolUpdated"
 
 	ServiceNameLabel = "kubernetes.io/service-name"
 )
