@@ -724,17 +724,25 @@ var _ = Describe("Container Load Balancer Finalizer Tests", Label(slbTestLabel, 
 		// While the pod still exists with a deletionTimestamp, the drain-gate finalizer must
 		// stay present on every observation; a single premature removal (the W2-1 defect) would
 		// let the pod and its egress IP be reclaimed while NRP still maps the address.
-		Consistently(func() bool {
+		Consistently(func() error {
 			p, getErr := cs.CoreV1().Pods(ns.Name).Get(ctx, podName, metav1.GetOptions{})
 			if apierrors.IsNotFound(getErr) {
-				return true // fully drained and removed; acceptable terminal state
+				return nil // fully drained and removed; acceptable terminal state
 			}
-			Expect(getErr).NotTo(HaveOccurred())
+			if getErr != nil {
+				return getErr
+			}
 			if p.DeletionTimestamp == nil {
-				return true
+				return nil
 			}
-			return hasFinalizer(p.Finalizers, serviceGatewayPodFinalizer)
-		}, 20*time.Second, 1*time.Second).Should(BeTrue(),
+			if !hasFinalizer(p.Finalizers, serviceGatewayPodFinalizer) {
+				return fmt.Errorf(
+					"terminating pod lost ServiceGateway finalizer: uid=%s resourceVersion=%s phase=%s hostIP=%s podIPs=%v deletionTimestamp=%s finalizers=%v",
+					p.UID, p.ResourceVersion, p.Status.Phase, p.Status.HostIP, p.Status.PodIPs, p.DeletionTimestamp.Time.Format(time.RFC3339Nano), p.Finalizers,
+				)
+			}
+			return nil
+		}, 20*time.Second, 1*time.Second).Should(Succeed(),
 			"pod finalizer must be held continuously while terminating until NRP drain completes")
 
 		By("Waiting for the pod to be fully deleted after Azure NAT Gateway cleanup")

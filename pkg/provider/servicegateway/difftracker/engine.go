@@ -1076,6 +1076,15 @@ func (dt *DiffTracker) promotePendingEndpointsLocked(serviceUID string) {
 // If the service is being created, the pod is buffered until creation completes.
 // If the service doesn't exist, it triggers service creation and buffers the pod.
 func (dt *DiffTracker) AddPod(serviceUID, podKey, location, address string) {
+	dt.addPod(serviceUID, podKey, "", location, address)
+}
+
+// AddPodWithUID is the identity-aware runtime entry point used by the pod informer.
+func (dt *DiffTracker) AddPodWithUID(serviceUID, podKey, podUID, location, address string) {
+	dt.addPod(serviceUID, podKey, podUID, location, address)
+}
+
+func (dt *DiffTracker) addPod(serviceUID, podKey, podUID, location, address string) {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
@@ -1084,12 +1093,15 @@ func (dt *DiffTracker) AddPod(serviceUID, podKey, location, address string) {
 		return
 	}
 
-	dt.logger.V(5).Info("Added pod request", "service", serviceUID, "pod", podKey, "location", location, "address", address)
+	dt.logger.V(5).Info("Added pod request", "service", serviceUID, "pod", podKey, "podUID", podUID, "location", location, "address", address)
 
 	// A pod reaching AddPod is live; drop any stale pending finalizer-removal record (e.g. from a
 	// prior egress identity after a label or IP change) so CheckPendingPodDeletions cannot strip
 	// its cleanup finalizer while it still backs a current egress service. DeletePod re-enqueues it.
-	delete(dt.pendingPodDeletions, podKey)
+	if pending, ok := dt.pendingPodDeletions[podKey]; ok &&
+		(podUID == "" || pending.UID == "" || pending.UID == podUID) {
+		delete(dt.pendingPodDeletions, podKey)
+	}
 
 	// Check if service operation is tracked
 	opState, exists := dt.pendingServiceOps[serviceUID]
@@ -1102,6 +1114,8 @@ func (dt *DiffTracker) AddPod(serviceUID, podKey, location, address string) {
 			err := dt.updateK8sPodLocked(UpdatePodInputType{
 				PodOperation:           Add,
 				PublicOutboundIdentity: serviceUID,
+				PodKey:                 podKey,
+				PodUID:                 podUID,
 				Location:               location,
 				Address:                address,
 			})
@@ -1138,6 +1152,7 @@ func (dt *DiffTracker) AddPod(serviceUID, podKey, location, address string) {
 		// Buffer the pod
 		dt.pendingPods[serviceUID] = append(dt.pendingPods[serviceUID], PendingPodUpdate{
 			PodKey:    podKey,
+			PodUID:    podUID,
 			Location:  location,
 			Address:   address,
 			Timestamp: time.Now().Format(time.RFC3339),
@@ -1155,6 +1170,7 @@ func (dt *DiffTracker) AddPod(serviceUID, podKey, location, address string) {
 		dt.logger.V(5).Info("Buffered pod while service is being created", "service", serviceUID, "state", opState.State, "pod", podKey)
 		dt.pendingPods[serviceUID] = append(dt.pendingPods[serviceUID], PendingPodUpdate{
 			PodKey:    podKey,
+			PodUID:    podUID,
 			Location:  location,
 			Address:   address,
 			Timestamp: time.Now().Format(time.RFC3339),
@@ -1166,6 +1182,8 @@ func (dt *DiffTracker) AddPod(serviceUID, podKey, location, address string) {
 		err := dt.updateK8sPodLocked(UpdatePodInputType{
 			PodOperation:           Add,
 			PublicOutboundIdentity: serviceUID,
+			PodKey:                 podKey,
+			PodUID:                 podUID,
 			Location:               location,
 			Address:                address,
 		})
@@ -1186,6 +1204,8 @@ func (dt *DiffTracker) AddPod(serviceUID, podKey, location, address string) {
 		err := dt.updateK8sPodLocked(UpdatePodInputType{
 			PodOperation:           Add,
 			PublicOutboundIdentity: serviceUID,
+			PodKey:                 podKey,
+			PodUID:                 podUID,
 			Location:               location,
 			Address:                address,
 		})
@@ -1205,7 +1225,10 @@ func (dt *DiffTracker) AddPod(serviceUID, podKey, location, address string) {
 		delete(dt.pendingServiceDeletions, serviceUID)
 		// The pod being re-added is alive: drop its own last-pod deletion record so its
 		// finalizer is preserved (it must NOT be removed).
-		delete(dt.pendingPodDeletions, podKey)
+		if pending, ok := dt.pendingPodDeletions[podKey]; ok &&
+			(podUID == "" || pending.UID == "" || pending.UID == podUID) {
+			delete(dt.pendingPodDeletions, podKey)
+		}
 		// Any remaining last-pod records for this service belong to genuinely departed
 		// pods. Since the NAT Gateway will no longer be deleted, demote them to normal
 		// pending deletions so CheckPendingPodDeletions removes their finalizers once
@@ -1218,6 +1241,8 @@ func (dt *DiffTracker) AddPod(serviceUID, podKey, location, address string) {
 		if err := dt.updateK8sPodLocked(UpdatePodInputType{
 			PodOperation:           Add,
 			PublicOutboundIdentity: serviceUID,
+			PodKey:                 podKey,
+			PodUID:                 podUID,
 			Location:               location,
 			Address:                address,
 		}); err != nil {
@@ -1234,6 +1259,7 @@ func (dt *DiffTracker) AddPod(serviceUID, podKey, location, address string) {
 		dt.logger.V(5).Info("Buffered pod while service deletion is in progress", "pod", podKey, "service", serviceUID)
 		dt.pendingPods[serviceUID] = append(dt.pendingPods[serviceUID], PendingPodUpdate{
 			PodKey:    podKey,
+			PodUID:    podUID,
 			Location:  location,
 			Address:   address,
 			Timestamp: time.Now().Format(time.RFC3339),
@@ -1244,18 +1270,40 @@ func (dt *DiffTracker) AddPod(serviceUID, podKey, location, address string) {
 	}
 }
 
-// DeletePodResult contains the result of a DeletePod operation
+// PodFinalizerDecision tells the informer whether it may remove the pod cleanup finalizer.
+// The zero value is intentionally not releasable: callers must only strip the finalizer after an
+// explicit DecisionReleaseNoDrain result.
+type PodFinalizerDecision string
+
+const (
+	PodFinalizerDecisionHoldForDrain           PodFinalizerDecision = "hold-for-drain"
+	PodFinalizerDecisionHoldForServiceDeletion PodFinalizerDecision = "hold-for-service-deletion"
+	PodFinalizerDecisionReleaseNoDrain         PodFinalizerDecision = "release-no-drain"
+)
+
+// DeletePodResult contains the result of a DeletePod operation.
 type DeletePodResult struct {
-	IsLastPod bool // True if this was the last pod for the service
-	Enqueued  bool // True if the pod was recorded in pendingPodDeletions for drain-gated finalizer removal
+	IsLastPod         bool                 // True if this was the last pod for the service
+	Enqueued          bool                 // True if the pod was recorded in pendingPodDeletions for drain-gated finalizer removal
+	FinalizerDecision PodFinalizerDecision // Explicit authorization for the informer finalizer action
+}
+
+func (result *DeletePodResult) setFinalizerDecision() {
+	switch {
+	case result.IsLastPod:
+		result.FinalizerDecision = PodFinalizerDecisionHoldForServiceDeletion
+	case result.Enqueued:
+		result.FinalizerDecision = PodFinalizerDecisionHoldForDrain
+	default:
+		result.FinalizerDecision = PodFinalizerDecisionReleaseNoDrain
+	}
 }
 
 // deletePodAddressOutcome reports the effect of removing one of a pod's egress addresses, so DeletePod
 // can build a single drain-gated finalizer record and trigger the LocationsUpdater once for the whole
 // pod (keeping the per-pod deletion atomic).
 type deletePodAddressOutcome struct {
-	drainGated  bool // the address was removed from live state and needs drain-gated finalizer handling
-	isLastPod   bool // removing this address emptied the service's egress ref-count
+	drainGated  bool // the address was removed from live/NRP state and needs drain-gated finalizer handling
 	triggerSync bool // a LocationsUpdater sync is required to push the removal to NRP
 }
 
@@ -1264,7 +1312,7 @@ type deletePodAddressOutcome struct {
 // after every address has been processed, so CheckPendingPodDeletions can never observe a partial
 // address set and strip the pod's single finalizer while another address is still registered in NRP.
 // Must be called with dt.mu held.
-func (dt *DiffTracker) deletePodAddressLocked(serviceUID, location, address, podKey string) deletePodAddressOutcome {
+func (dt *DiffTracker) deletePodAddressLocked(serviceUID, location, address, podKey, podUID string) deletePodAddressOutcome {
 	// Resolve the location the address is actually registered under: the caller's hint is the pod's
 	// primary node IP, which is wrong for a secondary-family address (see
 	// resolveOutboundAddressLocationLocked). Without this the removal would no-op as stale and leak.
@@ -1277,25 +1325,52 @@ func (dt *DiffTracker) deletePodAddressLocked(serviceUID, location, address, pod
 	mayHaveReachedNRP := (opExists && opState.State != StateNotStarted) ||
 		dt.NRPResources.NATGateways.Has(serviceUID) ||
 		dt.serviceHasLocationsInNRP(serviceUID)
-	if dt.cancelBufferedPodLocked(serviceUID, location, address, podKey) {
+	if dt.cancelBufferedPodLocked(serviceUID, location, address, podKey, podUID) {
 		dt.logger.V(5).Info("Cancelled buffered pod before service creation", "service", serviceUID, "location", location, "address", address)
 		// If that was the service's only pod, tear down the pod-less NAT Gateway so it is not leaked.
 		// Once creation was dispatched, the address may already be visible in NRP even though the
 		// completion callback has not promoted the pod into live state. Keep the finalizer until the
 		// resulting service deletion completes.
-		isLastPod := dt.handleEmptyOutboundServiceLocked(serviceUID)
+		dt.handleEmptyOutboundServiceLocked(serviceUID)
 		return deletePodAddressOutcome{
 			drainGated:  mayHaveReachedNRP,
-			isLastPod:   isLastPod,
 			triggerSync: mayHaveReachedNRP,
 		}
 	}
+	if dt.bufferedPodOwnedByDifferentUIDLocked(serviceUID, location, address, podKey, podUID) {
+		dt.logger.V(5).Info("Ignored stale pod deletion for address buffered by a replacement",
+			"pod", podKey,
+			"podUID", podUID,
+			"service", serviceUID,
+			"location", location,
+			"address", address)
+		return deletePodAddressOutcome{}
+	}
 
 	// A stale or duplicate delete (informer double-delivery, or a pod that already moved/was removed)
-	// must be a no-op: otherwise isLastPod would be computed from OTHER still-live pods' ref-count and
-	// could falsely tear down a still-served service.
+	// normally no-ops. A local-state miss is not authoritative, however: if NRP still maps this exact
+	// address to the service, reconstruct a drain-gated record instead of authorizing inline finalizer
+	// removal. This covers transient engine-state gaps and recovery races without falsely decrementing
+	// another live pod's ref-count.
 	if !dt.outboundPodExistsLocked(serviceUID, location, address) {
+		if dt.outboundAddressInAnyNRPLocationLocked(serviceUID, address) {
+			dt.logger.V(4).Info("Recovered pending pod deletion from NRP after local state miss", "service", serviceUID, "location", location, "address", address, "pod", podKey)
+			return deletePodAddressOutcome{
+				drainGated:  true,
+				triggerSync: true,
+			}
+		}
 		dt.logger.V(5).Info("Skipped stale pod delete", "service", serviceUID, "location", location, "address", address)
+		return deletePodAddressOutcome{}
+	}
+
+	if !dt.outboundPodOwnedByLocked(serviceUID, location, address, podKey, podUID) {
+		dt.logger.V(5).Info("Ignored stale pod deletion for address owned by a replacement",
+			"pod", podKey,
+			"podUID", podUID,
+			"service", serviceUID,
+			"location", location,
+			"address", address)
 		return deletePodAddressOutcome{}
 	}
 
@@ -1305,26 +1380,42 @@ func (dt *DiffTracker) deletePodAddressLocked(serviceUID, location, address, pod
 		if err := dt.updateK8sPodLocked(UpdatePodInputType{
 			PodOperation:           Remove,
 			PublicOutboundIdentity: serviceUID,
+			PodKey:                 podKey,
+			PodUID:                 podUID,
 			Location:               location,
 			Address:                address,
 		}); err != nil {
 			dt.logger.V(4).Info("Could not remove pod", "err", err)
+			return deletePodAddressOutcome{}
 		}
-		return deletePodAddressOutcome{triggerSync: true}
+		// The local address existed and was removed. A missing ref-count is an internal-state
+		// inconsistency, not proof that NRP is clear; retain the finalizer through the drain.
+		return deletePodAddressOutcome{drainGated: true, triggerSync: true}
 	}
 
 	counter := val.(int)
 	if counter <= 0 {
 		dt.logger.V(4).Info("Found invalid service pod counter", "service", serviceUID, "count", counter)
-		return deletePodAddressOutcome{}
+		if err := dt.updateK8sPodLocked(UpdatePodInputType{
+			PodOperation:           Remove,
+			PublicOutboundIdentity: serviceUID,
+			PodKey:                 podKey,
+			PodUID:                 podUID,
+			Location:               location,
+			Address:                address,
+		}); err != nil {
+			dt.logger.V(4).Info("Could not remove pod with invalid service pod counter", "err", err)
+		}
+		// removePod clears the local identity before reporting the counter error. Keep the drain gate
+		// even when the inconsistent counter cannot be decremented.
+		return deletePodAddressOutcome{drainGated: true, triggerSync: true}
 	}
-
-	// counter == 1 means this removes the last registered address, so the service becomes empty.
-	isLastPod := counter == 1
 
 	if err := dt.updateK8sPodLocked(UpdatePodInputType{
 		PodOperation:           Remove,
 		PublicOutboundIdentity: serviceUID,
+		PodKey:                 podKey,
+		PodUID:                 podUID,
 		Location:               location,
 		Address:                address,
 	}); err != nil {
@@ -1332,30 +1423,7 @@ func (dt *DiffTracker) deletePodAddressLocked(serviceUID, location, address, pod
 		return deletePodAddressOutcome{}
 	}
 
-	if isLastPod {
-		dt.logger.V(5).Info("Marked service for deletion after last pod was removed", "service", serviceUID)
-		opState, exists := dt.pendingServiceOps[serviceUID]
-		if !exists {
-			dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
-				ServiceUID:    serviceUID,
-				Config:        NewOutboundServiceConfig(serviceUID, nil),
-				State:         StateDeletionPending,
-				RetryCount:    0,
-				LastAttempt:   time.Now().Format(time.RFC3339),
-				CreatedAt:     time.Now(),
-				CorrelationID: uuid.NewString(),
-			}
-		} else {
-			opState.State = StateDeletionPending
-		}
-		dt.pendingServiceDeletions[serviceUID] = &PendingServiceDeletion{
-			ServiceUID: serviceUID,
-			IsInbound:  false,
-			Timestamp:  time.Now().Format(time.RFC3339),
-		}
-	}
-
-	return deletePodAddressOutcome{drainGated: true, isLastPod: isLastPod, triggerSync: true}
+	return deletePodAddressOutcome{drainGated: true, triggerSync: true}
 }
 
 // DeletePod handles pod deletion events for outbound (NAT Gateway) services. A dual-stack pod is
@@ -1369,6 +1437,17 @@ func (dt *DiffTracker) deletePodAddressLocked(serviceUID, location, address, pod
 // - Non-last pod: the finalizer is removed by CheckPendingPodDeletions once every address drains.
 // - Last pod: the finalizer is removed by RemoveLastPodFinalizers after the NAT Gateway is deleted.
 func (dt *DiffTracker) DeletePod(serviceUID, location string, addresses []string, namespace, name, uid string) DeletePodResult {
+	return dt.deletePod(serviceUID, location, addresses, namespace, name, uid, false)
+}
+
+// DeletePodForReplacement drains an old pod while a same-service replacement is about to be added.
+// The old addresses remain finalizer-gated through NRP removal, but the temporary zero-address window
+// must not schedule deletion of the NAT Gateway that the replacement will continue using.
+func (dt *DiffTracker) DeletePodForReplacement(serviceUID, location string, addresses []string, namespace, name, uid string) DeletePodResult {
+	return dt.deletePod(serviceUID, location, addresses, namespace, name, uid, true)
+}
+
+func (dt *DiffTracker) deletePod(serviceUID, location string, addresses []string, namespace, name, uid string, preserveService bool) DeletePodResult {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
@@ -1394,16 +1473,23 @@ func (dt *DiffTracker) DeletePod(serviceUID, location string, addresses []string
 		if address == "" {
 			continue
 		}
-		outcome := dt.deletePodAddressLocked(serviceUID, location, address, identityPodKey)
+		outcome := dt.deletePodAddressLocked(serviceUID, location, address, identityPodKey, uid)
 		if outcome.triggerSync {
 			triggerSync = true
-		}
-		if outcome.isLastPod {
-			result.IsLastPod = true
 		}
 		if outcome.drainGated {
 			drainGated = appendAddressIfAbsent(drainGated, address)
 		}
+	}
+
+	// Determine last-pod status once, after every address has been removed from desired local state.
+	// This avoids per-address dual-stack decisions and remains correct when the ref-counter or one
+	// address entry was missing. NRP-only addresses are not desired pods: LocationsUpdater will drain
+	// them too, so an otherwise empty service must proceed to NAT Gateway cleanup instead of leaving
+	// an orphaned gateway behind.
+	if len(drainGated) > 0 && !preserveService && !dt.outboundServiceHasLiveOrBufferedPodLocked(serviceUID) {
+		result.IsLastPod = true
+		dt.markOutboundServiceForDeletionLocked(serviceUID)
 	}
 
 	// Enqueue a single drain-gated finalizer record for the whole pod (one pod object carries one
@@ -1433,11 +1519,161 @@ func (dt *DiffTracker) DeletePod(serviceUID, location string, addresses []string
 		}
 	}
 
+	result.setFinalizerDecision()
+
 	if triggerSync {
 		dt.triggerLocationsUpdater()
 	}
 
 	return result
+}
+
+// DeletePodWithoutAddresses handles a terminating egress pod first observed after its PodIPs/HostIP
+// were cleared. The exact old address set is unavailable, so release is gated on a service-level NRP
+// verification rather than inferred from missing pod status. Buffered entries for the same pod are
+// cancelled by UID-stable namespace/name identity so they cannot be promoted after deletion.
+func (dt *DiffTracker) DeletePodWithoutAddresses(serviceUID, namespace, name, uid string) DeletePodResult {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
+	result := DeletePodResult{}
+	if serviceUID == "" || namespace == "" || name == "" {
+		dt.logger.V(4).Info("Could not delete no-IP pod with invalid parameters", "service", serviceUID, "namespace", namespace, "name", name)
+		return result
+	}
+
+	podKey := fmt.Sprintf("%s/%s", namespace, name)
+	if existing, ok := dt.pendingPodDeletions[podKey]; ok && (uid == "" || existing.UID == uid) {
+		result.IsLastPod = existing.IsLastPod
+		result.Enqueued = true
+		result.setFinalizerDecision()
+		return result
+	}
+	replacementExists := dt.outboundPodKeyOwnedByDifferentUIDLocked(serviceUID, podKey, uid)
+
+	opState, opExists := dt.pendingServiceOps[serviceUID]
+	mayHaveReachedNRP := (opExists && opState.State != StateNotStarted) ||
+		dt.NRPResources.NATGateways.Has(serviceUID) ||
+		dt.serviceHasLocationsInNRP(serviceUID)
+
+	removedBuffered := dt.cancelBufferedPodByKeyLocked(serviceUID, podKey, uid)
+	var addresses []string
+	for _, pending := range removedBuffered {
+		addresses = appendAddressIfAbsent(addresses, pending.Address)
+	}
+	removedLive := dt.removeLivePodsByKeyLocked(serviceUID, podKey, uid)
+	for _, pending := range removedLive {
+		addresses = appendAddressIfAbsent(addresses, pending.Address)
+	}
+	if len(removedBuffered) > 0 || len(removedLive) > 0 {
+		dt.handleEmptyOutboundServiceLocked(serviceUID)
+		if replacementExists {
+			if mayHaveReachedNRP {
+				dt.triggerLocationsUpdater()
+			}
+			dt.logger.V(5).Info("Removed stale no-IP pod state while preserving its replacement",
+				"pod", podKey,
+				"podUID", uid,
+				"service", serviceUID,
+				"addresses", addresses)
+			result.setFinalizerDecision()
+			return result
+		}
+		if !mayHaveReachedNRP {
+			result.setFinalizerDecision()
+			return result
+		}
+	}
+	if replacementExists {
+		dt.logger.V(5).Info("Ignored stale no-IP pod deletion after confirming replacement ownership",
+			"pod", podKey,
+			"podUID", uid,
+			"service", serviceUID)
+		result.setFinalizerDecision()
+		return result
+	}
+
+	if !mayHaveReachedNRP {
+		result.setFinalizerDecision()
+		return result
+	}
+
+	result.IsLastPod = !dt.outboundServiceHasLiveOrBufferedPodLocked(serviceUID)
+	if result.IsLastPod {
+		dt.markOutboundServiceForDeletionLocked(serviceUID)
+	}
+	dt.pendingPodDeletions[podKey] = &PendingPodDeletion{
+		Namespace:          namespace,
+		Name:               name,
+		UID:                uid,
+		ServiceUID:         serviceUID,
+		Addresses:          addresses,
+		VerifyServiceDrain: len(addresses) == 0,
+		IsLastPod:          result.IsLastPod,
+		Timestamp:          time.Now().Format(time.RFC3339),
+	}
+	result.Enqueued = true
+	result.setFinalizerDecision()
+
+	dt.logger.V(4).Info("Added no-IP pending pod deletion for NRP verification",
+		"pod", podKey,
+		"service", serviceUID,
+		"addresses", addresses,
+		"verifyServiceDrain", len(addresses) == 0,
+		"isLastPod", result.IsLastPod,
+		"decision", result.FinalizerDecision)
+	dt.triggerLocationsUpdater()
+	return result
+}
+
+// outboundServiceHasLiveOrBufferedPodLocked reports whether the service still has any desired pod
+// address in local state. It is used only for NRP-recovery deletes, where the ref-counter itself may
+// be missing or stale. Requires dt.mu held.
+func (dt *DiffTracker) outboundServiceHasLiveOrBufferedPodLocked(serviceUID string) bool {
+	if len(dt.pendingPods[serviceUID]) > 0 {
+		return true
+	}
+	for _, node := range dt.K8sResources.Nodes {
+		for _, pod := range node.Pods {
+			if pod.PublicOutboundIdentity != "" && strings.EqualFold(pod.PublicOutboundIdentity, serviceUID) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// markOutboundServiceForDeletionLocked schedules NAT Gateway cleanup after the last egress pod is
+// removed. Requires dt.mu held.
+func (dt *DiffTracker) markOutboundServiceForDeletionLocked(serviceUID string) {
+	dt.logger.V(5).Info("Marked service for deletion after last pod was removed", "service", serviceUID)
+	opState, exists := dt.pendingServiceOps[serviceUID]
+	if !exists {
+		dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
+			ServiceUID:    serviceUID,
+			Config:        NewOutboundServiceConfig(serviceUID, nil),
+			State:         StateDeletionPending,
+			RetryCount:    0,
+			LastAttempt:   time.Now().Format(time.RFC3339),
+			CreatedAt:     time.Now(),
+			CorrelationID: uuid.NewString(),
+		}
+	} else {
+		// The Azure delete is already running. Do not demote it to StateDeletionPending: a pod
+		// re-registration arriving immediately afterward would take AddPod's pending-delete revive
+		// path and mark the service Created while the worker is still deleting its NAT Gateway.
+		// The in-flight worker sweeps this last-pod entry before completion, and the completion
+		// callback re-dispatches idempotently if the entry arrived after that sweep.
+		if opState.State == StateDeletionInProgress {
+			return
+		}
+		opState.State = StateDeletionPending
+	}
+	dt.pendingServiceDeletions[serviceUID] = &PendingServiceDeletion{
+		ServiceUID: serviceUID,
+		IsInbound:  false,
+		Timestamp:  time.Now().Format(time.RFC3339),
+	}
 }
 
 // outboundPodExistsLocked reports whether a pod at the given location/address is
@@ -1454,6 +1690,63 @@ func (dt *DiffTracker) outboundPodExistsLocked(serviceUID, location, address str
 		return false
 	}
 	return pod.PublicOutboundIdentity != "" && strings.EqualFold(pod.PublicOutboundIdentity, serviceUID)
+}
+
+// outboundPodOwnedByLocked verifies the Kubernetes pod identity stored with a live outbound address.
+// Empty identity fields preserve compatibility for callers and state reconstructed before UID tracking.
+// Requires dt.mu held.
+func (dt *DiffTracker) outboundPodOwnedByLocked(serviceUID, location, address, podKey, podUID string) bool {
+	node, ok := dt.K8sResources.Nodes[location]
+	if !ok {
+		return false
+	}
+	pod, ok := node.Pods[address]
+	if !ok || pod.PublicOutboundIdentity == "" || !strings.EqualFold(pod.PublicOutboundIdentity, serviceUID) {
+		return false
+	}
+	if podKey != "" && pod.OutboundPodKey != "" && pod.OutboundPodKey != podKey {
+		return false
+	}
+	return podUID == "" || pod.OutboundPodUID == "" || pod.OutboundPodUID == podUID
+}
+
+func (dt *DiffTracker) bufferedPodOwnedByDifferentUIDLocked(serviceUID, location, address, podKey, podUID string) bool {
+	if podKey == "" || podUID == "" {
+		return false
+	}
+	for _, pod := range dt.pendingPods[serviceUID] {
+		if pod.Location == location &&
+			pod.Address == address &&
+			pod.PodKey == podKey &&
+			pod.PodUID != "" &&
+			pod.PodUID != podUID {
+			return true
+		}
+	}
+	return false
+}
+
+func (dt *DiffTracker) outboundPodKeyOwnedByDifferentUIDLocked(serviceUID, podKey, podUID string) bool {
+	if podKey == "" || podUID == "" {
+		return false
+	}
+	for _, node := range dt.K8sResources.Nodes {
+		for _, pod := range node.Pods {
+			if pod.PublicOutboundIdentity != "" &&
+				strings.EqualFold(pod.PublicOutboundIdentity, serviceUID) &&
+				pod.OutboundPodKey == podKey &&
+				pod.OutboundPodUID != "" &&
+				pod.OutboundPodUID != podUID {
+				return true
+			}
+		}
+	}
+	for _, pod := range dt.pendingPods[serviceUID] {
+		if pod.PodKey == podKey && pod.PodUID != "" && pod.PodUID != podUID {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveOutboundAddressLocationLocked returns the node location an outbound address is actually
@@ -1533,7 +1826,7 @@ func (dt *DiffTracker) handleEmptyOutboundServiceLocked(serviceUID string) bool 
 // Pods buffered during StateNotStarted/StateCreationInProgress are not yet in live state or the
 // ref-counter, so a deletion in that window must cancel the buffered add; otherwise
 // promotePendingPodsLocked would resurrect the deleted pod. Must be called with dt.mu held.
-func (dt *DiffTracker) cancelBufferedPodLocked(serviceUID, location, address, podKey string) bool {
+func (dt *DiffTracker) cancelBufferedPodLocked(serviceUID, location, address, podKey, podUID string) bool {
 	buffered, exists := dt.pendingPods[serviceUID]
 	if !exists || len(buffered) == 0 {
 		return false
@@ -1541,7 +1834,9 @@ func (dt *DiffTracker) cancelBufferedPodLocked(serviceUID, location, address, po
 	kept := buffered[:0]
 	removed := false
 	for _, pod := range buffered {
-		if pod.Location == location && pod.Address == address && (podKey == "" || pod.PodKey == podKey) {
+		keyMatches := podKey == "" || pod.PodKey == "" || pod.PodKey == podKey
+		uidMatches := podUID == "" || pod.PodUID == "" || pod.PodUID == podUID
+		if pod.Location == location && pod.Address == address && keyMatches && uidMatches {
 			removed = true
 			continue
 		}
@@ -1556,6 +1851,71 @@ func (dt *DiffTracker) cancelBufferedPodLocked(serviceUID, location, address, po
 		dt.pendingPods[serviceUID] = kept
 	}
 	return true
+}
+
+// cancelBufferedPodByKeyLocked removes every buffered address belonging to the pod key and returns
+// the removed entries so a no-IP delete can retain their known addresses for drain tracking.
+// Requires dt.mu held.
+func (dt *DiffTracker) cancelBufferedPodByKeyLocked(serviceUID, podKey, podUID string) []PendingPodUpdate {
+	buffered := dt.pendingPods[serviceUID]
+	if len(buffered) == 0 || podKey == "" {
+		return nil
+	}
+	kept := buffered[:0]
+	var removed []PendingPodUpdate
+	for _, pod := range buffered {
+		if pod.PodKey == podKey && (podUID == "" || pod.PodUID == "" || pod.PodUID == podUID) {
+			removed = append(removed, pod)
+			continue
+		}
+		kept = append(kept, pod)
+	}
+	if len(removed) == 0 {
+		return nil
+	}
+	if len(kept) == 0 {
+		delete(dt.pendingPods, serviceUID)
+	} else {
+		dt.pendingPods[serviceUID] = kept
+	}
+	return removed
+}
+
+// removeLivePodsByKeyLocked removes every live outbound address owned by the pod key and returns the
+// removed entries for drain tracking. Requires dt.mu held.
+func (dt *DiffTracker) removeLivePodsByKeyLocked(serviceUID, podKey, podUID string) []PendingPodUpdate {
+	if podKey == "" {
+		return nil
+	}
+	var removed []PendingPodUpdate
+	for location, node := range dt.K8sResources.Nodes {
+		for address, pod := range node.Pods {
+			if pod.OutboundPodKey != podKey ||
+				(podUID != "" && pod.OutboundPodUID != "" && pod.OutboundPodUID != podUID) ||
+				pod.PublicOutboundIdentity == "" ||
+				!strings.EqualFold(pod.PublicOutboundIdentity, serviceUID) {
+				continue
+			}
+			removed = append(removed, PendingPodUpdate{
+				PodKey:   podKey,
+				PodUID:   pod.OutboundPodUID,
+				Location: location,
+				Address:  address,
+			})
+			if err := dt.updateK8sPodLocked(UpdatePodInputType{
+				PodOperation:           Remove,
+				PublicOutboundIdentity: serviceUID,
+				PodKey:                 podKey,
+				PodUID:                 podUID,
+				Location:               location,
+				Address:                address,
+			}); err != nil {
+				// The identity/address is already cleared before a ref-count error is returned.
+				dt.logger.V(4).Info("Removed no-IP pod address with inconsistent ref-count", "pod", podKey, "service", serviceUID, "location", location, "address", address, "err", err)
+			}
+		}
+	}
+	return removed
 }
 
 // promotePendingPodsLocked flushes all pending pods for a service after it's created.
@@ -1574,6 +1934,8 @@ func (dt *DiffTracker) promotePendingPodsLocked(serviceUID string) {
 		err := dt.updateK8sPodLocked(UpdatePodInputType{
 			PodOperation:           Add,
 			PublicOutboundIdentity: serviceUID,
+			PodKey:                 pod.PodKey,
+			PodUID:                 pod.PodUID,
 			Location:               pod.Location,
 			Address:                pod.Address,
 		})

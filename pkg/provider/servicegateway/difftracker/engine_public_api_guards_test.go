@@ -358,6 +358,298 @@ func TestGuardDeletePod_LastPodWithNamespaceNameTracksLastPodEntry(t *testing.T)
 	}
 }
 
+func TestGuardDeletePod_LocalStateMissingNRPOnlySurvivorSchedulesServiceCleanup(t *testing.T) {
+	dt := newTestDiffTracker()
+	const uid, location, deleted, survivor = "egress-recovered", "10.0.0.1", "10.244.0.7", "10.244.0.8"
+	dt.NRPResources.NATGateways.Insert(uid)
+	dt.NRPResources.Locations[location] = NRPLocation{
+		Addresses: map[string]NRPAddress{
+			deleted:  {Services: utilsets.NewString(uid)},
+			survivor: {Services: utilsets.NewString(uid)},
+		},
+	}
+	dt.pendingServiceOps[uid] = &ServiceOperationState{
+		ServiceUID: uid,
+		Config:     NewOutboundServiceConfig(uid, nil),
+		State:      StateCreated,
+	}
+
+	res := dt.DeletePod(uid, location, []string{deleted}, "ns", "deleted", "deleted-uid")
+
+	assert.True(t, res.IsLastPod,
+		"NRP-only addresses are not desired pods and will drain in the same locations sync")
+	assert.True(t, res.Enqueued)
+	assert.Equal(t, PodFinalizerDecisionHoldForServiceDeletion, res.FinalizerDecision)
+	assert.Equal(t, StateDeletionPending, dt.pendingServiceOps[uid].State,
+		"once all desired pods are gone, cleanup must also remove the NAT Gateway after draining NRP-only addresses")
+	assert.Contains(t, dt.pendingServiceDeletions, uid)
+	entry := dt.pendingPodDeletions["ns/deleted"]
+	if assert.NotNil(t, entry) {
+		assert.Equal(t, []string{deleted}, entry.Addresses)
+		assert.True(t, entry.IsLastPod)
+	}
+}
+
+func TestGuardDeletePod_LocalStateMissingNRPWithLiveOrBufferedPodIsNonLast(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		setup func(*DiffTracker)
+	}{
+		{
+			name: "another live pod",
+			setup: func(dt *DiffTracker) {
+				dt.K8sResources.Nodes["10.0.0.2"] = Node{
+					Pods: map[string]Pod{
+						"10.244.0.8": {
+							InboundIdentities:      utilsets.NewString(),
+							PublicOutboundIdentity: "egress-recovered",
+						},
+					},
+				}
+			},
+		},
+		{
+			name: "another buffered pod",
+			setup: func(dt *DiffTracker) {
+				dt.pendingPods["egress-recovered"] = []PendingPodUpdate{{
+					PodKey:   "ns/survivor",
+					Location: "10.0.0.2",
+					Address:  "10.244.0.8",
+				}}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dt := newTestDiffTracker()
+			const uid, location, deleted = "egress-recovered", "10.0.0.1", "10.244.0.7"
+			dt.NRPResources.NATGateways.Insert(uid)
+			dt.NRPResources.Locations[location] = NRPLocation{
+				Addresses: map[string]NRPAddress{
+					deleted: {Services: utilsets.NewString(uid)},
+				},
+			}
+			dt.pendingServiceOps[uid] = &ServiceOperationState{
+				ServiceUID: uid,
+				Config:     NewOutboundServiceConfig(uid, nil),
+				State:      StateCreated,
+			}
+			tc.setup(dt)
+
+			res := dt.DeletePod(uid, location, []string{deleted}, "ns", "deleted", "deleted-uid")
+
+			assert.False(t, res.IsLastPod)
+			assert.True(t, res.Enqueued)
+			assert.Equal(t, PodFinalizerDecisionHoldForDrain, res.FinalizerDecision)
+			assert.Equal(t, StateCreated, dt.pendingServiceOps[uid].State)
+			assert.NotContains(t, dt.pendingServiceDeletions, uid)
+		})
+	}
+}
+
+func TestGuardDeletePod_LocalStateMissingNRPDualStackLastReconstructsServiceCleanup(t *testing.T) {
+	dt := newTestDiffTracker()
+	const uid, v4Location, v6Location, v4, v6 = "egress-recovered", "10.0.0.1", "fd00::a", "10.244.0.7", "fd00::7"
+	dt.NRPResources.NATGateways.Insert(uid)
+	dt.NRPResources.Locations[v4Location] = NRPLocation{
+		Addresses: map[string]NRPAddress{v4: {Services: utilsets.NewString(uid)}},
+	}
+	dt.NRPResources.Locations[v6Location] = NRPLocation{
+		Addresses: map[string]NRPAddress{v6: {Services: utilsets.NewString(uid)}},
+	}
+	dt.pendingServiceOps[uid] = &ServiceOperationState{
+		ServiceUID: uid,
+		Config:     NewOutboundServiceConfig(uid, nil),
+		State:      StateCreated,
+	}
+
+	res := dt.DeletePod(uid, v4Location, []string{v4, v6}, "ns", "dual", "dual-uid")
+
+	assert.True(t, res.IsLastPod)
+	assert.True(t, res.Enqueued)
+	assert.Equal(t, PodFinalizerDecisionHoldForServiceDeletion, res.FinalizerDecision)
+	assert.Equal(t, StateDeletionPending, dt.pendingServiceOps[uid].State)
+	assert.Contains(t, dt.pendingServiceDeletions, uid)
+	entry := dt.pendingPodDeletions["ns/dual"]
+	if assert.NotNil(t, entry) {
+		assert.ElementsMatch(t, []string{v4, v6}, entry.Addresses)
+		assert.True(t, entry.IsLastPod)
+	}
+}
+
+func TestGuardDeletePod_RecoveredDeletePreservesInFlightDeletionForLiveReregistration(t *testing.T) {
+	dt := newTestDiffTracker()
+	const uid, location, oldAddress, newAddress = "egress-recovered", "10.0.0.1", "10.244.0.7", "10.244.0.8"
+	dt.NRPResources.NATGateways.Insert(uid)
+	dt.NRPResources.Locations[location] = NRPLocation{
+		Addresses: map[string]NRPAddress{
+			oldAddress: {Services: utilsets.NewString(uid)},
+		},
+	}
+	dt.pendingServiceOps[uid] = &ServiceOperationState{
+		ServiceUID: uid,
+		Config:     NewOutboundServiceConfig(uid, nil),
+		State:      StateDeletionInProgress,
+	}
+
+	// Live re-registration drains the old address without a pod finalizer record, then immediately
+	// adds the replacement address. The recovered drain must not make AddPod revive a delete worker
+	// that is already deleting Azure resources.
+	res := dt.DeletePod(uid, location, []string{oldAddress}, "", "", "")
+	assert.True(t, res.IsLastPod)
+	assert.Equal(t, PodFinalizerDecisionHoldForServiceDeletion, res.FinalizerDecision)
+	assert.Equal(t, StateDeletionInProgress, dt.pendingServiceOps[uid].State)
+	assert.NotContains(t, dt.pendingServiceDeletions, uid)
+
+	dt.AddPod(uid, "ns/live", location, newAddress)
+
+	assert.Equal(t, StateDeletionInProgress, dt.pendingServiceOps[uid].State,
+		"an in-flight Azure deletion must not be revived as Created")
+	if assert.Len(t, dt.pendingPods[uid], 1, "the replacement pod must wait for delete completion and recreation") {
+		assert.Equal(t, newAddress, dt.pendingPods[uid][0].Address)
+	}
+}
+
+func TestGuardDeletePod_StaleSameIPDeleteDoesNotRemoveReplacementUID(t *testing.T) {
+	dt := newTestDiffTracker()
+	const serviceUID, location, address, podKey = "egress-replacement", "10.0.0.1", "10.244.0.7", "ns/pod"
+	dt.NRPResources.NATGateways.Insert(serviceUID)
+	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
+		ServiceUID: serviceUID,
+		Config:     NewOutboundServiceConfig(serviceUID, nil),
+		State:      StateCreated,
+	}
+	dt.AddPodWithUID(serviceUID, podKey, "uid-new", location, address)
+
+	res := dt.DeletePod(serviceUID, location, []string{address}, "ns", "pod", "uid-old")
+
+	assert.Equal(t, PodFinalizerDecisionReleaseNoDrain, res.FinalizerDecision)
+	assert.False(t, res.Enqueued)
+	assert.Empty(t, dt.pendingPodDeletions)
+	assert.Equal(t, StateCreated, dt.pendingServiceOps[serviceUID].State)
+	assert.NotContains(t, dt.pendingServiceDeletions, serviceUID)
+	live := dt.K8sResources.Nodes[location].Pods[address]
+	assert.Equal(t, serviceUID, live.PublicOutboundIdentity)
+	assert.Equal(t, podKey, live.OutboundPodKey)
+	assert.Equal(t, "uid-new", live.OutboundPodUID)
+	if count, ok := dt.outboundIdentityPodRefCount.Load(serviceUID); assert.True(t, ok) {
+		assert.Equal(t, 1, count)
+	}
+}
+
+func TestGuardDeletePodForReplacement_DoesNotDeleteSameServiceNATGateway(t *testing.T) {
+	dt := newTestDiffTracker()
+	const serviceUID, location, oldAddress, newAddress, podKey = "egress-replacement", "10.0.0.1", "10.244.0.7", "10.244.0.8", "ns/pod"
+	dt.NRPResources.NATGateways.Insert(serviceUID)
+	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
+		ServiceUID: serviceUID,
+		Config:     NewOutboundServiceConfig(serviceUID, nil),
+		State:      StateCreated,
+	}
+	dt.AddPodWithUID(serviceUID, podKey, "uid-old", location, oldAddress)
+
+	res := dt.DeletePodForReplacement(serviceUID, location, []string{oldAddress}, "", "", "")
+
+	assert.False(t, res.IsLastPod)
+	assert.Equal(t, StateCreated, dt.pendingServiceOps[serviceUID].State)
+	assert.NotContains(t, dt.pendingServiceDeletions, serviceUID)
+
+	dt.AddPodWithUID(serviceUID, podKey, "uid-new", location, newAddress)
+
+	assert.Equal(t, StateCreated, dt.pendingServiceOps[serviceUID].State)
+	assert.NotContains(t, dt.pendingServiceDeletions, serviceUID)
+	assert.Equal(t, "uid-new", dt.K8sResources.Nodes[location].Pods[newAddress].OutboundPodUID)
+	assert.NotContains(t, dt.K8sResources.Nodes[location].Pods, oldAddress)
+	if count, ok := dt.outboundIdentityPodRefCount.Load(serviceUID); assert.True(t, ok) {
+		assert.Equal(t, 1, count)
+	}
+}
+
+func TestGuardDeletePodWithoutAddresses_StaleUIDDoesNotRemoveReplacement(t *testing.T) {
+	dt := newTestDiffTracker()
+	const serviceUID, location, oldAddress, newAddress, podKey = "egress-replacement", "10.0.0.1", "10.244.0.7", "10.244.0.8", "ns/pod"
+	dt.NRPResources.NATGateways.Insert(serviceUID)
+	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
+		ServiceUID: serviceUID,
+		Config:     NewOutboundServiceConfig(serviceUID, nil),
+		State:      StateCreated,
+	}
+	dt.AddPodWithUID(serviceUID, podKey, "uid-old", location, oldAddress)
+	dt.AddPodWithUID(serviceUID, podKey, "uid-new", location, newAddress)
+
+	res := dt.DeletePodWithoutAddresses(serviceUID, "ns", "pod", "uid-old")
+
+	assert.Equal(t, PodFinalizerDecisionReleaseNoDrain, res.FinalizerDecision)
+	assert.False(t, res.Enqueued)
+	assert.NotContains(t, dt.K8sResources.Nodes[location].Pods, oldAddress)
+	live := dt.K8sResources.Nodes[location].Pods[newAddress]
+	assert.Equal(t, serviceUID, live.PublicOutboundIdentity)
+	assert.Equal(t, "uid-new", live.OutboundPodUID)
+	assert.NotContains(t, dt.pendingPodDeletions, podKey)
+	assert.NotContains(t, dt.pendingServiceDeletions, serviceUID)
+	if count, ok := dt.outboundIdentityPodRefCount.Load(serviceUID); assert.True(t, ok) {
+		assert.Equal(t, 1, count)
+	}
+}
+
+func TestGuardDeletePod_UntrackedAndAbsentFromNRPExplicitlyReleases(t *testing.T) {
+	dt := newTestDiffTracker()
+
+	res := dt.DeletePod("egress-absent", "10.0.0.1", []string{"10.244.0.7"}, "ns", "pod", "pod-uid")
+
+	assert.False(t, res.IsLastPod)
+	assert.False(t, res.Enqueued)
+	assert.Equal(t, PodFinalizerDecisionReleaseNoDrain, res.FinalizerDecision)
+	assert.Empty(t, dt.pendingPodDeletions)
+}
+
+func TestGuardDeletePod_LocalAddressWithMissingOrInvalidRefCountKeepsDrainGate(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		setCounter bool
+		counter    int
+	}{
+		{name: "missing ref-count"},
+		{name: "zero ref-count", setCounter: true, counter: 0},
+		{name: "negative ref-count", setCounter: true, counter: -1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dt := newTestDiffTracker()
+			const uid, location, address = "egress-inconsistent", "10.0.0.1", "10.244.0.7"
+			dt.NRPResources.NATGateways.Insert(uid)
+			dt.NRPResources.Locations[location] = NRPLocation{
+				Addresses: map[string]NRPAddress{
+					address: {Services: utilsets.NewString(uid)},
+				},
+			}
+			dt.K8sResources.Nodes[location] = Node{
+				Pods: map[string]Pod{
+					address: {
+						InboundIdentities:      utilsets.NewString(),
+						PublicOutboundIdentity: uid,
+					},
+				},
+			}
+			dt.pendingServiceOps[uid] = &ServiceOperationState{
+				ServiceUID: uid,
+				Config:     NewOutboundServiceConfig(uid, nil),
+				State:      StateCreated,
+			}
+			if tc.setCounter {
+				dt.outboundIdentityPodRefCount.Store(uid, tc.counter)
+			}
+
+			res := dt.DeletePod(uid, location, []string{address}, "ns", "pod", "pod-uid")
+
+			assert.True(t, res.IsLastPod)
+			assert.True(t, res.Enqueued,
+				"a ref-count inconsistency must retain NRP drain protection instead of authorizing inline release")
+			assert.Equal(t, PodFinalizerDecisionHoldForServiceDeletion, res.FinalizerDecision)
+			assert.Equal(t, StateDeletionPending, dt.pendingServiceOps[uid].State)
+			assert.Contains(t, dt.pendingPodDeletions, "ns/pod")
+		})
+	}
+}
+
 // TestGuardDeletePod_MixedDualStackInputAggregatesOnlyLiveAddresses verifies the atomic multi-address
 // delete when the caller passes a mix of live, duplicate, and stale addresses (as can happen from an
 // informer resync or an at-least-once event). Only the two genuinely live addresses (one per family)

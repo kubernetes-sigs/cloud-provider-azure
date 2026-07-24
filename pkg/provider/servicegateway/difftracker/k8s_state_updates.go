@@ -172,6 +172,12 @@ func (dt *DiffTracker) addOrUpdatePod(input UpdatePodInputType) {
 	}
 
 	pod.PublicOutboundIdentity = input.PublicOutboundIdentity
+	if input.PodKey != "" {
+		pod.OutboundPodKey = input.PodKey
+	}
+	if input.PodUID != "" {
+		pod.OutboundPodUID = input.PodUID
+	}
 	node.Pods[input.Address] = pod
 	dt.logger.V(5).Info("Set outbound identity for pod", "identity", input.PublicOutboundIdentity, "pod", input.Address, "node", input.Location)
 }
@@ -193,6 +199,8 @@ func (dt *DiffTracker) removePod(input UpdatePodInputType) (existed bool, err er
 
 	if pod.PublicOutboundIdentity != "" && strings.EqualFold(pod.PublicOutboundIdentity, input.PublicOutboundIdentity) {
 		pod.PublicOutboundIdentity = ""
+		pod.OutboundPodKey = ""
+		pod.OutboundPodUID = ""
 		node.Pods[input.Address] = pod
 		err = dt.decrementOutboundRefCount(input.PublicOutboundIdentity)
 	}
@@ -325,6 +333,8 @@ func (dt *DiffTracker) removeServiceFromK8sStateLocked(serviceUID string, isInbo
 				// are removed.
 				if strings.EqualFold(pod.PublicOutboundIdentity, serviceUID) {
 					pod.PublicOutboundIdentity = ""
+					pod.OutboundPodKey = ""
+					pod.OutboundPodUID = ""
 					node.Pods[podIP] = pod
 					if err := dt.decrementOutboundRefCount(serviceUID); err != nil {
 						dt.logger.V(4).Info("Could not decrement outbound ref-count", "err", err, "service", serviceUID)

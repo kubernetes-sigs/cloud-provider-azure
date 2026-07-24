@@ -348,7 +348,7 @@ func nodeIPForEndpointSlice(nodeIPs []string, addressType discoveryv1.AddressTyp
 //   - For Services: The diff mechanism handles LB/NAT deletion (not in K8s.Services → marked for removal)
 //     Just log for visibility; no explicit pendingServiceDeletions needed as GetSyncOperations will handle it
 //   - For Pods with valid addresses: Track in pendingPodDeletions (don't call DeletePod - counters are clean)
-//   - For Pods with missing addresses: Directly remove finalizer (nothing to sync)
+//   - For Pods with missing addresses: Track a service-level NRP verification before removal
 //   - For malformed resources (no egress label): Directly remove finalizer
 //
 // NOTE: EndpointSlices do not use finalizers - their deletion is handled directly by the informer.
@@ -474,16 +474,22 @@ func recoverStuckFinalizers(
 			podIPs := PodEgressAddresses(pod)
 			nodeIP := pod.Status.HostIP
 
-			// If we don't have addresses, we can't track for sync through DeletePod
-			// (DeletePod rejects empty location/address). Directly remove finalizer since
-			// there's nothing to sync out of NRP anyway.
+			// If addresses are already cleared, retain the finalizer until the initialization
+			// locations sync proves there is no unbacked NRP mapping for this egress service.
 			if len(podIPs) == 0 || nodeIP == "" {
-				logger.V(4).Info("Removed pod finalizer with missing addresses", "namespace", pod.Namespace, "pod", pod.Name, "podIPs", podIPs, "nodeIP", nodeIP)
-				if err := dt.removePodFinalizer(ctx, pod); err != nil {
-					logger.V(4).Info("Could not remove pod finalizer", "namespace", pod.Namespace, "pod", pod.Name, "err", err)
-				} else {
-					podsDirectCleaned++
+				logger.V(2).Info("Recovered no-IP pod finalizer for service-level NRP verification", "namespace", pod.Namespace, "pod", pod.Name, "egress", egressLabel)
+				podKey := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+				pendingPods[podKey] = &PendingPodDeletion{
+					Namespace:          pod.Namespace,
+					Name:               pod.Name,
+					UID:                string(pod.UID),
+					ServiceUID:         egressLabel,
+					VerifyServiceDrain: true,
+					IsLastPod:          false,
+					Timestamp:          time.Now().Format(time.RFC3339),
 				}
+				podsRecovered++
+				recordFinalizerRecovered()
 				continue
 			}
 
@@ -720,7 +726,7 @@ func processK8sEgresses(
 				continue
 			}
 			ensureNodeExists(k8s, nodeIP)
-			addOutboundIdentityToPod(k8s, nodeIP, podIP, egressVal)
+			addOutboundIdentityToPod(k8s, nodeIP, podIP, egressVal, fmt.Sprintf("%s/%s", pod.Namespace, pod.Name), string(pod.UID))
 			seeded = true
 		}
 		if seeded {
@@ -1236,7 +1242,7 @@ func addInboundIdentityToPod(k8s *K8sState, nodeIP, podIP, serviceUID string) {
 }
 
 // addOutboundIdentityToPod adds an outbound identity to a pod
-func addOutboundIdentityToPod(k8s *K8sState, nodeIP, podIP, egressVal string) {
+func addOutboundIdentityToPod(k8s *K8sState, nodeIP, podIP, egressVal, podKey, podUID string) {
 	pod, exists := k8s.Nodes[nodeIP].Pods[podIP]
 	if !exists {
 		pod = Pod{
@@ -1245,6 +1251,8 @@ func addOutboundIdentityToPod(k8s *K8sState, nodeIP, podIP, egressVal string) {
 		}
 	}
 	pod.PublicOutboundIdentity = egressVal
+	pod.OutboundPodKey = podKey
+	pod.OutboundPodUID = podUID
 	k8s.Nodes[nodeIP].Pods[podIP] = pod
 }
 

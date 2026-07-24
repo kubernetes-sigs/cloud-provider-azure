@@ -310,7 +310,7 @@ func (dt *DiffTracker) podInformerAddPod(pod *v1.Pod) {
 				fmt.Sprintf("No same-family node IP for pod address %q; the node must expose that IP family in status.hostIPs", podIP))
 			continue
 		}
-		dt.AddPod(egressName, podKey, location, podIP)
+		dt.AddPodWithUID(egressName, podKey, string(pod.UID), location, podIP)
 	}
 }
 
@@ -335,13 +335,13 @@ func (dt *DiffTracker) podInformerRemovePod(pod *v1.Pod) {
 	// drain. Only strip inline when the engine has no pending drain - a genuinely untracked or
 	// never-registered pod - to avoid stranding it.
 	if pod.Status.HostIP == "" || len(podIPs) == 0 {
-		if dt.HasPendingPodDeletion(pod.Namespace, pod.Name, string(pod.UID)) {
-			klog.V(2).Infof("podInformerRemovePod: Pod %s has no IPs but a drain is pending; leaving finalizer for the drain-gate", podKey)
-			return
-		}
-		klog.V(2).Infof("podInformerRemovePod: Pod %s has egress label but no IPs and no pending drain; removing finalizer directly", podKey)
-		if err := dt.RemovePodFinalizerByPod(context.Background(), pod); err != nil {
-			klog.Warningf("podInformerRemovePod: Failed to remove finalizer from no-IP pod %s: %v", podKey, err)
+		result := dt.DeletePodWithoutAddresses(egressName, pod.Namespace, pod.Name, string(pod.UID))
+		klog.V(2).Infof("podInformerRemovePod: Pod %s has no IPs; finalizer decision=%s (lastPod=%t, enqueued=%t)",
+			podKey, result.FinalizerDecision, result.IsLastPod, result.Enqueued)
+		if result.FinalizerDecision == PodFinalizerDecisionReleaseNoDrain {
+			if err := dt.RemovePodFinalizerByPod(context.Background(), pod); err != nil {
+				klog.Warningf("podInformerRemovePod: Failed to remove finalizer from no-IP pod %s: %v", podKey, err)
+			}
 		}
 		return
 	}
@@ -353,10 +353,14 @@ func (dt *DiffTracker) podInformerRemovePod(pod *v1.Pod) {
 	// stripped only after all have drained from NRP, never inline.
 	result := dt.DeletePod(egressName, pod.Status.HostIP, podIPs, pod.Namespace, pod.Name, string(pod.UID))
 
-	// Untracked non-last delete (stale/duplicate, or post-restart): nothing to drain, so remove the
-	// finalizer directly to avoid stranding it.
-	if !result.IsLastPod && !result.Enqueued {
-		klog.V(2).Infof("podInformerRemovePod: Pod %s is not tracked by the engine; removing finalizer directly (nothing to drain)", podKey)
+	klog.V(2).Infof("podInformerRemovePod: Pod %s finalizer decision=%s (lastPod=%t, enqueued=%t)",
+		podKey, result.FinalizerDecision, result.IsLastPod, result.Enqueued)
+
+	// Remove only after the engine explicitly proves that neither local nor NRP state needs a drain.
+	// Do not infer release from !IsLastPod && !Enqueued: a local-state miss can still have an NRP
+	// mapping, in which case DeletePod reconstructs pending drain tracking and holds the finalizer.
+	if result.FinalizerDecision == PodFinalizerDecisionReleaseNoDrain {
+		klog.V(2).Infof("podInformerRemovePod: Pod %s has no local or NRP drain; removing finalizer directly", podKey)
 		if err := dt.RemovePodFinalizerByPod(context.Background(), pod); err != nil {
 			klog.Warningf("podInformerRemovePod: Failed to remove finalizer from untracked pod %s: %v", podKey, err)
 		}
@@ -414,5 +418,9 @@ func (dt *DiffTracker) podInformerDrainForReplace(oldPod, newPod *v1.Pod) {
 
 	// Empty namespace/name: drain from NRP but enqueue no finalizer record, so no stripper can act on
 	// the still-live pod. The finalizer is re-ensured by the following AddPod.
+	if oldEgress == newEgress {
+		dt.DeletePodForReplacement(oldEgress, oldPod.Status.HostIP, toDrain, "", "", "")
+		return
+	}
 	dt.DeletePod(oldEgress, oldPod.Status.HostIP, toDrain, "", "", "")
 }

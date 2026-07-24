@@ -611,6 +611,43 @@ func TestRecoverStuckFinalizers_SeedsAllDualStackAddresses(t *testing.T) {
 	}
 }
 
+func TestRecoverStuckFinalizers_NoIPPodUsesServiceDrainVerification(t *testing.T) {
+	delTime := metav1.Now()
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "no-ip-terminating",
+			Namespace:         "default",
+			UID:               types.UID("uid-no-ip"),
+			DeletionTimestamp: &delTime,
+			Finalizers:        []string{ServiceGatewayPodCleanupFinalizer},
+			Labels:            map[string]string{consts.PodLabelServiceEgressGateway: "corp-egress"},
+		},
+		Status: v1.PodStatus{Phase: v1.PodFailed},
+	}
+	kube := fake.NewSimpleClientset(pod)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{
+		Addresses: map[string]NRPAddress{
+			"10.244.9.1": {Services: utilsets.NewString("corp-egress")},
+		},
+	}
+
+	egressPods := &v1.PodList{Items: []v1.Pod{*pod}}
+	recoverStuckFinalizers(context.Background(), dt, nil, egressPods, nil, utilsets.NewString(), utilsets.NewString(), nil)
+
+	got, err := kube.CoreV1().Pods("default").Get(context.Background(), "no-ip-terminating", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.Contains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
+		"restart recovery must not release a no-IP pod while NRP still has an unbacked service address")
+	entry := dt.pendingPodDeletions["default/no-ip-terminating"]
+	if assert.NotNil(t, entry) {
+		assert.True(t, entry.VerifyServiceDrain)
+		assert.Empty(t, entry.Addresses)
+		assert.Equal(t, "corp-egress", entry.ServiceUID)
+	}
+}
+
 // TestCheckInitializationComplete_ParkedOpDoesNotBlockCompletion verifies that
 // checkInitializationCompleteLocked does NOT count a transient-failure-parked op (RetriesExhausted=true,
 // CreationFailedTerminal=false) as pending. Such an op self-heals in the background (retryGate cooldown

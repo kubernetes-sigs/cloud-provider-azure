@@ -304,6 +304,11 @@ type Pod struct {
 	// PublicOutboundIdentity is the UID of the single outbound/egress ServiceGateway
 	// service (NAT Gateway) this pod uses for egress; empty if the pod has no egress.
 	PublicOutboundIdentity string
+	// OutboundPodKey is the namespace/name of the Kubernetes pod that owns this outbound address.
+	// It allows a terminating pod first observed without PodIPs to remove its stale live entries.
+	OutboundPodKey string
+	// OutboundPodUID distinguishes same-name replacement pods.
+	OutboundPodUID string
 }
 
 // newPod returns a Pod with its InboundIdentities set initialized.
@@ -486,6 +491,8 @@ type UpdateK8sEndpointsInputType struct {
 type UpdatePodInputType struct {
 	PodOperation           Operation
 	PublicOutboundIdentity string
+	PodKey                 string
+	PodUID                 string
 	Location               string
 	Address                string
 }
@@ -493,6 +500,7 @@ type UpdatePodInputType struct {
 // PendingPodUpdate represents a pod waiting for its service to be created
 type PendingPodUpdate struct {
 	PodKey    string // namespace/name for logging
+	PodUID    string // Kubernetes UID; distinguishes same-name replacement pods
 	Location  string // HostIP
 	Address   string // PodIP
 	Timestamp string // When buffered (for debugging/metrics)

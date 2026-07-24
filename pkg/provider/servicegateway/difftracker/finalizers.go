@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -53,13 +54,14 @@ const (
 
 // PendingPodDeletion tracks a pod waiting for its location to be synced to NRP before finalizer removal
 type PendingPodDeletion struct {
-	Namespace  string   // Pod namespace
-	Name       string   // Pod name
-	UID        string   // Pod UID; guards against stripping a same-name replacement pod's finalizer
-	ServiceUID string   // Egress service this pod belongs to
-	Addresses  []string // PodIPs; a dual-stack pod contributes one address per IP family
-	IsLastPod  bool     // True if this was the last pod for the service (finalizer removed after NAT GW deletion)
-	Timestamp  string
+	Namespace          string   // Pod namespace
+	Name               string   // Pod name
+	UID                string   // Pod UID; guards against stripping a same-name replacement pod's finalizer
+	ServiceUID         string   // Egress service this pod belongs to
+	Addresses          []string // PodIPs; a dual-stack pod contributes one address per IP family
+	VerifyServiceDrain bool     // No PodIPs were available; wait until no unbacked NRP address remains for the service
+	IsLastPod          bool     // True if this was the last pod for the service (finalizer removed after NAT GW deletion)
+	Timestamp          string
 }
 
 // ================================================================================================
@@ -434,13 +436,24 @@ func (dt *DiffTracker) CheckPendingPodDeletions(ctx context.Context) (readyRemov
 			continue
 		}
 
-		// For non-last pods, remove the finalizer only once ALL of the pod's addresses have drained
-		// from NRP. A dual-stack pod registers one address per IP family under the same location, so
-		// stripping the finalizer while any address is still mapped would let the pod (and that IP) be
-		// reclaimed while NRP still routes it.
-		if addr, waiting := dt.podAddressStillInNRPLocked(pending); waiting {
-			dt.logger.V(4).Info("Address still in NRP for pod, waiting", "address", addr, "pod", podKey)
-			continue
+		if pending.VerifyServiceDrain {
+			// The terminating pod was first observed without PodIPs, so its exact old addresses are
+			// unavailable. Wait until the refreshed NRP snapshot contains no service address that is
+			// absent from desired live/buffered state. This prevents restart/no-IP events from
+			// releasing the finalizer while an old overlay mapping can still own the pod's IP.
+			if addr, waiting := dt.serviceHasUnbackedNRPAddressLocked(pending.ServiceUID); waiting {
+				dt.logger.V(4).Info("Unbacked service address still in NRP for no-IP pod, waiting", "address", addr, "pod", podKey, "service", pending.ServiceUID)
+				continue
+			}
+		} else {
+			// For non-last pods, remove the finalizer only once ALL of the pod's addresses have drained
+			// from NRP. A dual-stack pod registers one address per IP family under the same location, so
+			// stripping the finalizer while any address is still mapped would let the pod (and that IP) be
+			// reclaimed while NRP still routes it.
+			if addr, waiting := dt.podAddressStillInNRPLocked(pending); waiting {
+				dt.logger.V(4).Info("Address still in NRP for pod, waiting", "address", addr, "pod", podKey)
+				continue
+			}
 		}
 
 		// All addresses are no longer in NRP, collect for finalizer removal
@@ -519,6 +532,41 @@ func (dt *DiffTracker) CheckPendingPodDeletions(ctx context.Context) (readyRemov
 	// A ready removal that was not processed this cycle (transient GET/Update failure) means the
 	// caller should reschedule a retry rather than report success.
 	return len(toProcess) > len(processed)
+}
+
+// serviceHasUnbackedNRPAddressLocked reports whether NRP maps an address to the service that is not
+// backed by current live or buffered desired pod state. It is used for terminating pods first
+// observed without PodIPs, where the exact old address set cannot be reconstructed. Requires dt.mu.
+func (dt *DiffTracker) serviceHasUnbackedNRPAddressLocked(serviceUID string) (string, bool) {
+	for _, nrpLocation := range dt.NRPResources.Locations {
+		for address, nrpAddress := range nrpLocation.Addresses {
+			if nrpAddress.Services == nil || !nrpAddress.Services.Has(serviceUID) {
+				continue
+			}
+			if !dt.outboundAddressDesiredLocked(serviceUID, address) {
+				return address, true
+			}
+		}
+	}
+	return "", false
+}
+
+// outboundAddressDesiredLocked reports whether an address is still desired by a live or buffered pod
+// for the service. Requires dt.mu.
+func (dt *DiffTracker) outboundAddressDesiredLocked(serviceUID, address string) bool {
+	for _, node := range dt.K8sResources.Nodes {
+		if pod, ok := node.Pods[address]; ok &&
+			pod.PublicOutboundIdentity != "" &&
+			strings.EqualFold(pod.PublicOutboundIdentity, serviceUID) {
+			return true
+		}
+	}
+	for _, pending := range dt.pendingPods[serviceUID] {
+		if pending.Address == address {
+			return true
+		}
+	}
+	return false
 }
 
 // podAddressStillInNRPLocked reports whether any of a pending pod's addresses is still in NRP for its

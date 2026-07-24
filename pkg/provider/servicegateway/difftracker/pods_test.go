@@ -728,6 +728,201 @@ func TestPodInformerRemovePod_NoIPDeleteStripsUntrackedPod(t *testing.T) {
 		"an untracked no-IP pod with no pending drain must have its finalizer removed to avoid stranding")
 }
 
+func TestPodInformerRemovePod_NoIPDeleteWaitsForUnbackedNRPAddress(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	const (
+		egress      = "egress-svc"
+		oldAddress  = "10.244.0.1"
+		liveAddress = "10.244.0.2"
+		location    = "10.0.0.1"
+	)
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "deleted", Namespace: "default", UID: types.UID("deleted-uid"),
+			Labels:     map[string]string{consts.PodLabelServiceEgressGateway: egress},
+			Finalizers: []string{ServiceGatewayPodCleanupFinalizer},
+		},
+		Status: v1.PodStatus{Phase: v1.PodFailed},
+	}
+	kube := fake.NewSimpleClientset(pod)
+	dt := newProviderDiffTracker(t, ctrl, kube)
+	dt.pendingServiceOps[egress] = &ServiceOperationState{
+		ServiceUID: egress,
+		Config:     NewOutboundServiceConfig(egress, nil),
+		State:      StateCreated,
+	}
+	dt.K8sResources.Nodes[location] = Node{
+		Pods: map[string]Pod{
+			liveAddress: {
+				InboundIdentities:      utilsets.NewString(),
+				PublicOutboundIdentity: egress,
+			},
+		},
+	}
+	dt.NRPResources.NATGateways.Insert(egress)
+	dt.NRPResources.Locations[location] = NRPLocation{
+		Addresses: map[string]NRPAddress{
+			oldAddress:  {Services: utilsets.NewString(egress)},
+			liveAddress: {Services: utilsets.NewString(egress)},
+		},
+	}
+
+	dt.podInformerRemovePod(pod)
+
+	got, err := kube.CoreV1().Pods("default").Get(context.Background(), "deleted", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.Contains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer)
+	entry := dt.pendingPodDeletions["default/deleted"]
+	if assert.NotNil(t, entry) {
+		assert.True(t, entry.VerifyServiceDrain)
+		assert.False(t, entry.IsLastPod)
+	}
+
+	dt.CheckPendingPodDeletions(context.Background())
+	got, err = kube.CoreV1().Pods("default").Get(context.Background(), "deleted", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.Contains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
+		"the no-IP finalizer must remain while an unbacked NRP address can belong to the pod")
+
+	delete(dt.NRPResources.Locations[location].Addresses, oldAddress)
+	dt.CheckPendingPodDeletions(context.Background())
+
+	got, err = kube.CoreV1().Pods("default").Get(context.Background(), "deleted", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.NotContains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
+		"once every remaining NRP address is backed by a live pod, the no-IP pod can terminate")
+}
+
+func TestPodInformerRemovePod_NoIPLastPodWaitsForServiceDeletion(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	const egress = "egress-svc"
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "deleted", Namespace: "default", UID: types.UID("deleted-uid"),
+			Labels:     map[string]string{consts.PodLabelServiceEgressGateway: egress},
+			Finalizers: []string{ServiceGatewayPodCleanupFinalizer},
+		},
+		Status: v1.PodStatus{Phase: v1.PodFailed},
+	}
+	kube := fake.NewSimpleClientset(pod)
+	dt := newProviderDiffTracker(t, ctrl, kube)
+	dt.pendingServiceOps[egress] = &ServiceOperationState{
+		ServiceUID: egress,
+		Config:     NewOutboundServiceConfig(egress, nil),
+		State:      StateCreated,
+	}
+	dt.K8sResources.Nodes["10.0.0.1"] = Node{
+		Pods: map[string]Pod{
+			"10.244.0.1": {
+				InboundIdentities:      utilsets.NewString(),
+				PublicOutboundIdentity: egress,
+				OutboundPodKey:         "default/deleted",
+			},
+		},
+	}
+	dt.outboundIdentityPodRefCount.Store(egress, 1)
+	dt.NRPResources.NATGateways.Insert(egress)
+	dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{
+		Addresses: map[string]NRPAddress{
+			"10.244.0.1": {Services: utilsets.NewString(egress)},
+		},
+	}
+
+	dt.podInformerRemovePod(pod)
+
+	got, err := kube.CoreV1().Pods("default").Get(context.Background(), "deleted", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.Contains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer)
+	entry := dt.pendingPodDeletions["default/deleted"]
+	if assert.NotNil(t, entry) {
+		assert.False(t, entry.VerifyServiceDrain,
+			"the pod identity should recover its stale live address even though status PodIPs are empty")
+		assert.Equal(t, []string{"10.244.0.1"}, entry.Addresses)
+		assert.True(t, entry.IsLastPod)
+	}
+	assert.NotContains(t, dt.K8sResources.Nodes, "10.0.0.1",
+		"the deleted pod's stale desired address must be removed before NRP verification")
+	assert.Equal(t, StateDeletionPending, dt.pendingServiceOps[egress].State)
+
+	assert.NoError(t, dt.RemoveLastPodFinalizers(context.Background(), egress))
+	got, err = kube.CoreV1().Pods("default").Get(context.Background(), "deleted", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.NotContains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer)
+}
+
+// A local K8s-state miss is not proof that an egress pod is untracked: NRP can still map its
+// address while the engine is between snapshots or recovering state. The terminating pod must keep
+// its finalizer and reconstruct drain tracking instead of taking the inline "untracked" release.
+func TestPodInformerRemovePod_LocalStateMissingButNRPAddressPresentKeepsFinalizer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	const (
+		egress = "egress-svc"
+		hostIP = "10.0.0.1"
+		podIP  = "10.244.0.1"
+	)
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "pod-a", Namespace: "default", UID: types.UID("uid-a"),
+			Labels:     map[string]string{consts.PodLabelServiceEgressGateway: egress},
+			Finalizers: []string{ServiceGatewayPodCleanupFinalizer},
+		},
+		Status: v1.PodStatus{
+			HostIP: hostIP,
+			PodIP:  podIP,
+			PodIPs: []v1.PodIP{{IP: podIP}},
+			Phase:  v1.PodRunning,
+		},
+	}
+	kube := fake.NewSimpleClientset(pod)
+	dt := newProviderDiffTracker(t, ctrl, kube)
+	dt.NRPResources.NATGateways.Insert(egress)
+	dt.NRPResources.Locations[hostIP] = NRPLocation{
+		Addresses: map[string]NRPAddress{
+			podIP: {Services: utilsets.NewString(egress)},
+		},
+	}
+	dt.pendingServiceOps[egress] = &ServiceOperationState{
+		ServiceUID: egress,
+		Config:     NewOutboundServiceConfig(egress, nil),
+		State:      StateCreated,
+	}
+
+	// Deliberately do not seed K8sResources.Nodes: this models the production failure where the
+	// informer delete raced a transient local-state gap even though NRP still owned the address.
+	dt.podInformerRemovePod(pod)
+	dt.podInformerRemovePod(pod.DeepCopy()) // duplicate terminating update
+	noIPs := pod.DeepCopy()
+	noIPs.Status.HostIP = ""
+	noIPs.Status.PodIP = ""
+	noIPs.Status.PodIPs = nil
+	dt.podInformerRemovePod(noIPs) // later terminating update after kubelet clears addresses
+
+	got, err := kube.CoreV1().Pods("default").Get(context.Background(), "pod-a", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.Contains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
+		"NRP still maps the pod address, so a local state miss must not authorize finalizer removal")
+	pending, ok := dt.pendingPodDeletions["default/pod-a"]
+	if assert.True(t, ok, "the local-state miss must reconstruct pending drain tracking") {
+		assert.Equal(t, "uid-a", pending.UID)
+		assert.Equal(t, []string{podIP}, pending.Addresses)
+		assert.True(t, pending.IsLastPod,
+			"with no other live or buffered egress pods, cleanup must wait for NAT Gateway deletion")
+	}
+
+	// Simulate the outbound delete worker's post-NAT/PIP finalizer sweep.
+	assert.NoError(t, dt.RemoveLastPodFinalizers(context.Background(), egress))
+	got, err = kube.CoreV1().Pods("default").Get(context.Background(), "pod-a", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.NotContains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
+		"the finalizer should release only when the outbound delete worker completes cleanup")
+}
+
 // TestReconcileEgressPodUpdate_LiveReRegistrationKeepsFinalizerAndReAdds drives the real update
 // executor end-to-end on a live engine: a dual-stack pod that gains a secondary family
 // ([v4] -> [v4,v6]) is a live re-registration. The executor must drain the old set without a
@@ -803,6 +998,78 @@ func TestReconcileEgressPodUpdate_LiveReRegistrationKeepsFinalizerAndReAdds(t *t
 		assert.Equal(t, egress, v6Pods[v6].PublicOutboundIdentity)
 	}
 	assert.NotContains(t, v4Pods, v6, "the IPv6 address must not be filed under the IPv4 node location")
+}
+
+func TestReconcileEgressPodUpdate_SolePodIPReplacementKeepsNATGateway(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	const (
+		egress = "egress-svc"
+		hostIP = "10.0.0.1"
+		oldIP  = "10.244.0.1"
+		newIP  = "10.244.0.2"
+		podKey = "default/pod-a"
+		podUID = "uid-a"
+	)
+	k8s := K8sState{
+		Services: utilsets.NewString(),
+		Egresses: utilsets.NewString(egress),
+		Nodes: map[string]Node{
+			hostIP: {Pods: map[string]Pod{
+				oldIP: {
+					InboundIdentities:      utilsets.NewString(),
+					PublicOutboundIdentity: egress,
+					OutboundPodKey:         podKey,
+					OutboundPodUID:         podUID,
+				},
+			}},
+		},
+	}
+	nrp := NRPState{
+		LoadBalancers: utilsets.NewString(),
+		NATGateways:   utilsets.NewString(egress),
+		Locations:     make(map[string]NRPLocation),
+	}
+	makePod := func(ip string) *v1.Pod {
+		return &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "pod-a",
+				Namespace:  "default",
+				UID:        types.UID(podUID),
+				Labels:     map[string]string{consts.PodLabelServiceEgressGateway: egress},
+				Finalizers: []string{ServiceGatewayPodCleanupFinalizer},
+			},
+			Status: v1.PodStatus{
+				HostIP: hostIP,
+				PodIP:  ip,
+				PodIPs: []v1.PodIP{{IP: ip}},
+				Phase:  v1.PodRunning,
+			},
+		}
+	}
+
+	oldPod, newPod := makePod(oldIP), makePod(newIP)
+	kube := fake.NewSimpleClientset(newPod)
+	dt, _ := newSeededDiffTracker(t, ctrl, kube, k8s, nrp)
+
+	dt.reconcileEgressPodUpdate(oldPod, newPod)
+
+	assert.NotContains(t, dt.pendingServiceDeletions, egress,
+		"a same-service IP replacement must not schedule NAT Gateway deletion in the drain/add gap")
+	if op, ok := dt.pendingServiceOps[egress]; ok {
+		assert.NotEqual(t, StateDeletionPending, op.State)
+		assert.NotEqual(t, StateDeletionInProgress, op.State)
+	}
+	assert.NotContains(t, dt.K8sResources.Nodes[hostIP].Pods, oldIP)
+	replacement := dt.K8sResources.Nodes[hostIP].Pods[newIP]
+	assert.Equal(t, egress, replacement.PublicOutboundIdentity)
+	assert.Equal(t, podKey, replacement.OutboundPodKey)
+	assert.Equal(t, podUID, replacement.OutboundPodUID)
+
+	got, err := kube.CoreV1().Pods("default").Get(context.Background(), "pod-a", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.Contains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer)
 }
 
 // TestEgressPodUpdateActions verifies the pure UPDATE decision function directly: for each pod
