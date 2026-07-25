@@ -49,8 +49,11 @@ const (
 
 var (
 	containerRegistryUrls = []string{"*.azurecr.io", "*.azurecr.cn", "*.azurecr.de", "*.azurecr.us"}
-	// a valid acr image starts with alphanumerics, followed by corresponding acr domain name.
-	acrRE = regexp.MustCompile(`^[a-zA-Z0-9]+\.(azurecr\.io|azurecr\.cn|azurecr\.de|azurecr\.us)`)
+	// a valid acr image starts with a DNS label (allowing dashes, e.g. registries with a
+	// Domain Name Label suffix such as "registry-hash.azurecr.io"), optionally followed by
+	// one more label for regional endpoints (e.g. "registry.<region>.azurecr.io"), followed
+	// by the corresponding acr domain name.
+	acrRE = regexp.MustCompile(`^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)?\.(azurecr\.io|azurecr\.cn|azurecr\.de|azurecr\.us)`)
 )
 
 // CredentialProvider is an interface implemented by the kubelet credential provider plugin to fetch
