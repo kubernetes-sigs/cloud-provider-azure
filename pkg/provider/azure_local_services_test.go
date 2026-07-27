@@ -27,6 +27,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 
 	"go.uber.org/mock/gomock"
@@ -38,6 +39,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	clientgotesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/backendaddresspoolclient/mock_backendaddresspoolclient"
@@ -45,6 +47,49 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
+
+func TestEndpointSliceFromDeleteEvent(t *testing.T) {
+	endpointSlice := &discovery_v1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{Name: "slice"},
+	}
+	tests := []struct {
+		name string
+		obj  interface{}
+		want *discovery_v1.EndpointSlice
+	}{
+		{
+			name: "direct object",
+			obj:  endpointSlice,
+			want: endpointSlice,
+		},
+		{
+			name: "tombstone",
+			obj: cache.DeletedFinalStateUnknown{
+				Key: "default/slice",
+				Obj: endpointSlice,
+			},
+			want: endpointSlice,
+		},
+		{
+			name: "tombstone with unexpected object",
+			obj: cache.DeletedFinalStateUnknown{
+				Key: "default/slice",
+				Obj: "not-an-endpoint-slice",
+			},
+		},
+		{
+			name: "unexpected object",
+			obj:  "not-an-endpoint-slice",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := endpointSliceFromDeleteEvent(logr.Discard(), tt.obj)
+			assert.Same(t, tt.want, got)
+		})
+	}
+}
 
 func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
 	ctrl := gomock.NewController(t)
