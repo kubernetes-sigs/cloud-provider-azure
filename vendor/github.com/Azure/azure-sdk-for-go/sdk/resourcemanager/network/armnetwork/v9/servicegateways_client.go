@@ -8,14 +8,13 @@ package armnetwork
 import (
 	"context"
 	"errors"
-	"net/http"
-	"net/url"
-	"strings"
-
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
+	"net/http"
+	"net/url"
+	"strings"
 )
 
 // ServiceGatewaysClient contains the methods for the ServiceGateways group.
@@ -564,8 +563,7 @@ func (client *ServiceGatewaysClient) updateAddressLocations(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	// NRP ServiceGateway endpoint returns 200 OK (not 202/204); accept StatusOK.
-	if !runtime.HasStatusCode(httpResp, http.StatusOK, http.StatusAccepted, http.StatusNoContent) {
+	if !runtime.HasStatusCode(httpResp, http.StatusAccepted, http.StatusNoContent) {
 		err = runtime.NewResponseError(httpResp)
 		return nil, err
 	}
@@ -652,8 +650,7 @@ func (client *ServiceGatewaysClient) updateServices(ctx context.Context, resourc
 	if err != nil {
 		return nil, err
 	}
-	// NRP ServiceGateway endpoint returns 200 OK (not 202/204); accept StatusOK.
-	if !runtime.HasStatusCode(httpResp, http.StatusOK, http.StatusAccepted, http.StatusNoContent) {
+	if !runtime.HasStatusCode(httpResp, http.StatusAccepted, http.StatusNoContent) {
 		err = runtime.NewResponseError(httpResp)
 		return nil, err
 	}

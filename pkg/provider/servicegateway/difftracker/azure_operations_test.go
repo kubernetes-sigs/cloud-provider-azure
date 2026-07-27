@@ -17,9 +17,19 @@ limitations under the License.
 package difftracker
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
 	"testing"
+	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -27,6 +37,9 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	corelisters "k8s.io/client-go/listers/core/v1"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 func TestConvertServiceDTOsToServiceRequests_OutboundRemovalHasNoNatGatewayID(t *testing.T) {
@@ -288,4 +301,117 @@ func TestUpdateServiceLoadBalancerStatus_DualStackSafeThroughLister(t *testing.T
 	assert.Contains(t, ips, "10.0.0.1")
 	assert.Contains(t, ips, "2001:db8::1")
 	assert.Contains(t, hosts, "example.com")
+}
+
+func responseError(status int) error {
+	return &azcore.ResponseError{
+		StatusCode:  status,
+		RawResponse: &http.Response{StatusCode: status, Header: http.Header{}},
+	}
+}
+
+// TestIsSynchronousCompletion pins the discriminator that lets the provider drop the vendored SDK
+// patch: NRP answers these long-running operations with 200 OK, which the generated client rejects
+// even though the request succeeded. Only 200 may be tolerated; every other status is a real
+// failure and must still propagate.
+func TestIsSynchronousCompletion(t *testing.T) {
+	assert.True(t, isSynchronousCompletion(responseError(http.StatusOK)))
+	assert.True(t, isSynchronousCompletion(fmt.Errorf("wrapped: %w", responseError(http.StatusOK))))
+
+	assert.False(t, isSynchronousCompletion(nil))
+	assert.False(t, isSynchronousCompletion(errors.New("boom")))
+	for _, status := range []int{
+		http.StatusAccepted,
+		http.StatusNoContent,
+		http.StatusBadRequest,
+		http.StatusUnauthorized,
+		http.StatusNotFound,
+		http.StatusConflict,
+		http.StatusTooManyRequests,
+		http.StatusInternalServerError,
+		http.StatusServiceUnavailable,
+	} {
+		assert.False(t, isSynchronousCompletion(responseError(status)), "status %d must not be treated as success", status)
+	}
+}
+
+func TestTolerateSynchronousCompletion(t *testing.T) {
+	dt := &DiffTracker{logger: log.Noop()}
+
+	assert.NoError(t, dt.tolerateSynchronousCompletion(responseError(http.StatusOK), "UpdateServices", "sgw"))
+	assert.NoError(t, dt.tolerateSynchronousCompletion(nil, "UpdateServices", "sgw"))
+
+	conflict := responseError(http.StatusConflict)
+	assert.Same(t, conflict, dt.tolerateSynchronousCompletion(conflict, "UpdateServices", "sgw"))
+
+	// A 200 carrying polling headers is still tolerated, but must not go unnoticed.
+	async := &azcore.ResponseError{
+		StatusCode:  http.StatusOK,
+		RawResponse: &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Location": []string{"https://poll"}}},
+	}
+	assert.NoError(t, dt.tolerateSynchronousCompletion(async, "UpdateAddressLocations", "sgw"))
+}
+
+type fixedStatusTransport struct {
+	status int
+	header http.Header
+}
+
+func (t fixedStatusTransport) Do(req *http.Request) (*http.Response, error) {
+	header := t.header
+	if header == nil {
+		header = http.Header{}
+	}
+	header.Set("Content-Type", "application/json")
+	return &http.Response{
+		StatusCode: t.status,
+		Status:     http.StatusText(t.status),
+		Header:     header,
+		Body:       io.NopCloser(bytes.NewReader([]byte(`{}`))),
+		Request:    req,
+	}, nil
+}
+
+type fakeCredential struct{}
+
+func (fakeCredential) GetToken(context.Context, policy.TokenRequestOptions) (azcore.AccessToken, error) {
+	return azcore.AccessToken{Token: "fake", ExpiresOn: time.Now().Add(time.Hour)}, nil
+}
+
+func newServiceGatewayClient(t *testing.T, status int, header http.Header) servicegatewayclient.Interface {
+	t.Helper()
+	client, err := servicegatewayclient.New("subscription", fakeCredential{}, &arm.ClientOptions{
+		ClientOptions: azcore.ClientOptions{Transport: fixedStatusTransport{status: status, header: header}},
+	})
+	if err != nil {
+		t.Fatalf("building ServiceGateway client: %v", err)
+	}
+	return client
+}
+
+// TestServiceGatewayClientSynchronousCompletionEndToEnd drives the real generated SDK client, so it
+// proves the provider no longer needs the vendored patch: NRP's 200 OK surfaces as an error that
+// isSynchronousCompletion recognises, while a 409 still propagates.
+func TestServiceGatewayClientSynchronousCompletionEndToEnd(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("200 OK is tolerated", func(t *testing.T) {
+		client := newServiceGatewayClient(t, http.StatusOK, nil)
+
+		err := client.UpdateServices(ctx, "rg", "sgw", armnetwork.ServiceGatewayUpdateServicesRequest{})
+		assert.Error(t, err, "the generated client rejects 200 OK")
+		assert.True(t, isSynchronousCompletion(err))
+
+		err = client.UpdateAddressLocations(ctx, "rg", "sgw", armnetwork.ServiceGatewayUpdateAddressLocationsRequest{})
+		assert.Error(t, err)
+		assert.True(t, isSynchronousCompletion(err))
+	})
+
+	t.Run("409 Conflict still fails", func(t *testing.T) {
+		client := newServiceGatewayClient(t, http.StatusConflict, nil)
+
+		err := client.UpdateServices(ctx, "rg", "sgw", armnetwork.ServiceGatewayUpdateServicesRequest{})
+		assert.Error(t, err)
+		assert.False(t, isSynchronousCompletion(err), "a real ARM failure must never be tolerated")
+	})
 }

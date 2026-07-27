@@ -41,10 +41,13 @@ package difftracker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	v1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -192,7 +195,7 @@ func (dt *DiffTracker) disassociateNatGatewayFromServiceGateway(ctx context.Cont
 				},
 			},
 		}
-		if err := dt.networkClientFactory.GetServiceGatewayClient().UpdateServices(ctx, dt.config.ResourceGroup, serviceGatewayName, updateServicesRequest); err != nil {
+		if err := dt.updateNRPServices(ctx, serviceGatewayName, updateServicesRequest); err != nil {
 			return fmt.Errorf("updating Service Gateway to disassociate NAT Gateway %q: %w", natGatewayName, err)
 		}
 	}
@@ -238,7 +241,7 @@ func (dt *DiffTracker) updateNRPSGWServices(ctx context.Context, serviceGatewayN
 		ServiceRequests: serviceRequests,
 	}
 
-	err = dt.networkClientFactory.GetServiceGatewayClient().UpdateServices(ctx, dt.config.ResourceGroup, serviceGatewayName, req)
+	err = dt.updateNRPServices(ctx, serviceGatewayName, req)
 	if err != nil {
 		return fmt.Errorf("updating Service Gateway services for %q: %w", serviceGatewayName, err)
 	}
@@ -256,7 +259,7 @@ func (dt *DiffTracker) updateNRPSGWAddressLocations(ctx context.Context, service
 		AddressLocations: convertLocationDTOsToAddressLocations(locationsDTO.Locations),
 	}
 
-	err := dt.networkClientFactory.GetServiceGatewayClient().UpdateAddressLocations(ctx, dt.config.ResourceGroup, serviceGatewayName, req)
+	err := dt.updateNRPAddressLocations(ctx, serviceGatewayName, req)
 	if err != nil {
 		return fmt.Errorf("updating Service Gateway address locations for %q: %w", serviceGatewayName, err)
 	}
@@ -555,4 +558,66 @@ func convertLocationDTOsToAddressLocations(locations []LocationDTO) []*armnetwor
 		armLocations = append(armLocations, armLoc)
 	}
 	return armLocations
+}
+
+// synchronousCompletionStatus is the HTTP status NRP returns when it completes a ServiceGateway
+// long-running operation inline instead of handing back a poller.
+const synchronousCompletionStatus = http.StatusOK
+
+// isSynchronousCompletion reports whether err is only the Azure SDK refusing an HTTP 200 response.
+//
+// The generated armnetwork ServiceGateways client accepts just 202 and 204 for the updateServices
+// and updateAddressLocations long-running operations, but NRP finishes both synchronously and
+// answers 200 OK. The SDK converts that into a ResponseError before a poller is ever created, so
+// the request in fact succeeded and there is nothing left to poll. Genuine failures keep their own
+// 4xx/5xx status and are therefore never swallowed here.
+//
+// This compensates for the vendored SDK; drop it once the generator accepts 200 for these
+// operations.
+//
+// Known side effect: the azclient wrapper records its ARM request metric before this tolerance is
+// applied, so a synchronous 200 is still counted in ARMRequestErrors with status_code=200. The
+// request did succeed; the counter is noise that disappears with the SDK fix.
+func isSynchronousCompletion(err error) bool {
+	var respErr *azcore.ResponseError
+	if !errors.As(err, &respErr) {
+		return false
+	}
+	return respErr.StatusCode == synchronousCompletionStatus
+}
+
+// updateNRPServices calls UpdateServices, tolerating NRP's synchronous 200 OK completion.
+func (dt *DiffTracker) updateNRPServices(ctx context.Context, serviceGatewayName string, req armnetwork.ServiceGatewayUpdateServicesRequest) error {
+	err := dt.networkClientFactory.GetServiceGatewayClient().UpdateServices(ctx, dt.config.ResourceGroup, serviceGatewayName, req)
+	return dt.tolerateSynchronousCompletion(err, "UpdateServices", serviceGatewayName)
+}
+
+// updateNRPAddressLocations calls UpdateAddressLocations, tolerating NRP's synchronous 200 OK.
+func (dt *DiffTracker) updateNRPAddressLocations(ctx context.Context, serviceGatewayName string, req armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
+	err := dt.networkClientFactory.GetServiceGatewayClient().UpdateAddressLocations(ctx, dt.config.ResourceGroup, serviceGatewayName, req)
+	return dt.tolerateSynchronousCompletion(err, "UpdateAddressLocations", serviceGatewayName)
+}
+
+func (dt *DiffTracker) tolerateSynchronousCompletion(err error, operation, serviceGatewayName string) error {
+	if !isSynchronousCompletion(err) {
+		return err
+	}
+
+	// A 200 that still carries polling headers would mean the operation is genuinely asynchronous
+	// and we are reporting success too early. Surface that loudly rather than silently.
+	var respErr *azcore.ResponseError
+	_ = errors.As(err, &respErr)
+	if respErr.RawResponse != nil {
+		if location := respErr.RawResponse.Header.Get("Location"); location != "" {
+			dt.logger.Error(nil, "ServiceGateway operation returned 200 OK with a polling header; treating it as complete may be premature",
+				"operation", operation, "serviceGateway", serviceGatewayName)
+		} else if respErr.RawResponse.Header.Get("Azure-AsyncOperation") != "" {
+			dt.logger.Error(nil, "ServiceGateway operation returned 200 OK with an async-operation header; treating it as complete may be premature",
+				"operation", operation, "serviceGateway", serviceGatewayName)
+		}
+	}
+
+	dt.logger.V(4).Info("ServiceGateway operation completed synchronously with 200 OK",
+		"operation", operation, "serviceGateway", serviceGatewayName)
+	return nil
 }
