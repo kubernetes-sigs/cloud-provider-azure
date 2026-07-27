@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -30,6 +31,7 @@ import (
 	"k8s.io/client-go/tools/record"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/servicegateway/difftracker"
 )
@@ -190,4 +192,48 @@ func TestRuntimeStartFailureRollsBack(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("failed ServiceGateway runtime context was not cancelled")
 	}
+}
+
+func validServiceGatewayConfig() providerconfig.Config {
+	config := providerconfig.Config{ServiceGatewayEnabled: true}
+	config.SubscriptionID = "subscription"
+	config.ResourceGroup = "resource-group"
+	config.Location = "eastus"
+	config.VnetName = "vnet"
+	return config
+}
+
+func TestRuntimeStartWithoutDiscovery(t *testing.T) {
+	kubeClient := fake.NewSimpleClientset()
+	runtime := NewRuntime(validServiceGatewayConfig(), mock_azclient.NewMockClientFactory(gomock.NewController(t)), kubeClient)
+	recorder := record.NewFakeRecorder(1)
+	runtime.SetEventRecorder(recorder)
+
+	loadBalancer, supported := runtime.LoadBalancer()
+	assert.True(t, supported)
+	service := &v1.Service{}
+	service.UID = "service-uid"
+	service.Spec.Ports = []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}}
+
+	_, err := loadBalancer.EnsureLoadBalancer(context.Background(), "cluster", service, nil)
+	assert.EqualError(t, err, "ServiceGateway LoadBalancer is not initialized")
+
+	assert.NoError(t, runtime.StartWithoutDiscovery())
+	assert.NotNil(t, runtime.tracker)
+
+	_, err = loadBalancer.EnsureLoadBalancer(context.Background(), "cluster", service, nil)
+	assert.NoError(t, err)
+	assert.True(t, runtime.tracker.IsServiceTracked(difftracker.ServiceUID(service)))
+
+	assert.EqualError(t, runtime.StartWithoutDiscovery(), "ServiceGateway runtime is already started")
+}
+
+func TestRuntimeStartWithoutDiscoveryRejectsInvalidConfig(t *testing.T) {
+	kubeClient := fake.NewSimpleClientset()
+	runtime := NewRuntime(providerconfig.Config{ServiceGatewayEnabled: true}, nil, kubeClient)
+	runtime.SetEventRecorder(record.NewFakeRecorder(1))
+
+	err := runtime.StartWithoutDiscovery()
+	assert.ErrorContains(t, err, "initialize difftracker")
+	assert.Nil(t, runtime.tracker)
 }

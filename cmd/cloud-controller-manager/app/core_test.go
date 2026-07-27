@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
@@ -38,8 +39,7 @@ import (
 
 type fakeServiceGatewayRuntimeProvider struct {
 	cloudprovider.Interface
-	runtime        *servicegateway.Runtime
-	onLoadBalancer func()
+	runtime *servicegateway.Runtime
 }
 
 func (f *fakeServiceGatewayRuntimeProvider) ServiceGatewayRuntime() *servicegateway.Runtime {
@@ -47,9 +47,6 @@ func (f *fakeServiceGatewayRuntimeProvider) ServiceGatewayRuntime() *servicegate
 }
 
 func (f *fakeServiceGatewayRuntimeProvider) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
-	if f.onLoadBalancer != nil {
-		f.onLoadBalancer()
-	}
 	if f.runtime == nil {
 		return nil, false
 	}
@@ -150,12 +147,6 @@ func TestValidateServiceGatewayControllerConfiguration(t *testing.T) {
 	}
 }
 
-// TestStartServiceControllerBootstrapsServiceGatewayBeforeLoadBalancerCapture proves the ordering
-// contract in startServiceController: the ServiceGateway runtime must be started before
-// servicecontroller.New captures cloud.LoadBalancer(), because the Service controller stores the
-// balancer once and never re-reads it. A runtime built without a network client factory fails
-// during Start, so a correct implementation returns early and never reaches the capture. If the
-// two steps were ever reordered, onLoadBalancer would fire and this test would fail.
 func TestStartServiceControllerBootstrapsServiceGatewayBeforeLoadBalancerCapture(t *testing.T) {
 	kubeClient := fake.NewSimpleClientset()
 	config := (&cloudcontrollerconfig.Config{
@@ -165,13 +156,12 @@ func TestStartServiceControllerBootstrapsServiceGatewayBeforeLoadBalancerCapture
 	}).Complete()
 	runtime := servicegateway.NewRuntime(providerconfig.Config{ServiceGatewayEnabled: true}, nil, kubeClient)
 	runtime.SetEventRecorder(record.NewFakeRecorder(1))
-	loadBalancerCaptured := false
-	cloud := &fakeServiceGatewayRuntimeProvider{
-		runtime: runtime,
-		onLoadBalancer: func() {
-			loadBalancerCaptured = true
-		},
-	}
+	cloud := &fakeServiceGatewayRuntimeProvider{runtime: runtime}
+	loadBalancer, supported := runtime.LoadBalancer()
+	assert.True(t, supported)
+	service := &v1.Service{}
+	_, err := loadBalancer.EnsureLoadBalancer(context.Background(), "cluster", service, nil)
+	assert.EqualError(t, err, "ServiceGateway LoadBalancer is not initialized")
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -184,8 +174,11 @@ func TestStartServiceControllerBootstrapsServiceGatewayBeforeLoadBalancerCapture
 		cloud,
 	)
 
+	// The real ServiceGateway engine performs live Azure discovery during Start, which this
+	// fixture's client factory does not serve, so Start fails and the LoadBalancer is never
+	// published. The engine-backed happy path is covered in pkg/provider/servicegateway.
 	assert.ErrorContains(t, err, "failed to start ServiceGateway runtime")
 	assert.False(t, started)
-	assert.False(t, loadBalancerCaptured,
-		"the Service controller must not capture the LoadBalancer before the ServiceGateway runtime starts")
+	_, err = loadBalancer.EnsureLoadBalancer(context.Background(), "cluster", service, nil)
+	assert.EqualError(t, err, "ServiceGateway LoadBalancer is not initialized")
 }

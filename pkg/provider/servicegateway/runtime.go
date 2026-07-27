@@ -174,6 +174,52 @@ func (r *Runtime) Start(ctx context.Context, informerFactory informers.SharedInf
 	return nil
 }
 
+// StartWithoutDiscovery publishes an engine built from empty K8s and NRP state, skipping the
+// cluster and Azure discovery that Start performs. It gives callers a usable ServiceGateway
+// LoadBalancer without live Azure dependencies, which Start cannot provide because it builds the
+// engine from state discovered in NRP.
+func (r *Runtime) StartWithoutDiscovery() error {
+	if r == nil || r.loadBalancer == nil {
+		return fmt.Errorf("ServiceGateway runtime is not configured")
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.tracker != nil {
+		return fmt.Errorf("ServiceGateway runtime is already started")
+	}
+
+	tracker, err := difftracker.New(
+		log.Background(),
+		difftracker.K8sState{
+			Services: utilsets.NewString(),
+			Egresses: utilsets.NewString(),
+			Nodes:    make(map[string]difftracker.Node),
+		},
+		difftracker.NRPState{
+			LoadBalancers: utilsets.NewString(),
+			NATGateways:   utilsets.NewString(),
+			Locations:     make(map[string]difftracker.NRPLocation),
+		},
+		r.config,
+		r.networkClientFactory,
+		r.kubeClient,
+	)
+	if err != nil {
+		return fmt.Errorf("initialize difftracker: %w", err)
+	}
+	if r.eventRecorder != nil {
+		tracker.SetEventRecorder(r.eventRecorder)
+	}
+	if err := r.loadBalancer.SetTracker(tracker); err != nil {
+		return fmt.Errorf("initialize ServiceGateway LoadBalancer: %w", err)
+	}
+
+	r.tracker = tracker
+	return nil
+}
+
 // LoadBalancer returns the ServiceGateway LoadBalancer when enabled.
 func (r *Runtime) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 	if r == nil || !r.enabled || r.loadBalancer == nil {
