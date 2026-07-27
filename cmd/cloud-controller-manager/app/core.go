@@ -27,7 +27,6 @@ import (
 	"strings"
 
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
-	"k8s.io/client-go/informers"
 	cloudprovider "k8s.io/cloud-provider"
 	nodecontroller "k8s.io/cloud-provider/controllers/node"
 	nodelifecyclecontroller "k8s.io/cloud-provider/controllers/nodelifecycle"
@@ -48,10 +47,6 @@ import (
 
 type serviceGatewayRuntimeProvider interface {
 	ServiceGatewayRuntime() *servicegateway.Runtime
-}
-
-var startServiceGatewayRuntime = func(ctx context.Context, runtime *servicegateway.Runtime, informerFactory informers.SharedInformerFactory) error {
-	return runtime.Start(ctx, informerFactory)
 }
 
 func startCloudNodeController(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface) (http.Handler, bool, error) {
@@ -99,7 +94,7 @@ func startServiceController(ctx context.Context, controllerContext genericcontro
 	if runtimeProvider, ok := cloud.(serviceGatewayRuntimeProvider); ok {
 		runtime := runtimeProvider.ServiceGatewayRuntime()
 		if runtime != nil && runtime.Enabled() {
-			if err := startServiceGatewayRuntime(ctx, runtime, completedConfig.SharedInformers); err != nil {
+			if err := runtime.Start(ctx, completedConfig.SharedInformers); err != nil {
 				return nil, false, fmt.Errorf("failed to start ServiceGateway runtime: %w", err)
 			}
 		}

@@ -150,12 +150,13 @@ func TestValidateServiceGatewayControllerConfiguration(t *testing.T) {
 	}
 }
 
+// TestStartServiceControllerBootstrapsServiceGatewayBeforeLoadBalancerCapture proves the ordering
+// contract in startServiceController: the ServiceGateway runtime must be started before
+// servicecontroller.New captures cloud.LoadBalancer(), because the Service controller stores the
+// balancer once and never re-reads it. A runtime built without a network client factory fails
+// during Start, so a correct implementation returns early and never reaches the capture. If the
+// two steps were ever reordered, onLoadBalancer would fire and this test would fail.
 func TestStartServiceControllerBootstrapsServiceGatewayBeforeLoadBalancerCapture(t *testing.T) {
-	originalStartRuntime := startServiceGatewayRuntime
-	t.Cleanup(func() {
-		startServiceGatewayRuntime = originalStartRuntime
-	})
-
 	kubeClient := fake.NewSimpleClientset()
 	config := (&cloudcontrollerconfig.Config{
 		LoopbackClientConfig: &rest.Config{},
@@ -164,15 +165,11 @@ func TestStartServiceControllerBootstrapsServiceGatewayBeforeLoadBalancerCapture
 	}).Complete()
 	runtime := servicegateway.NewRuntime(providerconfig.Config{ServiceGatewayEnabled: true}, nil, kubeClient)
 	runtime.SetEventRecorder(record.NewFakeRecorder(1))
-	runtimeStarted := false
-	startServiceGatewayRuntime = func(context.Context, *servicegateway.Runtime, informers.SharedInformerFactory) error {
-		runtimeStarted = true
-		return nil
-	}
+	loadBalancerCaptured := false
 	cloud := &fakeServiceGatewayRuntimeProvider{
 		runtime: runtime,
 		onLoadBalancer: func() {
-			assert.True(t, runtimeStarted, "ServiceGateway runtime must start before the Service controller captures the LoadBalancer")
+			loadBalancerCaptured = true
 		},
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -187,7 +184,8 @@ func TestStartServiceControllerBootstrapsServiceGatewayBeforeLoadBalancerCapture
 		cloud,
 	)
 
-	assert.NoError(t, err)
-	assert.True(t, started)
-	assert.True(t, runtimeStarted)
+	assert.ErrorContains(t, err, "failed to start ServiceGateway runtime")
+	assert.False(t, started)
+	assert.False(t, loadBalancerCaptured,
+		"the Service controller must not capture the LoadBalancer before the ServiceGateway runtime starts")
 }

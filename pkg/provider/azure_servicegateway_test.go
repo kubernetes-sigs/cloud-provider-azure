@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package provider
 
 import (
@@ -12,31 +28,24 @@ import (
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
+// newProviderDiffTracker builds a real engine with empty state from a test Cloud's Azure
+// configuration. Provider tests use it to inject a ready tracker instead of calling
+// Runtime.Start, which performs live Azure discovery.
 func newProviderDiffTracker(t *testing.T, az *Cloud, kubeClient kubernetes.Interface) *difftracker.DiffTracker {
-	t.Helper()
-
-	return seededProviderDiffTracker(t, az, kubeClient, difftracker.K8sState{
-		Services: utilsets.NewString(),
-		Egresses: utilsets.NewString(),
-		Nodes:    make(map[string]difftracker.Node),
-	}, difftracker.NRPState{
-		LoadBalancers: utilsets.NewString(),
-		NATGateways:   utilsets.NewString(),
-		Locations:     make(map[string]difftracker.NRPLocation),
-	})
-}
-
-// seededProviderDiffTracker builds a real engine pre-seeded with the given K8s and NRP state, so a
-// test can start from live egress pods (New seeds the outbound ref-counter from k8s.Nodes) rather
-// than driving the full create lifecycle. Used to exercise the informer's delete/drain paths against
-// an engine that already tracks the pods.
-func seededProviderDiffTracker(t *testing.T, az *Cloud, kubeClient kubernetes.Interface, k8s difftracker.K8sState, nrp difftracker.NRPState) *difftracker.DiffTracker {
 	t.Helper()
 
 	dt, err := difftracker.New(
 		log.Noop(),
-		k8s,
-		nrp,
+		difftracker.K8sState{
+			Services: utilsets.NewString(),
+			Egresses: utilsets.NewString(),
+			Nodes:    make(map[string]difftracker.Node),
+		},
+		difftracker.NRPState{
+			LoadBalancers: utilsets.NewString(),
+			NATGateways:   utilsets.NewString(),
+			Locations:     make(map[string]difftracker.NRPLocation),
+		},
 		difftracker.Config{
 			SubscriptionID:                az.SubscriptionID,
 			NetworkResourceSubscriptionID: az.getNetworkResourceSubscriptionID(),

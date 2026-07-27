@@ -114,7 +114,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			testutil.ExpectEqualInJSON(t, azureFx.SecurityGroup().Build(), sg)
 		})
 
-		t.Run("add Internet allow rules if allow all", func(t *testing.T) {
+		t.Run("do not add Internet allow rules if allow all", func(t *testing.T) {
 			var (
 				ctrl                    = gomock.NewController(t)
 				az                      = GetTestCloud(ctrl)
@@ -258,7 +258,6 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
-
 	})
 
 	t.Run("public Load Balancer", func(t *testing.T) {
@@ -901,7 +900,6 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
-
 	})
 
 	t.Run("skip - when rules are up-to-date", func(t *testing.T) {
@@ -1435,7 +1433,6 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
-
 	})
 
 	t.Run("update rules - add to related rules", func(t *testing.T) {
