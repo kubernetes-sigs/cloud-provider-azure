@@ -44,7 +44,9 @@ type Config struct {
 	// Virtual Network name (required for backend pool configuration)
 	VNetName string
 
-	// Virtual Network resource group
+	// Resource group that contains the Virtual Network. Optional: when empty, the VNet is
+	// assumed to live in ResourceGroup (the common case). Set this for BYO-VNet clusters whose
+	// VNet is in a separate resource group (mirrors the cloud config's vnetResourceGroup).
 	VNetResourceGroup string
 }
 
@@ -53,6 +55,17 @@ func (c *Config) networkResourceSubscriptionID() string {
 		return c.NetworkResourceSubscriptionID
 	}
 	return c.SubscriptionID
+}
+
+// VNetResourceGroupOrDefault returns the resource group that contains the Virtual Network,
+// falling back to ResourceGroup when VNetResourceGroup is unset. This mirrors how the rest of
+// the cloud provider resolves the VNet resource group (see azure_loadbalancer.go), and keeps
+// callers from building resource IDs with an empty resource group segment.
+func (c *Config) VNetResourceGroupOrDefault() string {
+	if c.VNetResourceGroup != "" {
+		return c.VNetResourceGroup
+	}
+	return c.ResourceGroup
 }
 
 // Validate checks if the configuration has all required fields
