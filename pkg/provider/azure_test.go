@@ -2473,10 +2473,8 @@ func TestInitializePublishesServiceGatewayDependencies(t *testing.T) {
 	_, err := loadBalancer.EnsureLoadBalancer(context.Background(), testClusterName, &service, nil)
 	assert.EqualError(t, err, "ServiceGateway LoadBalancer is not initialized")
 
-	informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	assert.NoError(t, runtime.Start(ctx, informerFactory))
+	// Start performs live Azure discovery, which this fixture's client factory does not serve.
+	assert.NoError(t, runtime.StartWithoutDiscovery())
 
 	_, err = loadBalancer.EnsureLoadBalancer(context.Background(), testClusterName, &service, nil)
 	assert.NoError(t, err)
