@@ -54,7 +54,7 @@ func TestConvertServiceDTOsToServiceRequests_OutboundRemovalHasNoNatGatewayID(t 
 func TestConvertServiceDTOsToServiceRequests_OutboundAddHasNatGatewayID(t *testing.T) {
 	natID := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/natGateways/egr1"
 	reqs, err := convertServiceDTOsToServiceRequests([]ServiceDTO{
-		{Service: "egr1", ServiceType: Outbound, PublicNatGateway: NatGatewayDTO{Id: natID}},
+		{Service: "egr1", ServiceType: Outbound, PublicNatGateway: NatGatewayDTO{ID: natID}},
 	}, Config{SubscriptionID: "sub", ResourceGroup: "rg", VNetName: "vnet"})
 	assert.NoError(t, err)
 	assert.Len(t, reqs, 1)
@@ -151,7 +151,7 @@ func TestConvertServiceDTOsToServiceRequests_VNetResourceGroup(t *testing.T) {
 		Service:     "svc",
 		ServiceType: Inbound,
 		LoadBalancerBackendPools: []LoadBalancerBackendPoolDTO{
-			{Id: "/subscriptions/sub/resourceGroups/cluster-rg/providers/Microsoft.Network/loadBalancers/svc/backendAddressPools/svc"},
+			{ID: "/subscriptions/sub/resourceGroups/cluster-rg/providers/Microsoft.Network/loadBalancers/svc/backendAddressPools/svc"},
 		},
 	}}
 	vnetID := func(c Config) string {

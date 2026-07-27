@@ -432,7 +432,7 @@ func MapLocationDataToDTO(locationData LocationData) LocationsDataDTO {
 	return LocationsDataDTO
 }
 
-func RemoveBackendPoolReferenceFromServicesDTO(loadBalancerUpdates SyncServicesReturnType, subscriptionID string, resourceGroup string) ServicesDataDTO {
+func RemoveBackendPoolReferenceFromServicesDTO(loadBalancerUpdates SyncServicesReturnType, _ string, _ string) ServicesDataDTO {
 	var ServicesDataDTO ServicesDataDTO
 	ServicesDataDTO.Action = PartialUpdate
 	ServicesDataDTO.Services = []ServiceDTO{}
@@ -457,7 +457,7 @@ func MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(loadBalancerUpdates Sy
 			ServiceType: Inbound,
 			LoadBalancerBackendPools: []LoadBalancerBackendPoolDTO{
 				{
-					Id: fmt.Sprintf(
+					ID: fmt.Sprintf(
 						consts.BackendPoolIDTemplate,
 						subscriptionID,
 						resourceGroup,
@@ -482,7 +482,7 @@ func MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(loadBalancerUpdates Sy
 			Service:     service,
 			ServiceType: Outbound,
 			PublicNatGateway: NatGatewayDTO{
-				Id: fmt.Sprintf(
+				ID: fmt.Sprintf(
 					consts.NatGatewayIDTemplate,
 					subscriptionID,
 					resourceGroup,

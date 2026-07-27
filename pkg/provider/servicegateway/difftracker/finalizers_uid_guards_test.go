@@ -32,7 +32,7 @@ func newFinalizerPod(name, uid string, hasFinalizer bool) *v1.Pod {
 		},
 	}
 	if hasFinalizer {
-		p.ObjectMeta.Finalizers = []string{ServiceGatewayPodCleanupFinalizer}
+		p.Finalizers = []string{ServiceGatewayPodCleanupFinalizer}
 	}
 	return p
 }
@@ -70,7 +70,7 @@ func TestGuardPendingPodDeletion_DoesNotStripReplacementPodFinalizer(t *testing.
 
 	got, err := kube.CoreV1().Pods("default").Get(context.Background(), "foo", metav1.GetOptions{})
 	assert.NoError(t, err)
-	assert.Contains(t, got.ObjectMeta.Finalizers, ServiceGatewayPodCleanupFinalizer,
+	assert.Contains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
 		"replacement pod (different UID) must NOT have its finalizer stripped by predecessor's PendingPodDeletion")
 }
 
@@ -92,11 +92,11 @@ func TestGuardLastPodFinalizer_DoesNotStripReplacementPod(t *testing.T) {
 		IsLastPod:  true,
 	}
 
-	dt.RemoveLastPodFinalizers(context.Background(), euid)
+	assert.NoError(t, dt.RemoveLastPodFinalizers(context.Background(), euid))
 
 	got, err := kube.CoreV1().Pods("default").Get(context.Background(), "foo", metav1.GetOptions{})
 	assert.NoError(t, err)
-	assert.Contains(t, got.ObjectMeta.Finalizers, ServiceGatewayPodCleanupFinalizer,
+	assert.Contains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
 		"replacement pod (different UID) must NOT have its finalizer stripped by predecessor's last-pod entry")
 }
 
@@ -118,11 +118,11 @@ func TestGuardFinalizers_PositiveStripRemovesFinalizer(t *testing.T) {
 		IsLastPod:  true,
 	}
 
-	dt.RemoveLastPodFinalizers(context.Background(), euid)
+	assert.NoError(t, dt.RemoveLastPodFinalizers(context.Background(), euid))
 
 	got, err := kube.CoreV1().Pods("default").Get(context.Background(), "foo", metav1.GetOptions{})
 	assert.NoError(t, err)
-	assert.NotContains(t, got.ObjectMeta.Finalizers, ServiceGatewayPodCleanupFinalizer,
+	assert.NotContains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
 		"happy-path: pod that matches the entry must have its finalizer stripped")
 	// And the entry must be cleared from the map.
 	_, stillPending := dt.pendingPodDeletions["default/foo"]

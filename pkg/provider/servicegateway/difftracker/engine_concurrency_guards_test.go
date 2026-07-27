@@ -85,7 +85,7 @@ func TestGuardConcurrency_PublicMethodStorm(t *testing.T) {
 		uid := fmt.Sprintf("svc-%d", u%uids)
 		dt.DeleteService(uid, true, false)
 	})
-	launch(func(u int) {
+	launch(func(_ int) {
 		dt.CheckPendingServiceDeletions()
 	})
 	launch(func(u int) {

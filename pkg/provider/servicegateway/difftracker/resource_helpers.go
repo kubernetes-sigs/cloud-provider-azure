@@ -254,7 +254,7 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 
 // buildOutboundServiceResources constructs the PIP, NAT Gateway, and ServicesDTO for an outbound service
 // Returns the resources ready to be created via createOrUpdatePIP/createOrUpdateNatGateway/updateNRPSGWServices
-func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dtConfig Config) (
+func buildOutboundServiceResources(serviceUID string, _ *OutboundConfig, dtConfig Config) (
 	pip armnetwork.PublicIPAddress,
 	natGateway armnetwork.NatGateway,
 	servicesDTO ServicesDataDTO,

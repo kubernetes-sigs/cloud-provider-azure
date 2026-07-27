@@ -338,7 +338,7 @@ func TestBuildInboundServiceResources_WithConfig(t *testing.T) {
 
 	// Verify ServicesDTO
 	assert.Len(t, servicesDTO.Services, 1)
-	assert.Contains(t, servicesDTO.Services[0].LoadBalancerBackendPools[0].Id, "/subscriptions/network-sub/")
+	assert.Contains(t, servicesDTO.Services[0].LoadBalancerBackendPools[0].ID, "/subscriptions/network-sub/")
 	assert.Contains(t, servicesDTO.Services[0].Service, "service-uid-123")
 	assert.Equal(t, Inbound, servicesDTO.Services[0].ServiceType)
 }
@@ -435,7 +435,7 @@ func TestBuildOutboundServiceResources_Basic(t *testing.T) {
 
 	// Verify ServicesDTO
 	assert.Len(t, servicesDTO.Services, 1)
-	assert.Contains(t, servicesDTO.Services[0].PublicNatGateway.Id, "/subscriptions/network-sub/")
+	assert.Contains(t, servicesDTO.Services[0].PublicNatGateway.ID, "/subscriptions/network-sub/")
 	assert.Contains(t, servicesDTO.Services[0].Service, "egress-uid-456")
 	assert.Equal(t, Outbound, servicesDTO.Services[0].ServiceType)
 }

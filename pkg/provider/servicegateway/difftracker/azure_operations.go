@@ -464,7 +464,7 @@ func convertServiceDTOsToServiceRequests(services []ServiceDTO, config Config) (
 		// Build backend pools with full details
 		loadBalancerBackendPools := make([]*armnetwork.BackendAddressPool, len(svc.LoadBalancerBackendPools))
 		for i := range svc.LoadBalancerBackendPools {
-			backendPoolResourceID := svc.LoadBalancerBackendPools[i].Id
+			backendPoolResourceID := svc.LoadBalancerBackendPools[i].ID
 			backendPoolName := extractResourceChildName(backendPoolResourceID, "backendAddressPools")
 			loadBalancerBackendPools[i] = &armnetwork.BackendAddressPool{
 				ID:   &backendPoolResourceID,
@@ -486,8 +486,8 @@ func convertServiceDTOsToServiceRequests(services []ServiceDTO, config Config) (
 			publicNatGatewayID = nil
 		case Outbound:
 			serviceType = armnetwork.ServiceTypeOutbound
-			if !svc.IsDelete && svc.PublicNatGateway.Id != "" {
-				natID := svc.PublicNatGateway.Id
+			if !svc.IsDelete && svc.PublicNatGateway.ID != "" {
+				natID := svc.PublicNatGateway.ID
 				publicNatGatewayID = &natID
 			}
 		default:

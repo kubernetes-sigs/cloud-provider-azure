@@ -248,8 +248,9 @@ func computeRetryBackoff(attempt int) time.Duration {
 	if delay <= 0 || delay > locationsRetryMaxDelay {
 		delay = locationsRetryMaxDelay
 	}
-	// Add up to ~20% jitter to avoid synchronized retries across controllers.
-	delay += time.Duration(rand.Int63n(int64(delay)/5 + 1))
+	// Add up to ~20% jitter to avoid synchronized retries across controllers. Retry spacing is
+	// not a security boundary, so a non-cryptographic source is appropriate here.
+	delay += time.Duration(rand.Int63n(int64(delay)/5 + 1)) //nolint:gosec // G404: jitter only
 	return delay
 }
 

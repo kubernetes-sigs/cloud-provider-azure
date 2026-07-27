@@ -35,6 +35,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	servicehelper "k8s.io/cloud-provider/service/helpers"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
@@ -383,7 +384,7 @@ func TestParkedDelete_SkippedDuringCooldown(t *testing.T) {
 	// removeServiceGatewayFinalizer was never invoked).
 	got, err := kube.CoreV1().Services("default").Get(context.Background(), "svc", metav1.GetOptions{})
 	assert.NoError(t, err)
-	assert.Contains(t, got.ObjectMeta.Finalizers, ServiceGatewayServiceCleanupFinalizer,
+	assert.Contains(t, got.Finalizers, ServiceGatewayServiceCleanupFinalizer,
 		"parked delete: SGW cleanup finalizer must NOT have been removed (no worker dispatched)")
 }
 

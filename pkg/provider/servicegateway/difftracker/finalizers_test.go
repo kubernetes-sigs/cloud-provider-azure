@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	ktesting "k8s.io/client-go/testing"
+
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -1030,7 +1031,7 @@ func TestCheckPendingPodDeletions(t *testing.T) {
 		assert.Empty(t, dt.pendingPodDeletions)
 	})
 
-	t.Run("handles empty pending deletions", func(t *testing.T) {
+	t.Run("handles empty pending deletions", func(_ *testing.T) {
 		kubeClient := fake.NewSimpleClientset()
 		dt := &DiffTracker{
 			kubeClient:          kubeClient,
@@ -1496,6 +1497,6 @@ func TestAddPodPreservesFinalizerOnEgressIdentityChange(t *testing.T) {
 	dt.CheckPendingPodDeletions(context.Background())
 	got, err := kube.CoreV1().Pods("default").Get(context.Background(), "foo", metav1.GetOptions{})
 	assert.NoError(t, err)
-	assert.Contains(t, got.ObjectMeta.Finalizers, ServiceGatewayPodCleanupFinalizer,
+	assert.Contains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
 		"a live pod under a new egress identity must retain its cleanup finalizer")
 }

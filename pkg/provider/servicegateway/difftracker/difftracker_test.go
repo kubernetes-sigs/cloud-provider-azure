@@ -12,37 +12,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
-func createTestDiffTracker() *DiffTracker {
-	return &DiffTracker{
-		K8sResources: K8sState{
-			Services: sets.NewString(),
-			Egresses: sets.NewString(),
-			Nodes: map[string]Node{
-				"node1": {
-					Pods: map[string]Pod{
-						"10.0.0.1": {
-							InboundIdentities:      sets.NewString("existingService"),
-							PublicOutboundIdentity: "existingPublicOutboundIdentity",
-						},
-					},
-				},
-			},
-		},
-		NRPResources: NRPState{
-			LoadBalancers: sets.NewString(),
-			NATGateways:   sets.NewString(),
-			Locations: map[string]NRPLocation{
-				"node1": {
-					Addresses: map[string]NRPAddress{
-						"10.0.0.1": {
-							Services: sets.NewString("existingService", "existingPublicOutboundIdentity"),
-						},
-					},
-				},
-			},
-		},
-	}
-}
 func TestInitializeDiffTracker(t *testing.T) {
 	K8sResources := K8sState{
 		Services: sets.NewString("Service0", "Service1", "Service2"),

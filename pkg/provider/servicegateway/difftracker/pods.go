@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 

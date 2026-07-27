@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 

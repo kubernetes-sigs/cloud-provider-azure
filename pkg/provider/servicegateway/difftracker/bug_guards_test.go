@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	clienttesting "k8s.io/client-go/testing"
+
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 

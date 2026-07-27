@@ -237,12 +237,7 @@ func (c *ServiceConfig) Validate() error {
 	if c.UID == "" {
 		return ErrServiceUIDEmpty
 	}
-	if c.IsInbound && c.InboundConfig == nil {
-		// Allow nil InboundConfig - will use defaults
-	}
-	if !c.IsInbound && c.OutboundConfig == nil {
-		// Allow nil OutboundConfig - will use defaults
-	}
+	// A nil InboundConfig or OutboundConfig is allowed; defaults are applied downstream.
 	return nil
 }
 
@@ -571,11 +566,11 @@ const (
 )
 
 type LoadBalancerBackendPoolDTO struct {
-	Id string `json:"Id"`
+	ID string `json:"Id"`
 }
 
 type NatGatewayDTO struct {
-	Id string `json:"Id"`
+	ID string `json:"Id"`
 }
 
 type ServiceDTO struct {

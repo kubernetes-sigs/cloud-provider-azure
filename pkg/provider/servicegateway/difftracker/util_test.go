@@ -7,12 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
-)
 
-var (
-	subscriptionID    = "test-subscription-id"
-	resourceGroupName = "test-resource-group-name"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 // TestOperationStringAndJSON tests Operation String() and MarshalJSON()

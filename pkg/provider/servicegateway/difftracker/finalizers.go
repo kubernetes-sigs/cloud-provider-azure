@@ -90,7 +90,7 @@ var ErrServiceGoneOrReplaced = errors.New("service gone or replaced by a same-na
 
 // hasServiceGatewayFinalizer checks if service has the ServiceGateway cleanup finalizer
 func hasServiceGatewayFinalizer(service *v1.Service) bool {
-	return hasFinalizer(service.ObjectMeta.Finalizers, ServiceGatewayServiceCleanupFinalizer)
+	return hasFinalizer(service.Finalizers, ServiceGatewayServiceCleanupFinalizer)
 }
 
 // addServiceGatewayFinalizer adds the ServiceGateway cleanup finalizer to the service
@@ -134,7 +134,7 @@ func (dt *DiffTracker) addServiceGatewayFinalizer(ctx context.Context, service *
 		// Make a copy so we don't mutate the shared informer cache
 		updated := currentSvc.DeepCopy()
 		if !hasServiceGatewayFinalizer(currentSvc) {
-			updated.ObjectMeta.Finalizers = append(updated.ObjectMeta.Finalizers, ServiceGatewayServiceCleanupFinalizer)
+			updated.Finalizers = append(updated.Finalizers, ServiceGatewayServiceCleanupFinalizer)
 		}
 
 		// Also add the K8s LoadBalancerCleanupFinalizer if not present.
@@ -143,7 +143,7 @@ func (dt *DiffTracker) addServiceGatewayFinalizer(ctx context.Context, service *
 		// Without this finalizer, the controller tries to add it (which fails since
 		// the service is being deleted), and never calls EnsureLoadBalancerDeleted.
 		if !servicehelper.HasLBFinalizer(currentSvc) {
-			updated.ObjectMeta.Finalizers = append(updated.ObjectMeta.Finalizers, servicehelper.LoadBalancerCleanupFinalizer)
+			updated.Finalizers = append(updated.Finalizers, servicehelper.LoadBalancerCleanupFinalizer)
 		}
 
 		dt.logger.V(5).Info("Adding ServiceGateway finalizer to service", "namespace", namespace, "name", name)
@@ -160,7 +160,7 @@ func (dt *DiffTracker) addServiceGatewayFinalizer(ctx context.Context, service *
 	})
 
 	if retryErr != nil {
-		return fmt.Errorf("failed to add finalizer after retries: %v (last error: %v)", retryErr, lastErr)
+		return fmt.Errorf("failed to add finalizer after retries: %w (last error: %w)", retryErr, lastErr)
 	}
 	if goneOrReplaced {
 		return ErrServiceGoneOrReplaced
@@ -204,9 +204,9 @@ func (dt *DiffTracker) removeServiceGatewayFinalizer(ctx context.Context, servic
 
 		// Make a copy so we don't mutate the shared informer cache
 		updated := currentSvc.DeepCopy()
-		updated.ObjectMeta.Finalizers = removeFinalizerString(updated.ObjectMeta.Finalizers, ServiceGatewayServiceCleanupFinalizer)
+		updated.Finalizers = removeFinalizerString(updated.Finalizers, ServiceGatewayServiceCleanupFinalizer)
 		// Also remove the K8s LoadBalancerCleanupFinalizer that we added
-		updated.ObjectMeta.Finalizers = removeFinalizerString(updated.ObjectMeta.Finalizers, servicehelper.LoadBalancerCleanupFinalizer)
+		updated.Finalizers = removeFinalizerString(updated.Finalizers, servicehelper.LoadBalancerCleanupFinalizer)
 
 		dt.logger.V(5).Info("Removing ServiceGateway finalizer from service", "namespace", namespace, "name", name)
 		// Update carries the fresh object's resourceVersion, so a concurrent same-name
@@ -222,7 +222,7 @@ func (dt *DiffTracker) removeServiceGatewayFinalizer(ctx context.Context, servic
 	})
 
 	if retryErr != nil {
-		return fmt.Errorf("failed to remove finalizer after retries: %v (last error: %v)", retryErr, lastErr)
+		return fmt.Errorf("failed to remove finalizer after retries: %w (last error: %w)", retryErr, lastErr)
 	}
 	return nil
 }
@@ -234,7 +234,7 @@ func (dt *DiffTracker) removeServiceGatewayFinalizer(ctx context.Context, servic
 // HasPodFinalizer checks if pod has the ServiceGateway pod cleanup finalizer.
 // This is exported for use by provider layer to check pod state during recovery.
 func HasPodFinalizer(pod *v1.Pod) bool {
-	return hasFinalizer(pod.ObjectMeta.Finalizers, ServiceGatewayPodCleanupFinalizer)
+	return hasFinalizer(pod.Finalizers, ServiceGatewayPodCleanupFinalizer)
 }
 
 // hasPodFinalizer is an alias for internal use
@@ -300,7 +300,7 @@ func (dt *DiffTracker) AddPodFinalizer(ctx context.Context, pod *v1.Pod) error {
 
 		// Make a copy so we don't mutate the shared informer cache
 		updated := currentPod.DeepCopy()
-		updated.ObjectMeta.Finalizers = append(updated.ObjectMeta.Finalizers, ServiceGatewayPodCleanupFinalizer)
+		updated.Finalizers = append(updated.Finalizers, ServiceGatewayPodCleanupFinalizer)
 
 		dt.logger.V(5).Info("Adding ServiceGateway pod finalizer to pod", "namespace", namespace, "name", name)
 		if _, err = dt.kubeClient.CoreV1().Pods(namespace).Update(ctx, updated, metav1.UpdateOptions{}); err != nil {
@@ -313,7 +313,7 @@ func (dt *DiffTracker) AddPodFinalizer(ctx context.Context, pod *v1.Pod) error {
 	})
 
 	if retryErr != nil {
-		return fmt.Errorf("failed to add pod finalizer after retries: %v (last error: %v)", retryErr, lastErr)
+		return fmt.Errorf("failed to add pod finalizer after retries: %w (last error: %w)", retryErr, lastErr)
 	}
 	if goneOrReplaced {
 		return ErrPodGoneOrReplaced
@@ -360,7 +360,7 @@ func (dt *DiffTracker) removePodFinalizer(ctx context.Context, pod *v1.Pod) erro
 
 		// Make a copy so we don't mutate the cache
 		updated := currentPod.DeepCopy()
-		updated.ObjectMeta.Finalizers = removeFinalizerString(updated.ObjectMeta.Finalizers, ServiceGatewayPodCleanupFinalizer)
+		updated.Finalizers = removeFinalizerString(updated.Finalizers, ServiceGatewayPodCleanupFinalizer)
 
 		dt.logger.V(5).Info("Removing ServiceGateway pod finalizer from pod", "namespace", namespace, "name", name)
 		_, err = dt.kubeClient.CoreV1().Pods(namespace).Update(ctx, updated, metav1.UpdateOptions{})
@@ -422,7 +422,7 @@ func (dt *DiffTracker) CheckPendingPodDeletions(ctx context.Context) (readyRemov
 
 	if len(dt.pendingPodDeletions) == 0 {
 		dt.mu.Unlock()
-		return
+		return readyRemovalPending
 	}
 
 	dt.logger.V(5).Info("Checking pending pod deletions", "count", len(dt.pendingPodDeletions))
@@ -470,7 +470,7 @@ func (dt *DiffTracker) CheckPendingPodDeletions(ctx context.Context) (readyRemov
 	dt.mu.Unlock()
 
 	if len(toProcess) == 0 {
-		return
+		return readyRemovalPending
 	}
 
 	// Phase 2: Remove finalizers without holding lock (API calls)

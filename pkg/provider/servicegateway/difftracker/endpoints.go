@@ -32,7 +32,7 @@ func serviceUIDOfEndpointSlice(es *discovery_v1.EndpointSlice) (uid string, load
 	if es == nil {
 		return "", false
 	}
-	for _, owner := range es.ObjectMeta.OwnerReferences {
+	for _, owner := range es.OwnerReferences {
 		if owner.Kind == "Service" {
 			return string(owner.UID), true
 		}

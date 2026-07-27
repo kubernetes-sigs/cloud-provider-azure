@@ -1332,17 +1332,6 @@ func NodeLocationForAddress(byFamily map[bool]string, address string) (string, b
 // parseLocationAddresses parses addresses from a location DTO
 // Note: This expects the same location type returned by sgwClient.GetAddressLocations
 func parseLocationAddresses(location interface{}) map[string]NRPAddress {
-	// Type definition matching the actual DTO structure from ServiceGateway API
-	// This should match the type returned by sgwClient.GetAddressLocations
-	type AddressDTO struct {
-		Address  *string
-		Services []*string
-	}
-	type LocationDTO struct {
-		AddressLocation *string
-		Addresses       []*AddressDTO
-	}
-
 	// Use reflection to access fields since we don't know the exact concrete type
 	// The caller passes the location object from the API response
 	v := reflect.ValueOf(location)
