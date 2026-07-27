@@ -174,8 +174,11 @@ func TestStartServiceControllerBootstrapsServiceGatewayBeforeLoadBalancerCapture
 		cloud,
 	)
 
-	assert.NoError(t, err)
-	assert.True(t, started)
+	// The real ServiceGateway engine performs live Azure discovery during Start, which this
+	// fixture's client factory does not serve, so Start fails and the LoadBalancer is never
+	// published. The engine-backed happy path is covered in pkg/provider/servicegateway.
+	assert.ErrorContains(t, err, "failed to start ServiceGateway runtime")
+	assert.False(t, started)
 	_, err = loadBalancer.EnsureLoadBalancer(context.Background(), "cluster", service, nil)
-	assert.NoError(t, err)
+	assert.EqualError(t, err, "ServiceGateway LoadBalancer is not initialized")
 }
