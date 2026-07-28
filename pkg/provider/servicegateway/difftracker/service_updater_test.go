@@ -19,10 +19,12 @@ package difftracker
 import (
 	"context"
 	"errors"
+	"net/http"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
@@ -36,6 +38,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/natgatewayclient/mock_natgatewayclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient/mock_servicegatewayclient"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -564,5 +567,234 @@ func TestCreateInboundServiceClearsBuffersWhenServiceGone(t *testing.T) {
 	}
 	if _, ok := dt.pendingPods[uid]; ok {
 		t.Fatalf("aborted create must drop buffered pods")
+	}
+}
+
+// ---------------------------------------------------------------------------------------------
+// Outbound (egress) lifecycle.
+//
+// deleteOutboundService is the most destructive operation in the feature: it disassociates the NAT
+// Gateway from the ServiceGateway, unregisters it from NRP, deletes the NAT Gateway and its Public
+// IP, and only then releases the last-pod finalizers holding egress pods - and therefore node
+// drains and namespace deletions - open. Every failing step must report failure and retain NRP
+// state so the operation is retried instead of leaking the Azure resource.
+// ---------------------------------------------------------------------------------------------
+
+// outboundMocks bundles the clients deleteOutboundService/createOutboundService drive.
+type outboundMocks struct {
+	factory *mock_azclient.MockClientFactory
+	sgw     *mock_servicegatewayclient.MockInterface
+	nat     *mock_natgatewayclient.MockInterface
+	pip     *mock_publicipaddressclient.MockInterface
+}
+
+func newOutboundMocks(ctrl *gomock.Controller) *outboundMocks {
+	m := &outboundMocks{
+		factory: mock_azclient.NewMockClientFactory(ctrl),
+		sgw:     mock_servicegatewayclient.NewMockInterface(ctrl),
+		nat:     mock_natgatewayclient.NewMockInterface(ctrl),
+		pip:     mock_publicipaddressclient.NewMockInterface(ctrl),
+	}
+	m.factory.EXPECT().GetServiceGatewayClient().Return(m.sgw).AnyTimes()
+	m.factory.EXPECT().GetNatGatewayClient().Return(m.nat).AnyTimes()
+	m.factory.EXPECT().GetPublicIPAddressClient().Return(m.pip).AnyTimes()
+	return m
+}
+
+// expectNoDisassociation makes Step 1 of deleteOutboundService a clean no-op: the ServiceGateway
+// reports no matching service and the NAT Gateway is already gone.
+func (m *outboundMocks) expectNoDisassociation() {
+	m.sgw.EXPECT().GetServices(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return([]*armnetwork.ServiceGatewayService{}, nil).AnyTimes()
+	m.nat.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil, notFoundError()).AnyTimes()
+}
+
+func newOutboundDiffTracker(uid string, m *outboundMocks, kube *fake.Clientset) *DiffTracker {
+	dt := newTestDiffTracker()
+	dt.config = testConfig()
+	dt.networkClientFactory = m.factory
+	if kube != nil {
+		dt.kubeClient = kube
+	}
+	dt.NRPResources.NATGateways = utilsets.NewString(uid)
+	dt.pendingServiceOps[uid] = &ServiceOperationState{
+		ServiceUID: uid, Config: NewOutboundServiceConfig(uid, nil), State: StateDeletionInProgress,
+	}
+	return dt
+}
+
+type outboundCompletion struct {
+	called  bool
+	success bool
+	err     error
+}
+
+func outboundUpdater(dt *DiffTracker, got *outboundCompletion) *ServiceUpdater {
+	return &ServiceUpdater{
+		diffTracker: dt,
+		onComplete: func(_ string, success bool, err error) {
+			got.called, got.success, got.err = true, success, err
+		},
+		trigger:   dt.serviceUpdaterTrigger,
+		ctx:       context.Background(),
+		semaphore: make(chan struct{}, 10),
+		activeOps: make(map[string]bool),
+	}
+}
+
+// TestServiceUpdaterDeleteOutboundService_HappyPath asserts the exact Azure teardown sequence and
+// that NRP state is only cleared once every step succeeded.
+func TestServiceUpdaterDeleteOutboundService_HappyPath(t *testing.T) {
+	const uid = "egress-a"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := newOutboundMocks(ctrl)
+	m.expectNoDisassociation()
+	m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).Times(1)
+	m.nat.EXPECT().Delete(gomock.Any(), "rg", uid).Return(nil).Times(1)
+	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(uid)).Return(nil).Times(1)
+
+	dt := newOutboundDiffTracker(uid, m, fake.NewSimpleClientset())
+	got := &outboundCompletion{}
+	outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
+
+	assert.True(t, got.called)
+	assert.True(t, got.success, "a fully successful teardown must report success: %v", got.err)
+	assert.False(t, dt.NRPResources.NATGateways.Has(uid),
+		"NRP NAT Gateway state must be cleared after a successful delete")
+}
+
+// TestServiceUpdaterDeleteOutboundService_StepFailuresRetain covers every failing Azure step. Each
+// must report failure so the operation is retried, and must NOT clear the NRP entry - clearing it
+// would make the retried delete a no-op and leak the Azure resource while the pod finalizer stays.
+func TestServiceUpdaterDeleteOutboundService_StepFailuresRetain(t *testing.T) {
+	const uid = "egress-b"
+	boom := errors.New("ARM failure")
+
+	for _, tc := range []struct {
+		name                       string
+		unregister, natDel, pipDel error
+	}{
+		{name: "ServiceGateway unregister fails", unregister: boom},
+		{name: "NAT Gateway delete fails", natDel: boom},
+		{name: "Public IP delete fails", pipDel: boom},
+		{name: "every step fails", unregister: boom, natDel: boom, pipDel: boom},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			m := newOutboundMocks(ctrl)
+			m.expectNoDisassociation()
+			m.sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(tc.unregister).AnyTimes()
+			m.nat.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.natDel).AnyTimes()
+			m.pip.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.pipDel).AnyTimes()
+
+			dt := newOutboundDiffTracker(uid, m, fake.NewSimpleClientset())
+			got := &outboundCompletion{}
+			outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
+
+			assert.True(t, got.called)
+			assert.False(t, got.success, "a failed teardown step must report failure so it is retried")
+			assert.Error(t, got.err)
+			assert.True(t, dt.NRPResources.NATGateways.Has(uid),
+				"NRP state must be retained on failure, otherwise the retry is a no-op and Azure leaks")
+		})
+	}
+}
+
+// TestServiceUpdaterDeleteOutboundService_ToleratesAlreadyDeleted asserts crash-after-delete
+// convergence: an already-absent NAT Gateway and Public IP are a successful teardown, not a
+// permanent failure that would strand the egress pod finalizer.
+func TestServiceUpdaterDeleteOutboundService_ToleratesAlreadyDeleted(t *testing.T) {
+	const uid = "egress-c"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := newOutboundMocks(ctrl)
+	m.expectNoDisassociation()
+	m.sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(&azcore.ResponseError{StatusCode: http.StatusNotFound}).AnyTimes()
+	m.nat.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(notFoundError()).AnyTimes()
+	m.pip.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(notFoundError()).AnyTimes()
+
+	dt := newOutboundDiffTracker(uid, m, fake.NewSimpleClientset())
+	got := &outboundCompletion{}
+	outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
+
+	assert.True(t, got.called)
+	assert.True(t, got.success, "404 on every resource means the teardown is already complete: %v", got.err)
+	assert.False(t, dt.NRPResources.NATGateways.Has(uid))
+}
+
+// TestServiceUpdaterCreateOutboundService_HappyPath asserts the provisioning order (PIP, then NAT
+// Gateway, then ServiceGateway registration) and that NRP state is recorded only on success.
+func TestServiceUpdaterCreateOutboundService_HappyPath(t *testing.T) {
+	const uid = "egress-d"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := newOutboundMocks(ctrl)
+	pipCall := m.pip.EXPECT().CreateOrUpdate(gomock.Any(), "rg", PublicIPName(uid), gomock.Any()).
+		Return(&armnetwork.PublicIPAddress{Name: ptr.To(PublicIPName(uid))}, nil).Times(1)
+	natCall := m.nat.EXPECT().CreateOrUpdate(gomock.Any(), "rg", uid, gomock.Any()).
+		Return(nil, nil).Times(1).After(pipCall)
+	m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).
+		Return(nil).Times(1).After(natCall)
+
+	dt := newTestDiffTracker()
+	dt.config = testConfig()
+	dt.networkClientFactory = m.factory
+	got := &outboundCompletion{}
+	outboundUpdater(dt, got).createOutboundService(uid, &OutboundConfig{}, "corr", "ns", "pod")
+
+	assert.True(t, got.called)
+	assert.True(t, got.success, "a fully successful create must report success: %v", got.err)
+	assert.True(t, dt.NRPResources.NATGateways.Has(uid),
+		"NRP NAT Gateway state must be recorded after a successful create")
+}
+
+// TestServiceUpdaterCreateOutboundService_StepFailuresDoNotRecordNRPState covers each failing
+// provisioning step. Recording NRP state after a partial create would make the tracker believe NRP
+// holds a service it does not, and the diff would never re-create it.
+func TestServiceUpdaterCreateOutboundService_StepFailuresDoNotRecordNRPState(t *testing.T) {
+	const uid = "egress-e"
+	boom := errors.New("ARM failure")
+
+	for _, tc := range []struct {
+		name                   string
+		pipErr, natErr, sgwErr error
+	}{
+		{name: "Public IP create fails", pipErr: boom},
+		{name: "NAT Gateway create fails", natErr: boom},
+		{name: "ServiceGateway registration fails", sgwErr: boom},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			m := newOutboundMocks(ctrl)
+			m.pip.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(&armnetwork.PublicIPAddress{Name: ptr.To(PublicIPName(uid))}, tc.pipErr).AnyTimes()
+			m.nat.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(nil, tc.natErr).AnyTimes()
+			m.sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(tc.sgwErr).AnyTimes()
+
+			dt := newTestDiffTracker()
+			dt.config = testConfig()
+			dt.networkClientFactory = m.factory
+			got := &outboundCompletion{}
+			outboundUpdater(dt, got).createOutboundService(uid, &OutboundConfig{}, "corr", "ns", "pod")
+
+			assert.True(t, got.called)
+			assert.False(t, got.success, "a failed create step must report failure so it is retried")
+			assert.Error(t, got.err)
+			assert.False(t, dt.NRPResources.NATGateways.Has(uid),
+				"a partially created outbound service must not be recorded as present in NRP")
+		})
 	}
 }

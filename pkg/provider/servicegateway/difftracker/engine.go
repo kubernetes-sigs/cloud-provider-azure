@@ -9,8 +9,6 @@ import (
 
 	"github.com/google/uuid"
 	v1 "k8s.io/api/core/v1"
-
-	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 // triggerLocationsUpdater sends a non-blocking trigger to the LocationsUpdater.
@@ -81,19 +79,12 @@ func (dt *DiffTracker) ReconcileInboundService(service *v1.Service) error {
 
 	dt.logger.V(2).Info("Reconciling inbound Service", "serviceUID", serviceUID)
 
-	if service.Annotations[consts.ServiceAnnotationLoadBalancerInternal] == consts.TrueAnnotationValue {
-		return &InboundConfigValidationError{
-			Reason:  "UnsupportedInternalLoadBalancer",
-			Message: fmt.Sprintf("internal load balancer is not supported when ServiceGateway is enabled; remove the %q annotation", consts.ServiceAnnotationLoadBalancerInternal),
-		}
+	inboundConfig, err := AdmitInboundService(service)
+	if err != nil {
+		return err
 	}
-
-	inboundConfig := ExtractInboundConfigFromService(service)
 	if inboundConfig == nil {
 		return nil
-	}
-	if err := ValidateInboundConfig(inboundConfig); err != nil {
-		return err
 	}
 
 	config := NewInboundServiceConfig(serviceUID, inboundConfig)

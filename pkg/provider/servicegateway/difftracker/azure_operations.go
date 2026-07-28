@@ -564,13 +564,25 @@ func convertLocationDTOsToAddressLocations(locations []LocationDTO) []*armnetwor
 // long-running operation inline instead of handing back a poller.
 const synchronousCompletionStatus = http.StatusOK
 
-// isSynchronousCompletion reports whether err is only the Azure SDK refusing an HTTP 200 response.
+// isSynchronousCompletion reports whether err is only the Azure SDK refusing an HTTP 200 response
+// to the *initial* request.
 //
 // The generated armnetwork ServiceGateways client accepts just 202 and 204 for the updateServices
 // and updateAddressLocations long-running operations, but NRP finishes both synchronously and
 // answers 200 OK. The SDK converts that into a ResponseError before a poller is ever created, so
-// the request in fact succeeded and there is nothing left to poll. Genuine failures keep their own
-// 4xx/5xx status and are therefore never swallowed here.
+// the request in fact succeeded and there is nothing left to poll.
+//
+// A 200 alone is not sufficient. azcore reports a genuinely FAILED long-running operation as a
+// ResponseError built from the last poll response (pollers/async.Poller.Result), and for
+// Azure-AsyncOperation polling that terminal poll is itself HTTP 200 carrying
+// {"status":"Failed",...}. Matching on the status code alone therefore reports every async NRP
+// failure as success. The two cases separate on the request method:
+//
+//	NRP synchronous 200 : Method=POST, no polling headers  -> tolerate
+//	failed async LRO    : Method=GET,  no polling headers  -> propagate
+//
+// A 200 carrying Location or Azure-AsyncOperation is an LRO acknowledgement: the operation is still
+// in flight, so reporting success would be premature.
 //
 // This compensates for the vendored SDK; drop it once the generator accepts 200 for these
 // operations.
@@ -583,7 +595,20 @@ func isSynchronousCompletion(err error) bool {
 	if !errors.As(err, &respErr) {
 		return false
 	}
-	return respErr.StatusCode == synchronousCompletionStatus
+	if respErr.StatusCode != synchronousCompletionStatus {
+		return false
+	}
+	raw := respErr.RawResponse
+	if raw == nil || raw.Request == nil {
+		// Cannot prove this was the initial call, so it cannot be proven complete.
+		return false
+	}
+	if raw.Header.Get("Location") != "" || raw.Header.Get("Azure-AsyncOperation") != "" {
+		// A 200 that is really an LRO acknowledgement: still in flight.
+		return false
+	}
+	// Every LRO poll is a GET; only the initial updateServices/updateAddressLocations call is a POST.
+	return raw.Request.Method == http.MethodPost
 }
 
 // updateNRPServices calls UpdateServices, tolerating NRP's synchronous 200 OK completion.
@@ -599,25 +624,19 @@ func (dt *DiffTracker) updateNRPAddressLocations(ctx context.Context, serviceGat
 }
 
 func (dt *DiffTracker) tolerateSynchronousCompletion(err error, operation, serviceGatewayName string) error {
-	if !isSynchronousCompletion(err) {
-		return err
+	if isSynchronousCompletion(err) {
+		dt.logger.V(4).Info("ServiceGateway operation completed synchronously with 200 OK",
+			"operation", operation, "serviceGateway", serviceGatewayName)
+		return nil
 	}
 
-	// A 200 that still carries polling headers would mean the operation is genuinely asynchronous
-	// and we are reporting success too early. Surface that loudly rather than silently.
+	// A 200 that is not a provable synchronous completion is an asynchronous operation that either
+	// failed or is still in flight. Reporting it as success would leave the tracker believing NRP
+	// holds state it does not, so log it as it propagates.
 	var respErr *azcore.ResponseError
-	_ = errors.As(err, &respErr)
-	if respErr.RawResponse != nil {
-		if location := respErr.RawResponse.Header.Get("Location"); location != "" {
-			dt.logger.Error(nil, "ServiceGateway operation returned 200 OK with a polling header; treating it as complete may be premature",
-				"operation", operation, "serviceGateway", serviceGatewayName)
-		} else if respErr.RawResponse.Header.Get("Azure-AsyncOperation") != "" {
-			dt.logger.Error(nil, "ServiceGateway operation returned 200 OK with an async-operation header; treating it as complete may be premature",
-				"operation", operation, "serviceGateway", serviceGatewayName)
-		}
+	if errors.As(err, &respErr) && respErr.StatusCode == synchronousCompletionStatus {
+		dt.logger.Error(err, "ServiceGateway operation returned 200 OK that is not a synchronous completion; propagating as a failure",
+			"operation", operation, "serviceGateway", serviceGatewayName, "errorCode", respErr.ErrorCode)
 	}
-
-	dt.logger.V(4).Info("ServiceGateway operation completed synchronously with 200 OK",
-		"operation", operation, "serviceGateway", serviceGatewayName)
-	return nil
+	return err
 }

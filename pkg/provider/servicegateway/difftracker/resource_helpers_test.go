@@ -836,3 +836,53 @@ func TestExtractInboundConfigFromService_DropsAffinityAndIdleTimeout(t *testing.
 	assert.Nil(t, config.SessionPersistence)
 	assert.Nil(t, config.IdleTimeoutMinutes)
 }
+
+// TestAdmitInboundService_RejectsInternalLoadBalancerCaseInsensitively pins the shared admission
+// gate used by both the runtime path (ReconcileInboundService) and the startup path
+// (reconcileServices).
+//
+// An exact "true" comparison treats "True"/"TRUE" as absent and lets the request through, and the
+// builder then hardcodes Scope="Public" - so the user asks for an internal load balancer and
+// receives a public, internet-facing one. Every other Azure annotation in this provider is matched
+// case-insensitively.
+func TestAdmitInboundService_RejectsInternalLoadBalancerCaseInsensitively(t *testing.T) {
+	for _, value := range []string{"true", "True", "TRUE", "TrUe"} {
+		svc := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        "svc",
+				Namespace:   "ns",
+				UID:         "11111111-1111-1111-1111-111111111111",
+				Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerInternal: value},
+			},
+			Spec: v1.ServiceSpec{
+				Type:  v1.ServiceTypeLoadBalancer,
+				Ports: []v1.ServicePort{{Port: 80, TargetPort: intstr.FromInt32(8080), Protocol: v1.ProtocolTCP}},
+			},
+		}
+
+		config, err := AdmitInboundService(svc)
+		assert.Nil(t, config, "an internal-LB request must not yield a provisionable config (value %q)", value)
+		assert.Error(t, err, "internal load balancer annotation %q must be rejected", value)
+
+		var validationErr *InboundConfigValidationError
+		if assert.ErrorAs(t, err, &validationErr) {
+			assert.Equal(t, "UnsupportedInternalLoadBalancer", validationErr.Reason)
+		}
+	}
+}
+
+// TestAdmitInboundService_AdmitsSupportedService is the control: a plain LoadBalancer Service must
+// still be admitted, so the guard above cannot pass by rejecting everything.
+func TestAdmitInboundService_AdmitsSupportedService(t *testing.T) {
+	svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "ns", UID: "22222222-2222-2222-2222-222222222222"},
+		Spec: v1.ServiceSpec{
+			Type:  v1.ServiceTypeLoadBalancer,
+			Ports: []v1.ServicePort{{Port: 80, TargetPort: intstr.FromInt32(8080), Protocol: v1.ProtocolTCP}},
+		},
+	}
+
+	config, err := AdmitInboundService(svc)
+	assert.NoError(t, err)
+	assert.NotNil(t, config, "a supported LoadBalancer Service must still be admitted")
+}

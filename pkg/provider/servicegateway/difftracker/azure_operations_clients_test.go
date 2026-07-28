@@ -463,6 +463,13 @@ func TestInitializeFromCluster_ReusesFetchedPIPListForOrphanCleanup(t *testing.T
 	// A single detached orphan PIP (no IPConfiguration) with a non-UUID name, so ONLY
 	// cleanupOrphanedPublicIPs acts on it (scheduleOrphanedResourceDeletions skips non-UUID "-pip"
 	// names). List returns a NON-NIL slice: init must reuse it and never call List again.
+	//
+	// NOTE: "leftover-pip" carries no ownership marker, so it is indistinguishable from a Public IP
+	// created by the customer or by another cluster sharing the resource group, yet the Delete below
+	// is asserted as mandatory. Selecting orphans by ownership tag instead of name suffix will make
+	// this expectation fail. Resolve that by giving the fixture a non-UUID name that also carries
+	// the ownership tag, not by weakening the selection: the subject here is list reuse and the
+	// deletion is incidental.
 	const orphanPIP = "leftover-pip"
 	pips := []*armnetwork.PublicIPAddress{{
 		Name:       ptr.To(orphanPIP),

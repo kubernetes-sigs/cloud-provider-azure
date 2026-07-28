@@ -958,3 +958,61 @@ func TestProcessK8sEndpoints_SkipsMalformedAddresses(t *testing.T) {
 	assert.True(t, podIPTracked(&k8s, goodIP), "a valid endpoint address must be imported")
 	assert.False(t, podIPTracked(&k8s, badIP), "a malformed endpoint address must be skipped")
 }
+
+// TestReconcileServices_AppliesRuntimeAdmissionOnStartup pins that the startup path applies the
+// same admission gate as the runtime path.
+//
+// Startup's only structural criterion is Spec.Type == LoadBalancer, so without an explicit gate a
+// Service that ReconcileInboundService rejects - notably one requesting an internal load balancer -
+// is admitted after a CCM restart and provisioned with Scope="Public". A Service claimed by another
+// LoadBalancerClass, which the upstream controller never hands to a cloud provider, would likewise
+// be provisioned by both controllers.
+func TestReconcileServices_AppliesRuntimeAdmissionOnStartup(t *testing.T) {
+	const (
+		internalUID = "11111111-1111-1111-1111-111111111111"
+		classedUID  = "22222222-2222-2222-2222-222222222222"
+		okUID       = "33333333-3333-3333-3333-333333333333"
+	)
+
+	ports := []v1.ServicePort{{Port: 80, TargetPort: intstr.FromInt32(8080), Protocol: v1.ProtocolTCP}}
+	foreignClass := "example.com/other-controller"
+
+	serviceUIDToService := map[string]*v1.Service{
+		internalUID: {
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "internal", Namespace: "ns", UID: types.UID(internalUID),
+				Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerInternal: "True"},
+			},
+			Spec: v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer, Ports: ports},
+		},
+		classedUID: {
+			ObjectMeta: metav1.ObjectMeta{Name: "classed", Namespace: "ns", UID: types.UID(classedUID)},
+			Spec: v1.ServiceSpec{
+				Type: v1.ServiceTypeLoadBalancer, Ports: ports, LoadBalancerClass: &foreignClass,
+			},
+		},
+		okUID: {
+			ObjectMeta: metav1.ObjectMeta{Name: "ok", Namespace: "ns", UID: types.UID(okUID)},
+			Spec:       v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer, Ports: ports},
+		},
+	}
+
+	dt := newTestDiffTracker()
+	syncOps := &SyncDiffTrackerReturnType{
+		LoadBalancerUpdates: SyncServicesReturnType{
+			Additions: newIgnoreCaseSetFromSlice([]string{internalUID, classedUID, okUID}),
+		},
+		NATGatewayUpdates: SyncServicesReturnType{Additions: utilsets.NewString()},
+	}
+
+	dt.reconcileServices(syncOps, serviceUIDToService)
+
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	assert.NotContains(t, dt.pendingServiceOps, internalUID,
+		"an internal-LB Service rejected at runtime must not be provisioned as public on restart")
+	assert.NotContains(t, dt.pendingServiceOps, classedUID,
+		"a Service owned by another LoadBalancerClass must not be claimed on restart")
+	assert.Contains(t, dt.pendingServiceOps, okUID,
+		"a supported Service must still be provisioned on restart")
+}

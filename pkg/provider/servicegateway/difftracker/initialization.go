@@ -46,6 +46,22 @@ func isValidServiceUUID(name string) bool {
 	return uuidRegex.MatchString(strings.ToLower(name))
 }
 
+// defaultInitialSyncTimeout bounds the wait for initial K8s/NRP convergence. WaitForInitialSync is
+// otherwise gated only by the CCM root context, so a work item that never clears hangs
+// InitializeFromCluster, and with it Runtime.Start and startServiceController. startControllers
+// runs its initializers sequentially and starts the shared informer factories only afterwards, so
+// that hang leaves every remaining controller unstarted while the pod still reports Running.
+// Bounding the wait turns a silent stall into a visible startup failure.
+const defaultInitialSyncTimeout = 10 * time.Minute
+
+// initialSyncTimeout holds the initial-sync deadline in nanoseconds. Stored atomically so tests can
+// shorten it without racing the updater goroutines.
+var initialSyncTimeout atomic.Int64
+
+func init() { initialSyncTimeout.Store(int64(defaultInitialSyncTimeout)) }
+
+func getInitialSyncTimeout() time.Duration { return time.Duration(initialSyncTimeout.Load()) }
+
 // InitializeFromCluster initializes a DiffTracker by fetching K8s and NRP state, computing the diff,
 // and synchronizing resources. This replaces the provider-level initializeDiffTracker function.
 func InitializeFromCluster(
@@ -171,7 +187,10 @@ func InitializeFromCluster(
 	//   - pendingServiceOps (ServiceUpdater work - includes orphan deletions)
 	//   - pendingUpdaterTriggers (LocationsUpdater work)
 	// Note: bufferedEndpoints/bufferedPods are always empty during initialization
-	if err := diffTracker.WaitForInitialSync(ctx); err != nil {
+	// Bounded so a never-clearing pending item fails startup visibly instead of hanging the CCM.
+	waitCtx, cancelWait := context.WithTimeout(ctx, getInitialSyncTimeout())
+	defer cancelWait()
+	if err := diffTracker.WaitForInitialSync(waitCtx); err != nil {
 		cleanupOnError(diffTracker)
 		return nil, fmt.Errorf("waiting for initial sync: %w", err)
 	}
@@ -1497,7 +1516,26 @@ func (dt *DiffTracker) reconcileServices(syncOps *SyncDiffTrackerReturnType, ser
 			svc, exists := serviceUIDToService[serviceUID]
 			var inboundConfig *InboundConfig
 			if exists && svc != nil {
-				inboundConfig = ExtractInboundConfigFromService(svc)
+				// The upstream service controller never calls EnsureLoadBalancer for a Service
+				// claimed by another LoadBalancerClass, so the runtime path never sees one.
+				// Startup lists Services directly from the API and must apply that filter itself;
+				// otherwise both controllers provision the same Service.
+				if svc.Spec.LoadBalancerClass != nil {
+					logger.V(2).Info("Skipped provisioning a Service owned by another LoadBalancerClass",
+						"namespace", svc.Namespace, "service", svc.Name,
+						"loadBalancerClass", *svc.Spec.LoadBalancerClass)
+					continue
+				}
+				var err error
+				inboundConfig, err = AdmitInboundService(svc)
+				if err != nil {
+					// Startup must apply the same admission as the runtime path. A Service
+					// rejected there - notably one requesting an internal load balancer - would
+					// otherwise be provisioned here with Scope="Public" after a restart.
+					logger.Error(err, "Skipped provisioning a Service rejected by inbound admission",
+						"namespace", svc.Namespace, "service", svc.Name, "serviceUID", serviceUID)
+					continue
+				}
 			}
 			config := NewInboundServiceConfig(serviceUID, inboundConfig)
 			logger.V(5).Info("Called AddService for load balancer", "serviceUID", serviceUID)

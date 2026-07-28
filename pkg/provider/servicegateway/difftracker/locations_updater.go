@@ -18,6 +18,22 @@ const (
 	locationsRetryMaxDelay  = 30 * time.Second
 )
 
+// defaultMaxInitLocationSyncAttempts bounds how many times a transient location-sync failure is
+// retried while initialization is still blocked on it, matching the ServiceUpdater's own
+// maxServiceRetries. backoffAndRetry re-triggers before the in-flight trigger counter is
+// decremented, so an unbounded retry against a sustained NRP error (503/429/5xx) keeps
+// WaitForInitialSync from returning and stalls CCM startup. Giving up leaves NRP state stale until
+// the next cluster event triggers another sync.
+const defaultMaxInitLocationSyncAttempts = 12
+
+// maxInitLocationSyncAttempts holds the attempt cap. Stored atomically so tests can lower it
+// without racing the updater goroutines that read it.
+var maxInitLocationSyncAttempts atomic.Int64
+
+func init() { maxInitLocationSyncAttempts.Store(defaultMaxInitLocationSyncAttempts) }
+
+func getMaxInitLocationSyncAttempts() int { return int(maxInitLocationSyncAttempts.Load()) }
+
 // defaultNRPOperationTimeout bounds a single NRP/Azure operation attempt (a location sync in the
 // LocationsUpdater, or a service create/update/delete in the ServiceUpdater). Normal operations
 // complete in seconds; the timeout exists only so a hung or pathologically slow ARM call fails into
@@ -120,6 +136,14 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 			lu.failureCount = 0
 		case terminalSyncErr:
 			lu.failureCount = 0
+		case atomic.LoadInt32(&lu.diffTracker.isInitializing) == 1 &&
+			lu.failureCount >= getMaxInitLocationSyncAttempts():
+			// Stop blocking initialization on an NRP error that is not clearing; fall through to
+			// the trigger decrement below so WaitForInitialSync completes and the CCM starts
+			// degraded.
+			lu.logger.Error(nil, "Gave up initial NRP location sync after repeated transient failures; continuing degraded",
+				"attempts", lu.failureCount)
+			lu.failureCount = 0
 		default:
 			lu.backoffAndRetry()
 		}
@@ -188,6 +212,13 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 			recordLocationSyncTerminalError()
 			lu.logger.Error(err, "Terminal error syncing locations to NRP; not retrying until the next change",
 				"httpStatus", httpStatus, "errorCode", errCode)
+			// Abandoning the batch must not block the drain gates. A Service or pod whose
+			// addresses are already absent from NRP is independently deletable and must not be
+			// left Terminating because another Service contributed a malformed entry to the
+			// shared batch, which would block node drain and namespace deletion. The no-diff
+			// return above runs these same checks for the same reason.
+			lu.diffTracker.CheckPendingServiceDeletions()
+			lu.diffTracker.CheckPendingPodDeletions(ctx)
 			return
 		}
 		lu.logger.V(4).Info("Could not sync locations to NRP", "err", err, "attempt", lu.failureCount+1)

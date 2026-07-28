@@ -408,6 +408,40 @@ func (e *InboundConfigValidationError) WarningEvent() (reason, message string) {
 	return e.Reason, e.Message
 }
 
+// AdmitInboundService is the single decision point for whether this controller may provision a
+// LoadBalancer Service, and with what desired config. It returns the extracted config on success,
+// (nil, nil) when there is nothing to provision, and an *InboundConfigValidationError when the
+// Service must be rejected.
+//
+// Both the runtime path (ReconcileInboundService) and the startup path (reconcileServices) must
+// call this. A Service admitted by only one of them is provisioned inconsistently across a CCM
+// restart: an internal-LB request rejected at runtime would be rebuilt with Scope="Public".
+//
+// The internal-LB annotation is matched case-insensitively through the shared consts helper, as
+// every other Azure annotation in this provider is. An exact string comparison would treat "True"
+// as absent and let the request through.
+func AdmitInboundService(service *v1.Service) (*InboundConfig, error) {
+	if service == nil {
+		return nil, nil
+	}
+
+	if consts.IsK8sServiceUsingInternalLoadBalancer(service) {
+		return nil, &InboundConfigValidationError{
+			Reason:  "UnsupportedInternalLoadBalancer",
+			Message: fmt.Sprintf("internal load balancer is not supported when ServiceGateway is enabled; remove the %q annotation", consts.ServiceAnnotationLoadBalancerInternal),
+		}
+	}
+
+	inboundConfig := ExtractInboundConfigFromService(service)
+	if inboundConfig == nil {
+		return nil, nil
+	}
+	if err := ValidateInboundConfig(inboundConfig); err != nil {
+		return nil, err
+	}
+	return inboundConfig, nil
+}
+
 // ValidateInboundConfig rejects inbound Service specs the PodIP backend pool cannot support,
 // returning an *InboundConfigValidationError whose Reason is the Event reason to surface. Without
 // this fast check the engine would terminal-park the create asynchronously with no visible cause.
