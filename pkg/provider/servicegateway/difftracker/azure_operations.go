@@ -578,11 +578,13 @@ const synchronousCompletionStatus = http.StatusOK
 // {"status":"Failed",...}. Matching on the status code alone therefore reports every async NRP
 // failure as success. The two cases separate on the request method:
 //
-//	NRP synchronous 200 : Method=POST, no polling headers  -> tolerate
-//	failed async LRO    : Method=GET,  no polling headers  -> propagate
+//	NRP synchronous 200 : Method=POST -> tolerate
+//	failed async LRO    : Method=GET  -> propagate
 //
-// A 200 carrying Location or Azure-AsyncOperation is an LRO acknowledgement: the operation is still
-// in flight, so reporting success would be premature.
+// The polling headers cannot be used to tell the two apart. NRP stamps Azure-AsyncOperation and
+// Location onto the synchronous 200 it returns for updateServices even though the operation has
+// already completed, so treating their presence as "still in flight" rejects every successful
+// Service registration.
 //
 // This compensates for the vendored SDK; drop it once the generator accepts 200 for these
 // operations.
@@ -601,10 +603,6 @@ func isSynchronousCompletion(err error) bool {
 	raw := respErr.RawResponse
 	if raw == nil || raw.Request == nil {
 		// Cannot prove this was the initial call, so it cannot be proven complete.
-		return false
-	}
-	if raw.Header.Get("Location") != "" || raw.Header.Get("Azure-AsyncOperation") != "" {
-		// A 200 that is really an LRO acknowledgement: still in flight.
 		return false
 	}
 	// Every LRO poll is a GET; only the initial updateServices/updateAddressLocations call is a POST.
