@@ -1,3 +1,4 @@
 vendor/github.com/google/cel-go/ext/BUILD.bazel -whitespace
 vendor/k8s.io/api/resource/v1beta2/generated.proto -whitespace
 vendor/sigs.k8s.io/randfill/CONTRIBUTING.md -whitespace
+vendor/github.com/google/cel-go/cel/prompt.go -whitespace
