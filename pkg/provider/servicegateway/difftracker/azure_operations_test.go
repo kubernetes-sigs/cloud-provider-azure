@@ -305,9 +305,9 @@ func TestUpdateServiceLoadBalancerStatus_DualStackSafeThroughLister(t *testing.T
 }
 
 // responseError builds the shape azcore produces for the INITIAL updateServices/
-// updateAddressLocations call: a POST with no polling headers. isSynchronousCompletion requires
-// that shape, because a bare 200 is also how azcore reports a FAILED asynchronous operation (the
-// terminal poll is a GET returning 200 {"status":"Failed"}).
+// updateAddressLocations call: a POST. isSynchronousCompletion requires the POST, because a 200 is
+// also how azcore reports a FAILED asynchronous operation (the terminal poll is a GET returning
+// 200 {"status":"Failed"}).
 func responseError(status int) error {
 	req, _ := http.NewRequest(http.MethodPost, "https://example/sgw", nil)
 	return &azcore.ResponseError{
@@ -357,14 +357,14 @@ func TestIsSynchronousCompletion(t *testing.T) {
 		// Set canonicalises the key exactly as net/http does when parsing a real response.
 		pollingHeader := http.Header{}
 		pollingHeader.Set(header, "https://poll")
-		assert.False(t, isSynchronousCompletion(&azcore.ResponseError{
+		assert.True(t, isSynchronousCompletion(&azcore.ResponseError{
 			StatusCode: http.StatusOK,
 			RawResponse: &http.Response{
 				StatusCode: http.StatusOK,
 				Header:     pollingHeader,
 				Request:    postReq,
 			},
-		}), "a 200 carrying %s is an LRO acknowledgement, not a completion", header)
+		}), "NRP stamps %s on its already-complete synchronous 200; rejecting it fails every registration", header)
 	}
 }
 
@@ -377,8 +377,9 @@ func TestTolerateSynchronousCompletion(t *testing.T) {
 	conflict := responseError(http.StatusConflict)
 	assert.Same(t, conflict, dt.tolerateSynchronousCompletion(conflict, "UpdateServices", "sgw"))
 
-	// A 200 carrying polling headers is an LRO acknowledgement: the operation is still in flight,
-	// so it must propagate rather than be reported as a completed sync.
+	// NRP returns its synchronous 200 for updateServices with a Location header even though the
+	// operation has already completed, so this must be tolerated. Rejecting it fails every
+	// Service registration against the live provider.
 	postReq, _ := http.NewRequest(http.MethodPost, "https://example/sgw", nil)
 	async := &azcore.ResponseError{
 		StatusCode: http.StatusOK,
@@ -388,8 +389,17 @@ func TestTolerateSynchronousCompletion(t *testing.T) {
 			Request:    postReq,
 		},
 	}
-	assert.Same(t, async, dt.tolerateSynchronousCompletion(async, "UpdateAddressLocations", "sgw"),
-		"a 200 that is still polling must not be reported as complete")
+	assert.NoError(t, dt.tolerateSynchronousCompletion(async, "UpdateAddressLocations", "sgw"),
+		"a POST 200 carrying a polling header is still NRP's synchronous completion")
+
+	// A GET 200 is azcore's terminal poll for a FAILED async operation and must still propagate.
+	pollGET, _ := http.NewRequest(http.MethodGet, "https://poll.example/op/1", nil)
+	failedLRO := &azcore.ResponseError{
+		StatusCode:  http.StatusOK,
+		RawResponse: &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: pollGET},
+	}
+	assert.Same(t, failedLRO, dt.tolerateSynchronousCompletion(failedLRO, "UpdateServices", "sgw"),
+		"a failed async LRO must not be reported as a synchronous completion")
 }
 
 type fixedStatusTransport struct {
