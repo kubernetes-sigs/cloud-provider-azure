@@ -18,6 +18,7 @@ package difftracker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -105,10 +106,34 @@ func (lb *LoadBalancer) EnsureLoadBalancer(ctx context.Context, _ string, servic
 	defer func() { metricContext.ObserveOperationWithResult(err == nil) }()
 
 	if err = tracker.ReconcileInboundService(service); err != nil {
+		recordWarningEvent(tracker, service, err)
 		return nil, err
 	}
 
 	return service.Status.LoadBalancer.DeepCopy(), nil
+}
+
+// recordWarningEvent surfaces a WarningEventError as a Kubernetes warning Event on the Service.
+//
+// Returning the error alone is not enough: the Service controller reports it as a generic
+// SyncLoadBalancerFailed, which loses the ServiceGateway-specific reason (for example
+// UnsupportedNamedTargetPort) telling the user which part of the spec is unsupported. Errors that
+// do not carry a reason, and a tracker with no recorder yet, are ignored.
+func recordWarningEvent(tracker *DiffTracker, service *v1.Service, err error) {
+	var warning WarningEventError
+	if !errors.As(err, &warning) {
+		return
+	}
+
+	tracker.mu.Lock()
+	recorder := tracker.eventRecorder
+	tracker.mu.Unlock()
+	if recorder == nil {
+		return
+	}
+
+	reason, message := warning.WarningEvent()
+	recorder.Event(service, v1.EventTypeWarning, reason, message)
 }
 
 func (lb *LoadBalancer) UpdateLoadBalancer(context.Context, string, *v1.Service, []*v1.Node) error {

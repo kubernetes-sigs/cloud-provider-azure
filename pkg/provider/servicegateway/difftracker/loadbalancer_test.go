@@ -18,6 +18,7 @@ package difftracker
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,7 +26,11 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/record"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 func newInboundService(uid string) *v1.Service {
@@ -71,4 +76,89 @@ func TestLoadBalancerEnsureTracksExternalService(t *testing.T) {
 	_, exists, err := lb.GetLoadBalancer(context.Background(), "cluster", svc)
 	assert.NoError(t, err)
 	assert.True(t, exists)
+}
+
+// TestLoadBalancerEmitsWarningEventForRejectedService pins the user-visible half of a rejection:
+// the Service controller only reports a generic SyncLoadBalancerFailed, so without this Event the
+// specific reason (which part of the spec is unsupported) never reaches the user.
+func TestLoadBalancerEmitsWarningEventForRejectedService(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(*v1.Service)
+		reason  string
+		message string
+	}{
+		{
+			name: "named targetPort",
+			mutate: func(svc *v1.Service) {
+				svc.Spec.Ports[0].TargetPort = intstr.FromString("http")
+			},
+			reason: "UnsupportedNamedTargetPort",
+		},
+		{
+			name: "internal load balancer",
+			mutate: func(svc *v1.Service) {
+				svc.Annotations = map[string]string{
+					consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue,
+				}
+			},
+			reason: "UnsupportedInternalLoadBalancer",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc := newInboundService("service-uid")
+			tt.mutate(svc)
+
+			tracker := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset(svc))
+			recorder := record.NewFakeRecorder(10)
+			tracker.SetEventRecorder(recorder)
+
+			lb := NewLoadBalancer(nil)
+			assert.NoError(t, lb.SetTracker(tracker))
+
+			_, err := lb.EnsureLoadBalancer(context.Background(), "cluster", svc, nil)
+			assert.Error(t, err)
+			assert.False(t, tracker.IsServiceTracked(ServiceUID(svc)))
+
+			select {
+			case event := <-recorder.Events:
+				assert.Contains(t, event, v1.EventTypeWarning)
+				assert.Contains(t, event, tt.reason)
+			default:
+				t.Fatalf("expected a %s warning event on the Service", tt.reason)
+			}
+		})
+	}
+}
+
+// TestLoadBalancerDoesNotEmitEventWithoutReason keeps the Event path from turning every failure
+// into a Service Event: only errors carrying a reason are surfaced.
+func TestLoadBalancerDoesNotEmitEventWithoutReason(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	svc := newInboundService("service-uid")
+	tracker := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset(svc))
+	recorder := record.NewFakeRecorder(10)
+	tracker.SetEventRecorder(recorder)
+
+	recordWarningEvent(tracker, svc, errors.New("some transient failure"))
+
+	select {
+	case event := <-recorder.Events:
+		t.Fatalf("unexpected event recorded: %s", event)
+	default:
+	}
+}
+
+// TestRecordWarningEventWithoutRecorder covers the window before the runtime publishes a recorder.
+func TestRecordWarningEventWithoutRecorder(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	svc := newInboundService("service-uid")
+	tracker := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset(svc))
+
+	assert.NotPanics(t, func() {
+		recordWarningEvent(tracker, svc, &InboundConfigValidationError{Reason: "R", Message: "m"})
+	})
 }
