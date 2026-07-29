@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM mcr.microsoft.com/oss/go/microsoft/golang:1.25.12-bookworm@sha256:4864ebb0a0e087d248149acdb8a2e44c487d5ab5caac76efd4faa744692c51cc
+FROM mcr.microsoft.com/oss/go/microsoft/golang:1.25.12-bookworm@sha256:f3c3ae5451ab9ba13393efb538828af220f2f1b125a64a405fb3ee9c434cfa9f
 
 WORKDIR /go/src/sigs.k8s.io/cloud-provider-azure
 
