@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7"
 	"github.com/stretchr/testify/assert"
 
@@ -36,6 +37,36 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 )
+
+type virtualMachineUpdatePollerHandler struct{}
+
+func (*virtualMachineUpdatePollerHandler) Done() bool {
+	return true
+}
+
+func (*virtualMachineUpdatePollerHandler) Poll(context.Context) (*http.Response, error) {
+	return &http.Response{StatusCode: http.StatusOK}, nil
+}
+
+func (*virtualMachineUpdatePollerHandler) Result(_ context.Context, _ *armcompute.VirtualMachinesClientUpdateResponse) error {
+	return nil
+}
+
+func newVirtualMachineUpdatePoller(t *testing.T, vm armcompute.VirtualMachine) *runtime.Poller[armcompute.VirtualMachinesClientUpdateResponse] {
+	t.Helper()
+	poller, err := runtime.NewPoller(
+		&http.Response{StatusCode: http.StatusOK},
+		runtime.Pipeline{},
+		&runtime.NewPollerOptions[armcompute.VirtualMachinesClientUpdateResponse]{
+			Handler: &virtualMachineUpdatePollerHandler{},
+			Response: &armcompute.VirtualMachinesClientUpdateResponse{
+				VirtualMachine: vm,
+			},
+		},
+	)
+	assert.NoError(t, err)
+	return poller
+}
 
 func TestAttachDiskWithVmssFlex(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -279,8 +310,11 @@ func TestUpdateVMWithVmssFlex(t *testing.T) {
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOutInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
 
-		mockVMClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), tc.vmName, gomock.Any()).Return(nil, tc.vmssFlexVMUpdateError).AnyTimes()
-		mockVMClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), tc.vmName, gomock.Any()).Return(nil, tc.vmssFlexVMUpdateError).AnyTimes()
+		var poller *runtime.Poller[armcompute.VirtualMachinesClientUpdateResponse]
+		if tc.vmssFlexVMUpdateError == nil {
+			poller = newVirtualMachineUpdatePoller(t, armcompute.VirtualMachine{})
+		}
+		mockVMClient.EXPECT().BeginUpdate(gomock.Any(), gomock.Any(), tc.vmName, armcompute.VirtualMachineUpdate{}, nil).Return(poller, tc.vmssFlexVMUpdateError).AnyTimes()
 
 		err = fs.UpdateVM(ctx, tc.nodeName)
 
