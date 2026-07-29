@@ -28,6 +28,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	azclientutils "sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
@@ -52,6 +54,21 @@ type ExtendedLocation struct {
 	Name string `json:"name,omitempty"`
 	// Type - The type of the extended location.
 	Type string `json:"type,omitempty"`
+}
+
+func updateVirtualMachine(
+	ctx context.Context,
+	client virtualmachineclient.Interface,
+	resourceGroupName,
+	vmName string,
+) (*armcompute.VirtualMachine, error) {
+	resp, err := azclientutils.NewPollerWrapper(
+		client.BeginUpdate(ctx, resourceGroupName, vmName, armcompute.VirtualMachineUpdate{}, nil),
+	).WaitforPollerResp(ctx)
+	if err != nil || resp == nil {
+		return nil, err
+	}
+	return &resp.VirtualMachine, nil
 }
 
 func FilterNonExistingDisks(ctx context.Context, clientFactory azclient.ClientFactory, unfilteredDisks []*armcompute.DataDisk) []*armcompute.DataDisk {
