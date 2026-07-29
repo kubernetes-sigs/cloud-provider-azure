@@ -331,3 +331,23 @@ func TestOnServiceCreationComplete_OrphanDeleteSuccessCountsOrphanCleanup(t *tes
 	assert.Equal(t, 1.0, after-before,
 		"a successful orphan deletion counts exactly one orphaned_resources_cleaned_total")
 }
+
+// TestRecordServiceParked_CountsByReason pins that a parked service operation is observable.
+//
+// A parked operation has stopped making progress: EnsureLoadBalancer has already returned nil, so
+// the service controller reports success and the Service stays pending indefinitely. Without this
+// counter the condition is visible only in logs, so an operator has no way to alert on it.
+func TestRecordServiceParked_CountsByReason(t *testing.T) {
+	RegisterMetrics()
+
+	for _, reason := range []string{parkReasonTerminalError, parkReasonRetriesExceeded} {
+		before, err := testutil.GetCounterMetricValue(serviceOperationsParkedTotal.WithLabelValues(reason))
+		assert.NoError(t, err)
+
+		recordServiceParked(reason)
+
+		after, err := testutil.GetCounterMetricValue(serviceOperationsParkedTotal.WithLabelValues(reason))
+		assert.NoError(t, err)
+		assert.Equal(t, float64(1), after-before, "parking with reason %q must be counted exactly once", reason)
+	}
+}

@@ -64,14 +64,18 @@ func endpointSliceAddresses(es *discovery_v1.EndpointSlice, nodeLister coreliste
 				nodeIPs = append(nodeIPs, address.Address)
 			}
 		}
-		nodeIP, ok := nodeIPForEndpointSlice(nodeIPs, es.AddressType)
-		if !ok {
-			continue
-		}
 		for _, podIP := range endpoint.Addresses {
 			addr, err := netip.ParseAddr(podIP)
 			if err != nil {
 				klog.Warningf("EndpointSlice %s/%s has a malformed endpoint address %q; skipping", es.Namespace, es.Name, podIP)
+				continue
+			}
+			// Resolve the node location from the address's own family rather than the slice's
+			// declared AddressType. NRP requires every address to sit under a same-family
+			// location, and AddressType describes the slice, not a guarantee about each address
+			// it carries.
+			nodeIP, ok := SelectSameFamilyNodeIP(nodeIPs, addr.Is6())
+			if !ok {
 				continue
 			}
 			addresses[addr.String()] = nodeIP
@@ -245,15 +249,9 @@ func (dt *DiffTracker) ReconcileNodeIPChange(nodeName string, oldNodeIPs, newNod
 			return true
 		}
 
-		// Resolve the same-family location on this node before and after the change, using the
-		// deterministic picker shared with the EndpointSlice path so the keys match NRP state.
-		ipv6 := es.AddressType == discovery_v1.AddressTypeIPv6
-		oldLocation, oldOK := SelectSameFamilyNodeIP(oldNodeIPs, ipv6)
-		newLocation, newOK := SelectSameFamilyNodeIP(newNodeIPs, ipv6)
-		if !oldOK && !newOK {
-			return true
-		}
-
+		// The same-family location is resolved per address below: AddressType describes the slice,
+		// not a guarantee about each address it carries, and NRP requires every address to sit
+		// under a location of its own family.
 		for _, ep := range es.Endpoints {
 			if !ptr.Deref(ep.Conditions.Ready, true) {
 				continue
@@ -261,15 +259,20 @@ func (dt *DiffTracker) ReconcileNodeIPChange(nodeName string, oldNodeIPs, newNod
 			if !strings.EqualFold(ptr.Deref(ep.NodeName, ""), nodeName) {
 				continue
 			}
-			delta := perService[serviceUID]
-			if delta == nil {
-				delta = &endpointDelta{oldAddresses: map[string]string{}, newAddresses: map[string]string{}}
-				perService[serviceUID] = delta
-			}
 			for _, podIP := range ep.Addresses {
 				addr, err := netip.ParseAddr(podIP)
 				if err != nil {
 					continue
+				}
+				oldLocation, oldOK := SelectSameFamilyNodeIP(oldNodeIPs, addr.Is6())
+				newLocation, newOK := SelectSameFamilyNodeIP(newNodeIPs, addr.Is6())
+				if !oldOK && !newOK {
+					continue
+				}
+				delta := perService[serviceUID]
+				if delta == nil {
+					delta = &endpointDelta{oldAddresses: map[string]string{}, newAddresses: map[string]string{}}
+					perService[serviceUID] = delta
 				}
 				if oldOK {
 					delta.oldAddresses[addr.String()] = oldLocation

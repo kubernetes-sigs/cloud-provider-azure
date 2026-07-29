@@ -239,20 +239,6 @@ func TestServiceUpdaterWorker_RecoversFromPanic(t *testing.T) {
 	}
 }
 
-// TestServiceUpdaterInitialization tests ServiceUpdater creation
-func TestServiceUpdaterInitialization(t *testing.T) {
-	// Skip: ServiceUpdater requires DiffTracker with Azure clients which needs extensive mocking
-	// The initialization logic is simple and verified through integration tests
-	t.Skip("ServiceUpdater requires Azure client mocking - deferred to integration tests")
-}
-
-// TestServiceUpdaterGracefulStop tests that ServiceUpdater stops gracefully
-func TestServiceUpdaterGracefulStop(t *testing.T) {
-	// Skip: ServiceUpdater requires DiffTracker with Azure clients which needs extensive mocking
-	// Graceful shutdown logic is verified through integration tests
-	t.Skip("ServiceUpdater requires Azure client mocking - deferred to integration tests")
-}
-
 // TestServiceUpdaterProcessBatchFlow tests that processBatch correctly categorizes work
 func TestServiceUpdaterProcessBatchFlow(t *testing.T) {
 	dt := &DiffTracker{
@@ -316,20 +302,6 @@ func TestServiceUpdaterProcessBatchFlow(t *testing.T) {
 	assert.Equal(t, 1, createdCount, "Should have 1 service in StateCreated")
 	assert.Equal(t, 1, deletionPendingCount, "Should have 1 service in StateDeletionPending")
 	assert.Equal(t, 1, deletionInProgressCount, "Should have 1 service in StateDeletionInProgress")
-}
-
-// TestServiceUpdaterSemaphoreLimit tests that semaphore limits concurrent operations
-func TestServiceUpdaterSemaphoreLimit(t *testing.T) {
-	// Skip: ServiceUpdater requires DiffTracker with Azure clients which needs extensive mocking
-	// Semaphore limiting is verified through integration tests
-	t.Skip("ServiceUpdater requires Azure client mocking - deferred to integration tests")
-}
-
-// TestServiceUpdaterActiveOpsTracking tests that activeOps map prevents duplicate processing
-func TestServiceUpdaterActiveOpsTracking(t *testing.T) {
-	// Skip: ServiceUpdater requires DiffTracker with Azure clients which needs extensive mocking
-	// Active operations tracking is verified through integration tests
-	t.Skip("ServiceUpdater requires Azure client mocking - deferred to integration tests")
 }
 
 // TestServiceUpdaterRequeueKeepsInitTriggerCounterBalanced verifies that the follow-up
@@ -797,4 +769,88 @@ func TestServiceUpdaterCreateOutboundService_StepFailuresDoNotRecordNRPState(t *
 				"a partially created outbound service must not be recorded as present in NRP")
 		})
 	}
+}
+
+// TestServiceUpdaterUpdateInboundService covers the path that applies a spec change to a live
+// LoadBalancer. It re-PUTs only the LoadBalancer: the Public IP allocation is independent of the
+// rules, and the ServiceGateway registration references the backend pool by an ID that is stable
+// across port edits.
+func TestServiceUpdaterUpdateInboundService(t *testing.T) {
+	const uid = "11111111-1111-1111-1111-111111111111"
+
+	validConfig := func() *InboundConfig {
+		return &InboundConfig{
+			FrontendPorts: []PortMapping{{Port: 80, Protocol: "TCP"}},
+			BackendPorts:  []PortMapping{{Port: 8080, Protocol: "TCP"}},
+		}
+	}
+
+	t.Run("re-PUTs the LoadBalancer and reports success", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		m := newOutboundMocks(ctrl)
+		mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+		m.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), "rg", uid, gomock.Any()).Return(nil, nil).Times(1)
+		// A port-only update must not touch the Public IP or re-register with the ServiceGateway.
+		m.pip.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+		m.sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.networkClientFactory = m.factory
+		got := &outboundCompletion{}
+		outboundUpdater(dt, got).updateInboundService(uid, validConfig(), "corr")
+
+		assert.True(t, got.called)
+		assert.True(t, got.success, "a successful LoadBalancer update must report success: %v", got.err)
+	})
+
+	t.Run("transient ARM failure is retryable, not terminal", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		m := newOutboundMocks(ctrl)
+		mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+		m.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil, errors.New("boom")).AnyTimes()
+
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.networkClientFactory = m.factory
+		got := &outboundCompletion{}
+		outboundUpdater(dt, got).updateInboundService(uid, validConfig(), "corr")
+
+		assert.True(t, got.called)
+		assert.False(t, got.success)
+		assert.False(t, isTerminalError(got.err),
+			"an ARM failure must stay retryable so the update is re-attempted")
+	})
+
+	t.Run("unsupported spec parks instead of retrying forever", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		m := newOutboundMocks(ctrl)
+		mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+		m.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+		// The build fails first, so the LoadBalancer must never be PUT with an unsupported spec.
+		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		dualStack := validConfig()
+		dualStack.IPFamilies = []string{"IPv4", "IPv6"}
+
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.networkClientFactory = m.factory
+		got := &outboundCompletion{}
+		outboundUpdater(dt, got).updateInboundService(uid, dualStack, "corr")
+
+		assert.True(t, got.called)
+		assert.False(t, got.success)
+		assert.True(t, isTerminalError(got.err),
+			"a deterministic spec failure must be terminal so the engine parks instead of looping")
+	})
 }

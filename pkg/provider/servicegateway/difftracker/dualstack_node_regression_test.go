@@ -266,33 +266,6 @@ func TestColdStart_FQDNEndpointSlice_Skipped(t *testing.T) {
 	assert.Empty(t, k8s.Nodes, "no location should be created for an FQDN-only slice")
 }
 
-// TestNodeIPForEndpointSlice_FamilyMatchTable pins the family-matching helper directly.
-func TestNodeIPForEndpointSlice_FamilyMatchTable(t *testing.T) {
-	nodeIPs := []string{"10.0.0.50", "fd00::50"} // IPv4 first
-	cases := []struct {
-		name     string
-		addrType discoveryv1.AddressType
-		wantIP   string
-		wantOK   bool
-	}{
-		{"ipv4 slice -> ipv4 node ip", discoveryv1.AddressTypeIPv4, "10.0.0.50", true},
-		{"ipv6 slice -> ipv6 node ip", discoveryv1.AddressTypeIPv6, "fd00::50", true},
-		{"fqdn slice -> skipped", discoveryv1.AddressTypeFQDN, "", false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			ip, ok := nodeIPForEndpointSlice(nodeIPs, tc.addrType)
-			assert.Equal(t, tc.wantOK, ok)
-			assert.Equal(t, tc.wantIP, ip)
-		})
-	}
-
-	// A node missing the requested family yields no match (e.g. IPv4-only node, IPv6 slice).
-	ip, ok := nodeIPForEndpointSlice([]string{"10.0.0.51"}, discoveryv1.AddressTypeIPv6)
-	assert.False(t, ok, "an IPv4-only node has no IPv6 location for an IPv6 slice")
-	assert.Equal(t, "", ip)
-}
-
 // Compile-time guard that the egress label const is the one the importer filters on (keeps this
 // regression file honest if the label is ever renamed).
 var _ = consts.PodLabelServiceEgressGateway

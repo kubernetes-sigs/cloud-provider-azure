@@ -245,7 +245,7 @@ func (dt *DiffTracker) podInformerAddPod(pod *v1.Pod) {
 	if _, err := netip.ParseAddr(pod.Status.HostIP); err != nil {
 		klog.Warningf("podInformerAddPod: pod %s/%s has a malformed HostIP %q; skipping egress registration",
 			pod.Namespace, pod.Name, pod.Status.HostIP)
-		dt.eventRecorder.Event(pod, v1.EventTypeWarning, "ServiceGatewayInvalidPodIP",
+		dt.recordEvent(pod, v1.EventTypeWarning, "ServiceGatewayInvalidPodIP",
 			fmt.Sprintf("Malformed HostIP %q on the pod status", pod.Status.HostIP))
 		return
 	}
@@ -257,7 +257,7 @@ func (dt *DiffTracker) podInformerAddPod(pod *v1.Pod) {
 		if _, err := netip.ParseAddr(podIP); err != nil {
 			klog.Warningf("podInformerAddPod: pod %s/%s has a malformed PodIP %q; skipping that address",
 				pod.Namespace, pod.Name, podIP)
-			dt.eventRecorder.Event(pod, v1.EventTypeWarning, "ServiceGatewayInvalidPodIP",
+			dt.recordEvent(pod, v1.EventTypeWarning, "ServiceGatewayInvalidPodIP",
 				fmt.Sprintf("Malformed PodIP %q on the pod status", podIP))
 			continue
 		}
@@ -275,7 +275,7 @@ func (dt *DiffTracker) podInformerAddPod(pod *v1.Pod) {
 		// malformed ARM requests (endless retries). Reject and surface it.
 		klog.Warningf("podInformerAddPod: pod %s/%s has an invalid egress gateway label %q; skipping egress registration",
 			pod.Namespace, pod.Name, egressName)
-		dt.eventRecorder.Event(pod, v1.EventTypeWarning, "ServiceGatewayInvalidEgressLabel",
+		dt.recordEvent(pod, v1.EventTypeWarning, "ServiceGatewayInvalidEgressLabel",
 			fmt.Sprintf("Invalid egress gateway label %q: must be a valid Azure resource name (alphanumerics, '-', '_', '.'; start alphanumeric; 1-76 chars)", egressName))
 		return
 	}
@@ -297,7 +297,7 @@ func (dt *DiffTracker) podInformerAddPod(pod *v1.Pod) {
 		}
 		klog.Warningf("podInformerAddPod: registering egress pod %s WITHOUT cleanup finalizer after retries: %v", podKey, err)
 		RecordPodFinalizerAddFailed()
-		dt.eventRecorder.Event(pod, v1.EventTypeWarning, "ServiceGatewayFinalizerAddFailed",
+		dt.recordEvent(pod, v1.EventTypeWarning, "ServiceGatewayFinalizerAddFailed",
 			fmt.Sprintf("Failed to add ServiceGateway cleanup finalizer after retries; egress pod registered without NRP-drain protection: %v", err))
 	}
 
@@ -308,7 +308,7 @@ func (dt *DiffTracker) podInformerAddPod(pod *v1.Pod) {
 		if !ok {
 			klog.Warningf("podInformerAddPod: pod %s/%s has no same-family node IP for PodIP %q (HostIPs=%v); skipping that address",
 				pod.Namespace, pod.Name, podIP, pod.Status.HostIPs)
-			dt.eventRecorder.Event(pod, v1.EventTypeWarning, "ServiceGatewayNoNodeLocation",
+			dt.recordEvent(pod, v1.EventTypeWarning, "ServiceGatewayNoNodeLocation",
 				fmt.Sprintf("No same-family node IP for pod address %q; the node must expose that IP family in status.hostIPs", podIP))
 			continue
 		}

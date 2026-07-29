@@ -162,3 +162,63 @@ func TestRecordWarningEventWithoutRecorder(t *testing.T) {
 		recordWarningEvent(tracker, svc, &InboundConfigValidationError{Reason: "R", Message: "m"})
 	})
 }
+
+// TestLoadBalancerEnsureDeletedSchedulesTeardown pins the cloud-provider deletion entry point.
+//
+// The Service controller removes its own load-balancer finalizer as soon as this returns nil, so a
+// nil return that did not actually schedule teardown loses the deletion: the Azure resources are
+// left behind with no Kubernetes object driving their removal.
+func TestLoadBalancerEnsureDeletedSchedulesTeardown(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := newInboundService("service-uid")
+	tracker := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset(svc))
+
+	lb := NewLoadBalancer(nil)
+	assert.NoError(t, lb.SetTracker(tracker))
+
+	_, err := lb.EnsureLoadBalancer(context.Background(), "cluster", svc, nil)
+	assert.NoError(t, err)
+	assert.True(t, tracker.IsServiceTracked(ServiceUID(svc)))
+
+	assert.NoError(t, lb.EnsureLoadBalancerDeleted(context.Background(), "cluster", svc))
+
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	opState, tracked := tracker.pendingServiceOps[ServiceUID(svc)]
+	if assert.True(t, tracked, "deletion must leave the engine tracking the teardown") {
+		assert.Contains(t,
+			[]ResourceState{StateDeletionPending, StateDeletionInProgress},
+			opState.State,
+			"the Service must be moved into a deleting state, not left as-is")
+	}
+}
+
+// TestLoadBalancerEnsureDeletedRequiresTracker pins that deletion fails loudly when the runtime has
+// not published a tracker. Returning nil here would let the Service controller drop its finalizer
+// and consider the load balancer deleted while nothing ever tore it down.
+func TestLoadBalancerEnsureDeletedRequiresTracker(t *testing.T) {
+	lb := NewLoadBalancer(nil)
+	err := lb.EnsureLoadBalancerDeleted(context.Background(), "cluster", newInboundService("service-uid"))
+	assert.Error(t, err, "an unbound tracker must not report a successful deletion")
+}
+
+// TestLoadBalancerEnsureDeletedRejectsUnusableService pins that a Service the engine cannot identify
+// is reported as an error rather than silently reported deleted.
+func TestLoadBalancerEnsureDeletedRejectsUnusableService(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tracker := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset())
+	lb := NewLoadBalancer(nil)
+	assert.NoError(t, lb.SetTracker(tracker))
+
+	assert.Error(t, lb.EnsureLoadBalancerDeleted(context.Background(), "cluster", nil),
+		"a nil Service must be an error, not a silent success")
+
+	noUID := newInboundService("")
+	noUID.UID = ""
+	assert.Error(t, lb.EnsureLoadBalancerDeleted(context.Background(), "cluster", noUID),
+		"a Service without a UID cannot be identified and must not report success")
+}

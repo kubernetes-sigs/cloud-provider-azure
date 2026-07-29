@@ -110,6 +110,10 @@ type InboundConfig struct {
 	// Public IP version; more than one (dual-stack) is unsupported for PodIP backend pools and
 	// is rejected as a terminal error in buildInboundServiceResources.
 	IPFamilies []string
+	// InvalidIdleTimeout holds the raw idle-timeout annotation value when it could not be parsed
+	// or fell outside the supported range. Recorded rather than dropped so ValidateInboundConfig
+	// can reject the Service with a visible reason instead of silently applying the default.
+	InvalidIdleTimeout *string
 	// NamedTargetPorts holds any string (named) Service targetPort values. Named target ports
 	// cannot be resolved to a PodIP backend port here, so their presence is rejected as a
 	// terminal error in buildInboundServiceResources rather than silently mis-routing traffic.

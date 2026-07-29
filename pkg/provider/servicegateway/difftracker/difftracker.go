@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/record"
@@ -131,6 +132,26 @@ func (dt *DiffTracker) SetEventRecorder(recorder record.EventRecorder) {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 	dt.eventRecorder = recorder
+}
+
+// recordEvent emits a Kubernetes Event for object, if a recorder has been published.
+//
+// It is the only supported way to reach dt.eventRecorder. SetEventRecorder writes the field under
+// dt.mu after construction while informer handlers read it concurrently, so an unsynchronised read
+// is a data race; the field can also still be nil on paths that never publish a recorder, which
+// would panic the informer goroutine that dereferenced it. The recorder is snapshotted and the lock
+// released before Event is called, because Event performs I/O.
+func (dt *DiffTracker) recordEvent(object runtime.Object, eventType, reason, message string) {
+	if dt == nil {
+		return
+	}
+	dt.mu.Lock()
+	recorder := dt.eventRecorder
+	dt.mu.Unlock()
+	if recorder == nil {
+		return
+	}
+	recorder.Event(object, eventType, reason, message)
 }
 
 // lockWithLatency acquires dt.mu and returns a release function that unlocks it and,

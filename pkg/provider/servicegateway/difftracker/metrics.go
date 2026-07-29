@@ -181,6 +181,21 @@ var (
 		},
 	)
 
+	// serviceOperationsParkedTotal counts service operations that stopped making progress: either a
+	// deterministic, spec-driven failure that cannot succeed on retry, or exhaustion of the retry
+	// budget. A parked operation leaves the Service without its Azure resources indefinitely while
+	// EnsureLoadBalancer has already reported success to the service controller, so without this
+	// counter the condition has no signal beyond a log line.
+	serviceOperationsParkedTotal = metrics.NewCounterVec(
+		&metrics.CounterOpts{
+			Subsystem:      diffTrackerSubsystem,
+			Name:           "service_operations_parked_total",
+			Help:           "Total count of service operations parked without completing, by park reason",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"reason"},
+	)
+
 	// initializationDurationSeconds reports how long SLB controller initialization took.
 	initializationDurationSeconds = metrics.NewGauge(
 		&metrics.GaugeOpts{
@@ -239,6 +254,7 @@ func RegisterMetrics() {
 		legacyregistry.MustRegister(orphanedResourcesCleanedTotal)
 		legacyregistry.MustRegister(finalizersRecoveredTotal)
 		legacyregistry.MustRegister(podFinalizerAddFailedTotal)
+		legacyregistry.MustRegister(serviceOperationsParkedTotal)
 		legacyregistry.MustRegister(locationSyncTerminalErrorsTotal)
 		legacyregistry.MustRegister(initializationDurationSeconds)
 		legacyregistry.MustRegister(pendingOperationOldestAgeSeconds)
@@ -379,6 +395,19 @@ func recordLocationSyncTerminalError() {
 // informer in the provider package.
 func RecordPodFinalizerAddFailed() {
 	podFinalizerAddFailedTotal.Inc()
+}
+
+// Park reasons for serviceOperationsParkedTotal. The label is a small closed set so cardinality
+// stays bounded.
+const (
+	parkReasonTerminalError   = "terminal_error"
+	parkReasonRetriesExceeded = "retries_exceeded"
+)
+
+// recordServiceParked counts a service operation that stopped making progress. Safe to call while
+// dt.mu is held: it touches only the package-level counter.
+func recordServiceParked(reason string) {
+	serviceOperationsParkedTotal.WithLabelValues(reason).Inc()
 }
 
 // recordInitializationDuration records how long initialization took

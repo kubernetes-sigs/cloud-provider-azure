@@ -154,6 +154,7 @@ func (s *ServiceUpdater) retryGate(serviceUID string, opState *ServiceOperationS
 		if !opState.RetriesExhausted {
 			opState.RetriesExhausted = true
 			opState.NextRetryAt = time.Now().Add(parkReArmCooldown)
+			recordServiceParked(parkReasonRetriesExceeded)
 			s.logger.Info("Giving up service operation after exhausting retries",
 				"serviceUID", serviceUID, "state", opState.State, "retries", opState.RetryCount)
 			time.AfterFunc(parkReArmCooldown, s.diffTracker.triggerServiceUpdater)

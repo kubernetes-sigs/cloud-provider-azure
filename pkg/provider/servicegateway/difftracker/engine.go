@@ -810,7 +810,8 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 					opState.CreationFailedTerminal = true
 					opState.State = StateNotStarted
 					opState.LastAttempt = time.Now().Format(time.RFC3339)
-					dt.logger.V(4).Info("Parked service after non-retryable update error", "err", err, "service", serviceUID)
+					recordServiceParked(parkReasonTerminalError)
+					dt.logger.Error(err, "Parked service after a non-retryable update error; it will not be retried until the Service spec changes", "service", serviceUID)
 					dt.checkInitializationCompleteLocked()
 				}
 			} else {
@@ -1006,7 +1007,8 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 					opState.CreationFailedTerminal = true
 					opState.State = StateNotStarted
 					opState.LastAttempt = time.Now().Format(time.RFC3339)
-					dt.logger.V(4).Info("Parked service after non-retryable creation error", "err", err, "service", serviceUID)
+					recordServiceParked(parkReasonTerminalError)
+					dt.logger.Error(err, "Parked service after a non-retryable creation error; it will not be retried until the Service spec changes", "service", serviceUID)
 					dt.checkInitializationCompleteLocked()
 				}
 			} else {

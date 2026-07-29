@@ -2,6 +2,7 @@ package difftracker
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -1015,4 +1016,58 @@ func TestReconcileServices_AppliesRuntimeAdmissionOnStartup(t *testing.T) {
 		"a Service owned by another LoadBalancerClass must not be claimed on restart")
 	assert.Contains(t, dt.pendingServiceOps, okUID,
 		"a supported Service must still be provisioned on restart")
+}
+
+// TestRecoverServiceExternalIPs_SnapshotsNRPStateUnderLock pins that the NRP LoadBalancer set is
+// read under dt.mu.
+//
+// recoverServiceExternalIPs runs after WaitForInitialSync, so the ServiceUpdater and
+// LocationsUpdater goroutines are already live and mutate NRPResources.LoadBalancers under dt.mu.
+// IgnoreCaseSet wraps a map, so an unsynchronised read there is not a tolerable data race but a
+// fatal "concurrent map read and map write" that recover() cannot catch, killing the CCM during
+// startup recovery. Run with -race.
+func TestRecoverServiceExternalIPs_SnapshotsNRPStateUnderLock(t *testing.T) {
+	dt := newTestDiffTracker()
+	dt.config = testConfig()
+	dt.kubeClient = fake.NewSimpleClientset()
+
+	serviceUIDToService := make(map[string]*v1.Service)
+	for i := 0; i < 50; i++ {
+		uid := fmt.Sprintf("svc-%d", i)
+		serviceUIDToService[uid] = &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: uid, Namespace: "ns", UID: types.UID(uid)},
+			Spec:       v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer},
+		}
+		dt.NRPResources.LoadBalancers.Insert(uid)
+	}
+
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			// Exactly what the ServiceUpdater does on every create/delete completion.
+			dt.UpdateNRPLoadBalancers(SyncServicesReturnType{
+				Additions: newIgnoreCaseSetFromSlice([]string{fmt.Sprintf("churn-%d", i)}),
+				Removals:  newIgnoreCaseSetFromSlice([]string{fmt.Sprintf("churn-%d", i-1)}),
+			})
+		}
+	}()
+
+	for i := 0; i < 20; i++ {
+		recoverServiceExternalIPs(context.Background(), dt, serviceUIDToService, map[string]string{})
+	}
+
+	close(stop)
+	<-done
+
+	dt.mu.Lock()
+	stillTracked := dt.NRPResources.LoadBalancers.Has("svc-0")
+	dt.mu.Unlock()
+	assert.True(t, stillTracked, "recovery must only read the NRP LoadBalancer set, never mutate it")
 }

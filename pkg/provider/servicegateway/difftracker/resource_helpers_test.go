@@ -9,6 +9,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
@@ -807,34 +808,104 @@ func TestIsValidEgressIdentity(t *testing.T) {
 		"PIP name derived from a max-length egress identity must fit Azure's 80-char publicIPAddresses limit")
 }
 
-func TestExtractInboundConfigFromService_DropsAffinityAndIdleTimeout(t *testing.T) {
-	service := &v1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        "test-service",
-			Namespace:   "default",
-			Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIdleTimeout: "30"},
-		},
-		Spec: v1.ServiceSpec{
-			SessionAffinity: v1.ServiceAffinityClientIP,
-			Ports: []v1.ServicePort{
-				{
-					Name:       "http",
-					Protocol:   v1.ProtocolTCP,
-					Port:       80,
-					TargetPort: intstr.FromInt(8080),
+func TestExtractInboundConfigFromService_ExtractsIdleTimeout(t *testing.T) {
+	newService := func(annotations map[string]string) *v1.Service {
+		return &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-service", Namespace: "default", Annotations: annotations},
+			Spec: v1.ServiceSpec{
+				Ports: []v1.ServicePort{
+					{Name: "http", Protocol: v1.ProtocolTCP, Port: 80, TargetPort: intstr.FromInt(8080)},
 				},
 			},
-		},
+		}
 	}
 
-	config := ExtractInboundConfigFromService(service)
-	if !assert.NotNil(t, config) {
-		t.FailNow()
+	// buildInboundServiceResources programs IdleTimeoutInMinutes from this field, so leaving it
+	// unset makes the annotation inert and the Service silently keeps the Azure default.
+	t.Run("annotation reaches the config", func(t *testing.T) {
+		config := ExtractInboundConfigFromService(newService(
+			map[string]string{consts.ServiceAnnotationLoadBalancerIdleTimeout: "30"}))
+		if assert.NotNil(t, config) {
+			assert.Equal(t, int32(30), ptr.Deref(config.IdleTimeoutMinutes, 0))
+			assert.Nil(t, config.InvalidIdleTimeout)
+			assert.NoError(t, ValidateInboundConfig(config))
+		}
+	})
+
+	t.Run("absent annotation leaves the builder default in place", func(t *testing.T) {
+		config := ExtractInboundConfigFromService(newService(nil))
+		if assert.NotNil(t, config) {
+			assert.Nil(t, config.IdleTimeoutMinutes)
+			assert.NoError(t, ValidateInboundConfig(config))
+		}
+	})
+
+	// An unusable value must be rejected with a reason rather than silently falling back to the
+	// default, which would report a timeout the Service is not running with.
+	for _, value := range []string{"0", "3", "101", "not-a-number"} {
+		t.Run("invalid value "+value+" is rejected", func(t *testing.T) {
+			config := ExtractInboundConfigFromService(newService(
+				map[string]string{consts.ServiceAnnotationLoadBalancerIdleTimeout: value}))
+			if !assert.NotNil(t, config) {
+				return
+			}
+			assert.Nil(t, config.IdleTimeoutMinutes)
+			err := ValidateInboundConfig(config)
+			var validationErr *InboundConfigValidationError
+			if assert.ErrorAs(t, err, &validationErr) {
+				assert.Equal(t, "InvalidIdleTimeout", validationErr.Reason)
+			}
+		})
+	}
+}
+
+// TestAdmitInboundService_RejectsUnimplementedSpecFields pins that Service spec fields the PodIP
+// data path does not implement are rejected rather than silently ignored. Accepting them makes the
+// Service report a configuration it is not running with: ClientIP affinity that is not honoured,
+// externalTrafficPolicy Local that behaves as Cluster, or a requested loadBalancerIP that is never
+// used.
+func TestAdmitInboundService_RejectsUnimplementedSpecFields(t *testing.T) {
+	base := func() *v1.Service {
+		return &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "ns", UID: "abc"},
+			Spec: v1.ServiceSpec{
+				Type:  v1.ServiceTypeLoadBalancer,
+				Ports: []v1.ServicePort{{Port: 80, TargetPort: intstr.FromInt32(8080), Protocol: v1.ProtocolTCP}},
+			},
+		}
 	}
 
-	// The extractor maps neither SessionAffinity nor the idle-timeout annotation, so both stay nil.
-	assert.Nil(t, config.SessionPersistence)
-	assert.Nil(t, config.IdleTimeoutMinutes)
+	for _, tc := range []struct {
+		name   string
+		mutate func(*v1.Service)
+		reason string
+	}{
+		{"sessionAffinity ClientIP", func(s *v1.Service) { s.Spec.SessionAffinity = v1.ServiceAffinityClientIP }, "UnsupportedSessionAffinity"},
+		{"externalTrafficPolicy Local", func(s *v1.Service) {
+			s.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
+		}, "UnsupportedExternalTrafficPolicy"},
+		{"loadBalancerIP", func(s *v1.Service) { s.Spec.LoadBalancerIP = "203.0.113.10" }, "UnsupportedLoadBalancerIP"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := base()
+			tc.mutate(svc)
+			config, err := AdmitInboundService(svc)
+			assert.Nil(t, config)
+			var validationErr *InboundConfigValidationError
+			if assert.ErrorAs(t, err, &validationErr) {
+				assert.Equal(t, tc.reason, validationErr.Reason)
+			}
+		})
+	}
+
+	t.Run("defaults are still admitted", func(t *testing.T) {
+		svc := base()
+		svc.Spec.SessionAffinity = v1.ServiceAffinityNone
+		svc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeCluster
+		config, err := AdmitInboundService(svc)
+		assert.NoError(t, err)
+		assert.NotNil(t, config)
+	})
 }
 
 // TestAdmitInboundService_RejectsInternalLoadBalancerCaseInsensitively pins the shared admission

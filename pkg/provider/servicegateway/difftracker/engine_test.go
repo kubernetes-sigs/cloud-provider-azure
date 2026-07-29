@@ -339,12 +339,6 @@ func TestEngineDeleteService_WithLocations(t *testing.T) {
 	}
 }
 
-// TestEngineUpdateEndpoints_ServiceExists tests endpoint updates for existing service
-// Note: This test is skipped as it requires mocking UpdateK8sEndpoints which has complex dependencies
-func TestEngineUpdateEndpoints_ServiceExists(t *testing.T) {
-	t.Skip("Requires mocking UpdateK8sEndpoints - covered by integration tests")
-}
-
 // TestEngineUpdateEndpoints_ServiceCreating tests endpoint buffering during service creation
 func TestEngineUpdateEndpoints_ServiceCreating(t *testing.T) {
 	dt := newTestDiffTracker()
@@ -377,12 +371,6 @@ func TestEngineUpdateEndpoints_ServiceCreating(t *testing.T) {
 	}
 }
 
-// TestEngineOnServiceCreationComplete_Success tests successful service creation callback
-// Note: This test is skipped as promotion requires mocking UpdateK8sEndpoints/UpdateK8sPod
-func TestEngineOnServiceCreationComplete_Success(t *testing.T) {
-	t.Skip("Requires mocking UpdateK8sEndpoints/UpdateK8sPod - covered by integration tests")
-}
-
 // TestEngineOnServiceCreationComplete_Failure tests failed service creation callback
 func TestEngineOnServiceCreationComplete_Failure(t *testing.T) {
 	dt := newTestDiffTracker()
@@ -403,12 +391,6 @@ func TestEngineOnServiceCreationComplete_Failure(t *testing.T) {
 	opState, exists := dt.pendingServiceOps[serviceUID]
 	assert.True(t, exists, "Failed service should remain in pending")
 	assert.Greater(t, opState.RetryCount, 0, "Retry count should increase")
-}
-
-// TestEngineAddPod_ServiceExists tests adding a pod to an existing service
-// Note: This test is skipped as it requires mocking UpdatePod which has complex dependencies
-func TestEngineAddPod_ServiceExists(t *testing.T) {
-	t.Skip("Requires mocking UpdatePod - covered by integration tests")
 }
 
 // TestEngineAddPod_ServiceCreating tests pod buffering during service creation

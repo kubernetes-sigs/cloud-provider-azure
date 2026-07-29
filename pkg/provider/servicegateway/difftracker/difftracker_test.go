@@ -5,6 +5,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
@@ -241,3 +244,51 @@ func TestNewSeedsOutboundRefCount(t *testing.T) {
 // TestUpdateK8sEndpointsRelocation covers the case where the same pod IP appears
 // in both OldAddresses and NewAddresses but on a different node (relocation): the
 // pod must be removed from the old node and added to the new one.
+
+// nonBlockingRecorder discards events. record.NewFakeRecorder is unsuitable here: its Event does a
+// blocking channel send, so a tight emit loop fills the buffer and deadlocks the test rather than
+// exercising the field access this test is about.
+type nonBlockingRecorder struct{}
+
+func (nonBlockingRecorder) Event(runtime.Object, string, string, string)                  {}
+func (nonBlockingRecorder) Eventf(runtime.Object, string, string, string, ...interface{}) {}
+func (nonBlockingRecorder) AnnotatedEventf(runtime.Object, map[string]string, string, string, string, ...interface{}) {
+}
+
+// TestRecordEvent_IsRaceFreeAndNilSafe pins the two properties every event call site depends on.
+//
+// SetEventRecorder writes dt.eventRecorder under dt.mu after construction while informer handlers
+// emit events concurrently, so reading the field directly is a data race. The field is also nil
+// until a recorder is published, and a direct dereference from an informer goroutine would panic
+// the CCM rather than drop the event. Run with -race.
+func TestRecordEvent_IsRaceFreeAndNilSafe(t *testing.T) {
+	dt := newTestDiffTracker()
+
+	pod := &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "ns"}}
+
+	// No recorder published yet: must be a silent no-op, not a panic.
+	assert.NotPanics(t, func() {
+		dt.recordEvent(pod, v1.EventTypeWarning, "Reason", "message")
+	}, "emitting before a recorder is published must not panic the informer goroutine")
+
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			dt.recordEvent(pod, v1.EventTypeWarning, "Reason", "message")
+		}
+	}()
+
+	for i := 0; i < 200; i++ {
+		dt.SetEventRecorder(nonBlockingRecorder{})
+	}
+
+	close(stop)
+	<-done
+}

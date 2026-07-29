@@ -311,3 +311,67 @@ func TestEndpointSliceAddresses(t *testing.T) {
 		})
 	}
 }
+
+// TestEndpointSliceAddresses_ResolvesLocationPerAddressFamily pins that the node location is
+// selected from each address's own family rather than the slice's declared AddressType.
+//
+// NRP requires every address to sit under a same-family location: an IPv4 location cannot hold an
+// IPv6 address. AddressType describes the slice, not a guarantee about each address it carries, so
+// deriving one location per endpoint and applying it to every address can register an address under
+// the wrong family. The egress path already resolves per address (PodNodeLocationsByFamily).
+func TestEndpointSliceAddresses_ResolvesLocationPerAddressFamily(t *testing.T) {
+	node := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "node-1"},
+		Status: v1.NodeStatus{Addresses: []v1.NodeAddress{
+			{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+			{Type: v1.NodeInternalIP, Address: "fd00::1"},
+		}},
+	}
+	indexer := k8scache.NewIndexer(k8scache.MetaNamespaceKeyFunc, k8scache.Indexers{})
+	assert.NoError(t, indexer.Add(node))
+	nodeLister := corelisters.NewNodeLister(indexer)
+
+	newSlice := func(addressType discovery_v1.AddressType, addresses ...string) *discovery_v1.EndpointSlice {
+		return &discovery_v1.EndpointSlice{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "es", Namespace: "ns",
+				OwnerReferences: []metav1.OwnerReference{{Kind: "Service", UID: types.UID("svc-1")}},
+			},
+			AddressType: addressType,
+			Endpoints: []discovery_v1.Endpoint{{
+				Addresses:  addresses,
+				NodeName:   ptr.To("node-1"),
+				Conditions: discovery_v1.EndpointConditions{Ready: ptr.To(true)},
+			}},
+		}
+	}
+
+	t.Run("address family wins over a mismatched AddressType", func(t *testing.T) {
+		got := endpointSliceAddresses(newSlice(discovery_v1.AddressTypeIPv4, "fd00::99"), nodeLister)
+		assert.Equal(t, map[string]string{"fd00::99": "fd00::1"}, got,
+			"an IPv6 address must resolve to the node's IPv6 location even in an IPv4-typed slice")
+	})
+
+	t.Run("mixed families each resolve to their own location", func(t *testing.T) {
+		got := endpointSliceAddresses(newSlice(discovery_v1.AddressTypeIPv4, "10.244.0.9", "fd00::99"), nodeLister)
+		assert.Equal(t, map[string]string{"10.244.0.9": "10.0.0.1", "fd00::99": "fd00::1"}, got)
+	})
+
+	t.Run("no same-family node IP skips the address", func(t *testing.T) {
+		v4Only := &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: "node-2"},
+			Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "10.0.0.2"}}},
+		}
+		v4Indexer := k8scache.NewIndexer(k8scache.MetaNamespaceKeyFunc, k8scache.Indexers{})
+		assert.NoError(t, v4Indexer.Add(v4Only))
+		slice := newSlice(discovery_v1.AddressTypeIPv6, "fd00::99")
+		slice.Endpoints[0].NodeName = ptr.To("node-2")
+		assert.Empty(t, endpointSliceAddresses(slice, corelisters.NewNodeLister(v4Indexer)),
+			"an IPv6 address must not fall back to an IPv4 node location")
+	})
+
+	t.Run("conforming single-family slice is unchanged", func(t *testing.T) {
+		got := endpointSliceAddresses(newSlice(discovery_v1.AddressTypeIPv4, "10.244.0.9"), nodeLister)
+		assert.Equal(t, map[string]string{"10.244.0.9": "10.0.0.1"}, got)
+	})
+}

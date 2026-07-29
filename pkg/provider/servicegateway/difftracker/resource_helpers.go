@@ -385,6 +385,24 @@ func ExtractInboundConfigFromService(service *v1.Service) *InboundConfig {
 		}
 	}
 
+	// buildInboundServiceResources programs IdleTimeoutInMinutes from this field and falls back to
+	// the Azure default when it is nil, so leaving it unset makes the annotation inert: the user
+	// asks for a different timeout and silently keeps the default. Bounds match the standard
+	// LoadBalancer path so the same annotation behaves identically with ServiceGateway enabled.
+	// A malformed or out-of-range value is left nil here and rejected by ValidateInboundConfig,
+	// which carries the Event reason.
+	if idleTimeout, err := consts.Getint32ValueFromK8sSvcAnnotation(service.Annotations, consts.ServiceAnnotationLoadBalancerIdleTimeout, func(val *int32) error {
+		if *val < inboundIdleTimeoutMinMinutes || *val > inboundIdleTimeoutMaxMinutes {
+			return fmt.Errorf("idle timeout must be a whole number of minutes between %d and %d, got %d",
+				inboundIdleTimeoutMinMinutes, inboundIdleTimeoutMaxMinutes, *val)
+		}
+		return nil
+	}); err != nil {
+		config.InvalidIdleTimeout = to.Ptr(service.Annotations[consts.ServiceAnnotationLoadBalancerIdleTimeout])
+	} else if idleTimeout != nil {
+		config.IdleTimeoutMinutes = idleTimeout
+	}
+
 	return config
 }
 
@@ -408,6 +426,13 @@ func (e *InboundConfigValidationError) WarningEvent() (reason, message string) {
 	return e.Reason, e.Message
 }
 
+// Supported bounds for the idle-timeout annotation, matching the standard LoadBalancer path so the
+// same annotation is accepted identically with ServiceGateway enabled.
+const (
+	inboundIdleTimeoutMinMinutes = 4
+	inboundIdleTimeoutMaxMinutes = 100
+)
+
 // AdmitInboundService is the single decision point for whether this controller may provision a
 // LoadBalancer Service, and with what desired config. It returns the extracted config on success,
 // (nil, nil) when there is nothing to provision, and an *InboundConfigValidationError when the
@@ -429,6 +454,29 @@ func AdmitInboundService(service *v1.Service) (*InboundConfig, error) {
 		return nil, &InboundConfigValidationError{
 			Reason:  "UnsupportedInternalLoadBalancer",
 			Message: fmt.Sprintf("internal load balancer is not supported when ServiceGateway is enabled; remove the %q annotation", consts.ServiceAnnotationLoadBalancerInternal),
+		}
+	}
+
+	// Reject spec fields the PodIP data path does not implement. Accepting them silently is the
+	// dangerous option: sessionAffinity would report ClientIP while traffic is balanced per
+	// connection, and externalTrafficPolicy would report Local while every rule behaves as
+	// Cluster, so the Service looks configured in a way it is not.
+	if service.Spec.SessionAffinity == v1.ServiceAffinityClientIP {
+		return nil, &InboundConfigValidationError{
+			Reason:  "UnsupportedSessionAffinity",
+			Message: "sessionAffinity: ClientIP is not implemented when ServiceGateway is enabled; the Service would be balanced as sessionAffinity: None",
+		}
+	}
+	if service.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeLocal {
+		return nil, &InboundConfigValidationError{
+			Reason:  "UnsupportedExternalTrafficPolicy",
+			Message: "externalTrafficPolicy: Local is not implemented when ServiceGateway is enabled; the Service would behave as externalTrafficPolicy: Cluster",
+		}
+	}
+	if service.Spec.LoadBalancerIP != "" {
+		return nil, &InboundConfigValidationError{
+			Reason:  "UnsupportedLoadBalancerIP",
+			Message: "spec.loadBalancerIP is not implemented when ServiceGateway is enabled; a new Public IP is always allocated",
 		}
 	}
 
@@ -456,6 +504,17 @@ func ValidateInboundConfig(config *InboundConfig) error {
 		return &InboundConfigValidationError{
 			Reason:  "UnsupportedDualStack",
 			Message: fmt.Sprintf("dual-stack Services are not supported when ServiceGateway is enabled (ipFamilies=%v); use a single-stack Service", config.IPFamilies),
+		}
+	}
+
+	// A malformed or out-of-range idle timeout was recorded rather than applied, so the Service is
+	// rejected with a visible reason instead of silently running on the Azure default.
+	if config.InvalidIdleTimeout != nil {
+		return &InboundConfigValidationError{
+			Reason: "InvalidIdleTimeout",
+			Message: fmt.Sprintf("annotation %q value %q is invalid; it must be a whole number of minutes between %d and %d",
+				consts.ServiceAnnotationLoadBalancerIdleTimeout, *config.InvalidIdleTimeout,
+				inboundIdleTimeoutMinMinutes, inboundIdleTimeoutMaxMinutes),
 		}
 	}
 

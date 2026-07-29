@@ -333,23 +333,6 @@ func SelectSameFamilyNodeIP(nodeIPs []string, wantIPv6 bool) (string, bool) {
 	return best, best != ""
 }
 
-// nodeIPForEndpointSlice returns the node InternalIP whose IP family matches the EndpointSlice's
-// AddressType, mirroring the runtime endpointSliceAddresses selection. ok is false
-// for an unsupported AddressType (e.g. FQDN — not a PodIP backend address) or when the node has no
-// internal IP of the required family. This keeps the init-time location key identical to the
-// runtime key so the restart diff is empty for an unchanged dual-stack cluster.
-func nodeIPForEndpointSlice(nodeIPs []string, addressType discoveryv1.AddressType) (string, bool) {
-	switch addressType {
-	case discoveryv1.AddressTypeIPv4:
-		return SelectSameFamilyNodeIP(nodeIPs, false)
-	case discoveryv1.AddressTypeIPv6:
-		return SelectSameFamilyNodeIP(nodeIPs, true)
-	default:
-		// FQDN or unknown AddressType: not a PodIP backend address, skip.
-		return "", false
-	}
-}
-
 // ================================================================================================
 // RESTART RECOVERY - FINALIZER CLEANUP FOR ORPHANED RESOURCES
 // ================================================================================================
@@ -642,17 +625,6 @@ func processK8sEndpoints(
 				continue
 			}
 
-			// Use the node InternalIP whose family matches the EndpointSlice AddressType,
-			// matching the runtime path (endpointSliceAddresses). Without this an
-			// IPv6 slice would be keyed under the node's IPv4 InternalIP at init while runtime
-			// keys it under the IPv6 InternalIP, orphaning the IPv6 location across a restart.
-			nodeIP, ok := nodeIPForEndpointSlice(nodeNameToIPsMap[*endpoint.NodeName], endpointSlice.AddressType)
-			if !ok {
-				logger.V(5).Info("Skipped endpoint: no family-matched node IP or unsupported AddressType", "node", *endpoint.NodeName, "addressType", endpointSlice.AddressType)
-				continue
-			}
-
-			ensureNodeExists(k8s, nodeIP)
 			for _, podIP := range endpoint.Addresses {
 				// Skip malformed addresses; a bad value would poison the AddressLocations payload and
 				// make NRP reject the whole batch (matches endpointSliceAddresses).
@@ -662,6 +634,16 @@ func processK8sEndpoints(
 					logger.V(4).Info("Skipped endpoint with malformed address", "namespace", endpointSlice.Namespace, "endpointSlice", endpointSlice.Name, "address", podIP)
 					continue
 				}
+				// Resolve the node location from the address's own family, matching the runtime
+				// path (endpointSliceAddresses). AddressType describes the slice, not a guarantee
+				// about each address it carries, and NRP requires every address to sit under a
+				// location of its own family.
+				nodeIP, ok := SelectSameFamilyNodeIP(nodeNameToIPsMap[*endpoint.NodeName], addr.Is6())
+				if !ok {
+					logger.V(5).Info("Skipped endpoint with no family-matched node IP", "node", *endpoint.NodeName, "address", addr.String())
+					continue
+				}
+				ensureNodeExists(k8s, nodeIP)
 				addInboundIdentityToPod(k8s, nodeIP, addr.String(), serviceUID)
 			}
 		}
@@ -1044,6 +1026,16 @@ func recoverServiceExternalIPs(ctx context.Context, diffTracker *DiffTracker, se
 	recoveredCount := 0
 	checkedCount := 0
 
+	// Snapshot the NRP LoadBalancer set once under the lock. This runs after WaitForInitialSync, so
+	// the ServiceUpdater and LocationsUpdater goroutines are live and mutate the set under dt.mu,
+	// and IgnoreCaseSet wraps a map: an unsynchronised read is a fatal "concurrent map read and map
+	// write" that recover() cannot catch. The lock cannot simply be held across the loop because it
+	// performs apiserver I/O, and acting on a single observation is also the correct semantics for
+	// a recovery pass.
+	diffTracker.mu.Lock()
+	nrpLoadBalancers := utilsets.NewString(diffTracker.NRPResources.LoadBalancers.UnsortedList()...)
+	diffTracker.mu.Unlock()
+
 	// Find services that exist in BOTH K8s AND NRP but have empty status
 	for serviceUID, svc := range serviceUIDToService {
 		// Only process inbound (LoadBalancer) services
@@ -1052,7 +1044,7 @@ func recoverServiceExternalIPs(ctx context.Context, diffTracker *DiffTracker, se
 		}
 
 		// Only check services that exist in NRP
-		if !diffTracker.NRPResources.LoadBalancers.Has(serviceUID) {
+		if !nrpLoadBalancers.Has(serviceUID) {
 			continue
 		}
 
