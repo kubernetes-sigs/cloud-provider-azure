@@ -720,6 +720,19 @@ func TestAddPodFinalizer(t *testing.T) {
 
 		err := dt.AddPodFinalizer(ctx, pod)
 		assert.NoError(t, err)
+
+		// The fake ObjectTracker does not validate finalizers, so a duplicate Update succeeds
+		// here while a real apiserver rejects it — asserting only NoError would let the
+		// short-circuit be deleted and only fail against a live cluster. Count instead.
+		updatedPod, err := kubeClient.CoreV1().Pods("default").Get(ctx, "test-pod", metav1.GetOptions{})
+		assert.NoError(t, err)
+		count := 0
+		for _, f := range updatedPod.Finalizers {
+			if f == ServiceGatewayPodCleanupFinalizer {
+				count++
+			}
+		}
+		assert.Equal(t, 1, count, "AddPodFinalizer must not append a second copy of the finalizer")
 	})
 
 	t.Run("re-adds finalizer when the live pod lacks it despite the passed object showing it", func(t *testing.T) {
@@ -1367,6 +1380,34 @@ func TestOutboundAddressInAnyNRPLocationLocked(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+
+	// Every case above seeds a single location, so none of them exercises the "any location"
+	// search this function exists for. Dual-stack pods register their IPv4 and IPv6 addresses
+	// under different per-family node locations, so stopping at the first location would release
+	// a finalizer while the pod's other family is still routed in NRP.
+	t.Run("finds an address under a later location", func(t *testing.T) {
+		dt := &DiffTracker{
+			NRPResources: NRPState{
+				Locations: map[string]NRPLocation{
+					"10.0.0.1": {
+						Addresses: map[string]NRPAddress{
+							"10.244.0.5": {Services: utilsets.NewString("egress-1")},
+						},
+					},
+					"fd00::1": {
+						Addresses: map[string]NRPAddress{
+							"fd00:244::5": {Services: utilsets.NewString("egress-1")},
+						},
+					},
+				},
+			},
+		}
+
+		assert.True(t, dt.outboundAddressInAnyNRPLocationLocked("egress-1", "fd00:244::5"),
+			"an address registered under a second location must still be found")
+		assert.False(t, dt.outboundAddressInAnyNRPLocationLocked("egress-1", "fd00:244::9"),
+			"an address registered under no location must not be reported as present")
+	})
 }
 
 // ================================================================================================
@@ -1374,43 +1415,17 @@ func TestOutboundAddressInAnyNRPLocationLocked(t *testing.T) {
 // ================================================================================================
 
 func TestFinalizerConstants(t *testing.T) {
-	// Verify finalizer constants have expected values
+	// These strings are a wire contract: they are written into Service and Pod metadata and must
+	// match what a previous CCM version wrote, or an upgrade strands every finalizer it left.
 	assert.Equal(t, "servicegateway.azure.com/service-cleanup", ServiceGatewayServiceCleanupFinalizer)
 	assert.Equal(t, "servicegateway.azure.com/pod-cleanup", ServiceGatewayPodCleanupFinalizer)
-
-	// Verify they are all unique
-	finalizers := []string{
-		ServiceGatewayServiceCleanupFinalizer,
-		ServiceGatewayPodCleanupFinalizer,
-	}
-	seen := make(map[string]bool)
-	for _, f := range finalizers {
-		assert.False(t, seen[f], "Duplicate finalizer: %s", f)
-		seen[f] = true
-	}
+	assert.NotEqual(t, ServiceGatewayServiceCleanupFinalizer, ServiceGatewayPodCleanupFinalizer,
+		"the Service and Pod finalizers must be distinct; sharing one would make a Service cleanup release Pod drains")
 }
 
 // ================================================================================================
 // PENDING DELETION TYPE TESTS
 // ================================================================================================
-
-func TestPendingPodDeletionType(t *testing.T) {
-	pending := &PendingPodDeletion{
-		Namespace:  "default",
-		Name:       "test-pod",
-		ServiceUID: "egress-service",
-		Addresses:  []string{"10.0.0.1"},
-		IsLastPod:  true,
-		Timestamp:  "2026-01-12T10:00:00Z",
-	}
-
-	assert.Equal(t, "default", pending.Namespace)
-	assert.Equal(t, "test-pod", pending.Name)
-	assert.Equal(t, "egress-service", pending.ServiceUID)
-	assert.Equal(t, []string{"10.0.0.1"}, pending.Addresses)
-	assert.True(t, pending.IsLastPod)
-	assert.Equal(t, "2026-01-12T10:00:00Z", pending.Timestamp)
-}
 
 // ================================================================================================
 // CONCURRENT ACCESS TESTS

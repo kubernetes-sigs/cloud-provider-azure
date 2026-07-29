@@ -275,18 +275,26 @@ var _ = Describe("SLB - Dataplane", Label(slbTestLabel, "SLB-Dataplane"), func()
 	// skipUnlessDataplaneCarriesTraffic probes the load balancer and skips the spec when it
 	// never answers. NRP owns the dataplane; a test environment that does not carry traffic
 	// says nothing about the cloud provider under test.
+	//
+	// The probe must keep polling for the whole timeout before deciding: a freshly programmed
+	// endpoint routinely refuses the first few requests, and skipping on that would silently
+	// disable every dataplane assertion in this file on a perfectly healthy cluster.
 	skipUnlessDataplaneCarriesTraffic := func(clientPod, ip string, port int) {
 		var last string
-		Eventually(func() string {
+		answered := func() bool {
 			last = get(clientPod, ip, port, "/hostname")
-			return last
-		}, dataplaneReadyTimeout, 10*time.Second).Should(Or(Not(BeEmpty()), Equal("")))
+			return last != ""
+		}
 
-		if last == "" {
-			Skip(fmt.Sprintf(
-				"load balancer %s:%d never answered within %s; this environment does not carry "+
-					"Container Load Balancer dataplane traffic, so the dataplane assertions cannot run",
-				ip, port, dataplaneReadyTimeout))
+		deadline := time.Now().Add(dataplaneReadyTimeout)
+		for !answered() {
+			if time.Now().After(deadline) {
+				Skip(fmt.Sprintf(
+					"load balancer %s:%d never answered within %s; this environment does not carry "+
+						"Container Load Balancer dataplane traffic, so the dataplane assertions cannot run",
+					ip, port, dataplaneReadyTimeout))
+			}
+			time.Sleep(10 * time.Second)
 		}
 		utils.Logf("Dataplane is live: %s:%d answered %q", ip, port, last)
 	}

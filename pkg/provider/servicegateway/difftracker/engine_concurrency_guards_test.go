@@ -177,6 +177,17 @@ func TestGuardConcurrency_AddPodDeletePod_RefCountSymmetry(t *testing.T) {
 				"node=%s pod=%s still references egress %s after symmetric delete", nodeIP, podIP, euid)
 		}
 	}
+
+	// The loop above is vacuous on its own: removePod drops a node entry once its last pod goes,
+	// so after a symmetric delete wave there are no nodes left to iterate. Assert the emptiness
+	// directly, and — the point of "RefCountSymmetry" — that the outbound ref-counter came back
+	// to zero. A counter that never decrements leaks the egress identity forever and keeps the
+	// NAT Gateway alive after the last pod is gone.
+	assert.Empty(t, dt.K8sResources.Nodes, "every node entry must be dropped once its last pod is deleted")
+
+	_, stillCounted := dt.outboundIdentityPodRefCount.Load(euid)
+	assert.False(t, stillCounted,
+		"outbound ref-count for %s must be released after an equal number of AddPod/DeletePod calls", euid)
 }
 
 // Concurrent AddService/DeleteService should not panic and should keep valid state.

@@ -53,38 +53,6 @@ var (
 	apiVersion         string
 )
 
-// initSLBConfig initializes the SLB test configuration from environment variables
-// and AzureTestClient. This should be called in BeforeSuite.
-func initSLBConfig() error {
-	// Try to get subscription and resource group from AzureTestClient
-	tc, err := utils.CreateAzureTestClient()
-	if err != nil {
-		return fmt.Errorf("failed to create AzureTestClient: %w", err)
-	}
-
-	subscriptionID = tc.GetSubscriptionID()
-	resourceGroupName = tc.GetResourceGroup()
-
-	// Get SLB-specific config from environment with defaults
-	serviceGatewayName = os.Getenv(envServiceGatewayName)
-	if serviceGatewayName == "" {
-		serviceGatewayName = defaultServiceGatewayName
-	}
-
-	apiVersion = os.Getenv(envServiceGatewayAPIVersion)
-	if apiVersion == "" {
-		apiVersion = defaultAPIVersion
-	}
-
-	utils.Logf("SLB Test Configuration:")
-	utils.Logf("  Subscription ID: %s", subscriptionID)
-	utils.Logf("  Resource Group: %s", resourceGroupName)
-	utils.Logf("  Service Gateway: %s", serviceGatewayName)
-	utils.Logf("  API Version: %s", apiVersion)
-
-	return nil
-}
-
 // AzurePublicIP represents a Public IP resource in Azure
 type AzurePublicIP struct {
 	Name      string            `json:"name"`

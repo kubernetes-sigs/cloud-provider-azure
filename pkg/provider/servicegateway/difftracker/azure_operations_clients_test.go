@@ -285,6 +285,61 @@ func TestUpdateNRPSGWServices_Mock(t *testing.T) {
 		dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
 		assert.NoError(t, dt.updateNRPSGWServices(context.Background(), "sgw", ServicesDataDTO{Action: PartialUpdate}))
 	})
+
+	// NRP completes UpdateServices inline and answers 200 OK, which the generated armnetwork
+	// client rejects as an error before a poller exists. updateNRPServices must apply
+	// tolerateSynchronousCompletion so the registration is recorded as the success it is.
+	//
+	// The predicate is unit-tested directly in TestIsSynchronousCompletion; these cases exist
+	// because that is not enough. Dropping the tolerance from updateNRPServices leaves the
+	// predicate's own tests green while every inbound and egress Service registration fails
+	// against the live provider, which is exactly how that regression once shipped.
+	t.Run("tolerates NRP's synchronous 200 completion", func(t *testing.T) {
+		for name, header := range map[string]http.Header{
+			"bare 200":                   {},
+			"200 + Location":             {"Location": []string{"https://poll"}},
+			"200 + Azure-AsyncOperation": {"Azure-Asyncoperation": []string{"https://poll"}},
+		} {
+			t.Run(name, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+				mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+				mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+				mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+
+				req, _ := http.NewRequest(http.MethodPost, "https://example/sgw", nil)
+				mockSGW.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(&azcore.ResponseError{
+					StatusCode:  http.StatusOK,
+					RawResponse: &http.Response{StatusCode: http.StatusOK, Header: header, Request: req},
+				})
+
+				dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
+				assert.NoError(t, dt.updateNRPSGWServices(context.Background(), "sgw", servicesDTO),
+					"a synchronous 200 from NRP must be tolerated by updateNRPServices, not propagated")
+			})
+		}
+	})
+
+	// The mirror of the case above: azure_operations.go must not tolerate a 200 that is azcore's
+	// terminal poll of a FAILED asynchronous operation (always a GET), or a failed NRP write is
+	// recorded as a successful registration.
+	t.Run("propagates a failed async LRO reported as 200", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+		mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+		mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+
+		pollGET, _ := http.NewRequest(http.MethodGet, "https://poll.example/op/1", nil)
+		mockSGW.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(&azcore.ResponseError{
+			StatusCode:  http.StatusOK,
+			RawResponse: &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: pollGET},
+		})
+
+		dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
+		assert.Error(t, dt.updateNRPSGWServices(context.Background(), "sgw", servicesDTO),
+			"a failed async LRO must not be recorded as a successful registration")
+	})
 }
 
 func TestUpdateNRPSGWAddressLocations_Mock(t *testing.T) {
@@ -317,6 +372,41 @@ func TestUpdateNRPSGWAddressLocations_Mock(t *testing.T) {
 
 		dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
 		assert.Error(t, dt.updateNRPSGWAddressLocations(context.Background(), "sgw", locationsDTO))
+	})
+
+	// The address-locations path carries the same NRP synchronous-200 contract as UpdateServices:
+	// without the tolerance every pod-IP registration fails against the live provider while the
+	// predicate's own unit tests stay green.
+	t.Run("tolerates NRP's synchronous 200 completion", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+		mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+		mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+		mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), "rg", "sgw", gomock.Any()).
+			Return(responseError(http.StatusOK))
+
+		dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
+		assert.NoError(t, dt.updateNRPSGWAddressLocations(context.Background(), "sgw", locationsDTO),
+			"a synchronous 200 from NRP must be tolerated by updateNRPAddressLocations, not propagated")
+	})
+
+	t.Run("propagates a failed async LRO reported as 200", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+		mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+		mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+
+		pollGET, _ := http.NewRequest(http.MethodGet, "https://poll.example/op/1", nil)
+		mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), "rg", "sgw", gomock.Any()).Return(&azcore.ResponseError{
+			StatusCode:  http.StatusOK,
+			RawResponse: &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: pollGET},
+		})
+
+		dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
+		assert.Error(t, dt.updateNRPSGWAddressLocations(context.Background(), "sgw", locationsDTO),
+			"a failed async LRO must not be recorded as a successful location sync")
 	})
 }
 

@@ -27,6 +27,14 @@ var _ = BeforeSuite(func() {
 	// Initialize SLB configuration (subscription, resource group, service gateway name, api version)
 	// This is done in BeforeSuite so all tests have access to these package-level variables
 	ensureSLBConfigInitialized()
+
+	// Fail the whole suite here rather than letting every spec fail later on a malformed URL:
+	// buildServiceGatewayURL interpolates these two directly, so an empty value turns every
+	// `az rest` call into an opaque error instead of naming the missing configuration.
+	Expect(subscriptionID).NotTo(BeEmpty(),
+		"AZURE_SUBSCRIPTION_ID must be set, or the Azure test client must be able to resolve it")
+	Expect(resourceGroupName).NotTo(BeEmpty(),
+		"AZURE_RESOURCE_GROUP must be set, or the Azure test client must be able to resolve it")
 })
 
 func TestSLB(t *testing.T) {

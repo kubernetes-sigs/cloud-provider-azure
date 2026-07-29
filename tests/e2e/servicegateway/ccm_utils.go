@@ -25,6 +25,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -147,9 +148,18 @@ func (c *CCMClusterClient) DeleteAllCCMPods(ctx context.Context) error {
 	return nil
 }
 
-// WaitForCCMReady waits for at least one CCM pod to be running and ready
-func (c *CCMClusterClient) WaitForCCMReady(ctx context.Context, timeout time.Duration) error {
+// WaitForCCMReady waits for at least one CCM pod to be running and ready.
+//
+// excludeUIDs names pods that existed before a deliberate crash: a pod that is still terminating
+// keeps reporting Running with ready containers for its whole grace period, so accepting one
+// would let a caller conclude the CCM restarted when the original process is still serving.
+func (c *CCMClusterClient) WaitForCCMReady(ctx context.Context, timeout time.Duration, excludeUIDs ...types.UID) error {
 	utils.Logf("Waiting for CCM to be ready (timeout: %v)", timeout)
+
+	excluded := make(map[types.UID]struct{}, len(excludeUIDs))
+	for _, uid := range excludeUIDs {
+		excluded[uid] = struct{}{}
+	}
 
 	return wait.PollUntilContextTimeout(ctx, CCMRecoveryPollInterval, timeout, true, func(ctx context.Context) (bool, error) {
 		pods, err := c.GetCCMPods(ctx)
@@ -159,6 +169,12 @@ func (c *CCMClusterClient) WaitForCCMReady(ctx context.Context, timeout time.Dur
 		}
 
 		for _, pod := range pods {
+			if _, isOld := excluded[pod.UID]; isOld {
+				continue
+			}
+			if pod.DeletionTimestamp != nil {
+				continue
+			}
 			if pod.Status.Phase == v1.PodRunning {
 				// Check if all containers are ready
 				allReady := true
@@ -179,7 +195,12 @@ func (c *CCMClusterClient) WaitForCCMReady(ctx context.Context, timeout time.Dur
 	})
 }
 
-// CrashCCMAndWaitForRecovery deletes all CCM pods and waits for recovery
+// CrashCCMAndWaitForRecovery deletes all CCM pods and waits for recovery.
+//
+// Recovery is only accepted from a pod that did not exist before the delete, and the pods that
+// did exist must all be gone. Without both checks the helper returns while the original CCM is
+// still running out its grace period, and every spec built on it silently degrades into a test
+// that never crashed the CCM at all.
 func (c *CCMClusterClient) CrashCCMAndWaitForRecovery(ctx context.Context, recoveryTimeout time.Duration) error {
 	utils.Logf("Crashing CCM by deleting all CCM pods...")
 
@@ -190,16 +211,36 @@ func (c *CCMClusterClient) CrashCCMAndWaitForRecovery(ctx context.Context, recov
 	}
 	utils.Logf("CCM pods before crash: %v", getPodNames(podsBefore))
 
+	oldUIDs := make([]types.UID, 0, len(podsBefore))
+	for _, pod := range podsBefore {
+		oldUIDs = append(oldUIDs, pod.UID)
+	}
+
 	// Delete all CCM pods
 	if err := c.DeleteAllCCMPods(ctx); err != nil {
 		return fmt.Errorf("failed to delete CCM pods: %w", err)
 	}
 
-	// Wait a brief moment for pods to start terminating
-	time.Sleep(2 * time.Second)
+	// The crash is only real once every pre-crash pod has actually gone away.
+	if err := wait.PollUntilContextTimeout(ctx, CCMRecoveryPollInterval, recoveryTimeout, true, func(ctx context.Context) (bool, error) {
+		pods, err := c.GetCCMPods(ctx)
+		if err != nil {
+			return false, nil
+		}
+		for _, pod := range pods {
+			for _, oldUID := range oldUIDs {
+				if pod.UID == oldUID {
+					return false, nil
+				}
+			}
+		}
+		return true, nil
+	}); err != nil {
+		return fmt.Errorf("pre-crash CCM pods did not terminate within %v: %w", recoveryTimeout, err)
+	}
 
-	// Wait for new CCM pods to be ready
-	if err := c.WaitForCCMReady(ctx, recoveryTimeout); err != nil {
+	// Wait for a genuinely new CCM pod to be ready
+	if err := c.WaitForCCMReady(ctx, recoveryTimeout, oldUIDs...); err != nil {
 		return fmt.Errorf("CCM failed to recover within %v: %w", recoveryTimeout, err)
 	}
 

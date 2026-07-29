@@ -296,15 +296,38 @@ func TestGuardAddPod_ExistingNRPNATGatewayAddsImmediately(t *testing.T) {
 // DeletePod — input validation & non-last contract
 // ================================================================================================
 
-// TestGuardDeletePod_InvalidParamsIsNoOp verifies the validation rule.
+// TestGuardDeletePod_InvalidParamsIsNoOp verifies the validation rule: a malformed DeletePod must
+// change nothing and must not tell the caller it may strip the pod's cleanup finalizer.
+//
+// Asserting only IsLastPod==false is not enough — that is the zero value of DeletePodResult, so it
+// also holds if deletePod became a total no-op. The safety-critical field is FinalizerDecision:
+// its zero value is deliberately not releasable, and a validation path that started returning
+// ReleaseNoDrain would let the informer strip the finalizer off a pod whose addresses are still
+// routed in NRP.
 func TestGuardDeletePod_InvalidParamsIsNoOp(t *testing.T) {
-	dt := newTestDiffTracker()
-	res := dt.DeletePod("", "loc", []string{"addr"}, "ns", "p", "")
-	assert.False(t, res.IsLastPod)
-	res = dt.DeletePod("uid", "", []string{"addr"}, "ns", "p", "")
-	assert.False(t, res.IsLastPod)
-	res = dt.DeletePod("uid", "loc", []string{""}, "ns", "p", "")
-	assert.False(t, res.IsLastPod)
+	for _, tc := range []struct {
+		name                               string
+		uid, location, ns, podName, podUID string
+		addresses                          []string
+	}{
+		{name: "empty service UID", uid: "", location: "loc", addresses: []string{"addr"}, ns: "ns", podName: "p"},
+		{name: "empty location", uid: "uid", location: "", addresses: []string{"addr"}, ns: "ns", podName: "p"},
+		{name: "no addresses", uid: "uid", location: "loc", addresses: nil, ns: "ns", podName: "p"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dt := newTestDiffTracker()
+			res := dt.DeletePod(tc.uid, tc.location, tc.addresses, tc.ns, tc.podName, tc.podUID)
+
+			assert.False(t, res.IsLastPod)
+			assert.NotEqual(t, PodFinalizerDecisionReleaseNoDrain, res.FinalizerDecision,
+				"a rejected DeletePod must never authorise releasing the pod's cleanup finalizer")
+
+			dt.mu.Lock()
+			defer dt.mu.Unlock()
+			assert.Empty(t, dt.pendingPodDeletions, "a rejected DeletePod must not enqueue a drain gate")
+			assert.Empty(t, dt.K8sResources.Nodes, "a rejected DeletePod must not mutate node state")
+		})
+	}
 }
 
 // TestGuardDeletePod_NonLastEnqueuesPendingPodDeletion verifies the contract that a
@@ -762,10 +785,13 @@ func TestGuardCheckPendingServiceDeletions_AdvancesWhenLocationsCleared(t *testi
 // (i.e. before initialization started) must return an error rather than block.
 func TestGuardWaitForInitialSync_NotInitializedReturnsError(t *testing.T) {
 	dt := newTestDiffTracker()
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-	err := dt.WaitForInitialSync(ctx)
-	assert.Error(t, err, "WaitForInitialSync must error if initialization never started")
+	// Deliberately no timeout: a context deadline would make "returned the explicit
+	// not-initialized error" and "blocked until the caller gave up" indistinguishable, and the
+	// real caller (InitializeFromCluster) waits on a context with no deadline — so losing this
+	// guard hangs CCM initialization forever rather than surfacing an error.
+	err := dt.WaitForInitialSync(context.Background())
+	assert.ErrorContains(t, err, "before initialization started",
+		"WaitForInitialSync must fail fast with an explicit error if initialization never started")
 }
 
 // TestGuardWaitForInitialSync_ReturnsOnContextCancel verifies that the wait

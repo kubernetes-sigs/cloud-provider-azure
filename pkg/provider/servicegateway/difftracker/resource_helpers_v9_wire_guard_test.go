@@ -53,6 +53,14 @@ func TestGuardV9WireValues_InboundResources(t *testing.T) {
 
 	// Frontend must reference a Public IP — the SGW inbound path always provisions a public frontend.
 	if assert.NotNil(t, lb.Properties) && assert.NotEmpty(t, lb.Properties.FrontendIPConfigurations) {
+		// The Public scope is what makes AdmitInboundService safe to reject internal-LB requests
+		// outright: the builder always hardcodes Public, so an internal request would otherwise
+		// be silently provisioned as a public load balancer.
+		if assert.NotNil(t, lb.Properties.Scope, "inbound LB must set an explicit scope") {
+			assert.Equal(t, armnetwork.LoadBalancerScopePublic, *lb.Properties.Scope)
+			assert.Equal(t, "Public", string(*lb.Properties.Scope))
+		}
+
 		fe := lb.Properties.FrontendIPConfigurations[0]
 		if assert.NotNil(t, fe.Properties) {
 			assert.NotNil(t, fe.Properties.PublicIPAddress, "inbound frontend must reference a public IP")
