@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -31,6 +32,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 	servicehelper "k8s.io/cloud-provider/service/helpers"
@@ -239,69 +241,87 @@ func TestServiceUpdaterWorker_RecoversFromPanic(t *testing.T) {
 	}
 }
 
-// TestServiceUpdaterProcessBatchFlow tests that processBatch correctly categorizes work
+// TestServiceUpdaterProcessBatchFlow asserts how processBatch categorises each pending operation:
+// which states it promotes and dispatches, and which it leaves untouched.
+//
+// The state transitions asserted below are made synchronously by processBatch while it holds the
+// lock, before any worker goroutine is spawned, and the completion callback used here records
+// results without mutating engine state. The Azure clients are permissive because the workers'
+// outcome is not what is under test.
 func TestServiceUpdaterProcessBatchFlow(t *testing.T) {
-	dt := &DiffTracker{
-		NRPResources: NRPState{
-			LoadBalancers: utilsets.NewString(),
-			NATGateways:   utilsets.NewString(),
-			Locations:     make(map[string]NRPLocation),
-		},
-		K8sResources: K8sState{
-			Services: utilsets.NewString(),
-			Egresses: utilsets.NewString(),
-			Nodes:    make(map[string]Node),
-		},
-		pendingServiceOps: map[string]*ServiceOperationState{
-			"service-1": {ServiceUID: "service-1", Config: NewInboundServiceConfig("service-1", nil), State: StateNotStarted, RetryCount: 0},
-			"service-2": {ServiceUID: "service-2", Config: NewInboundServiceConfig("service-2", nil), State: StateCreationInProgress, RetryCount: 0},
-			"service-3": {ServiceUID: "service-3", Config: NewInboundServiceConfig("service-3", nil), State: StateCreated, RetryCount: 0},
-			"service-4": {ServiceUID: "service-4", Config: NewInboundServiceConfig("service-4", nil), State: StateDeletionPending, RetryCount: 0},
-			"service-5": {ServiceUID: "service-5", Config: NewInboundServiceConfig("service-5", nil), State: StateDeletionInProgress, RetryCount: 0},
-		},
-		pendingEndpoints:        make(map[string][]PendingEndpointUpdate),
-		pendingPods:             make(map[string][]PendingPodUpdate),
-		pendingServiceDeletions: make(map[string]*PendingServiceDeletion),
-		serviceUpdaterTrigger:   make(chan bool, 1),
-		locationsUpdaterTrigger: make(chan bool, 1),
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := newOutboundMocks(ctrl)
+	mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+	m.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+	m.expectNoDisassociation()
+	m.pip.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(&armnetwork.PublicIPAddress{Name: ptr.To("pip")}, nil).AnyTimes()
+	m.pip.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockLB.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	mockLB.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	m.sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	m.nat.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	// The Services must exist: a dispatched operation looks its Service up by UID, and an operation
+	// whose Service is gone is dropped from tracking rather than dispatched.
+	uids := []string{"not-started", "creation-in-progress", "created", "deletion-pending", "deletion-in-progress", "parked"}
+	objects := make([]runtime.Object, 0, len(uids))
+	for _, uid := range uids {
+		objects = append(objects, &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: uid, Namespace: "default", UID: types.UID(uid),
+				Finalizers: []string{ServiceGatewayServiceCleanupFinalizer},
+			},
+			Spec: v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer},
+		})
 	}
 
-	// processBatch behavior:
-	// - Process service-1 (StateNotStarted -> will try to create)
-	// - Skip service-2 (StateCreationInProgress - already being processed)
-	// - Skip service-3 (StateCreated - done)
-	// - Skip service-4 (StateDeletionPending - waiting for LocationsUpdater)
-	// - Process service-5 (StateDeletionInProgress -> will try to delete)
+	dt := newTestDiffTracker()
+	dt.config = testConfig()
+	dt.networkClientFactory = m.factory
+	dt.kubeClient = fake.NewSimpleClientset(objects...)
 
-	// Verify initial state counts
+	newOp := func(uid string, state ResourceState) *ServiceOperationState {
+		return &ServiceOperationState{ServiceUID: uid, Config: NewInboundServiceConfig(uid, nil), State: state}
+	}
+	dt.pendingServiceOps = map[string]*ServiceOperationState{
+		"not-started":          newOp("not-started", StateNotStarted),
+		"creation-in-progress": newOp("creation-in-progress", StateCreationInProgress),
+		"created":              newOp("created", StateCreated),
+		"deletion-pending":     newOp("deletion-pending", StateDeletionPending),
+		"deletion-in-progress": newOp("deletion-in-progress", StateDeletionInProgress),
+		"parked":               newOp("parked", StateNotStarted),
+	}
+	dt.pendingServiceOps["parked"].CreationFailedTerminal = true
+
+	updater := outboundUpdater(dt, &outboundCompletion{})
+	updater.processBatch()
+	updater.wg.Wait()
+
 	dt.mu.Lock()
-	notStartedCount := 0
-	creationInProgressCount := 0
-	createdCount := 0
-	deletionPendingCount := 0
-	deletionInProgressCount := 0
+	defer dt.mu.Unlock()
 
-	for _, opState := range dt.pendingServiceOps {
-		switch opState.State {
-		case StateNotStarted:
-			notStartedCount++
-		case StateCreationInProgress:
-			creationInProgressCount++
-		case StateCreated:
-			createdCount++
-		case StateDeletionPending:
-			deletionPendingCount++
-		case StateDeletionInProgress:
-			deletionInProgressCount++
-		}
-	}
-	dt.mu.Unlock()
+	// Promoted and dispatched.
+	assert.Equal(t, StateCreationInProgress, dt.pendingServiceOps["not-started"].State,
+		"an unstarted operation must be promoted to CreationInProgress and dispatched")
+	assert.NotNil(t, dt.pendingServiceOps["not-started"].InFlightConfig,
+		"the dispatched config must be snapshotted as in-flight")
 
-	assert.Equal(t, 1, notStartedCount, "Should have 1 service in StateNotStarted")
-	assert.Equal(t, 1, creationInProgressCount, "Should have 1 service in StateCreationInProgress")
-	assert.Equal(t, 1, createdCount, "Should have 1 service in StateCreated")
-	assert.Equal(t, 1, deletionPendingCount, "Should have 1 service in StateDeletionPending")
-	assert.Equal(t, 1, deletionInProgressCount, "Should have 1 service in StateDeletionInProgress")
+	// Left untouched.
+	assert.Equal(t, StateCreationInProgress, dt.pendingServiceOps["creation-in-progress"].State,
+		"a creation already in flight must not be dispatched again")
+	assert.Nil(t, dt.pendingServiceOps["creation-in-progress"].InFlightConfig,
+		"a skipped operation must not have a config snapshotted for it")
+	assert.Equal(t, StateCreated, dt.pendingServiceOps["created"].State,
+		"a completed service must not be re-dispatched")
+	assert.Equal(t, StateDeletionPending, dt.pendingServiceOps["deletion-pending"].State,
+		"a deletion still waiting for its locations to drain must not be dispatched")
+	assert.Equal(t, StateNotStarted, dt.pendingServiceOps["parked"].State,
+		"an operation parked after a terminal failure must not be re-dispatched")
+	assert.Nil(t, dt.pendingServiceOps["parked"].InFlightConfig,
+		"a parked operation must not have a config snapshotted for it")
 }
 
 // TestServiceUpdaterRequeueKeepsInitTriggerCounterBalanced verifies that the follow-up
@@ -596,17 +616,32 @@ func newOutboundDiffTracker(uid string, m *outboundMocks, kube *fake.Clientset) 
 	return dt
 }
 
+// outboundCompletion records the completion callback. It is mutex-guarded because processBatch can
+// dispatch several operations concurrently, so more than one worker may report into it.
 type outboundCompletion struct {
+	mu      sync.Mutex
 	called  bool
 	success bool
 	err     error
+}
+
+func (c *outboundCompletion) record(success bool, err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.called, c.success, c.err = true, success, err
+}
+
+func (c *outboundCompletion) result() (called, success bool, err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.called, c.success, c.err
 }
 
 func outboundUpdater(dt *DiffTracker, got *outboundCompletion) *ServiceUpdater {
 	return &ServiceUpdater{
 		diffTracker: dt,
 		onComplete: func(_ string, success bool, err error) {
-			got.called, got.success, got.err = true, success, err
+			got.record(success, err)
 		},
 		trigger:   dt.serviceUpdaterTrigger,
 		ctx:       context.Background(),
@@ -632,8 +667,9 @@ func TestServiceUpdaterDeleteOutboundService_HappyPath(t *testing.T) {
 	got := &outboundCompletion{}
 	outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
 
-	assert.True(t, got.called)
-	assert.True(t, got.success, "a fully successful teardown must report success: %v", got.err)
+	called, success, completionErr := got.result()
+	assert.True(t, called)
+	assert.True(t, success, "a fully successful teardown must report success: %v", completionErr)
 	assert.False(t, dt.NRPResources.NATGateways.Has(uid),
 		"NRP NAT Gateway state must be cleared after a successful delete")
 }
@@ -669,9 +705,10 @@ func TestServiceUpdaterDeleteOutboundService_StepFailuresRetain(t *testing.T) {
 			got := &outboundCompletion{}
 			outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
 
-			assert.True(t, got.called)
-			assert.False(t, got.success, "a failed teardown step must report failure so it is retried")
-			assert.Error(t, got.err)
+			called, success, completionErr := got.result()
+			assert.True(t, called)
+			assert.False(t, success, "a failed teardown step must report failure so it is retried")
+			assert.Error(t, completionErr)
 			assert.True(t, dt.NRPResources.NATGateways.Has(uid),
 				"NRP state must be retained on failure, otherwise the retry is a no-op and Azure leaks")
 		})
@@ -697,8 +734,9 @@ func TestServiceUpdaterDeleteOutboundService_ToleratesAlreadyDeleted(t *testing.
 	got := &outboundCompletion{}
 	outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
 
-	assert.True(t, got.called)
-	assert.True(t, got.success, "404 on every resource means the teardown is already complete: %v", got.err)
+	called, success, completionErr := got.result()
+	assert.True(t, called)
+	assert.True(t, success, "404 on every resource means the teardown is already complete: %v", completionErr)
 	assert.False(t, dt.NRPResources.NATGateways.Has(uid))
 }
 
@@ -723,8 +761,9 @@ func TestServiceUpdaterCreateOutboundService_HappyPath(t *testing.T) {
 	got := &outboundCompletion{}
 	outboundUpdater(dt, got).createOutboundService(uid, &OutboundConfig{}, "corr", "ns", "pod")
 
-	assert.True(t, got.called)
-	assert.True(t, got.success, "a fully successful create must report success: %v", got.err)
+	called, success, completionErr := got.result()
+	assert.True(t, called)
+	assert.True(t, success, "a fully successful create must report success: %v", completionErr)
 	assert.True(t, dt.NRPResources.NATGateways.Has(uid),
 		"NRP NAT Gateway state must be recorded after a successful create")
 }
@@ -762,9 +801,10 @@ func TestServiceUpdaterCreateOutboundService_StepFailuresDoNotRecordNRPState(t *
 			got := &outboundCompletion{}
 			outboundUpdater(dt, got).createOutboundService(uid, &OutboundConfig{}, "corr", "ns", "pod")
 
-			assert.True(t, got.called)
-			assert.False(t, got.success, "a failed create step must report failure so it is retried")
-			assert.Error(t, got.err)
+			called, success, completionErr := got.result()
+			assert.True(t, called)
+			assert.False(t, success, "a failed create step must report failure so it is retried")
+			assert.Error(t, completionErr)
 			assert.False(t, dt.NRPResources.NATGateways.Has(uid),
 				"a partially created outbound service must not be recorded as present in NRP")
 		})
@@ -803,8 +843,9 @@ func TestServiceUpdaterUpdateInboundService(t *testing.T) {
 		got := &outboundCompletion{}
 		outboundUpdater(dt, got).updateInboundService(uid, validConfig(), "corr")
 
-		assert.True(t, got.called)
-		assert.True(t, got.success, "a successful LoadBalancer update must report success: %v", got.err)
+		called, success, completionErr := got.result()
+		assert.True(t, called)
+		assert.True(t, success, "a successful LoadBalancer update must report success: %v", completionErr)
 	})
 
 	t.Run("transient ARM failure is retryable, not terminal", func(t *testing.T) {
@@ -823,9 +864,10 @@ func TestServiceUpdaterUpdateInboundService(t *testing.T) {
 		got := &outboundCompletion{}
 		outboundUpdater(dt, got).updateInboundService(uid, validConfig(), "corr")
 
-		assert.True(t, got.called)
-		assert.False(t, got.success)
-		assert.False(t, isTerminalError(got.err),
+		called, success, completionErr := got.result()
+		assert.True(t, called)
+		assert.False(t, success)
+		assert.False(t, isTerminalError(completionErr),
 			"an ARM failure must stay retryable so the update is re-attempted")
 	})
 
@@ -848,9 +890,10 @@ func TestServiceUpdaterUpdateInboundService(t *testing.T) {
 		got := &outboundCompletion{}
 		outboundUpdater(dt, got).updateInboundService(uid, dualStack, "corr")
 
-		assert.True(t, got.called)
-		assert.False(t, got.success)
-		assert.True(t, isTerminalError(got.err),
+		called, success, completionErr := got.result()
+		assert.True(t, called)
+		assert.False(t, success)
+		assert.True(t, isTerminalError(completionErr),
 			"a deterministic spec failure must be terminal so the engine parks instead of looping")
 	})
 }

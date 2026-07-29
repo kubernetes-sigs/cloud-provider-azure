@@ -881,9 +881,6 @@ func TestAdmitInboundService_RejectsUnimplementedSpecFields(t *testing.T) {
 		reason string
 	}{
 		{"sessionAffinity ClientIP", func(s *v1.Service) { s.Spec.SessionAffinity = v1.ServiceAffinityClientIP }, "UnsupportedSessionAffinity"},
-		{"externalTrafficPolicy Local", func(s *v1.Service) {
-			s.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
-		}, "UnsupportedExternalTrafficPolicy"},
 		{"loadBalancerIP", func(s *v1.Service) { s.Spec.LoadBalancerIP = "203.0.113.10" }, "UnsupportedLoadBalancerIP"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -956,4 +953,32 @@ func TestAdmitInboundService_AdmitsSupportedService(t *testing.T) {
 	config, err := AdmitInboundService(svc)
 	assert.NoError(t, err)
 	assert.NotNil(t, config, "a supported LoadBalancer Service must still be admitted")
+}
+
+// TestAdmitInboundService_AdmitsBothExternalTrafficPolicies pins that externalTrafficPolicy is not
+// an admission input. Local only differs from Cluster for node-IP backend pools, where it avoids a
+// second hop to a node without a local pod; the PodIP backend pool registers Ready pod IPs
+// directly, so the load balancer already reaches the pod without that hop under either policy.
+// Rejecting Local would also strand Services that are already running: AdmitInboundService gates
+// the startup path too, so a CCM restart would tear their load balancers down.
+func TestAdmitInboundService_AdmitsBothExternalTrafficPolicies(t *testing.T) {
+	for _, policy := range []v1.ServiceExternalTrafficPolicyType{
+		v1.ServiceExternalTrafficPolicyTypeCluster,
+		v1.ServiceExternalTrafficPolicyTypeLocal,
+	} {
+		t.Run(string(policy), func(t *testing.T) {
+			svc := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "ns", UID: "33333333-3333-3333-3333-333333333333"},
+				Spec: v1.ServiceSpec{
+					Type:                  v1.ServiceTypeLoadBalancer,
+					ExternalTrafficPolicy: policy,
+					Ports:                 []v1.ServicePort{{Port: 80, TargetPort: intstr.FromInt32(8080), Protocol: v1.ProtocolTCP}},
+				},
+			}
+
+			config, err := AdmitInboundService(svc)
+			assert.NoError(t, err, "externalTrafficPolicy %s must be admitted", policy)
+			assert.NotNil(t, config, "externalTrafficPolicy %s must be admitted", policy)
+		})
+	}
 }

@@ -459,18 +459,17 @@ func AdmitInboundService(service *v1.Service) (*InboundConfig, error) {
 
 	// Reject spec fields the PodIP data path does not implement. Accepting them silently is the
 	// dangerous option: sessionAffinity would report ClientIP while traffic is balanced per
-	// connection, and externalTrafficPolicy would report Local while every rule behaves as
-	// Cluster, so the Service looks configured in a way it is not.
+	// connection, so the Service looks configured in a way it is not.
+	//
+	// externalTrafficPolicy is deliberately NOT rejected. It selects between routing to a local
+	// pod and hopping to another node, a distinction that only exists for node-IP backend pools.
+	// The PodIP backend pool registers Ready pod IPs directly (see endpointSliceAddresses), so
+	// the load balancer always reaches the pod without a second hop and both policies describe
+	// the behaviour the data path already has.
 	if service.Spec.SessionAffinity == v1.ServiceAffinityClientIP {
 		return nil, &InboundConfigValidationError{
 			Reason:  "UnsupportedSessionAffinity",
 			Message: "sessionAffinity: ClientIP is not implemented when ServiceGateway is enabled; the Service would be balanced as sessionAffinity: None",
-		}
-	}
-	if service.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeLocal {
-		return nil, &InboundConfigValidationError{
-			Reason:  "UnsupportedExternalTrafficPolicy",
-			Message: "externalTrafficPolicy: Local is not implemented when ServiceGateway is enabled; the Service would behave as externalTrafficPolicy: Cluster",
 		}
 	}
 	if service.Spec.LoadBalancerIP != "" {
