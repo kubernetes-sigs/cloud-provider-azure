@@ -227,7 +227,7 @@ func (as *availabilitySet) UpdateVM(ctx context.Context, nodeName types.NodeName
 		return err
 	}
 
-	result, rerr := as.ComputeClientFactory.GetVirtualMachineClient().CreateOrUpdate(ctx, nodeResourceGroup, vmName, armcompute.VirtualMachine{})
+	result, rerr := updateVirtualMachine(ctx, as.ComputeClientFactory.GetVirtualMachineClient(), nodeResourceGroup, vmName)
 	if rerr != nil {
 		if exists, err := errutils.CheckResourceExistsFromAzcoreError(rerr); !exists && err == nil {
 			// if the VM does not exist, we should not update the cache
