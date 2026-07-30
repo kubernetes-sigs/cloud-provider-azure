@@ -36,6 +36,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 	servicehelper "k8s.io/cloud-provider/service/helpers"
+	"k8s.io/component-base/metrics/testutil"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
@@ -1024,4 +1025,37 @@ func TestServiceUpdaterUpdateInboundService(t *testing.T) {
 		assert.True(t, isTerminalError(completionErr),
 			"a deterministic spec failure must be terminal so the engine parks instead of looping")
 	})
+}
+
+// TestServiceUpdaterOutboundUpdateIsCountedAsSkipped pins that an outbound update dispatched by
+// processBatch is counted as skipped. The updater has no way to apply it, so the requested spec
+// change is silently dropped and the service keeps its existing Azure configuration; this counter
+// is the only signal an operator gets that the change was not applied.
+func TestServiceUpdaterOutboundUpdateIsCountedAsSkipped(t *testing.T) {
+	RegisterMetrics()
+
+	dt := newTestDiffTracker()
+	uid := "outbound-update"
+	dt.pendingServiceOps[uid] = &ServiceOperationState{
+		ServiceUID: uid,
+		Config:     NewOutboundServiceConfig(uid, &OutboundConfig{}),
+		State:      StateUpdateInProgress,
+	}
+
+	before, err := testutil.GetCounterMetricValue(outboundServiceUpdatesSkippedTotal)
+	assert.NoError(t, err)
+
+	got := &outboundCompletion{}
+	updater := outboundUpdater(dt, got)
+	updater.processBatch()
+	updater.wg.Wait()
+
+	called, success, opErr := got.result()
+	assert.True(t, called, "the operation must be completed so the state machine does not strand")
+	assert.True(t, success, "the completion is reported as success to release the operation")
+	assert.NoError(t, opErr)
+
+	after, err := testutil.GetCounterMetricValue(outboundServiceUpdatesSkippedTotal)
+	assert.NoError(t, err)
+	assert.Equal(t, 1.0, after-before, "a dropped outbound update must be counted exactly once")
 }

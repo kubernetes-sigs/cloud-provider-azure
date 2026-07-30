@@ -71,12 +71,14 @@ var (
 		[]string{"operation", "service_type"},
 	)
 
-	// serviceOperationRetries tracks how many retry attempts were needed.
+	// serviceOperationRetries records, once per completed service operation, how many retries it
+	// needed. It is observed only at a terminal outcome (success, terminal-error park, or retry
+	// budget exhausted), so a first-attempt success contributes an explicit 0.
 	serviceOperationRetries = metrics.NewHistogramVec(
 		&metrics.HistogramOpts{
 			Subsystem:      diffTrackerSubsystem,
 			Name:           "service_operation_retries",
-			Help:           "Number of retries for service operations",
+			Help:           "Retries performed before a service operation reached a terminal outcome",
 			Buckets:        []float64{0, 1, 2, 3, 5, 10, 20},
 			StabilityLevel: metrics.ALPHA,
 		},
@@ -158,12 +160,41 @@ var (
 		},
 	)
 
-	// finalizersRecoveredTotal counts stuck pod/service finalizers recovered at startup.
+	// finalizersRecoveredTotal counts stuck pod/service finalizers that startup actually removed.
+	// It deliberately excludes work that was merely scheduled: a finalizer handed to the diff or
+	// enqueued for drain is still on the object, so counting it here would report recovery that has
+	// not happened. That work is counted by finalizersRecoveryScheduledTotal instead.
 	finalizersRecoveredTotal = metrics.NewCounter(
 		&metrics.CounterOpts{
 			Subsystem:      diffTrackerSubsystem,
 			Name:           "finalizers_recovered_total",
-			Help:           "Total count of stuck pod/service finalizers recovered at startup",
+			Help:           "Total count of stuck pod/service finalizers actually removed at startup",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
+	// finalizersRecoveryScheduledTotal counts stuck finalizers startup handed to another path rather
+	// than removing: a Service whose Azure resource still exists is left to the diff, and a pod with
+	// live addresses is enqueued for drain. The finalizer is still present when this is counted, so
+	// a persistent gap between this and finalizersRecoveredTotal means recovery is not completing.
+	finalizersRecoveryScheduledTotal = metrics.NewCounter(
+		&metrics.CounterOpts{
+			Subsystem:      diffTrackerSubsystem,
+			Name:           "finalizers_recovery_scheduled_total",
+			Help:           "Total count of stuck finalizers scheduled for cleanup by another path at startup",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
+	// serviceFinalizerRemoveFailedTotal counts Services left Terminating because startup could not
+	// remove the cleanup finalizer after its retries. Nothing re-drives it: a deleting Service is
+	// excluded from desired state and has no NRP entry, so no operation is scheduled for it. It is
+	// retried only on the next CCM restart, and blocks namespace deletion until then.
+	serviceFinalizerRemoveFailedTotal = metrics.NewCounter(
+		&metrics.CounterOpts{
+			Subsystem:      diffTrackerSubsystem,
+			Name:           "service_finalizer_remove_failed_total",
+			Help:           "Total count of Services left Terminating because cleanup finalizer removal failed at startup",
 			StabilityLevel: metrics.ALPHA,
 		},
 	)
@@ -181,6 +212,21 @@ var (
 		},
 	)
 
+	// podFinalizerRemoveFailedTotal counts egress pods left holding the cleanup finalizer because
+	// removing it failed. The removal here is the direct, non-drain-gated path: the engine has
+	// already proven nothing needs to drain, so there is no pending record to retry from and the
+	// informer only re-drives a pod when its state actually changes - a resync delivers an
+	// unchanged object and is skipped. The pod therefore stays Terminating until the CCM restarts,
+	// blocking node drain and namespace deletion, so a non-zero value should be alerted on.
+	podFinalizerRemoveFailedTotal = metrics.NewCounter(
+		&metrics.CounterOpts{
+			Subsystem:      diffTrackerSubsystem,
+			Name:           "pod_finalizer_remove_failed_total",
+			Help:           "Total count of egress pods left Terminating because cleanup finalizer removal failed",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
 	// serviceOperationsParkedTotal counts service operations that stopped making progress: either a
 	// deterministic, spec-driven failure that cannot succeed on retry, or exhaustion of the retry
 	// budget. A parked operation leaves the Service without its Azure resources indefinitely while
@@ -194,6 +240,19 @@ var (
 			StabilityLevel: metrics.ALPHA,
 		},
 		[]string{"reason"},
+	)
+
+	// outboundServiceUpdatesSkippedTotal counts outbound (egress) service updates that the updater
+	// drops because there is no NRP update operation for an egress identity. The service keeps its
+	// previously applied Azure configuration, so this is the only signal that a requested outbound
+	// spec change was not applied.
+	outboundServiceUpdatesSkippedTotal = metrics.NewCounter(
+		&metrics.CounterOpts{
+			Subsystem:      diffTrackerSubsystem,
+			Name:           "outbound_service_updates_skipped_total",
+			Help:           "Total count of outbound service updates dropped because they cannot be applied",
+			StabilityLevel: metrics.ALPHA,
+		},
 	)
 
 	// initializationDurationSeconds reports how long SLB controller initialization took.
@@ -253,8 +312,12 @@ func RegisterMetrics() {
 		legacyregistry.MustRegister(servicegatewayEnabled)
 		legacyregistry.MustRegister(orphanedResourcesCleanedTotal)
 		legacyregistry.MustRegister(finalizersRecoveredTotal)
+		legacyregistry.MustRegister(finalizersRecoveryScheduledTotal)
+		legacyregistry.MustRegister(serviceFinalizerRemoveFailedTotal)
 		legacyregistry.MustRegister(podFinalizerAddFailedTotal)
+		legacyregistry.MustRegister(podFinalizerRemoveFailedTotal)
 		legacyregistry.MustRegister(serviceOperationsParkedTotal)
+		legacyregistry.MustRegister(outboundServiceUpdatesSkippedTotal)
 		legacyregistry.MustRegister(locationSyncTerminalErrorsTotal)
 		legacyregistry.MustRegister(initializationDurationSeconds)
 		legacyregistry.MustRegister(pendingOperationOldestAgeSeconds)
@@ -324,8 +387,10 @@ func recordServiceOperation(operation string, isInbound bool, startTime time.Tim
 	serviceOperationDuration.WithLabelValues(operation, serviceType).Observe(duration)
 }
 
-// recordServiceOperationRetry records retry count for service operations
-func recordServiceOperationRetry(operation string, isInbound bool, retryCount int) {
+// recordServiceOperationRetries records the number of retries a service operation needed. It must be
+// called exactly once per operation, at the point the operation reaches a terminal outcome, so that
+// operations which succeed on the first attempt are represented as 0.
+func recordServiceOperationRetries(operation string, isInbound bool, retryCount int) {
 	serviceType := "outbound"
 	if isInbound {
 		serviceType = "inbound"
@@ -384,6 +449,18 @@ func recordFinalizerRecovered() {
 	finalizersRecoveredTotal.Inc()
 }
 
+// recordFinalizerRecoveryScheduled counts a stuck finalizer handed to the diff or to drain tracking
+// rather than removed. The finalizer is still on the object.
+func recordFinalizerRecoveryScheduled() {
+	finalizersRecoveryScheduledTotal.Inc()
+}
+
+// RecordServiceFinalizerRemoveFailed counts a Service left Terminating because startup could not
+// remove its cleanup finalizer and no retry is scheduled before the next CCM restart.
+func RecordServiceFinalizerRemoveFailed() {
+	serviceFinalizerRemoveFailedTotal.Inc()
+}
+
 // recordLocationSyncTerminalError increments the counter of NRP location syncs abandoned due to a
 // deterministic, non-retryable error.
 func recordLocationSyncTerminalError() {
@@ -397,6 +474,12 @@ func RecordPodFinalizerAddFailed() {
 	podFinalizerAddFailedTotal.Inc()
 }
 
+// RecordPodFinalizerRemoveFailed counts an egress pod left Terminating because removing its cleanup
+// finalizer failed and no retry is scheduled.
+func RecordPodFinalizerRemoveFailed() {
+	podFinalizerRemoveFailedTotal.Inc()
+}
+
 // Park reasons for serviceOperationsParkedTotal. The label is a small closed set so cardinality
 // stays bounded.
 const (
@@ -408,6 +491,25 @@ const (
 // dt.mu is held: it touches only the package-level counter.
 func recordServiceParked(reason string) {
 	serviceOperationsParkedTotal.WithLabelValues(reason).Inc()
+}
+
+// operationLabelForState maps the state a pending operation is dispatched from to the operation
+// label used by the service operation metrics.
+func operationLabelForState(state ResourceState) string {
+	switch state {
+	case StateDeletionPending, StateDeletionInProgress:
+		return "delete"
+	case StateUpdateInProgress:
+		return "update"
+	default:
+		return "create"
+	}
+}
+
+// recordOutboundServiceUpdateSkipped counts an outbound service update that was dropped because it
+// cannot be applied to an existing egress identity.
+func recordOutboundServiceUpdateSkipped() {
+	outboundServiceUpdatesSkippedTotal.Inc()
 }
 
 // recordInitializationDuration records how long initialization took

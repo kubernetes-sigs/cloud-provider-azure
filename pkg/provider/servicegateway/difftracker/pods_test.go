@@ -32,6 +32,7 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/component-base/metrics/testutil"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -1431,4 +1432,46 @@ func TestPodInformerAddPod_AcceptsOrdinaryEgressLabel(t *testing.T) {
 
 	assert.True(t, dt.IsServiceTracked("team-egress"),
 		"an ordinary egress identity must still be registered")
+}
+
+// TestPodInformerRemovePod_CountsForgottenFinalizerRemoval pins that a failed direct finalizer
+// removal is observable.
+//
+// This removal path is not retried: the engine has already proven there is nothing to drain, so no
+// pending record exists to retry from, and the informer only re-drives a pod whose state changes -
+// an informer resync delivers an unchanged object and is skipped by egressPodUpdateActions. The pod
+// therefore stays Terminating until the CCM restarts, blocking node drain and namespace deletion,
+// so the condition must at least be countable.
+func TestPodInformerRemovePod_CountsForgottenFinalizerRemoval(t *testing.T) {
+	RegisterMetrics()
+	before, err := testutil.GetCounterMetricValue(podFinalizerRemoveFailedTotal)
+	assert.NoError(t, err)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "gone-pod", Namespace: "ns", UID: types.UID("pod-uid"),
+			Labels:     map[string]string{consts.PodLabelServiceEgressGateway: "team-egress"},
+			Finalizers: []string{ServiceGatewayPodCleanupFinalizer},
+		},
+		// No HostIP/PodIP: takes the direct, non-drain-gated removal path.
+		Status: v1.PodStatus{Phase: v1.PodRunning},
+	}
+
+	kube := fake.NewSimpleClientset(pod)
+	kube.PrependReactor("update", "pods", func(_ k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewInternalError(fmt.Errorf("transient apiserver failure"))
+	})
+
+	dt := newProviderDiffTracker(t, ctrl, kube)
+	dt.eventRecorder = record.NewFakeRecorder(10)
+
+	dt.podInformerRemovePod(pod)
+
+	after, err := testutil.GetCounterMetricValue(podFinalizerRemoveFailedTotal)
+	assert.NoError(t, err)
+	assert.Equal(t, float64(1), after-before,
+		"a forgotten finalizer removal must be counted so the resulting Terminating pod is detectable")
 }

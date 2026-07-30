@@ -429,12 +429,18 @@ func recoverStuckFinalizers(
 				// Azure resource exists - diff mechanism will handle deletion
 				logger.V(2).Info("Found stuck service finalizer", "namespace", svc.Namespace, "service", svc.Name, "uid", uid)
 				servicesRecovered++
-				recordFinalizerRecovered()
+				// The finalizer is still on the Service; the diff owns its removal from here.
+				recordFinalizerRecoveryScheduled()
 			} else {
 				// No Azure resource - directly remove finalizer since there's nothing to clean up
 				logger.V(4).Info("Removed service finalizer without Azure resource", "namespace", svc.Namespace, "service", svc.Name, "uid", uid)
 				if err := dt.removeServiceGatewayFinalizer(ctx, svc); err != nil {
-					logger.V(4).Info("Could not remove service finalizer", "namespace", svc.Namespace, "service", svc.Name, "err", err)
+					// Nothing re-drives this: a deleting Service is excluded from desired state and
+					// has no NRP entry, so no operation is scheduled for it. It is retried only on
+					// the next CCM restart, and blocks namespace deletion until then.
+					RecordServiceFinalizerRemoveFailed()
+					logger.Error(err, "Service is left Terminating; removing its cleanup finalizer failed and will not be retried until CCM restart",
+						"namespace", svc.Namespace, "service", svc.Name, "uid", uid)
 				} else {
 					servicesDirectCleaned++
 					recordFinalizerRecovered()
@@ -464,9 +470,12 @@ func recoverStuckFinalizers(
 				// No egress label = nothing to track, just remove finalizer directly
 				logger.V(4).Info("Removed pod finalizer with missing egress label", "namespace", pod.Namespace, "pod", pod.Name)
 				if err := dt.removePodFinalizer(ctx, pod); err != nil {
-					logger.V(4).Info("Could not remove pod finalizer", "namespace", pod.Namespace, "pod", pod.Name, "err", err)
+					RecordPodFinalizerRemoveFailed()
+					logger.Error(err, "Pod is left Terminating; removing its cleanup finalizer failed and will not be retried until CCM restart",
+						"namespace", pod.Namespace, "pod", pod.Name)
 				} else {
 					podsDirectCleaned++
+					recordFinalizerRecovered()
 				}
 				continue
 			}
@@ -491,12 +500,14 @@ func recoverStuckFinalizers(
 					Timestamp:          time.Now().Format(time.RFC3339),
 				}
 				podsRecovered++
-				recordFinalizerRecovered()
+				// The finalizer is still on the pod; drain tracking owns its removal from here.
+				recordFinalizerRecoveryScheduled()
 				continue
 			}
 
 			logger.V(2).Info("Recovered stuck pod finalizer", "namespace", pod.Namespace, "pod", pod.Name, "egress", egressLabel, "location", nodeIP, "addresses", podIPs)
-			recordFinalizerRecovered()
+			// The finalizer is still on the pod; drain tracking owns its removal from here.
+			recordFinalizerRecoveryScheduled()
 
 			// Collect for batch insertion (Issue 2.4: avoid lock contention)
 			// NOTE: We do NOT call DeletePod() because:
@@ -1591,6 +1602,18 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 
 		// Extract the service name from PIP name (remove "-pip" suffix)
 		serviceName := strings.TrimSuffix(pipName, "-pip")
+
+		// A Service or egress identity Kubernetes still wants is not an orphan, even when NRP has
+		// no record of it. That combination is exactly the crash-mid-create state: the Public IP was
+		// allocated before the LoadBalancer and ServiceGateway registration completed. The restart's
+		// re-create can then park (terminal spec failure, or retries exhausted), and parked
+		// operations deliberately do not block initialization, so this cleanup runs while the
+		// Service is still being reconciled. Deleting here destroys an address that is in use and
+		// forces a new one to be allocated on the next successful create.
+		if dt.K8sResources.Services.Has(serviceName) || dt.K8sResources.Egresses.Has(serviceName) {
+			logger.V(4).Info("Skipped Public IP for a service still desired in Kubernetes", "publicIP", pipName, "service", serviceName)
+			continue
+		}
 
 		// Check if this PIP is associated with a tracked service
 		lbExists := dt.NRPResources.LoadBalancers.Has(serviceName)

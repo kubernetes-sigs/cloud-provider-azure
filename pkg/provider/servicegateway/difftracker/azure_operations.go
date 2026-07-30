@@ -273,6 +273,10 @@ func (dt *DiffTracker) updateNRPSGWAddressLocations(ctx context.Context, service
 // namespace/name is never mistaken for the original. It falls back to a direct apiserver Get when
 // the lister is unset or its cache has not yet observed the object, and to a UID scan when the
 // namespace/name are unknown (e.g. entries recovered from NRP without a Service object).
+//
+// It matches on UID alone: the returned Service may no longer be of type LoadBalancer and may be
+// terminating. Only the UID-scan fallback narrows by spec.type. Callers that act on the result must
+// apply their own type and deletion checks.
 func (dt *DiffTracker) getServiceByUID(ctx context.Context, uid string) (*v1.Service, error) {
 	namespace, name, lister := dt.serviceIdentityForUID(uid)
 
@@ -353,6 +357,11 @@ func (dt *DiffTracker) getServiceByUIDViaList(ctx context.Context, uid string) (
 // engine provisions the PIP, LB and ServiceGateway registration asynchronously in the
 // background. This function backfills Service.Status.LoadBalancer.Ingress once the PIP is
 // created, since it would otherwise stay empty.
+//
+// The Service is resolved by UID only, so a Service that changed type or started terminating while
+// the PIP was provisioning still gets stamped: the ingress IP is written onto a Service that is no
+// longer a LoadBalancer, and nothing clears it until that Service is edited again. The startup
+// recovery path re-applies it for the same reason.
 func (dt *DiffTracker) updateServiceLoadBalancerStatus(ctx context.Context, serviceUID string, ip string) error {
 	if ip == "" {
 		return fmt.Errorf("updateServiceLoadBalancerStatus: ip is empty")

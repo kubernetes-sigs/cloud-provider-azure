@@ -155,6 +155,7 @@ func (s *ServiceUpdater) retryGate(serviceUID string, opState *ServiceOperationS
 			opState.RetriesExhausted = true
 			opState.NextRetryAt = time.Now().Add(parkReArmCooldown)
 			recordServiceParked(parkReasonRetriesExceeded)
+			recordServiceOperationRetries(operationLabelForState(opState.State), opState.Config.IsInbound, opState.RetryCount)
 			s.logger.Info("Giving up service operation after exhausting retries",
 				"serviceUID", serviceUID, "state", opState.State, "retries", opState.RetryCount)
 			time.AfterFunc(parkReArmCooldown, s.diffTracker.triggerServiceUpdater)
@@ -322,7 +323,8 @@ func (s *ServiceUpdater) processBatch() {
 					if cfg.IsInbound {
 						s.updateInboundService(uid, cfg.InboundConfig, corrID)
 					} else {
-						s.logger.V(4).Info("Skipped unsupported outbound service update", "serviceUID", uid)
+						s.logger.Info("Skipped outbound service update; egress identities cannot be updated in place", "serviceUID", uid)
+						recordOutboundServiceUpdateSkipped()
 						s.onComplete(uid, true, nil)
 					}
 				})

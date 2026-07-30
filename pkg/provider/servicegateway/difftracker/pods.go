@@ -360,7 +360,12 @@ func (dt *DiffTracker) podInformerRemovePod(pod *v1.Pod) {
 			podKey, result.FinalizerDecision, result.IsLastPod, result.Enqueued)
 		if result.FinalizerDecision == PodFinalizerDecisionReleaseNoDrain {
 			if err := dt.RemovePodFinalizerByPod(context.Background(), pod); err != nil {
-				klog.Warningf("podInformerRemovePod: Failed to remove finalizer from no-IP pod %s: %v", podKey, err)
+				// Nothing retries this: the engine proved there is no drain, so no pending record
+				// exists, and the informer only re-drives a pod whose state changes - a resync
+				// delivers an unchanged object and is skipped. The pod stays Terminating until the
+				// CCM restarts, blocking node drain and namespace deletion.
+				RecordPodFinalizerRemoveFailed()
+				klog.Errorf("podInformerRemovePod: pod %s is left Terminating; removing its cleanup finalizer failed and will not be retried until CCM restart: %v", podKey, err)
 			}
 		}
 		return
@@ -382,7 +387,9 @@ func (dt *DiffTracker) podInformerRemovePod(pod *v1.Pod) {
 	if result.FinalizerDecision == PodFinalizerDecisionReleaseNoDrain {
 		klog.V(2).Infof("podInformerRemovePod: Pod %s has no local or NRP drain; removing finalizer directly", podKey)
 		if err := dt.RemovePodFinalizerByPod(context.Background(), pod); err != nil {
-			klog.Warningf("podInformerRemovePod: Failed to remove finalizer from untracked pod %s: %v", podKey, err)
+			// See the no-IP path above: this removal is not retried either.
+			RecordPodFinalizerRemoveFailed()
+			klog.Errorf("podInformerRemovePod: pod %s is left Terminating; removing its cleanup finalizer failed and will not be retried until CCM restart: %v", podKey, err)
 		}
 	}
 }

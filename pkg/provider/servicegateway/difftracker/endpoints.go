@@ -226,8 +226,13 @@ func (dt *DiffTracker) seedInboundEndpointsFromCache(serviceUID string) {
 // removal of a pod from its previous node IP. oldNodeIPs/newNodeIPs are taken from the informer's node
 // objects rather than the mutable cache, so the old location is accurate: each affected pod is moved
 // from its old same-family location to its new one. Empty newNodeIPs (node deleted) drains the pods;
-// empty oldNodeIPs (node added) registers a pod dropped while its node was not yet cached. Egress pods
-// are unaffected — they resolve their node location from pod.Status.HostIPs.
+// empty oldNodeIPs (node added) registers a pod dropped while its node was not yet cached.
+//
+// Only inbound endpoints are handled here. Egress pod locations are owned by the pod informer, which
+// re-resolves them from pod.Status.HostIPs whenever that field changes, so keeping them out of this
+// path avoids two writers racing on the same pod. That relies on kubelet republishing HostIPs for a
+// running pod when its node's InternalIP set changes; if it does not, an egress pod stays mapped to
+// its previous location until the pod or the tracker is restarted.
 func (dt *DiffTracker) ReconcileNodeIPChange(nodeName string, oldNodeIPs, newNodeIPs []string) {
 	if dt == nil || nodeName == "" {
 		return

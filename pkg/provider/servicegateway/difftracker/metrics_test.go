@@ -351,3 +351,135 @@ func TestRecordServiceParked_CountsByReason(t *testing.T) {
 		assert.Equal(t, float64(1), after-before, "parking with reason %q must be counted exactly once", reason)
 	}
 }
+
+// TestServiceOperationRetries_ObservedOncePerOperation pins the meaning of
+// service_operation_retries: one observation per operation, taken when the operation reaches a
+// terminal outcome, carrying the number of retries it needed. Observing on every failed attempt
+// instead would make the sum a running total of attempt numbers and would drop first-attempt
+// successes from the distribution entirely.
+func TestServiceOperationRetries_ObservedOncePerOperation(t *testing.T) {
+	RegisterMetrics()
+	serviceOperationRetries.Reset()
+
+	dt := newTestDiffTracker()
+	cfg := NewInboundServiceConfig("svc-retry-metric", makeInboundConfig(80))
+	dt.pendingServiceOps["svc-retry-metric"] = &ServiceOperationState{
+		ServiceUID: "svc-retry-metric",
+		Config:     cfg,
+		State:      StateCreationInProgress,
+	}
+
+	// Two retryable failures, then a success on the third attempt.
+	transient := errors.New("transient azure failure")
+	for i := 0; i < 2; i++ {
+		dt.OnServiceCreationComplete("svc-retry-metric", false, transient)
+		dt.mu.Lock()
+		dt.pendingServiceOps["svc-retry-metric"].State = StateCreationInProgress
+		dt.mu.Unlock()
+	}
+	dt.OnServiceCreationComplete("svc-retry-metric", true, nil)
+
+	observer := serviceOperationRetries.WithLabelValues("create", "inbound")
+	count, err := testutil.GetHistogramMetricCount(observer)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), count,
+		"one completed operation must contribute exactly one observation, not one per failed attempt")
+
+	sum, err := testutil.GetHistogramMetricValue(observer)
+	assert.NoError(t, err)
+	assert.Equal(t, 2.0, sum,
+		"the observation must be the retries the operation needed (2), not the sum of attempt numbers")
+
+	// A first-attempt success must still be represented, as an explicit zero.
+	dt.pendingServiceOps["svc-retry-first-try"] = &ServiceOperationState{
+		ServiceUID: "svc-retry-first-try",
+		Config:     NewInboundServiceConfig("svc-retry-first-try", makeInboundConfig(80)),
+		State:      StateCreationInProgress,
+	}
+	dt.OnServiceCreationComplete("svc-retry-first-try", true, nil)
+
+	count, err = testutil.GetHistogramMetricCount(observer)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(2), count,
+		"an operation that succeeds without retrying must be observed too, otherwise the distribution is conditioned on failure")
+
+	sum, err = testutil.GetHistogramMetricValue(observer)
+	assert.NoError(t, err)
+	assert.Equal(t, 2.0, sum, "a first-attempt success contributes 0 retries")
+}
+
+// TestOnServiceCreationComplete_RefreshesPendingDeletionsGauge pins that the completion callback
+// refreshes the pending-deletions gauge. It mutates pendingServiceDeletions on several paths, so a
+// gauge refreshed only by DeleteService keeps reporting the count from the last delete request.
+func TestOnServiceCreationComplete_RefreshesPendingDeletionsGauge(t *testing.T) {
+	RegisterMetrics()
+
+	dt := newTestDiffTracker()
+	uid := "svc-gauge-delete"
+	dt.pendingServiceOps[uid] = &ServiceOperationState{
+		ServiceUID: uid,
+		Config:     NewInboundServiceConfig(uid, makeInboundConfig(80)),
+		State:      StateDeletionInProgress,
+	}
+	dt.pendingServiceDeletions[uid] = &PendingServiceDeletion{ServiceUID: uid, IsInbound: true}
+	dt.pendingServiceDeletions["other"] = &PendingServiceDeletion{ServiceUID: "other", IsInbound: true}
+
+	// Prime the gauge to the pre-completion count, as DeleteService would have left it.
+	updatePendingServiceDeletionsMetric(dt)
+	primed, err := testutil.GetGaugeMetricValue(pendingServiceDeletions)
+	assert.NoError(t, err)
+	assert.Equal(t, 2.0, primed)
+
+	// The deletion completes and its pendingServiceDeletions entry is removed.
+	dt.OnServiceCreationComplete(uid, true, nil)
+
+	dt.mu.Lock()
+	remaining := len(dt.pendingServiceDeletions)
+	dt.mu.Unlock()
+	assert.Equal(t, 1, remaining, "the completed deletion must be removed from the pending map")
+
+	got, err := testutil.GetGaugeMetricValue(pendingServiceDeletions)
+	assert.NoError(t, err)
+	assert.Equal(t, 1.0, got,
+		"the gauge must track the map after a completion, not stay at the value the last DeleteService set")
+}
+
+// TestOnServiceCreationComplete_OutboundUpdateRecordsNoAzureWrite pins that an outbound update
+// completion does not report a successful Azure operation. The updater cannot apply an outbound
+// update, so it completes the operation without calling Azure; recording the operation counter and
+// duration histogram there would report a write that never happened.
+func TestOnServiceCreationComplete_OutboundUpdateRecordsNoAzureWrite(t *testing.T) {
+	RegisterMetrics()
+	serviceOperationTotal.Reset()
+	serviceOperationDuration.Reset()
+
+	dt := newTestDiffTracker()
+	uid := "svc-outbound-update-metric"
+	cfg := NewOutboundServiceConfig(uid, &OutboundConfig{})
+	inflight := cfg
+	dt.pendingServiceOps[uid] = &ServiceOperationState{
+		ServiceUID:     uid,
+		Config:         cfg,
+		InFlightConfig: &inflight,
+		State:          StateUpdateInProgress,
+	}
+
+	dt.OnServiceCreationComplete(uid, true, nil)
+
+	dt.mu.Lock()
+	state := dt.pendingServiceOps[uid].State
+	dt.mu.Unlock()
+	assert.Equal(t, StateCreated, state, "the update completion must still advance the state machine")
+
+	got, err := testutil.GetCounterMetricValue(
+		serviceOperationTotal.WithLabelValues("update", "outbound", "success", "", "false"),
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, 0.0, got, "an outbound update performs no Azure write and must not be counted as one")
+
+	durCount, err := testutil.GetHistogramMetricCount(
+		serviceOperationDuration.WithLabelValues("update", "outbound"),
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), durCount, "no Azure call was made, so there is no duration to observe")
+}

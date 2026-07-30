@@ -14,13 +14,18 @@ import (
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/component-base/metrics/testutil"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
@@ -1070,4 +1075,124 @@ func TestRecoverServiceExternalIPs_SnapshotsNRPStateUnderLock(t *testing.T) {
 	stillTracked := dt.NRPResources.LoadBalancers.Has("svc-0")
 	dt.mu.Unlock()
 	assert.True(t, stillTracked, "recovery must only read the NRP LoadBalancer set, never mutate it")
+}
+
+// TestCleanupOrphanedPublicIPs_KeepsPIPForServiceStillDesiredInKubernetes pins that orphan
+// classification consults Kubernetes desired state, not only NRP.
+//
+// A Public IP with no NRP registration is the crash-mid-create state: the address was allocated
+// before the LoadBalancer and ServiceGateway registration completed. The restart's re-create can
+// park (terminal spec failure, or retries exhausted), and parked operations do not block
+// initialization, so this cleanup runs while the Service is still being reconciled. Treating that
+// as an orphan destroys an in-use address and forces a new one on the next successful create.
+func TestCleanupOrphanedPublicIPs_KeepsPIPForServiceStillDesiredInKubernetes(t *testing.T) {
+	const (
+		desiredUID = "11111111-1111-1111-1111-111111111111"
+		egressUID  = "team-egress"
+		orphanUID  = "22222222-2222-2222-2222-222222222222"
+	)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+
+	var deleted []string
+	mockPIP.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, name string) error {
+			deleted = append(deleted, name)
+			return nil
+		}).AnyTimes()
+
+	dt := newTestDiffTracker()
+	dt.config = testConfig()
+	dt.networkClientFactory = mockFactory
+	// Both are desired in Kubernetes but neither has reached NRP yet.
+	dt.K8sResources.Services.Insert(desiredUID)
+	dt.K8sResources.Egresses.Insert(egressUID)
+
+	detached := func(name string) *armnetwork.PublicIPAddress {
+		return &armnetwork.PublicIPAddress{
+			Name:       ptr.To(name),
+			Properties: &armnetwork.PublicIPAddressPropertiesFormat{},
+		}
+	}
+
+	assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{
+		detached(PublicIPName(desiredUID)),
+		detached(PublicIPName(egressUID)),
+		detached(PublicIPName(orphanUID)),
+	}))
+
+	assert.NotContains(t, deleted, PublicIPName(desiredUID),
+		"the Public IP of a Service Kubernetes still wants must not be deleted as an orphan")
+	assert.NotContains(t, deleted, PublicIPName(egressUID),
+		"the Public IP of an egress identity Kubernetes still wants must not be deleted as an orphan")
+	assert.Contains(t, deleted, PublicIPName(orphanUID),
+		"a Public IP desired by neither Kubernetes nor NRP must still be cleaned up")
+}
+
+// TestRecoverStuckFinalizers_CountsRemovalSeparatelyFromScheduling pins that startup recovery
+// reports what it actually did.
+//
+// finalizers_recovered_total previously incremented on paths that left the finalizer in place -- a
+// Service handed to the diff, a pod enqueued for drain -- while the one path that genuinely removed
+// a pod finalizer incremented nothing. An operator watching it for recovery progress was therefore
+// misled in both directions. Scheduled work now has its own counter, and a removal that fails is
+// counted so the resulting Terminating object is detectable.
+func TestRecoverStuckFinalizers_CountsRemovalSeparatelyFromScheduling(t *testing.T) {
+	RegisterMetrics()
+
+	read := func() (recovered, scheduled, svcFailed float64) {
+		r, err := testutil.GetCounterMetricValue(finalizersRecoveredTotal)
+		assert.NoError(t, err)
+		s, err := testutil.GetCounterMetricValue(finalizersRecoveryScheduledTotal)
+		assert.NoError(t, err)
+		f, err := testutil.GetCounterMetricValue(serviceFinalizerRemoveFailedTotal)
+		assert.NoError(t, err)
+		return r, s, f
+	}
+
+	deleting := metav1.NewTime(time.Now())
+	svcScheduled := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "svc-with-azure", Namespace: "ns", UID: types.UID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+			DeletionTimestamp: &deleting, Finalizers: []string{ServiceGatewayServiceCleanupFinalizer},
+		},
+		Spec: v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	dt := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset(svcScheduled))
+
+	t.Run("a Service left to the diff counts as scheduled, not recovered", func(t *testing.T) {
+		r0, s0, _ := read()
+		// Its LoadBalancer still exists in Azure, so recovery must defer to the diff.
+		recoverStuckFinalizers(context.Background(), dt,
+			&v1.ServiceList{Items: []v1.Service{*svcScheduled}}, nil, nil,
+			utilsets.NewString(strings.ToLower(string(svcScheduled.UID))), utilsets.NewString(), utilsets.NewString())
+		r1, s1, _ := read()
+		assert.Equal(t, float64(0), r1-r0, "the finalizer is still on the Service; it was not recovered")
+		assert.Equal(t, float64(1), s1-s0, "handing it to the diff must be counted as scheduled work")
+	})
+
+	t.Run("a failed direct removal is counted", func(t *testing.T) {
+		kube := fake.NewSimpleClientset(svcScheduled)
+		kube.PrependReactor("update", "services", func(_ k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, apierrors.NewInternalError(fmt.Errorf("transient apiserver failure"))
+		})
+		failing := newProviderDiffTracker(t, ctrl, kube)
+
+		r0, _, f0 := read()
+		// No Azure resource anywhere, so recovery takes the direct-removal path -- which fails.
+		recoverStuckFinalizers(context.Background(), failing,
+			&v1.ServiceList{Items: []v1.Service{*svcScheduled}}, nil, nil,
+			utilsets.NewString(), utilsets.NewString(), utilsets.NewString())
+		r1, _, f1 := read()
+		assert.Equal(t, float64(1), f1-f0, "a forgotten Service finalizer removal must be counted")
+		assert.Equal(t, float64(0), r1-r0, "a failed removal must not be reported as a recovery")
+	})
 }

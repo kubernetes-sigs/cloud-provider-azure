@@ -679,6 +679,10 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 		// UpdateNRPNATGateways) before this completion callback, so refresh the tracked_services gauge
 		// here too - otherwise it stays stale after an async create/delete until the next Add/Update.
 		updateTrackedServicesMetric(dt)
+		// This callback both adds and removes pendingServiceDeletions entries (deletion completion,
+		// the delete-during-create pre-empt, and the post-deletion recreate), so the gauge must be
+		// refreshed here as well or it reports the count from the last DeleteService call.
+		updatePendingServiceDeletionsMetric(dt)
 	}()
 
 	dt.mu.Lock()
@@ -764,7 +768,13 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 	if isUpdate {
 		if success {
 			dt.logger.V(2).Info("Updated service", "service", serviceUID)
-			recordServiceOperation("update", opState.Config.IsInbound, startTime, nil, "", opState.IsOrphan)
+			// An outbound completion reaches here from the updater's skip path, which performs no
+			// Azure call; recording an update duration and success would assert a write that never
+			// happened. Those completions are counted by outbound_service_updates_skipped_total.
+			if opState.Config.IsInbound {
+				recordServiceOperation("update", true, startTime, nil, "", opState.IsOrphan)
+				recordServiceOperationRetries("update", true, opState.RetryCount)
+			}
 			// Persist the config that was actually applied (snapshot at dispatch time).
 			if opState.InFlightConfig != nil {
 				applied := *opState.InFlightConfig
@@ -811,6 +821,7 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 					opState.State = StateNotStarted
 					opState.LastAttempt = time.Now().Format(time.RFC3339)
 					recordServiceParked(parkReasonTerminalError)
+					recordServiceOperationRetries("update", opState.Config.IsInbound, opState.RetryCount)
 					dt.logger.Error(err, "Parked service after a non-retryable update error; it will not be retried until the Service spec changes", "service", serviceUID)
 					dt.checkInitializationCompleteLocked()
 				}
@@ -820,7 +831,6 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 				opState.RetryCount++
 				opState.LastAttempt = time.Now().Format(time.RFC3339)
 				opState.NextRetryAt = time.Now().Add(computeRetryBackoff(opState.RetryCount))
-				recordServiceOperationRetry("update", opState.Config.IsInbound, opState.RetryCount)
 
 				dt.logger.V(4).Info("Scheduled service update retry", "service", serviceUID, "attempt", opState.RetryCount, "nextRetryAt", opState.NextRetryAt)
 				// Stay in StateUpdateInProgress so dispatcher picks it up again.
@@ -835,6 +845,7 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 		if success {
 			dt.logger.V(2).Info("Deleted service", "service", serviceUID)
 			recordServiceOperation("delete", opState.Config.IsInbound, startTime, nil, "", opState.IsOrphan)
+			recordServiceOperationRetries("delete", opState.Config.IsInbound, opState.RetryCount)
 			if opState.IsOrphan {
 				// Count the orphan only once its async deletion actually succeeded (not at schedule
 				// time), so a failed cleanup does not over-report orphaned_resources_cleaned_total.
@@ -916,7 +927,6 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 				// CheckPendingServiceDeletions -> retryGate, which honours NextRetryAt. Without it a
 				// persistent overlay rejection tight-loops the drain/delete cycle and storms NRP.
 				opState.NextRetryAt = time.Now().Add(computeRetryBackoff(opState.RetryCount))
-				recordServiceOperationRetry("delete", opState.Config.IsInbound, opState.RetryCount)
 
 				opState.State = StateDeletionPending
 				dt.removeServiceFromK8sStateLocked(serviceUID, opState.Config.IsInbound)
@@ -935,7 +945,6 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 			opState.RetryCount++
 			opState.LastAttempt = time.Now().Format(time.RFC3339)
 			opState.NextRetryAt = time.Now().Add(computeRetryBackoff(opState.RetryCount))
-			recordServiceOperationRetry("delete", opState.Config.IsInbound, opState.RetryCount)
 
 			dt.logger.V(4).Info("Scheduled service deletion retry", "service", serviceUID, "attempt", opState.RetryCount, "nextRetryAt", opState.NextRetryAt)
 			// Trigger ServiceUpdater for retry
@@ -951,6 +960,7 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 
 			dt.logger.V(2).Info("Created service", "service", serviceUID)
 			recordServiceOperation("create", opState.Config.IsInbound, startTime, nil, "", opState.IsOrphan)
+			recordServiceOperationRetries("create", opState.Config.IsInbound, opState.RetryCount)
 			opState.State = StateCreated
 			opState.RetryCount = 0
 			// Persist applied config snapshot for future UpdateService diffing.
@@ -1008,6 +1018,7 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 					opState.State = StateNotStarted
 					opState.LastAttempt = time.Now().Format(time.RFC3339)
 					recordServiceParked(parkReasonTerminalError)
+					recordServiceOperationRetries("create", opState.Config.IsInbound, opState.RetryCount)
 					dt.logger.Error(err, "Parked service after a non-retryable creation error; it will not be retried until the Service spec changes", "service", serviceUID)
 					dt.checkInitializationCompleteLocked()
 				}
@@ -1017,7 +1028,6 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 				opState.RetryCount++
 				opState.LastAttempt = time.Now().Format(time.RFC3339)
 				opState.NextRetryAt = time.Now().Add(computeRetryBackoff(opState.RetryCount))
-				recordServiceOperationRetry("create", opState.Config.IsInbound, opState.RetryCount)
 
 				dt.logger.V(4).Info("Scheduled service creation retry", "service", serviceUID, "attempt", opState.RetryCount, "nextRetryAt", opState.NextRetryAt)
 				// Reset to NotStarted for retry
