@@ -48,7 +48,6 @@ generate() {
     --branch=${BRANCH} \
     --start-rev=${FROM_TAG} \
     --end-rev=${TO_TAG} \
-    --skip-first-commit \
     --markdown-links=true \
     --output=${OUTPUT}
 
