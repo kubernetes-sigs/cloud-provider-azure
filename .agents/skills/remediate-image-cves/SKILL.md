@@ -229,12 +229,15 @@ When source changes exist and every final gate passes:
 5. Preserve the repository template's heading text and order. Before opening
    the PR, verify that every `####` heading from the repository template appears
    exactly once in the same order and that its `release-note` and `docs` fences
-   remain. Use `/kind cleanup`, no issue closure unless the caller supplied one,
-   and `NONE` in the release-note block. Replace the issue placeholder with
-   `NONE` when no issue was supplied. Count vulnerability findings rather than
-   grouped remediation actions in the baseline column. Use `None` instead of
-   omitting an empty fix or residual-risk entry. For a shared root-module fix,
-   identify the checkpoint that covers both CCM and CNM.
+   remain. Use `/kind cleanup` and no issue closure unless the caller supplied
+   one. In the `release-note` block, include a concise, user-facing summary of
+   the CVE remediation changes that names the remediated dependency or image
+   and the CVE IDs when known, for example: `Bumped github.com/golang-jwt/jwt
+   for CVE-2025-30204.` Replace the issue placeholder with `NONE` when no issue
+   was supplied. Count vulnerability findings rather than grouped remediation
+   actions in the baseline column. Use `None` instead of omitting an empty fix
+   or residual-risk entry. For a shared root-module fix, identify the
+   checkpoint that covers both CCM and CNM.
 
 ## Cleanup and Output
 
