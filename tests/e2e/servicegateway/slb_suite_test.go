@@ -18,6 +18,7 @@ package servicegateway
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -186,13 +187,81 @@ func buildServiceGatewayURL(path string) string {
 	)
 }
 
+// azTransientRetries is how many times runAz re-issues a command that failed for a reason the
+// Azure control plane is expected to recover from on its own.
+const azTransientRetries = 4
+
+// azRetryBackoff is the pause between those attempts.
+const azRetryBackoff = 10 * time.Second
+
+// isTransientAzureFailure reports whether an `az` invocation failed for a reason that is worth
+// retrying rather than failing the spec.
+//
+// A 503 from ARM arrives as an HTML error page rather than JSON, and throttling (429) and gateway
+// timeouts behave the same way. These say nothing about the cloud provider under test, but because
+// most callers issue a single un-polled query, one of them is otherwise enough to fail a spec that
+// has already run for minutes — and, in a suite this long, to cost a whole run.
+func isTransientAzureFailure(output string) bool {
+	for _, marker := range []string{
+		"Service Unavailable",
+		"ServiceUnavailable",
+		"(503)",
+		"Gateway Timeout",
+		"(504)",
+		"TooManyRequests",
+		"(429)",
+		"temporarily unavailable",
+		"connection reset by peer",
+		"Please run 'az login'",
+		"AADSTS700082", // expired refresh token; the next attempt re-authenticates
+	} {
+		if strings.Contains(output, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// runAz runs an `az` command and returns its stdout, retrying transient control-plane failures.
+//
+// It deliberately uses Output() rather than CombinedOutput(): `az` writes warnings (extension
+// notices, deprecation and MSAL messages) to stderr, and folding those into stdout corrupts the
+// buffer that callers hand to json.Unmarshal, turning a perfectly healthy query into a parse
+// error. Stderr is still reported, but only as part of the error message.
+func runAz(args ...string) ([]byte, error) {
+	var lastErr error
+	for attempt := 0; attempt <= azTransientRetries; attempt++ {
+		if attempt > 0 {
+			time.Sleep(azRetryBackoff)
+		}
+
+		cmd := exec.Command("az", args...)
+		stdout, err := cmd.Output()
+		if err == nil {
+			return stdout, nil
+		}
+
+		stderr := ""
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			stderr = string(exitErr.Stderr)
+		}
+		lastErr = fmt.Errorf("az %s: %w (stderr: %s)", strings.Join(args, " "), err, strings.TrimSpace(stderr))
+
+		if !isTransientAzureFailure(stderr) && !isTransientAzureFailure(string(stdout)) {
+			return nil, lastErr
+		}
+		utils.Logf("Transient Azure failure (attempt %d/%d), retrying: %v", attempt+1, azTransientRetries+1, lastErr)
+	}
+	return nil, fmt.Errorf("az command still failing after %d attempts: %w", azTransientRetries+1, lastErr)
+}
+
 // queryServiceGatewayServices queries all services in the Service Gateway
 func queryServiceGatewayServices() (ServiceGatewayServicesResponse, error) {
 	url := buildServiceGatewayURL("services")
-	cmd := exec.Command("az", "rest", "--method", "get", "--url", url)
-	output, err := cmd.CombinedOutput()
+	output, err := runAz("rest", "--method", "get", "--url", url)
 	if err != nil {
-		return ServiceGatewayServicesResponse{}, fmt.Errorf("failed to query Service Gateway services: %w, output: %s", err, string(output))
+		return ServiceGatewayServicesResponse{}, fmt.Errorf("failed to query Service Gateway services: %w", err)
 	}
 
 	var response ServiceGatewayServicesResponse
@@ -206,10 +275,9 @@ func queryServiceGatewayServices() (ServiceGatewayServicesResponse, error) {
 // queryServiceGatewayAddressLocations queries all address locations in the Service Gateway
 func queryServiceGatewayAddressLocations() (ServiceGatewayAddressLocationsResponse, error) {
 	url := buildServiceGatewayURL("addressLocations")
-	cmd := exec.Command("az", "rest", "--method", "get", "--url", url)
-	output, err := cmd.CombinedOutput()
+	output, err := runAz("rest", "--method", "get", "--url", url)
 	if err != nil {
-		return ServiceGatewayAddressLocationsResponse{}, fmt.Errorf("failed to query Service Gateway address locations: %w, output: %s", err, string(output))
+		return ServiceGatewayAddressLocationsResponse{}, fmt.Errorf("failed to query Service Gateway address locations: %w", err)
 	}
 
 	var response ServiceGatewayAddressLocationsResponse
@@ -348,10 +416,9 @@ func natGatewayCleanupErr(egressNames []string) error {
 func azurePublicIPAbsentErr(serviceUID string) error {
 	publicIPName := fmt.Sprintf("%s-pip", serviceUID)
 
-	pipCmd := exec.Command("az", "network", "public-ip", "list",
+	pipOutput, err := runAz("network", "public-ip", "list",
 		"--resource-group", resourceGroupName,
 		"--output", "json")
-	pipOutput, err := pipCmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to query Azure for Public IPs: %w", err)
 	}
@@ -374,10 +441,9 @@ func verifyAzureResources(serviceUID string) error {
 	loadBalancerName := serviceUID
 
 	// Verify Public IP in Azure
-	pipCmd := exec.Command("az", "network", "public-ip", "list",
+	pipOutput, err := runAz("network", "public-ip", "list",
 		"--resource-group", resourceGroupName,
 		"--output", "json")
-	pipOutput, err := pipCmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to query Azure for Public IPs: %w", err)
 	}
@@ -399,11 +465,10 @@ func verifyAzureResources(serviceUID string) error {
 	}
 
 	// Verify Load Balancer in Azure
-	lbCmd := exec.Command("az", "network", "lb", "show",
+	lbOutput, err := runAz("network", "lb", "show",
 		"--resource-group", resourceGroupName,
 		"--name", loadBalancerName,
 		"--output", "json")
-	lbOutput, err := lbCmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to query Azure for Load Balancer: %w", err)
 	}

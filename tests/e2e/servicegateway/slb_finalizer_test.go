@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -61,10 +60,9 @@ func verifyAzureLBAndPIPExist(serviceUID string) error {
 	loadBalancerName := serviceUID
 
 	// Query Public IPs
-	pipCmd := exec.Command("az", "network", "public-ip", "list",
+	pipOutput, err := runAz("network", "public-ip", "list",
 		"--resource-group", resourceGroupName,
 		"--output", "json")
-	pipOutput, err := pipCmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to query Azure for Public IPs: %w", err)
 	}
@@ -87,11 +85,10 @@ func verifyAzureLBAndPIPExist(serviceUID string) error {
 	}
 
 	// Query Load Balancer
-	lbCmd := exec.Command("az", "network", "lb", "show",
+	lbOutput, err := runAz("network", "lb", "show",
 		"--resource-group", resourceGroupName,
 		"--name", loadBalancerName,
 		"--output", "json")
-	lbOutput, err := lbCmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("load Balancer %s not found: %w", loadBalancerName, err)
 	}
@@ -111,11 +108,10 @@ func verifyAzureLBAndPIPDeleted(serviceUID string) error {
 	loadBalancerName := serviceUID
 
 	// Check Public IP is deleted
-	pipCmd := exec.Command("az", "network", "public-ip", "show",
+	pipOutput, err := runAz("network", "public-ip", "show",
 		"--resource-group", resourceGroupName,
 		"--name", publicIPName,
 		"--output", "json")
-	pipOutput, err := pipCmd.CombinedOutput()
 	if err == nil {
 		return fmt.Errorf("public IP %s still exists", publicIPName)
 	}
@@ -124,11 +120,10 @@ func verifyAzureLBAndPIPDeleted(serviceUID string) error {
 	}
 
 	// Check Load Balancer is deleted
-	lbCmd := exec.Command("az", "network", "lb", "show",
+	lbOutput, err := runAz("network", "lb", "show",
 		"--resource-group", resourceGroupName,
 		"--name", loadBalancerName,
 		"--output", "json")
-	lbOutput, err := lbCmd.CombinedOutput()
 	if err == nil {
 		return fmt.Errorf("load Balancer %s still exists", loadBalancerName)
 	}
@@ -147,11 +142,10 @@ func verifyNATGatewayAndPIPExist(natGatewayID string) error {
 	natGatewayName := parts[len(parts)-1]
 
 	// Query NAT Gateway
-	natCmd := exec.Command("az", "network", "nat", "gateway", "show",
+	natOutput, err := runAz("network", "nat", "gateway", "show",
 		"--resource-group", resourceGroupName,
 		"--name", natGatewayName,
 		"--output", "json")
-	natOutput, err := natCmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("NAT Gateway %s not found: %w", natGatewayName, err)
 	}
@@ -178,11 +172,10 @@ func verifyNATGatewayAndPIPDeleted(natGatewayID string) error {
 	natGatewayName := parts[len(parts)-1]
 
 	// Check NAT Gateway is deleted
-	natCmd := exec.Command("az", "network", "nat", "gateway", "show",
+	natOutput, err := runAz("network", "nat", "gateway", "show",
 		"--resource-group", resourceGroupName,
 		"--name", natGatewayName,
 		"--output", "json")
-	natOutput, err := natCmd.CombinedOutput()
 	if err == nil {
 		return fmt.Errorf("NAT Gateway %s still exists", natGatewayName)
 	}

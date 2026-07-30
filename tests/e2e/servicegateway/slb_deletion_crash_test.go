@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -705,10 +704,9 @@ var _ = Describe("Container Load Balancer Deletion Crash Recovery Tests", Label(
 
 // countAzureLoadBalancers counts the number of SLB-managed Load Balancers in the resource group
 func countAzureLoadBalancers() (int, error) {
-	cmd := exec.Command("az", "network", "lb", "list",
+	output, err := runAz("network", "lb", "list",
 		"--resource-group", resourceGroupName,
 		"--output", "json")
-	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return 0, fmt.Errorf("failed to list Load Balancers: %w", err)
 	}
@@ -744,10 +742,9 @@ func countAzureLoadBalancers() (int, error) {
 
 // countAzurePublicIPs counts the number of SLB-managed Public IPs in the resource group
 func countAzurePublicIPs() (int, error) {
-	cmd := exec.Command("az", "network", "public-ip", "list",
+	output, err := runAz("network", "public-ip", "list",
 		"--resource-group", resourceGroupName,
 		"--output", "json")
-	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return 0, fmt.Errorf("failed to list Public IPs: %w", err)
 	}
@@ -780,10 +777,9 @@ func countAzurePublicIPs() (int, error) {
 // SLB creates NAT Gateways named after the egress label value (e.g., namespace name)
 // The default NAT Gateway "default-natgw" is always excluded
 func countAzureNATGateways() (int, error) {
-	cmd := exec.Command("az", "network", "nat", "gateway", "list",
+	output, err := runAz("network", "nat", "gateway", "list",
 		"--resource-group", resourceGroupName,
 		"--output", "json")
-	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return 0, fmt.Errorf("failed to list NAT Gateways: %w", err)
 	}

@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -142,10 +141,9 @@ var _ = Describe("SLB - Basic Service", Label(slbTestLabel), func() {
 		utils.Logf("Looking for Public IP with name: %s", expectedPIPName)
 
 		// List all Public IPs and find ours by name
-		pipCmd := exec.Command("az", "network", "public-ip", "list",
+		pipOutput, err := runAz("network", "public-ip", "list",
 			"--resource-group", resourceGroupName,
 			"--output", "json")
-		pipOutput, err := pipCmd.CombinedOutput()
 
 		if err != nil {
 			utils.Logf("Failed to list public IPs: %v", err)
@@ -184,11 +182,10 @@ var _ = Describe("SLB - Basic Service", Label(slbTestLabel), func() {
 		utils.Logf("Looking for Load Balancer with name: %s", expectedLBName)
 
 		// Use 'show' to get full details
-		lbCmd := exec.Command("az", "network", "lb", "show",
+		lbOutput, err := runAz("network", "lb", "show",
 			"--resource-group", resourceGroupName,
 			"--name", expectedLBName,
 			"--output", "json")
-		lbOutput, err := lbCmd.CombinedOutput()
 
 		if err != nil {
 			utils.Logf("Failed to get load balancer: %v", err)
@@ -224,8 +221,7 @@ var _ = Describe("SLB - Basic Service", Label(slbTestLabel), func() {
 		utils.Logf("  Resource Group: %s", resourceGroupName)
 
 		serviceGatewayURL := buildServiceGatewayURL("services")
-		sgCmd := exec.Command("az", "rest", "--method", "get", "--url", serviceGatewayURL)
-		sgOutput, err := sgCmd.CombinedOutput()
+		sgOutput, err := runAz("rest", "--method", "get", "--url", serviceGatewayURL)
 
 		if err != nil {
 			utils.Logf("Failed to query Service Gateway: %v", err)

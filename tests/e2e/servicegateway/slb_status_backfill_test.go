@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -148,11 +147,11 @@ var _ = Describe("SLB - Status Backfill", Label(slbTestLabel), func() {
 // provisions for a service (named "<uid>-pip"), or an empty string if it does not yet exist.
 func getServicePublicIPAddress(serviceUID string) (string, error) {
 	expectedPIPName := fmt.Sprintf("%s-pip", serviceUID)
-	out, err := exec.Command("az", "network", "public-ip", "list",
+	out, err := runAz("network", "public-ip", "list",
 		"--resource-group", resourceGroupName,
-		"--output", "json").CombinedOutput()
+		"--output", "json")
 	if err != nil {
-		return "", fmt.Errorf("list public IPs: %w (%s)", err, string(out))
+		return "", fmt.Errorf("list public IPs: %w", err)
 	}
 	var pips []AzurePublicIP
 	if err := json.Unmarshal(out, &pips); err != nil {

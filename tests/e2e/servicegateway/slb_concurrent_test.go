@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -262,10 +261,9 @@ var _ = Describe("SLB - Concurrent Services", Label(slbTestLabel), func() {
 
 		// Query all Public IPs once
 		utils.Logf("Querying all Public IPs...")
-		pipCmd := exec.Command("az", "network", "public-ip", "list",
+		pipOutput, err := runAz("network", "public-ip", "list",
 			"--resource-group", resourceGroupName,
 			"--output", "json")
-		pipOutput, err := pipCmd.CombinedOutput()
 		Expect(err).NotTo(HaveOccurred(), "Should be able to query Azure for Public IPs")
 
 		var allPublicIPs []AzurePublicIP
@@ -275,10 +273,9 @@ var _ = Describe("SLB - Concurrent Services", Label(slbTestLabel), func() {
 
 		// Query all Load Balancers once
 		utils.Logf("Querying all Load Balancers...")
-		lbListCmd := exec.Command("az", "network", "lb", "list",
+		lbListOutput, err := runAz("network", "lb", "list",
 			"--resource-group", resourceGroupName,
 			"--output", "json")
-		lbListOutput, err := lbListCmd.CombinedOutput()
 		Expect(err).NotTo(HaveOccurred(), "Should be able to query Azure for Load Balancers")
 
 		var allLoadBalancers []AzureLoadBalancer

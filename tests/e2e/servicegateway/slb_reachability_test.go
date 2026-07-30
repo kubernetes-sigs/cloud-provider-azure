@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -350,10 +349,9 @@ var _ = Describe("SLB - Multi-Service Provisioning", Label(slbTestLabel), func()
 				"all services should have their pods registered in the Service Gateway")
 
 			By("Verifying all Public IPs exist in Azure")
-			pipCmd := exec.Command("az", "network", "public-ip", "list",
+			pipOutput, err := runAz("network", "public-ip", "list",
 				"--resource-group", resourceGroupName,
 				"--output", "json")
-			pipOutput, err := pipCmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Should be able to query Azure for Public IPs")
 
 			var publicIPs []AzurePublicIP

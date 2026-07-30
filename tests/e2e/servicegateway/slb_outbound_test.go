@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -148,11 +147,10 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		parts := strings.Split(natGatewayID, "/")
 		natGatewayName := parts[len(parts)-1]
 
-		natGwCmd := exec.Command("az", "network", "nat", "gateway", "show",
+		natGwOutput, err := runAz("network", "nat", "gateway", "show",
 			"--resource-group", resourceGroupName,
 			"--name", natGatewayName,
 			"--output", "json")
-		natGwOutput, err := natGwCmd.CombinedOutput()
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("NAT Gateway %s should exist in Azure", natGatewayName))
 
 		var natGateway map[string]interface{}

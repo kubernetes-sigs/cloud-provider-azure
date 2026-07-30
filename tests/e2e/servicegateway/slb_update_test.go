@@ -26,7 +26,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"sort"
 	"time"
 
@@ -51,11 +50,10 @@ type azureLBRule struct {
 // getLoadBalancerFrontendPorts reads all frontend ports configured on the LB
 // whose name == serviceUID. Returns sorted list for deterministic comparison.
 func getLoadBalancerFrontendPorts(serviceUID string) ([]int32, error) {
-	cmd := exec.Command("az", "network", "lb", "rule", "list",
+	output, err := runAz("network", "lb", "rule", "list",
 		"--resource-group", resourceGroupName,
 		"--lb-name", serviceUID,
 		"--output", "json")
-	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list LB rules for %s: %w, output: %s", serviceUID, err, string(output))
 	}

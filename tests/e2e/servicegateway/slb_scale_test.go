@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -220,10 +219,9 @@ var _ = Describe("SLB - Pod Scaling", Label(slbTestLabel), func() {
 		loadBalancerName := serviceUID
 
 		By("Verifying Public IP in Azure")
-		pipCmd := exec.Command("az", "network", "public-ip", "list",
+		pipOutput, err := runAz("network", "public-ip", "list",
 			"--resource-group", resourceGroupName,
 			"--output", "json")
-		pipOutput, err := pipCmd.CombinedOutput()
 		Expect(err).NotTo(HaveOccurred(), "Should be able to query Azure for Public IPs")
 
 		var publicIPs []AzurePublicIP
@@ -246,11 +244,10 @@ var _ = Describe("SLB - Pod Scaling", Label(slbTestLabel), func() {
 		utils.Logf("  Location: %s", servicePublicIP.Location)
 
 		By("Verifying Load Balancer in Azure")
-		lbCmd := exec.Command("az", "network", "lb", "show",
+		lbOutput, err := runAz("network", "lb", "show",
 			"--resource-group", resourceGroupName,
 			"--name", loadBalancerName,
 			"--output", "json")
-		lbOutput, err := lbCmd.CombinedOutput()
 		Expect(err).NotTo(HaveOccurred(), "Should be able to query Azure for Load Balancer")
 
 		var serviceLB AzureLoadBalancer

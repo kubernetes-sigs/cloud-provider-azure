@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -46,11 +45,10 @@ type udpLBRule struct {
 
 // getLoadBalancerRules returns all load-balancing rules on the LB named serviceUID.
 func getLoadBalancerRules(serviceUID string) ([]udpLBRule, error) {
-	cmd := exec.Command("az", "network", "lb", "rule", "list",
+	output, err := runAz("network", "lb", "rule", "list",
 		"--resource-group", resourceGroupName,
 		"--lb-name", serviceUID,
 		"--output", "json")
-	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list LB rules for %s: %w, output: %s", serviceUID, err, string(output))
 	}

@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"time"
 
@@ -244,10 +243,9 @@ var _ = Describe("SLB - Egress SNAT Connectivity", Label(slbTestLabel), func() {
 // ServiceGateway API version instead. The attached public IPs are then resolved with the
 // standard public-ip command (which works for them).
 func getNatGatewayPublicIPs(natGatewayID string) ([]string, error) {
-	showCmd := exec.Command("az", "rest",
+	showOut, err := runAz("rest",
 		"--method", "get",
 		"--url", fmt.Sprintf("https://management.azure.com%s?api-version=%s", natGatewayID, apiVersion))
-	showOut, err := showCmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("query NAT gateway %s: %v, output: %s", natGatewayID, err, string(showOut))
 	}
@@ -265,11 +263,10 @@ func getNatGatewayPublicIPs(natGatewayID string) ([]string, error) {
 
 	var ips []string
 	for _, pip := range natGateway.Properties.PublicIPAddresses {
-		ipCmd := exec.Command("az", "network", "public-ip", "show",
+		ipOut, err := runAz("network", "public-ip", "show",
 			"--ids", pip.ID,
 			"--query", "ipAddress",
 			"--output", "tsv")
-		ipOut, err := ipCmd.CombinedOutput()
 		if err != nil {
 			return nil, fmt.Errorf("resolve public IP %s: %v, output: %s", pip.ID, err, string(ipOut))
 		}
