@@ -56,12 +56,35 @@ func PublicIPName(identity string) string {
 	return identity + publicIPNameSuffix
 }
 
+// DefaultOutboundNATGatewayName is the RP-owned default outbound NAT Gateway. AKS provisions it
+// (with IsDefault=true) before the CCM starts, and it carries the cluster's default egress Public
+// IP. It is not managed by this controller and must never be created, updated or deleted by it.
+const DefaultOutboundNATGatewayName = "default-natgw"
+
+// IsReservedEgressIdentity reports whether name refers to a resource this controller must not
+// manage. Matching is case-insensitive because the value originates from a user-controlled label and
+// Azure may normalise resource-name casing differently across endpoints.
+func IsReservedEgressIdentity(name string) bool {
+	return strings.EqualFold(name, DefaultOutboundNATGatewayName)
+}
+
 // IsValidEgressIdentity reports whether name is a safe egress identity. The identity is derived from
 // a user-controllable pod label and is used verbatim as the NAT Gateway name and as the stem of the
 // Public IP name (identity+"-pip"), and is interpolated into their ARM resource IDs, so it must be
 // validated to avoid malformed ARM requests (for example a path-traversal value like "../foo") or a
 // PIP name that overflows Azure's 80-char limit, either of which causes endless create retries.
+//
+// Reserved names are rejected here so every caller fails closed. The identity names the Azure
+// resources directly, so a pod label naming a resource this controller does not own would make the
+// egress lifecycle act on it: registering the first pod PUTs that NAT Gateway and its Public IP, and
+// removing the last pod DELETEs them. For the RP-owned default gateway that is a cluster-wide egress
+// outage reachable by anyone who can create a labelled pod in any namespace, and it is not otherwise
+// prevented: the default gateway is deliberately excluded from NRP state at startup, so the pod-add
+// path always concludes it must be created.
 func IsValidEgressIdentity(name string) bool {
+	if IsReservedEgressIdentity(name) {
+		return false
+	}
 	return egressIdentityRegex.MatchString(name)
 }
 

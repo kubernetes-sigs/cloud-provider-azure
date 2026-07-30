@@ -982,3 +982,19 @@ func TestAdmitInboundService_AdmitsBothExternalTrafficPolicies(t *testing.T) {
 		})
 	}
 }
+
+// TestIsValidEgressIdentity_RejectsReservedNames pins the reserved-name guard at the shared
+// chokepoint used by both the pod informer and startup egress discovery.
+func TestIsValidEgressIdentity_RejectsReservedNames(t *testing.T) {
+	for _, name := range []string{"default-natgw", "Default-NatGW", "DEFAULT-NATGW"} {
+		assert.True(t, IsReservedEgressIdentity(name), "%q must be recognised as reserved", name)
+		assert.False(t, IsValidEgressIdentity(name),
+			"%q names the RP-owned default gateway and must not be usable as an egress identity", name)
+	}
+
+	// Controls: shape-valid identities that merely resemble the reserved name stay usable.
+	for _, name := range []string{"team-egress", "default-natgw2", "my-default-natgw", "default-natgateway"} {
+		assert.False(t, IsReservedEgressIdentity(name), "%q must not be treated as reserved", name)
+		assert.True(t, IsValidEgressIdentity(name), "%q must remain a usable egress identity", name)
+	}
+}

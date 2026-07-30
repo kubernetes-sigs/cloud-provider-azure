@@ -1349,3 +1349,86 @@ func TestPodInformerRemovePod_BufferedPodFinalizerRemovedByCaller(t *testing.T) 
 	assert.NotContains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
 		"a pod deleted while buffered must have its finalizer removed by the caller, not stranded in Terminating")
 }
+
+// TestPodInformerAddPod_IgnoresReservedEgressLabel pins that a pod cannot make this controller
+// manage the cluster's default outbound NAT Gateway.
+//
+// The egress label is user-controlled and becomes the Azure resource name verbatim: the NAT Gateway
+// is named after it and its Public IP is "<label>-pip". Labelling a pod with the RP-owned default
+// gateway's name therefore aims the whole egress lifecycle at it - registering the first pod PUTs
+// that gateway and its Public IP, and removing the last pod DELETEs them, taking out the cluster's
+// default egress and reallocating its address. Nothing else prevents this: the default gateway is
+// deliberately excluded from NRP state at startup, so the pod-add path always concludes it must be
+// created, and the pod informer watches every namespace filtered only by this label.
+func TestPodInformerAddPod_IgnoresReservedEgressLabel(t *testing.T) {
+	for _, label := range []string{"default-natgw", "Default-NatGW", "DEFAULT-NATGW"} {
+		t.Run(label, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			pod := &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "evil-pod",
+					Namespace: "attacker-ns",
+					UID:       types.UID("pod-uid"),
+					Labels:    map[string]string{consts.PodLabelServiceEgressGateway: label},
+				},
+				Status: v1.PodStatus{
+					Phase:  v1.PodRunning,
+					HostIP: "10.0.0.1",
+					PodIP:  "10.244.0.9",
+					PodIPs: []v1.PodIP{{IP: "10.244.0.9"}},
+				},
+				Spec: v1.PodSpec{NodeName: "node-1"},
+			}
+
+			dt := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset(pod))
+			rec := record.NewFakeRecorder(10)
+			dt.eventRecorder = rec
+
+			dt.podInformerAddPod(pod)
+
+			assert.False(t, dt.IsServiceTracked(DefaultOutboundNATGatewayName),
+				"a pod must never make the controller manage the default outbound NAT Gateway")
+			dt.mu.Lock()
+			opCount := len(dt.pendingServiceOps)
+			dt.mu.Unlock()
+			assert.Zero(t, opCount, "no Azure operation may be scheduled for a reserved egress identity")
+
+			select {
+			case ev := <-rec.Events:
+				assert.Contains(t, ev, "ServiceGatewayReservedEgressLabel",
+					"the user must be told the label is reserved, not merely malformed")
+			default:
+				t.Fatal("expected a ServiceGatewayReservedEgressLabel warning Event")
+			}
+		})
+	}
+}
+
+// TestPodInformerAddPod_AcceptsOrdinaryEgressLabel is the control: the reserved-name guard must not
+// reject ordinary egress identities.
+func TestPodInformerAddPod_AcceptsOrdinaryEgressLabel(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "app-pod", Namespace: "team-ns", UID: types.UID("pod-uid"),
+			Labels: map[string]string{consts.PodLabelServiceEgressGateway: "team-egress"},
+		},
+		Status: v1.PodStatus{
+			Phase: v1.PodRunning, HostIP: "10.0.0.1", PodIP: "10.244.0.9",
+			PodIPs: []v1.PodIP{{IP: "10.244.0.9"}},
+		},
+		Spec: v1.PodSpec{NodeName: "node-1"},
+	}
+
+	dt := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset(pod))
+	dt.eventRecorder = record.NewFakeRecorder(10)
+
+	dt.podInformerAddPod(pod)
+
+	assert.True(t, dt.IsServiceTracked("team-egress"),
+		"an ordinary egress identity must still be registered")
+}

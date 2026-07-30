@@ -820,7 +820,7 @@ func fetchServiceGatewayServices(
 			// HTTP 400 MultipleDefaultServicesNotAllowedInServiceGateway,
 			// then deletes the NAT GW + PIP and recreates them. Case-insensitive
 			// because Azure may normalize naming differently across endpoints.
-			if strings.EqualFold(*service.Name, "default-natgw") {
+			if IsReservedEgressIdentity(*service.Name) {
 				logger.V(4).Info("Skipped RP-owned default outbound service", "service", *service.Name)
 				continue
 			}
@@ -1121,7 +1121,7 @@ func scheduleOrphanedResourceDeletions(diffTracker *DiffTracker, currentLBsInAzu
 	if currentNATsInAzure != nil {
 		for _, natName := range currentNATsInAzure.UnsortedList() {
 			// Skip the default NAT Gateway
-			if natName == "default-natgw" {
+			if IsReservedEgressIdentity(natName) {
 				continue
 			}
 			// If NAT is desired in K8s, reconcileServices will handle it - NOT orphaned
@@ -1147,7 +1147,7 @@ func scheduleOrphanedResourceDeletions(diffTracker *DiffTracker, currentLBsInAzu
 	orphanLBSet := utilsets.NewString(orphanedLBs...)
 	for _, pipName := range pipNamesInAzure.UnsortedList() {
 		pipName = strings.ToLower(pipName)
-		if !strings.HasSuffix(pipName, "-pip") || pipName == "default-natgw-pip" {
+		if !strings.HasSuffix(pipName, "-pip") || IsReservedEgressIdentity(strings.TrimSuffix(pipName, "-pip")) {
 			continue
 		}
 		uid := strings.TrimSuffix(pipName, "-pip")
@@ -1578,7 +1578,7 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 		}
 
 		// Skip the default NAT Gateway PIP
-		if pipName == "default-natgw-pip" {
+		if IsReservedEgressIdentity(strings.TrimSuffix(pipName, "-pip")) {
 			logger.V(5).Info("Skipped default NAT gateway Public IP")
 			continue
 		}
