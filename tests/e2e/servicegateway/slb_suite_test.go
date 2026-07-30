@@ -249,7 +249,12 @@ func runAz(args ...string) ([]byte, error) {
 		lastErr = fmt.Errorf("az %s: %w (stderr: %s)", strings.Join(args, " "), err, strings.TrimSpace(stderr))
 
 		if !isTransientAzureFailure(stderr) && !isTransientAzureFailure(string(stdout)) {
-			return nil, lastErr
+			// Hand back the diagnostic text on the failure path. Several callers deliberately
+			// expect the command to fail — "the resource is gone" is asserted by running `az
+			// ... show` and matching ResourceNotFound — and `az` writes that to stderr. Returning
+			// only stdout here would give them an empty buffer and turn a correct deletion into
+			// an "unexpected error" with no message.
+			return append(stdout, stderr...), lastErr
 		}
 		utils.Logf("Transient Azure failure (attempt %d/%d), retrying: %v", attempt+1, azTransientRetries+1, lastErr)
 	}

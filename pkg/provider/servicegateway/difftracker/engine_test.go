@@ -1444,3 +1444,151 @@ func TestEngineOnServiceCreationComplete_DriftDuringTerminalUpdateReDispatches(t
 	assert.Equal(t, StateNotStarted, op.State, "the drifted config must be re-dispatched")
 	assert.True(t, configsEqualForUpdate(&op.Config, &desired), "the re-dispatch must target the new desired config")
 }
+
+// TestDeletePod_StaleDeleteDoesNotDrainReplacementAddress pins the rapid pod-recreate guard on the
+// address delete path.
+//
+// A pod can be deleted and recreated under the same name with a new UID while the outbound service
+// is still provisioning, so its addresses are buffered rather than live. The replacement's Add can
+// be processed before the original's Delete arrives, leaving the buffer holding the address under
+// the NEW UID when a delete for the OLD UID shows up.
+//
+// NRP is seeded with the address here because that is what makes the two paths diverge: without the
+// guard the delete falls through to the local-state-miss recovery, which sees the address still
+// mapped in NRP and reconstructs a drain-gated finalizer record keyed by namespace/name. That record
+// belongs to the live replacement pod, so CheckPendingPodDeletions would strip its cleanup finalizer
+// while it is still backing the egress service.
+func TestDeletePod_StaleDeleteDoesNotDrainReplacementAddress(t *testing.T) {
+	const (
+		serviceUID = "egress-a"
+		podKey     = "ns/egress-pod"
+		location   = "10.0.0.1"
+		address    = "10.244.0.9"
+		oldUID     = "uid-old"
+		newUID     = "uid-new"
+	)
+
+	dt := newTestDiffTracker()
+	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
+		ServiceUID: serviceUID,
+		Config:     NewOutboundServiceConfig(serviceUID, nil),
+		State:      StateCreationInProgress,
+	}
+	// The replacement pod has already buffered the address under its own UID.
+	dt.pendingPods[serviceUID] = []PendingPodUpdate{
+		{PodKey: podKey, PodUID: newUID, Location: location, Address: address},
+	}
+	// NRP still maps the address to the service, as it would once the create reached it.
+	dt.NRPResources.Locations[location] = NRPLocation{
+		Addresses: map[string]NRPAddress{address: {Services: utilsets.NewString(serviceUID)}},
+	}
+
+	result := dt.DeletePod(serviceUID, location, []string{address}, "ns", "egress-pod", oldUID)
+
+	assert.False(t, result.Enqueued,
+		"a stale delete must not drain-gate the live replacement pod")
+	assert.Equal(t, PodFinalizerDecisionReleaseNoDrain, result.FinalizerDecision,
+		"the stale delete must release the dead pod's OWN finalizer without draining: it owns no live "+
+			"address, so holding would wedge the old pod object in Terminating forever")
+
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	buffered := dt.pendingPods[serviceUID]
+	if assert.Len(t, buffered, 1, "the replacement's buffered address must survive a stale delete") {
+		assert.Equal(t, newUID, buffered[0].PodUID, "the surviving entry must be the replacement's")
+		assert.Equal(t, address, buffered[0].Address)
+	}
+	assert.NotContains(t, dt.pendingPodDeletions, podKey,
+		"a stale delete must not enqueue a finalizer removal against the live replacement pod")
+}
+
+// TestDeletePod_MatchingUIDStillCancelsBufferedAddress is the control for the guard above: a delete
+// carrying the same UID as the buffered entry is the pod's own delete and must still take effect.
+func TestDeletePod_MatchingUIDStillCancelsBufferedAddress(t *testing.T) {
+	const (
+		serviceUID = "egress-b"
+		podKey     = "ns/egress-pod"
+		location   = "10.0.0.1"
+		address    = "10.244.0.9"
+		podUID     = "uid-1"
+	)
+
+	dt := newTestDiffTracker()
+	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
+		ServiceUID: serviceUID,
+		Config:     NewOutboundServiceConfig(serviceUID, nil),
+		State:      StateCreationInProgress,
+	}
+	dt.pendingPods[serviceUID] = []PendingPodUpdate{
+		{PodKey: podKey, PodUID: podUID, Location: location, Address: address},
+	}
+
+	dt.DeletePod(serviceUID, location, []string{address}, "ns", "egress-pod", podUID)
+
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	assert.Empty(t, dt.pendingPods[serviceUID],
+		"a pod's own delete must still cancel its buffered address")
+}
+
+// TestDeletePodWithoutAddresses_KeepsReplacementBufferedAddresses pins the same rapid-recreate
+// guard on the no-IP delete path.
+//
+// A pod observed terminating before it ever reported a PodIP is deleted by key rather than by
+// address. Cancelling every buffered entry for that key would also cancel the addresses a same-name
+// replacement has already buffered under a different UID, silently removing a live pod's egress.
+func TestDeletePodWithoutAddresses_KeepsReplacementBufferedAddresses(t *testing.T) {
+	const (
+		serviceUID = "egress-c"
+		podKey     = "ns/egress-pod"
+		location   = "10.0.0.1"
+		oldUID     = "uid-old"
+		newUID     = "uid-new"
+	)
+
+	dt := newTestDiffTracker()
+	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
+		ServiceUID: serviceUID,
+		Config:     NewOutboundServiceConfig(serviceUID, nil),
+		State:      StateCreationInProgress,
+	}
+	dt.pendingPods[serviceUID] = []PendingPodUpdate{
+		{PodKey: podKey, PodUID: newUID, Location: location, Address: "10.244.0.9"},
+	}
+
+	dt.DeletePodWithoutAddresses(serviceUID, "ns", "egress-pod", oldUID)
+
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	buffered := dt.pendingPods[serviceUID]
+	if assert.Len(t, buffered, 1, "a no-IP delete for the old pod must not cancel the replacement") {
+		assert.Equal(t, newUID, buffered[0].PodUID)
+	}
+}
+
+// TestDeletePodWithoutAddresses_MatchingUIDCancelsBufferedAddresses is the control: the pod's own
+// no-IP delete must still clear its buffered entries.
+func TestDeletePodWithoutAddresses_MatchingUIDCancelsBufferedAddresses(t *testing.T) {
+	const (
+		serviceUID = "egress-d"
+		podKey     = "ns/egress-pod"
+		podUID     = "uid-1"
+	)
+
+	dt := newTestDiffTracker()
+	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
+		ServiceUID: serviceUID,
+		Config:     NewOutboundServiceConfig(serviceUID, nil),
+		State:      StateCreationInProgress,
+	}
+	dt.pendingPods[serviceUID] = []PendingPodUpdate{
+		{PodKey: podKey, PodUID: podUID, Location: "10.0.0.1", Address: "10.244.0.9"},
+	}
+
+	dt.DeletePodWithoutAddresses(serviceUID, "ns", "egress-pod", podUID)
+
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	assert.Empty(t, dt.pendingPods[serviceUID],
+		"a pod's own no-IP delete must still cancel its buffered addresses")
+}
