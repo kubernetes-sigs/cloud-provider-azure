@@ -213,14 +213,18 @@ func TestGuardConcurrency_NoPanicOnDeleteServiceWhileAddService(t *testing.T) {
 	close(start)
 	wg.Wait()
 
-	// Whatever state we end up in must be legal. If tracked, the state must
-	// be in the known enum range; if a pending deletion exists, the op must
-	// exist too.
+	// Whatever state we end up in must be legal. A range check over the enum cannot fail (the
+	// zero value is the first member and the last member is the maximum), so assert the
+	// *reachable* set instead: an Add racing a Delete must always settle in a deletion state —
+	// ending in StateCreated or StateUpdateInProgress would mean the delete was lost and the
+	// Azure LB/PIP leaked.
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 	if op, ok := dt.pendingServiceOps[uid]; ok {
-		assert.GreaterOrEqual(t, op.State, StateNotStarted)
-		assert.LessOrEqual(t, op.State, StateUpdateInProgress)
+		assert.Contains(t,
+			[]ResourceState{StateDeletionPending, StateDeletionInProgress},
+			op.State,
+			"an AddService/DeleteService race must settle in a deletion state, got %v", op.State)
 	}
 	if _, hasPending := dt.pendingServiceDeletions[uid]; hasPending {
 		_, hasOp := dt.pendingServiceOps[uid]

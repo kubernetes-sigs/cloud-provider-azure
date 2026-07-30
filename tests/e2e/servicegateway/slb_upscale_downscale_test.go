@@ -289,6 +289,21 @@ var _ = Describe("Container Load Balancer Scale Operations", Label(slbTestLabel)
 			"initial Service Gateway state should have Azure resources and registered pod endpoints")
 		utils.Logf("Initial state: %d pod IPs registered", initialPodIPs)
 
+		By("Capturing the survivors' pod IPs before the downscale")
+		// A bare count cannot see the failure that matters here: a stale IP left behind paired
+		// with a survivor wrongly dropped also yields exactly finalPods.
+		survivorIPs := make(map[string]struct{})
+		for i := 0; i < finalPods; i++ {
+			pod, getErr := cs.CoreV1().Pods(ns.Name).Get(context.TODO(), fmt.Sprintf("%s-pod-%d", serviceName, i), metav1.GetOptions{})
+			Expect(getErr).NotTo(HaveOccurred())
+			for _, ip := range pod.Status.PodIPs {
+				if ip.IP != "" {
+					survivorIPs[ip.IP] = struct{}{}
+				}
+			}
+		}
+		Expect(survivorIPs).NotTo(BeEmpty())
+
 		By(fmt.Sprintf("Downscaling: Deleting %d pods (keeping %d)", initialPods-finalPods, finalPods))
 		for i := finalPods; i < initialPods; i++ {
 			podName := fmt.Sprintf("%s-pod-%d", serviceName, i)
@@ -296,21 +311,12 @@ var _ = Describe("Container Load Balancer Scale Operations", Label(slbTestLabel)
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		By("Waiting for Service Gateway to deregister deleted pods")
-		finalPodIPs := 0
+		By("Verifying exactly the survivors remain registered")
 		Eventually(func() error {
-			c, err := countRegisteredEndpoints(serviceUID)
-			if err != nil {
-				return err
-			}
-			if c != finalPods {
-				return fmt.Errorf("expected %d pod IPs, got %d", finalPods, c)
-			}
-			finalPodIPs = c
-			return nil
+			return registeredAddressesMatchErr(serviceUID, survivorIPs)
 		}, waitTime+30*time.Second, 10*time.Second).Should(Succeed(),
-			"Service Gateway should clean up deleted pod IPs")
-		utils.Logf("After downscale: %d pod IPs registered in Service Gateway", finalPodIPs)
+			"every deleted pod IP must be deregistered and every survivor must remain")
+		utils.Logf("After downscale: exactly the %d survivor pod IPs remain", len(survivorIPs))
 
 		utils.Logf("\n✓ Downscale test passed: %d → %d pods", initialPods, finalPods)
 	})

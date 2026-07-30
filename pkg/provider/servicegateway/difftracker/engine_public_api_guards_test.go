@@ -834,12 +834,19 @@ func TestGuardWaitForInitialSync_ReturnsOnCompletion(t *testing.T) {
 // TestGuardIsServiceTracked_HandlesNilNRPSets verifies that a partially-initialized
 // DiffTracker (nil LoadBalancers/NATGateways sets) does not panic when probed
 // (only pendingServiceOps need be present).
+// TestGuardIsServiceTracked_HandlesNilNRPSets pins that a DiffTracker whose NRP sets were never
+// initialised is still queryable. The nil-safety itself lives in IgnoreCaseSet (Has returns false
+// for a nil receiver), so this documents the contract IsServiceTracked relies on rather than a
+// branch inside IsServiceTracked; a set type that started panicking on nil would fail here.
 func TestGuardIsServiceTracked_HandlesNilNRPSets(t *testing.T) {
 	dt := &DiffTracker{
 		pendingServiceOps: map[string]*ServiceOperationState{
 			"only-in-pending": {ServiceUID: "only-in-pending"},
 		},
 	}
+	assert.Nil(t, dt.NRPResources.LoadBalancers, "this guard is only meaningful with uninitialised NRP sets")
+	assert.Nil(t, dt.NRPResources.NATGateways, "this guard is only meaningful with uninitialised NRP sets")
+
 	assert.True(t, dt.IsServiceTracked("only-in-pending"))
 	assert.False(t, dt.IsServiceTracked("missing"))
 }

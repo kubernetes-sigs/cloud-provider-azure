@@ -38,6 +38,10 @@ func TestGuardStateTransitions_UpdateServiceDispatch(t *testing.T) {
 		nrpHasLB    bool
 		afterState  ResourceState
 		mustTrigger bool
+		// wantRecreate is the RecreateAfterDeletion intent the update must buffer. Without this
+		// (and wantConfigApplied) every row except StateCreated asserts only "state unchanged,
+		// no trigger", which is exactly what UpdateService doing nothing at all would produce.
+		wantRecreate bool
 	}
 	tests := []row{
 		{
@@ -69,18 +73,20 @@ func TestGuardStateTransitions_UpdateServiceDispatch(t *testing.T) {
 			mustTrigger: false,
 		},
 		{
-			name:        "StateDeletionPending -> kept; update ignored",
-			startState:  StateDeletionPending,
-			nrpHasLB:    true,
-			afterState:  StateDeletionPending,
-			mustTrigger: false,
+			name:         "StateDeletionPending -> kept; recreate intent buffered",
+			startState:   StateDeletionPending,
+			nrpHasLB:     true,
+			afterState:   StateDeletionPending,
+			mustTrigger:  false,
+			wantRecreate: true,
 		},
 		{
-			name:        "StateDeletionInProgress -> kept; update ignored",
-			startState:  StateDeletionInProgress,
-			nrpHasLB:    true,
-			afterState:  StateDeletionInProgress,
-			mustTrigger: false,
+			name:         "StateDeletionInProgress -> kept; recreate intent buffered",
+			startState:   StateDeletionInProgress,
+			nrpHasLB:     true,
+			afterState:   StateDeletionInProgress,
+			mustTrigger:  false,
+			wantRecreate: true,
 		},
 	}
 
@@ -109,6 +115,14 @@ func TestGuardStateTransitions_UpdateServiceDispatch(t *testing.T) {
 			} else {
 				assert.Len(t, dt.serviceUpdaterTrigger, 0, "did NOT expect ServiceUpdater trigger")
 			}
+
+			// Every state must record the newly desired config, whatever it does with it. Serving
+			// the previous spec after a user edit is the regression these rows exist to catch, and
+			// a state-only assertion cannot see it.
+			assert.Equal(t, newCfg.InboundConfig.FrontendPorts[0].Port, op.Config.InboundConfig.FrontendPorts[0].Port,
+				"the updated config must be recorded on the operation")
+			assert.Equal(t, tc.wantRecreate, op.RecreateAfterDeletion,
+				"RecreateAfterDeletion intent mismatch")
 		})
 	}
 }

@@ -203,11 +203,19 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 
 		// Build a map of what we expect: hostIP -> podIPs
 		// Build a map of what we got from Service Gateway
+		// Only count addresses attached to THIS service: an unfiltered collection is satisfied by
+		// a pod IP that is present under the right host but registered to another service (or to
+		// none at all), which is exactly the mis-registration this spec should catch.
 		sgAddressLocations := make(map[string][]string) // addressLocation (hostIP) -> addresses (podIPs)
 		for _, loc := range addrResponse.Value {
 			addresses := make([]string, 0)
 			for _, addr := range loc.Addresses {
-				addresses = append(addresses, addr.Address)
+				for _, svc := range addr.Services {
+					if svc == serviceUID {
+						addresses = append(addresses, addr.Address)
+						break
+					}
+				}
 			}
 			sgAddressLocations[loc.AddressLocation] = addresses
 		}
@@ -240,13 +248,15 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 
 		var foundService bool
 		for _, sgSvc := range sgResponse.Value {
-			if sgSvc.Properties.ServiceType == "Inbound" {
+			// Match this spec's service, not merely "some inbound service": every spec shares
+			// one ServiceGateway, so another spec's leftover would satisfy a type-only check.
+			if sgSvc.Name == serviceUID && sgSvc.Properties.ServiceType == "Inbound" {
 				foundService = true
 				utils.Logf("✓ Found inbound service in Service Gateway: %s", sgSvc.Name)
 				break
 			}
 		}
-		Expect(foundService).To(BeTrue(), "Inbound service should exist in Service Gateway")
+		Expect(foundService).To(BeTrue(), "Inbound service %s should exist in Service Gateway", serviceUID)
 
 		utils.Logf("\n✓ Multi-node inbound test passed!")
 		utils.Logf("  - Pods spread across %d nodes", len(nodeNames))
@@ -404,36 +414,25 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 		utils.Logf("Expected (from pods): %v", podHostIPs)
 		utils.Logf("Actual (from Service Gateway for egress %s): %v", egressName, sgAddressLocations)
 
-		// Verify we have address locations for all nodes with pods
-		nodesWithPods := len(podHostIPs)
-		nodesInSG := len(sgAddressLocations)
-		utils.Logf("Nodes with pods: %d, Nodes in Service Gateway: %d", nodesWithPods, nodesInSG)
+		// The point of this spec is that each pod's address is filed under ITS OWN node's
+		// location. Downgrading a missing location to a log and moving on (and only asserting a
+		// >= on the global total) would let a CCM that filed every address under one node pass.
+		utils.Logf("Nodes with pods: %d, Nodes in Service Gateway: %d", len(podHostIPs), len(sgAddressLocations))
 
-		// Verify each host IP's pods are registered
-		for hostIP, expectedPodIPs := range podHostIPs {
-			actualPodIPs, exists := sgAddressLocations[hostIP]
-			if !exists {
-				utils.Logf("WARNING: Host IP %s not found in Service Gateway (may be registered under different key)", hostIP)
-				continue
-			}
-
-			matchedCount := 0
-			for _, expectedIP := range expectedPodIPs {
-				for _, actualIP := range actualPodIPs {
-					if actualIP == expectedIP {
-						matchedCount++
-						break
-					}
-				}
-			}
-			utils.Logf("Host %s: %d/%d pod IPs matched", hostIP, matchedCount, len(expectedPodIPs))
-		}
-
-		// Verify total address count
 		totalExpectedAddresses := 0
-		for _, ips := range podHostIPs {
-			totalExpectedAddresses += len(ips)
+		for hostIP, expectedPodIPs := range podHostIPs {
+			totalExpectedAddresses += len(expectedPodIPs)
+
+			actualPodIPs, exists := sgAddressLocations[hostIP]
+			Expect(exists).To(BeTrue(),
+				"host %s runs egress pods, so it must have an address location in the Service Gateway", hostIP)
+			for _, expectedIP := range expectedPodIPs {
+				Expect(actualPodIPs).To(ContainElement(expectedIP),
+					"pod IP %s must be registered under its own node location %s", expectedIP, hostIP)
+			}
+			utils.Logf("Host %s: all %d pod IPs registered under their own node location", hostIP, len(expectedPodIPs))
 		}
+
 		totalActualAddresses := 0
 		for _, ips := range sgAddressLocations {
 			totalActualAddresses += len(ips)
@@ -445,8 +444,8 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 		utils.Logf("  - Expected addresses: %d", totalExpectedAddresses)
 		utils.Logf("  - Registered addresses: %d", totalActualAddresses)
 
-		Expect(totalActualAddresses).To(BeNumerically(">=", totalExpectedAddresses),
-			"All pod addresses should be registered in Service Gateway")
+		Expect(totalActualAddresses).To(Equal(totalExpectedAddresses),
+			"the egress must register exactly its pods' addresses, with no extras left behind")
 	})
 
 	// Test 3: Node drain simulation - verify addresses are updated when pods move
@@ -546,20 +545,36 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 		}, provisionTime, 10*time.Second).Should(Succeed(),
 			"service should be reconciled with initial pod endpoints")
 
-		By("Verifying initial address locations (should have 2 nodes)")
-		addrResponse, err := queryServiceGatewayAddressLocations()
-		Expect(err).NotTo(HaveOccurred())
-
-		initialLocations := 0
-		initialAddresses := 0
-		for _, loc := range addrResponse.Value {
-			if len(loc.Addresses) > 0 {
-				initialLocations++
-				initialAddresses += len(loc.Addresses)
+		By("Capturing which pod IPs belong to each node before the drain")
+		// Capture the exact per-node address sets. A global count delta cannot distinguish the
+		// correct outcome from the inverse failure - node 1's pods deregistered while node 0's
+		// leaked - because both leave the same total.
+		podIPsFor := func(names []string) map[string]struct{} {
+			set := make(map[string]struct{})
+			for _, podName := range names {
+				pod, getErr := cs.CoreV1().Pods(ns.Name).Get(ctx, podName, metav1.GetOptions{})
+				Expect(getErr).NotTo(HaveOccurred())
+				for _, ip := range pod.Status.PodIPs {
+					if ip.IP != "" {
+						set[ip.IP] = struct{}{}
+					}
+				}
 			}
+			return set
 		}
-		utils.Logf("Initial state: %d address locations, %d total addresses", initialLocations, initialAddresses)
-		Expect(initialLocations).To(BeNumerically(">=", 2), "Should have addresses on at least 2 nodes")
+		node0IPs := podIPsFor(podsOnNode0)
+		node1IPs := podIPsFor(podsOnNode1)
+		Expect(node0IPs).NotTo(BeEmpty())
+		Expect(node1IPs).NotTo(BeEmpty())
+
+		initial, err := registeredAddressesFor(serviceUID)
+		Expect(err).NotTo(HaveOccurred())
+		for ip := range node0IPs {
+			Expect(initial).To(HaveKey(ip), "node 0 pod IP %s should be registered before the drain", ip)
+		}
+		for ip := range node1IPs {
+			Expect(initial).To(HaveKey(ip), "node 1 pod IP %s should be registered before the drain", ip)
+		}
 
 		By(fmt.Sprintf("Simulating drain: Deleting all pods from node %s", nodeNames[0]))
 		for _, podName := range podsOnNode0 {
@@ -568,33 +583,16 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 			utils.Logf("Deleted pod %s", podName)
 		}
 
-		By("Waiting for address locations to update")
-		finalAddresses := 0
+		By("Verifying exactly the drained node's addresses are deregistered")
 		Eventually(func() error {
-			addrResponse, err = queryServiceGatewayAddressLocations()
-			if err != nil {
-				return fmt.Errorf("query Service Gateway address locations: %w", err)
-			}
+			return registeredAddressesMatchErr(serviceUID, node1IPs)
+		}, 3*time.Minute, defaultPollInterval).Should(Succeed(),
+			"every drained node-0 pod IP must be deregistered and every node-1 pod IP must remain")
 
-			finalAddresses = 0
-			for _, loc := range addrResponse.Value {
-				finalAddresses += len(loc.Addresses)
-			}
-			if finalAddresses >= initialAddresses {
-				return fmt.Errorf("address count should decrease after deleting pods from one node: got %d, want less than %d", finalAddresses, initialAddresses)
-			}
-			if finalAddresses < len(podsOnNode1) {
-				return fmt.Errorf("should still have addresses for pods on node 1: got %d, want at least %d", finalAddresses, len(podsOnNode1))
-			}
-			return nil
-		}, 30*time.Second, 10*time.Second).Should(Succeed(),
-			"address locations should update after deleting pods from one node")
-
-		utils.Logf("After drain: %d total addresses (was %d)", finalAddresses, initialAddresses)
+		utils.Logf("After drain: exactly the %d node-1 pod IPs remain (%d node-0 IPs deregistered)",
+			len(node1IPs), len(node0IPs))
 
 		utils.Logf("\n✓ Node drain simulation test passed!")
-		utils.Logf("  - Initial addresses: %d", initialAddresses)
-		utils.Logf("  - After drain: %d", finalAddresses)
 		utils.Logf("  - Addresses correctly updated when pods removed from node")
 	})
 

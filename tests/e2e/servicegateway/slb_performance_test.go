@@ -51,7 +51,22 @@ var _ = Describe("Container Load Balancer Performance Test", Label(slbTestLabel,
 		Expect(err).NotTo(HaveOccurred())
 	})
 
+	// Cleanup must run here rather than at the end of the It body: this spec creates 200 services
+	// in the one ServiceGateway resource that every spec in the suite shares, so a failure part
+	// way through would otherwise leave them registered and turn the next spec's cleanup
+	// assertion (which requires only the default outbound service to remain) red as well.
 	AfterEach(func() {
+		if cs != nil && ns != nil {
+			By("Deleting the test namespace")
+			if err := utils.DeleteNamespace(cs, ns.Name); err != nil {
+				// At this scale namespace deletion regularly outlives its client-side timeout
+				// while Azure finalizers drain; the Azure-side wait below is the real assertion.
+				utils.Logf("WARNING: namespace deletion did not complete in time: %v", err)
+			}
+
+			By("Waiting for Azure cleanup")
+			eventuallyAzureCleanup(15 * time.Minute)
+		}
 		cs = nil
 		ns = nil
 	})

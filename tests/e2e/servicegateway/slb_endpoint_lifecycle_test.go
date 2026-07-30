@@ -239,15 +239,31 @@ var _ = Describe("SLB - Endpoint Lifecycle", Label(slbTestLabel), func() {
 		By("Waiting for all pods to register")
 		eventuallyServiceReconciled(serviceUID, numPods, waitTime)
 
+		By("Capturing which address belongs to the pod that will go NotReady")
+		// A count of numPods-1 would also be satisfied by deregistering one of the pods that
+		// stayed Ready, so assert on the specific addresses instead.
+		flip, err := cs.CoreV1().Pods(ns.Name).Get(context.TODO(), flipPod, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		flipIPs := podIPSet([]v1.Pod{*flip})
+		Expect(flipIPs).NotTo(BeEmpty())
+
+		allPods, err := cs.CoreV1().Pods(ns.Name).List(context.TODO(), metav1.ListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		remainingIPs := podIPSet(allPods.Items)
+		for ip := range flipIPs {
+			delete(remainingIPs, ip)
+		}
+		Expect(remainingIPs).NotTo(BeEmpty())
+
 		By(fmt.Sprintf("Making pod %s NotReady (removing its readiness file)", flipPod))
 		_, err = utils.RunKubectl(ns.Name, "exec", flipPod, "--", "/bin/sh", "-c", "rm -f /tmp/ready")
 		Expect(err).NotTo(HaveOccurred())
 
-		By("Verifying the NotReady pod is deregistered")
-		Eventually(func() (int, error) {
-			return countRegisteredEndpoints(serviceUID)
-		}, waitTime, defaultPollInterval).Should(Equal(numPods-1),
-			"a NotReady pod should be deregistered from the backend")
+		By("Verifying exactly the NotReady pod's address is deregistered")
+		Eventually(func() error {
+			return registeredAddressesMatchErr(serviceUID, remainingIPs)
+		}, waitTime, defaultPollInterval).Should(Succeed(),
+			"only the NotReady pod's address may be deregistered; the Ready pods must all remain")
 
 		By(fmt.Sprintf("Making pod %s Ready again (restoring its readiness file)", flipPod))
 		_, err = utils.RunKubectl(ns.Name, "exec", flipPod, "--", "/bin/sh", "-c", "touch /tmp/ready")

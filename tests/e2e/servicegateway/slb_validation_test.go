@@ -18,6 +18,7 @@ package servicegateway
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -69,13 +70,6 @@ var _ = Describe("SLB - Service Validation", Label(slbTestLabel), func() {
 		ns = nil
 	})
 
-	// expectTerminallyRejected asserts the service never provisions Azure resources.
-	expectTerminallyRejected := func(serviceUID, why string) {
-		Consistently(func() bool {
-			return verifyAzureResources(serviceUID) != nil
-		}, 45*time.Second, 10*time.Second).Should(BeTrue(), why)
-	}
-
 	// expectServiceWarningEvent asserts a warning event with the given reason is recorded on the service.
 	expectServiceWarningEvent := func(serviceName, reason string) {
 		Eventually(func() bool {
@@ -90,6 +84,39 @@ var _ = Describe("SLB - Service Validation", Label(slbTestLabel), func() {
 			}
 			return false
 		}, 60*time.Second, 5*time.Second).Should(BeTrue(), "expected a "+reason+" warning event")
+	}
+
+	// expectTerminallyRejected asserts the service is genuinely refused rather than merely slow.
+	//
+	// Waiting for verifyAzureResources to keep returning *an* error is not enough on its own: it
+	// short-circuits on the first missing resource, so it never reaches its Service Gateway check,
+	// and a perfectly valid service that is simply still provisioning (60-180s on live Azure)
+	// satisfies it too. Assert each resource is absent in its own right, and require the warning
+	// event as the positive signal that the CCM decided to reject rather than not having got to it.
+	expectTerminallyRejected := func(serviceName, serviceUID, reason, why string) {
+		By("Verifying a warning event records the rejection reason")
+		expectServiceWarningEvent(serviceName, reason)
+
+		By("Verifying no Azure or Service Gateway resources were provisioned")
+		Consistently(func() error {
+			// No Service Gateway registration.
+			if err := serviceDeletedErr(serviceUID); err != nil {
+				return err
+			}
+			// No Public IP.
+			if err := azurePublicIPAbsentErr(serviceUID); err != nil {
+				return err
+			}
+			// No Service status ingress.
+			svc, getErr := cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
+			if getErr != nil {
+				return fmt.Errorf("get service %s: %w", serviceName, getErr)
+			}
+			if len(svc.Status.LoadBalancer.Ingress) != 0 {
+				return fmt.Errorf("service %s was assigned an ingress IP despite being rejected", serviceName)
+			}
+			return nil
+		}, 45*time.Second, defaultPollInterval).Should(Succeed(), why)
 	}
 
 	It("should terminally reject a service with a named targetPort", func() {
@@ -114,11 +141,8 @@ var _ = Describe("SLB - Service Validation", Label(slbTestLabel), func() {
 		utils.Logf("Named-targetPort service created with UID=%s", serviceUID)
 
 		By("Verifying the service is terminally rejected and never provisions Azure resources")
-		expectTerminallyRejected(serviceUID,
+		expectTerminallyRejected(serviceName, serviceUID, "UnsupportedNamedTargetPort",
 			"a service with a named targetPort must be terminally rejected (no PIP/LB/SGW registration)")
-
-		By("Verifying a warning event explains named targetPorts are unsupported")
-		expectServiceWarningEvent(serviceName, "UnsupportedNamedTargetPort")
 
 		utils.Logf("✓ Named-targetPort service was terminally rejected with no Azure resources")
 	})
@@ -152,7 +176,7 @@ var _ = Describe("SLB - Service Validation", Label(slbTestLabel), func() {
 		utils.Logf("SCTP service created with UID=%s", serviceUID)
 
 		By("Verifying the service is terminally rejected and never provisions Azure resources")
-		expectTerminallyRejected(serviceUID,
+		expectTerminallyRejected(serviceName, serviceUID, "UnsupportedProtocol",
 			"a service with an SCTP port must be terminally rejected (unsupported protocol)")
 
 		utils.Logf("✓ SCTP service was terminally rejected with no Azure resources")
@@ -194,11 +218,8 @@ var _ = Describe("SLB - Service Validation", Label(slbTestLabel), func() {
 		}
 
 		By("Verifying the dual-stack service is terminally rejected and never provisions Azure resources")
-		expectTerminallyRejected(serviceUID,
+		expectTerminallyRejected(serviceName, serviceUID, "UnsupportedDualStack",
 			"a dual-stack service must be terminally rejected (no PIP/LB/SGW registration)")
-
-		By("Verifying a warning event explains dual-stack is unsupported")
-		expectServiceWarningEvent(serviceName, "UnsupportedDualStack")
 
 		utils.Logf("✓ Dual-stack service was terminally rejected with no Azure resources")
 	})
@@ -228,7 +249,7 @@ var _ = Describe("SLB - Service Validation", Label(slbTestLabel), func() {
 		utils.Logf("Internal service created with UID=%s", serviceUID)
 
 		By("Verifying the service never provisions Azure resources and gets no ingress IP")
-		expectTerminallyRejected(serviceUID,
+		expectTerminallyRejected(serviceName, serviceUID, "UnsupportedInternalLoadBalancer",
 			"an internal LoadBalancer must be rejected under ServiceGateway (no PIP/LB/SGW registration)")
 		Consistently(func() int {
 			svc, getErr := cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})

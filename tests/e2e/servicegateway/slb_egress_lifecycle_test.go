@@ -259,6 +259,11 @@ var _ = Describe("SLB - Dual-Stack Egress", Label(slbTestLabel), func() {
 	var (
 		cs clientset.Interface
 		ns *v1.Namespace
+		// Set by the spec that scales the CCM down. AfterEach restores it before the cleanup
+		// that needs a running CCM; DeferCleanup cannot be used because Ginkgo runs deferred
+		// cleanups AFTER the container's AfterEach, so a spec that failed while the CCM was at
+		// 0 replicas would leave namespace deletion and the Azure drain with no controller.
+		ccmToRestore *CCMClusterClient
 	)
 
 	BeforeEach(func() {
@@ -270,6 +275,12 @@ var _ = Describe("SLB - Dual-Stack Egress", Label(slbTestLabel), func() {
 	})
 
 	AfterEach(func() {
+		// Restore the CCM first: everything below needs a running controller.
+		if ccmToRestore != nil {
+			_ = scaleCCMDeployment(context.TODO(), ccmToRestore, 1)
+			_ = waitForCCMFullyUp(context.TODO(), ccmToRestore, CCMRecoveryTimeout)
+			ccmToRestore = nil
+		}
 		if cs != nil && ns != nil {
 			Expect(utils.DeleteNamespace(cs, ns.Name)).To(Succeed())
 			By("Waiting for Azure cleanup (egress cleanup is slower)")
@@ -501,12 +512,10 @@ var _ = Describe("SLB - Dual-Stack Egress", Label(slbTestLabel), func() {
 		By("Restarting the cloud-controller-manager (scale to 0, then back up)")
 		ccmClient, err := NewCCMClusterClient()
 		Expect(err).NotTo(HaveOccurred())
-		// Guarantee the CCM is restored even if the assertions below fail, so namespace/Azure cleanup
-		// in AfterEach (which needs a running CCM) still works.
-		DeferCleanup(func() {
-			_ = scaleCCMDeployment(context.TODO(), ccmClient, 1)
-			_ = waitForCCMFullyUp(context.TODO(), ccmClient, CCMRecoveryTimeout)
-		})
+		// Hand the client to AfterEach rather than DeferCleanup: Ginkgo runs deferred cleanups
+		// after the container's AfterEach, so a failure below would leave namespace deletion and
+		// the Azure drain running against a CCM that is still scaled to 0.
+		ccmToRestore = ccmClient
 		Expect(scaleCCMDeployment(ctx, ccmClient, 0)).To(Succeed())
 		Expect(waitForCCMFullyDown(ctx, ccmClient, CCMRecoveryTimeout)).To(Succeed())
 		Expect(scaleCCMDeployment(ctx, ccmClient, 1)).To(Succeed())

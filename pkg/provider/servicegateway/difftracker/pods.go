@@ -50,6 +50,31 @@ func ResyncPeriod(base time.Duration) func() time.Duration {
 // setUpPodInformerForEgress creates an informer for Pods with egress labels.
 // It uses label selectors to filter pods efficiently at the API server level,
 // reducing memory and CPU overhead by only watching relevant pods.
+// podFromDeleteObj decodes the object an informer DeleteFunc receives into a Pod.
+//
+// A delete event carries either the Pod itself or, when the watch missed the deletion, a
+// DeletedFinalStateUnknown tombstone wrapping it. Dropping the tombstone case would silently
+// ignore the deletion of an egress pod and strand its cleanup finalizer forever, so the decode is
+// kept as a named function that can be exercised directly.
+func podFromDeleteObj(obj interface{}) (*v1.Pod, bool) {
+	switch v := obj.(type) {
+	case *v1.Pod:
+		return v, true
+	case cache.DeletedFinalStateUnknown:
+		pod, ok := v.Obj.(*v1.Pod)
+		if !ok {
+			klog.Errorf("Cannot convert to *v1.Pod: %T", v.Obj)
+			return nil, false
+		}
+		klog.V(2).Infof("DeleteFunc: processing DeletedFinalStateUnknown for pod %s/%s",
+			pod.Namespace, pod.Name)
+		return pod, true
+	default:
+		klog.Errorf("Cannot convert to *v1.Pod: %T", v)
+		return nil, false
+	}
+}
+
 func (dt *DiffTracker) SetUpPodInformer(stopCh <-chan struct{}) error {
 	klog.V(2).Infof("setUpPodInformerForEgress: Setting up pod informer with label selector: %s", consts.PodLabelServiceEgressGateway)
 
@@ -79,21 +104,8 @@ func (dt *DiffTracker) SetUpPodInformer(stopCh <-chan struct{}) error {
 				// Deletion is normally handled via UpdateFunc (2-phase deletion sets DeletionTimestamp
 				// before the finalizer is removed). This is a defensive backup for
 				// DeletedFinalStateUnknown and pods created during CCM downtime.
-				var pod *v1.Pod
-				switch v := obj.(type) {
-				case *v1.Pod:
-					pod = v
-				case cache.DeletedFinalStateUnknown:
-					var ok bool
-					pod, ok = v.Obj.(*v1.Pod)
-					if !ok {
-						klog.Errorf("Cannot convert to *v1.Pod: %T", v.Obj)
-						return
-					}
-					klog.V(2).Infof("DeleteFunc: processing DeletedFinalStateUnknown for pod %s/%s",
-						pod.Namespace, pod.Name)
-				default:
-					klog.Errorf("Cannot convert to *v1.Pod: %T", v)
+				pod, ok := podFromDeleteObj(obj)
+				if !ok {
 					return
 				}
 				// Idempotent - safe even if already processed in UpdateFunc.

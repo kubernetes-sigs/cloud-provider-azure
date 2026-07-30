@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientset "k8s.io/client-go/kubernetes"
 
@@ -254,7 +255,15 @@ var _ = Describe("Container Load Balancer Lifecycle", Label(slbTestLabel), func(
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("Service port updated to %d", updatedPort)
 
-		By("Waiting for Azure to process update")
+		By("Verifying the Azure LB rule now serves the updated frontend port")
+		// serviceReconciledErr only proves the PIP/LB/SGW entry still EXISTS, which was already
+		// true before the edit — a CCM that silently dropped the port change would pass. Read the
+		// actual LB rule instead.
+		Eventually(func() ([]int32, error) {
+			return getLoadBalancerFrontendPorts(serviceUID)
+		}, waitTime, 10*time.Second).Should(Equal([]int32{updatedPort}),
+			"the Azure LB rule must serve the updated frontend port")
+
 		Eventually(func() error {
 			return serviceReconciledErr(serviceUID, -1)
 		}, waitTime, 10*time.Second).Should(Succeed(),
@@ -373,13 +382,13 @@ var _ = Describe("Container Load Balancer Lifecycle", Label(slbTestLabel), func(
 		}, waitTime, 10*time.Second).Should(Succeed(),
 			"Service Gateway should only register healthy pods")
 
+		// No trailing re-assertion here: registeredPods is set inside the Eventually above, which
+		// only returns nil when these exact bounds already hold, so repeating them cannot fail.
 		utils.Logf("Registered pods: %d (expected: %d healthy pods)", registeredPods, totalPods-crashPods)
-		// Note: Crashing pods may briefly get IPs and be registered before crashing.
-		// We expect at least the healthy pods to be registered, but some crashing pods
-		// may also be temporarily registered. The key assertion is that the system
-		// works with healthy pods and doesn't fail due to crashing pods.
-		Expect(registeredPods).To(BeNumerically(">=", totalPods-crashPods), "At least healthy pods should be registered")
-		Expect(registeredPods).To(BeNumerically("<=", totalPods), "Should not exceed total pods")
+		// Note: Crashing pods may briefly get IPs and be registered before crashing, so the
+		// bounds asserted by the Eventually above are deliberately a range rather than an exact
+		// count. Re-asserting them here would be a no-op: registeredPods is set inside that loop,
+		// which only returns nil once those same bounds hold.
 
 		utils.Logf("\n✓ Pod failure handling test passed: %d pods registered (healthy: %d, crashed pods may be temporarily included)", registeredPods, totalPods-crashPods)
 	})
@@ -493,23 +502,29 @@ var _ = Describe("Container Load Balancer Lifecycle", Label(slbTestLabel), func(
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("Service selector updated from v1 to v2")
 
-		By("Waiting for Service Gateway to update")
-		var registeredPods int
-		Eventually(func() error {
-			count, err := countRegisteredEndpoints(serviceUID)
-			if err != nil {
-				return err
-			}
-			registeredPods = count
-			if registeredPods != numNewPods {
-				return fmt.Errorf("registered pods %d, want %d v2 pods", registeredPods, numNewPods)
-			}
-			return nil
-		}, waitTime, 10*time.Second).Should(Succeed(),
-			"Service Gateway should switch to v2 pods")
+		By("Waiting for Service Gateway to switch from the v1 pod IPs to the v2 pod IPs")
+		// A count alone proves nothing here: both pod sets are the same size, so "15 registered"
+		// is already true before the selector change. Assert the exact address set instead, which
+		// fails both if a v2 pod is missing and if a v1 pod was left behind.
+		v1Pods, err := cs.CoreV1().Pods(ns.Name).List(context.TODO(), metav1.ListOptions{
+			LabelSelector: labels.Set(initialLabels).String(),
+		})
+		Expect(err).NotTo(HaveOccurred())
+		v2Pods, err := cs.CoreV1().Pods(ns.Name).List(context.TODO(), metav1.ListOptions{
+			LabelSelector: labels.Set(newLabels).String(),
+		})
+		Expect(err).NotTo(HaveOccurred())
 
-		utils.Logf("After selector update: %d pods registered (expected %d v2 pods)", registeredPods, numNewPods)
-		Expect(registeredPods).To(Equal(numNewPods), "Should have switched to v2 pods")
+		wantAddrs := podIPSet(v2Pods.Items)
+		Expect(wantAddrs).NotTo(BeEmpty(), "the v2 pods must have IPs to compare against")
+
+		Eventually(func() error {
+			return registeredAddressesMatchErr(serviceUID, wantAddrs)
+		}, waitTime, 10*time.Second).Should(Succeed(),
+			"the Service Gateway must register exactly the v2 pod IPs and drop every v1 pod IP")
+
+		utils.Logf("After selector update: exactly the %d v2 pod IPs are registered (%d v1 pods deregistered)",
+			len(wantAddrs), len(podIPSet(v1Pods.Items)))
 
 		utils.Logf("\n✓ Service selector update test passed: v1 → v2")
 	})

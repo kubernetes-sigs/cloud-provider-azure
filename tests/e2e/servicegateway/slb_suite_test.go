@@ -21,10 +21,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	v1 "k8s.io/api/core/v1"
 
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
@@ -338,6 +342,32 @@ func natGatewayCleanupErr(egressNames []string) error {
 	return nil
 }
 
+// azurePublicIPAbsentErr returns nil once no Public IP exists for the given service UID. It is the
+// positive form of "nothing was provisioned", usable on its own rather than as a side effect of
+// verifyAzureResources failing for some unrelated reason.
+func azurePublicIPAbsentErr(serviceUID string) error {
+	publicIPName := fmt.Sprintf("%s-pip", serviceUID)
+
+	pipCmd := exec.Command("az", "network", "public-ip", "list",
+		"--resource-group", resourceGroupName,
+		"--output", "json")
+	pipOutput, err := pipCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to query Azure for Public IPs: %w", err)
+	}
+
+	var publicIPs []AzurePublicIP
+	if err := json.Unmarshal(pipOutput, &publicIPs); err != nil {
+		return fmt.Errorf("failed to parse Public IPs response: %w", err)
+	}
+	for i := range publicIPs {
+		if publicIPs[i].Name == publicIPName {
+			return fmt.Errorf("public IP %s exists for a service that should not have been provisioned", publicIPName)
+		}
+	}
+	return nil
+}
+
 // verifyAzureResources verifies Public IP, Load Balancer, and Service Gateway for a given service
 func verifyAzureResources(serviceUID string) error {
 	publicIPName := fmt.Sprintf("%s-pip", serviceUID)
@@ -428,26 +458,109 @@ func verifyAzureResources(serviceUID string) error {
 // defaultPollInterval is the polling cadence used by the eventually* wrappers.
 const defaultPollInterval = 10 * time.Second
 
-// countRegisteredEndpoints returns the number of Service Gateway address-location
-// entries that reference the given service/egress identifier (its registered pod
-// IP count). It works for both inbound services and outbound egress, since both
-// are referenced by identifier in an address's Services list.
+// countRegisteredEndpoints returns how many distinct addresses the Service Gateway has registered
+// for the given service/egress identifier. It works for both inbound services and outbound egress,
+// since both are referenced by identifier in an address's Services list.
+//
+// Two properties matter for callers:
+//
+//   - It counts ADDRESSES, not pods. A single-stack pod contributes one address, so a pod count and
+//     an address count coincide; a dual-stack pod registers one address per IP family and therefore
+//     contributes two. Callers that want to express an expectation in pods on a dual-stack cluster
+//     must use expectedAddressesForPods rather than the raw pod count.
+//   - Each address is counted once even if it appears under more than one node location (which
+//     happens transiently while a node's IP changes) and locations that are not a live view of
+//     state are skipped, so a tombstoned entry cannot inflate the total.
 func countRegisteredEndpoints(serviceID string) (int, error) {
 	alResponse, err := queryServiceGatewayAddressLocations()
 	if err != nil {
 		return 0, fmt.Errorf("query Service Gateway address locations: %w", err)
 	}
-	count := 0
+	seen := make(map[string]struct{})
 	for _, location := range alResponse.Value {
+		// A delete-shaped location describes addresses being removed, not addresses in service.
+		if strings.EqualFold(location.AddressUpdateAction, "Delete") {
+			continue
+		}
 		for _, addr := range location.Addresses {
 			for _, svc := range addr.Services {
 				if svc == serviceID {
-					count++
+					seen[addr.Address] = struct{}{}
+					break
 				}
 			}
 		}
 	}
-	return count, nil
+	return len(seen), nil
+}
+
+// registeredAddressesFor returns the exact set of addresses the Service Gateway has registered for
+// the given service/egress identifier.
+//
+// Prefer it over countRegisteredEndpoints whenever a spec removes backends. A count cannot tell a
+// correct removal apart from a stale address that leaked paired with a live one that was wrongly
+// dropped — both leave the total unchanged — which is precisely the regression the removal paths
+// are most likely to have.
+func registeredAddressesFor(serviceID string) (map[string]struct{}, error) {
+	alResponse, err := queryServiceGatewayAddressLocations()
+	if err != nil {
+		return nil, fmt.Errorf("query Service Gateway address locations: %w", err)
+	}
+	addrs := make(map[string]struct{})
+	for _, location := range alResponse.Value {
+		if strings.EqualFold(location.AddressUpdateAction, "Delete") {
+			continue
+		}
+		for _, addr := range location.Addresses {
+			for _, svc := range addr.Services {
+				if svc == serviceID {
+					addrs[addr.Address] = struct{}{}
+					break
+				}
+			}
+		}
+	}
+	return addrs, nil
+}
+
+// registeredAddressesMatchErr returns nil once the Service Gateway has registered exactly want for
+// the service: no missing address and, just as importantly, no extra one left behind.
+func registeredAddressesMatchErr(serviceID string, want map[string]struct{}) error {
+	got, err := registeredAddressesFor(serviceID)
+	if err != nil {
+		return err
+	}
+	var missing, unexpected []string
+	for addr := range want {
+		if _, ok := got[addr]; !ok {
+			missing = append(missing, addr)
+		}
+	}
+	for addr := range got {
+		if _, ok := want[addr]; !ok {
+			unexpected = append(unexpected, addr)
+		}
+	}
+	if len(missing) > 0 || len(unexpected) > 0 {
+		sort.Strings(missing)
+		sort.Strings(unexpected)
+		return fmt.Errorf("registered addresses for %s do not match: missing %v, unexpectedly still registered %v",
+			serviceID, missing, unexpected)
+	}
+	return nil
+}
+
+// podIPSet collects every IP of the given pods, which is the address set they should register.
+func podIPSet(pods []v1.Pod) map[string]struct{} {
+	set := make(map[string]struct{})
+	for i := range pods {
+		for _, ip := range pods[i].Status.PodIPs {
+			if ip.IP != "" {
+				set[ip.IP] = struct{}{}
+			}
+		}
+	}
+	return set
 }
 
 // serviceReconciledErr returns nil once the inbound service's Azure resources exist

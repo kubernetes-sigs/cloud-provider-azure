@@ -50,7 +50,24 @@ var _ = Describe("Container Load Balancer Outbound Performance Test", Label(slbT
 		Expect(err).NotTo(HaveOccurred())
 	})
 
+	// Cleanup must run here rather than at the end of the It body: these specs create up to 50 NAT
+	// gateways / 100 egress pods in the one ServiceGateway resource that every spec in the suite
+	// shares, so a failure part way through would otherwise leave them registered and turn the
+	// next spec's cleanup assertion (which requires only the default outbound service to remain)
+	// red as well.
 	AfterEach(func() {
+		if cs != nil && ns != nil {
+			By("Deleting the test namespace")
+			if err := utils.DeleteNamespace(cs, ns.Name); err != nil {
+				// Egress pods are finalizer-gated on NAT Gateway teardown, so at this scale the
+				// namespace regularly outlives its client-side timeout; the Azure-side wait below
+				// is the real assertion.
+				utils.Logf("WARNING: namespace deletion did not complete in time: %v", err)
+			}
+
+			By("Waiting for Azure cleanup")
+			eventuallyAzureCleanup(15 * time.Minute)
+		}
 		cs = nil
 		ns = nil
 	})

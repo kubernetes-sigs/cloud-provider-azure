@@ -422,23 +422,10 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(slbTestLa
 	})
 
 	AfterEach(func() {
-		if cs != nil && ns != nil {
-			err := utils.DeleteNamespace(cs, ns.Name)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Waiting for Azure cleanup to complete (egress gateway cleanup is slower)")
-			// Poll instead of a fixed sleep so the spec only waits as long as Azure
-			// actually needs. The cap matches the previous conservative fixed wait.
-			eventuallyAzureCleanup(6 * time.Minute)
-
-			By("Verifying Service Gateway cleanup")
-			verifyServiceGatewayCleanup()
-
-			By("Verifying Address Locations cleanup")
-			verifyAddressLocationsCleanup()
-		}
-
-		// Restore original configuration and ensure CCM is running
+		// Restore the CCM BEFORE waiting on Azure cleanup. These specs deliberately scale the CCM
+		// to 0, and a spec that fails (or ends) while it is down leaves no controller to process
+		// the namespace deletion — so the cleanup wait below would burn its entire budget against
+		// a dead CCM and then report a "leaked" service that simply had nothing to delete it yet.
 		if ccmClient != nil {
 			ctx := context.Background()
 
@@ -468,6 +455,22 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(slbTestLa
 			if err != nil {
 				utils.Logf("Warning: CCM may not be fully recovered after test: %v", err)
 			}
+		}
+
+		if cs != nil && ns != nil {
+			err := utils.DeleteNamespace(cs, ns.Name)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for Azure cleanup to complete (egress gateway cleanup is slower)")
+			// Poll instead of a fixed sleep so the spec only waits as long as Azure
+			// actually needs. The cap matches the previous conservative fixed wait.
+			eventuallyAzureCleanup(6 * time.Minute)
+
+			By("Verifying Service Gateway cleanup")
+			verifyServiceGatewayCleanup()
+
+			By("Verifying Address Locations cleanup")
+			verifyAddressLocationsCleanup()
 		}
 
 		cs = nil

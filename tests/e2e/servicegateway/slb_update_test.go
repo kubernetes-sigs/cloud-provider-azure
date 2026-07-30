@@ -762,18 +762,43 @@ var _ = Describe("Container Load Balancer Update", Label(slbTestLabel), func() {
 		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), retrieved, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
+		By("Verifying the update was terminally rejected rather than silently applied")
+		Eventually(func() bool {
+			events, listErr := cs.CoreV1().Events(ns.Name).List(context.TODO(), metav1.ListOptions{})
+			if listErr != nil {
+				return false
+			}
+			for _, e := range events.Items {
+				if e.InvolvedObject.Name == serviceName && e.Reason == "UnsupportedNamedTargetPort" {
+					return true
+				}
+			}
+			return false
+		}, 90*time.Second, defaultPollInterval).Should(BeTrue(),
+			"a named targetPort must surface an UnsupportedNamedTargetPort warning event")
+
+		By("Capturing the surviving pods' IPs before forcing a locations sync")
+		doomed, err := cs.CoreV1().Pods(ns.Name).Get(context.TODO(), fmt.Sprintf("%s-pod-0", serviceName), metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		doomedIPs := podIPSet([]v1.Pod{*doomed})
+		allPods, err := cs.CoreV1().Pods(ns.Name).List(context.TODO(), metav1.ListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		survivorIPs := podIPSet(allPods.Items)
+		for ip := range doomedIPs {
+			delete(survivorIPs, ip)
+		}
+		Expect(survivorIPs).NotTo(BeEmpty())
+
 		By("Deleting one pod to force a locations sync while the op is parked")
 		Expect(cs.CoreV1().Pods(ns.Name).Delete(context.TODO(),
 			fmt.Sprintf("%s-pod-0", serviceName), metav1.DeleteOptions{})).To(Succeed())
 
-		By("Waiting for the sync to settle")
-		time.Sleep(settle)
-
 		By("Verifying only the removed pod was unregistered (the live LB was not drained)")
-		// The remaining backends must stay registered; only the deleted pod is unregistered.
-		Eventually(func() (int, error) {
-			return countRegisteredEndpoints(serviceUID)
-		}, 60*time.Second, 5*time.Second).Should(Equal(numPods-1),
+		// Assert the exact surviving address set: a count of numPods-1 is also satisfied by
+		// dropping a live backend while the deleted pod's address leaks.
+		Eventually(func() error {
+			return registeredAddressesMatchErr(serviceUID, survivorIPs)
+		}, 3*time.Minute, defaultPollInterval).Should(Succeed(),
 			"a terminal update must not drain the live LB's remaining backends")
 		Expect(verifyAzureResources(serviceUID)).To(Succeed(),
 			"the LB must remain live in Azure under the same UID")

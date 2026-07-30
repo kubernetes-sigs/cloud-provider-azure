@@ -652,6 +652,134 @@ func outboundUpdater(dt *DiffTracker, got *outboundCompletion) *ServiceUpdater {
 
 // TestServiceUpdaterDeleteOutboundService_HappyPath asserts the exact Azure teardown sequence and
 // that NRP state is only cleared once every step succeeded.
+// TestGuardDeleteOutboundService_RemovesLastPodFinalizerOnlyAfterNATGatewayDeletion pins the
+// ordering that the whole egress teardown design rests on: the last pod's cleanup finalizer must
+// not be released until the NAT Gateway is actually gone from Azure.
+//
+// Releasing it first hands the pod (and its IP) back to Kubernetes while NRP still routes that IP
+// through a live NAT Gateway, which is exactly the stranding the finalizer exists to prevent.
+//
+// Every other last-pod test hand-calls RemoveLastPodFinalizers, so none of them observes the
+// ordering; this drives the real deleteOutboundService and asserts, from inside the NAT delete
+// call itself, that the finalizer is still attached at that moment.
+func TestGuardDeleteOutboundService_RemovesLastPodFinalizerOnlyAfterNATGatewayDeletion(t *testing.T) {
+	const (
+		uid     = "egress-ordering"
+		podNS   = "default"
+		podName = "egress-last-pod"
+		podUID  = "pod-uid-1"
+		podKey  = podNS + "/" + podName
+	)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       podName,
+			Namespace:  podNS,
+			UID:        types.UID(podUID),
+			Finalizers: []string{ServiceGatewayPodCleanupFinalizer},
+		},
+	}
+	kube := fake.NewSimpleClientset(pod)
+
+	m := newOutboundMocks(ctrl)
+	m.expectNoDisassociation()
+	m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).Times(1)
+
+	// Captured at the instant the NAT Gateway delete runs.
+	var finalizerHeldDuringNATDelete bool
+	m.nat.EXPECT().Delete(gomock.Any(), "rg", uid).DoAndReturn(func(ctx context.Context, _, _ string) error {
+		live, err := kube.CoreV1().Pods(podNS).Get(ctx, podName, metav1.GetOptions{})
+		if err == nil {
+			finalizerHeldDuringNATDelete = hasPodFinalizer(live)
+		}
+		return nil
+	}).Times(1)
+
+	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(uid)).Return(nil).Times(1)
+
+	dt := newOutboundDiffTracker(uid, m, kube)
+	dt.pendingPodDeletions[podKey] = &PendingPodDeletion{
+		Namespace:  podNS,
+		Name:       podName,
+		UID:        podUID,
+		ServiceUID: uid,
+		Addresses:  []string{"10.244.0.5"},
+		IsLastPod:  true,
+	}
+
+	got := &outboundCompletion{}
+	outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
+
+	called, success, completionErr := got.result()
+	assert.True(t, called)
+	assert.True(t, success, "a fully successful teardown must report success: %v", completionErr)
+
+	assert.True(t, finalizerHeldDuringNATDelete,
+		"the last pod must still carry its cleanup finalizer while the NAT Gateway is being deleted")
+
+	live, err := kube.CoreV1().Pods(podNS).Get(context.Background(), podName, metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.False(t, hasPodFinalizer(live),
+		"the last pod's finalizer must be released once the NAT Gateway is gone")
+}
+
+// TestGuardDeleteOutboundService_FinalizerRemovalFailureReportsFailure pins the other half of the
+// contract: if the finalizer sweep cannot complete, the delete must be reported as failed so it is
+// retried (the NAT/PIP deletes are idempotent on 404). Reporting success would drop the operation
+// while the pod stays stuck Terminating forever.
+func TestGuardDeleteOutboundService_FinalizerRemovalFailureReportsFailure(t *testing.T) {
+	const (
+		uid     = "egress-ordering-fail"
+		podNS   = "default"
+		podName = "egress-last-pod"
+		podUID  = "pod-uid-2"
+	)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	kube := fake.NewSimpleClientset(&v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       podName,
+			Namespace:  podNS,
+			UID:        types.UID(podUID),
+			Finalizers: []string{ServiceGatewayPodCleanupFinalizer},
+		},
+	})
+	// Every attempt to strip the finalizer fails, exhausting the retry budget.
+	kube.PrependReactor("update", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("apiserver down")
+	})
+
+	m := newOutboundMocks(ctrl)
+	m.expectNoDisassociation()
+	m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).Times(1)
+	m.nat.EXPECT().Delete(gomock.Any(), "rg", uid).Return(nil).Times(1)
+	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(uid)).Return(nil).Times(1)
+
+	dt := newOutboundDiffTracker(uid, m, kube)
+	dt.pendingPodDeletions[podNS+"/"+podName] = &PendingPodDeletion{
+		Namespace:  podNS,
+		Name:       podName,
+		UID:        podUID,
+		ServiceUID: uid,
+		Addresses:  []string{"10.244.0.5"},
+		IsLastPod:  true,
+	}
+
+	got := &outboundCompletion{}
+	outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
+
+	called, success, completionErr := got.result()
+	assert.True(t, called)
+	assert.False(t, success,
+		"a delete whose last-pod finalizer sweep failed must be reported as failed so it retries")
+	assert.Error(t, completionErr)
+}
+
 func TestServiceUpdaterDeleteOutboundService_HappyPath(t *testing.T) {
 	const uid = "egress-a"
 	ctrl := gomock.NewController(t)

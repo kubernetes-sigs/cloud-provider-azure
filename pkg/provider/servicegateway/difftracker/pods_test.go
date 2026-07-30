@@ -1284,26 +1284,17 @@ func TestPodInformerDeleteFunc(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// The informer DeleteFunc decodes the object (direct pod or tombstone) before acting.
-			var pod *v1.Pod
-			switch v := tt.obj.(type) {
-			case *v1.Pod:
-				pod = v
-			case cache.DeletedFinalStateUnknown:
-				var ok bool
-				pod, ok = v.Obj.(*v1.Pod)
-				if !ok {
-					if !tt.shouldError {
-						t.Errorf("Expected valid pod in tombstone but conversion failed")
-					}
-					return
-				}
-			default:
-				if !tt.shouldError {
-					t.Errorf("Expected valid pod object but got %T", v)
-				}
+			// Drive the production decode the informer's DeleteFunc uses. Re-implementing the
+			// type switch here would leave the real one untested: dropping its
+			// DeletedFinalStateUnknown arm silently ignores the deletion of every egress pod
+			// whose delete event the watch missed, stranding their cleanup finalizers.
+			pod, ok := podFromDeleteObj(tt.obj)
+			assert.Equal(t, !tt.shouldError, ok, "podFromDeleteObj decode result mismatch")
+			if !ok {
+				assert.Nil(t, pod, "a rejected object must not yield a pod")
 				return
 			}
+			assert.NotNil(t, pod)
 
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()

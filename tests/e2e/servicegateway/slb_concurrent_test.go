@@ -204,7 +204,10 @@ var _ = Describe("SLB - Concurrent Services", Label(slbTestLabel), func() {
 		By("Waiting for Azure to provision all services")
 		Eventually(func() error {
 			for _, service := range services {
-				if err := serviceReconciledErr(string(service.UID), -1); err != nil {
+				// Assert the per-service endpoint count here rather than passing -1: without it
+				// nothing in this spec checks that any INDIVIDUAL service got its pods, and 14 of
+				// 15 services registering zero backends would still satisfy the global total below.
+				if err := serviceReconciledErr(string(service.UID), podsPerService); err != nil {
 					return fmt.Errorf("service %s: %w", service.Name, err)
 				}
 			}
@@ -380,6 +383,9 @@ var _ = Describe("SLB - Concurrent Services", Label(slbTestLabel), func() {
 		}
 
 		utils.Logf("%d/%d services have exactly %d pods registered", servicesWithCorrectPodCount, numServices, podsPerService)
+		Expect(servicesWithCorrectPodCount).To(Equal(numServices),
+			"every service must have exactly %d pod IPs registered; computing this and only logging it "+
+				"lets a run where most services registered nothing still pass", podsPerService)
 
 		utils.Logf("\n✓ Container Load Balancer with %d concurrent services (%d total pods) verified", numServices, totalPods)
 		utils.Logf("  Services verified: %d/%d", numServices, numServices)

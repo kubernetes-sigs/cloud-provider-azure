@@ -273,10 +273,9 @@ var _ = Describe("Container Load Balancer Stress Tests", Label(slbTestLabel), fu
 		}, waitTime, 10*time.Second).Should(Succeed(),
 			"Service Gateway should only register healthy/ready pods")
 
+		// No trailing re-assertion here: registeredPods is set inside the Eventually above, which
+		// only returns nil when these exact bounds already hold, so repeating them cannot fail.
 		utils.Logf("Registered pods: %d (expected approximately %d healthy pods)", registeredPods, healthyPods)
-		// Allow some tolerance - crashing pods might briefly become ready
-		Expect(registeredPods).To(BeNumerically(">=", healthyPods))
-		Expect(registeredPods).To(BeNumerically("<=", healthyPods+5)) // Small buffer for transient states
 
 		utils.Logf("\n✓ Pod crash handling test passed: only healthy pods registered")
 	})
@@ -323,10 +322,13 @@ var _ = Describe("Container Load Balancer Stress Tests", Label(slbTestLabel), fu
 			err := utils.WaitPodsToBeReady(cs, ns.Name)
 			Expect(err).NotTo(HaveOccurred())
 
+			// Establish a non-zero baseline: without it the post-delete "count == 0" below is
+			// satisfied even if the pods were never registered, so the deregistration path
+			// would not be exercised at all.
 			Eventually(func() error {
-				return egressRegisteredErr(egressName, -1)
+				return egressRegisteredErr(egressName, podsPerCycle)
 			}, waitTime, 10*time.Second).Should(Succeed(),
-				"NAT Gateway for '%s' should exist", egressName)
+				"NAT Gateway for '%s' should exist with all %d pods registered", egressName, podsPerCycle)
 
 			By(fmt.Sprintf("Cycle %d/%d: Deleting egress pods", cycle, cycles))
 

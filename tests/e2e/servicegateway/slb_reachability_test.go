@@ -134,7 +134,13 @@ func verifyAllPodsReachable(externalIP string, port int, expectedPodNames []stri
 	}
 }
 
-var _ = Describe("SLB - Multi-Service Reachability", Label(slbTestLabel), func() {
+// This suite provisions many services at once and asserts the cloud-provider-owned contract for
+// each: a Public IP, a Load Balancer with SKU=Service and a backend pool, and a Service Gateway
+// registration carrying every backing pod. It also probes dataplane reachability, but only
+// informationally — whether LoadBalancer traffic actually flows is a property of the environment
+// (NRP owns the dataplane), so slb_dataplane_test.go asserts that separately behind a guard that
+// skips when the environment does not carry traffic.
+var _ = Describe("SLB - Multi-Service Provisioning", Label(slbTestLabel), func() {
 	basename := "slb-reachability-test"
 
 	var (
@@ -181,7 +187,7 @@ var _ = Describe("SLB - Multi-Service Reachability", Label(slbTestLabel), func()
 		ns = nil
 	})
 
-	It("should create 20 LoadBalancer services with 3 pods each and verify all pods are reachable",
+	It("should create 20 LoadBalancer services with 3 pods each and register every pod in the Service Gateway",
 		NodeTimeout(15*time.Minute),
 		func(ctx SpecContext) {
 			const (
