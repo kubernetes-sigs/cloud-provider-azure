@@ -277,6 +277,22 @@ var (
 		},
 	)
 
+	// locationSyncAbandonedTotal counts NRP location syncs given up on after exhausting the retry
+	// budget. Unlike locationSyncTerminalErrorsTotal, which fires for a single deterministic
+	// rejection that the next change can still correct, this fires only once retries are spent, so
+	// NRP address state stays stale with nothing left to re-drive it: services and pods blocked on
+	// the abandoned drain keep their finalizers, and any initialization gate waiting on that drain
+	// is released to avoid stalling startup. A non-zero value must be alerted on.
+	locationSyncAbandonedTotal = metrics.NewCounterVec(
+		&metrics.CounterOpts{
+			Subsystem:      diffTrackerSubsystem,
+			Name:           "location_sync_abandoned_total",
+			Help:           "Total count of NRP location syncs abandoned after exhausting retries, by reason",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"reason"},
+	)
+
 	// ========================================================================
 	// Stuck detection metric (addresses David's review comment)
 	// ========================================================================
@@ -319,6 +335,7 @@ func RegisterMetrics() {
 		legacyregistry.MustRegister(serviceOperationsParkedTotal)
 		legacyregistry.MustRegister(outboundServiceUpdatesSkippedTotal)
 		legacyregistry.MustRegister(locationSyncTerminalErrorsTotal)
+		legacyregistry.MustRegister(locationSyncAbandonedTotal)
 		legacyregistry.MustRegister(initializationDurationSeconds)
 		legacyregistry.MustRegister(pendingOperationOldestAgeSeconds)
 	})
@@ -465,6 +482,18 @@ func RecordServiceFinalizerRemoveFailed() {
 // deterministic, non-retryable error.
 func recordLocationSyncTerminalError() {
 	locationSyncTerminalErrorsTotal.Inc()
+}
+
+// Reasons for abandoning an NRP location sync after its retry budget is spent.
+const (
+	locationSyncAbandonReasonInitAttempts = "init_attempts_exhausted"
+	locationSyncAbandonReasonDrain        = "drain_attempts_exhausted"
+)
+
+// recordLocationSyncAbandoned increments the counter of NRP location syncs given up on after
+// exhausting retries, leaving NRP address state stale with nothing left to re-drive it.
+func recordLocationSyncAbandoned(reason string) {
+	locationSyncAbandonedTotal.WithLabelValues(reason).Inc()
 }
 
 // RecordPodFinalizerAddFailed increments the counter for an egress pod that was registered without

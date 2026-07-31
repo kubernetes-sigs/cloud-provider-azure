@@ -357,3 +357,58 @@ func TestLocationsUpdater_InitDoesNotHangOnSustainedTransientError(t *testing.T)
 	assert.NoError(t, dt.WaitForInitialSync(ctx),
 		"initialization must give up on a never-clearing transient NRP error instead of hanging forever")
 }
+
+// TestLocationsUpdater_TerminalErrorRetriedWhileDeletionDrainPending verifies that a deterministic
+// NRP rejection is still retried, post-initialization, while a deletion waits on the abandoned batch.
+//
+// CheckPendingServiceDeletions advances a deletion only once its addresses have left NRP, so calling
+// it after abandoning the batch is a no-op. Taking the terminal shortcut there consumes the pass
+// without rescheduling, and on a quiet cluster nothing re-drives the sync, so the Service stays
+// Terminating until the CCM restarts. TestLocationsUpdater_TerminalErrorNotRetried is the control:
+// with no deletion pending, the identical rejection is attempted exactly once.
+func TestLocationsUpdater_TerminalErrorRetriedWhileDeletionDrainPending(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	var calls int32
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+	mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, _ armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
+			atomic.AddInt32(&calls, 1)
+			return &azcore.ResponseError{StatusCode: http.StatusBadRequest, ErrorCode: "InvalidRequest"}
+		}).AnyTimes()
+
+	dt := newTestDiffTracker()
+	dt.networkClientFactory = mockFactory
+	dt.config = testConfig()
+
+	// Drain shape: the pod is gone from Kubernetes but NRP still holds its address, so the batch
+	// this pass computes is the removal the pending deletion is waiting on.
+	dt.K8sResources.Nodes["node-1"] = newNode()
+	dt.NRPResources.Locations["node-1"] = NRPLocation{
+		Addresses: map[string]NRPAddress{"10.0.0.1": {Services: utilsets.NewString("svc")}},
+	}
+	dt.NRPResources.LoadBalancers.Insert("svc")
+	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceUID: "svc", State: StateDeletionPending}
+	dt.pendingServiceDeletions["svc"] = &PendingServiceDeletion{ServiceUID: "svc", IsInbound: true}
+
+	lu := NewLocationsUpdater(context.Background(), dt)
+	stopped := make(chan struct{})
+	go func() {
+		lu.Run()
+		close(stopped)
+	}()
+	defer func() {
+		lu.Stop()
+		<-stopped
+	}()
+
+	dt.triggerLocationsUpdater()
+
+	assert.Eventually(t, func() bool {
+		return atomic.LoadInt32(&calls) > 1
+	}, 6*time.Second, 50*time.Millisecond,
+		"a deletion waiting on the abandoned batch must keep the sync rescheduled, not strand it")
+}

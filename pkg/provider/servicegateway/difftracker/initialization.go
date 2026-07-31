@@ -398,12 +398,12 @@ func recoverStuckFinalizers(
 		for i := range services.Items {
 			svc := &services.Items[i]
 
-			// Only process LoadBalancer services
-			if svc.Spec.Type != v1.ServiceTypeLoadBalancer {
-				continue
-			}
-
-			// Check if service has our finalizer AND is being deleted
+			// Recovery keys on our own finalizer, not on spec.type. The finalizer is what records
+			// that this tracker provisioned Azure resources for the Service, and it survives a
+			// retype: a LoadBalancer switched to ClusterIP and then deleted still needs its PIP/LB
+			// torn down and its finalizer stripped. Gating on the type here would skip exactly those
+			// Services on every restart, leaving them Terminating forever and blocking namespace
+			// deletion behind them.
 			if svc.DeletionTimestamp == nil {
 				continue
 			}

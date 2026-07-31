@@ -1592,3 +1592,102 @@ func TestDeletePodWithoutAddresses_MatchingUIDCancelsBufferedAddresses(t *testin
 	assert.Empty(t, dt.pendingPods[serviceUID],
 		"a pod's own no-IP delete must still cancel its buffered addresses")
 }
+
+// TestAddPod_RejectsEgressIdentityCollidingWithInboundService pins that an egress pod cannot attach
+// to an INBOUND service's operation.
+//
+// pendingServiceOps is keyed by a bare string shared by both kinds: inbound entries by Kubernetes
+// Service UID, outbound entries by the egress pod label value, which any user who can create a Pod
+// controls. Without a kind check the pod resolves to the inbound operation and is published into
+// that service's address set with no NAT Gateway behind it, letting one tenant attach to another
+// tenant's LoadBalancer. The outbound identity is the control: it must still register normally.
+func TestAddPod_RejectsEgressIdentityCollidingWithInboundService(t *testing.T) {
+	const inboundUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	const egressUID = "team-egress"
+
+	dt := newTestDiffTracker()
+	dt.pendingServiceOps[inboundUID] = &ServiceOperationState{
+		ServiceUID: inboundUID,
+		Config:     NewInboundServiceConfig(inboundUID, nil),
+		State:      StateCreated,
+	}
+	dt.NRPResources.LoadBalancers.Insert(inboundUID)
+
+	// An egress pod labelled with the inbound Service's UID.
+	dt.AddPodWithUID(inboundUID, "attacker/pod", "pod-uid-1", "10.0.0.1", "10.244.0.5")
+
+	dt.mu.Lock()
+	op := dt.pendingServiceOps[inboundUID]
+	_, nodeTracked := dt.K8sResources.Nodes["10.0.0.1"]
+	bufferedPods := len(dt.pendingPods[inboundUID])
+	readyAsOutbound := dt.isServiceReadyToSync(inboundUID, false)
+	dt.mu.Unlock()
+
+	assert.True(t, op.Config.IsInbound, "the inbound operation must be left untouched")
+	assert.Equal(t, StateCreated, op.State, "the inbound operation must not be re-purposed as outbound")
+	assert.False(t, nodeTracked, "the egress pod must not be published under the inbound service's identity")
+	assert.Zero(t, bufferedPods, "the colliding pod must not be buffered against the inbound operation")
+	assert.False(t, readyAsOutbound,
+		"an inbound LoadBalancer must never satisfy an outbound readiness check for the same key")
+
+	// Control: a non-colliding egress identity registers as normal.
+	dt.AddPodWithUID(egressUID, "team/pod", "pod-uid-2", "10.0.0.2", "10.244.0.6")
+	dt.mu.Lock()
+	ctlOp, ctlExists := dt.pendingServiceOps[egressUID]
+	ctlBuffered := len(dt.pendingPods[egressUID])
+	dt.mu.Unlock()
+	if assert.True(t, ctlExists, "control: an ordinary egress identity must create its own operation") {
+		assert.False(t, ctlOp.Config.IsInbound, "control: that operation must be outbound")
+	}
+	assert.Equal(t, 1, ctlBuffered, "control: the egress pod must be buffered for its own service")
+}
+
+// TestAddPod_DoesNotReviveOutboundServiceWhoseDeleteWasAttempted pins that the StateDeletionPending
+// revive only fires while nothing has been dispatched to Azure.
+//
+// deleteOutboundService is not transactional: when the ServiceGateway unregister fails it records
+// the error and still deletes the NAT Gateway and Public IP before returning, after which the
+// operation is demoted back to StateDeletionPending. Reviving from there marks the service Created
+// and publishes pods to a gateway that no longer exists, and nothing re-creates it. Buffering
+// instead lets the delete finish and the buffered pod drive a clean re-create. RetryCount==0 is the
+// control: an untouched deletion still revives, which is what keeps a sole egress pod's IP change
+// from losing egress.
+func TestAddPod_DoesNotReviveOutboundServiceWhoseDeleteWasAttempted(t *testing.T) {
+	newTrackerWithPendingDelete := func(retryCount int) *DiffTracker {
+		dt := newTestDiffTracker()
+
+		dt.pendingServiceOps["egress"] = &ServiceOperationState{
+			ServiceUID: "egress",
+			Config:     NewOutboundServiceConfig("egress", nil),
+			State:      StateDeletionPending,
+			RetryCount: retryCount,
+		}
+		dt.pendingServiceDeletions["egress"] = &PendingServiceDeletion{ServiceUID: "egress"}
+		return dt
+	}
+
+	attempted := newTrackerWithPendingDelete(1)
+	attempted.AddPodWithUID("egress", "ns/replacement", "uid-1", "10.0.0.1", "10.244.0.5")
+	attempted.mu.Lock()
+	attemptedState := attempted.pendingServiceOps["egress"].State
+	_, attemptedStillDeleting := attempted.pendingServiceDeletions["egress"]
+	attemptedBuffered := len(attempted.pendingPods["egress"])
+	attempted.mu.Unlock()
+
+	assert.Equal(t, StateDeletionPending, attemptedState,
+		"a deletion that already ran against Azure must not be revived: its NAT Gateway and PIP may be gone")
+	assert.True(t, attemptedStillDeleting, "the pending deletion record must survive so the delete completes")
+	assert.Equal(t, 1, attemptedBuffered,
+		"the pod must be buffered so the delete-success path re-creates the service for it")
+
+	fresh := newTrackerWithPendingDelete(0)
+	fresh.AddPodWithUID("egress", "ns/replacement", "uid-1", "10.0.0.1", "10.244.0.5")
+	fresh.mu.Lock()
+	freshState := fresh.pendingServiceOps["egress"].State
+	_, freshStillDeleting := fresh.pendingServiceDeletions["egress"]
+	fresh.mu.Unlock()
+
+	assert.Equal(t, StateCreated, freshState,
+		"control: an undispatched deletion must still revive so a sole egress pod's IP change keeps egress")
+	assert.False(t, freshStillDeleting, "control: reviving must clear the pending deletion record")
+}

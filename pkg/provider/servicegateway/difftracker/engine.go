@@ -1087,12 +1087,34 @@ func (dt *DiffTracker) AddPodWithUID(serviceUID, podKey, podUID, location, addre
 	dt.addPod(serviceUID, podKey, podUID, location, address)
 }
 
+// outboundIdentityConflictsWithInboundLocked reports whether an egress identity collides with a
+// tracked INBOUND service operation.
+//
+// pendingServiceOps is keyed by a bare string shared by both kinds: inbound entries are keyed by
+// Kubernetes Service UID, outbound entries by the egress pod label value, which is arbitrary and
+// user-controlled. A pod labelled with an existing Service's UID therefore resolves to that
+// Service's operation. Acting on it would publish the pod into the inbound service's address set
+// with no NAT Gateway behind it, revive an inbound deletion as if it were an egress one, or
+// schedule a deletion that tears down the inbound LoadBalancer. The egress identity is not ours to
+// honour in that case, so the pod is refused and the inbound operation is left untouched.
+// Must be called with dt.mu held.
+func (dt *DiffTracker) outboundIdentityConflictsWithInboundLocked(serviceUID string) bool {
+	opState, exists := dt.pendingServiceOps[serviceUID]
+	return exists && opState.Config.IsInbound
+}
+
 func (dt *DiffTracker) addPod(serviceUID, podKey, podUID, location, address string) {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
 	if serviceUID == "" || location == "" || address == "" {
 		dt.logger.V(4).Info("Could not add pod with invalid parameters", "service", serviceUID, "location", location, "address", address)
+		return
+	}
+
+	if dt.outboundIdentityConflictsWithInboundLocked(serviceUID) {
+		dt.logger.V(2).Info("Rejected egress pod whose identity collides with an inbound service",
+			"service", serviceUID, "pod", podKey)
 		return
 	}
 
@@ -1223,6 +1245,25 @@ func (dt *DiffTracker) addPod(serviceUID, podKey, podUID, location, address stri
 		// deletion has not been dispatched yet (that happens in StateDeletionInProgress).
 		// Dropping this add would leave the new pod without egress once the NAT Gateway is
 		// deleted, so cancel the pending deletion and revive the service instead.
+		//
+		// That premise only holds while nothing has been dispatched to Azure. StateDeletionPending
+		// is also reached from a delete that ran partway and failed (deleteOutboundService is not
+		// transactional: it records the error and still deletes the NAT Gateway and Public IP before
+		// returning), so the resources may already be gone. Reviving then reports the service
+		// healthy and publishes pods to a gateway that no longer exists, and nothing re-creates it.
+		// Treat a previously attempted delete as not revivable and fall through to buffering.
+		if opState.RetryCount > 0 {
+			dt.logger.V(4).Info("Buffered pod instead of reviving a service whose deletion was already attempted",
+				"pod", podKey, "service", serviceUID, "retryCount", opState.RetryCount)
+			dt.pendingPods[serviceUID] = append(dt.pendingPods[serviceUID], PendingPodUpdate{
+				PodKey:    podKey,
+				PodUID:    podUID,
+				Location:  location,
+				Address:   address,
+				Timestamp: time.Now().Format(time.RFC3339),
+			})
+			return
+		}
 		dt.logger.V(5).Info("Revived service pending deletion for pod", "pod", podKey, "service", serviceUID)
 		opState.State = StateCreated
 		delete(dt.pendingServiceDeletions, serviceUID)
@@ -1458,6 +1499,12 @@ func (dt *DiffTracker) deletePod(serviceUID, location string, addresses []string
 
 	if serviceUID == "" || location == "" || len(addresses) == 0 {
 		dt.logger.V(4).Info("Could not delete pod with invalid parameters", "service", serviceUID, "location", location, "addresses", addresses)
+		return result
+	}
+
+	if dt.outboundIdentityConflictsWithInboundLocked(serviceUID) {
+		dt.logger.V(2).Info("Rejected egress pod deletion whose identity collides with an inbound service",
+			"service", serviceUID, "location", location)
 		return result
 	}
 

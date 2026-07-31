@@ -53,7 +53,6 @@ import (
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/util/retry"
@@ -331,13 +330,18 @@ func (dt *DiffTracker) getServiceByNamespaceName(ctx context.Context, lister cor
 }
 
 // getServiceByUIDViaList scans all Services for a UID match. Used only when a Service's
-// namespace/name are not known to the engine. The spec.type field selector narrows the
-// server-side result to LoadBalancer Services only, which is the sole type the difftracker
-// manages.
+// namespace/name are not known to the engine.
+//
+// The scan is deliberately not narrowed by a spec.type field selector. This tracker owns a
+// Service's finalizer and its Azure resources from the moment it provisions them, and that
+// ownership outlives the Service's type: retyping a LoadBalancer to ClusterIP is a normal way to
+// decommission it, and the deletion that follows still has to tear down the PIP/LB and strip the
+// finalizer. Filtering by type would hide such a Service here, and callers treat the typed NotFound
+// below as "the Service is gone" - dropping tracking while its Azure resources still exist, or
+// reporting a deletion complete while its finalizer is still attached. The UID comparison is what
+// identifies the Service; the type is not part of that identity.
 func (dt *DiffTracker) getServiceByUIDViaList(ctx context.Context, uid string) (*v1.Service, error) {
-	svcList, err := dt.kubeClient.CoreV1().Services(v1.NamespaceAll).List(ctx, metav1.ListOptions{
-		FieldSelector: fields.OneTermEqualSelector("spec.type", string(v1.ServiceTypeLoadBalancer)).String(),
-	})
+	svcList, err := dt.kubeClient.CoreV1().Services(v1.NamespaceAll).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("getServiceByUID: list failed: %w", err)
 	}

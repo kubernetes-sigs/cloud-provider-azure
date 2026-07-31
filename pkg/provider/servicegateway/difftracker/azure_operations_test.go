@@ -35,9 +35,11 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	corelisters "k8s.io/client-go/listers/core/v1"
+	k8stesting "k8s.io/client-go/testing"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
@@ -508,4 +510,63 @@ func TestServiceGatewayClientAsyncFailureIsNotSynchronousCompletion(t *testing.T
 		"a failed asynchronous operation reported as 200 must not be treated as a synchronous completion")
 	assert.Error(t, dt.tolerateSynchronousCompletion(err, "UpdateServices", "sgw"),
 		"a failed asynchronous operation must propagate so the caller retries instead of recording phantom NRP state")
+}
+
+// serviceClientWithTypeFieldSelector returns a fake clientset whose Service List honours a
+// spec.type field selector the way the apiserver does. The default fake tracker ignores field
+// selectors entirely, so without this a filtered List looks identical to an unfiltered one and a
+// test cannot tell the two apart.
+func serviceClientWithTypeFieldSelector(services ...*v1.Service) *fake.Clientset {
+	c := fake.NewSimpleClientset()
+	c.PrependReactor("list", "services", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		out := &v1.ServiceList{}
+		wantType, filtered := action.(k8stesting.ListAction).GetListRestrictions().Fields.RequiresExactMatch("spec.type")
+		for _, svc := range services {
+			if filtered && string(svc.Spec.Type) != wantType {
+				continue
+			}
+			out.Items = append(out.Items, *svc)
+		}
+		return true, out, nil
+	})
+	return c
+}
+
+// TestGetServiceByUIDViaList_FindsServiceRetypedAwayFromLoadBalancer pins that the UID scan is not
+// narrowed by spec.type.
+//
+// This tracker owns a Service's finalizer and Azure resources from the moment it provisions them,
+// and that ownership outlives the Service's type: retyping a LoadBalancer to ClusterIP is a normal
+// way to decommission it, and the delete that follows still has to tear down the PIP/LB and strip
+// the finalizer. Narrowing the scan to LoadBalancer Services hides exactly that Service, and callers
+// read the resulting typed NotFound as "the Service is gone" - dropping tracking while its Azure
+// resources still exist (createInboundService) or reporting deletion complete while its finalizer is
+// still attached (deleteInboundService). The LoadBalancer case is the control: it resolves either
+// way, so only the retyped lookup distinguishes a filtered scan from an unfiltered one.
+func TestGetServiceByUIDViaList_FindsServiceRetypedAwayFromLoadBalancer(t *testing.T) {
+	retyped := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "was-lb", Namespace: "ns", UID: "uid-retyped"},
+		Spec:       v1.ServiceSpec{Type: v1.ServiceTypeClusterIP},
+	}
+	stillLB := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "still-lb", Namespace: "ns", UID: "uid-lb"},
+		Spec:       v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer},
+	}
+
+	dt := newTestDiffTracker()
+	// No namespace/name recorded for either UID, so both reads take the List scan.
+	dt.kubeClient = serviceClientWithTypeFieldSelector(retyped, stillLB)
+
+	got, err := dt.getServiceByUID(context.Background(), "uid-retyped")
+	assert.NoError(t, err,
+		"a Service retyped away from LoadBalancer must still resolve: the tracker still owns its finalizer and Azure resources")
+	if assert.NotNil(t, got) {
+		assert.Equal(t, "uid-retyped", string(got.UID))
+	}
+
+	gotLB, err := dt.getServiceByUID(context.Background(), "uid-lb")
+	assert.NoError(t, err, "control: a LoadBalancer Service resolves regardless of the selector")
+	if assert.NotNil(t, gotLB) {
+		assert.Equal(t, "uid-lb", string(gotLB.UID))
+	}
 }

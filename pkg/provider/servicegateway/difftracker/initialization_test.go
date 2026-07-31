@@ -1196,3 +1196,44 @@ func TestRecoverStuckFinalizers_CountsRemovalSeparatelyFromScheduling(t *testing
 		assert.Equal(t, float64(0), r1-r0, "a failed removal must not be reported as a recovery")
 	})
 }
+
+// TestRecoverStuckFinalizers_RecoversServiceRetypedAwayFromLoadBalancer pins that finalizer recovery
+// keys on our own finalizer rather than on spec.type.
+//
+// The finalizer is what records that this tracker provisioned Azure resources for the Service, and
+// it survives a retype: a LoadBalancer switched to ClusterIP and then deleted still needs its
+// finalizer stripped once nothing is left in Azure. Gating recovery on the type skips exactly those
+// Services on every restart, so nothing ever removes the finalizer and the namespace stays
+// Terminating behind it. The LoadBalancer case is the control: it recovers either way.
+func TestRecoverStuckFinalizers_RecoversServiceRetypedAwayFromLoadBalancer(t *testing.T) {
+	delTime := metav1.Now()
+	newStuck := func(name, uid string, svcType v1.ServiceType) *v1.Service {
+		return &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name, Namespace: "default", UID: types.UID(uid),
+				DeletionTimestamp: &delTime,
+				Finalizers:        []string{ServiceGatewayServiceCleanupFinalizer},
+			},
+			Spec: v1.ServiceSpec{Type: svcType},
+		}
+	}
+	retyped := newStuck("was-lb", "uid-retyped", v1.ServiceTypeClusterIP)
+	stillLB := newStuck("still-lb", "uid-lb", v1.ServiceTypeLoadBalancer)
+
+	kube := fake.NewSimpleClientset(retyped, stillLB)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	services := &v1.ServiceList{Items: []v1.Service{*retyped, *stillLB}}
+
+	// No Azure resource exists for either, so recovery should strip both finalizers directly.
+	recoverStuckFinalizers(context.Background(), dt, services, nil, nil, utilsets.NewString(), utilsets.NewString(), nil)
+
+	got, err := kube.CoreV1().Services("default").Get(context.Background(), "was-lb", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.False(t, hasServiceGatewayFinalizer(got),
+		"a Terminating Service retyped away from LoadBalancer must still have its finalizer recovered, or its namespace never deletes")
+
+	gotLB, err := kube.CoreV1().Services("default").Get(context.Background(), "still-lb", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.False(t, hasServiceGatewayFinalizer(gotLB), "control: a LoadBalancer Service recovers as before")
+}
