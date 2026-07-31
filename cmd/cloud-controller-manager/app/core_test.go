@@ -147,7 +147,7 @@ func TestValidateServiceGatewayControllerConfiguration(t *testing.T) {
 	}
 }
 
-func TestStartServiceControllerBootstrapsServiceGatewayBeforeLoadBalancerCapture(t *testing.T) {
+func TestStartServiceControllerPropagatesServiceGatewayStartFailure(t *testing.T) {
 	kubeClient := fake.NewSimpleClientset()
 	config := (&cloudcontrollerconfig.Config{
 		LoopbackClientConfig: &rest.Config{},
@@ -174,9 +174,11 @@ func TestStartServiceControllerBootstrapsServiceGatewayBeforeLoadBalancerCapture
 		cloud,
 	)
 
-	// The real ServiceGateway engine performs live Azure discovery during Start, which this
-	// fixture's client factory does not serve, so Start fails and the LoadBalancer is never
-	// published. The engine-backed happy path is covered in pkg/provider/servicegateway.
+	// This fixture builds the runtime with a nil Azure client factory, which
+	// InitializeFromCluster now rejects, so the ServiceGateway runtime fails to start. The
+	// failure must surface from startServiceController and leave the LoadBalancer unpublished
+	// rather than being swallowed. Runtime.Start's success path is covered by TestRuntimeStart
+	// in pkg/provider/servicegateway.
 	assert.ErrorContains(t, err, "failed to start ServiceGateway runtime")
 	assert.False(t, started)
 	_, err = loadBalancer.EnsureLoadBalancer(context.Background(), "cluster", service, nil)
