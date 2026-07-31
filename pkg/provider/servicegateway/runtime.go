@@ -189,6 +189,10 @@ func (r *Runtime) StartWithoutDiscovery() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	if r.tracker != nil {
+		return fmt.Errorf("ServiceGateway runtime is already started")
+	}
+
 	tracker, err := difftracker.New(
 		log.Background(),
 		difftracker.K8sState{
@@ -208,8 +212,11 @@ func (r *Runtime) StartWithoutDiscovery() error {
 	if err != nil {
 		return fmt.Errorf("initialize difftracker: %w", err)
 	}
+	if r.eventRecorder != nil {
+		tracker.SetEventRecorder(r.eventRecorder)
+	}
 	if err := r.loadBalancer.SetTracker(tracker); err != nil {
-		return err
+		return fmt.Errorf("initialize ServiceGateway LoadBalancer: %w", err)
 	}
 
 	r.tracker = tracker

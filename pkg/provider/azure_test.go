@@ -2473,7 +2473,9 @@ func TestInitializePublishesServiceGatewayDependencies(t *testing.T) {
 	_, err := loadBalancer.EnsureLoadBalancer(context.Background(), testClusterName, &service, nil)
 	assert.EqualError(t, err, "ServiceGateway LoadBalancer is not initialized")
 
-	// Start performs live Azure discovery, which this fixture's client factory does not serve.
+	// StartWithoutDiscovery publishes the engine from empty state. It avoids the cluster and NRP
+	// discovery that the engine-backed Start performs, which this fixture's mock client factory
+	// is not set up to serve. Start itself is covered by TestRuntimeStart.
 	assert.NoError(t, runtime.StartWithoutDiscovery())
 
 	_, err = loadBalancer.EnsureLoadBalancer(context.Background(), testClusterName, &service, nil)
