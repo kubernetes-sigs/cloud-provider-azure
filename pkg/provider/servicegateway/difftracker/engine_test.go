@@ -1691,3 +1691,96 @@ func TestAddPod_DoesNotReviveOutboundServiceWhoseDeleteWasAttempted(t *testing.T
 		"control: an undispatched deletion must still revive so a sole egress pod's IP change keeps egress")
 	assert.False(t, freshStillDeleting, "control: reviving must clear the pending deletion record")
 }
+
+// TestReconcileInboundService_SkipsServiceBeingDeleted pins that a Service carrying a
+// DeletionTimestamp is never provisioned, and never records a recreate intent against its own
+// in-flight deletion.
+//
+// Upstream keeps calling EnsureLoadBalancer for such a Service: it drops its own
+// load-balancer-cleanup finalizer as soon as EnsureLoadBalancerDeleted returns, which here is
+// immediate because the Azure delete is asynchronous. Our cleanup finalizer then holds the object
+// Terminating with no upstream finalizer left, so needsCleanup is false while wantsLoadBalancer is
+// true and any re-enqueue (an annotation edit, or a CCM restart replaying every Service to AddFunc)
+// takes upstream's ensure branch. Setting RecreateAfterDeletion from there makes the delete-success
+// path rebuild the LoadBalancer, Public IP and ServiceGateway registration for a Service that is
+// going away; once our finalizer clears the object disappears and those resources are stranded in
+// Azure with nothing tracking them. The live Service is the control: the legitimate
+// ClusterIP->LoadBalancer toggle always arrives without a DeletionTimestamp and must still work.
+func TestReconcileInboundService_SkipsServiceBeingDeleted(t *testing.T) {
+	newSvc := func(uid string, deleting bool) *v1.Service {
+		svc := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "ns", UID: types.UID(uid)},
+			Spec: v1.ServiceSpec{
+				Type:  v1.ServiceTypeLoadBalancer,
+				Ports: []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}},
+			},
+		}
+		if deleting {
+			now := metav1.Now()
+			svc.DeletionTimestamp = &now
+		}
+		return svc
+	}
+
+	// A deletion is already in flight for this UID, exactly as it would be after
+	// EnsureLoadBalancerDeleted queued the Azure teardown.
+	const uid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	deleting := newTestDiffTracker()
+	deleting.pendingServiceOps[uid] = &ServiceOperationState{
+		ServiceUID: uid,
+		Config:     NewInboundServiceConfig(uid, nil),
+		State:      StateDeletionInProgress,
+	}
+
+	assert.NoError(t, deleting.ReconcileInboundService(newSvc(uid, true)))
+
+	deleting.mu.Lock()
+	op := deleting.pendingServiceOps[uid]
+	deleting.mu.Unlock()
+	assert.Equal(t, StateDeletionInProgress, op.State,
+		"a Terminating Service must not disturb its own in-flight deletion")
+	assert.False(t, op.RecreateAfterDeletion,
+		"a Terminating Service must not arm RecreateAfterDeletion: the rebuilt Azure resources would never be deleted")
+
+	// Control: the same Service, still live, records the recreate intent as designed.
+	live := newTestDiffTracker()
+	live.pendingServiceOps[uid] = &ServiceOperationState{
+		ServiceUID: uid,
+		Config:     NewInboundServiceConfig(uid, nil),
+		State:      StateDeletionInProgress,
+	}
+
+	assert.NoError(t, live.ReconcileInboundService(newSvc(uid, false)))
+
+	live.mu.Lock()
+	ctlOp := live.pendingServiceOps[uid]
+	live.mu.Unlock()
+	assert.True(t, ctlOp.RecreateAfterDeletion,
+		"control: a live Service re-declared during deletion must still be re-created")
+}
+
+// TestReconcileInboundService_DeletingServiceIsNotProvisionedFromScratch covers the same guard for a
+// Service the engine is not tracking at all, which is the shape a CCM restart produces: the pending
+// operation is gone, upstream replays the Service to AddFunc, and provisioning it would create Azure
+// resources for an object that is already going away.
+func TestReconcileInboundService_DeletingServiceIsNotProvisionedFromScratch(t *testing.T) {
+	now := metav1.Now()
+	svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "web", Namespace: "ns", UID: types.UID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+			DeletionTimestamp: &now,
+		},
+		Spec: v1.ServiceSpec{
+			Type:  v1.ServiceTypeLoadBalancer,
+			Ports: []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}},
+		},
+	}
+
+	dt := newTestDiffTracker()
+	assert.NoError(t, dt.ReconcileInboundService(svc))
+
+	dt.mu.Lock()
+	tracked := len(dt.pendingServiceOps)
+	dt.mu.Unlock()
+	assert.Zero(t, tracked, "a Terminating Service must not be provisioned from scratch after a restart")
+}

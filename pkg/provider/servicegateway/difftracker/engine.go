@@ -77,6 +77,23 @@ func (dt *DiffTracker) ReconcileInboundService(service *v1.Service) error {
 		return fmt.Errorf("cannot reconcile inbound Service %s/%s without a UID", service.Namespace, service.Name)
 	}
 
+	// A Service that is already being deleted must never be provisioned, and this is the only place
+	// that can tell: the deletion path works from a UID alone, and nothing downstream sees the
+	// object. Upstream still calls EnsureLoadBalancer for such a Service because it drops its own
+	// load-balancer-cleanup finalizer as soon as EnsureLoadBalancerDeleted returns, which here is
+	// immediate (the Azure delete is asynchronous). Our cleanup finalizer then holds the object
+	// Terminating with no upstream finalizer left, so needsCleanup is false while wantsLoadBalancer
+	// is true, and any re-enqueue - an annotation edit, or a CCM restart replaying every Service to
+	// AddFunc - takes upstream's ensure branch. Reconciling from there sets RecreateAfterDeletion on
+	// the in-flight deletion, and the delete-success path then re-creates the LoadBalancer, Public IP
+	// and ServiceGateway registration for a Service that is going away. Once our finalizer clears,
+	// the object disappears and those resources are left in Azure with nothing tracking them.
+	if service.DeletionTimestamp != nil {
+		dt.logger.V(4).Info("Skipped reconciling a Service that is being deleted",
+			"namespace", service.Namespace, "service", service.Name, "serviceUID", serviceUID)
+		return nil
+	}
+
 	dt.logger.V(2).Info("Reconciling inbound Service", "serviceUID", serviceUID)
 
 	inboundConfig, err := AdmitInboundService(service)
@@ -496,6 +513,11 @@ func (dt *DiffTracker) UpdateService(config ServiceConfig) {
 		// A re-create (e.g. a LoadBalancer->ClusterIP->LoadBalancer toggle) arrived while
 		// the service is being deleted. Record the desired config and let the
 		// deletion-success path replay it as a fresh create, so it cannot race the delete.
+		//
+		// Only a live Service can legitimately ask for this. ReconcileInboundService, the sole
+		// caller, refuses a Service carrying a DeletionTimestamp precisely so a recreate intent is
+		// never recorded for an object that is going away: the delete-success path would honour it
+		// and rebuild Azure resources that nothing will ever delete again.
 		opState.Config = config
 		opState.RecreateAfterDeletion = true
 		dt.mu.Unlock()
