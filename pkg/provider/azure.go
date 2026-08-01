@@ -886,6 +886,19 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 	}
 }
 
+// getNodePrivateIPsForNode returns the cached private IPs of the given node, and
+// whether the node is present in the cache. It is safe for concurrent use with
+// updateNodeCaches. The list is extracted while holding the lock because the
+// cached set is mutated in place by updateNodeCaches, so returning the set
+// itself would let callers race with it.
+func (az *Cloud) getNodePrivateIPsForNode(nodeName string) ([]string, bool) {
+	az.nodeCachesLock.RLock()
+	defer az.nodeCachesLock.RUnlock()
+
+	ips, found := az.nodePrivateIPs[strings.ToLower(nodeName)]
+	return ips.UnsortedList(), found
+}
+
 // updateNodeTaint updates node out-of-service taint
 func (az *Cloud) updateNodeTaint(node *v1.Node) {
 	logger := log.Background().WithName("updateNodeTaint")
