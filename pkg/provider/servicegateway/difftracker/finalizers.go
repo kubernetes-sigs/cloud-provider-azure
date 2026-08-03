@@ -61,6 +61,7 @@ type PendingPodDeletion struct {
 	Addresses          []string // PodIPs; a dual-stack pod contributes one address per IP family
 	VerifyServiceDrain bool     // No PodIPs were available; wait until no unbacked NRP address remains for the service
 	IsLastPod          bool     // True if this was the last pod for the service (finalizer removed after NAT GW deletion)
+	RecoveredAtStartup bool     // Finalizer was found stuck at startup; removing it closes the recovery gap
 	Timestamp          string
 }
 
@@ -349,6 +350,31 @@ func (dt *DiffTracker) AddPodFinalizer(ctx context.Context, pod *v1.Pod) error {
 	return nil
 }
 
+// markServiceFinalizerRecovering records that startup found a stuck finalizer on this Service and
+// left its removal to the diff, so the removal can later be counted as recovered.
+func (dt *DiffTracker) markServiceFinalizerRecovering(serviceUID string) {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	if dt.recoveredServiceFinalizers == nil {
+		dt.recoveredServiceFinalizers = make(map[string]struct{})
+	}
+	dt.recoveredServiceFinalizers[serviceUID] = struct{}{}
+}
+
+// recordServiceFinalizerRecoveryDone counts a finalizer that startup scheduled for recovery once it
+// is actually off the Service. Routine deletions are not counted: only a UID that startup marked
+// matches, and it matches once.
+func (dt *DiffTracker) recordServiceFinalizerRecoveryDone(serviceUID string) {
+	dt.mu.Lock()
+	_, scheduled := dt.recoveredServiceFinalizers[serviceUID]
+	delete(dt.recoveredServiceFinalizers, serviceUID)
+	dt.mu.Unlock()
+
+	if scheduled {
+		recordFinalizerRecovered()
+	}
+}
+
 // removePodFinalizer removes the ServiceGateway pod cleanup finalizer from the pod
 // This allows Kubernetes to complete the pod deletion after location is synced to NRP
 // Uses retry logic to handle concurrent modifications during bulk pod deletions
@@ -412,10 +438,11 @@ func (dt *DiffTracker) RemovePodFinalizerByPod(ctx context.Context, pod *v1.Pod)
 // pendingPodToProcess is used internally to collect pending pods for processing
 // without holding the lock during API calls
 type pendingPodToProcess struct {
-	Key       string
-	Namespace string
-	Name      string
-	UID       string
+	Key                string
+	Namespace          string
+	Name               string
+	UID                string
+	RecoveredAtStartup bool
 }
 
 // HasPendingPodDeletion reports whether a drain-gated deletion is still pending for the pod, i.e.
@@ -488,10 +515,11 @@ func (dt *DiffTracker) CheckPendingPodDeletions(ctx context.Context) (readyRemov
 		dt.logger.V(5).Info("All addresses removed from NRP, will remove finalizer from pod", "addresses", pending.Addresses, "pod", podKey)
 
 		toProcess = append(toProcess, pendingPodToProcess{
-			Key:       podKey,
-			Namespace: pending.Namespace,
-			Name:      pending.Name,
-			UID:       pending.UID,
+			Key:                podKey,
+			Namespace:          pending.Namespace,
+			Name:               pending.Name,
+			UID:                pending.UID,
+			RecoveredAtStartup: pending.RecoveredAtStartup,
 		})
 	}
 
@@ -536,6 +564,10 @@ func (dt *DiffTracker) CheckPendingPodDeletions(ctx context.Context) (readyRemov
 			dt.logger.V(4).Info("Could not remove finalizer from pod", "pod", p.Key, "err", err)
 			// Don't add to processed, will retry next cycle
 			continue
+		}
+
+		if p.RecoveredAtStartup {
+			recordFinalizerRecovered()
 		}
 
 		processed = append(processed, p)
@@ -645,10 +677,11 @@ func (dt *DiffTracker) RemoveLastPodFinalizers(ctx context.Context, serviceUID s
 	dt.mu.Lock()
 
 	type lastPodEntry struct {
-		Key       string
-		Namespace string
-		Name      string
-		UID       string
+		Key                string
+		Namespace          string
+		Name               string
+		UID                string
+		RecoveredAtStartup bool
 	}
 	var toProcess []lastPodEntry
 
@@ -661,10 +694,11 @@ func (dt *DiffTracker) RemoveLastPodFinalizers(ctx context.Context, serviceUID s
 		dt.logger.V(5).Info("Will remove finalizer from last pod after NAT Gateway deletion", "pod", podKey, "serviceUID", serviceUID)
 
 		toProcess = append(toProcess, lastPodEntry{
-			Key:       podKey,
-			Namespace: pending.Namespace,
-			Name:      pending.Name,
-			UID:       pending.UID,
+			Key:                podKey,
+			Namespace:          pending.Namespace,
+			Name:               pending.Name,
+			UID:                pending.UID,
+			RecoveredAtStartup: pending.RecoveredAtStartup,
 		})
 	}
 
@@ -719,6 +753,9 @@ func (dt *DiffTracker) RemoveLastPodFinalizers(ctx context.Context, serviceUID s
 			dt.logger.V(4).Info("Could not remove finalizer from last pod after retries", "pod", p.Key, "err", retryErr, "lastErr", lastErr)
 			failed = append(failed, p.Key)
 		} else {
+			if p.RecoveredAtStartup {
+				recordFinalizerRecovered()
+			}
 			processed = append(processed, p)
 		}
 	}

@@ -188,15 +188,35 @@ var _ = Describe("Container Load Balancer Creation Crash Recovery Tests", Label(
 
 		By(fmt.Sprintf("IMMEDIATELY crashing CCM after %v (during Azure provisioning)", crashDelay))
 		time.Sleep(crashDelay)
-		err := ccmClient.DeleteAllCCMPods(ctx)
+		// Establish the crash premise rather than assuming it: DeleteAllCCMPods only issues the
+		// deletes, so the old controller can still be running while the spec acts "during downtime".
+		crashedUIDs, err := ccmClient.CrashCCMAndWaitForDown(ctx, CCMRecoveryTimeout)
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("CCM crashed during service provisioning!")
+
+		By("Verifying provisioning was genuinely still in flight when the CCM died")
+		// Without this the spec cannot distinguish "recovery finished the interrupted work" from
+		// "everything was already provisioned before the crash", in which case it proves ordinary
+		// steady state and the crash is decorative. At crashDelay after creation the Azure
+		// Load Balancers cannot all exist yet, so unfinished work must be observable here.
+		incomplete := 0
+		for _, serviceName := range serviceNames {
+			svc, getErr := cs.CoreV1().Services(ns.Name).Get(ctx, serviceName, metav1.GetOptions{})
+			Expect(getErr).NotTo(HaveOccurred())
+			if len(svc.Status.LoadBalancer.Ingress) == 0 || svc.Status.LoadBalancer.Ingress[0].IP == "" {
+				incomplete++
+			}
+		}
+		Expect(incomplete).To(BeNumerically(">", 0),
+			"every service was already provisioned before the crash, so this spec exercised steady-state "+
+				"recovery rather than recovery of in-flight provisioning; shorten crashDelay")
+		utils.Logf("%d/%d services were still unprovisioned when the CCM died", incomplete, serviceCount)
 
 		By(fmt.Sprintf("Waiting %v with CCM down", ccmDowntime))
 		time.Sleep(ccmDowntime)
 
 		By("Waiting for CCM to recover")
-		err = ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout)
+		err = ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout, crashedUIDs...)
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("CCM recovered")
 
@@ -337,7 +357,9 @@ var _ = Describe("Container Load Balancer Creation Crash Recovery Tests", Label(
 
 		By(fmt.Sprintf("IMMEDIATELY crashing CCM after %v (during NAT Gateway provisioning)", crashDelay))
 		time.Sleep(crashDelay)
-		err := ccmClient.DeleteAllCCMPods(ctx)
+		// Establish the crash premise rather than assuming it: DeleteAllCCMPods only issues the
+		// deletes, so the old controller can still be running while the spec acts "during downtime".
+		crashedUIDs, err := ccmClient.CrashCCMAndWaitForDown(ctx, CCMRecoveryTimeout)
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("CCM crashed during egress provisioning!")
 
@@ -345,7 +367,7 @@ var _ = Describe("Container Load Balancer Creation Crash Recovery Tests", Label(
 		time.Sleep(ccmDowntime)
 
 		By("Waiting for CCM to recover")
-		err = ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout)
+		err = ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout, crashedUIDs...)
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("CCM recovered")
 
@@ -544,7 +566,9 @@ var _ = Describe("Container Load Balancer Creation Crash Recovery Tests", Label(
 
 		By(fmt.Sprintf("IMMEDIATELY crashing CCM after %v (during mixed provisioning)", crashDelay))
 		time.Sleep(crashDelay)
-		err := ccmClient.DeleteAllCCMPods(ctx)
+		// Establish the crash premise rather than assuming it: DeleteAllCCMPods only issues the
+		// deletes, so the old controller can still be running while the spec acts "during downtime".
+		crashedUIDs, err := ccmClient.CrashCCMAndWaitForDown(ctx, CCMRecoveryTimeout)
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("CCM crashed during mixed provisioning!")
 
@@ -552,7 +576,7 @@ var _ = Describe("Container Load Balancer Creation Crash Recovery Tests", Label(
 		time.Sleep(ccmDowntime)
 
 		By("Waiting for CCM to recover")
-		err = ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout)
+		err = ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout, crashedUIDs...)
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("CCM recovered")
 
@@ -745,7 +769,9 @@ var _ = Describe("Container Load Balancer Creation Crash Recovery Tests", Label(
 
 			// Crash CCM immediately after pods are ready
 			time.Sleep(crashDelay)
-			err := ccmClient.DeleteAllCCMPods(ctx)
+			// Establish the crash premise rather than assuming it: DeleteAllCCMPods only issues the
+			// deletes, so the old controller can still be running while the spec acts "during downtime".
+			crashedUIDs, err := ccmClient.CrashCCMAndWaitForDown(ctx, CCMRecoveryTimeout)
 			Expect(err).NotTo(HaveOccurred())
 			utils.Logf("CCM crashed in cycle %d", cycle+1)
 
@@ -753,7 +779,7 @@ var _ = Describe("Container Load Balancer Creation Crash Recovery Tests", Label(
 			time.Sleep(ccmDowntime)
 
 			// Recover CCM
-			err = ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout)
+			err = ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout, crashedUIDs...)
 			Expect(err).NotTo(HaveOccurred())
 			utils.Logf("CCM recovered in cycle %d", cycle+1)
 

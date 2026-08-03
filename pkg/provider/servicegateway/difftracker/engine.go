@@ -1562,14 +1562,21 @@ func (dt *DiffTracker) deletePod(serviceUID, location string, addresses []string
 	if namespace != "" && name != "" {
 		podKey := fmt.Sprintf("%s/%s", namespace, name)
 		if len(drainGated) > 0 {
+			// A delete event for a pod startup already recovered must not drop the recovery mark,
+			// or removing its finalizer stops closing the recovery gap.
+			recoveredAtStartup := false
+			if existing, ok := dt.pendingPodDeletions[podKey]; ok && (uid == "" || existing.UID == uid) {
+				recoveredAtStartup = existing.RecoveredAtStartup
+			}
 			dt.pendingPodDeletions[podKey] = &PendingPodDeletion{
-				Namespace:  namespace,
-				Name:       name,
-				UID:        uid,
-				ServiceUID: serviceUID,
-				Addresses:  drainGated,
-				IsLastPod:  result.IsLastPod,
-				Timestamp:  time.Now().Format(time.RFC3339),
+				Namespace:          namespace,
+				Name:               name,
+				UID:                uid,
+				ServiceUID:         serviceUID,
+				Addresses:          drainGated,
+				IsLastPod:          result.IsLastPod,
+				RecoveredAtStartup: recoveredAtStartup,
+				Timestamp:          time.Now().Format(time.RFC3339),
 			}
 			result.Enqueued = true
 			dt.logger.V(5).Info("Added pending pod deletion", "pod", podKey, "isLastPod", result.IsLastPod, "addresses", drainGated)

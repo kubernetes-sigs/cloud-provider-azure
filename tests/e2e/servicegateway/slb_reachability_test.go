@@ -422,10 +422,21 @@ var _ = Describe("SLB - Multi-Service Provisioning", Label(slbTestLabel), func()
 				}
 			}
 
-			if len(reachabilityErrors) > 0 {
-				utils.Logf("⚠ Pod reachability not confirmed for %d/%d services (env may not route LB traffic; not asserting):\n%s",
-					len(reachabilityErrors), numServices, strings.Join(reachabilityErrors, "\n"))
-			} else {
+			// Assert conditionally rather than swallowing every failure. Logging a warning and
+			// passing meant a totally dead dataplane still reported success. If NO service is
+			// reachable the environment simply does not route LB traffic, which says nothing about
+			// the cloud provider - skip visibly. But if some services are reachable the routing
+			// clearly works, so a service that is NOT reachable is a genuine defect.
+			switch reachable := numServices - len(reachabilityErrors); {
+			case reachable == 0:
+				Skip(fmt.Sprintf("no LoadBalancer service answered within %s; this environment does not "+
+					"route Container Load Balancer dataplane traffic, so reachability cannot be asserted",
+					reachabilityTimeout))
+			case len(reachabilityErrors) > 0:
+				Fail(fmt.Sprintf("%d/%d services were reachable but %d were not - the dataplane routes "+
+					"traffic here, so the unreachable services are a real failure:\n%s",
+					reachable, numServices, len(reachabilityErrors), strings.Join(reachabilityErrors, "\n")))
+			default:
 				utils.Logf("✓ All %d pods across %d services are reachable", numServices*podsPerSvc, numServices)
 			}
 		})

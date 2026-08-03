@@ -428,6 +428,7 @@ func recoverStuckFinalizers(
 				logger.V(2).Info("Found stuck service finalizer", "namespace", svc.Namespace, "service", svc.Name, "uid", uid)
 				servicesRecovered++
 				// The finalizer is still on the Service; the diff owns its removal from here.
+				dt.markServiceFinalizerRecovering(uid)
 				recordFinalizerRecoveryScheduled()
 			} else {
 				// No Azure resource - directly remove finalizer since there's nothing to clean up
@@ -495,6 +496,7 @@ func recoverStuckFinalizers(
 					ServiceUID:         egressLabel,
 					VerifyServiceDrain: true,
 					IsLastPod:          false,
+					RecoveredAtStartup: true,
 					Timestamp:          time.Now().Format(time.RFC3339),
 				}
 				podsRecovered++
@@ -529,6 +531,8 @@ func recoverStuckFinalizers(
 				// the address sync, rather than waiting for NAT Gateway deletion callback.
 				IsLastPod: false,
 				Timestamp: time.Now().Format(time.RFC3339),
+
+				RecoveredAtStartup: true,
 			}
 			podsRecovered++
 		}
@@ -1056,7 +1060,7 @@ func cleanupOnError(diffTracker *DiffTracker) {
 //  2. ServiceUpdater creates PIP and LB in Azure
 //  3. CCM crashes BEFORE updateServiceLoadBalancerStatus patches the K8s Service
 //  4. On restart, AddService sees the service exists in NRP and returns early
-//  5. EnsureLoadBalancer returns empty status (service already exists)
+//  5. EnsureLoadBalancer echoes the Service's status, which is still empty
 //  6. patchStatus skips patching (both previous and new status are empty)
 //  7. Service never gets its External IP
 //

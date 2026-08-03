@@ -78,6 +78,38 @@ func TestLoadBalancerEnsureTracksExternalService(t *testing.T) {
 	assert.True(t, exists)
 }
 
+// TestLoadBalancerEnsureEchoesExistingStatus pins the echo. The service controller only patches
+// when the returned status differs from what it captured before the call, so echoing is what keeps
+// it from clearing an ingress IP that updateServiceLoadBalancerStatus already wrote.
+func TestLoadBalancerEnsureEchoesExistingStatus(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := newInboundService("service-uid")
+	svc.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: "1.2.3.4"}}
+	tracker := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset(svc))
+
+	lb := NewLoadBalancer(nil)
+	assert.NoError(t, lb.SetTracker(tracker))
+
+	status, err := lb.EnsureLoadBalancer(context.Background(), "cluster", svc, nil)
+	assert.NoError(t, err)
+	if !assert.Equal(t, &svc.Status.LoadBalancer, status) {
+		t.FailNow()
+	}
+
+	// A copy, not an alias: the controller must not be able to mutate the Service through it.
+	status.Ingress[0].IP = "9.9.9.9"
+	assert.Equal(t, "1.2.3.4", svc.Status.LoadBalancer.Ingress[0].IP)
+
+	// A Service with no IP yet echoes empty, which is what leaves the LB pending until the
+	// engine finishes provisioning.
+	pending := newInboundService("pending-uid")
+	pendingStatus, err := lb.EnsureLoadBalancer(context.Background(), "cluster", pending, nil)
+	assert.NoError(t, err)
+	assert.Empty(t, pendingStatus.Ingress)
+}
+
 // TestLoadBalancerEmitsWarningEventForRejectedService pins the user-visible half of a rejection:
 // the Service controller only reports a generic SyncLoadBalancerFailed, so without this Event the
 // specific reason (which part of the spec is unsupported) never reaches the user.

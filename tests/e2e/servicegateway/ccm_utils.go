@@ -195,6 +195,50 @@ func (c *CCMClusterClient) WaitForCCMReady(ctx context.Context, timeout time.Dur
 	})
 }
 
+// CrashCCMAndWaitForDown deletes every CCM pod and blocks until all of the pre-existing pods have
+// actually terminated, returning their UIDs so a later WaitForCCMReady can require a genuinely new
+// pod.
+//
+// DeleteAllCCMPods only ISSUES the deletes and returns, so a spec that calls it and immediately
+// performs "while the CCM is down" actions may in fact be racing a still-running controller: the
+// premise the spec depends on is never established, and the spec silently degrades into a
+// steady-state test. Use this whenever the downtime window itself is the thing under test.
+func (c *CCMClusterClient) CrashCCMAndWaitForDown(ctx context.Context, timeout time.Duration) ([]types.UID, error) {
+	podsBefore, err := c.GetCCMPods(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get CCM pods before crash: %w", err)
+	}
+	oldUIDs := make([]types.UID, 0, len(podsBefore))
+	for _, pod := range podsBefore {
+		oldUIDs = append(oldUIDs, pod.UID)
+	}
+	utils.Logf("Crashing CCM and waiting for it to be fully down; pods before crash: %v", getPodNames(podsBefore))
+
+	if err := c.DeleteAllCCMPods(ctx); err != nil {
+		return nil, fmt.Errorf("failed to delete CCM pods: %w", err)
+	}
+
+	if err := wait.PollUntilContextTimeout(ctx, CCMRecoveryPollInterval, timeout, true, func(ctx context.Context) (bool, error) {
+		pods, err := c.GetCCMPods(ctx)
+		if err != nil {
+			return false, nil
+		}
+		for _, pod := range pods {
+			for _, oldUID := range oldUIDs {
+				if pod.UID == oldUID {
+					return false, nil
+				}
+			}
+		}
+		return true, nil
+	}); err != nil {
+		return nil, fmt.Errorf("pre-crash CCM pods did not terminate within %v: %w", timeout, err)
+	}
+
+	utils.Logf("CCM is fully down; every pre-crash pod has terminated")
+	return oldUIDs, nil
+}
+
 // CrashCCMAndWaitForRecovery deletes all CCM pods and waits for recovery.
 //
 // Recovery is only accepted from a pod that did not exist before the delete, and the pods that

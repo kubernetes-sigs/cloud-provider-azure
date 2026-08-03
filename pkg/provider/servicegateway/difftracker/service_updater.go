@@ -537,9 +537,9 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 	})
 
 	// Step 5: Update K8s Service status with the external IP.
-	// This is critical for ServiceGateway mode since EnsureLoadBalancer returns empty status
-	// immediately; without it the Service.Status.LoadBalancer.Ingress stays empty and the load
-	// balancer appears permanently pending despite the Azure resources existing.
+	// EnsureLoadBalancer returns the Service's status unchanged, so this is the only writer of the
+	// ingress IP; without it Service.Status.LoadBalancer.Ingress stays empty and the load balancer
+	// appears permanently pending despite the Azure resources existing.
 	if pipIPAddress == "" {
 		// The Public IP create response carried no allocated address. Fail the op so it is retried;
 		// the Azure resources are idempotent and a later attempt returns the allocated address.
@@ -751,6 +751,7 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID s
 			if apierrors.IsNotFound(err) {
 				// Service object is already gone - nothing left to finalize.
 				s.logger.V(4).Info("Skipped finalizer removal for deleted service", "serviceUID", serviceUID)
+				s.diffTracker.recordServiceFinalizerRecoveryDone(serviceUID)
 			} else {
 				// Transient lookup failure - retry the deletion rather than assume success.
 				s.logger.V(4).Info("Could not look up service for finalizer removal", "serviceUID", serviceUID, "err", err)
@@ -764,6 +765,7 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID s
 				return
 			}
 			s.logger.V(5).Info("Removed finalizer from service", "serviceUID", serviceUID)
+			s.diffTracker.recordServiceFinalizerRecoveryDone(serviceUID)
 		}
 
 		s.onComplete(serviceUID, true, nil)

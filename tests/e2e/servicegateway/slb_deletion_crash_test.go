@@ -216,15 +216,31 @@ var _ = Describe("Container Load Balancer Deletion Crash Recovery Tests", Label(
 
 		By("IMMEDIATELY crashing CCM (within 2 seconds of deletion)")
 		time.Sleep(2 * time.Second) // Give just enough time for deletion to start
-		err = ccmClient.DeleteAllCCMPods(ctx)
+		// Establish the crash premise rather than assuming it: DeleteAllCCMPods only issues the
+		// deletes, so the old controller can still be running while the spec acts "during downtime".
+		crashedUIDs, err := ccmClient.CrashCCMAndWaitForDown(ctx, CCMRecoveryTimeout)
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("CCM crashed (all pods deleted)")
+		By("Verifying the deletions were genuinely still in flight when the CCM died")
+		// Without this the spec cannot distinguish "recovery completed the interrupted teardown"
+		// from "everything was already torn down before the crash", in which case the crash is
+		// decorative and the recovery path is never exercised.
+		stillPresent := 0
+		for _, serviceUID := range serviceUIDs {
+			if azureLoadBalancerAbsentErr(serviceUID) != nil {
+				stillPresent++
+			}
+		}
+		Expect(stillPresent).To(BeNumerically(">", 0),
+			"every Azure Load Balancer was already deleted before the crash, so this spec exercised "+
+				"steady state rather than recovery of an interrupted deletion")
+		utils.Logf("%d/%d Load Balancers were still present when the CCM died", stillPresent, len(serviceUIDs))
 
 		By("Waiting 10 seconds with CCM down")
 		time.Sleep(10 * time.Second)
 
 		By("Waiting for CCM to recover")
-		err = ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout)
+		err = ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout, crashedUIDs...)
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("CCM recovered")
 
@@ -400,15 +416,28 @@ var _ = Describe("Container Load Balancer Deletion Crash Recovery Tests", Label(
 
 		By("IMMEDIATELY crashing CCM (within 2 seconds of deletion)")
 		time.Sleep(2 * time.Second)
-		err = ccmClient.DeleteAllCCMPods(ctx)
+		// Establish the crash premise rather than assuming it: DeleteAllCCMPods only issues the
+		// deletes, so the old controller can still be running while the spec acts "during downtime".
+		crashedUIDs, err := ccmClient.CrashCCMAndWaitForDown(ctx, CCMRecoveryTimeout)
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("CCM crashed (all pods deleted)")
+		By("Verifying the egress teardown was genuinely still in flight when the CCM died")
+		// The pods must still be Terminating with their cleanup finalizer: if they were already
+		// gone, recovery had nothing to finish and the crash proved nothing.
+		inFlight, listErr := cs.CoreV1().Pods(ns.Name).List(ctx, metav1.ListOptions{
+			LabelSelector: fmt.Sprintf("%s=%s", egressLabel, egressName),
+		})
+		Expect(listErr).NotTo(HaveOccurred())
+		Expect(inFlight.Items).NotTo(BeEmpty(),
+			"every egress pod was already reclaimed before the crash, so this spec exercised steady "+
+				"state rather than recovery of an interrupted teardown")
+		utils.Logf("%d egress pod(s) were still terminating when the CCM died", len(inFlight.Items))
 
 		By("Waiting 10 seconds with CCM down")
 		time.Sleep(10 * time.Second)
 
 		By("Waiting for CCM to recover")
-		err = ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout)
+		err = ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout, crashedUIDs...)
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("CCM recovered")
 
@@ -607,15 +636,28 @@ var _ = Describe("Container Load Balancer Deletion Crash Recovery Tests", Label(
 
 		By("IMMEDIATELY crashing CCM (within 2 seconds)")
 		time.Sleep(2 * time.Second)
-		err = ccmClient.DeleteAllCCMPods(ctx)
+		// Establish the crash premise rather than assuming it: DeleteAllCCMPods only issues the
+		// deletes, so the old controller can still be running while the spec acts "during downtime".
+		crashedUIDs, err := ccmClient.CrashCCMAndWaitForDown(ctx, CCMRecoveryTimeout)
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("CCM crashed (all pods deleted)")
+		By("Verifying the egress teardown was genuinely still in flight when the CCM died")
+		// The pods must still be Terminating with their cleanup finalizer: if they were already
+		// gone, recovery had nothing to finish and the crash proved nothing.
+		inFlight, listErr := cs.CoreV1().Pods(ns.Name).List(ctx, metav1.ListOptions{
+			LabelSelector: fmt.Sprintf("%s=%s", egressLabel, egressName),
+		})
+		Expect(listErr).NotTo(HaveOccurred())
+		Expect(inFlight.Items).NotTo(BeEmpty(),
+			"every egress pod was already reclaimed before the crash, so this spec exercised steady "+
+				"state rather than recovery of an interrupted teardown")
+		utils.Logf("%d egress pod(s) were still terminating when the CCM died", len(inFlight.Items))
 
 		By("Waiting 15 seconds with CCM down")
 		time.Sleep(15 * time.Second)
 
 		By("Waiting for CCM to recover")
-		err = ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout)
+		err = ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout, crashedUIDs...)
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("CCM recovered")
 

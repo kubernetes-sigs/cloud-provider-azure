@@ -137,21 +137,27 @@ var _ = Describe("SLB - Egress SNAT Connectivity", Label(slbTestLabel), func() {
 		// programmed by Azure NRP from the registrations above and is not part of the
 		// cloud-provider contract this suite asserts; on the standalone test cluster it does not
 		// carry traffic. This step therefore only logs what it sees and never fails the spec.
-		By("Observing egress SNAT behaviour (informational, not asserted)")
+		By("Verifying egress SNAT uses the NAT gateway public IP when the environment carries traffic")
+		// Previously this only logged whatever it saw and passed either way, so a pod egressing via
+		// the node's default outbound IP - i.e. the NAT gateway doing nothing - looked identical to
+		// success. Assert conditionally instead: if no outbound IP is observable the environment
+		// does not carry egress traffic and the spec skips visibly; but once traffic IS flowing, it
+		// MUST leave through a NAT gateway public IP, otherwise SNAT is genuinely broken.
 		pipSet := map[string]bool{}
 		for _, ip := range natGatewayPIPs {
 			pipSet[ip] = true
 		}
 		out, _ := utils.RunKubectl(ns.Name, "exec", "egress-snat-pod-0", "--",
 			"/bin/sh", "-c", "curl -s -m 10 ifconfig.me/ip || true")
-		switch observedIP := ipv4Regexp.FindString(out); {
-		case observedIP == "":
-			utils.Logf("  egress pod produced no outbound IP; SNAT through the NAT gateway is not active in this environment")
-		case pipSet[observedIP]:
-			utils.Logf("  egress SNAT verified: pod egresses as NAT gateway public IP %s", observedIP)
-		default:
-			utils.Logf("  egress pod egresses as %s, not the NAT gateway public IP %v; dataplane SNAT is not active in this environment", observedIP, natGatewayPIPs)
+		observedIP := ipv4Regexp.FindString(out)
+		if observedIP == "" {
+			Skip("egress pod produced no outbound IP; this environment does not carry egress dataplane " +
+				"traffic, so SNAT through the NAT gateway cannot be asserted")
 		}
+		Expect(pipSet).To(HaveKey(observedIP),
+			"egress pod egressed as %s, which is not one of the NAT gateway public IPs %v: traffic is "+
+				"bypassing the NAT gateway, so SNAT is not actually in effect", observedIP, natGatewayPIPs)
+		utils.Logf("  egress SNAT verified: pod egresses as NAT gateway public IP %s", observedIP)
 
 		utils.Logf("\n✓ Egress NAT gateway contract verified: NAT gateway %s with public IP(s) %v, %d egress pod IP(s) registered", natGatewayID, natGatewayPIPs, registered)
 	})

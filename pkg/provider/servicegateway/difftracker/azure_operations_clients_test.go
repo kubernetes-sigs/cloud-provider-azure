@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/natgatewayclient/mock_natgatewayclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient/mock_servicegatewayclient"
+	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 func testConfig() Config {
@@ -259,10 +260,33 @@ func TestUpdateNRPSGWServices_Mock(t *testing.T) {
 		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
 		mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
 		mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
-		mockSGW.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil)
+
+		// Capture and assert the WIRE PAYLOAD, not just that a call happened. With gomock.Any()
+		// for the request the DTO -> ARM conversion is entirely unverified: sending nil service
+		// requests, the wrong service name, or dropping IsDelete all left this test green while
+		// NRP received something completely different from what the caller asked for.
+		var got armnetwork.ServiceGatewayUpdateServicesRequest
+		mockSGW.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).
+			DoAndReturn(func(_ context.Context, _, _ string, req armnetwork.ServiceGatewayUpdateServicesRequest) error {
+				got = req
+				return nil
+			})
 
 		dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
 		assert.NoError(t, dt.updateNRPSGWServices(context.Background(), "sgw", servicesDTO))
+
+		if assert.NotNil(t, got.Action, "the request must carry an explicit update action") {
+			assert.Equal(t, armnetwork.ServiceUpdateActionPartialUpdate, *got.Action)
+		}
+		if assert.Len(t, got.ServiceRequests, 1, "exactly the requested service must be sent") {
+			sr := got.ServiceRequests[0]
+			if assert.NotNil(t, sr.IsDelete) {
+				assert.True(t, *sr.IsDelete, "the deletion flag must survive the DTO conversion")
+			}
+			if assert.NotNil(t, sr.Service) && assert.NotNil(t, sr.Service.Name) {
+				assert.Equal(t, "svc", *sr.Service.Name, "the request must name the service the caller asked for")
+			}
+		}
 	})
 
 	t.Run("error", func(t *testing.T) {
@@ -346,7 +370,11 @@ func TestUpdateNRPSGWAddressLocations_Mock(t *testing.T) {
 	locationsDTO := LocationsDataDTO{
 		Action: PartialUpdate,
 		Locations: []LocationDTO{
-			{Location: "node1", AddressUpdateAction: PartialUpdate, Addresses: []AddressDTO{}},
+			{
+				Location:            "node1",
+				AddressUpdateAction: PartialUpdate,
+				Addresses:           []AddressDTO{{Address: "10.244.0.7", ServiceNames: utilsets.NewString("svc")}},
+			},
 		},
 	}
 
@@ -356,10 +384,36 @@ func TestUpdateNRPSGWAddressLocations_Mock(t *testing.T) {
 		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
 		mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
 		mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
-		mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil)
+
+		// Capture and assert the WIRE PAYLOAD. With gomock.Any() for the request, the DTO -> ARM
+		// conversion was unverified: sending the wrong node location or dropping the address list
+		// left this test green while NRP received something entirely different. This is the call
+		// that registers and drains pod IPs, so a wrong location strands an address under a node
+		// that does not own it and a wrong address blackholes live traffic.
+		var got armnetwork.ServiceGatewayUpdateAddressLocationsRequest
+		mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), "rg", "sgw", gomock.Any()).
+			DoAndReturn(func(_ context.Context, _, _ string, req armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
+				got = req
+				return nil
+			})
 
 		dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
 		assert.NoError(t, dt.updateNRPSGWAddressLocations(context.Background(), "sgw", locationsDTO))
+
+		if assert.NotNil(t, got.Action, "the request must carry an explicit update action") {
+			assert.Equal(t, armnetwork.UpdateActionPartialUpdate, *got.Action)
+		}
+		if assert.Len(t, got.AddressLocations, 1, "exactly the requested location must be sent") {
+			loc := got.AddressLocations[0]
+			if assert.NotNil(t, loc.AddressLocation) {
+				assert.Equal(t, "node1", *loc.AddressLocation, "the address must be filed under the requested node")
+			}
+			if assert.Len(t, loc.Addresses, 1, "the location's address must be sent") {
+				if assert.NotNil(t, loc.Addresses[0].Address) {
+					assert.Equal(t, "10.244.0.7", *loc.Addresses[0].Address)
+				}
+			}
+		}
 	})
 
 	t.Run("error", func(t *testing.T) {

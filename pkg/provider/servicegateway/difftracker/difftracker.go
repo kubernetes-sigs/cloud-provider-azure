@@ -94,6 +94,8 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 		pendingServiceDeletions: make(map[string]*PendingServiceDeletion),
 		pendingPodDeletions:     make(map[string]*PendingPodDeletion),
 
+		recoveredServiceFinalizers: make(map[string]struct{}),
+
 		// Initialize Engine communication channels
 		serviceUpdaterTrigger:   make(chan bool, 1),
 		locationsUpdaterTrigger: make(chan bool, 1),

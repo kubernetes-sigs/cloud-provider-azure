@@ -116,6 +116,10 @@ func (lb *LoadBalancer) EnsureLoadBalancer(ctx context.Context, _ string, servic
 		return nil, err
 	}
 
+	// Echo the Service's current status rather than an empty one. The service controller compares
+	// what it captured before this call against what is returned and only patches when they differ,
+	// so echoing means it never patches. Returning an empty status would make it clear the ingress
+	// IP written by updateServiceLoadBalancerStatus on every sync, flapping the Service to pending.
 	return service.Status.LoadBalancer.DeepCopy(), nil
 }
 

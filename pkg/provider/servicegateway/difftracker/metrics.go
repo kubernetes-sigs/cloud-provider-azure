@@ -170,23 +170,22 @@ var (
 		},
 	)
 
-	// finalizersRecoveredTotal counts stuck pod/service finalizers that startup actually removed.
-	// It deliberately excludes work that was merely scheduled: a finalizer handed to the diff or
-	// enqueued for drain is still on the object, so counting it here would report recovery that has
-	// not happened. That work is counted by finalizersRecoveryScheduledTotal instead.
+	// finalizersRecoveredTotal counts stuck pod/service finalizers that recovery actually removed,
+	// whether startup removed them directly or a later drain or diff completed the handoff. Work
+	// that is only scheduled is not counted here: the finalizer is still on the object.
 	finalizersRecoveredTotal = metrics.NewCounter(
 		&metrics.CounterOpts{
 			Subsystem:      diffTrackerSubsystem,
 			Name:           "finalizers_recovered_total",
-			Help:           "Total count of stuck pod/service finalizers actually removed at startup",
+			Help:           "Total count of stuck pod/service finalizers actually removed",
 			StabilityLevel: metrics.ALPHA,
 		},
 	)
 
 	// finalizersRecoveryScheduledTotal counts stuck finalizers startup handed to another path rather
 	// than removing: a Service whose Azure resource still exists is left to the diff, and a pod with
-	// live addresses is enqueued for drain. The finalizer is still present when this is counted, so
-	// a persistent gap between this and finalizersRecoveredTotal means recovery is not completing.
+	// live addresses is enqueued for drain. Each of those is counted by finalizersRecoveredTotal once
+	// that path removes it, so a gap that does not close means recovery is stalled.
 	finalizersRecoveryScheduledTotal = metrics.NewCounter(
 		&metrics.CounterOpts{
 			Subsystem:      diffTrackerSubsystem,

@@ -276,8 +276,11 @@ var _ = Describe("Container Load Balancer Crash Recovery", Label(slbTestLabel, s
 		}, waitTime, 10*time.Second).Should(Succeed(),
 			"Azure resources should exist before CCM crash")
 
-		By("Crashing CCM")
-		err = ccmClient.DeleteAllCCMPods(ctx)
+		By("Crashing CCM and waiting until it is genuinely down")
+		// DeleteAllCCMPods only issues the deletes, so the pods created below could otherwise be
+		// observed by a still-running controller - the spec would then prove ordinary reconciliation
+		// rather than recovery of work missed during downtime.
+		crashedUIDs, err := ccmClient.CrashCCMAndWaitForDown(ctx, CCMRecoveryTimeout)
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Creating additional pods while CCM is down")
@@ -305,7 +308,7 @@ var _ = Describe("Container Load Balancer Crash Recovery", Label(slbTestLabel, s
 		utils.Logf("Created %d additional pods while CCM was down", additionalPods)
 
 		By("Waiting for CCM to recover")
-		err = ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout)
+		err = ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout, crashedUIDs...)
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for CCM to reconcile endpoints")
@@ -632,10 +635,29 @@ var _ = Describe("Container Load Balancer Outbound Crash Recovery", Label(slbTes
 		By("Deleting the egress pods and immediately crashing CCM to lose the in-flight delete tracking")
 		Expect(cs.CoreV1().Pods(ns.Name).DeleteCollection(ctx, metav1.DeleteOptions{},
 			metav1.ListOptions{LabelSelector: egressSelector})).To(Succeed())
-		Expect(ccmClient.DeleteAllCCMPods(ctx)).To(Succeed())
+		// The premise is that the CCM dies while the deletes are in flight, losing its in-memory
+		// pendingPodDeletions. Waiting for it to be fully down establishes that; issuing the pod
+		// deletes and returning would leave the old controller running long enough to drain them
+		// normally, so the recovery path under test would never be exercised.
+		crashedUIDs, err := ccmClient.CrashCCMAndWaitForDown(ctx, CCMRecoveryTimeout)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Verifying the pods are still Terminating with their cleanup finalizer while the CCM is down")
+		// Without this the spec cannot distinguish "recovery removed a stranded finalizer" from
+		// "the finalizer was already gone before the crash", which is the whole point of the guard.
+		stranded, err := cs.CoreV1().Pods(ns.Name).List(ctx, metav1.ListOptions{LabelSelector: egressSelector})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(stranded.Items).NotTo(BeEmpty(),
+			"the egress pods must still exist while the CCM is down; their cleanup finalizer should be blocking deletion")
+		for i := range stranded.Items {
+			Expect(stranded.Items[i].DeletionTimestamp).NotTo(BeNil(),
+				"pod %s should be Terminating", stranded.Items[i].Name)
+			Expect(hasFinalizer(stranded.Items[i].Finalizers, serviceGatewayPodFinalizer)).To(BeTrue(),
+				"pod %s should still carry the cleanup finalizer while the CCM is down", stranded.Items[i].Name)
+		}
 
 		By("Waiting for CCM to recover")
-		Expect(ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout)).To(Succeed())
+		Expect(ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout, crashedUIDs...)).To(Succeed())
 
 		By("Verifying the egress pods fully delete (no stranded pod-cleanup finalizer)")
 		Eventually(func() (int, error) {
@@ -700,8 +722,9 @@ var _ = Describe("Container Load Balancer Outbound Crash Recovery", Label(slbTes
 		}, waitTime, 10*time.Second).Should(Succeed(),
 			"outbound service should exist")
 
-		By("Crashing CCM")
-		err := ccmClient.DeleteAllCCMPods(ctx)
+		By("Crashing CCM and waiting until it is genuinely down")
+		// See above: the "during downtime" premise must be established, not assumed.
+		crashedUIDs, err := ccmClient.CrashCCMAndWaitForDown(ctx, CCMRecoveryTimeout)
 		Expect(err).NotTo(HaveOccurred())
 
 		By(fmt.Sprintf("Creating %d additional pods while CCM is down", additionalPods))
@@ -731,7 +754,7 @@ var _ = Describe("Container Load Balancer Outbound Crash Recovery", Label(slbTes
 		utils.Logf("Created %d additional pods while CCM was down", additionalPods)
 
 		By("Waiting for CCM to recover")
-		err = ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout)
+		err = ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout, crashedUIDs...)
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for CCM to reconcile")

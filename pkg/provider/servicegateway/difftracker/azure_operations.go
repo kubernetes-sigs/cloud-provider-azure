@@ -356,10 +356,10 @@ func (dt *DiffTracker) getServiceByUIDViaList(ctx context.Context, uid string) (
 }
 
 // updateServiceLoadBalancerStatus updates the K8s Service status with the LoadBalancer IP address.
-// EnsureLoadBalancer returns an empty LoadBalancer status immediately while the difftracker
-// engine provisions the PIP, LB and ServiceGateway registration asynchronously in the
-// background. This function backfills Service.Status.LoadBalancer.Ingress once the PIP is
-// created, since it would otherwise stay empty.
+// EnsureLoadBalancer returns the Service's status unchanged while the difftracker engine provisions
+// the PIP, LB and ServiceGateway registration asynchronously in the background. This function
+// backfills Service.Status.LoadBalancer.Ingress once the PIP is created, since it would otherwise
+// stay empty.
 //
 // The Service is resolved by UID only, so a Service that changed type or started terminating while
 // the PIP was provisioning still gets stamped: the ingress IP is written onto a Service that is no

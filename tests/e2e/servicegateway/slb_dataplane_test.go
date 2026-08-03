@@ -339,7 +339,12 @@ var _ = Describe("SLB - Dataplane", Label(slbTestLabel, "SLB-Dataplane"), func()
 		for _, port := range []int{80, 9000} {
 			By(fmt.Sprintf("Verifying port %d reaches a backend of this service", port))
 			hits, failures := sample(client, ip, port, 10)
-			Expect(failures).To(BeNumerically("<", 10),
+			// Tolerate at most one transient blip out of ten. The previous bound was "< 10", which
+			// accepted nine failures out of ten requests - i.e. it asserted only that a single
+			// request had succeeded, so a dataplane dropping 90% of traffic passed. These samples
+			// run after skipUnlessDataplaneCarriesTraffic has already proved the LB answers, so a
+			// healthy path should show no failures at all.
+			Expect(failures).To(BeNumerically("<=", 1),
 				fmt.Sprintf("every request to port %d failed; the port is not carrying traffic", port))
 			Expect(hits).NotTo(BeEmpty())
 			for answered := range hits {
@@ -385,7 +390,9 @@ var _ = Describe("SLB - Dataplane", Label(slbTestLabel, "SLB-Dataplane"), func()
 
 		By("Verifying service A only ever answers from its own pods")
 		hitsA, failuresA := sample(client, ipA, 80, 12)
-		Expect(failuresA).To(BeNumerically("<", 12))
+		// See above: "< 12" accepted eleven failures out of twelve requests.
+		Expect(failuresA).To(BeNumerically("<=", 1),
+			"service A should answer nearly every request; %d/12 failed", failuresA)
 		for answered := range hitsA {
 			Expect(setA).To(HaveKey(answered),
 				fmt.Sprintf("service A was answered by %q, which belongs to another service", answered))
@@ -393,7 +400,8 @@ var _ = Describe("SLB - Dataplane", Label(slbTestLabel, "SLB-Dataplane"), func()
 
 		By("Verifying service B only ever answers from its own pods")
 		hitsB, failuresB := sample(client, ipB, 9000, 12)
-		Expect(failuresB).To(BeNumerically("<", 12))
+		Expect(failuresB).To(BeNumerically("<=", 1),
+			"service B should answer nearly every request; %d/12 failed", failuresB)
 		for answered := range hitsB {
 			Expect(setB).To(HaveKey(answered),
 				fmt.Sprintf("service B was answered by %q, which belongs to another service", answered))
@@ -426,7 +434,10 @@ var _ = Describe("SLB - Dataplane", Label(slbTestLabel, "SLB-Dataplane"), func()
 		hits, failures := sample(client, ip, 80, 30)
 		utils.Logf("  distribution: %v (%d failures)", hits, failures)
 
-		Expect(failures).To(BeNumerically("<", 15), "more than half of the requests failed")
+		// The previous bound ("< 15") accepted a 47% loss rate as success. Allow only a ~10%
+		// transient margin so a genuinely degraded backend pool is visible.
+		Expect(failures).To(BeNumerically("<=", 3),
+			"the load balancer should answer nearly every request; %d/30 failed", failures)
 		for answered := range hits {
 			Expect(podNames).To(ContainElement(answered))
 		}

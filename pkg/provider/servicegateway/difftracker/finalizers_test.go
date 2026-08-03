@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	ktesting "k8s.io/client-go/testing"
+	"k8s.io/component-base/metrics/testutil"
 
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
@@ -1514,4 +1515,109 @@ func TestAddPodPreservesFinalizerOnEgressIdentityChange(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
 		"a live pod under a new egress identity must retain its cleanup finalizer")
+}
+
+// TestFinalizerRecoveryGapClosesOnAsyncRemoval pins that the scheduled/recovered gap closes.
+//
+// Startup counts a stuck finalizer it hands to the drain or the diff as scheduled and leaves it on
+// the object. Nothing counted the later removal, so the gap stayed open forever and an operator
+// alerting on it paged on recovery that had already finished. Routine deletions are the control:
+// they must not close a gap they never opened.
+func TestFinalizerRecoveryGapClosesOnAsyncRemoval(t *testing.T) {
+	RegisterMetrics()
+	ctx := context.Background()
+
+	recovered := func() float64 {
+		v, err := testutil.GetCounterMetricValue(finalizersRecoveredTotal)
+		assert.NoError(t, err)
+		return v
+	}
+
+	t.Run("draining a recovered pod counts, draining a routine one does not", func(t *testing.T) {
+		newPod := func(name string) *v1.Pod {
+			return &v1.Pod{ObjectMeta: metav1.ObjectMeta{
+				Name: name, Namespace: "default",
+				Finalizers: []string{ServiceGatewayPodCleanupFinalizer},
+			}}
+		}
+		kube := fake.NewSimpleClientset(newPod("stuck-pod"), newPod("routine-pod"))
+		dt := &DiffTracker{
+			kubeClient:          kube,
+			pendingPodDeletions: make(map[string]*PendingPodDeletion),
+			NRPResources:        NRPState{Locations: make(map[string]NRPLocation)},
+		}
+		entry := func(name string, atStartup bool) *PendingPodDeletion {
+			return &PendingPodDeletion{
+				Namespace: "default", Name: name, ServiceUID: "egress-1",
+				Addresses:          []string{"10.0.0.1"},
+				RecoveredAtStartup: atStartup,
+				Timestamp:          time.Now().Format(time.RFC3339),
+			}
+		}
+		dt.pendingPodDeletions["default/stuck-pod"] = entry("stuck-pod", true)
+		dt.pendingPodDeletions["default/routine-pod"] = entry("routine-pod", false)
+
+		before := recovered()
+		dt.CheckPendingPodDeletions(ctx)
+
+		// Both finalizers must actually come off, or the counter delta proves nothing.
+		for _, name := range []string{"stuck-pod", "routine-pod"} {
+			got, err := kube.CoreV1().Pods("default").Get(ctx, name, metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.False(t, hasPodFinalizer(got), "%s should have been drained", name)
+		}
+		assert.Equal(t, float64(1), recovered()-before,
+			"only the pod startup scheduled for recovery may close the gap")
+	})
+
+	t.Run("the last-pod path counts a recovered pod and not a routine one", func(t *testing.T) {
+		newPod := func(name string) *v1.Pod {
+			return &v1.Pod{ObjectMeta: metav1.ObjectMeta{
+				Name: name, Namespace: "default",
+				Finalizers: []string{ServiceGatewayPodCleanupFinalizer},
+			}}
+		}
+		kube := fake.NewSimpleClientset(newPod("stuck-last"), newPod("routine-last"))
+		dt := &DiffTracker{
+			kubeClient:          kube,
+			pendingPodDeletions: make(map[string]*PendingPodDeletion),
+		}
+		entry := func(name string, atStartup bool) *PendingPodDeletion {
+			return &PendingPodDeletion{
+				Namespace: "default", Name: name, ServiceUID: "egress-1",
+				IsLastPod:          true,
+				RecoveredAtStartup: atStartup,
+			}
+		}
+		dt.pendingPodDeletions["default/stuck-last"] = entry("stuck-last", true)
+		dt.pendingPodDeletions["default/routine-last"] = entry("routine-last", false)
+
+		before := recovered()
+		assert.NoError(t, dt.RemoveLastPodFinalizers(ctx, "egress-1"))
+
+		for _, name := range []string{"stuck-last", "routine-last"} {
+			got, err := kube.CoreV1().Pods("default").Get(ctx, name, metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.False(t, hasPodFinalizer(got), "%s should have been stripped", name)
+		}
+		assert.Equal(t, float64(1), recovered()-before,
+			"only the pod startup scheduled for recovery may close the gap")
+	})
+
+	t.Run("the diff removing a recovered Service finalizer counts once", func(t *testing.T) {
+		dt := &DiffTracker{recoveredServiceFinalizers: make(map[string]struct{})}
+		dt.markServiceFinalizerRecovering("stuck-uid")
+
+		before := recovered()
+		dt.recordServiceFinalizerRecoveryDone("routine-uid")
+		assert.Equal(t, float64(0), recovered()-before,
+			"a Service that was never stuck must not be counted as recovered")
+
+		dt.recordServiceFinalizerRecoveryDone("stuck-uid")
+		assert.Equal(t, float64(1), recovered()-before)
+
+		// A retried delete must not inflate the count.
+		dt.recordServiceFinalizerRecoveryDone("stuck-uid")
+		assert.Equal(t, float64(1), recovered()-before)
+	})
 }
