@@ -116,12 +116,10 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 	// terminalSyncErr is set when NRP rejects the batch with a deterministic error that retrying the
 	// identical payload cannot fix; it suppresses the self-rescheduling backoff below.
 	terminalSyncErr := false
-	// drainPending records that a Service or pod finalizer is still waiting on the batch this pass
-	// failed to apply. Such work has nothing else to re-drive it, so it keeps the retry alive even
-	// for a deterministic rejection.
+	// A Service or pod finalizer is still waiting on the batch this pass failed to apply. Nothing
+	// else re-drives it, so keep retrying even for a deterministic rejection.
 	drainPending := false
-	// lastSyncErr is the most recent NRP error, so the give-up branch can report the real cause
-	// instead of a bare "gave up" with no error attached.
+	// Most recent NRP error, reported when giving up.
 	var lastSyncErr error
 	var numLocations, numAddresses int
 
@@ -136,10 +134,8 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 		// stays blocked (WaitForInitialSync) until a sync actually succeeds. On success,
 		// reset the backoff. The retry wait is cancellable via the updater context.
 		//
-		// A terminal (deterministic) failure is the exception (see the terminalSyncErr branch in
-		// process): do not self-reschedule, because the next real change recomputes the diff. That
-		// shortcut is only safe when nothing is blocked on the abandoned batch, which is why the
-		// terminal branch clears terminalSyncErr when it leaves drain work behind.
+		// A terminal (deterministic) failure does not self-reschedule: the next real change
+		// recomputes the diff. That is safe only when nothing is blocked on the abandoned batch.
 		switch {
 		case isOperationSucceeded:
 			lu.failureCount = 0
@@ -147,19 +143,16 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 			lu.failureCount = 0
 		case atomic.LoadInt32(&lu.diffTracker.isInitializing) == 1 &&
 			lu.failureCount >= getMaxInitLocationSyncAttempts():
-			// Stop blocking initialization on an NRP error that is not clearing; fall through to
-			// the trigger decrement below. Work that only a successful sync can advance (a deletion
-			// parked on its drain, or a recovered pod deletion) still holds the initialization gate,
-			// so WaitForInitialSync then fails on its deadline and the CCM exits rather than running
+			// Stop retrying an NRP error that is not clearing. Work only a successful sync can
+			// advance still holds the initialization gate, so startup fails rather than running
 			// against NRP state this sync never reconciled.
 			lu.logger.Error(lastSyncErr, "Gave up initial NRP location sync after repeated transient failures",
 				"attempts", lu.failureCount)
 			recordLocationSyncAbandoned(locationSyncAbandonReasonInitAttempts)
 			lu.failureCount = 0
 		case drainPending && lu.failureCount >= getMaxInitLocationSyncAttempts():
-			// A deterministic rejection kept blocking a Service or pod finalizer and the retry budget
-			// is spent. Give up loudly rather than retrying forever; the affected object stays
-			// Terminating until the next cluster change or a restart re-drives the sync.
+			// Retry budget spent while a finalizer is still blocked. Give up loudly; the object
+			// stays Terminating until the next cluster change re-drives the sync.
 			lu.logger.Error(lastSyncErr, "Gave up NRP location sync; drain-blocked finalizers remain pending",
 				"attempts", lu.failureCount)
 			recordLocationSyncAbandoned(locationSyncAbandonReasonDrain)
@@ -233,20 +226,14 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 			recordLocationSyncTerminalError()
 			lu.logger.Error(err, "Terminal error syncing locations to NRP; not retrying until the next change",
 				"httpStatus", httpStatus, "errorCode", errCode)
-			// While initializing, a deletion parked on this drain still holds the initialization gate,
-			// so the retry below is what gives it a chance to clear before that gate decides the
-			// outcome. Abandoning the batch must not block the drain gates either: a Service or pod
-			// whose addresses are already absent from NRP is independently deletable and must not be
-			// left Terminating because another Service contributed a malformed entry to the shared
-			// batch, which would block node drain and namespace deletion. The no-diff return above
-			// runs these same checks for the same reason.
+			// A Service or pod whose addresses already left NRP is independently deletable and must
+			// not be left Terminating because another Service contributed a malformed entry to the
+			// shared batch.
 			lu.diffTracker.CheckPendingServiceDeletions()
 			readyRemovalPending := lu.diffTracker.CheckPendingPodDeletions(ctx)
-			// Those two checks only advance work whose addresses have already left NRP. This batch
-			// was abandoned without being applied, so anything still waiting on it is waiting on a
-			// sync that will not be re-driven: with no diff changed there is no future trigger. Keep
-			// retrying in that case (bounded above) instead of taking the terminal shortcut,
-			// otherwise the Service or pod stays Terminating until the CCM restarts.
+			// Those checks only advance work whose addresses already left NRP. The batch was
+			// abandoned unapplied, so anything still waiting has no future trigger: keep retrying
+			// instead of taking the terminal shortcut.
 			drainPending = readyRemovalPending || lu.serviceDeletionsPending()
 			if drainPending {
 				terminalSyncErr = false
@@ -300,8 +287,7 @@ func (lu *LocationsUpdater) initPodFinalizersStillPending() bool {
 }
 
 // serviceDeletionsPending reports whether any service deletion is still waiting for its addresses
-// to leave NRP. Such a deletion is advanced only by CheckPendingServiceDeletions after a successful
-// location sync, so process() uses this to tell whether abandoning a batch would strand it.
+// to leave NRP. Only a successful location sync advances one.
 func (lu *LocationsUpdater) serviceDeletionsPending() bool {
 	dt := lu.diffTracker
 	dt.mu.Lock()

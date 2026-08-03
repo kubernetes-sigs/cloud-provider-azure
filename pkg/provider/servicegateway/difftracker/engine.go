@@ -77,17 +77,12 @@ func (dt *DiffTracker) ReconcileInboundService(service *v1.Service) error {
 		return fmt.Errorf("cannot reconcile inbound Service %s/%s without a UID", service.Namespace, service.Name)
 	}
 
-	// A Service that is already being deleted must never be provisioned, and this is the only place
-	// that can tell: the deletion path works from a UID alone, and nothing downstream sees the
-	// object. Upstream still calls EnsureLoadBalancer for such a Service because it drops its own
-	// load-balancer-cleanup finalizer as soon as EnsureLoadBalancerDeleted returns, which here is
-	// immediate (the Azure delete is asynchronous). Our cleanup finalizer then holds the object
-	// Terminating with no upstream finalizer left, so needsCleanup is false while wantsLoadBalancer
-	// is true, and any re-enqueue - an annotation edit, or a CCM restart replaying every Service to
-	// AddFunc - takes upstream's ensure branch. Reconciling from there sets RecreateAfterDeletion on
-	// the in-flight deletion, and the delete-success path then re-creates the LoadBalancer, Public IP
-	// and ServiceGateway registration for a Service that is going away. Once our finalizer clears,
-	// the object disappears and those resources are left in Azure with nothing tracking them.
+	// A Service already being deleted must never be provisioned, and this is the only place that can
+	// tell: the deletion path works from a UID alone. Upstream still calls EnsureLoadBalancer for
+	// one, because it drops its own cleanup finalizer as soon as EnsureLoadBalancerDeleted returns
+	// and the Azure delete here is asynchronous. Provisioning from there re-creates the LoadBalancer,
+	// Public IP and ServiceGateway registration for a Service that is going away; once our finalizer
+	// clears, the object disappears and those resources are left in Azure with nothing tracking them.
 	if service.DeletionTimestamp != nil {
 		dt.logger.V(4).Info("Skipped reconciling a Service that is being deleted",
 			"namespace", service.Namespace, "service", service.Name, "serviceUID", serviceUID)
@@ -514,10 +509,8 @@ func (dt *DiffTracker) UpdateService(config ServiceConfig) {
 		// the service is being deleted. Record the desired config and let the
 		// deletion-success path replay it as a fresh create, so it cannot race the delete.
 		//
-		// Only a live Service can legitimately ask for this. ReconcileInboundService, the sole
-		// caller, refuses a Service carrying a DeletionTimestamp precisely so a recreate intent is
-		// never recorded for an object that is going away: the delete-success path would honour it
-		// and rebuild Azure resources that nothing will ever delete again.
+		// Only a live Service can ask for this: a recreate intent recorded for an object that is
+		// going away would rebuild Azure resources that nothing will ever delete again.
 		opState.Config = config
 		opState.RecreateAfterDeletion = true
 		dt.mu.Unlock()
@@ -1110,15 +1103,12 @@ func (dt *DiffTracker) AddPodWithUID(serviceUID, podKey, podUID, location, addre
 }
 
 // outboundIdentityConflictsWithInboundLocked reports whether an egress identity collides with a
-// tracked INBOUND service operation.
+// tracked inbound service operation.
 //
-// pendingServiceOps is keyed by a bare string shared by both kinds: inbound entries are keyed by
-// Kubernetes Service UID, outbound entries by the egress pod label value, which is arbitrary and
-// user-controlled. A pod labelled with an existing Service's UID therefore resolves to that
-// Service's operation. Acting on it would publish the pod into the inbound service's address set
-// with no NAT Gateway behind it, revive an inbound deletion as if it were an egress one, or
-// schedule a deletion that tears down the inbound LoadBalancer. The egress identity is not ours to
-// honour in that case, so the pod is refused and the inbound operation is left untouched.
+// pendingServiceOps is keyed by a bare string shared by both kinds: inbound by Service UID,
+// outbound by the egress pod label value, which is user-controlled. A pod labelled with an existing
+// Service's UID resolves to that Service's operation, where acting on it would publish the pod with
+// no NAT Gateway behind it or tear down the inbound LoadBalancer.
 // Must be called with dt.mu held.
 func (dt *DiffTracker) outboundIdentityConflictsWithInboundLocked(serviceUID string) bool {
 	opState, exists := dt.pendingServiceOps[serviceUID]
@@ -1268,12 +1258,10 @@ func (dt *DiffTracker) addPod(serviceUID, podKey, podUID, location, address stri
 		// Dropping this add would leave the new pod without egress once the NAT Gateway is
 		// deleted, so cancel the pending deletion and revive the service instead.
 		//
-		// That premise only holds while nothing has been dispatched to Azure. StateDeletionPending
-		// is also reached from a delete that ran partway and failed (deleteOutboundService is not
-		// transactional: it records the error and still deletes the NAT Gateway and Public IP before
-		// returning), so the resources may already be gone. Reviving then reports the service
-		// healthy and publishes pods to a gateway that no longer exists, and nothing re-creates it.
-		// Treat a previously attempted delete as not revivable and fall through to buffering.
+		// That premise only holds while nothing has been dispatched to Azure. deleteOutboundService
+		// is not transactional: on failure it still deletes the NAT Gateway and Public IP, so the
+		// resources may already be gone. Reviving then publishes pods to a gateway that no longer
+		// exists. Buffer instead, and let the delete finish and re-create.
 		if opState.RetryCount > 0 {
 			dt.logger.V(4).Info("Buffered pod instead of reviving a service whose deletion was already attempted",
 				"pod", podKey, "service", serviceUID, "retryCount", opState.RetryCount)

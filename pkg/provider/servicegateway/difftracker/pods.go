@@ -341,6 +341,21 @@ func (dt *DiffTracker) podInformerAddPod(pod *v1.Pod) {
 func (dt *DiffTracker) podInformerRemovePod(pod *v1.Pod) {
 	// Validate pod has egress label
 	if pod.Labels == nil || pod.Labels[consts.PodLabelServiceEgressGateway] == "" {
+		// An unlabelled pod carrying our cleanup finalizer is still ours to finish with. The informer
+		// selects on the label key alone, so a pod whose value was emptied keeps matching and is
+		// still delivered here, with nothing left to identify its egress service. Skipping it would
+		// leave the finalizer attached with nothing able to remove it, blocking node drain and
+		// namespace deletion.
+		if hasFinalizer(pod.Finalizers, ServiceGatewayPodCleanupFinalizer) {
+			klog.V(2).Infof("podInformerRemovePod: Pod %s/%s has no egress label but carries the cleanup finalizer; removing it directly",
+				pod.Namespace, pod.Name)
+			if err := dt.RemovePodFinalizerByPod(context.Background(), pod); err != nil {
+				RecordPodFinalizerRemoveFailed()
+				klog.Errorf("podInformerRemovePod: pod %s/%s is left Terminating; removing its cleanup finalizer failed and will not be retried until CCM restart: %v",
+					pod.Namespace, pod.Name, err)
+			}
+			return
+		}
 		klog.V(4).Infof("podInformerRemovePod: Pod %s/%s has no egress label, skipping", pod.Namespace, pod.Name)
 		return
 	}

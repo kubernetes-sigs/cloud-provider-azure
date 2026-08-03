@@ -203,11 +203,9 @@ func (dt *DiffTracker) isServiceReadyToSync(serviceUID string, isInbound bool) b
 		(!isInbound && dt.NRPResources.NATGateways.Has(serviceUID))
 
 	if opState, exists := dt.pendingServiceOps[serviceUID]; exists {
-		// pendingServiceOps is keyed by a bare string shared by inbound (Service UID) and outbound
-		// (egress label) identities, so an entry found here may belong to the other kind. Answering
-		// from it would let an egress identity ride an inbound service's readiness, publishing the
-		// pod with no NAT Gateway behind it. Fall back to the NRP resource of the kind actually
-		// asked about.
+		// The key is shared by inbound (Service UID) and outbound (egress label) identities, so this
+		// entry may belong to the other kind. Answering from it would let an egress identity ride an
+		// inbound service's readiness. Fall back to the NRP resource of the kind asked about.
 		if opState.Config.IsInbound != isInbound {
 			return existsInNRP
 		}

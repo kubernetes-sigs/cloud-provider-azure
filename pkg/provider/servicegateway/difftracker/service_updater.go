@@ -26,6 +26,12 @@ type ServiceUpdater struct {
 	semaphore   chan struct{}   // Limits concurrent operations to 10
 	mu          sync.Mutex      // Protects activeOperations
 	activeOps   map[string]bool // Tracks which services are being processed
+	// retryTimers holds the pending re-dispatch timer per service. A parked or backed-off operation
+	// has no external driver, so it self-arms with time.AfterFunc; those timers are not tracked by wg
+	// nor bound to ctx, so they must be stopped explicitly or they keep the whole DiffTracker
+	// reachable and fire into a stopped updater. Keyed by service UID so re-arming replaces its
+	// pending revisit. Guarded by mu.
+	retryTimers map[string]*time.Timer
 	logger      logr.Logger
 }
 
@@ -52,6 +58,7 @@ func NewServiceUpdater(ctx context.Context, diffTracker *DiffTracker, onComplete
 		cancel:      cancel,
 		semaphore:   make(chan struct{}, 10), // Max 10 concurrent operations
 		activeOps:   make(map[string]bool),
+		retryTimers: make(map[string]*time.Timer),
 		logger:      diffTracker.logger.WithName("ServiceUpdater"),
 	}
 }
@@ -100,8 +107,40 @@ func (s *ServiceUpdater) Run() {
 func (s *ServiceUpdater) Stop() {
 	s.logger.V(2).Info("Stopping ServiceUpdater")
 	s.cancel()
+	// Cancel pending re-dispatch timers so they stop holding the DiffTracker. A timer that has
+	// already fired is harmless: its callback checks ctx.
+	s.mu.Lock()
+	for uid, timer := range s.retryTimers {
+		timer.Stop()
+		delete(s.retryTimers, uid)
+	}
+	s.mu.Unlock()
 	s.wg.Wait()
 	s.logger.V(2).Info("Stopped ServiceUpdater")
+}
+
+// scheduleRetry arms a single re-dispatch for a service after delay, replacing any revisit already
+// pending for it so repeated backoff passes cannot accumulate timers. The callback is a no-op once
+// the updater's context is done. Takes s.mu.
+func (s *ServiceUpdater) scheduleRetry(serviceUID string, delay time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.retryTimers == nil {
+		// Tolerate an updater built as a struct literal rather than through NewServiceUpdater.
+		s.retryTimers = make(map[string]*time.Timer)
+	}
+	if existing, ok := s.retryTimers[serviceUID]; ok {
+		existing.Stop()
+	}
+	s.retryTimers[serviceUID] = time.AfterFunc(delay, func() {
+		s.mu.Lock()
+		delete(s.retryTimers, serviceUID)
+		s.mu.Unlock()
+		if s.ctx != nil && s.ctx.Err() != nil {
+			return
+		}
+		s.diffTracker.triggerServiceUpdater()
+	})
 }
 
 // requeueIfMoreWork is fired from a per-service goroutine's defer chain AFTER
@@ -158,7 +197,8 @@ func (s *ServiceUpdater) retryGate(serviceUID string, opState *ServiceOperationS
 			recordServiceOperationRetries(operationLabelForState(opState.State), opState.Config.IsInbound, opState.RetryCount)
 			s.logger.Info("Giving up service operation after exhausting retries",
 				"serviceUID", serviceUID, "state", opState.State, "retries", opState.RetryCount)
-			time.AfterFunc(parkReArmCooldown, s.diffTracker.triggerServiceUpdater)
+			s.scheduleRetry(serviceUID, parkReArmCooldown)
+
 		} else if !opState.NextRetryAt.IsZero() && time.Now().After(opState.NextRetryAt) {
 			// Cooldown elapsed: re-arm once so the op dispatches again this pass.
 			resetRetryStateLocked(opState)
@@ -178,7 +218,7 @@ func (s *ServiceUpdater) retryGate(serviceUID string, opState *ServiceOperationS
 		s.mu.Lock()
 		delete(s.activeOps, serviceUID)
 		s.mu.Unlock()
-		time.AfterFunc(delay, s.diffTracker.triggerServiceUpdater)
+		s.scheduleRetry(serviceUID, delay)
 		return true
 	}
 

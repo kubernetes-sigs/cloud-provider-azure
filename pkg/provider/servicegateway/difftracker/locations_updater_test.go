@@ -359,13 +359,9 @@ func TestLocationsUpdater_InitDoesNotHangOnSustainedTransientError(t *testing.T)
 }
 
 // TestLocationsUpdater_TerminalErrorRetriedWhileDeletionDrainPending verifies that a deterministic
-// NRP rejection is still retried, post-initialization, while a deletion waits on the abandoned batch.
-//
-// CheckPendingServiceDeletions advances a deletion only once its addresses have left NRP, so calling
-// it after abandoning the batch is a no-op. Taking the terminal shortcut there consumes the pass
-// without rescheduling, and on a quiet cluster nothing re-drives the sync, so the Service stays
-// Terminating until the CCM restarts. TestLocationsUpdater_TerminalErrorNotRetried is the control:
-// with no deletion pending, the identical rejection is attempted exactly once.
+// NRP rejection is still retried while a deletion waits on the abandoned batch. Abandoning it
+// without rescheduling leaves the Service Terminating until the CCM restarts, because nothing
+// re-drives the sync on a quiet cluster.
 func TestLocationsUpdater_TerminalErrorRetriedWhileDeletionDrainPending(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -384,8 +380,8 @@ func TestLocationsUpdater_TerminalErrorRetriedWhileDeletionDrainPending(t *testi
 	dt.networkClientFactory = mockFactory
 	dt.config = testConfig()
 
-	// Drain shape: the pod is gone from Kubernetes but NRP still holds its address, so the batch
-	// this pass computes is the removal the pending deletion is waiting on.
+	// The pod is gone from Kubernetes but NRP still holds its address, so this batch is the removal
+	// the pending deletion waits on.
 	dt.K8sResources.Nodes["node-1"] = newNode()
 	dt.NRPResources.Locations["node-1"] = NRPLocation{
 		Addresses: map[string]NRPAddress{"10.0.0.1": {Services: utilsets.NewString("svc")}},
@@ -411,4 +407,93 @@ func TestLocationsUpdater_TerminalErrorRetriedWhileDeletionDrainPending(t *testi
 		return atomic.LoadInt32(&calls) > 1
 	}, 6*time.Second, 50*time.Millisecond,
 		"a deletion waiting on the abandoned batch must keep the sync rescheduled, not strand it")
+}
+
+// TestLocationsUpdater_SendsExactAddressPayloadToNRP pins the CONTENT of the address-location
+// request the updater sends to NRP, not merely that a request was sent.
+//
+// Every other LocationsUpdater test matches the request with gomock.Any(), so the updater could
+// send a wrong node location, a wrong address, or an empty address list and the whole unit suite
+// would still pass. This is the request that actually registers and drains pod IPs in Azure: a
+// wrong location strands the address under a node that does not own it, and a wrong address list
+// blackholes live traffic or leaks a dead pod's IP. Assert the exact wire payload.
+func TestLocationsUpdater_SendsExactAddressPayloadToNRP(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	const (
+		nodeIP  = "10.0.0.1"
+		podIP   = "10.244.0.7"
+		svcUID  = "svc"
+		wantRG  = "rg"
+		wantSGW = "sgw"
+	)
+
+	captured := make(chan armnetwork.ServiceGatewayUpdateAddressLocationsRequest, 8)
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+	mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, rg, sgw string, req armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
+			assert.Equal(t, wantRG, rg, "the request must target the configured resource group")
+			assert.Equal(t, wantSGW, sgw, "the request must target the configured ServiceGateway")
+			captured <- req
+			return nil
+		}).AnyTimes()
+
+	dt := newTestDiffTracker()
+	dt.networkClientFactory = mockFactory
+	dt.config = testConfig()
+
+	pod := newPod()
+	pod.InboundIdentities = utilsets.NewString(svcUID)
+	node := newNode()
+	node.Pods[podIP] = pod
+	dt.K8sResources.Nodes[nodeIP] = node
+	dt.NRPResources.LoadBalancers.Insert(svcUID)
+	dt.pendingServiceOps[svcUID] = &ServiceOperationState{ServiceUID: svcUID, State: StateCreated}
+
+	lu := NewLocationsUpdater(context.Background(), dt)
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		lu.Run()
+	}()
+	defer func() {
+		lu.Stop()
+		<-stopped
+	}()
+
+	dt.locationsUpdaterTrigger <- true
+
+	var req armnetwork.ServiceGatewayUpdateAddressLocationsRequest
+	select {
+	case req = <-captured:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the updater never sent an address-location request to NRP")
+	}
+
+	if !assert.Len(t, req.AddressLocations, 1, "exactly one node location must be sent") {
+		return
+	}
+	loc := req.AddressLocations[0]
+	if assert.NotNil(t, loc.AddressLocation) {
+		assert.Equal(t, nodeIP, *loc.AddressLocation,
+			"the address must be filed under the node that actually hosts the pod")
+	}
+	if !assert.Len(t, loc.Addresses, 1, "exactly the pod's address must be sent") {
+		return
+	}
+	addr := loc.Addresses[0]
+	if assert.NotNil(t, addr.Address) {
+		assert.Equal(t, podIP, *addr.Address, "the registered address must be the pod IP")
+	}
+	names := make([]string, 0, len(addr.Services))
+	for _, n := range addr.Services {
+		if n != nil {
+			names = append(names, *n)
+		}
+	}
+	assert.Equal(t, []string{svcUID}, names,
+		"the address must be attributed to the owning service, or NRP routes it for the wrong service")
 }

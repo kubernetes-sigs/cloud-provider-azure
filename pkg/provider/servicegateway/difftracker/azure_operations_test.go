@@ -19,6 +19,7 @@ package difftracker
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -32,6 +33,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,6 +42,11 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/utils/ptr"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/natgatewayclient/mock_natgatewayclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient/mock_servicegatewayclient"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
@@ -514,8 +521,7 @@ func TestServiceGatewayClientAsyncFailureIsNotSynchronousCompletion(t *testing.T
 
 // serviceClientWithTypeFieldSelector returns a fake clientset whose Service List honours a
 // spec.type field selector the way the apiserver does. The default fake tracker ignores field
-// selectors entirely, so without this a filtered List looks identical to an unfiltered one and a
-// test cannot tell the two apart.
+// selectors, so without this a filtered List is indistinguishable from an unfiltered one.
 func serviceClientWithTypeFieldSelector(services ...*v1.Service) *fake.Clientset {
 	c := fake.NewSimpleClientset()
 	c.PrependReactor("list", "services", func(action k8stesting.Action) (bool, runtime.Object, error) {
@@ -533,16 +539,9 @@ func serviceClientWithTypeFieldSelector(services ...*v1.Service) *fake.Clientset
 }
 
 // TestGetServiceByUIDViaList_FindsServiceRetypedAwayFromLoadBalancer pins that the UID scan is not
-// narrowed by spec.type.
-//
-// This tracker owns a Service's finalizer and Azure resources from the moment it provisions them,
-// and that ownership outlives the Service's type: retyping a LoadBalancer to ClusterIP is a normal
-// way to decommission it, and the delete that follows still has to tear down the PIP/LB and strip
-// the finalizer. Narrowing the scan to LoadBalancer Services hides exactly that Service, and callers
-// read the resulting typed NotFound as "the Service is gone" - dropping tracking while its Azure
-// resources still exist (createInboundService) or reporting deletion complete while its finalizer is
-// still attached (deleteInboundService). The LoadBalancer case is the control: it resolves either
-// way, so only the retyped lookup distinguishes a filtered scan from an unfiltered one.
+// narrowed by spec.type. Retyping a LoadBalancer to ClusterIP is a normal way to decommission it,
+// and the delete that follows still has to tear down the PIP/LB and strip the finalizer. Hiding
+// such a Service makes callers read the NotFound as "gone". The LoadBalancer case is the control.
 func TestGetServiceByUIDViaList_FindsServiceRetypedAwayFromLoadBalancer(t *testing.T) {
 	retyped := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: "was-lb", Namespace: "ns", UID: "uid-retyped"},
@@ -569,4 +568,67 @@ func TestGetServiceByUIDViaList_FindsServiceRetypedAwayFromLoadBalancer(t *testi
 	if assert.NotNil(t, gotLB) {
 		assert.Equal(t, "uid-lb", string(gotLB.UID))
 	}
+}
+
+// TestDisassociateNatGateway_ClearsReferencesOnTheWire pins the marshalled request bodies, not just
+// that the calls happen. Assigning a plain typed nil to clear a field is silently dropped by the
+// generated marshaller, and ARM reads an absent field as "leave unchanged", so both clears become
+// no-ops that still report success.
+func TestDisassociateNatGateway_ClearsReferencesOnTheWire(t *testing.T) {
+	const sgwName, natName = "sgw", "egress-uid"
+	sgwID := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/serviceGateways/" + sgwName
+	natID := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/natGateways/" + natName
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	var sgwBody, natBody []byte
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+
+	mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+	mockSGW.EXPECT().GetServices(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return([]*armnetwork.ServiceGatewayService{{
+			Name: ptr.To(natName),
+			Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
+				ServiceType:        ptr.To(armnetwork.ServiceTypeOutbound),
+				PublicNatGatewayID: ptr.To(natID),
+			},
+		}}, nil).AnyTimes()
+	mockSGW.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, req armnetwork.ServiceGatewayUpdateServicesRequest) error {
+			sgwBody, _ = json.Marshal(req)
+			return nil
+		}).AnyTimes()
+
+	mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
+	mockNAT.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(&armnetwork.NatGateway{
+			Name: ptr.To(natName),
+			Properties: &armnetwork.NatGatewayPropertiesFormat{
+				IdleTimeoutInMinutes: ptr.To[int32](4),
+				ServiceGateway:       &armnetwork.SubResource{ID: ptr.To(sgwID)},
+			},
+		}, nil).AnyTimes()
+	mockNAT.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, ng armnetwork.NatGateway) (*armnetwork.NatGateway, error) {
+			natBody, _ = json.Marshal(ng)
+			return &ng, nil
+		}).AnyTimes()
+
+	dt := newTestDiffTracker()
+	dt.networkClientFactory = mockFactory
+	dt.config = testConfig()
+
+	assert.NoError(t, dt.disassociateNatGatewayFromServiceGateway(context.Background(), sgwName, natName))
+
+	assert.Contains(t, string(sgwBody), `"publicNatGatewayId":null`,
+		"the ServiceGateway-side reference must be cleared explicitly, not omitted")
+	assert.Contains(t, string(natBody), `"serviceGateway":null`,
+		"the NAT-gateway-side reference must be cleared explicitly, not omitted")
+	// Control: unrelated fields are still sent, so the null above is a real clear rather than an
+	// empty body.
+	assert.Contains(t, string(natBody), `"idleTimeoutInMinutes":4`,
+		"control: sibling fields must survive the clear")
 }

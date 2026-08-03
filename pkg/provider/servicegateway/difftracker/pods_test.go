@@ -1475,3 +1475,77 @@ func TestPodInformerRemovePod_CountsForgottenFinalizerRemoval(t *testing.T) {
 	assert.Equal(t, float64(1), after-before,
 		"a forgotten finalizer removal must be counted so the resulting Terminating pod is detectable")
 }
+
+// TestPodInformerRemovePod_ReleasesFinalizerWhenLabelValueEmptied pins that an unlabelled pod
+// carrying our cleanup finalizer is still finished off. The informer selects on the label key alone,
+// so a pod whose value was emptied keeps matching and is still delivered here. Returning early on
+// the missing label leaves the finalizer attached with nothing able to remove it, blocking node
+// drain and namespace deletion.
+func TestPodInformerRemovePod_ReleasesFinalizerWhenLabelValueEmptied(t *testing.T) {
+	newEgressPod := func(labelValue string) *v1.Pod {
+		pod := &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "egress-pod", Namespace: "default", UID: types.UID("pod-uid-1"),
+				Labels:     map[string]string{consts.PodLabelServiceEgressGateway: labelValue},
+				Finalizers: []string{ServiceGatewayPodCleanupFinalizer},
+			},
+			Status: v1.PodStatus{Phase: v1.PodRunning, PodIP: "10.244.0.5", HostIP: "10.0.0.1"},
+		}
+		return pod
+	}
+
+	// The label value was emptied, so this is all that is left.
+	emptied := newEgressPod("")
+	kube := fake.NewSimpleClientset(emptied)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+
+	dt.podInformerRemovePod(emptied)
+
+	got, err := kube.CoreV1().Pods("default").Get(context.Background(), "egress-pod", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.False(t, hasFinalizer(got.Finalizers, ServiceGatewayPodCleanupFinalizer),
+		"a pod carrying our cleanup finalizer must be released even once its egress label value is gone")
+
+	// Control 1: an unlabelled pod that is NOT ours must be left completely alone.
+	foreign := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "foreign-pod", Namespace: "default", UID: types.UID("pod-uid-2"),
+			Labels:     map[string]string{consts.PodLabelServiceEgressGateway: ""},
+			Finalizers: []string{"example.com/other-controller"},
+		},
+		Status: v1.PodStatus{Phase: v1.PodRunning, PodIP: "10.244.0.6", HostIP: "10.0.0.1"},
+	}
+	foreignKube := fake.NewSimpleClientset(foreign)
+	foreignDT := newTestDiffTracker()
+	foreignDT.kubeClient = foreignKube
+
+	foreignDT.podInformerRemovePod(foreign)
+
+	gotForeign, err := foreignKube.CoreV1().Pods("default").Get(context.Background(), "foreign-pod", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"example.com/other-controller"}, gotForeign.Finalizers,
+		"control: a pod we do not own must not be touched")
+
+	// Control 2: a labelled pod whose address is still in NRP keeps its finalizer until it drains.
+	labelled := newEgressPod("team-egress")
+	labelledKube := fake.NewSimpleClientset(labelled)
+	labelledDT := newTestDiffTracker()
+	labelledDT.kubeClient = labelledKube
+	labelledDT.NRPResources.NATGateways.Insert("team-egress")
+	labelledDT.NRPResources.Locations["10.0.0.1"] = NRPLocation{
+		Addresses: map[string]NRPAddress{"10.244.0.5": {Services: utilsets.NewString("team-egress")}},
+	}
+	labelledDT.pendingServiceOps["team-egress"] = &ServiceOperationState{
+		ServiceUID: "team-egress",
+		Config:     NewOutboundServiceConfig("team-egress", nil),
+		State:      StateCreated,
+	}
+
+	labelledDT.podInformerRemovePod(labelled)
+
+	gotLabelled, err := labelledKube.CoreV1().Pods("default").Get(context.Background(), "egress-pod", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.True(t, hasFinalizer(gotLabelled.Finalizers, ServiceGatewayPodCleanupFinalizer),
+		"control: a labelled pod keeps its finalizer until its addresses drain from NRP")
+}

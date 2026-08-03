@@ -277,12 +277,9 @@ var (
 		},
 	)
 
-	// locationSyncAbandonedTotal counts NRP location syncs given up on after exhausting the retry
-	// budget. Unlike locationSyncTerminalErrorsTotal, which fires for a single deterministic
-	// rejection that the next change can still correct, this fires only once retries are spent, so
-	// NRP address state stays stale with nothing left to re-drive it: services and pods blocked on
-	// the abandoned drain keep their finalizers, and any initialization gate waiting on that drain
-	// is released to avoid stalling startup. A non-zero value must be alerted on.
+	// locationSyncAbandonedTotal counts NRP location syncs given up on after exhausting retries.
+	// NRP address state is then stale with nothing left to re-drive it, and blocked finalizers stay
+	// pending. A non-zero value must be alerted on.
 	locationSyncAbandonedTotal = metrics.NewCounterVec(
 		&metrics.CounterOpts{
 			Subsystem:      diffTrackerSubsystem,
@@ -490,8 +487,7 @@ const (
 	locationSyncAbandonReasonDrain        = "drain_attempts_exhausted"
 )
 
-// recordLocationSyncAbandoned increments the counter of NRP location syncs given up on after
-// exhausting retries, leaving NRP address state stale with nothing left to re-drive it.
+// recordLocationSyncAbandoned counts an NRP location sync given up on after exhausting retries.
 func recordLocationSyncAbandoned(reason string) {
 	locationSyncAbandonedTotal.WithLabelValues(reason).Inc()
 }

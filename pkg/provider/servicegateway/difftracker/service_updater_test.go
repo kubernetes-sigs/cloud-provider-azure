@@ -1059,3 +1059,188 @@ func TestServiceUpdaterOutboundUpdateIsCountedAsSkipped(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1.0, after-before, "a dropped outbound update must be counted exactly once")
 }
+
+// newRetryTimerTestUpdater builds an updater whose fired timer is observable as a buffered token.
+func newRetryTimerTestUpdater(t *testing.T) (*ServiceUpdater, *DiffTracker) {
+	t.Helper()
+	dt := newTestDiffTracker()
+	ctx, cancel := context.WithCancel(context.Background())
+	s := &ServiceUpdater{
+		diffTracker: dt,
+		ctx:         ctx,
+		cancel:      cancel,
+		activeOps:   make(map[string]bool),
+		retryTimers: make(map[string]*time.Timer),
+		logger:      dt.logger,
+	}
+	return s, dt
+}
+
+// TestServiceUpdaterStop_CancelsPendingRetryTimers pins that a parked operation's self-arm cannot
+// outlive the updater. Those timers are not tracked by wg nor bound to ctx, so unless Stop cancels
+// them each keeps the whole DiffTracker reachable and then fires into a stopped updater. The
+// still-running case is the control: the timer is the only thing that re-arms a parked service.
+func TestServiceUpdaterStop_CancelsPendingRetryTimers(t *testing.T) {
+	stopped, stoppedDT := newRetryTimerTestUpdater(t)
+	stopped.scheduleRetry("svc", 60*time.Millisecond)
+	stopped.Stop()
+
+	time.Sleep(200 * time.Millisecond)
+	assert.Empty(t, stoppedDT.serviceUpdaterTrigger,
+		"a retry timer must not push a trigger token into a stopped updater")
+	assert.Empty(t, len(stopped.retryTimers), "Stop must release the retained timers")
+
+	// Control: an updater that is still running must still be re-armed by the same mechanism.
+	running, runningDT := newRetryTimerTestUpdater(t)
+	defer running.Stop()
+	running.scheduleRetry("svc", 60*time.Millisecond)
+
+	assert.Eventually(t, func() bool {
+		return len(runningDT.serviceUpdaterTrigger) > 0
+	}, 2*time.Second, 20*time.Millisecond,
+		"control: the self-arm is the only driver for a parked service and must still fire")
+}
+
+// TestServiceUpdaterScheduleRetry_ReplacesPendingTimer pins that repeated backoff passes for the
+// same service do not accumulate timers, each holding the DiffTracker until it fires.
+func TestServiceUpdaterScheduleRetry_ReplacesPendingTimer(t *testing.T) {
+	s, _ := newRetryTimerTestUpdater(t)
+	defer s.Stop()
+
+	for i := 0; i < 5; i++ {
+		s.scheduleRetry("svc", time.Hour)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	assert.Len(t, s.retryTimers, 1, "re-arming the same service must replace its pending revisit, not add one")
+}
+
+// TestGuardDeleteOutboundService_NATDeleteFailureRetainsLastPodFinalizer pins the failure half of
+// the drain-before-release ordering.
+//
+// The happy path is guarded by RemovesLastPodFinalizerOnlyAfterNATGatewayDeletion, but nothing
+// covered the case where the NAT Gateway delete FAILS. The finalizer must stay attached: releasing
+// it lets the pod disappear while its NAT Gateway is still live in Azure, which is exactly the
+// traffic-blackhole the finalizer exists to prevent. Structurally the sweep sits inside the
+// lastErr == nil branch, but without this test that guard can be deleted with no signal.
+func TestGuardDeleteOutboundService_NATDeleteFailureRetainsLastPodFinalizer(t *testing.T) {
+	const (
+		uid     = "egress-nat-fail"
+		podNS   = "default"
+		podName = "egress-last-pod"
+		podUID  = "pod-uid-nat-fail"
+	)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       podName,
+			Namespace:  podNS,
+			UID:        types.UID(podUID),
+			Finalizers: []string{ServiceGatewayPodCleanupFinalizer},
+		},
+	}
+	kube := fake.NewSimpleClientset(pod)
+
+	m := newOutboundMocks(ctrl)
+	m.expectNoDisassociation()
+	m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).AnyTimes()
+	// The NAT Gateway teardown fails, so the Azure resource is still live afterwards.
+	m.nat.EXPECT().Delete(gomock.Any(), "rg", uid).Return(errors.New("nat gateway delete failed")).Times(1)
+	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(uid)).Return(nil).AnyTimes()
+
+	dt := newOutboundDiffTracker(uid, m, kube)
+	dt.pendingPodDeletions[podNS+"/"+podName] = &PendingPodDeletion{
+		Namespace:  podNS,
+		Name:       podName,
+		UID:        podUID,
+		ServiceUID: uid,
+		Addresses:  []string{"10.244.0.5"},
+		IsLastPod:  true,
+	}
+
+	got := &outboundCompletion{}
+	outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
+
+	called, success, _ := got.result()
+	assert.True(t, called)
+	assert.False(t, success, "a delete whose NAT Gateway teardown failed must be reported as failed")
+
+	live, err := kube.CoreV1().Pods(podNS).Get(context.Background(), podName, metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.True(t, hasPodFinalizer(live),
+		"the last pod must keep its cleanup finalizer while the NAT Gateway is still live in Azure")
+
+	_, stillPending := dt.pendingPodDeletions[podNS+"/"+podName]
+	assert.True(t, stillPending,
+		"the last-pod entry must survive so the retried delete can release the finalizer")
+}
+
+// TestGuardDeleteOutboundService_FinalizerReleasedOnRetryAfterNATFailure pins the other direction of
+// the same invariant: the pod must not be stranded Terminating forever.
+//
+// Holding the finalizer through a failed teardown is only correct if a later successful attempt
+// actually releases it. Without this, a fix that permanently held the finalizer on any prior failure
+// would look correct to the test above while blocking node drain and namespace deletion indefinitely.
+func TestGuardDeleteOutboundService_FinalizerReleasedOnRetryAfterNATFailure(t *testing.T) {
+	const (
+		uid     = "egress-nat-retry"
+		podNS   = "default"
+		podName = "egress-last-pod"
+		podUID  = "pod-uid-nat-retry"
+	)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	kube := fake.NewSimpleClientset(&v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       podName,
+			Namespace:  podNS,
+			UID:        types.UID(podUID),
+			Finalizers: []string{ServiceGatewayPodCleanupFinalizer},
+		},
+	})
+
+	m := newOutboundMocks(ctrl)
+	m.expectNoDisassociation()
+	m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).AnyTimes()
+	// First attempt fails, second succeeds.
+	gomock.InOrder(
+		m.nat.EXPECT().Delete(gomock.Any(), "rg", uid).Return(errors.New("nat gateway delete failed")).Times(1),
+		m.nat.EXPECT().Delete(gomock.Any(), "rg", uid).Return(nil).Times(1),
+	)
+	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(uid)).Return(nil).AnyTimes()
+
+	dt := newOutboundDiffTracker(uid, m, kube)
+	entry := &PendingPodDeletion{
+		Namespace:  podNS,
+		Name:       podName,
+		UID:        podUID,
+		ServiceUID: uid,
+		Addresses:  []string{"10.244.0.5"},
+		IsLastPod:  true,
+	}
+	dt.pendingPodDeletions[podNS+"/"+podName] = entry
+
+	updater := outboundUpdater(dt, &outboundCompletion{})
+	updater.deleteOutboundService(uid, "corr-1")
+
+	live, err := kube.CoreV1().Pods(podNS).Get(context.Background(), podName, metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.True(t, hasPodFinalizer(live), "precondition: the failed attempt must retain the finalizer")
+
+	got := &outboundCompletion{}
+	outboundUpdater(dt, got).deleteOutboundService(uid, "corr-2")
+
+	_, success, completionErr := got.result()
+	assert.True(t, success, "the retried delete must succeed: %v", completionErr)
+
+	live, err = kube.CoreV1().Pods(podNS).Get(context.Background(), podName, metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.False(t, hasPodFinalizer(live),
+		"a successful retry must release the finalizer, or the pod stays Terminating forever")
+}

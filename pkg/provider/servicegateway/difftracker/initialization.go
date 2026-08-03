@@ -398,12 +398,9 @@ func recoverStuckFinalizers(
 		for i := range services.Items {
 			svc := &services.Items[i]
 
-			// Recovery keys on our own finalizer, not on spec.type. The finalizer is what records
-			// that this tracker provisioned Azure resources for the Service, and it survives a
-			// retype: a LoadBalancer switched to ClusterIP and then deleted still needs its PIP/LB
-			// torn down and its finalizer stripped. Gating on the type here would skip exactly those
-			// Services on every restart, leaving them Terminating forever and blocking namespace
-			// deletion behind them.
+			// Keyed on our finalizer, not spec.type: the finalizer records that we provisioned Azure
+			// resources, and it survives a retype. A LoadBalancer switched to ClusterIP and then
+			// deleted still needs its PIP/LB torn down and its finalizer stripped.
 			if svc.DeletionTimestamp == nil {
 				continue
 			}
@@ -582,6 +579,22 @@ func processK8sServices(
 			// Their deletion will be handled by recoverStuckFinalizers or the diff mechanism
 			if service.DeletionTimestamp != nil {
 				logger.V(5).Info("Skipped deleting service", "namespace", service.Namespace, "service", service.Name)
+				continue
+			}
+			// Ownership is decided here, where desired state is built, because the diff derives every
+			// later decision from it. The upstream controller never calls EnsureLoadBalancer for a
+			// Service claimed by another LoadBalancerClass, so only startup can apply that filter.
+			// A Service admitted here but never provisioned is neither an addition nor a removal, so
+			// it would be synced forever; excluding it lets the diff relinquish the resource.
+			if service.Spec.LoadBalancerClass != nil {
+				logger.V(2).Info("Excluded a Service owned by another LoadBalancerClass from desired state",
+					"namespace", service.Namespace, "service", service.Name,
+					"loadBalancerClass", *service.Spec.LoadBalancerClass)
+				continue
+			}
+			if _, err := AdmitInboundService(&services.Items[i]); err != nil {
+				logger.Error(err, "Excluded a Service rejected by inbound admission from desired state",
+					"namespace", service.Namespace, "service", service.Name)
 				continue
 			}
 			uid := ServiceUID(&services.Items[i])

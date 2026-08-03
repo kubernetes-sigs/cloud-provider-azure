@@ -22,18 +22,24 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/servicegateway/difftracker"
+	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 func TestDiffTrackerConfig(t *testing.T) {
@@ -236,4 +242,113 @@ func TestRuntimeStartWithoutDiscoveryRejectsInvalidConfig(t *testing.T) {
 	err := runtime.StartWithoutDiscovery()
 	assert.ErrorContains(t, err, "initialize difftracker")
 	assert.Nil(t, runtime.tracker)
+}
+
+// TestRegisterInformers_DeliversEndpointSliceEventsToTracker pins that RegisterInformers wires
+// handlers that actually reach the DiffTracker, by driving a real EndpointSlice through the shared
+// informer and observing the pod address land in the tracker's sync state.
+//
+// RegisterInformers had no test reference anywhere: dropping its AddEventHandler calls — silently
+// discarding every EndpointSlice and Node event the tracker relies on to keep Azure in sync — left
+// the whole package green. Asserting registration merely "succeeded", or that the informer's own
+// store filled, is not enough: both hold even when no handler is attached. This asserts the
+// tracker's observable state instead.
+func TestRegisterInformers_DeliversEndpointSliceEventsToTracker(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	const (
+		serviceUID = "svc-informer-probe"
+		nodeName   = "node-informer-probe"
+		nodeIP     = "10.0.0.42"
+		podIP      = "10.244.0.42"
+	)
+
+	node := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: nodeName},
+		Status: v1.NodeStatus{
+			Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: nodeIP}},
+		},
+	}
+	kubeClient := fake.NewSimpleClientset(node)
+
+	tracker, err := difftracker.New(
+		logr.Discard(),
+		difftracker.K8sState{
+			Services: utilsets.NewString(serviceUID),
+			Egresses: utilsets.NewString(),
+			Nodes:    map[string]difftracker.Node{},
+		},
+		difftracker.NRPState{
+			LoadBalancers: utilsets.NewString(serviceUID),
+			NATGateways:   utilsets.NewString(),
+			Locations:     map[string]difftracker.NRPLocation{},
+		},
+		testDiffTrackerConfig(),
+		mock_azclient.NewMockClientFactory(ctrl),
+		kubeClient,
+	)
+	if !assert.NoError(t, err) {
+		return
+	}
+
+	informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
+	tracker.SetNodeLister(informerFactory.Core().V1().Nodes().Lister())
+
+	unregister, err := RegisterInformers(informerFactory, tracker)
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.NotNil(t, unregister, "a successful registration must return an unregister func")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	informerFactory.Start(ctx.Done())
+	informerFactory.WaitForCacheSync(ctx.Done())
+
+	ready := true
+	_, err = kubeClient.DiscoveryV1().EndpointSlices("default").Create(ctx, &discoveryv1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "probe-slice",
+			Namespace: "default",
+			Labels:    map[string]string{discoveryv1.LabelServiceName: "probe-svc"},
+			// The tracker resolves the owning Service by OwnerReference UID.
+			OwnerReferences: []metav1.OwnerReference{{
+				Kind: "Service",
+				Name: "probe-svc",
+				UID:  types.UID(serviceUID),
+			}},
+		},
+		AddressType: discoveryv1.AddressTypeIPv4,
+		Endpoints: []discoveryv1.Endpoint{{
+			Addresses:  []string{podIP},
+			NodeName:   ptr.To(nodeName),
+			Conditions: discoveryv1.EndpointConditions{Ready: &ready},
+		}},
+	}, metav1.CreateOptions{})
+	assert.NoError(t, err)
+
+	assert.Eventually(t, func() bool {
+		locations := tracker.GetSyncLocationsAddresses()
+		loc, ok := locations.Locations[nodeIP]
+		if !ok {
+			return false
+		}
+		_, hasAddr := loc.Addresses[podIP]
+		return hasAddr
+	}, 15*time.Second, 50*time.Millisecond,
+		"the EndpointSlice handler registered by RegisterInformers must forward the event to the "+
+			"tracker; without it the pod address never reaches Azure")
+
+	unregister()
+}
+
+func testDiffTrackerConfig() difftracker.Config {
+	cfg := providerconfig.Config{}
+	cfg.SubscriptionID = "sub"
+	cfg.ResourceGroup = "rg"
+	cfg.Location = "eastus"
+	cfg.VnetName = "vnet"
+	cfg.VnetResourceGroup = "rg"
+	return diffTrackerConfig(cfg)
 }

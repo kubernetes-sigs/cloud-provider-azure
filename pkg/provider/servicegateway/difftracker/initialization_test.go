@@ -1197,14 +1197,10 @@ func TestRecoverStuckFinalizers_CountsRemovalSeparatelyFromScheduling(t *testing
 	})
 }
 
-// TestRecoverStuckFinalizers_RecoversServiceRetypedAwayFromLoadBalancer pins that finalizer recovery
-// keys on our own finalizer rather than on spec.type.
-//
-// The finalizer is what records that this tracker provisioned Azure resources for the Service, and
-// it survives a retype: a LoadBalancer switched to ClusterIP and then deleted still needs its
-// finalizer stripped once nothing is left in Azure. Gating recovery on the type skips exactly those
-// Services on every restart, so nothing ever removes the finalizer and the namespace stays
-// Terminating behind it. The LoadBalancer case is the control: it recovers either way.
+// TestRecoverStuckFinalizers_RecoversServiceRetypedAwayFromLoadBalancer pins that recovery keys on
+// our finalizer rather than spec.type. A LoadBalancer switched to ClusterIP and then deleted still
+// needs its finalizer stripped; gating on the type skips it on every restart, so the namespace stays
+// Terminating. The LoadBalancer case is the control.
 func TestRecoverStuckFinalizers_RecoversServiceRetypedAwayFromLoadBalancer(t *testing.T) {
 	delTime := metav1.Now()
 	newStuck := func(name, uid string, svcType v1.ServiceType) *v1.Service {
@@ -1236,4 +1232,72 @@ func TestRecoverStuckFinalizers_RecoversServiceRetypedAwayFromLoadBalancer(t *te
 	gotLB, err := kube.CoreV1().Services("default").Get(context.Background(), "still-lb", metav1.GetOptions{})
 	assert.NoError(t, err)
 	assert.False(t, hasServiceGatewayFinalizer(gotLB), "control: a LoadBalancer Service recovers as before")
+}
+
+// TestProcessK8sServices_ExcludesServicesNotOwnedByServiceGateway pins that ownership is decided
+// where desired state is built. A Service claimed by another LoadBalancerClass, or one admission
+// rejects, is neither an addition nor a removal once its LoadBalancer already exists, so admitting
+// it here would keep it synced forever. The ordinary Service is the control.
+func TestProcessK8sServices_ExcludesServicesNotOwnedByServiceGateway(t *testing.T) {
+	newLB := func(name, uid string, mutate func(*v1.Service)) *v1.Service {
+		svc := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default", UID: types.UID(uid)},
+			Spec: v1.ServiceSpec{
+				Type:  v1.ServiceTypeLoadBalancer,
+				Ports: []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}},
+			},
+		}
+		if mutate != nil {
+			mutate(svc)
+		}
+		return svc
+	}
+
+	owned := newLB("owned", "uid-owned", nil)
+	foreignClass := newLB("foreign", "uid-foreign", func(s *v1.Service) {
+		s.Spec.LoadBalancerClass = ptr.To("example.com/other-controller")
+	})
+	internal := newLB("internal", "uid-internal", func(s *v1.Service) {
+		s.Annotations = map[string]string{consts.ServiceAnnotationLoadBalancerInternal: "true"}
+	})
+
+	kube := fake.NewSimpleClientset(owned, foreignClass, internal)
+	k8s := &K8sState{Services: utilsets.NewString(), Egresses: utilsets.NewString(), Nodes: map[string]Node{}}
+
+	_, serviceUIDToService, err := processK8sServices(context.Background(), kube, k8s)
+	assert.NoError(t, err)
+
+	assert.True(t, k8s.Services.Has("uid-owned"), "control: a Service ServiceGateway owns must stay desired")
+	assert.Contains(t, serviceUIDToService, "uid-owned")
+
+	assert.False(t, k8s.Services.Has("uid-foreign"),
+		"a Service claimed by another LoadBalancerClass must not be desired, or ServiceGateway keeps syncing it forever")
+	assert.False(t, k8s.Services.Has("uid-internal"),
+		"a Service inbound admission rejects must not be desired after a restart")
+}
+
+// TestProcessK8sServices_ForeignServiceBecomesRemoval pins that an existing LoadBalancer for a
+// Service that is no longer ours is relinquished by the diff rather than kept in sync.
+func TestProcessK8sServices_ForeignServiceBecomesRemoval(t *testing.T) {
+	foreign := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "foreign", Namespace: "default", UID: types.UID("uid-foreign")},
+		Spec: v1.ServiceSpec{
+			Type:              v1.ServiceTypeLoadBalancer,
+			LoadBalancerClass: ptr.To("example.com/other-controller"),
+			Ports:             []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}},
+		},
+	}
+	kube := fake.NewSimpleClientset(foreign)
+
+	dt := newTestDiffTracker()
+	// A LoadBalancer from before the class was set.
+	dt.NRPResources.LoadBalancers.Insert("uid-foreign")
+
+	_, _, err := processK8sServices(context.Background(), kube, &dt.K8sResources)
+	assert.NoError(t, err)
+
+	sync := dt.GetSyncLoadBalancerServices()
+	assert.True(t, sync.Removals.Has("uid-foreign"),
+		"a ServiceGateway LoadBalancer for a Service now owned by another controller must be relinquished")
+	assert.False(t, sync.Additions.Has("uid-foreign"), "it must not be re-provisioned either")
 }

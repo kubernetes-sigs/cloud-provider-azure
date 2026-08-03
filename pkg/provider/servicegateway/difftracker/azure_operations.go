@@ -184,7 +184,9 @@ func (dt *DiffTracker) disassociateNatGatewayFromServiceGateway(ctx context.Cont
 	}
 
 	if serviceToBeUpdated != nil && serviceToBeUpdated.Properties != nil && serviceToBeUpdated.Properties.PublicNatGatewayID != nil {
-		serviceToBeUpdated.Properties.PublicNatGatewayID = nil
+		// azcore.NullValue, not a plain nil: the generated marshaller drops a typed-nil pointer
+		// instead of emitting JSON null, and ARM reads an absent field as "leave unchanged".
+		serviceToBeUpdated.Properties.PublicNatGatewayID = azcore.NullValue[*string]()
 		updateServicesRequest := armnetwork.ServiceGatewayUpdateServicesRequest{
 			Action: ptr.To(armnetwork.ServiceUpdateActionPartialUpdate),
 			ServiceRequests: []*armnetwork.ServiceGatewayServiceRequest{
@@ -211,7 +213,8 @@ func (dt *DiffTracker) disassociateNatGatewayFromServiceGateway(ctx context.Cont
 	}
 
 	if natGateway.Properties != nil && natGateway.Properties.ServiceGateway != nil {
-		natGateway.Properties.ServiceGateway = nil
+		// See above: a plain nil would be omitted from the payload rather than clearing the field.
+		natGateway.Properties.ServiceGateway = azcore.NullValue[*armnetwork.SubResource]()
 		if _, err := dt.networkClientFactory.GetNatGatewayClient().CreateOrUpdate(ctx, dt.config.ResourceGroup, natGatewayName, *natGateway); err != nil {
 			return fmt.Errorf("updating NAT Gateway %q to remove Service Gateway reference: %w", natGatewayName, err)
 		}
@@ -332,14 +335,10 @@ func (dt *DiffTracker) getServiceByNamespaceName(ctx context.Context, lister cor
 // getServiceByUIDViaList scans all Services for a UID match. Used only when a Service's
 // namespace/name are not known to the engine.
 //
-// The scan is deliberately not narrowed by a spec.type field selector. This tracker owns a
-// Service's finalizer and its Azure resources from the moment it provisions them, and that
-// ownership outlives the Service's type: retyping a LoadBalancer to ClusterIP is a normal way to
-// decommission it, and the deletion that follows still has to tear down the PIP/LB and strip the
-// finalizer. Filtering by type would hide such a Service here, and callers treat the typed NotFound
-// below as "the Service is gone" - dropping tracking while its Azure resources still exist, or
-// reporting a deletion complete while its finalizer is still attached. The UID comparison is what
-// identifies the Service; the type is not part of that identity.
+// The scan is deliberately not narrowed by spec.type. Ownership of a Service's finalizer and Azure
+// resources outlives its type: retyping a LoadBalancer to ClusterIP is a normal way to decommission
+// it, and the deletion that follows still has to tear down the PIP/LB and strip the finalizer.
+// Filtering by type would hide such a Service, and callers read the NotFound below as "gone".
 func (dt *DiffTracker) getServiceByUIDViaList(ctx context.Context, uid string) (*v1.Service, error) {
 	svcList, err := dt.kubeClient.CoreV1().Services(v1.NamespaceAll).List(ctx, metav1.ListOptions{})
 	if err != nil {

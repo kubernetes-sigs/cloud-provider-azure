@@ -1594,13 +1594,9 @@ func TestDeletePodWithoutAddresses_MatchingUIDCancelsBufferedAddresses(t *testin
 }
 
 // TestAddPod_RejectsEgressIdentityCollidingWithInboundService pins that an egress pod cannot attach
-// to an INBOUND service's operation.
-//
-// pendingServiceOps is keyed by a bare string shared by both kinds: inbound entries by Kubernetes
-// Service UID, outbound entries by the egress pod label value, which any user who can create a Pod
-// controls. Without a kind check the pod resolves to the inbound operation and is published into
-// that service's address set with no NAT Gateway behind it, letting one tenant attach to another
-// tenant's LoadBalancer. The outbound identity is the control: it must still register normally.
+// to an inbound service's operation. The key is shared by both kinds, and the egress side is a
+// user-controlled pod label, so without a kind check one tenant can attach to another tenant's
+// LoadBalancer. The ordinary egress identity is the control.
 func TestAddPod_RejectsEgressIdentityCollidingWithInboundService(t *testing.T) {
 	const inboundUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 	const egressUID = "team-egress"
@@ -1642,16 +1638,10 @@ func TestAddPod_RejectsEgressIdentityCollidingWithInboundService(t *testing.T) {
 	assert.Equal(t, 1, ctlBuffered, "control: the egress pod must be buffered for its own service")
 }
 
-// TestAddPod_DoesNotReviveOutboundServiceWhoseDeleteWasAttempted pins that the StateDeletionPending
-// revive only fires while nothing has been dispatched to Azure.
-//
-// deleteOutboundService is not transactional: when the ServiceGateway unregister fails it records
-// the error and still deletes the NAT Gateway and Public IP before returning, after which the
-// operation is demoted back to StateDeletionPending. Reviving from there marks the service Created
-// and publishes pods to a gateway that no longer exists, and nothing re-creates it. Buffering
-// instead lets the delete finish and the buffered pod drive a clean re-create. RetryCount==0 is the
-// control: an untouched deletion still revives, which is what keeps a sole egress pod's IP change
-// from losing egress.
+// TestAddPod_DoesNotReviveOutboundServiceWhoseDeleteWasAttempted pins that the revive only fires
+// while nothing has been dispatched to Azure. deleteOutboundService is not transactional: on failure
+// it still deletes the NAT Gateway and Public IP, so reviving would publish pods to a gateway that
+// no longer exists. RetryCount==0 is the control: an untouched deletion still revives.
 func TestAddPod_DoesNotReviveOutboundServiceWhoseDeleteWasAttempted(t *testing.T) {
 	newTrackerWithPendingDelete := func(retryCount int) *DiffTracker {
 		dt := newTestDiffTracker()
@@ -1693,19 +1683,10 @@ func TestAddPod_DoesNotReviveOutboundServiceWhoseDeleteWasAttempted(t *testing.T
 }
 
 // TestReconcileInboundService_SkipsServiceBeingDeleted pins that a Service carrying a
-// DeletionTimestamp is never provisioned, and never records a recreate intent against its own
-// in-flight deletion.
-//
-// Upstream keeps calling EnsureLoadBalancer for such a Service: it drops its own
-// load-balancer-cleanup finalizer as soon as EnsureLoadBalancerDeleted returns, which here is
-// immediate because the Azure delete is asynchronous. Our cleanup finalizer then holds the object
-// Terminating with no upstream finalizer left, so needsCleanup is false while wantsLoadBalancer is
-// true and any re-enqueue (an annotation edit, or a CCM restart replaying every Service to AddFunc)
-// takes upstream's ensure branch. Setting RecreateAfterDeletion from there makes the delete-success
-// path rebuild the LoadBalancer, Public IP and ServiceGateway registration for a Service that is
-// going away; once our finalizer clears the object disappears and those resources are stranded in
-// Azure with nothing tracking them. The live Service is the control: the legitimate
-// ClusterIP->LoadBalancer toggle always arrives without a DeletionTimestamp and must still work.
+// DeletionTimestamp is never provisioned and never records a recreate intent against its own
+// in-flight deletion. Upstream keeps calling EnsureLoadBalancer for one, because it drops its own
+// cleanup finalizer as soon as EnsureLoadBalancerDeleted returns. Rebuilding from there strands the
+// resources once our finalizer clears. The live Service is the control.
 func TestReconcileInboundService_SkipsServiceBeingDeleted(t *testing.T) {
 	newSvc := func(uid string, deleting bool) *v1.Service {
 		svc := &v1.Service{
@@ -1722,8 +1703,7 @@ func TestReconcileInboundService_SkipsServiceBeingDeleted(t *testing.T) {
 		return svc
 	}
 
-	// A deletion is already in flight for this UID, exactly as it would be after
-	// EnsureLoadBalancerDeleted queued the Azure teardown.
+	// A deletion is already in flight for this UID.
 	const uid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 	deleting := newTestDiffTracker()
 	deleting.pendingServiceOps[uid] = &ServiceOperationState{
@@ -1759,10 +1739,8 @@ func TestReconcileInboundService_SkipsServiceBeingDeleted(t *testing.T) {
 		"control: a live Service re-declared during deletion must still be re-created")
 }
 
-// TestReconcileInboundService_DeletingServiceIsNotProvisionedFromScratch covers the same guard for a
-// Service the engine is not tracking at all, which is the shape a CCM restart produces: the pending
-// operation is gone, upstream replays the Service to AddFunc, and provisioning it would create Azure
-// resources for an object that is already going away.
+// TestReconcileInboundService_DeletingServiceIsNotProvisionedFromScratch covers the same guard for
+// an untracked Service, the shape a CCM restart produces.
 func TestReconcileInboundService_DeletingServiceIsNotProvisionedFromScratch(t *testing.T) {
 	now := metav1.Now()
 	svc := &v1.Service{
