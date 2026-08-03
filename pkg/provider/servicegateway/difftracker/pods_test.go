@@ -18,6 +18,7 @@ package difftracker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -33,6 +34,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/component-base/metrics/testutil"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -1548,4 +1550,56 @@ func TestPodInformerRemovePod_ReleasesFinalizerWhenLabelValueEmptied(t *testing.
 	assert.NoError(t, err)
 	assert.True(t, hasFinalizer(gotLabelled.Finalizers, ServiceGatewayPodCleanupFinalizer),
 		"control: a labelled pod keeps its finalizer until its addresses drain from NRP")
+}
+
+// TestPodInformerRemovePod_QueuesRetryWhenFinalizerRemovalFails pins that a transient apiserver
+// error on a direct finalizer removal is retried rather than lost.
+//
+// These paths run only once the engine has proved there is nothing to drain, so no pending record
+// exists and the informer will not re-drive the pod: a resync delivers an unchanged object and is
+// skipped. Without a queued record the pod stays Terminating until the CCM restarts, blocking node
+// drain and namespace deletion. The successful removal is the control: it must queue nothing.
+func TestPodInformerRemovePod_QueuesRetryWhenFinalizerRemovalFails(t *testing.T) {
+	newPodObj := func() *v1.Pod {
+		return &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "egress-pod", Namespace: "default", UID: types.UID("pod-uid"),
+				Labels:            map[string]string{consts.PodLabelServiceEgressGateway: "team-egress"},
+				Finalizers:        []string{ServiceGatewayPodCleanupFinalizer},
+				DeletionTimestamp: ptr.To(metav1.Now()),
+			},
+			// No IPs, so the engine takes the "nothing to drain" path.
+			Status: v1.PodStatus{Phase: v1.PodRunning},
+		}
+	}
+
+	run := func(t *testing.T, removalFails bool) *DiffTracker {
+		t.Helper()
+		pod := newPodObj()
+		kube := fake.NewSimpleClientset(pod)
+		if removalFails {
+			kube.PrependReactor("update", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+				return true, nil, errors.New("apiserver unavailable")
+			})
+		}
+		dt := newTestDiffTracker()
+		dt.kubeClient = kube
+		dt.podInformerRemovePod(pod)
+		return dt
+	}
+
+	failed := run(t, true)
+	failed.mu.Lock()
+	pending, queued := failed.pendingPodDeletions["default/egress-pod"]
+	failed.mu.Unlock()
+	if assert.True(t, queued, "a failed finalizer removal must be queued for retry, not dropped") {
+		assert.Equal(t, "pod-uid", pending.UID, "the record must pin the pod UID so a replacement is not stripped")
+		assert.False(t, pending.IsLastPod, "a finalizer-only retry must not wait on a NAT Gateway deletion")
+	}
+
+	ok := run(t, false)
+	ok.mu.Lock()
+	_, queuedOnSuccess := ok.pendingPodDeletions["default/egress-pod"]
+	ok.mu.Unlock()
+	assert.False(t, queuedOnSuccess, "control: a successful removal queues nothing")
 }

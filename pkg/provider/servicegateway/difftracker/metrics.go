@@ -282,6 +282,32 @@ var (
 		},
 	)
 
+	// deleteSubstepFailuresTotal counts delete sub-steps that failed and were continued past. The
+	// deletion still proceeds, because the later steps are what free the resources, but the skipped
+	// step leaves a stale ServiceGateway reference behind and the operation is still recorded as a
+	// successful delete. This is the only signal that happened.
+	deleteSubstepFailuresTotal = metrics.NewCounterVec(
+		&metrics.CounterOpts{
+			Subsystem:      diffTrackerSubsystem,
+			Name:           "delete_substep_failures_total",
+			Help:           "Total count of non-fatal delete sub-step failures by step",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"step"},
+	)
+
+	// serviceExternalIPRecoveryFailedTotal counts Services whose External IP could not be written back
+	// at startup. Recovery runs once, so the Service keeps an empty ingress until the next restart
+	// even though its Azure resources exist. A non-zero value must be alerted on.
+	serviceExternalIPRecoveryFailedTotal = metrics.NewCounter(
+		&metrics.CounterOpts{
+			Subsystem:      diffTrackerSubsystem,
+			Name:           "service_external_ip_recovery_failed_total",
+			Help:           "Total count of Services whose External IP could not be recovered at startup",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
 	// locationSyncAbandonedTotal counts NRP location syncs given up on after exhausting retries.
 	// NRP address state is then stale with nothing left to re-drive it, and blocked finalizers stay
 	// pending. A non-zero value must be alerted on.
@@ -338,6 +364,8 @@ func RegisterMetrics() {
 		legacyregistry.MustRegister(outboundServiceUpdatesSkippedTotal)
 		legacyregistry.MustRegister(locationSyncTerminalErrorsTotal)
 		legacyregistry.MustRegister(locationSyncAbandonedTotal)
+		legacyregistry.MustRegister(deleteSubstepFailuresTotal)
+		legacyregistry.MustRegister(serviceExternalIPRecoveryFailedTotal)
 		legacyregistry.MustRegister(initializationDurationSeconds)
 		legacyregistry.MustRegister(pendingOperationOldestAgeSeconds)
 	})
@@ -491,6 +519,22 @@ const (
 	locationSyncAbandonReasonInitAttempts = "init_attempts_exhausted"
 	locationSyncAbandonReasonDrain        = "drain_attempts_exhausted"
 )
+
+// Delete sub-steps that are continued past on failure.
+const (
+	deleteStepRemoveBackendPool = "remove_backend_pool"
+	deleteStepDisassociateNAT   = "disassociate_nat_gateway"
+)
+
+// recordServiceExternalIPRecoveryFailed counts a Service whose External IP could not be recovered.
+func recordServiceExternalIPRecoveryFailed() {
+	serviceExternalIPRecoveryFailedTotal.Inc()
+}
+
+// recordDeleteSubstepFailure counts a delete sub-step that failed and was continued past.
+func recordDeleteSubstepFailure(step string) {
+	deleteSubstepFailuresTotal.WithLabelValues(step).Inc()
+}
 
 // recordLocationSyncAbandoned counts an NRP location sync given up on after exhausting retries.
 func recordLocationSyncAbandoned(reason string) {

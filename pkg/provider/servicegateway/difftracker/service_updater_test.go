@@ -1282,3 +1282,121 @@ func TestRefreshOperationGauges_ReflectsPodDrivenAndAbortedOperations(t *testing
 	assert.NoError(t, err)
 	assert.Zero(t, cleared, "an untracked operation must not leave a phantom count")
 }
+
+// TestCreateInboundService_StatusPatchFailureKeepsLoadBalancerLive pins that a failed Kubernetes
+// status write does not un-provision a service Azure and NRP have already accepted.
+//
+// The status write touches only Kubernetes, so failing it leaves the PIP, the LoadBalancer and the
+// ServiceGateway registration in place. Recording the registration only after that write would
+// demote the operation to StateNotStarted with no LoadBalancer tracked, and isServiceReadyToSync
+// then withholds the service's endpoints - leaving a public IP with no backends until the patch
+// eventually succeeds. The successful write is the control.
+func TestCreateInboundService_StatusPatchFailureKeepsLoadBalancerLive(t *testing.T) {
+	const uid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+
+	run := func(t *testing.T, statusPatchFails bool) *DiffTracker {
+		t.Helper()
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		svc := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "default", UID: types.UID(uid)},
+			Spec: v1.ServiceSpec{
+				Type:  v1.ServiceTypeLoadBalancer,
+				Ports: []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}},
+			},
+		}
+		kube := fake.NewSimpleClientset(svc)
+		if statusPatchFails {
+			// Only the status patch fails; the finalizer add earlier in the create uses update and
+			// must still succeed so the run reaches the ServiceGateway registration.
+			kube.PrependReactor("patch", "services", func(k8stesting.Action) (bool, runtime.Object, error) {
+				return true, nil, errors.New("apiserver unavailable")
+			})
+		}
+
+		m := newOutboundMocks(ctrl)
+		mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+		m.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+
+		// PIP and LoadBalancer create succeed, and the ServiceGateway registration succeeds, so the
+		// service is genuinely live in Azure before the status write is attempted.
+		m.pip.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(&armnetwork.PublicIPAddress{
+				Name:       ptr.To(PublicIPName(uid)),
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{IPAddress: ptr.To("20.30.40.50")},
+			}, nil).AnyTimes()
+		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(&armnetwork.LoadBalancer{Name: ptr.To(uid)}, nil).AnyTimes()
+		m.sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil).AnyTimes()
+
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.networkClientFactory = m.factory
+		dt.kubeClient = kube
+
+		s := NewServiceUpdater(context.Background(), dt, func(string, bool, error) {}, dt.serviceUpdaterTrigger)
+		s.createInboundService(uid, makeInboundConfig(80), "corr")
+		return dt
+	}
+
+	failed := run(t, true)
+	failed.mu.Lock()
+	liveAfterFailure := failed.NRPResources.LoadBalancers.Has(uid)
+	readyAfterFailure := failed.isServiceReadyToSync(uid, true)
+	failed.mu.Unlock()
+	assert.True(t, liveAfterFailure,
+		"the LoadBalancer is registered in NRP, so a failed Kubernetes status write must not un-track it")
+	assert.True(t, readyAfterFailure,
+		"its endpoints must still publish, or the public IP serves nothing")
+
+	ok := run(t, false)
+	ok.mu.Lock()
+	liveAfterSuccess := ok.NRPResources.LoadBalancers.Has(uid)
+	ok.mu.Unlock()
+	assert.True(t, liveAfterSuccess, "control: a successful create tracks the LoadBalancer")
+}
+
+// TestDeleteOutboundService_CountsSwallowedDisassociationFailure pins that a delete sub-step which
+// fails and is continued past is still counted.
+//
+// The deletion proceeds deliberately, because the later steps free the resources, and it is recorded
+// as a successful delete. Logging that at V(4) left a sustained NRP failure invisible in both metrics
+// and production logs while every deleted service kept a stale ServiceGateway association. The
+// successful disassociation is the control.
+func TestDeleteOutboundService_CountsSwallowedDisassociationFailure(t *testing.T) {
+	const uid = "egress-uid"
+
+	run := func(t *testing.T, disassociationFails bool) float64 {
+		t.Helper()
+		RegisterMetrics()
+		deleteSubstepFailuresTotal.Reset()
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		m := newOutboundMocks(ctrl)
+
+		if disassociationFails {
+			m.sgw.EXPECT().GetServices(gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(nil, errors.New("NRP unavailable")).AnyTimes()
+		} else {
+			m.expectNoDisassociation()
+		}
+		m.sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		m.nat.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		m.pip.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+		dt := newOutboundDiffTracker(uid, m, fake.NewSimpleClientset())
+		s := NewServiceUpdater(context.Background(), dt, func(string, bool, error) {}, dt.serviceUpdaterTrigger)
+		s.deleteOutboundService(uid, "corr")
+
+		got, err := testutil.GetCounterMetricValue(deleteSubstepFailuresTotal.WithLabelValues(deleteStepDisassociateNAT))
+		assert.NoError(t, err)
+		return got
+	}
+
+	assert.Equal(t, float64(1), run(t, true),
+		"a swallowed disassociation failure must be counted, or a sustained NRP failure is invisible")
+	assert.Zero(t, run(t, false), "control: a successful disassociation counts nothing")
+}

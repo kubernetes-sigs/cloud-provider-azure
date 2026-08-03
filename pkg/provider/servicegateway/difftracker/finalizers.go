@@ -64,6 +64,34 @@ type PendingPodDeletion struct {
 	Timestamp          string
 }
 
+// enqueuePodFinalizerRetry records a pod whose cleanup finalizer could not be removed so
+// CheckPendingPodDeletions retries it, and nudges the LocationsUpdater to run that check.
+//
+// The removal paths that call this have already established there is nothing to drain, so the record
+// carries no addresses and is immediately ready. Without it a transient apiserver error is simply
+// lost: no pending record exists, and the informer only re-drives a pod whose state changes, so the
+// pod stays Terminating until the CCM restarts and blocks node drain and namespace deletion.
+func (dt *DiffTracker) enqueuePodFinalizerRetry(pod *v1.Pod, serviceUID string) {
+	if pod == nil {
+		return
+	}
+	podKey := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+
+	dt.mu.Lock()
+	if _, exists := dt.pendingPodDeletions[podKey]; !exists {
+		dt.pendingPodDeletions[podKey] = &PendingPodDeletion{
+			Namespace:  pod.Namespace,
+			Name:       pod.Name,
+			UID:        string(pod.UID),
+			ServiceUID: serviceUID,
+			Timestamp:  time.Now().Format(time.RFC3339),
+		}
+	}
+	dt.mu.Unlock()
+
+	dt.triggerLocationsUpdater()
+}
+
 // ================================================================================================
 // HELPER FUNCTIONS
 // ================================================================================================

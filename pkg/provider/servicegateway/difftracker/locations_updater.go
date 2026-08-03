@@ -174,6 +174,13 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 			lu.backoffAndRetry()
 		}
 
+		// A shutdown mid-sync leaves this pass neither successful nor rescheduled, so retiring its
+		// trigger and re-evaluating completion could close the initialization channel as a success
+		// the sync never earned. The tracker is being torn down; leave the gate untouched.
+		if lu.ctx.Err() != nil && !isOperationSucceeded {
+			return
+		}
+
 		// Decrement in-flight trigger counter and check initialization completion
 		lu.diffTracker.mu.Lock()
 		shouldCheck := atomic.LoadInt32(&lu.diffTracker.isInitializing) == 1

@@ -2,6 +2,7 @@ package difftracker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync/atomic"
@@ -26,6 +27,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient/mock_servicegatewayclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
@@ -1300,4 +1302,144 @@ func TestProcessK8sServices_ForeignServiceBecomesRemoval(t *testing.T) {
 	assert.True(t, sync.Removals.Has("uid-foreign"),
 		"a ServiceGateway LoadBalancer for a Service now owned by another controller must be relinquished")
 	assert.False(t, sync.Additions.Has("uid-foreign"), "it must not be re-provisioned either")
+}
+
+// TestFetchServiceGatewayServices_MatchesServiceTypeCaseInsensitively pins how NRP service types are
+// parsed. A service dropped here is absent from NRPState while still present in Azure, which is what
+// scheduleOrphanedResourceDeletions treats as an orphan, so an unrecognized type costs the live
+// resource. InboundOutbound counts as both, casing must not matter, and a genuinely unknown type
+// fails initialization rather than proceeding on a partial view.
+func TestFetchServiceGatewayServices_MatchesServiceTypeCaseInsensitively(t *testing.T) {
+	svc := func(name, serviceType string) *armnetwork.ServiceGatewayService {
+		return &armnetwork.ServiceGatewayService{
+			Name:       ptr.To(name),
+			Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{ServiceType: ptr.To(armnetwork.ServiceType(serviceType))},
+		}
+	}
+
+	cases := []struct {
+		name            string
+		services        []*armnetwork.ServiceGatewayService
+		wantLB, wantNAT []string
+		wantErr         bool
+	}{
+		{"canonical", []*armnetwork.ServiceGatewayService{svc("lb", "Inbound"), svc("nat", "Outbound")},
+			[]string{"lb"}, []string{"nat"}, false},
+		{"lowercase", []*armnetwork.ServiceGatewayService{svc("lb", "inbound"), svc("nat", "outbound")},
+			[]string{"lb"}, []string{"nat"}, false},
+		{"inbound outbound counts as both", []*armnetwork.ServiceGatewayService{svc("both", "InboundOutbound")},
+			[]string{"both"}, []string{"both"}, false},
+		{"unknown type fails initialization", []*armnetwork.ServiceGatewayService{svc("weird", "Sideways")},
+			nil, nil, true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+			mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+			mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+			mockSGW.EXPECT().GetServices(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.services, nil).AnyTimes()
+
+			nrp := &NRPState{LoadBalancers: utilsets.NewString(), NATGateways: utilsets.NewString()}
+			err := fetchServiceGatewayServices(context.Background(), testConfig(), mockFactory, nrp)
+
+			if tc.wantErr {
+				assert.Error(t, err, "an unrecognized service type must not yield a silently partial NRP view")
+				return
+			}
+			assert.NoError(t, err)
+			for _, name := range tc.wantLB {
+				assert.True(t, nrp.LoadBalancers.Has(name), "expected %q tracked as a LoadBalancer", name)
+			}
+			for _, name := range tc.wantNAT {
+				assert.True(t, nrp.NATGateways.Has(name), "expected %q tracked as a NAT Gateway", name)
+			}
+		})
+	}
+}
+
+// TestRecoverServiceExternalIPs_RetriesTransientPatchFailure pins that the one pass which recovers a
+// Service's External IP retries a transient apiserver error instead of swallowing it. Nothing
+// re-drives the write afterwards, so a single swallowed failure leaves the Service with an empty
+// ingress until the next CCM restart even though its Azure resources exist.
+func TestRecoverServiceExternalIPs_RetriesTransientPatchFailure(t *testing.T) {
+	const uid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "default", UID: types.UID(uid)},
+		Spec:       v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer},
+	}
+
+	kube := fake.NewSimpleClientset(svc)
+	var patches int32
+	kube.PrependReactor("patch", "services", func(k8stesting.Action) (bool, runtime.Object, error) {
+		// Fail the first attempt only; the retry must then succeed.
+		if atomic.AddInt32(&patches, 1) == 1 {
+			return true, nil, errors.New("apiserver unavailable")
+		}
+		return false, nil, nil
+	})
+
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.NRPResources.LoadBalancers.Insert(uid)
+
+	recoverServiceExternalIPs(context.Background(), dt,
+		map[string]*v1.Service{uid: svc},
+		map[string]string{strings.ToLower(PublicIPName(uid)): "20.30.40.50"})
+
+	assert.Greater(t, atomic.LoadInt32(&patches), int32(1),
+		"a transient failure must be retried, not swallowed")
+	got, err := kube.CoreV1().Services("default").Get(context.Background(), "web", metav1.GetOptions{})
+	assert.NoError(t, err)
+	if assert.Len(t, got.Status.LoadBalancer.Ingress, 1, "the External IP must be recovered") {
+		assert.Equal(t, "20.30.40.50", got.Status.LoadBalancer.Ingress[0].IP)
+	}
+}
+
+// TestScheduleOrphanedResourceDeletions_SkipsNonUUIDLoadBalancers pins the guard that keeps startup
+// from deleting LoadBalancers this controller never created. Managed LoadBalancers are named after
+// the Service UID, so anything else in the resource group belongs to someone else - the cluster's
+// own "kubernetes" LoadBalancers among them.
+func TestScheduleOrphanedResourceDeletions_SkipsNonUUIDLoadBalancers(t *testing.T) {
+	const orphanUUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	dt := newTestDiffTracker()
+
+	azureLBs := utilsets.NewString("kubernetes", "kubernetes-internal", "customer-lb", orphanUUID)
+	scheduleOrphanedResourceDeletions(dt, azureLBs, utilsets.NewString(), utilsets.NewString())
+
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	for _, name := range []string{"kubernetes", "kubernetes-internal", "customer-lb"} {
+		_, scheduled := dt.pendingServiceOps[name]
+		assert.False(t, scheduled, "%q is not a managed LoadBalancer and must never be scheduled for deletion", name)
+	}
+	_, scheduled := dt.pendingServiceOps[orphanUUID]
+	assert.True(t, scheduled, "control: a genuine UUID-named orphan must still be collected")
+}
+
+// TestParseLocationAddresses_ReadsAddressesAndServices pins that the startup NRP snapshot is
+// actually parsed. Every other test stubs the locations call out, so a parser that silently returned
+// nothing would leave the diff engine comparing against an empty NRP view.
+func TestParseLocationAddresses_ReadsAddressesAndServices(t *testing.T) {
+	location := armnetwork.ServiceGatewayAddressLocation{
+		AddressLocation: ptr.To("10.0.0.1"),
+		Addresses: []*armnetwork.ServiceGatewayAddress{
+			{Address: ptr.To("10.244.0.5"), Services: []*string{ptr.To("svc-a"), ptr.To("svc-b")}},
+			{Address: ptr.To("10.244.0.6")},
+			{Address: nil},
+		},
+	}
+
+	got := parseLocationAddresses(location)
+
+	assert.Len(t, got, 2, "addresses with no value must be skipped, the rest parsed")
+	if assert.Contains(t, got, "10.244.0.5") {
+		assert.True(t, got["10.244.0.5"].Services.Has("svc-a"))
+		assert.True(t, got["10.244.0.5"].Services.Has("svc-b"))
+	}
+	if assert.Contains(t, got, "10.244.0.6") {
+		assert.Zero(t, got["10.244.0.6"].Services.Len(), "an address with no services parses to an empty set")
+	}
 }

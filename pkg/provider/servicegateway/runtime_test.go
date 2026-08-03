@@ -32,6 +32,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 
@@ -351,4 +352,48 @@ func testDiffTrackerConfig() difftracker.Config {
 	cfg.VnetName = "vnet"
 	cfg.VnetResourceGroup = "rg"
 	return diffTrackerConfig(cfg)
+}
+
+// TestNodePrivateIPAddresses_SelectsOnlyInternalIPs pins that node locations are derived from
+// InternalIP addresses alone. A node's address list also carries ExternalIP and Hostname entries;
+// registering those as locations would publish backends under an address NRP cannot route to.
+func TestNodePrivateIPAddresses_SelectsOnlyInternalIPs(t *testing.T) {
+	node := &v1.Node{
+		Status: v1.NodeStatus{
+			Addresses: []v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "node-1"},
+				{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+				{Type: v1.NodeExternalIP, Address: "52.1.2.3"},
+				{Type: v1.NodeInternalIP, Address: "fd00::1"},
+				{Type: v1.NodeExternalDNS, Address: "node-1.example.com"},
+			},
+		},
+	}
+
+	assert.Equal(t, []string{"10.0.0.1", "fd00::1"}, nodePrivateIPAddresses(node),
+		"only InternalIP addresses are node locations, in the order the node reports them")
+
+	assert.Empty(t, nodePrivateIPAddresses(&v1.Node{}),
+		"a node with no addresses yields no locations")
+}
+
+// TestNodeFromDeleteEvent_DecodesTombstones pins that a delete delivered as a tombstone is decoded.
+// An informer that has fallen behind wraps the object in DeletedFinalStateUnknown, so a handler that
+// only accepts the bare type silently drops those deletions.
+func TestNodeFromDeleteEvent_DecodesTombstones(t *testing.T) {
+	node := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-1"}}
+
+	got, err := nodeFromDeleteEvent(node)
+	assert.NoError(t, err)
+	assert.Equal(t, "node-1", got.Name, "a bare object decodes")
+
+	got, err = nodeFromDeleteEvent(cache.DeletedFinalStateUnknown{Key: "node-1", Obj: node})
+	assert.NoError(t, err)
+	assert.Equal(t, "node-1", got.Name, "a tombstone decodes to the object it wraps")
+
+	_, err = nodeFromDeleteEvent(cache.DeletedFinalStateUnknown{Key: "node-1", Obj: "not-a-node"})
+	assert.Error(t, err, "a tombstone wrapping the wrong type is an error, not a silent drop")
+
+	_, err = nodeFromDeleteEvent("not-a-node")
+	assert.Error(t, err, "an unexpected object is an error")
 }

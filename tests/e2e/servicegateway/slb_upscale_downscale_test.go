@@ -431,5 +431,14 @@ func livePodIPs(cs clientset.Interface, namespace string, selector map[string]st
 	if err != nil {
 		return nil, err
 	}
-	return podIPSet(pods.Items), nil
+	readyPods := make([]v1.Pod, 0, len(pods.Items))
+	for i := range pods.Items {
+		// Skip pods that are already Terminating: their addresses are being drained, so they
+		// are not part of the set the Service Gateway should still hold. Counting them makes
+		// a scale-down transiently expect one address too many.
+		if pods.Items[i].DeletionTimestamp == nil {
+			readyPods = append(readyPods, pods.Items[i])
+		}
+	}
+	return podIPSet(readyPods), nil
 }

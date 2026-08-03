@@ -16,6 +16,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/ptr"
 
@@ -833,10 +834,26 @@ func fetchServiceGatewayServices(
 			continue
 		}
 
-		switch *service.Properties.ServiceType {
-		case "Inbound":
+		// Matched case-insensitively against the SDK constants: Azure may normalize casing
+		// differently across endpoints, and a service dropped here is absent from NRPState while
+		// still present in Azure, which is exactly what scheduleOrphanedResourceDeletions treats as
+		// an orphan - so an unrecognized type would cost the live resource. InboundOutbound counts
+		// as both.
+		serviceType := *service.Properties.ServiceType
+		isInbound := strings.EqualFold(string(serviceType), string(armnetwork.ServiceTypeInbound)) ||
+			strings.EqualFold(string(serviceType), string(armnetwork.ServiceTypeInboundOutbound))
+		isOutbound := strings.EqualFold(string(serviceType), string(armnetwork.ServiceTypeOutbound)) ||
+			strings.EqualFold(string(serviceType), string(armnetwork.ServiceTypeInboundOutbound))
+
+		if !isInbound && !isOutbound {
+			return fmt.Errorf("ServiceGateway service %q has unrecognized service type %q; refusing to "+
+				"initialize with an incomplete NRP view", *service.Name, serviceType)
+		}
+
+		if isInbound {
 			nrp.LoadBalancers.Insert(*service.Name)
-		case "Outbound":
+		}
+		if isOutbound {
 			// Skip the RP-owned default outbound NAT Gateway. AKS RP provisions
 			// it (name: "default-natgw", IsDefault=true) before CCM starts; if
 			// CCM inserts it here, the diff vs K8s Egresses (count=0) marks it
@@ -1093,9 +1110,17 @@ func recoverServiceExternalIPs(ctx context.Context, diffTracker *DiffTracker, se
 
 		logger.V(5).Info("Found service External IP", "ip", ipAddress, "serviceUID", serviceUID)
 
-		// Update K8s Service status with the External IP
-		if err := diffTracker.updateServiceLoadBalancerStatus(ctx, serviceUID, ipAddress); err != nil {
-			logger.V(4).Info("Could not update service LoadBalancer status", "namespace", svc.Namespace, "service", svc.Name, "ip", ipAddress, "err", err)
+		// Update K8s Service status with the External IP. This is the only pass that recovers it, so
+		// a transient apiserver error is retried here rather than swallowed: nothing re-drives the
+		// write afterwards and the Service would keep an empty ingress until the next CCM restart.
+		var lastErr error
+		if err := wait.ExponentialBackoff(finalizerRetryBackoff, func() (bool, error) {
+			lastErr = diffTracker.updateServiceLoadBalancerStatus(ctx, serviceUID, ipAddress)
+			return lastErr == nil, nil
+		}); err != nil {
+			recordServiceExternalIPRecoveryFailed()
+			logger.Error(lastErr, "Could not recover service External IP after retries; the Service keeps an empty ingress until the next restart",
+				"namespace", svc.Namespace, "service", svc.Name, "ip", ipAddress)
 			continue
 		}
 

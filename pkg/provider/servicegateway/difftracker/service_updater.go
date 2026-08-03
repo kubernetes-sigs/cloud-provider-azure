@@ -526,6 +526,16 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 	}
 	s.logger.V(5).Info("Registered inbound service with ServiceGateway", "serviceUID", serviceUID, "correlationID", correlationID)
 
+	// The LoadBalancer is live from here: Azure holds the PIP and LB, and NRP holds the registration.
+	// Record that before the status write below, which touches only Kubernetes. Leaving it until
+	// after would let a failed status patch demote a provisioned service back to StateNotStarted with
+	// no LoadBalancer tracked, and isServiceReadyToSync then withholds its endpoints - a public IP
+	// serving nothing until the patch eventually succeeds.
+	s.diffTracker.UpdateNRPLoadBalancers(SyncServicesReturnType{
+		Additions: newIgnoreCaseSetFromSlice([]string{serviceUID}),
+		Removals:  nil,
+	})
+
 	// Step 5: Update K8s Service status with the external IP.
 	// This is critical for ServiceGateway mode since EnsureLoadBalancer returns empty status
 	// immediately; without it the Service.Status.LoadBalancer.Ingress stays empty and the load
@@ -546,12 +556,6 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 		return
 	}
 	s.logger.V(5).Info("Updated service status with external IP", "serviceUID", serviceUID, "publicIPAddress", pipIPAddress)
-
-	// Update NRPResources to reflect the sync
-	s.diffTracker.UpdateNRPLoadBalancers(SyncServicesReturnType{
-		Additions: newIgnoreCaseSetFromSlice([]string{serviceUID}),
-		Removals:  nil,
-	})
 
 	// Step 6: Success callback
 	s.onComplete(serviceUID, true, nil)
@@ -675,8 +679,11 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID s
 	)
 
 	if err := s.diffTracker.updateNRPSGWServices(ctx, s.diffTracker.config.ServiceGatewayResourceName, removeBackendPoolDTO); err != nil {
-		s.logger.V(4).Info("Could not remove backend pool reference for inbound service", "serviceUID", serviceUID, "err", err)
-		// Don't fail the deletion - continue with LoadBalancer deletion
+		// Continue: the later steps are what free the resources. Logged at error level and counted
+		// because nothing retries this step, the deletion is still recorded as a success, and the
+		// ServiceGateway keeps a stale backend pool reference.
+		recordDeleteSubstepFailure(deleteStepRemoveBackendPool)
+		s.logger.Error(err, "Could not remove backend pool reference for inbound service; continuing with deletion", "serviceUID", serviceUID)
 	} else {
 		s.logger.V(5).Info("Removed backend pool reference for inbound service", "serviceUID", serviceUID)
 	}
@@ -773,8 +780,11 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string, correlationID 
 
 	// Step 1: Disassociate NAT Gateway from ServiceGateway
 	if err := s.diffTracker.disassociateNatGatewayFromServiceGateway(ctx, s.diffTracker.config.ServiceGatewayResourceName, serviceUID); err != nil {
-		s.logger.V(4).Info("Could not disassociate NAT Gateway from ServiceGateway", "serviceUID", serviceUID, "err", err)
-		// Non-fatal - continue with deletion
+		// Continue: the later steps are what free the resources. Logged at error level and counted
+		// because nothing retries this step, the deletion is still recorded as a success, and the
+		// ServiceGateway keeps a stale NAT Gateway association.
+		recordDeleteSubstepFailure(deleteStepDisassociateNAT)
+		s.logger.Error(err, "Could not disassociate NAT Gateway from ServiceGateway; continuing with deletion", "serviceUID", serviceUID)
 	} else {
 		s.logger.V(5).Info("Disassociated NAT Gateway from ServiceGateway", "serviceUID", serviceUID)
 	}

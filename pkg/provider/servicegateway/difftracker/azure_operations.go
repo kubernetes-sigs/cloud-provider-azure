@@ -617,6 +617,12 @@ func isSynchronousCompletion(err error) bool {
 		// Cannot prove this was the initial call, so it cannot be proven complete.
 		return false
 	}
+	// A body that names an error is NRP reporting failure inline, whatever the status code says.
+	// azcore fills ErrorCode from that body, so an empty one is the documented completion shape and
+	// stays tolerated; anything else would mark the service registered while NRP holds no entry.
+	if respErr.ErrorCode != "" {
+		return false
+	}
 	// Every LRO poll is a GET; only the initial updateServices/updateAddressLocations call is a POST.
 	return raw.Request.Method == http.MethodPost
 }

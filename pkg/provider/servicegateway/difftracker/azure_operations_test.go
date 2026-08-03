@@ -632,3 +632,59 @@ func TestDisassociateNatGateway_ClearsReferencesOnTheWire(t *testing.T) {
 	assert.Contains(t, string(natBody), `"idleTimeoutInMinutes":4`,
 		"control: sibling fields must survive the clear")
 }
+
+// TestIsSynchronousCompletion_RejectsErrorBearing200 pins that a 200 which names an error is not
+// mistaken for NRP's synchronous completion.
+//
+// The completion shape is a bare 200 on the initial POST, so matching on status and method alone
+// also swallows a 200 whose body reports failure. Tolerating that marks the service registered,
+// adds its finalizer and publishes an external IP while NRP holds no entry, so no traffic is ever
+// forwarded and nothing re-drives it. azcore fills ErrorCode from the body, so the empty case
+// remains the real completion.
+func TestIsSynchronousCompletion_RejectsErrorBearing200(t *testing.T) {
+	errorBearing := func(code string) error {
+		req, _ := http.NewRequest(http.MethodPost, "https://example/sgw", nil)
+		return &azcore.ResponseError{
+			StatusCode:  http.StatusOK,
+			ErrorCode:   code,
+			RawResponse: &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: req},
+		}
+	}
+
+	assert.False(t, isSynchronousCompletion(errorBearing("OperationFailed")),
+		"a 200 whose body reports a failure must propagate, not be tolerated as completion")
+	assert.False(t, isSynchronousCompletion(fmt.Errorf("wrapped: %w", errorBearing("ServiceRegistrationFailed"))),
+		"the same holds through a wrapped error")
+
+	// Control: the documented completion shape carries no error code and stays tolerated.
+	assert.True(t, isSynchronousCompletion(errorBearing("")),
+		"control: a bare 200 on the initial POST is NRP's synchronous completion")
+}
+
+// TestConvertServiceDTOsToServiceRequests_MapsServiceType pins the field that decides whether NRP
+// registers a service as an inbound LoadBalancer or an outbound NAT Gateway, and that an outbound
+// service carries its NAT Gateway reference. Asserting the call happened while matching the payload
+// with gomock.Any() cannot see either.
+func TestConvertServiceDTOsToServiceRequests_MapsServiceType(t *testing.T) {
+	requests, err := convertServiceDTOsToServiceRequests([]ServiceDTO{
+		{Service: "lb-uid", ServiceType: Inbound},
+		{Service: "nat-uid", ServiceType: Outbound, PublicNatGateway: NatGatewayDTO{ID: "/nat/id"}},
+	}, testConfig())
+	assert.NoError(t, err)
+
+	if assert.Len(t, requests, 2) {
+		assert.Equal(t, armnetwork.ServiceTypeInbound, *requests[0].Service.Properties.ServiceType,
+			"an inbound service must register as a LoadBalancer")
+		assert.Nil(t, requests[0].Service.Properties.PublicNatGatewayID,
+			"an inbound service must not carry a NAT Gateway reference")
+
+		assert.Equal(t, armnetwork.ServiceTypeOutbound, *requests[1].Service.Properties.ServiceType,
+			"an outbound service must register as a NAT Gateway")
+		if assert.NotNil(t, requests[1].Service.Properties.PublicNatGatewayID) {
+			assert.Equal(t, "/nat/id", *requests[1].Service.Properties.PublicNatGatewayID)
+		}
+	}
+
+	_, err = convertServiceDTOsToServiceRequests([]ServiceDTO{{Service: "x", ServiceType: "Sideways"}}, testConfig())
+	assert.Error(t, err, "an unknown service type must not be silently mapped")
+}

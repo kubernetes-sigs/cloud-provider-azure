@@ -351,8 +351,9 @@ func (dt *DiffTracker) podInformerRemovePod(pod *v1.Pod) {
 				pod.Namespace, pod.Name)
 			if err := dt.RemovePodFinalizerByPod(context.Background(), pod); err != nil {
 				RecordPodFinalizerRemoveFailed()
-				klog.Errorf("podInformerRemovePod: pod %s/%s is left Terminating; removing its cleanup finalizer failed and will not be retried until CCM restart: %v",
+				klog.Errorf("podInformerRemovePod: pod %s/%s could not have its cleanup finalizer removed, queued for retry: %v",
 					pod.Namespace, pod.Name, err)
+				dt.enqueuePodFinalizerRetry(pod, "")
 			}
 			return
 		}
@@ -375,12 +376,12 @@ func (dt *DiffTracker) podInformerRemovePod(pod *v1.Pod) {
 			podKey, result.FinalizerDecision, result.IsLastPod, result.Enqueued)
 		if result.FinalizerDecision == PodFinalizerDecisionReleaseNoDrain {
 			if err := dt.RemovePodFinalizerByPod(context.Background(), pod); err != nil {
-				// Nothing retries this: the engine proved there is no drain, so no pending record
-				// exists, and the informer only re-drives a pod whose state changes - a resync
-				// delivers an unchanged object and is skipped. The pod stays Terminating until the
-				// CCM restarts, blocking node drain and namespace deletion.
+				// The engine proved there is no drain, so queue a finalizer-only record: nothing
+				// else re-drives this pod, because the informer only reacts to a state change and a
+				// resync delivers an unchanged object.
 				RecordPodFinalizerRemoveFailed()
-				klog.Errorf("podInformerRemovePod: pod %s is left Terminating; removing its cleanup finalizer failed and will not be retried until CCM restart: %v", podKey, err)
+				klog.Errorf("podInformerRemovePod: pod %s could not have its cleanup finalizer removed, queued for retry: %v", podKey, err)
+				dt.enqueuePodFinalizerRetry(pod, egressName)
 			}
 		}
 		return
@@ -402,9 +403,9 @@ func (dt *DiffTracker) podInformerRemovePod(pod *v1.Pod) {
 	if result.FinalizerDecision == PodFinalizerDecisionReleaseNoDrain {
 		klog.V(2).Infof("podInformerRemovePod: Pod %s has no local or NRP drain; removing finalizer directly", podKey)
 		if err := dt.RemovePodFinalizerByPod(context.Background(), pod); err != nil {
-			// See the no-IP path above: this removal is not retried either.
 			RecordPodFinalizerRemoveFailed()
-			klog.Errorf("podInformerRemovePod: pod %s is left Terminating; removing its cleanup finalizer failed and will not be retried until CCM restart: %v", podKey, err)
+			klog.Errorf("podInformerRemovePod: pod %s could not have its cleanup finalizer removed, queued for retry: %v", podKey, err)
+			dt.enqueuePodFinalizerRetry(pod, egressName)
 		}
 	}
 }
