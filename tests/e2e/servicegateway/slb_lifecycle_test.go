@@ -19,6 +19,7 @@ package servicegateway
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -361,36 +362,41 @@ var _ = Describe("Container Load Balancer Lifecycle", Label(slbTestLabel), func(
 		By("Waiting for healthy pods to be ready")
 		time.Sleep(30 * time.Second)
 
-		By("Waiting for Azure provisioning")
-		var registeredPods int
+		By("Waiting for the Service Gateway to converge on exactly the healthy pods")
+		// Assert the exact healthy set. The previous bound accepted anything from
+		// totalPods-crashPods up to totalPods, so registering EVERY crashing pod satisfied it -
+		// the precise failure this spec is named for. A crashing pod may briefly hold an IP, so
+		// convergence is what is asserted: once it is no longer Ready its address must be drained.
 		Eventually(func() error {
 			if err := serviceReconciledErr(serviceUID, -1); err != nil {
 				return err
 			}
-			count, err := countRegisteredEndpoints(serviceUID)
+			healthy, err := cs.CoreV1().Pods(ns.Name).List(context.TODO(), metav1.ListOptions{
+				LabelSelector: labels.SelectorFromSet(serviceLabels).String(),
+			})
 			if err != nil {
 				return err
 			}
-			registeredPods = count
-			if registeredPods < totalPods-crashPods {
-				return fmt.Errorf("registered pods %d, want at least %d", registeredPods, totalPods-crashPods)
+			want := make(map[string]struct{})
+			for i := range healthy.Items {
+				pod := &healthy.Items[i]
+				if !strings.Contains(pod.Name, "-healthy-") {
+					continue
+				}
+				for _, ip := range pod.Status.PodIPs {
+					if ip.IP != "" {
+						want[ip.IP] = struct{}{}
+					}
+				}
 			}
-			if registeredPods > totalPods {
-				return fmt.Errorf("registered pods %d, want at most %d", registeredPods, totalPods)
+			if len(want) != totalPods-crashPods {
+				return fmt.Errorf("expected %d healthy pod IPs, got %d", totalPods-crashPods, len(want))
 			}
-			return nil
+			return registeredAddressesMatchErr(serviceUID, want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
-			"Service Gateway should only register healthy pods")
+			"the Service Gateway must register exactly the healthy pods' IPs and drain the crashing ones")
 
-		// No trailing re-assertion here: registeredPods is set inside the Eventually above, which
-		// only returns nil when these exact bounds already hold, so repeating them cannot fail.
-		utils.Logf("Registered pods: %d (expected: %d healthy pods)", registeredPods, totalPods-crashPods)
-		// Note: Crashing pods may briefly get IPs and be registered before crashing, so the
-		// bounds asserted by the Eventually above are deliberately a range rather than an exact
-		// count. Re-asserting them here would be a no-op: registeredPods is set inside that loop,
-		// which only returns nil once those same bounds hold.
-
-		utils.Logf("\n✓ Pod failure handling test passed: %d pods registered (healthy: %d, crashed pods may be temporarily included)", registeredPods, totalPods-crashPods)
+		utils.Logf("\n✓ Pod failure handling test passed: exactly the %d healthy pod IPs are registered", totalPods-crashPods)
 	})
 
 	It("should handle service selector updates", func() {

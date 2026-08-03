@@ -165,7 +165,10 @@ func verifyNATGatewayAndPIPExist(natGatewayID string) error {
 	return nil
 }
 
-// verifyNATGatewayAndPIPDeleted checks if NAT Gateway has been deleted
+// verifyNATGatewayAndPIPDeleted checks that the NAT Gateway AND its Public IP have been deleted.
+//
+// The PIP half was missing despite the name: a CCM that deletes the NAT Gateway but orphans its
+// Public IP passed every egress teardown spec while leaking a billable address each time.
 func verifyNATGatewayAndPIPDeleted(natGatewayID string) error {
 	// Extract NAT Gateway name from ID
 	parts := strings.Split(natGatewayID, "/")
@@ -183,7 +186,13 @@ func verifyNATGatewayAndPIPDeleted(natGatewayID string) error {
 		return fmt.Errorf("unexpected error checking NAT Gateway: %s", string(natOutput))
 	}
 
-	utils.Logf("  NAT Gateway %s confirmed deleted", natGatewayName)
+	// The NAT Gateway's Public IP follows the same <name>-pip convention as the inbound path and
+	// must be torn down with it.
+	if err := azurePublicIPAbsentErr(natGatewayName); err != nil {
+		return fmt.Errorf("NAT Gateway %s was deleted but its Public IP leaked: %w", natGatewayName, err)
+	}
+
+	utils.Logf("  NAT Gateway %s and its Public IP confirmed deleted", natGatewayName)
 	return nil
 }
 
@@ -366,33 +375,39 @@ var _ = Describe("Container Load Balancer Finalizer Tests", Label(slbTestLabel, 
 			utils.Logf("Initiated deletion for service %s", serviceName)
 		}
 
-		By("Immediately checking services have deletion timestamp AND ServiceGateway finalizer")
-		// Small delay to ensure deletion has started but not completed
-		time.Sleep(2 * time.Second)
-
-		for _, serviceName := range serviceNames {
-			svc, err := cs.CoreV1().Services(ns.Name).Get(ctx, serviceName, metav1.GetOptions{})
-			if apierrors.IsNotFound(err) {
-				// Service already deleted (very fast cleanup)
-				utils.Logf("Service %s already deleted (fast cleanup)", serviceName)
-				continue
+		By("Asserting no Service object is reclaimed while its Azure Load Balancer is still live")
+		// Pin the ORDER, not two independent "eventually happened" facts. The previous check was a
+		// single T+2s snapshot whose body was skipped entirely on IsNotFound - so a controller that
+		// released the ServiceGateway finalizer early, letting the object be reclaimed inside those
+		// 2s, passed without asserting anything. That early release is the leak/blackhole bug.
+		//
+		// Query Azure first, then Kubernetes: observing "Load Balancer alive" together with
+		// "Service object gone" is the violation.
+		Consistently(func() error {
+			for i, serviceName := range serviceNames {
+				lbAlive := azureLoadBalancerAbsentErr(serviceUIDs[i]) != nil
+				svc, getErr := cs.CoreV1().Services(ns.Name).Get(ctx, serviceName, metav1.GetOptions{})
+				svcGone := apierrors.IsNotFound(getErr)
+				if getErr != nil && !svcGone {
+					return fmt.Errorf("could not read service %s: %w", serviceName, getErr)
+				}
+				if lbAlive && svcGone {
+					return fmt.Errorf("service %s was reclaimed while its Azure Load Balancer was still live: "+
+						"the ServiceGateway finalizer was released before Azure cleanup completed", serviceName)
+				}
+				if !svcGone {
+					if svc.DeletionTimestamp == nil {
+						return fmt.Errorf("service %s has no DeletionTimestamp despite being deleted", serviceName)
+					}
+					if lbAlive && !hasFinalizer(svc.Finalizers, serviceGatewayServiceFinalizer) {
+						return fmt.Errorf("service %s lost its ServiceGateway finalizer while its Load Balancer "+
+							"was still live in Azure", serviceName)
+					}
+				}
 			}
-			Expect(err).NotTo(HaveOccurred())
-
-			// Verify deletion timestamp is set
-			Expect(svc.DeletionTimestamp).NotTo(BeNil(),
-				"Service %s should have DeletionTimestamp set", serviceName)
-			utils.Logf("Service %s has DeletionTimestamp: %v", serviceName, svc.DeletionTimestamp)
-
-			// Verify ServiceGateway finalizer is still present (blocking deletion until Azure cleanup)
-			hasSGFinalizer := hasFinalizer(svc.Finalizers, serviceGatewayServiceFinalizer)
-			utils.Logf("Service %s during deletion - ServiceGateway finalizer present: %v, Finalizers: %v",
-				serviceName, hasSGFinalizer, svc.Finalizers)
-
-			Expect(hasSGFinalizer).To(BeTrue(),
-				"Service %s should still have ServiceGateway finalizer during deletion (blocks until Azure cleanup)", serviceName)
-		}
-		utils.Logf("✓ All services have deletion timestamp AND ServiceGateway finalizer is blocking deletion")
+			return nil
+		}, 30*time.Second, 3*time.Second).Should(Succeed(),
+			"the ServiceGateway finalizer must hold each Service until its Azure Load Balancer is deleted")
 
 		By("Waiting for services to be fully deleted (Azure cleanup completes)")
 		for _, serviceName := range serviceNames {
@@ -575,25 +590,29 @@ var _ = Describe("Container Load Balancer Finalizer Tests", Label(slbTestLabel, 
 		err = cs.CoreV1().Pods(ns.Name).Delete(ctx, lastPodName, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		By("Immediately checking last pod has deletion timestamp AND pod finalizer is blocking")
-		time.Sleep(2 * time.Second)
-
-		lastPod, err := cs.CoreV1().Pods(ns.Name).Get(ctx, lastPodName, metav1.GetOptions{})
-		if !apierrors.IsNotFound(err) {
-			Expect(err).NotTo(HaveOccurred())
-
-			// Verify deletion timestamp is set
-			Expect(lastPod.DeletionTimestamp).NotTo(BeNil(),
-				"Last pod %s should have DeletionTimestamp set", lastPodName)
-
-			// Verify pod finalizer is still present (blocking until Azure cleanup)
-			hasPodFinalizer := hasFinalizer(lastPod.Finalizers, serviceGatewayPodFinalizer)
-			utils.Logf("Last pod %s during deletion - Finalizer present: %v, DeletionTimestamp: %v",
-				lastPodName, hasPodFinalizer, lastPod.DeletionTimestamp)
-
-			Expect(hasPodFinalizer).To(BeTrue(),
-				"Last pod %s should still have finalizer during deletion (waiting for Azure cleanup)", lastPodName)
-		}
+		By("Asserting the last pod is never reclaimed while its NAT Gateway is still live in Azure")
+		// This is the ordering invariant, and it must be asserted as an ORDER rather than as two
+		// independent "eventually happened" facts. The previous check was a single T+2s snapshot
+		// wrapped in `if !apierrors.IsNotFound(err)`, so a controller that released the finalizer
+		// early - letting the pod be reclaimed within those 2s, which is precisely what the
+		// traffic-blackhole bug looks like - skipped the assertion entirely and still passed.
+		//
+		// Query Azure first, then the pod: if the NAT Gateway is still present, the pod must still
+		// exist. Observing "NAT Gateway alive" and "pod gone" together is the violation.
+		Consistently(func() error {
+			natAlive := verifyNATGatewayAndPIPExist(natGatewayID) == nil
+			_, getErr := cs.CoreV1().Pods(ns.Name).Get(ctx, lastPodName, metav1.GetOptions{})
+			podGone := apierrors.IsNotFound(getErr)
+			if getErr != nil && !podGone {
+				return fmt.Errorf("could not read last pod %s: %w", lastPodName, getErr)
+			}
+			if natAlive && podGone {
+				return fmt.Errorf("last pod %s was reclaimed while its NAT Gateway was still live in Azure: "+
+					"the cleanup finalizer was released before the drain completed", lastPodName)
+			}
+			return nil
+		}, 30*time.Second, 2*time.Second).Should(Succeed(),
+			"the last pod's cleanup finalizer must hold it Terminating until the NAT Gateway is torn down")
 
 		By("Waiting for last pod to be fully deleted (Azure NAT Gateway cleanup)")
 		Eventually(func() bool {
@@ -717,10 +736,19 @@ var _ = Describe("Container Load Balancer Finalizer Tests", Label(slbTestLabel, 
 		// While the pod still exists with a deletionTimestamp, the drain-gate finalizer must
 		// stay present on every observation; a single premature removal (the W2-1 defect) would
 		// let the pod and its egress IP be reclaimed while NRP still maps the address.
+		//
+		// The pod disappearing is only an acceptable terminal state once Azure teardown has
+		// actually completed. Treating it as acceptable unconditionally would let a controller
+		// that releases the finalizer part-way through the window pass: the pod vanishes, every
+		// later observation short-circuits, and the NAT Gateway is still live in Azure.
 		Consistently(func() error {
 			p, getErr := cs.CoreV1().Pods(ns.Name).Get(ctx, podName, metav1.GetOptions{})
 			if apierrors.IsNotFound(getErr) {
-				return nil // fully drained and removed; acceptable terminal state
+				if verifyNATGatewayAndPIPExist(natGatewayID) == nil {
+					return fmt.Errorf("pod %s was reclaimed while its NAT Gateway was still live in Azure: "+
+						"the drain-gate finalizer was released before NRP finished draining", podName)
+				}
+				return nil // drained and torn down; acceptable terminal state
 			}
 			if getErr != nil {
 				return getErr

@@ -159,11 +159,12 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 	var lbRules []*armnetwork.LoadBalancingRule
 
 	if config != nil && len(config.FrontendPorts) > 0 {
-		idleTimeout := int32(4)
+		idleTimeout := int32(inboundIdleTimeoutMinMinutes)
 		if config.IdleTimeoutMinutes != nil {
 			idleTimeout = *config.IdleTimeoutMinutes
-			if idleTimeout < 4 || idleTimeout > 30 {
-				return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: idle timeout %d out of range (4-30) for service %s", idleTimeout, serviceUID)
+			if idleTimeout < inboundIdleTimeoutMinMinutes || idleTimeout > inboundIdleTimeoutMaxMinutes {
+				return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: idle timeout %d out of range (%d-%d) for service %s",
+					idleTimeout, inboundIdleTimeoutMinMinutes, inboundIdleTimeoutMaxMinutes, serviceUID)
 			}
 		}
 		// Azure rejects two load-balancing rules that share the same protocol and backend
@@ -449,11 +450,12 @@ func (e *InboundConfigValidationError) WarningEvent() (reason, message string) {
 	return e.Reason, e.Message
 }
 
-// Supported bounds for the idle-timeout annotation, matching the standard LoadBalancer path so the
-// same annotation is accepted identically with ServiceGateway enabled.
+// Supported bounds for the idle-timeout annotation. Azure Load Balancer accepts 4-30 minutes, and
+// buildInboundServiceResources enforces the same range when it builds the rule; admission uses these
+// constants so a value cannot pass here and then park the Service when the build rejects it.
 const (
 	inboundIdleTimeoutMinMinutes = 4
-	inboundIdleTimeoutMaxMinutes = 100
+	inboundIdleTimeoutMaxMinutes = 30
 )
 
 // AdmitInboundService is the single decision point for whether this controller may provision a

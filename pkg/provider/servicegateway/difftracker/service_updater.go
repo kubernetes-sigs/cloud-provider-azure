@@ -84,7 +84,7 @@ func isTerminalError(err error) bool {
 func (s *ServiceUpdater) Run() {
 	s.logger.V(2).Info("Started ServiceUpdater")
 
-	// Periodic ticker to keep the oldest-age metric fresh even when no new operations arrive
+	// Periodic ticker to keep the operation gauges fresh even when no new operations arrive
 	ageTicker := time.NewTicker(30 * time.Second)
 	defer ageTicker.Stop()
 
@@ -98,9 +98,20 @@ func (s *ServiceUpdater) Run() {
 			s.logger.V(5).Info("Processing triggered service batch")
 			s.processBatch()
 		case <-ageTicker.C:
-			updatePendingOperationOldestAgeMetric(s.diffTracker)
+			s.refreshOperationGauges()
 		}
 	}
+}
+
+// refreshOperationGauges recomputes the operation gauges from pendingServiceOps. They are only
+// refreshed from AddService/UpdateService/DeleteService/OnServiceCreationComplete, so the dispatcher
+// and the pod-driven paths mutate that map without updating them; outbound services are created only
+// by pod events, so without a periodic recompute the counts miss the egress fleet entirely and keep
+// a phantom after an aborted operation is untracked.
+func (s *ServiceUpdater) refreshOperationGauges() {
+	updatePendingOperationOldestAgeMetric(s.diffTracker)
+	updatePendingServiceOperationsMetric(s.diffTracker)
+	updateTrackedServicesMetric(s.diffTracker)
 }
 
 // Stop gracefully shuts down the ServiceUpdater

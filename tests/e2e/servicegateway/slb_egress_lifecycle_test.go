@@ -34,7 +34,11 @@ import (
 )
 
 // egressOutboundGoneErr returns nil once no Outbound service with the given name remains in the
-// Service Gateway (i.e. the NAT gateway/outbound registration has been torn down).
+// Service Gateway AND its Azure NAT Gateway and Public IP have been deleted.
+//
+// The Azure-resource half matters: removing the ServiceGateway registration says nothing about
+// the underlying ARM resources, so a CCM that unregisters but never deletes them satisfied every
+// egress teardown assertion while leaking a NAT Gateway and Public IP per egress identity.
 func egressOutboundGoneErr(egressName string) error {
 	resp, err := queryServiceGatewayServices()
 	if err != nil {
@@ -45,7 +49,7 @@ func egressOutboundGoneErr(egressName string) error {
 			return fmt.Errorf("outbound service %s still registered", egressName)
 		}
 	}
-	return nil
+	return azureEgressResourcesAbsentErr(egressName)
 }
 
 // Egress (NAT gateway) lifecycle edge case: draining the last egress pod must tear the NAT
@@ -117,7 +121,27 @@ var _ = Describe("SLB - Egress Lifecycle", Label(slbTestLabel), func() {
 		Expect(cs.CoreV1().Pods(ns.Name).DeleteCollection(context.TODO(), metav1.DeleteOptions{},
 			metav1.ListOptions{LabelSelector: egressSelector})).To(Succeed())
 
-		By("Verifying the egress pods drain (their finalizers clear after NAT gateway teardown)")
+		By("Asserting no egress pod is reclaimed while the outbound service is still registered")
+		// Polling "pods gone" and then "outbound gone" in sequence proves neither ordering nor the
+		// finalizer: a controller that released the finalizers immediately would satisfy the first
+		// poll instantly and still satisfy the second once teardown eventually happened. Assert the
+		// ORDER instead - while the outbound registration/NAT Gateway is still live, pods must
+		// still exist.
+		Consistently(func() error {
+			outboundGone := egressOutboundGoneErr(egressName) == nil
+			pods, err := cs.CoreV1().Pods(ns.Name).List(context.TODO(), metav1.ListOptions{LabelSelector: egressSelector})
+			if err != nil {
+				return err
+			}
+			if !outboundGone && len(pods.Items) == 0 {
+				return fmt.Errorf("every egress pod was reclaimed while the outbound service/NAT gateway was " +
+					"still registered: the cleanup finalizers were released before Azure teardown completed")
+			}
+			return nil
+		}, 30*time.Second, 3*time.Second).Should(Succeed(),
+			"the egress cleanup finalizers must hold the pods until the NAT gateway is torn down")
+
+		By("Verifying the egress pods drain once teardown completes")
 		Eventually(func() (int, error) {
 			pods, err := cs.CoreV1().Pods(ns.Name).List(context.TODO(), metav1.ListOptions{LabelSelector: egressSelector})
 			if err != nil {
@@ -126,7 +150,7 @@ var _ = Describe("SLB - Egress Lifecycle", Label(slbTestLabel), func() {
 			return len(pods.Items), nil
 		}, waitTime, defaultPollInterval).Should(Equal(0), "egress pods should fully delete")
 
-		By("Verifying the outbound service is removed from the Service Gateway")
+		By("Verifying the outbound service and its Azure resources are removed")
 		Eventually(func() error {
 			return egressOutboundGoneErr(egressName)
 		}, waitTime, defaultPollInterval).Should(Succeed(), "the NAT gateway/outbound service should be torn down")

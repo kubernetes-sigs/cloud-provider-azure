@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -496,4 +497,68 @@ func TestLocationsUpdater_SendsExactAddressPayloadToNRP(t *testing.T) {
 	}
 	assert.Equal(t, []string{svcUID}, names,
 		"the address must be attributed to the owning service, or NRP routes it for the wrong service")
+}
+
+// TestLocationsUpdater_StopWaitsForInFlightSync pins that Stop does not return while a sync is still
+// running. Cancelling alone lets an initialization failure tear down and report while process is
+// still inside an NRP call and about to mutate tracker state.
+func TestLocationsUpdater_StopWaitsForInFlightSync(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+	mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, _ armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
+			close(entered)
+			<-release
+			return nil
+		}).AnyTimes()
+
+	dt := newTestDiffTracker()
+	dt.networkClientFactory = mockFactory
+	dt.config = testConfig()
+
+	pod := newPod()
+	pod.InboundIdentities = utilsets.NewString("svc")
+	node := newNode()
+	node.Pods["10.0.0.1"] = pod
+	dt.K8sResources.Nodes["node-1"] = node
+	dt.NRPResources.LoadBalancers.Insert("svc")
+	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceUID: "svc", State: StateCreated}
+
+	lu := NewLocationsUpdater(context.Background(), dt)
+	go lu.Run()
+	defer releaseOnce.Do(func() { close(release) })
+
+	dt.triggerLocationsUpdater()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the sync never reached NRP")
+	}
+
+	stopped := make(chan struct{})
+	go func() {
+		lu.Stop()
+		close(stopped)
+	}()
+
+	select {
+	case <-stopped:
+		t.Fatal("Stop returned while a sync was still in flight")
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	releaseOnce.Do(func() { close(release) })
+	select {
+	case <-stopped:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Stop did not return after the sync finished")
+	}
 }

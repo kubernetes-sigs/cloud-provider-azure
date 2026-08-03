@@ -440,6 +440,66 @@ func azurePublicIPAbsentErr(serviceUID string) error {
 	return nil
 }
 
+// azureLoadBalancerAbsentErr returns nil once the service's Azure Load Balancer is gone.
+//
+// Deletion specs previously asserted only that the Service Gateway registration disappeared, which
+// says nothing about the underlying ARM resources: a CCM that deregisters the service but never
+// issues the LB/PIP deletes passes every such assertion while leaking billable Azure resources on
+// each service deletion. Absence is decided from the LIST output rather than a `show` exit code so
+// a transient query failure is reported as an error instead of being mistaken for "deleted".
+func azureLoadBalancerAbsentErr(serviceUID string) error {
+	lbOutput, err := runAz("network", "lb", "list",
+		"--resource-group", resourceGroupName,
+		"--output", "json")
+	if err != nil {
+		return fmt.Errorf("failed to query Azure for Load Balancers: %w", err)
+	}
+
+	var loadBalancers []AzureLoadBalancer
+	if err := json.Unmarshal(lbOutput, &loadBalancers); err != nil {
+		return fmt.Errorf("failed to parse Load Balancers response: %w", err)
+	}
+	for i := range loadBalancers {
+		if loadBalancers[i].Name == serviceUID {
+			return fmt.Errorf("load balancer %s still exists in Azure after deletion (leaked)", serviceUID)
+		}
+	}
+	return nil
+}
+
+// azureInboundResourcesAbsentErr returns nil once BOTH the service's Load Balancer and its Public
+// IP are gone from Azure. This is the resource-level counterpart to serviceDeletedErr, which only
+// checks the ServiceGateway registration.
+func azureInboundResourcesAbsentErr(serviceUID string) error {
+	if err := azureLoadBalancerAbsentErr(serviceUID); err != nil {
+		return err
+	}
+	return azurePublicIPAbsentErr(serviceUID)
+}
+
+// azureEgressResourcesAbsentErr returns nil once the egress identity's NAT Gateway and its Public
+// IP are gone from Azure.
+//
+// The NAT Gateway is named after the egress identity and its Public IP follows the same
+// <name>-pip convention as the inbound path (see buildOutboundResourceNames in the provider).
+// Without this check a CCM that removes the Outbound registration from the ServiceGateway but
+// never deletes the ARM resources passes every egress teardown spec while leaking a NAT Gateway
+// and a Public IP per egress identity.
+func azureEgressResourcesAbsentErr(egressName string) error {
+	natOutput, err := runAz("network", "nat", "gateway", "show",
+		"--resource-group", resourceGroupName,
+		"--name", egressName,
+		"--output", "json")
+	if err == nil {
+		return fmt.Errorf("NAT Gateway %s still exists in Azure after teardown (leaked)", egressName)
+	}
+	text := string(natOutput)
+	if !strings.Contains(text, "not found") && !strings.Contains(text, "NotFound") {
+		return fmt.Errorf("could not determine whether NAT Gateway %s was deleted: %s", egressName, text)
+	}
+	return azurePublicIPAbsentErr(egressName)
+}
+
 // verifyAzureResources verifies Public IP, Load Balancer, and Service Gateway for a given service
 func verifyAzureResources(serviceUID string) error {
 	publicIPName := fmt.Sprintf("%s-pip", serviceUID)
@@ -654,8 +714,36 @@ func serviceReconciledErr(serviceUID string, wantEndpoints int) error {
 	return nil
 }
 
-// serviceDeletedErr returns nil once the inbound service is gone from the Service
-// Gateway and no address location still references it.
+// serviceReconciledMatchErr is the set-based sibling of serviceReconciledErr: it verifies the
+// inbound service's Azure resources exist AND that exactly wantAddrs are registered for it.
+//
+// Prefer this whenever the expected pod IPs are knowable. A count cannot distinguish the right N
+// addresses from the wrong N: registering a node IP, a stale pod's IP, or another service's pod
+// leaves the count correct while traffic goes to the wrong place, and on a scale-down it cannot
+// tell a drained survivor from a drained victim.
+func serviceReconciledMatchErr(serviceUID string, wantAddrs map[string]struct{}) error {
+	if err := verifyAzureResources(serviceUID); err != nil {
+		return err
+	}
+	return registeredAddressesMatchErr(serviceUID, wantAddrs)
+}
+
+// egressRegisteredMatchErr is the set-based sibling of egressRegisteredErr: the egress service must
+// exist with a NAT Gateway, and exactly wantAddrs must be registered for it.
+func egressRegisteredMatchErr(egressName string, wantAddrs map[string]struct{}) error {
+	if err := egressRegisteredErr(egressName, -1); err != nil {
+		return err
+	}
+	return registeredAddressesMatchErr(egressName, wantAddrs)
+}
+
+// serviceDeletedErr returns nil once the inbound service is gone from the Service Gateway, no
+// address location still references it, AND its Azure Load Balancer and Public IP are deleted.
+//
+// The Azure-resource check is the important half: without it a CCM that unregisters the service
+// but never issues the ARM deletes satisfies every deletion spec in the suite while leaking a
+// billable Load Balancer and Public IP per deleted service. Every caller already wraps this in
+// Eventually/Consistently, so the extra convergence time is absorbed there.
 func serviceDeletedErr(serviceUID string) error {
 	sgResponse, err := queryServiceGatewayServices()
 	if err != nil {
@@ -673,7 +761,7 @@ func serviceDeletedErr(serviceUID string) error {
 	if got > 0 {
 		return fmt.Errorf("service %s still has %d registered endpoint(s)", serviceUID, got)
 	}
-	return nil
+	return azureInboundResourcesAbsentErr(serviceUID)
 }
 
 // egressRegisteredErr returns nil once the named egress (outbound) service exists in

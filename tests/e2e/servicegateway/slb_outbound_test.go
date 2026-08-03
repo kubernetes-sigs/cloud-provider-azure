@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientset "k8s.io/client-go/kubernetes"
 
@@ -117,7 +118,14 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		By("Waiting for Azure to provision NAT Gateway and PIP")
 		Eventually(func() error {
-			return egressRegisteredErr(egressName, numPods)
+			want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+			if err != nil {
+				return err
+			}
+			if len(want) != numPods {
+				return fmt.Errorf("expected %d live egress pod IPs, got %d", numPods, len(want))
+			}
+			return egressRegisteredMatchErr(egressName, want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
 			"egress service should be registered with NAT Gateway and pod IPs")
 
@@ -254,7 +262,14 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		By("Waiting for Azure to provision all NAT Gateways")
 		Eventually(func() error {
 			for _, egressName := range egressGateways {
-				if err := egressRegisteredErr(egressName, podsPerGateway); err != nil {
+				want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+				if err != nil {
+					return err
+				}
+				if len(want) != podsPerGateway {
+					return fmt.Errorf("egress %s: expected %d live pod IPs, got %d", egressName, podsPerGateway, len(want))
+				}
+				if err := egressRegisteredMatchErr(egressName, want); err != nil {
 					return err
 				}
 			}
@@ -348,7 +363,14 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		By("Waiting for NAT Gateway provisioning")
 		Eventually(func() error {
-			return egressRegisteredErr(egressName, initialPods)
+			want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+			if err != nil {
+				return err
+			}
+			if len(want) != initialPods {
+				return fmt.Errorf("expected %d live egress pod IPs, got %d", initialPods, len(want))
+			}
+			return egressRegisteredMatchErr(egressName, want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
 			"egress service should be registered with initial pod IPs")
 
@@ -402,7 +424,14 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		By("Waiting for Address Locations update")
 		Eventually(func() error {
-			return egressRegisteredErr(egressName, finalPods)
+			want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+			if err != nil {
+				return err
+			}
+			if len(want) != finalPods {
+				return fmt.Errorf("expected %d live egress pod IPs, got %d", finalPods, len(want))
+			}
+			return egressRegisteredMatchErr(egressName, want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
 			"egress service should be updated with scaled pod IPs")
 
@@ -468,7 +497,14 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		By("Waiting for NAT Gateway provisioning")
 		Eventually(func() error {
-			return egressRegisteredErr(egressName, initialPods)
+			want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+			if err != nil {
+				return err
+			}
+			if len(want) != initialPods {
+				return fmt.Errorf("expected %d live egress pod IPs, got %d", initialPods, len(want))
+			}
+			return egressRegisteredMatchErr(egressName, want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
 			"egress service should be registered with initial pod IPs")
 
@@ -501,18 +537,21 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		By("Waiting for pod deletions to complete")
 		time.Sleep(30 * time.Second)
 
-		By("Waiting for Address Locations cleanup")
+		By("Waiting for the deleted pods' addresses to drain, leaving exactly the survivors")
+		// Assert the exact surviving set. A count cannot tell a correct drain from an inverted one:
+		// draining the survivors and leaving the deleted pods registered yields the same number
+		// while blackholing every live pod's egress traffic.
 		Eventually(func() error {
-			got, err := countRegisteredEndpoints(egressName)
+			want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
 			if err != nil {
 				return err
 			}
-			if got != remainPods {
-				return fmt.Errorf("egress %s has %d registered pod(s), want %d", egressName, got, remainPods)
+			if len(want) != remainPods {
+				return fmt.Errorf("expected %d surviving egress pod IPs, got %d", remainPods, len(want))
 			}
-			return nil
+			return egressRegisteredMatchErr(egressName, want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
-			"egress service should be updated after pod deletion")
+			"exactly the surviving egress pods' IPs must remain registered after deletion")
 
 		By("Verifying cleanup")
 		alResponseFinal, err := queryServiceGatewayAddressLocations()
@@ -628,7 +667,14 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		By("Waiting for Azure provisioning")
 		Eventually(func() error {
-			if err := egressRegisteredErr(egressName, egressPods); err != nil {
+			want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+			if err != nil {
+				return err
+			}
+			if len(want) != egressPods {
+				return fmt.Errorf("egress %s: expected %d live pod IPs, got %d", egressName, egressPods, len(want))
+			}
+			if err := egressRegisteredMatchErr(egressName, want); err != nil {
 				return err
 			}
 			if err := serviceReconciledErr(serviceUID, inboundPods); err != nil {
@@ -762,7 +808,14 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		By("Waiting for Azure provisioning")
 		Eventually(func() error {
-			if err := egressRegisteredErr(egressName, dualPods); err != nil {
+			want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+			if err != nil {
+				return err
+			}
+			if len(want) != dualPods {
+				return fmt.Errorf("egress %s: expected %d live pod IPs, got %d", egressName, dualPods, len(want))
+			}
+			if err := egressRegisteredMatchErr(egressName, want); err != nil {
 				return err
 			}
 			if err := serviceReconciledErr(serviceUID, dualPods); err != nil {
@@ -926,3 +979,22 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		utils.Logf("\n✓ Dual inbound+outbound pod test passed: %d pods with both LB and NAT Gateway", dualPods)
 	})
 })
+
+// livePodIPsWithLabel returns the address set the pods carrying labelKey=labelValue should have
+// registered. Egress specs compare against this set rather than a count: after a partial deletion
+// only the set can distinguish the surviving pods from the deleted ones.
+func livePodIPsWithLabel(cs clientset.Interface, namespace, labelKey, labelValue string) (map[string]struct{}, error) {
+	pods, err := cs.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
+		LabelSelector: labels.SelectorFromSet(map[string]string{labelKey: labelValue}).String(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	ready := make([]v1.Pod, 0, len(pods.Items))
+	for i := range pods.Items {
+		if pods.Items[i].DeletionTimestamp == nil {
+			ready = append(ready, pods.Items[i])
+		}
+	}
+	return podIPSet(ready), nil
+}

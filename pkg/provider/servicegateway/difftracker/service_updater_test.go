@@ -1244,3 +1244,41 @@ func TestGuardDeleteOutboundService_FinalizerReleasedOnRetryAfterNATFailure(t *t
 	assert.False(t, hasPodFinalizer(live),
 		"a successful retry must release the finalizer, or the pod stays Terminating forever")
 }
+
+// TestRefreshOperationGauges_ReflectsPodDrivenAndAbortedOperations pins that the periodic recompute
+// converges on the truth for operations the four event-driven refresh points never see.
+//
+// Outbound services are created only by pod events, so a gauge refreshed solely from
+// AddService/UpdateService/DeleteService/OnServiceCreationComplete never counts the egress fleet.
+// The abort path is the mirror: it untracks the operation, so a stale count has nothing left to
+// bring it back down and pages forever on an idle cluster.
+func TestRefreshOperationGauges_ReflectsPodDrivenAndAbortedOperations(t *testing.T) {
+	RegisterMetrics()
+	pendingServiceOperations.Reset()
+
+	s, dt := newRetryTimerTestUpdater(t)
+	defer s.Stop()
+
+	// A pod-driven outbound operation: created by AddPod, which does not refresh the gauges.
+	dt.AddPodWithUID("team-egress", "team/pod", "pod-uid", "10.0.0.1", "10.244.0.5")
+
+	dt.mu.Lock()
+	tracked := len(dt.pendingServiceOps)
+	dt.mu.Unlock()
+	assert.Equal(t, 1, tracked, "the pod must have created an outbound operation")
+
+	s.refreshOperationGauges()
+	after, err := testutil.GetGaugeMetricValue(pendingServiceOperations.WithLabelValues("not_started", "outbound"))
+	assert.NoError(t, err)
+	assert.Equal(t, float64(1), after, "the recompute must count a pod-driven outbound operation")
+
+	// Aborting untracks it; the recompute must drop the count rather than leave a phantom.
+	dt.mu.Lock()
+	delete(dt.pendingServiceOps, "team-egress")
+	dt.mu.Unlock()
+
+	s.refreshOperationGauges()
+	cleared, err := testutil.GetGaugeMetricValue(pendingServiceOperations.WithLabelValues("not_started", "outbound"))
+	assert.NoError(t, err)
+	assert.Zero(t, cleared, "an untracked operation must not leave a phantom count")
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/rand"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -60,6 +61,11 @@ type LocationsUpdater struct {
 	// retry backoff. Accessed only from the single Run goroutine (process), so no lock.
 	failureCount int
 
+	// wg tracks the Run loop so Stop can wait for an in-flight sync to finish. Cancelling alone
+	// would let Stop return while process is still inside an NRP call and about to mutate tracker
+	// state, so an initialization failure could tear down and report while that work continues.
+	wg sync.WaitGroup
+
 	logger logr.Logger
 }
 
@@ -72,17 +78,23 @@ func NewLocationsUpdater(ctx context.Context, diffTracker *DiffTracker) *Locatio
 		panic("LocationsUpdater: diffTracker.networkClientFactory must not be nil")
 	}
 	childCtx, cancel := context.WithCancel(ctx)
-	return &LocationsUpdater{
+	lu := &LocationsUpdater{
 		diffTracker: diffTracker,
 		ctx:         childCtx,
 		cancel:      cancel,
 		logger:      diffTracker.logger.WithName("LocationsUpdater"),
 	}
+	// Registered here rather than inside Run: the caller starts Run in a goroutine, so a Stop that
+	// lands before it is scheduled would otherwise find nothing to wait for. Every constructed
+	// updater is started, so the counter is always released.
+	lu.wg.Add(1)
+	return lu
 }
 
 // Run is the main loop that processes location update requests
 func (lu *LocationsUpdater) Run() {
 	lu.logger.V(2).Info("Started LocationsUpdater")
+	defer lu.wg.Done()
 
 	for {
 		select {
@@ -105,6 +117,7 @@ func (lu *LocationsUpdater) Run() {
 func (lu *LocationsUpdater) Stop() {
 	lu.logger.V(2).Info("Stopping LocationsUpdater")
 	lu.cancel()
+	lu.wg.Wait()
 	lu.logger.V(2).Info("Stopped LocationsUpdater")
 }
 

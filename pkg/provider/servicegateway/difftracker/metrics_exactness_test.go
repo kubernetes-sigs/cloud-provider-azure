@@ -12,10 +12,11 @@ You may obtain a copy of the License at
 //
 // These tests verify two cross-cutting metric invariants:
 //
-//   * service_operation_total — INCREMENT EXACTLY ONCE per logical
-//     operation (create / update / delete). A regression that double-records
-//     (e.g. once in the dispatch, once in the completion handler) would
-//     silently corrupt service-level SLOs.
+//   * service_operations_total — INCREMENT EXACTLY ONCE per completed attempt
+//     (create / update / delete), under the operation label the attempt actually
+//     performed. A regression that double-records (e.g. once in the dispatch, once
+//     in the completion handler) or records the wrong operation would silently
+//     corrupt service-level SLOs.
 //
 //   * pendingServiceDeletions gauge — NEVER NEGATIVE and tracks
 //     len(dt.pendingServiceDeletions) exactly. A negative value means
@@ -39,8 +40,9 @@ import (
 
 // TestGuardMetrics_ServiceOperationTotal_IncrementsOnce verifies that
 // recordServiceOperation increments serviceOperationTotal exactly once per
-// call (and once only). A regression that double-fires the counter would
-// fail this test.
+// call (and once only). It exercises the helper in isolation;
+// TestGuardMetrics_ServiceOperationTotal_ExactlyOncePerCompletion drives the
+// real completion paths that call it.
 func TestGuardMetrics_ServiceOperationTotal_IncrementsOnce(t *testing.T) {
 	RegisterMetrics()
 	serviceOperationTotal.Reset()
@@ -276,4 +278,61 @@ func TestTrackedServicesMetric_RefreshedOnServiceCompletion(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, float64(0), v,
 		"tracked_services{nrp_loadbalancers} must be refreshed to match the NRP set after a service completion")
+}
+
+// TestGuardMetrics_ServiceOperationTotal_ExactlyOncePerCompletion drives the real completion paths
+// and asserts each publishes exactly one attempt, under the operation label it actually performed.
+//
+// Asserting that recordServiceOperation increments when called only proves that Inc() increments; it
+// cannot see a path that records twice, records nothing, or attributes an update to "create". The
+// count here sums every series for the metric, so a duplicate emission or a stray label combination
+// fails regardless of which labels it carries.
+func TestGuardMetrics_ServiceOperationTotal_ExactlyOncePerCompletion(t *testing.T) {
+	cases := []struct {
+		name      string
+		state     ResourceState
+		isInbound bool
+		success   bool
+		err       error
+		operation string
+		result    string
+	}{
+		{"create success", StateCreationInProgress, true, true, nil, "create", "success"},
+		{"create failure", StateCreationInProgress, true, false, assert.AnError, "create", "error"},
+		{"update success", StateUpdateInProgress, true, true, nil, "update", "success"},
+		{"delete success", StateDeletionInProgress, true, true, nil, "delete", "success"},
+		{"delete failure", StateDeletionInProgress, true, false, assert.AnError, "delete", "error"},
+		{"outbound create success", StateCreationInProgress, false, true, nil, "create", "success"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			RegisterMetrics()
+			serviceOperationTotal.Reset()
+
+			dt := newTestDiffTracker()
+			config := NewInboundServiceConfig("svc", nil)
+			if !tc.isInbound {
+				config = NewOutboundServiceConfig("svc", nil)
+			}
+			dt.pendingServiceOps["svc"] = &ServiceOperationState{
+				ServiceUID: "svc",
+				Config:     config,
+				State:      tc.state,
+			}
+
+			dt.OnServiceCreationComplete("svc", tc.success, tc.err)
+
+			serviceType := "inbound"
+			if !tc.isInbound {
+				serviceType = "outbound"
+			}
+			testutil.AssertVectorCount(t, "difftracker_engine_service_operations_total",
+				map[string]string{"operation": tc.operation, "service_type": serviceType, "result": tc.result}, 1)
+			// Nothing else may fire: a second emission, or one attributed to another operation,
+			// shows up here even though its labels differ.
+			testutil.AssertVectorCount(t, "difftracker_engine_service_operations_total",
+				map[string]string{}, 1)
+		})
+	}
 }

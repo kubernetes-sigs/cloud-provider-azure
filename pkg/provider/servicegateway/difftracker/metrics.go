@@ -48,23 +48,28 @@ var (
 		[]string{"state", "service_type"},
 	)
 
-	// serviceOperationTotal counts successful and failed operations, with error code for triage.
+	// serviceOperationTotal counts service operation ATTEMPTS, with error code for triage. A retried
+	// operation records one error per failed attempt and then a success, so one logical create that
+	// recovers from a transient failure appears here as several errors plus one success. A success
+	// rate computed from these labels is therefore an attempt success rate, not a service one.
 	serviceOperationTotal = metrics.NewCounterVec(
 		&metrics.CounterOpts{
 			Subsystem:      diffTrackerSubsystem,
 			Name:           "service_operations_total",
-			Help:           "Total count of service creation/deletion operations by result, error code, and orphan status",
+			Help:           "Total count of service creation/deletion operation attempts by result, error code, and orphan status; a retried operation records one attempt per try",
 			StabilityLevel: metrics.ALPHA,
 		},
 		[]string{"operation", "service_type", "result", "error_code", "is_orphan"},
 	)
 
-	// serviceOperationDuration tracks how long LB/NAT creation/deletion takes.
+	// serviceOperationDuration tracks how long a single LB/NAT create/delete ATTEMPT takes. The
+	// operation clock restarts on each dispatch, so a retried operation reports only its final
+	// attempt rather than the elapsed time a user waited.
 	serviceOperationDuration = metrics.NewHistogramVec(
 		&metrics.HistogramOpts{
 			Subsystem:      diffTrackerSubsystem,
 			Name:           "service_operation_duration_seconds",
-			Help:           "Duration of service creation/deletion operations in seconds",
+			Help:           "Duration of a single service creation/deletion attempt in seconds; a retried operation reports only its final attempt",
 			Buckets:        []float64{0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0},
 			StabilityLevel: metrics.ALPHA,
 		},

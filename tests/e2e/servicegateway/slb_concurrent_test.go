@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientset "k8s.io/client-go/kubernetes"
 
@@ -203,10 +204,18 @@ var _ = Describe("SLB - Concurrent Services", Label(slbTestLabel), func() {
 		By("Waiting for Azure to provision all services")
 		Eventually(func() error {
 			for _, service := range services {
-				// Assert the per-service endpoint count here rather than passing -1: without it
-				// nothing in this spec checks that any INDIVIDUAL service got its pods, and 14 of
-				// 15 services registering zero backends would still satisfy the global total below.
-				if err := serviceReconciledErr(string(service.UID), podsPerService); err != nil {
+				// Assert each service's exact address set. A per-service count cannot detect one
+				// service's pods being registered under another service's name - a plausible
+				// outcome of a race in concurrent reconciliation, and one that leaves every count
+				// correct while routing traffic to the wrong workload.
+				want, err := livePodIPsForSelector(cs, ns.Name, service.Spec.Selector)
+				if err != nil {
+					return err
+				}
+				if len(want) != podsPerService {
+					return fmt.Errorf("service %s: expected %d live pod IPs, got %d", service.Name, podsPerService, len(want))
+				}
+				if err := serviceReconciledMatchErr(string(service.UID), want); err != nil {
 					return fmt.Errorf("service %s: %w", service.Name, err)
 				}
 			}
@@ -403,3 +412,16 @@ var _ = Describe("SLB - Concurrent Services", Label(slbTestLabel), func() {
 		utils.Logf("Azure cleanup in progress - Load Balancers, Public IPs, and Service Gateway entries will be removed...")
 	})
 })
+
+// livePodIPsForSelector returns the address set the pods matching a Service's own selector should
+// have registered. Deriving the selector from the Service avoids relying on creation order, which
+// is not preserved when results are collected from a channel.
+func livePodIPsForSelector(cs clientset.Interface, namespace string, selector map[string]string) (map[string]struct{}, error) {
+	pods, err := cs.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
+		LabelSelector: labels.SelectorFromSet(selector).String(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return podIPSet(pods.Items), nil
+}

@@ -450,7 +450,12 @@ var _ = Describe("Container Load Balancer Deletion Crash Recovery Tests", Label(
 		Expect(foundEgress).To(BeFalse(), "Egress service should be removed from Service Gateway")
 		utils.Logf("✓ Egress service removed from Service Gateway")
 
-		By("Verifying NAT Gateway is deleted")
+		By("Verifying the NAT Gateway and its Public IP are actually deleted in Azure")
+		// This step previously only LOGGED a NAT Gateway count and asserted nothing, so a recovery
+		// that removed the ServiceGateway entry but leaked the ARM NAT Gateway and its Public IP
+		// passed unnoticed. Assert the named resources are gone.
+		Expect(azureEgressResourcesAbsentErr(egressName)).To(Succeed(),
+			"the egress NAT Gateway and its Public IP must be deleted after CCM recovery, not leaked")
 		finalNATCount, err := countAzureNATGateways()
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("Final NAT Gateway count: %d (was %d)", finalNATCount, initialNATCount)
@@ -686,14 +691,22 @@ var _ = Describe("Container Load Balancer Deletion Crash Recovery Tests", Label(
 		Expect(outboundCount).To(Equal(0), "No non-default outbound services should remain")
 		utils.Logf("✓ Service Gateway cleaned up")
 
-		By("Verifying Azure resources cleaned up")
+		By("Verifying every inbound and egress Azure resource is actually deleted")
+		// A decreasing LB count is far weaker than this spec's claim: deleting one of the five
+		// Load Balancers satisfied it, and the PIP/NAT counts were only logged. Assert each
+		// named resource is gone so a per-service leak cannot hide behind an aggregate.
+		for _, serviceUID := range serviceUIDs {
+			Expect(azureInboundResourcesAbsentErr(serviceUID)).To(Succeed(),
+				"service %s must have its Load Balancer and Public IP deleted, not leaked", serviceUID)
+		}
+		Expect(azureEgressResourcesAbsentErr(egressName)).To(Succeed(),
+			"the egress NAT Gateway and its Public IP must be deleted, not leaked")
+
 		finalLBCount, _ := countAzureLoadBalancers()
 		finalPIPCount, _ := countAzurePublicIPs()
 		finalNATCount, _ := countAzureNATGateways()
 		utils.Logf("Final Azure resources: %d LBs (was %d), %d PIPs (was %d), %d NATs (was %d)",
 			finalLBCount, initialLBCount, finalPIPCount, initialPIPCount, finalNATCount, initialNATCount)
-
-		Expect(finalLBCount).To(BeNumerically("<", initialLBCount), "LBs should be cleaned up")
 
 		utils.Logf("\n✓ Mixed deletion crash recovery test PASSED!")
 		utils.Logf("  - %d inbound services deleted", inboundServiceCount)

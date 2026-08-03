@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientset "k8s.io/client-go/kubernetes"
 
@@ -137,24 +138,21 @@ var _ = Describe("Container Load Balancer Scale Operations", Label(slbTestLabel)
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("All %d initial pods are ready", initialPods)
 
-		initialPodIPs := 0
-		By("Waiting for Azure to provision initial resources")
+		By("Waiting for Azure to provision initial resources and register exactly the initial pods")
 		Eventually(func() error {
 			if err := verifyAzureResources(serviceUID); err != nil {
 				return err
 			}
-			c, err := countRegisteredEndpoints(serviceUID)
+			want, err := livePodIPs(cs, ns.Name, serviceLabels)
 			if err != nil {
 				return err
 			}
-			if c != initialPods {
-				return fmt.Errorf("expected %d pod IPs, got %d", initialPods, c)
+			if len(want) != initialPods {
+				return fmt.Errorf("expected %d live pod IPs, got %d", initialPods, len(want))
 			}
-			initialPodIPs = c
-			return nil
+			return registeredAddressesMatchErr(serviceUID, want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
-			"initial Service Gateway state should have Azure resources and registered pod endpoints")
-		utils.Logf("Initial state: %d pod IPs registered in Service Gateway", initialPodIPs)
+			"the Service Gateway must register exactly the initial pods' IPs")
 
 		By(fmt.Sprintf("Upscaling: Creating additional %d pods (total %d)", finalPods-initialPods, finalPods))
 		for i := initialPods; i < finalPods; i++ {
@@ -184,21 +182,18 @@ var _ = Describe("Container Load Balancer Scale Operations", Label(slbTestLabel)
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("All %d pods are ready after upscale", finalPods)
 
-		finalPodIPs := 0
-		By("Waiting for Service Gateway to register new pods")
+		By("Waiting for Service Gateway to register exactly the upscaled pod set")
 		Eventually(func() error {
-			c, err := countRegisteredEndpoints(serviceUID)
+			want, err := livePodIPs(cs, ns.Name, serviceLabels)
 			if err != nil {
 				return err
 			}
-			if c != finalPods {
-				return fmt.Errorf("expected %d pod IPs, got %d", finalPods, c)
+			if len(want) != finalPods {
+				return fmt.Errorf("expected %d live pod IPs, got %d", finalPods, len(want))
 			}
-			finalPodIPs = c
-			return nil
+			return registeredAddressesMatchErr(serviceUID, want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
-			"all pods should be registered in Service Gateway after upscale")
-		utils.Logf("After upscale: %d pod IPs registered in Service Gateway", finalPodIPs)
+			"every upscaled pod IP - and no other - must be registered")
 
 		utils.Logf("\n✓ Upscale test passed: %d → %d pods", initialPods, finalPods)
 	})
@@ -270,24 +265,21 @@ var _ = Describe("Container Load Balancer Scale Operations", Label(slbTestLabel)
 		err = utils.WaitPodsToBeReady(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
 
-		initialPodIPs := 0
-		By("Waiting for Azure to provision resources")
+		By("Waiting for Azure to provision resources and register exactly the pre-downscale pods")
 		Eventually(func() error {
 			if err := verifyAzureResources(serviceUID); err != nil {
 				return err
 			}
-			c, err := countRegisteredEndpoints(serviceUID)
+			want, err := livePodIPs(cs, ns.Name, serviceLabels)
 			if err != nil {
 				return err
 			}
-			if c != initialPods {
-				return fmt.Errorf("expected %d pod IPs, got %d", initialPods, c)
+			if len(want) != initialPods {
+				return fmt.Errorf("expected %d live pod IPs, got %d", initialPods, len(want))
 			}
-			initialPodIPs = c
-			return nil
+			return registeredAddressesMatchErr(serviceUID, want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
-			"initial Service Gateway state should have Azure resources and registered pod endpoints")
-		utils.Logf("Initial state: %d pod IPs registered", initialPodIPs)
+			"the full pre-downscale pod set must be registered, so the later drain is provably observed")
 
 		By("Capturing the survivors' pod IPs before the downscale")
 		// A bare count cannot see the failure that matters here: a stale IP left behind paired
@@ -402,20 +394,24 @@ var _ = Describe("Container Load Balancer Scale Operations", Label(slbTestLabel)
 			err = utils.WaitPodsToBeReady(cs, ns.Name)
 			Expect(err).NotTo(HaveOccurred())
 
-			registeredPods := 0
-			By("Waiting for Service Gateway to update")
+			By("Waiting for Service Gateway to register exactly the live pods")
+			// Assert the exact address SET, not just the count: after a scale-down the two are very
+			// different claims. Draining a surviving pod's IP while leaving a deleted pod's IP
+			// registered keeps the count correct but blackholes live traffic and routes to a pod
+			// that no longer exists, which a count-based assertion cannot see.
+			livePods, err := cs.CoreV1().Pods(ns.Name).List(context.TODO(), metav1.ListOptions{
+				LabelSelector: labels.SelectorFromSet(serviceLabels).String(),
+			})
+			Expect(err).NotTo(HaveOccurred())
+			wantAddrs := podIPSet(livePods.Items)
+			Expect(wantAddrs).To(HaveLen(targetPods),
+				"scale step %d: expected %d live pod IPs to compare against", stepIdx+1, targetPods)
+
 			Eventually(func() error {
-				c, err := countRegisteredEndpoints(serviceUID)
-				if err != nil {
-					return err
-				}
-				if c != targetPods {
-					return fmt.Errorf("scale step %d failed: expected %d pods, got %d", stepIdx+1, targetPods, c)
-				}
-				registeredPods = c
-				return nil
+				return registeredAddressesMatchErr(serviceUID, wantAddrs)
 			}, waitTime, 10*time.Second).Should(Succeed(),
-				"Service Gateway state should match scale step %d", stepIdx+1)
+				"Service Gateway must register exactly the live pod IPs at scale step %d", stepIdx+1)
+			registeredPods := targetPods
 
 			utils.Logf("Step %d: Expected %d pods, Service Gateway has %d", stepIdx+1, targetPods, registeredPods)
 		}
@@ -423,3 +419,17 @@ var _ = Describe("Container Load Balancer Scale Operations", Label(slbTestLabel)
 		utils.Logf("\n✓ Rapid scale test passed: %v", scaleSteps)
 	})
 })
+
+// livePodIPs returns the address set the Service Gateway should currently hold for the pods
+// matching selector. Specs assert against this set rather than a count: on a scale-down the two are
+// different claims, and only the set can detect that a surviving pod's IP was drained while a
+// deleted pod's IP was left registered.
+func livePodIPs(cs clientset.Interface, namespace string, selector map[string]string) (map[string]struct{}, error) {
+	pods, err := cs.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
+		LabelSelector: labels.SelectorFromSet(selector).String(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return podIPSet(pods.Items), nil
+}

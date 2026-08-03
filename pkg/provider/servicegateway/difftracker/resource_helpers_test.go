@@ -998,3 +998,37 @@ func TestIsValidEgressIdentity_RejectsReservedNames(t *testing.T) {
 		assert.True(t, IsValidEgressIdentity(name), "%q must remain a usable egress identity", name)
 	}
 }
+
+// TestIdleTimeout_AdmissionAndBuildAgree pins that every idle timeout admission accepts can also be
+// built. Admission and buildInboundServiceResources enforce the same range from shared constants; if
+// they diverge, a value passes admission, EnsureLoadBalancer reports success, and the build then
+// fails terminally so the Service never provisions and nothing retries it.
+func TestIdleTimeout_AdmissionAndBuildAgree(t *testing.T) {
+	newService := func(minutes string) *v1.Service {
+		return &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "svc", Namespace: "default", UID: "idle-uid",
+				Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIdleTimeout: minutes},
+			},
+			Spec: v1.ServiceSpec{
+				Type:  v1.ServiceTypeLoadBalancer,
+				Ports: []v1.ServicePort{{Name: "http", Protocol: v1.ProtocolTCP, Port: 80, TargetPort: intstr.FromInt(8080)}},
+			},
+		}
+	}
+
+	for _, minutes := range []string{"4", "5", "30", "31", "60", "100", "101"} {
+		t.Run(minutes, func(t *testing.T) {
+			config, admitErr := AdmitInboundService(newService(minutes))
+			if admitErr != nil {
+				return // Rejected up front, with a synchronous error the user sees.
+			}
+			if !assert.NotNil(t, config, "an admitted Service must carry a config") {
+				return
+			}
+			_, _, _, buildErr := buildInboundServiceResources("idle-uid", config, testConfig())
+			assert.NoError(t, buildErr,
+				"idle timeout %s passed admission, so the build must accept it too or the Service parks terminally", minutes)
+		})
+	}
+}
