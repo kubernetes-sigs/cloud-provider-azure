@@ -45,12 +45,13 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 	}
 
 	logger = logger.WithName("difftracker")
+	// The subscription ID and the full ARM resource ID that embeds it are omitted: this line is
+	// routine startup output, and the resource group, location and resource names below identify the
+	// deployment for support purposes without putting tenant identifiers into every log sink.
 	logger.V(2).Info("Initialized DiffTracker",
-		"subscription", config.networkResourceSubscriptionID(),
 		"resourceGroup", config.ResourceGroup,
 		"location", config.Location,
 		"serviceGatewayResourceName", config.ServiceGatewayResourceName,
-		"serviceGatewayID", config.ServiceGatewayResourceID(),
 		"vnetName", config.VNetName)
 
 	// The caller is expected to pass fully initialized state structs. A nil

@@ -179,6 +179,8 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 				backendPort = config.BackendPorts[i].Port
 			}
 
+			// Azure accepts 1-65534 for a load-balancing rule's frontend port and 1-65535 for its
+			// backend port; the asymmetry is the API's, not a typo.
 			if frontendPort.Port < 1 || frontendPort.Port > 65534 {
 				return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: frontend port %d out of range (1-65534) for service %s", frontendPort.Port, serviceUID)
 			}

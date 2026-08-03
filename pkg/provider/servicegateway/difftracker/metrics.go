@@ -111,11 +111,16 @@ var (
 	)
 
 	// trackedServices tracks the number of LBs and NAT Gateways in the cluster.
+	//
+	// The nrp_loadbalancers and nrp_natgateways series are live. k8s_services is not: the desired
+	// Kubernetes set feeds the startup diff and is deliberately not mutated afterwards, so that
+	// series reports what startup observed and does not move as Services come and go. Alert on the
+	// NRP series, not on it.
 	trackedServices = metrics.NewGaugeVec(
 		&metrics.GaugeOpts{
 			Subsystem:      diffTrackerSubsystem,
 			Name:           "tracked_services_total",
-			Help:           "Number of services tracked by state (k8s_services, nrp_loadbalancers, nrp_natgateways)",
+			Help:           "Number of services tracked by state; nrp_loadbalancers and nrp_natgateways are live, k8s_services is the startup snapshot",
 			StabilityLevel: metrics.ALPHA,
 		},
 		[]string{"state"},
@@ -462,6 +467,7 @@ func updateTrackedServicesMetric(dt *DiffTracker) {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
+	// Startup snapshot, not a live count: see the trackedServices declaration.
 	k8sServices := dt.K8sResources.Services.Len()
 	nrpLoadBalancers := dt.NRPResources.LoadBalancers.Len()
 	nrpNATGateways := dt.NRPResources.NATGateways.Len()

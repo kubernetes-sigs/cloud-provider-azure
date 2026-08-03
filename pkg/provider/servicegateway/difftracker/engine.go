@@ -743,6 +743,9 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 			_, preemptErrCode = extractAzureErrorInfo(err)
 		}
 		recordServiceOperation(preemptOp, opState.Config.IsInbound, startTime, err, preemptErrCode, opState.IsOrphan)
+		// The pre-empted operation ends here, so observe its retries too. Recording the operation
+		// without them leaves the histogram counting fewer operations than the counter does.
+		recordServiceOperationRetries(preemptOp, opState.Config.IsInbound, opState.RetryCount)
 		hasLocations := dt.serviceHasLocationsInNRP(serviceUID)
 		if !hasLocations {
 			// Ready for immediate deletion.

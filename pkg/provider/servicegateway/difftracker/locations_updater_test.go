@@ -562,3 +562,28 @@ func TestLocationsUpdater_StopWaitsForInFlightSync(t *testing.T) {
 		t.Fatal("Stop did not return after the sync finished")
 	}
 }
+
+// TestIsTerminalLocationSyncStatus_ClassifiesEveryStatus pins which NRP responses abandon a batch.
+// Treating a retryable status as terminal drops the batch and leaves NRP stale; treating a
+// deterministic rejection as retryable spins the single worker against a payload that can never be
+// accepted.
+func TestIsTerminalLocationSyncStatus_ClassifiesEveryStatus(t *testing.T) {
+	for _, status := range []int{http.StatusBadRequest, http.StatusUnprocessableEntity} {
+		assert.True(t, isTerminalLocationSyncStatus(status),
+			"status %d is a deterministic rejection and must not be retried", status)
+	}
+	for _, status := range []int{
+		http.StatusNotFound,
+		http.StatusConflict,
+		http.StatusTooManyRequests,
+		http.StatusInternalServerError,
+		http.StatusServiceUnavailable,
+		http.StatusGatewayTimeout,
+		http.StatusUnauthorized,
+		http.StatusForbidden,
+		0,
+	} {
+		assert.False(t, isTerminalLocationSyncStatus(status),
+			"status %d is transient and must stay retryable", status)
+	}
+}

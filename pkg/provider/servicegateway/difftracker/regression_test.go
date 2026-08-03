@@ -101,10 +101,15 @@ func TestInitConcurrencyHandshakeRace(t *testing.T) {
 	assert.GreaterOrEqual(t, counter, int32(0),
 		"pendingUpdaterTriggers must not go negative: negative implies double-decrement, which causes WaitForInitialSync to hang indefinitely")
 
+	// All work drained, so the handshake must actually have signalled completion. Without this the
+	// test passes even if the completion signal never fires, which is the failure that leaves
+	// WaitForInitialSync blocked until its deadline.
 	select {
 	case <-dt.initCompletionChecker:
 	default:
+		t.Fatal("initialization never signalled completion after all triggers drained")
 	}
+	assert.Zero(t, atomic.LoadInt32(&dt.isInitializing), "completion must clear the initializing flag")
 }
 
 // TestNRPDrainVsRemoveWireShapes verifies the two distinct wire shapes emitted depending on
