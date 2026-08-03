@@ -262,8 +262,14 @@ var _ = Describe("SLB - Concurrent Services", Label(slbTestLabel), func() {
 
 		utils.Logf("Found %d non-default inbound services in Service Gateway", len(registeredServices))
 
-		Expect(len(registeredServices)).To(BeNumerically(">=", numServices),
-			fmt.Sprintf("Expected at least %d services in Service Gateway, found %d", numServices, len(registeredServices)))
+		// A count is satisfied by the wrong services: with ">=" an unrelated leftover registration
+		// offsets a missing one, so 15 registrations can hide a service that never reached the
+		// Service Gateway. Assert each created Service's UID is registered by name instead.
+		for _, service := range services {
+			Expect(registeredServices).To(HaveKey(string(service.UID)),
+				"service %s (UID %s) is not registered as an inbound service in the Service Gateway",
+				service.Name, string(service.UID))
+		}
 
 		// Verify each service individually by querying all resources once
 		By("Verifying Azure resources (PIP, LB, Service Gateway) for all services")

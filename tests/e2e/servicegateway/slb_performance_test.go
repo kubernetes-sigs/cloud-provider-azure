@@ -94,6 +94,11 @@ var _ = Describe("Container Load Balancer Performance Test", Label(slbTestLabel,
 		createStart := time.Now()
 
 		var wg sync.WaitGroup
+		// Assertions cannot run inside these goroutines (there is no GinkgoRecover, so a failure
+		// would panic the worker instead of failing the spec), and simply logging an error lets the
+		// run continue with fewer services than it claims to be measuring. Collect failures and
+		// assert once the workers have joined.
+		var createErrs []string
 		for i := 0; i < numServices; i++ {
 			wg.Add(1)
 			go func(index int) {
@@ -116,7 +121,9 @@ var _ = Describe("Container Load Balancer Performance Test", Label(slbTestLabel,
 
 				createdSvc, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 				if err != nil {
-					utils.Logf("ERROR creating svc-%d: %v", index, err)
+					uidMutex.Lock()
+					createErrs = append(createErrs, fmt.Sprintf("service perf-svc-%d: %v", index, err))
+					uidMutex.Unlock()
 					return
 				}
 
@@ -131,10 +138,20 @@ var _ = Describe("Container Load Balancer Performance Test", Label(slbTestLabel,
 						Containers: []v1.Container{{Name: "nginx", Image: "nginx:alpine", Ports: []v1.ContainerPort{{ContainerPort: int32(targetPort)}}}},
 					},
 				}
-				cs.CoreV1().Pods(ns.Name).Create(context.TODO(), pod, metav1.CreateOptions{})
+				if _, err := cs.CoreV1().Pods(ns.Name).Create(context.TODO(), pod, metav1.CreateOptions{}); err != nil {
+					uidMutex.Lock()
+					createErrs = append(createErrs, fmt.Sprintf("pod %s: %v", podName, err))
+					uidMutex.Unlock()
+				}
 			}(i)
 		}
 		wg.Wait()
+
+		// Without these the phase below measures provisioning for however many Services happened to
+		// be created, while still reporting the full count as a success.
+		Expect(createErrs).To(BeEmpty(), "every Service and backend Pod must be created before timing provisioning")
+		Expect(serviceUIDs).To(HaveLen(numServices),
+			"all %d services must exist before measuring provisioning time", numServices)
 
 		k8sCreateDuration := time.Since(createStart)
 		utils.Logf("✓ K8s API calls completed in %v (%d services created)", k8sCreateDuration, len(serviceUIDs))

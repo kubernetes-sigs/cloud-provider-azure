@@ -155,45 +155,43 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		parts := strings.Split(natGatewayID, "/")
 		natGatewayName := parts[len(parts)-1]
 
-		natGwOutput, err := runAz("network", "nat", "gateway", "show",
-			"--resource-group", resourceGroupName,
-			"--name", natGatewayName,
-			"--output", "json")
+		// Fetch with `az rest` at the ServiceGateway API version. `az network nat gateway show`
+		// deserializes an NRP-managed NAT gateway's properties as EMPTY, so every assertion below
+		// used to sit behind a type-assertion that silently failed: the live ss10 run logged
+		// "NAT Gateway verified:" but never once logged the SKU, proving the whole block was
+		// skipped and this step asserted nothing beyond the CLI call succeeding.
+		natGwOutput, err := runAz("rest", "--method", "get",
+			"--url", fmt.Sprintf("https://management.azure.com%s?api-version=%s", natGatewayID, apiVersion))
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("NAT Gateway %s should exist in Azure", natGatewayName))
 
-		var natGateway map[string]interface{}
-		err = json.Unmarshal(natGwOutput, &natGateway)
-		Expect(err).NotTo(HaveOccurred())
+		var natGateway struct {
+			Properties struct {
+				SKU struct {
+					Name string `json:"name"`
+				} `json:"sku"`
+				PublicIPAddresses []struct {
+					ID string `json:"id"`
+				} `json:"publicIpAddresses"`
+				ServiceGateway struct {
+					ID string `json:"id"`
+				} `json:"serviceGateway"`
+			} `json:"properties"`
+		}
+		Expect(json.Unmarshal(natGwOutput, &natGateway)).To(Succeed())
 
 		utils.Logf("NAT Gateway verified:")
-		if props, ok := natGateway["properties"].(map[string]interface{}); ok {
-			if sku, ok := props["sku"].(map[string]interface{}); ok {
-				if skuName, ok := sku["name"].(string); ok {
-					utils.Logf("  SKU: %s", skuName)
-					Expect(skuName).To(Equal("StandardV2"), "NAT Gateway SKU should be StandardV2")
-				}
-			}
+		props := natGateway.Properties
 
-			// Verify Public IP exists
-			if pips, ok := props["publicIpAddresses"].([]interface{}); ok && len(pips) > 0 {
-				utils.Logf("  Public IPs: %d", len(pips))
-				Expect(len(pips)).To(BeNumerically(">", 0), "NAT Gateway should have at least one Public IP")
+		utils.Logf("  SKU: %s", props.SKU.Name)
+		Expect(props.SKU.Name).To(Equal("StandardV2"), "NAT Gateway SKU should be StandardV2")
 
-				if pip, ok := pips[0].(map[string]interface{}); ok {
-					if pipID, ok := pip["id"].(string); ok {
-						utils.Logf("  Public IP ID: %s", pipID)
-					}
-				}
-			}
+		utils.Logf("  Public IPs: %d", len(props.PublicIPAddresses))
+		Expect(props.PublicIPAddresses).NotTo(BeEmpty(), "NAT Gateway should have at least one Public IP")
+		utils.Logf("  Public IP ID: %s", props.PublicIPAddresses[0].ID)
 
-			// Verify Service Gateway association
-			if sgw, ok := props["serviceGateway"].(map[string]interface{}); ok {
-				if sgwID, ok := sgw["id"].(string); ok {
-					utils.Logf("  Service Gateway: %s", sgwID)
-					Expect(sgwID).To(ContainSubstring(serviceGatewayName), "NAT Gateway should be associated with Service Gateway")
-				}
-			}
-		}
+		utils.Logf("  Service Gateway: %s", props.ServiceGateway.ID)
+		Expect(props.ServiceGateway.ID).To(ContainSubstring(serviceGatewayName),
+			"NAT Gateway should be associated with the Service Gateway")
 
 		By("Verifying pod IPs registered in Address Locations")
 		alResponse, err := queryServiceGatewayAddressLocations()
@@ -870,8 +868,29 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		utils.Logf("Pod IPs in outbound (NAT Gateway): %d", len(egressPodIPs))
 		utils.Logf("Pod IPs in inbound (LB): %d", len(inboundPodIPs))
 
-		Expect(len(egressPodIPs)).To(Equal(dualPods), fmt.Sprintf("Expected %d pods in outbound service, got %d", dualPods, len(egressPodIPs)))
-		Expect(len(inboundPodIPs)).To(Equal(dualPods), fmt.Sprintf("Expected %d pods in inbound service, got %d", dualPods, len(inboundPodIPs)))
+		// Counting registrations cannot distinguish a correct registration from a stale or foreign
+		// address: two wrong pod IPs satisfy a count of two just as well as the two right ones.
+		// The dual-traffic pods carry both labels, so the same live IP set must appear under the
+		// inbound service and the egress gateway.
+		wantIPs, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(wantIPs).To(HaveLen(dualPods), "expected %d live dual-traffic pod IPs", dualPods)
+		wantList := make([]string, 0, len(wantIPs))
+		for ip := range wantIPs {
+			wantList = append(wantList, ip)
+		}
+		egressList := make([]string, 0, len(egressPodIPs))
+		for ip := range egressPodIPs {
+			egressList = append(egressList, ip)
+		}
+		inboundList := make([]string, 0, len(inboundPodIPs))
+		for ip := range inboundPodIPs {
+			inboundList = append(inboundList, ip)
+		}
+		Expect(egressList).To(ConsistOf(wantList),
+			"the outbound service must register exactly the live dual-traffic pod IPs")
+		Expect(inboundList).To(ConsistOf(wantList),
+			"the inbound service must register exactly the live dual-traffic pod IPs")
 
 		By("Verifying the SAME pod IPs are in both services")
 		dualRegisteredCount := 0

@@ -1027,6 +1027,77 @@ func TestServiceUpdaterUpdateInboundService(t *testing.T) {
 	})
 }
 
+// TestServiceUpdaterUpdateInboundService_PortRemovalDropsOnlyThatRule pins the ARM payload for a
+// port removal, which is the only way a Service can lose a load-balancing rule: Kubernetes rejects
+// a type=LoadBalancer Service with an empty spec.ports, so a Service can never transition to
+// "no ports at all" and the rule set can only shrink to a smaller non-empty set.
+//
+// updateInboundService rebuilds the LoadBalancer from the new config and PUTs it whole, so the
+// rules it sends are the complete desired set and the removed port's rule disappears by omission.
+// The sibling subtests above assert only that CreateOrUpdate happened, with gomock.Any() for the
+// body; that still passes if the stale rule is carried into the payload, which would leave the
+// removed port reachable on the frontend IP. This asserts the body itself.
+func TestServiceUpdaterUpdateInboundService_PortRemovalDropsOnlyThatRule(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	const uid = "22222222-2222-2222-2222-222222222222"
+
+	m := newOutboundMocks(ctrl)
+	mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+	m.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+
+	var puts []armnetwork.LoadBalancer
+	mockLB.EXPECT().CreateOrUpdate(gomock.Any(), "rg", uid, gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, lb armnetwork.LoadBalancer) (*armnetwork.LoadBalancer, error) {
+			puts = append(puts, lb)
+			return nil, nil
+		}).Times(1)
+
+	// Dropping a port changes only the rule list. Re-allocating the Public IP would move the
+	// Service's external address, and re-registering with the ServiceGateway is unnecessary
+	// because the backend pool ID the registration points at does not change.
+	m.pip.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+	m.sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	dt := newTestDiffTracker()
+	dt.config = testConfig()
+	dt.networkClientFactory = m.factory
+
+	// The Service previously published 80->8080 and 443->8443; 443 has been removed from spec.ports.
+	remaining := &InboundConfig{
+		FrontendPorts: []PortMapping{{Port: 80, Protocol: "TCP"}},
+		BackendPorts:  []PortMapping{{Port: 8080, Protocol: "TCP"}},
+	}
+
+	got := &outboundCompletion{}
+	outboundUpdater(dt, got).updateInboundService(uid, remaining, "corr-port-removal")
+
+	called, success, completionErr := got.result()
+	assert.True(t, called)
+	assert.True(t, success, "removing a port must report success: %v", completionErr)
+
+	if assert.Len(t, puts, 1, "the update must PUT the LoadBalancer exactly once") &&
+		assert.NotNil(t, puts[0].Properties) {
+		rules := puts[0].Properties.LoadBalancingRules
+		if assert.Len(t, rules, 1, "the PUT must carry only the surviving rule, so the removed one is deleted by omission") {
+			assert.Equal(t, "rule-tcp-80", *rules[0].Name)
+			assert.Equal(t, int32(80), *rules[0].Properties.FrontendPort)
+			assert.Equal(t, int32(8080), *rules[0].Properties.BackendPort)
+		}
+		for _, rule := range rules {
+			assert.NotEqual(t, "rule-tcp-443", *rule.Name,
+				"the removed port's rule must not survive in the payload sent to Azure")
+		}
+		// The frontend and backend pool are the anchors the surviving rule and the ServiceGateway
+		// registration reference; a port edit that dropped either would tear down the data path.
+		assert.Len(t, puts[0].Properties.FrontendIPConfigurations, 1,
+			"a port removal must keep the frontend IP configuration")
+		assert.Len(t, puts[0].Properties.BackendAddressPools, 1,
+			"a port removal must keep the backend address pool")
+	}
+}
+
 // TestServiceUpdaterOutboundUpdateIsCountedAsSkipped pins that an outbound update dispatched by
 // processBatch is counted as skipped. The updater has no way to apply it, so the requested spec
 // change is silently dropped and the service keeps its existing Azure configuration; this counter

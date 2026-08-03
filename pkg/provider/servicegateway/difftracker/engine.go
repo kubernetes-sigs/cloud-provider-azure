@@ -103,11 +103,9 @@ func (dt *DiffTracker) ReconcileInboundService(service *v1.Service) error {
 	config.Namespace = service.Namespace
 	config.Name = service.Name
 
-	if dt.IsServiceTracked(serviceUID) {
-		dt.UpdateService(config)
-	} else {
-		dt.AddService(config)
-	}
+	// UpdateService resolves tracked vs untracked under its own lock and delegates to AddService
+	// when untracked, so the decision is not made on a stale read here.
+	dt.UpdateService(config)
 	return nil
 }
 
@@ -686,6 +684,34 @@ func (dt *DiffTracker) DeleteService(serviceUID string, isInbound bool, isOrphan
 // OnServiceCreationComplete is called by ServiceUpdater after service creation or deletion completes.
 // For creation: promotes buffered endpoints/pods and updates the service state.
 // For deletion: cleans up Engine state.
+// serviceParkNotice carries a terminal park out of the locked section for event emission.
+type serviceParkNotice struct {
+	serviceUID string
+	operation  string
+	err        error
+}
+
+// emitServiceParkedEvent reports a terminal park as a Warning Event on the Service. The park is
+// otherwise visible only in controller logs, and is not retried until the Service spec changes.
+func (dt *DiffTracker) emitServiceParkedEvent(ctx context.Context, notice serviceParkNotice) {
+	dt.mu.Lock()
+	hasRecorder := dt.eventRecorder != nil
+	dt.mu.Unlock()
+	if !hasRecorder {
+		return
+	}
+
+	svc, err := dt.getServiceByUID(ctx, notice.serviceUID)
+	if err != nil {
+		dt.logger.V(4).Info("Could not resolve service to report a parked operation",
+			"service", notice.serviceUID, "err", err)
+		return
+	}
+	dt.recordEvent(svc, v1.EventTypeWarning, "ServiceGatewayConfigurationRejected",
+		fmt.Sprintf("Service %s failed with a non-retryable error and will not be retried until the Service spec changes: %v",
+			notice.operation, notice.err))
+}
+
 func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool, err error) {
 	defer func() {
 		updatePendingServiceOperationsMetric(dt)
@@ -698,6 +724,14 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 		// the delete-during-create pre-empt, and the post-deletion recreate), so the gauge must be
 		// refreshed here as well or it reports the count from the last DeleteService call.
 		updatePendingServiceDeletionsMetric(dt)
+	}()
+
+	// Runs after dt.mu is released: the Event needs the Service object and dt.mu.
+	var parked *serviceParkNotice
+	defer func() {
+		if parked != nil {
+			dt.emitServiceParkedEvent(context.Background(), *parked)
+		}
 	}()
 
 	dt.mu.Lock()
@@ -841,6 +875,7 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 					recordServiceParked(parkReasonTerminalError)
 					recordServiceOperationRetries("update", opState.Config.IsInbound, opState.RetryCount)
 					dt.logger.Error(err, "Parked service after a non-retryable update error; it will not be retried until the Service spec changes", "service", serviceUID)
+					parked = &serviceParkNotice{serviceUID: serviceUID, operation: "update", err: err}
 					dt.checkInitializationCompleteLocked()
 				}
 			} else {
@@ -1038,6 +1073,7 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 					recordServiceParked(parkReasonTerminalError)
 					recordServiceOperationRetries("create", opState.Config.IsInbound, opState.RetryCount)
 					dt.logger.Error(err, "Parked service after a non-retryable creation error; it will not be retried until the Service spec changes", "service", serviceUID)
+					parked = &serviceParkNotice{serviceUID: serviceUID, operation: "creation", err: err}
 					dt.checkInitializationCompleteLocked()
 				}
 			} else {

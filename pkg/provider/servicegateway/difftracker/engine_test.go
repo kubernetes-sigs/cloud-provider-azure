@@ -20,11 +20,14 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/record"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -141,6 +144,35 @@ func TestReconcileInboundService(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.False(t, dt.IsServiceTracked("service-uid"))
+	})
+
+	// A port-less Service is dropped without being tracked, so the reconcile that follows it must
+	// take the "not yet tracked" branch and add the Service rather than issuing an update against
+	// resources that were never provisioned. Only the first half of this sequence was pinned, and
+	// the two subtests pass independently even if the recovery never happens.
+	t.Run("provisions a previously port-less service once ports appear", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		service := newService("service-uid", 80)
+		service.Spec.Ports = nil
+
+		assert.NoError(t, dt.ReconcileInboundService(service))
+		assert.False(t, dt.IsServiceTracked("service-uid"))
+
+		withPorts := newService("service-uid", 80)
+		assert.NoError(t, dt.ReconcileInboundService(withPorts))
+
+		assert.True(t, dt.IsServiceTracked("service-uid"),
+			"a Service that gains ports must be provisioned, not left behind by the earlier skip")
+		opState := dt.pendingServiceOps["service-uid"]
+		if assert.NotNil(t, opState, "the Service must be scheduled for creation") {
+			assert.Equal(t, StateNotStarted, opState.State,
+				"the Service was never provisioned while port-less, so it must be created, not updated")
+			if assert.NotNil(t, opState.Config.InboundConfig) {
+				assert.Equal(t, []PortMapping{{Port: 80, Protocol: "TCP"}},
+					opState.Config.InboundConfig.FrontendPorts,
+					"the newly added port must reach the config that is provisioned")
+			}
+		}
 	})
 
 	t.Run("rejects a missing service identity", func(t *testing.T) {
@@ -357,10 +389,18 @@ func TestEngineUpdateEndpoints_ServiceCreating(t *testing.T) {
 	newEndpoints := map[string]string{"10.0.0.1": "node1"}
 	dt.UpdateEndpoints(serviceUID, oldEndpoints, newEndpoints)
 
-	// Verify endpoints were buffered
+	// Verify the endpoints were buffered WITH their contents. Asserting only len>0 cannot
+	// distinguish a correctly buffered update from one that dropped the address map or the
+	// removal side: on promotion the engine replays exactly what was buffered, so a nil
+	// OldPodIPToNodeIP would silently leak an address that should have been drained.
 	buffered, exists := dt.pendingEndpoints[serviceUID]
 	assert.True(t, exists, "Endpoints should be buffered")
-	assert.Greater(t, len(buffered), 0, "Should have buffered updates")
+	if assert.Len(t, buffered, 1, "exactly the one update must be buffered") {
+		assert.Equal(t, newEndpoints, buffered[0].PodIPToNodeIP,
+			"the buffered update must carry the new endpoint map")
+		assert.Equal(t, oldEndpoints, buffered[0].OldPodIPToNodeIP,
+			"the buffered update must carry the old endpoint map so removals replay correctly")
+	}
 
 	// Verify no immediate trigger
 	select {
@@ -409,10 +449,16 @@ func TestEngineAddPod_ServiceCreating(t *testing.T) {
 	// Execute
 	dt.AddPod(egressUID, "ns1/pod2", "node2", "10.0.0.2")
 
-	// Verify pod was buffered
+	// Verify the pod was buffered WITH its identity and address. len>0 alone cannot detect
+	// buffering the wrong pod or losing the address, either of which registers the wrong IP in
+	// Azure when the buffer is replayed on promotion.
 	buffered, exists := dt.pendingPods[egressUID]
 	assert.True(t, exists, "Pods should be buffered")
-	assert.Greater(t, len(buffered), 0, "Should have buffered pod updates")
+	if assert.Len(t, buffered, 1, "exactly the one pod must be buffered") {
+		assert.Equal(t, "ns1/pod2", buffered[0].PodKey, "the buffered entry must identify the pod")
+		assert.Equal(t, "10.0.0.2", buffered[0].Address, "the buffered entry must carry the pod address")
+		assert.Equal(t, "node2", buffered[0].Location, "the buffered entry must carry the node location")
+	}
 
 	// Verify no immediate trigger
 	select {
@@ -580,26 +626,6 @@ func TestEngineUpdateService_PortChangeSchedulesUpdate(t *testing.T) {
 	}
 }
 
-// TestEngineUpdateService_LBInNRPNoTrackingEntry verifies that when an LB exists in
-// NRP but has no pendingServiceOps entry (e.g., post-restart recovery), UpdateService
-// creates an entry in StateUpdateInProgress and triggers.
-func TestEngineUpdateService_LBInNRPNoTrackingEntry(t *testing.T) {
-	dt := newTestDiffTracker()
-	uid := "svc-update-recovered"
-	dt.NRPResources.LoadBalancers.Insert(uid)
-
-	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80)))
-
-	opState, exists := dt.pendingServiceOps[uid]
-	assert.True(t, exists)
-	assert.Equal(t, StateUpdateInProgress, opState.State)
-	select {
-	case <-dt.serviceUpdaterTrigger:
-	default:
-		t.Error("expected serviceUpdater trigger")
-	}
-}
-
 // TestEngineUpdateService_IgnoredDuringDeletion verifies UpdateService is a no-op when
 // the service is already being deleted.
 func TestEngineUpdateService_IgnoredDuringDeletion(t *testing.T) {
@@ -681,8 +707,13 @@ func TestIsServiceReady_StateUpdateInProgress(t *testing.T) {
 	assert.False(t, dt.isServiceReadyToSync(uid, true), "StateCreationInProgress should NOT be ready")
 }
 
-// TestEngineDeleteService_DuringUpdate verifies that DeleteService correctly transitions
-// a StateUpdateInProgress service to StateDeletionPending and clears InFlightConfig.
+// TestEngineDeleteService_DuringUpdate verifies that DeleteService transitions a
+// StateUpdateInProgress service to StateDeletionPending and PRESERVES InFlightConfig.
+//
+// Preserving it is load-bearing: OnServiceCreationComplete's pre-empt uses InFlightConfig to
+// recognise the in-flight update's completion and route it to deletion, clearing the field itself
+// (see the StateUpdateInProgress case in DeleteService). Clearing it here instead would strand the
+// completion and leak the Load Balancer, public IP and ServiceGateway registration.
 func TestEngineDeleteService_DuringUpdate(t *testing.T) {
 	dt := newTestDiffTracker()
 	uid := "svc-delete-during-update"
@@ -1761,4 +1792,203 @@ func TestReconcileInboundService_DeletingServiceIsNotProvisionedFromScratch(t *t
 	tracked := len(dt.pendingServiceOps)
 	dt.mu.Unlock()
 	assert.Zero(t, tracked, "a Terminating Service must not be provisioned from scratch after a restart")
+}
+
+// TestOnServiceCreationComplete_TerminalParkEmitsWarningEvent verifies a terminal park reaches the
+// Service as a Warning Event. A transient failure is the control: it retries, so it must stay
+// silent.
+func TestOnServiceCreationComplete_TerminalParkEmitsWarningEvent(t *testing.T) {
+	newTracker := func(uid string) (*DiffTracker, *record.FakeRecorder) {
+		svc := &v1.Service{ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default", Name: "svc", UID: types.UID(uid),
+		}}
+		dt := newTestDiffTracker()
+		dt.kubeClient = fake.NewSimpleClientset(svc)
+		recorder := record.NewFakeRecorder(10)
+		dt.eventRecorder = recorder
+
+		config := NewInboundServiceConfig(uid, &InboundConfig{
+			FrontendPorts: []PortMapping{{Port: 65535, Protocol: "TCP"}},
+		})
+		config.Namespace = "default"
+		config.Name = "svc"
+		dt.pendingServiceOps[uid] = &ServiceOperationState{
+			ServiceUID: uid,
+			Config:     config,
+			State:      StateCreationInProgress,
+		}
+		return dt, recorder
+	}
+
+	// The park is decided under dt.mu and the Event needs it again, so a regression deadlocks
+	// rather than fails.
+	completeWithin := func(t *testing.T, dt *DiffTracker, uid string, err error) {
+		t.Helper()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			dt.OnServiceCreationComplete(uid, false, err)
+		}()
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			t.Fatal("OnServiceCreationComplete deadlocked emitting the parked-service Event")
+		}
+	}
+
+	t.Run("terminal failure reports the reason on the Service", func(t *testing.T) {
+		dt, recorder := newTracker("svc-parked")
+		completeWithin(t, dt, "svc-parked", newTerminalError(errors.New("frontend port 65535 out of range")))
+
+		assert.True(t, dt.pendingServiceOps["svc-parked"].CreationFailedTerminal)
+		select {
+		case event := <-recorder.Events:
+			assert.Contains(t, event, "Warning")
+			assert.Contains(t, event, "ServiceGatewayConfigurationRejected")
+			assert.Contains(t, event, "frontend port 65535 out of range")
+			assert.Contains(t, event, "will not be retried until the Service spec changes")
+		default:
+			t.Fatal("a parked service must report the reason as an Event on the Service")
+		}
+	})
+
+	t.Run("a parked update reports the reason on the Service", func(t *testing.T) {
+		dt, recorder := newTracker("svc-parked-update")
+		dt.pendingServiceOps["svc-parked-update"].State = StateUpdateInProgress
+		completeWithin(t, dt, "svc-parked-update", newTerminalError(errors.New("unsupported protocol SCTP")))
+
+		assert.True(t, dt.pendingServiceOps["svc-parked-update"].CreationFailedTerminal)
+		select {
+		case event := <-recorder.Events:
+			assert.Contains(t, event, "ServiceGatewayConfigurationRejected")
+			assert.Contains(t, event, "unsupported protocol SCTP")
+		default:
+			t.Fatal("a parked update must report the reason as an Event on the Service")
+		}
+	})
+
+	t.Run("transient failure stays silent", func(t *testing.T) {
+		dt, recorder := newTracker("svc-transient")
+		completeWithin(t, dt, "svc-transient", errors.New("throttled, try again"))
+
+		assert.False(t, dt.pendingServiceOps["svc-transient"].CreationFailedTerminal)
+		select {
+		case event := <-recorder.Events:
+			t.Fatalf("a retryable failure must not raise an Event, got %q", event)
+		default:
+		}
+	})
+}
+
+// TestPublicEntryPointsAlwaysReleaseLock drives every early-return branch of the entry points that
+// unlock manually rather than by defer, and asserts the mutex is free afterwards. A branch that
+// returns without unlocking would otherwise surface as a deadlock elsewhere.
+func TestPublicEntryPointsAlwaysReleaseLock(t *testing.T) {
+	const uid = "11111111-1111-1111-1111-111111111111"
+
+	inbound := func() ServiceConfig {
+		return NewInboundServiceConfig(uid, &InboundConfig{
+			FrontendPorts: []PortMapping{{Port: 80, Protocol: "TCP"}},
+			BackendPorts:  []PortMapping{{Port: 8080, Protocol: "TCP"}},
+		})
+	}
+
+	cases := []struct {
+		name string
+		run  func(dt *DiffTracker)
+	}{
+		{"AddService invalid config", func(dt *DiffTracker) {
+			dt.AddService(ServiceConfig{})
+		}},
+		{"AddService LB already in NRP", func(dt *DiffTracker) {
+			dt.NRPResources.LoadBalancers.Insert(uid)
+			dt.AddService(inbound())
+		}},
+		{"AddService NAT already in NRP", func(dt *DiffTracker) {
+			dt.NRPResources.NATGateways.Insert(uid)
+			dt.AddService(NewOutboundServiceConfig(uid, nil))
+		}},
+		{"AddService already tracked", func(dt *DiffTracker) {
+			dt.pendingServiceOps[uid] = &ServiceOperationState{ServiceUID: uid, Config: inbound(), State: StateCreated}
+			dt.AddService(inbound())
+		}},
+		{"AddService creates", func(dt *DiffTracker) {
+			dt.AddService(inbound())
+		}},
+		{"UpdateService invalid config", func(dt *DiffTracker) {
+			dt.UpdateService(ServiceConfig{})
+		}},
+		{"UpdateService outbound is ignored", func(dt *DiffTracker) {
+			dt.UpdateService(NewOutboundServiceConfig(uid, nil))
+		}},
+		{"UpdateService untracked delegates to add", func(dt *DiffTracker) {
+			dt.UpdateService(inbound())
+		}},
+		{"UpdateService untracked but in NRP", func(dt *DiffTracker) {
+			dt.NRPResources.LoadBalancers.Insert(uid)
+			dt.UpdateService(inbound())
+		}},
+		{"UpdateService parked with unchanged spec", func(dt *DiffTracker) {
+			dt.pendingServiceOps[uid] = &ServiceOperationState{
+				ServiceUID: uid, Config: inbound(), State: StateNotStarted, CreationFailedTerminal: true,
+			}
+			dt.UpdateService(inbound())
+		}},
+		{"UpdateService parked with changed spec", func(dt *DiffTracker) {
+			dt.pendingServiceOps[uid] = &ServiceOperationState{
+				ServiceUID: uid, Config: inbound(), State: StateNotStarted, CreationFailedTerminal: true,
+			}
+			changed := NewInboundServiceConfig(uid, &InboundConfig{
+				FrontendPorts: []PortMapping{{Port: 443, Protocol: "TCP"}},
+				BackendPorts:  []PortMapping{{Port: 8443, Protocol: "TCP"}},
+			})
+			dt.UpdateService(changed)
+		}},
+		{"UpdateService created and unchanged", func(dt *DiffTracker) {
+			applied := inbound()
+			dt.pendingServiceOps[uid] = &ServiceOperationState{
+				ServiceUID: uid, Config: applied, LastAppliedConfig: &applied, State: StateCreated,
+			}
+			dt.UpdateService(inbound())
+		}},
+		{"UpdateService while deleting", func(dt *DiffTracker) {
+			dt.pendingServiceOps[uid] = &ServiceOperationState{ServiceUID: uid, Config: inbound(), State: StateDeletionInProgress}
+			dt.UpdateService(inbound())
+		}},
+		{"DeleteService untracked", func(dt *DiffTracker) {
+			dt.DeleteService(uid, true, false)
+		}},
+		{"DeleteService tracked", func(dt *DiffTracker) {
+			dt.pendingServiceOps[uid] = &ServiceOperationState{ServiceUID: uid, Config: inbound(), State: StateCreated}
+			dt.DeleteService(uid, true, false)
+		}},
+		{"DeleteService already deleting", func(dt *DiffTracker) {
+			dt.pendingServiceOps[uid] = &ServiceOperationState{ServiceUID: uid, Config: inbound(), State: StateDeletionInProgress}
+			dt.DeleteService(uid, true, false)
+		}},
+		{"UpdateEndpoints untracked", func(dt *DiffTracker) {
+			dt.UpdateEndpoints(uid, nil, map[string]string{"10.0.0.1": "10.1.0.1"})
+		}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dt := newTestDiffTracker()
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				tc.run(dt)
+			}()
+			select {
+			case <-done:
+			case <-time.After(10 * time.Second):
+				t.Fatal("entry point did not return; a branch is holding the lock")
+			}
+
+			if !dt.mu.TryLock() {
+				t.Fatal("the lock was still held after the call returned")
+			}
+			dt.mu.Unlock()
+		})
+	}
 }

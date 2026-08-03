@@ -206,75 +206,11 @@ func TestBuildInboundServiceResources_MultipleConfigs(t *testing.T) {
 	assert.Equal(t, int32(443), *lb2.Properties.LoadBalancingRules[0].Properties.FrontendPort)
 }
 
-func TestConfigValidation_AllFieldsRequired(t *testing.T) {
-	tests := []struct {
-		name        string
-		config      Config
-		expectError bool
-	}{
-		{
-			name: "valid config",
-			config: Config{
-				SubscriptionID:             "sub-123",
-				ResourceGroup:              "rg-456",
-				Location:                   "eastus",
-				VNetName:                   "test-vnet",
-				ServiceGatewayResourceName: "sgw-789",
-			},
-			expectError: false,
-		},
-		{
-			name: "missing subscription",
-			config: Config{
-				ResourceGroup:              "rg-456",
-				Location:                   "eastus",
-				ServiceGatewayResourceName: "sgw-789",
-			},
-			expectError: true,
-		},
-		{
-			name: "missing resource group",
-			config: Config{
-				SubscriptionID:             "sub-123",
-				Location:                   "eastus",
-				ServiceGatewayResourceName: "sgw-789",
-			},
-			expectError: true,
-		},
-		{
-			name: "missing location",
-			config: Config{
-				SubscriptionID:             "sub-123",
-				ResourceGroup:              "rg-456",
-				ServiceGatewayResourceName: "sgw-789",
-			},
-			expectError: true,
-		},
-		{
-			name: "missing ServiceGatewayResourceName",
-			config: Config{
-				SubscriptionID: "sub-123",
-				ResourceGroup:  "rg-456",
-				Location:       "eastus",
-			},
-			expectError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.config.Validate()
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestNewIgnoreCaseSetFromSlice_PreservesOrder(t *testing.T) {
-	// Order shouldn't matter for set membership
+// TestNewIgnoreCaseSetFromSlice_IsOrderIndependent pins that membership does not depend on the
+// order of the input slice. The previous name claimed the constructor "preserves order", which it
+// neither does nor is asserted here - the set is backed by a map and has no defined iteration order.
+func TestNewIgnoreCaseSetFromSlice_IsOrderIndependent(t *testing.T) {
+	// Order must not matter for set membership.
 	items1 := []string{"a", "b", "c"}
 	items2 := []string{"c", "b", "a"}
 

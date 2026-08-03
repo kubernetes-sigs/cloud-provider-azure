@@ -420,20 +420,10 @@ var _ = Describe("Container Load Balancer Finalizer Tests", Label(slbTestLabel, 
 		}
 
 		By("Verifying Azure resources are cleaned up via Service Gateway")
-		Eventually(func() bool {
-			sgResponse, err := queryServiceGatewayServices()
-			if err != nil {
-				return false
-			}
-			// Only default-natgw should remain
-			for _, svc := range sgResponse.Value {
-				if svc.Name != "default-natgw" {
-					utils.Logf("Service %s still exists in Service Gateway", svc.Name)
-					return false
-				}
-			}
-			return true
-		}, 2*time.Minute, 10*time.Second).Should(BeTrue(),
+		// Uses the shared cleanup check rather than a local copy: a hand-rolled loop that only
+		// rejects unexpected services reports success on an empty Service Gateway, where the
+		// default outbound service has been destroyed along with the test's own.
+		Eventually(serviceGatewayCleanupErr, 2*time.Minute, 10*time.Second).Should(Succeed(),
 			"Service Gateway should only have default outbound service after cleanup")
 
 		By("Verifying Azure LB and PIP are deleted for each service")

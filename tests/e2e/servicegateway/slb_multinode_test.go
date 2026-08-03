@@ -225,6 +225,11 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 		utils.Logf("Actual (from Service Gateway): %v", sgAddressLocations)
 
 		// Verify each host IP has correct pod IPs
+		// The verification loop iterates the *expected* map, so an empty map checks nothing and
+		// reports success without a single address location having been compared. The pod list
+		// this map is built from is filtered by label, so an empty result is a real possibility.
+		Expect(podHostIPs).NotTo(BeEmpty(),
+			"no pod host IPs were collected, so the address-location verification below would assert nothing")
 		for hostIP, expectedPodIPs := range podHostIPs {
 			actualPodIPs, exists := sgAddressLocations[hostIP]
 			Expect(exists).To(BeTrue(), "Host IP %s should exist in Service Gateway address locations", hostIP)

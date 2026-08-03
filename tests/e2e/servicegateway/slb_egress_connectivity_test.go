@@ -217,25 +217,33 @@ var _ = Describe("SLB - Egress SNAT Connectivity", Label(slbTestLabel), func() {
 			pipSet[ip] = true
 		}
 
-		// Per-family dataplane observation only. The standalone test cluster routes pod egress through
-		// the node's default outbound, not the SGW NAT gateway, so the observed source is not the NAT
-		// gateway public IP here; this step therefore never fails the spec. On a traffic-carrying
-		// dual-stack cluster it surfaces the real per-family SNAT source for inspection.
+		// Assert per-family SNAT conditionally. Logging whatever was observed and passing either way
+		// made "egress leaves via the node's default outbound IP" - i.e. the NAT gateway doing
+		// nothing - indistinguishable from success. Where no source is observable the environment
+		// does not route that family's egress and there is nothing to assert; but once a source IS
+		// observable it MUST be a NAT gateway public IP, otherwise SNAT is genuinely bypassed.
+		observedAnyFamily := false
 		observe := func(family, curlArg, endpoint string) {
 			out, _ := utils.RunKubectl(ns.Name, "exec", podName, "--",
 				"/bin/sh", "-c", fmt.Sprintf("curl -s -m 10 %s %s || true", curlArg, endpoint))
-			switch observed := ipv4Regexp.FindString(out); {
-			case observed == "":
-				utils.Logf("  %s egress produced no IPv4 source (expected for the IPv6 probe, or where the dataplane does not route SGW egress)", family)
-			case pipSet[observed]:
-				utils.Logf("  ✓ %s egress SNAT observed as NAT gateway public IP %s", family, observed)
-			default:
-				utils.Logf("  %s egress observed as %s (not a NAT gateway public IP %v); SGW dataplane SNAT is not active in this environment", family, observed, natGatewayPIPs)
+			observed := ipv4Regexp.FindString(out)
+			if observed == "" {
+				utils.Logf("  %s egress produced no observable source (expected for the IPv6 probe, or where the dataplane does not route SGW egress)", family)
+				return
 			}
+			observedAnyFamily = true
+			Expect(pipSet).To(HaveKey(observed),
+				"%s egress left as %s, which is not one of the NAT gateway public IPs %v: traffic is "+
+					"bypassing the NAT gateway, so SNAT is not in effect for this family", family, observed, natGatewayPIPs)
+			utils.Logf("  ✓ %s egress SNAT verified as NAT gateway public IP %s", family, observed)
 		}
-		By("Observing per-family egress SNAT (informational)")
+		By("Verifying per-family egress SNAT uses the NAT gateway public IP where traffic flows")
 		observe("IPv4", "-4", "ifconfig.me/ip")
 		observe("IPv6", "-6", "ifconfig.co/ip")
+		if !observedAnyFamily {
+			utils.Logf("  no family produced an observable egress source; this environment does not carry " +
+				"SGW egress dataplane traffic, so per-family SNAT could not be asserted")
+		}
 
 		utils.Logf("\n✓ Dual-stack egress contract verified: families %v under family-pure locations; NAT gateway %s public IP(s) %v", ips, natGatewayID, natGatewayPIPs)
 	})

@@ -351,6 +351,15 @@ func newIgnoreCaseSetFromSlice(items []string) *utilsets.IgnoreCaseSet {
 
 // ExtractInboundConfigFromService creates InboundConfig from a Kubernetes Service
 // This is shared between initialization and the provider layer
+//
+// A nil return means "nothing to provision" and the callers skip the Service without tracking it.
+// For a type=LoadBalancer Service the empty-ports case is defensive rather than reachable:
+// Kubernetes requires spec.ports on any Service that is not headless or ExternalName, and rejects
+// a headless LoadBalancer, so a LoadBalancer Service can neither be created nor updated into
+// having zero ports. Ports can therefore only be removed down to a smaller non-empty set, which
+// is an ordinary update: the LoadBalancer is rebuilt from the new config and PUT whole, so a
+// removed port's rule disappears by omission while the Public IP and ServiceGateway registration
+// are left alone.
 func ExtractInboundConfigFromService(service *v1.Service) *InboundConfig {
 	if service == nil || len(service.Spec.Ports) == 0 {
 		return nil
@@ -474,7 +483,7 @@ const (
 // as absent and let the request through.
 func AdmitInboundService(service *v1.Service) (*InboundConfig, error) {
 	if service == nil {
-		return nil, nil
+		return nil, fmt.Errorf("cannot admit a nil Service")
 	}
 
 	if consts.IsK8sServiceUsingInternalLoadBalancer(service) {

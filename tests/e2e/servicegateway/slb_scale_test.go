@@ -370,6 +370,10 @@ var _ = Describe("SLB - Pod Scaling", Label(slbTestLabel), func() {
 		}
 
 		// Verify each expected node's address location
+		// An empty expectation map would make the loop below assert nothing and still report
+		// success, so require at least one node before comparing against the Service Gateway.
+		Expect(expectedNodeToPods).NotTo(BeEmpty(),
+			"no expected node->pod mapping was collected, so the verification below would assert nothing")
 		for expectedNodeIP, expectedPodIPs := range expectedNodeToPods {
 			// Find the address location for this node
 			var nodeAddressLocation *ServiceGatewayAddressLocation

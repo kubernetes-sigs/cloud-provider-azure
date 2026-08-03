@@ -304,23 +304,17 @@ var _ = Describe("SLB - Basic Service", Label(slbTestLabel), func() {
 		utils.Logf("  Azure Portal: https://portal.azure.com/#@/resource%s", serviceLB.ID)
 
 		By("Verifying service details from Kubernetes")
-		updatedService, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		// The ingress IP is stamped asynchronously once the Azure resources exist, so wait for it
+		// rather than sampling once. Passing the Azure IP as the target also pins that Kubernetes
+		// reports the address Azure actually allocated.
+		updatedService, err := utils.WaitServiceExposure(cs, ns.Name, serviceName, []*string{&externalIP})
+		Expect(err).NotTo(HaveOccurred(), "Kubernetes Service status should be updated with the external IP")
+		Expect(updatedService).NotTo(BeNil())
 
-		// Check if external IP was eventually updated in Kubernetes (optional - might not be updated)
-		if len(updatedService.Status.LoadBalancer.Ingress) > 0 {
-			k8sIP := updatedService.Status.LoadBalancer.Ingress[0].IP
-			utils.Logf("\n✓ Kubernetes Service Status was also updated:")
-			utils.Logf("  External IP (from K8s): %s", k8sIP)
-			if k8sIP == externalIP {
-				utils.Logf("  ✓ Matches Azure Public IP!")
-			} else {
-				utils.Logf("  ⚠ Warning: K8s IP (%s) doesn't match Azure IP (%s)", k8sIP, externalIP)
-			}
-		} else {
-			utils.Logf("\n⚠ Note: Kubernetes service status not yet updated with external IP")
-			utils.Logf("  This is a known issue - resources exist in Azure but K8s status not synced")
-		}
+		k8sIP := updatedService.Status.LoadBalancer.Ingress[0].IP
+		Expect(k8sIP).To(Equal(externalIP), "Kubernetes external IP should match the Azure Public IP")
+		utils.Logf("\n✓ Kubernetes Service Status was updated:")
+		utils.Logf("  External IP (from K8s): %s", k8sIP)
 
 		utils.Logf("\n" + strings.Repeat("=", 80))
 		utils.Logf("✓✓✓ TEST PASSED! ✓✓✓")

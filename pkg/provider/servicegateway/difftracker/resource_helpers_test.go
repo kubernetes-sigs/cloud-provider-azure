@@ -939,6 +939,16 @@ func TestAdmitInboundService_RejectsInternalLoadBalancerCaseInsensitively(t *tes
 	}
 }
 
+// TestAdmitInboundService_RejectsNilService pins that a nil Service is an error, not a skip. A
+// (nil, nil) return is how admission reports "nothing to provision", so callers would silently
+// drop the Service instead of surfacing the programming error.
+func TestAdmitInboundService_RejectsNilService(t *testing.T) {
+	config, err := AdmitInboundService(nil)
+
+	assert.EqualError(t, err, "cannot admit a nil Service")
+	assert.Nil(t, config)
+}
+
 // TestAdmitInboundService_AdmitsSupportedService is the control: a plain LoadBalancer Service must
 // still be admitted, so the guard above cannot pass by rejecting everything.
 func TestAdmitInboundService_AdmitsSupportedService(t *testing.T) {

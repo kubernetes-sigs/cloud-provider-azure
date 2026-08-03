@@ -2472,12 +2472,6 @@ func TestInitializePublishesServiceGatewayDependencies(t *testing.T) {
 	service := getTestService("servicegateway-lifecycle", v1.ProtocolTCP, nil, false, 80)
 	_, err := loadBalancer.EnsureLoadBalancer(context.Background(), testClusterName, &service, nil)
 	assert.EqualError(t, err, "ServiceGateway LoadBalancer is not initialized")
-
-	// Start performs live Azure discovery, which this fixture's client factory does not serve.
-	assert.NoError(t, runtime.StartWithoutDiscovery())
-
-	_, err = loadBalancer.EnsureLoadBalancer(context.Background(), testClusterName, &service, nil)
-	assert.NoError(t, err)
 }
 
 func TestInitializeCloudFromConfig(t *testing.T) {

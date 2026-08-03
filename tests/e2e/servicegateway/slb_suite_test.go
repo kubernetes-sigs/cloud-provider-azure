@@ -301,6 +301,7 @@ func verifyServiceGatewayCleanup() {
 	Expect(err).NotTo(HaveOccurred(), "Should be able to query Service Gateway services after cleanup")
 
 	utils.Logf("Found %d service(s) in Service Gateway after cleanup", len(sgResponse.Value))
+	foundDefault := false
 	for i := range sgResponse.Value {
 		svc := &sgResponse.Value[i]
 		utils.Logf("  Service: %s (Type: %s)", svc.Name, svc.Properties.ServiceType)
@@ -308,8 +309,14 @@ func verifyServiceGatewayCleanup() {
 		if svc.Name != "default-natgw" {
 			Fail(fmt.Sprintf("Unexpected service '%s' still exists in Service Gateway after cleanup", svc.Name))
 		}
+		foundDefault = true
 		Expect(svc.Properties.ServiceType).To(Equal("Outbound"), "Service should be the default outbound service")
 	}
+	// The loop above only rejects *extra* services, so it passes vacuously on an empty response -
+	// which is not cleanup succeeding but the cluster's default egress path having been destroyed.
+	// The default NAT gateway is not created by these tests and must outlive every one of them.
+	Expect(foundDefault).To(BeTrue(),
+		"the default outbound service 'default-natgw' is missing from the Service Gateway; cleanup must leave it in place")
 	utils.Logf("  ✓ Only default outbound service remains in Service Gateway")
 }
 
@@ -368,11 +375,19 @@ func serviceGatewayCleanupErr() error {
 	if err != nil {
 		return fmt.Errorf("query Service Gateway services: %w", err)
 	}
+	foundDefault := false
 	for i := range sgResponse.Value {
 		svc := &sgResponse.Value[i]
 		if svc.Name != "default-natgw" {
 			return fmt.Errorf("unexpected service %q (type %s) still exists in Service Gateway after cleanup", svc.Name, svc.Properties.ServiceType)
 		}
+		foundDefault = true
+	}
+	// Without this an empty Service Gateway satisfies the poll immediately: the loop finds no
+	// unexpected service because it finds no service at all. Cleanup must remove the test's
+	// services and leave the cluster-wide default outbound service untouched.
+	if !foundDefault {
+		return fmt.Errorf("the default outbound service %q is missing from the Service Gateway; cleanup must leave it in place", "default-natgw")
 	}
 	return nil
 }

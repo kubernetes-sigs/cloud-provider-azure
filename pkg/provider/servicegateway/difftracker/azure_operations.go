@@ -340,6 +340,9 @@ func (dt *DiffTracker) getServiceByNamespaceName(ctx context.Context, lister cor
 // it, and the deletion that follows still has to tear down the PIP/LB and strip the finalizer.
 // Filtering by type would hide such a Service, and callers read the NotFound below as "gone".
 func (dt *DiffTracker) getServiceByUIDViaList(ctx context.Context, uid string) (*v1.Service, error) {
+	if dt.kubeClient == nil {
+		return nil, fmt.Errorf("getServiceByUID: no Kubernetes client")
+	}
 	svcList, err := dt.kubeClient.CoreV1().Services(v1.NamespaceAll).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("getServiceByUID: list failed: %w", err)

@@ -61,10 +61,17 @@ func TestCreateOrUpdatePIP_Mock(t *testing.T) {
 		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
 		mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
 		mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
-		mockPIP.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "svc-pip", gomock.Any()).Return(pip, nil)
+		// Pin the builder -> client seam (see TestCreateOrUpdateLB_Mock).
+		var sent armnetwork.PublicIPAddress
+		mockPIP.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "svc-pip", gomock.Any()).
+			DoAndReturn(func(_ context.Context, _, _ string, got armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
+				sent = got
+				return pip, nil
+			})
 
 		dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
 		assert.NoError(t, dt.createOrUpdatePIP(context.Background(), "rg", pip))
+		assert.Equal(t, *pip, sent, "the Public IP sent to Azure must be the one the caller built")
 	})
 
 	t.Run("error", func(t *testing.T) {
@@ -132,10 +139,22 @@ func TestCreateOrUpdateLB_Mock(t *testing.T) {
 		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
 		mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
 		mockFactory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
-		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "svc", gomock.Any()).Return(nil, nil)
+		// Capture the Load Balancer actually handed to Azure. The builder is well covered by
+		// TestBuildInboundServiceResources_* and the v9 wire guard, and this wrapper's error
+		// handling is covered below - but nothing verified the SEAM between them. Replacing the
+		// caller's LB with an empty armnetwork.LoadBalancer{} (no SKU, no frontend IP config, no
+		// backend pool, no rules) passed the entire unit suite, because every mock matched the
+		// payload with gomock.Any(). Pin that what the caller built is what is sent.
+		var sent armnetwork.LoadBalancer
+		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "svc", gomock.Any()).
+			DoAndReturn(func(_ context.Context, _, _ string, got armnetwork.LoadBalancer) (*armnetwork.LoadBalancer, error) {
+				sent = got
+				return nil, nil
+			})
 
 		dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
 		assert.NoError(t, dt.createOrUpdateLB(context.Background(), lb))
+		assert.Equal(t, lb, sent, "the Load Balancer sent to Azure must be the one the caller built")
 	})
 
 	t.Run("error", func(t *testing.T) {
@@ -191,10 +210,18 @@ func TestCreateOrUpdateNatGateway_Mock(t *testing.T) {
 		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
 		mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
 		mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
-		mockNAT.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "svc", gomock.Any()).Return(nil, nil)
+		// Pin the builder -> client seam (see TestCreateOrUpdateLB_Mock): with gomock.Any() for the
+		// payload, replacing the caller's NAT gateway with an empty one was invisible.
+		var sent armnetwork.NatGateway
+		mockNAT.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "svc", gomock.Any()).
+			DoAndReturn(func(_ context.Context, _, _ string, got armnetwork.NatGateway) (*armnetwork.NatGateway, error) {
+				sent = got
+				return nil, nil
+			})
 
 		dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
 		assert.NoError(t, dt.createOrUpdateNatGateway(context.Background(), "rg", natGW))
+		assert.Equal(t, natGW, sent, "the NAT Gateway sent to Azure must be the one the caller built")
 	})
 
 	t.Run("error", func(t *testing.T) {
