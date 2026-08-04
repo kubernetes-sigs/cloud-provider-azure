@@ -101,10 +101,17 @@ var _ = Describe("Container Load Balancer Creation Crash Recovery Tests", Label(
 	// Test 1: Create inbound services + immediately crash CCM during provisioning
 	It("should recover and complete service creation after CCM crash during provisioning", func() {
 		const (
-			serviceCount    = 5
-			servicePort     = int32(8080)
-			targetPort      = 8080
-			crashDelay      = 2 * time.Second  // Crash after 2 seconds
+			serviceCount = 5
+			servicePort  = int32(8080)
+			targetPort   = 8080
+			// Crash while provisioning is still in flight. This has to be well under the time the
+			// controller needs to finish all serviceCount Load Balancers, and that is much shorter
+			// than it looks: a live run created five Services at 17:26:32.1 and had every one of
+			// them carrying an Ingress IP by 17:26:34.1. A 2s delay therefore landed *after*
+			// provisioning completed and the spec silently degraded into steady-state recovery,
+			// which the premise check below then failed on. The Services exist before this fires,
+			// so the controller already has the work queued.
+			crashDelay      = 250 * time.Millisecond
 			ccmDowntime     = 20 * time.Second // Keep CCM down for 20 seconds
 			recoveryTimeout = 180 * time.Second
 		)
