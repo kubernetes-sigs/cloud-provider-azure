@@ -39,8 +39,10 @@ import (
 // Refer: https://github.com/kubernetes/kubernetes/blob/master/pkg/credentialprovider/azure/azure_credentials.go
 
 const (
-	maxReadLength   = 10 * 1 << 20 // 10MB
-	defaultCacheTTL = 5 * time.Minute
+	maxReadLength = 10 * 1 << 20 // 10MB
+	// Since the ACR Refresh token TTL is around 3 hours, too short TTL may cause frequent token exchange and bring
+	// throttleling risk, so we set the cache TTL to 60 minutes, which is a trade-off between security and performance.
+	defaultCacheTTL = 60 * time.Minute
 
 	AcrAudience = "https://containerregistry.azure.net"
 )
