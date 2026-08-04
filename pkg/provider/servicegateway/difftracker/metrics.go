@@ -541,7 +541,11 @@ func recordDeleteSubstepFailure(step string) {
 	deleteSubstepFailuresTotal.WithLabelValues(step).Inc()
 }
 
-// recordLocationSyncAbandoned counts an NRP location sync given up on after exhausting retries.
+// recordLocationSyncAbandoned counts an NRP location sync that has exhausted its retry budget.
+// The sync is no longer abandoned when this fires - retries continue under a capped, jittered
+// backoff - so this is a sustained-outage signal rather than a give-up signal. The metric name is
+// retained for dashboard/alert compatibility; the operational meaning ("NRP sync is not
+// converging, investigate") is unchanged.
 func recordLocationSyncAbandoned(reason string) {
 	locationSyncAbandonedTotal.WithLabelValues(reason).Inc()
 }

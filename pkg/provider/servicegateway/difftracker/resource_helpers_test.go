@@ -410,7 +410,8 @@ func TestBuildOutboundServiceResources_Basic(t *testing.T) {
 		ServiceGatewayResourceName:    "test-sgw",
 	}
 
-	pip, natGw, servicesDTO := buildOutboundServiceResources("egress-uid-456", nil, dtConfig)
+	pips, natGw, servicesDTO := buildOutboundServiceResources("egress-uid-456", nil, dtConfig)
+	pip := pips[0]
 
 	// Verify PIP
 	assert.NotNil(t, pip.Name)
@@ -779,7 +780,7 @@ func TestIsValidEgressIdentity(t *testing.T) {
 		"my_egress.gw-1",
 		"a",
 		"e0",
-		strings.Repeat("a", 76), // max length (reserves 4 chars for the "-pip" suffix)
+		strings.Repeat("a", 73), // max length (reserves 7 chars for the "-pip-v6" suffix)
 	}
 	for _, n := range valid {
 		assert.True(t, IsValidEgressIdentity(n), "expected %q to be a valid egress identity", n)
@@ -795,17 +796,18 @@ func TestIsValidEgressIdentity(t *testing.T) {
 		"trailing-hyphen-",      // must end with an alphanumeric or underscore
 		"has space",             // whitespace
 		"UPPER",                 // callers lowercase first; raw uppercase is rejected
-		strings.Repeat("a", 77), // exceeds 76: derived PIP name would overflow Azure's 80-char limit
+		strings.Repeat("a", 74), // exceeds 73: the IPv6 PIP name would overflow Azure's 80-char limit
 		strings.Repeat("a", 81), // too long
 	}
 	for _, n := range invalid {
 		assert.False(t, IsValidEgressIdentity(n), "expected %q to be an invalid egress identity", n)
 	}
 
-	// A max-length egress identity must yield a Public IP name within Azure's 80-char limit.
-	_, pipName := buildOutboundResourceNames(strings.Repeat("a", 76))
-	assert.LessOrEqual(t, len(pipName), 80,
-		"PIP name derived from a max-length egress identity must fit Azure's 80-char publicIPAddresses limit")
+	// A max-length egress identity must yield BOTH Public IP names within Azure's 80-char limit.
+	for _, pipName := range OutboundPublicIPNames(strings.Repeat("a", 73)) {
+		assert.LessOrEqual(t, len(pipName), 80,
+			"PIP name %q derived from a max-length egress identity must fit Azure's 80-char publicIPAddresses limit", pipName)
+	}
 }
 
 func TestExtractInboundConfigFromService_ExtractsIdleTimeout(t *testing.T) {
@@ -1041,4 +1043,65 @@ func TestIdleTimeout_AdmissionAndBuildAgree(t *testing.T) {
 				"idle timeout %s passed admission, so the build must accept it too or the Service parks terminally", minutes)
 		})
 	}
+}
+
+// TestBuildOutboundServiceResources_DualStack pins the exact wire shape of a dual-stack egress
+// NAT Gateway: an IPv4 and an IPv6 Public IP, each with its version set, attached to the matching
+// NAT Gateway list. An IPv6 pod address registered against a gateway with no V6 public path has no
+// egress at all, and there is no outbound update path to correct it later.
+func TestBuildOutboundServiceResources_DualStack(t *testing.T) {
+	const uid = "team-egress"
+	dtConfig := testConfig()
+
+	versions := func(pips []armnetwork.PublicIPAddress) map[string]string {
+		got := map[string]string{}
+		for _, pip := range pips {
+			version := ""
+			if pip.Properties != nil && pip.Properties.PublicIPAddressVersion != nil {
+				version = string(*pip.Properties.PublicIPAddressVersion)
+			}
+			got[ptr.Deref(pip.Name, "")] = version
+		}
+		return got
+	}
+	refNames := func(refs []*armnetwork.SubResource) []string {
+		names := []string{}
+		for _, ref := range refs {
+			parts := strings.Split(ptr.Deref(ref.ID, ""), "/")
+			names = append(names, parts[len(parts)-1])
+		}
+		return names
+	}
+
+	t.Run("dual-stack provisions both families", func(t *testing.T) {
+		pips, natGw, _ := buildOutboundServiceResources(uid, &OutboundConfig{
+			IPFamilies: []string{"IPv4", "IPv6"},
+		}, dtConfig)
+
+		assert.Equal(t, map[string]string{
+			"team-egress-pip":    "IPv4",
+			"team-egress-pip-v6": "IPv6",
+		}, versions(pips))
+		assert.Equal(t, []string{"team-egress-pip"}, refNames(natGw.Properties.PublicIPAddresses))
+		assert.Equal(t, []string{"team-egress-pip-v6"}, refNames(natGw.Properties.PublicIPAddressesV6),
+			"the IPv6 address must be attached to the V6 list; the V4 list is a different field")
+	})
+
+	t.Run("IPv4-only is unchanged", func(t *testing.T) {
+		pips, natGw, _ := buildOutboundServiceResources(uid, &OutboundConfig{
+			IPFamilies: []string{"IPv4"},
+		}, dtConfig)
+
+		assert.Equal(t, map[string]string{"team-egress-pip": "IPv4"}, versions(pips))
+		assert.Equal(t, []string{"team-egress-pip"}, refNames(natGw.Properties.PublicIPAddresses))
+		assert.Empty(t, natGw.Properties.PublicIPAddressesV6,
+			"an IPv4-only cluster must not be charged for an unused IPv6 address")
+	})
+
+	t.Run("a nil config stays IPv4-only", func(t *testing.T) {
+		pips, natGw, _ := buildOutboundServiceResources(uid, nil, dtConfig)
+
+		assert.Equal(t, map[string]string{"team-egress-pip": "IPv4"}, versions(pips))
+		assert.Empty(t, natGw.Properties.PublicIPAddressesV6)
+	})
 }

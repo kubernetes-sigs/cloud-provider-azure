@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"regexp"
 	"time"
 
@@ -33,6 +34,11 @@ import (
 )
 
 var ipv4Regexp = regexp.MustCompile(`\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b`)
+
+// ipv6SourceRegexp matches a bare IPv6 address in command output. Each family needs its own
+// pattern: matching an IPv6 source with ipv4Regexp always yields the empty string, which reads as
+// "no source observed" and makes the IPv6 assertion unable to fail.
+var ipv6SourceRegexp = regexp.MustCompile(`\b(?:[0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}\b`)
 
 // The Outbound suite verifies the NAT gateway and its public IP are *provisioned*. This spec
 // goes one step further and verifies the dataplane: traffic that an egress-labelled pod sends to
@@ -212,10 +218,6 @@ var _ = Describe("SLB - Egress SNAT Connectivity", Label(slbTestLabel), func() {
 		natGatewayPIPs, err := getNatGatewayPublicIPs(natGatewayID)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(natGatewayPIPs).NotTo(BeEmpty(), "the NAT gateway should expose at least one public IP")
-		pipSet := map[string]bool{}
-		for _, ip := range natGatewayPIPs {
-			pipSet[ip] = true
-		}
 
 		// Assert per-family SNAT conditionally. Logging whatever was observed and passing either way
 		// made "egress leaves via the node's default outbound IP" - i.e. the NAT gateway doing
@@ -223,23 +225,33 @@ var _ = Describe("SLB - Egress SNAT Connectivity", Label(slbTestLabel), func() {
 		// does not route that family's egress and there is nothing to assert; but once a source IS
 		// observable it MUST be a NAT gateway public IP, otherwise SNAT is genuinely bypassed.
 		observedAnyFamily := false
-		observe := func(family, curlArg, endpoint string) {
+		observe := func(family, curlArg, endpoint string, pattern *regexp.Regexp) {
 			out, _ := utils.RunKubectl(ns.Name, "exec", podName, "--",
 				"/bin/sh", "-c", fmt.Sprintf("curl -s -m 10 %s %s || true", curlArg, endpoint))
-			observed := ipv4Regexp.FindString(out)
+			observed := pattern.FindString(out)
 			if observed == "" {
-				utils.Logf("  %s egress produced no observable source (expected for the IPv6 probe, or where the dataplane does not route SGW egress)", family)
+				utils.Logf("  %s egress produced no observable source (this environment does not route that family's SGW egress)", family)
 				return
 			}
 			observedAnyFamily = true
-			Expect(pipSet).To(HaveKey(observed),
+			matched := false
+			for _, pip := range natGatewayPIPs {
+				if net.ParseIP(pip) != nil && net.ParseIP(observed) != nil && net.ParseIP(pip).Equal(net.ParseIP(observed)) {
+					matched = true
+					break
+				}
+			}
+			Expect(matched).To(BeTrue(),
 				"%s egress left as %s, which is not one of the NAT gateway public IPs %v: traffic is "+
 					"bypassing the NAT gateway, so SNAT is not in effect for this family", family, observed, natGatewayPIPs)
 			utils.Logf("  ✓ %s egress SNAT verified as NAT gateway public IP %s", family, observed)
 		}
 		By("Verifying per-family egress SNAT uses the NAT gateway public IP where traffic flows")
-		observe("IPv4", "-4", "ifconfig.me/ip")
-		observe("IPv6", "-6", "ifconfig.co/ip")
+		// Each family needs its own pattern. Matching an IPv6 source with the IPv4 pattern always
+		// yields the empty string, which the branch above reads as "not observable", so the IPv6
+		// assertion could never fail regardless of what the dataplane did.
+		observe("IPv4", "-4", "ifconfig.me/ip", ipv4Regexp)
+		observe("IPv6", "-6", "ifconfig.co/ip", ipv6SourceRegexp)
 		if !observedAnyFamily {
 			utils.Logf("  no family produced an observable egress source; this environment does not carry " +
 				"SGW egress dataplane traffic, so per-family SNAT could not be asserted")
@@ -269,14 +281,22 @@ func getNatGatewayPublicIPs(natGatewayID string) ([]string, error) {
 			PublicIPAddresses []struct {
 				ID string `json:"id"`
 			} `json:"publicIpAddresses"`
+			PublicIPAddressesV6 []struct {
+				ID string `json:"id"`
+			} `json:"publicIpAddressesV6"`
 		} `json:"properties"`
 	}
 	if err := json.Unmarshal(showOut, &natGateway); err != nil {
 		return nil, fmt.Errorf("parse NAT gateway JSON: %w", err)
 	}
 
+	refs := natGateway.Properties.PublicIPAddresses
+	// Both properties count. Resolving only the IPv4 list would make any IPv6 SNAT assertion fail
+	// even when the gateway is correct, because the observed IPv6 source could never be in the set.
+	refs = append(refs, natGateway.Properties.PublicIPAddressesV6...)
+
 	var ips []string
-	for _, pip := range natGateway.Properties.PublicIPAddresses {
+	for _, pip := range refs {
 		ipOut, err := runAz("network", "public-ip", "show",
 			"--ids", pip.ID,
 			"--query", "ipAddress",

@@ -33,14 +33,21 @@ import (
 
 const (
 	publicIPNameSuffix    = "-pip"
+	publicIPNameSuffixV6  = "-pip-v6"
 	publicIPNameMaxLength = 80
+
+	// maxEgressIdentityLength is the longest egress identity that still leaves room for the longest
+	// Public IP suffix within Azure's resource-name limit. Kubernetes caps a label value at 63, so
+	// this bound is not reachable through the pod label in practice.
+	maxEgressIdentityLength = publicIPNameMaxLength - len(publicIPNameSuffixV6)
 )
 
 // egressIdentityRegex matches a valid (lowercased) Azure NAT Gateway resource name and reserves
-// enough room for publicIPNameSuffix within Azure's Public IP resource-name limit.
+// enough room for the longest Public IP suffix within Azure's resource-name limit. The bound is
+// maxEgressIdentityLength; the pattern spends one character on each anchored end.
 var egressIdentityRegex = regexp.MustCompile(fmt.Sprintf(
 	`^[a-z0-9]([a-z0-9._-]{0,%d}[a-z0-9_])?$`,
-	publicIPNameMaxLength-len(publicIPNameSuffix)-2,
+	maxEgressIdentityLength-2,
 ))
 
 // ServiceUID returns the canonical ServiceGateway identity for a Kubernetes Service.
@@ -54,6 +61,40 @@ func ServiceUID(service *v1.Service) string {
 // PublicIPName returns the Public IP resource name associated with a ServiceGateway identity.
 func PublicIPName(identity string) string {
 	return identity + publicIPNameSuffix
+}
+
+// outboundWantsIPv6 reports whether an outbound config asks for an IPv6 public path.
+func outboundWantsIPv6(config *OutboundConfig) bool {
+	if config == nil {
+		return false
+	}
+	for _, family := range config.IPFamilies {
+		if strings.EqualFold(family, string(armnetwork.IPVersionIPv6)) {
+			return true
+		}
+	}
+	return false
+}
+
+// PublicIPNameV6 returns the IPv6 Public IP resource name for an outbound identity. Egress keeps
+// the IPv4 address under PublicIPName so existing resources are untouched.
+func PublicIPNameV6(identity string) string {
+	return identity + publicIPNameSuffixV6
+}
+
+// derefString returns the pointed-to string, or empty when nil.
+func derefString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+// OutboundPublicIPNames returns every Public IP name an outbound identity can own. Teardown must
+// attempt both: the config that chose the families is not available at delete time, and deleting an
+// address that was never created is a 404, which deletePublicIP already treats as success.
+func OutboundPublicIPNames(identity string) []string {
+	return []string{PublicIPName(identity), PublicIPNameV6(identity)}
 }
 
 // DefaultOutboundNATGatewayName is the RP-owned default outbound NAT Gateway. AKS provisions it
@@ -280,25 +321,41 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 
 // buildOutboundServiceResources constructs the PIP, NAT Gateway, and ServicesDTO for an outbound service
 // Returns the resources ready to be created via createOrUpdatePIP/createOrUpdateNatGateway/updateNRPSGWServices
-func buildOutboundServiceResources(serviceUID string, _ *OutboundConfig, dtConfig Config) (
-	pip armnetwork.PublicIPAddress,
+func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dtConfig Config) (
+	pips []armnetwork.PublicIPAddress,
 	natGateway armnetwork.NatGateway,
 	servicesDTO ServicesDataDTO,
 ) {
-	pipName := PublicIPName(serviceUID)
+	pipID := func(name string) string {
+		return fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
+			dtConfig.networkResourceSubscriptionID(), dtConfig.ResourceGroup, name)
+	}
+	buildPIP := func(name string, version armnetwork.IPVersion) armnetwork.PublicIPAddress {
+		return armnetwork.PublicIPAddress{
+			Name: to.Ptr(name),
+			ID:   to.Ptr(pipID(name)),
+			SKU: &armnetwork.PublicIPAddressSKU{
+				Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
+			},
+			Location: to.Ptr(dtConfig.Location),
+			Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+				PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
+				PublicIPAddressVersion:   to.Ptr(version),
+			},
+		}
+	}
 
-	// Build Public IP
-	pip = armnetwork.PublicIPAddress{
-		Name: to.Ptr(pipName),
-		ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
-			dtConfig.networkResourceSubscriptionID(), dtConfig.ResourceGroup, pipName)),
-		SKU: &armnetwork.PublicIPAddressSKU{
-			Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
-		},
-		Location: to.Ptr(dtConfig.Location),
-		Properties: &armnetwork.PublicIPAddressPropertiesFormat{
-			PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
-		},
+	// IPv4 is always provisioned; its name and shape are unchanged so existing NAT Gateways are
+	// untouched. IPv6 is added only when the config asks for it.
+	v4Name := PublicIPName(serviceUID)
+	pips = []armnetwork.PublicIPAddress{buildPIP(v4Name, armnetwork.IPVersionIPv4)}
+	v4Refs := []*armnetwork.SubResource{{ID: to.Ptr(pipID(v4Name))}}
+
+	var v6Refs []*armnetwork.SubResource
+	if outboundWantsIPv6(config) {
+		v6Name := PublicIPNameV6(serviceUID)
+		pips = append(pips, buildPIP(v6Name, armnetwork.IPVersionIPv6))
+		v6Refs = []*armnetwork.SubResource{{ID: to.Ptr(pipID(v6Name))}}
 	}
 
 	// Build NAT Gateway
@@ -314,12 +371,8 @@ func buildOutboundServiceResources(serviceUID string, _ *OutboundConfig, dtConfi
 			ServiceGateway: &armnetwork.SubResource{
 				ID: to.Ptr(dtConfig.ServiceGatewayResourceID()),
 			},
-			PublicIPAddresses: []*armnetwork.SubResource{
-				{
-					ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
-						dtConfig.networkResourceSubscriptionID(), dtConfig.ResourceGroup, pipName)),
-				},
-			},
+			PublicIPAddresses:   v4Refs,
+			PublicIPAddressesV6: v6Refs,
 		},
 	}
 
@@ -337,7 +390,7 @@ func buildOutboundServiceResources(serviceUID string, _ *OutboundConfig, dtConfi
 		dtConfig.ResourceGroup,
 	)
 
-	return pip, natGateway, servicesDTO
+	return pips, natGateway, servicesDTO
 }
 
 // newIgnoreCaseSetFromSlice creates an IgnoreCaseSet from a slice of strings

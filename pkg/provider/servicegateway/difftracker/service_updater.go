@@ -189,11 +189,15 @@ const parkReArmCooldown = 5 * time.Minute
 
 // retryGate decides whether a retryable operation should be skipped this dispatch pass. It returns
 // true (caller must `continue`) when the op is still within its post-failure backoff window
-// (scheduling a guaranteed revisit via time.AfterFunc) or has exhausted its retry budget (a
-// "gave up" park). It must be called with s.diffTracker.mu held and after activeOps[uid] has been
-// set; it releases activeOps[uid] on skip.
+// (scheduling a guaranteed revisit via time.AfterFunc) or has exhausted its current retry burst
+// (a park-and-re-arm cooldown). It must be called with s.diffTracker.mu held and after
+// activeOps[uid] has been set; it releases activeOps[uid] on skip.
+//
+// Note the op is never abandoned: exhausting maxServiceRetries parks it for parkReArmCooldown and
+// schedules a revisit, after which it re-arms and retries again. A permanently failing op therefore
+// retries forever at one burst per cooldown rather than stranding until CCM restart.
 func (s *ServiceUpdater) retryGate(serviceUID string, opState *ServiceOperationState) bool {
-	// Terminal ceiling: stop re-dispatching after exhausting the retry budget.
+	// Retry-burst ceiling: pause re-dispatching until the park cooldown elapses.
 	if opState.RetryCount >= maxServiceRetries {
 		// A parked op has no external driver on a stable cluster, so it must self-arm or it strands
 		// until CCM restart: the controller does not re-drive an unchanged Service (resync's
@@ -206,8 +210,9 @@ func (s *ServiceUpdater) retryGate(serviceUID string, opState *ServiceOperationS
 			opState.NextRetryAt = time.Now().Add(parkReArmCooldown)
 			recordServiceParked(parkReasonRetriesExceeded)
 			recordServiceOperationRetries(operationLabelForState(opState.State), opState.Config.IsInbound, opState.RetryCount)
-			s.logger.Info("Giving up service operation after exhausting retries",
-				"serviceUID", serviceUID, "state", opState.State, "retries", opState.RetryCount)
+			s.logger.Info("Parked service operation after exhausting its retry burst; will re-arm and retry after the cooldown",
+				"serviceUID", serviceUID, "state", opState.State, "retries", opState.RetryCount,
+				"reArmAfter", parkReArmCooldown)
 			s.scheduleRetry(serviceUID, parkReArmCooldown)
 
 		} else if !opState.NextRetryAt.IsZero() && time.Now().After(opState.NextRetryAt) {
@@ -616,17 +621,21 @@ func (s *ServiceUpdater) createOutboundService(serviceUID string, config *Outbou
 	defer cancel()
 
 	// Step 1: Build resources using shared helper
-	pipResource, natGatewayResource, servicesDTO := buildOutboundServiceResources(serviceUID, config, s.diffTracker.config)
+	pipResources, natGatewayResource, servicesDTO := buildOutboundServiceResources(serviceUID, config, s.diffTracker.config)
 
-	// Step 2: Create Public IP
-	if err := s.diffTracker.createOrUpdatePIP(ctx, s.diffTracker.config.ResourceGroup, &pipResource); err != nil {
-		httpStatus, errCode := extractAzureErrorInfo(err)
-		s.logger.V(4).Info("Could not create Public IP for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
-		s.onComplete(serviceUID, false, fmt.Errorf("failed to create Public IP: %w", err))
-		return
+	// Step 2: Create every Public IP the NAT Gateway references. Creating them all before the
+	// gateway keeps the retry idempotent: a partial failure here leaves addresses the next attempt
+	// reuses, and the gateway is never PUT referencing an address that does not exist.
+	for i := range pipResources {
+		pipResource := pipResources[i]
+		if err := s.diffTracker.createOrUpdatePIP(ctx, s.diffTracker.config.ResourceGroup, &pipResource); err != nil {
+			httpStatus, errCode := extractAzureErrorInfo(err)
+			s.logger.V(4).Info("Could not create Public IP for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName, "publicIP", derefString(pipResource.Name), "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+			s.onComplete(serviceUID, false, fmt.Errorf("failed to create Public IP: %w", err))
+			return
+		}
+		s.logger.V(5).Info("Created Public IP for outbound service", "serviceUID", serviceUID, "publicIP", derefString(pipResource.Name))
 	}
-	pipName := PublicIPName(serviceUID)
-	s.logger.V(5).Info("Created Public IP for outbound service", "serviceUID", serviceUID, "publicIP", pipName)
 
 	// Step 3: Create NAT Gateway
 	if err := s.diffTracker.createOrUpdateNatGateway(ctx, s.diffTracker.config.ResourceGroup, natGatewayResource); err != nil {
@@ -819,14 +828,18 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string, correlationID 
 		s.logger.V(5).Info("Deleted NAT Gateway for outbound service", "serviceUID", serviceUID)
 	}
 
-	// Step 4: Delete Public IP
-	_, pipName := buildOutboundResourceNames(serviceUID)
-	if err := s.diffTracker.deletePublicIP(ctx, s.diffTracker.config.ResourceGroup, pipName); err != nil {
-		httpStatus, errCode := extractAzureErrorInfo(err)
-		s.logger.V(4).Info("Could not delete Public IP for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "publicIP", pipName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
-		lastErr = fmt.Errorf("failed to delete Public IP: %w", err)
-	} else {
-		s.logger.V(5).Info("Deleted Public IP for outbound service", "serviceUID", serviceUID, "publicIP", pipName)
+	// Step 4: Delete every Public IP this identity can own. Both names are reserved for this
+	// controller, and the config that decided the families is not available here, so both are
+	// always attempted. A delete for an address that was never created is a 404, which
+	// deletePublicIP already treats as success.
+	for _, pipName := range OutboundPublicIPNames(serviceUID) {
+		if err := s.diffTracker.deletePublicIP(ctx, s.diffTracker.config.ResourceGroup, pipName); err != nil {
+			httpStatus, errCode := extractAzureErrorInfo(err)
+			s.logger.V(4).Info("Could not delete Public IP for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "publicIP", pipName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+			lastErr = fmt.Errorf("failed to delete Public IP: %w", err)
+		} else {
+			s.logger.V(5).Info("Deleted Public IP for outbound service", "serviceUID", serviceUID, "publicIP", pipName)
+		}
 	}
 
 	// Step 5: Update NRPResources and notify completion

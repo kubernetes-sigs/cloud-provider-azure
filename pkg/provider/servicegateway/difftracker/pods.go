@@ -79,9 +79,15 @@ func (dt *DiffTracker) SetUpPodInformer(stopCh <-chan struct{}) error {
 	klog.V(2).Infof("setUpPodInformerForEgress: Setting up pod informer with label selector: %s", consts.PodLabelServiceEgressGateway)
 
 	// Create a separate informer factory with label selector to filter pods at the API server
+	//
+	// Resync is a safety net, not a correctness dependency: the watch should deliver every pod
+	// event, and a resync only re-delivers current state as synthetic updates. It is kept short
+	// deliberately so that recovery path is exercised routinely rather than a handful of times a
+	// day, which is when a latent bug in it would otherwise surface. ResyncPeriod randomizes
+	// x1.0-2.0 to avoid lock-step across controllers, so this is an effective 1-2h.
 	podInformerFactory := informers.NewSharedInformerFactoryWithOptions(
 		dt.kubeClient,
-		ResyncPeriod(12*time.Hour)(),
+		ResyncPeriod(time.Hour)(),
 		informers.WithTweakListOptions(func(options *metav1.ListOptions) {
 			// Only watch pods with the egress gateway label
 			options.LabelSelector = consts.PodLabelServiceEgressGateway
@@ -287,7 +293,7 @@ func (dt *DiffTracker) podInformerAddPod(pod *v1.Pod) {
 		// malformed ARM requests (endless retries), and a reserved value would make this
 		// controller manage a resource it does not own.
 		reason, message := "ServiceGatewayInvalidEgressLabel",
-			fmt.Sprintf("Invalid egress gateway label %q: must be a valid Azure resource name (alphanumerics, '-', '_', '.'; start alphanumeric; 1-76 chars)", egressName)
+			fmt.Sprintf("Invalid egress gateway label %q: must be a valid Azure resource name (alphanumerics, '-', '_', '.'; start alphanumeric; 1-%d chars)", egressName, maxEgressIdentityLength)
 		if IsReservedEgressIdentity(egressName) {
 			reason, message = "ServiceGatewayReservedEgressLabel",
 				fmt.Sprintf("Egress gateway label %q is reserved for the cluster's default outbound gateway and cannot be used; choose a different value", egressName)

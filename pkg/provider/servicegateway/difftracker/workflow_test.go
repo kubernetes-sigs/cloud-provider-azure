@@ -280,7 +280,8 @@ func TestOutboundWorkflow(t *testing.T) {
 		ServiceGatewayResourceName: "sgw-789",
 	}
 
-	pip, natGw, servicesDTO := buildOutboundServiceResources(egressUID, nil, dtConfig)
+	pips, natGw, servicesDTO := buildOutboundServiceResources(egressUID, nil, dtConfig)
+	pip := pips[0]
 
 	// Validate PIP
 	assert.Equal(t, egressUID+"-pip", *pip.Name)

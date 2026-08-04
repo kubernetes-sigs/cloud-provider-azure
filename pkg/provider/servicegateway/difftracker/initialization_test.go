@@ -25,7 +25,9 @@ import (
 	"k8s.io/component-base/metrics/testutil"
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/natgatewayclient/mock_natgatewayclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient/mock_servicegatewayclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -163,7 +165,8 @@ func TestBuildOutboundServiceResources_NilConfig(t *testing.T) {
 		ServiceGatewayResourceName: "test-sgw",
 	}
 
-	pip, natGw, servicesDTO := buildOutboundServiceResources("egress-123", nil, dtConfig)
+	pips, natGw, servicesDTO := buildOutboundServiceResources("egress-123", nil, dtConfig)
+	pip := pips[0]
 
 	// Should create resources even with nil config
 	assert.NotNil(t, pip)
@@ -1433,4 +1436,255 @@ func TestParseLocationAddresses_ReadsAddressesAndServices(t *testing.T) {
 	if assert.Contains(t, got, "10.244.0.6") {
 		assert.Zero(t, got["10.244.0.6"].Services.Len(), "an address with no services parses to an empty set")
 	}
+}
+
+// TestOutboundIPFamiliesLocked_FollowsClusterAddressFamilies pins that egress families are decided
+// from the cluster's Nodes. There is no outbound update path, so this decision is made once per NAT
+// Gateway and cannot be corrected later; deriving it from one identity's pods would be wrong
+// because a dual-stack cluster can run single-stack pods.
+func TestOutboundIPFamiliesLocked_FollowsClusterAddressFamilies(t *testing.T) {
+	node := func(name string, ips ...string) *v1.Node {
+		addrs := make([]v1.NodeAddress, 0, len(ips))
+		for _, ip := range ips {
+			addrs = append(addrs, v1.NodeAddress{Type: v1.NodeInternalIP, Address: ip})
+		}
+		return &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: name},
+			Status:     v1.NodeStatus{Addresses: addrs},
+		}
+	}
+	families := func(t *testing.T, nodes ...*v1.Node) []string {
+		t.Helper()
+		dt := newTestDiffTracker()
+		if len(nodes) > 0 {
+			setTestNodeLister(t, dt, nodes...)
+		}
+		dt.mu.Lock()
+		defer dt.mu.Unlock()
+		return dt.outboundIPFamiliesLocked()
+	}
+
+	assert.Equal(t, []string{"IPv4", "IPv6"},
+		families(t, node("dual", "10.0.0.1", "fd00::1")),
+		"a dual-stack node means IPv6 pods can exist, so the gateway needs an IPv6 public path")
+
+	assert.Equal(t, []string{"IPv4"},
+		families(t, node("v4", "10.0.0.1")),
+		"an IPv4-only cluster must not be charged for an unused IPv6 address")
+
+	assert.Equal(t, []string{"IPv4", "IPv6"},
+		families(t, node("v4", "10.0.0.1"), node("dual", "10.0.0.2", "fd00::2")),
+		"a mixed node pool still requires an IPv6 path for the pods that get one")
+
+	assert.Equal(t, []string{"IPv4"}, families(t),
+		"with no Node lister the safe answer is today's IPv4-only behaviour")
+}
+
+// TestClusterProvidesIPv6Locked_CachesPositiveResult pins that the Node walk happens at most once
+// per process. It runs under dt.mu on the outbound create path, so repeating an O(nodes) scan for
+// every new egress identity would put cluster-sized work inside the engine's global lock.
+func TestClusterProvidesIPv6Locked_CachesPositiveResult(t *testing.T) {
+	dualNode := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "dual"},
+		Status: v1.NodeStatus{Addresses: []v1.NodeAddress{
+			{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+			{Type: v1.NodeInternalIP, Address: "fd00::1"},
+		}},
+	}
+
+	dt := newTestDiffTracker()
+	setTestNodeLister(t, dt, dualNode)
+
+	dt.mu.Lock()
+	first := dt.clusterProvidesIPv6Locked()
+	dt.mu.Unlock()
+	assert.True(t, first)
+
+	// Drop the lister entirely. Without the cache the answer would flip to false.
+	dt.SetNodeLister(nil)
+	dt.mu.Lock()
+	second := dt.clusterProvidesIPv6Locked()
+	dt.mu.Unlock()
+	assert.True(t, second, "an observed IPv6 cluster must not need a second Node walk")
+
+	// CONTROL: a tracker that never saw IPv6 still answers false, so the cache is not a blanket true.
+	fresh := newTestDiffTracker()
+	fresh.mu.Lock()
+	defer fresh.mu.Unlock()
+	assert.False(t, fresh.clusterProvidesIPv6Locked())
+}
+
+// TestReconcileServices_OutboundAdditionsCarryClusterIPFamilies pins that the startup create path
+// decides egress address families exactly as the runtime pod path does. Outbound has no update
+// path, so a NAT Gateway created during reconciliation without them stays single-stack for its
+// whole life and no restart repairs it.
+//
+// The startup case deliberately runs with NO Node lister, because that is production: the lister is
+// published only after InitializeFromCluster returns. The seed from the Node list initialization
+// already fetched is what has to carry the decision, and the unseeded case is the control that
+// proves it.
+func TestReconcileServices_OutboundAdditionsCarryClusterIPFamilies(t *testing.T) {
+	dualNode := func() *v1.Node {
+		return &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: "dual"},
+			Status: v1.NodeStatus{Addresses: []v1.NodeAddress{
+				{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+				{Type: v1.NodeInternalIP, Address: "fd00::1"},
+			}},
+		}
+	}
+	dualNodeIPs := map[string][]string{"dual": {"10.0.0.1", "fd00::1"}}
+
+	const uid = "team-egress"
+
+	familiesOf := func(t *testing.T, dt *DiffTracker) (families []string, natHasV6 bool, pipCount int) {
+		t.Helper()
+		dt.mu.Lock()
+		op := dt.pendingServiceOps[uid]
+		dt.mu.Unlock()
+		if op == nil {
+			t.Fatalf("no pending service operation was created")
+		}
+		if op.Config.OutboundConfig != nil {
+			families = op.Config.OutboundConfig.IPFamilies
+		}
+		pips, nat, _ := buildOutboundServiceResources(uid, op.Config.OutboundConfig, dt.config)
+		return families, len(nat.Properties.PublicIPAddressesV6) > 0, len(pips)
+	}
+
+	startupReconcile := func(dt *DiffTracker) {
+		dt.reconcileServices(&SyncDiffTrackerReturnType{
+			LoadBalancerUpdates: SyncServicesReturnType{
+				Additions: utilsets.NewString(), Removals: utilsets.NewString(),
+			},
+			NATGatewayUpdates: SyncServicesReturnType{
+				Additions: utilsets.NewString(uid), Removals: utilsets.NewString(),
+			},
+		}, map[string]*v1.Service{})
+	}
+
+	// Reference: the runtime pod path, which does have a Node lister.
+	runtimeTracker := newTestDiffTracker()
+	setTestNodeLister(t, runtimeTracker, dualNode())
+	runtimeTracker.addPod(uid, "ns/pod-1", "pod-uid-1", "loc-1", "10.244.0.5")
+	runtimeFamilies, runtimeHasV6, runtimePIPs := familiesOf(t, runtimeTracker)
+
+	assert.Equal(t, []string{"IPv4", "IPv6"}, runtimeFamilies)
+	assert.True(t, runtimeHasV6)
+	assert.Equal(t, 2, runtimePIPs)
+
+	// Startup, as production runs it: no Node lister, families carried by the seed.
+	seeded := newTestDiffTracker()
+	seeded.seedClusterAddressFamilies(dualNodeIPs)
+	startupReconcile(seeded)
+	seededFamilies, seededHasV6, seededPIPs := familiesOf(t, seeded)
+
+	assert.Equal(t, runtimeFamilies, seededFamilies,
+		"startup reconciliation must derive the same families as the pod path")
+	assert.Equal(t, runtimeHasV6, seededHasV6,
+		"a NAT Gateway created at startup must get the same IPv6 public path")
+	assert.Equal(t, runtimePIPs, seededPIPs,
+		"a NAT Gateway created at startup must get the same Public IPs")
+
+	// CONTROL: without the seed the same call sees no Nodes at all and falls back to IPv4-only, so
+	// the assertions above are carried by the seed and not by an unrelated default.
+	unseeded := newTestDiffTracker()
+	startupReconcile(unseeded)
+	unseededFamilies, unseededHasV6, unseededPIPs := familiesOf(t, unseeded)
+
+	assert.Equal(t, []string{"IPv4"}, unseededFamilies)
+	assert.False(t, unseededHasV6)
+	assert.Equal(t, 1, unseededPIPs)
+}
+
+// TestSeedClusterAddressFamilies_OnlyIPv6NodeAddressesCount pins the seed's parsing: an IPv4-only
+// cluster must not be charged for an IPv6 address, and an IPv4-mapped IPv6 form is not IPv6.
+func TestSeedClusterAddressFamilies_OnlyIPv6NodeAddressesCount(t *testing.T) {
+	seeded := func(nodeIPs map[string][]string) bool {
+		dt := newTestDiffTracker()
+		dt.seedClusterAddressFamilies(nodeIPs)
+		return dt.clusterHasIPv6.Load()
+	}
+
+	assert.True(t, seeded(map[string][]string{"a": {"10.0.0.1"}, "b": {"10.0.0.2", "fd00::2"}}),
+		"one dual-stack node in a mixed pool still means IPv6 pods can exist")
+	assert.False(t, seeded(map[string][]string{"a": {"10.0.0.1"}, "b": {"10.0.0.2"}}),
+		"an IPv4-only cluster must not be charged for an unused IPv6 address")
+	assert.False(t, seeded(map[string][]string{"a": {"::ffff:10.0.0.1"}}),
+		"an IPv4-mapped address is an IPv4 address")
+	assert.False(t, seeded(map[string][]string{"a": {"not-an-ip"}}))
+	assert.False(t, seeded(nil))
+}
+
+// TestInitializeFromCluster_SeedsClusterAddressFamiliesFromNodes pins the production wiring: the
+// Node lister is published only after InitializeFromCluster returns, so initialization must take
+// the cluster's address families from the Node list it fetches itself. Without this the startup
+// create path provisions IPv4-only NAT Gateways on a dual-stack cluster, and outbound has no update
+// path to correct them.
+func TestInitializeFromCluster_SeedsClusterAddressFamiliesFromNodes(t *testing.T) {
+	initWithNodes := func(t *testing.T, nodes ...*v1.Node) *DiffTracker {
+		t.Helper()
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+		mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+		mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+		mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
+		mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+
+		mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+		mockFactory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+		mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
+		mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+
+		mockSGW.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+		mockSGW.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+		mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		mockSGW.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		mockLB.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+		mockNAT.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+		mockPIP.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+
+		objects := make([]runtime.Object, 0, len(nodes))
+		for _, node := range nodes {
+			objects = append(objects, node)
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		dt, err := InitializeFromCluster(ctx, testConfig(), mockFactory, fake.NewSimpleClientset(objects...))
+		assert.NoError(t, err)
+		if dt == nil {
+			t.Fatal("InitializeFromCluster returned no tracker")
+		}
+		return dt
+	}
+
+	node := func(name string, ips ...string) *v1.Node {
+		addrs := make([]v1.NodeAddress, 0, len(ips))
+		for _, ip := range ips {
+			addrs = append(addrs, v1.NodeAddress{Type: v1.NodeInternalIP, Address: ip})
+		}
+		return &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: name}, Status: v1.NodeStatus{Addresses: addrs}}
+	}
+
+	dual := initWithNodes(t, node("dual", "10.0.0.1", "fd00::1"))
+	assert.True(t, dual.clusterHasIPv6.Load(),
+		"a dual-stack cluster must be observed during init, while no Node lister exists yet")
+	dual.mu.Lock()
+	dualFamilies := dual.outboundIPFamiliesLocked()
+	dual.mu.Unlock()
+	assert.Equal(t, []string{"IPv4", "IPv6"}, dualFamilies)
+
+	// CONTROL: an IPv4-only cluster reaches the opposite conclusion through the same code path, so
+	// the assertion above is not satisfied by a default.
+	v4Only := initWithNodes(t, node("v4", "10.0.0.1"))
+	assert.False(t, v4Only.clusterHasIPv6.Load(),
+		"an IPv4-only cluster must not be charged for an unused IPv6 address")
+	v4Only.mu.Lock()
+	v4Families := v4Only.outboundIPFamiliesLocked()
+	v4Only.mu.Unlock()
+	assert.Equal(t, []string{"IPv4"}, v4Families)
 }

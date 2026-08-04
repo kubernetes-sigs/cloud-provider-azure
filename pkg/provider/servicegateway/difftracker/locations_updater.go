@@ -19,16 +19,16 @@ const (
 	locationsRetryMaxDelay  = 30 * time.Second
 )
 
-// defaultMaxInitLocationSyncAttempts bounds how many times a transient location-sync failure is
-// retried while initialization is still blocked on it, matching the ServiceUpdater's own
-// maxServiceRetries. backoffAndRetry re-triggers before the in-flight trigger counter is
-// decremented, so an unbounded retry against a sustained NRP error (503/429/5xx) keeps
-// WaitForInitialSync from returning and stalls CCM startup. Giving up leaves NRP state stale until
-// the next cluster event triggers another sync.
+// defaultMaxInitLocationSyncAttempts is the number of consecutive location-sync failures after
+// which a sustained NRP outage is reported, matching the ServiceUpdater's own maxServiceRetries.
+// It is a reporting threshold, not a give-up point: the sync is never abandoned, because
+// abandoning it retires the in-flight trigger and lets initialization complete against NRP state
+// the sync never reconciled. Retries continue under the capped, jittered backoff until either NRP
+// recovers or the CCM shuts down; the wait for it is unbounded by design.
 const defaultMaxInitLocationSyncAttempts = 12
 
-// maxInitLocationSyncAttempts holds the attempt cap. Stored atomically so tests can lower it
-// without racing the updater goroutines that read it.
+// maxInitLocationSyncAttempts holds the reporting threshold. Stored atomically so tests can lower
+// it without racing the updater goroutines that read it.
 var maxInitLocationSyncAttempts atomic.Int64
 
 func init() { maxInitLocationSyncAttempts.Store(defaultMaxInitLocationSyncAttempts) }
@@ -156,13 +156,22 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 			lu.failureCount = 0
 		case atomic.LoadInt32(&lu.diffTracker.isInitializing) == 1 &&
 			lu.failureCount >= getMaxInitLocationSyncAttempts():
-			// Stop retrying an NRP error that is not clearing. Work only a successful sync can
-			// advance still holds the initialization gate, so startup fails rather than running
-			// against NRP state this sync never reconciled.
-			lu.logger.Error(lastSyncErr, "Gave up initial NRP location sync after repeated transient failures",
-				"attempts", lu.failureCount)
-			recordLocationSyncAbandoned(locationSyncAbandonReasonInitAttempts)
-			lu.failureCount = 0
+			// Never abandon an unreconciled sync. Abandoning stopped the self-reschedule, which
+			// let the in-flight trigger retire and checkInitializationComplete observe an empty
+			// queue - so initialization could complete against NRP state this sync never
+			// reconciled, and a recovery arriving one second later was thrown away.
+			//
+			// Keep retrying instead: either NRP recovers and startup proceeds correctly, or the
+			// inside the window and startup proceeds correctly, or the deadline expires and
+			// WaitForInitialSync fails InitializeFromCluster loudly. The backoff is capped at
+			// locationsRetryMaxDelay with jitter, so this cannot hot-loop against a struggling
+			// NRP. Reported once per outage rather than every attempt.
+			if lu.failureCount == getMaxInitLocationSyncAttempts() {
+				lu.logger.Error(lastSyncErr, "NRP location sync still failing during initialization; retrying until the initial-sync deadline",
+					"attempts", lu.failureCount)
+				recordLocationSyncAbandoned(locationSyncAbandonReasonInitAttempts)
+			}
+			lu.backoffAndRetry()
 		case drainPending && lu.failureCount >= getMaxInitLocationSyncAttempts():
 			// Retry budget spent while a finalizer is still blocked. Nothing else re-drives a
 			// drain-gated finalizer on a quiet cluster, so keep retrying instead of leaving the

@@ -1221,7 +1221,7 @@ func (dt *DiffTracker) addPod(serviceUID, podKey, podUID, location, address stri
 		}
 		dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
 			ServiceUID:             serviceUID,
-			Config:                 NewOutboundServiceConfig(serviceUID, nil),
+			Config:                 NewOutboundServiceConfig(serviceUID, &OutboundConfig{IPFamilies: dt.outboundIPFamiliesLocked()}),
 			State:                  StateNotStarted,
 			RetryCount:             0,
 			LastAttempt:            time.Now().Format(time.RFC3339),

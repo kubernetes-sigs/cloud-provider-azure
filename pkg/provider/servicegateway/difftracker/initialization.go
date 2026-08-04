@@ -16,6 +16,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/ptr"
@@ -47,21 +48,51 @@ func isValidServiceUUID(name string) bool {
 	return uuidRegex.MatchString(strings.ToLower(name))
 }
 
-// defaultInitialSyncTimeout bounds the wait for initial K8s/NRP convergence. WaitForInitialSync is
-// otherwise gated only by the CCM root context, so a work item that never clears hangs
-// InitializeFromCluster, and with it Runtime.Start and startServiceController. startControllers
-// runs its initializers sequentially and starts the shared informer factories only afterwards, so
-// that hang leaves every remaining controller unstarted while the pod still reports Running.
-// Bounding the wait turns a silent stall into a visible startup failure.
-const defaultInitialSyncTimeout = 10 * time.Minute
+// The wait for initial K8s/NRP convergence is deliberately unbounded: it ends only when the sync
+// actually succeeds or the CCM shuts down. A deadline here would fail startup during an NRP outage,
+// and the restart that follows re-runs exactly the same work against the same unavailable NRP - so
+// a one-hour outage becomes an hour of crash-looping across every cluster instead of one wait that
+// resolves itself the moment NRP returns.
+//
+// The reason a deadline existed is still real and is handled by reporting rather than by giving up:
+// InitializeFromCluster blocks Runtime.Start and startServiceController, and startControllers only
+// starts the shared informer factories after every initializer returns, so while this waits the
+// whole CCM is inert while the pod still reports Running. defaultInitialSyncProgressInterval keeps
+// that state loud in the logs instead of silent.
+const defaultInitialSyncProgressInterval = 1 * time.Minute
 
-// initialSyncTimeout holds the initial-sync deadline in nanoseconds. Stored atomically so tests can
-// shorten it without racing the updater goroutines.
-var initialSyncTimeout atomic.Int64
+// initialSyncProgressInterval holds the progress-report period in nanoseconds. Stored atomically so
+// tests can shorten it without racing the updater goroutines.
+var initialSyncProgressInterval atomic.Int64
 
-func init() { initialSyncTimeout.Store(int64(defaultInitialSyncTimeout)) }
+func init() { initialSyncProgressInterval.Store(int64(defaultInitialSyncProgressInterval)) }
 
-func getInitialSyncTimeout() time.Duration { return time.Duration(initialSyncTimeout.Load()) }
+func getInitialSyncProgressInterval() time.Duration {
+	return time.Duration(initialSyncProgressInterval.Load())
+}
+
+// waitForInitialSyncReportingProgress blocks until the initial sync completes or ctx is done,
+// reporting at getInitialSyncProgressInterval() while it waits. The report is logged at error level
+// with the elapsed time: the CCM cannot finish starting until this clears, so a stalled sync must be
+// alertable even though it is not fatal.
+func waitForInitialSyncReportingProgress(ctx context.Context, dt *DiffTracker, logger logr.Logger) error {
+	done := make(chan error, 1)
+	go func() { done <- dt.WaitForInitialSync(ctx) }()
+
+	started := time.Now()
+	ticker := time.NewTicker(getInitialSyncProgressInterval())
+	defer ticker.Stop()
+
+	for {
+		select {
+		case err := <-done:
+			return err
+		case <-ticker.C:
+			logger.Error(nil, "ServiceGateway initial sync has not completed; retrying and blocking cloud-controller-manager startup until it succeeds",
+				"elapsed", time.Since(started).Round(time.Second))
+		}
+	}
+}
 
 // InitializeFromCluster initializes a DiffTracker by fetching K8s and NRP state, computing the diff,
 // and synchronizing resources. This replaces the provider-level initializeDiffTracker function.
@@ -87,9 +118,8 @@ func InitializeFromCluster(
 	}
 
 	// Build K8s state from cluster (also returns lists for reuse by recoverStuckFinalizers).
-	// The node-IPs map is consumed inside buildK8sState (for family-matched location keys) and is
-	// not needed again here.
-	k8s, serviceList, serviceUIDToService, endpointSliceList, egressPodList, _, err := buildK8sState(ctx, kubeClient)
+	// The node-IPs map is reused below to decide the cluster's egress address families.
+	k8s, serviceList, serviceUIDToService, endpointSliceList, egressPodList, nodeNameToIPs, err := buildK8sState(ctx, kubeClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build K8s state: %w", err)
 	}
@@ -113,6 +143,7 @@ func InitializeFromCluster(
 		return nil, fmt.Errorf("failed to initialize DiffTracker: %w", err)
 	}
 	diffTracker.initializeEndpointSlicesCache(endpointSliceList)
+	diffTracker.seedClusterAddressFamilies(nodeNameToIPs)
 
 	// FIX FOR ORPHANED SERVICES: We intentionally do NOT enhance NRP state with orphaned Azure resources.
 	// Orphaned resources are LBs/NATs that exist in Azure but are NOT registered in ServiceGateway.
@@ -188,10 +219,10 @@ func InitializeFromCluster(
 	//   - pendingServiceOps (ServiceUpdater work - includes orphan deletions)
 	//   - pendingUpdaterTriggers (LocationsUpdater work)
 	// Note: bufferedEndpoints/bufferedPods are always empty during initialization
-	// Bounded so a never-clearing pending item fails startup visibly instead of hanging the CCM.
-	waitCtx, cancelWait := context.WithTimeout(ctx, getInitialSyncTimeout())
-	defer cancelWait()
-	if err := diffTracker.WaitForInitialSync(waitCtx); err != nil {
+	// Unbounded: this returns only when the sync succeeds or the CCM shuts down. Failing here on a
+	// deadline would restart into the same unavailable NRP, so an outage is waited out in place and
+	// reported at intervals instead.
+	if err := waitForInitialSyncReportingProgress(ctx, diffTracker, logger); err != nil {
 		cleanupOnError(diffTracker)
 		return nil, fmt.Errorf("waiting for initial sync: %w", err)
 	}
@@ -334,6 +365,88 @@ func SelectSameFamilyNodeIP(nodeIPs []string, wantIPv6 bool) (string, bool) {
 	return best, best != ""
 }
 
+// seedClusterAddressFamilies records whether the cluster provides IPv6, from the authoritative Node
+// list initialization already fetched.
+//
+// The Node lister is published after InitializeFromCluster returns, so it is nil for the whole of
+// initialization. Without this seed the startup create path would observe no Nodes and give every
+// egress identity it provisions an IPv4-only NAT Gateway; outbound has no update path, so that
+// choice would never be corrected.
+func (dt *DiffTracker) seedClusterAddressFamilies(nodeNameToIPs map[string][]string) {
+	for _, ips := range nodeNameToIPs {
+		for _, ip := range ips {
+			if parsed, err := netip.ParseAddr(ip); err == nil && parsed.Is6() && !parsed.Is4In6() {
+				dt.clusterHasIPv6.Store(true)
+				dt.logger.V(4).Info("Observed an IPv6 cluster; egress gateways will get an IPv6 public address")
+				return
+			}
+		}
+	}
+}
+
+// clusterProvidesIPv6Locked reports whether any Node exposes an IPv6 InternalIP, i.e. whether the cluster
+// can run IPv6 workloads at all.
+//
+// Egress families are decided from the cluster rather than from an identity's pods because there is
+// no outbound update path: a NAT Gateway is created once and never modified, and a dual-stack
+// cluster can run single-stack pods, so the pods present at create time do not predict later ones.
+// A false answer here (no Node lister, or an empty cluster) yields today's IPv4-only behaviour.
+// Must be called with dt.mu held: the only caller decides an outbound config inside addPod's
+// critical section, and dt.mu is not reentrant. The lister read is an in-memory indexer lookup,
+// not I/O.
+func (dt *DiffTracker) clusterProvidesIPv6Locked() bool {
+	// Cached once observed: this walks every Node, and the answer is a stable cluster property.
+	// Only the negative result is recomputed, so a cluster that gains IPv6 nodes is still picked up
+	// by the next new egress identity.
+	if dt.clusterHasIPv6.Load() {
+		return true
+	}
+
+	nodeLister := dt.nodeLister
+	if nodeLister == nil {
+		return false
+	}
+
+	nodes, err := nodeLister.List(labels.Everything())
+	if err != nil {
+		dt.logger.V(4).Info("Could not list nodes to determine cluster address families", "err", err)
+		return false
+	}
+
+	for _, node := range nodes {
+		if node == nil {
+			continue
+		}
+		for _, addr := range node.Status.Addresses {
+			if addr.Type != v1.NodeInternalIP {
+				continue
+			}
+			if parsed, err := netip.ParseAddr(addr.Address); err == nil && parsed.Is6() && !parsed.Is4In6() {
+				dt.clusterHasIPv6.Store(true)
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// outboundIPFamiliesLocked returns the address families an egress NAT Gateway must serve.
+// Must be called with dt.mu held.
+func (dt *DiffTracker) outboundIPFamiliesLocked() []string {
+	if dt.clusterProvidesIPv6Locked() {
+		return []string{string(armnetwork.IPVersionIPv4), string(armnetwork.IPVersionIPv6)}
+	}
+	return []string{string(armnetwork.IPVersionIPv4)}
+}
+
+// outboundIPFamilies is outboundIPFamiliesLocked for callers that do not already hold dt.mu.
+// The returned slice is read-only and may be shared across configs.
+func (dt *DiffTracker) outboundIPFamilies() []string {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	return dt.outboundIPFamiliesLocked()
+}
+
 // ================================================================================================
 // RESTART RECOVERY - FINALIZER CLEANUP FOR ORPHANED RESOURCES
 // ================================================================================================
@@ -417,7 +530,10 @@ func recoverStuckFinalizers(
 			// Azure yet absent from NRPResources. Also consult the actual Azure LB/NAT/PIP enumeration
 			// so we do not strip the finalizer before the resource's cleanup is scheduled. PIP existence
 			// is checked by name (not the allocated-IP map) so an address-less PIP still counts.
-			pipExistsInAzure := azurePIPNames != nil && azurePIPNames.Has(uid+"-pip")
+			// Only the IPv4 name is considered: this loop walks Kubernetes Services, which are always
+			// inbound and never own an IPv6 Public IP, so accepting that name here could only match a
+			// customer resource and strand the Service in Terminating.
+			pipExistsInAzure := azurePIPNames != nil && azurePIPNames.Has(uid+publicIPNameSuffix)
 			hasAzureResource := dt.NRPResources.LoadBalancers.Has(uid) || dt.NRPResources.NATGateways.Has(uid) ||
 				(currentLBsInAzure != nil && currentLBsInAzure.Has(uid)) ||
 				(currentNATsInAzure != nil && currentNATsInAzure.Has(uid)) ||
@@ -1591,8 +1707,15 @@ func (dt *DiffTracker) reconcileServices(syncOps *SyncDiffTrackerReturnType, ser
 			dt.AddService(config)
 		}
 
+		// Startup must decide address families exactly as the runtime pod path does. Outbound has
+		// no update path, so a NAT Gateway created here without them stays single-stack for its
+		// whole life. Resolved once because it is a cluster property, not a per-identity one.
+		var outboundFamilies []string
+		if len(natAdditions) > 0 {
+			outboundFamilies = dt.outboundIPFamilies()
+		}
 		for _, serviceUID := range natAdditions {
-			config := NewOutboundServiceConfig(serviceUID, nil)
+			config := NewOutboundServiceConfig(serviceUID, &OutboundConfig{IPFamilies: outboundFamilies})
 			logger.V(5).Info("Called AddService for NAT gateway", "serviceUID", serviceUID)
 			dt.AddService(config)
 		}

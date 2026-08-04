@@ -307,7 +307,14 @@ func TestLocationsUpdater_TerminalErrorStillDrainsUnrelatedDeletions(t *testing.
 // pendingUpdaterTriggers above zero, WaitForInitialSync never returns, and InitializeFromCluster,
 // Runtime.Start and startServiceController all hang. startControllers runs sequentially and starts
 // informers only afterwards, so every remaining CCM controller is left unstarted.
-func TestLocationsUpdater_InitDoesNotHangOnSustainedTransientError(t *testing.T) {
+// TestLocationsUpdater_InitFailsLoudlyOnSustainedTransientError pins that a never-clearing
+// transient NRP error is never abandoned during initialization. Abandoning retired the in-flight
+// trigger, which let WaitForInitialSync return success and startup proceed against NRP state the
+// sync had never reconciled - and discarded an NRP recovery arriving moments later.
+//
+// The contract is now: keep retrying, and if NRP has not recovered by the initial-sync deadline,
+// surface that as an error so InitializeFromCluster fails loudly rather than silently continuing.
+func TestLocationsUpdater_InitFailsLoudlyOnSustainedTransientError(t *testing.T) {
 	prev := maxInitLocationSyncAttempts.Load()
 	maxInitLocationSyncAttempts.Store(1)
 	defer maxInitLocationSyncAttempts.Store(prev)
@@ -315,12 +322,14 @@ func TestLocationsUpdater_InitDoesNotHangOnSustainedTransientError(t *testing.T)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	var attempts int32
 	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
 	mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
 	mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
-	// 503 is retryable (not terminal), so without a ceiling this retries forever.
+	// 503 is retryable (not terminal): the updater must keep re-attempting it, not park it.
 	mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, _, _ string, _ armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
+			atomic.AddInt32(&attempts, 1)
 			return &azcore.ResponseError{StatusCode: http.StatusServiceUnavailable, ErrorCode: "ServiceUnavailable"}
 		}).AnyTimes()
 
@@ -353,10 +362,16 @@ func TestLocationsUpdater_InitDoesNotHangOnSustainedTransientError(t *testing.T)
 
 	dt.triggerLocationsUpdater()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	// Stands in for the CCM root context ending (shutdown) while NRP is still down. The production
+	// wait is unbounded, so this is what a caller-side cancellation looks like.
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
 	defer cancel()
-	assert.NoError(t, dt.WaitForInitialSync(ctx),
-		"initialization must give up on a never-clearing transient NRP error instead of hanging forever")
+	assert.Error(t, dt.WaitForInitialSync(ctx),
+		"initialization must not report success while the NRP location sync has never succeeded; "+
+			"it must keep waiting and surface the cancellation instead")
+
+	assert.Greater(t, atomic.LoadInt32(&attempts), int32(1),
+		"the sync must keep being retried past the reporting threshold, not abandoned after it")
 }
 
 // TestLocationsUpdater_TerminalErrorRetriedWhileDeletionDrainPending verifies that a deterministic

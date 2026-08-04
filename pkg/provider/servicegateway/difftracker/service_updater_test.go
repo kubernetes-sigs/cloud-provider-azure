@@ -700,6 +700,7 @@ func TestGuardDeleteOutboundService_RemovesLastPodFinalizerOnlyAfterNATGatewayDe
 	}).Times(1)
 
 	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(uid)).Return(nil).Times(1)
+	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPNameV6(uid)).Return(nil).Times(1)
 
 	dt := newOutboundDiffTracker(uid, m, kube)
 	dt.pendingPodDeletions[podKey] = &PendingPodDeletion{
@@ -760,6 +761,7 @@ func TestGuardDeleteOutboundService_FinalizerRemovalFailureReportsFailure(t *tes
 	m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).Times(1)
 	m.nat.EXPECT().Delete(gomock.Any(), "rg", uid).Return(nil).Times(1)
 	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(uid)).Return(nil).Times(1)
+	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPNameV6(uid)).Return(nil).Times(1)
 
 	dt := newOutboundDiffTracker(uid, m, kube)
 	dt.pendingPodDeletions[podNS+"/"+podName] = &PendingPodDeletion{
@@ -791,6 +793,7 @@ func TestServiceUpdaterDeleteOutboundService_HappyPath(t *testing.T) {
 	m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).Times(1)
 	m.nat.EXPECT().Delete(gomock.Any(), "rg", uid).Return(nil).Times(1)
 	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(uid)).Return(nil).Times(1)
+	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPNameV6(uid)).Return(nil).Times(1)
 
 	dt := newOutboundDiffTracker(uid, m, fake.NewSimpleClientset())
 	got := &outboundCompletion{}
@@ -1222,6 +1225,7 @@ func TestGuardDeleteOutboundService_NATDeleteFailureRetainsLastPodFinalizer(t *t
 	// The NAT Gateway teardown fails, so the Azure resource is still live afterwards.
 	m.nat.EXPECT().Delete(gomock.Any(), "rg", uid).Return(errors.New("nat gateway delete failed")).Times(1)
 	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(uid)).Return(nil).AnyTimes()
+	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPNameV6(uid)).Return(nil).AnyTimes()
 
 	dt := newOutboundDiffTracker(uid, m, kube)
 	dt.pendingPodDeletions[podNS+"/"+podName] = &PendingPodDeletion{
@@ -1285,6 +1289,7 @@ func TestGuardDeleteOutboundService_FinalizerReleasedOnRetryAfterNATFailure(t *t
 		m.nat.EXPECT().Delete(gomock.Any(), "rg", uid).Return(nil).Times(1),
 	)
 	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(uid)).Return(nil).AnyTimes()
+	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPNameV6(uid)).Return(nil).AnyTimes()
 
 	dt := newOutboundDiffTracker(uid, m, kube)
 	entry := &PendingPodDeletion{

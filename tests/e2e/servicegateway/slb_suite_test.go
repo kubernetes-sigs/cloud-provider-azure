@@ -427,6 +427,14 @@ func natGatewayCleanupErr(egressNames []string) error {
 			}
 		}
 	}
+	// Deregistering from the ServiceGateway says nothing about ARM. Without this a CCM that
+	// unregisters but never deletes the resources passes every egress teardown while leaking a NAT
+	// Gateway and, on a dual-stack cluster, both of its Public IPs.
+	for _, egressName := range egressNames {
+		if err := azureEgressResourcesAbsentErr(egressName); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -434,8 +442,11 @@ func natGatewayCleanupErr(egressNames []string) error {
 // positive form of "nothing was provisioned", usable on its own rather than as a side effect of
 // verifyAzureResources failing for some unrelated reason.
 func azurePublicIPAbsentErr(serviceUID string) error {
-	publicIPName := fmt.Sprintf("%s-pip", serviceUID)
+	return azurePublicIPNamedAbsentErr(fmt.Sprintf("%s-pip", serviceUID))
+}
 
+// azurePublicIPNamedAbsentErr returns nil once the exactly-named Public IP is gone from Azure.
+func azurePublicIPNamedAbsentErr(publicIPName string) error {
 	pipOutput, err := runAz("network", "public-ip", "list",
 		"--resource-group", resourceGroupName,
 		"--output", "json")
@@ -495,8 +506,8 @@ func azureInboundResourcesAbsentErr(serviceUID string) error {
 // azureEgressResourcesAbsentErr returns nil once the egress identity's NAT Gateway and its Public
 // IP are gone from Azure.
 //
-// The NAT Gateway is named after the egress identity and its Public IP follows the same
-// <name>-pip convention as the inbound path (see buildOutboundResourceNames in the provider).
+// The NAT Gateway is named after the egress identity. Its IPv4 Public IP follows the same
+// <name>-pip convention as the inbound path, and a dual-stack cluster adds <name>-pip-v6.
 // Without this check a CCM that removes the Outbound registration from the ServiceGateway but
 // never deletes the ARM resources passes every egress teardown spec while leaking a NAT Gateway
 // and a Public IP per egress identity.
@@ -512,7 +523,13 @@ func azureEgressResourcesAbsentErr(egressName string) error {
 	if !strings.Contains(text, "not found") && !strings.Contains(text, "NotFound") {
 		return fmt.Errorf("could not determine whether NAT Gateway %s was deleted: %s", egressName, text)
 	}
-	return azurePublicIPAbsentErr(egressName)
+	if err := azurePublicIPAbsentErr(egressName); err != nil {
+		return err
+	}
+	// A dual-stack cluster also gets an IPv6 address, named "<name>-pip-v6". It is provisioned by
+	// the same create and removed by the same delete, so a teardown that misses it leaks a second
+	// billable address per egress identity.
+	return azurePublicIPNamedAbsentErr(fmt.Sprintf("%s-pip-v6", egressName))
 }
 
 // verifyAzureResources verifies Public IP, Load Balancer, and Service Gateway for a given service
@@ -855,7 +872,41 @@ func eventuallyAzureCleanup(timeout time.Duration) {
 		if err := serviceGatewayCleanupErr(); err != nil {
 			return err
 		}
-		return addressLocationsCleanupErr()
+		if err := addressLocationsCleanupErr(); err != nil {
+			return err
+		}
+		return egressIPv6PublicIPsCleanedUpErr()
 	}, timeout, defaultPollInterval).Should(Succeed(),
-		"Service Gateway and address locations should be free of test services after cleanup")
+		"Service Gateway, address locations and egress Public IPs should be free of test resources after cleanup")
+}
+
+// egressIPv6PublicIPsCleanedUpErr returns nil once no IPv6 egress Public IP remains in Azure.
+//
+// The "-pip-v6" suffix is created only by this controller, for a dual-stack egress NAT Gateway, so
+// any survivor is a leak. This is a global check like serviceGatewayCleanupErr: the other cleanup
+// assertions only read the ServiceGateway registration, which says nothing about ARM, so without
+// this a CCM that deregisters an egress identity but never deletes its IPv6 address passes every
+// egress spec while leaking a billable Public IP per identity.
+func egressIPv6PublicIPsCleanedUpErr() error {
+	pipOutput, err := runAz("network", "public-ip", "list",
+		"--resource-group", resourceGroupName,
+		"--output", "json")
+	if err != nil {
+		return fmt.Errorf("failed to query Azure for Public IPs: %w", err)
+	}
+
+	var publicIPs []AzurePublicIP
+	if err := json.Unmarshal(pipOutput, &publicIPs); err != nil {
+		return fmt.Errorf("failed to parse Public IPs response: %w", err)
+	}
+	leaked := []string{}
+	for i := range publicIPs {
+		if strings.HasSuffix(publicIPs[i].Name, "-pip-v6") {
+			leaked = append(leaked, publicIPs[i].Name)
+		}
+	}
+	if len(leaked) > 0 {
+		return fmt.Errorf("IPv6 egress Public IPs still exist after cleanup (leaked): %v", leaked)
+	}
+	return nil
 }

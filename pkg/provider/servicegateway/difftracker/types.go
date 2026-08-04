@@ -19,6 +19,7 @@ package difftracker
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -122,7 +123,14 @@ type InboundConfig struct {
 
 // OutboundConfig contains NAT Gateway configuration for outbound services
 type OutboundConfig struct {
-	// Placeholder for future NAT Gateway options
+	// IPFamilies holds the address families this NAT Gateway must provide a public path for
+	// ("IPv4"/"IPv6"), decided once when the service is created. Empty means IPv4 only.
+	//
+	// There is no outbound update path (UpdateService returns early for a non-inbound config), so
+	// a NAT Gateway is never modified after creation and this set cannot change. It is therefore
+	// derived from the cluster's families rather than from the pods of one identity: a dual-stack
+	// cluster can run single-stack pods, so the first pod does not predict the rest.
+	IPFamilies []string
 }
 
 // Equals returns true if two InboundConfigs describe the same desired LB shape.
@@ -460,6 +468,13 @@ type DiffTracker struct {
 	locationsUpdaterTrigger chan bool
 
 	// Initialization tracking
+	// clusterHasIPv6 caches the cluster's IPv6-ness once observed. Nodes never lose a family in
+	// practice, so a positive result is permanent and the node walk runs at most once per process.
+	// Seeded during initialization from the Node list fetched there, because the Node lister is
+	// published only afterwards and the startup create path must not mistake a dual-stack cluster
+	// for an IPv4-only one.
+	clusterHasIPv6 atomic.Bool
+
 	isInitializing         int32 // Atomic: 1 during initialization, 0 after
 	initCompletionChecker  chan struct{}
 	pendingUpdaterTriggers int32 // Atomic counter for in-flight updater triggers
