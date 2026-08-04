@@ -1895,6 +1895,21 @@ func (dt *DiffTracker) handleEmptyOutboundServiceLocked(serviceUID string) bool 
 	}
 	switch opState.State {
 	case StateNotStarted:
+		if opState.RetryCount > 0 || opState.CreationFailedTerminal {
+			// A failed create returns here with the Public IP and NAT Gateway possibly already
+			// live in Azure, since both are created before the NRP registration that would record
+			// them. Dropping tracking would leave nothing to delete them. Tear them down instead;
+			// the deletes are 404-safe if a step never ran.
+			dt.logger.V(5).Info("Scheduled service deletion after last buffered pod was removed following a failed creation", "service", serviceUID, "attempts", opState.RetryCount)
+			opState.State = StateDeletionInProgress
+			dt.pendingServiceDeletions[serviceUID] = &PendingServiceDeletion{
+				ServiceUID: serviceUID,
+				IsInbound:  opState.Config.IsInbound,
+				Timestamp:  time.Now().Format(time.RFC3339),
+			}
+			dt.triggerServiceUpdater()
+			return true
+		}
 		// Creation has not been dispatched yet (no Azure resource exists); abort it.
 		dt.logger.V(5).Info("Aborted service creation after last buffered pod was removed", "service", serviceUID)
 		delete(dt.pendingServiceOps, serviceUID)

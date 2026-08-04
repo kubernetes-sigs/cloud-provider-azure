@@ -164,12 +164,16 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 			recordLocationSyncAbandoned(locationSyncAbandonReasonInitAttempts)
 			lu.failureCount = 0
 		case drainPending && lu.failureCount >= getMaxInitLocationSyncAttempts():
-			// Retry budget spent while a finalizer is still blocked. Give up loudly; the object
-			// stays Terminating until the next cluster change re-drives the sync.
-			lu.logger.Error(lastSyncErr, "Gave up NRP location sync; drain-blocked finalizers remain pending",
-				"attempts", lu.failureCount)
-			recordLocationSyncAbandoned(locationSyncAbandonReasonDrain)
-			lu.failureCount = 0
+			// Retry budget spent while a finalizer is still blocked. Nothing else re-drives a
+			// drain-gated finalizer on a quiet cluster, so keep retrying instead of leaving the
+			// object Terminating. The backoff is capped at locationsRetryMaxDelay, so this costs
+			// one NRP call per interval and cannot starve other services. Reported once per outage.
+			if lu.failureCount == getMaxInitLocationSyncAttempts() {
+				lu.logger.Error(lastSyncErr, "NRP location sync still failing; drain-blocked finalizers remain pending and will keep retrying",
+					"attempts", lu.failureCount)
+				recordLocationSyncAbandoned(locationSyncAbandonReasonDrain)
+			}
+			lu.backoffAndRetry()
 		default:
 			lu.backoffAndRetry()
 		}

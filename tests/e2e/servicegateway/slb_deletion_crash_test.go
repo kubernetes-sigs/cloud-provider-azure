@@ -225,16 +225,23 @@ var _ = Describe("Container Load Balancer Deletion Crash Recovery Tests", Label(
 		// Without this the spec cannot distinguish "recovery completed the interrupted teardown"
 		// from "everything was already torn down before the crash", in which case the crash is
 		// decorative and the recovery path is never exercised.
+		//
+		// The premise is measured on the Kubernetes Services rather than on the Azure Load
+		// Balancers. A Service survives until the CCM removes its finalizer, so its presence is
+		// controlled by the very controller this spec crashes. Azure removes a deleted Load
+		// Balancer from the list within a few seconds regardless of the CCM, so keying the premise
+		// off ARM made it a race against Azure's deletion latency instead of a statement about
+		// the controller: this run observed all five Load Balancers gone 6s after the delete call.
 		stillPresent := 0
-		for _, serviceUID := range serviceUIDs {
-			if azureLoadBalancerAbsentErr(serviceUID) != nil {
+		for _, serviceName := range serviceNames {
+			if _, getErr := cs.CoreV1().Services(ns.Name).Get(ctx, serviceName, metav1.GetOptions{}); getErr == nil {
 				stillPresent++
 			}
 		}
 		Expect(stillPresent).To(BeNumerically(">", 0),
-			"every Azure Load Balancer was already deleted before the crash, so this spec exercised "+
+			"every Service had already been finalized before the crash, so this spec exercised "+
 				"steady state rather than recovery of an interrupted deletion")
-		utils.Logf("%d/%d Load Balancers were still present when the CCM died", stillPresent, len(serviceUIDs))
+		utils.Logf("%d/%d Services were still awaiting finalization when the CCM died", stillPresent, len(serviceNames))
 
 		By("Waiting 10 seconds with CCM down")
 		time.Sleep(10 * time.Second)
@@ -483,7 +490,13 @@ var _ = Describe("Container Load Balancer Deletion Crash Recovery Tests", Label(
 		// This step previously only LOGGED a NAT Gateway count and asserted nothing, so a recovery
 		// that removed the ServiceGateway entry but leaked the ARM NAT Gateway and its Public IP
 		// passed unnoticed. Assert the named resources are gone.
-		Expect(azureEgressResourcesAbsentErr(egressName)).To(Succeed(),
+		//
+		// Polled, not one-shot: the NAT Gateway and its Public IP are deleted by separate async ARM
+		// operations, so the Public IP can still exist for a few seconds after the gateway is gone
+		// and the ServiceGateway entry has cleared.
+		Eventually(func() error {
+			return azureEgressResourcesAbsentErr(egressName)
+		}, 180*time.Second, 10*time.Second).Should(Succeed(),
 			"the egress NAT Gateway and its Public IP must be deleted after CCM recovery, not leaked")
 		finalNATCount, err := countAzureNATGateways()
 		Expect(err).NotTo(HaveOccurred())
@@ -737,11 +750,21 @@ var _ = Describe("Container Load Balancer Deletion Crash Recovery Tests", Label(
 		// A decreasing LB count is far weaker than this spec's claim: deleting one of the five
 		// Load Balancers satisfied it, and the PIP/NAT counts were only logged. Assert each
 		// named resource is gone so a per-service leak cannot hide behind an aggregate.
+		//
+		// Polled, not one-shot: ARM deletes the Load Balancer / NAT Gateway and its Public IP as
+		// separate asynchronous operations, so the Public IP routinely outlives the resource that
+		// referenced it by a few seconds. A bare Expect here fails on that lag and reports a leak
+		// that is not one.
 		for _, serviceUID := range serviceUIDs {
-			Expect(azureInboundResourcesAbsentErr(serviceUID)).To(Succeed(),
-				"service %s must have its Load Balancer and Public IP deleted, not leaked", serviceUID)
+			uid := serviceUID
+			Eventually(func() error {
+				return azureInboundResourcesAbsentErr(uid)
+			}, 180*time.Second, 10*time.Second).Should(Succeed(),
+				"service %s must have its Load Balancer and Public IP deleted, not leaked", uid)
 		}
-		Expect(azureEgressResourcesAbsentErr(egressName)).To(Succeed(),
+		Eventually(func() error {
+			return azureEgressResourcesAbsentErr(egressName)
+		}, 180*time.Second, 10*time.Second).Should(Succeed(),
 			"the egress NAT Gateway and its Public IP must be deleted, not leaked")
 
 		finalLBCount, _ := countAzureLoadBalancers()

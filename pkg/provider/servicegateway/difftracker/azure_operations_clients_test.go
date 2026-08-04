@@ -631,23 +631,16 @@ func TestInitializeFromCluster_ReusesFetchedPIPListForOrphanCleanup(t *testing.T
 	mockLB.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
 	mockNAT.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
 
-	// A single detached orphan PIP (no IPConfiguration) with a non-UUID name, so ONLY
-	// cleanupOrphanedPublicIPs acts on it (scheduleOrphanedResourceDeletions skips non-UUID "-pip"
-	// names). List returns a NON-NIL slice: init must reuse it and never call List again.
-	//
-	// NOTE: "leftover-pip" carries no ownership marker, so it is indistinguishable from a Public IP
-	// created by the customer or by another cluster sharing the resource group, yet the Delete below
-	// is asserted as mandatory. Selecting orphans by ownership tag instead of name suffix will make
-	// this expectation fail. Resolve that by giving the fixture a non-UUID name that also carries
-	// the ownership tag, not by weakening the selection: the subject here is list reuse and the
-	// deletion is incidental.
+	// A single detached PIP (no IPConfiguration) whose name is not a managed Service address.
+	// List returns a NON-NIL slice: init must reuse it and never call List again, which is what
+	// the Times(1) below pins. The PIP itself belongs to nobody we manage, so it must survive.
 	const orphanPIP = "leftover-pip"
 	pips := []*armnetwork.PublicIPAddress{{
 		Name:       ptr.To(orphanPIP),
 		Properties: &armnetwork.PublicIPAddressPropertiesFormat{},
 	}}
 	mockPIP.EXPECT().List(gomock.Any(), "rg").Return(pips, nil).Times(1)
-	mockPIP.EXPECT().Delete(gomock.Any(), "rg", orphanPIP).Return(nil).Times(1)
+	mockPIP.EXPECT().Delete(gomock.Any(), "rg", orphanPIP).Return(nil).Times(0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

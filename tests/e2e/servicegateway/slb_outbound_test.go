@@ -164,11 +164,14 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 			"--url", fmt.Sprintf("https://management.azure.com%s?api-version=%s", natGatewayID, apiVersion))
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("NAT Gateway %s should exist in Azure", natGatewayName))
 
+		// `sku` is a top-level field on the ARM NAT Gateway resource, a sibling of `properties` -
+		// not nested inside it. Decoding it under `properties` yields an empty string, which is
+		// what the first live run of this (previously skipped) assertion reported.
 		var natGateway struct {
+			SKU struct {
+				Name string `json:"name"`
+			} `json:"sku"`
 			Properties struct {
-				SKU struct {
-					Name string `json:"name"`
-				} `json:"sku"`
 				PublicIPAddresses []struct {
 					ID string `json:"id"`
 				} `json:"publicIpAddresses"`
@@ -182,8 +185,8 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		utils.Logf("NAT Gateway verified:")
 		props := natGateway.Properties
 
-		utils.Logf("  SKU: %s", props.SKU.Name)
-		Expect(props.SKU.Name).To(Equal("StandardV2"), "NAT Gateway SKU should be StandardV2")
+		utils.Logf("  SKU: %s", natGateway.SKU.Name)
+		Expect(natGateway.SKU.Name).To(Equal("StandardV2"), "NAT Gateway SKU should be StandardV2")
 
 		utils.Logf("  Public IPs: %d", len(props.PublicIPAddresses))
 		Expect(props.PublicIPAddresses).NotTo(BeEmpty(), "NAT Gateway should have at least one Public IP")

@@ -111,35 +111,17 @@ var _ = Describe("Container Load Balancer Creation Crash Recovery Tests", Label(
 
 		ctx := context.Background()
 
-		By(fmt.Sprintf("Creating %d LoadBalancer services with backend pods", serviceCount))
+		By(fmt.Sprintf("Creating %d backend pods", serviceCount))
+		// Pods are created and become Ready BEFORE their Services exist. Creating the Services
+		// first meant Azure provisioning began immediately and then ran to completion during the
+		// pod-readiness wait below (up to 120s), so the crash that follows crashDelay landed long
+		// after every Load Balancer was live and the spec silently exercised steady-state recovery
+		// instead of recovery of interrupted provisioning.
 		serviceNames := make([]string, serviceCount)
 		for i := 0; i < serviceCount; i++ {
 			serviceName := fmt.Sprintf("create-crash-svc-%d", i)
 			serviceNames[i] = serviceName
 
-			service := &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      serviceName,
-					Namespace: ns.Name,
-				},
-				Spec: v1.ServiceSpec{
-					Type: v1.ServiceTypeLoadBalancer,
-					Selector: map[string]string{
-						"app": serviceName,
-					},
-					Ports: []v1.ServicePort{
-						{
-							Port:       servicePort,
-							TargetPort: intstr.FromInt(targetPort),
-							Protocol:   v1.ProtocolTCP,
-						},
-					},
-				},
-			}
-			_, err := cs.CoreV1().Services(ns.Name).Create(ctx, service, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-
-			// Create backend pod
 			pod := &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      fmt.Sprintf("%s-pod", serviceName),
@@ -161,10 +143,10 @@ var _ = Describe("Container Load Balancer Creation Crash Recovery Tests", Label(
 					},
 				},
 			}
-			_, err = cs.CoreV1().Pods(ns.Name).Create(ctx, pod, metav1.CreateOptions{})
+			_, err := cs.CoreV1().Pods(ns.Name).Create(ctx, pod, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}
-		utils.Logf("Created %d services with backend pods", serviceCount)
+		utils.Logf("Created %d backend pods", serviceCount)
 
 		By("Waiting for all pods to be ready (so endpoints exist)")
 		for _, serviceName := range serviceNames {
@@ -187,18 +169,46 @@ var _ = Describe("Container Load Balancer Creation Crash Recovery Tests", Label(
 		utils.Logf("All %d pods are ready", serviceCount)
 
 		By(fmt.Sprintf("IMMEDIATELY crashing CCM after %v (during Azure provisioning)", crashDelay))
-		time.Sleep(crashDelay)
-		// Establish the crash premise rather than assuming it: DeleteAllCCMPods only issues the
-		// deletes, so the old controller can still be running while the spec acts "during downtime".
-		crashedUIDs, err := ccmClient.CrashCCMAndWaitForDown(ctx, CCMRecoveryTimeout)
-		Expect(err).NotTo(HaveOccurred())
-		utils.Logf("CCM crashed during service provisioning!")
+		// The Services are created here, once their endpoints already exist, so Azure provisioning
+		// starts now and crashDelay is measured from the moment the controller has real work to do.
+		for _, serviceName := range serviceNames {
+			service := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      serviceName,
+					Namespace: ns.Name,
+				},
+				Spec: v1.ServiceSpec{
+					Type: v1.ServiceTypeLoadBalancer,
+					Selector: map[string]string{
+						"app": serviceName,
+					},
+					Ports: []v1.ServicePort{
+						{
+							Port:       servicePort,
+							TargetPort: intstr.FromInt(targetPort),
+							Protocol:   v1.ProtocolTCP,
+						},
+					},
+				},
+			}
+			_, err := cs.CoreV1().Services(ns.Name).Create(ctx, service, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}
+		utils.Logf("Created %d LoadBalancer services", serviceCount)
 
-		By("Verifying provisioning was genuinely still in flight when the CCM died")
+		time.Sleep(crashDelay)
+
+		By("Verifying provisioning was genuinely still in flight when the crash was initiated")
 		// Without this the spec cannot distinguish "recovery finished the interrupted work" from
 		// "everything was already provisioned before the crash", in which case it proves ordinary
-		// steady state and the crash is decorative. At crashDelay after creation the Azure
-		// Load Balancers cannot all exist yet, so unfinished work must be observable here.
+		// steady state and the crash is decorative.
+		//
+		// Sampled at the instant the crash is initiated, not after the CCM is confirmed down:
+		// CrashCCMAndWaitForDown must wait for the pods to actually disappear, and this
+		// environment provisions these five small Load Balancers in about that same few seconds,
+		// so a sample taken afterwards routinely observed every service already finished. This is
+		// the last moment the spec controls; the controller may still complete work while it is
+		// shutting down.
 		incomplete := 0
 		for _, serviceName := range serviceNames {
 			svc, getErr := cs.CoreV1().Services(ns.Name).Get(ctx, serviceName, metav1.GetOptions{})
@@ -208,9 +218,15 @@ var _ = Describe("Container Load Balancer Creation Crash Recovery Tests", Label(
 			}
 		}
 		Expect(incomplete).To(BeNumerically(">", 0),
-			"every service was already provisioned before the crash, so this spec exercised steady-state "+
-				"recovery rather than recovery of in-flight provisioning; shorten crashDelay")
-		utils.Logf("%d/%d services were still unprovisioned when the CCM died", incomplete, serviceCount)
+			"every service was already provisioned before the crash was initiated, so this spec exercised "+
+				"steady-state recovery rather than recovery of in-flight provisioning; shorten crashDelay")
+		utils.Logf("%d/%d services were still unprovisioned when the crash was initiated", incomplete, serviceCount)
+
+		// Establish the crash premise rather than assuming it: DeleteAllCCMPods only issues the
+		// deletes, so the old controller can still be running while the spec acts "during downtime".
+		crashedUIDs, err := ccmClient.CrashCCMAndWaitForDown(ctx, CCMRecoveryTimeout)
+		Expect(err).NotTo(HaveOccurred())
+		utils.Logf("CCM crashed during service provisioning!")
 
 		By(fmt.Sprintf("Waiting %v with CCM down", ccmDowntime))
 		time.Sleep(ccmDowntime)

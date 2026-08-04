@@ -1072,6 +1072,55 @@ func TestCleanupOrphanedPublicIPs_KeepsPIPForServiceStillDesiredInKubernetes(t *
 		"a Public IP desired by neither Kubernetes nor NRP must still be cleaned up")
 }
 
+// TestCleanupOrphanedPublicIPs_KeepsCustomerPublicIPs pins that the sweeper only deletes managed
+// Service addresses. Any unattached "*-pip" in the resource group used to qualify as an orphan, so
+// a customer address reserved for later use was destroyed on every startup.
+func TestCleanupOrphanedPublicIPs_KeepsCustomerPublicIPs(t *testing.T) {
+	run := func(t *testing.T, pips []*armnetwork.PublicIPAddress) []string {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+		mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+		mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+
+		var deleted []string
+		mockPIP.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, _, name string) error {
+				deleted = append(deleted, name)
+				return nil
+			}).AnyTimes()
+
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.networkClientFactory = mockFactory
+		assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), pips))
+		return deleted
+	}
+
+	detached := func(name string) *armnetwork.PublicIPAddress {
+		return &armnetwork.PublicIPAddress{
+			Name:       ptr.To(name),
+			Properties: &armnetwork.PublicIPAddressPropertiesFormat{},
+		}
+	}
+
+	const managedOrphan = "22222222-2222-2222-2222-222222222222-pip"
+
+	deleted := run(t, []*armnetwork.PublicIPAddress{
+		detached("bastion-pip"),
+		detached("team-egress-pip"),
+		detached(managedOrphan),
+	})
+
+	assert.NotContains(t, deleted, "bastion-pip",
+		"an unattached customer address must not be deleted as an orphan")
+	assert.NotContains(t, deleted, "team-egress-pip",
+		"an egress address is named from a user label and is deleted by the NAT teardown, not here")
+	assert.Contains(t, deleted, managedOrphan,
+		"a managed Service address desired by neither Kubernetes nor NRP must still be cleaned up")
+}
+
 // TestRecoverStuckFinalizers_CountsRemovalSeparatelyFromScheduling pins that startup recovery
 // reports what it actually did.
 //
@@ -1210,8 +1259,14 @@ func TestProcessK8sServices_ExcludesServicesNotOwnedByServiceGateway(t *testing.
 
 	assert.False(t, k8s.Services.Has("uid-foreign"),
 		"a Service claimed by another LoadBalancerClass must not be desired, or ServiceGateway keeps syncing it forever")
-	assert.False(t, k8s.Services.Has("uid-internal"),
-		"a Service inbound admission rejects must not be desired after a restart")
+
+	// An admission rejection is a mutated spec on a Service that may already be serving. Excluding
+	// it would make the diff read it as removed and destroy its live LoadBalancer and Public IP on
+	// the next restart, which is not what the runtime path does with the same Service.
+	assert.True(t, k8s.Services.Has("uid-internal"),
+		"a Service inbound admission rejects must stay desired so its live Azure resources are not deleted")
+	assert.Contains(t, serviceUIDToService, "uid-internal",
+		"reconcileServices needs the Service object to re-apply admission and decline to provision it")
 }
 
 // TestProcessK8sServices_ForeignServiceBecomesRemoval pins that an existing LoadBalancer for a

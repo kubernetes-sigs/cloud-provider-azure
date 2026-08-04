@@ -696,9 +696,16 @@ func registeredAddressesMatchErr(serviceID string, want map[string]struct{}) err
 }
 
 // podIPSet collects every IP of the given pods, which is the address set they should register.
+// podIPSet collects the pod IPs of the given pods, skipping any pod that is already terminating.
+// A pod keeps its IP in a List response until it is fully gone, so counting it after a scale-down
+// yields one address more than the workload actually has and makes an exact-set comparison against
+// the Service Gateway fail against a set the data path has correctly stopped using.
 func podIPSet(pods []v1.Pod) map[string]struct{} {
 	set := make(map[string]struct{})
 	for i := range pods {
+		if pods[i].DeletionTimestamp != nil {
+			continue
+		}
 		for _, ip := range pods[i].Status.PodIPs {
 			if ip.IP != "" {
 				set[ip.IP] = struct{}{}

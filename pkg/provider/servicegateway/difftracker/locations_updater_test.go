@@ -410,6 +410,60 @@ func TestLocationsUpdater_TerminalErrorRetriedWhileDeletionDrainPending(t *testi
 		"a deletion waiting on the abandoned batch must keep the sync rescheduled, not strand it")
 }
 
+// TestLocationsUpdater_DrainKeepsRetryingPastAttemptCap pins that spending the retry budget does
+// not end the retries while a finalizer is still blocked. Nothing else re-drives a drain-gated
+// deletion, so giving up leaves the Service Terminating until some unrelated cluster change.
+func TestLocationsUpdater_DrainKeepsRetryingPastAttemptCap(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	prev := maxInitLocationSyncAttempts.Load()
+	maxInitLocationSyncAttempts.Store(1)
+	defer maxInitLocationSyncAttempts.Store(prev)
+
+	var calls int32
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+	mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, _ armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
+			atomic.AddInt32(&calls, 1)
+			return &azcore.ResponseError{StatusCode: http.StatusBadRequest, ErrorCode: "InvalidRequest"}
+		}).AnyTimes()
+
+	dt := newTestDiffTracker()
+	dt.networkClientFactory = mockFactory
+	dt.config = testConfig()
+
+	dt.K8sResources.Nodes["node-1"] = newNode()
+	dt.NRPResources.Locations["node-1"] = NRPLocation{
+		Addresses: map[string]NRPAddress{"10.0.0.1": {Services: utilsets.NewString("svc")}},
+	}
+	dt.NRPResources.LoadBalancers.Insert("svc")
+	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceUID: "svc", State: StateDeletionPending}
+	dt.pendingServiceDeletions["svc"] = &PendingServiceDeletion{ServiceUID: "svc", IsInbound: true}
+
+	lu := NewLocationsUpdater(context.Background(), dt)
+	stopped := make(chan struct{})
+	go func() {
+		lu.Run()
+		close(stopped)
+	}()
+	defer func() {
+		lu.Stop()
+		<-stopped
+	}()
+
+	dt.triggerLocationsUpdater()
+
+	// The cap is 1, so anything beyond a couple of attempts can only come from retries that
+	// continued after the budget was spent.
+	assert.Eventually(t, func() bool {
+		return atomic.LoadInt32(&calls) >= 3
+	}, 10*time.Second, 50*time.Millisecond,
+		"a drain-blocked deletion must keep retrying after the attempt cap, not be abandoned")
+}
+
 // TestLocationsUpdater_SendsExactAddressPayloadToNRP pins the CONTENT of the address-location
 // request the updater sends to NRP, not merely that a request was sent.
 //

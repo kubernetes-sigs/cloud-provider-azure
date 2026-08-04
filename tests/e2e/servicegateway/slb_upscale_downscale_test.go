@@ -399,12 +399,21 @@ var _ = Describe("Container Load Balancer Scale Operations", Label(slbTestLabel)
 			// different claims. Draining a surviving pod's IP while leaving a deleted pod's IP
 			// registered keeps the count correct but blackholes live traffic and routes to a pod
 			// that no longer exists, which a count-based assertion cannot see.
-			livePods, err := cs.CoreV1().Pods(ns.Name).List(context.TODO(), metav1.ListOptions{
-				LabelSelector: labels.SelectorFromSet(serviceLabels).String(),
-			})
-			Expect(err).NotTo(HaveOccurred())
-			wantAddrs := podIPSet(livePods.Items)
-			Expect(wantAddrs).To(HaveLen(targetPods),
+			//
+			// The live set is polled rather than sampled once: WaitPodsToBeReady returns as soon as
+			// no pod is pending, but a scaled-down pod can still be listed for a moment before the
+			// API server marks it terminating, which yields one address too many.
+			var wantAddrs map[string]struct{}
+			Eventually(func() (int, error) {
+				livePods, listErr := cs.CoreV1().Pods(ns.Name).List(context.TODO(), metav1.ListOptions{
+					LabelSelector: labels.SelectorFromSet(serviceLabels).String(),
+				})
+				if listErr != nil {
+					return 0, listErr
+				}
+				wantAddrs = podIPSet(livePods.Items)
+				return len(wantAddrs), nil
+			}, 3*time.Minute, 5*time.Second).Should(Equal(targetPods),
 				"scale step %d: expected %d live pod IPs to compare against", stepIdx+1, targetPods)
 
 			Eventually(func() error {

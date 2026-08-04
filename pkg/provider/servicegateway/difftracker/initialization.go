@@ -598,9 +598,13 @@ func processK8sServices(
 				continue
 			}
 			if _, err := AdmitInboundService(&services.Items[i]); err != nil {
-				logger.Error(err, "Excluded a Service rejected by inbound admission from desired state",
+				// Kept in desired state deliberately. Rejection means the spec was mutated into
+				// something unsupported, and the runtime path answers that by returning an error
+				// and leaving the existing load balancer serving. Dropping it here instead would
+				// make the diff read it as removed and destroy live Azure resources on the next
+				// restart. reconcileServices re-applies this admission and declines to provision.
+				logger.Error(err, "Kept a Service rejected by inbound admission in desired state; it will not be provisioned or changed",
 					"namespace", service.Namespace, "service", service.Name)
-				continue
 			}
 			uid := ServiceUID(&services.Items[i])
 			k8s.Services.Insert(uid)
@@ -1644,6 +1648,16 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 
 		// Extract the service name from PIP name (remove "-pip" suffix)
 		serviceName := strings.TrimSuffix(pipName, "-pip")
+
+		// Only UUID-named Public IPs belong to a managed inbound Service. Any other "*-pip" in this
+		// resource group is a customer resource, and deleting it destroys an address they own.
+		// Egress Public IPs are named from a user-chosen pod label and so cannot be told apart from
+		// a customer name here; deleteOutboundService deletes them directly (Step 4), so skipping
+		// them costs at most a leaked address rather than a destroyed one.
+		if !isValidServiceUUID(serviceName) {
+			logger.V(5).Info("Skipped Public IP that is not a managed service address", "publicIP", pipName)
+			continue
+		}
 
 		// A Service or egress identity Kubernetes still wants is not an orphan, even when NRP has
 		// no record of it. That combination is exactly the crash-mid-create state: the Public IP was

@@ -1992,3 +1992,49 @@ func TestPublicEntryPointsAlwaysReleaseLock(t *testing.T) {
 		})
 	}
 }
+
+// TestHandleEmptyOutboundService_FailedCreateSchedulesTeardown pins that a create which already
+// reached Azure is torn down when its last pod goes away. createOutboundService creates the Public
+// IP and NAT Gateway before the NRP registration that records them, and a failed create returns to
+// StateNotStarted, so treating that state as "nothing was dispatched" drops the only tracking that
+// could delete them.
+func TestHandleEmptyOutboundService_FailedCreateSchedulesTeardown(t *testing.T) {
+	const egress = "egress-partial-create"
+
+	newTrackerWithPod := func() *DiffTracker {
+		dt := newTestDiffTracker()
+		dt.AddPodWithUID(egress, "ns/pod1", "pod-uid-1", "10.1.0.1", "10.0.0.1")
+		return dt
+	}
+
+	t.Run("a create that already reached Azure is torn down", func(t *testing.T) {
+		dt := newTrackerWithPod()
+		// One failed attempt: the Public IP and NAT Gateway may exist in Azure, but the NRP
+		// registration that records them never ran.
+		dt.OnServiceCreationComplete(egress, false, errors.New("NAT Gateway create failed"))
+		op := dt.pendingServiceOps[egress]
+		assert.Equal(t, StateNotStarted, op.State)
+		assert.Greater(t, op.RetryCount, 0)
+		assert.False(t, dt.NRPResources.NATGateways.Has(egress), "NRP never recorded the resources")
+
+		dt.DeletePod(egress, "10.1.0.1", []string{"10.0.0.1"}, "ns", "pod1", "pod-uid-1")
+
+		op, tracked := dt.pendingServiceOps[egress]
+		assert.True(t, tracked, "tracking must survive so the Azure resources can be deleted")
+		assert.Equal(t, StateDeletionInProgress, op.State)
+		assert.Contains(t, dt.pendingServiceDeletions, egress)
+	})
+
+	t.Run("a create that was never dispatched is still aborted", func(t *testing.T) {
+		dt := newTrackerWithPod()
+		op := dt.pendingServiceOps[egress]
+		assert.Equal(t, StateNotStarted, op.State)
+		assert.Equal(t, 0, op.RetryCount, "nothing was dispatched, so nothing exists in Azure")
+
+		dt.DeletePod(egress, "10.1.0.1", []string{"10.0.0.1"}, "ns", "pod1", "pod-uid-1")
+
+		_, tracked := dt.pendingServiceOps[egress]
+		assert.False(t, tracked, "with no Azure resources there is nothing to tear down")
+		assert.NotContains(t, dt.pendingServiceDeletions, egress)
+	})
+}
