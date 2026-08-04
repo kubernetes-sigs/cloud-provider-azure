@@ -186,9 +186,16 @@ func (dt *DiffTracker) seedInboundEndpointsFromCache(serviceUID string) {
 		return
 	}
 
+	// The cache walk and the apply are held under one lock. The snapshot can only add addresses, so
+	// releasing the lock between them lets a concurrent EndpointSlice removal be overwritten by an
+	// older snapshot. The resurrected address is then unreachable: later deltas derive their removal
+	// set from the cache, which no longer lists it, so it stays registered until the process
+	// restarts and is served as a live backend. Holding the lock orders the two: either the removal
+	// lands first and this snapshot already reflects it, or it applies after and removes it.
 	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
 	nodeLister := dt.nodeLister
-	dt.mu.Unlock()
 	if nodeLister == nil {
 		dt.logger.V(4).Info("Skipped endpoint cache replay because dependencies are unavailable",
 			"nodeListerAvailable", false)
@@ -216,7 +223,7 @@ func (dt *DiffTracker) seedInboundEndpointsFromCache(serviceUID string) {
 		return
 	}
 	dt.logger.V(2).Info("Seeded endpoints for registered service", "service", serviceUID, "endpoints", len(addresses))
-	dt.UpdateEndpoints(serviceUID, nil, addresses)
+	dt.updateEndpointsLocked(serviceUID, nil, addresses)
 }
 
 // ReconcileNodeIPChange replays the cached EndpointSlices hosting a pod on nodeName into the diff

@@ -17,7 +17,9 @@ limitations under the License.
 package difftracker
 
 import (
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
@@ -373,5 +375,132 @@ func TestEndpointSliceAddresses_ResolvesLocationPerAddressFamily(t *testing.T) {
 	t.Run("conforming single-family slice is unchanged", func(t *testing.T) {
 		got := endpointSliceAddresses(newSlice(discovery_v1.AddressTypeIPv4, "10.244.0.9"), nodeLister)
 		assert.Equal(t, map[string]string{"10.244.0.9": "10.0.0.1"}, got)
+	})
+}
+
+// blockingNodeLister parks the first Get so a concurrent EndpointSlice removal can be applied while
+// the seed is mid-snapshot.
+type blockingNodeLister struct {
+	corelisters.NodeLister
+	entered chan struct{}
+	release chan struct{}
+	gate    atomic.Bool
+}
+
+// Get parks only the FIRST caller. Later callers pass straight through, so the concurrent removal
+// is free to apply while the seed is stalled.
+func (b *blockingNodeLister) Get(name string) (*v1.Node, error) {
+	if b.gate.CompareAndSwap(false, true) {
+		close(b.entered)
+		<-b.release
+	}
+	return b.NodeLister.Get(name)
+}
+
+// TestSeedInboundEndpointsFromCache_DoesNotOvertakeRemoval pins that the endpoint cache replay
+// cannot resurrect an address a concurrent EndpointSlice removal just deleted. The replay only adds,
+// so an older snapshot applied afterwards re-registers the address, and no later delta can remove it
+// (removals are derived from the cache, which no longer lists it) -- it stays a live backend until
+// the process restarts, and is served once the CNI reassigns the IP.
+func TestSeedInboundEndpointsFromCache_DoesNotOvertakeRemoval(t *testing.T) {
+	const (
+		svcUID = "cafe0000-0000-0000-0000-00000000000a"
+		podIP  = "1.1.1.1"
+		nodeIP = "10.0.0.1"
+	)
+
+	node := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "node-a"},
+		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: nodeIP}}},
+	}
+	slice := &discovery_v1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ns", Name: "slice-1",
+			OwnerReferences: []metav1.OwnerReference{{Kind: "Service", UID: types.UID(svcUID)}},
+		},
+		AddressType: discovery_v1.AddressTypeIPv4,
+		Endpoints: []discovery_v1.Endpoint{{
+			Addresses:  []string{podIP},
+			NodeName:   ptr.To("node-a"),
+			Conditions: discovery_v1.EndpointConditions{Ready: ptr.To(true)},
+		}},
+	}
+
+	registered := func(dt *DiffTracker) bool {
+		dt.mu.Lock()
+		defer dt.mu.Unlock()
+		n, ok := dt.K8sResources.Nodes[nodeIP]
+		if !ok {
+			return false
+		}
+		pod, ok := n.Pods[podIP]
+		return ok && pod.InboundIdentities.Has(svcUID)
+	}
+
+	newTracker := func(t *testing.T) (*DiffTracker, *blockingNodeLister) {
+		dt := newTestDiffTracker()
+		dt.NRPResources.LoadBalancers.Insert(svcUID)
+		setTestNodeLister(t, dt, node)
+		// Register the endpoint with the plain lister first, so the blocking one is only consumed
+		// by the seed under test.
+		dt.ReconcileEndpointSlice(nil, slice)
+		blocking := &blockingNodeLister{
+			NodeLister: dt.nodeLister,
+			entered:    make(chan struct{}),
+			release:    make(chan struct{}),
+		}
+		dt.SetNodeLister(blocking)
+		return dt, blocking
+	}
+
+	t.Run("a removal applied during the snapshot is not overwritten", func(t *testing.T) {
+		dt, blocking := newTracker(t)
+
+		seedDone := make(chan struct{})
+		go func() {
+			defer close(seedDone)
+			dt.seedInboundEndpointsFromCache(svcUID)
+		}()
+
+		select {
+		case <-blocking.entered:
+		case <-time.After(10 * time.Second):
+			t.Fatal("the seed never reached the node lookup")
+		}
+
+		// The pod is deleted while the seed holds its snapshot. Give the removal time to apply
+		// before releasing the seed: without the lock it completes here and the older snapshot
+		// then overwrites it, which is the defect. Holding the lock makes it wait instead.
+		removalDone := make(chan struct{})
+		go func() {
+			defer close(removalDone)
+			dt.ReconcileEndpointSlice(slice, nil)
+		}()
+		select {
+		case <-removalDone:
+		case <-time.After(time.Second):
+		}
+
+		close(blocking.release)
+		for _, done := range []chan struct{}{seedDone, removalDone} {
+			select {
+			case <-done:
+			case <-time.After(10 * time.Second):
+				t.Fatal("seed or removal did not finish")
+			}
+		}
+
+		assert.False(t, registered(dt),
+			"a deleted pod IP must not survive the endpoint cache replay")
+	})
+
+	t.Run("the seed still registers endpoints when nothing is removed", func(t *testing.T) {
+		dt, blocking := newTracker(t)
+		close(blocking.release)
+
+		dt.seedInboundEndpointsFromCache(svcUID)
+
+		assert.True(t, registered(dt),
+			"the replay must still seed endpoints for a newly registered service")
 	})
 }

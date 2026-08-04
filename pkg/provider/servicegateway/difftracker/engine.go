@@ -203,6 +203,12 @@ func (dt *DiffTracker) UpdateEndpoints(serviceUID string, oldPodIPToNodeIP, newP
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
+	dt.updateEndpointsLocked(serviceUID, oldPodIPToNodeIP, newPodIPToNodeIP)
+}
+
+// updateEndpointsLocked is UpdateEndpoints without the lock, for callers that must apply an
+// endpoint change atomically with the state they derived it from. Must be called with dt.mu held.
+func (dt *DiffTracker) updateEndpointsLocked(serviceUID string, oldPodIPToNodeIP, newPodIPToNodeIP map[string]string) {
 	if serviceUID == "" {
 		dt.logger.V(4).Info("Could not update endpoints without service")
 		return
