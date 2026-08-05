@@ -316,3 +316,57 @@ func TestGuardDeleteInboundServiceRetriesOnTransientServiceLookupFailure(t *test
 		assert.False(t, tracked, "CONTROL: tracking is cleared on a genuine success")
 	})
 }
+
+// An egress identity's Public IPs must be swept once its NAT Gateway is gone. The identity comes
+// from a user-chosen pod label rather than a UUID, and the sweeper used to delete only UUID-named
+// addresses, so the egress address leaked forever. The IPv6 address is covered too:
+// "<identity>-pip-v6" does not end in "-pip", so it was rejected as an unknown name.
+func TestGuardEgressPublicIPsAreSweptOnceNATGatewayIsGone(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+
+	var deleted []string
+	mockPIP.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, name string) error {
+			deleted = append(deleted, name)
+			return nil
+		}).AnyTimes()
+
+	dt := newTestDiffTracker()
+	dt.config = testConfig()
+	dt.networkClientFactory = mockFactory
+
+	pip := func(name string) *armnetwork.PublicIPAddress {
+		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
+	}
+
+	const egress = "team-egress"
+	const desired = "still-wanted-egress"
+	dt.K8sResources.Egresses = newIgnoreCaseSetFromSlice([]string{desired})
+
+	attached := pip(PublicIPName("still-in-use"))
+	attached.Properties.NatGateway = &armnetwork.NatGateway{ID: ptr.To("/natGateways/still-in-use")}
+
+	assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{
+		pip(PublicIPName(egress)),
+		pip(PublicIPNameV6(egress)),
+		pip(PublicIPName(desired)),
+		pip(PublicIPName(DefaultOutboundNATGatewayName)),
+		attached,
+	}))
+
+	assert.Contains(t, deleted, PublicIPName(egress),
+		"BUG CASE: the egress IPv4 Public IP leaked because its name is not a UUID")
+	assert.Contains(t, deleted, PublicIPNameV6(egress),
+		"BUG CASE: the egress IPv6 Public IP leaked because \"-pip-v6\" was treated as an unknown name")
+	assert.NotContains(t, deleted, PublicIPName(desired),
+		"BUG CASE: an address for an egress identity Kubernetes still wants was deleted")
+	assert.NotContains(t, deleted, PublicIPName(DefaultOutboundNATGatewayName),
+		"BUG CASE: the cluster's default egress Public IP was deleted")
+	assert.NotContains(t, deleted, PublicIPName("still-in-use"),
+		"BUG CASE: a Public IP still attached to a NAT Gateway was scheduled for deletion")
+}

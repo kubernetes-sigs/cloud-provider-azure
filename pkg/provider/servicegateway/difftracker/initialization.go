@@ -1751,36 +1751,30 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 
 		pipName := *pip.Name
 
-		// Skip PIPs that don't follow our naming convention (must end with "-pip")
-		if !strings.HasSuffix(pipName, "-pip") {
+		// Map the address back to its identity. Both "-pip" and "-pip-v6" are ours.
+		identity, ok := identityFromPublicIPName(pipName)
+		if !ok {
 			logger.V(5).Info("Skipped Public IP with unexpected name", "publicIP", pipName)
 			continue
 		}
 
 		// Skip the default NAT Gateway PIP
-		if IsReservedEgressIdentity(strings.TrimSuffix(pipName, "-pip")) {
+		if IsReservedEgressIdentity(identity) {
 			logger.V(5).Info("Skipped default NAT gateway Public IP")
 			continue
 		}
 
 		// Skip PIPs that are still attached to a resource (will fail deletion with "PublicIPAddressCannotBeDeleted")
-		if pip.Properties != nil && pip.Properties.IPConfiguration != nil {
+		if pip.Properties != nil && (pip.Properties.IPConfiguration != nil || pip.Properties.NatGateway != nil) {
 			logger.V(5).Info("Skipped attached Public IP", "publicIP", pipName)
 			continue
 		}
 
-		// Extract the service name from PIP name (remove "-pip" suffix)
-		serviceName := strings.TrimSuffix(pipName, "-pip")
+		serviceName := identity
 
-		// Only UUID-named Public IPs belong to a managed inbound Service. Any other "*-pip" in this
-		// resource group is a customer resource, and deleting it destroys an address they own.
-		// Egress Public IPs are named from a user-chosen pod label and so cannot be told apart from
-		// a customer name here; deleteOutboundService deletes them directly (Step 4), so skipping
-		// them costs at most a leaked address rather than a destroyed one.
-		if !isValidServiceUUID(serviceName) {
-			logger.V(5).Info("Skipped Public IP that is not a managed service address", "publicIP", pipName)
-			continue
-		}
+		// Every "*-pip" in this resource group is ours: it is the cluster's managed node resource
+		// group, so there are no customer-created addresses here to protect. Both a UUID-named
+		// inbound address and an egress address named from a pod label are swept.
 
 		// A Service or egress identity Kubernetes still wants is not an orphan, even when NRP has
 		// no record of it. That combination is exactly the crash-mid-create state: the Public IP was

@@ -631,16 +631,16 @@ func TestInitializeFromCluster_ReusesFetchedPIPListForOrphanCleanup(t *testing.T
 	mockLB.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
 	mockNAT.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
 
-	// A single detached PIP (no IPConfiguration) whose name is not a managed Service address.
+	// A single detached PIP (no IPConfiguration) that no Kubernetes object or NRP entry claims.
 	// List returns a NON-NIL slice: init must reuse it and never call List again, which is what
-	// the Times(1) below pins. The PIP itself belongs to nobody we manage, so it must survive.
+	// the Times(1) below pins. The PIP is an orphan, so the sweep deletes it.
 	const orphanPIP = "leftover-pip"
 	pips := []*armnetwork.PublicIPAddress{{
 		Name:       ptr.To(orphanPIP),
 		Properties: &armnetwork.PublicIPAddressPropertiesFormat{},
 	}}
 	mockPIP.EXPECT().List(gomock.Any(), "rg").Return(pips, nil).Times(1)
-	mockPIP.EXPECT().Delete(gomock.Any(), "rg", orphanPIP).Return(nil).Times(0)
+	mockPIP.EXPECT().Delete(gomock.Any(), "rg", orphanPIP).Return(nil).Times(1)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

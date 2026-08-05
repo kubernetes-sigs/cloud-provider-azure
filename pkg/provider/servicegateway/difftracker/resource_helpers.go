@@ -97,6 +97,20 @@ func OutboundPublicIPNames(identity string) []string {
 	return []string{PublicIPName(identity), PublicIPNameV6(identity)}
 }
 
+// identityFromPublicIPName maps a Public IP name back to the identity that owns it. The IPv6 suffix
+// must be tested first: "<identity>-pip-v6" does not end in "-pip", so a plain "-pip" test rejects
+// every IPv6 address as unrecognized and leaks it.
+func identityFromPublicIPName(pipName string) (identity string, ok bool) {
+	switch {
+	case strings.HasSuffix(pipName, publicIPNameSuffixV6):
+		return strings.TrimSuffix(pipName, publicIPNameSuffixV6), true
+	case strings.HasSuffix(pipName, publicIPNameSuffix):
+		return strings.TrimSuffix(pipName, publicIPNameSuffix), true
+	default:
+		return "", false
+	}
+}
+
 // DefaultOutboundNATGatewayName is the RP-owned default outbound NAT Gateway. AKS provisions it
 // (with IsDefault=true) before the CCM starts, and it carries the cluster's default egress Public
 // IP. It is not managed by this controller and must never be created, updated or deleted by it.

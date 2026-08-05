@@ -1075,10 +1075,12 @@ func TestCleanupOrphanedPublicIPs_KeepsPIPForServiceStillDesiredInKubernetes(t *
 		"a Public IP desired by neither Kubernetes nor NRP must still be cleaned up")
 }
 
-// TestCleanupOrphanedPublicIPs_KeepsCustomerPublicIPs pins that the sweeper only deletes managed
-// Service addresses. Any unattached "*-pip" in the resource group used to qualify as an orphan, so
-// a customer address reserved for later use was destroyed on every startup.
-func TestCleanupOrphanedPublicIPs_KeepsCustomerPublicIPs(t *testing.T) {
+// TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress pins what the sweeper may and may
+// not delete. The resource group is the cluster's managed node resource group, so every "*-pip" in
+// it belongs to this controller and an unused one is a leak, whether it is named from a Service UUID
+// or from an egress pod label. What still has to survive is an address that is attached, reserved
+// for the default gateway, or wanted by a Kubernetes object.
+func TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress(t *testing.T) {
 	run := func(t *testing.T, pips []*armnetwork.PublicIPAddress) []string {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -1111,17 +1113,23 @@ func TestCleanupOrphanedPublicIPs_KeepsCustomerPublicIPs(t *testing.T) {
 	const managedOrphan = "22222222-2222-2222-2222-222222222222-pip"
 
 	deleted := run(t, []*armnetwork.PublicIPAddress{
-		detached("bastion-pip"),
 		detached("team-egress-pip"),
+		detached("team-egress-pip-v6"),
 		detached(managedOrphan),
+		detached(PublicIPName(DefaultOutboundNATGatewayName)),
+		detached("not-one-of-ours"),
 	})
 
-	assert.NotContains(t, deleted, "bastion-pip",
-		"an unattached customer address must not be deleted as an orphan")
-	assert.NotContains(t, deleted, "team-egress-pip",
-		"an egress address is named from a user label and is deleted by the NAT teardown, not here")
 	assert.Contains(t, deleted, managedOrphan,
-		"a managed Service address desired by neither Kubernetes nor NRP must still be cleaned up")
+		"a managed Service address desired by neither Kubernetes nor NRP must be cleaned up")
+	assert.Contains(t, deleted, "team-egress-pip",
+		"an unused egress address is a leak: its NAT Gateway is already gone, so nothing else deletes it")
+	assert.Contains(t, deleted, "team-egress-pip-v6",
+		"the IPv6 half of an egress identity leaks the same way as the IPv4 half")
+	assert.NotContains(t, deleted, PublicIPName(DefaultOutboundNATGatewayName),
+		"the cluster's default egress address is RP-owned and must never be deleted")
+	assert.NotContains(t, deleted, "not-one-of-ours",
+		"a name that does not follow the controller's convention must be left alone")
 }
 
 // TestRecoverStuckFinalizers_CountsRemovalSeparatelyFromScheduling pins that startup recovery
