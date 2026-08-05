@@ -110,6 +110,16 @@ func publicIPVersionAndAddress(publicIPName string) (version, address string, er
 	return pip.PublicIPAddressVersion, pip.IPAddress, nil
 }
 
+// podRegisteredAddressCount returns how many address entries the named pod contributes to its
+// egress identity: one per assigned IP family. countRegisteredEndpoints counts ADDRESSES, not
+// pods, so a dual-stack pod contributes 2 - asserting a pod count instead makes the wait time out
+// on a dual-stack cluster before the spec reaches what it actually means to verify.
+func podRegisteredAddressCount(cs clientset.Interface, namespace, podName string) int {
+	ready, err := cs.CoreV1().Pods(namespace).Get(context.TODO(), podName, metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred())
+	return len(ready.Status.PodIPs)
+}
+
 // dualStackAttachmentErr asserts the exact ARM shape of a dual-stack egress NAT Gateway: exactly
 // one IPv4 address on publicIpAddresses and exactly one IPv6 address on publicIpAddressesV6.
 //
@@ -194,11 +204,28 @@ var _ = Describe("SLB - Dual-stack egress", Label(slbTestLabel, "SLB-DualStackEg
 		}
 	}
 
+	// createEgressPod creates the pod, waits for it to be Ready, and returns it re-read from the
+	// API so Status.PodIPs is populated. The object returned by Create has no addresses yet, and
+	// callers need the assigned families to know how many addresses the identity must register.
 	createEgressPod := func(name, egressName string) *v1.Pod {
-		pod, err := cs.CoreV1().Pods(ns.Name).Create(context.TODO(), newEgressPod(name, egressName), metav1.CreateOptions{})
+		_, err := cs.CoreV1().Pods(ns.Name).Create(context.TODO(), newEgressPod(name, egressName), metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
-		return pod
+		ready, err := cs.CoreV1().Pods(ns.Name).Get(context.TODO(), name, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		return ready
+	}
+
+	// registeredAddressCount is how many address entries a set of pods must contribute to an egress
+	// identity. countRegisteredEndpoints counts ADDRESSES, not pods, and a dual-stack pod registers
+	// one per family - so passing a pod count here silently asserts the wrong number on a
+	// dual-stack cluster and the wait times out before the spec reaches what it means to verify.
+	registeredAddressCount := func(pods ...*v1.Pod) int {
+		total := 0
+		for _, p := range pods {
+			total += len(p.Status.PodIPs)
+		}
+		return total
 	}
 
 	requireIPv6Cluster := func() {
@@ -217,7 +244,7 @@ var _ = Describe("SLB - Dual-stack egress", Label(slbTestLabel, "SLB-DualStackEg
 
 		By("Creating an egress pod")
 		pod := createEgressPod("ds-shape-pod", egressName)
-		eventuallyEgressRegistered(egressName, 1, waitTime)
+		eventuallyEgressRegistered(egressName, registeredAddressCount(pod), waitTime)
 
 		By("Verifying the exact ARM attachment")
 		Eventually(func() error {
@@ -280,8 +307,8 @@ var _ = Describe("SLB - Dual-stack egress", Label(slbTestLabel, "SLB-DualStackEg
 		By("Creating one pod per identity")
 		podA := createEgressPod("ds-pod-a", egressA)
 		podB := createEgressPod("ds-pod-b", egressB)
-		eventuallyEgressRegistered(egressA, 1, waitTime)
-		eventuallyEgressRegistered(egressB, 1, waitTime)
+		eventuallyEgressRegistered(egressA, registeredAddressCount(podA), waitTime)
+		eventuallyEgressRegistered(egressB, registeredAddressCount(podB), waitTime)
 
 		Eventually(func() error { return dualStackAttachmentErr(egressA) }, waitTime, defaultPollInterval).Should(Succeed())
 		Eventually(func() error { return dualStackAttachmentErr(egressB) }, waitTime, defaultPollInterval).Should(Succeed())
@@ -315,7 +342,7 @@ var _ = Describe("SLB - Dual-stack egress", Label(slbTestLabel, "SLB-DualStackEg
 
 		By("Creating the identity")
 		pod := createEgressPod("ds-recycle-1", egressName)
-		eventuallyEgressRegistered(egressName, 1, waitTime)
+		eventuallyEgressRegistered(egressName, registeredAddressCount(pod), waitTime)
 		Eventually(func() error { return dualStackAttachmentErr(egressName) }, waitTime, defaultPollInterval).Should(Succeed())
 
 		By("Removing the last pod")
@@ -328,7 +355,7 @@ var _ = Describe("SLB - Dual-stack egress", Label(slbTestLabel, "SLB-DualStackEg
 		// The second create is the interesting one: it runs against a NAT Gateway name that has
 		// just been deleted, and a create that reused stale state would come back single-stack.
 		pod2 := createEgressPod("ds-recycle-2", egressName)
-		eventuallyEgressRegistered(egressName, 1, waitTime)
+		eventuallyEgressRegistered(egressName, registeredAddressCount(pod2), waitTime)
 		Eventually(func() error {
 			return dualStackAttachmentErr(egressName)
 		}, waitTime, defaultPollInterval).Should(Succeed())
@@ -521,7 +548,7 @@ var _ = Describe("SLB - Dual-stack egress across CCM restart", Label(slbTestLabe
 		Expect(ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout, crashedUIDs...)).To(Succeed())
 
 		By("Verifying the gateway created at startup is dual-stack")
-		eventuallyEgressRegistered(egressName, 1, waitTime)
+		eventuallyEgressRegistered(egressName, podRegisteredAddressCount(cs, ns.Name, "ds-cold-pod"), waitTime)
 		Eventually(func() error {
 			return dualStackAttachmentErr(egressName)
 		}, waitTime, defaultPollInterval).Should(Succeed(),
@@ -541,7 +568,7 @@ var _ = Describe("SLB - Dual-stack egress across CCM restart", Label(slbTestLabe
 		_, err := cs.CoreV1().Pods(ns.Name).Create(context.TODO(), egressPod("ds-survive-pod", egressName), metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
-		eventuallyEgressRegistered(egressName, 1, waitTime)
+		eventuallyEgressRegistered(egressName, podRegisteredAddressCount(cs, ns.Name, "ds-survive-pod"), waitTime)
 		Eventually(func() error { return dualStackAttachmentErr(egressName) }, waitTime, defaultPollInterval).Should(Succeed())
 
 		_, beforeV4, err := publicIPVersionAndAddress(egressName + "-pip")
@@ -584,7 +611,7 @@ var _ = Describe("SLB - Dual-stack egress across CCM restart", Label(slbTestLabe
 		_, err := cs.CoreV1().Pods(ns.Name).Create(context.TODO(), egressPod("ds-colddel-pod", egressName), metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
-		eventuallyEgressRegistered(egressName, 1, waitTime)
+		eventuallyEgressRegistered(egressName, podRegisteredAddressCount(cs, ns.Name, "ds-colddel-pod"), waitTime)
 		Eventually(func() error { return dualStackAttachmentErr(egressName) }, waitTime, defaultPollInterval).Should(Succeed())
 
 		By("Stopping CCM and removing the last pod while nothing is watching")
