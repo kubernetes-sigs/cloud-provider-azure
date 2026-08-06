@@ -233,7 +233,7 @@ func (fs *FlexScaleSet) UpdateVM(ctx context.Context, nodeName types.NodeName) e
 		return err
 	}
 
-	_, err = fs.ComputeClientFactory.GetVirtualMachineClient().CreateOrUpdate(ctx, nodeResourceGroup, *vm.Name, armcompute.VirtualMachine{})
+	_, err = updateVirtualMachine(ctx, fs.ComputeClientFactory.GetVirtualMachineClient(), nodeResourceGroup, *vm.Name)
 	return err
 }
 
