@@ -38,9 +38,6 @@ type Config struct {
 	// Service Gateway resource name
 	ServiceGatewayResourceName string
 
-	// Full Service Gateway resource ID
-	ServiceGatewayID string
-
 	// Virtual Network name (required for backend pool configuration)
 	VNetName string
 
@@ -82,11 +79,18 @@ func (c *Config) Validate() error {
 	if c.ServiceGatewayResourceName == "" {
 		return fmt.Errorf("config validation failed: ServiceGatewayResourceName is required")
 	}
-	if c.ServiceGatewayID == "" {
-		return fmt.Errorf("config validation failed: ServiceGatewayID is required")
-	}
 	if c.VNetName == "" {
 		return fmt.Errorf("config validation failed: VNetName is required")
 	}
 	return nil
+}
+
+// ServiceGatewayResourceID returns the ARM resource ID of the configured Service Gateway.
+func (c *Config) ServiceGatewayResourceID() string {
+	return fmt.Sprintf(
+		"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/serviceGateways/%s",
+		c.networkResourceSubscriptionID(),
+		c.ResourceGroup,
+		c.ServiceGatewayResourceName,
+	)
 }

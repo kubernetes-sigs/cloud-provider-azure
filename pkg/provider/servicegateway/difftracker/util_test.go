@@ -18,6 +18,8 @@ package difftracker
 
 import (
 	"encoding/json"
+	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -78,15 +80,6 @@ func TestUpdateActionStringAndJSON(t *testing.T) {
 			assert.Equal(t, tt.action, unmarshaled)
 		})
 	}
-}
-
-// TestEnumStringOutOfRange verifies String() does not panic for out-of-range enum
-// values and returns a descriptive fallback instead.
-func TestEnumStringOutOfRange(t *testing.T) {
-	assert.Equal(t, "Operation(99)", Operation(99).String())
-	assert.Equal(t, "Operation(-1)", Operation(-1).String())
-	assert.Equal(t, "UpdateAction(99)", UpdateAction(99).String())
-	assert.Equal(t, "SyncStatus(99)", SyncStatus(99).String())
 }
 
 // TestUpdateActionUnmarshalJSON_InvalidValue tests error handling
@@ -202,6 +195,24 @@ func TestDeepEqual(t *testing.T) {
 		dt       *DiffTracker
 		expected bool
 	}{
+		{
+			// Folded in from the former TestDiffTracker_DeepEqual, which was otherwise a strict
+			// subset of this table: an entirely empty tracker is trivially in sync.
+			name: "in sync - empty state",
+			dt: &DiffTracker{
+				K8sResources: K8sState{
+					Services: sets.NewString(),
+					Egresses: sets.NewString(),
+					Nodes:    map[string]Node{},
+				},
+				NRPResources: NRPState{
+					LoadBalancers: sets.NewString(),
+					NATGateways:   sets.NewString(),
+					Locations:     map[string]NRPLocation{},
+				},
+			},
+			expected: true,
+		},
 		{
 			name: "in sync - matching services and load balancers",
 			dt: &DiffTracker{
@@ -555,6 +566,102 @@ func TestSyncServicesReturnTypeEquals(t *testing.T) {
 	}
 }
 
+// TestMapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO tests the DTO mapping function
+func TestMapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(t *testing.T) {
+	tests := []struct {
+		name        string
+		lbUpdates   SyncServicesReturnType
+		natUpdates  SyncServicesReturnType
+		expectedLen int
+	}{
+		{
+			name: "only inbound additions",
+			lbUpdates: SyncServicesReturnType{
+				Additions: sets.NewString("svc1", "svc2"),
+			},
+			natUpdates:  SyncServicesReturnType{},
+			expectedLen: 2,
+		},
+		{
+			name:      "only outbound additions",
+			lbUpdates: SyncServicesReturnType{},
+			natUpdates: SyncServicesReturnType{
+				Additions: sets.NewString("egress1"),
+			},
+			expectedLen: 1,
+		},
+		{
+			name: "mixed additions",
+			lbUpdates: SyncServicesReturnType{
+				Additions: sets.NewString("svc1"),
+			},
+			natUpdates: SyncServicesReturnType{
+				Additions: sets.NewString("egress1"),
+			},
+			expectedLen: 2,
+		},
+		{
+			name: "removals only",
+			lbUpdates: SyncServicesReturnType{
+				Removals: sets.NewString("svc1"),
+			},
+			natUpdates: SyncServicesReturnType{
+				Removals: sets.NewString("egress1"),
+			},
+			expectedLen: 2,
+		},
+		{
+			name:        "empty updates",
+			lbUpdates:   SyncServicesReturnType{},
+			natUpdates:  SyncServicesReturnType{},
+			expectedLen: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(tt.lbUpdates, tt.natUpdates, "sub1", "rg1")
+			assert.Equal(t, tt.expectedLen, len(result.Services))
+		})
+	}
+}
+
+// TestRemoveBackendPoolReferenceFromServicesDTO tests removing backend pool references
+func TestRemoveBackendPoolReferenceFromServicesDTO(t *testing.T) {
+	tests := []struct {
+		name        string
+		lbUpdates   SyncServicesReturnType
+		expectedLen int
+	}{
+		{
+			name: "remove services",
+			lbUpdates: SyncServicesReturnType{
+				Removals: sets.NewString("svc1", "svc2"),
+			},
+			expectedLen: 2,
+		},
+		{
+			name: "empty removal list",
+			lbUpdates: SyncServicesReturnType{
+				Removals: sets.NewString(),
+			},
+			expectedLen: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := RemoveBackendPoolReferenceFromServicesDTO(tt.lbUpdates, "sub1", "rg1")
+			assert.Equal(t, tt.expectedLen, len(result.Services))
+			// Verify all have empty backend pools (backend pool reference removed)
+			for _, service := range result.Services {
+				assert.Equal(t, 0, len(service.LoadBalancerBackendPools))
+				assert.Equal(t, Inbound, service.ServiceType)
+			}
+		})
+	}
+}
+
 // TestConfigValidate tests Config.Validate()
 func TestConfigValidate(t *testing.T) {
 	tests := []struct {
@@ -571,7 +678,6 @@ func TestConfigValidate(t *testing.T) {
 				Location:                   "eastus",
 				VNetName:                   "test-vnet",
 				ServiceGatewayResourceName: "sgw",
-				ServiceGatewayID:           "/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.Network/serviceGateways/sgw",
 			},
 			shouldError: false,
 		},
@@ -581,7 +687,6 @@ func TestConfigValidate(t *testing.T) {
 				ResourceGroup:              "rg1",
 				Location:                   "eastus",
 				ServiceGatewayResourceName: "sgw",
-				ServiceGatewayID:           "/id",
 			},
 			shouldError: true,
 			errorMsg:    "SubscriptionID is required",
@@ -592,7 +697,6 @@ func TestConfigValidate(t *testing.T) {
 				SubscriptionID:             "sub1",
 				Location:                   "eastus",
 				ServiceGatewayResourceName: "sgw",
-				ServiceGatewayID:           "/id",
 			},
 			shouldError: true,
 			errorMsg:    "ResourceGroup is required",
@@ -603,7 +707,6 @@ func TestConfigValidate(t *testing.T) {
 				SubscriptionID:             "sub1",
 				ResourceGroup:              "rg1",
 				ServiceGatewayResourceName: "sgw",
-				ServiceGatewayID:           "/id",
 			},
 			shouldError: true,
 			errorMsg:    "Location is required",
@@ -611,24 +714,12 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "missing ServiceGatewayResourceName",
 			config: Config{
-				SubscriptionID:   "sub1",
-				ResourceGroup:    "rg1",
-				Location:         "eastus",
-				ServiceGatewayID: "/id",
+				SubscriptionID: "sub1",
+				ResourceGroup:  "rg1",
+				Location:       "eastus",
 			},
 			shouldError: true,
 			errorMsg:    "ServiceGatewayResourceName is required",
-		},
-		{
-			name: "missing ServiceGatewayID",
-			config: Config{
-				SubscriptionID:             "sub1",
-				ResourceGroup:              "rg1",
-				Location:                   "eastus",
-				ServiceGatewayResourceName: "sgw",
-			},
-			shouldError: true,
-			errorMsg:    "ServiceGatewayID is required",
 		},
 	}
 
@@ -643,6 +734,22 @@ func TestConfigValidate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConfigServiceGatewayResourceID(t *testing.T) {
+	config := Config{
+		SubscriptionID:             "sub1",
+		ResourceGroup:              "rg1",
+		ServiceGatewayResourceName: "sgw",
+	}
+	assert.Equal(t,
+		"/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.Network/serviceGateways/sgw",
+		config.ServiceGatewayResourceID())
+
+	config.NetworkResourceSubscriptionID = "network-sub"
+	assert.Equal(t,
+		"/subscriptions/network-sub/resourceGroups/rg1/providers/Microsoft.Network/serviceGateways/sgw",
+		config.ServiceGatewayResourceID())
 }
 
 // TestJSONRoundTrip tests JSON marshaling/unmarshaling for various types
@@ -673,7 +780,13 @@ func TestJSONRoundTrip(t *testing.T) {
 	})
 }
 
-// TestLocationDataEqualsMoreCases covers additional LocationData.Equals branches.
+func TestEnumStringOutOfRange(t *testing.T) {
+	assert.Equal(t, "Operation(99)", Operation(99).String())
+	assert.Equal(t, "Operation(-1)", Operation(-1).String())
+	assert.Equal(t, "UpdateAction(99)", UpdateAction(99).String())
+	assert.Equal(t, "SyncStatus(99)", SyncStatus(99).String())
+}
+
 func TestLocationDataEqualsMoreCases(t *testing.T) {
 	base := LocationData{
 		Action: PartialUpdate,
@@ -966,71 +1079,147 @@ func TestDeepEqualMoreCases(t *testing.T) {
 	assert.False(t, d.deepEqualLocked())
 }
 
-func TestDiffTracker_DeepEqual(t *testing.T) {
+func TestOperation_String(t *testing.T) {
+	assert.Equal(t, "Add", Add.String())
+	assert.Equal(t, "Remove", Remove.String())
+	assert.Equal(t, "Update", Update.String())
+}
+func TestMapLocationDataToDTO(t *testing.T) {
 	tests := []struct {
-		name     string
-		dt       *DiffTracker
-		expected bool
+		name         string
+		locationData LocationData
+		expected     LocationsDataDTO
 	}{
 		{
-			name: "equal empty states",
-			dt: &DiffTracker{
-				K8sResources: K8sState{
-					Services: sets.NewString(),
-					Egresses: sets.NewString(),
-					Nodes:    map[string]Node{},
-				},
-				NRPResources: NRPState{
-					LoadBalancers: sets.NewString(),
-					NATGateways:   sets.NewString(),
-					Locations:     map[string]NRPLocation{},
-				},
+			name: "Empty location data",
+			locationData: LocationData{
+				Action:    PartialUpdate,
+				Locations: map[string]Location{},
 			},
-			expected: true,
+			expected: LocationsDataDTO{
+				Action:    PartialUpdate,
+				Locations: []LocationDTO{},
+			},
 		},
 		{
-			name: "equal states with services",
-			dt: &DiffTracker{
-				K8sResources: K8sState{
-					Services: sets.NewString("service1", "service2"),
-					Egresses: sets.NewString(),
-					Nodes:    map[string]Node{},
-				},
-				NRPResources: NRPState{
-					LoadBalancers: sets.NewString("service1", "service2"),
-					NATGateways:   sets.NewString(),
-					Locations:     map[string]NRPLocation{},
+			name: "Single location with no addresses",
+			locationData: LocationData{
+				Action: PartialUpdate,
+				Locations: map[string]Location{
+					"location1": {
+						AddressUpdateAction: FullUpdate,
+						Addresses:           map[string]Address{},
+					},
 				},
 			},
-			expected: true,
+			expected: LocationsDataDTO{
+				Action: PartialUpdate,
+				Locations: []LocationDTO{
+					{
+						Location:            "location1",
+						AddressUpdateAction: FullUpdate,
+						Addresses:           []AddressDTO{},
+					},
+				},
+			},
 		},
 		{
-			name: "services not equal",
-			dt: &DiffTracker{
-				K8sResources: K8sState{
-					Services: sets.NewString("service1", "service2"),
-					Egresses: sets.NewString(),
-					Nodes:    map[string]Node{},
-				},
-				NRPResources: NRPState{
-					LoadBalancers: sets.NewString("service1"),
-					NATGateways:   sets.NewString(),
-					Locations:     map[string]NRPLocation{},
+			name: "Multiple locations",
+			locationData: LocationData{
+				Action: PartialUpdate,
+				Locations: map[string]Location{
+					"location0": {
+						AddressUpdateAction: PartialUpdate,
+						Addresses:           map[string]Address{},
+					},
+					"location1": {
+						AddressUpdateAction: PartialUpdate,
+						Addresses: map[string]Address{
+							"addr1": {
+								ServiceRef: sets.NewString("service1", "service2"),
+							},
+							"addr2": {
+								ServiceRef: sets.NewString("service3"),
+							},
+						},
+					},
+					"location2": {
+						AddressUpdateAction: FullUpdate,
+						Addresses: map[string]Address{
+							"addr3": {
+								ServiceRef: sets.NewString("service4"),
+							},
+						},
+					},
 				},
 			},
-			expected: false,
+			expected: LocationsDataDTO{
+				Action: PartialUpdate,
+				Locations: []LocationDTO{
+					{
+						Location:            "location0",
+						AddressUpdateAction: PartialUpdate,
+						Addresses:           []AddressDTO{},
+					},
+					{
+						Location:            "location1",
+						AddressUpdateAction: PartialUpdate,
+						Addresses: []AddressDTO{
+							{
+								Address:      "addr1",
+								ServiceNames: sets.NewString("service1", "service2"),
+							},
+							{
+								Address:      "addr2",
+								ServiceNames: sets.NewString("service3"),
+							},
+						},
+					},
+					{
+						Location:            "location2",
+						AddressUpdateAction: FullUpdate,
+						Addresses: []AddressDTO{
+							{
+								Address:      "addr3",
+								ServiceNames: sets.NewString("service4"),
+							},
+						},
+					},
+				},
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := tt.dt.deepEqualLocked()
-			assert.Equal(t, tt.expected, result)
+			result := MapLocationDataToDTO(tt.locationData)
+
+			// Sort locations for deterministic comparison
+			sort.Slice(result.Locations, func(i, j int) bool {
+				return result.Locations[i].Location < result.Locations[j].Location
+			})
+
+			// Sort expected locations for deterministic comparison
+			sort.Slice(tt.expected.Locations, func(i, j int) bool {
+				return tt.expected.Locations[i].Location < tt.expected.Locations[j].Location
+			})
+
+			// For each location, sort addresses for deterministic comparison
+			for i := range result.Locations {
+				sort.Slice(result.Locations[i].Addresses, func(j, k int) bool {
+					return result.Locations[i].Addresses[j].Address < result.Locations[i].Addresses[k].Address
+				})
+			}
+
+			for i := range tt.expected.Locations {
+				sort.Slice(tt.expected.Locations[i].Addresses, func(j, k int) bool {
+					return tt.expected.Locations[i].Addresses[j].Address < tt.expected.Locations[i].Addresses[k].Address
+				})
+			}
+
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("mapLocationDataToDTO() = %v, want %v", result, tt.expected)
+			}
 		})
 	}
-}
-func TestOperation_String(t *testing.T) {
-	assert.Equal(t, "Add", Add.String())
-	assert.Equal(t, "Remove", Remove.String())
-	assert.Equal(t, "Update", Update.String())
 }

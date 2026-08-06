@@ -174,11 +174,10 @@ func TestStartServiceControllerPropagatesServiceGatewayStartFailure(t *testing.T
 		cloud,
 	)
 
-	// This fixture builds the runtime with a nil Azure client factory, which
-	// InitializeFromCluster now rejects, so the ServiceGateway runtime fails to start. The
-	// failure must surface from startServiceController and leave the LoadBalancer unpublished
-	// rather than being swallowed. Runtime.Start's success path is covered by TestRuntimeStart
-	// in pkg/provider/servicegateway.
+	// The runtime is built with a nil Azure client factory, which InitializeFromCluster rejects, so
+	// the ServiceGateway runtime fails to start. That failure must surface from
+	// startServiceController and leave the LoadBalancer unpublished rather than being swallowed.
+	// The success path is covered by TestRuntimeStart in pkg/provider/servicegateway.
 	assert.ErrorContains(t, err, "failed to start ServiceGateway runtime")
 	assert.False(t, started)
 	_, err = loadBalancer.EnsureLoadBalancer(context.Background(), "cluster", service, nil)

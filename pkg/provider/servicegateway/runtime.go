@@ -88,11 +88,6 @@ func diffTrackerConfig(config providerconfig.Config) difftracker.Config {
 		VNetName:                      config.VnetName,
 		VNetResourceGroup:             config.VnetResourceGroup,
 		ServiceGatewayResourceName:    serviceGatewayName,
-		ServiceGatewayID: difftracker.ServiceGatewayResourceID(
-			networkSubscriptionID,
-			config.ResourceGroup,
-			serviceGatewayName,
-		),
 	}
 }
 

@@ -22,16 +22,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/servicegateway/difftracker"
+	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 func TestDiffTrackerConfig(t *testing.T) {
@@ -51,7 +60,7 @@ func TestDiffTrackerConfig(t *testing.T) {
 	assert.Equal(t, "eastus", diffTrackerConfig.Location)
 	assert.Equal(t, "vnet", diffTrackerConfig.VNetName)
 	assert.Equal(t, "vnet-resource-group", diffTrackerConfig.VNetResourceGroup)
-	assert.Contains(t, diffTrackerConfig.ServiceGatewayID, "/subscriptions/network-subscription/")
+	assert.Contains(t, diffTrackerConfig.ServiceGatewayResourceID(), "/subscriptions/network-subscription/")
 }
 
 func TestRuntimeEnablementAndLoadBalancer(t *testing.T) {
@@ -133,6 +142,7 @@ func TestRuntimeStart(t *testing.T) {
 	loadBalancer, supported := runtime.LoadBalancer()
 	assert.True(t, supported)
 	service := new(v1.Service)
+	service.UID = "service-uid"
 	_, err := loadBalancer.EnsureLoadBalancer(context.Background(), "cluster", service, nil)
 	assert.NoError(t, err)
 
@@ -189,4 +199,157 @@ func TestRuntimeStartFailureRollsBack(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("failed ServiceGateway runtime context was not cancelled")
 	}
+}
+
+// TestRegisterInformers_DeliversEndpointSliceEventsToTracker pins that RegisterInformers wires
+// handlers that actually reach the DiffTracker, by driving a real EndpointSlice through the shared
+// informer and observing the pod address land in the tracker's sync state.
+//
+// RegisterInformers had no test reference anywhere: dropping its AddEventHandler calls — silently
+// discarding every EndpointSlice and Node event the tracker relies on to keep Azure in sync — left
+// the whole package green. Asserting registration merely "succeeded", or that the informer's own
+// store filled, is not enough: both hold even when no handler is attached. This asserts the
+// tracker's observable state instead.
+func TestRegisterInformers_DeliversEndpointSliceEventsToTracker(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	const (
+		serviceUID = "svc-informer-probe"
+		nodeName   = "node-informer-probe"
+		nodeIP     = "10.0.0.42"
+		podIP      = "10.244.0.42"
+	)
+
+	node := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: nodeName},
+		Status: v1.NodeStatus{
+			Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: nodeIP}},
+		},
+	}
+	kubeClient := fake.NewSimpleClientset(node)
+
+	tracker, err := difftracker.New(
+		logr.Discard(),
+		difftracker.K8sState{
+			Services: utilsets.NewString(serviceUID),
+			Egresses: utilsets.NewString(),
+			Nodes:    map[string]difftracker.Node{},
+		},
+		difftracker.NRPState{
+			LoadBalancers: utilsets.NewString(serviceUID),
+			NATGateways:   utilsets.NewString(),
+			Locations:     map[string]difftracker.NRPLocation{},
+		},
+		testDiffTrackerConfig(),
+		mock_azclient.NewMockClientFactory(ctrl),
+		kubeClient,
+	)
+	if !assert.NoError(t, err) {
+		return
+	}
+
+	informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
+	tracker.SetNodeLister(informerFactory.Core().V1().Nodes().Lister())
+
+	unregister, err := RegisterInformers(informerFactory, tracker)
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.NotNil(t, unregister, "a successful registration must return an unregister func")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	informerFactory.Start(ctx.Done())
+	informerFactory.WaitForCacheSync(ctx.Done())
+
+	ready := true
+	_, err = kubeClient.DiscoveryV1().EndpointSlices("default").Create(ctx, &discoveryv1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "probe-slice",
+			Namespace: "default",
+			Labels:    map[string]string{discoveryv1.LabelServiceName: "probe-svc"},
+			// The tracker resolves the owning Service by OwnerReference UID.
+			OwnerReferences: []metav1.OwnerReference{{
+				Kind: "Service",
+				Name: "probe-svc",
+				UID:  types.UID(serviceUID),
+			}},
+		},
+		AddressType: discoveryv1.AddressTypeIPv4,
+		Endpoints: []discoveryv1.Endpoint{{
+			Addresses:  []string{podIP},
+			NodeName:   ptr.To(nodeName),
+			Conditions: discoveryv1.EndpointConditions{Ready: &ready},
+		}},
+	}, metav1.CreateOptions{})
+	assert.NoError(t, err)
+
+	assert.Eventually(t, func() bool {
+		locations := tracker.GetSyncLocationsAddresses()
+		loc, ok := locations.Locations[nodeIP]
+		if !ok {
+			return false
+		}
+		_, hasAddr := loc.Addresses[podIP]
+		return hasAddr
+	}, 15*time.Second, 50*time.Millisecond,
+		"the EndpointSlice handler registered by RegisterInformers must forward the event to the "+
+			"tracker; without it the pod address never reaches Azure")
+
+	unregister()
+}
+
+func testDiffTrackerConfig() difftracker.Config {
+	cfg := providerconfig.Config{}
+	cfg.SubscriptionID = "sub"
+	cfg.ResourceGroup = "rg"
+	cfg.Location = "eastus"
+	cfg.VnetName = "vnet"
+	cfg.VnetResourceGroup = "rg"
+	return diffTrackerConfig(cfg)
+}
+
+// TestNodePrivateIPAddresses_SelectsOnlyInternalIPs pins that node locations are derived from
+// InternalIP addresses alone. A node's address list also carries ExternalIP and Hostname entries;
+// registering those as locations would publish backends under an address NRP cannot route to.
+func TestNodePrivateIPAddresses_SelectsOnlyInternalIPs(t *testing.T) {
+	node := &v1.Node{
+		Status: v1.NodeStatus{
+			Addresses: []v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "node-1"},
+				{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+				{Type: v1.NodeExternalIP, Address: "52.1.2.3"},
+				{Type: v1.NodeInternalIP, Address: "fd00::1"},
+				{Type: v1.NodeExternalDNS, Address: "node-1.example.com"},
+			},
+		},
+	}
+
+	assert.Equal(t, []string{"10.0.0.1", "fd00::1"}, nodePrivateIPAddresses(node),
+		"only InternalIP addresses are node locations, in the order the node reports them")
+
+	assert.Empty(t, nodePrivateIPAddresses(&v1.Node{}),
+		"a node with no addresses yields no locations")
+}
+
+// TestNodeFromDeleteEvent_DecodesTombstones pins that a delete delivered as a tombstone is decoded.
+// An informer that has fallen behind wraps the object in DeletedFinalStateUnknown, so a handler that
+// only accepts the bare type silently drops those deletions.
+func TestNodeFromDeleteEvent_DecodesTombstones(t *testing.T) {
+	node := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-1"}}
+
+	got, err := nodeFromDeleteEvent(node)
+	assert.NoError(t, err)
+	assert.Equal(t, "node-1", got.Name, "a bare object decodes")
+
+	got, err = nodeFromDeleteEvent(cache.DeletedFinalStateUnknown{Key: "node-1", Obj: node})
+	assert.NoError(t, err)
+	assert.Equal(t, "node-1", got.Name, "a tombstone decodes to the object it wraps")
+
+	_, err = nodeFromDeleteEvent(cache.DeletedFinalStateUnknown{Key: "node-1", Obj: "not-a-node"})
+	assert.Error(t, err, "a tombstone wrapping the wrong type is an error, not a silent drop")
+
+	_, err = nodeFromDeleteEvent("not-a-node")
+	assert.Error(t, err, "an unexpected object is an error")
 }
