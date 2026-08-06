@@ -91,8 +91,8 @@ func endpointSliceCacheKey(es *discovery_v1.EndpointSlice) string {
 	return strings.ToLower(es.Namespace + "/" + es.Name)
 }
 
-func (dt *DiffTracker) updateEndpointSliceCache(oldES, newES *discovery_v1.EndpointSlice) {
-	oldKey := endpointSliceCacheKey(oldES)
+func (dt *DiffTracker) updateEndpointSliceCache(oldSlice, newES *discovery_v1.EndpointSlice) {
+	oldKey := endpointSliceCacheKey(oldSlice)
 	newKey := endpointSliceCacheKey(newES)
 	if oldKey != "" && oldKey != newKey {
 		dt.endpointSlicesCache.Delete(oldKey)
@@ -114,14 +114,14 @@ func (dt *DiffTracker) initializeEndpointSlicesCache(endpointSlices *discovery_v
 
 // ReconcileEndpointSlice converts an EndpointSlice informer event into an endpoint delta. A nil
 // old slice is an add, a nil new slice is a delete, and two slices represent an update.
-func (dt *DiffTracker) ReconcileEndpointSlice(oldES, newES *discovery_v1.EndpointSlice) {
+func (dt *DiffTracker) ReconcileEndpointSlice(oldSlice, newES *discovery_v1.EndpointSlice) {
 	if dt == nil {
 		return
 	}
 
 	// Keep an internal snapshot even when dependencies or the owning Service are not available yet.
 	// A later Service registration or node event can then replay the current EndpointSlice state.
-	dt.updateEndpointSliceCache(oldES, newES)
+	dt.updateEndpointSliceCache(oldSlice, newES)
 
 	dt.mu.Lock()
 	nodeLister := dt.nodeLister
@@ -131,7 +131,7 @@ func (dt *DiffTracker) ReconcileEndpointSlice(oldES, newES *discovery_v1.Endpoin
 		return
 	}
 
-	oldUID, oldLoaded := serviceUIDOfEndpointSlice(oldES)
+	oldUID, oldLoaded := serviceUIDOfEndpointSlice(oldSlice)
 	newUID, newLoaded := serviceUIDOfEndpointSlice(newES)
 	oldAddresses := make(map[string]string)
 	newAddresses := make(map[string]string)
@@ -139,15 +139,15 @@ func (dt *DiffTracker) ReconcileEndpointSlice(oldES, newES *discovery_v1.Endpoin
 	switch {
 	case newES == nil:
 		if oldLoaded {
-			oldAddresses = endpointSliceAddresses(oldES, nodeLister)
+			oldAddresses = endpointSliceAddresses(oldSlice, nodeLister)
 		}
-	case oldES == nil:
+	case oldSlice == nil:
 		if newLoaded && newES.DeletionTimestamp == nil {
 			newAddresses = endpointSliceAddresses(newES, nodeLister)
 		}
 	default:
-		if oldLoaded && oldES.DeletionTimestamp == nil {
-			oldAddresses = endpointSliceAddresses(oldES, nodeLister)
+		if oldLoaded && oldSlice.DeletionTimestamp == nil {
+			oldAddresses = endpointSliceAddresses(oldSlice, nodeLister)
 		}
 		if newLoaded && newES.DeletionTimestamp == nil {
 			newAddresses = endpointSliceAddresses(newES, nodeLister)

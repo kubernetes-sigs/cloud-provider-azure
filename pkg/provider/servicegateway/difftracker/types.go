@@ -490,7 +490,7 @@ type DiffTracker struct {
 }
 
 // --------------------------------------------------------------------------------
-// Types that are used while events are received and proccessed in order to update K8s state
+// Types that are used while events are received and processed in order to update K8s state
 // --------------------------------------------------------------------------------
 
 // UpdateK8sResource represents input for K8s service or egress updates

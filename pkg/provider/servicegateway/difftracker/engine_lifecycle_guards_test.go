@@ -36,7 +36,7 @@ func TestGuardLifecycle_DeleteDuringCreateRoutesToDeletion(t *testing.T) {
 	dt.OnServiceCreationComplete(uid, true, nil)
 
 	// A weak "not StateCreated" check would also pass on the bug this guard exists to catch:
-	// if the pre-empt block is removed, the create success is treated as a plain success, wipes
+	// if the preempt block is removed, the create success is treated as a plain success, wipes
 	// all tracking, and the entry is simply absent — leaking the Azure LB/PIP/SGW registration
 	// and leaving the Service stuck Terminating. Require the positive routing instead.
 	op, ok := dt.pendingServiceOps[uid]

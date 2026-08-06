@@ -177,14 +177,14 @@ func (c *CCMClusterClient) WaitForCCMReady(ctx context.Context, timeout time.Dur
 			}
 			if pod.Status.Phase == v1.PodRunning {
 				// Check if all containers are ready
-				allReady := true
+				allPodsReady := true
 				for _, containerStatus := range pod.Status.ContainerStatuses {
 					if !containerStatus.Ready {
-						allReady = false
+						allPodsReady = false
 						break
 					}
 				}
-				if allReady {
+				if allPodsReady {
 					utils.Logf("CCM pod %s is running and ready", pod.Name)
 					return true, nil
 				}

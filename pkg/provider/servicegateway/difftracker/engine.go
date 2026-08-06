@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package difftracker
 
 import (
@@ -609,7 +625,7 @@ func (dt *DiffTracker) DeleteService(serviceUID string, isInbound bool, isOrphan
 
 		case StateUpdateInProgress:
 			// An update is in flight; deletion wins. Preserve InFlightConfig so the
-			// OnServiceCreationComplete pre-empt can recognize the in-flight update's
+			// OnServiceCreationComplete preempt can recognize the in-flight update's
 			// completion and route it to deletion (it clears InFlightConfig itself).
 			dt.logger.V(5).Info("Marked service for deletion while update is in progress", "service", serviceUID)
 			opState.State = StateDeletionPending
@@ -727,7 +743,7 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 		// here too - otherwise it stays stale after an async create/delete until the next Add/Update.
 		updateTrackedServicesMetric(dt)
 		// This callback both adds and removes pendingServiceDeletions entries (deletion completion,
-		// the delete-during-create pre-empt, and the post-deletion recreate), so the gauge must be
+		// the delete-during-create preempt, and the post-deletion recreate), so the gauge must be
 		// refreshed here as well or it reports the count from the last DeleteService call.
 		updatePendingServiceDeletionsMetric(dt)
 	}()
@@ -756,7 +772,7 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 		startTime = time.Now()
 	}
 
-	// PRE-EMPT: if a Delete arrived during the in-flight create/update, DeleteService
+	// PREEMPT: if a Delete arrived during the in-flight create/update, DeleteService
 	// changed the state to StateDeletionPending (service still had NRP locations) or
 	// jumped straight to StateDeletionInProgress (no locations yet — the common case for
 	// a service deleted mid-create). In BOTH cases the operation that just completed is
@@ -783,7 +799,7 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 			_, preemptErrCode = extractAzureErrorInfo(err)
 		}
 		recordServiceOperation(preemptOp, opState.Config.IsInbound, startTime, err, preemptErrCode, opState.IsOrphan)
-		// The pre-empted operation ends here, so observe its retries too. Recording the operation
+		// The preempted operation ends here, so observe its retries too. Recording the operation
 		// without them leaves the histogram counting fewer operations than the counter does.
 		recordServiceOperationRetries(preemptOp, opState.Config.IsInbound, opState.RetryCount)
 		hasLocations := dt.serviceHasLocationsInNRP(serviceUID)
@@ -1014,7 +1030,7 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 		if success {
 			// Note: a delete requested during this in-flight create (StateDeletionPending,
 			// or StateDeletionInProgress with InFlightConfig != nil) is handled by the
-			// pre-empt block at the top of this function, so we know opState.State is still
+			// preempt block at the top of this function, so we know opState.State is still
 			// StateCreationInProgress here.
 
 			dt.logger.V(2).Info("Created service", "service", serviceUID)
@@ -1052,7 +1068,7 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 		} else {
 			dt.logger.V(4).Info("Could not create service", "err", err, "service", serviceUID)
 			// Capture the attempted config before clearing it (a stale snapshot would misfire a later
-			// delete-completion pre-empt), so the terminal branch can detect a desired-spec drift that
+			// delete-completion preempt), so the terminal branch can detect a desired-spec drift that
 			// landed while this attempt was in flight.
 			attempted := opState.InFlightConfig
 			opState.InFlightConfig = nil
@@ -1926,7 +1942,7 @@ func (dt *DiffTracker) handleEmptyOutboundServiceLocked(serviceUID string) bool 
 		return false
 	case StateCreationInProgress:
 		// The NAT Gateway create is in flight. Mark the service for deletion: when the create
-		// completes, OnServiceCreationComplete's pre-empt (StateDeletionInProgress with
+		// completes, OnServiceCreationComplete's preempt (StateDeletionInProgress with
 		// InFlightConfig != nil) routes it to a real delete, preventing an orphaned gateway.
 		dt.logger.V(5).Info("Scheduled service deletion after last buffered pod was removed during creation", "service", serviceUID)
 		opState.State = StateDeletionInProgress

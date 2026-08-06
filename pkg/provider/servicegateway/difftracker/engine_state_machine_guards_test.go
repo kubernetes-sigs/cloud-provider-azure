@@ -6,6 +6,12 @@ you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 */
 
 // State transition tests for the DiffTracker engine.
@@ -343,7 +349,7 @@ func TestUpdateService_RecreateAfterDeletionReplays(t *testing.T) {
 		State:             StateDeletionInProgress,
 		LastAppliedConfig: func() *ServiceConfig { c := NewInboundServiceConfig(uid, makeInboundConfig(80)); return &c }(),
 		// InFlightConfig is nil — the delete worker doesn't set it on the engine state,
-		// so a genuine delete-success completion will NOT fire the pre-empt branch.
+		// so a genuine delete-success completion will NOT fire the preempt branch.
 	}
 	dt.pendingServiceDeletions[uid] = &PendingServiceDeletion{ServiceUID: uid, IsInbound: true}
 	// Drain any pre-existing trigger so we can assert the replay fires a fresh one.

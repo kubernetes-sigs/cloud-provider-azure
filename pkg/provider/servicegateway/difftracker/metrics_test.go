@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package difftracker
 
 import (
@@ -218,7 +234,7 @@ func TestUpdatePendingOperationOldestAgeMetric_IncludesUpdateInProgress(t *testi
 	assert.Greater(t, v, 3000.0, "the update_in_progress oldest-age series must be emitted")
 }
 
-// TestOnServiceCreationComplete_PreEmptRecordsCompletedInFlightOperation verifies the pre-empt branch:
+// TestOnServiceCreationComplete_PreEmptRecordsCompletedInFlightOperation verifies the preempt branch:
 // when a delete arrived while a create/update was in flight, OnServiceCreationComplete routes the
 // completed in-flight operation to the deletion flow and records that create/update exactly once
 // (the subsequent delete records its own metric when it completes).
@@ -228,8 +244,8 @@ func TestOnServiceCreationComplete_PreEmptRecordsCompletedInFlightOperation(t *t
 
 	dt := newTestDiffTracker()
 	uid := "svc-preempt-metric"
-	// Pre-empt fixture: a concurrent DeleteService changed the state while a create was in flight
-	// (InFlightConfig != nil). StateDeletionPending is one of the pre-empt triggers.
+	// Preempt fixture: a concurrent DeleteService changed the state while a create was in flight
+	// (InFlightConfig != nil). StateDeletionPending is one of the preempt triggers.
 	cfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
 	inflight := cfg
 	dt.pendingServiceOps[uid] = &ServiceOperationState{
@@ -240,13 +256,13 @@ func TestOnServiceCreationComplete_PreEmptRecordsCompletedInFlightOperation(t *t
 	}
 	dt.pendingServiceDeletions[uid] = &PendingServiceDeletion{ServiceUID: uid, IsInbound: true}
 
-	// The in-flight create completes successfully. The pre-empt branch fires.
+	// The in-flight create completes successfully. The preempt branch fires.
 	dt.OnServiceCreationComplete(uid, true, nil)
 
-	// The pre-empt branch took the path (InFlightConfig is cleared and state moved off pending).
+	// The preempt branch took the path (InFlightConfig is cleared and state moved off pending).
 	op := dt.pendingServiceOps[uid]
-	if assert.NotNil(t, op, "op must remain tracked through the pre-empt") {
-		assert.Nil(t, op.InFlightConfig, "pre-empt must clear InFlightConfig")
+	if assert.NotNil(t, op, "op must remain tracked through the preempt") {
+		assert.Nil(t, op.InFlightConfig, "preempt must clear InFlightConfig")
 	}
 
 	// The completed in-flight create is recorded exactly once. LastAppliedConfig was nil, so the
@@ -256,7 +272,7 @@ func TestOnServiceCreationComplete_PreEmptRecordsCompletedInFlightOperation(t *t
 	)
 	assert.NoError(t, err)
 	assert.Equal(t, 1.0, got,
-		"the pre-empt path records the completed in-flight create once")
+		"the preempt path records the completed in-flight create once")
 
 	// The error series stays 0: a successful completion is not double-counted as an error.
 	gotErr, err := testutil.GetCounterMetricValue(
@@ -264,7 +280,7 @@ func TestOnServiceCreationComplete_PreEmptRecordsCompletedInFlightOperation(t *t
 	)
 	assert.NoError(t, err)
 	assert.Equal(t, 0.0, gotErr,
-		"a successful pre-empt completion does not touch the error series")
+		"a successful preempt completion does not touch the error series")
 }
 
 func TestOnServiceCreationComplete_PreEmptRecordsInFlightUpdate(t *testing.T) {
@@ -274,7 +290,7 @@ func TestOnServiceCreationComplete_PreEmptRecordsInFlightUpdate(t *testing.T) {
 	dt := newTestDiffTracker()
 	uid := "svc-preempt-update-metric"
 	// A service that was already applied once (LastAppliedConfig != nil) had an UPDATE in flight
-	// (InFlightConfig != nil) when a Delete pre-empted it. The completed in-flight op is an UPDATE.
+	// (InFlightConfig != nil) when a Delete preempted it. The completed in-flight op is an UPDATE.
 	cfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
 	applied := cfg
 	inflight := cfg
@@ -287,7 +303,7 @@ func TestOnServiceCreationComplete_PreEmptRecordsInFlightUpdate(t *testing.T) {
 	}
 	dt.pendingServiceDeletions[uid] = &PendingServiceDeletion{ServiceUID: uid, IsInbound: true}
 
-	// The in-flight update completes successfully; the pre-empt branch fires.
+	// The in-flight update completes successfully; the preempt branch fires.
 	dt.OnServiceCreationComplete(uid, true, nil)
 
 	got, err := testutil.GetCounterMetricValue(
@@ -295,7 +311,7 @@ func TestOnServiceCreationComplete_PreEmptRecordsInFlightUpdate(t *testing.T) {
 	)
 	assert.NoError(t, err)
 	assert.Equal(t, 1.0, got,
-		"the pre-empt path records the completed in-flight update once, on the update series")
+		"the preempt path records the completed in-flight update once, on the update series")
 
 	// The create series is untouched: LastAppliedConfig != nil means the op is classified as update.
 	gotCreate, err := testutil.GetCounterMetricValue(
@@ -303,7 +319,7 @@ func TestOnServiceCreationComplete_PreEmptRecordsInFlightUpdate(t *testing.T) {
 	)
 	assert.NoError(t, err)
 	assert.Equal(t, 0.0, gotCreate,
-		"an already-applied service's pre-empted op is an update, not a create")
+		"an already-applied service's preempted op is an update, not a create")
 }
 
 func TestOnServiceCreationComplete_OrphanDeleteSuccessCountsOrphanCleanup(t *testing.T) {

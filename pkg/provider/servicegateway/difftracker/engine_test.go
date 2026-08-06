@@ -710,7 +710,7 @@ func TestIsServiceReady_StateUpdateInProgress(t *testing.T) {
 // TestEngineDeleteService_DuringUpdate verifies that DeleteService transitions a
 // StateUpdateInProgress service to StateDeletionPending and PRESERVES InFlightConfig.
 //
-// Preserving it is load-bearing: OnServiceCreationComplete's pre-empt uses InFlightConfig to
+// Preserving it is load-bearing: OnServiceCreationComplete's preempt uses InFlightConfig to
 // recognise the in-flight update's completion and route it to deletion, clearing the field itself
 // (see the StateUpdateInProgress case in DeleteService). Clearing it here instead would strand the
 // completion and leak the Load Balancer, public IP and ServiceGateway registration.
@@ -737,7 +737,7 @@ func TestEngineDeleteService_DuringUpdate(t *testing.T) {
 
 	opState := dt.pendingServiceOps[uid]
 	assert.Equal(t, StateDeletionPending, opState.State, "should transition to DeletionPending")
-	assert.NotNil(t, opState.InFlightConfig, "InFlightConfig must be preserved so OnServiceCreationComplete pre-empt routes to deletion")
+	assert.NotNil(t, opState.InFlightConfig, "InFlightConfig must be preserved so OnServiceCreationComplete preempt routes to deletion")
 
 	_, queued := dt.pendingServiceDeletions[uid]
 	assert.True(t, queued, "service should be queued in pendingServiceDeletions")
@@ -745,7 +745,7 @@ func TestEngineDeleteService_DuringUpdate(t *testing.T) {
 
 // TestEngineOnServiceCreationComplete_DeletionPendingAfterUpdate verifies that when an
 // update completes (success or failure) but DeleteService raced to StateDeletionPending,
-// the deletion flow takes over uniformly via the pre-empt block at the top of
+// the deletion flow takes over uniformly via the preempt block at the top of
 // OnServiceCreationComplete.
 func TestEngineOnServiceCreationComplete_DeletionPendingAfterUpdate(t *testing.T) {
 	dt := newTestDiffTracker()
@@ -1767,7 +1767,7 @@ func TestReconcileInboundService_SkipsServiceBeingDeleted(t *testing.T) {
 	ctlOp := live.pendingServiceOps[uid]
 	live.mu.Unlock()
 	assert.True(t, ctlOp.RecreateAfterDeletion,
-		"control: a live Service re-declared during deletion must still be re-created")
+		"control: a live Service redeclared during deletion must still be re-created")
 }
 
 // TestReconcileInboundService_DeletingServiceIsNotProvisionedFromScratch covers the same guard for

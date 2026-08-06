@@ -219,16 +219,16 @@ func TestReconcileEndpointSlice(t *testing.T) {
 		}
 	}
 
-	oldES := endpointSlice(oldPod)
-	dt.ReconcileEndpointSlice(nil, oldES)
+	oldSlice := endpointSlice(oldPod)
+	dt.ReconcileEndpointSlice(nil, oldSlice)
 	assert.Contains(t, dt.K8sResources.Nodes[nodeIP].Pods, oldPod)
 	cached, loaded := dt.endpointSlicesCache.Load("test/eps1")
 	if assert.True(t, loaded) {
-		assert.NotSame(t, oldES, cached, "difftracker must store its own EndpointSlice snapshot")
+		assert.NotSame(t, oldSlice, cached, "difftracker must store its own EndpointSlice snapshot")
 	}
 
 	newES := endpointSlice(newPod)
-	dt.ReconcileEndpointSlice(oldES, newES)
+	dt.ReconcileEndpointSlice(oldSlice, newES)
 	assert.NotContains(t, dt.K8sResources.Nodes[nodeIP].Pods, oldPod)
 	assert.Contains(t, dt.K8sResources.Nodes[nodeIP].Pods, newPod)
 
