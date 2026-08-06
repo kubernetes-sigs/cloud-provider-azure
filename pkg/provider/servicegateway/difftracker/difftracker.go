@@ -14,57 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package difftracker contains the ServiceGateway state-diffing API and LoadBalancer adapter.
-// The reconciliation-engine methods in difftracker.go are temporary no-op stubs; the adapter is
-// functional and receives its initialized DiffTracker from the ServiceGateway runtime.
 package difftracker
 
 import (
-	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
-	v1 "k8s.io/api/core/v1"
-	discoveryv1 "k8s.io/api/discovery/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/record"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 )
-
-const publicIPNameSuffix = "-pip"
-
-// ServiceUID returns the canonical ServiceGateway identity for a Kubernetes Service.
-func ServiceUID(service *v1.Service) string {
-	if service == nil {
-		return ""
-	}
-	return strings.ToLower(string(service.UID))
-}
-
-// PublicIPName returns the Public IP resource name associated with a ServiceGateway identity.
-func PublicIPName(identity string) string {
-	return identity + publicIPNameSuffix
-}
-
-// ServiceGatewayResourceID returns the Azure resource ID for a ServiceGateway.
-func ServiceGatewayResourceID(subscriptionID, resourceGroup, name string) string {
-	return fmt.Sprintf(
-		"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/serviceGateways/%s",
-		subscriptionID,
-		resourceGroup,
-		name,
-	)
-}
-
-// WarningEventError describes an error that the provider should surface as a Kubernetes warning Event.
-type WarningEventError interface {
-	error
-	WarningEvent() (reason, message string)
-}
 
 // New creates and initializes a new DiffTracker with the given state and configuration.
 // It validates the configuration and ensures all required dependencies are present.
@@ -82,6 +45,14 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 	}
 
 	logger = logger.WithName("difftracker")
+	// The subscription ID and the full ARM resource ID that embeds it are omitted: this line is
+	// routine startup output, and the resource group, location and resource names below identify the
+	// deployment for support purposes without putting tenant identifiers into every log sink.
+	logger.V(2).Info("Initialized DiffTracker",
+		"resourceGroup", config.ResourceGroup,
+		"location", config.Location,
+		"serviceGatewayResourceName", config.ServiceGatewayResourceName,
+		"vnetName", config.VNetName)
 
 	// The caller is expected to pass fully initialized state structs. A nil
 	// field is unexpected and indicates a programming error, so error out.
@@ -105,36 +76,95 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 	}
 
 	diffTracker := &DiffTracker{
-		K8sResources: k8s,
-		NRPResources: nrp,
+		K8sResources:    k8s,
+		NRPResources:    nrp,
+		InitialSyncDone: false,
 
 		logger: logger,
 
+		// Configuration and clients
 		config:               config,
 		networkClientFactory: networkClientFactory,
 		kubeClient:           kubeClient,
+
+		// Initialize Engine state management maps
+		pendingServiceOps:       make(map[string]*ServiceOperationState),
+		pendingEndpoints:        make(map[string][]PendingEndpointUpdate),
+		pendingPods:             make(map[string][]PendingPodUpdate),
+		pendingServiceDeletions: make(map[string]*PendingServiceDeletion),
+		pendingPodDeletions:     make(map[string]*PendingPodDeletion),
+
+		recoveredServiceFinalizers: make(map[string]struct{}),
+
+		// Initialize Engine communication channels
+		serviceUpdaterTrigger:   make(chan bool, 1),
+		locationsUpdaterTrigger: make(chan bool, 1),
 	}
 
+	// Seed the outbound ref-counter from egress pods already in the initial state
+	// so a later REMOVE can drive the counter to zero.
 	for _, node := range k8s.Nodes {
 		for _, pod := range node.Pods {
 			diffTracker.incrementOutboundRefCount(pod.PublicOutboundIdentity)
 		}
 	}
 
-	logger.V(2).Info("Initialized DiffTracker",
-		"subscription", config.SubscriptionID,
-		"resourceGroup", config.ResourceGroup,
-		"location", config.Location,
-		"serviceGatewayResourceName", config.ServiceGatewayResourceName,
-		"serviceGatewayID", config.ServiceGatewayID,
-		"vnetName", config.VNetName)
-
 	return diffTracker, nil
+}
+
+// SetServiceLister publishes the provider's shared-informer-backed Service lister to the engine.
+// It is called from SetInformers once the lister exists; getServiceByUID uses it for O(1) cached
+// reads instead of listing every Service. Safe to call from a different goroutine than the engine
+// workers because the write is serialized under mu.
+func (dt *DiffTracker) SetServiceLister(lister corelisters.ServiceLister) {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	dt.serviceLister = lister
+}
+
+// SetNodeLister publishes the provider's shared-informer-backed Node lister to the engine.
+func (dt *DiffTracker) SetNodeLister(lister corelisters.NodeLister) {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	dt.nodeLister = lister
+}
+
+// SetEventRecorder publishes the recorder used to emit Service Gateway pod events. Set post-init,
+// before the egress pod informer starts.
+func (dt *DiffTracker) SetEventRecorder(recorder record.EventRecorder) {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	dt.eventRecorder = recorder
+}
+
+// recordEvent emits a Kubernetes Event for object, if a recorder has been published.
+//
+// It is the only supported way to reach dt.eventRecorder. SetEventRecorder writes the field under
+// dt.mu after construction while informer handlers read it concurrently, so an unsynchronised read
+// is a data race; the field can also still be nil on paths that never publish a recorder, which
+// would panic the informer goroutine that dereferenced it. The recorder is snapshotted and the lock
+// released before Event is called, because Event performs I/O.
+func (dt *DiffTracker) recordEvent(object runtime.Object, eventType, reason, message string) {
+	if dt == nil {
+		return
+	}
+	dt.mu.Lock()
+	recorder := dt.eventRecorder
+	dt.mu.Unlock()
+	if recorder == nil {
+		return
+	}
+	recorder.Event(object, eventType, reason, message)
 }
 
 // lockWithLatency acquires dt.mu and returns a release function that unlocks it and,
 // at V(4), logs how long the caller waited to acquire the lock and how long it was
-// held.
+// held. It is the instrumented equivalent of `dt.mu.Lock(); defer dt.mu.Unlock()`:
+//
+//	defer dt.lockWithLatency("MethodName")()
+//
+// The critical sections it guards are in-memory map mutations with no Azure calls, so
+// these durations are expected to be in the microsecond range.
 func (dt *DiffTracker) lockWithLatency(method string) func() {
 	waitStart := time.Now()
 	dt.mu.Lock()
@@ -150,51 +180,12 @@ func (dt *DiffTracker) lockWithLatency(method string) func() {
 	}
 }
 
-// InitializeFromCluster builds a DiffTracker from current cluster and NRP state.
-func InitializeFromCluster(_ context.Context, _ Config, networkClientFactory azclient.ClientFactory, kubeClient kubernetes.Interface) (*DiffTracker, error) {
-	if networkClientFactory == nil {
-		return nil, fmt.Errorf("networkClientFactory must not be nil")
-	}
-	if kubeClient == nil {
-		return nil, fmt.Errorf("kubeClient must not be nil")
-	}
-	return &DiffTracker{}, nil
+// GetServiceUpdaterTrigger returns the trigger channel for ServiceUpdater
+func (dt *DiffTracker) GetServiceUpdaterTrigger() <-chan bool {
+	return dt.serviceUpdaterTrigger
 }
 
-// SetEventRecorder publishes the recorder used to emit ServiceGateway pod events.
-func (dt *DiffTracker) SetEventRecorder(recorder record.EventRecorder) {
-	dt.eventRecorder = recorder
+// GetLocationsUpdaterTrigger returns the trigger channel for LocationsUpdater
+func (dt *DiffTracker) GetLocationsUpdaterTrigger() <-chan bool {
+	return dt.locationsUpdaterTrigger
 }
-
-// SetServiceLister publishes the provider's Service lister for cached UID resolution.
-func (dt *DiffTracker) SetServiceLister(_ corelisters.ServiceLister) {}
-
-// SetNodeLister publishes the provider's Node lister for cached InternalIP resolution.
-func (dt *DiffTracker) SetNodeLister(_ corelisters.NodeLister) {}
-
-// SetUpPodInformer starts the egress pod informer using the runtime lifecycle.
-func (dt *DiffTracker) SetUpPodInformer(_ <-chan struct{}) error { return nil }
-
-// ReconcileEndpointSlice converts an EndpointSlice informer event into an endpoint delta.
-func (dt *DiffTracker) ReconcileEndpointSlice(_, _ *discoveryv1.EndpointSlice) {}
-
-// ReconcileNodeIPChange replays a node's endpoints when its InternalIP set changes.
-func (dt *DiffTracker) ReconcileNodeIPChange(_ string, _, _ []string) {}
-
-// IsServiceTracked reports whether the engine currently tracks the given service UID.
-func (dt *DiffTracker) IsServiceTracked(_ string) bool { return false }
-
-// ReconcileInboundService validates and submits a LoadBalancer Service to the engine.
-func (dt *DiffTracker) ReconcileInboundService(_ *v1.Service) error { return nil }
-
-// DeleteInboundService submits a LoadBalancer Service deletion to the engine.
-func (dt *DiffTracker) DeleteInboundService(_ *v1.Service) error { return nil }
-
-// UpdateEndpoints applies an inbound service's endpoint delta.
-func (dt *DiffTracker) UpdateEndpoints(_ string, _, _ map[string]string) {}
-
-// RegisterMetrics registers the ServiceGateway metrics with the component-base registry.
-func RegisterMetrics() {}
-
-// RecordServiceGatewayEnabled marks ServiceGateway as enabled for the cluster.
-func RecordServiceGatewayEnabled() {}
