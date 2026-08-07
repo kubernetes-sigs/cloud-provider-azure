@@ -35,6 +35,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
 	cpconfig "k8s.io/cloud-provider/config"
+	nodelifecycleconfig "k8s.io/cloud-provider/controllers/nodelifecycle/config"
 	serviceconfig "k8s.io/cloud-provider/controllers/service/config"
 	"k8s.io/cloud-provider/names"
 	cpoptions "k8s.io/cloud-provider/options"
@@ -83,7 +84,6 @@ func TestDefaultFlags(t *testing.T) {
 		KubeCloudShared: &cpoptions.KubeCloudSharedOptions{
 			KubeCloudSharedConfiguration: &cpconfig.KubeCloudSharedConfiguration{
 				RouteReconciliationPeriod: metav1.Duration{Duration: 10 * time.Second},
-				NodeMonitorPeriod:         metav1.Duration{Duration: 5 * time.Second},
 				ClusterName:               "kubernetes",
 				ClusterCIDR:               "",
 				AllocateNodeCIDRs:         false,
@@ -95,6 +95,12 @@ func TestDefaultFlags(t *testing.T) {
 					Name:            "azure",
 					CloudConfigFile: "",
 				},
+			},
+		},
+		NodeLifecycleController: &cpoptions.NodeLifecycleControllerOptions{
+			NodeLifecycleControllerConfiguration: &nodelifecycleconfig.NodeLifecycleControllerConfiguration{
+				NodeMonitorPeriod:            metav1.Duration{Duration: 5 * time.Second},
+				ConcurrentNodeLifecycleSyncs: 1,
 			},
 		},
 		ServiceController: &cpoptions.ServiceControllerOptions{
@@ -230,7 +236,6 @@ func TestAddFlags(t *testing.T) {
 		KubeCloudShared: &cpoptions.KubeCloudSharedOptions{
 			KubeCloudSharedConfiguration: &cpconfig.KubeCloudSharedConfiguration{
 				RouteReconciliationPeriod: metav1.Duration{Duration: 30 * time.Second},
-				NodeMonitorPeriod:         metav1.Duration{Duration: 5 * time.Second},
 				ClusterName:               "k8s",
 				ClusterCIDR:               "1.2.3.4/24",
 				AllocateNodeCIDRs:         true,
@@ -242,6 +247,12 @@ func TestAddFlags(t *testing.T) {
 					Name:            "azure",
 					CloudConfigFile: "/cloud-config",
 				},
+			},
+		},
+		NodeLifecycleController: &cpoptions.NodeLifecycleControllerOptions{
+			NodeLifecycleControllerConfiguration: &nodelifecycleconfig.NodeLifecycleControllerConfiguration{
+				NodeMonitorPeriod:            metav1.Duration{Duration: 5 * time.Second},
+				ConcurrentNodeLifecycleSyncs: 1,
 			},
 		},
 		ServiceController: &cpoptions.ServiceControllerOptions{
