@@ -49,6 +49,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/servicegateway"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -157,6 +158,8 @@ type Cloud struct {
 	endpointSlicesCache                             sync.Map
 
 	azureResourceLocker *AzureResourceLocker
+
+	serviceGatewayRuntime *servicegateway.Runtime
 }
 
 // NewCloud returns a Cloud with initialized clients
@@ -179,8 +182,11 @@ func NewCloud(ctx context.Context, clientBuilder cloudprovider.ControllerClientB
 
 	az.ipv6DualStackEnabled = true
 
-	if clientBuilder != nil {
+	if az.KubeClient == nil && clientBuilder != nil {
 		az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
+	}
+	if az.ServiceGatewayEnabled {
+		az.serviceGatewayRuntime = servicegateway.NewRuntime(az.Config, az.NetworkClientFactory, az.KubeClient)
 	}
 	az.azureResourceLocker = NewAzureResourceLocker(
 		az,
@@ -263,18 +269,6 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 		return fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config")
 	}
 
-	// Use a single flag to determine if the service gateway is enabled.
-	// All 3 conditions must be true:
-	// 1. ServiceGatewayEnabled is true
-	// 2. lb sku is service
-	// 3. backendPoolType is PodIP
-	if az.ServiceGatewayEnabled && az.IsLBBackendPoolTypePodIPAndUseServiceLoadBalancer() {
-		logger.V(2).Info("Service Gateway is enabled, using PodIP backend pool type with Service Load Balancer")
-		az.ServiceGatewayEnabled = true
-	} else {
-		az.ServiceGatewayEnabled = false
-	}
-
 	if config.RouteTableResourceGroup == "" {
 		config.RouteTableResourceGroup = config.ResourceGroup
 	}
@@ -313,8 +307,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 		}
 	}
 
-	if config.LoadBalancerBackendPoolConfigurationType == "" ||
-		strings.EqualFold(config.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePodIP) {
+	if config.LoadBalancerBackendPoolConfigurationType == "" {
 		config.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration
 	} else {
 		supportedLoadBalancerBackendPoolConfigurationTypes := utilsets.NewString(
@@ -355,6 +348,30 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 		return err
 	}
 
+	serviceGatewayPartiallyEnabled := config.ServiceGatewayEnabled || config.IsLBBackendPoolTypePodIP() || config.UseServiceLoadBalancer()
+	serviceGatewayFullyEnabled := config.ServiceGatewayEnabled && config.IsLBBackendPoolTypePodIP() && config.UseServiceLoadBalancer()
+
+	if serviceGatewayPartiallyEnabled && !serviceGatewayFullyEnabled {
+		return fmt.Errorf("InitializeCloudFromConfig: ServiceGateway requires serviceGatewayEnabled=true, loadBalancerBackendPoolConfigurationType=podIP, and loadBalancerSku=service to be configured together (actual: serviceGatewayEnabled=%t, loadBalancerBackendPoolConfigurationType=%s, loadBalancerSku=%s)",
+			config.ServiceGatewayEnabled,
+			config.LoadBalancerBackendPoolConfigurationType,
+			config.LoadBalancerSKU)
+	}
+
+	if serviceGatewayFullyEnabled {
+		logger.V(2).Info("Service Gateway is enabled, using PodIP backend pool type with Service Load Balancer")
+
+		// ServiceGateway (PodIP backend pools) and Multi-SLB (NodeIP/NIC backend pools) are mutually exclusive.
+		if len(config.MultipleStandardLoadBalancerConfigurations) > 0 {
+			return fmt.Errorf("InitializeCloudFromConfig: ServiceGatewayEnabled and MultipleStandardLoadBalancerConfigurations are mutually exclusive and cannot both be set")
+		}
+
+		// EnableMigrateToIPBasedBackendPoolAPI has no meaning when ServiceGateway is enabled.
+		if config.EnableMigrateToIPBasedBackendPoolAPI {
+			return fmt.Errorf("InitializeCloudFromConfig: EnableMigrateToIPBasedBackendPoolAPI cannot be used when ServiceGatewayEnabled is true — ContainerLB already uses PodIP-based backend pools")
+		}
+	}
+
 	az.Config = *config
 	az.Environment = env
 	az.ResourceRequestBackoff = resourceRequestBackoff
@@ -388,6 +405,9 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIPConfig(az)
 	} else if az.IsLBBackendPoolTypeNodeIP() {
 		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIP(az)
+	} else if az.IsLBBackendPoolTypePodIP() {
+		// ServiceGateway owns PodIP backend pools through difftracker.
+		az.LoadBalancerBackendPool = nil
 	}
 
 	if az.UseMultipleStandardLoadBalancers() {
@@ -642,14 +662,28 @@ func (az *Cloud) setCloudProviderBackoffDefaults(config *azureconfig.Config) wai
 
 // Initialize passes a Kubernetes clientBuilder interface to the cloud provider
 func (az *Cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, _ <-chan struct{}) {
-	az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
+	if az.KubeClient == nil {
+		az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
+	}
 	az.eventBroadcaster = record.NewBroadcaster()
 	az.eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: az.KubeClient.CoreV1().Events("")})
 	az.eventRecorder = az.eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "azure-cloud-provider"})
+	if az.serviceGatewayRuntime != nil {
+		az.serviceGatewayRuntime.SetKubeClient(az.KubeClient)
+		az.serviceGatewayRuntime.SetEventRecorder(az.eventRecorder)
+	}
+}
+
+// ServiceGatewayRuntime returns the ServiceGateway runtime used by the Service controller.
+func (az *Cloud) ServiceGatewayRuntime() *servicegateway.Runtime {
+	return az.serviceGatewayRuntime
 }
 
 // LoadBalancer returns a balancer interface. Also returns true if the interface is supported, false otherwise.
 func (az *Cloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
+	if az.serviceGatewayRuntime != nil {
+		return az.serviceGatewayRuntime.LoadBalancer()
+	}
 	return az, true
 }
 
@@ -742,7 +776,10 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 	az.serviceLister = informerFactory.Core().V1().Services().Lister()
 	az.nodeLister = informerFactory.Core().V1().Nodes().Lister()
 
-	az.setUpEndpointSlicesInformer(informerFactory)
+	// ServiceGateway registers its own EndpointSlice handlers when its runtime starts.
+	if az.serviceGatewayRuntime == nil {
+		az.setUpEndpointSlicesInformer(informerFactory)
+	}
 }
 
 // updateNodeCaches updates local cache for node's zones and external resource groups.

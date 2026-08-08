@@ -243,6 +243,11 @@ const (
 	LoadBalancerSKUStandard = "standard"
 	// LoadBalancerSKUService is the load balancer service SKU
 	LoadBalancerSKUService = "service"
+	// LoadBalancerARMSKUService is the case-sensitive ARM SKU for a ServiceGateway load balancer.
+	LoadBalancerARMSKUService = "Service"
+
+	// PodLabelServiceEgressGateway is the label used on the pod
+	PodLabelServiceEgressGateway = "kubernetes.azure.com/service-egress-gateway"
 
 	// ServiceAnnotationLoadBalancerInternal is the annotation used on the service
 	ServiceAnnotationLoadBalancerInternal = "service.beta.kubernetes.io/azure-load-balancer-internal"
@@ -367,6 +372,8 @@ const (
 	FrontendIPConfigIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/frontendIPConfigurations/%s"
 	// BackendPoolIDTemplate is the template of the backend pool
 	BackendPoolIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s"
+	// NatGatewayIDTemplate is the template of the nat gateway
+	NatGatewayIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/natGateways/%s"
 	// LoadBalancerProbeIDTemplate is the template of the load balancer probe
 	LoadBalancerProbeIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/probes/%s"
 
@@ -582,6 +589,13 @@ const (
 	VMPowerStateDeallocated  = "deallocated"
 	VMPowerStateDeallocating = "deallocating"
 	VMPowerStateUnknown      = "unknown"
+)
+
+// ServiceGateway resource defaults
+const (
+	// DefaultServiceGatewayResourceName is the fixed ServiceGateway resource name used when
+	// ServiceGatewayEnabled=true. It is not configurable via cloud-provider config.
+	DefaultServiceGatewayResourceName = "servicegateway"
 )
 
 // Azure resource lock
