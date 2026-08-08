@@ -367,3 +367,147 @@ func TestLen(t *testing.T) {
 		})
 	}
 }
+func TestEquals(t *testing.T) {
+	tests := []struct {
+		name string
+		s1   *IgnoreCaseSet
+		s2   *IgnoreCaseSet
+		want bool
+	}{
+		{
+			name: "both nil",
+			s1:   nil,
+			s2:   nil,
+			want: true,
+		},
+		{
+			name: "first nil",
+			s1:   nil,
+			s2:   NewString("foo"),
+			want: false,
+		},
+		{
+			name: "second nil",
+			s1:   NewString("foo"),
+			s2:   nil,
+			want: false,
+		},
+		{
+			name: "empty sets",
+			s1:   NewString(),
+			s2:   NewString(),
+			want: true,
+		},
+		{
+			name: "same elements",
+			s1:   NewString("foo", "bar"),
+			s2:   NewString("foo", "bar"),
+			want: true,
+		},
+		{
+			name: "same elements with different case",
+			s1:   NewString("foo", "bar"),
+			s2:   NewString("FOO", "BAR"),
+			want: true,
+		},
+		{
+			name: "different sizes",
+			s1:   NewString("foo", "bar"),
+			s2:   NewString("foo"),
+			want: false,
+		},
+		{
+			name: "same size but different elements",
+			s1:   NewString("foo", "bar"),
+			s2:   NewString("foo", "baz"),
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Equals is nil-safe on both the receiver and the argument, so call it
+			// directly for every case (including the nil ones) to exercise the
+			// production code path rather than asserting an expectation against itself.
+			if got := tt.s1.Equals(tt.s2); got != tt.want {
+				t.Errorf("Equals() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDifference(t *testing.T) {
+	tests := []struct {
+		name  string
+		s     *IgnoreCaseSet
+		other *IgnoreCaseSet
+		want  *IgnoreCaseSet
+	}{
+		{
+			name:  "disjoint sets",
+			s:     NewString("foo", "bar"),
+			other: NewString("baz"),
+			want:  NewString("foo", "bar"),
+		},
+		{
+			name:  "partial overlap",
+			s:     NewString("foo", "bar", "baz"),
+			other: NewString("bar"),
+			want:  NewString("foo", "baz"),
+		},
+		{
+			name:  "all removed",
+			s:     NewString("foo", "bar"),
+			other: NewString("foo", "bar"),
+			want:  NewString(),
+		},
+		{
+			name:  "case-insensitive",
+			s:     NewString("Foo", "BAR"),
+			other: NewString("foo"),
+			want:  NewString("bar"),
+		},
+		{
+			name:  "other empty",
+			s:     NewString("foo", "bar"),
+			other: NewString(),
+			want:  NewString("foo", "bar"),
+		},
+		{
+			name:  "s empty",
+			s:     NewString(),
+			other: NewString("foo"),
+			want:  NewString(),
+		},
+		{
+			name:  "other nil",
+			s:     NewString("foo"),
+			other: nil,
+			want:  NewString("foo"),
+		},
+		{
+			name:  "s nil",
+			s:     nil,
+			other: NewString("foo"),
+			want:  NewString(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.s.Difference(tt.other)
+			if !got.Equals(tt.want) {
+				t.Errorf("Difference() = %v, want %v", got.UnsortedList(), tt.want.UnsortedList())
+			}
+		})
+	}
+}
+
+func TestInsertOnUninitializedSet(t *testing.T) {
+	s := &IgnoreCaseSet{}
+	s.Insert("Foo", "BAR")
+	if !s.Has("foo") || !s.Has("bar") {
+		t.Errorf("Insert on uninitialized set should lazily initialize and add items, got %v", s.UnsortedList())
+	}
+	if s.Len() != 2 {
+		t.Errorf("expected len 2, got %d", s.Len())
+	}
+}
