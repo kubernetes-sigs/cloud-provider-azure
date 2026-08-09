@@ -151,7 +151,13 @@ func (dt *DiffTracker) lockWithLatency(method string) func() {
 }
 
 // InitializeFromCluster builds a DiffTracker from current cluster and NRP state.
-func InitializeFromCluster(_ context.Context, _ Config, _ azclient.ClientFactory, _ kubernetes.Interface) (*DiffTracker, error) {
+func InitializeFromCluster(_ context.Context, _ Config, networkClientFactory azclient.ClientFactory, kubeClient kubernetes.Interface) (*DiffTracker, error) {
+	if networkClientFactory == nil {
+		return nil, fmt.Errorf("networkClientFactory must not be nil")
+	}
+	if kubeClient == nil {
+		return nil, fmt.Errorf("kubeClient must not be nil")
+	}
 	return &DiffTracker{}, nil
 }
 

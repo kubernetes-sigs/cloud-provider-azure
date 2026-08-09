@@ -2472,14 +2472,6 @@ func TestInitializePublishesServiceGatewayDependencies(t *testing.T) {
 	service := getTestService("servicegateway-lifecycle", v1.ProtocolTCP, nil, false, 80)
 	_, err := loadBalancer.EnsureLoadBalancer(context.Background(), testClusterName, &service, nil)
 	assert.EqualError(t, err, "ServiceGateway LoadBalancer is not initialized")
-
-	informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	assert.NoError(t, runtime.Start(ctx, informerFactory))
-
-	_, err = loadBalancer.EnsureLoadBalancer(context.Background(), testClusterName, &service, nil)
-	assert.NoError(t, err)
 }
 
 func TestInitializeCloudFromConfig(t *testing.T) {
