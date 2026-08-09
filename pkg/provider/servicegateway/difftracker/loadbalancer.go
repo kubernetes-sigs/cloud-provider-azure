@@ -18,6 +18,7 @@ package difftracker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -95,6 +96,12 @@ func (lb *LoadBalancer) EnsureLoadBalancer(ctx context.Context, _ string, servic
 	ctx, span := trace.BeginReconcile(ctx, trace.DefaultTracer(), operation)
 	defer func() { span.Observe(ctx, err) }()
 
+	// Guard before the Service is dereferenced below, for the same reason as
+	// EnsureLoadBalancerDeleted: the metric label is built before the engine validates the input.
+	if service == nil {
+		return nil, fmt.Errorf("cannot ensure a load balancer for a nil Service")
+	}
+
 	tracker, err := lb.diffTracker()
 	if err != nil {
 		return nil, err
@@ -105,10 +112,31 @@ func (lb *LoadBalancer) EnsureLoadBalancer(ctx context.Context, _ string, servic
 	defer func() { metricContext.ObserveOperationWithResult(err == nil) }()
 
 	if err = tracker.ReconcileInboundService(service); err != nil {
+		recordWarningEvent(tracker, service, err)
 		return nil, err
 	}
 
+	// Echo the Service's current status rather than an empty one. The service controller compares
+	// what it captured before this call against what is returned and only patches when they differ,
+	// so echoing means it never patches. Returning an empty status would make it clear the ingress
+	// IP written by updateServiceLoadBalancerStatus on every sync, flapping the Service to pending.
 	return service.Status.LoadBalancer.DeepCopy(), nil
+}
+
+// recordWarningEvent surfaces a WarningEventError as a Kubernetes warning Event on the Service.
+//
+// Returning the error alone is not enough: the Service controller reports it as a generic
+// SyncLoadBalancerFailed, which loses the ServiceGateway-specific reason (for example
+// UnsupportedNamedTargetPort) telling the user which part of the spec is unsupported. Errors that
+// do not carry a reason, and a tracker with no recorder yet, are ignored.
+func recordWarningEvent(tracker *DiffTracker, service *v1.Service, err error) {
+	var warning WarningEventError
+	if !errors.As(err, &warning) {
+		return
+	}
+
+	reason, message := warning.WarningEvent()
+	tracker.recordEvent(service, v1.EventTypeWarning, reason, message)
 }
 
 func (lb *LoadBalancer) UpdateLoadBalancer(context.Context, string, *v1.Service, []*v1.Node) error {
@@ -120,6 +148,12 @@ func (lb *LoadBalancer) EnsureLoadBalancerDeleted(ctx context.Context, _ string,
 	const operation = "EnsureLoadBalancerDeleted"
 	ctx, span := trace.BeginReconcile(ctx, trace.DefaultTracer(), operation)
 	defer func() { span.Observe(ctx, err) }()
+
+	// Guard before the Service is dereferenced below: the engine validates it too, but the metric
+	// label is built first, so a nil Service would panic the caller's goroutine rather than return.
+	if service == nil {
+		return fmt.Errorf("cannot delete the load balancer for a nil Service")
+	}
 
 	tracker, err := lb.diffTracker()
 	if err != nil {
