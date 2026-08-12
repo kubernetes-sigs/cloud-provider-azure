@@ -79,6 +79,7 @@ type AccountOptions struct {
 	AllowSharedKeyAccess                    *bool
 	IsMultichannelEnabled                   *bool
 	IsSmbOAuthEnabled                       *bool
+	IsNFSEncryptionInTransitEnabled         *bool
 	KeyName                                 *string
 	KeyVersion                              *string
 	KeyVaultURI                             *string
@@ -169,6 +170,13 @@ func (az *AccountRepo) getStorageAccounts(ctx context.Context, storageAccountCli
 			}
 
 			if equal, err = az.isDisableFileServiceDeleteRetentionPolicyEqual(ctx, acct, accountOptions); err != nil {
+				return nil, err
+			}
+			if !equal {
+				continue
+			}
+
+			if equal, err = az.isNFSEncryptionInTransitEnabledEqual(ctx, acct, accountOptions); err != nil {
 				return nil, err
 			}
 			if !equal {
@@ -657,7 +665,7 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 			}
 		}
 
-		if accountOptions.DisableFileServiceDeleteRetentionPolicy != nil || accountOptions.IsMultichannelEnabled != nil {
+		if accountOptions.DisableFileServiceDeleteRetentionPolicy != nil || accountOptions.IsMultichannelEnabled != nil || ptr.Deref(accountOptions.IsNFSEncryptionInTransitEnabled, false) {
 			prop, err := az.fileServiceRepo.Get(ctx, accountOptions.SubscriptionID, accountOptions.ResourceGroup, accountName)
 			if err != nil {
 				return "", "", err
@@ -679,7 +687,21 @@ func (az *AccountRepo) EnsureStorageAccount(ctx context.Context, accountOptions 
 			if accountOptions.IsMultichannelEnabled != nil {
 				logger.V(2).Info("enable SMB Multichannel setting on account", "account", accountName, "subscription", subsID, "resourceGroup", resourceGroup)
 				enabled := *accountOptions.IsMultichannelEnabled
-				prop.FileServiceProperties.ProtocolSettings = &armstorage.ProtocolSettings{Smb: &armstorage.SmbSetting{Multichannel: &armstorage.Multichannel{Enabled: &enabled}}}
+				if prop.FileServiceProperties.ProtocolSettings == nil {
+					prop.FileServiceProperties.ProtocolSettings = &armstorage.ProtocolSettings{}
+				}
+				prop.FileServiceProperties.ProtocolSettings.Smb = &armstorage.SmbSetting{Multichannel: &armstorage.Multichannel{Enabled: &enabled}}
+			}
+			if ptr.Deref(accountOptions.IsNFSEncryptionInTransitEnabled, false) {
+				logger.V(2).Info("set NFS EncryptionInTransit setting on account",
+					"required", true,
+					"account", accountName,
+					"subscription", subsID,
+					"resourceGroup", resourceGroup)
+				if prop.FileServiceProperties.ProtocolSettings == nil {
+					prop.FileServiceProperties.ProtocolSettings = &armstorage.ProtocolSettings{}
+				}
+				prop.FileServiceProperties.ProtocolSettings.Nfs = &armstorage.NfsSetting{EncryptionInTransit: &armstorage.EncryptionInTransit{Required: ptr.To(true)}}
 			}
 
 			if err := az.fileServiceRepo.Set(ctx, subsID, resourceGroup, accountName, prop); err != nil {
@@ -1097,6 +1119,31 @@ func (az *AccountRepo) isMultichannelEnabledEqual(ctx context.Context, account *
 	}
 
 	return *accountOptions.IsMultichannelEnabled == ptr.Deref(prop.FileServiceProperties.ProtocolSettings.Smb.Multichannel.Enabled, false), nil
+}
+
+func (az *AccountRepo) isNFSEncryptionInTransitEnabledEqual(ctx context.Context, account *armstorage.Account, accountOptions *AccountOptions) (bool, error) {
+	if accountOptions.IsNFSEncryptionInTransitEnabled == nil {
+		return true, nil
+	}
+
+	if account.Name == nil {
+		klog.Warningf("account.Name under resource group(%s) is nil", accountOptions.ResourceGroup)
+		return false, nil
+	}
+
+	prop, err := az.fileServiceRepo.Get(ctx, accountOptions.SubscriptionID, accountOptions.ResourceGroup, ptr.Deref(account.Name, ""))
+	if err != nil {
+		return false, err
+	}
+
+	if prop.FileServiceProperties == nil ||
+		prop.FileServiceProperties.ProtocolSettings == nil ||
+		prop.FileServiceProperties.ProtocolSettings.Nfs == nil ||
+		prop.FileServiceProperties.ProtocolSettings.Nfs.EncryptionInTransit == nil {
+		return !*accountOptions.IsNFSEncryptionInTransitEnabled, nil
+	}
+
+	return *accountOptions.IsNFSEncryptionInTransitEnabled == ptr.Deref(prop.FileServiceProperties.ProtocolSettings.Nfs.EncryptionInTransit.Required, false), nil
 }
 
 func (az *AccountRepo) isDisableFileServiceDeleteRetentionPolicyEqual(ctx context.Context, account *armstorage.Account, accountOptions *AccountOptions) (bool, error) {
