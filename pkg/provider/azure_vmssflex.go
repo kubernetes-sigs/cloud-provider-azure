@@ -695,7 +695,7 @@ func (fs *FlexScaleSet) ensureVMSSFlexInPool(ctx context.Context, _ *v1.Service,
 			})
 		primaryIPConfig.Properties.LoadBalancerBackendAddressPools = loadBalancerBackendAddressPools
 		newVMSS := armcompute.VirtualMachineScaleSet{
-			Location: vmssFlex.Location,
+			Location:         vmssFlex.Location,
 			ExtendedLocation: vmssFlex.ExtendedLocation,
 			Properties: &armcompute.VirtualMachineScaleSetProperties{
 				VirtualMachineProfile: &armcompute.VirtualMachineScaleSetVMProfile{
@@ -843,7 +843,7 @@ func (fs *FlexScaleSet) EnsureBackendPoolDeletedFromVMSets(ctx context.Context, 
 		vmssUpdaters = append(vmssUpdaters, func() error {
 			// Compose a new vmss with added backendPoolID.
 			newVMSS := armcompute.VirtualMachineScaleSet{
-				Location: vmss.Location,
+				Location:         vmss.Location,
 				ExtendedLocation: vmss.ExtendedLocation,
 				Properties: &armcompute.VirtualMachineScaleSetProperties{
 					VirtualMachineProfile: &armcompute.VirtualMachineScaleSetVMProfile{
