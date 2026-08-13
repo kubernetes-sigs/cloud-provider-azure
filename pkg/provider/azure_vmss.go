@@ -1351,7 +1351,8 @@ func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes [
 			})
 		primaryIPConfig.Properties.LoadBalancerBackendAddressPools = loadBalancerBackendAddressPools
 		newVMSS := armcompute.VirtualMachineScaleSet{
-			Location: vmss.Location,
+			Location:         vmss.Location,
+			ExtendedLocation: vmss.ExtendedLocation,
 			Properties: &armcompute.VirtualMachineScaleSetProperties{
 				VirtualMachineProfile: &armcompute.VirtualMachineScaleSetVMProfile{
 					NetworkProfile: &armcompute.VirtualMachineScaleSetNetworkProfile{
@@ -2289,7 +2290,8 @@ func (ss *ScaleSet) EnsureBackendPoolDeletedFromVMSets(ctx context.Context, vmss
 		vmssUpdaters = append(vmssUpdaters, func() error {
 			// Compose a new vmss with added backendPoolID.
 			newVMSS := armcompute.VirtualMachineScaleSet{
-				Location: vmss.Location,
+				Location:         vmss.Location,
+				ExtendedLocation: vmss.ExtendedLocation,
 				Properties: &armcompute.VirtualMachineScaleSetProperties{
 					VirtualMachineProfile: &armcompute.VirtualMachineScaleSetVMProfile{
 						NetworkProfile: &armcompute.VirtualMachineScaleSetNetworkProfile{
