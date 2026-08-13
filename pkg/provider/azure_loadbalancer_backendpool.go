@@ -707,6 +707,13 @@ func (az *Cloud) addNodeIPAddressesToBackendPool(backendPool *armnetwork.Backend
 	for _, ipAddress := range nodeIPAddresses {
 		if !hasIPAddressInBackendPool(backendPool, ipAddress) {
 			name := az.nodePrivateIPToNodeNameMap[ipAddress]
+			if name == "" {
+				// The node name in cache could be empty for unknown reasons. Fall back to a name
+				// derived from the IP address, prefixed to avoid colliding with a real node name,
+				// so the backend address is not created with an empty name.
+				name = "ip-" + strings.NewReplacer(".", "-", ":", "-").Replace(ipAddress)
+				logger.V(2).Info("Node name not found in cache for IP address, generated a name for the backend address", "ip", ipAddress, "generatedName", name)
+			}
 			logger.V(4).Info("adding node to the backend pool", "ip", ipAddress, "backendPoolName", ptr.Deref(backendPool.Name, ""))
 			addresses = append(addresses, &armnetwork.LoadBalancerBackendAddress{
 				Name: ptr.To(name),
