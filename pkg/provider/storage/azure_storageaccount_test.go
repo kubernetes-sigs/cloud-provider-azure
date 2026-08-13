@@ -1265,6 +1265,34 @@ func TestIsEnableHTTPSTrafficOnly(t *testing.T) {
 			},
 			expectedResult: false,
 		},
+		{
+			// SkipHTTPSTrafficOnlyMatch=true → accept any account regardless of
+			// its EnableHTTPSTrafficOnly value, even when options require true.
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					EnableHTTPSTrafficOnly: ptr.To(false),
+				},
+			},
+			accountOptions: &AccountOptions{
+				EnableHTTPSTrafficOnly:    true,
+				SkipHTTPSTrafficOnlyMatch: true,
+			},
+			expectedResult: true,
+		},
+		{
+			// SkipHTTPSTrafficOnlyMatch=true with the same value on both sides
+			// also matches (skip supersedes equality check).
+			account: &armstorage.Account{
+				Properties: &armstorage.AccountProperties{
+					EnableHTTPSTrafficOnly: ptr.To(true),
+				},
+			},
+			accountOptions: &AccountOptions{
+				EnableHTTPSTrafficOnly:    true,
+				SkipHTTPSTrafficOnlyMatch: true,
+			},
+			expectedResult: true,
+		},
 	}
 
 	for _, test := range tests {
