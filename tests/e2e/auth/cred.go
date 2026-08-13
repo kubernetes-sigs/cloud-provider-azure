@@ -26,6 +26,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 
+	acr "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerregistry/armcontainerregistry"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -64,7 +66,7 @@ var _ = Describe("Azure Credential Provider", Label(utils.TestSuiteLabelCredenti
 	})
 
 	It("should be able to pull private images from acr without docker secrets set explicitly", func() {
-		registry, err := tc.CreateContainerRegistry()
+		registry, err := tc.CreateContainerRegistry(acr.SKUNameStandard)
 		Expect(err).NotTo(HaveOccurred())
 
 		defer func() {
@@ -103,7 +105,7 @@ var _ = Describe("Azure Credential Provider", Label(utils.TestSuiteLabelCredenti
 		err = utils.AZACRLogin()
 		Expect(err).NotTo(HaveOccurred())
 
-		registry, err := tc.CreateContainerRegistry()
+		registry, err := tc.CreateContainerRegistry(acr.SKUNamePremium)
 		Expect(err).NotTo(HaveOccurred())
 
 		defer func() {
@@ -145,7 +147,7 @@ var _ = Describe("Azure Credential Provider", Label(utils.TestSuiteLabelCredenti
 		// https://learn.microsoft.com/en-us/azure/container-registry/tutorial-registry-cache
 		// The reason is that Windows test should be included but control-plane Node is Linux.
 		// So, it is hard to push a Windows image to ACR. With this new feature, the pushing can be skipped.
-		registry, err := tc.CreateContainerRegistry()
+		registry, err := tc.CreateContainerRegistry(acr.SKUNameStandard)
 		Expect(err).NotTo(HaveOccurred())
 
 		defer func() {

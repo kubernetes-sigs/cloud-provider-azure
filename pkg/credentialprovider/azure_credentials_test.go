@@ -151,6 +151,59 @@ func TestGetCredentialsRegionalServicePrincipal(t *testing.T) {
 		t.Errorf("Unexpected credentials for regional login server: %v", cred)
 	}
 }
+
+func TestGetCredentialsRegionalMirrorServicePrincipal(t *testing.T) {
+	configFile, err := os.CreateTemp(".", "config.json")
+	if err != nil {
+		t.Fatalf("Unexpected error when creating temp file: %v", err)
+	}
+	defer os.Remove(configFile.Name())
+
+	_, err = configFile.WriteString(`
+    {
+        "aadClientId": "foo",
+        "aadClientSecret": "bar"
+    }`)
+	if err != nil {
+		t.Fatalf("Unexpected error when writing to temp file: %v", err)
+	}
+
+	// The registry mirror maps a source host (mcr.microsoft.com) to a regional (geo)
+	// ACR login server target. The pulled image references the source host; the
+	// provider rewrites it to the geo target and must authenticate that target.
+	mirrorImage := "mcr.microsoft.com/nginx:v1"
+	provider, err := NewAcrProvider(
+		&v1.CredentialProviderRequest{
+			Image: mirrorImage,
+		},
+		"mcr.microsoft.com:foo.eastus2.geo.azurecr.io",
+		configFile.Name(),
+		IdentityBindingsConfig{},
+	)
+	if err != nil {
+		t.Fatalf("Unexpected error when creating acr provider: %v", err)
+	}
+
+	credResponse, err := provider.GetCredentials(context.TODO(), mirrorImage, nil)
+	if err != nil {
+		t.Fatalf("Unexpected error when fetching acr credentials: %v", err)
+	}
+
+	// The regional (geo) target login server must receive the service principal credentials.
+	cred, found := credResponse.Auth["foo.eastus2.geo.azurecr.io"]
+	if !found {
+		t.Fatalf("Missing explicit entry for regional mirror target foo.eastus2.geo.azurecr.io; auth keys: %v", credResponse.Auth)
+	}
+	if cred.Username != "foo" || cred.Password != "bar" {
+		t.Errorf("Unexpected credentials for regional mirror target: %v", cred)
+	}
+
+	// The mirror source host is operator-configured and may be an arbitrary non-ACR
+	// host; the service principal path must not emit the raw client secret to it.
+	if _, found := credResponse.Auth["mcr.microsoft.com"]; found {
+		t.Errorf("Service principal credentials must not be emitted for mirror source host mcr.microsoft.com; auth keys: %v", credResponse.Auth)
+	}
+}
 func TestGetCredentialsConfig(t *testing.T) {
 	// msiEndpointEnv and msiSecretEnv are required because autorest/adal requires IMDS endpoint to be available.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -374,6 +427,16 @@ func TestParseACRLoginServerFromImage(t *testing.T) {
 			expected: "foo.chinaeast2.geo.azurecr.cn",
 		},
 		{
+			// regional endpoint in the Azure Germany cloud
+			image:    "foo.germanynorth.geo.azurecr.de/bar/image:version",
+			expected: "foo.germanynorth.geo.azurecr.de",
+		},
+		{
+			// regional endpoint in the Azure US Government cloud
+			image:    "foo.usgovvirginia.geo.azurecr.us/bar/image:version",
+			expected: "foo.usgovvirginia.geo.azurecr.us",
+		},
+		{
 			// regional-looking host with a trailing suffix must not match
 			image:    "foo.eastus2.geo.azurecr.io.example/bar/image:version",
 			expected: "",
@@ -386,6 +449,16 @@ func TestParseACRLoginServerFromImage(t *testing.T) {
 		{
 			// dedicated data endpoint in a sovereign cloud must not match either
 			image:    "foo.chinaeast2.data.azurecr.cn/bar/image:version",
+			expected: "",
+		},
+		{
+			// dedicated data endpoint in the Azure Germany cloud must not match
+			image:    "foo.germanynorth.data.azurecr.de/bar/image:version",
+			expected: "",
+		},
+		{
+			// dedicated data endpoint in the Azure US Government cloud must not match
+			image:    "foo.usgovvirginia.data.azurecr.us/bar/image:version",
 			expected: "",
 		},
 		{

@@ -33,17 +33,17 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-// CreateContainerRegistry creates a Premium test acr. Premium is used for all tests
-// so they share a single SKU, and so features such as regional (geo) endpoints, which
-// require the Premium SKU, can be enabled on the same registry.
-func (tc *AzureTestClient) CreateContainerRegistry() (acr.Registry, error) {
+// CreateContainerRegistry creates a test acr with the given SKU. Most tests use a
+// Standard registry; the regional (geo) endpoint test passes Premium because regional
+// endpoints require the Premium SKU.
+func (tc *AzureTestClient) CreateContainerRegistry(skuName acr.SKUName) (acr.Registry, error) {
 	acrClient := tc.createACRClient()
 	rgName, location := tc.GetResourceGroup(), tc.GetLocation()
 	acrName := "e2eacr" + string(uuid.NewUUID())[0:4]
 	template := acr.Registry{
 		SKU: &acr.SKU{
-			Name: to.Ptr(acr.SKUNamePremium),
-			Tier: to.Ptr(acr.SKUTierPremium),
+			Name: to.Ptr(skuName),
+			Tier: to.Ptr(acr.SKUTier(skuName)),
 		},
 		Name:     ptr.To(acrName),
 		Location: ptr.To(location),
