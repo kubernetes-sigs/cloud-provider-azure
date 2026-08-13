@@ -65,6 +65,12 @@ type AccountOptions struct {
 	SubscriptionID                            string
 	Name, Type, Kind, ResourceGroup, Location string
 	EnableHTTPSTrafficOnly                    bool
+	// SkipHTTPSTrafficOnlyMatch skips EnableHTTPSTrafficOnly account matching
+	// during account reuse lookup. Useful for NFS file share callers where
+	// EnableHTTPSTrafficOnly only governs the REST plane and has no effect
+	// on the NFS mount, so existing accounts should be reused regardless of
+	// their EnableHTTPSTrafficOnly value. Has no effect on account creation.
+	SkipHTTPSTrafficOnlyMatch bool
 	// indicate whether create new account when Name is empty or when account does not exists
 	CreateAccount                           bool
 	CreatePrivateEndpoint                   *bool
@@ -1057,6 +1063,15 @@ func isEnableNfsV3PropertyEqual(account *armstorage.Account, accountOptions *Acc
 }
 
 func isEnableHTTPSTrafficOnlyEqual(account *armstorage.Account, accountOptions *AccountOptions) bool {
+	// Callers can opt out of EnableHTTPSTrafficOnly matching for scenarios
+	// where the setting is irrelevant to the mount protocol (e.g. NFS file
+	// shares, where EnableHTTPSTrafficOnly only affects REST traffic). This
+	// preserves account reuse across driver-side cleanups such as
+	// kubernetes-sigs/azurefile-csi-driver#3335 that stop explicitly setting
+	// EnableHTTPSTrafficOnly=false for NFS accounts.
+	if accountOptions.SkipHTTPSTrafficOnlyMatch {
+		return true
+	}
 	return accountOptions.EnableHTTPSTrafficOnly == ptr.Deref(account.Properties.EnableHTTPSTrafficOnly, true)
 }
 
