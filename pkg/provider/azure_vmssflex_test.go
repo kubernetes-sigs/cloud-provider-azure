@@ -1420,7 +1420,7 @@ func TestEnsureVMSSFlexInPool(t *testing.T) {
 		if tc.expectedErr != nil {
 			assert.EqualError(t, err, tc.expectedErr.Error(), tc.description)
 		}
-	    assert.Equal(t, tc.extendedLocation, capturedVMSS.ExtendedLocation, tc.description)
+		assert.Equal(t, tc.extendedLocation, capturedVMSS.ExtendedLocation, tc.description)
 	}
 
 }
