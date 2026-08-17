@@ -2984,7 +2984,6 @@ func TestEnsureBackendPoolDeletedFromVMSetsExtendedLocation(t *testing.T) {
 	}
 }
 
-// TestEnsureHostsInPool
 func TestEnsureHostsInPool(t *testing.T) {
 
 	testCases := []struct {
