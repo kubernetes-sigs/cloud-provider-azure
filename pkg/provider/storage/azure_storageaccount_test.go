@@ -2036,7 +2036,7 @@ func TestIsNFSEncryptionInTransitEnabledEqual(t *testing.T) {
 			expectedResult:            false,
 		},
 		{
-			desc: "IsNFSEncryptionInTransitEnabled not equal #2",
+			desc: "EiT request matches a non-EiT account without a file-service Get (one-directional)",
 			account: &armstorage.Account{
 				Name:       &accountName,
 				Properties: &armstorage.AccountProperties{},
@@ -2044,11 +2044,10 @@ func TestIsNFSEncryptionInTransitEnabledEqual(t *testing.T) {
 			accountOptions: &AccountOptions{
 				IsNFSEncryptionInTransitEnabled: ptr.To(true),
 			},
-			serviceProperties: &nfsEiTNotRequired,
-			expectedResult:    false,
+			expectedResult: true,
 		},
 		{
-			desc: "IsNFSEncryptionInTransitEnabled is equal #1",
+			desc: "EiT request matches an EiT-required account without a file-service Get (one-directional)",
 			account: &armstorage.Account{
 				Name:       &accountName,
 				Properties: &armstorage.AccountProperties{},
@@ -2056,8 +2055,7 @@ func TestIsNFSEncryptionInTransitEnabledEqual(t *testing.T) {
 			accountOptions: &AccountOptions{
 				IsNFSEncryptionInTransitEnabled: ptr.To(true),
 			},
-			serviceProperties: &nfsEiTRequired,
-			expectedResult:    true,
+			expectedResult: true,
 		},
 		{
 			desc: "IsNFSEncryptionInTransitEnabled is equal #2",
