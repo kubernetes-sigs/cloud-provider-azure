@@ -1162,6 +1162,15 @@ func (az *AccountRepo) isNFSEncryptionInTransitEnabledEqual(ctx context.Context,
 		return true, nil
 	}
 
+	// An EiT request can reuse any existing account. Enforcement handled by
+	// ProtocolSettings.Nfs.EncryptionInTransit.Required (stamped at account
+	// creation) and client-side TLS. Short circuit prevents EiT requests from
+	// always creating a new account per PVC (Required property is new, no
+	// pre-existing account has it).
+	if *accountOptions.IsNFSEncryptionInTransitEnabled {
+		return true, nil
+	}
+
 	if account.Name == nil {
 		klog.Warningf("account.Name under resource group(%s) is nil", accountOptions.ResourceGroup)
 		return false, nil
@@ -1176,10 +1185,12 @@ func (az *AccountRepo) isNFSEncryptionInTransitEnabledEqual(ctx context.Context,
 		prop.FileServiceProperties.ProtocolSettings == nil ||
 		prop.FileServiceProperties.ProtocolSettings.Nfs == nil ||
 		prop.FileServiceProperties.ProtocolSettings.Nfs.EncryptionInTransit == nil {
-		return !*accountOptions.IsNFSEncryptionInTransitEnabled, nil
+		// Account has no NFS EiT requirement, non EiT request may reuse it.
+		return true, nil
 	}
 
-	return *accountOptions.IsNFSEncryptionInTransitEnabled == ptr.Deref(prop.FileServiceProperties.ProtocolSettings.Nfs.EncryptionInTransit.Required, false), nil
+	// Non-EiT request must not reuse an account requiring EiT.
+	return !ptr.Deref(prop.FileServiceProperties.ProtocolSettings.Nfs.EncryptionInTransit.Required, false), nil
 }
 
 func (az *AccountRepo) isDisableFileServiceDeleteRetentionPolicyEqual(ctx context.Context, account *armstorage.Account, accountOptions *AccountOptions) (bool, error) {
