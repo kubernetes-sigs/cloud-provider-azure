@@ -177,7 +177,7 @@ func (az *Cloud) listPIP(ctx context.Context, pipResourceGroup string, crt azcac
 }
 
 func (az *Cloud) findMatchedPIP(ctx context.Context, loadBalancerIP, pipName, pipResourceGroup string) (pip *armnetwork.PublicIPAddress, err error) {
-	if loadBalancerIP != "" {
+	if loadBalancerIP != "" && !az.IsStackCloud() {
 		if err := validatePublicIPCandidate(loadBalancerIP); err != nil {
 			return nil, err
 		}
