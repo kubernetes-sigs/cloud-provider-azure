@@ -1380,3 +1380,92 @@ func TestLoadBalancerBackendPoolUpdaterRemoveOperationCancelsOperationsBeforeDra
 	assert.Equal(t, 0, len(u.operations))
 	u.lock.Unlock()
 }
+
+// TestNodeAndEndpointSliceInformersConcurrentAccess reproduces a data race between the node
+// informer, which writes az.nodePrivateIPs under nodeCachesLock in updateNodeCaches, and the
+// EndpointSlice informer, which used to read az.nodePrivateIPs without holding the lock. Run
+// with -race to verify.
+func TestNodeAndEndpointSliceInformersConcurrentAccess(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cloud := GetTestCloud(ctrl)
+	cloud.localServiceNameToServiceInfoMap = sync.Map{}
+	cloud.localServiceNameToServiceInfoMap.Store("test/svc1", newServiceInfo(consts.IPVersionIPv4String, "lb1"))
+	cloud.LoadBalancerBackendPoolUpdateIntervalInSeconds = 1
+	cloud.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+	cloud.MultipleStandardLoadBalancerConfigurations = []config.MultipleStandardLoadBalancerConfiguration{
+		{Name: "lb1"},
+	}
+
+	for i := 0; i < 10; i++ {
+		cloud.nodePrivateIPs[fmt.Sprintf("node-%d", i)] = utilsets.NewString(fmt.Sprintf("10.0.0.%d", i))
+	}
+
+	existingEPS := getTestEndpointSlice("eps1", "test", "svc1", "node-0")
+	svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+	svc.Namespace = "test"
+
+	initialNodes := make([]runtime.Object, 10)
+	for i := 0; i < 10; i++ {
+		initialNodes[i] = &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf("node-%d", i),
+			},
+			Status: v1.NodeStatus{
+				Addresses: []v1.NodeAddress{
+					{Type: v1.NodeInternalIP, Address: fmt.Sprintf("10.0.0.%d", i)},
+				},
+			},
+		}
+	}
+	clientObjs := append([]runtime.Object{&svc, existingEPS}, initialNodes...)
+	client := fake.NewSimpleClientset(clientObjs...)
+	cloud.KubeClient = client
+
+	informerFactory := informers.NewSharedInformerFactory(client, 0)
+
+	mockVMSet := NewMockVMSet(ctrl)
+	mockVMSet.EXPECT().DeleteCacheForNode(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	cloud.VMSet = mockVMSet
+
+	cloud.SetInformers(informerFactory)
+
+	stopChan := make(chan struct{})
+	informerFactory.Start(stopChan)
+	informerFactory.WaitForCacheSync(stopChan)
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 50; i++ {
+			node := &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf("node-%d", i%10),
+				},
+				Status: v1.NodeStatus{
+					Addresses: []v1.NodeAddress{
+						{Type: v1.NodeInternalIP, Address: fmt.Sprintf("10.0.%d.%d", i/256, i%256)},
+					},
+				},
+			}
+			_, _ = client.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 50; i++ {
+			eps := getTestEndpointSlice("eps1", "test", "svc1", fmt.Sprintf("node-%d", i%10))
+			eps.ResourceVersion = fmt.Sprintf("%d", i+2)
+			_, _ = client.DiscoveryV1().EndpointSlices("test").Update(context.Background(), eps, metav1.UpdateOptions{})
+		}
+	}()
+
+	wg.Wait()
+	time.Sleep(500 * time.Millisecond)
+	close(stopChan)
+}

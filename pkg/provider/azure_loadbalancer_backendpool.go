@@ -278,12 +278,11 @@ func (bc *backendPoolTypeNodeIPConfig) GetBackendPrivateIPs(ctx context.Context,
 						logger.Error(err, "failed: GetNodeNameByIPConfigurationID", "service", serviceName)
 						continue
 					}
-					privateIPsSet, ok := bc.nodePrivateIPs[strings.ToLower(nodeName)]
+					privateIPs, ok := bc.getNodePrivateIPsForNode(nodeName)
 					if !ok {
 						klog.Warningf("bc.GetBackendPrivateIPs for service (%s): failed to get private IPs of node %s", serviceName, nodeName)
 						continue
 					}
-					privateIPs := privateIPsSet.UnsortedList()
 					for _, ip := range privateIPs {
 						logger.V(2).Info("lb backendpool - found private IPs of node", "serviceName", serviceName, "ip", ip, "nodeName", nodeName)
 						if utilnet.IsIPv4String(ip) {
@@ -534,7 +533,8 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(ctx context.Context, clus
 			bp := newBackendPools[i]
 			var nodeIPAddressesToBeDeleted []string
 			for _, nodeName := range bi.excludeLoadBalancerNodes.UnsortedList() {
-				for _, ip := range bi.nodePrivateIPs[strings.ToLower(nodeName)].UnsortedList() {
+				ips, _ := bi.getNodePrivateIPsForNode(nodeName)
+				for _, ip := range ips {
 					logger.V(2).Info("found unwanted node private IP, decouple it from the LB", "serviceName", serviceName, "ip", ip, "lbName", lbName)
 					nodeIPAddressesToBeDeleted = append(nodeIPAddressesToBeDeleted, ip)
 				}

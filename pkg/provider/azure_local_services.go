@@ -404,12 +404,12 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 					}
 				}
 				for _, previousNodeName := range previousNodeNameSet.UnsortedList() {
-					nodeIPsSet := az.nodePrivateIPs[strings.ToLower(previousNodeName)]
-					previousIPs = append(previousIPs, nodeIPsSet.UnsortedList()...)
+					ips, _ := az.getNodePrivateIPsForNode(previousNodeName)
+					previousIPs = append(previousIPs, ips...)
 				}
 				for _, currentNodeName := range currentNodeNameSet.UnsortedList() {
-					nodeIPsSet := az.nodePrivateIPs[strings.ToLower(currentNodeName)]
-					currentIPs = append(currentIPs, nodeIPsSet.UnsortedList()...)
+					ips, _ := az.getNodePrivateIPsForNode(currentNodeName)
+					currentIPs = append(currentIPs, ips...)
 				}
 
 				if az.backendPoolUpdater != nil {
@@ -618,8 +618,8 @@ func (az *Cloud) checkAndApplyLocalServiceBackendPoolUpdates(lb armnetwork.LoadB
 
 	var expectedIPs []string
 	for _, nodeName := range endpointsNodeNames.UnsortedList() {
-		ips := az.nodePrivateIPs[strings.ToLower(nodeName)]
-		expectedIPs = append(expectedIPs, ips.UnsortedList()...)
+		ips, _ := az.getNodePrivateIPsForNode(nodeName)
+		expectedIPs = append(expectedIPs, ips...)
 	}
 	currentIPsInBackendPools := make(map[string][]string)
 	for _, bp := range lb.Properties.BackendAddressPools {
