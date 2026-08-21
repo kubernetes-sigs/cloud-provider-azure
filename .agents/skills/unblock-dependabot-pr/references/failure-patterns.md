@@ -38,15 +38,16 @@ or acting on a row.
   bot to regenerate the branch rather than handing the PR to a human reviewer.
   The needs-rebase row uses this as a guard: a conflicting branch is detected
   from metadata and handed to Dependabot before any CI/log I/O, since a rebase
-  invalidates a stale CI run anyway.
+  invalidates a stale CI run anyway. The directive consumes one shared unblock
+  attempt and carries its attempt stamp in the same comment.
 
 ## Catalog
 
 | Pri | Stage | Pattern | Signal | Autonomy | Stop | Details |
 |-----|-------|---------|--------|----------|------|---------|
 | 10 | guard | K8s minor-version bump | `k8s.io/*` `go.mod` minor-family change | close | yes | [Details: K8s minor-version guard](#details-k8s-minor-version-guard) |
+| 13 | guard | Retry budget exhausted | Highest `Unblock attempt: N` is `>= 3` | escalate | yes | [Details: Retry budget exhausted](#details-retry-budget-exhausted) |
 | 15 | guard | Needs rebase | `needs-rebase` label or `mergeable` = CONFLICTING | bot-rebase | yes | [Details: Needs rebase](#details-needs-rebase) |
-| 17 | guard | Retry budget exhausted | Highest `Unblock attempt: N` is `>= 3` | escalate | yes | [Details: Retry budget exhausted](#details-retry-budget-exhausted) |
 | 20 | act | go-mod-consistency failed | `go-mod-consistency` failed | auto-fix | no | [Details: go-mod-consistency](#details-go-mod-consistency) |
 | 30 | act | Public-IP quota e2e flake | Public-IP quota marker in e2e log | auto-fix | no | [Details: Public-IP quota e2e](#details-public-ip-quota-e2e) |
 | 35 | act | Image-build registry flake e2e | Registry 5xx during pre-test image build | auto-fix | no | [Details: Image-build registry flake](#details-image-build-registry-flake) |
@@ -183,9 +184,11 @@ failed run after pushing a new commit; the push-triggered rerun supersedes it.
 
 ## Details: Attempt stamp
 
-Shared rule for a triage round with one or more act-stage non-final actions — a
-`Stop=no` row whose action posts a comment, pushes, or triggers a CI rerun that
-leaves the PR for another CI round rather than terminating triage. Today that is
+Shared rule for a triage round that takes an automated unblock action and leaves
+the PR for another automated round rather than terminating it. This includes the
+guard-stage [Needs rebase](#details-needs-rebase) directive, whose `Stop=yes`
+ends the current triage, and act-stage `Stop=no` actions that post a comment,
+push, or trigger a CI rerun. The act-stage actions are
 [go-mod-consistency](#details-go-mod-consistency) (push + `/lgtm`),
 the [Shared e2e flake rerun](#details-shared-e2e-flake-rerun) rule used by
 [Public-IP quota e2e](#details-public-ip-quota-e2e),
@@ -199,12 +202,12 @@ the [Shared e2e flake rerun](#details-shared-e2e-flake-rerun) rule used by
 stamp recipe.
 
 The skill keeps no state between runs, so the attempt count lives in the PR's
-own comment history. Count triage **rounds**, not actions or comments: one
-triage may push a module-sync fix and rerun three e2e jobs, but it is a single
-attempt with one summary comment.
+own comment history. Count triage **rounds**, not actions or comments: a rebase
+directive is one attempt, while one act-stage triage may push a module-sync fix
+and rerun three e2e jobs but is still one attempt with one summary comment.
 
-Compute the next attempt number once, at the start of the act stage, before
-taking any non-final action this round:
+Compute the next attempt number once, before taking any automated unblock action
+this round:
 
 ```bash
 # Highest existing "Unblock attempt: N" stamp across all PR comments; 0 if none.
@@ -212,9 +215,11 @@ gh pr view <pr> --json comments \
   --jq '[.comments[].body | capture("Unblock attempt: (?<n>[0-9]+)"; "g").n | tonumber] | max // 0'
 ```
 
-Let `N` be that maximum. This round's attempt number is `N + 1`. Do not add
-`Unblock attempt: <N+1>` to an individual `/test`, `/lgtm`, or GitHub Actions
-action comment. After all non-final actions taken this triage have completed,
+Let `N` be that maximum. This round's attempt number is `N + 1`. For a
+guard-stage rebase, put `Unblock attempt: <N+1>` in the same comment as the bot
+directive so the action and its accounting are atomic. For act-stage actions,
+do not add the stamp to an individual `/test`, `/lgtm`, or GitHub Actions action
+comment. After all act-stage non-final actions taken this triage have completed,
 post exactly one plain informational comment that summarizes them:
 
 ```bash
@@ -226,10 +231,10 @@ Unblock attempt: <N+1>
 EOF
 ```
 
-Post no summary when the triage takes no non-final action. The summary is what
-the guard-stage [Retry budget exhausted](#details-retry-budget-exhausted) row
-reads on the next run. Terminal actions do not cause a summary on their own:
-`/close` (K8s guard), `@dependabot rebase` (needs-rebase), the `escalate`
+Post no summary when the triage takes no act-stage non-final action. A rebase
+directive causes no separate summary because its comment already carries the
+attempt stamp. Terminal actions do not cause a summary or consume an attempt:
+`/close` (K8s guard), the `escalate`
 [Toolchain / SDK / policy](#details-toolchain--sdk--policy) and
 [Retry budget exhausted](#details-retry-budget-exhausted) handoffs, and the
 [Only Tide pending](#details-only-tide-pending) `/lgtm`.
@@ -462,41 +467,45 @@ blocker type so a reviewer knows where to look.
 
 ## Details: Needs rebase
 
-Evaluate this guard from PR metadata right after the K8s minor-version guard,
-before reading CI status or any Prow log. If the PR carries the `needs-rebase`
-label or `gh pr view` reports `mergeable` = `CONFLICTING`, the branch is out of
-date and `@dependabot rebase` will regenerate it — so classifying CI, syncing
-modules, or pushing a local fix first would be wasted work against a stale
-branch.
+Evaluate this guard from PR metadata after the
+[Retry budget exhausted](#details-retry-budget-exhausted) guard and before
+reading CI status or any Prow log. If the PR carries the `needs-rebase` label or
+`gh pr view` reports `mergeable` = `CONFLICTING`, the branch is out of date and
+`@dependabot rebase` will regenerate it — so classifying CI, syncing modules, or
+pushing a local fix first would be wasted work against a stale branch.
 
-Ask Dependabot to rebase the branch instead of manually rewriting the generated
-PR branch. Put `@dependabot rebase` on the first line, then say the branch is in
-a needs-rebase / conflicting state and must be rebased before Tide can merge it:
+Reuse `N`, the highest attempt stamp read by the retry-budget guard. Ask
+Dependabot to rebase the branch instead of manually rewriting the generated PR
+branch. Put `@dependabot rebase` on the first line, explain why it is needed,
+and record this round as `N + 1` in the same comment:
 
 ```bash
 gh pr comment <pr> --body-file - <<'EOF'
 @dependabot rebase
 
 Reason: the PR is in a needs-rebase or conflicting state and must be rebased before Tide can merge it.
+Unblock attempt: <N+1>
 EOF
 ```
 
 After posting the comment, stop triage for this PR. Do not inspect CI, sync
 modules, retest, comment `/lgtm`, or report no-action; Dependabot will push a
-rebased branch and a fresh CI run to triage next time.
+rebased branch and a fresh CI run to triage next time. The rebase directive is
+one automated unblock attempt; do not post a separate attempt-summary comment.
 
 ## Details: Retry budget exhausted
 
-Evaluate this guard from PR comment metadata as a guard-stage step, right after the
-[Needs rebase](#details-needs-rebase) guard and before reading CI status or any
-Prow log. Its purpose is to cap automated churn: once this skill has already
-tried to unblock a PR three times without success, a fourth automated attempt is
-unlikely to help, so the PR goes to human reviewers instead of burning more
-CI on the same failing jobs.
+Evaluate this guard from PR comment metadata as a guard-stage step immediately
+after the K8s minor-version guard and before the
+[Needs rebase](#details-needs-rebase) guard or any CI/log I/O. Its purpose is to
+cap automated churn: once this skill has already tried to unblock a PR three
+times without success, a fourth automated attempt is unlikely to help, so the
+PR goes to human reviewers instead of burning more CI on the same failing jobs.
 
-The count comes from the one `Unblock attempt: N` summary that each completed
-non-final triage leaves on the PR (see [Attempt stamp](#details-attempt-stamp)).
-Read the highest stamp already present:
+The count comes from the one `Unblock attempt: N` stamp that each completed
+non-final triage leaves on the PR: the rebase directive carries its own stamp,
+while act-stage actions use one summary (see
+[Attempt stamp](#details-attempt-stamp)). Read the highest stamp already present:
 
 ```bash
 gh pr view <pr> --json comments \
@@ -505,16 +514,20 @@ gh pr view <pr> --json comments \
 
 Let `N` be that maximum. The budget is three attempts, so:
 
-- `N < 3` — budget remains. Do not escalate; continue triage. If this triage
-  completes one or more non-final actions, post one `Unblock attempt: <N+1>`
-  summary per the [Attempt stamp](#details-attempt-stamp) rule.
+- `N < 3` — budget remains. Do not escalate; continue triage. If the
+  [Needs rebase](#details-needs-rebase) guard matches, its directive carries
+  `Unblock attempt: <N+1>`; otherwise, if the act stage completes one or more
+  non-final actions, post one summary with that stamp per the
+  [Attempt stamp](#details-attempt-stamp) rule.
 - `N >= 3` — the budget is spent (a fourth attempt would exceed three). Stop
-  working the PR: make no automated change and report it as needing human review
-  in the final output.
+  working the PR: make no automated change, including no rebase directive, and
+  report it as needing human review in the final output.
 
 Escalation makes no change to the PR — no comment, no checks, no module sync, no
 push, no `/lgtm`. Because it posts nothing, it leaves no `Unblock attempt:` stamp
 and is safe to re-evaluate on every later run: once `N >= 3` the guard simply
 keeps reporting the PR as needing human review until a human resolves it. Report
-the PR in the final output with its remaining failing jobs so a reviewer knows
-where to look.
+the PR in the final output with the retry-budget blocker and current attempt
+count. Include failing jobs only when they are already known from the caller's
+input or guard-stage metadata; do not fetch CI status or logs solely to populate
+this report.
