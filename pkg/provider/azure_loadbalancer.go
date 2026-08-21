@@ -3429,6 +3429,8 @@ func (az *Cloud) reconcileSecurityGroup(
 		var opts []loadbalancer.AccessControlOption
 		if !wantLb {
 			// When deleting LB, we don't need to validate the annotation
+			opts = append(opts, loadbalancer.SkipAnnotationValidation())
+		} else {
 			opts = append(opts, loadbalancer.WithEventEmitter(az.Event))
 		}
 		accessControl, err = loadbalancer.NewAccessControl(logger, service, sg, opts...)

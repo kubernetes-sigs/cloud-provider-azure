@@ -21,6 +21,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -47,5 +48,14 @@ func EventMessageOfConflictLoadBalancerSourceRangesAndAllowedIPRanges() string {
 		"Please use annotation %s instead of spec.loadBalancerSourceRanges while using %s annotation at the same time.",
 		consts.ServiceAnnotationAllowedIPRanges,
 		consts.ServiceAnnotationAllowedServiceTags,
+	)
+}
+
+func EventMessageOfIPRangeFamilyMismatch(ipRanges []string) string {
+	return fmt.Sprintf(
+		"Found IP ranges %q that do not match the Service's IP families, so no traffic from them can reach the Service. Check spec.loadBalancerSourceRanges, %s and %s.",
+		ipRanges,
+		consts.ServiceAnnotationAllowedIPRanges,
+		v1.AnnotationLoadBalancerSourceRangesKey,
 	)
 }
