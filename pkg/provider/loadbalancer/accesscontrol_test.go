@@ -18,6 +18,7 @@ package loadbalancer
 
 import (
 	"net/netip"
+	"strings"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
@@ -203,6 +204,206 @@ func TestNewAccessControl(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, called)
 	})
+
+	t.Run("it should not emit any event if azure-allowed-ip-ranges is valid", func(t *testing.T) {
+		svc := k8sFx.Service().
+			WithAllowedIPRanges("10.0.0.0/24").
+			Build()
+
+		called := 0
+		eventEmitter := func(_ runtime.Object, _, reason, _ string) {
+			called++
+			t.Errorf("unexpected event with reason %q", reason)
+		}
+
+		_, err := NewAccessControl(log.Noop(), &svc, sg, WithEventEmitter(eventEmitter))
+		assert.NoError(t, err)
+		assert.Equal(t, 0, called)
+	})
+
+	t.Run("it should not report a rejected configuration if annotation validation is skipped", func(t *testing.T) {
+		svc := k8sFx.Service().
+			WithLoadBalancerSourceRanges("20.0.0.1/32").
+			WithAllowedIPRanges("10.0.0.1/32").
+			Build()
+
+		called := 0
+		eventEmitter := func(_ runtime.Object, _, reason, _ string) {
+			called++
+			t.Errorf("unexpected event with reason %q", reason)
+		}
+
+		_, err := NewAccessControl(log.Noop(), &svc, sg, WithEventEmitter(eventEmitter), SkipAnnotationValidation())
+		assert.NoError(t, err, "setting both ranges must not be a hard error when validation is skipped")
+		assert.Equal(t, 0, called)
+	})
+
+	for _, tt := range []struct {
+		name              string
+		families          []v1.IPFamily
+		ipRanges          []string
+		sourceRanges      []string
+		legacyRanges      []string
+		serviceTags       []string
+		disableFloatingIP bool
+		expectedErr       error
+		expectedReasons   []string
+	}{
+		{
+			name:            "it should emit IPRangeFamilyMismatch if IPv4 Service with IPv6-only azure-allowed-ip-ranges",
+			families:        []v1.IPFamily{v1.IPv4Protocol},
+			ipRanges:        []string{"2001:db8:85a3::/64"},
+			expectedReasons: []string{"IPRangeFamilyMismatch"},
+		},
+		{
+			name:            "it should emit IPRangeFamilyMismatch if IPv4 Service with IPv6-only spec.loadBalancerSourceRanges",
+			families:        []v1.IPFamily{v1.IPv4Protocol},
+			sourceRanges:    []string{"2001:db8:85a3::/64"},
+			expectedReasons: []string{"IPRangeFamilyMismatch"},
+		},
+		{
+			name:            "it should emit IPRangeFamilyMismatch if IPv4 Service with IPv6-only load-balancer-source-ranges",
+			families:        []v1.IPFamily{v1.IPv4Protocol},
+			legacyRanges:    []string{"2001:db8:85a3::/64"},
+			expectedReasons: []string{"IPRangeFamilyMismatch"},
+		},
+		{
+			name:            "it should emit IPRangeFamilyMismatch if IPv6 Service with IPv4-only azure-allowed-ip-ranges",
+			families:        []v1.IPFamily{v1.IPv6Protocol},
+			ipRanges:        []string{"10.0.0.0/24"},
+			expectedReasons: []string{"IPRangeFamilyMismatch"},
+		},
+		{
+			name:            "it should emit IPRangeFamilyMismatch if IPv6 Service with IPv4-only spec.loadBalancerSourceRanges",
+			families:        []v1.IPFamily{v1.IPv6Protocol},
+			sourceRanges:    []string{"10.0.0.0/24"},
+			expectedReasons: []string{"IPRangeFamilyMismatch"},
+		},
+		{
+			name:            "it should emit IPRangeFamilyMismatch if IPv6 Service with IPv4-only load-balancer-source-ranges",
+			families:        []v1.IPFamily{v1.IPv6Protocol},
+			legacyRanges:    []string{"10.0.0.0/24"},
+			expectedReasons: []string{"IPRangeFamilyMismatch"},
+		},
+		{
+			name:            "it should emit IPRangeFamilyMismatch if IPv4 Service with both IPv4 and IPv6 azure-allowed-ip-ranges, even though the IPv4 range applies",
+			families:        []v1.IPFamily{v1.IPv4Protocol},
+			ipRanges:        []string{"10.0.0.0/24", "2001:db8:85a3::/64"},
+			expectedReasons: []string{"IPRangeFamilyMismatch"},
+		},
+		{
+			name:            "it should emit IPRangeFamilyMismatch if IPv6 Service with both IPv4 and IPv6 azure-allowed-ip-ranges, even though the IPv6 range applies",
+			families:        []v1.IPFamily{v1.IPv6Protocol},
+			ipRanges:        []string{"10.0.0.0/24", "2001:db8:85a3::/64"},
+			expectedReasons: []string{"IPRangeFamilyMismatch"},
+		},
+		{
+			name:            "it should emit IPRangeFamilyMismatch if IPv4 Service with IPv6-only azure-allowed-ip-ranges and a service tag",
+			families:        []v1.IPFamily{v1.IPv4Protocol},
+			ipRanges:        []string{"2001:db8:85a3::/64"},
+			serviceTags:     []string{"AzureCloud"},
+			expectedReasons: []string{"IPRangeFamilyMismatch"},
+		},
+		{
+			name:            "it should emit IPRangeFamilyMismatch if IPv6 Service with IPv4-only azure-allowed-ip-ranges and a service tag",
+			families:        []v1.IPFamily{v1.IPv6Protocol},
+			ipRanges:        []string{"10.0.0.0/24"},
+			serviceTags:     []string{"AzureCloud"},
+			expectedReasons: []string{"IPRangeFamilyMismatch"},
+		},
+		{
+			// spec.loadBalancerSourceRanges is the only range source that also conflicts with
+			// service tags, so it reports both problems.
+			name:            "it should emit ConflictConfiguration and IPRangeFamilyMismatch if IPv4 Service with IPv6-only spec.loadBalancerSourceRanges and a service tag",
+			families:        []v1.IPFamily{v1.IPv4Protocol},
+			sourceRanges:    []string{"2001:db8:85a3::/64"},
+			serviceTags:     []string{"AzureCloud"},
+			expectedReasons: []string{"ConflictConfiguration", "IPRangeFamilyMismatch"},
+		},
+		{
+			name:     "it should not emit any event if dual-stack Service with both IPv4 and IPv6 azure-allowed-ip-ranges",
+			families: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
+			ipRanges: []string{"10.0.0.0/24", "2001:db8:85a3::/64"},
+		},
+		{
+			// Disabling the floating IP retargets the rule at a node IP of the range's own family,
+			// but the Service still answers only on its families, so the range remains unreachable.
+			name:              "it should emit IPRangeFamilyMismatch if IPv4 Service with IPv6-only azure-allowed-ip-ranges and the floating IP disabled",
+			families:          []v1.IPFamily{v1.IPv4Protocol},
+			ipRanges:          []string{"2001:db8:85a3::/64"},
+			disableFloatingIP: true,
+			expectedReasons:   []string{"IPRangeFamilyMismatch"},
+		},
+		{
+			name:              "it should emit IPRangeFamilyMismatch if IPv6 Service with IPv4-only azure-allowed-ip-ranges and the floating IP disabled",
+			families:          []v1.IPFamily{v1.IPv6Protocol},
+			ipRanges:          []string{"10.0.0.0/24"},
+			disableFloatingIP: true,
+			expectedReasons:   []string{"IPRangeFamilyMismatch"},
+		},
+		{
+			// Warning events should not be emitted after fatal checks error.
+			name:         "it should not emit InvalidAllowedIPRanges if setting both spec.loadBalancerSourceRanges and azure-allowed-ip-ranges is rejected",
+			sourceRanges: []string{"20.0.0.1/32"},
+			ipRanges:     []string{"10.0.0.0/24", "bad"},
+			expectedErr:  ErrSetBothLoadBalancerSourceRangesAndAllowedIPRanges,
+		},
+		{
+			name:         "it should not emit InvalidSourceRanges if setting both spec.loadBalancerSourceRanges and azure-allowed-ip-ranges is rejected",
+			sourceRanges: []string{"20.0.0.1/32", "bad"},
+			ipRanges:     []string{"10.0.0.0/24"},
+			expectedErr:  ErrSetBothLoadBalancerSourceRangesAndAllowedIPRanges,
+		},
+		{
+			name:         "it should not emit ConflictConfiguration if setting both spec.loadBalancerSourceRanges and azure-allowed-ip-ranges is rejected",
+			sourceRanges: []string{"20.0.0.1/32"},
+			ipRanges:     []string{"10.0.0.0/24"},
+			serviceTags:  []string{"AzureCloud"},
+			expectedErr:  ErrSetBothLoadBalancerSourceRangesAndAllowedIPRanges,
+		},
+		{
+			name:         "it should not emit IPRangeFamilyMismatch if setting both spec.loadBalancerSourceRanges and azure-allowed-ip-ranges is rejected",
+			families:     []v1.IPFamily{v1.IPv4Protocol},
+			sourceRanges: []string{"2001:db8:85a3::/64"},
+			ipRanges:     []string{"10.0.0.0/24"},
+			expectedErr:  ErrSetBothLoadBalancerSourceRangesAndAllowedIPRanges,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			builder := k8sFx.Service().WithIPFamilies(tt.families...)
+			if len(tt.ipRanges) > 0 {
+				builder = builder.WithAllowedIPRanges(tt.ipRanges...)
+			}
+			if len(tt.sourceRanges) > 0 {
+				builder = builder.WithLoadBalancerSourceRanges(tt.sourceRanges...)
+			}
+			if len(tt.serviceTags) > 0 {
+				builder = builder.WithAllowedServiceTags(tt.serviceTags...)
+			}
+			if tt.disableFloatingIP {
+				builder = builder.WithDisableFloatingIP()
+			}
+			svc := builder.Build()
+			if len(tt.legacyRanges) > 0 {
+				svc.Annotations[v1.AnnotationLoadBalancerSourceRangesKey] = strings.Join(tt.legacyRanges, ",")
+			}
+
+			var reasons []string
+			eventEmitter := func(obj runtime.Object, eventType, reason, _ string) {
+				assert.Equal(t, &svc, obj)
+				assert.Equal(t, v1.EventTypeWarning, eventType)
+				reasons = append(reasons, reason)
+			}
+
+			_, err := NewAccessControl(log.Noop(), &svc, sg, WithEventEmitter(eventEmitter))
+			if tt.expectedErr != nil {
+				assert.ErrorIs(t, err, tt.expectedErr)
+			} else {
+				assert.NoError(t, err, "this configuration must not be a hard error")
+			}
+			assert.ElementsMatch(t, tt.expectedReasons, reasons)
+		})
+	}
 }
 
 func TestAccessControl_DenyAllExceptSourceRanges(t *testing.T) {
