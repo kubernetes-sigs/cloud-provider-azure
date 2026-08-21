@@ -116,6 +116,11 @@ func (f *KubernetesServiceFixture) WithLoadBalancerSourceRanges(parts ...string)
 	return f
 }
 
+func (f *KubernetesServiceFixture) WithIPFamilies(families ...v1.IPFamily) *KubernetesServiceFixture {
+	f.svc.Spec.IPFamilies = families
+	return f
+}
+
 func (f *KubernetesServiceFixture) TCPPorts() []int32 {
 	var rv []int32
 	for _, p := range f.svc.Spec.Ports {

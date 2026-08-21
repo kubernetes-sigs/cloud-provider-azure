@@ -52,7 +52,8 @@ type AccessControl struct {
 }
 
 type accessControlOptions struct {
-	EventEmitter K8sEventEmitter
+	EventEmitter             K8sEventEmitter
+	SkipAnnotationValidation bool
 }
 
 var defaultAccessControlOptions = accessControlOptions{
@@ -64,6 +65,13 @@ type AccessControlOption func(*accessControlOptions)
 func WithEventEmitter(emitter K8sEventEmitter) AccessControlOption {
 	return func(o *accessControlOptions) {
 		o.EventEmitter = emitter
+	}
+}
+
+// SkipAnnotationValidation keeps a rejected annotation configuration from aborting the caller.
+func SkipAnnotationValidation() AccessControlOption {
+	return func(o *accessControlOptions) {
+		o.SkipAnnotationValidation = true
 	}
 }
 
@@ -82,14 +90,14 @@ func NewAccessControl(logger logr.Logger, svc *v1.Service, sg *armnetwork.Securi
 		return nil, err
 	}
 	sourceRanges, invalidSourceRanges, err := SourceRanges(svc)
-	if err != nil {
+	if err != nil && !options.SkipAnnotationValidation {
 		logger.Error(err, "Failed to parse SourceRange configuration")
 
 		// Backward compatibility: no error but emit a warning event.
 		eventEmitter(svc, v1.EventTypeWarning, "InvalidSourceRanges", EventMessageOfInvalidSourceRanges(invalidSourceRanges))
 	}
 	allowedIPRanges, invalidAllowedIPRanges, err := AllowedIPRanges(svc)
-	if err != nil {
+	if err != nil && !options.SkipAnnotationValidation {
 		logger.Error(err, "Failed to parse AllowedIPRanges configuration")
 
 		// Backward compatibility: no error but emit a warning event.
@@ -101,12 +109,12 @@ func NewAccessControl(logger logr.Logger, svc *v1.Service, sg *armnetwork.Securi
 		logger.Error(err, "Failed to parse service Spec.Ports")
 		return nil, err
 	}
-	if len(sourceRanges) > 0 && len(allowedIPRanges) > 0 {
+	if !options.SkipAnnotationValidation && len(sourceRanges) > 0 && len(allowedIPRanges) > 0 {
 		logger.Error(ErrSetBothLoadBalancerSourceRangesAndAllowedIPRanges, "Forbidden configuration")
 		return nil, ErrSetBothLoadBalancerSourceRangesAndAllowedIPRanges
 	}
 
-	if len(sourceRanges) > 0 && len(allowedServiceTags) > 0 {
+	if !options.SkipAnnotationValidation && len(sourceRanges) > 0 && len(allowedServiceTags) > 0 {
 		logger.Info(
 			"Service is using both of spec.loadBalancerSourceRanges and annotation service.beta.kubernetes.io/azure-allowed-service-tags",
 		)
@@ -115,7 +123,7 @@ func NewAccessControl(logger logr.Logger, svc *v1.Service, sg *armnetwork.Securi
 		eventEmitter(svc, v1.EventTypeWarning, "ConflictConfiguration", EventMessageOfConflictLoadBalancerSourceRangesAndAllowedIPRanges())
 	}
 
-	return &AccessControl{
+	ac := &AccessControl{
 		logger:                                 logger,
 		svc:                                    svc,
 		sgHelper:                               sgHelper,
@@ -124,7 +132,46 @@ func NewAccessControl(logger logr.Logger, svc *v1.Service, sg *armnetwork.Securi
 		AllowedServiceTags:                     allowedServiceTags,
 		invalidRanges:                          append(invalidSourceRanges, invalidAllowedIPRanges...),
 		securityRuleDestinationPortsByProtocol: securityRuleDestinationPortsByProtocol,
-	}, nil
+	}
+
+	if !options.SkipAnnotationValidation {
+		if ignored := ac.ignoredIPFamilyRanges(); len(ignored) > 0 {
+			ranges := fnutil.Map(func(p netip.Prefix) string { return p.String() }, ignored)
+			logger.V(2).Info("Ignored allowed IP ranges that do not match the Service's IP families",
+				"ip-ranges", ranges, "service-ip-families", ac.svc.Spec.IPFamilies)
+			eventEmitter(svc, v1.EventTypeWarning, "IPRangeFamilyMismatch", EventMessageOfIPRangeFamilyMismatch(ranges))
+		}
+	}
+
+	return ac, nil
+}
+
+// ignoredIPFamilyRanges returns the configured ranges that do not match any of the Service's IP families.
+// The Service only ever answers on its own families, so nothing in those ranges can reach it.
+// Mismatched ranges are returned even when matching ranges still apply.
+func (ac *AccessControl) ignoredIPFamilyRanges() []netip.Prefix {
+	if len(ac.svc.Spec.IPFamilies) == 0 {
+		return nil
+	}
+
+	var hasIPv4, hasIPv6 bool
+	for _, family := range ac.svc.Spec.IPFamilies {
+		switch family {
+		case v1.IPv4Protocol:
+			hasIPv4 = true
+		case v1.IPv6Protocol:
+			hasIPv6 = true
+		}
+	}
+
+	var rv []netip.Prefix
+	if !hasIPv4 {
+		rv = append(rv, ac.AllowedIPv4Ranges()...)
+	}
+	if !hasIPv6 {
+		rv = append(rv, ac.AllowedIPv6Ranges()...)
+	}
+	return rv
 }
 
 // IsAllowFromInternet returns true if the given service is allowed to be accessed from internet.
