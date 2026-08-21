@@ -31,10 +31,11 @@ gh pr view <pr> --json number,title,headRefName,headRepositoryOwner,headRefOid,b
 
 Then walk the catalog as an explicit staged algorithm:
 
-> **Guard stage — metadata/diff only.** Before running `gh pr checks`, reading
-> `statusCheckRollup`, or fetching any Prow log, evaluate every guard row whose
-> Signal is computable from PR metadata and the `go.mod` diff alone. If a guard
-> row matches and is marked Stop, follow its linked Details action
+> **Guard stage — metadata/diff/comment-history only.** Before running
+> `gh pr checks`, reading `statusCheckRollup`, or fetching any Prow log,
+> evaluate every guard row whose Signal is computable from PR metadata, the
+> `go.mod` diff, and PR comment history alone. If a guard row matches and is
+> marked Stop, follow its linked Details action
 > (e.g. `/close`) and **end triage immediately** — do not inspect CI, sync
 > modules, retest, `/lgtm`, or report no-action.
 >
@@ -77,10 +78,10 @@ or overwrite unrelated files.
   compatibility issue, commit SHA, changed files, and validation result.
 - Use specific staging commands, never `git add .`.
 - Push only the current task's files.
-- Resolve guard rows from PR metadata and the `go.mod` diff before any CI or log
-  I/O. When a guard row marked Stop matches, follow its linked
-  Details action and end triage immediately — do not inspect CI, sync modules,
-  retest, comment `/lgtm`, or report that no action is needed.
+- Resolve guard rows from PR metadata, the `go.mod` diff, and PR comment history
+  before any CI or log I/O. When a guard row marked Stop matches, follow its
+  linked Details action and end triage immediately — do not inspect CI, sync
+  modules, retest, comment `/lgtm`, or report that no action is needed.
 - After the guard stage, handle failed required jobs one by one. For each failed
   job, walk act rows in ascending Priority and take a row's linked Details
   action only when its Details preconditions and exclusions hold. Do not stop
@@ -89,18 +90,19 @@ or overwrite unrelated files.
 - When a row's Details action reruns CI (a push), skip any later row whose only
   effect would be to retest the jobs that push will rerun; prefer the
   push-triggered rerun.
-- After all retry-budgeted non-final actions in a triage are complete, post one
-  plain attempt summary comment with this triage's attempt number, counted from
-  the PR's own comment history. Public-IP quota e2e reruns are explicitly
-  unbudgeted: they do not create or increment an `Unblock attempt` stamp, and a
-  quota-only triage posts no attempt summary. If the same triage also takes a
-  budgeted action, summarize only the budgeted actions in the single attempt
-  comment. Do not add an attempt marker to individual action comments. Once the
-  automated retry budget is spent, an `escalate` row makes no change to the PR
-  — no comment, no checks, no push — and the PR is reported as needing human
-  review in the final output. All of this is catalog-driven: the retry-budget
-  guard reads the summary before any CI/log I/O, and the shared attempt-stamp
-  rule writes it. Do not invent a separate counter.
+- Count every retry-budgeted automated unblock round against the same
+  PR-comment-backed retry budget. Public-IP quota e2e reruns are explicitly
+  unbudgeted: they do not create or increment an `Unblock attempt` stamp. A
+  guard-stage `@dependabot rebase` comment carries its budgeted attempt stamp
+  directly; after all budgeted act-stage non-final actions in a triage are
+  complete, post one plain attempt-summary comment instead. A quota-only triage
+  posts no attempt summary; in a mixed triage, summarize only the budgeted
+  actions. Do not add an attempt marker to individual act-stage action comments.
+  Once the budget is spent, an `escalate` row makes no change to the PR — no
+  comment, no checks, no push — and the PR is reported as needing human review
+  in the final output. All of this is catalog-driven: the retry-budget guard
+  reads the highest stamp before any rebase or CI/log I/O, and the shared
+  attempt-stamp rule writes it. Do not invent a separate counter.
 - A row marked Stop ends triage after it is handled.
 - Use the retry mechanism for the CI system that produced the failure, and only
   after the failure is classified as transient or safe to rerun. For Prow jobs,
@@ -110,5 +112,5 @@ or overwrite unrelated files.
 - Report pending jobs, `tide` status, and any residual risk clearly instead of
   claiming the PR is green before CI finishes. When an `escalate` row matched
   (retry budget spent, or a toolchain / SDK / policy blocker), report the PR as
-  needing human review, naming the failing jobs and the blocker, rather than
-  claiming it was unblocked.
+  needing human review, naming the blocker and any failing jobs already known
+  under that row's I/O rules, rather than claiming it was unblocked.
