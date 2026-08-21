@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil"
@@ -2752,6 +2753,248 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 
 		_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), false) // deleting
 		assert.NoError(t, err)
+	})
+
+	t.Run("validation events", func(t *testing.T) {
+		reconcile := func(
+			t *testing.T, svc *v1.Service, lbIPs []string, wantLb bool,
+			staleRules ...*armnetwork.SecurityRule,
+		) (*armnetwork.SecurityGroup, []string, error) {
+			t.Helper()
+			var (
+				ctrl                    = gomock.NewController(t)
+				az                      = GetTestCloud(ctrl)
+				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+				loadBalancerClient      = az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
+				securityGroup           = azureFx.SecurityGroup().WithRules(append(azureFx.NoiseSecurityRules(), staleRules...)).Build()
+				loadBalancer            = azureFx.LoadBalancer().Build()
+			)
+			defer ctrl.Finish()
+
+			// GetTestCloud's zero-value FakeRecorder has a nil channel that discards events.
+			recorder := record.NewFakeRecorder(10)
+			az.eventRecorder = recorder
+
+			securityGroupClient.EXPECT().
+				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
+				Return(securityGroup, nil).
+				AnyTimes()
+			securityGroupClient.EXPECT().
+				CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any()).
+				Return(nil, nil).
+				AnyTimes()
+			loadBalancerClient.EXPECT().
+				Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
+				Return(loadBalancer, nil).
+				AnyTimes()
+			loadBalancerBackendPool.EXPECT().
+				GetBackendPrivateIPs(gomock.Any(), ClusterName, svc, loadBalancer).
+				Return(
+					azureFx.LoadBalancer().BackendPoolIPv4Addresses(),
+					azureFx.LoadBalancer().BackendPoolIPv6Addresses(),
+				).
+				AnyTimes()
+
+			rv, err := az.reconcileSecurityGroup(ctx, ClusterName, svc, *loadBalancer.Name, lbIPs, wantLb)
+
+			var events []string
+			for len(recorder.Events) > 0 {
+				events = append(events, <-recorder.Events)
+			}
+			return rv, events, err
+		}
+
+		for _, tt := range []struct {
+			name           string
+			families       []v1.IPFamily
+			ipRanges       []string
+			sourceRanges   []string
+			serviceTags    []string
+			expectedReason string
+			expectedRules  []*armnetwork.SecurityRule
+		}{
+			{
+				name:           "it should emit IPRangeFamilyMismatch and leave the frontend with no allow rule when ensuring an IPv4 Service with IPv6-only azure-allowed-ip-ranges",
+				families:       []v1.IPFamily{v1.IPv4Protocol},
+				ipRanges:       []string{"2001:db8:85a3::/64"},
+				expectedReason: "IPRangeFamilyMismatch",
+			},
+			{
+				name:           "it should emit IPRangeFamilyMismatch and leave the frontend with no allow rule when ensuring an IPv6 Service with IPv4-only azure-allowed-ip-ranges",
+				families:       []v1.IPFamily{v1.IPv6Protocol},
+				ipRanges:       []string{"10.0.0.0/24"},
+				expectedReason: "IPRangeFamilyMismatch",
+			},
+			{
+				name:           "it should emit IPRangeFamilyMismatch and not open the frontend to the Internet when ensuring an IPv4 Service with an allow-all IPv6 range in azure-allowed-ip-ranges",
+				families:       []v1.IPFamily{v1.IPv4Protocol},
+				ipRanges:       []string{"::/0"},
+				expectedReason: "IPRangeFamilyMismatch",
+			},
+			{
+				name:           "it should emit IPRangeFamilyMismatch and not open the frontend to the Internet when ensuring an IPv6 Service with an allow-all IPv4 range in azure-allowed-ip-ranges",
+				families:       []v1.IPFamily{v1.IPv6Protocol},
+				ipRanges:       []string{"0.0.0.0/0"},
+				expectedReason: "IPRangeFamilyMismatch",
+			},
+			{
+				name:           "it should emit IPRangeFamilyMismatch and still add the service tag rules when ensuring an IPv4 Service with IPv6-only azure-allowed-ip-ranges and a service tag",
+				families:       []v1.IPFamily{v1.IPv4Protocol},
+				ipRanges:       []string{"2001:db8:85a3::/64"},
+				serviceTags:    []string{"AzureCloud"},
+				expectedReason: "IPRangeFamilyMismatch",
+				expectedRules: []*armnetwork.SecurityRule{
+					azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{"AzureCloud"}, k8sFx.Service().TCPPorts()).
+						WithPriority(500).WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).Build(),
+					azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{"AzureCloud"}, k8sFx.Service().UDPPorts()).
+						WithPriority(501).WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).Build(),
+				},
+			},
+			{
+				name:           "it should emit IPRangeFamilyMismatch and still add the service tag rules when ensuring an IPv6 Service with IPv4-only azure-allowed-ip-ranges and a service tag",
+				families:       []v1.IPFamily{v1.IPv6Protocol},
+				ipRanges:       []string{"10.0.0.0/24"},
+				serviceTags:    []string{"AzureCloud"},
+				expectedReason: "IPRangeFamilyMismatch",
+				expectedRules: []*armnetwork.SecurityRule{
+					azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, []string{"AzureCloud"}, k8sFx.Service().TCPPorts()).
+						WithPriority(500).WithDestination(azureFx.LoadBalancer().IPv6Addresses()...).Build(),
+					azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, []string{"AzureCloud"}, k8sFx.Service().UDPPorts()).
+						WithPriority(501).WithDestination(azureFx.LoadBalancer().IPv6Addresses()...).Build(),
+				},
+			},
+			{
+				name:     "it should not emit any event and add rules for both families when ensuring a dual-stack Service with both IPv4 and IPv6 azure-allowed-ip-ranges",
+				families: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
+				ipRanges: []string{"10.0.0.0/24", "2001:db8:85a3::/64"},
+				expectedRules: []*armnetwork.SecurityRule{
+					azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{"10.0.0.0/24"}, k8sFx.Service().TCPPorts()).
+						WithPriority(500).WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).Build(),
+					azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, []string{"2001:db8:85a3::/64"}, k8sFx.Service().TCPPorts()).
+						WithPriority(501).WithDestination(azureFx.LoadBalancer().IPv6Addresses()...).Build(),
+					azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{"10.0.0.0/24"}, k8sFx.Service().UDPPorts()).
+						WithPriority(502).WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).Build(),
+					azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, []string{"2001:db8:85a3::/64"}, k8sFx.Service().UDPPorts()).
+						WithPriority(503).WithDestination(azureFx.LoadBalancer().IPv6Addresses()...).Build(),
+				},
+			},
+			{
+				name:           "it should emit InvalidAllowedIPRanges and add DenyAll rules when ensuring a Service with an invalid range in azure-allowed-ip-ranges",
+				ipRanges:       []string{"foo", "10.0.0.0/24"},
+				expectedReason: "InvalidAllowedIPRanges",
+				expectedRules: []*armnetwork.SecurityRule{
+					azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{"10.0.0.0/24"}, k8sFx.Service().TCPPorts()).
+						WithPriority(500).WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).Build(),
+					azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{"10.0.0.0/24"}, k8sFx.Service().UDPPorts()).
+						WithPriority(501).WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).Build(),
+					azureFx.DenyAllSecurityRule(iputil.IPv6).
+						WithPriority(4094).WithDestination(azureFx.LoadBalancer().IPv6Addresses()...).Build(),
+					azureFx.DenyAllSecurityRule(iputil.IPv4).
+						WithPriority(4095).WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).Build(),
+				},
+			},
+			{
+				name:           "it should emit ConflictConfiguration and add rules for both the spec ranges and the service tag when ensuring a Service with spec.loadBalancerSourceRanges and service tags",
+				sourceRanges:   []string{"20.0.0.1/32"},
+				serviceTags:    []string{"AKS"},
+				expectedReason: "ConflictConfiguration",
+				expectedRules: []*armnetwork.SecurityRule{
+					azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{"AKS"}, k8sFx.Service().TCPPorts()).
+						WithPriority(500).WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).Build(),
+					azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{"20.0.0.1/32"}, k8sFx.Service().TCPPorts()).
+						WithPriority(501).WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).Build(),
+					azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv6, []string{"AKS"}, k8sFx.Service().TCPPorts()).
+						WithPriority(502).WithDestination(azureFx.LoadBalancer().IPv6Addresses()...).Build(),
+					azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{"AKS"}, k8sFx.Service().UDPPorts()).
+						WithPriority(503).WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).Build(),
+					azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{"20.0.0.1/32"}, k8sFx.Service().UDPPorts()).
+						WithPriority(504).WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).Build(),
+					azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv6, []string{"AKS"}, k8sFx.Service().UDPPorts()).
+						WithPriority(505).WithDestination(azureFx.LoadBalancer().IPv6Addresses()...).Build(),
+				},
+			},
+			{
+				name:     "it should not emit any event and add the allow rules when ensuring a Service with a valid range in azure-allowed-ip-ranges",
+				ipRanges: []string{"10.0.0.0/24"},
+				expectedRules: []*armnetwork.SecurityRule{
+					azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{"10.0.0.0/24"}, k8sFx.Service().TCPPorts()).
+						WithPriority(500).WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).Build(),
+					azureFx.AllowSecurityRule(armnetwork.SecurityRuleProtocolUDP, iputil.IPv4, []string{"10.0.0.0/24"}, k8sFx.Service().UDPPorts()).
+						WithPriority(501).WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).Build(),
+				},
+			},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				builder := k8sFx.Service().WithIPFamilies(tt.families...)
+				if len(tt.ipRanges) > 0 {
+					builder = builder.WithAllowedIPRanges(tt.ipRanges...)
+				}
+				if len(tt.sourceRanges) > 0 {
+					builder = builder.WithLoadBalancerSourceRanges(tt.sourceRanges...)
+				}
+				if len(tt.serviceTags) > 0 {
+					builder = builder.WithAllowedServiceTags(tt.serviceTags...)
+				}
+				svc := builder.Build()
+
+				// A single-stack Service has an LB frontend of only its own family.
+				lbIPs := azureFx.LoadBalancer().Addresses()
+				switch {
+				case len(tt.families) == 1 && tt.families[0] == v1.IPv4Protocol:
+					lbIPs = azureFx.LoadBalancer().IPv4Addresses()
+				case len(tt.families) == 1 && tt.families[0] == v1.IPv6Protocol:
+					lbIPs = azureFx.LoadBalancer().IPv6Addresses()
+				}
+
+				sg, events, err := reconcile(t, &svc, lbIPs, EnsureLB)
+				assert.NoError(t, err, "a rejected configuration must not block reconcile")
+				if tt.expectedReason != "" {
+					assert.Contains(t, strings.Join(events, "\n"), tt.expectedReason)
+				} else {
+					assert.Empty(t, events)
+				}
+				testutil.ExpectExactSecurityRules(t, sg, append(azureFx.NoiseSecurityRules(), tt.expectedRules...))
+			})
+		}
+
+		for _, tt := range []struct {
+			name string
+			svc  v1.Service
+		}{
+			{
+				name: "it should skip validation and clean up when deleting a Service with an invalid range in azure-allowed-ip-ranges",
+				svc:  k8sFx.Service().WithAllowedIPRanges("foo", "10.0.0.0/24").Build(),
+			},
+			{
+				name: "it should skip validation and clean up when deleting a Service with spec.loadBalancerSourceRanges and service tags",
+				svc:  k8sFx.Service().WithLoadBalancerSourceRanges("20.0.0.1/32").WithAllowedServiceTags("AKS").Build(),
+			},
+			{
+				name: "it should skip validation and clean up when deleting a Service with an IP family mismatch in azure-allowed-ip-ranges",
+				svc:  k8sFx.Service().WithIPFamilies(v1.IPv4Protocol).WithAllowedIPRanges("2001:db8:85a3::/64").Build(),
+			},
+			{
+				name: "it should skip validation and clean up when deleting a Service with both spec.loadBalancerSourceRanges and azure-allowed-ip-ranges",
+				svc:  k8sFx.Service().WithLoadBalancerSourceRanges("20.0.0.1/32").WithAllowedIPRanges("10.0.0.1/32").Build(),
+			},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				svc := tt.svc
+
+				// Without a rule to clean up, the assertion below cannot fail.
+				staleRule := azureFx.
+					AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{"10.0.0.0/24"}, k8sFx.Service().TCPPorts()).
+					WithPriority(507).
+					WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).
+					Build()
+
+				sg, events, err := reconcile(t, &svc, azureFx.LoadBalancer().IPv4Addresses(), false, staleRule)
+				assert.NoError(t, err, "configuration validation must not block deletion")
+				assert.Empty(t, events)
+				testutil.ExpectExactSecurityRules(t, sg, azureFx.NoiseSecurityRules())
+			})
+		}
 	})
 
 	t.Run("negative cases", func(t *testing.T) {
