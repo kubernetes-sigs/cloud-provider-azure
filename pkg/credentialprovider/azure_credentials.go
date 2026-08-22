@@ -49,9 +49,25 @@ const (
 
 var (
 	containerRegistryUrls = []string{"*.azurecr.io", "*.azurecr.cn", "*.azurecr.de", "*.azurecr.us"}
-	// a valid acr image starts with alphanumerics, followed by corresponding acr domain name.
-	acrRE = regexp.MustCompile(`^[a-zA-Z0-9]+\.(azurecr\.io|azurecr\.cn|azurecr\.de|azurecr\.us)`)
+	// a valid acr image starts with a registry domain name label (alphanumerics,
+	// optionally followed by a single hyphen and a suffix for domain name label
+	// (DNL) registries, e.g. demo-abc123), followed by an optional regional login
+	// server segment (.<region>.geo), then the corresponding acr domain name.
+	// Examples:
+	//   foo.azurecr.io                 (global login server)
+	//   demo-abc123.azurecr.io         (domain name label (DNL) registry)
+	//   foo.eastus2.geo.azurecr.io     (regional login server)
+	acrRE = regexp.MustCompile(`^[a-zA-Z0-9]+(-[a-zA-Z0-9]+)?(\.[a-zA-Z0-9]+\.geo)?\.(azurecr\.io|azurecr\.cn|azurecr\.de|azurecr\.us)`)
 )
+
+// isRegionalACRLoginServer reports whether loginServer is an ACR regional
+// (geo-replica) login server such as foo.eastus2.geo.azurecr.io. Such hosts have
+// an extra ".<region>.geo" segment that the static "*.azurecr.*" wildcard
+// patterns do not match, so they need an explicit auth entry. Global login
+// servers (e.g. foo.azurecr.io) are already covered by the wildcards.
+func isRegionalACRLoginServer(loginServer string) bool {
+	return strings.Contains(loginServer, ".geo.")
+}
 
 // CredentialProvider is an interface implemented by the kubelet credential provider plugin to fetch
 // the username/password based on the provided image name.
@@ -231,13 +247,26 @@ func (a *acrProvider) GetCredentials(ctx context.Context, image string, _ []stri
 			response.Auth[sourceloginServer] = authConfig
 		}
 	} else {
+		// The service principal credentials are identical for every ACR entry,
+		// so build them once and reuse.
+		spCred := v1.AuthConfig{
+			Username: a.config.AADClientID,
+			Password: a.config.AADClientSecret,
+		}
+
 		// Add our entry for each of the supported container registry URLs
 		for _, url := range containerRegistryUrls {
-			cred := v1.AuthConfig{
-				Username: a.config.AADClientID,
-				Password: a.config.AADClientSecret,
-			}
-			response.Auth[url] = cred
+			response.Auth[url] = spCred
+		}
+
+		// The static wildcard patterns above (e.g. *.azurecr.io) only match a
+		// single label before the ACR suffix, so they do not cover regional
+		// (geo-replica) login servers such as foo.eastus2.geo.azurecr.io. Add an
+		// explicit entry for such regional targets so service-principal pulls from
+		// regional endpoints are authenticated. Global targets are already covered
+		// by the wildcards above, so we avoid adding a duplicate entry for them.
+		if isRegionalACRLoginServer(targetloginServer) {
+			response.Auth[targetloginServer] = spCred
 		}
 
 		// Handle the custom cloud case
@@ -253,11 +282,7 @@ func (a *acrProvider) GetCredentials(ctx context.Context, image string, _ []stri
 			}
 
 			if !hasBeenAdded {
-				cred := v1.AuthConfig{
-					Username: a.config.AADClientID,
-					Password: a.config.AADClientSecret,
-				}
-				response.Auth[customAcrSuffix] = cred
+				response.Auth[customAcrSuffix] = spCred
 			}
 		}
 	}
