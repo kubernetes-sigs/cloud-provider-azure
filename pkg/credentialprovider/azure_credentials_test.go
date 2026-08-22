@@ -77,11 +77,12 @@ func TestGetCredentials(t *testing.T) {
 		t.Fatalf("Unexpected error when fetching acr credentials: %v", err)
 	}
 
-	// Expected entries: the anonymous "*.azurecr.*" wildcard, one entry per
-	// containerRegistryUrls wildcard (len(result)), and one explicit entry for
-	// the exact parsed login server (foo.azurecr.io).
-	if credResponse == nil || len(credResponse.Auth) != len(result)+2 {
-		t.Errorf("Unexpected credential response: %v, expected length %d", credResponse, len(result)+2)
+	// Expected entries: the anonymous "*.azurecr.*" wildcard plus one entry per
+	// containerRegistryUrls wildcard (len(result)). A global login server such as
+	// foo.azurecr.io is already covered by the *.azurecr.io wildcard, so it must
+	// NOT get an additional explicit entry.
+	if credResponse == nil || len(credResponse.Auth) != len(result)+1 {
+		t.Errorf("Unexpected credential response: %v, expected length %d", credResponse, len(result)+1)
 	}
 	for _, cred := range credResponse.Auth {
 		if cred.Username != "" && cred.Username != "foo" {
@@ -96,12 +97,10 @@ func TestGetCredentials(t *testing.T) {
 			t.Errorf("Missing expected registry: %s", registryName)
 		}
 	}
-	// The exact parsed login server must have an explicit entry with the
-	// service-principal credentials.
-	if cred, found := credResponse.Auth["foo.azurecr.io"]; !found {
-		t.Errorf("Missing explicit entry for parsed login server foo.azurecr.io")
-	} else if cred.Username != "foo" || cred.Password != "bar" {
-		t.Errorf("Unexpected credentials for foo.azurecr.io: %v", cred)
+	// A global (non-regional) login server is covered by the *.azurecr.io
+	// wildcard, so it must not get a duplicate explicit entry.
+	if _, found := credResponse.Auth["foo.azurecr.io"]; found {
+		t.Errorf("Global login server foo.azurecr.io should not get a duplicate explicit entry; auth keys: %v", credResponse.Auth)
 	}
 }
 
@@ -242,7 +241,7 @@ func TestGetCredentialsConfig(t *testing.T) {
         "aadClientId": "foo",
         "aadClientSecret": "bar"
     }`,
-			expectedCredsLength: 6,
+			expectedCredsLength: 5,
 		},
 		{
 			desc:  "0 credential should be returned for non-ACR image using Managed Identity",
@@ -405,6 +404,16 @@ func TestParseACRLoginServerFromImage(t *testing.T) {
 			expected: "foo.azurecr.io",
 		},
 		{
+			// domain name label (DNL) registry name with hyphens
+			image:    "demo-abc123.azurecr.io/bar/image:version",
+			expected: "demo-abc123.azurecr.io",
+		},
+		{
+			// domain name label (DNL) registry name with hyphens on a regional endpoint
+			image:    "demo-abc123.eastus2.geo.azurecr.io/bar/image:version",
+			expected: "demo-abc123.eastus2.geo.azurecr.io",
+		},
+		{
 			image:    "foo.azurecr.cn/bar/image:version",
 			expected: "foo.azurecr.cn",
 		},
@@ -486,6 +495,8 @@ func TestParseACRLoginServerFromImage(t *testing.T) {
 			expected: "",
 		},
 		{
+			// a domain name label (DNL) registry has exactly one hyphen
+			// (<name>-<hash>); more than one hyphen is not a valid login server
 			image:    "foo-azurecr-io.azurecr.cn",
 			expected: "",
 		},
