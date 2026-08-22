@@ -18,9 +18,20 @@ Expected inputs:
 
 ## Triage First
 
-Load the catalog at [`references/failure-patterns.md`](references/failure-patterns.md);
-it is the source of truth for which failure patterns exist. The engine never
-hard-codes a pattern — it walks the catalog by the staged algorithm below.
+Start by reading these references once:
+
+- [`references/failure-patterns.md`](references/failure-patterns.md) — the
+  source-of-truth catalog and routing metadata.
+- [`references/guard-patterns.md`](references/guard-patterns.md) — the
+  normative guard match criteria and actions.
+
+The engine never hard-codes a pattern — it walks the catalog by the staged
+algorithm below. Do not read
+[`references/act-patterns.md`](references/act-patterns.md) until the act stage.
+Read [`references/shared-actions.md`](references/shared-actions.md) only when a
+matched guard or act workflow links to it. Read each reference at most once per
+triage; following a cross-file link never requires reloading a file already
+read.
 
 Fetch PR metadata and changed dependencies first; these feed guard rows before any
 CI or log I/O:
@@ -43,14 +54,18 @@ Then walk the catalog as an explicit staged algorithm:
 > checkout as needed, then build the current failed required job list. Do not
 > require a full up-front classification before acting.
 >
-> **Act stage.** Process failed required jobs one at a time. For one failed job,
-> walk act rows by ascending Priority, inspect only enough current evidence to
-> match a row or escalate, take that row's linked Details action, then move to
-> the next failed job. Continue until every failed required job is examined,
-> resolved, rerun, superseded by a push, or escalated. Track the actions already
-> taken this triage: if an action reruns CI (a push), skip any later row whose
-> only effect would be to retest jobs that the push will rerun. Prefer the
-> push-triggered rerun. An act row marked Stop ends triage after it is handled.
+> **Act stage.** Read
+> [`references/act-patterns.md`](references/act-patterns.md), then process failed
+> required jobs one at a time. For one failed job, walk act rows by ascending
+> Priority, inspect only enough current evidence to match a row or escalate,
+> take that row's linked Details action, then move to the next failed job. Read
+> [`references/shared-actions.md`](references/shared-actions.md) only if that
+> matched workflow links to it. Continue until every failed required job is
+> examined, resolved, rerun, superseded by a push, or escalated. Track the
+> actions already taken this triage: if an action reruns CI (a push), skip any
+> later row whose only effect would be to retest jobs that the push will rerun.
+> Prefer the push-triggered rerun. An act row marked Stop ends triage after it
+> is handled.
 
 Classification inspects CI only after no guard Stop fired:
 
@@ -90,19 +105,15 @@ or overwrite unrelated files.
 - When a row's Details action reruns CI (a push), skip any later row whose only
   effect would be to retest the jobs that push will rerun; prefer the
   push-triggered rerun.
-- Count every retry-budgeted automated unblock round against the same
-  PR-comment-backed retry budget. Public-IP quota e2e reruns are explicitly
-  unbudgeted: they do not create or increment an `Unblock attempt` stamp. A
-  guard-stage `@dependabot rebase` comment carries its budgeted attempt stamp
-  directly; after all budgeted act-stage non-final actions in a triage are
-  complete, post one plain attempt-summary comment instead. A quota-only triage
-  posts no attempt summary; in a mixed triage, summarize only the budgeted
-  actions. Do not add an attempt marker to individual act-stage action comments.
-  Once the budget is spent, an `escalate` row makes no change to the PR — no
-  comment, no checks, no push — and the PR is reported as needing human review
-  in the final output. All of this is catalog-driven: the retry-budget guard
-  reads the highest stamp before any rebase or CI/log I/O, and the shared
-  attempt-stamp rule writes it. Do not invent a separate counter.
+- One retry-budgeted automated unblock round consumes one attempt from one
+  PR-comment-backed counter. Public-IP quota e2e reruns are unbudgeted: a
+  quota-only triage creates no attempt stamp, while a mixed triage summarizes
+  only its budgeted actions. Read the counter once before any rebase or CI/log
+  I/O and reuse it throughout the triage. Rebase and budgeted act-stage paths
+  must never create two attempt stamps in one triage. When the retry budget is
+  exhausted, mutate nothing and escalate for human review. Do not invent a
+  second counter; the guard and shared-action references own the policy and
+  write mechanics.
 - A row marked Stop ends triage after it is handled.
 - Use the retry mechanism for the CI system that produced the failure, and only
   after the failure is classified as transient or safe to rerun. For Prow jobs,
