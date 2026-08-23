@@ -77,6 +77,10 @@ func TestGetCredentials(t *testing.T) {
 		t.Fatalf("Unexpected error when fetching acr credentials: %v", err)
 	}
 
+	// Expected entries: the anonymous "*.azurecr.*" wildcard plus one entry per
+	// containerRegistryUrls wildcard (len(result)). A global login server such as
+	// foo.azurecr.io is already covered by the *.azurecr.io wildcard, so it must
+	// NOT get an additional explicit entry.
 	if credResponse == nil || len(credResponse.Auth) != len(result)+1 {
 		t.Errorf("Unexpected credential response: %v, expected length %d", credResponse, len(result)+1)
 	}
@@ -92,6 +96,111 @@ func TestGetCredentials(t *testing.T) {
 		if _, found := credResponse.Auth[registryName]; !found {
 			t.Errorf("Missing expected registry: %s", registryName)
 		}
+	}
+	// A global (non-regional) login server is covered by the *.azurecr.io
+	// wildcard, so it must not get a duplicate explicit entry.
+	if _, found := credResponse.Auth["foo.azurecr.io"]; found {
+		t.Errorf("Global login server foo.azurecr.io should not get a duplicate explicit entry; auth keys: %v", credResponse.Auth)
+	}
+}
+
+// TestGetCredentialsRegionalServicePrincipal verifies that on the service
+// principal path a pull from an ACR regional (geo-replica) login server, whose
+// 5-label host is not matched by the static *.azurecr.io wildcard patterns,
+// still receives an explicit auth entry keyed on the exact regional host.
+func TestGetCredentialsRegionalServicePrincipal(t *testing.T) {
+	configFile, err := os.CreateTemp(".", "config.json")
+	if err != nil {
+		t.Fatalf("Unexpected error when creating temp file: %v", err)
+	}
+	defer os.Remove(configFile.Name())
+
+	_, err = configFile.WriteString(`
+    {
+        "aadClientId": "foo",
+        "aadClientSecret": "bar"
+    }`)
+	if err != nil {
+		t.Fatalf("Unexpected error when writing to temp file: %v", err)
+	}
+
+	regionalImage := "foo.eastus2.geo.azurecr.io/nginx:v1"
+	provider, err := NewAcrProvider(
+		&v1.CredentialProviderRequest{
+			Image: regionalImage,
+		},
+		"",
+		configFile.Name(),
+		IdentityBindingsConfig{},
+	)
+	if err != nil {
+		t.Fatalf("Unexpected error when creating acr provider: %v", err)
+	}
+
+	credResponse, err := provider.GetCredentials(context.TODO(), regionalImage, nil)
+	if err != nil {
+		t.Fatalf("Unexpected error when fetching acr credentials: %v", err)
+	}
+
+	cred, found := credResponse.Auth["foo.eastus2.geo.azurecr.io"]
+	if !found {
+		t.Fatalf("Missing explicit entry for regional login server foo.eastus2.geo.azurecr.io; auth keys: %v", credResponse.Auth)
+	}
+	if cred.Username != "foo" || cred.Password != "bar" {
+		t.Errorf("Unexpected credentials for regional login server: %v", cred)
+	}
+}
+
+func TestGetCredentialsRegionalMirrorServicePrincipal(t *testing.T) {
+	configFile, err := os.CreateTemp(".", "config.json")
+	if err != nil {
+		t.Fatalf("Unexpected error when creating temp file: %v", err)
+	}
+	defer os.Remove(configFile.Name())
+
+	_, err = configFile.WriteString(`
+    {
+        "aadClientId": "foo",
+        "aadClientSecret": "bar"
+    }`)
+	if err != nil {
+		t.Fatalf("Unexpected error when writing to temp file: %v", err)
+	}
+
+	// The registry mirror maps a source host (mcr.microsoft.com) to a regional (geo)
+	// ACR login server target. The pulled image references the source host; the
+	// provider rewrites it to the geo target and must authenticate that target.
+	mirrorImage := "mcr.microsoft.com/nginx:v1"
+	provider, err := NewAcrProvider(
+		&v1.CredentialProviderRequest{
+			Image: mirrorImage,
+		},
+		"mcr.microsoft.com:foo.eastus2.geo.azurecr.io",
+		configFile.Name(),
+		IdentityBindingsConfig{},
+	)
+	if err != nil {
+		t.Fatalf("Unexpected error when creating acr provider: %v", err)
+	}
+
+	credResponse, err := provider.GetCredentials(context.TODO(), mirrorImage, nil)
+	if err != nil {
+		t.Fatalf("Unexpected error when fetching acr credentials: %v", err)
+	}
+
+	// The regional (geo) target login server must receive the service principal credentials.
+	cred, found := credResponse.Auth["foo.eastus2.geo.azurecr.io"]
+	if !found {
+		t.Fatalf("Missing explicit entry for regional mirror target foo.eastus2.geo.azurecr.io; auth keys: %v", credResponse.Auth)
+	}
+	if cred.Username != "foo" || cred.Password != "bar" {
+		t.Errorf("Unexpected credentials for regional mirror target: %v", cred)
+	}
+
+	// The mirror source host is operator-configured and may be an arbitrary non-ACR
+	// host; the service principal path must not emit the raw client secret to it.
+	if _, found := credResponse.Auth["mcr.microsoft.com"]; found {
+		t.Errorf("Service principal credentials must not be emitted for mirror source host mcr.microsoft.com; auth keys: %v", credResponse.Auth)
 	}
 }
 func TestGetCredentialsConfig(t *testing.T) {
@@ -295,6 +404,16 @@ func TestParseACRLoginServerFromImage(t *testing.T) {
 			expected: "foo.azurecr.io",
 		},
 		{
+			// domain name label (DNL) registry name with hyphens
+			image:    "demo-abc123.azurecr.io/bar/image:version",
+			expected: "demo-abc123.azurecr.io",
+		},
+		{
+			// domain name label (DNL) registry name with hyphens on a regional endpoint
+			image:    "demo-abc123.eastus2.geo.azurecr.io/bar/image:version",
+			expected: "demo-abc123.eastus2.geo.azurecr.io",
+		},
+		{
 			image:    "foo.azurecr.cn/bar/image:version",
 			expected: "foo.azurecr.cn",
 		},
@@ -305,6 +424,51 @@ func TestParseACRLoginServerFromImage(t *testing.T) {
 		{
 			image:    "foo.azurecr.us/bar/image:version",
 			expected: "foo.azurecr.us",
+		},
+		{
+			// regional endpoint (geo-replicated Premium registry)
+			image:    "foo.eastus2.geo.azurecr.io/bar/image:version",
+			expected: "foo.eastus2.geo.azurecr.io",
+		},
+		{
+			// regional endpoint in a sovereign cloud
+			image:    "foo.chinaeast2.geo.azurecr.cn/bar/image:version",
+			expected: "foo.chinaeast2.geo.azurecr.cn",
+		},
+		{
+			// regional endpoint in the Azure Germany cloud
+			image:    "foo.germanynorth.geo.azurecr.de/bar/image:version",
+			expected: "foo.germanynorth.geo.azurecr.de",
+		},
+		{
+			// regional endpoint in the Azure US Government cloud
+			image:    "foo.usgovvirginia.geo.azurecr.us/bar/image:version",
+			expected: "foo.usgovvirginia.geo.azurecr.us",
+		},
+		{
+			// regional-looking host with a trailing suffix must not match
+			image:    "foo.eastus2.geo.azurecr.io.example/bar/image:version",
+			expected: "",
+		},
+		{
+			// dedicated data endpoints are not login servers and must not match
+			image:    "foo.eastus2.data.azurecr.io/bar/image:version",
+			expected: "",
+		},
+		{
+			// dedicated data endpoint in a sovereign cloud must not match either
+			image:    "foo.chinaeast2.data.azurecr.cn/bar/image:version",
+			expected: "",
+		},
+		{
+			// dedicated data endpoint in the Azure Germany cloud must not match
+			image:    "foo.germanynorth.data.azurecr.de/bar/image:version",
+			expected: "",
+		},
+		{
+			// dedicated data endpoint in the Azure US Government cloud must not match
+			image:    "foo.usgovvirginia.data.azurecr.us/bar/image:version",
+			expected: "",
 		},
 		{
 			image:    "foo.azurecr.my.cloud/bar/image:version",
@@ -331,6 +495,8 @@ func TestParseACRLoginServerFromImage(t *testing.T) {
 			expected: "",
 		},
 		{
+			// a domain name label (DNL) registry has exactly one hyphen
+			// (<name>-<hash>); more than one hyphen is not a valid login server
 			image:    "foo-azurecr-io.azurecr.cn",
 			expected: "",
 		},
