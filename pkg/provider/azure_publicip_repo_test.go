@@ -425,7 +425,7 @@ func TestFindMatchedPIPAllowsPrivateIPOnAzureStackHub(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			az := GetTestCloud(ctrl)
-			az.Config.Cloud = consts.AzureStackCloudName
+			az.Cloud = consts.AzureStackCloudName
 			mockPIPsClient := az.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
 			mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return([]*armnetwork.PublicIPAddress{}, nil).Times(2)
 
