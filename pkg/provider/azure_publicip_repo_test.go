@@ -403,6 +403,39 @@ func TestFindMatchedPIPSkipsListForInvalidOrNonPublicLoadBalancerIP(t *testing.T
 	}
 }
 
+func TestFindMatchedPIPAllowsPrivateIPOnAzureStackHub(t *testing.T) {
+	for _, tc := range []struct {
+		description    string
+		loadBalancerIP string
+	}{
+		{
+			description:    "RFC1918 10/8 on Azure Stack Hub",
+			loadBalancerIP: "10.255.96.63",
+		},
+		{
+			description:    "RFC1918 172.16/12 on Azure Stack Hub",
+			loadBalancerIP: "172.16.0.5",
+		},
+		{
+			description:    "RFC1918 192.168/16 on Azure Stack Hub",
+			loadBalancerIP: "192.168.0.5",
+		},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			az := GetTestCloud(ctrl)
+			az.Cloud = consts.AzureStackCloudName
+			mockPIPsClient := az.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
+			mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return([]*armnetwork.PublicIPAddress{}, nil).Times(2)
+
+			_, err := az.findMatchedPIP(context.TODO(), tc.loadBalancerIP, "", "rg")
+
+			assert.NotErrorIs(t, err, providererrors.ErrNonPublicLoadBalancerIP)
+		})
+	}
+}
+
 func TestIsAzureReservedIP(t *testing.T) {
 	for _, tc := range []struct {
 		description string
