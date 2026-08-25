@@ -59,7 +59,7 @@ else
 endif
 
 .PHONY: build-health-probe-proxy-image
-build-health-probe-proxy-image: buildx-setup  $(BIN_DIR)/health-probe-proxy ## Build health-probe-proxy image for Linux.
+build-health-probe-proxy-image: buildx-setup ## Build health-probe-proxy image for Linux.
 	$(CONTAINER_BUILDX) build --pull \
 		$(OUTPUT_FLAG) \
 		--platform linux/$(ARCH) \
