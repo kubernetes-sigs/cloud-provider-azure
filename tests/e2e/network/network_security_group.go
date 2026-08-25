@@ -22,6 +22,7 @@ import (
 	"net/netip"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	. "github.com/onsi/ginkgo/v2"
@@ -225,8 +226,8 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		})
 	})
 
-	When("creating a LoadBalancer service with `spec.LoadBalancerSourceRanges`", func() {
-		It("should add a rule to allow traffic from allowed-IPs only", func() {
+	DescribeTable("creating a LoadBalancer service with load balancer source ranges",
+		func(viaAnnotation bool) {
 			var (
 				serviceIPv4s      []netip.Addr
 				serviceIPv6s      []netip.Addr
@@ -258,21 +259,31 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 					labels = map[string]string{
 						"app": ServiceName,
 					}
-					annotations = map[string]string{
-						v1.AnnotationLoadBalancerSourceRangesKey: strings.Join(
-							append(
-								append(allowedIPv4Ranges, overlappingIPv4Ranges...),
-								append(allowedIPv6Ranges, overlappingIPv6Ranges...)...,
-							),
-							",",
-						),
-					}
-					ports = []v1.ServicePort{{
+					annotations = map[string]string{}
+					ports       = []v1.ServicePort{{
 						Port:       serverPort,
 						TargetPort: intstr.FromInt32(serverPort),
 					}}
+					sourceRanges = append(
+						append(allowedIPv4Ranges, overlappingIPv4Ranges...),
+						append(allowedIPv6Ranges, overlappingIPv6Ranges...)...,
+					)
 				)
-				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, ServiceName, namespace.Name, labels, annotations, ports)
+				service := utils.CreateLoadBalancerServiceManifest(ServiceName, annotations, labels, namespace.Name, ports)
+				if viaAnnotation {
+					service.Annotations[v1.AnnotationLoadBalancerSourceRangesKey] = strings.Join(sourceRanges, ",")
+				} else {
+					service.Spec.LoadBalancerSourceRanges = sourceRanges
+				}
+				_, err := k8sClient.CoreV1().Services(namespace.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				utils.PrintCreateSVCSuccessfully(ServiceName, namespace.Name)
+
+				// Skip service connectivity validation because kube-proxy enforces
+				// spec.loadBalancerSourceRanges and these test ranges exclude the IP
+				// used by the connectivity test.
+				rv, err := utils.WaitServiceExposureAndGetIPs(k8sClient, namespace.Name, ServiceName)
+				Expect(err).NotTo(HaveOccurred())
 				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
 			})
 			logger.Info("Created a LoadBalancer service", "v4-IPs", serviceIPv4s, "v6-IPs", serviceIPv6s)
@@ -314,8 +325,10 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 					).To(BeFalse(), "Should not have a rule for denying all traffic")
 				}
 			})
-		})
-	})
+		},
+		Entry("via `spec.loadBalancerSourceRanges` should add a rule to allow traffic from allowed-IPs only", false),
+		Entry("via annotation `service.beta.kubernetes.io/load-balancer-source-ranges` should add a rule to allow traffic from allowed-IPs only", true),
+	)
 
 	When("creating a LoadBalancer service with annotation `service.beta.kubernetes.io/azure-deny-all-except-load-balancer-source-ranges`", func() {
 		It("should add a rule to allow traffic from allowed-IPs only", func() {
@@ -686,8 +699,8 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		})
 	})
 
-	When("creating a LoadBalancer service with annotation `service.beta.kubernetes.io/azure-allowed-ip-ranges`", func() {
-		It("should add a rule to allow traffic from allowed-IPs only", func() {
+	DescribeTable("creating a LoadBalancer service with annotation `service.beta.kubernetes.io/azure-allowed-ip-ranges`",
+		func(internal bool) {
 			var (
 				serviceIPv4s      []netip.Addr
 				serviceIPv6s      []netip.Addr
@@ -733,6 +746,9 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 						TargetPort: intstr.FromInt32(serverPort),
 					}}
 				)
+				if internal {
+					annotations[consts.ServiceAnnotationLoadBalancerInternal] = "true"
+				}
 				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, ServiceName, namespace.Name, labels, annotations, ports)
 				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
 			})
@@ -774,6 +790,133 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 						validator.HasDenyAllRuleForDestination(serviceIPv6s),
 					).To(BeFalse(), "Should not have a rule for denying all traffic")
 				}
+			})
+		},
+		Entry("should add a rule to allow traffic from allowed-IPs only", false),
+		Entry("should add a rule to allow traffic from allowed-IPs only on an internal load balancer", true),
+	)
+
+	When("creating a LoadBalancer service with an invalid `service.beta.kubernetes.io/azure-allowed-ip-ranges`", func() {
+		It("should keep the valid ranges, deny all other traffic and emit a warning event", func() {
+			var (
+				serviceIPv4s     []netip.Addr
+				serviceIPv6s     []netip.Addr
+				allowedIPv4Range = "10.20.0.0/16"
+				allowedIPv6Range = "2c0f:fe40:8000::/48"
+				invalidRange     = "notacidr"
+				createdAt        time.Time
+			)
+
+			By("Creating a LoadBalancer service", func() {
+				var (
+					labels = map[string]string{
+						"app": ServiceName,
+					}
+					annotations = map[string]string{
+						consts.ServiceAnnotationAllowedIPRanges: strings.Join(
+							[]string{allowedIPv4Range, allowedIPv6Range, invalidRange}, ",",
+						),
+					}
+					ports = []v1.ServicePort{{
+						Port:       serverPort,
+						TargetPort: intstr.FromInt32(serverPort),
+					}}
+				)
+				createdAt = time.Now()
+				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, ServiceName, namespace.Name, labels, annotations, ports)
+				serviceIPv4s, serviceIPv6s = groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+			})
+			logger.Info("Created a LoadBalancer service", "v4-IPs", serviceIPv4s, "v6-IPs", serviceIPv6s)
+
+			By("Checking if the warning event for the invalid range is emitted", func() {
+				Expect(
+					utils.WaitForServiceWarningEventAfter(k8sClient, namespace.Name, ServiceName, "InvalidAllowedIPRanges", invalidRange, createdAt),
+				).NotTo(HaveOccurred(), "Should emit an InvalidAllowedIPRanges event naming the invalid range")
+			})
+
+			var validator *SecurityGroupValidator
+			By("Getting the cluster security groups", func() {
+				rv, err := azureClient.GetClusterSecurityGroups()
+				Expect(err).NotTo(HaveOccurred())
+
+				validator = NewSecurityGroupValidator(rv)
+			})
+
+			By("Checking if the valid ranges are allowed and all other traffic is denied", func() {
+				var (
+					expectedProtocol = armnetwork.SecurityRuleProtocolTCP
+					expectedDstPorts = []string{strconv.FormatInt(int64(serverPort), 10)}
+				)
+
+				if len(serviceIPv4s) > 0 {
+					Expect(
+						validator.HasExactAllowRule(expectedProtocol, []string{allowedIPv4Range}, serviceIPv4s, expectedDstPorts),
+					).To(BeTrue(), "Should have a rule for allowing IPv4 traffic from the valid range")
+					Expect(
+						validator.HasExactAllowRule(expectedProtocol, []string{"Internet"}, serviceIPv4s, expectedDstPorts),
+					).To(BeFalse(), "Should not have a rule for allowing IPv4 traffic from Internet")
+					Expect(
+						validator.HasDenyAllRuleForDestination(serviceIPv4s),
+					).To(BeTrue(), "Should have a rule for denying all other IPv4 traffic")
+				}
+				if len(serviceIPv6s) > 0 {
+					Expect(
+						validator.HasExactAllowRule(expectedProtocol, []string{allowedIPv6Range}, serviceIPv6s, expectedDstPorts),
+					).To(BeTrue(), "Should have a rule for allowing IPv6 traffic from the valid range")
+					Expect(
+						validator.HasExactAllowRule(expectedProtocol, []string{"Internet"}, serviceIPv6s, expectedDstPorts),
+					).To(BeFalse(), "Should not have a rule for allowing IPv6 traffic from Internet")
+					Expect(
+						validator.HasDenyAllRuleForDestination(serviceIPv6s),
+					).To(BeTrue(), "Should have a rule for denying all other IPv6 traffic")
+				}
+			})
+		})
+	})
+
+	When("creating a LoadBalancer service with both `spec.loadBalancerSourceRanges` and annotation `service.beta.kubernetes.io/azure-allowed-ip-ranges`", func() {
+		It("should refuse to reconcile and emit a warning event", func() {
+			var createdAt time.Time
+			By("Creating a LoadBalancer service", func() {
+				var (
+					labels = map[string]string{
+						"app": ServiceName,
+					}
+					annotations = map[string]string{
+						consts.ServiceAnnotationAllowedIPRanges: "10.20.0.0/16",
+					}
+					ports = []v1.ServicePort{{
+						Port:       serverPort,
+						TargetPort: intstr.FromInt32(serverPort),
+					}}
+				)
+				svc := utils.CreateLoadBalancerServiceManifest(ServiceName, annotations, labels, namespace.Name, ports)
+				svc.Spec.LoadBalancerSourceRanges = []string{"192.168.0.1/32"}
+
+				createdAt = time.Now()
+				_, err := k8sClient.CoreV1().Services(namespace.Name).Create(context.Background(), svc, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			defer func() {
+				err := utils.DeleteService(k8sClient, namespace.Name, ServiceName)
+				Expect(err).NotTo(HaveOccurred(), "Should not be blocked by the rejected configuration")
+			}()
+
+			By("Checking if the reconcile failure is reported", func() {
+				err := utils.WaitForServiceWarningEventAfter(k8sClient, namespace.Name, ServiceName, "SyncLoadBalancerFailed", "cannot set both", createdAt)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			By("Checking that the service is never exposed", func() {
+				svc, err := k8sClient.CoreV1().Services(namespace.Name).Get(context.Background(), ServiceName, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(svc.Status.LoadBalancer.Ingress).To(BeEmpty(), "Should not assign an ingress IP to a rejected service")
+			})
+
+			By("Deleting the service", func() {
+				err := utils.DeleteService(k8sClient, namespace.Name, ServiceName)
+				Expect(err).NotTo(HaveOccurred(), "Should not be blocked by the rejected configuration")
 			})
 		})
 	})
