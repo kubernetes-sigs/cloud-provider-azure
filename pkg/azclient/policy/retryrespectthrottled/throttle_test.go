@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package retryrepectthrottled_test
+package retryrespectthrottled_test
 
 import (
 	"context"
@@ -30,7 +30,7 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/retryrepectthrottled"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/retryrespectthrottled"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
@@ -38,7 +38,7 @@ var _ = ginkgo.Describe("Throttle", func() {
 	ginkgo.Describe("Throttle", func() {
 		ginkgo.It("should respect retry-after", func() {
 			once := sync.Once{}
-			throttlePolicy := &retryrepectthrottled.ThrottlingPolicy{}
+			throttlePolicy := &retryrespectthrottled.ThrottlingPolicy{}
 			pipeline := runtime.NewPipeline("testmodule", "v0.1.0", runtime.PipelineOptions{}, &policy.ClientOptions{
 				PerCallPolicies: []policy.Policy{
 					throttlePolicy,
@@ -90,7 +90,7 @@ var _ = ginkgo.Describe("Throttle", func() {
 
 		ginkgo.DescribeTable("should populate RetryAfter correctly",
 			func(initialTimer *time.Time, responseStatus int, retryAfterValue string, check func(time.Time)) {
-				throttlePolicy := &retryrepectthrottled.ThrottlingPolicy{}
+				throttlePolicy := &retryrespectthrottled.ThrottlingPolicy{}
 				if initialTimer != nil {
 					throttlePolicy.RetryAfterWriter = *initialTimer
 				}
@@ -116,7 +116,7 @@ var _ = ginkgo.Describe("Throttle", func() {
 				gomega.Expect(err).NotTo(gomega.HaveOccurred())
 				_, err = pipeline.Do(req)
 				gomega.Expect(err).To(gomega.HaveOccurred())
-				var throttleErr *retryrepectthrottled.ThrottleError
+				var throttleErr *retryrespectthrottled.ThrottleError
 				gomega.Expect(errors.As(err, &throttleErr)).To(gomega.BeTrue())
 				check(throttleErr.RetryAfter)
 			},
@@ -148,21 +148,21 @@ var _ = ginkgo.Describe("Throttle", func() {
 		)
 
 		ginkgo.It("should satisfy errors.Is(err, ErrTooManyRequest) for ThrottleError", func() {
-			err := &retryrepectthrottled.ThrottleError{RetryAfter: time.Now()}
-			gomega.Expect(errors.Is(err, retryrepectthrottled.ErrTooManyRequest)).To(gomega.BeTrue())
+			err := &retryrespectthrottled.ThrottleError{RetryAfter: time.Now()}
+			gomega.Expect(errors.Is(err, retryrespectthrottled.ErrTooManyRequest)).To(gomega.BeTrue())
 		})
 
 		ginkgo.It("should allow errors.As to extract ThrottleError with correct RetryAfter", func() {
 			expected := time.Now().Add(42 * time.Second)
-			var err error = &retryrepectthrottled.ThrottleError{RetryAfter: expected}
-			var throttleErr *retryrepectthrottled.ThrottleError
+			var err error = &retryrespectthrottled.ThrottleError{RetryAfter: expected}
+			var throttleErr *retryrespectthrottled.ThrottleError
 			gomega.Expect(errors.As(err, &throttleErr)).To(gomega.BeTrue())
 			gomega.Expect(throttleErr.RetryAfter).To(gomega.BeTemporally("~", expected, time.Millisecond))
 		})
 
 		ginkgo.It("should return the same error string as ErrTooManyRequest", func() {
-			err := &retryrepectthrottled.ThrottleError{RetryAfter: time.Now()}
-			gomega.Expect(err.Error()).To(gomega.Equal(retryrepectthrottled.ErrTooManyRequest.Error()))
+			err := &retryrespectthrottled.ThrottleError{RetryAfter: time.Now()}
+			gomega.Expect(err.Error()).To(gomega.Equal(retryrespectthrottled.ErrTooManyRequest.Error()))
 		})
 	})
 })
