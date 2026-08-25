@@ -221,6 +221,24 @@ func TestAllowedIPRanges(t *testing.T) {
 		assert.ErrorAs(t, err, &e)
 		assert.Equal(t, []string{"foobar", "10.0.0.1/24", "barfoo", "2002:db8::1/32"}, invalid)
 	})
+	t.Run("with empty value in allowed ip ranges", func(t *testing.T) {
+		actual, invalid, err := AllowedIPRanges(&v1.Service{
+			Spec: v1.ServiceSpec{
+				Type: v1.ServiceTypeLoadBalancer,
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					consts.ServiceAnnotationAllowedIPRanges: "",
+				},
+			},
+		})
+		assert.Error(t, err)
+
+		var e *ErrAnnotationValue
+		assert.ErrorAs(t, err, &e)
+		assert.Empty(t, actual)
+		assert.Equal(t, []string{""}, invalid)
+	})
 }
 
 func TestSourceRanges(t *testing.T) {
