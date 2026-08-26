@@ -1529,6 +1529,25 @@ func getClusterFromPIPClusterTags(tags map[string]*string) string {
 	return ""
 }
 
+// Public IP tag keys whose values the controller owns.
+var reservedPIPTagKeys = []string{
+	consts.ClusterNameKey, consts.LegacyClusterNameKey,
+	consts.ServiceTagKey, consts.LegacyServiceTagKey,
+	consts.ServiceUsingDNSKey, consts.LegacyServiceUsingDNSKey,
+}
+
+// isPIPReservedTagKey reports whether key names a Public IP tag whose value the controller owns.
+// Matching ignores case: Azure resource tag names are case-insensitive.
+// https://learn.microsoft.com/azure/azure-resource-manager/management/tag-resources
+func isPIPReservedTagKey(key string) bool {
+	for _, reserved := range reservedPIPTagKeys {
+		if strings.EqualFold(key, reserved) {
+			return true
+		}
+	}
+	return false
+}
+
 type serviceIPTagRequest struct {
 	IPTagsRequestedByAnnotation bool
 	IPTags                      []*armnetwork.IPTag
@@ -3610,13 +3629,23 @@ func (az *Cloud) ensurePIPTagged(service *v1.Service, pip *armnetwork.PublicIPAd
 		annotationTags = parseTags(service.Annotations[consts.ServiceAnnotationAzurePIPTags], map[string]string{})
 	}
 
+	var ignoredReservedKeys bool
 	for k, v := range annotationTags {
+		if isPIPReservedTagKey(k) {
+			ignoredReservedKeys = true
+			continue // the controller owns these values; an annotation must not set them
+		}
 		found, key := findKeyInMapCaseInsensitive(configTags, k)
 		if !found {
 			configTags[k] = v
 		} else if !strings.EqualFold(ptr.Deref(v, ""), ptr.Deref(configTags[key], "")) {
 			configTags[key] = v
 		}
+	}
+	if ignoredReservedKeys {
+		az.Event(service, v1.EventTypeWarning, "IgnoredPIPTagKeys", fmt.Sprintf(
+			"Ignoring reserved tag keys in the %s annotation; the controller owns the values of: %s",
+			consts.ServiceAnnotationAzurePIPTags, strings.Join(reservedPIPTagKeys, ", ")))
 	}
 
 	// include the cluster name and service names tags when comparing
