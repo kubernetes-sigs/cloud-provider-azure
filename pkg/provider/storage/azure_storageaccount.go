@@ -131,6 +131,12 @@ type AccountRepo struct {
 	fileServiceRepo      fileservice.Repository
 	storageAccountCache  cache.Resource[armstorage.Account]
 	lockMap              *lockmap.LockMap
+	// saTokenCredOpts and saTokenARMOpts are pre-resolved at init time
+	// so that GetStorageAccesskeyFromServiceAccountToken does not call
+	// GetAzCoreClientOption (and the metadata-service network fetch it
+	// triggers on Azure Stack) on every volume mount.
+	saTokenCredOpts azcore.ClientOptions
+	saTokenARMOpts  arm.ClientOptions
 }
 
 func NewRepository(config azureconfig.Config, env *azclient.Environment, authProvider *azclient.AuthProvider, computeClientFactory azclient.ClientFactory, networkClientFactory azclient.ClientFactory) (*AccountRepo, error) {
@@ -147,6 +153,13 @@ func NewRepository(config azureconfig.Config, env *azclient.Environment, authPro
 	if err != nil {
 		return nil, err
 	}
+	// Pre-resolve azcore/arm client options at init time so the SA-token
+	// path does not call GetAzCoreClientOption (which may hit the metadata
+	// endpoint on Azure Stack) on every volume mount.
+	credOpts, armOpts, err := buildSATokenClientOptions(&config.ARMClientConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build SA-token client options: %w", err)
+	}
 	return &AccountRepo{
 		Config:               config,
 		Environment:          env,
@@ -157,6 +170,8 @@ func NewRepository(config azureconfig.Config, env *azclient.Environment, authPro
 		subnetRepo:           subnetRepo,
 		storageAccountCache:  storageAccountCache,
 		lockMap:              lockmap.NewLockMap(),
+		saTokenCredOpts:      credOpts,
+		saTokenARMOpts:       armOpts,
 	}, nil
 }
 
@@ -272,18 +287,11 @@ func (az *AccountRepo) getStorageAccountWithCache(ctx context.Context, subsID, r
 }
 
 // buildSATokenClientOptions derives the azcore + arm client options for the
-// service-account-token workload-identity path from az.ARMClientConfig, so
-// that non-Public clouds (AzureChinaCloud, AzureUSGovernmentCloud,
-// AzureStackCloud) authenticate against the correct AAD authority + ARM
-// audience. Without this, azidentity / arm clients default to Azure Public,
-// which causes AADSTS500011 in sovereign clouds
-// (see kubernetes-sigs/blob-csi-driver#2649).
-//
-// Extracted from GetStorageAccesskeyFromServiceAccountToken so the
-// cloud-selection behavior can be exercised by unit tests without needing a
-// live ARM endpoint.
-func (az *AccountRepo) buildSATokenClientOptions() (azcore.ClientOptions, arm.ClientOptions, error) {
-	clientOpts, _, err := azclient.GetAzCoreClientOption(&az.ARMClientConfig)
+// service-account-token workload-identity path. It is called once at
+// repository init time so the per-call GetStorageAccesskeyFromServiceAccountToken
+// path does not trigger network I/O (metadata endpoint on Azure Stack).
+func buildSATokenClientOptions(armConfig *azclient.ARMClientConfig) (azcore.ClientOptions, arm.ClientOptions, error) {
+	clientOpts, _, err := azclient.GetAzCoreClientOption(armConfig)
 	if err != nil {
 		return azcore.ClientOptions{}, arm.ClientOptions{}, fmt.Errorf("failed to get azcore client options, error: %w", err)
 	}
@@ -293,7 +301,7 @@ func (az *AccountRepo) buildSATokenClientOptions() (azcore.ClientOptions, arm.Cl
 	// clouds and Azure Stack pin an older ListKeys API version, otherwise the
 	// SDK default would return an unsupported-API-version error even after the
 	// authentication fix.
-	if az.Cloud != "" && strings.EqualFold(az.Cloud, azclientutils.AzureStackCloudName) && !az.DisableAzureStackCloud {
+	if armConfig.Cloud != "" && strings.EqualFold(armConfig.Cloud, azclientutils.AzureStackCloudName) && !armConfig.DisableAzureStackCloud {
 		armOpts.APIVersion = accountclient.AzureStackCloudAPIVersion
 	} else if !strings.EqualFold(clientOpts.Cloud.ActiveDirectoryAuthorityHost, cloud.AzurePublic.ActiveDirectoryAuthorityHost) {
 		armOpts.APIVersion = accountclient.MooncakeApiVersion
@@ -302,20 +310,16 @@ func (az *AccountRepo) buildSATokenClientOptions() (azcore.ClientOptions, arm.Cl
 }
 
 func (az *AccountRepo) GetStorageAccesskeyFromServiceAccountToken(ctx context.Context, subsID, accountName, rgName, clientID, tenantID, serviceAccountToken string) (string, error) {
-	credOpts, armOpts, err := az.buildSATokenClientOptions()
-	if err != nil {
-		return "", err
-	}
-
 	cred, err := azidentity.NewClientAssertionCredential(tenantID, clientID, func(context.Context) (string, error) {
 		return parseServiceAccountToken(serviceAccountToken)
 	}, &azidentity.ClientAssertionCredentialOptions{
-		ClientOptions: credOpts,
+		ClientOptions: az.saTokenCredOpts,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create client assertion credential, error: %w", err)
 	}
 
+	armOpts := az.saTokenARMOpts // shallow copy so callers don't race
 	client, err := accountclient.New(subsID, cred, &armOpts)
 	if err != nil {
 		return "", fmt.Errorf("failed to create storage account client, error: %w", err)

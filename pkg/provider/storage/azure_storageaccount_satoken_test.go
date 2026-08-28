@@ -36,7 +36,7 @@ import (
 // the token audience does not match the sovereign-cloud ARM resource ID.
 //
 // This test derives the client options exactly the same way the fix does
-// (via az.buildSATokenClientOptions -> azclient.GetAzCoreClientOption), and
+// (via buildSATokenClientOptions -> azclient.GetAzCoreClientOption), and
 // pins both the AAD authority host and the ARM ResourceManager endpoint per
 // cloud so any future refactor that drops the cloud config on the floor
 // fails loudly.
@@ -92,7 +92,7 @@ func TestBuildSATokenClientOptions_CloudSelection(t *testing.T) {
 				},
 			}
 
-			credOpts, armOpts, err := az.buildSATokenClientOptions()
+			credOpts, armOpts, err := buildSATokenClientOptions(&az.Config.ARMClientConfig)
 			assert.NoError(t, err)
 
 			// azidentity uses ClientOptions.Cloud.ActiveDirectoryAuthorityHost
@@ -132,7 +132,7 @@ func TestBuildSATokenClientOptions_CloudSelection(t *testing.T) {
 func TestBuildSATokenClientOptions_NilConfig(t *testing.T) {
 	az := &AccountRepo{}
 
-	credOpts, armOpts, err := az.buildSATokenClientOptions()
+	credOpts, armOpts, err := buildSATokenClientOptions(&az.Config.ARMClientConfig)
 	assert.NoError(t, err)
 	// Zero-valued config defaults to AzurePublic.
 	assert.Equal(t, cloud.AzurePublic.ActiveDirectoryAuthorityHost, credOpts.Cloud.ActiveDirectoryAuthorityHost)
