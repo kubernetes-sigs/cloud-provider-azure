@@ -293,7 +293,7 @@ func (az *AccountRepo) buildSATokenClientOptions() (azcore.ClientOptions, arm.Cl
 	// clouds and Azure Stack pin an older ListKeys API version, otherwise the
 	// SDK default would return an unsupported-API-version error even after the
 	// authentication fix.
-	if az.ARMClientConfig.Cloud != "" && strings.EqualFold(az.ARMClientConfig.Cloud, azclientutils.AzureStackCloudName) && !az.ARMClientConfig.DisableAzureStackCloud {
+	if az.Cloud != "" && strings.EqualFold(az.Cloud, azclientutils.AzureStackCloudName) && !az.DisableAzureStackCloud {
 		armOpts.APIVersion = accountclient.AzureStackCloudAPIVersion
 	} else if !strings.EqualFold(clientOpts.Cloud.ActiveDirectoryAuthorityHost, cloud.AzurePublic.ActiveDirectoryAuthorityHost) {
 		armOpts.APIVersion = accountclient.MooncakeApiVersion
