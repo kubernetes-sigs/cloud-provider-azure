@@ -945,6 +945,7 @@ func TestInstanceMetadata(t *testing.T) {
 			},
 			Zone:   "westus2-1",
 			Region: "westus2",
+			AdditionalLabels: map[string]string{"topology.kubernetes.azure.com/fault-domain": "0"},
 		}
 		meta, err := cloud.InstanceMetadata(context.Background(), &v1.Node{
 			ObjectMeta: metav1.ObjectMeta{
