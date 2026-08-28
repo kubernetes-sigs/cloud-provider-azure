@@ -131,6 +131,7 @@ type AccountRepo struct {
 	fileServiceRepo      fileservice.Repository
 	storageAccountCache  cache.Resource[armstorage.Account]
 	lockMap              *lockmap.LockMap
+
 	// saTokenCredOpts and saTokenARMOpts are pre-resolved at init time
 	// so that GetStorageAccesskeyFromServiceAccountToken does not call
 	// GetAzCoreClientOption (and the metadata-service network fetch it
@@ -171,6 +172,7 @@ func NewRepository(config azureconfig.Config, env *azclient.Environment, authPro
 		subnetRepo:           subnetRepo,
 		storageAccountCache:  storageAccountCache,
 		lockMap:              lockmap.NewLockMap(),
+
 		saTokenCredOpts:              credOpts,
 		saTokenARMOpts:               armOpts,
 		saTokenDisableInstanceDiscov: isAzureStack,
