@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sort"
 	"strings"
 	"sync"
 
@@ -62,9 +63,10 @@ func getContextWithCancel() (context.Context, context.CancelFunc) {
 // It logs warnings for parsing errors and empty keys, and info messages for case-insensitive key replacements.
 //
 // XXX: return error instead of logging; decouple tag parsing and tag application
-func parseTags(tags string, tagsMap map[string]string) map[string]*string {
+func parseTags(tags string, tagsMap map[string]string) (map[string]*string, error) {
 	logger := log.Background().WithName("parseTags")
 	formatted := make(map[string]*string)
+	var errs []error
 
 	if tags != "" {
 		kvs := strings.Split(tags, consts.TagsDelimiter)
@@ -85,13 +87,25 @@ func parseTags(tags string, tagsMap map[string]string) map[string]*string {
 				klog.Warning("parseTags: empty key, ignoring this key-value pair")
 				continue
 			}
+			if found, kExisting := findKeyInMapCaseInsensitive(formatted, k); found {
+				errs = append(errs, fmt.Errorf("found duplicate tag key %q (case-insensitive) in tags, ignoring this key-value pair and keeping the first occurrence %q", k, kExisting))
+				continue
+			}
 			formatted[k] = ptr.To(v)
 		}
 	}
 
 	if len(tagsMap) > 0 {
-		for k, v := range tagsMap {
-			key, value := strings.TrimSpace(k), strings.TrimSpace(v)
+		var keys []string
+		for k := range tagsMap {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		tagsMapKeys := make(map[string]bool)
+		for _, key := range keys {
+			v := tagsMap[key]
+			key, value := strings.TrimSpace(key), strings.TrimSpace(v)
 			if strings.EqualFold(value, "null") {
 				value = v
 			}
@@ -100,15 +114,29 @@ func parseTags(tags string, tagsMap map[string]string) map[string]*string {
 				continue
 			}
 
-			if found, k := findKeyInMapCaseInsensitive(formatted, key); found && k != key {
-				logger.V(4).Info("found identical keys from tags and tagsMap (case-insensitive), will replace", "identical keys", k, "keyFromTagsMap", key)
-				delete(formatted, k)
+			if found, kExisting := findKeyInMapCaseInsensitive(formatted, key); found {
+				if tagsMapKeys[strings.ToLower(key)] {
+					errs = append(errs, fmt.Errorf("found duplicate tag key %q (case-insensitive) in tagsMap, keeping the first occurrence %q", key, kExisting))
+					continue
+				}
+				if kExisting != key {
+					logger.V(4).Info("found identical keys from tags and tagsMap (case-insensitive), will replace", "identical keys", kExisting, "keyFromTagsMap", key)
+					delete(formatted, kExisting)
+				}
 			}
 			formatted[key] = ptr.To(value)
+			tagsMapKeys[strings.ToLower(key)] = true
 		}
 	}
 
-	return formatted
+	if len(errs) > 0 {
+		var errStrs []string
+		for _, err := range errs {
+			errStrs = append(errStrs, err.Error())
+		}
+		return formatted, fmt.Errorf("%s", strings.Join(errStrs, "; "))
+	}
+	return formatted, nil
 }
 
 func findKeyInMapCaseInsensitive(targetMap map[string]*string, key string) (bool, string) {

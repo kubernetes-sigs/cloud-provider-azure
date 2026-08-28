@@ -3626,10 +3626,18 @@ func shouldReleaseExistingOwnedPublicIP(
 
 // ensurePIPTagged ensures the public IP of the service is tagged as configured
 func (az *Cloud) ensurePIPTagged(service *v1.Service, pip *armnetwork.PublicIPAddress) bool {
-	configTags := parseTags(az.Tags, az.TagsMap)
+	configTags, err := parseTags(az.Tags, az.TagsMap)
+	if err != nil {
+		klog.Warningf("ensurePIPTagged: %v", err)
+	}
 	annotationTags := make(map[string]*string)
 	if _, ok := service.Annotations[consts.ServiceAnnotationAzurePIPTags]; ok {
-		annotationTags = parseTags(service.Annotations[consts.ServiceAnnotationAzurePIPTags], map[string]string{})
+		var annErr error
+		annotationTags, annErr = parseTags(service.Annotations[consts.ServiceAnnotationAzurePIPTags], map[string]string{})
+		if annErr != nil {
+			az.Event(service, v1.EventTypeWarning, "DuplicatePIPTags", annErr.Error())
+			klog.Warningf("ensurePIPTagged: %v", annErr)
+		}
 	}
 
 	var ignoredReservedKeys bool
@@ -4375,7 +4383,10 @@ func (az *Cloud) ensureLoadBalancerTagged(lb *armnetwork.LoadBalancer) bool {
 	if az.Tags == "" && len(az.TagsMap) == 0 {
 		return false
 	}
-	tags := parseTags(az.Tags, az.TagsMap)
+	tags, err := parseTags(az.Tags, az.TagsMap)
+	if err != nil {
+		klog.Warningf("ensureLoadBalancerTagged: %v", err)
+	}
 	if lb.Tags == nil {
 		lb.Tags = make(map[string]*string)
 	}
@@ -4391,7 +4402,10 @@ func (az *Cloud) ensureSecurityGroupTagged(sg *armnetwork.SecurityGroup) bool {
 	if az.Tags == "" && (len(az.TagsMap) == 0) {
 		return false
 	}
-	tags := parseTags(az.Tags, az.TagsMap)
+	tags, err := parseTags(az.Tags, az.TagsMap)
+	if err != nil {
+		klog.Warningf("ensureSecurityGroupTagged: %v", err)
+	}
 	if sg.Tags == nil {
 		sg.Tags = make(map[string]*string)
 	}

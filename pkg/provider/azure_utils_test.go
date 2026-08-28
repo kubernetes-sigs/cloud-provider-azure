@@ -282,7 +282,7 @@ func TestParseTags(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.description, func(t *testing.T) {
-			tags := parseTags(testCase.tags, testCase.tagsMap)
+			tags, _ := parseTags(testCase.tags, testCase.tagsMap)
 			assert.Equal(t, testCase.expectedTags, tags)
 		})
 	}

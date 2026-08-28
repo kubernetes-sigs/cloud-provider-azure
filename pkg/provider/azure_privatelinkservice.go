@@ -32,6 +32,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
@@ -594,7 +595,10 @@ func (az *Cloud) reconcilePLSTags(
 	clusterName *string,
 	service *v1.Service,
 ) bool {
-	configTags := parseTags(az.Tags, az.TagsMap)
+	configTags, err := parseTags(az.Tags, az.TagsMap)
+	if err != nil {
+		klog.Warningf("reconcilePLSTags: %v", err)
+	}
 	serviceName := getServiceName(service)
 
 	if existingPLS.Tags == nil {
