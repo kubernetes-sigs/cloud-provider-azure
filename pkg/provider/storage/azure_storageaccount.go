@@ -25,6 +25,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
@@ -268,14 +270,26 @@ func (az *AccountRepo) getStorageAccountWithCache(ctx context.Context, subsID, r
 }
 
 func (az *AccountRepo) GetStorageAccesskeyFromServiceAccountToken(ctx context.Context, subsID, accountName, rgName, clientID, tenantID, serviceAccountToken string) (string, error) {
+	// Build cloud config from az's ARMClientConfig so non-Public clouds
+	// (e.g. AzureChinaCloud, AzureUSGovernmentCloud) authenticate against
+	// the correct AAD authority + ARM audience. Without this, azidentity /
+	// arm clients default to Azure Public, which causes AADSTS500011 in
+	// sovereign clouds (see kubernetes-sigs/blob-csi-driver#2649).
+	clientOpts, _, err := azclient.GetAzCoreClientOption(&az.ARMClientConfig)
+	if err != nil {
+		return "", fmt.Errorf("failed to get azcore client options, error: %w", err)
+	}
+
 	cred, err := azidentity.NewClientAssertionCredential(tenantID, clientID, func(context.Context) (string, error) {
 		return parseServiceAccountToken(serviceAccountToken)
-	}, &azidentity.ClientAssertionCredentialOptions{})
+	}, &azidentity.ClientAssertionCredentialOptions{
+		ClientOptions: azcore.ClientOptions{Cloud: clientOpts.Cloud},
+	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create client assertion credential, error: %w", err)
 	}
 
-	client, err := accountclient.New(subsID, cred, nil)
+	client, err := accountclient.New(subsID, cred, &arm.ClientOptions{ClientOptions: *clientOpts})
 	if err != nil {
 		return "", fmt.Errorf("failed to create storage account client, error: %w", err)
 	}
