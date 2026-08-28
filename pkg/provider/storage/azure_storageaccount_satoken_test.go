@@ -92,7 +92,7 @@ func TestBuildSATokenClientOptions_CloudSelection(t *testing.T) {
 				},
 			}
 
-			credOpts, armOpts, err := buildSATokenClientOptions(&az.Config.ARMClientConfig)
+			credOpts, armOpts, err := buildSATokenClientOptions(&az.ARMClientConfig)
 			assert.NoError(t, err)
 
 			// azidentity uses ClientOptions.Cloud.ActiveDirectoryAuthorityHost
@@ -132,7 +132,7 @@ func TestBuildSATokenClientOptions_CloudSelection(t *testing.T) {
 func TestBuildSATokenClientOptions_NilConfig(t *testing.T) {
 	az := &AccountRepo{}
 
-	credOpts, armOpts, err := buildSATokenClientOptions(&az.Config.ARMClientConfig)
+	credOpts, armOpts, err := buildSATokenClientOptions(&az.ARMClientConfig)
 	assert.NoError(t, err)
 	// Zero-valued config defaults to AzurePublic.
 	assert.Equal(t, cloud.AzurePublic.ActiveDirectoryAuthorityHost, credOpts.Cloud.ActiveDirectoryAuthorityHost)
