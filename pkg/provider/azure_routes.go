@@ -31,6 +31,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
@@ -577,7 +578,10 @@ func (az *Cloud) ensureRouteTableTagged(rt *armnetwork.RouteTable) (map[string]*
 	if az.Tags == "" && (len(az.TagsMap) == 0) {
 		return nil, false
 	}
-	tags := parseTags(az.Tags, az.TagsMap)
+	tags, err := parseTags(az.Tags, az.TagsMap)
+	if err != nil {
+		klog.Warningf("reconcileRouteTableTags: %v", err)
+	}
 	if rt.Tags == nil {
 		rt.Tags = make(map[string]*string)
 	}
