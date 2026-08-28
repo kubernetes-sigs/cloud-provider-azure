@@ -41,10 +41,10 @@ import (
 // fails loudly.
 func TestBuildSATokenClientOptions_CloudSelection(t *testing.T) {
 	tests := []struct {
-		name                 string
-		cloudName            string
-		wantAADAuthority     string
-		wantARMEndpoint      string
+		name             string
+		cloudName        string
+		wantAADAuthority string
+		wantARMEndpoint  string
 	}{
 		{
 			name:             "Azure Public (default)",
