@@ -44,6 +44,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/backendaddresspoolclient/mock_backendaddresspoolclient"
@@ -7917,8 +7918,18 @@ func compareStrings(s0, s1 []string) bool {
 }
 
 func TestEnsurePublicIPExistsCommon(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	// Builds a pip tags annotation that tries to set every controller-owned tag key.
+	reservedTagKeysAnnotation := func(transform func(string) string) string {
+		var pairs []string
+		for _, key := range []string{
+			consts.ClusterNameKey, consts.LegacyClusterNameKey,
+			consts.ServiceTagKey, consts.LegacyServiceTagKey,
+			consts.ServiceUsingDNSKey, consts.LegacyServiceUsingDNSKey,
+		} {
+			pairs = append(pairs, transform(key)+"=annotation-value")
+		}
+		return strings.Join(pairs, ",")
+	}
 
 	testCases := []struct {
 		desc                    string
@@ -7936,6 +7947,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 		assertPutPIPCalled      bool
 		putErr                  error
 		expectedError           bool
+		expectedWarningReasons  []string
 	}{
 		{
 			desc:    "shall return existed IPv4 PIP if there is any",
@@ -8244,6 +8256,71 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			expectedError: true,
 		},
 		{
+			desc:    "shall not apply reserved tag keys from the pip tags annotation",
+			pipName: "pip1",
+			additionalAnnotations: map[string]string{
+				consts.ServiceAnnotationAzurePIPTags: reservedTagKeysAnnotation(func(key string) string { return key }),
+			},
+			existingPIPs: []*armnetwork.PublicIPAddress{{
+				Name: ptr.To("pip1"),
+				ID:   ptr.To(expectedPIPID),
+				Tags: map[string]*string{
+					consts.ClusterNameKey: ptr.To("testCluster"),
+					consts.ServiceTagKey:  ptr.To("default/test1"),
+				},
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
+					PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
+				},
+			}},
+			expectedPIP: &armnetwork.PublicIPAddress{
+				Name: ptr.To("pip1"),
+				ID:   ptr.To(expectedPIPID),
+				Tags: map[string]*string{
+					consts.ClusterNameKey: ptr.To("testCluster"),
+					consts.ServiceTagKey:  ptr.To("default/test1"),
+				},
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
+					PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
+				},
+			},
+			expectedWarningReasons: []string{"IgnoredPIPTagKeys"},
+		},
+		{
+			// Azure resource tag names are case-insensitive.
+			desc:    "shall not apply reserved tag keys from the pip tags annotation regardless of their case",
+			pipName: "pip1",
+			additionalAnnotations: map[string]string{
+				consts.ServiceAnnotationAzurePIPTags: reservedTagKeysAnnotation(strings.ToUpper),
+			},
+			existingPIPs: []*armnetwork.PublicIPAddress{{
+				Name: ptr.To("pip1"),
+				ID:   ptr.To(expectedPIPID),
+				Tags: map[string]*string{
+					consts.ClusterNameKey: ptr.To("testCluster"),
+					consts.ServiceTagKey:  ptr.To("default/test1"),
+				},
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
+					PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
+				},
+			}},
+			expectedPIP: &armnetwork.PublicIPAddress{
+				Name: ptr.To("pip1"),
+				ID:   ptr.To(expectedPIPID),
+				Tags: map[string]*string{
+					consts.ClusterNameKey: ptr.To("testCluster"),
+					consts.ServiceTagKey:  ptr.To("default/test1"),
+				},
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
+					PublicIPAddressVersion:   to.Ptr(armnetwork.IPVersionIPv4),
+				},
+			},
+			expectedWarningReasons: []string{"IgnoredPIPTagKeys"},
+		},
+		{
 			desc:          "shall return the pip without calling PUT API if the tags are good",
 			pipName:       "pip1",
 			inputDNSLabel: "test",
@@ -8430,20 +8507,26 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			additionalAnnotations: map[string]string{
 				consts.ServiceAnnotationIPTagsForPublicIP: "RoutingPreference=Invalid",
 			},
-			shouldPutPIP:       true,
-			assertPutPIPCalled: true,
-			putErr:             errors.New("azure rejected iptags mutation"),
-			expectedError:      true,
+			shouldPutPIP:           true,
+			assertPutPIPCalled:     true,
+			putErr:                 errors.New("azure rejected iptags mutation"),
+			expectedError:          true,
+			expectedWarningReasons: []string{"CreateOrUpdatePublicIPAddress"},
 		},
 	}
 
 	for _, test := range testCases {
 		t.Run(test.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
 			az := GetTestCloud(ctrl)
 			if test.useSLB {
 				az.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 			}
 			az.EnableIPTagMutationForExistingPublicIP = test.enableIPTagMutation
+			recorder := record.NewFakeRecorder(10)
+			az.eventRecorder = recorder
 
 			service := getTestService("test1", v1.ProtocolTCP, nil, test.isIPv6, 80)
 			service.Annotations = test.additionalAnnotations
@@ -8499,6 +8582,16 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 				assert.Equal(t, test.expectedID, ptr.Deref(pip.ID, ""))
 			} else {
 				assert.Equal(t, test.expectedPIP, pip)
+			}
+
+			var events []string
+			for len(recorder.Events) > 0 {
+				events = append(events, <-recorder.Events)
+			}
+			if assert.Len(t, events, len(test.expectedWarningReasons), events) {
+				for i, reason := range test.expectedWarningReasons {
+					assert.Contains(t, events[i], v1.EventTypeWarning+" "+reason)
+				}
 			}
 		})
 	}
@@ -9234,7 +9327,7 @@ func TestEnsurePIPTagged(t *testing.T) {
 	service := v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
-				consts.ServiceAnnotationAzurePIPTags: "A=b,c=d,e=,=f,ghi",
+				consts.ServiceAnnotationAzurePIPTags: "A=b,c=d,e=,=f,ghi,k8s-azure-service-suffix=b,prefix-k8s-azure-service=b",
 			},
 		},
 	}
@@ -9252,15 +9345,17 @@ func TestEnsurePIPTagged(t *testing.T) {
 	t.Run("ensurePIPTagged should ensure the pip is tagged as configured", func(t *testing.T) {
 		expectedPIP := armnetwork.PublicIPAddress{
 			Tags: map[string]*string{
-				consts.ClusterNameKey:     ptr.To("testCluster"),
-				consts.ServiceTagKey:      ptr.To("default/svc1,default/svc2"),
-				consts.ServiceUsingDNSKey: ptr.To("default/svc1"),
-				"foo":                     ptr.To("bar"),
-				"a":                       ptr.To("b"),
-				"c":                       ptr.To("d"),
-				"y":                       ptr.To("z"),
-				"m":                       ptr.To("n"),
-				"e":                       ptr.To(""),
+				consts.ClusterNameKey:      ptr.To("testCluster"),
+				consts.ServiceTagKey:       ptr.To("default/svc1,default/svc2"),
+				consts.ServiceUsingDNSKey:  ptr.To("default/svc1"),
+				"foo":                      ptr.To("bar"),
+				"a":                        ptr.To("b"),
+				"c":                        ptr.To("d"),
+				"y":                        ptr.To("z"),
+				"m":                        ptr.To("n"),
+				"e":                        ptr.To(""),
+				"k8s-azure-service-suffix": ptr.To("b"),
+				"prefix-k8s-azure-service": ptr.To("b"),
 			},
 		}
 		changed := cloud.ensurePIPTagged(&service, &pip)
@@ -9272,14 +9367,16 @@ func TestEnsurePIPTagged(t *testing.T) {
 		cloud.SystemTags = "a,foo"
 		expectedPIP := armnetwork.PublicIPAddress{
 			Tags: map[string]*string{
-				consts.ClusterNameKey:     ptr.To("testCluster"),
-				consts.ServiceTagKey:      ptr.To("default/svc1,default/svc2"),
-				consts.ServiceUsingDNSKey: ptr.To("default/svc1"),
-				"foo":                     ptr.To("bar"),
-				"a":                       ptr.To("b"),
-				"c":                       ptr.To("d"),
-				"y":                       ptr.To("z"),
-				"e":                       ptr.To(""),
+				consts.ClusterNameKey:      ptr.To("testCluster"),
+				consts.ServiceTagKey:       ptr.To("default/svc1,default/svc2"),
+				consts.ServiceUsingDNSKey:  ptr.To("default/svc1"),
+				"foo":                      ptr.To("bar"),
+				"a":                        ptr.To("b"),
+				"c":                        ptr.To("d"),
+				"y":                        ptr.To("z"),
+				"e":                        ptr.To(""),
+				"k8s-azure-service-suffix": ptr.To("b"),
+				"prefix-k8s-azure-service": ptr.To("b"),
 			},
 		}
 		changed := cloud.ensurePIPTagged(&service, &pip)
@@ -9292,20 +9389,94 @@ func TestEnsurePIPTagged(t *testing.T) {
 		cloud.TagsMap = map[string]string{"a": "c", "a=b": "c=d", "Y": "zz"}
 		expectedPIP := armnetwork.PublicIPAddress{
 			Tags: map[string]*string{
-				consts.ClusterNameKey:     ptr.To("testCluster"),
-				consts.ServiceTagKey:      ptr.To("default/svc1,default/svc2"),
-				consts.ServiceUsingDNSKey: ptr.To("default/svc1"),
-				"foo":                     ptr.To("bar"),
-				"a":                       ptr.To("b"),
-				"c":                       ptr.To("d"),
-				"a=b":                     ptr.To("c=d"),
-				"e":                       ptr.To(""),
+				consts.ClusterNameKey:      ptr.To("testCluster"),
+				consts.ServiceTagKey:       ptr.To("default/svc1,default/svc2"),
+				consts.ServiceUsingDNSKey:  ptr.To("default/svc1"),
+				"foo":                      ptr.To("bar"),
+				"a":                        ptr.To("b"),
+				"c":                        ptr.To("d"),
+				"a=b":                      ptr.To("c=d"),
+				"e":                        ptr.To(""),
+				"k8s-azure-service-suffix": ptr.To("b"),
+				"prefix-k8s-azure-service": ptr.To("b"),
 			},
 		}
 		changed := cloud.ensurePIPTagged(&service, &pip)
 		assert.True(t, changed)
 		assert.Equal(t, expectedPIP, pip)
 	})
+}
+
+func TestEnsurePIPTaggedShouldIgnoreReservedTagKeysFromAnnotation(t *testing.T) {
+	const (
+		existingValue   = "existing-value"
+		annotationValue = "annotation-value"
+	)
+
+	// Tag keys whose values the controller owns.
+	reservedKeys := []string{
+		consts.ClusterNameKey,
+		consts.LegacyClusterNameKey,
+		consts.ServiceTagKey,
+		consts.LegacyServiceTagKey,
+		consts.ServiceUsingDNSKey,
+		consts.LegacyServiceUsingDNSKey,
+	}
+
+	newService := func(annotationKey string) v1.Service {
+		return v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					consts.ServiceAnnotationAzurePIPTags: annotationKey + "=" + annotationValue,
+				},
+			},
+		}
+	}
+
+	for _, reservedKey := range reservedKeys {
+		// Azure resource tag names are case-insensitive, so any spelling must be treated as reserved.
+		for _, annotationKey := range []string{reservedKey, strings.ToUpper(reservedKey)} {
+			t.Run(fmt.Sprintf("annotation key %s, tag already set on the PIP", annotationKey), func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+
+				cloud := GetTestCloud(ctrl)
+				service := newService(annotationKey)
+				pip := armnetwork.PublicIPAddress{
+					Tags: map[string]*string{
+						reservedKey: ptr.To(existingValue),
+						"foo":       ptr.To("bar"),
+					},
+				}
+
+				cloud.ensurePIPTagged(&service, &pip)
+
+				assert.Equal(t, existingValue, ptr.Deref(pip.Tags[reservedKey], ""),
+					"the controller-owned value must be preserved")
+				for k, v := range pip.Tags {
+					assert.NotEqual(t, annotationValue, ptr.Deref(v, ""),
+						"tag key %q must not carry a value supplied by the annotation", k)
+				}
+			})
+
+			t.Run(fmt.Sprintf("annotation key %s, tag not set on the PIP", annotationKey), func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+
+				cloud := GetTestCloud(ctrl)
+				service := newService(annotationKey)
+				pip := armnetwork.PublicIPAddress{
+					Tags: map[string]*string{"foo": ptr.To("bar")},
+				}
+
+				changed := cloud.ensurePIPTagged(&service, &pip)
+
+				assert.False(t, changed)
+				assert.Equal(t, map[string]*string{"foo": ptr.To("bar")}, pip.Tags,
+					"the annotation must not change the PIP tags")
+			})
+		}
+	}
 }
 
 func TestEnsurePIPIPTagged(t *testing.T) {
