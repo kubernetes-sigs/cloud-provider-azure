@@ -1161,7 +1161,7 @@ func TestGetStandardVMZoneByNodeName(t *testing.T) {
 			},
 		},
 		{
-			name:     "GetZoneByNodeName should get FailureDomain as zone if zone is not used for node",
+			name:     "GetZoneByNodeName should return empty FailureDomain if zone is not used for node",
 			nodeName: "vm3",
 			vm: &armcompute.VirtualMachine{
 				Name:     ptr.To("vm3"),
@@ -1173,7 +1173,7 @@ func TestGetStandardVMZoneByNodeName(t *testing.T) {
 				},
 			},
 			expectedZone: cloudprovider.Zone{
-				FailureDomain: "3",
+				FailureDomain: "",
 				Region:        "eastus",
 			},
 		},
@@ -1193,7 +1193,7 @@ func TestGetStandardVMZoneByNodeName(t *testing.T) {
 			expectedErrMsg: fmt.Errorf("failed to parse zone %q: strconv.Atoi: parsing %q: invalid syntax", []string{"a"}, "a"),
 		},
 		{
-			name:     "GetZoneByNodeName should set failuredomain to 0 if no zones are found",
+			name:     "GetZoneByNodeName should set empty FailureDomain if no zones are found",
 			nodeName: "vm5",
 			vm: &armcompute.VirtualMachine{
 				Name:     ptr.To("vm5"),
@@ -1204,7 +1204,7 @@ func TestGetStandardVMZoneByNodeName(t *testing.T) {
 				},
 			},
 			expectedZone: cloudprovider.Zone{
-				FailureDomain: "0",
+				FailureDomain: "",
 				Region:        "hybridenvironment",
 			},
 		},
@@ -1218,6 +1218,65 @@ func TestGetStandardVMZoneByNodeName(t *testing.T) {
 			assert.EqualError(t, test.expectedErrMsg, err.Error(), test.name)
 		}
 		assert.Equal(t, test.expectedZone, zone, test.name)
+	}
+}
+
+func TestGetStandardVMPlatformFaultDomainByNodeName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cloud := GetTestCloud(ctrl)
+	faultDomain := int32(3)
+	testcases := []struct {
+		name           string
+		nodeName       string
+		vm             *armcompute.VirtualMachine
+		getErr         error
+		expectedFD     string
+		expectedErrMsg error
+	}{
+		{
+			name:     "GetPlatformFaultDomainByNodeName should return fault domain from instance view",
+			nodeName: "vm1",
+			vm: &armcompute.VirtualMachine{
+				Name: ptr.To("vm1"),
+				Properties: &armcompute.VirtualMachineProperties{
+					InstanceView: &armcompute.VirtualMachineInstanceView{
+						PlatformFaultDomain: &faultDomain,
+					},
+				},
+			},
+			expectedFD: "3",
+		},
+		{
+			name:     "GetPlatformFaultDomainByNodeName should default to 0 if instance view is nil",
+			nodeName: "vm2",
+			vm: &armcompute.VirtualMachine{
+				Name: ptr.To("vm2"),
+				Properties: &armcompute.VirtualMachineProperties{
+					InstanceView: nil,
+				},
+			},
+			expectedFD: "0",
+		},
+		{
+			name:           "GetPlatformFaultDomainByNodeName should return error when getting VM fails",
+			nodeName:       "vm3",
+			getErr:         fmt.Errorf("failed to get vm"),
+			expectedErrMsg: fmt.Errorf("failed to get vm"),
+		},
+	}
+	for _, test := range testcases {
+		mockVMClient := cloud.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nodeName, gomock.Any()).Return(test.vm, test.getErr)
+
+		fd, err := cloud.VMSet.GetPlatformFaultDomainByNodeName(context.TODO(), test.nodeName)
+		if test.expectedErrMsg != nil {
+			assert.EqualError(t, test.expectedErrMsg, err.Error(), test.name)
+		} else {
+			assert.NoError(t, err, test.name)
+			assert.Equal(t, test.expectedFD, fd, test.name)
+		}
 	}
 }
 

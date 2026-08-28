@@ -943,8 +943,9 @@ func TestInstanceMetadata(t *testing.T) {
 					Address: "5.6.7.8",
 				},
 			},
-			Zone:   "westus2-1",
-			Region: "westus2",
+			Zone:             "westus2-1",
+			Region:           "westus2",
+			AdditionalLabels: map[string]string{consts.FaultDomainLabel: "0"},
 		}
 		meta, err := cloud.InstanceMetadata(context.Background(), &v1.Node{
 			ObjectMeta: metav1.ObjectMeta{

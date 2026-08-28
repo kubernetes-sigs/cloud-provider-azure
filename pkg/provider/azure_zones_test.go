@@ -125,10 +125,10 @@ func TestGetZone(t *testing.T) {
 			expected:    "eastus-1",
 		},
 		{
-			name:        "GetZone should get faultDomain if node's zone isn't set",
+			name:        "GetZone should return empty zone if node's zone isn't set",
 			location:    "eastus",
 			faultDomain: "99",
-			expected:    "99",
+			expected:    "",
 		},
 		{
 			name:     "GetZone should get availability zone in lower cases",
