@@ -42,20 +42,22 @@ import (
 // fails loudly.
 func TestBuildSATokenClientOptions_CloudSelection(t *testing.T) {
 	tests := []struct {
-		name             string
-		cloudName        string
-		wantAADAuthority string
-		wantARMEndpoint  string
-		wantARMAudience  string
-		wantAPIVersion   string
+		name                      string
+		cloudName                 string
+		wantAADAuthority          string
+		wantARMEndpoint           string
+		wantARMAudience           string
+		wantAPIVersion            string
+		wantDisableInstanceDiscov bool
 	}{
 		{
-			name:             "Azure Public (default)",
-			cloudName:        "AzurePublicCloud",
-			wantAADAuthority: cloud.AzurePublic.ActiveDirectoryAuthorityHost,
-			wantARMEndpoint:  cloud.AzurePublic.Services[cloud.ResourceManager].Endpoint,
-			wantARMAudience:  cloud.AzurePublic.Services[cloud.ResourceManager].Audience,
-			wantAPIVersion:   "", // SDK default; no override.
+			name:                      "Azure Public (default)",
+			cloudName:                 "AzurePublicCloud",
+			wantAADAuthority:          cloud.AzurePublic.ActiveDirectoryAuthorityHost,
+			wantARMEndpoint:           cloud.AzurePublic.Services[cloud.ResourceManager].Endpoint,
+			wantARMAudience:           cloud.AzurePublic.Services[cloud.ResourceManager].Audience,
+			wantAPIVersion:            "", // SDK default; no override.
+			wantDisableInstanceDiscov: false,
 		},
 		{
 			// The bug: before this fix, the credential/ARM client fell
@@ -63,20 +65,22 @@ func TestBuildSATokenClientOptions_CloudSelection(t *testing.T) {
 			// failed with AADSTS500011. Assert BOTH the endpoint and the
 			// audience so a mixed China-endpoint + Public-audience
 			// configuration (the exact shape of issue #2649) cannot pass.
-			name:             "Azure China",
-			cloudName:        "AzureChinaCloud",
-			wantAADAuthority: cloud.AzureChina.ActiveDirectoryAuthorityHost,
-			wantARMEndpoint:  cloud.AzureChina.Services[cloud.ResourceManager].Endpoint,
-			wantARMAudience:  cloud.AzureChina.Services[cloud.ResourceManager].Audience,
-			wantAPIVersion:   accountclient.MooncakeApiVersion,
+			name:                      "Azure China",
+			cloudName:                 "AzureChinaCloud",
+			wantAADAuthority:          cloud.AzureChina.ActiveDirectoryAuthorityHost,
+			wantARMEndpoint:           cloud.AzureChina.Services[cloud.ResourceManager].Endpoint,
+			wantARMAudience:           cloud.AzureChina.Services[cloud.ResourceManager].Audience,
+			wantAPIVersion:            accountclient.MooncakeApiVersion,
+			wantDisableInstanceDiscov: false,
 		},
 		{
-			name:             "Azure US Government",
-			cloudName:        "AzureUSGovernmentCloud",
-			wantAADAuthority: cloud.AzureGovernment.ActiveDirectoryAuthorityHost,
-			wantARMEndpoint:  cloud.AzureGovernment.Services[cloud.ResourceManager].Endpoint,
-			wantARMAudience:  cloud.AzureGovernment.Services[cloud.ResourceManager].Audience,
-			wantAPIVersion:   accountclient.MooncakeApiVersion,
+			name:                      "Azure US Government",
+			cloudName:                 "AzureUSGovernmentCloud",
+			wantAADAuthority:          cloud.AzureGovernment.ActiveDirectoryAuthorityHost,
+			wantARMEndpoint:           cloud.AzureGovernment.Services[cloud.ResourceManager].Endpoint,
+			wantARMAudience:           cloud.AzureGovernment.Services[cloud.ResourceManager].Audience,
+			wantAPIVersion:            accountclient.MooncakeApiVersion,
+			wantDisableInstanceDiscov: false,
 		},
 	}
 
@@ -92,7 +96,7 @@ func TestBuildSATokenClientOptions_CloudSelection(t *testing.T) {
 				},
 			}
 
-			credOpts, armOpts, err := buildSATokenClientOptions(&az.ARMClientConfig)
+			credOpts, armOpts, isAzureStack, err := buildSATokenClientOptions(&az.ARMClientConfig)
 			assert.NoError(t, err)
 
 			// azidentity uses ClientOptions.Cloud.ActiveDirectoryAuthorityHost
@@ -121,6 +125,8 @@ func TestBuildSATokenClientOptions_CloudSelection(t *testing.T) {
 			// in the same clouds even after the authentication fix.
 			assert.Equal(t, tc.wantAPIVersion, armOpts.APIVersion,
 				"ARM APIVersion override must match the normal account-client factory")
+			assert.Equal(t, tc.wantDisableInstanceDiscov, isAzureStack,
+				"DisableInstanceDiscovery must be true for Azure Stack")
 		})
 	}
 }
@@ -132,8 +138,9 @@ func TestBuildSATokenClientOptions_CloudSelection(t *testing.T) {
 func TestBuildSATokenClientOptions_NilConfig(t *testing.T) {
 	az := &AccountRepo{}
 
-	credOpts, armOpts, err := buildSATokenClientOptions(&az.ARMClientConfig)
+	credOpts, armOpts, isAzureStack, err := buildSATokenClientOptions(&az.ARMClientConfig)
 	assert.NoError(t, err)
+	assert.False(t, isAzureStack)
 	// Zero-valued config defaults to AzurePublic.
 	assert.Equal(t, cloud.AzurePublic.ActiveDirectoryAuthorityHost, credOpts.Cloud.ActiveDirectoryAuthorityHost)
 	gotARM, ok := armOpts.Cloud.Services[cloud.ResourceManager]
