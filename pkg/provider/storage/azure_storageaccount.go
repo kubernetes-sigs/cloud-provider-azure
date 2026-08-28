@@ -135,8 +135,9 @@ type AccountRepo struct {
 	// so that GetStorageAccesskeyFromServiceAccountToken does not call
 	// GetAzCoreClientOption (and the metadata-service network fetch it
 	// triggers on Azure Stack) on every volume mount.
-	saTokenCredOpts azcore.ClientOptions
-	saTokenARMOpts  arm.ClientOptions
+	saTokenCredOpts              azcore.ClientOptions
+	saTokenARMOpts               arm.ClientOptions
+	saTokenDisableInstanceDiscov bool // true for Azure Stack (private/disconnected cloud)
 }
 
 func NewRepository(config azureconfig.Config, env *azclient.Environment, authProvider *azclient.AuthProvider, computeClientFactory azclient.ClientFactory, networkClientFactory azclient.ClientFactory) (*AccountRepo, error) {
@@ -156,7 +157,7 @@ func NewRepository(config azureconfig.Config, env *azclient.Environment, authPro
 	// Pre-resolve azcore/arm client options at init time so the SA-token
 	// path does not call GetAzCoreClientOption (which may hit the metadata
 	// endpoint on Azure Stack) on every volume mount.
-	credOpts, armOpts, err := buildSATokenClientOptions(&config.ARMClientConfig)
+	credOpts, armOpts, isAzureStack, err := buildSATokenClientOptions(&config.ARMClientConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build SA-token client options: %w", err)
 	}
@@ -170,8 +171,9 @@ func NewRepository(config azureconfig.Config, env *azclient.Environment, authPro
 		subnetRepo:           subnetRepo,
 		storageAccountCache:  storageAccountCache,
 		lockMap:              lockmap.NewLockMap(),
-		saTokenCredOpts:      credOpts,
-		saTokenARMOpts:       armOpts,
+		saTokenCredOpts:              credOpts,
+		saTokenARMOpts:               armOpts,
+		saTokenDisableInstanceDiscov: isAzureStack,
 	}, nil
 }
 
@@ -290,30 +292,27 @@ func (az *AccountRepo) getStorageAccountWithCache(ctx context.Context, subsID, r
 // service-account-token workload-identity path. It is called once at
 // repository init time so the per-call GetStorageAccesskeyFromServiceAccountToken
 // path does not trigger network I/O (metadata endpoint on Azure Stack).
-func buildSATokenClientOptions(armConfig *azclient.ARMClientConfig) (azcore.ClientOptions, arm.ClientOptions, error) {
+func buildSATokenClientOptions(armConfig *azclient.ARMClientConfig) (azcore.ClientOptions, arm.ClientOptions, bool, error) {
 	clientOpts, _, err := azclient.GetAzCoreClientOption(armConfig)
 	if err != nil {
-		return azcore.ClientOptions{}, arm.ClientOptions{}, fmt.Errorf("failed to get azcore client options, error: %w", err)
+		return azcore.ClientOptions{}, arm.ClientOptions{}, false, fmt.Errorf("failed to get azcore client options, error: %w", err)
 	}
 	armOpts := arm.ClientOptions{ClientOptions: *clientOpts}
-	// Match the API-version branching that the normal account-client factory
-	// applies (see pkg/azclient/factory_gen.go NewAccountClient): sovereign
-	// clouds and Azure Stack pin an older ListKeys API version, otherwise the
-	// SDK default would return an unsupported-API-version error even after the
-	// authentication fix.
-	if armConfig.Cloud != "" && strings.EqualFold(armConfig.Cloud, azclientutils.AzureStackCloudName) && !armConfig.DisableAzureStackCloud {
+	isAzureStack := armConfig.Cloud != "" && strings.EqualFold(armConfig.Cloud, azclientutils.AzureStackCloudName) && !armConfig.DisableAzureStackCloud
+	if isAzureStack {
 		armOpts.APIVersion = accountclient.AzureStackCloudAPIVersion
 	} else if !strings.EqualFold(clientOpts.Cloud.ActiveDirectoryAuthorityHost, cloud.AzurePublic.ActiveDirectoryAuthorityHost) {
 		armOpts.APIVersion = accountclient.MooncakeApiVersion
 	}
-	return azcore.ClientOptions{Cloud: clientOpts.Cloud}, armOpts, nil
+	return azcore.ClientOptions{Cloud: clientOpts.Cloud}, armOpts, isAzureStack, nil
 }
 
 func (az *AccountRepo) GetStorageAccesskeyFromServiceAccountToken(ctx context.Context, subsID, accountName, rgName, clientID, tenantID, serviceAccountToken string) (string, error) {
 	cred, err := azidentity.NewClientAssertionCredential(tenantID, clientID, func(context.Context) (string, error) {
 		return parseServiceAccountToken(serviceAccountToken)
 	}, &azidentity.ClientAssertionCredentialOptions{
-		ClientOptions: az.saTokenCredOpts,
+		ClientOptions:            az.saTokenCredOpts,
+		DisableInstanceDiscovery: az.saTokenDisableInstanceDiscov,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create client assertion credential, error: %w", err)
