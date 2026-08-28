@@ -269,27 +269,41 @@ func (az *AccountRepo) getStorageAccountWithCache(ctx context.Context, subsID, r
 	return *result, nil
 }
 
-func (az *AccountRepo) GetStorageAccesskeyFromServiceAccountToken(ctx context.Context, subsID, accountName, rgName, clientID, tenantID, serviceAccountToken string) (string, error) {
-	// Build cloud config from az's ARMClientConfig so non-Public clouds
-	// (e.g. AzureChinaCloud, AzureUSGovernmentCloud) authenticate against
-	// the correct AAD authority + ARM audience. Without this, azidentity /
-	// arm clients default to Azure Public, which causes AADSTS500011 in
-	// sovereign clouds (see kubernetes-sigs/blob-csi-driver#2649).
+// buildSATokenClientOptions derives the azcore + arm client options for the
+// service-account-token workload-identity path from az.ARMClientConfig, so
+// that non-Public clouds (AzureChinaCloud, AzureUSGovernmentCloud,
+// AzureStackCloud) authenticate against the correct AAD authority + ARM
+// audience. Without this, azidentity / arm clients default to Azure Public,
+// which causes AADSTS500011 in sovereign clouds
+// (see kubernetes-sigs/blob-csi-driver#2649).
+//
+// Extracted from GetStorageAccesskeyFromServiceAccountToken so the
+// cloud-selection behavior can be exercised by unit tests without needing a
+// live ARM endpoint.
+func (az *AccountRepo) buildSATokenClientOptions() (azcore.ClientOptions, arm.ClientOptions, error) {
 	clientOpts, _, err := azclient.GetAzCoreClientOption(&az.ARMClientConfig)
 	if err != nil {
-		return "", fmt.Errorf("failed to get azcore client options, error: %w", err)
+		return azcore.ClientOptions{}, arm.ClientOptions{}, fmt.Errorf("failed to get azcore client options, error: %w", err)
+	}
+	return azcore.ClientOptions{Cloud: clientOpts.Cloud}, arm.ClientOptions{ClientOptions: *clientOpts}, nil
+}
+
+func (az *AccountRepo) GetStorageAccesskeyFromServiceAccountToken(ctx context.Context, subsID, accountName, rgName, clientID, tenantID, serviceAccountToken string) (string, error) {
+	credOpts, armOpts, err := az.buildSATokenClientOptions()
+	if err != nil {
+		return "", err
 	}
 
 	cred, err := azidentity.NewClientAssertionCredential(tenantID, clientID, func(context.Context) (string, error) {
 		return parseServiceAccountToken(serviceAccountToken)
 	}, &azidentity.ClientAssertionCredentialOptions{
-		ClientOptions: azcore.ClientOptions{Cloud: clientOpts.Cloud},
+		ClientOptions: credOpts,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create client assertion credential, error: %w", err)
 	}
 
-	client, err := accountclient.New(subsID, cred, &arm.ClientOptions{ClientOptions: *clientOpts})
+	client, err := accountclient.New(subsID, cred, &armOpts)
 	if err != nil {
 		return "", fmt.Errorf("failed to create storage account client, error: %w", err)
 	}
