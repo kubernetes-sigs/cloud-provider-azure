@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
 	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 )
 
@@ -45,27 +46,37 @@ func TestBuildSATokenClientOptions_CloudSelection(t *testing.T) {
 		cloudName        string
 		wantAADAuthority string
 		wantARMEndpoint  string
+		wantARMAudience  string
+		wantAPIVersion   string
 	}{
 		{
 			name:             "Azure Public (default)",
 			cloudName:        "AzurePublicCloud",
 			wantAADAuthority: cloud.AzurePublic.ActiveDirectoryAuthorityHost,
 			wantARMEndpoint:  cloud.AzurePublic.Services[cloud.ResourceManager].Endpoint,
+			wantARMAudience:  cloud.AzurePublic.Services[cloud.ResourceManager].Audience,
+			wantAPIVersion:   "", // SDK default; no override.
 		},
 		{
 			// The bug: before this fix, the credential/ARM client fell
 			// back to AzurePublic here, and Azure China token exchange
-			// failed with AADSTS500011.
+			// failed with AADSTS500011. Assert BOTH the endpoint and the
+			// audience so a mixed China-endpoint + Public-audience
+			// configuration (the exact shape of issue #2649) cannot pass.
 			name:             "Azure China",
 			cloudName:        "AzureChinaCloud",
 			wantAADAuthority: cloud.AzureChina.ActiveDirectoryAuthorityHost,
 			wantARMEndpoint:  cloud.AzureChina.Services[cloud.ResourceManager].Endpoint,
+			wantARMAudience:  cloud.AzureChina.Services[cloud.ResourceManager].Audience,
+			wantAPIVersion:   accountclient.MooncakeApiVersion,
 		},
 		{
 			name:             "Azure US Government",
 			cloudName:        "AzureUSGovernmentCloud",
 			wantAADAuthority: cloud.AzureGovernment.ActiveDirectoryAuthorityHost,
 			wantARMEndpoint:  cloud.AzureGovernment.Services[cloud.ResourceManager].Endpoint,
+			wantARMAudience:  cloud.AzureGovernment.Services[cloud.ResourceManager].Audience,
+			wantAPIVersion:   accountclient.MooncakeApiVersion,
 		},
 	}
 
@@ -98,6 +109,18 @@ func TestBuildSATokenClientOptions_CloudSelection(t *testing.T) {
 			assert.True(t, ok, "arm client options must carry a ResourceManager endpoint")
 			assert.Equal(t, tc.wantARMEndpoint, gotARM.Endpoint,
 				"ARM ResourceManager endpoint must follow the configured cloud")
+			// The ARM bearer policy builds its scope from Services[ResourceManager].Audience
+			// independently of the endpoint, so a mixed China-endpoint +
+			// Public-audience configuration (issue #2649's exact shape)
+			// must not slip through.
+			assert.Equal(t, tc.wantARMAudience, gotARM.Audience,
+				"ARM ResourceManager audience must follow the configured cloud")
+			// The account-client factory pins an older ListKeys API
+			// version in sovereign clouds; the SA-token path must match
+			// or ListKeys will fail with an unsupported-API-version error
+			// in the same clouds even after the authentication fix.
+			assert.Equal(t, tc.wantAPIVersion, armOpts.APIVersion,
+				"ARM APIVersion override must match the normal account-client factory")
 		})
 	}
 }
