@@ -27,6 +27,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
@@ -39,6 +40,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/cache"
+	azclientutils "sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
@@ -285,7 +287,18 @@ func (az *AccountRepo) buildSATokenClientOptions() (azcore.ClientOptions, arm.Cl
 	if err != nil {
 		return azcore.ClientOptions{}, arm.ClientOptions{}, fmt.Errorf("failed to get azcore client options, error: %w", err)
 	}
-	return azcore.ClientOptions{Cloud: clientOpts.Cloud}, arm.ClientOptions{ClientOptions: *clientOpts}, nil
+	armOpts := arm.ClientOptions{ClientOptions: *clientOpts}
+	// Match the API-version branching that the normal account-client factory
+	// applies (see pkg/azclient/factory_gen.go NewAccountClient): sovereign
+	// clouds and Azure Stack pin an older ListKeys API version, otherwise the
+	// SDK default would return an unsupported-API-version error even after the
+	// authentication fix.
+	if az.ARMClientConfig.Cloud != "" && strings.EqualFold(az.ARMClientConfig.Cloud, azclientutils.AzureStackCloudName) && !az.ARMClientConfig.DisableAzureStackCloud {
+		armOpts.APIVersion = accountclient.AzureStackCloudAPIVersion
+	} else if !strings.EqualFold(clientOpts.Cloud.ActiveDirectoryAuthorityHost, cloud.AzurePublic.ActiveDirectoryAuthorityHost) {
+		armOpts.APIVersion = accountclient.MooncakeApiVersion
+	}
+	return azcore.ClientOptions{Cloud: clientOpts.Cloud}, armOpts, nil
 }
 
 func (az *AccountRepo) GetStorageAccesskeyFromServiceAccountToken(ctx context.Context, subsID, accountName, rgName, clientID, tenantID, serviceAccountToken string) (string, error) {
