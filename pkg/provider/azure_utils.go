@@ -58,6 +58,8 @@ func getContextWithCancel() (context.Context, context.CancelFunc) {
 //
 // Returns:
 //   - A map[string]*string where keys are tag names and values are pointers to tag values
+//   - An error if duplicate keys (case-insensitive) are found. Duplicate keys produce a non-fatal error
+//     alongside a usable result, keeping the first occurrence.
 //
 // The function prioritizes tags from tagsMap over those from the tags string in case of conflicts.
 // It logs warnings for parsing errors and empty keys, and info messages for case-insensitive key replacements.
@@ -102,7 +104,7 @@ func parseTags(tags string, tagsMap map[string]string) (map[string]*string, erro
 		}
 		sort.Strings(keys)
 
-		tagsMapKeys := make(map[string]bool)
+		var tagsMapKeys []string
 		for _, key := range keys {
 			v := tagsMap[key]
 			key, value := strings.TrimSpace(key), strings.TrimSpace(v)
@@ -114,18 +116,29 @@ func parseTags(tags string, tagsMap map[string]string) (map[string]*string, erro
 				continue
 			}
 
-			if found, kExisting := findKeyInMapCaseInsensitive(formatted, key); found {
-				if tagsMapKeys[strings.ToLower(key)] {
-					errs = append(errs, fmt.Errorf("found duplicate tag key %q (case-insensitive) in tagsMap, keeping the first occurrence %q", key, kExisting))
-					continue
+			var alreadyInTagsMap bool
+			var existingTagsMapKey string
+			for _, k := range tagsMapKeys {
+				if strings.EqualFold(k, key) {
+					alreadyInTagsMap = true
+					existingTagsMapKey = k
+					break
 				}
+			}
+
+			if alreadyInTagsMap {
+				errs = append(errs, fmt.Errorf("found duplicate tag key %q (case-insensitive) in tagsMap, keeping the first occurrence %q", key, existingTagsMapKey))
+				continue
+			}
+
+			if found, kExisting := findKeyInMapCaseInsensitive(formatted, key); found {
 				if kExisting != key {
 					logger.V(4).Info("found identical keys from tags and tagsMap (case-insensitive), will replace", "identical keys", kExisting, "keyFromTagsMap", key)
 					delete(formatted, kExisting)
 				}
 			}
 			formatted[key] = ptr.To(value)
-			tagsMapKeys[strings.ToLower(key)] = true
+			tagsMapKeys = append(tagsMapKeys, key)
 		}
 	}
 
