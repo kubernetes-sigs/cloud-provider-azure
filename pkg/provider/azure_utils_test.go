@@ -197,6 +197,7 @@ func TestParseTags(t *testing.T) {
 		description, tags string
 		tagsMap           map[string]string
 		expectedTags      map[string]*string
+		expectedErr       bool
 	}{
 		{
 			description: "parseTags should return a map of tags",
@@ -280,10 +281,58 @@ func TestParseTags(t *testing.T) {
 				"z": ptr.To("z"),
 			},
 		},
+		{
+			description: "parseTags should keep first occurrence when duplicate case-insensitive keys are in tags",
+			tags:        "foo=bar, FOO=baz, FOO=qux, bar=1",
+			expectedTags: map[string]*string{
+				"foo": ptr.To("bar"),
+				"bar": ptr.To("1"),
+			},
+			expectedErr: true,
+		},
+		{
+			description: "parseTags should keep first occurrence when duplicate case-insensitive keys are in tagsMap",
+			tagsMap: map[string]string{
+				"foo": "bar",
+				"FOO": "baz",
+			},
+			expectedTags: map[string]*string{
+				"FOO": ptr.To("baz"),
+			},
+			expectedErr: true,
+		},
+		{
+			description: "parseTags should handle Unicode case-folded duplicate keys in tagsMap",
+			tagsMap: map[string]string{
+				"S": "first",
+				"ſ": "second",
+			},
+			expectedTags: map[string]*string{
+				"S": ptr.To("first"),
+			},
+			expectedErr: true,
+		},
+		{
+			description: "parseTags should let tagsMap override tags while discarding duplicates in both",
+			tags:        "foo=1, FOO=2",
+			tagsMap: map[string]string{
+				"Foo": "3",
+				"fOO": "4",
+			},
+			expectedTags: map[string]*string{
+				"Foo": ptr.To("3"),
+			},
+			expectedErr: true,
+		},
 	} {
 		t.Run(testCase.description, func(t *testing.T) {
-			tags, _ := parseTags(testCase.tags, testCase.tagsMap)
+			tags, err := parseTags(testCase.tags, testCase.tagsMap)
 			assert.Equal(t, testCase.expectedTags, tags)
+			if testCase.expectedErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }

@@ -27,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	cloudprovider "k8s.io/cloud-provider"
-	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
 
@@ -580,7 +579,7 @@ func (az *Cloud) ensureRouteTableTagged(rt *armnetwork.RouteTable) (map[string]*
 	}
 	tags, err := parseTags(az.Tags, az.TagsMap)
 	if err != nil {
-		klog.Warningf("reconcileRouteTableTags: %v", err)
+		log.Background().WithName("ensureRouteTableTagged").Error(err, "Found duplicate tag keys in cloud configuration")
 	}
 	if rt.Tags == nil {
 		rt.Tags = make(map[string]*string)

@@ -29,7 +29,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
@@ -597,7 +596,7 @@ func (az *Cloud) reconcilePLSTags(
 ) bool {
 	configTags, err := parseTags(az.Tags, az.TagsMap)
 	if err != nil {
-		klog.Warningf("reconcilePLSTags: %v", err)
+		log.Background().WithName("reconcilePLSTags").Error(err, "Found duplicate tag keys in cloud configuration")
 	}
 	serviceName := getServiceName(service)
 
