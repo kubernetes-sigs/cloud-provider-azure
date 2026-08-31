@@ -103,9 +103,12 @@ Use this order and identity in every phase:
 | health-probe-proxy | `hpp` | `local/health-probe-proxy:<tag>` | `health-probe-proxy` | `health-probe-proxy/Dockerfile` |
 
 For every build, allow concurrent builds from other worktrees. Docker builds
-share a host-level Buildx builder; Podman uses its native builder. For Docker
-only, if a build fails specifically because Buildx setup raced, retry the exact
-build once; otherwise do not retry it.
+share a host-level Buildx builder; Podman uses its native builder. Pass the
+build helper's `--retry-transient-runtime-errors` option on every build. The
+build skill owns runtime-specific failure classification, health checks,
+bounded delay, exact retry execution, and the two-attempt limit. Do not run an
+additional outer retry. If the helper still returns a failure, preserve both
+attempts in the run summary and stop.
 
 ### Baseline Phase
 

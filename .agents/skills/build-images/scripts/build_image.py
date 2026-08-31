@@ -21,6 +21,8 @@ import re
 import shlex
 import subprocess
 import sys
+import time
+from collections import deque
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,6 +40,36 @@ MAKE_CONTROL_ENV = {
 }
 GOEXPERIMENT_DEFAULT = "nosystemcrypto"
 ENABLE_GIT_COMMAND_DEFAULT = "false"
+RETRY_DELAY_SECONDS = 5
+PODMAN_INFO_TIMEOUT_SECONDS = 10
+FAILURE_TAIL_LINES = 50
+PODMAN_REGISTRY_CONTEXT_MARKERS = (
+    "initializing source docker://",
+    "pinging container registry",
+    "reading manifest",
+    "copying system image",
+    "copying blob",
+    "fetching blob",
+    "pulling image",
+    "trying to pull",
+)
+PODMAN_TRANSIENT_ERROR_MARKERS = (
+    "temporary failure in name resolution",
+    "i/o timeout",
+    "connection timed out",
+    "connection timeout",
+    "connection reset by peer",
+    "tls handshake timeout",
+)
+PODMAN_TRANSIENT_HTTP_STATUS_RE = re.compile(
+    r"(?:http(?:\s+response)?\s+status|status(?:\s+code)?|"
+    r"unexpected\s+(?:http\s+)?status)[^\n]{0,80}\b(?:429|5\d{2})\b",
+    re.IGNORECASE,
+)
+DOCKER_BUILDX_RACE_MARKER_GROUPS = (
+    ("existing instance for", "no append mode"),
+    ("builder instance with the name", "already exists"),
+)
 
 
 @dataclass(frozen=True)
@@ -54,6 +86,12 @@ class BuildPlan:
     cmd: list[str]
     env: dict[str, str]
     unset_env: frozenset[str] = frozenset()
+
+
+@dataclass(frozen=True)
+class BuildAttempt:
+    returncode: int
+    stderr_tail: str
 
 
 IMAGE_TARGETS = {
@@ -193,6 +231,103 @@ def format_dry_run(plan: BuildPlan) -> str:
     return f"cwd: {plan.cwd}\ncommand: {format_command(plan)}"
 
 
+def is_transient_podman_registry_failure(output: str) -> bool:
+    lines = output.splitlines()[-FAILURE_TAIL_LINES:]
+    for index, line in enumerate(lines):
+        lowered = line.lower()
+        is_transient = any(
+            marker in lowered for marker in PODMAN_TRANSIENT_ERROR_MARKERS
+        ) or PODMAN_TRANSIENT_HTTP_STATUS_RE.search(line)
+        if not is_transient:
+            continue
+
+        adjacent = "\n".join(lines[max(0, index - 1) : index + 2]).lower()
+        if any(marker in adjacent for marker in PODMAN_REGISTRY_CONTEXT_MARKERS):
+            return True
+    return False
+
+
+def is_docker_buildx_setup_race(output: str) -> bool:
+    lowered = "\n".join(output.splitlines()[-FAILURE_TAIL_LINES:]).lower()
+    return any(
+        all(marker in lowered for marker in group)
+        for group in DOCKER_BUILDX_RACE_MARKER_GROUPS
+    )
+
+
+def explicit_container_runtime(plan: BuildPlan) -> str | None:
+    container_cli = plan.env.get("CONTAINER_CLI")
+    if not container_cli:
+        return None
+    runtime = Path(container_cli).name.lower()
+    return runtime if runtime in {"docker", "podman"} else None
+
+
+def retryable_failure_reason(runtime: str, output: str) -> str | None:
+    if runtime == "docker" and is_docker_buildx_setup_race(output):
+        return "Docker Buildx setup race"
+    if runtime == "podman" and is_transient_podman_registry_failure(output):
+        return "transient Podman registry access or image transfer"
+    return None
+
+
+def is_interrupted_returncode(returncode: int) -> bool:
+    return returncode < 0 or 128 <= returncode <= 159
+
+
+def run_plan_capturing_stderr(plan: BuildPlan, env: Mapping[str, str]) -> BuildAttempt:
+    process = subprocess.Popen(
+        plan.cmd,
+        cwd=plan.cwd,
+        env=env,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+    )
+    if process.stderr is None:
+        raise RuntimeError("failed to capture build stderr")
+
+    stderr_tail: deque[str] = deque(maxlen=FAILURE_TAIL_LINES)
+    for line in process.stderr:
+        stderr_tail.append(line)
+        sys.stderr.write(line)
+        sys.stderr.flush()
+    return BuildAttempt(process.wait(), "".join(stderr_tail))
+
+
+def podman_is_available(plan: BuildPlan, env: Mapping[str, str]) -> bool:
+    container_cli = plan.env["CONTAINER_CLI"]
+    try:
+        completed = subprocess.run(
+            [container_cli, "info"],
+            cwd=plan.cwd,
+            env=env,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=PODMAN_INFO_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        print(
+            "[ERROR] Podman availability check timed out; not retrying the build",
+            file=sys.stderr,
+        )
+        return False
+
+    if completed.returncode != 0:
+        print(
+            "[ERROR] Podman is unavailable after the transient build failure; "
+            "not retrying",
+            file=sys.stderr,
+        )
+        if completed.stderr:
+            sys.stderr.write(completed.stderr)
+            sys.stderr.flush()
+        return False
+    return True
+
+
 def find_repo_root(start: Path) -> Path:
     _ = start
     return script_repo_root()
@@ -231,10 +366,15 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="print the resolved working directory and command without building",
     )
+    parser.add_argument(
+        "--retry-transient-runtime-errors",
+        action="store_true",
+        help="retry one recognized transient Docker or Podman build failure",
+    )
     return parser.parse_args(argv)
 
 
-def run_plan(plan: BuildPlan) -> int:
+def run_plan(plan: BuildPlan, *, retry_transient_runtime_errors: bool = False) -> int:
     env = os.environ.copy()
     for key in MAKE_CONTROL_ENV:
         env.pop(key, None)
@@ -242,7 +382,44 @@ def run_plan(plan: BuildPlan) -> int:
         env.pop(key, None)
     env.update(plan.env)
     print(format_dry_run(plan))
-    return subprocess.run(plan.cmd, cwd=plan.cwd, env=env, check=False).returncode
+    if not retry_transient_runtime_errors:
+        return subprocess.run(plan.cmd, cwd=plan.cwd, env=env, check=False).returncode
+
+    runtime = explicit_container_runtime(plan)
+    if runtime is None:
+        raise ValueError(
+            "--retry-transient-runtime-errors requires an explicit "
+            "CONTAINER_CLI ending in docker or podman"
+        )
+
+    first = run_plan_capturing_stderr(plan, env)
+    if first.returncode == 0:
+        return 0
+    if is_interrupted_returncode(first.returncode):
+        return first.returncode
+    reason = retryable_failure_reason(runtime, first.stderr_tail)
+    if reason is None:
+        return first.returncode
+
+    print(
+        f"[WARN] Build failed with a retryable {reason} (exit code "
+        f"{first.returncode}); retrying once after {RETRY_DELAY_SECONDS} seconds",
+        file=sys.stderr,
+    )
+    time.sleep(RETRY_DELAY_SECONDS)
+    if runtime == "podman" and not podman_is_available(plan, env):
+        return first.returncode
+
+    second = run_plan_capturing_stderr(plan, env)
+    if second.returncode == 0:
+        print(f"[INFO] {runtime.capitalize()} build retry succeeded", file=sys.stderr)
+    else:
+        print(
+            f"[ERROR] {runtime.capitalize()} build retry failed with exit code "
+            f"{second.returncode}",
+            file=sys.stderr,
+        )
+    return second.returncode
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -263,6 +440,14 @@ def main(argv: list[str] | None = None) -> int:
             unset_values=args.unset_values,
             inherited_env=os.environ,
         )
+        if (
+            args.retry_transient_runtime_errors
+            and explicit_container_runtime(plan) is None
+        ):
+            raise ValueError(
+                "--retry-transient-runtime-errors requires --set "
+                "CONTAINER_CLI=<path-to-docker-or-podman>"
+            )
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -270,7 +455,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         print(format_dry_run(plan))
         return 0
-    return run_plan(plan)
+    return run_plan(
+        plan,
+        retry_transient_runtime_errors=args.retry_transient_runtime_errors,
+    )
 
 
 if __name__ == "__main__":
