@@ -73,7 +73,7 @@ jobs:
         env:
           TRIVY_SKIP_DB_UPDATE: true
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v3.29.5
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v3.29.5
         with:
           sarif_file: 'trivy-ccm-results.sarif'
           category: azure-cloud-controller-manager-image
@@ -89,7 +89,7 @@ jobs:
         env:
           TRIVY_SKIP_DB_UPDATE: true
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v3.29.5
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v3.29.5
         with:
           sarif_file: 'trivy-cnm-linux-results.sarif'
           category: azure-cloud-node-manager-linux-image
@@ -105,7 +105,7 @@ jobs:
         env:
           TRIVY_SKIP_DB_UPDATE: true
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v3.29.5
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v3.29.5
         with:
           sarif_file: 'trivy-health-probe-proxy-linux-results.sarif'
           category: health-probe-proxy-linux-image
