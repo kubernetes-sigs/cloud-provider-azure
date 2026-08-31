@@ -58,7 +58,8 @@ changed existing module, the expected minor family is the module's removed
 version; for a newly added module on `release-1.N`, it is `v0.N.x`.
 
 If the guard finds no `k8s.io/*` module changes, or only patch-level updates
-within the same minor family, continue with the matching workflow below.
+within the same minor family, this guard does not match; continue with the
+remaining guard rows in ascending catalog priority.
 
 ## Details: Retry budget exhausted
 

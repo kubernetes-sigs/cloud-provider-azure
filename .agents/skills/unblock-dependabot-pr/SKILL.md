@@ -33,12 +33,14 @@ matched guard or act workflow links to it. Read each reference at most once per
 triage; following a cross-file link never requires reloading a file already
 read.
 
-Fetch PR metadata and changed dependencies first; these feed guard rows before any
-CI or log I/O:
+Fetch the PR metadata shared by guard rows first, before any CI or log I/O:
 
 ```bash
 gh pr view <pr> --json number,title,headRefName,headRepositoryOwner,headRefOid,baseRefName,author,labels,mergeable
 ```
+
+When each guard row is reached, its linked Details fetch any extra allowed
+input, such as the `go.mod` diff or PR comment history, in priority order.
 
 Then walk the catalog as an explicit staged algorithm:
 
