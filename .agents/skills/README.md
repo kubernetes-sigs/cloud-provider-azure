@@ -56,7 +56,7 @@ level small:
   matching errors against known failure patterns
 - `build-images`: build cloud-provider-azure CCM, CNM, health-probe-proxy,
   CCM e2e, or root CCM/CNM aggregate images with explicit tag/registry inputs
-  and optional make flag overrides
+  plus optional make flag overrides and bounded Docker or Podman retries
 
 ## How To Use
 
