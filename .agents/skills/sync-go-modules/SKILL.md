@@ -20,7 +20,7 @@ Replace `<SKILL_DIR>` with the path to this skill directory.
 1. Check for unrelated local work before mutating files:
 
 ```bash
-git status --short
+GIT_OPTIONAL_LOCKS=0 git status --short
 ```
 
 If there are unrelated uncommitted changes, stop and report the conflict. If the
@@ -42,7 +42,7 @@ python3 <SKILL_DIR>/scripts/sync_go_modules.py --repo . --allow-dirty
 The helper discovers modules with the same tracked-file pathspec as CI:
 
 ```bash
-git ls-files 'go.mod' '**/go.mod'
+GIT_OPTIONAL_LOCKS=0 git ls-files 'go.mod' '**/go.mod'
 ```
 
 It then runs `go mod tidy` and `go mod verify` in every discovered module, with
@@ -61,7 +61,7 @@ without touching root vendored dependencies.
 4. Inspect the generated diff:
 
 ```bash
-git diff --stat
+GIT_OPTIONAL_LOCKS=0 git diff --stat
 ```
 
 Expected changes are scoped to tracked module files (`go.mod` / `go.sum`) and,
@@ -81,12 +81,17 @@ python3 <SKILL_DIR>/scripts/sync_go_modules.py --repo . --check-clean
 `--check-clean` fails if the sync produces any repository diff, matching the CI
 "Fail on uncommitted changes" step.
 
+Helper-owned Git commands are read-only and run with
+`GIT_OPTIONAL_LOCKS=0`. This suppresses optional index refresh writes without
+weakening required locking for checkout, staging, commit, push, or ref-update
+operations performed outside this helper.
+
 ## Manual Fallback
 
 If the helper cannot be used, run the CI-equivalent loop manually:
 
 ```bash
-mapfile -t go_mods < <(git ls-files 'go.mod' '**/go.mod')
+mapfile -t go_mods < <(GIT_OPTIONAL_LOCKS=0 git ls-files 'go.mod' '**/go.mod')
 mapfile -t modules < <(for mod in "${go_mods[@]}"; do dirname "$mod"; done | sort -u)
 for m in "${modules[@]}"; do
   echo ">> go mod tidy (${m})"
@@ -95,7 +100,7 @@ for m in "${modules[@]}"; do
   (cd "${m}" && GOTOOLCHAIN=local go mod verify)
 done
 GOTOOLCHAIN=local go mod vendor
-git diff --stat
+GIT_OPTIONAL_LOCKS=0 git diff --stat
 ```
 
 Do not use `find . -name go.mod` for this repo. Hidden local worktrees and other
