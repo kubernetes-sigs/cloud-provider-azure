@@ -645,9 +645,9 @@ func (az *Cloud) reconcilePLSTags(
 	clusterName *string,
 	service *v1.Service,
 ) bool {
-	configTags, err := parseTags(az.Tags, az.TagsMap)
-	if err != nil {
-		log.Background().WithName("reconcilePLSTags").Error(err, "Found duplicate tag keys in cloud configuration")
+	configTags, droppedKeys := parseTags(az.Tags, az.TagsMap)
+	if len(droppedKeys) > 0 {
+		log.Background().WithName("reconcilePLSTags").V(2).Info("Found duplicate tag keys in cloud configuration", "duplicateKeys", droppedKeys)
 	}
 	serviceName := getServiceName(service)
 
