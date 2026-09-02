@@ -3626,17 +3626,18 @@ func shouldReleaseExistingOwnedPublicIP(
 
 // ensurePIPTagged ensures the public IP of the service is tagged as configured
 func (az *Cloud) ensurePIPTagged(service *v1.Service, pip *armnetwork.PublicIPAddress) bool {
-	configTags, err := parseTags(az.Tags, az.TagsMap)
-	if err != nil {
-		log.Background().WithName("ensurePIPTagged").Error(err, "Found duplicate tag keys in cloud configuration")
+	configTags, droppedConfigKeys := parseTags(az.Tags, az.TagsMap)
+	if len(droppedConfigKeys) > 0 {
+		log.Background().WithName("ensurePIPTagged").V(2).Info("Found duplicate tag keys in cloud configuration", "duplicateKeys", droppedConfigKeys)
 	}
 	annotationTags := make(map[string]*string)
 	if _, ok := service.Annotations[consts.ServiceAnnotationAzurePIPTags]; ok {
-		var annErr error
-		annotationTags, annErr = parseTags(service.Annotations[consts.ServiceAnnotationAzurePIPTags], map[string]string{})
-		if annErr != nil {
-			az.Event(service, v1.EventTypeWarning, "DuplicatePIPTags", annErr.Error())
-			log.Background().WithName("ensurePIPTagged").Error(annErr, "Found duplicate tag keys in service annotation", "service", getServiceName(service))
+		var droppedAnnotationKeys []string
+		annotationTags, droppedAnnotationKeys = parseTags(service.Annotations[consts.ServiceAnnotationAzurePIPTags], nil)
+		if len(droppedAnnotationKeys) > 0 {
+			az.Event(service, v1.EventTypeWarning, "DuplicatePIPTags", fmt.Sprintf(
+				"Ignoring duplicate tag keys (case-insensitive) in the %s annotation; keeping the first occurrence: %s",
+				consts.ServiceAnnotationAzurePIPTags, strings.Join(droppedAnnotationKeys, ", ")))
 		}
 	}
 
@@ -4383,9 +4384,9 @@ func (az *Cloud) ensureLoadBalancerTagged(lb *armnetwork.LoadBalancer) bool {
 	if az.Tags == "" && len(az.TagsMap) == 0 {
 		return false
 	}
-	tags, err := parseTags(az.Tags, az.TagsMap)
-	if err != nil {
-		log.Background().WithName("ensureLoadBalancerTagged").Error(err, "Found duplicate tag keys in cloud configuration")
+	tags, droppedKeys := parseTags(az.Tags, az.TagsMap)
+	if len(droppedKeys) > 0 {
+		log.Background().WithName("ensureLoadBalancerTagged").V(2).Info("Found duplicate tag keys in cloud configuration", "duplicateKeys", droppedKeys)
 	}
 	if lb.Tags == nil {
 		lb.Tags = make(map[string]*string)
@@ -4402,9 +4403,9 @@ func (az *Cloud) ensureSecurityGroupTagged(sg *armnetwork.SecurityGroup) bool {
 	if az.Tags == "" && (len(az.TagsMap) == 0) {
 		return false
 	}
-	tags, err := parseTags(az.Tags, az.TagsMap)
-	if err != nil {
-		log.Background().WithName("ensureSecurityGroupTagged").Error(err, "Found duplicate tag keys in cloud configuration")
+	tags, droppedKeys := parseTags(az.Tags, az.TagsMap)
+	if len(droppedKeys) > 0 {
+		log.Background().WithName("ensureSecurityGroupTagged").V(2).Info("Found duplicate tag keys in cloud configuration", "duplicateKeys", droppedKeys)
 	}
 	if sg.Tags == nil {
 		sg.Tags = make(map[string]*string)

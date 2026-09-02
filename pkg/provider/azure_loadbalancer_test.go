@@ -9436,6 +9436,8 @@ func TestEnsurePIPTagged(t *testing.T) {
 		}
 		if assert.Len(t, events, 1) {
 			assert.Contains(t, events[0], "Warning DuplicatePIPTags")
+			assert.Contains(t, events[0], consts.ServiceAnnotationAzurePIPTags)
+			assert.Contains(t, events[0], "KEY1")
 		}
 	})
 }
