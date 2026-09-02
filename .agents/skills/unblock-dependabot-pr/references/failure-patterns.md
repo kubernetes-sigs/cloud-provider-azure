@@ -183,28 +183,29 @@ failed run after pushing a new commit; the push-triggered rerun supersedes it.
 
 ## Details: Attempt stamp
 
-Shared rule for a triage round with one or more act-stage non-final actions — a
-`Stop=no` row whose action posts a comment, pushes, or triggers a CI rerun that
-leaves the PR for another CI round rather than terminating triage. Today that is
-[go-mod-consistency](#details-go-mod-consistency) (push + `/lgtm`),
-the [Shared e2e flake rerun](#details-shared-e2e-flake-rerun) rule used by
-[Public-IP quota e2e](#details-public-ip-quota-e2e),
-[Image-build registry flake](#details-image-build-registry-flake), and
+Shared rule for a triage round with one or more retry-budgeted act-stage
+non-final actions — a `Stop=no` row whose action posts a comment, pushes, or
+triggers a CI rerun that leaves the PR for another CI round rather than
+terminating triage. Today the budgeted actions are
+[go-mod-consistency](#details-go-mod-consistency) (push + `/lgtm`), the
+[Shared e2e flake rerun](#details-shared-e2e-flake-rerun) rule used by
+[Image-build registry flake](#details-image-build-registry-flake) and
 [Cluster-provisioning node-readiness timeout](#details-cluster-provisioning-node-readiness-timeout)
 (each `/test <job-name>`),
 [Prow job did not start](#details-prow-job-did-not-start)
 (`/test <job-name>`), and
 [GitHub Actions transient failure](#details-github-actions-transient-failure)
 (`gh run rerun`). Link here from a new non-final pattern instead of copying the
-stamp recipe.
+stamp recipe. [Public-IP quota e2e](#details-public-ip-quota-e2e) reruns are
+explicitly unbudgeted and do not create or increment an attempt stamp.
 
 The skill keeps no state between runs, so the attempt count lives in the PR's
-own comment history. Count triage **rounds**, not actions or comments: one
-triage may push a module-sync fix and rerun three e2e jobs, but it is a single
-attempt with one summary comment.
+own comment history. Count retry-budgeted triage **rounds**, not actions or
+comments: one triage may push a module-sync fix and rerun three budgeted e2e
+jobs, but it is a single attempt with one summary comment.
 
-Compute the next attempt number once, at the start of the act stage, before
-taking any non-final action this round:
+Compute the next attempt number once, before taking the first retry-budgeted
+non-final action this round:
 
 ```bash
 # Highest existing "Unblock attempt: N" stamp across all PR comments; 0 if none.
@@ -214,8 +215,9 @@ gh pr view <pr> --json comments \
 
 Let `N` be that maximum. This round's attempt number is `N + 1`. Do not add
 `Unblock attempt: <N+1>` to an individual `/test`, `/lgtm`, or GitHub Actions
-action comment. After all non-final actions taken this triage have completed,
-post exactly one plain informational comment that summarizes them:
+action comment. After all retry-budgeted non-final actions taken this triage
+have completed, post exactly one plain informational comment that summarizes
+only those budgeted actions:
 
 ```bash
 gh pr comment <pr> --body-file - <<'EOF'
@@ -226,10 +228,12 @@ Unblock attempt: <N+1>
 EOF
 ```
 
-Post no summary when the triage takes no non-final action. The summary is what
-the guard-stage [Retry budget exhausted](#details-retry-budget-exhausted) row
-reads on the next run. Terminal actions do not cause a summary on their own:
-`/close` (K8s guard), `@dependabot rebase` (needs-rebase), the `escalate`
+Post no summary when the triage takes no retry-budgeted non-final action. In
+particular, one or more [Public-IP quota e2e](#details-public-ip-quota-e2e)
+reruns alone do not consume an attempt. The summary is what the guard-stage
+[Retry budget exhausted](#details-retry-budget-exhausted) row reads on the next
+run. Terminal actions do not cause a summary on their own: `/close` (K8s
+guard), `@dependabot rebase` (needs-rebase), the `escalate`
 [Toolchain / SDK / policy](#details-toolchain--sdk--policy) and
 [Retry budget exhausted](#details-retry-budget-exhausted) handoffs, and the
 [Only Tide pending](#details-only-tide-pending) `/lgtm`.
@@ -274,10 +278,17 @@ shows one of:
 
 - `PublicIPCountLimitReached`
 - `PublicIPPrefixCountLimitReached`
+- `IPv4StandardSkuPublicIpCountLimitReached`
 
 Confirm the failure text from the job's current Prow log before retesting. If
 the row matches, follow [Shared e2e flake rerun](#details-shared-e2e-flake-rerun)
 and fill the evidence with the quota marker found in that job's log.
+
+This rerun is exempt from the automated retry budget. Do not create or
+increment an `Unblock attempt` stamp because this row matched. If a triage only
+reruns one or more public-IP quota jobs, post no attempt summary. If the same
+triage also takes a retry-budgeted action, that action alone governs the single
+attempt summary and increment.
 
 ## Details: Image-build registry flake
 
@@ -495,8 +506,9 @@ unlikely to help, so the PR goes to human reviewers instead of burning more
 CI on the same failing jobs.
 
 The count comes from the one `Unblock attempt: N` summary that each completed
-non-final triage leaves on the PR (see [Attempt stamp](#details-attempt-stamp)).
-Read the highest stamp already present:
+retry-budgeted triage leaves on the PR (see
+[Attempt stamp](#details-attempt-stamp)). Public-IP quota reruns do not write
+this stamp. Read the highest stamp already present:
 
 ```bash
 gh pr view <pr> --json comments \
@@ -506,8 +518,10 @@ gh pr view <pr> --json comments \
 Let `N` be that maximum. The budget is three attempts, so:
 
 - `N < 3` — budget remains. Do not escalate; continue triage. If this triage
-  completes one or more non-final actions, post one `Unblock attempt: <N+1>`
-  summary per the [Attempt stamp](#details-attempt-stamp) rule.
+  completes one or more retry-budgeted non-final actions, post one
+  `Unblock attempt: <N+1>` summary per the
+  [Attempt stamp](#details-attempt-stamp) rule. Quota-only reruns post no
+  summary and leave `N` unchanged.
 - `N >= 3` — the budget is spent (a fourth attempt would exceed three). Stop
   working the PR: make no automated change and report it as needing human review
   in the final output.

@@ -89,14 +89,18 @@ or overwrite unrelated files.
 - When a row's Details action reruns CI (a push), skip any later row whose only
   effect would be to retest the jobs that push will rerun; prefer the
   push-triggered rerun.
-- After all non-final actions in a triage are complete, post one plain attempt
-  summary comment with this triage's attempt number, counted from the PR's own
-  comment history. Do not add an attempt marker to individual action comments.
-  Once the automated retry budget is spent, an `escalate` row makes no change
-  to the PR — no comment, no checks, no push — and the PR is reported as needing
-  human review in the final output. All of this is catalog-driven: the
-  retry-budget guard reads the summary before any CI/log I/O, and the shared
-  attempt-stamp rule writes it. Do not invent a separate counter.
+- After all retry-budgeted non-final actions in a triage are complete, post one
+  plain attempt summary comment with this triage's attempt number, counted from
+  the PR's own comment history. Public-IP quota e2e reruns are explicitly
+  unbudgeted: they do not create or increment an `Unblock attempt` stamp, and a
+  quota-only triage posts no attempt summary. If the same triage also takes a
+  budgeted action, summarize only the budgeted actions in the single attempt
+  comment. Do not add an attempt marker to individual action comments. Once the
+  automated retry budget is spent, an `escalate` row makes no change to the PR
+  — no comment, no checks, no push — and the PR is reported as needing human
+  review in the final output. All of this is catalog-driven: the retry-budget
+  guard reads the summary before any CI/log I/O, and the shared attempt-stamp
+  rule writes it. Do not invent a separate counter.
 - A row marked Stop ends triage after it is handled.
 - Use the retry mechanism for the CI system that produced the failure, and only
   after the failure is classified as transient or safe to rerun. For Prow jobs,
