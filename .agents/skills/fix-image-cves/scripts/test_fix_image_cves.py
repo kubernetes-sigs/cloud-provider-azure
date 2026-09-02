@@ -43,22 +43,79 @@ def module_info(
 
 
 class FixImageCVEsTest(unittest.TestCase):
+    def test_read_only_git_disables_optional_locks_without_mutating_parent_env(self) -> None:
+        repo_root = Path("/repo")
+        with mock.patch.dict(
+            os.environ,
+            {"GIT_OPTIONAL_LOCKS": "1", "KEEP_ME": "yes"},
+            clear=True,
+        ):
+            with mock.patch.object(
+                fix_image_cves,
+                "run",
+                return_value="ok",
+            ) as run:
+                self.assertEqual(
+                    fix_image_cves.read_only_git(repo_root, ["status", "--short"]),
+                    "ok",
+                )
+
+            child_env = run.call_args.kwargs["env"]
+            self.assertEqual(child_env["GIT_OPTIONAL_LOCKS"], "0")
+            self.assertEqual(child_env["KEEP_ME"], "yes")
+            self.assertEqual(os.environ["GIT_OPTIONAL_LOCKS"], "1")
+
+        run.assert_called_once_with(
+            ["git", "-C", str(repo_root), "status", "--short"],
+            cwd=repo_root,
+            capture=True,
+            env=child_env,
+        )
+
+    def test_ensure_repo_root_uses_read_only_git(self) -> None:
+        repo = Path("/repo")
+        with mock.patch.object(Path, "is_dir", return_value=True):
+            with mock.patch.object(
+                fix_image_cves,
+                "read_only_git",
+                return_value=str(repo),
+            ) as read_only_git:
+                self.assertEqual(fix_image_cves.ensure_repo_root(str(repo)), repo)
+
+        read_only_git.assert_called_once_with(
+            repo,
+            ["rev-parse", "--show-toplevel"],
+        )
+
+    def test_ensure_repo_root_rejects_missing_path_before_running_git(self) -> None:
+        missing_repo = Path("/definitely-missing-fix-image-cves-repo")
+        with mock.patch.object(
+            fix_image_cves,
+            "read_only_git",
+        ) as read_only_git:
+            with self.assertRaisesRegex(
+                fix_image_cves.CommandError,
+                "is not a git checkout",
+            ):
+                fix_image_cves.ensure_repo_root(str(missing_repo))
+
+        read_only_git.assert_not_called()
+
     def test_git_path_resolves_main_checkout_state(self) -> None:
         repo_root = Path("/repo")
         with mock.patch.object(
             fix_image_cves,
-            "run",
+            "read_only_git",
             return_value=".git/fix-image-cves.json",
-        ) as run:
+        ) as read_only_git:
             self.assertEqual(
                 fix_image_cves.git_path(repo_root),
                 Path("/repo/.git/fix-image-cves.json"),
             )
 
-        run.assert_called_once_with(
-            ["git", "rev-parse", "--git-path", "fix-image-cves.json"],
-            cwd=repo_root,
-            capture=True,
+        read_only_git.assert_called_once_with(
+            repo_root,
+            ["rev-parse", "--git-path", "fix-image-cves.json"],
         )
 
     def test_git_path_preserves_linked_worktree_state(self) -> None:
@@ -67,7 +124,7 @@ class FixImageCVEsTest(unittest.TestCase):
         )
         with mock.patch.object(
             fix_image_cves,
-            "run",
+            "read_only_git",
             return_value=str(worktree_path),
         ):
             self.assertEqual(
@@ -76,12 +133,36 @@ class FixImageCVEsTest(unittest.TestCase):
             )
 
     def test_git_path_rejects_empty_output(self) -> None:
-        with mock.patch.object(fix_image_cves, "run", return_value=""):
+        with mock.patch.object(fix_image_cves, "read_only_git", return_value=""):
             with self.assertRaisesRegex(
                 fix_image_cves.CommandError,
                 "empty CVE state path",
             ):
                 fix_image_cves.git_path(Path("/repo"))
+
+    def test_status_and_module_discovery_use_read_only_git(self) -> None:
+        repo_root = Path("/repo")
+        with mock.patch.object(
+            fix_image_cves,
+            "read_only_git",
+            side_effect=[" M tracked.txt\n?? untracked.txt", "go.mod\nnested/go.mod"],
+        ) as read_only_git:
+            self.assertEqual(
+                fix_image_cves.git_status_paths(repo_root),
+                {"tracked.txt", "untracked.txt"},
+            )
+            self.assertEqual(
+                fix_image_cves.discover_go_modules(repo_root),
+                [".", "nested"],
+            )
+
+        self.assertEqual(
+            read_only_git.call_args_list,
+            [
+                mock.call(repo_root, ["status", "--porcelain"]),
+                mock.call(repo_root, ["ls-files", "go.mod", "**/go.mod"]),
+            ],
+        )
 
     def test_classify_result_treats_go_runtime_packages_as_toolchain(self) -> None:
         result = {"Class": "lang-pkgs", "Type": "gobinary"}

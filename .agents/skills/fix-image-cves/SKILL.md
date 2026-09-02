@@ -130,6 +130,10 @@ python3 <SKILL_DIR>/scripts/fix_image_cves.py clean
 - The state file is resolved with
   `git rev-parse --git-path fix-image-cves.json` so it stays untracked and each
   linked worktree gets isolated scan, plan, apply, and verification state.
+- Helper-owned Git commands are read-only and run with
+  `GIT_OPTIONAL_LOCKS=0`. This prevents `git status` from refreshing the index
+  as an optional side effect without weakening required locking for later
+  checkout, staging, commit, push, or ref-update operations.
 - `verify --rescan` expects the agent to rebuild the image first. The skill
   does not build or push images.
 - `clean` removes the state file and cleans up any temporary helper artifacts

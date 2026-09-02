@@ -97,6 +97,20 @@ def run_result(
     return subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, env=env)
 
 
+def read_only_git_env() -> dict[str, str]:
+    """Disable optional index refresh locks for read-only Git commands."""
+    return {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}
+
+
+def read_only_git(repo_root: Path, args: list[str], *, capture: bool = True) -> str:
+    return run(
+        ["git", "-C", str(repo_root), *args],
+        cwd=repo_root,
+        capture=capture,
+        env=read_only_git_env(),
+    )
+
+
 def _go_env() -> dict[str, str]:
     """Return env dict with GOTOOLCHAIN=local to match CI (actions/setup-go)."""
     return {**os.environ, "GOTOOLCHAIN": "local"}
@@ -154,21 +168,21 @@ def ensure_command(name: str) -> None:
 
 def ensure_repo_root(repo_arg: str) -> Path:
     repo = Path(repo_arg).resolve()
-    proc = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "--show-toplevel"],
-        text=True,
-        capture_output=True,
-    )
-    if proc.returncode != 0 or not proc.stdout.strip():
+    if not repo.is_dir():
         raise CommandError(f"{repo} is not a git checkout")
-    return Path(proc.stdout.strip())
+    try:
+        root = read_only_git(repo, ["rev-parse", "--show-toplevel"])
+    except CommandError as exc:
+        raise CommandError(f"{repo} is not a git checkout") from exc
+    if not root:
+        raise CommandError(f"{repo} is not a git checkout")
+    return Path(root)
 
 
 def git_path(repo_root: Path) -> Path:
-    raw_path = run(
-        ["git", "rev-parse", "--git-path", STATE_FILE_NAME],
-        cwd=repo_root,
-        capture=True,
+    raw_path = read_only_git(
+        repo_root,
+        ["rev-parse", "--git-path", STATE_FILE_NAME],
     ).strip()
     if not raw_path:
         raise CommandError("git rev-parse returned an empty CVE state path")
@@ -677,7 +691,7 @@ def summarize_plan(plan: dict[str, Any]) -> None:
 
 
 def git_status_paths(repo_root: Path) -> set[str]:
-    output = run(["git", "-C", str(repo_root), "status", "--porcelain"], cwd=repo_root, capture=True)
+    output = read_only_git(repo_root, ["status", "--porcelain"])
     paths: set[str] = set()
     for line in output.splitlines():
         if len(line) < 4:
@@ -696,7 +710,7 @@ def path_is_under(path: str, prefix: str) -> bool:
 
 
 def discover_go_modules(repo_root: Path) -> list[str]:
-    output = run(["git", "-C", str(repo_root), "ls-files", "go.mod", "**/go.mod"], cwd=repo_root, capture=True)
+    output = read_only_git(repo_root, ["ls-files", "go.mod", "**/go.mod"])
     modules = []
     for mod_path in output.splitlines():
         directory = str(Path(mod_path).parent)

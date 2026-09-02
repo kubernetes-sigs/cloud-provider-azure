@@ -36,6 +36,21 @@ Invoke both image helpers and the module-sync helper with their explicit
 `--repo` input pointing at the current worktree. Remove the temporary tooling
 snapshot during final cleanup.
 
+## Git Lock Discipline
+
+Run every orchestration-owned read-only Git inspection with command-scoped
+`GIT_OPTIONAL_LOCKS=0`. This includes status, diff, log, show, rev-parse,
+ls-files, ls-tree, and ref checks. The image-CVE and module-sync helpers enforce
+the same rule internally for their read-only Git subprocesses.
+
+Do not export this setting across the workflow or pass it to mutating Git
+commands. Fetch, checkout, branch or ref updates, staging, commits, and pushes
+must run serially with normal required locking. Before each mutation and after
+each long-running helper exits, inspect the current worktree Git directory for
+lock files. If an unexpected lock exists, stop and report its path, owner,
+size, modification time, and holder check when available. Never delete,
+rename, bypass, or work around it as part of this skill.
+
 ## Preconditions
 
 1. Require a clean worktree before changing branches. Preserve all pre-existing

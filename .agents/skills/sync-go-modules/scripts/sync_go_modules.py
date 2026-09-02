@@ -69,25 +69,31 @@ def run_logged(
     run(cmd, cwd=cwd, env=env)
 
 
-def git(repo: Path, args: list[str], *, capture: bool = True) -> str:
-    return run(["git", "-C", str(repo), *args], cwd=repo, capture=capture)
+def read_only_git_env() -> dict[str, str]:
+    """Disable optional index refresh locks for read-only Git commands."""
+    return {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}
+
+
+def read_only_git(repo: Path, args: list[str], *, capture: bool = True) -> str:
+    return run(
+        ["git", "-C", str(repo), *args],
+        cwd=repo,
+        env=read_only_git_env(),
+        capture=capture,
+    )
 
 
 def resolve_repo_root(path: Path) -> Path:
-    root = run(
-        ["git", "-C", str(path), "rev-parse", "--show-toplevel"],
-        cwd=path,
-        capture=True,
-    )
+    root = read_only_git(path, ["rev-parse", "--show-toplevel"])
     return Path(root).resolve()
 
 
 def status_short(repo: Path) -> str:
-    return git(repo, ["status", "--short"])
+    return read_only_git(repo, ["status", "--short"])
 
 
 def discover_go_modules(repo: Path) -> list[str]:
-    out = git(repo, ["ls-files", "go.mod", "**/go.mod"])
+    out = read_only_git(repo, ["ls-files", "go.mod", "**/go.mod"])
     go_mods = [line for line in out.splitlines() if line]
     if not go_mods:
         raise CommandError("No tracked go.mod files were found")
@@ -154,7 +160,7 @@ def check_go_version(
 
 
 def print_diff_stat(repo: Path) -> None:
-    stat = git(repo, ["diff", "--stat"])
+    stat = read_only_git(repo, ["diff", "--stat"])
     if not stat:
         print("[INFO] No repository diff after sync", file=sys.stderr)
         return
@@ -163,7 +169,11 @@ def print_diff_stat(repo: Path) -> None:
 
 
 def check_clean(repo: Path) -> None:
-    proc = subprocess.run(["git", "-C", str(repo), "diff", "--quiet"], cwd=repo)
+    proc = subprocess.run(
+        ["git", "-C", str(repo), "diff", "--quiet"],
+        cwd=repo,
+        env=read_only_git_env(),
+    )
     if proc.returncode == 0:
         return
     if proc.returncode == 1:

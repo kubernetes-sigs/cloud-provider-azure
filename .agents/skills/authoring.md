@@ -46,6 +46,10 @@ agents that support the shared `.agents` convention.
   skill itself unless they are part of the agent workflow.
 - Make scripts accept explicit inputs rather than assuming a specific local
   agent path.
+- Scope `GIT_OPTIONAL_LOCKS=0` to read-only Git subprocesses in bundled
+  scripts so status-style inspections cannot refresh the index. Keep normal
+  required locking enabled for checkout, staging, commits, pushes, and ref
+  updates.
 - If you need an exception to the Python-only convention, explain it in
   `SKILL.md` so later contributors do not reintroduce mixed runtimes casually.
 
