@@ -466,6 +466,7 @@ func TestNodeAddresses(t *testing.T) {
 		useCustomImsCache   bool
 		nilVMSet            bool
 		expectedErrMsg      error
+		lbStatusCode        int
 	}{
 		{
 			name:                "NodeAddresses should report error if metadata.Network is nil",
@@ -602,6 +603,39 @@ func TestNodeAddresses(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:                "NodeAddresses should report error when loadbalancer metadata returns a transient failure",
+			nodeName:            "vm1",
+			metadataName:        "vm1",
+			vmType:              consts.VMTypeStandard,
+			ipV4:                "10.240.0.1",
+			ipV4Public:          "192.168.1.12",
+			loadBalancerSKU:     "standard",
+			lbStatusCode:        http.StatusServiceUnavailable,
+			useInstanceMetadata: true,
+			expectedErrMsg:      fmt.Errorf("failed to get loadbalancer metadata: %w", &imdsResponseError{statusCode: http.StatusServiceUnavailable}),
+		},
+		{
+			name:                "NodeAddresses should not report error and keep instance addresses when the VM is not in a standard LB backend pool",
+			nodeName:            "vm1",
+			metadataName:        "vm1",
+			vmType:              consts.VMTypeStandard,
+			ipV4:                "10.240.0.1",
+			ipV4Public:          "192.168.1.12",
+			loadBalancerSKU:     "standard",
+			lbStatusCode:        http.StatusNotFound,
+			useInstanceMetadata: true,
+			expectedAddress: []v1.NodeAddress{
+				{
+					Type:    v1.NodeHostName,
+					Address: "vm1",
+				},
+				{
+					Type:    v1.NodeInternalIP,
+					Address: "10.240.0.1",
+				},
+			},
+		},
 	}
 
 	for _, test := range testcases {
@@ -620,6 +654,10 @@ func TestNodeAddresses(t *testing.T) {
 		mux := http.NewServeMux()
 		mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.Contains(r.RequestURI, consts.ImdsLoadBalancerURI) {
+				if test.lbStatusCode != 0 {
+					w.WriteHeader(test.lbStatusCode)
+					return
+				}
 				fmt.Fprintf(w, loadbalancerTemplate, test.ipV4Public, test.ipV4, test.ipV6Public, test.ipV6)
 				return
 			}

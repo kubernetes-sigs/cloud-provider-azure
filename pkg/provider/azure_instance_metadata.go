@@ -114,6 +114,33 @@ type InstanceMetadataService struct {
 	imsCache   azcache.Resource
 }
 
+// imdsResponseError is returned when IMDS responds with a non-200 status code.
+type imdsResponseError struct {
+	statusCode int
+}
+
+func (e *imdsResponseError) Error() string {
+	return fmt.Sprintf("failure of getting loadbalancer metadata, status code %d", e.statusCode)
+}
+
+// isTransientIMDSError reports whether an error from getLoadBalancerMetadata is a
+// transient failure that should be retried, as opposed to a benign response that
+// simply means the VM is not part of a standard load balancer backend pool.
+//
+// Server-side (5xx), throttling (429) and request-timeout (408) responses are
+// treated as transient, as are non-HTTP errors such as connection resets,
+// timeouts, and malformed responses. Other 4xx responses are treated as benign.
+func isTransientIMDSError(err error) bool {
+	var respErr *imdsResponseError
+	if errors.As(err, &respErr) {
+		return respErr.statusCode >= 500 ||
+			respErr.statusCode == http.StatusTooManyRequests ||
+			respErr.statusCode == http.StatusRequestTimeout
+	}
+	// Non-HTTP errors (network failure, timeout, JSON parse) are transient.
+	return true
+}
+
 // NewInstanceMetadataService creates an instance of the InstanceMetadataService accessor object.
 func NewInstanceMetadataService(imdsServer string) (*InstanceMetadataService, error) {
 	ims := &InstanceMetadataService{
@@ -172,10 +199,21 @@ func (ims *InstanceMetadataService) getMetadata(ctx context.Context, key string)
 		}
 
 		loadBalancerMetadata, err := ims.getLoadBalancerMetadata()
-		if err != nil || loadBalancerMetadata == nil || loadBalancerMetadata.LoadBalancer == nil {
-			// Log a warning since loadbalancer metadata may not be available when the VM
-			// is not in standard LoadBalancer backend address pool.
+		if err != nil {
+			if isTransientIMDSError(err) {
+				// Propagate transient failures so teh caller retries instead of
+				// publishing node metadata without the load balancer public IP.
+				// Returning instance metadata here would transiently drop the
+				// node's ExternalIP until the next successful reconcile
+				return nil, fmt.Errorf("failed to get loadbalancer metadata: %w", err)
+			}
+			// Benigng: loadbalancer metadata is not available when the VM is not in
+			// a standard LoadBalancer backend address pool. Proceed with instance
+			// metadata as before.
 			logger.V(4).Info("Warning: failed to get loadbalancer metadata", "error", err)
+			return instanceMetadata, nil
+		}
+		if loadBalancerMetadata == nil || loadBalancerMetadata.LoadBalancer == nil {
 			return instanceMetadata, nil
 		}
 
@@ -245,7 +283,8 @@ func (ims *InstanceMetadataService) getLoadBalancerMetadata() (*LoadBalancerMeta
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failure of getting loadbalancer metadata with response %q", resp.Status)
+		// Return an imdsResponseError to indicate that this is a non-200 response from IMDS.
+		return nil, &imdsResponseError{statusCode: resp.StatusCode}
 	}
 
 	data, err := io.ReadAll(resp.Body)
