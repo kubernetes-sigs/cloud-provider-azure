@@ -31,6 +31,11 @@ python3 <SKILL_DIR>/scripts/fix_image_cves.py scan \
 python3 <SKILL_DIR>/scripts/fix_image_cves.py plan
 ```
 
+The plan resolves the target Go modules' own `go` directives without changing
+the repository. If it reports a Go directive bump, select a locally installed
+Go version that is at least the planned target before continuing. Keep
+`GOTOOLCHAIN=local`; do not rely on an automatic toolchain download.
+
 3. Review the plan before changing files. When base-image CVEs are in scope,
    decide the deterministic replacement image and digest yourself. Then apply
    the plan:
@@ -102,15 +107,20 @@ python3 <SKILL_DIR>/scripts/fix_image_cves.py clean
   verification result.
 - `plan` groups multiple GO_MODULE CVEs by module path, chooses the highest
   `FixedVersion` as the minimum required version, and adds Go's required `v`
-  prefix when Trivy reports a digit-leading version. BASE_IMAGE findings are
-  grouped into a recommendation that requires an explicit
-  `--base-image-target`.
-- `apply` stages every unresolved Go module minimum for the same module root in
-  one `go mod edit` command, then lets `go mod tidy` resolve the complete module
-  graph using Minimal Version Selection. This avoids treating command-line
-  versions as conflicting exact `go get` requests. It then mirrors the repo CI
-  behavior by discovering all tracked `go.mod` files and running `go mod tidy`
-  plus `go mod verify` in every module before `go mod vendor`.
+  prefix when Trivy reports a digit-leading version. It queries each target
+  module version outside the repository with `GOTOOLCHAIN=local`, groups any
+  newer `go` directive requirements by module root, and plans the highest
+  required directive. BASE_IMAGE findings are grouped into a recommendation
+  that requires an explicit `--base-image-target`.
+- `apply` first verifies that the selected local Go version satisfies both the
+  current repository and planned directives. It applies each planned directive
+  with `go mod edit -go=<version>` before staging every unresolved Go module
+  minimum for the same module root in one `go mod edit` command, then lets
+  `go mod tidy` resolve the complete module graph using Minimal Version
+  Selection. This avoids treating command-line versions as conflicting exact
+  `go get` requests. It then mirrors the repo CI behavior by discovering all
+  tracked `go.mod` files and running `go mod tidy` plus `go mod verify` in every
+  module before `go mod vendor`.
 - When vendoring is enabled at the repo root, `apply` also runs
   `hack/update-azure-vendor-licenses.sh` so `LICENSES/` stays in sync with
   `vendor/` and the resulting PR is self-contained. The upstream license
@@ -118,11 +128,11 @@ python3 <SKILL_DIR>/scripts/fix_image_cves.py clean
   the root `go.sum`, so `apply` reruns root `go mod tidy` and `go mod verify`
   after license generation. This keeps the recorded changes clean under the
   repository's `go-mod-consistency` workflow.
-- `verify` accepts resolved and vendored Go module versions that are equal to or
-  higher than each planned minimum. It does not assume a clean worktree and
-  compares the current repo diff against the pre-existing changed files plus
-  the files recorded during `apply` so unrelated user edits do not trigger
-  false failures.
+- `verify` requires each planned `go` directive and resolved or vendored Go
+  module version to be equal to or higher than its planned minimum. It does not
+  assume a clean worktree and compares the current repo diff against the
+  pre-existing changed files plus the files recorded during `apply` so
+  unrelated user edits do not trigger false failures.
 - `apply` refuses planned Go modules with `replace` directives, and `verify`
   fails resolved or vendored replacements. A replacement module's version does
   not prove that the original module meets its CVE fix threshold; update or
@@ -138,10 +148,10 @@ python3 <SKILL_DIR>/scripts/fix_image_cves.py clean
   does not build or push images.
 - `clean` removes the state file and cleans up any temporary helper artifacts
   left behind by vendor-license regeneration.
-- `apply` and `verify` set `GOTOOLCHAIN=local` for all Go subprocess calls to
+- `plan`, `apply`, and `verify` set `GOTOOLCHAIN=local` for all Go subprocess calls to
   match CI behavior (`actions/setup-go` uses `GOTOOLCHAIN=local`). This
   prevents toolchain auto-download from producing extra `go.sum` entries that
   fail the Go Module Consistency check. The skill requires a locally installed
-  Go version that satisfies the repo's `go` directive; `apply` performs a
-  preflight check and fails early with a clear message if the local Go is too
-  old.
+  Go version that satisfies the current and planned repo `go` directives;
+  `apply` performs a preflight check and fails before source mutation with a
+  clear message if the local Go is too old.
