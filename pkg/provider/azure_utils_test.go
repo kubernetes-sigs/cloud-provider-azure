@@ -302,6 +302,17 @@ func TestParseTags(t *testing.T) {
 			expectedDroppedKeys: []string{"foo"},
 		},
 		{
+			description: "parseTags should handle Unicode characters in tagsMap",
+			tagsMap: map[string]string{
+				"S": "first",
+				"ſ": "second",
+			},
+			expectedTags: map[string]*string{
+				"S": ptr.To("first"),
+				"ſ": ptr.To("second"),
+			},
+		},
+		{
 			description: "parseTags should let tagsMap override tags while discarding duplicates in both",
 			tags:        "foo=1, FOO=2",
 			tagsMap: map[string]string{

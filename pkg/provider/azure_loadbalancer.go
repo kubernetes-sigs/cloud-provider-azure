@@ -3628,7 +3628,7 @@ func shouldReleaseExistingOwnedPublicIP(
 func (az *Cloud) ensurePIPTagged(service *v1.Service, pip *armnetwork.PublicIPAddress) bool {
 	configTags, droppedConfigKeys := parseTags(az.Tags, az.TagsMap)
 	if len(droppedConfigKeys) > 0 {
-		log.Background().WithName("ensurePIPTagged").V(2).Info("Found duplicate tag keys in cloud configuration", "duplicateKeys", droppedConfigKeys)
+		log.Background().WithName("ensurePIPTagged").V(2).Info("Found duplicate tag keys in cloud configuration", "droppedKeys", droppedConfigKeys)
 	}
 	annotationTags := make(map[string]*string)
 	if _, ok := service.Annotations[consts.ServiceAnnotationAzurePIPTags]; ok {
@@ -3636,7 +3636,7 @@ func (az *Cloud) ensurePIPTagged(service *v1.Service, pip *armnetwork.PublicIPAd
 		annotationTags, droppedAnnotationKeys = parseTags(service.Annotations[consts.ServiceAnnotationAzurePIPTags], nil)
 		if len(droppedAnnotationKeys) > 0 {
 			az.Event(service, v1.EventTypeWarning, "DuplicatePIPTags", fmt.Sprintf(
-				"Ignoring duplicate tag keys (case-insensitive) in the %s annotation; keeping the first occurrence: %s",
+				"Ignoring duplicate tag keys (case-insensitive) in the %s annotation; keeping the first occurrence, dropped duplicate keys: %s",
 				consts.ServiceAnnotationAzurePIPTags, strings.Join(droppedAnnotationKeys, ", ")))
 		}
 	}
@@ -4386,7 +4386,7 @@ func (az *Cloud) ensureLoadBalancerTagged(lb *armnetwork.LoadBalancer) bool {
 	}
 	tags, droppedKeys := parseTags(az.Tags, az.TagsMap)
 	if len(droppedKeys) > 0 {
-		log.Background().WithName("ensureLoadBalancerTagged").V(2).Info("Found duplicate tag keys in cloud configuration", "duplicateKeys", droppedKeys)
+		log.Background().WithName("ensureLoadBalancerTagged").V(2).Info("Found duplicate tag keys in cloud configuration", "droppedKeys", droppedKeys)
 	}
 	if lb.Tags == nil {
 		lb.Tags = make(map[string]*string)
@@ -4405,7 +4405,7 @@ func (az *Cloud) ensureSecurityGroupTagged(sg *armnetwork.SecurityGroup) bool {
 	}
 	tags, droppedKeys := parseTags(az.Tags, az.TagsMap)
 	if len(droppedKeys) > 0 {
-		log.Background().WithName("ensureSecurityGroupTagged").V(2).Info("Found duplicate tag keys in cloud configuration", "duplicateKeys", droppedKeys)
+		log.Background().WithName("ensureSecurityGroupTagged").V(2).Info("Found duplicate tag keys in cloud configuration", "droppedKeys", droppedKeys)
 	}
 	if sg.Tags == nil {
 		sg.Tags = make(map[string]*string)
