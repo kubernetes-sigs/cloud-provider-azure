@@ -18,6 +18,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -38,9 +39,6 @@ import (
 )
 
 func TestReconcilePrivateLinkService(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	testCases := []struct {
 		desc              string
 		annotations       map[string]string
@@ -52,7 +50,7 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 		expectedPLSCreate bool
 		expectedPLS       *armnetwork.PrivateLinkService
 		expectedPLSDelete bool
-		expectedError     bool
+		expectedErrMsg    string
 		expectedDeleted   bool // new field to test the deleted PLS return value
 	}{
 		{
@@ -64,8 +62,8 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			annotations: map[string]string{
 				consts.ServiceAnnotationPLSCreation: "true",
 			},
-			wantPLS:       true,
-			expectedError: true,
+			wantPLS:        true,
+			expectedErrMsg: "service requiring private link service must be internal or disable floating ip",
 		},
 		{
 			desc: "reconcilePrivateLinkService should create a new PLS for external service with floating ip disabled",
@@ -135,7 +133,76 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 					},
 				},
 			},
-			expectedError: true,
+			expectedErrMsg: "already has unmanaged private link service",
+		},
+		{
+			desc: "reconcilePrivateLinkService should report error if the requested PLS name is used by another LB frontend",
+			annotations: map[string]string{
+				consts.ServiceAnnotationPLSCreation:          "true",
+				consts.ServiceAnnotationLoadBalancerInternal: "true",
+				consts.ServiceAnnotationPLSName:              "testpls",
+			},
+			wantPLS:         true,
+			expectedPLSList: true,
+			existingPLSList: []*armnetwork.PrivateLinkService{
+				{
+					Name: ptr.To("testpls"),
+					Properties: &armnetwork.PrivateLinkServiceProperties{
+						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: ptr.To("fipConfigID2")}},
+					},
+					Tags: map[string]*string{
+						consts.ClusterNameTagKey:  ptr.To(testClusterName),
+						consts.OwnerServiceTagKey: ptr.To("default/test1"),
+					},
+				},
+			},
+			expectedErrMsg: "private link service(testpls) in resource group(rg) already exists, owned by service(default/test1) on LB frontend(fipConfigID2)",
+		},
+		{
+			desc: "reconcilePrivateLinkService should report error if the default PLS name is used by another LB frontend",
+			annotations: map[string]string{
+				consts.ServiceAnnotationPLSCreation:          "true",
+				consts.ServiceAnnotationLoadBalancerInternal: "true",
+			},
+			wantPLS:         true,
+			expectedPLSList: true,
+			existingPLSList: []*armnetwork.PrivateLinkService{
+				{
+					Name: ptr.To("pls-fipConfig"),
+					Properties: &armnetwork.PrivateLinkServiceProperties{
+						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: ptr.To("fipConfigID2")}},
+					},
+				},
+			},
+			expectedErrMsg: "private link service(pls-fipConfig) in resource group(rg) already exists, owned by service(<unknown>) on LB frontend(fipConfigID2)",
+		},
+		{
+			desc: "reconcilePrivateLinkService should create a new PLS if another PLS in the resource group has a different name",
+			annotations: map[string]string{
+				consts.ServiceAnnotationPLSCreation:          "true",
+				consts.ServiceAnnotationLoadBalancerInternal: "true",
+				consts.ServiceAnnotationPLSName:              "testpls",
+			},
+			wantPLS:           true,
+			expectedSubnetGet: true,
+			existingSubnet: &armnetwork.Subnet{
+				Name: ptr.To("subnet"),
+				ID:   ptr.To("subnetID"),
+				Properties: &armnetwork.SubnetPropertiesFormat{
+					PrivateLinkServiceNetworkPolicies: to.Ptr(armnetwork.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled),
+				},
+			},
+			expectedPLSList: true,
+			existingPLSList: []*armnetwork.PrivateLinkService{
+				{
+					Name: ptr.To("otherpls"),
+					Properties: &armnetwork.PrivateLinkServiceProperties{
+						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: ptr.To("fipConfigID2")}},
+					},
+				},
+			},
+			expectedPLSCreate: true,
+			expectedPLS:       &armnetwork.PrivateLinkService{Name: ptr.To("testpls")},
 		},
 		{
 			desc: "reconcilePrivateLinkService should report error if service tries to update pls without being an owner",
@@ -168,7 +235,7 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 					},
 				},
 			},
-			expectedError: true,
+			expectedErrMsg: "already has existing private link service(testpls) owned by service(default/test1)",
 		},
 		{
 			desc: "reconcilePrivateLinkService should share existing pls to a service using the same LB frontEnd without any changes",
@@ -360,6 +427,9 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 	for _, test := range testCases {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
 			az := GetTestCloud(ctrl)
 			service := getTestServiceWithAnnotation("test", test.annotations, false, 80)
 			fipConfig := &armnetwork.FrontendIPConfiguration{
@@ -400,7 +470,11 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 				mockPLSRepo.EXPECT().Delete(gomock.Any(), "rg", "testpls", *fipConfig.ID).Return(nil).Times(1)
 			}
 			deleted, err := az.reconcilePrivateLinkService(context.TODO(), clusterName, &service, fipConfig, test.wantPLS)
-			assert.Equal(t, test.expectedError, err != nil, "error: %v", err)
+			if test.expectedErrMsg == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorContains(t, err, test.expectedErrMsg)
+			}
 			assert.Equal(t, test.expectedDeleted, deleted, "expected deleted PLS return value mismatch")
 		})
 	}
@@ -585,6 +659,160 @@ func TestGetPrivateLinkServiceName(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, test.expectedName, actualName, "TestCase[%d]: %s", i, test.desc)
 		}
+	}
+}
+
+func TestCheckPrivateLinkServiceNameConflict(t *testing.T) {
+	tests := []struct {
+		desc         string
+		existingPLS  []*armnetwork.PrivateLinkService
+		listErr      error
+		plsName      string
+		fipConfigID  string
+		errSubstring []string
+	}{
+		{
+			desc:        "no PLS in the resource group",
+			existingPLS: []*armnetwork.PrivateLinkService{},
+			plsName:     "testpls",
+			fipConfigID: "fipConfigID",
+		},
+		{
+			desc: "existing PLS has a different name",
+			existingPLS: []*armnetwork.PrivateLinkService{
+				{
+					Name: ptr.To("otherpls"),
+					Properties: &armnetwork.PrivateLinkServiceProperties{
+						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: ptr.To("fipConfigID2")}},
+					},
+				},
+			},
+			plsName:     "testpls",
+			fipConfigID: "fipConfigID",
+		},
+		{
+			desc: "same name on another LB frontend should conflict",
+			existingPLS: []*armnetwork.PrivateLinkService{
+				{
+					Name: ptr.To("testpls"),
+					Properties: &armnetwork.PrivateLinkServiceProperties{
+						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: ptr.To("fipConfigID2")}},
+					},
+					Tags: map[string]*string{
+						consts.OwnerServiceTagKey: ptr.To("default/test1"),
+					},
+				},
+			},
+			plsName:      "testpls",
+			fipConfigID:  "fipConfigID",
+			errSubstring: []string{"testpls", "default/test1", "fipConfigID2"},
+		},
+		{
+			desc: "same name on the same LB frontend should be tolerated",
+			existingPLS: []*armnetwork.PrivateLinkService{
+				{
+					Name: ptr.To("testpls"),
+					Properties: &armnetwork.PrivateLinkServiceProperties{
+						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: ptr.To("fipConfigID")}},
+					},
+				},
+			},
+			plsName:     "testpls",
+			fipConfigID: "fipConfigID",
+		},
+		{
+			desc: "name comparison should be case-insensitive",
+			existingPLS: []*armnetwork.PrivateLinkService{
+				{
+					Name: ptr.To("TestPLS"),
+					Properties: &armnetwork.PrivateLinkServiceProperties{
+						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: ptr.To("fipConfigID2")}},
+					},
+					Tags: map[string]*string{
+						consts.OwnerServiceTagKey: ptr.To("default/test1"),
+					},
+				},
+			},
+			plsName:      "testpls",
+			fipConfigID:  "fipConfigID",
+			errSubstring: []string{"testpls", "default/test1", "fipConfigID2"},
+		},
+		{
+			desc: "conflicting PLS without properties should report an unknown frontend",
+			existingPLS: []*armnetwork.PrivateLinkService{
+				{
+					Name: ptr.To("testpls"),
+					Tags: map[string]*string{
+						consts.OwnerServiceTagKey: ptr.To("default/test1"),
+					},
+				},
+			},
+			plsName:      "testpls",
+			fipConfigID:  "fipConfigID",
+			errSubstring: []string{"testpls", "default/test1", "LB frontend(<unknown>)"},
+		},
+		{
+			desc: "conflicting PLS with an empty frontend list should report an unknown frontend",
+			existingPLS: []*armnetwork.PrivateLinkService{
+				{
+					Name:       ptr.To("testpls"),
+					Properties: &armnetwork.PrivateLinkServiceProperties{},
+					Tags: map[string]*string{
+						consts.OwnerServiceTagKey: ptr.To("default/test1"),
+					},
+				},
+			},
+			plsName:      "testpls",
+			fipConfigID:  "fipConfigID",
+			errSubstring: []string{"testpls", "default/test1", "LB frontend(<unknown>)"},
+		},
+		{
+			desc: "conflicting unmanaged PLS should report an unknown owner",
+			existingPLS: []*armnetwork.PrivateLinkService{
+				{
+					Name: ptr.To("testpls"),
+					Properties: &armnetwork.PrivateLinkServiceProperties{
+						LoadBalancerFrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{ID: ptr.To("fipConfigID2")}},
+					},
+				},
+			},
+			plsName:      "testpls",
+			fipConfigID:  "fipConfigID",
+			errSubstring: []string{"testpls", "service(<unknown>)", "fipConfigID2"},
+		},
+		{
+			desc:         "list error should be propagated",
+			listErr:      errors.New("list failed"),
+			plsName:      "testpls",
+			fipConfigID:  "fipConfigID",
+			errSubstring: []string{"list failed"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			az := GetTestCloud(ctrl)
+			service := getTestService("test", v1.ProtocolTCP, nil, false, 80)
+
+			mockPLSRepo := az.plsRepo.(*privatelinkservice.MockRepository)
+			mockPLSRepo.EXPECT().List(gomock.Any(), "rg").Return(test.existingPLS, test.listErr).Times(1)
+
+			err := az.checkPrivateLinkServiceNameConflict(context.TODO(), &service, test.plsName, test.fipConfigID)
+			if len(test.errSubstring) == 0 {
+				assert.NoError(t, err)
+				return
+			}
+			assert.Error(t, err)
+			for _, s := range test.errSubstring {
+				assert.ErrorContains(t, err, s)
+			}
+			if test.listErr == nil {
+				assert.NotContains(t, err.Error(), "()", "conflict message must not report an empty field")
+			}
+		})
 	}
 }
 
