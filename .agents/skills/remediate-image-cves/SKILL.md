@@ -57,7 +57,9 @@ rename, bypass, or work around it as part of this skill.
    work; never reset, discard, or overwrite it.
 2. Fail fast if Git, GitHub CLI, Trivy, Docker with Buildx or Podman with native
    build support, or a local Go version compatible with the checked-out branch
-   is unavailable. Do not install or upgrade host software.
+   is unavailable. Before each CVE apply, also require an available local Go
+   version compatible with the fresh plan's Go directive actions. Do not
+   install or upgrade host software or enable automatic toolchain downloads.
 3. Require both `git var GIT_AUTHOR_IDENT` and
    `git var GIT_COMMITTER_IDENT` to succeed before any build so checkpoint
    commits cannot fail after remediation has started.
@@ -157,12 +159,14 @@ table order:
 1. Rebuild the image from the current source and resolve its canonical runtime
    reference. Run a fresh `scan` and `plan`; do not apply the saved baseline
    plan because an earlier image may already have changed a shared module.
-2. Review every fresh plan. Apply Go-module fixes through `fix-image-cves`. For
-   a fixable runtime base-image finding, automatically replace only the digest
-   of the existing registry, repository, and tag. If remediation would change
-   the image family or tag, stop for review. Stop and report any other
-   permission, judgment, or conflict-resolution requirement instead of
-   guessing.
+2. Review every fresh plan. If it contains Go directive actions, select a
+   locally installed Go version at least as new as the highest target before
+   apply, and keep `GOTOOLCHAIN=local`. Apply Go-module and directive fixes
+   through `fix-image-cves`. For a fixable runtime base-image finding,
+   automatically replace only the digest of the existing registry, repository,
+   and tag. If remediation would change the image family or tag, stop for
+   review. Stop and report any other permission, judgment, or
+   conflict-resolution requirement instead of guessing.
 3. If the fresh plan contains no Go-module or base-image actions and no
    unsupported fixable findings, record its residual risks, run `clean`, and
    continue to the next image. Skip `apply`, file verification, remediation
