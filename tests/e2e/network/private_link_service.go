@@ -470,6 +470,57 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		// Verify it's still the configuration from service1
 		Expect(len(pls.Properties.IPConfigurations)).To(Equal(ipAddrCount))
 	})
+
+	It("should not modify an existing private link service when another service requests the same name", func() {
+		plsName := "testpls"
+		annotation := map[string]string{
+			consts.ServiceAnnotationLoadBalancerInternal: "true",
+			consts.ServiceAnnotationPLSCreation:          "true",
+			consts.ServiceAnnotationPLSName:              plsName,
+		}
+
+		svc1 := "service1"
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, svc1, ns.Name, labels, annotation, ports)
+		defer func() {
+			err := utils.DeleteService(cs, ns.Name, svc1)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
+
+		pls := getPrivateLinkServiceFromIP(tc, ip, "", "", plsName)
+		Expect(pls.Properties.LoadBalancerFrontendIPConfigurations).NotTo(BeEmpty())
+		originalFrontendID := ptr.Deref((pls.Properties.LoadBalancerFrontendIPConfigurations)[0].ID, "")
+		originalOwner := ptr.Deref(pls.Tags[consts.OwnerServiceTagKey], "")
+		utils.Logf("PLS %s is on frontend %s owned by service %s", plsName, originalFrontendID, originalOwner)
+
+		By("creating a second service requesting the same private link service name")
+		// No shared IP, so svc2 gets its own LB frontend; it is rejected before backends matter.
+		svc2 := "service2"
+		ports2 := []v1.ServicePort{{
+			Port:       testingPort,
+			TargetPort: intstr.FromInt(testingPort),
+		}}
+		service2 := utils.CreateLoadBalancerServiceManifest(svc2, annotation, map[string]string{"app": svc2}, ns.Name, ports2)
+		start := time.Now()
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service2, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			err := utils.DeleteService(cs, ns.Name, svc2)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+
+		By("checking the second service is rejected")
+		err = utils.WaitForServiceWarningEventAfter(cs, ns.Name, svc2,
+			"SyncLoadBalancerFailed", "already exists, owned by service", start)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("checking the existing private link service still belongs to the first service")
+		pls = getPrivateLinkServiceFromIP(tc, ip, "", "", plsName)
+		Expect(pls.Properties.LoadBalancerFrontendIPConfigurations).NotTo(BeEmpty())
+		Expect(ptr.Deref((pls.Properties.LoadBalancerFrontendIPConfigurations)[0].ID, "")).To(Equal(originalFrontendID))
+		Expect(ptr.Deref(pls.Tags[consts.OwnerServiceTagKey], "")).To(Equal(originalOwner))
+	})
 })
 
 func updateServiceAnnotation(service *v1.Service, annotation map[string]string) (result *v1.Service) {
