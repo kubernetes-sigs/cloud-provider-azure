@@ -958,6 +958,24 @@ func TestAddNodeIPAddressesToBackendPoolDeduplicates(t *testing.T) {
 	}
 }
 
+func TestAddNodeIPAddressesToBackendPoolGeneratesNameWhenNodeNameMissing(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cloud := GetTestCloud(ctrl)
+	cloud.nodePrivateIPToNodeNameMap = map[string]string{}
+
+	bp := buildTestLoadBalancerBackendPoolWithIPs("test-pool", nil)
+	changed := cloud.addNodeIPAddressesToBackendPool(bp, []string{"10.0.0.1"})
+	assert.True(t, changed)
+
+	if assert.Len(t, bp.Properties.LoadBalancerBackendAddresses, 1) {
+		addr := bp.Properties.LoadBalancerBackendAddresses[0]
+		assert.Equal(t, "10.0.0.1", ptr.Deref(addr.Properties.IPAddress, ""))
+		assert.Equal(t, "ip-10-0-0-1", ptr.Deref(addr.Name, ""))
+	}
+}
+
 func TestGetBackendPrivateIPsNodeIPConfig(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

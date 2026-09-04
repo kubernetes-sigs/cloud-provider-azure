@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -522,8 +523,10 @@ func getTestBackendAddressPoolWithIPs(lbName, bpName string, ips []string) *armn
 	}
 	for _, ip := range ips {
 		if len(ip) > 0 {
+			// The local service reconciliation path never populates nodePrivateIPToNodeNameMap,
+			// so addNodeIPAddressesToBackendPool falls back to a name derived from the IP address.
 			bp.Properties.LoadBalancerBackendAddresses = append(bp.Properties.LoadBalancerBackendAddresses, &armnetwork.LoadBalancerBackendAddress{
-				Name: ptr.To(""),
+				Name: ptr.To("ip-" + strings.NewReplacer(".", "-", ":", "-").Replace(ip)),
 				Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{
 					IPAddress: ptr.To(ip),
 				},
