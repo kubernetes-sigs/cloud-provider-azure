@@ -65,6 +65,8 @@ type NodeProvider interface {
 	GetPlatformSubFaultDomain(ctx context.Context) (string, error)
 	// GetInterconnectGroupID returns the Interconnect Group ID from IMDS if set.
 	GetInterconnectGroupID(ctx context.Context) (string, error)
+	// GetInterconnectSubgroupID returns the Interconnect Subgroup ID from IMDS if set.
+	GetInterconnectSubgroupID(ctx context.Context) (string, error)
 }
 
 // labelReconcile holds information about a label to reconcile and how to reconcile it.
@@ -548,6 +550,14 @@ func (cnc *CloudNodeController) getNodeModifiersFromCloudProvider(ctx context.Co
 		nodeModifiers = append(nodeModifiers, addCloudNodeLabel(consts.LabelPlatformInterconnectGroup, interconnectGroupID))
 	}
 
+	interconnectSubgroupID, err := cnc.getInterconnectSubgroupID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get interconnectSubgroupID: %w", err)
+	}
+	if interconnectSubgroupID != "" {
+		nodeModifiers = append(nodeModifiers, addCloudNodeLabel(consts.LabelPlatformInterconnectSubgroup, interconnectSubgroupID))
+	}
+
 	return nodeModifiers, nil
 }
 
@@ -702,6 +712,14 @@ func (cnc *CloudNodeController) getInterconnectGroupID(ctx context.Context) (str
 		return "", fmt.Errorf("cnc.getInterconnectGroupID: %w", err)
 	}
 	return ig, nil
+}
+
+func (cnc *CloudNodeController) getInterconnectSubgroupID(ctx context.Context) (string, error) {
+	isg, err := cnc.nodeProvider.GetInterconnectSubgroupID(ctx)
+	if err != nil {
+		return "", fmt.Errorf("cnc.getInterconnectSubgroupID: %w", err)
+	}
+	return isg, nil
 }
 
 func (cnc *CloudNodeController) updateNetworkingCondition(node *v1.Node, networkReady bool) error {
