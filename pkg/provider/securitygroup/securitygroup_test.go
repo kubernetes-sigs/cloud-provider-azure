@@ -863,7 +863,7 @@ func TestSecurityGroupHelper_AddRuleForDenyAll(t *testing.T) {
 						SourcePortRange:            ptr.To("*"),
 						DestinationAddressPrefixes: fnutil.Map(func(v netip.Addr) *string { return to.Ptr(v.String()) }, dstAddresses),
 						DestinationPortRange:       ptr.To("*"),
-						Priority:                   ptr.To(int32(4095)),
+						Priority:                   ptr.To(int32(4096)),
 					},
 				},
 			}, "[`%s`] 1 allow rule should be created", c.TestName)
