@@ -1546,9 +1546,6 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 // participating in the specified LoadBalancer Backend Pool.
 func (ss *ScaleSet) EnsureHostsInPool(ctx context.Context, service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetNameOfLB string) error {
 	logger := log.FromContextOrBackground(ctx).WithName("EnsureHostsInPool")
-	if ss.DisableAvailabilitySetNodes && !ss.EnableVmssFlexNodes {
-		return ss.ensureHostsInPool(ctx, service, nodes, backendPoolID, vmSetNameOfLB)
-	}
 	vmssUniformNodes := make([]*v1.Node, 0)
 	vmssFlexNodes := make([]*v1.Node, 0)
 	vmasNodes := make([]*v1.Node, 0)
@@ -1571,9 +1568,14 @@ func (ss *ScaleSet) EnsureHostsInPool(ctx context.Context, service *v1.Service, 
 			continue
 		}
 
-		vmManagementType, err := ss.getVMManagementTypeByNodeName(ctx, localNodeName, azcache.CacheReadTypeDefault)
+		var vmManagementType VMManagementType
+		if ss.DisableAvailabilitySetNodes && !ss.EnableVmssFlexNodes && node.Spec.ProviderID != "" {
+			vmManagementType, err = ss.getVMManagementTypeByProviderID(ctx, node.Spec.ProviderID, azcache.CacheReadTypeDefault)
+		} else {
+			vmManagementType, err = ss.getVMManagementTypeByNodeName(ctx, localNodeName, azcache.CacheReadTypeDefault)
+		}
 		if err != nil {
-			logger.Error(err, "Failed to check vmManagementType by node name", "node", localNodeName)
+			logger.Error(err, "Failed to check VM management type", "node", localNodeName)
 			errors = append(errors, err)
 			continue
 		}
