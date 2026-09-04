@@ -14,6 +14,17 @@
 
 # syntax=docker/dockerfile:1
 
+FROM --platform=linux/amd64 mcr.microsoft.com/oss/go/microsoft/golang:1.26.5-2-bookworm@sha256:ea712a1aaf80306c19ff842ba0bfcb9ad360afd8143e70044e0d0bd6d6899887 AS builder
+
+ARG ARCH=amd64
+
+WORKDIR /go/src/health-probe-proxy
+COPY . .
+
+# Cache the go build into the Go compiler cache folder so we benefit from compiler caching across docker build calls
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    make bin/health-probe-proxy ARCH=${ARCH}
+
 FROM gcr.io/distroless/base:latest@sha256:f4a335ca209e1d2ee873102c17c389ad0142e3d5b21aee2817e9cc9c01d87d20
-COPY bin/health-probe-proxy /usr/local/bin/health-probe-proxy
+COPY --from=builder /go/src/health-probe-proxy/bin/health-probe-proxy /usr/local/bin/health-probe-proxy
 ENTRYPOINT [ "/usr/local/bin/health-probe-proxy" ]
