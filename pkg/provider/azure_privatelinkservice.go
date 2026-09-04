@@ -149,6 +149,14 @@ func (az *Cloud) reconcilePrivateLinkService(
 			return false, err
 		}
 
+		if !exists {
+			// The lookup above is keyed by LB frontend, so it cannot see the name already
+			// taken on another frontend; creating would silently repoint that PLS here.
+			if err := az.checkPrivateLinkServiceNameConflict(ctx, service, plsName, *fipConfigID); err != nil {
+				return false, err
+			}
+		}
+
 		dirtyPLS, err := az.getExpectedPrivateLinkService(ctx, existingPLS, &plsName, &clusterName, service, fipConfig)
 		if err != nil {
 			return false, err
@@ -297,6 +305,53 @@ func (az *Cloud) getPrivateLinkServiceName(
 
 	// default PLS name: pls-<frontendIPConfigName>
 	return fmt.Sprintf("%s-%s", "pls", *fipConfig.Name), nil
+}
+
+// checkPrivateLinkServiceNameConflict rejects a service whose requested private link
+// service name is already taken by a private link service on another LB frontend.
+func (az *Cloud) checkPrivateLinkServiceNameConflict(
+	ctx context.Context,
+	service *v1.Service,
+	plsName string,
+	fipConfigID string,
+) error {
+	resourceGroup := az.getPLSResourceGroup(service)
+	plsList, err := az.plsRepo.List(ctx, resourceGroup)
+	if err != nil {
+		return err
+	}
+
+	for _, pls := range plsList {
+		if pls == nil || !strings.EqualFold(ptr.Deref(pls.Name, ""), plsName) {
+			continue
+		}
+		var frontendID string
+		if pls.Properties != nil && len(pls.Properties.LoadBalancerFrontendIPConfigurations) > 0 {
+			frontendID = ptr.Deref(pls.Properties.LoadBalancerFrontendIPConfigurations[0].ID, "")
+			// Not a conflict: the service's own PLS, which the caller's cached exists check can miss.
+			if strings.EqualFold(frontendID, fipConfigID) {
+				return nil
+			}
+		}
+		// An unmanaged PLS carries no owner tag, and a partial response may omit frontends.
+		owner := getPrivateLinkServiceOwner(pls)
+		if owner == "" {
+			owner = "<unknown>"
+		}
+		if frontendID == "" {
+			frontendID = "<unknown>"
+		}
+		return fmt.Errorf(
+			"reconcilePrivateLinkService for service(%s) failed: private link service(%s) in resource group(%s) already exists, owned by service(%s) on LB frontend(%s)",
+			getServiceName(service),
+			plsName,
+			resourceGroup,
+			owner,
+			frontendID,
+		)
+	}
+
+	return nil
 }
 
 // getExpectedPrivateLinkService builds expected PLS object from service spec
