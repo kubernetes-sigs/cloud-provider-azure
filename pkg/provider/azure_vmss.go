@@ -578,8 +578,8 @@ func (ss *ScaleSet) GetZoneByNodeName(ctx context.Context, name string) (cloudpr
 	} else if vm.IsVirtualMachineScaleSetVM() &&
 		vm.AsVirtualMachineScaleSetVM().Properties.InstanceView != nil &&
 		vm.AsVirtualMachineScaleSetVM().Properties.InstanceView.PlatformFaultDomain != nil {
-		// Availability zone is not used for the node, falling back to fault domain.
-		failureDomain = strconv.Itoa(int(*vm.AsVirtualMachineScaleSetVM().Properties.InstanceView.PlatformFaultDomain))
+		// Availability zone is not used for the node, but we don't fallback to fault domain anymore.
+		// Keep failureDomain empty to omit the zone label.
 	} else {
 		err = fmt.Errorf("failed to get zone info")
 		logger.Error(err, "got unexpected error")
@@ -587,10 +587,40 @@ func (ss *ScaleSet) GetZoneByNodeName(ctx context.Context, name string) (cloudpr
 		return cloudprovider.Zone{}, err
 	}
 
-	return cloudprovider.Zone{
+	zone := cloudprovider.Zone{
 		FailureDomain: strings.ToLower(failureDomain),
 		Region:        strings.ToLower(vm.Location),
-	}, nil
+	}
+	return zone, nil
+}
+
+// GetPlatformFaultDomainByNodeName gets the platform fault domain for the specified node.
+func (ss *ScaleSet) GetPlatformFaultDomainByNodeName(ctx context.Context, name string) (string, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("GetPlatformFaultDomainByNodeName")
+	vmManagementType, err := ss.getVMManagementTypeByNodeName(ctx, name, azcache.CacheReadTypeUnsafe)
+	if err != nil {
+		logger.Error(err, "Failed to check VM management type")
+		return "", err
+	}
+
+	if vmManagementType == ManagedByAvSet {
+		return ss.availabilitySet.GetPlatformFaultDomainByNodeName(ctx, name)
+	}
+	if vmManagementType == ManagedByVmssFlex {
+		return ss.flexScaleSet.GetPlatformFaultDomainByNodeName(ctx, name)
+	}
+
+	vm, err := ss.getVmssVM(ctx, name, azcache.CacheReadTypeUnsafe)
+	if err != nil {
+		return "", err
+	}
+
+	if vm.IsVirtualMachineScaleSetVM() &&
+		vm.AsVirtualMachineScaleSetVM().Properties.InstanceView != nil &&
+		vm.AsVirtualMachineScaleSetVM().Properties.InstanceView.PlatformFaultDomain != nil {
+		return strconv.Itoa(int(*vm.AsVirtualMachineScaleSetVM().Properties.InstanceView.PlatformFaultDomain)), nil
+	}
+	return "0", nil
 }
 
 // GetPrimaryVMSetName returns the VM set name depending on the configured vmType.

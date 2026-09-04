@@ -961,6 +961,45 @@ func (c *MockVMSetGetZoneByNodeNameCall) DoAndReturn(f func(context.Context, str
 	return c
 }
 
+// GetPlatformFaultDomainByNodeName mocks base method.
+func (m *MockVMSet) GetPlatformFaultDomainByNodeName(ctx context.Context, name string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPlatformFaultDomainByNodeName", ctx, name)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPlatformFaultDomainByNodeName indicates an expected call of GetPlatformFaultDomainByNodeName.
+func (mr *MockVMSetMockRecorder) GetPlatformFaultDomainByNodeName(ctx, name any) *MockVMSetGetPlatformFaultDomainByNodeNameCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPlatformFaultDomainByNodeName", reflect.TypeOf((*MockVMSet)(nil).GetPlatformFaultDomainByNodeName), ctx, name)
+	return &MockVMSetGetPlatformFaultDomainByNodeNameCall{Call: call}
+}
+
+// MockVMSetGetPlatformFaultDomainByNodeNameCall wrap *gomock.Call
+type MockVMSetGetPlatformFaultDomainByNodeNameCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockVMSetGetPlatformFaultDomainByNodeNameCall) Return(arg0 string, arg1 error) *MockVMSetGetPlatformFaultDomainByNodeNameCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockVMSetGetPlatformFaultDomainByNodeNameCall) Do(f func(context.Context, string) (string, error)) *MockVMSetGetPlatformFaultDomainByNodeNameCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockVMSetGetPlatformFaultDomainByNodeNameCall) DoAndReturn(f func(context.Context, string) (string, error)) *MockVMSetGetPlatformFaultDomainByNodeNameCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // RefreshCaches mocks base method.
 func (m *MockVMSet) RefreshCaches() error {
 	m.ctrl.T.Helper()

@@ -27,6 +27,8 @@ const (
 	// VMTypeStandard is the vmas vm type
 	VMTypeStandard = "standard"
 	// VMTypeVmssFlex is the vmssflex vm type
+	// FaultDomainLabel is the node label used to identify the fault domain of a VM
+	FaultDomainLabel = "topology.kubernetes.azure.com/fault-domain"
 	VMTypeVmssFlex = "vmssflex"
 
 	// ExternalResourceGroupLabel is the label representing the node is in a different
