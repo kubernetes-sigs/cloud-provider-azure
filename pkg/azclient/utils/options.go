@@ -25,7 +25,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/tracing"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/retryrepectthrottled"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/retryrespectthrottled"
 )
 
 var TracingProvider tracing.Provider
@@ -48,10 +48,10 @@ func GetDefaultAzCoreClientOption() policy.ClientOptions {
 			RetryDelay:    DefaultRetryDelay,
 			MaxRetryDelay: DefaultMaxRetryDelay,
 			MaxRetries:    DefaultMaxRetries,
-			StatusCodes:   retryrepectthrottled.GetRetriableStatusCode(),
+			StatusCodes:   retryrespectthrottled.GetRetriableStatusCode(),
 		},
 		PerRetryPolicies: []policy.Policy{
-			retryrepectthrottled.NewThrottlingPolicy(),
+			retryrespectthrottled.NewThrottlingPolicy(),
 		},
 		Transport: &http.Client{
 			Transport: DefaultTransport,
