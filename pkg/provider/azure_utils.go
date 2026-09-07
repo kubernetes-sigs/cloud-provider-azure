@@ -138,8 +138,9 @@ func parseTags(tags string, tagsMap map[string]string) (map[string]*string, []st
 }
 
 func findKeyInMapCaseInsensitive(targetMap map[string]*string, key string) (bool, string) {
+	keyLower := strings.ToLower(key)
 	for k := range targetMap {
-		if strings.EqualFold(k, key) {
+		if strings.ToLower(k) == keyLower {
 			return true, k
 		}
 	}
