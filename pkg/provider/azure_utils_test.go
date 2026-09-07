@@ -178,6 +178,20 @@ func TestReconcileTags(t *testing.T) {
 			},
 			expectedChanged: false,
 		},
+		{
+			description: "reconcileTags should preserve distinct Unicode characters",
+			currentTagsOnResource: map[string]*string{
+				"S": ptr.To("first"),
+			},
+			newTags: map[string]*string{
+				"ſ": ptr.To("second"),
+			},
+			expectedTags: map[string]*string{
+				"S": ptr.To("first"),
+				"ſ": ptr.To("second"),
+			},
+			expectedChanged: true,
+		},
 	} {
 		t.Run(testCase.description, func(t *testing.T) {
 			cloud := &Cloud{}
@@ -331,6 +345,33 @@ func TestParseTags(t *testing.T) {
 			assert.Equal(t, testCase.expectedDroppedKeys, droppedKeys)
 		})
 	}
+}
+
+func TestFindKeyInMapCaseInsensitive(t *testing.T) {
+	targetMap := map[string]*string{
+		"Foo": ptr.To("1"),
+		"S":   ptr.To("2"),
+	}
+
+	found, k := findKeyInMapCaseInsensitive(targetMap, "foo")
+	assert.True(t, found)
+	assert.Equal(t, "Foo", k)
+
+	found, k = findKeyInMapCaseInsensitive(targetMap, "FOO")
+	assert.True(t, found)
+	assert.Equal(t, "Foo", k)
+
+	found, k = findKeyInMapCaseInsensitive(targetMap, "s")
+	assert.True(t, found)
+	assert.Equal(t, "S", k)
+
+	found, k = findKeyInMapCaseInsensitive(targetMap, "ſ")
+	assert.False(t, found)
+	assert.Equal(t, "", k)
+
+	found, k = findKeyInMapCaseInsensitive(targetMap, "bar")
+	assert.False(t, found)
+	assert.Equal(t, "", k)
 }
 
 func TestGetNodePrivateIPAddress(t *testing.T) {
