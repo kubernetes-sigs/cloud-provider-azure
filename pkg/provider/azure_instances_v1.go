@@ -103,6 +103,10 @@ func (az *Cloud) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.N
 			return nil, fmt.Errorf("no credentials provided for Azure cloud provider")
 		}
 
+		if metadata.LBMetadataError != nil {
+			return nil, metadata.LBMetadataError
+		}
+
 		return az.getLocalInstanceNodeAddresses(metadata.Network.Interface, string(name))
 	}
 

@@ -88,8 +88,9 @@ type ComputeMetadata struct {
 
 // InstanceMetadata represents instance information.
 type InstanceMetadata struct {
-	Compute *ComputeMetadata `json:"compute,omitempty"`
-	Network *NetworkMetadata `json:"network,omitempty"`
+	Compute         *ComputeMetadata `json:"compute,omitempty"`
+	Network         *NetworkMetadata `json:"network,omitempty"`
+	LBMetadataError error            `json:"-"`
 }
 
 // PublicIPMetadata represents the public IP metadata.
@@ -201,13 +202,10 @@ func (ims *InstanceMetadataService) getMetadata(ctx context.Context, key string)
 		loadBalancerMetadata, err := ims.getLoadBalancerMetadata()
 		if err != nil {
 			if isTransientIMDSError(err) {
-				// Propagate transient failures so teh caller retries instead of
-				// publishing node metadata without the load balancer public IP.
-				// Returning instance metadata here would transiently drop the
-				// node's ExternalIP until the next successful reconcile
-				return nil, fmt.Errorf("failed to get loadbalancer metadata: %w", err)
+				instanceMetadata.LBMetadataError = fmt.Errorf("failed to get loadbalancer metadata: %w", err)
+				return instanceMetadata, nil
 			}
-			// Benigng: loadbalancer metadata is not available when the VM is not in
+			// Benign: loadbalancer metadata is not available when the VM is not in
 			// a standard LoadBalancer backend address pool. Proceed with instance
 			// metadata as before.
 			logger.V(4).Info("Warning: failed to get loadbalancer metadata", "error", err)
