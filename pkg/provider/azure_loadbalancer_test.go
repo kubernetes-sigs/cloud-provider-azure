@@ -42,6 +42,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/record"
@@ -50,14 +52,17 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/backendaddresspoolclient/mock_backendaddresspoolclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	providererrors "sigs.k8s.io/cloud-provider-azure/pkg/provider/errors"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/iputil"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -801,6 +806,176 @@ func TestEnsureLoadBalancerDeleted(t *testing.T) {
 
 			err = az.EnsureLoadBalancerDeleted(context.TODO(), testClusterName, &service)
 			assert.Nil(t, err, "TestCase[%d]: %s", i, c.desc)
+		})
+	}
+}
+
+// Deleting a floating-IP-disabled deny-all Service removes its own backend node IPs from the
+// deny-all rule, so a Service sharing those nodes needs them put back. Under multiple standard
+// load balancers, finding those nodes means knowing which load balancer the other Service is on.
+func TestEnsureLoadBalancerDeletedKeepsDenyAllDestinationsOnMultipleStandardLoadBalancers(t *testing.T) {
+	const (
+		clusterName = "kubernetes"
+		nodeName    = "node1"
+		nodeIP      = "10.0.0.1"
+	)
+
+	for _, tt := range []struct {
+		name           string
+		placementKnown bool
+		internal       bool
+	}{
+		// The first two differ only by the recorded placement, so a failure in both points elsewhere.
+		{name: "when the placement is already recorded", placementKnown: true},
+		{name: "on the first delete after a restart", placementKnown: false},
+		// The load balancer name carries a suffix that the configuration name does not.
+		{name: "on the first delete after a restart, on an internal load balancer", internal: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			az := GetTestCloud(ctrl)
+			az.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+			az.LoadBalancerBackendPool = newBackendPoolTypeNodeIP(az)
+			az.MultipleStandardLoadBalancerConfigurations = []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: clusterName},
+			}
+			az.nodePrivateIPs = map[string]*utilsets.IgnoreCaseSet{nodeName: utilsets.NewString(nodeIP)}
+			az.nodePrivateIPToNodeNameMap = map[string]string{nodeIP: nodeName}
+
+			annotations := map[string]string{
+				consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges: "true",
+				consts.ServiceAnnotationDisableLoadBalancerFloatingIP:         "true",
+				consts.ServiceAnnotationLoadBalancerConfigurations:            clusterName,
+			}
+			lbName := clusterName
+			if tt.internal {
+				annotations[consts.ServiceAnnotationLoadBalancerInternal] = "true"
+				lbName += consts.InternalLoadBalancerNameSuffix
+			}
+
+			newService := func(name string, port int32) *v1.Service {
+				return &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:        name,
+						Namespace:   "default",
+						UID:         types.UID("uid-" + name),
+						Annotations: annotations,
+					},
+					Spec: v1.ServiceSpec{
+						Type:                     v1.ServiceTypeLoadBalancer,
+						LoadBalancerSourceRanges: []string{"198.51.100.0/24"},
+						Ports: []v1.ServicePort{{
+							Name:     "http",
+							Port:     port,
+							Protocol: v1.ProtocolTCP,
+							NodePort: 30000 + port,
+						}},
+					},
+				}
+			}
+			deleted := newService("svc-a", 18080)
+			survivor := newService("svc-b", 18081)
+
+			if tt.placementKnown {
+				az.MultipleStandardLoadBalancerConfigurations[0].ActiveServices =
+					utilsets.NewString("default/svc-a", "default/svc-b")
+				az.MultipleStandardLoadBalancerConfigurations[0].ActiveNodes = utilsets.NewString(nodeName)
+				az.multipleStandardLoadBalancerConfigurationsSynced = true
+			}
+
+			node := &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{Name: nodeName},
+				Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: nodeIP}}},
+			}
+			kubeClient := fake.NewSimpleClientset([]runtime.Object{deleted, survivor, node}...)
+			az.KubeClient = kubeClient
+			informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
+			az.serviceLister = informerFactory.Core().V1().Services().Lister()
+			az.nodeLister = informerFactory.Core().V1().Nodes().Lister()
+			informerFactory.Start(wait.NeverStop)
+			informerFactory.WaitForCacheSync(wait.NeverStop)
+
+			// One load balancer and one node, so both Services need that node's IP on the deny-all rule.
+			loadBalancer := &armnetwork.LoadBalancer{
+				Name:     ptr.To(lbName),
+				Location: ptr.To(az.Location),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{Name: ptr.To(az.getLoadBalancerRuleName(deleted, v1.ProtocolTCP, 18080, false))},
+						{Name: ptr.To(az.getLoadBalancerRuleName(survivor, v1.ProtocolTCP, 18081, false))},
+					},
+					BackendAddressPools: []*armnetwork.BackendAddressPool{{
+						Name: ptr.To(clusterName),
+						Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+							LoadBalancerBackendAddresses: []*armnetwork.LoadBalancerBackendAddress{{
+								Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{IPAddress: ptr.To(nodeIP)},
+							}},
+						},
+					}},
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{},
+				},
+			}
+
+			denyAllRule := &armnetwork.SecurityRule{
+				Name: ptr.To(securitygroup.GenerateDenyAllSecurityRuleName(iputil.IPv4)),
+				Properties: &armnetwork.SecurityRulePropertiesFormat{
+					Protocol:                   ptr.To(armnetwork.SecurityRuleProtocolAsterisk),
+					Access:                     ptr.To(armnetwork.SecurityRuleAccessDeny),
+					Direction:                  ptr.To(armnetwork.SecurityRuleDirectionInbound),
+					Priority:                   ptr.To(int32(4095)),
+					SourceAddressPrefix:        ptr.To("*"),
+					SourcePortRange:            ptr.To("*"),
+					DestinationPortRange:       ptr.To("*"),
+					DestinationAddressPrefixes: []*string{ptr.To(nodeIP)},
+				},
+			}
+			securityGroup := &armnetwork.SecurityGroup{
+				Name: ptr.To(az.SecurityGroupName),
+				Properties: &armnetwork.SecurityGroupPropertiesFormat{
+					SecurityRules: []*armnetwork.SecurityRule{denyAllRule},
+				},
+			}
+
+			securityGroupClient := az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+			securityGroupClient.EXPECT().
+				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
+				Return(securityGroup, nil).
+				Times(1)
+			securityGroupClient.EXPECT().
+				CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any()).
+				DoAndReturn(func(
+					_ context.Context,
+					_, _ string,
+					properties armnetwork.SecurityGroup,
+				) (*armnetwork.SecurityGroup, error) {
+					var denyAllDestinations []string
+					for _, rule := range properties.Properties.SecurityRules {
+						if ptr.Deref(rule.Name, "") != securitygroup.GenerateDenyAllSecurityRuleName(iputil.IPv4) {
+							continue
+						}
+						denyAllDestinations = append(denyAllDestinations, securitygroup.ListDestinationPrefixes(rule)...)
+					}
+					assert.Contains(t, denyAllDestinations, nodeIP,
+						"svc-b is backed by %s and still denies all, so the rule must keep it", nodeIP)
+					return nil, nil
+				}).
+				Times(1)
+
+			loadBalancerClient := az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+			loadBalancerClient.EXPECT().List(gomock.Any(), gomock.Any()).
+				Return([]*armnetwork.LoadBalancer{loadBalancer}, nil).AnyTimes()
+			loadBalancerClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(loadBalancer, nil).Times(1)
+			loadBalancerClient.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+
+			publicIPClient := az.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
+			publicIPClient.EXPECT().List(gomock.Any(), gomock.Any()).
+				Return([]*armnetwork.PublicIPAddress{}, nil).Times(1)
+
+			err := az.EnsureLoadBalancerDeleted(context.TODO(), clusterName, deleted)
+			assert.NoError(t, err)
 		})
 	}
 }
@@ -12144,6 +12319,7 @@ func TestReconcileMultipleStandardLoadBalancerConfigurations(t *testing.T) {
 		noPrimaryConfig        bool
 		nodes                  []*v1.Node
 		expectedActiveServices map[string]*utilsets.IgnoreCaseSet
+		expectedActiveNodes    map[string]*utilsets.IgnoreCaseSet
 		expectedErr            error
 	}{
 		{
@@ -12152,6 +12328,19 @@ func TestReconcileMultipleStandardLoadBalancerConfigurations(t *testing.T) {
 			expectedActiveServices: map[string]*utilsets.IgnoreCaseSet{
 				"kubernetes": utilsets.NewString("default/lbsvconkubernetes"),
 				"lb1":        utilsets.NewString("ns1/lbsvconlb1"),
+			},
+		},
+		{
+			// The delete path passes no node list, which must not read as the cluster having no nodes.
+			description:   "should record the services and the nodes when there is no node list",
+			useMultipleLB: true,
+			expectedActiveServices: map[string]*utilsets.IgnoreCaseSet{
+				"kubernetes": utilsets.NewString("default/lbsvconkubernetes"),
+				"lb1":        utilsets.NewString("ns1/lbsvconlb1"),
+			},
+			expectedActiveNodes: map[string]*utilsets.IgnoreCaseSet{
+				"kubernetes": utilsets.NewString("node1"),
+				"lb1":        utilsets.NewString("node2"),
 			},
 		},
 		{
@@ -12166,6 +12355,7 @@ func TestReconcileMultipleStandardLoadBalancerConfigurations(t *testing.T) {
 	} {
 		az := GetTestCloud(ctrl)
 		az.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+		az.nodePrivateIPToNodeNameMap = map[string]string{"10.0.0.1": "node1", "10.0.0.2": "node2"}
 
 		t.Run(tc.description, func(t *testing.T) {
 			existingSvcs := []v1.Service{
@@ -12209,6 +12399,16 @@ func TestReconcileMultipleStandardLoadBalancerConfigurations(t *testing.T) {
 
 			lbSvcOnKubernetesRuleName := az.getLoadBalancerRuleName(&existingSvcs[1], v1.ProtocolTCP, 80, false)
 			lbSvcOnLB1RuleName := az.getLoadBalancerRuleName(&existingSvcs[2], v1.ProtocolTCP, 80, false)
+			backendPool := func(ip string) []*armnetwork.BackendAddressPool {
+				return []*armnetwork.BackendAddressPool{{
+					Name: ptr.To("kubernetes"),
+					Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+						LoadBalancerBackendAddresses: []*armnetwork.LoadBalancerBackendAddress{{
+							Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{IPAddress: ptr.To(ip)},
+						}},
+					},
+				}}
+			}
 			existingLBs := []*armnetwork.LoadBalancer{
 				{
 					Name: ptr.To("kubernetes-internal"),
@@ -12216,6 +12416,7 @@ func TestReconcileMultipleStandardLoadBalancerConfigurations(t *testing.T) {
 						LoadBalancingRules: []*armnetwork.LoadBalancingRule{
 							{Name: &lbSvcOnKubernetesRuleName},
 						},
+						BackendAddressPools: backendPool("10.0.0.1"),
 					},
 				},
 				{
@@ -12224,6 +12425,7 @@ func TestReconcileMultipleStandardLoadBalancerConfigurations(t *testing.T) {
 						LoadBalancingRules: []*armnetwork.LoadBalancingRule{
 							{Name: &lbSvcOnLB1RuleName},
 						},
+						BackendAddressPools: backendPool("10.0.0.2"),
 					},
 				},
 				{
@@ -12250,11 +12452,16 @@ func TestReconcileMultipleStandardLoadBalancerConfigurations(t *testing.T) {
 			assert.Equal(t, err, tc.expectedErr)
 
 			activeServices := make(map[string]*utilsets.IgnoreCaseSet)
+			activeNodes := make(map[string]*utilsets.IgnoreCaseSet)
 			for _, multiSLBConfig := range az.MultipleStandardLoadBalancerConfigurations {
 				activeServices[multiSLBConfig.Name] = multiSLBConfig.ActiveServices
+				activeNodes[multiSLBConfig.Name] = multiSLBConfig.ActiveNodes
 			}
 			for lbConfigName, svcNames := range tc.expectedActiveServices {
 				assert.Equal(t, svcNames, activeServices[lbConfigName])
+			}
+			for lbConfigName, nodeNames := range tc.expectedActiveNodes {
+				assert.Equal(t, nodeNames.UnsortedList(), activeNodes[lbConfigName].UnsortedList(), "active nodes on %s", lbConfigName)
 			}
 		})
 	}
