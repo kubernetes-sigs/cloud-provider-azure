@@ -34,6 +34,6 @@ COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build \
     make bin/azure-cloud-controller-manager ENABLE_GIT_COMMAND=${ENABLE_GIT_COMMAND} ARCH=${ARCH}
 
-FROM gcr.io/distroless/base:latest@sha256:20dc7edae3f7efe09b934aca4b347b00bb4ae0f2864b6131771687ae6d54891f
+FROM gcr.io/distroless/base:latest@sha256:9ef50bca108839d5986e4d84b7f7b2d79024c9293b7c35b162c6c55485bd5868
 COPY --from=builder /go/src/sigs.k8s.io/cloud-provider-azure/bin/azure-cloud-controller-manager /usr/local/bin/cloud-controller-manager
 ENTRYPOINT [ "/usr/local/bin/cloud-controller-manager" ]
