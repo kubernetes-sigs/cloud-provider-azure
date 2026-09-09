@@ -16,7 +16,7 @@ or acting on a row.
 | Column | Purpose |
 |--------|---------|
 | **Priority** | Gap-numbered (10, 20, 30…). Within a stage, the engine acts on matched rows low→high. New patterns slot into gaps without renumbering. |
-| **Stage** | `guard` (metadata/diff/comment-history only) or `act` (CI/log/artifact-based action). After the guard stage, the engine processes failed required jobs one at a time instead of classifying every failure up front. |
+| **Stage** | `guard` (metadata/diff/comment/commit-history only) or `act` (CI/log/artifact-based action). After the guard stage, the engine processes failed required jobs one at a time instead of classifying every failure up front. |
 | **Pattern** | Short human name. |
 | **Signal** | Compact routing hint: the diff marker, failing job name, or log fingerprint. A guard signal must be computable before CI/log I/O. |
 | **Autonomy** | `close` / `auto-fix` / `escalate` / `bot-rebase`. Governs whether the agent acts alone (see Autonomy values below). |
@@ -35,11 +35,14 @@ or acting on a row.
   final output. Used both as a guard when the automated retry budget is spent
   (Retry budget exhausted) and as an act-stage flag when a blocker needs a
   human policy or toolchain decision (Toolchain / SDK / policy).
-- `bot-rebase` — post a bot directive (`@dependabot rebase`) that regenerates
-  the branch, then stop; distinct from `escalate` because it directs another
-  bot to regenerate the branch rather than handing the PR to a human reviewer.
+- `bot-rebase` — post the commit-history-selected bot directive
+  (`@dependabot rebase` or `@dependabot recreate`) to refresh the branch, then
+  stop; distinct from `escalate` because it directs Dependabot to refresh the
+  branch rather than handing the PR to a human reviewer. The
+  [Needs rebase details](guard-patterns.md#details-needs-rebase) own selection
+  and the manual-edit overwrite policy.
   The needs-rebase row uses this as a guard: a conflicting branch is detected
-  from metadata and handed to Dependabot before any CI/log I/O, since a rebase
+  from metadata and handed to Dependabot before any CI/log I/O, since a refresh
   invalidates a stale CI run anyway. The directive consumes one shared unblock
   attempt and carries its attempt stamp in the same comment.
 

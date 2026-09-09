@@ -40,15 +40,15 @@ gh pr view <pr> --json number,title,headRefName,headRepositoryOwner,headRefOid,b
 ```
 
 When each guard row is reached, its linked Details fetch any extra allowed
-input, such as the `go.mod` diff or PR comment history, in priority order.
+input, such as the `go.mod` diff or PR comment/commit history, in priority order.
 
 Then walk the catalog as an explicit staged algorithm:
 
-> **Guard stage — metadata/diff/comment-history only.** Before running
+> **Guard stage — metadata/diff/comment/commit-history only.** Before running
 > `gh pr checks`, reading `statusCheckRollup`, or fetching any Prow log,
 > evaluate every guard row whose Signal is computable from PR metadata, the
-> `go.mod` diff, and PR comment history alone. If a guard row matches and is
-> marked Stop, follow its linked Details action
+> `go.mod` diff, and PR comment/commit history alone. If a guard row matches
+> and is marked Stop, follow its linked Details action
 > (e.g. `/close`) and **end triage immediately** — do not inspect CI, sync
 > modules, retest, `/lgtm`, or report no-action.
 >
@@ -95,9 +95,9 @@ or overwrite unrelated files.
   compatibility issue, commit SHA, changed files, and validation result.
 - Use specific staging commands, never `git add .`.
 - Push only the current task's files.
-- Resolve guard rows from PR metadata, the `go.mod` diff, and PR comment history
-  before any CI or log I/O. When a guard row marked Stop matches, follow its
-  linked Details action and end triage immediately — do not inspect CI, sync
+- Resolve guard rows from PR metadata, the `go.mod` diff, and PR comment/commit
+  history before any CI or log I/O. When a guard row marked Stop matches,
+  follow its linked Details action and end triage immediately — do not inspect CI, sync
   modules, retest, comment `/lgtm`, or report that no action is needed.
 - After the guard stage, handle failed required jobs one by one. For each failed
   job, walk act rows in ascending Priority and take a row's linked Details
@@ -110,10 +110,11 @@ or overwrite unrelated files.
 - One retry-budgeted automated unblock round consumes one attempt from one
   PR-comment-backed counter. Public-IP quota e2e reruns are unbudgeted: a
   quota-only triage creates no attempt stamp, while a mixed triage summarizes
-  only its budgeted actions. Read the counter once before any rebase or CI/log
-  I/O and reuse it throughout the triage. Rebase and budgeted act-stage paths
-  must never create two attempt stamps in one triage. When the retry budget is
-  exhausted, mutate nothing and escalate for human review. Do not invent a
+  only its budgeted actions. Read the counter once before any rebase/recreate
+  directive or CI/log I/O and reuse it throughout the triage. Guard directives
+  and budgeted act-stage paths must never create two attempt stamps in one
+  triage. When the retry budget is exhausted, mutate nothing and escalate for
+  human review. Do not invent a
   second counter; the guard and shared-action references own the policy and
   write mechanics.
 - A row marked Stop ends triage after it is handled.

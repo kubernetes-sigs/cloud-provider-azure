@@ -64,9 +64,9 @@ stamp.
 
 The skill keeps no state between runs, so the attempt count lives in the PR's
 own comment history. Count retry-budgeted triage **rounds**, not actions or
-comments: a rebase directive is one attempt, while one act-stage triage may push
-a module-sync fix and rerun three budgeted e2e jobs but is still one attempt
-with one summary comment.
+comments: a rebase or recreate directive is one attempt, while one act-stage
+triage may push a module-sync fix and rerun three budgeted e2e jobs but is still
+one attempt with one summary comment.
 
 Compute the next attempt number once, before taking any retry-budgeted automated
 unblock action this round:
@@ -78,16 +78,31 @@ gh pr view <pr> --json comments \
 ```
 
 Let `N` be that maximum. This round's attempt number is `N + 1`. For a
-guard-stage rebase, ask Dependabot to rebase the branch instead of manually
-rewriting the generated PR branch. Put `@dependabot rebase` on the first line,
-explain why it is needed, and put `Unblock attempt: <N+1>` in the same comment
-so the action and its accounting are atomic:
+guard-stage refresh, use the directive selected by
+[Needs rebase](guard-patterns.md#details-needs-rebase) from commit history.
+Put that directive on the first line, explain why it is needed, and put
+`Unblock attempt: <N+1>` in the same comment so the action and its accounting
+are atomic. Choose only one of these forms.
+
+All commits from Dependabot:
 
 ```bash
 gh pr comment <pr> --body-file - <<'EOF'
 @dependabot rebase
 
-Reason: the PR is in a needs-rebase or conflicting state and must be rebased before Tide can merge it.
+Reason: the PR needs a refresh before Tide can merge it, and all commits are from Dependabot.
+Unblock attempt: <N+1>
+EOF
+```
+
+Manual edits present:
+
+```bash
+gh pr comment <pr> --body-file - <<'EOF'
+@dependabot recreate
+
+Reason: the PR needs a refresh and contains manual edits, so Dependabot cannot rebase it. Recreate it from scratch, discarding those edits.
+Manual commits: <commit SHAs and authors/committers establishing manual edits>
 Unblock attempt: <N+1>
 EOF
 ```
@@ -110,9 +125,9 @@ Post no summary when the triage takes no retry-budgeted act-stage non-final
 action. In particular, one or more
 [Public-IP quota e2e](act-patterns.md#details-public-ip-quota-e2e) reruns alone
 do not consume an attempt; in a mixed triage, summarize only the budgeted
-actions. A rebase directive causes no separate summary because its comment
-already carries the attempt stamp. Terminal actions do not cause a summary or
-consume an attempt: `/close` (K8s guard), the `escalate`
+actions. A rebase or recreate directive causes no separate summary because its
+comment already carries the attempt stamp. Terminal actions do not cause a
+summary or consume an attempt: `/close` (K8s guard), the `escalate`
 [Toolchain / SDK / policy](act-patterns.md#details-toolchain--sdk--policy) and
 [Retry budget exhausted](guard-patterns.md#details-retry-budget-exhausted)
 handoffs, and the

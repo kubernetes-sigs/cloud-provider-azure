@@ -71,8 +71,8 @@ times without success, a fourth automated attempt is unlikely to help, so the
 PR goes to human reviewers instead of burning more CI on the same failing jobs.
 
 The count comes from the one `Unblock attempt: N` stamp that each completed
-retry-budgeted triage leaves on the PR: the rebase directive carries its own
-stamp, while budgeted act-stage actions use one summary (see
+retry-budgeted triage leaves on the PR: the rebase/recreate directive carries
+its own stamp, while budgeted act-stage actions use one summary (see
 [Attempt stamp](shared-actions.md#details-attempt-stamp)). Public-IP quota
 reruns do not write this stamp. Read the highest stamp already present:
 
@@ -90,8 +90,8 @@ Let `N` be that maximum. The budget is three attempts, so:
   [Attempt stamp](shared-actions.md#details-attempt-stamp) rule. Quota-only
   reruns post no summary and leave `N` unchanged.
 - `N >= 3` — the budget is spent (a fourth attempt would exceed three). Stop
-  working the PR: make no automated change, including no rebase directive, and
-  report it as needing human review in the final output.
+  working the PR: make no automated change, including no rebase/recreate
+  directive, and report it as needing human review in the final output.
 
 Escalation makes no change to the PR — no comment, no checks, no module sync, no
 push, no `/lgtm`. Because it posts nothing, it leaves no `Unblock attempt:` stamp
@@ -107,17 +107,57 @@ this report.
 Evaluate this guard from PR metadata after the
 [Retry budget exhausted](#details-retry-budget-exhausted) guard and before
 reading CI status or any Prow log. If the PR carries the `needs-rebase` label or
-`gh pr view` reports `mergeable` = `CONFLICTING`, the branch is out of date and
-`@dependabot rebase` will regenerate it — so classifying CI, syncing modules, or
-pushing a local fix first would be wasted work against a stale branch.
+`gh pr view` reports `mergeable` = `CONFLICTING`, the branch needs a refresh —
+so classifying CI, syncing modules, or pushing a local fix first would be
+wasted work against a stale branch. If neither signal is present, continue
+triage without fetching commit history or requesting a refresh.
 
-Reuse `N`, the highest attempt stamp read by the retry-budget guard. Ask
-Dependabot to rebase the branch instead of manually rewriting the generated PR
-branch. Follow the guard-stage rebase form in the shared
+Only after this guard matches and the retry-budget guard has passed, inspect
+the current PR's complete commit history (all pages, not just the latest
+commit). Commit attribution is guard-stage metadata, not CI/log I/O:
+
+```bash
+gh api 'repos/kubernetes-sigs/cloud-provider-azure/pulls/<pr>' \
+  --jq '{head: .head.sha, commitCount: .commits}'
+gh api --paginate 'repos/kubernetes-sigs/cloud-provider-azure/pulls/<pr>/commits?per_page=100' \
+  --jq '.[] | {sha, author: .author.login, committer: .committer.login}'
+```
+
+Before declaring the history complete, check that the distinct returned SHA
+count equals `commitCount` and the reported head and final commit SHA match
+the initial `headRefOid`. Pagination alone does not prove completeness; a
+truncated list or changed head cannot establish a Dependabot-only history.
+
+Choose exactly one directive:
+
+- **Any manual commit/edit:** use `@dependabot recreate` directly. A commit
+  authored by anyone other than `dependabot[bot]`, or committed by an actor
+  other than `dependabot[bot]` or GitHub's `web-flow`, is evidence of a manual
+  edit. This includes module-sync fixes from a previous unblock round. Do not
+  first try `@dependabot rebase`, which cannot handle manual edits.
+- **All commits from Dependabot:** use `@dependabot rebase` only when every
+  commit is attributed to `dependabot[bot]`. A Dependabot-authored commit may
+  have `web-flow` as its committer for GitHub signing; that alone is not a
+  manual edit.
+- **Unknown attribution or incomplete history:** if no manual edit is proven
+  and the history cannot establish that all commits are from Dependabot, stop
+  and report the missing evidence. A null login is unknown, not proof of a
+  manual edit; do not infer authorship from the PR author or commit message.
+
+Recreation intentionally discards manual edits and regenerates the Dependabot
+branch from scratch. This is the skill's selected policy for manually edited
+PRs that need a refresh; state that consequence in the request and final
+report. Do not manually replay the discarded edits in this triage. If the
+caller requires preserving those edits, stop for that PR instead of recreating.
+
+Reuse `N`, the highest attempt stamp read by the retry-budget guard. Follow the
+selected guard-directive form in the shared
 [Attempt stamp](shared-actions.md#details-attempt-stamp) rule so the directive
-and its `N + 1` accounting remain atomic.
+and its `N + 1` accounting remain atomic. Rebase and recreate share the same
+counter; recreation does not reset or bypass an exhausted retry budget.
 
 After posting the comment, stop triage for this PR. Do not inspect CI, sync
-modules, retest, comment `/lgtm`, or report no-action; Dependabot will push a
-rebased branch and a fresh CI run to triage next time. The rebase directive is
-one automated unblock attempt; do not post a separate attempt-summary comment.
+modules, retest, comment `/lgtm`, or report no-action. Report the refresh as
+requested, not completed, until Dependabot actually updates the branch. Either
+directive consumes one automated unblock attempt; do not post a separate
+attempt-summary comment or a second directive in this triage.
