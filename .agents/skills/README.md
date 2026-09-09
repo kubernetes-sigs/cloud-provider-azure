@@ -48,7 +48,9 @@ level small:
 - `sync-go-modules`: unblock `go-mod-consistency` by tidying and verifying all
   tracked Go modules, then refreshing the main module's `vendor/` tree
 - `unblock-dependabot-pr`: diagnose failed Dependabot PR CI, reuse the Go module
-  sync workflow, close Kubernetes minor-version bumps, retest Azure public-IP
+  sync workflow, close Kubernetes minor-version bumps, refresh conflicting
+  branches with rebase for Dependabot-only commits or recreate when manual
+  edits are present (discarding those edits), retest Azure public-IP
   quota e2e flakes without consuming the automated retry budget, add `/lgtm`
   when only Tide is pending, and escalate dependency/toolchain blockers for
   discussion
