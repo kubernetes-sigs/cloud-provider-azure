@@ -63,6 +63,7 @@ const (
 	ManagedByVmssFlex     VMManagementType = "ManagedByVmssFlex"
 	ManagedByAvSet        VMManagementType = "ManagedByAvSet"
 	ManagedByUnknownVMSet VMManagementType = "ManagedByUnknownVMSet"
+	ManagedByNoVM         VMManagementType = "ManagedByNoVM"
 )
 
 func (ss *ScaleSet) newVMSSCache() (azcache.Resource, error) {
@@ -539,6 +540,9 @@ func (ss *ScaleSet) getVMManagementTypeByIPConfigurationID(ctx context.Context, 
 	if err != nil {
 		return ManagedByUnknownVMSet, fmt.Errorf("failed to get vm name by ip config ID %s: %w", ipConfigurationID, err)
 	}
+	if vmName == "" {
+		return ManagedByNoVM, nil
+	}
 	if cachedAvSetVMs.Has(vmName) {
 		return ManagedByAvSet, nil
 	}
@@ -551,10 +555,14 @@ func (az *Cloud) GetVMNameByIPConfigurationName(ctx context.Context, nicResource
 	if rerr != nil {
 		return "", fmt.Errorf("failed to get interface of name %s: %w", nicName, rerr)
 	}
+	// Return empty when VM association is missing
 	if nic.Properties == nil || nic.Properties.VirtualMachine == nil || nic.Properties.VirtualMachine.ID == nil {
-		return "", fmt.Errorf("failed to get vm ID of nic %s", ptr.Deref(nic.Name, ""))
+		return "", nil
 	}
 	vmID := ptr.Deref(nic.Properties.VirtualMachine.ID, "")
+	if vmID == "" {
+		return "", nil
+	}
 	matches := vmIDRE.FindStringSubmatch(vmID)
 	if len(matches) != 2 {
 		return "", fmt.Errorf("invalid virtual machine ID %s", vmID)
