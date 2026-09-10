@@ -360,6 +360,80 @@ class FixImageCVEsTest(unittest.TestCase):
         ensure_command.assert_not_called()
         discover_modules.assert_not_called()
 
+    def test_apply_builder_targets_are_recorded_and_verified(self) -> None:
+        builder = "mcr.microsoft.com/oss/go/microsoft/golang:1.26.0-bookworm@sha256:" + "a" * 64
+        runtime = "gcr.io/distroless/base@sha256:" + "b" * 64
+        original = "FROM --platform=linux/amd64 golang:1.25.11 AS builder\nFROM distroless:old\n"
+        dockerfiles = ["Dockerfile", "cloud-node-manager.Dockerfile"]
+        for dry_run in (True, False):
+            with self.subTest(dry_run=dry_run), tempfile.TemporaryDirectory() as temp_dir:
+                repo = Path(temp_dir)
+                for name in dockerfiles:
+                    (repo / name).write_text(original, encoding="utf-8")
+                state = {
+                    "scan": {"module_root": ".", "dockerfile": "Dockerfile"},
+                    "plan": {
+                        "go_directive_actions": [{"module_root": ".", "target_version": "1.26.0"}],
+                        "base_image_actions": [{"dockerfile": "Dockerfile", "stage": "runtime"}],
+                    },
+                }
+                args = fix_image_cves.build_parser().parse_args(
+                    ["apply", "--repo", str(repo), "--base-image-target", runtime]
+                    + [arg for name in dockerfiles for arg in
+                       ("--base-image-target", f"{name}:builder={builder}")]
+                    + (["--dry-run"] if dry_run else [])
+                )
+                with mock.patch.object(fix_image_cves, "ensure_repo_root", return_value=repo), \
+                     mock.patch.object(fix_image_cves, "load_state", return_value=state), \
+                     mock.patch.object(fix_image_cves, "save_state") as save_state, \
+                     mock.patch.object(fix_image_cves, "git_status_paths",
+                                       side_effect=[set(), set(dockerfiles) | {"go.mod"}]), \
+                     mock.patch.object(fix_image_cves, "run") as run, \
+                     mock.patch("sys.stdout", io.StringIO()):
+                    self.assertEqual(fix_image_cves.command_apply(args), 0)
+                self.assertEqual(len(state["plan"]["base_image_actions"]), 1)
+                if dry_run:
+                    save_state.assert_not_called()
+                    run.assert_not_called()
+                    for name in dockerfiles:
+                        self.assertEqual((repo / name).read_text(), original)
+                else:
+                    applied = save_state.call_args.args[1]["apply"]
+                    self.assertEqual(set(applied["modified_files"]), set(dockerfiles) | {"go.mod"})
+                    results = {}
+                    self.assertTrue(fix_image_cves.verify_dockerfile_actions(repo, applied, results))
+                    self.assertEqual(len(results["dockerfile_checks"]), 3)
+                    for name in dockerfiles:
+                        lines = (repo / name).read_text().splitlines()
+                        self.assertEqual(lines[0], f"FROM --platform=linux/amd64 {builder} AS builder")
+                        self.assertEqual(lines[-1], f"FROM {runtime}" if name == "Dockerfile" else "FROM distroless:old")
+
+    def test_apply_rejects_invalid_builder_targets_before_mutation(self) -> None:
+        pinned = "golang:1.26.0@sha256:" + "a" * 64
+        original = "FROM golang:1.25.11 AS builder\nFROM distroless:old\n"
+        directive = {"module_root": ".", "target_version": "1.26.0"}
+        for directives, text, target, dirty, error in [
+            ([], original, pinned, set(), "planned Go directive"),
+            ([directive], "FROM distroless:old\n", pinned, set(), "named builder stage"),
+            ([directive], original, "golang:1.26.0", set(), "sha256 digest"),
+            ([directive], original, pinned, {"Dockerfile"}, "already dirty"),
+        ]:
+            with self.subTest(error=error), tempfile.TemporaryDirectory() as temp_dir:
+                repo = Path(temp_dir)
+                (repo / "Dockerfile").write_text(text, encoding="utf-8")
+                state = {"scan": {"module_root": "."}, "plan": {"go_directive_actions": directives}}
+                args = Namespace(repo=str(repo), base_image_target=[f"Dockerfile:builder={target}"], dry_run=False)
+                with mock.patch.object(fix_image_cves, "ensure_repo_root", return_value=repo), \
+                     mock.patch.object(fix_image_cves, "load_state", return_value=state), \
+                     mock.patch.object(fix_image_cves, "git_status_paths", return_value=dirty), \
+                     mock.patch.object(fix_image_cves, "run") as run, \
+                     mock.patch.object(fix_image_cves, "save_state") as save_state:
+                    with self.assertRaisesRegex(fix_image_cves.CommandError, error):
+                        fix_image_cves.command_apply(args)
+                run.assert_not_called()
+                save_state.assert_not_called()
+                self.assertEqual((repo / "Dockerfile").read_text(), text)
+
     def test_apply_retidies_root_after_vendor_license_update(self) -> None:
         state = {
             "scan": {"module_root": ".", "dockerfile": "Dockerfile"},

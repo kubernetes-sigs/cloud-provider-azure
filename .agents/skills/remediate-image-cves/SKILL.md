@@ -162,10 +162,13 @@ table order:
 2. Review every fresh plan. If it contains Go directive actions, select a
    locally installed Go version at least as new as the highest target before
    apply, and keep `GOTOOLCHAIN=local`. Apply Go-module and directive fixes
-   through `fix-image-cves`. For a fixable runtime base-image finding,
-   automatically replace only the digest of the existing registry, repository,
-   and tag. If remediation would change the image family or tag, stop for
-   review. Stop and report any other permission, judgment, or
+   through `fix-image-cves`, including compatible pinned Go builder targets
+   for every affected verification Dockerfile (both CCM and CNM for the root
+   module). Follow the fix skill's `Dockerfile:builder` target policy; keep
+   already-compatible builders unchanged. For a fixable runtime base-image
+   finding, automatically replace only the digest of the existing registry,
+   repository, and tag. If runtime base-image remediation would change the
+   image family or tag, stop for review. Stop and report any other permission, judgment, or
    conflict-resolution requirement instead of guessing.
 3. If the fresh plan contains no Go-module or base-image actions and no
    unsupported fixable findings, record its residual risks, run `clean`, and
