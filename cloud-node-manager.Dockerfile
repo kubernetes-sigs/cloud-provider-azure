@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=linux/amd64 mcr.microsoft.com/oss/go/microsoft/golang:1.25.11-bookworm@sha256:458de9482c2cbab0debe4d3f64fd10acca756f8b42d19f85e0b5535a5f65bfcd AS builder
+FROM --platform=linux/amd64 mcr.microsoft.com/oss/go/microsoft/golang:1.26.0-bookworm@sha256:9644874dae39c9ef28b59836911bc859c0a6c5c1c1d76429063f4b435275815b AS builder
 
 ARG ENABLE_GIT_COMMAND=true
 ARG ARCH=amd64
