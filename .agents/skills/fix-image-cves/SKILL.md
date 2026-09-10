@@ -36,6 +36,15 @@ the repository. If it reports a Go directive bump, select a locally installed
 Go version that is at least the planned target before continuing. Keep
 `GOTOOLCHAIN=local`; do not rely on an automatic toolchain download.
 
+Also bump older Go builder tags and digests in Dockerfiles that build the
+affected module; host Go selection does not change container Go. Keep the
+registry, repository, and OS variant; verify a stable builder Go version at
+least as new as the planned directive, target-platform support, and the digest.
+Pass each target to `apply` as
+`--base-image-target Dockerfile:builder=<image>@sha256:<digest>` (repeat for
+`cloud-node-manager.Dockerfile:builder` when the root module changes). The
+helper records and verifies these edits with the dependency changes.
+
 3. Review the plan before changing files. When base-image CVEs are in scope,
    decide the deterministic replacement image and digest yourself. Then apply
    the plan:
@@ -102,6 +111,8 @@ python3 <SKILL_DIR>/scripts/fix_image_cves.py clean
   never passed to `go mod edit`, `go list -m`, or module verification.
   `apply`, `verify`, and rescan also filter these pseudo-packages defensively
   when reading a plan saved by an older version of the skill.
+  Builder updates required by planned Go directive bumps are separate from
+  these report-only compiler CVEs.
 - OTHER findings with a non-empty `FixedVersion` are unsupported fixable
   findings. They require manual remediation and must not be treated as a clean
   verification result.

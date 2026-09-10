@@ -1229,8 +1229,24 @@ def command_apply(args: argparse.Namespace) -> int:
             state["plan"] = plan
             save_state(repo_root, state)
     go_directive_actions = plan.get("go_directive_actions") or []
-    base_actions = plan.get("base_image_actions") or []
+    base_actions = list(plan.get("base_image_actions") or [])
     targets = parse_base_image_targets(args.base_image_target or [])
+    allow_default_base_target = len(base_actions) <= 1
+    for key, image in targets.items():
+        if not key.endswith(":builder"):
+            continue
+        if not go_directive_actions:
+            raise CommandError("Builder image updates require planned Go directive actions.")
+        dockerfile = key.removesuffix(":builder")
+        stages = [
+            match for line in abs_from_repo(repo_root, dockerfile).read_text(encoding="utf-8").splitlines()
+            if (match := FROM_RE.match(line))
+        ]
+        if len(stages) < 2 or not re.fullmatch(r"\s+AS\s+builder\s*", stages[0]["suffix"], re.IGNORECASE):
+            raise CommandError(f"{dockerfile} must start with a named builder stage.")
+        if not re.fullmatch(r"[^\s]+@sha256:[0-9a-f]{64}", image):
+            raise CommandError("Builder image targets must include a sha256 digest.")
+        base_actions.append({"dockerfile": dockerfile, "stage": "builder"})
     preexisting_paths = git_status_paths(repo_root)
     module_roots = {action["module_root"] for action in go_actions}
     module_roots.update(action["module_root"] for action in go_directive_actions)
@@ -1325,7 +1341,6 @@ def command_apply(args: argparse.Namespace) -> int:
                 go_commands.append({"cwd": ".", "cmd": ["go", "mod", "verify"]})
 
     base_image_updates: list[dict[str, Any]] = []
-    allow_default_base_target = len(base_actions) <= 1
     for action in base_actions:
         selected = select_base_image_target(
             action,
