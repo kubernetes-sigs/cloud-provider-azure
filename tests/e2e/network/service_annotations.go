@@ -502,7 +502,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 
 			// The controller does not own this key, so it proves the annotation was applied at all.
 			expectedTagValue := "b"
-			tagsAnnotation := "a=" + expectedTagValue
+			tagsAnnotation := "a=" + expectedTagValue + ",A=should-be-dropped,S=first,ſ=second"
 			if setOnCreate {
 				tagsAnnotation += "," + reservedPairs
 			}
@@ -546,7 +546,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 					if err != nil {
 						return err
 					}
-					service.Annotations[consts.ServiceAnnotationAzurePIPTags] = "a=" + expectedTagValue + "," + reservedPairs
+					service.Annotations[consts.ServiceAnnotationAzurePIPTags] = "a=" + expectedTagValue + ",A=should-be-dropped,S=first,ſ=second," + reservedPairs
 					_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
 					return err
 				})
@@ -579,11 +579,16 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				}
 				Expect(ptr.Deref(pip.Tags[consts.ServiceTagKey], "")).To(Equal(ns.Name + "/" + serviceName))
 				Expect(ptr.Deref(pip.Tags["a"], "")).To(Equal(expectedTagValue))
+				Expect(ptr.Deref(pip.Tags["S"], "")).To(Equal("first"))
+				Expect(ptr.Deref(pip.Tags["ſ"], "")).To(Equal("second"))
 			}
 
-			By("Checking the warning event on the service")
+			By("Checking the warning events on the service")
 			err = utils.WaitForServiceEventAfter(cs, ns.Name, serviceName, v1.EventTypeWarning,
 				"IgnoredPIPTagKeys", consts.ServiceAnnotationAzurePIPTags, since)
+			Expect(err).NotTo(HaveOccurred())
+			err = utils.WaitForServiceEventAfter(cs, ns.Name, serviceName, v1.EventTypeWarning,
+				"DuplicatePIPTags", consts.ServiceAnnotationAzurePIPTags, since)
 			Expect(err).NotTo(HaveOccurred())
 		},
 		Entry("when set at service creation", true),
