@@ -22,7 +22,39 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	"github.com/stretchr/testify/assert"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
+
+func TestRuleHelper_NextRulePriority_IncludesMaximumPriority(t *testing.T) {
+	t.Parallel()
+
+	// Fill every priority except the maximum one, so the only slot left to find is
+	// consts.LoadBalancerMaximumPriority. IsManagedSecurityRule treats this priority as
+	// managed, so nextRulePriority must be able to allocate it too.
+	priorities := make(map[int32]string, consts.LoadBalancerMaximumPriority-consts.LoadBalancerMinimumPriority)
+	for p := int32(consts.LoadBalancerMinimumPriority); p < int32(consts.LoadBalancerMaximumPriority); p++ {
+		priorities[p] = "existing-rule"
+	}
+
+	t.Run("from start", func(t *testing.T) {
+		t.Parallel()
+		helper := &RuleHelper{priorities: priorities}
+
+		p, err := helper.nextRulePriority(rulePriorityPreferFromStart)
+		assert.NoError(t, err)
+		assert.Equal(t, int32(consts.LoadBalancerMaximumPriority), p)
+	})
+
+	t.Run("from end", func(t *testing.T) {
+		t.Parallel()
+		helper := &RuleHelper{priorities: priorities}
+
+		p, err := helper.nextRulePriority(rulePriorityPreferFromEnd)
+		assert.NoError(t, err)
+		assert.Equal(t, int32(consts.LoadBalancerMaximumPriority), p)
+	})
+}
 
 func TestSetDestinationPortRanges(t *testing.T) {
 	t.Parallel()

@@ -110,22 +110,24 @@ const (
 
 // nextRulePriority returns the next available priority for a new rule.
 // It takes a preference for whether to start from the beginning or end of the priority range.
+// The priority range is inclusive of both consts.LoadBalancerMinimumPriority and
+// consts.LoadBalancerMaximumPriority, matching the range considered managed by IsManagedSecurityRule.
 func (helper *RuleHelper) nextRulePriority(prefer rulePriorityPrefer) (int32, error) {
 	var (
-		init, end = consts.LoadBalancerMinimumPriority, consts.LoadBalancerMaximumPriority
-		delta     = 1
+		init, end = int32(consts.LoadBalancerMinimumPriority), int32(consts.LoadBalancerMaximumPriority)
+		delta     = int32(1)
 	)
 	if prefer == rulePriorityPreferFromEnd {
-		init, end, delta = end-1, init-1, -1
+		init, end, delta = end, init, -1
 	}
 
-	for init != end {
-		p := int32(init)
-		if _, found := helper.priorities[p]; found {
-			init += delta
-			continue
+	for p := init; ; p += delta {
+		if _, found := helper.priorities[p]; !found {
+			return p, nil
 		}
-		return p, nil
+		if p == end {
+			break
+		}
 	}
 
 	return 0, ErrSecurityRulePriorityExhausted
