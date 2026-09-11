@@ -50,18 +50,31 @@ func filterServicesByDisableFloatingIP(services []*v1.Service) []*v1.Service {
 	}, services)
 }
 
-// listSharedIPPortMapping lists the shared IP port mapping for the service excluding the service itself.
+// listSharedIPPortMapping lists the shared IP port mapping and the shared deny all destinations for
+// the service excluding the service itself.
 // There are scenarios where multiple services share the same public IP,
 // and in order to clean up the security rules, we need to know the port mapping of the shared IP.
+// The deny all rules are shared the same way, so a destination has to survive the cleanup while any
+// of those services still requires it. backendNodeIPs belong to every service that disables the floating
+// IP, because they all target the same nodes.
 func (az *Cloud) listSharedIPPortMapping(
 	ctx context.Context,
 	svc *v1.Service,
-	ingressIPs []netip.Addr,
-) (map[armnetwork.SecurityRuleProtocol][]int32, error) {
+	dstAddresses []netip.Addr,
+	backendNodeIPs []netip.Addr,
+) (map[armnetwork.SecurityRuleProtocol][]int32, []netip.Addr, error) {
 	var (
 		logger = log.FromContextOrBackground(ctx).WithName("listSharedIPPortMapping")
 		rv     = make(map[armnetwork.SecurityRuleProtocol][]int32)
+
+		isDstAddress = make(map[netip.Addr]bool, len(dstAddresses))
+		// The same address may be appended more than once. SetDestinationPrefixes will deduplicate.
+		denyAllDestinations []netip.Addr
+		denyAllRequired     bool
 	)
+	for _, addr := range dstAddresses {
+		isDstAddress[addr] = true
+	}
 
 	var services []*v1.Service
 	{
@@ -70,7 +83,7 @@ func (az *Cloud) listSharedIPPortMapping(
 		services, err = az.serviceLister.List(labels.Everything())
 		if err != nil {
 			logger.Error(err, "Failed to list all services")
-			return nil, fmt.Errorf("list all services: %w", err)
+			return nil, nil, fmt.Errorf("list all services: %w", err)
 		}
 		logger.V(5).Info("Listed all services", "num-all-services", len(services))
 
@@ -80,7 +93,7 @@ func (az *Cloud) listSharedIPPortMapping(
 			services = filterServicesByDisableFloatingIP(services)
 		} else {
 			logger.V(5).Info("Filter service by external IPs")
-			services = filterServicesByIngressIPs(services, ingressIPs)
+			services = filterServicesByIngressIPs(services, dstAddresses)
 		}
 	}
 	logger.V(5).Info("Filtered services", "num-filtered-services", len(services))
@@ -94,17 +107,46 @@ func (az *Cloud) listSharedIPPortMapping(
 
 		portsByProtocol, err := loadbalancer.SecurityRuleDestinationPortsByProtocol(s)
 		if err != nil {
-			return nil, fmt.Errorf("fetch security rule dst ports for %s: %w", s.Name, err)
+			return nil, nil, fmt.Errorf("fetch security rule dst ports for %s: %w", s.Name, err)
 		}
 
 		for protocol, ports := range portsByProtocol {
 			rv[protocol] = append(rv[protocol], ports...)
 		}
+
+		if consts.IsK8sServiceDisableLoadBalancerNSGRule(s) || !loadbalancer.RequiresDenyAllExceptSourceRanges(s) {
+			continue
+		}
+		denyAllRequired = true
+
+		if additionalIPs, err := loadbalancer.AdditionalPublicIPs(s); err == nil {
+			for _, addr := range additionalIPs {
+				if isDstAddress[addr] {
+					denyAllDestinations = append(denyAllDestinations, addr)
+				}
+			}
+		}
+
+		// A service that disables the floating IP has no rule for its frontend IP; its nodes are
+		// appended after the loop.
+		if consts.IsK8sServiceDisableLoadBalancerFloatingIP(s) {
+			continue
+		}
+
+		for _, ing := range s.Status.LoadBalancer.Ingress {
+			if addr, err := netip.ParseAddr(ing.IP); err == nil && isDstAddress[addr] {
+				denyAllDestinations = append(denyAllDestinations, addr)
+			}
+		}
 	}
 
-	logger.V(5).Info("Retain port mapping", "port-mapping", rv)
+	if denyAllRequired {
+		denyAllDestinations = append(denyAllDestinations, backendNodeIPs...)
+	}
 
-	return rv, nil
+	logger.V(5).Info("Retain port mapping", "port-mapping", rv, "deny-all-destinations", denyAllDestinations)
+
+	return rv, denyAllDestinations, nil
 }
 
 func (az *Cloud) listAvailableSecurityGroupDestinations(_ context.Context) ([]netip.Addr, error) {

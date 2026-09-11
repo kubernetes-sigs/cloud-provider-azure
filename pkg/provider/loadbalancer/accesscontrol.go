@@ -204,10 +204,23 @@ func (ac *AccessControl) IsAllowFromInternet() bool {
 // DenyAllExceptSourceRanges returns true if it needs to block any VNet traffic not on the allow list.
 // By default, NSG allow traffic from the VNet.
 func (ac *AccessControl) DenyAllExceptSourceRanges() bool {
+	return denyAllExceptSourceRanges(ac.svc, ac.SourceRanges, ac.AllowedIPRanges, ac.invalidRanges)
+}
+
+// RequiresDenyAllExceptSourceRanges answers the same question as AccessControl.DenyAllExceptSourceRanges
+// for a service that is not being reconciled, so it has no precomputed ranges to read.
+func RequiresDenyAllExceptSourceRanges(svc *v1.Service) bool {
+	sourceRanges, invalidSourceRanges, _ := SourceRanges(svc)
+	allowedIPRanges, invalidAllowedIPRanges, _ := AllowedIPRanges(svc)
+
+	return denyAllExceptSourceRanges(svc, sourceRanges, allowedIPRanges, append(invalidSourceRanges, invalidAllowedIPRanges...))
+}
+
+func denyAllExceptSourceRanges(svc *v1.Service, sourceRanges, allowedIPRanges []netip.Prefix, invalidRanges []string) bool {
 	var (
-		annotationEnabled      = strings.EqualFold(ac.svc.Annotations[consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges], "true")
-		sourceRangeSpecified   = len(ac.SourceRanges) > 0 || len(ac.AllowedIPRanges) > 0
-		invalidRangesSpecified = len(ac.invalidRanges) > 0
+		annotationEnabled      = strings.EqualFold(svc.Annotations[consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges], "true")
+		sourceRangeSpecified   = len(sourceRanges) > 0 || len(allowedIPRanges) > 0
+		invalidRangesSpecified = len(invalidRanges) > 0
 	)
 	return (annotationEnabled && sourceRangeSpecified) || invalidRangesSpecified
 }
@@ -334,6 +347,22 @@ func (ac *AccessControl) PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses [
 	}
 
 	logger.V(10).Info("Completed patching")
+
+	return nil
+}
+
+// EnsureDenyAllRules adds the given destinations to the deny all rules.
+func (ac *AccessControl) EnsureDenyAllRules(dstIPv4Addresses, dstIPv6Addresses []netip.Addr) error {
+	if len(dstIPv4Addresses) > 0 {
+		if err := ac.sgHelper.AddRuleForDenyAll(dstIPv4Addresses); err != nil {
+			return fmt.Errorf("add rule for deny all on IPv4: %w", err)
+		}
+	}
+	if len(dstIPv6Addresses) > 0 {
+		if err := ac.sgHelper.AddRuleForDenyAll(dstIPv6Addresses); err != nil {
+			return fmt.Errorf("add rule for deny all on IPv6: %w", err)
+		}
+	}
 
 	return nil
 }
