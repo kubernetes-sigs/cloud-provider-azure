@@ -29,7 +29,7 @@ import (
 	"go.opentelemetry.io/otel/metric/noop"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/retryrepectthrottled"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/retryrespectthrottled"
 )
 
 var (
@@ -77,7 +77,7 @@ func (c *ARMContext) Observe(ctx context.Context, err error) {
 		return
 	}
 
-	if errors.Is(err, retryrepectthrottled.ErrTooManyRequest) {
+	if errors.Is(err, retryrespectthrottled.ErrTooManyRequest) {
 		c.Throttled(ctx)
 		return
 	}
