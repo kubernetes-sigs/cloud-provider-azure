@@ -1,0 +1,27 @@
+#### What type of PR is this?
+
+/kind feature
+
+#### What this PR does / why we need it:
+
+This PR changes the topology labeling behavior so that Azure availability zones and Azure platform fault domains are represented as separate topology concepts.
+Specifically:
+- For standalone/regional VMs that are not running in an availability zone, it stops using Azure `platformFaultDomain` as the fallback value for `topology.kubernetes.io/zone`. If the VM has no real availability zone, the Kubernetes zone label is omitted rather than populated with the platform fault domain.
+- Exposes Azure `platformFaultDomain` as a separate node label `topology.kubernetes.azure.com/fault-domain`.
+
+#### Which issue(s) this PR fixes:
+
+Fixes #10222
+
+#### Special notes for your reviewer:
+
+#### Does this PR introduce a user-facing change?
+
+```release-note
+Nodes no longer use platformFaultDomain as a fallback for topology.kubernetes.io/zone if an availability zone is not present. Instead, a new label topology.kubernetes.azure.com/fault-domain is used for fault domains.
+```
+
+#### Additional documentation e.g., KEPs (Kubernetes Enhancement Proposals), usage docs, etc.:
+
+```docs
+```

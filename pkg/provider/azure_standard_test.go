@@ -1173,7 +1173,7 @@ func TestGetStandardVMZoneByNodeName(t *testing.T) {
 				},
 			},
 			expectedZone: cloudprovider.Zone{
-				FailureDomain: "3",
+				FailureDomain: "",
 				Region:        "eastus",
 			},
 		},
@@ -1204,7 +1204,7 @@ func TestGetStandardVMZoneByNodeName(t *testing.T) {
 				},
 			},
 			expectedZone: cloudprovider.Zone{
-				FailureDomain: "0",
+				FailureDomain: "",
 				Region:        "hybridenvironment",
 			},
 		},

@@ -450,7 +450,7 @@ func TestGetZoneByNodeNameVmssFlex(t *testing.T) {
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
 			expectedZone: cloudprovider.Zone{
-				FailureDomain: "1",
+				FailureDomain: "",
 				Region:        "eastus",
 			},
 			expectedErr: nil,

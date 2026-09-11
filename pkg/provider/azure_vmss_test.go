@@ -538,7 +538,7 @@ func TestGetZoneByNodeName(t *testing.T) {
 			vmList:      []string{"vmssee6c2000000", "vmssee6c2000001"},
 			nodeName:    "vmssee6c2000000",
 			faultDomain: 3,
-			expected:    "3",
+			expected:    "",
 		},
 		{
 			description: "ScaleSet should get availability zone for zoned nodes",
