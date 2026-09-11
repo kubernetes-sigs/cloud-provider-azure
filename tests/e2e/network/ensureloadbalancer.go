@@ -1012,14 +1012,14 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 		}
 
 		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, testServiceName, ns.Name, labels, annotation, ports)
-		Expect(len(ips)).NotTo(BeZero())
-		ip := ips[0]
-		service, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
 		defer func() {
 			By("Cleaning up")
 			err := utils.DeleteService(cs, ns.Name, testServiceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
+		service, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Update the service and without significant changes and compare etags")
@@ -1074,16 +1074,16 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 		}
 		service.Spec.SessionAffinity = "ClientIP"
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, targetIPs)
-		Expect(err).NotTo(HaveOccurred())
-
-		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
 		defer func() {
 			By("Cleaning up")
 			err := utils.DeleteService(cs, ns.Name, testServiceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		Expect(err).NotTo(HaveOccurred())
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, targetIPs)
+		Expect(err).NotTo(HaveOccurred())
+
+		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Update the service and without significant changes and compare etags")
@@ -1135,6 +1135,11 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 		service := utils.CreateLoadBalancerServiceManifest(testServiceName, annotation, labels, ns.Name, ports)
 		service.Spec.ExternalTrafficPolicy = "Local"
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		defer func() {
+			By("Cleaning up")
+			err := utils.DeleteService(cs, ns.Name, testServiceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		Expect(err).NotTo(HaveOccurred())
 		ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, []*string{})
 		Expect(err).NotTo(HaveOccurred())
@@ -1142,11 +1147,6 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 		ip := ips[0]
 
 		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
-		defer func() {
-			By("Cleaning up")
-			err := utils.DeleteService(cs, ns.Name, testServiceName)
-			Expect(err).NotTo(HaveOccurred())
-		}()
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Update the service and without significant changes and compare etags")
@@ -1175,12 +1175,12 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 			consts.ServiceAnnotationLoadBalancerEnableHighAvailabilityPorts: "true",
 		}
 		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, testServiceName, ns.Name, labels, annotation, ports)
-		service, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
 		defer func() {
 			By("Cleaning up")
 			err := utils.DeleteService(cs, ns.Name, testServiceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		service, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(ips)).NotTo(BeZero())
 		ip := ips[0]
