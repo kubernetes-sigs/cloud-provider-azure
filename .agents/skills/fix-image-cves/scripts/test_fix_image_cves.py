@@ -325,6 +325,27 @@ class FixImageCVEsTest(unittest.TestCase):
         self.assertEqual(plan["planned_vulnerability_keys"], [])
         self.assertEqual(plan["other_findings"][0]["category"], "GO_TOOLCHAIN")
 
+    def test_toolchain_findings_do_not_require_a_newer_module_fix(self) -> None:
+        for category in ("GO_MODULE", "GO_TOOLCHAIN"):
+            for package in ("stdlib", "toolchain"):
+                with self.subTest(category=category, package=package):
+                    finding = {
+                        "category": category,
+                        "package": package,
+                        "module_root": ".",
+                        "target": "cloud-controller-manager",
+                        "installed_version": "v1.24.6",
+                        "fixed_version": "1.23.12, 1.24.6",
+                        "id": "CVE-2026-0003",
+                    }
+                    with mock.patch.object(fix_image_cves, "lowest_fixed_version") as select:
+                        plan = fix_image_cves.build_plan({"findings": [finding]})
+
+                    select.assert_not_called()
+                    self.assertEqual(plan["go_module_actions"], [])
+                    self.assertEqual(plan["planned_vulnerability_keys"], [])
+                    self.assertEqual(plan["other_findings"][0]["category"], "GO_TOOLCHAIN")
+
     def test_apply_ignores_toolchain_action_from_older_plan_state(self) -> None:
         state = {
             "scan": {"module_root": ".", "dockerfile": "Dockerfile"},
@@ -779,6 +800,44 @@ class FixImageCVEsTest(unittest.TestCase):
             with self.subTest(versions=versions):
                 self.assertEqual(fix_image_cves.highest_fixed_version(versions), expected)
 
+    def test_lowest_fixed_version_normalizes_and_uses_go_semver_order(self) -> None:
+        cases = [
+            ("0.55.0", "v0.49.0", "v0.55.0"),
+            ("v1.10.0, 1.9.9", "1.9.0", "v1.9.9"),
+            (" , v0.55.0, 0.54.0,, 0.54.0, ", "v0.49.0", "v0.54.0"),
+            ("v1.2.3-rc.2, v1.2.3, v1.2.3-rc.1", "v1.2.2", "v1.2.3-rc.1"),
+            ("v1.2.3-rc.1, v1.2.3, v1.2.3-rc.2", "v1.2.3-rc.1", "v1.2.3-rc.2"),
+            (
+                "v0.0.0-20250101000000-bbbbbbbbbbbb, v0.0.0-20240101000000-aaaaaaaaaaaa",
+                "v0.0.0-20230101000000-cccccccccccc",
+                "v0.0.0-20240101000000-aaaaaaaaaaaa",
+            ),
+            ("2.0.1+incompatible, 2.1.0+incompatible", "v2.0.0+incompatible", "v2.0.1+incompatible"),
+        ]
+        for fixed, installed, expected in cases:
+            with self.subTest(fixed=fixed, installed=installed):
+                self.assertEqual(fix_image_cves.lowest_fixed_version(fixed, installed), expected)
+
+    def test_lowest_fixed_version_rejects_invalid_versions(self) -> None:
+        cases = [
+            ("v1.2.3", ""),
+            ("v1.2.3", "(devel)"),
+            ("", "v1.2.0"),
+            (", ,", "v1.2.0"),
+            ("not-a-version", "v1.2.0"),
+            ("v1.2.3, not-a-version", "v1.2.0"),
+        ]
+        for fixed, installed in cases:
+            with self.subTest(fixed=fixed, installed=installed):
+                with self.assertRaisesRegex(fix_image_cves.CommandError, "Invalid .* Go version"):
+                    fix_image_cves.lowest_fixed_version(fixed, installed)
+
+    def test_lowest_fixed_version_rejects_candidates_at_or_below_installed(self) -> None:
+        for fixed in ("v1.8.7", "v1.9.0", "v1.8.7, v1.9.0", "v1.9.0+build"):
+            with self.subTest(fixed=fixed):
+                with self.assertRaisesRegex(fix_image_cves.CommandError, "No fixed version newer than"):
+                    fix_image_cves.lowest_fixed_version(fixed, "v1.9.0")
+
     def test_build_plan_persists_canonical_go_version(self) -> None:
         plan = fix_image_cves.build_plan(
             {
@@ -797,6 +856,179 @@ class FixImageCVEsTest(unittest.TestCase):
         )
 
         self.assertEqual(plan["go_module_actions"][0]["fixed_version"], "v0.55.0")
+
+    def test_build_plan_uses_lowest_upgrade_for_each_finding(self) -> None:
+        cases = [
+            ([("v1.8.0", "1.9.3, 1.8.7")], "v1.8.7"),
+            (
+                [("v1.8.0", "1.8.7, 1.9.3"), ("v1.8.0", "1.8.8, 1.9.4")],
+                "v1.8.8",
+            ),
+            ([("v1.9.0", "1.8.7, 1.9.3")], "v1.9.3"),
+            (
+                [("v1.8.0", "1.8.7, 1.9.3"), ("v1.9.0", "1.8.8, 1.9.4")],
+                "v1.9.4",
+            ),
+            ([("v0.49.0", "0.54.0"), ("v0.49.0", "0.55.0")], "v0.55.0"),
+        ]
+        for versions, expected in cases:
+            with self.subTest(versions=versions):
+                findings = [
+                    {
+                        "category": "GO_MODULE",
+                        "package": "example.com/dependency",
+                        "module_root": ".",
+                        "target": "cloud-controller-manager",
+                        "installed_version": installed,
+                        "fixed_version": fixed,
+                        "id": f"CVE-2026-{index:04d}",
+                    }
+                    for index, (installed, fixed) in enumerate(versions)
+                ]
+                for ordered in (findings, list(reversed(findings))):
+                    plan = fix_image_cves.build_plan({"findings": ordered})
+                    actions = plan["go_module_actions"]
+                    self.assertEqual(len(actions), 1)
+                    self.assertEqual(actions[0]["fixed_version"], expected)
+                    self.assertEqual(actions[0]["cves"], sorted(f["id"] for f in findings))
+                    self.assertEqual(
+                        plan["planned_vulnerability_keys"],
+                        sorted(fix_image_cves.vuln_key(f) for f in findings),
+                    )
+                    self.assertEqual(
+                        fix_image_cves.build_go_requirement_commands(
+                            actions,
+                            {(".", "example.com/dependency"): versions[-1][0]},
+                        ),
+                        [{
+                            "cwd": ".",
+                            "cmd": [
+                                "go", "mod", "edit",
+                                f"-require=example.com/dependency@{expected}",
+                            ],
+                        }],
+                    )
+
+    def test_cross_branch_plan_still_requires_all_cves_to_disappear_on_rescan(self) -> None:
+        findings = [
+            {
+                "category": "GO_MODULE",
+                "package": "example.com/dependency",
+                "module_root": ".",
+                "target": "cloud-controller-manager",
+                "installed_version": "v1.8.0",
+                "fixed_version": fixed,
+                "id": f"CVE-2026-{index:04d}",
+            }
+            for index, fixed in enumerate(("v1.8.7", "v1.9.4"))
+        ]
+        plan = fix_image_cves.build_plan({"findings": findings})
+        self.assertEqual(plan["go_module_actions"][0]["fixed_version"], "v1.9.4")
+        # A numerically higher release need not include another branch's fix.
+        payload = {"Results": [{
+            "Class": "lang-pkgs",
+            "Type": "gobinary",
+            "Target": "cloud-controller-manager",
+            "Vulnerabilities": [{
+                "PkgName": "example.com/dependency",
+                "InstalledVersion": "v1.9.4",
+                "FixedVersion": "v1.8.7",
+                "VulnerabilityID": findings[0]["id"],
+            }],
+        }]}
+        results = {}
+        with mock.patch.object(
+            fix_image_cves, "ensure_command"
+        ), mock.patch.object(
+            fix_image_cves, "detect_trivy_db_staleness"
+        ), mock.patch.object(fix_image_cves, "run", return_value=json.dumps(payload)):
+            self.assertFalse(fix_image_cves.run_rescan(
+                Path("/repo"), image="local/test:rebuilt", module_root=".",
+                dockerfile="Dockerfile",
+                planned_keys=fix_image_cves.actionable_vulnerability_keys(plan),
+                results=results,
+            ))
+
+        self.assertEqual(
+            results["rescan"]["remaining_vulnerability_keys"],
+            [fix_image_cves.vuln_key(findings[0])],
+        )
+
+    def test_build_plan_rejects_finding_without_a_newer_fix(self) -> None:
+        finding = {
+            "category": "GO_MODULE",
+            "package": "example.com/dependency",
+            "module_root": ".",
+            "target": "cloud-controller-manager",
+            "installed_version": "v1.9.0",
+            "fixed_version": "1.8.7, 1.9.0",
+            "id": "CVE-2026-0001",
+        }
+        with self.assertRaisesRegex(
+            fix_image_cves.CommandError,
+            "example.com/dependency.*CVE-2026-0001.*newer than",
+        ):
+            fix_image_cves.build_plan({"findings": [finding]})
+
+    def test_command_plan_stops_before_saving_unusable_version_metadata(self) -> None:
+        state = {
+            "scan": {
+                "findings": [{
+                    "category": "GO_MODULE",
+                    "package": "example.com/dependency",
+                    "module_root": ".",
+                    "target": "cloud-controller-manager",
+                    "installed_version": "(devel)",
+                    "fixed_version": "v1.2.3",
+                    "id": "CVE-2026-0001",
+                }],
+            },
+        }
+        with mock.patch.object(
+            fix_image_cves, "ensure_repo_root", return_value=Path("/repo")
+        ), mock.patch.object(
+            fix_image_cves, "load_state", return_value=state
+        ), mock.patch.object(
+            fix_image_cves, "build_go_directive_actions"
+        ) as directives, mock.patch.object(
+            fix_image_cves, "save_state"
+        ) as save_state:
+            with self.assertRaisesRegex(
+                fix_image_cves.CommandError, "example.com/dependency.*CVE-2026-0001.*Invalid installed"
+            ):
+                fix_image_cves.command_plan(Namespace(repo="."))
+
+        directives.assert_not_called()
+        save_state.assert_not_called()
+
+    def test_selected_lowest_fix_drives_go_directive_requirement(self) -> None:
+        plan = fix_image_cves.build_plan({
+            "findings": [{
+                "category": "GO_MODULE",
+                "package": "example.com/dependency",
+                "module_root": ".",
+                "target": "cloud-controller-manager",
+                "installed_version": "v1.8.0",
+                "fixed_version": "v1.8.7, v1.9.3",
+                "id": "CVE-2026-0001",
+            }],
+        })
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir)
+            (repo_root / "go.mod").write_text(
+                "module example.com/main\n\ngo 1.25.0\n", encoding="utf-8"
+            )
+            with mock.patch.object(
+                fix_image_cves,
+                "target_module_go_directive",
+                side_effect=lambda module, version: {"v1.8.7": "1.25.0", "v1.9.3": "1.26.0"}[version],
+            ) as target_directive:
+                self.assertEqual(
+                    fix_image_cves.build_go_directive_actions(repo_root, plan["go_module_actions"]),
+                    [],
+                )
+
+        target_directive.assert_called_once_with("example.com/dependency", "v1.8.7")
 
     def test_target_module_go_directive_reads_go_mod_without_repo_context(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
