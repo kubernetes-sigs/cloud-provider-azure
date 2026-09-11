@@ -379,6 +379,28 @@ def highest_fixed_version(values: list[str]) -> str:
     return highest
 
 
+def lowest_fixed_version(fixed_version: str, installed_version: str) -> str:
+    """Select the smallest reported fix strictly newer than the vulnerable version."""
+    installed = normalize_go_version(installed_version)
+    if parse_go_semver(installed) is None:
+        raise CommandError(f"Invalid installed Go version {installed_version!r}; manual review required")
+
+    lowest: str | None = None
+    for value in parse_fixed_version_candidates(fixed_version):
+        candidate = normalize_go_version(value)
+        if parse_go_semver(candidate) is None:
+            raise CommandError(f"Invalid fixed Go version {value!r}; manual review required")
+        if compare_fixed_versions(candidate, installed) <= 0:
+            continue
+        if lowest is None or compare_fixed_versions(candidate, lowest) < 0:
+            lowest = candidate
+    if lowest is None:
+        raise CommandError(
+            f"No fixed version newer than {installed!r} in {fixed_version!r}; manual review required"
+        )
+    return lowest
+
+
 def version_at_least(actual: str, minimum: str) -> bool:
     normalized_actual = normalize_go_version(actual)
     normalized_minimum = normalize_go_version(minimum)
@@ -619,6 +641,10 @@ def build_plan(scan: dict[str, Any]) -> dict[str, Any]:
             finding = {**finding, "category": category}
         if category == "GO_MODULE":
             package = finding["package"]
+            try:
+                minimum = lowest_fixed_version(finding["fixed_version"], finding["installed_version"])
+            except CommandError as exc:
+                raise CommandError(f"Cannot plan {package} ({finding['id']}): {exc}") from exc
             group = go_groups.setdefault(
                 package,
                 {
@@ -627,12 +653,12 @@ def build_plan(scan: dict[str, Any]) -> dict[str, Any]:
                     "module_root": finding["module_root"],
                     "target": finding["target"],
                     "installed_versions": set(),
-                    "fixed_versions": [],
+                    "minimum_fixed_versions": [],
                     "cves": [],
                 },
             )
             group["installed_versions"].add(finding["installed_version"])
-            group["fixed_versions"].append(finding["fixed_version"])
+            group["minimum_fixed_versions"].append(minimum)
             group["cves"].append(finding["id"])
             evidence.append(
                 {
@@ -682,7 +708,7 @@ def build_plan(scan: dict[str, Any]) -> dict[str, Any]:
 
     go_actions = []
     for package, group in sorted(go_groups.items()):
-        fixed_version = highest_fixed_version(group["fixed_versions"])
+        fixed_version = highest_fixed_version(group["minimum_fixed_versions"])
         go_actions.append(
             {
                 "module": package,
