@@ -38,7 +38,7 @@ For more details about each configuration, please refer to [Azure Private Link S
 
 When a `LoadBalancer` typed service is created without the annotations `service.beta.kubernetes.io/azure-load-balancer-ipv4`, `service.beta.kubernetes.io/azure-load-balancer-ipv6` or field `Service.Spec.LoadBalancerIP` set, an LB frontend IP configuration is created with a dynamically generated IP. If the service has the annotation `service.beta.kubernetes.io/azure-load-balancer-ipv4` or `service.beta.kubernetes.io/azure-load-balancer-ipv6` set, an existing LB frontend IP configuration may be reused if one exists; otherwise a static configuration is created with the specified IP. When a service is created with annotation `service.beta.kubernetes.io/azure-pls-create` set to `true` or updated later with the annotation added, a PLS resource attached to the LB frontend is created in the default resource group or the resource group user set in config file with key `PrivateLinkServiceResourceGroup`.
 
-The Kubernetes service creating the PLS is assigned as the owner of the resource. Azure cloud provider tags the PLS with cluster name and service name `kubernetes-owner-service: <namespace>/<service name>`. Only the owner service can later update the properties of the PLS resource.
+The Kubernetes service creating the PLS is assigned as the owner of the resource. Azure cloud provider tags the PLS with cluster name and service name `k8s-azure-owner-service: <namespace>/<service name>`. Only the owner service can later update the properties of the PLS resource.
 
 If there's a managed PLS already created for the LB frontend, the same PLS is reused automatically since each LB frontend can be referenced by only one PLS. If the LB frontend is attached to a user defined PLS, service creation should fail with proper error logged.
 
@@ -54,7 +54,9 @@ If there are active PE connections to the PLS, all connections are removed and t
 
 Multiple Kubernetes services can share the same LB frontend by specifying the same annotations `service.beta.kubernetes.io/azure-load-balancer-ipv4`, `service.beta.kubernetes.io/azure-load-balancer-ipv6` or field `Service.Spec.LoadBalancerIP` (for more details, please refer to [Multiple Services Sharing One IP Address](../shared-ip)). Once a PLS is attached to the LB frontend, these services automatically share the PLS. Users can access these services via the same PE but different ports.
 
-Azure cloud provider tags the service creating the PLS as the owner (`kubernetes-owner-service: <namespace>/<service name>`) and only allows that service to update the configurations of the PLS. If the owner service is deleted or if user wants some other service to take control, user can modify the tag value to a new service in `<namespace>/<service name>` pattern.
+A PLS can only be shared by services on the same LB frontend, since each PLS can reference only one LB frontend. Setting `service.beta.kubernetes.io/azure-pls-name` to the name of a PLS the service does not own is rejected with a `SyncLoadBalancerFailed` event. The name only needs to be unique within the resource group where the PLS is created.
+
+Azure cloud provider tags the service creating the PLS as the owner (`k8s-azure-owner-service: <namespace>/<service name>`) and only allows that service to update the configurations of the PLS. Services sharing the PLS must not set any of the PLS configuration annotations; any change must be made on the owner service. If the owner service is deleted or if user wants some other service to take control, user can modify the tag value to a new service in `<namespace>/<service name>` pattern.
 
 PLS is only automatically deleted when the LB frontend IP configuration is deleted. One can delete a service while preserving the PLS by creating a temporary service referring to the same LB frontend.
 
