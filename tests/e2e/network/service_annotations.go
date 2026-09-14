@@ -1365,15 +1365,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 			service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
 			service, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			utils.PrintCreateSVCSuccessfully(serviceName, ns.Name)
-
-			//wait and get service's public IP Address
-			utils.Logf("Waiting service to expose...")
-			publicIPs, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []*string{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(publicIPs)).NotTo(BeZero())
-			// create service with given annotation and wait it to expose
-
+			var publicIPs []*string
 			defer func() {
 				By("Cleaning up service")
 				err := utils.DeleteService(cs, ns.Name, serviceName)
@@ -1388,6 +1380,13 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 					}
 				}
 			}()
+			utils.PrintCreateSVCSuccessfully(serviceName, ns.Name)
+
+			//wait and get service's public IP Address
+			utils.Logf("Waiting service to expose...")
+			publicIPs, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []*string{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(publicIPs)).NotTo(BeZero())
 
 			By("Changing ExternalTrafficPolicy of the service to Local")
 
@@ -1799,16 +1798,15 @@ func testPIPTagAnnotationWithTags(
 	service.GetAnnotations()
 	_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
-
-	By("Waiting service to expose...")
-	ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []*string{})
-	Expect(err).NotTo(HaveOccurred())
-
 	defer func() {
 		By("Cleaning up test service")
 		err := utils.DeleteService(cs, ns.Name, serviceName)
 		Expect(err).NotTo(HaveOccurred())
 	}()
+
+	By("Waiting service to expose...")
+	ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []*string{})
+	Expect(err).NotTo(HaveOccurred())
 
 	By("Checking tags on the corresponding public IP")
 	expectedTags := map[string]*string{
