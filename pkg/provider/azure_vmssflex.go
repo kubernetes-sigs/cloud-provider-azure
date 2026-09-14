@@ -408,6 +408,11 @@ func (fs *FlexScaleSet) getNodeInformationByIPConfigurationID(ctx context.Contex
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to get vm name of ip config ID %s: %w", ipConfigurationID, err)
 	}
+	if vmName == "" {
+		// skip this node
+		logger.Info("Empty vmName, skipping node.", "ipConfigurationID", ipConfigurationID)
+		return "", "", "", nil
+	}
 
 	nodeName, err := fs.getNodeNameByVMName(ctx, vmName)
 	if err != nil {
