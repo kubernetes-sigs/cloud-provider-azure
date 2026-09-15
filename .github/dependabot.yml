@@ -384,6 +384,30 @@ updates:
         - "minor"
         - "major"
   - package-ecosystem: "docker"
+    directory: "/health-probe-proxy"
+    schedule:
+      interval: "weekly"
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    target-branch: "release-1.36"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/cleanup"
+      - "lgtm"
+      - "approved"
+      - "release-1.36"
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
+  - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
@@ -465,6 +489,30 @@ updates:
         - "minor"
         - "major"
   - package-ecosystem: "docker"
+    directory: "/health-probe-proxy"
+    schedule:
+      interval: "weekly"
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    target-branch: "release-1.35"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/cleanup"
+      - "lgtm"
+      - "approved"
+      - "release-1.35"
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
+  - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
@@ -546,6 +594,30 @@ updates:
         - "minor"
         - "major"
   - package-ecosystem: "docker"
+    directory: "/health-probe-proxy"
+    schedule:
+      interval: "weekly"
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    target-branch: "release-1.34"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/cleanup"
+      - "lgtm"
+      - "approved"
+      - "release-1.34"
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
+  - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
@@ -613,6 +685,30 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/testing"
+      - "lgtm"
+      - "approved"
+      - "release-1.33"
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
+        - "major"
+  - package-ecosystem: "docker"
+    directory: "/health-probe-proxy"
+    schedule:
+      interval: "weekly"
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    target-branch: "release-1.33"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/cleanup"
       - "lgtm"
       - "approved"
       - "release-1.33"
