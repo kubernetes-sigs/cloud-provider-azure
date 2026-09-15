@@ -249,7 +249,7 @@ spec:
             {{- if hasKey .Values.cloudControllerManager "controllerStartInterval" }}
             - "--controller-start-interval={{ .Values.cloudControllerManager.controllerStartInterval }}"
             {{- end }}
-            - "--controllers=*,-cloud-node"
+            - "--controllers={{ .Values.cloudControllerManager.controllers }}"
             {{- if hasKey .Values.cloudControllerManager "enableDynamicReloading" }}
             - "--enable-dynamic-reloading={{ .Values.cloudControllerManager.enableDynamicReloading }}"
             {{- end }}

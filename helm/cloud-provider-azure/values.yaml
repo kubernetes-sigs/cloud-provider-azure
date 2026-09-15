@@ -11,6 +11,7 @@ cloudControllerManager:
   clusterCIDR: "10.244.0.0/16"
   configureCloudRoutes: "true" # "false" for Azure CNI and "true" for other network plugins
   # contentionProfiling: "true"
+  controllers: "*,-cloud-node"
   # controllerStartInterval: "2m"
   # enableDynamicReloading: "true"
   # http2MaxStreamsPerConnection: "47"
