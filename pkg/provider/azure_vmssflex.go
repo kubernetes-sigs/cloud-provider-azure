@@ -250,8 +250,7 @@ func (fs *FlexScaleSet) GetZoneByNodeName(ctx context.Context, name string) (clo
 
 		failureDomain = fs.makeZone(ptr.Deref(vm.Location, ""), zoneID)
 	} else if vm.Properties.InstanceView != nil && vm.Properties.InstanceView.PlatformFaultDomain != nil {
-		// Availability zone is not used for the node, falling back to fault domain.
-		failureDomain = strconv.Itoa(int(ptr.Deref(vm.Properties.InstanceView.PlatformFaultDomain, 0)))
+		// Availability zone is not used for the node. Keep failureDomain empty.
 	} else {
 		err = fmt.Errorf("failed to get zone info")
 		logger.Error(err, "got unexpected error")
@@ -263,6 +262,19 @@ func (fs *FlexScaleSet) GetZoneByNodeName(ctx context.Context, name string) (clo
 		Region:        strings.ToLower(ptr.Deref(vm.Location, "")),
 	}
 	return zone, nil
+}
+
+// GetPlatformFaultDomainByNodeName gets the platform fault domain for the specified node.
+func (fs *FlexScaleSet) GetPlatformFaultDomainByNodeName(ctx context.Context, name string) (string, error) {
+	vm, err := fs.getVmssFlexVM(ctx, name, azcache.CacheReadTypeUnsafe)
+	if err != nil {
+		return "", err
+	}
+
+	if vm.Properties.InstanceView != nil && vm.Properties.InstanceView.PlatformFaultDomain != nil {
+		return strconv.Itoa(int(ptr.Deref(vm.Properties.InstanceView.PlatformFaultDomain, 0))), nil
+	}
+	return "0", nil
 }
 
 // GetProvisioningStateByNodeName returns the provisioningState for the specified node.

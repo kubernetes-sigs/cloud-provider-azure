@@ -170,7 +170,7 @@ func (az *Cloud) GetZone(ctx context.Context) (cloudprovider.Zone, error) {
 			zone = az.makeZone(location, zoneID)
 		} else {
 			logger.V(3).Info("Availability zone is not enabled for the node, falling back to fault domain")
-			zone = metadata.Compute.FaultDomain
+			zone = ""
 		}
 
 		return cloudprovider.Zone{
