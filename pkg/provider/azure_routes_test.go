@@ -387,8 +387,12 @@ func TestCreateRoute(t *testing.T) {
 			route := cloudprovider.Route{TargetNode: "node", DestinationCIDR: "1.2.3.4/24"}
 			err := cloud.CreateRoute(ctx, "cluster", "unused", &route)
 			assert.Equal(t, cloud.routeCIDRs, tt.expectedRouteCIDRs, tt.name)
-			if err != nil {
-				assert.EqualError(t, tt.expectedErrMsg, err.Error(), tt.name)
+			if tt.expectedErrMsg != nil {
+				if assert.Error(t, err, tt.name) {
+					assert.EqualError(t, tt.expectedErrMsg, err.Error(), tt.name)
+				}
+			} else {
+				assert.NoError(t, err, tt.name)
 			}
 		})
 	}
