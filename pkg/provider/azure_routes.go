@@ -214,7 +214,7 @@ func (d *delayedRouteUpdater) updateRoutes(ctx context.Context) {
 			logger.V(2).Info("updating routes")
 			routeTable.Properties.Routes = routes
 		}
-		_, err := d.az.routeTableRepo.CreateOrUpdate(ctx, *routeTable)
+		_, err = d.az.routeTableRepo.CreateOrUpdate(ctx, *routeTable)
 		if err != nil {
 			logger.Error(err, "CreateOrUpdateRouteTable() failed")
 			return
