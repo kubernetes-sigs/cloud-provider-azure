@@ -183,6 +183,9 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
 		pipNames, targetIPs := []*string{}, []*string{}
 		deleteFuncs := []func(){}
+		defer func() {
+			runCleanupActions(deleteFuncs...)
+		}()
 		if v4Enabled {
 			targetIP, deleteFunc := createPIP(tc, ipNameBase, false)
 			targetIPs = append(targetIPs, &targetIP)
@@ -193,11 +196,6 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			targetIPs = append(targetIPs, &targetIP)
 			deleteFuncs = append(deleteFuncs, deleteFunc)
 		}
-		defer func() {
-			for _, deleteFunc := range deleteFuncs {
-				deleteFunc()
-			}
-		}()
 
 		By("Create a Service which will be deleted with the PIP")
 		nsName := ns.Name
@@ -598,6 +596,9 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		pipNameBase1, pipNameBase2 := "pip1", "pip2"
 		targetIPs1, targetIPs2 := []string{}, []string{}
 		deleteFuncs := []func(){}
+		defer func() {
+			runCleanupActions(deleteFuncs...)
+		}()
 		doPIP := func(isIPv6 bool) {
 			pipName1 := utils.GetNameWithSuffix(pipNameBase1, utils.Suffixes[isIPv6])
 			pipNames1[isIPv6] = pipName1
@@ -619,11 +620,6 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		if v6Enabled {
 			doPIP(true)
 		}
-		defer func() {
-			for _, deleteFunc := range deleteFuncs {
-				deleteFunc()
-			}
-		}()
 
 		By("Creating a service referring to the first pip")
 		annotation := map[string]string{}
@@ -680,6 +676,9 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		deleteFuncs := []func(){}
 
 		v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
+		defer func() {
+			runCleanupActions(deleteFuncs...)
+		}()
 		createPIPPrefix := func(isIPv6 bool) {
 			prefixName := utils.GetNameWithSuffix(prefix1NameBase, utils.Suffixes[isIPv6])
 			prefixNames1[isIPv6] = prefixName
@@ -705,11 +704,6 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		if v6Enabled {
 			createPIPPrefix(true)
 		}
-		defer func() {
-			for _, deleteFunc := range deleteFuncs {
-				deleteFunc()
-			}
-		}()
 
 		By("Creating a service referring to the prefix")
 		{
