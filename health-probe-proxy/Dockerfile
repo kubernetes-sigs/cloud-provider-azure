@@ -18,6 +18,11 @@ FROM --platform=linux/amd64 mcr.microsoft.com/oss/go/microsoft/golang:1.26.5-2-b
 
 ARG ARCH=amd64
 
+# health-probe-proxy is built with CGO_ENABLED=0, but the Microsoft Go image
+# defaults to GOEXPERIMENT=systemcrypto which requires CGO. Disable all
+# experiments so the CGO-less build succeeds.
+ENV GOEXPERIMENT=none
+
 WORKDIR /go/src/health-probe-proxy
 COPY . .
 
