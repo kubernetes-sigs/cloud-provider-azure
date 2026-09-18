@@ -95,3 +95,8 @@ func (np *ARMNodeProvider) GetPlatformSubFaultDomain(_ context.Context) (string,
 func (np *ARMNodeProvider) GetInterconnectGroupID(_ context.Context) (string, error) {
 	return "", nil
 }
+
+// GetInterconnectSubgroupID returns empty string for ARM provider.
+func (np *ARMNodeProvider) GetInterconnectSubgroupID(_ context.Context) (string, error) {
+	return "", nil
+}
