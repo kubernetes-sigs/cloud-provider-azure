@@ -183,6 +183,9 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
 		pipNames, targetIPs := []*string{}, []*string{}
 		deleteFuncs := []func(){}
+		defer func() {
+			runCleanupActions(deleteFuncs...)
+		}()
 		if v4Enabled {
 			targetIP, deleteFunc := createPIP(tc, ipNameBase, false)
 			targetIPs = append(targetIPs, &targetIP)
@@ -193,11 +196,6 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			targetIPs = append(targetIPs, &targetIP)
 			deleteFuncs = append(deleteFuncs, deleteFunc)
 		}
-		defer func() {
-			for _, deleteFunc := range deleteFuncs {
-				deleteFunc()
-			}
-		}()
 
 		By("Create a Service which will be deleted with the PIP")
 		nsName := ns.Name
@@ -598,6 +596,9 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		pipNameBase1, pipNameBase2 := "pip1", "pip2"
 		targetIPs1, targetIPs2 := []string{}, []string{}
 		deleteFuncs := []func(){}
+		defer func() {
+			runCleanupActions(deleteFuncs...)
+		}()
 		doPIP := func(isIPv6 bool) {
 			pipName1 := utils.GetNameWithSuffix(pipNameBase1, utils.Suffixes[isIPv6])
 			pipNames1[isIPv6] = pipName1
@@ -619,11 +620,6 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		if v6Enabled {
 			doPIP(true)
 		}
-		defer func() {
-			for _, deleteFunc := range deleteFuncs {
-				deleteFunc()
-			}
-		}()
 
 		By("Creating a service referring to the first pip")
 		annotation := map[string]string{}
@@ -680,6 +676,9 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		deleteFuncs := []func(){}
 
 		v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
+		defer func() {
+			runCleanupActions(deleteFuncs...)
+		}()
 		createPIPPrefix := func(isIPv6 bool) {
 			prefixName := utils.GetNameWithSuffix(prefix1NameBase, utils.Suffixes[isIPv6])
 			prefixNames1[isIPv6] = prefixName
@@ -705,11 +704,6 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		if v6Enabled {
 			createPIPPrefix(true)
 		}
-		defer func() {
-			for _, deleteFunc := range deleteFuncs {
-				deleteFunc()
-			}
-		}()
 
 		By("Creating a service referring to the prefix")
 		{
@@ -1365,15 +1359,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 			service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
 			service, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			utils.PrintCreateSVCSuccessfully(serviceName, ns.Name)
-
-			//wait and get service's public IP Address
-			utils.Logf("Waiting service to expose...")
-			publicIPs, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []*string{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(publicIPs)).NotTo(BeZero())
-			// create service with given annotation and wait it to expose
-
+			var publicIPs []*string
 			defer func() {
 				By("Cleaning up service")
 				err := utils.DeleteService(cs, ns.Name, serviceName)
@@ -1388,6 +1374,13 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 					}
 				}
 			}()
+			utils.PrintCreateSVCSuccessfully(serviceName, ns.Name)
+
+			//wait and get service's public IP Address
+			utils.Logf("Waiting service to expose...")
+			publicIPs, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []*string{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(publicIPs)).NotTo(BeZero())
 
 			By("Changing ExternalTrafficPolicy of the service to Local")
 
@@ -1799,16 +1792,15 @@ func testPIPTagAnnotationWithTags(
 	service.GetAnnotations()
 	_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
-
-	By("Waiting service to expose...")
-	ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []*string{})
-	Expect(err).NotTo(HaveOccurred())
-
 	defer func() {
 		By("Cleaning up test service")
 		err := utils.DeleteService(cs, ns.Name, serviceName)
 		Expect(err).NotTo(HaveOccurred())
 	}()
+
+	By("Waiting service to expose...")
+	ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []*string{})
+	Expect(err).NotTo(HaveOccurred())
 
 	By("Checking tags on the corresponding public IP")
 	expectedTags := map[string]*string{
