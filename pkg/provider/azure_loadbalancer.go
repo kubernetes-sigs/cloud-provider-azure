@@ -474,8 +474,13 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 		}
 	}()
 
-	lb, _, _, lbIPsPrimaryPIPs, _, _, err := az.getServiceLoadBalancer(ctx, service, clusterName, nil, false, []*armnetwork.LoadBalancer{})
+	lb, existingLBs, _, lbIPsPrimaryPIPs, _, _, err := az.getServiceLoadBalancer(ctx, service, clusterName, nil, false, []*armnetwork.LoadBalancer{})
 	if err != nil && !errutils.HasStatusForbiddenOrIgnoredError(err) {
+		return err
+	}
+
+	// reconcileLoadBalancer records the load balancer placement reconcileSecurityGroup needs, but runs later.
+	if err := az.reconcileMultipleStandardLoadBalancerConfigurations(ctx, existingLBs, service, clusterName, existingLBs, nil); err != nil {
 		return err
 	}
 
@@ -2495,6 +2500,12 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerBackendNodes(
 			logger.Error(err, "failed to record existing nodes on load balancers")
 			return err
 		}
+
+		// A nil node list means the caller has none to offer, as on the delete path, rather than
+		// every node having left the cluster.
+		if nodes == nil {
+			return nil
+		}
 	}
 
 	// Remove the nodes from the load balancer configurations if they are not in the node list.
@@ -3502,17 +3513,23 @@ func (az *Cloud) reconcileSecurityGroup(
 		dstIPv6Addresses = append(dstIPv6Addresses, lbIPv6Addresses...)
 	}
 
-	{
-		retainPortRanges, err := az.listSharedIPPortMapping(ctx, service, append(dstIPv4Addresses, dstIPv6Addresses...))
-		if err != nil {
-			logger.Error(err, "Failed to list retain port ranges")
-			return nil, err
-		}
+	var backendNodeIPs []netip.Addr
+	if disableFloatingIP {
+		backendNodeIPs = append(backendNodeIPs, backendIPv4Addresses...)
+		backendNodeIPs = append(backendNodeIPs, backendIPv6Addresses...)
+	}
 
-		if err := accessControl.CleanSecurityGroup(dstIPv4Addresses, dstIPv6Addresses, retainPortRanges); err != nil {
-			logger.Error(err, "Failed to clean security group")
-			return nil, err
-		}
+	retainPortRanges, denyAllDestinations, err := az.listSharedIPPortMapping(
+		ctx, service, append(dstIPv4Addresses, dstIPv6Addresses...), backendNodeIPs,
+	)
+	if err != nil {
+		logger.Error(err, "Failed to list retain port ranges")
+		return nil, err
+	}
+
+	if err := accessControl.CleanSecurityGroup(dstIPv4Addresses, dstIPv6Addresses, retainPortRanges); err != nil {
+		logger.Error(err, "Failed to clean security group")
+		return nil, err
 	}
 
 	if wantLb && !disableLoadBalancerNSGRule {
@@ -3523,6 +3540,14 @@ func (az *Cloud) reconcileSecurityGroup(
 		}
 	} else if wantLb {
 		logger.V(2).Info("Skipped patching security group because Service disables LoadBalancer NSG rule management")
+	}
+
+	{
+		// Patching only covers this Service, so restore what the other Services still need.
+		denyAllIPv4Addresses, denyAllIPv6Addresses := iputil.GroupAddressesByFamily(denyAllDestinations)
+		if err := accessControl.EnsureDenyAllRules(denyAllIPv4Addresses, denyAllIPv6Addresses); err != nil {
+			return nil, err
+		}
 	}
 
 	{
