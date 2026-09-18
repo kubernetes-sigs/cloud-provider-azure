@@ -51,12 +51,14 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/backendaddresspoolclient/mock_backendaddresspoolclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	providererrors "sigs.k8s.io/cloud-provider-azure/pkg/provider/errors"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/privatelinkservice"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/subnet"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -821,6 +823,100 @@ func TestEnsureLoadBalancerDeleted(t *testing.T) {
 	}
 }
 
+func TestEnsureLoadBalancerDeletedWithOwnConflictingAdditionalIP(t *testing.T) {
+	const serviceIP = "1.2.3.4"
+
+	ctrl := gomock.NewController(t)
+	az := GetTestCloud(ctrl)
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ *v1.Service, lb *armnetwork.LoadBalancer) (bool, bool, *armnetwork.LoadBalancer, error) {
+		return false, false, lb, nil
+	}).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockLBBackendPool.EXPECT().GetBackendPrivateIPs(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
+	clusterResources, expectedInterfaces, expectedVirtualMachines := getClusterResources(az, 1, 1)
+	setMockEnv(az, expectedInterfaces, expectedVirtualMachines, 1)
+	loadBalancerClient := az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+	loadBalancerClient.EXPECT().
+		Delete(gomock.Any(), az.ResourceGroup, testClusterName).
+		Return(nil).
+		Times(1)
+	securityGroupClient := mock_securitygroupclient.NewMockInterface(ctrl)
+	initialSecurityGroup := getTestSecurityGroup(az)
+	var securityGroupAfterCreate *armnetwork.SecurityGroup
+	var err error
+	az.nsgRepo, err = securitygroup.NewSecurityGroupRepo(
+		az.SecurityGroupResourceGroup,
+		az.SecurityGroupName,
+		az.NsgCacheTTLInSeconds,
+		az.DisableAPICallCache,
+		securityGroupClient,
+	)
+	assert.NoError(t, err)
+	gomock.InOrder(
+		securityGroupClient.EXPECT().
+			Get(gomock.Any(), az.SecurityGroupResourceGroup, az.SecurityGroupName).
+			Return(initialSecurityGroup, nil),
+		securityGroupClient.EXPECT().
+			CreateOrUpdate(gomock.Any(), az.SecurityGroupResourceGroup, az.SecurityGroupName, gomock.Any()).
+			DoAndReturn(func(
+				_ context.Context,
+				_, _ string,
+				properties armnetwork.SecurityGroup,
+			) (*armnetwork.SecurityGroup, error) {
+				if assert.Len(t, properties.Properties.SecurityRules, 1) {
+					assert.Equal(t, []string{serviceIP}, securitygroup.ListDestinationPrefixes(properties.Properties.SecurityRules[0]))
+				}
+				securityGroupAfterCreate = &properties
+				return &properties, nil
+			}),
+		securityGroupClient.EXPECT().
+			Get(gomock.Any(), az.SecurityGroupResourceGroup, az.SecurityGroupName).
+			DoAndReturn(func(context.Context, string, string) (*armnetwork.SecurityGroup, error) {
+				return securityGroupAfterCreate, nil
+			}),
+		securityGroupClient.EXPECT().
+			CreateOrUpdate(gomock.Any(), az.SecurityGroupResourceGroup, az.SecurityGroupName, gomock.Any()).
+			DoAndReturn(func(
+				_ context.Context,
+				_, _ string,
+				properties armnetwork.SecurityGroup,
+			) (*armnetwork.SecurityGroup, error) {
+				assert.Empty(t, properties.Properties.SecurityRules)
+				return &properties, nil
+			}),
+	)
+
+	service := getTestService("service1", v1.ProtocolTCP, nil, false, 80)
+	expectedLBs := make([]*armnetwork.LoadBalancer, 0)
+	setMockLBs(az, &expectedLBs, "service", 1, 1, false)
+
+	mockPLSRepo := privatelinkservice.NewMockRepository(ctrl)
+	mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
+	az.plsRepo = mockPLSRepo
+
+	status, err := az.EnsureLoadBalancer(context.TODO(), testClusterName, &service, clusterResources.nodes)
+	assert.NoError(t, err)
+	if !assert.NotNil(t, status) || !assert.Equal(t, []v1.LoadBalancerIngress{{IP: serviceIP}}, status.Ingress) {
+		return
+	}
+	service.Status.LoadBalancer = *status.DeepCopy()
+	service.Annotations[consts.ServiceAnnotationAdditionalPublicIPs] = serviceIP
+
+	expectedLBs = make([]*armnetwork.LoadBalancer, 0)
+	setMockLBs(az, &expectedLBs, "service", 1, 1, false)
+	expectedLBs[0].Properties.FrontendIPConfigurations[0].Properties.PublicIPAddress.ID = ptr.To(
+		"/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice1",
+	)
+	status, err = az.EnsureLoadBalancer(context.TODO(), testClusterName, &service, clusterResources.nodes)
+	assert.Nil(t, status)
+	assert.ErrorContains(t, err, "conflict with frontends of managed load balancers")
+	assert.Equal(t, []v1.LoadBalancerIngress{{IP: serviceIP}}, service.Status.LoadBalancer.Ingress)
+
+	assert.NoError(t, az.EnsureLoadBalancerDeleted(context.TODO(), testClusterName, &service))
+}
+
 func TestEnsureLoadBalancerLock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -1260,6 +1356,11 @@ func TestGetPublicIPAddressResourceGroup(t *testing.T) {
 			desc:        "annotation with non-empty resource group ",
 			annotations: map[string]string{consts.ServiceAnnotationLoadBalancerResourceGroup: "rg2"},
 			expected:    "rg2",
+		},
+		{
+			desc:        "annotation with mixed-case resource group",
+			annotations: map[string]string{consts.ServiceAnnotationLoadBalancerResourceGroup: "Frontend-RG"},
+			expected:    "Frontend-RG",
 		},
 	} {
 		t.Run(c.desc, func(t *testing.T) {
@@ -7009,6 +7110,1173 @@ func TestGetServiceLoadBalancerStatus(t *testing.T) {
 			status, _, _, err := az.getServiceLoadBalancerStatus(context.TODO(), test.service, test.lb)
 			assert.Equal(t, test.expectedStatus, status)
 			assert.Equal(t, test.expectedError, err != nil)
+		})
+	}
+}
+
+func TestEnsureLoadBalancerAllowsNonConflictingAdditionalPublicIP(t *testing.T) {
+	const additionalIP = "203.0.113.10"
+
+	ctrl := gomock.NewController(t)
+	az := GetTestCloud(ctrl)
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ *v1.Service, lb *armnetwork.LoadBalancer) (bool, bool, *armnetwork.LoadBalancer, error) {
+		return false, false, lb, nil
+	}).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockLBBackendPool.EXPECT().GetBackendPrivateIPs(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
+	clusterResources, expectedInterfaces, expectedVirtualMachines := getClusterResources(az, 1, 1)
+	service := getTestService("service1", v1.ProtocolTCP, map[string]string{
+		consts.ServiceAnnotationAdditionalPublicIPs: additionalIP,
+	}, false, 80)
+	setMockEnv(az, expectedInterfaces, expectedVirtualMachines, 1)
+	securityGroupClient := mock_securitygroupclient.NewMockInterface(ctrl)
+	var err error
+	az.nsgRepo, err = securitygroup.NewSecurityGroupRepo(
+		az.SecurityGroupResourceGroup,
+		az.SecurityGroupName,
+		az.NsgCacheTTLInSeconds,
+		az.DisableAPICallCache,
+		securityGroupClient,
+	)
+	assert.NoError(t, err)
+	securityGroupClient.EXPECT().
+		Get(gomock.Any(), az.SecurityGroupResourceGroup, az.SecurityGroupName).
+		Return(getTestSecurityGroup(az), nil).
+		Times(1)
+	securityGroupClient.EXPECT().
+		CreateOrUpdate(gomock.Any(), az.SecurityGroupResourceGroup, az.SecurityGroupName, gomock.Any()).
+		DoAndReturn(func(
+			_ context.Context,
+			_, _ string,
+			properties armnetwork.SecurityGroup,
+		) (*armnetwork.SecurityGroup, error) {
+			if assert.Len(t, properties.Properties.SecurityRules, 1) {
+				assert.ElementsMatch(t, []string{"1.2.3.4", additionalIP}, securitygroup.ListDestinationPrefixes(properties.Properties.SecurityRules[0]))
+			}
+			return &properties, nil
+		}).
+		Times(1)
+
+	expectedLBs := make([]*armnetwork.LoadBalancer, 0)
+	setMockLBs(az, &expectedLBs, "service", 1, 1, false)
+	expectedLBs[0].Properties.FrontendIPConfigurations[0].Properties.PublicIPAddress.ID = ptr.To(
+		"/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-aservice1",
+	)
+
+	mockPLSRepo := privatelinkservice.NewMockRepository(ctrl)
+	mockPLSRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&armnetwork.PrivateLinkService{ID: to.Ptr(consts.PrivateLinkServiceNotExistID)}, nil).AnyTimes()
+	az.plsRepo = mockPLSRepo
+
+	status, err := az.EnsureLoadBalancer(context.TODO(), testClusterName, &service, clusterResources.nodes)
+	if assert.NoError(t, err) && assert.NotNil(t, status) {
+		assert.ElementsMatch(t, []v1.LoadBalancerIngress{
+			{IP: "1.2.3.4"},
+			{IP: additionalIP},
+		}, status.Ingress)
+	}
+}
+
+func TestReconcileServiceRejectsAdditionalPublicIPConflictBeforeMutation(t *testing.T) {
+	tests := []struct {
+		name                       string
+		serviceIP                  string
+		additionalIPs              string
+		isIPv6                     bool
+		internal                   bool
+		servicePIPName             string
+		servicePIPPrefixID         string
+		serviceLoadBalancerIP      string
+		frontendPending            bool
+		managedFrontendIPs         []string
+		frontendOnAnotherManagedLB bool
+		publicIPResourceGroup      string
+		existingStatus             []v1.LoadBalancerIngress
+		subnet                     *armnetwork.Subnet
+		expectedConflictIPs        []string
+	}{
+		{
+			name:                  "PIP in another resource group referenced by frontend on managed LB",
+			serviceIP:             "1.2.3.4",
+			additionalIPs:         "203.0.113.10,10.10.0.2",
+			managedFrontendIPs:    []string{"10.10.0.2"},
+			publicIPResourceGroup: "rg-frontend-owner",
+			expectedConflictIPs:   []string{"10.10.0.2"},
+		},
+		{
+			name:                  "new external Service",
+			serviceIP:             "1.2.3.4",
+			additionalIPs:         "203.0.113.10,10.10.0.2",
+			managedFrontendIPs:    []string{"10.10.0.2"},
+			publicIPResourceGroup: "rg",
+			expectedConflictIPs:   []string{"10.10.0.2"},
+		},
+		{
+			name:                  "desired static PIP before frontend creation",
+			serviceIP:             "203.0.113.10",
+			additionalIPs:         "203.0.113.10",
+			servicePIPName:        "desired-pip",
+			frontendPending:       true,
+			publicIPResourceGroup: "rg",
+			expectedConflictIPs:   []string{"203.0.113.10"},
+		},
+		// PIP creation precedes the LB update, so a partial reconciliation can leave a CCM-owned PIP unattached.
+		{
+			name:                  "existing generated PIP before frontend creation",
+			serviceIP:             "203.0.113.10",
+			additionalIPs:         "203.0.113.10",
+			frontendPending:       true,
+			publicIPResourceGroup: "rg",
+			expectedConflictIPs:   []string{"203.0.113.10"},
+		},
+		{
+			name:                  "existing prefix-backed generated PIP before frontend creation",
+			serviceIP:             "203.0.113.10",
+			additionalIPs:         "203.0.113.10",
+			servicePIPPrefixID:    "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix",
+			frontendPending:       true,
+			publicIPResourceGroup: "rg",
+			expectedConflictIPs:   []string{"203.0.113.10"},
+		},
+		{
+			name:                  "existing external Service updated with conflicting additional IP",
+			serviceIP:             "1.2.3.4",
+			additionalIPs:         "203.0.113.10,10.10.0.2",
+			managedFrontendIPs:    []string{"10.10.0.2"},
+			publicIPResourceGroup: "rg",
+			existingStatus: []v1.LoadBalancerIngress{
+				{IP: "1.2.3.4"},
+			},
+			expectedConflictIPs: []string{"10.10.0.2"},
+		},
+		{
+			name:                  "existing external Service with conflicting additional IP already in status",
+			serviceIP:             "1.2.3.4",
+			additionalIPs:         "203.0.113.10,10.10.0.2",
+			managedFrontendIPs:    []string{"10.10.0.2"},
+			publicIPResourceGroup: "rg",
+			existingStatus: []v1.LoadBalancerIngress{
+				{IP: "1.2.3.4"},
+				{IP: "10.10.0.2"},
+			},
+			expectedConflictIPs: []string{"10.10.0.2"},
+		},
+		{
+			name:                "IPv4 frontend on managed internal LB",
+			serviceIP:           "10.0.0.10",
+			additionalIPs:       "203.0.113.10,10.0.0.20",
+			internal:            true,
+			managedFrontendIPs:  []string{"10.0.0.20"},
+			expectedConflictIPs: []string{"10.0.0.20"},
+		},
+		{
+			name:                  "desired static private IP before frontend creation",
+			serviceIP:             "10.0.0.10",
+			additionalIPs:         "10.0.0.10",
+			internal:              true,
+			serviceLoadBalancerIP: "10.0.0.10",
+			frontendPending:       true,
+			expectedConflictIPs:   []string{"10.0.0.10"},
+		},
+		{
+			name:            "external to internal switch rejects IPv4 additional IP selected from status inside selected subnet before frontend creation",
+			serviceIP:       "10.0.0.10",
+			additionalIPs:   "10.0.0.10",
+			internal:        true,
+			frontendPending: true,
+			existingStatus: []v1.LoadBalancerIngress{
+				{IP: "203.0.113.20"},
+				{IP: "10.0.0.10"},
+			},
+			subnet:              &armnetwork.Subnet{Properties: &armnetwork.SubnetPropertiesFormat{AddressPrefixes: to.SliceOfPtrs("10.0.0.0/24")}},
+			expectedConflictIPs: []string{"10.0.0.10"},
+		},
+		{
+			name:                       "PIP referenced by frontend on another managed LB in multi-SLB mode",
+			serviceIP:                  "1.2.3.4",
+			additionalIPs:              "203.0.113.10,198.51.100.20",
+			managedFrontendIPs:         []string{"198.51.100.20"},
+			frontendOnAnotherManagedLB: true,
+			publicIPResourceGroup:      "rg",
+			expectedConflictIPs:        []string{"198.51.100.20"},
+		},
+		{
+			name:                "IPv4-mapped additional IP matching private IP of frontend on managed internal LB",
+			serviceIP:           "10.0.0.10",
+			additionalIPs:       "::ffff:10.0.0.20,203.0.113.10",
+			internal:            true,
+			managedFrontendIPs:  []string{"10.0.0.20"},
+			expectedConflictIPs: []string{"10.0.0.20"},
+		},
+		{
+			name:                "multiple additional IPs matching private IPs of frontends on managed internal LB",
+			serviceIP:           "10.0.0.10",
+			additionalIPs:       "203.0.113.10,10.0.0.20,10.0.0.21",
+			internal:            true,
+			managedFrontendIPs:  []string{"10.0.0.20", "10.0.0.21"},
+			expectedConflictIPs: []string{"10.0.0.20", "10.0.0.21"},
+		},
+		{
+			name:                "IPv6 frontend on managed internal LB",
+			serviceIP:           "fd00::10",
+			additionalIPs:       "2001:db8:ffff::10,fd00::20",
+			isIPv6:              true,
+			internal:            true,
+			managedFrontendIPs:  []string{"fd00::20"},
+			expectedConflictIPs: []string{"fd00::20"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			az := GetTestCloud(ctrl)
+			az.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+			// Any VMSet, backend pool, or NSG call means conflict validation happened too late.
+			az.VMSet = NewMockVMSet(ctrl)
+
+			annotations := map[string]string{
+				consts.ServiceAnnotationAdditionalPublicIPs: test.additionalIPs,
+			}
+			if test.internal {
+				annotations[consts.ServiceAnnotationLoadBalancerInternal] = consts.TrueAnnotationValue
+			}
+			if test.servicePIPName != "" {
+				annotations[consts.ServiceAnnotationPIPNameDualStack[test.isIPv6]] = test.servicePIPName
+			}
+			if test.servicePIPPrefixID != "" {
+				annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[test.isIPv6]] = test.servicePIPPrefixID
+			}
+			if test.serviceLoadBalancerIP != "" {
+				annotations[consts.ServiceAnnotationLoadBalancerIPDualStack[test.isIPv6]] = test.serviceLoadBalancerIP
+			}
+			service := getTestService("service1", v1.ProtocolTCP, annotations, test.isIPv6, 80)
+			service.Status.LoadBalancer.Ingress = test.existingStatus
+			originalStatus := service.Status.LoadBalancer.DeepCopy()
+			loadBalancerName := testClusterName
+			if test.internal {
+				loadBalancerName += consts.InternalLoadBalancerNameSuffix
+			}
+			managedLB := &armnetwork.LoadBalancer{
+				Name:       ptr.To(loadBalancerName),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{},
+			}
+			managedLBs := []*armnetwork.LoadBalancer{managedLB}
+			frontendLB := managedLB
+			if test.frontendOnAnotherManagedLB {
+				az.MultipleStandardLoadBalancerConfigurations = []config.MultipleStandardLoadBalancerConfiguration{
+					{Name: testClusterName},
+					{Name: "lb1"},
+				}
+				frontendLB = &armnetwork.LoadBalancer{
+					Name:       ptr.To("lb1"),
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{},
+				}
+				managedLBs = append(managedLBs, frontendLB)
+			}
+			if !test.frontendPending && !test.internal {
+				servicePIPName := testClusterName + "-aservice1"
+				servicePIPID := fmt.Sprintf(
+					"/subscriptions/subscription/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
+					az.ResourceGroup,
+					servicePIPName,
+				)
+				managedLB.Properties.FrontendIPConfigurations = append(
+					managedLB.Properties.FrontendIPConfigurations,
+					&armnetwork.FrontendIPConfiguration{
+						Name: ptr.To("aservice1"),
+						Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+							PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To(servicePIPID)},
+						},
+					},
+				)
+			} else if !test.frontendPending {
+				managedLB.Properties.FrontendIPConfigurations = append(
+					managedLB.Properties.FrontendIPConfigurations,
+					&armnetwork.FrontendIPConfiguration{
+						Name: ptr.To("aservice1"),
+						Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+							PrivateIPAddress: ptr.To(test.serviceIP),
+						},
+					},
+				)
+			}
+			for i, ip := range test.managedFrontendIPs {
+				if !test.internal {
+					ownerPIPName := fmt.Sprintf("frontend-owner-%d", i)
+					ownerPIPID := fmt.Sprintf(
+						"/subscriptions/subscription/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
+						test.publicIPResourceGroup,
+						ownerPIPName,
+					)
+					frontendLB.Properties.FrontendIPConfigurations = append(
+						frontendLB.Properties.FrontendIPConfigurations,
+						&armnetwork.FrontendIPConfiguration{
+							Name: ptr.To(fmt.Sprintf("frontend-owner-service-%d", i)),
+							Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+								PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To(ownerPIPID)},
+							},
+						},
+					)
+				} else {
+					frontendLB.Properties.FrontendIPConfigurations = append(frontendLB.Properties.FrontendIPConfigurations, &armnetwork.FrontendIPConfiguration{
+						Name: ptr.To(fmt.Sprintf("frontend-owner-service-%d", i)),
+						Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+							PrivateIPAddress: ptr.To(ip),
+						},
+					})
+				}
+			}
+			if !test.internal {
+				publicIPClient := az.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
+				servicePIPName := testClusterName + "-aservice1"
+				if test.servicePIPName != "" {
+					servicePIPName = test.servicePIPName
+				} else if test.servicePIPPrefixID != "" {
+					servicePIPName += "-prefix"
+				}
+				servicePIPID := fmt.Sprintf(
+					"/subscriptions/subscription/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
+					az.ResourceGroup,
+					servicePIPName,
+				)
+				servicePIP := &armnetwork.PublicIPAddress{
+					ID:   ptr.To(servicePIPID),
+					Name: ptr.To(servicePIPName),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress: ptr.To(test.serviceIP),
+					},
+				}
+				if test.servicePIPPrefixID != "" {
+					servicePIP.Properties.PublicIPPrefix = &armnetwork.SubResource{ID: ptr.To(test.servicePIPPrefixID)}
+				}
+				ownerPIPs := make([]*armnetwork.PublicIPAddress, 0, len(test.managedFrontendIPs))
+				for i, ip := range test.managedFrontendIPs {
+					ownerPIPName := fmt.Sprintf("frontend-owner-%d", i)
+					ownerPIPID := fmt.Sprintf(
+						"/subscriptions/subscription/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
+						test.publicIPResourceGroup,
+						ownerPIPName,
+					)
+					ownerPIPs = append(ownerPIPs, &armnetwork.PublicIPAddress{
+						ID:   ptr.To(ownerPIPID),
+						Name: ptr.To(ownerPIPName),
+						Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+							IPAddress: ptr.To(ip),
+						},
+					})
+				}
+				if test.publicIPResourceGroup == az.ResourceGroup {
+					publicIPClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(append([]*armnetwork.PublicIPAddress{servicePIP}, ownerPIPs...), nil).Times(1)
+				} else {
+					publicIPClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return([]*armnetwork.PublicIPAddress{servicePIP}, nil).Times(1)
+					publicIPClient.EXPECT().List(gomock.Any(), test.publicIPResourceGroup).Return(ownerPIPs, nil).Times(1)
+				}
+			}
+			if test.subnet != nil {
+				az.subnetRepo.(*subnet.MockRepository).EXPECT().Get(gomock.Any(), "rg", "vnet", "subnet").Return(
+					test.subnet, nil,
+				).Times(1)
+			}
+
+			loadBalancerClient := az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+			loadBalancerClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(managedLBs, nil).Times(1)
+
+			status, err := az.reconcileService(context.Background(), testClusterName, &service, nil)
+			if assert.Error(t, err) {
+				assert.ErrorContains(t, err, "additional public IPs")
+				assert.ErrorContains(t, err, "conflict with frontends of managed load balancers")
+				assert.ErrorContains(t, err, consts.ServiceAnnotationAdditionalPublicIPs)
+				for _, ip := range test.expectedConflictIPs {
+					assert.ErrorContains(t, err, ip)
+				}
+			}
+			assert.Nil(t, status)
+			assert.Equal(t, *originalStatus, service.Status.LoadBalancer)
+			assert.Equal(t, test.additionalIPs, service.Annotations[consts.ServiceAnnotationAdditionalPublicIPs])
+		})
+	}
+}
+
+func TestValidateAdditionalPublicIPs(t *testing.T) {
+	const (
+		additionalIPv4        = "203.0.113.10"
+		additionalIPv6        = "2001:db8::10"
+		additionalPrivateIPv4 = "10.0.0.10"
+		additionalPrivateIPv6 = "fd00::10"
+	)
+	managedLBs := func(frontends ...*armnetwork.FrontendIPConfiguration) []*armnetwork.LoadBalancer {
+		return []*armnetwork.LoadBalancer{{
+			Name: ptr.To(testClusterName),
+			Properties: &armnetwork.LoadBalancerPropertiesFormat{
+				FrontendIPConfigurations: frontends,
+			},
+		}}
+	}
+	publicFrontend := func(resourceGroup, name string) *armnetwork.FrontendIPConfiguration {
+		return &armnetwork.FrontendIPConfiguration{
+			Name: ptr.To("frontend"),
+			Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+				PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To(fmt.Sprintf(
+					"/subscriptions/subscription/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
+					resourceGroup,
+					name,
+				))},
+			},
+		}
+	}
+	desiredPIP := func(name, address string, version armnetwork.IPVersion) []*armnetwork.PublicIPAddress {
+		return []*armnetwork.PublicIPAddress{{
+			Name: ptr.To(name),
+			Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+				IPAddress:                ptr.To(address),
+				PublicIPAddressVersion:   ptr.To(version),
+				PublicIPAllocationMethod: ptr.To(armnetwork.IPAllocationMethodStatic),
+			},
+		}}
+	}
+	withNonConflictingGeneratedPIP := func(publicIPs ...*armnetwork.PublicIPAddress) []*armnetwork.PublicIPAddress {
+		return append(desiredPIP("testCluster-aservice1", "198.51.100.200", armnetwork.IPVersionIPv4), publicIPs...)
+	}
+	serviceWithAdditionalIPs := func(additionalIPs string, annotations map[string]string, ipFamilies ...v1.IPFamily) v1.Service {
+		serviceAnnotations := make(map[string]string, len(annotations)+1)
+		for key, value := range annotations {
+			serviceAnnotations[key] = value
+		}
+		serviceAnnotations[consts.ServiceAnnotationAdditionalPublicIPs] = additionalIPs
+		if len(ipFamilies) > 1 {
+			return getTestServiceDualStack("service1", v1.ProtocolTCP, serviceAnnotations, 80)
+		}
+		isIPv6 := len(ipFamilies) == 1 && ipFamilies[0] == v1.IPv6Protocol
+		return getTestService("service1", v1.ProtocolTCP, serviceAnnotations, isIPv6, 80)
+	}
+	serviceWithLoadBalancerIP := func(service v1.Service, loadBalancerIP string) v1.Service {
+		service.Spec.LoadBalancerIP = loadBalancerIP
+		return service
+	}
+	serviceWithStatus := func(service v1.Service, ingresses ...v1.LoadBalancerIngress) v1.Service {
+		service.Status.LoadBalancer.Ingress = ingresses
+		return service
+	}
+	type publicIPListFixture struct {
+		resourceGroup string
+		publicIPs     []*armnetwork.PublicIPAddress
+		calls         int
+		err           error
+	}
+	type subnetGetFixture struct {
+		resourceGroup string
+		subnet        *armnetwork.Subnet
+		err           error
+	}
+	ipv4Subnet := &armnetwork.Subnet{Properties: &armnetwork.SubnetPropertiesFormat{AddressPrefixes: to.SliceOfPtrs("10.0.0.0/24")}}
+	ipv6Subnet := &armnetwork.Subnet{Properties: &armnetwork.SubnetPropertiesFormat{AddressPrefixes: to.SliceOfPtrs("fd00::/64")}}
+	dualStackSubnet := &armnetwork.Subnet{Properties: &armnetwork.SubnetPropertiesFormat{AddressPrefixes: to.SliceOfPtrs("10.0.0.0/24", "fd00::/64")}}
+	nonConflictingGeneratedPIPFixture := []publicIPListFixture{{
+		resourceGroup: "rg",
+		publicIPs:     withNonConflictingGeneratedPIP(),
+		calls:         1,
+	}}
+	tests := []struct {
+		name          string
+		service       v1.Service
+		managedLBs    []*armnetwork.LoadBalancer
+		publicIPLists []publicIPListFixture
+		subnetGet     *subnetGetFixture
+		expectedError string
+	}{
+		{
+			name:    "allows Service without additional public IP annotation",
+			service: getTestService("service1", v1.ProtocolTCP, nil, false, 80),
+		},
+		{
+			name:          "returns error for invalid additional public IP annotation",
+			service:       serviceWithAdditionalIPs("not-an-ip", nil),
+			expectedError: `invalid service annotation service.beta.kubernetes.io/azure-additional-public-ips:not-an-ip`,
+		},
+		{
+			name:          "allows additional IP when there are no managed load balancers",
+			service:       serviceWithAdditionalIPs(additionalIPv4, nil),
+			publicIPLists: nonConflictingGeneratedPIPFixture,
+		},
+		{
+			name:          "allows external Service with private additional IP without subnet lookup",
+			service:       serviceWithAdditionalIPs(additionalPrivateIPv4, nil),
+			publicIPLists: nonConflictingGeneratedPIPFixture,
+		},
+		{
+			name:    "allows additional IP when generated PIP is absent",
+			service: serviceWithAdditionalIPs(additionalIPv4, nil),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				calls:         2,
+			}},
+		},
+		{
+			name:          "allows additional IP when managed load balancer is nil",
+			service:       serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs:    []*armnetwork.LoadBalancer{nil},
+			publicIPLists: nonConflictingGeneratedPIPFixture,
+		},
+		{
+			name:    "allows additional IP when managed load balancer has no properties",
+			service: serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs: []*armnetwork.LoadBalancer{{
+				Name: ptr.To(testClusterName),
+			}},
+			publicIPLists: nonConflictingGeneratedPIPFixture,
+		},
+		{
+			name:          "allows additional IP when managed load balancer has no frontends",
+			service:       serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs:    managedLBs(),
+			publicIPLists: nonConflictingGeneratedPIPFixture,
+		},
+		{
+			name: "rejects IPv4 additional IP matching desired PIP selected by name before frontend creation",
+			service: serviceWithAdditionalIPs(additionalIPv4, map[string]string{
+				consts.ServiceAnnotationPIPNameDualStack[false]: "desired-pip",
+			}),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				publicIPs:     desiredPIP("desired-pip", additionalIPv4, armnetwork.IPVersionIPv4),
+				calls:         1,
+			}},
+			expectedError: `additional public IPs [203.0.113.10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name: "rejects IPv4 additional IP matching desired PIP selected by address before frontend creation",
+			service: serviceWithAdditionalIPs(additionalIPv4, map[string]string{
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: additionalIPv4,
+			}),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				publicIPs:     desiredPIP("desired-pip", additionalIPv4, armnetwork.IPVersionIPv4),
+				calls:         1,
+			}},
+			expectedError: `additional public IPs [203.0.113.10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name:    "rejects IPv4 additional IP matching desired PIP selected by spec before frontend creation",
+			service: serviceWithLoadBalancerIP(serviceWithAdditionalIPs(additionalIPv4, nil), additionalIPv4),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				publicIPs:     desiredPIP("desired-pip", additionalIPv4, armnetwork.IPVersionIPv4),
+				calls:         1,
+			}},
+			expectedError: `additional public IPs [203.0.113.10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name: "rejects IPv6 additional IP matching desired PIP selected by name before frontend creation",
+			service: serviceWithAdditionalIPs(additionalIPv6, map[string]string{
+				consts.ServiceAnnotationPIPNameDualStack[true]: "desired-pip",
+			}, v1.IPv6Protocol),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				publicIPs:     desiredPIP("desired-pip", additionalIPv6, armnetwork.IPVersionIPv6),
+				calls:         1,
+			}},
+			expectedError: `additional public IPs [2001:db8::10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name: "rejects IPv6 additional IP matching desired PIP selected by address before frontend creation",
+			service: serviceWithAdditionalIPs(additionalIPv6, map[string]string{
+				consts.ServiceAnnotationLoadBalancerIPDualStack[true]: additionalIPv6,
+			}, v1.IPv6Protocol),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				publicIPs:     desiredPIP("desired-pip", additionalIPv6, armnetwork.IPVersionIPv6),
+				calls:         1,
+			}},
+			expectedError: `additional public IPs [2001:db8::10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name:    "rejects IPv6 additional IP matching desired PIP selected by spec before frontend creation",
+			service: serviceWithLoadBalancerIP(serviceWithAdditionalIPs(additionalIPv6, nil, v1.IPv6Protocol), additionalIPv6),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				publicIPs:     desiredPIP("desired-pip", additionalIPv6, armnetwork.IPVersionIPv6),
+				calls:         1,
+			}},
+			expectedError: `additional public IPs [2001:db8::10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name: "rejects additional IP matching desired PIP in another resource group before frontend creation",
+			service: serviceWithAdditionalIPs(additionalIPv4, map[string]string{
+				consts.ServiceAnnotationPIPNameDualStack[false]:   "desired-pip",
+				consts.ServiceAnnotationLoadBalancerResourceGroup: "desired-pip-rg",
+			}),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "desired-pip-rg",
+				publicIPs:     desiredPIP("desired-pip", additionalIPv4, armnetwork.IPVersionIPv4),
+				calls:         1,
+			}},
+			expectedError: `additional public IPs [203.0.113.10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name: "rejects dual-stack additional IPs matching desired PIPs before frontend creation",
+			service: serviceWithAdditionalIPs(additionalIPv4+","+additionalIPv6, map[string]string{
+				consts.ServiceAnnotationPIPNameDualStack[false]: "desired-pip-v4",
+				consts.ServiceAnnotationPIPNameDualStack[true]:  "desired-pip-v6",
+			}, v1.IPv4Protocol, v1.IPv6Protocol),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				publicIPs:     append(desiredPIP("desired-pip-v4", additionalIPv4, armnetwork.IPVersionIPv4), desiredPIP("desired-pip-v6", additionalIPv6, armnetwork.IPVersionIPv6)...),
+				calls:         1,
+			}},
+			expectedError: `additional public IPs [203.0.113.10 2001:db8::10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name:    "rejects additional IP matching existing generated PIP before frontend creation",
+			service: serviceWithAdditionalIPs(additionalIPv4, nil),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				publicIPs:     desiredPIP("testCluster-aservice1", additionalIPv4, armnetwork.IPVersionIPv4),
+				calls:         1,
+			}},
+			expectedError: `additional public IPs [203.0.113.10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name: "rejects additional IP matching existing prefix-backed generated PIP before frontend creation",
+			service: serviceWithAdditionalIPs(additionalIPv4, map[string]string{
+				consts.ServiceAnnotationPIPPrefixIDDualStack[false]: "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix",
+			}),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				publicIPs: []*armnetwork.PublicIPAddress{{
+					Name: ptr.To("testCluster-aservice1-prefix"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress:                ptr.To(additionalIPv4),
+						PublicIPAddressVersion:   ptr.To(armnetwork.IPVersionIPv4),
+						PublicIPAllocationMethod: ptr.To(armnetwork.IPAllocationMethodStatic),
+						PublicIPPrefix: &armnetwork.SubResource{ID: ptr.To(
+							"/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix",
+						)},
+					},
+				}},
+				calls: 1,
+			}},
+			expectedError: `additional public IPs [203.0.113.10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name: "allows additional IP not matching desired PIP before frontend creation",
+			service: serviceWithAdditionalIPs(additionalIPv4, map[string]string{
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "198.51.100.10",
+			}),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				publicIPs:     desiredPIP("desired-pip", "198.51.100.10", armnetwork.IPVersionIPv4),
+				calls:         1,
+			}},
+		},
+		{
+			name: "returns error when desired public IP selection is invalid",
+			service: serviceWithAdditionalIPs(additionalIPv4, map[string]string{
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "not-an-ip",
+			}),
+			expectedError: `determine public IP for service "default/service1": external Service "default/service1" has invalid LoadBalancer IP "not-an-ip"`,
+		},
+		{
+			name: "returns error when lookup of desired PIP fails",
+			service: serviceWithAdditionalIPs(additionalIPv4, map[string]string{
+				consts.ServiceAnnotationPIPNameDualStack[false]: "desired-pip",
+			}),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				calls:         1,
+				err:           errors.New("list desired PIP failed"),
+			}},
+			expectedError: `get public IP "desired-pip" selected by service "default/service1": list desired PIP failed`,
+		},
+		{
+			name: "returns error when desired PIP selected by name is missing after cache refresh",
+			service: serviceWithAdditionalIPs(additionalIPv4, map[string]string{
+				consts.ServiceAnnotationPIPNameDualStack[false]: "desired-pip",
+			}),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				calls:         2,
+			}},
+			expectedError: `public IP "desired-pip" selected by service "default/service1" was not found in resource group "rg"`,
+		},
+		{
+			name: "returns error when desired PIP has no address",
+			service: serviceWithAdditionalIPs(additionalIPv4, map[string]string{
+				consts.ServiceAnnotationPIPNameDualStack[false]: "desired-pip",
+			}),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				publicIPs: []*armnetwork.PublicIPAddress{{
+					Name:       ptr.To("desired-pip"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{},
+				}},
+				calls: 1,
+			}},
+			expectedError: `public IP "desired-pip" selected by service "default/service1" has no IP address`,
+		},
+		{
+			name: "returns error when desired PIP has invalid address",
+			service: serviceWithAdditionalIPs(additionalIPv4, map[string]string{
+				consts.ServiceAnnotationPIPNameDualStack[false]: "desired-pip",
+			}),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				publicIPs: []*armnetwork.PublicIPAddress{{
+					Name: ptr.To("desired-pip"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress: ptr.To("not-an-ip"),
+					},
+				}},
+				calls: 1,
+			}},
+			expectedError: `parse public IP "not-an-ip" selected by service "default/service1"`,
+		},
+		{
+			name: "allows internal Service requiring dynamic private IP without subnet lookup",
+			service: serviceWithAdditionalIPs(additionalPrivateIPv4, map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue,
+			}),
+		},
+		{
+			name: "rejects internal IPv4 additional IP selected from Service status inside selected subnet before frontend creation",
+			service: serviceWithStatus(serviceWithAdditionalIPs(additionalPrivateIPv4, map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue,
+			}),
+				v1.LoadBalancerIngress{IP: "203.0.113.20"},
+				v1.LoadBalancerIngress{IP: additionalPrivateIPv4},
+			),
+			subnetGet:     &subnetGetFixture{resourceGroup: "vnet-rg", subnet: ipv4Subnet},
+			expectedError: `additional public IPs [10.0.0.10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name: "rejects internal IPv6 additional IP selected from Service status inside selected subnet before frontend creation",
+			service: serviceWithStatus(serviceWithAdditionalIPs(additionalPrivateIPv6, map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue,
+			}, v1.IPv6Protocol),
+				v1.LoadBalancerIngress{IP: "2001:db8::20"},
+				v1.LoadBalancerIngress{IP: additionalPrivateIPv6},
+			),
+			subnetGet:     &subnetGetFixture{subnet: ipv6Subnet},
+			expectedError: `additional public IPs [fd00::10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name: "rejects dual-stack internal additional IPs selected from Service status inside selected subnet with one subnet lookup",
+			service: serviceWithStatus(serviceWithAdditionalIPs(additionalPrivateIPv4+","+additionalPrivateIPv6, map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue,
+			}, v1.IPv4Protocol, v1.IPv6Protocol),
+				v1.LoadBalancerIngress{IP: "203.0.113.20"},
+				v1.LoadBalancerIngress{IP: "2001:db8::20"},
+				v1.LoadBalancerIngress{IP: additionalPrivateIPv4},
+				v1.LoadBalancerIngress{IP: additionalPrivateIPv6},
+			),
+			subnetGet:     &subnetGetFixture{subnet: dualStackSubnet},
+			expectedError: `additional public IPs [10.0.0.10 fd00::10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name: "allows internal IPv4 additional IP in Service status outside selected subnet",
+			service: serviceWithStatus(serviceWithAdditionalIPs(additionalIPv4, map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue,
+			}),
+				v1.LoadBalancerIngress{IP: additionalIPv4},
+			),
+			subnetGet: &subnetGetFixture{subnet: ipv4Subnet},
+		},
+		{
+			name: "returns error when lookup of subnet for status-derived internal IP fails",
+			service: serviceWithStatus(serviceWithAdditionalIPs(additionalPrivateIPv4, map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue,
+			}),
+				v1.LoadBalancerIngress{IP: additionalPrivateIPv4},
+			),
+			subnetGet:     &subnetGetFixture{err: errors.New("get subnet failed")},
+			expectedError: `get subnet "subnet" selected by service "default/service1": get subnet failed`,
+		},
+		{
+			name: "returns error when subnet for status-derived internal IP is missing",
+			service: serviceWithStatus(serviceWithAdditionalIPs(additionalPrivateIPv4, map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue,
+			}),
+				v1.LoadBalancerIngress{IP: additionalPrivateIPv4},
+			),
+			subnetGet:     &subnetGetFixture{err: &azcore.ResponseError{StatusCode: http.StatusNotFound}},
+			expectedError: `subnet "subnet" selected by service "default/service1" was not found in virtual network "vnet"`,
+		},
+		{
+			name: "rejects internal IPv4 additional IP matching desired static private IP selected by annotation before frontend creation",
+			service: serviceWithAdditionalIPs(additionalPrivateIPv4, map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:           consts.TrueAnnotationValue,
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: additionalPrivateIPv4,
+			}),
+			expectedError: `additional public IPs [10.0.0.10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name: "rejects internal IPv4 additional IP matching desired static private IP selected by spec before frontend creation",
+			service: serviceWithLoadBalancerIP(serviceWithAdditionalIPs(additionalPrivateIPv4, map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue,
+			}), additionalPrivateIPv4),
+			expectedError: `additional public IPs [10.0.0.10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name: "rejects internal IPv6 additional IP matching desired static private IP selected by annotation before frontend creation",
+			service: serviceWithAdditionalIPs(additionalPrivateIPv6, map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:          consts.TrueAnnotationValue,
+				consts.ServiceAnnotationLoadBalancerIPDualStack[true]: additionalPrivateIPv6,
+			}, v1.IPv6Protocol),
+			expectedError: `additional public IPs [fd00::10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name: "rejects internal IPv6 additional IP matching desired static private IP selected by spec before frontend creation",
+			service: serviceWithLoadBalancerIP(serviceWithAdditionalIPs(additionalPrivateIPv6, map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue,
+			}, v1.IPv6Protocol), additionalPrivateIPv6),
+			expectedError: `additional public IPs [fd00::10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name: "rejects dual-stack internal additional IPs matching desired static private IPs before frontend creation",
+			service: serviceWithAdditionalIPs(additionalPrivateIPv4+","+additionalPrivateIPv6, map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:           consts.TrueAnnotationValue,
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: additionalPrivateIPv4,
+				consts.ServiceAnnotationLoadBalancerIPDualStack[true]:  additionalPrivateIPv6,
+			}, v1.IPv4Protocol, v1.IPv6Protocol),
+			expectedError: `additional public IPs [10.0.0.10 fd00::10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name: "allows internal additional IP not matching desired static private IP before frontend creation",
+			service: serviceWithAdditionalIPs(additionalPrivateIPv4, map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:           consts.TrueAnnotationValue,
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "10.0.0.20",
+			}),
+		},
+		{
+			name: "returns error when desired static private IP is invalid",
+			service: serviceWithAdditionalIPs(additionalPrivateIPv4, map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:           consts.TrueAnnotationValue,
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "not-an-ip",
+			}),
+			expectedError: `parse private IP "not-an-ip" selected by service "default/service1"`,
+		},
+		{
+			name:          "allows additional IP when frontend is nil",
+			service:       serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs:    managedLBs(nil),
+			publicIPLists: nonConflictingGeneratedPIPFixture,
+		},
+		{
+			name:    "allows additional IP when frontend has no properties",
+			service: serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs: managedLBs(&armnetwork.FrontendIPConfiguration{
+				Name: ptr.To("frontend"),
+			}),
+			publicIPLists: nonConflictingGeneratedPIPFixture,
+		},
+		{
+			name:    "allows additional IP while dynamic private IP of frontend on managed LB is unallocated",
+			service: serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs: managedLBs(&armnetwork.FrontendIPConfiguration{
+				Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+					PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
+				},
+			}),
+			publicIPLists: nonConflictingGeneratedPIPFixture,
+		},
+		{
+			name:    "returns error when static private IP of frontend on managed LB is missing",
+			service: serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs: managedLBs(&armnetwork.FrontendIPConfiguration{
+				Name: ptr.To("frontend"),
+				Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+					PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
+				},
+			}),
+			publicIPLists: nonConflictingGeneratedPIPFixture,
+			expectedError: `managed load balancer "testCluster" frontend "frontend" has no IP address`,
+		},
+		{
+			name:    "rejects additional IP matching dynamically allocated private IP of frontend on managed LB",
+			service: serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs: managedLBs(&armnetwork.FrontendIPConfiguration{
+				Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+					PrivateIPAddress:          ptr.To(additionalIPv4),
+					PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
+				},
+			}),
+			publicIPLists: nonConflictingGeneratedPIPFixture,
+			expectedError: `additional public IPs [203.0.113.10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name:    "allows additional IP not matching dynamically allocated private IP of frontend on managed LB",
+			service: serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs: managedLBs(&armnetwork.FrontendIPConfiguration{
+				Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+					PrivateIPAddress:          ptr.To("198.51.100.10"),
+					PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
+				},
+			}),
+			publicIPLists: nonConflictingGeneratedPIPFixture,
+		},
+		{
+			name:    "rejects additional IP matching static private IP of frontend on managed LB",
+			service: serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs: managedLBs(&armnetwork.FrontendIPConfiguration{
+				Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+					PrivateIPAddress:          ptr.To(additionalIPv4),
+					PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
+				},
+			}),
+			publicIPLists: nonConflictingGeneratedPIPFixture,
+			expectedError: `additional public IPs [203.0.113.10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name:    "reports duplicate conflicting additional IP once",
+			service: serviceWithAdditionalIPs(additionalIPv4+","+additionalIPv4, nil),
+			managedLBs: managedLBs(&armnetwork.FrontendIPConfiguration{
+				Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+					PrivateIPAddress:          ptr.To(additionalIPv4),
+					PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
+				},
+			}),
+			publicIPLists: nonConflictingGeneratedPIPFixture,
+			expectedError: `additional public IPs [203.0.113.10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name:    "allows additional IP not matching static private IP of frontend on managed LB",
+			service: serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs: managedLBs(&armnetwork.FrontendIPConfiguration{
+				Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+					PrivateIPAddress:          ptr.To("198.51.100.10"),
+					PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
+				},
+			}),
+			publicIPLists: nonConflictingGeneratedPIPFixture,
+		},
+		{
+			name:    "returns error when private IP of frontend on managed LB is invalid",
+			service: serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs: managedLBs(&armnetwork.FrontendIPConfiguration{
+				Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+					PrivateIPAddress: ptr.To("not-an-ip"),
+				},
+			}),
+			publicIPLists: nonConflictingGeneratedPIPFixture,
+			expectedError: `parse managed load balancer "testCluster" frontend IP "not-an-ip"`,
+		},
+		{
+			name:       "rejects IPv4 additional IP matching PIP referenced by frontend on managed LB",
+			service:    serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs: managedLBs(publicFrontend("rg", "pip-v4")),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				publicIPs: withNonConflictingGeneratedPIP(&armnetwork.PublicIPAddress{
+					Name: ptr.To("pip-v4"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress:              ptr.To(additionalIPv4),
+						PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
+					},
+				}),
+				calls: 1,
+			}},
+			expectedError: `additional public IPs [203.0.113.10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name:       "allows IPv4 additional IP not matching PIP referenced by frontend on managed LB",
+			service:    serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs: managedLBs(publicFrontend("rg", "pip-v4")),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				publicIPs: withNonConflictingGeneratedPIP(&armnetwork.PublicIPAddress{
+					Name: ptr.To("pip-v4"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress:              ptr.To("198.51.100.10"),
+						PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv4),
+					},
+				}),
+				calls: 1,
+			}},
+		},
+		{
+			name:       "rejects IPv6 additional IP matching PIP referenced by frontend on managed LB",
+			service:    serviceWithAdditionalIPs(additionalIPv6, nil),
+			managedLBs: managedLBs(publicFrontend("rg", "pip-v6")),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				publicIPs: withNonConflictingGeneratedPIP(&armnetwork.PublicIPAddress{
+					Name: ptr.To("pip-v6"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress:              ptr.To(additionalIPv6),
+						PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv6),
+					},
+				}),
+				calls: 1,
+			}},
+			expectedError: `additional public IPs [2001:db8::10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name:       "allows IPv6 additional IP not matching PIP referenced by frontend on managed LB",
+			service:    serviceWithAdditionalIPs(additionalIPv6, nil),
+			managedLBs: managedLBs(publicFrontend("rg", "pip-v6")),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				publicIPs: withNonConflictingGeneratedPIP(&armnetwork.PublicIPAddress{
+					Name: ptr.To("pip-v6"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress:              ptr.To("2001:db8::20"),
+						PublicIPAddressVersion: to.Ptr(armnetwork.IPVersionIPv6),
+					},
+				}),
+				calls: 1,
+			}},
+		},
+		{
+			name:       "rejects additional IP matching PIP in another resource group referenced by frontend on managed LB",
+			service:    serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs: managedLBs(publicFrontend("FRONTEND-rg", "pip")),
+			publicIPLists: []publicIPListFixture{
+				{resourceGroup: "rg", publicIPs: withNonConflictingGeneratedPIP(), calls: 1},
+				{
+					resourceGroup: "frontend-rg",
+					publicIPs: []*armnetwork.PublicIPAddress{{
+						Name: ptr.To("pip"),
+						Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+							IPAddress: ptr.To(additionalIPv4),
+						},
+					}},
+					calls: 1,
+				},
+			},
+			expectedError: `additional public IPs [203.0.113.10] conflict with frontends of managed load balancers`,
+		},
+		{
+			name:    "returns error when frontend on managed LB has PIP reference without ID",
+			service: serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs: managedLBs(&armnetwork.FrontendIPConfiguration{
+				Name: ptr.To("frontend"),
+				Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &armnetwork.PublicIPAddress{},
+				},
+			}),
+			publicIPLists: nonConflictingGeneratedPIPFixture,
+			expectedError: `managed load balancer "testCluster" frontend "frontend" has no public IP ID`,
+		},
+		{
+			name:    "returns error when frontend on managed LB has malformed PIP reference ID",
+			service: serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs: managedLBs(&armnetwork.FrontendIPConfiguration{
+				Name: ptr.To("frontend"),
+				Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("not-an-arm-id")},
+				},
+			}),
+			publicIPLists: nonConflictingGeneratedPIPFixture,
+			expectedError: `get public IP resource group from ID for managed load balancer "testCluster" frontend "frontend"`,
+		},
+		{
+			name:    "returns error when frontend PIP ID on managed LB has no resource name",
+			service: serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs: managedLBs(&armnetwork.FrontendIPConfiguration{
+				Name: ptr.To("frontend"),
+				Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To(
+						"/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/",
+					)},
+				},
+			}),
+			publicIPLists: nonConflictingGeneratedPIPFixture,
+			expectedError: `get public IP name from ID for managed load balancer "testCluster" frontend "frontend"`,
+		},
+		{
+			name:    "returns error when frontend PIP reference on managed LB targets different resource type",
+			service: serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs: managedLBs(&armnetwork.FrontendIPConfiguration{
+				Name: ptr.To("frontend"),
+				Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To(
+						"/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix",
+					)},
+				},
+			}),
+			publicIPLists: nonConflictingGeneratedPIPFixture,
+			expectedError: `get public IP resource group from ID for managed load balancer "testCluster" frontend "frontend"`,
+		},
+		{
+			name:       "returns error when lookup of PIP referenced by frontend on managed LB fails",
+			service:    serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs: managedLBs(publicFrontend("frontend-rg", "pip")),
+			publicIPLists: []publicIPListFixture{
+				{resourceGroup: "rg", publicIPs: withNonConflictingGeneratedPIP(), calls: 1},
+				{resourceGroup: "frontend-rg", calls: 1, err: errors.New("list public IPs failed")},
+			},
+			expectedError: `get public IP "pip" for managed load balancer "testCluster": list public IPs failed`,
+		},
+		{
+			name:       "returns error when PIP referenced by frontend on managed LB is missing after cache refresh",
+			service:    serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs: managedLBs(publicFrontend("rg", "missing-pip")),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				publicIPs:     withNonConflictingGeneratedPIP(),
+				calls:         2,
+			}},
+			expectedError: `public IP "missing-pip" for managed load balancer "testCluster" was not found`,
+		},
+		{
+			name:       "returns error when PIP referenced by frontend on managed LB has no address",
+			service:    serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs: managedLBs(publicFrontend("rg", "pip")),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				publicIPs: withNonConflictingGeneratedPIP(&armnetwork.PublicIPAddress{
+					Name:       ptr.To("pip"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{},
+				}),
+				calls: 1,
+			}},
+			expectedError: `public IP "pip" for managed load balancer "testCluster" has no IP address`,
+		},
+		{
+			name:       "returns error when PIP referenced by frontend on managed LB has invalid address",
+			service:    serviceWithAdditionalIPs(additionalIPv4, nil),
+			managedLBs: managedLBs(publicFrontend("rg", "pip")),
+			publicIPLists: []publicIPListFixture{{
+				resourceGroup: "rg",
+				publicIPs: withNonConflictingGeneratedPIP(&armnetwork.PublicIPAddress{
+					Name: ptr.To("pip"),
+					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+						IPAddress: ptr.To("not-an-ip"),
+					},
+				}),
+				calls: 1,
+			}},
+			expectedError: `parse public IP "not-an-ip" for managed load balancer "testCluster"`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			az := GetTestCloud(ctrl)
+			service := test.service
+			for _, fixture := range test.publicIPLists {
+				az.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface).
+					EXPECT().List(gomock.Any(), fixture.resourceGroup).
+					Return(fixture.publicIPs, fixture.err).
+					Times(fixture.calls)
+			}
+			if subnetGet := test.subnetGet; subnetGet != nil {
+				vnetResourceGroup := az.ResourceGroup
+				if subnetGet.resourceGroup != "" {
+					az.VnetResourceGroup = subnetGet.resourceGroup
+					vnetResourceGroup = subnetGet.resourceGroup
+				}
+				az.subnetRepo.(*subnet.MockRepository).EXPECT().Get(gomock.Any(), vnetResourceGroup, "vnet", "subnet").Return(subnetGet.subnet, subnetGet.err).Times(1)
+			}
+
+			err := az.validateAdditionalPublicIPs(context.Background(), testClusterName, &service, test.managedLBs)
+			if test.expectedError == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorContains(t, err, test.expectedError)
+			}
 		})
 	}
 }
