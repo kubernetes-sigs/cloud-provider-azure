@@ -577,7 +577,10 @@ func (az *Cloud) ensureRouteTableTagged(rt *armnetwork.RouteTable) (map[string]*
 	if az.Tags == "" && (len(az.TagsMap) == 0) {
 		return nil, false
 	}
-	tags := parseTags(az.Tags, az.TagsMap)
+	tags, droppedKeys := parseTags(az.Tags, az.TagsMap)
+	if len(droppedKeys) > 0 {
+		log.Background().WithName("ensureRouteTableTagged").V(2).Info("Found duplicate tag keys in cloud configuration", "droppedKeys", droppedKeys)
+	}
 	if rt.Tags == nil {
 		rt.Tags = make(map[string]*string)
 	}
