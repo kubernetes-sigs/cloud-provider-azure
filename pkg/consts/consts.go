@@ -45,9 +45,14 @@ const (
 	LabelPlatformSubFaultDomain = "topology.kubernetes.azure.com/sub-fault-domain"
 	// LabelPlatformInterconnectGroup is the label key of Platform Interconnect Group
 	LabelPlatformInterconnectGroup = "topology.kubernetes.azure.com/interconnect-group"
+	// LabelPlatformInterconnectSubgroup is the label key of Platform Interconnect Subgroup
+	LabelPlatformInterconnectSubgroup = "topology.kubernetes.azure.com/interconnect-subgroup"
 
 	// TagNameInterconnectGroup is the tag name in IMDS tagsList for Platform Interconnect Group
 	TagNameInterconnectGroup = "Platform_Interconnect_Group"
+
+	// MetadataLabelEvaluationCostLimit bounds the runtime cost of each built-in CEL rule.
+	MetadataLabelEvaluationCostLimit = 1000
 
 	// ADFSIdentitySystem is the override value for tenantID on Azure Stack clouds.
 	ADFSIdentitySystem = "adfs"
@@ -133,6 +138,16 @@ const (
 	// ProvisioningStateUnknown is the unknown provisioning state
 	ProvisioningStateUnknown = "Unknown"
 )
+
+// ManagedMetadataLabelKeys is the set of node label keys that built-in IMDS
+// metadata label rules are permitted to produce. It is the single source of
+// truth shared by the provider's built-in rules and the node manager's
+// guardrail that prevents metadata labels from overwriting other managed node
+// labels. Adding a new metadata label rule requires registering its key here.
+var ManagedMetadataLabelKeys = map[string]struct{}{
+	LabelPlatformInterconnectGroup:    {},
+	LabelPlatformInterconnectSubgroup: {},
+}
 
 // cache
 const (
@@ -434,7 +449,7 @@ const (
 // metadata service
 const (
 	// ImdsInstanceAPIVersion is the imds instance api version
-	ImdsInstanceAPIVersion = "2021-10-01"
+	ImdsInstanceAPIVersion = "2025-11-15"
 	// ImdsLoadBalancerAPIVersion is the imds load balancer api version
 	ImdsLoadBalancerAPIVersion = "2020-10-01"
 	// ImdsServer is the imds server endpoint
