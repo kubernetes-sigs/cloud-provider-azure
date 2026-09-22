@@ -281,9 +281,6 @@ spec:
             {{- if hasKey .Values.cloudControllerManager "leaderElectResourceLock" }}
             - "--leader-elect-resource-lock={{ .Values.cloudControllerManager.leaderElectResourceLock }}"
             {{- end }}
-            {{- if hasKey .Values.cloudControllerManager "leaderElectResourceLock" }}
-            - "--leader-elect-resource-lock={{ .Values.cloudControllerManager.leaderElectResourceLock }}"
-            {{- end }}
             {{- if hasKey .Values.cloudControllerManager "master" }}
             - "--master={{ .Values.cloudControllerManager.master }}"
             {{- end }}
