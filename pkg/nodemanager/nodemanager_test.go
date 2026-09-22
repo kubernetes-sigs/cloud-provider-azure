@@ -1871,7 +1871,7 @@ func TestInitializeNodeWithLBMetadataStatus(t *testing.T) {
 				mockNP.EXPECT().InstanceType(gomock.Any(), types.NodeName(lbTestNodeName)).Return("Standard_D2s_v3", nil)
 				mockNP.EXPECT().GetZone(gomock.Any(), types.NodeName(lbTestNodeName)).Return(cloudprovider.Zone{Region: "eastus", FailureDomain: "eastus-1"}, nil)
 				mockNP.EXPECT().GetPlatformSubFaultDomain(gomock.Any()).Return("", nil)
-				mockNP.EXPECT().GetInterconnectGroupID(gomock.Any()).Return("", nil)
+				mockNP.EXPECT().GetMetadataLabels(gomock.Any()).Return(nil, nil)
 			}
 			cnc := newLBTestController(client, mockNP)
 

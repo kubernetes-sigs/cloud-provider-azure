@@ -37,6 +37,7 @@ import (
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+	providererrors "sigs.k8s.io/cloud-provider-azure/pkg/provider/errors"
 )
 
 func TestCompileMetadataLabelRules(t *testing.T) {
