@@ -24,7 +24,12 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/google/cel-go/cel"
+	"github.com/google/cel-go/common/types"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -83,7 +88,42 @@ type ComputeMetadata struct {
 	VMScaleSetName         string `json:"vmScaleSetName,omitempty"`
 	SubscriptionID         string `json:"subscriptionId,omitempty"`
 	ResourceID             string `json:"resourceId,omitempty"`
+	InterconnectGroupID    string `json:"interconnectGroupId,omitempty"`
+	InterconnectSubgroupID string `json:"interconnectSubgroupId,omitempty"`
 	TagsList               []Tag  `json:"tagsList,omitempty"`
+}
+
+// UnmarshalJSON rejects non-string M2 IDs, including null, rather than selecting M1.
+func (compute *ComputeMetadata) UnmarshalJSON(data []byte) error {
+	type computeMetadata ComputeMetadata
+	decoded := struct {
+		*computeMetadata
+		InterconnectGroupID    json.RawMessage `json:"interconnectGroupId"`
+		InterconnectSubgroupID json.RawMessage `json:"interconnectSubgroupId"`
+	}{computeMetadata: (*computeMetadata)(compute)}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	for _, field := range []struct {
+		name string
+		raw  json.RawMessage
+		dest *string
+	}{
+		{"interconnectGroupId", decoded.InterconnectGroupID, &compute.InterconnectGroupID},
+		{"interconnectSubgroupId", decoded.InterconnectSubgroupID, &compute.InterconnectSubgroupID},
+	} {
+		if len(field.raw) == 0 {
+			continue
+		}
+		// encoding/json otherwise accepts null when decoding a Go string.
+		if string(field.raw) == "null" {
+			return fmt.Errorf("compute metadata field %q must be a string", field.name)
+		}
+		if err := json.Unmarshal(field.raw, field.dest); err != nil {
+			return fmt.Errorf("decode compute metadata field %q: %w", field.name, err)
+		}
+	}
+	return nil
 }
 
 // InstanceMetadata represents instance information.
@@ -300,34 +340,144 @@ func (az *Cloud) GetPlatformSubFaultDomain(ctx context.Context) (string, error) 
 	return "", nil
 }
 
-// GetInterconnectGroupID returns the Platform Interconnect Group ID from IMDS if set.
-// It reads the value from the Platform_Interconnect_Group tag in tagsList.
-func (az *Cloud) GetInterconnectGroupID(ctx context.Context) (string, error) {
-	logger := log.FromContextOrBackground(ctx).WithName("GetInterconnectGroupID")
-	if az.UseInstanceMetadata {
-		metadata, err := az.Metadata.GetMetadata(ctx, azcache.CacheReadTypeUnsafe)
-		if err != nil {
-			return "", err
-		}
-		if metadata.Compute == nil {
-			_ = az.Metadata.imsCache.Delete(consts.MetadataCacheKey)
-			return "", errors.New("failure of getting compute information from instance metadata")
-		}
+type metadataLabelRule struct {
+	name       string
+	label      string
+	expression string
+}
 
-		// Check tagsList for Platform_Interconnect_Group tag
-		for _, tag := range metadata.Compute.TagsList {
-			if tag.Name == consts.TagNameInterconnectGroup {
-				if tag.Value == "" {
-					logger.V(4).Info("Interconnect Group tag is present but value is empty")
-					return "", nil
-				}
-				logger.V(2).Info("found Interconnect Group ID from tagsList", "InterconnectGroupID", tag.Value)
-				return tag.Value, nil
-			}
-		}
+type compiledMetadataLabelRule struct {
+	name    string
+	label   string
+	program cel.Program
+}
 
-		// Tag not found - this is normal for VMs without Interconnect Groups
-		logger.V(4).Info("Tag not found in IMDS", "tagName", consts.TagNameInterconnectGroup)
+// interconnectLabelExpression builds the CEL expression for one interconnect
+// label. When either M2 ID is present, it selects this label's M2 compute field
+// (m2Field), keeping M2 self-consistent without mixing in legacy tags.
+// Otherwise it falls back to the legacy M1 group tag, which represents a
+// subgroup and is aliased onto both the group and subgroup labels.
+func interconnectLabelExpression(m2Field string) string {
+	return fmt.Sprintf(
+		"compute.interconnectGroupId != '' || compute.interconnectSubgroupId != '' ? compute[%q] : (%q in tags ? tags[%q] : '')",
+		m2Field, consts.TagNameInterconnectGroup, consts.TagNameInterconnectGroup)
+}
+
+// Initialize on the first IMDS label request, retaining compilation errors for callers.
+// Programs are immutable and shared across requests; expressions are not user-configurable.
+var builtinMetadataLabelRules = sync.OnceValues(func() ([]compiledMetadataLabelRule, error) {
+	rules := []metadataLabelRule{
+		{
+			name:       "interconnect-group",
+			label:      consts.LabelPlatformInterconnectGroup,
+			expression: interconnectLabelExpression("interconnectGroupId"),
+		},
+		{
+			name:       "interconnect-subgroup",
+			label:      consts.LabelPlatformInterconnectSubgroup,
+			expression: interconnectLabelExpression("interconnectSubgroupId"),
+		},
 	}
-	return "", nil
+	// Keep built-in rules aligned with the registry the node manager trusts, so
+	// a new rule cannot silently produce a label the consumer will reject.
+	for _, rule := range rules {
+		if _, ok := consts.ManagedMetadataLabelKeys[rule.label]; !ok {
+			return nil, fmt.Errorf("built-in metadata label rule %q produces unregistered label %q", rule.name, rule.label)
+		}
+	}
+	return compileMetadataLabelRules(rules)
+})
+
+func compileMetadataLabelRules(rules []metadataLabelRule) ([]compiledMetadataLabelRule, error) {
+	env, err := cel.NewEnv(
+		cel.Variable("tags", cel.MapType(cel.StringType, cel.StringType)),
+		cel.Variable("compute", cel.MapType(cel.StringType, cel.StringType)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create metadata label CEL environment: %w", err)
+	}
+	compiled := make([]compiledMetadataLabelRule, 0, len(rules))
+	for _, rule := range rules {
+		ast, issues := env.Compile(rule.expression)
+		if issues.Err() != nil {
+			return nil, fmt.Errorf("compile metadata label rule %q (%s): %w", rule.name, rule.label, issues.Err())
+		}
+		if !ast.OutputType().IsExactType(cel.StringType) {
+			return nil, fmt.Errorf("metadata label rule %q (%s) must return string, got %s", rule.name, rule.label, ast.OutputType())
+		}
+		program, err := env.Program(ast, cel.CostLimit(consts.MetadataLabelEvaluationCostLimit))
+		if err != nil {
+			return nil, fmt.Errorf("create metadata label rule %q (%s): %w", rule.name, rule.label, err)
+		}
+		compiled = append(compiled, compiledMetadataLabelRule{name: rule.name, label: rule.label, program: program})
+	}
+	return compiled, nil
+}
+
+func evaluateMetadataLabels(ctx context.Context, rules []compiledMetadataLabelRule, compute ComputeMetadata) (map[string]string, error) {
+	tags := make(map[string]string, len(compute.TagsList))
+	for _, tag := range compute.TagsList {
+		// IMDS historically used the first matching tag, including an empty value.
+		if _, exists := tags[tag.Name]; !exists {
+			tags[tag.Name] = tag.Value
+		}
+	}
+	// Normalize supported optional fields so missing IDs are explicit empty strings in CEL.
+	input := map[string]any{
+		"tags": tags,
+		"compute": map[string]string{
+			"interconnectGroupId":    compute.InterconnectGroupID,
+			"interconnectSubgroupId": compute.InterconnectSubgroupID,
+		},
+	}
+	labels := make(map[string]string, len(rules))
+	for _, rule := range rules {
+		value, _, err := rule.program.ContextEval(ctx, input)
+		if err != nil {
+			return nil, fmt.Errorf("evaluate metadata label rule %q (%s): %w", rule.name, rule.label, err)
+		}
+		text, ok := value.(types.String)
+		if !ok {
+			return nil, fmt.Errorf("metadata label rule %q (%s) returned a non-string value", rule.name, rule.label)
+		}
+		if text == "" {
+			continue
+		}
+		if problems := validation.IsValidLabelValue(string(text)); len(problems) > 0 {
+			return nil, fmt.Errorf("metadata label rule %q (%s) produced an invalid label value: %s", rule.name, rule.label, strings.Join(problems, "; "))
+		}
+		labels[rule.label] = string(text)
+	}
+	return labels, nil
+}
+
+// GetMetadataLabels evaluates built-in label rules against one cached IMDS snapshot.
+// Empty rule results are omitted. No metadata labels are returned when IMDS is disabled.
+func (az *Cloud) GetMetadataLabels(ctx context.Context) (map[string]string, error) {
+	if !az.UseInstanceMetadata {
+		return nil, nil
+	}
+	metadata, err := az.Metadata.GetMetadata(ctx, azcache.CacheReadTypeUnsafe)
+	if err != nil {
+		return nil, err
+	}
+	if metadata.Compute == nil {
+		_ = az.Metadata.imsCache.Delete(consts.MetadataCacheKey)
+		return nil, errors.New("failure of getting compute information from instance metadata")
+	}
+	rules, err := builtinMetadataLabelRules()
+	if err != nil {
+		return nil, err
+	}
+	return evaluateMetadataLabels(ctx, rules, *metadata.Compute)
+}
+
+// GetInterconnectGroupID returns the M2 group ID or legacy M1 group tag from IMDS if set.
+// Retained for callers of the original single-label API.
+func (az *Cloud) GetInterconnectGroupID(ctx context.Context) (string, error) {
+	labels, err := az.GetMetadataLabels(ctx)
+	if err != nil {
+		return "", err
+	}
+	return labels[consts.LabelPlatformInterconnectGroup], nil
 }
