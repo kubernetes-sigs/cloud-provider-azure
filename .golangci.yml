@@ -24,6 +24,8 @@ linters:
   settings:
     goconst:
       min-occurrences: 10
+      # Keep table-driven test fixtures self-contained.
+      ignore-tests: true
     gosec:
       excludes:
         - G114
@@ -40,6 +42,24 @@ linters:
       - legacy
       - std-error-handling
     rules:
+      # Secret names and namespaces identify Kubernetes objects, not credentials.
+      - linters:
+          - gosec
+        path: ^cmd/cloud-controller-manager/app/options/(dynamic|options_test)\.go$
+        text: "G101:"
+        source: '.*&DynamicReloadingOptions\{'
+      # The test server intentionally returns a synthetic OAuth token.
+      - linters:
+          - gosec
+        path: ^pkg/credentialprovider/identity_bindings_credentials_test\.go$
+        text: "G117:"
+        source: '.*json\.NewEncoder\(w\)\.Encode\(resp\)'
+      # The subprocess reruns this test binary with a fixed table-driven test name.
+      - linters:
+          - gosec
+        path: ^pkg/nodeipam/node_ipam_controller_test\.go$
+        text: "G702:"
+        source: '.*exec\.Command\(arg0, arg1\)'
       - linters:
           - gosec
         path: ^(pkg/provider/azure_test|pkg/util/iputil/bits)\.go$

@@ -66,10 +66,7 @@ func NewCloudNodeManagerCommand() *cobra.Command {
 				return err
 			}
 
-			if err := Run(cmd.Context(), c); err != nil {
-				return err
-			}
-			return nil
+			return Run(cmd.Context(), c)
 		},
 	}
 
