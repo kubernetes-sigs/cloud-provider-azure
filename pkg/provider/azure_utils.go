@@ -20,12 +20,14 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"regexp"
 	"strings"
 	"sync"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
@@ -43,6 +45,17 @@ const (
 var strToExtendedLocationType = map[string]armnetwork.ExtendedLocationTypes{
 	"edgezone": armnetwork.ExtendedLocationTypesEdgeZone,
 }
+
+var (
+	// Resource group naming rules: https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules#microsoftresources
+	resourceGroupNameRE = regexp.MustCompile(`^[\p{L}\p{Nd}_().-]{0,89}[\p{L}\p{Nd}_()-]$`) // codespell:ignore nd
+
+	// Private Link Service naming rules: https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules#microsoftnetwork
+	privateLinkServiceNameRE = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}[a-zA-Z0-9_]$`)
+
+	// Subnet naming rules: https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules#microsoftnetwork
+	subnetNameRE = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9_.-]{0,78}[a-zA-Z0-9_])?$`)
+)
 
 func getContextWithCancel() (context.Context, context.CancelFunc) {
 	return context.WithCancel(context.Background())
@@ -426,6 +439,55 @@ func getServicePIPPrefixID(service *v1.Service, isIPv6 bool) string {
 	}
 
 	return service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[isIPv6]]
+}
+
+// validateServiceResourceNameAnnotations validates the public IP resource group,
+// the internal subnet when an internal load balancer is requested, and the PLS
+// resource group, name, and subnet when PLS creation is requested.
+// It aggregates naming errors.
+func validateServiceResourceNameAnnotations(service *v1.Service) error {
+	var validationErrors []error
+	var invalidResourceGroups []string
+	requiresPLS := serviceRequiresPLS(service)
+	resourceGroupAnnotations := []string{consts.ServiceAnnotationLoadBalancerResourceGroup}
+	if requiresPLS {
+		resourceGroupAnnotations = append(resourceGroupAnnotations, consts.ServiceAnnotationPLSResourceGroup)
+	}
+	for _, annotation := range resourceGroupAnnotations {
+		name := strings.TrimSpace(service.Annotations[annotation])
+		if name != "" && !resourceGroupNameRE.MatchString(name) {
+			invalidResourceGroups = append(invalidResourceGroups, fmt.Sprintf("%q=%q", annotation, name))
+		}
+	}
+	if len(invalidResourceGroups) > 0 {
+		validationErrors = append(validationErrors, fmt.Errorf("invalid resource group annotations (%s): a resource group name must be 1-90 characters, contain only letters, decimal digits, underscores, hyphens, periods, or parentheses, and not end with a period", strings.Join(invalidResourceGroups, ", ")))
+	}
+
+	if value, found := service.Annotations[consts.ServiceAnnotationPLSName]; requiresPLS && found {
+		name := strings.TrimSpace(value)
+		if !privateLinkServiceNameRE.MatchString(name) {
+			validationErrors = append(validationErrors, fmt.Errorf("invalid private link service annotation (%q=%q): a private link service name must be 2-64 characters, start with an alphanumeric, end with an alphanumeric or underscore, and contain only alphanumerics, underscores, periods, or hyphens", consts.ServiceAnnotationPLSName, name))
+		}
+	}
+
+	var subnetAnnotations []string
+	if requiresInternalLoadBalancer(service) {
+		subnetAnnotations = append(subnetAnnotations, consts.ServiceAnnotationLoadBalancerInternalSubnet)
+	}
+	if requiresPLS {
+		subnetAnnotations = append(subnetAnnotations, consts.ServiceAnnotationPLSIpConfigurationSubnet)
+	}
+	var invalidSubnets []string
+	for _, annotation := range subnetAnnotations {
+		name := strings.TrimSpace(service.Annotations[annotation])
+		if name != "" && !subnetNameRE.MatchString(name) {
+			invalidSubnets = append(invalidSubnets, fmt.Sprintf("%q=%q", annotation, name))
+		}
+	}
+	if len(invalidSubnets) > 0 {
+		validationErrors = append(validationErrors, fmt.Errorf("invalid subnet annotations (%s): a subnet name must be 1-80 characters, start with an alphanumeric, end with an alphanumeric or underscore, and contain only alphanumerics, underscores, periods, or hyphens", strings.Join(invalidSubnets, ", ")))
+	}
+	return utilerrors.NewAggregate(validationErrors)
 }
 
 // getResourceByIPFamily returns the resource name of with IPv6 suffix when
