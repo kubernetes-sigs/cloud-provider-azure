@@ -29,10 +29,14 @@ ETags and recovery after a fresh read, deletion between GET and PUT, and new
 NIC creation with nil or empty ETags. They exercise the real SDK pipeline
 against a simulated server; they do not establish live NRP behavior.
 
-The generic generated invalid-ETag test is omitted for this client with
-`skipEtagTest=true`. An arbitrary error (including a missing HTTP recording)
-must not count as evidence of an Azure precondition failure. Instead, the
-custom live spec requires an Azure response error with status 412 and code
+Every ETag-enabled client with generated create/update operations verifies the
+outgoing `If-Match` header in its generated tests. A fake credential and request
+interceptor exercise the SDK pipeline without Azure or cassette interactions.
+The test requires the exact interception error, so a missing recording or an
+unrelated failure cannot satisfy it. It copies the resource fixture rather
+than changing the shared fixture's ETag.
+
+The separate NIC live spec requires an Azure response error with status 412 and code
 `PreconditionFailed`, and checks GET returns 404 before and after a delayed
 PUT to a deleted NIC. It also checks accepted updates and fresh-read recovery.
 This spec explicitly skips during replay. To execute it, record the existing

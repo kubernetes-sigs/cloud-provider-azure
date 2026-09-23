@@ -91,8 +91,13 @@ func (g Generator) generateTestCase(ctx *genall.GenerationContext, root *loader.
 			aliasMap[markerConf.PackageAlias] = struct{}{}
 			importList[markerConf.PackageName] = aliasMap
 			importList["strings"] = make(map[string]struct{})
-			if markerConf.Etag && !markerConf.SkipEtagTest {
+			if markerConf.Etag {
+				importList["errors"] = make(map[string]struct{})
+				importList["net/http"] = make(map[string]struct{})
+				importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/fake"] = make(map[string]struct{})
+				importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"] = make(map[string]struct{})
 				importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/to"] = make(map[string]struct{})
+				importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"] = make(map[string]struct{})
 			}
 		}
 		if strings.EqualFold(FuncListByRG, verb) || strings.EqualFold(FuncList, verb) {
