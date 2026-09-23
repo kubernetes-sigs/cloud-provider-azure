@@ -24,23 +24,21 @@ import (
 
 func TestEtagTestGeneration(t *testing.T) {
 	for _, test := range []struct {
-		name         string
-		etag         bool
-		skipEtagTest bool
+		name  string
+		etag  bool
+		verbs []string
 	}{
-		{name: "generated coverage", etag: true},
-		{name: "custom coverage", etag: true, skipEtagTest: true},
-		{name: "no ETag policy"},
-		{name: "skip without ETag policy", skipEtagTest: true},
+		{name: "conditional writes", etag: true, verbs: []string{"get", "createorupdate"}},
+		{name: "unconditional writes", verbs: []string{"get", "createorupdate"}},
+		{name: "read-only client", etag: true, verbs: []string{"get"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			config := ClientGenConfig{
-				Verbs:        []string{"get", "createorupdate"},
+				Verbs:        test.verbs,
 				Resource:     "Interface",
 				PackageAlias: "armnetwork",
 				ClientName:   "InterfacesClient",
 				Etag:         test.etag,
-				SkipEtagTest: test.skipEtagTest,
 			}
 			var client bytes.Buffer
 			if err := ClientFactoryTemplate.Execute(&client, config); err != nil {
@@ -54,12 +52,25 @@ func TestEtagTestGeneration(t *testing.T) {
 			if err := TestCaseTemplate.Execute(&tests, config); err != nil {
 				t.Fatal(err)
 			}
-			wantEtagTest := test.etag && !test.skipEtagTest
-			if got := strings.Contains(tests.String(), `newResource.Etag = to.Ptr("invalid")`); got != wantEtagTest {
-				t.Errorf("generic ETag test generated = %t, want %t", got, wantEtagTest)
+			hasWrites := false
+			for _, verb := range test.verbs {
+				hasWrites = hasWrites || verb == "createorupdate"
 			}
-			if !strings.Contains(tests.String(), `ginkgo.When("update requests are raised"`) {
-				t.Error("normal update coverage was omitted")
+			wantEtagTest := test.etag && hasWrites
+			for _, assertion := range []string{
+				`req.Raw().Header.Get("If-Match")`,
+				`errors.Is(err, intercepted)`,
+				`&fake.TokenCredential{}`,
+			} {
+				if got := strings.Contains(tests.String(), assertion); got != wantEtagTest {
+					t.Errorf("generated %q = %t, want %t", assertion, got, wantEtagTest)
+				}
+			}
+			if strings.Contains(tests.String(), "newResource.Etag =") {
+				t.Error("ETag test must not mutate the shared resource fixture")
+			}
+			if got := strings.Contains(tests.String(), `ginkgo.When("update requests are raised"`); got != hasWrites {
+				t.Errorf("normal update coverage generated = %t, want %t", got, hasWrites)
 			}
 		})
 	}
