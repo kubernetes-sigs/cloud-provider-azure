@@ -197,8 +197,8 @@ func (az *Cloud) reconcileTags(currentTagsOnResource, newTags map[string]*string
 	// if the systemTags is set, delete the old currentTagsOnResource
 	if len(systemTagsMap) > 0 {
 		for k := range currentTagsOnResource {
-			if _, ok := newTags[k]; !ok {
-				if found, _ := findKeyInMapWithPrefix(systemTagsMap, k); !found {
+			if found, _ := findKeyInMapCaseInsensitive(newTags, k); !found {
+				if foundInSys, _ := findKeyInMapWithPrefix(systemTagsMap, k); !foundInSys {
 					logger.V(2).Info("delete tag", "key", k, "value", ptr.Deref(currentTagsOnResource[k], ""))
 					delete(currentTagsOnResource, k)
 					changed = true

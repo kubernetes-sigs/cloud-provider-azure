@@ -192,6 +192,52 @@ func TestReconcileTags(t *testing.T) {
 			},
 			expectedChanged: true,
 		},
+		{
+			description: "reconcileTags should keep existing tag unchanged when duplicate case-insensitive keys exist in tags and systemTags is set",
+			currentTagsOnResource: map[string]*string{
+				"OWNER": ptr.To("team"),
+			},
+			newTags: func() map[string]*string {
+				tags, _ := parseTags("owner=team,OWNER=team", nil)
+				return tags
+			}(),
+			systemTags: "aks-managed",
+			expectedTags: map[string]*string{
+				"OWNER": ptr.To("team"),
+			},
+			expectedChanged: false,
+		},
+		{
+			description: "reconcileTags should update tag value while preserving existing key casing when systemTags is set",
+			currentTagsOnResource: map[string]*string{
+				"OWNER": ptr.To("oldteam"),
+			},
+			newTags: map[string]*string{
+				"owner": ptr.To("newteam"),
+			},
+			systemTags: "aks-managed",
+			expectedTags: map[string]*string{
+				"OWNER": ptr.To("newteam"),
+			},
+			expectedChanged: true,
+		},
+		{
+			description: "reconcileTags should ignore key casing and not delete existing tags when systemTags is set",
+			currentTagsOnResource: map[string]*string{
+				"A": ptr.To("b"),
+				"c": ptr.To("d"),
+			},
+			newTags: map[string]*string{
+				"a": ptr.To("b"),
+				"C": ptr.To("d"),
+			},
+			systemTags: "aks-managed",
+			expectedTags: map[string]*string{
+				"A": ptr.To("b"),
+				"c": ptr.To("d"),
+			},
+			expectedChanged: false,
+		},
 	} {
 		t.Run(testCase.description, func(t *testing.T) {
 			cloud := &Cloud{}

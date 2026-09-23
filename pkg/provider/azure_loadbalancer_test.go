@@ -9396,6 +9396,7 @@ func TestEnsurePIPTagged(t *testing.T) {
 				"a":                        ptr.To("b"),
 				"c":                        ptr.To("d"),
 				"a=b":                      ptr.To("c=d"),
+				"y":                        ptr.To("zz"),
 				"e":                        ptr.To(""),
 				"k8s-azure-service-suffix": ptr.To("b"),
 				"prefix-k8s-azure-service": ptr.To("b"),
@@ -9439,6 +9440,28 @@ func TestEnsurePIPTagged(t *testing.T) {
 			assert.Contains(t, events[0], consts.ServiceAnnotationAzurePIPTags)
 			assert.Contains(t, events[0], "KEY1")
 		}
+	})
+
+	t.Run("ensurePIPTagged should retain existing tag and not delete it when duplicate case-insensitive keys are configured and systemTags is set", func(t *testing.T) {
+		cloud.Tags = "owner=team,OWNER=team"
+		cloud.TagsMap = nil
+		cloud.SystemTags = "aks-managed"
+
+		service := v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-service",
+			},
+		}
+		targetPIP := armnetwork.PublicIPAddress{
+			Tags: map[string]*string{
+				"OWNER": ptr.To("team"),
+			},
+		}
+		changed := cloud.ensurePIPTagged(&service, &targetPIP)
+		assert.False(t, changed)
+		assert.Equal(t, map[string]*string{
+			"OWNER": ptr.To("team"),
+		}, targetPIP.Tags)
 	})
 }
 
