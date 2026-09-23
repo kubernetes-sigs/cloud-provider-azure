@@ -18,6 +18,8 @@ package provider
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -28,6 +30,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
@@ -1033,6 +1036,395 @@ func TestGetServicePIPNames(t *testing.T) {
 				},
 			}
 			assert.Equal(t, tc.expected, getServicePIPNames(svc))
+		})
+	}
+}
+
+func TestValidateServiceResourceNameAnnotationValues(t *testing.T) {
+	type testCase struct {
+		desc        string
+		value       string
+		expectedErr bool
+	}
+	ruleGroups := []struct {
+		name        string
+		annotations []string
+		cases       []testCase
+	}{
+		{
+			name: "resource group",
+			annotations: []string{
+				consts.ServiceAnnotationLoadBalancerResourceGroup,
+				consts.ServiceAnnotationPLSResourceGroup,
+			},
+			cases: []testCase{
+				{desc: "allow empty annotation for default fallback", value: ""},
+				{desc: "allow whitespace-only annotation for default fallback", value: " \t "},
+				{desc: "allow surrounding whitespace to be trimmed", value: " \t0PLS..name-_\t "},
+				{desc: "reject internal space", value: "name child", expectedErr: true},
+				{desc: "reject internal newline", value: "name\nchild", expectedErr: true},
+				{desc: "reject internal tab", value: "name\tchild", expectedErr: true},
+				{desc: "allow name at minimum length", value: "a"},
+				{desc: "allow name at maximum length", value: strings.Repeat("a", 90)},
+				{desc: "reject name above maximum length", value: strings.Repeat("a", 91), expectedErr: true},
+				{desc: "allow Unicode name at maximum character count", value: strings.Repeat("\u8cc7", 90)},
+				{desc: "reject Unicode name above maximum character count", value: strings.Repeat("\u8cc7", 91), expectedErr: true},
+				{desc: "allow leading digit", value: "0name"},
+				{desc: "allow leading underscore", value: "_name"},
+				{desc: "allow leading hyphen", value: "-name"},
+				{desc: "allow leading period", value: ".name"},
+				{desc: "allow trailing underscore", value: "a_"},
+				{desc: "allow trailing hyphen", value: "name-"},
+				{desc: "reject trailing period", value: "name.", expectedErr: true},
+				{desc: "allow single digit as a name", value: "0"},
+				{desc: "allow single underscore as a name", value: "_"},
+				{desc: "allow single hyphen as a name", value: "-"},
+				{desc: "allow parentheses", value: "(name)"},
+				{desc: "allow mixed punctuation", value: "RG.name_(1)"},
+				{desc: "allow consecutive periods within a name", value: "name..part"},
+				{desc: "reject single period as a name", value: ".", expectedErr: true},
+				{desc: "reject two periods as a name", value: "..", expectedErr: true},
+				{desc: "allow mixed underscores hyphens and periods", value: "0PLS..name-_"},
+				{desc: "allow Unicode letters", value: "\u8cc7\u6e90"},
+				{desc: "allow Unicode decimal digit", value: "name-\u0661"},
+				{desc: "reject nondecimal numeric character", value: "name\u00b2", expectedErr: true},
+				{desc: "reject slash", value: "name/child", expectedErr: true},
+				{desc: "reject backslash", value: "name\\child", expectedErr: true},
+				{desc: "reject slash alongside allowed punctuation", value: "0PLS..name-_/child", expectedErr: true},
+				{desc: "reject backslash alongside allowed punctuation", value: "0PLS..name-_\\child", expectedErr: true},
+				{desc: "reject path segments", value: "name/../other", expectedErr: true},
+				{desc: "reject leading path segments", value: "../other-name", expectedErr: true},
+				{desc: "reject encoded slash", value: "name%2fchild", expectedErr: true},
+				{desc: "reject uppercase encoded slash", value: "name%2Fchild", expectedErr: true},
+				{desc: "reject double encoded slash", value: "name%252fchild", expectedErr: true},
+				{desc: "reject query delimiter", value: "name?child", expectedErr: true},
+				{desc: "reject fragment delimiter", value: "name#child", expectedErr: true},
+			},
+		},
+		{
+			name:        "private link service",
+			annotations: []string{consts.ServiceAnnotationPLSName},
+			cases: []testCase{
+				{desc: "reject empty name", value: "", expectedErr: true},
+				{desc: "reject whitespace-only name", value: " \t ", expectedErr: true},
+				{desc: "allow surrounding whitespace to be trimmed", value: " \t0PLS..name-_\t "},
+				{desc: "reject internal space", value: "name child", expectedErr: true},
+				{desc: "reject internal newline", value: "name\nchild", expectedErr: true},
+				{desc: "reject internal tab", value: "name\tchild", expectedErr: true},
+				{desc: "reject name below minimum length", value: "a", expectedErr: true},
+				{desc: "allow name at minimum length", value: "ab"},
+				{desc: "allow name at maximum length", value: strings.Repeat("a", 64)},
+				{desc: "reject name above maximum length", value: strings.Repeat("a", 65), expectedErr: true},
+				{desc: "allow leading digit", value: "0name"},
+				{desc: "reject leading underscore", value: "_name", expectedErr: true},
+				{desc: "reject leading hyphen", value: "-name", expectedErr: true},
+				{desc: "reject leading period", value: ".name", expectedErr: true},
+				{desc: "allow trailing underscore", value: "a_"},
+				{desc: "reject trailing hyphen", value: "name-", expectedErr: true},
+				{desc: "reject trailing period", value: "name.", expectedErr: true},
+				{desc: "reject parentheses", value: "(name)", expectedErr: true},
+				{desc: "reject parentheses alongside allowed punctuation", value: "RG.name_(1)", expectedErr: true},
+				{desc: "allow consecutive periods within a name", value: "name..part"},
+				{desc: "reject single period as a name", value: ".", expectedErr: true},
+				{desc: "reject two periods as a name", value: "..", expectedErr: true},
+				{desc: "allow mixed underscores hyphens and periods", value: "0PLS..name-_"},
+				{desc: "reject Unicode letters", value: "\u8cc7\u6e90", expectedErr: true},
+				{desc: "reject Unicode decimal digit", value: "name-\u0661", expectedErr: true},
+				{desc: "reject nondecimal numeric character", value: "name\u00b2", expectedErr: true},
+				{desc: "reject slash", value: "name/child", expectedErr: true},
+				{desc: "reject backslash", value: "name\\child", expectedErr: true},
+				{desc: "reject slash alongside allowed punctuation", value: "0PLS..name-_/child", expectedErr: true},
+				{desc: "reject backslash alongside allowed punctuation", value: "0PLS..name-_\\child", expectedErr: true},
+				{desc: "reject path segments", value: "name/../other", expectedErr: true},
+				{desc: "reject leading path segments", value: "../other-name", expectedErr: true},
+				{desc: "reject encoded slash", value: "name%2fchild", expectedErr: true},
+				{desc: "reject uppercase encoded slash", value: "name%2Fchild", expectedErr: true},
+				{desc: "reject double encoded slash", value: "name%252fchild", expectedErr: true},
+				{desc: "reject query delimiter", value: "name?child", expectedErr: true},
+				{desc: "reject fragment delimiter", value: "name#child", expectedErr: true},
+			},
+		},
+		{
+			name: "subnet",
+			annotations: []string{
+				consts.ServiceAnnotationLoadBalancerInternalSubnet,
+				consts.ServiceAnnotationPLSIpConfigurationSubnet,
+			},
+			cases: []testCase{
+				{desc: "allow empty annotation for default fallback", value: ""},
+				{desc: "allow whitespace-only annotation for default fallback", value: " \t "},
+				{desc: "allow surrounding whitespace to be trimmed", value: " \t0Subnet..name-_\t "},
+				{desc: "allow name at minimum length", value: "a"},
+				{desc: "allow single digit as a name", value: "0"},
+				{desc: "allow name at maximum length", value: strings.Repeat("a", 80)},
+				{desc: "reject name above maximum length", value: strings.Repeat("a", 81), expectedErr: true},
+				{desc: "allow leading digit", value: "0subnet"},
+				{desc: "allow trailing underscore", value: "a_"},
+				{desc: "allow mixed underscores hyphens and periods", value: "0Subnet..name-_"},
+				{desc: "reject single underscore", value: "_", expectedErr: true},
+				{desc: "reject leading underscore", value: "_subnet", expectedErr: true},
+				{desc: "reject leading hyphen", value: "-subnet", expectedErr: true},
+				{desc: "reject leading period", value: ".subnet", expectedErr: true},
+				{desc: "reject trailing hyphen", value: "subnet-", expectedErr: true},
+				{desc: "reject trailing period", value: "subnet.", expectedErr: true},
+				{desc: "reject single period", value: ".", expectedErr: true},
+				{desc: "reject two periods", value: "..", expectedErr: true},
+				{desc: "reject internal space", value: "subnet child", expectedErr: true},
+				{desc: "reject internal newline", value: "subnet\nchild", expectedErr: true},
+				{desc: "reject internal tab", value: "subnet\tchild", expectedErr: true},
+				{desc: "reject parentheses", value: "subnet(1)", expectedErr: true},
+				{desc: "reject Unicode letters", value: "\u8cc7\u6e90", expectedErr: true},
+				{desc: "reject Unicode decimal digit", value: "subnet-\u0661", expectedErr: true},
+				{desc: "reject nondecimal numeric character", value: "subnet\u00b2", expectedErr: true},
+				{desc: "reject slash", value: "subnet/child", expectedErr: true},
+				{desc: "reject backslash", value: "subnet\\child", expectedErr: true},
+				{desc: "reject path segments", value: "subnet/../other", expectedErr: true},
+				{desc: "reject leading path segments", value: "../other-subnet", expectedErr: true},
+				{desc: "reject encoded slash", value: "subnet%2fchild", expectedErr: true},
+				{desc: "reject uppercase encoded slash", value: "subnet%2Fchild", expectedErr: true},
+				{desc: "reject double encoded slash", value: "subnet%252fchild", expectedErr: true},
+				{desc: "reject query delimiter", value: "subnet?child", expectedErr: true},
+				{desc: "reject fragment delimiter", value: "subnet#child", expectedErr: true},
+			},
+		},
+	}
+	for _, group := range ruleGroups {
+		t.Run(group.name, func(t *testing.T) {
+			for _, test := range group.cases {
+				t.Run(test.desc, func(t *testing.T) {
+					for _, annotation := range group.annotations {
+						t.Run(annotation, func(t *testing.T) {
+							service := &v1.Service{ObjectMeta: metav1.ObjectMeta{
+								Annotations: map[string]string{annotation: test.value},
+							}}
+							if annotation == consts.ServiceAnnotationPLSResourceGroup || annotation == consts.ServiceAnnotationPLSName || annotation == consts.ServiceAnnotationPLSIpConfigurationSubnet {
+								service.Annotations[consts.ServiceAnnotationPLSCreation] = "true"
+							}
+							if annotation == consts.ServiceAnnotationLoadBalancerInternalSubnet {
+								service.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = "true"
+							}
+							err := validateServiceResourceNameAnnotations(service)
+							if test.expectedErr {
+								assert.ErrorContains(t, err, fmt.Sprintf("%q=%q", annotation, strings.TrimSpace(test.value)))
+							} else {
+								assert.NoError(t, err)
+							}
+						})
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestValidateServiceResourceNameAnnotations(t *testing.T) {
+	tests := []struct {
+		desc                     string
+		annotations              map[string]string
+		expectedErrorAnnotations []string
+		expectedRuleMessages     []string
+	}{
+		{desc: "allow nil annotations"},
+		{desc: "allow empty annotations", annotations: map[string]string{}},
+		{
+			desc:        "ignore unrelated annotations",
+			annotations: map[string]string{"example.com/setting": "name/child"},
+		},
+		{
+			desc: "allow missing optional name annotations when internal LB and PLS are enabled",
+			annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal: "true",
+				consts.ServiceAnnotationPLSCreation:          "true",
+			},
+		},
+		{
+			desc: "allow valid resource names",
+			annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerResourceGroup:  "rg-one",
+				consts.ServiceAnnotationLoadBalancerInternal:       "true",
+				consts.ServiceAnnotationLoadBalancerInternalSubnet: "lb-subnet",
+				consts.ServiceAnnotationPLSCreation:                "true",
+				consts.ServiceAnnotationPLSResourceGroup:           "rg-two",
+				consts.ServiceAnnotationPLSName:                    "pls-name",
+				consts.ServiceAnnotationPLSIpConfigurationSubnet:   "pls-subnet",
+			},
+		},
+		{
+			desc: "ignore invalid PLS annotations when PLS creation annotation is absent",
+			annotations: map[string]string{
+				consts.ServiceAnnotationPLSResourceGroup:         "pls-rg/child",
+				consts.ServiceAnnotationPLSName:                  "pls/name",
+				consts.ServiceAnnotationPLSIpConfigurationSubnet: "pls/subnet",
+			},
+		},
+		{
+			desc: "ignore invalid PLS annotations when PLS creation is false",
+			annotations: map[string]string{
+				consts.ServiceAnnotationPLSCreation:              "false",
+				consts.ServiceAnnotationPLSResourceGroup:         "pls-rg/child",
+				consts.ServiceAnnotationPLSName:                  "pls/name",
+				consts.ServiceAnnotationPLSIpConfigurationSubnet: "pls/subnet",
+			},
+		},
+		{
+			desc: "ignore empty PLS name when PLS creation is false",
+			annotations: map[string]string{
+				consts.ServiceAnnotationPLSCreation: "false",
+				consts.ServiceAnnotationPLSName:     "",
+			},
+		},
+		{
+			desc: "report empty PLS name when PLS creation is true",
+			annotations: map[string]string{
+				consts.ServiceAnnotationPLSCreation: "true",
+				consts.ServiceAnnotationPLSName:     "",
+			},
+			expectedErrorAnnotations: []string{consts.ServiceAnnotationPLSName},
+			expectedRuleMessages:     []string{"a private link service name must"},
+		},
+		{
+			desc: "report only invalid PLS name when other resource names are valid",
+			annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerResourceGroup: "rg-one",
+				consts.ServiceAnnotationPLSCreation:               "true",
+				consts.ServiceAnnotationPLSResourceGroup:          "rg-two",
+				consts.ServiceAnnotationPLSName:                   "pls/name",
+				consts.ServiceAnnotationPLSIpConfigurationSubnet:  "pls-subnet",
+			},
+			expectedErrorAnnotations: []string{consts.ServiceAnnotationPLSName},
+			expectedRuleMessages:     []string{"a private link service name must"},
+		},
+		{
+			desc: "report only invalid public IP resource group when PLS creation is false",
+			annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerResourceGroup: "rg/child",
+				consts.ServiceAnnotationPLSCreation:               "false",
+				consts.ServiceAnnotationPLSResourceGroup:          "pls-rg/child",
+				consts.ServiceAnnotationPLSName:                   "pls/name",
+				consts.ServiceAnnotationPLSIpConfigurationSubnet:  "pls/subnet",
+			},
+			expectedErrorAnnotations: []string{consts.ServiceAnnotationLoadBalancerResourceGroup},
+			expectedRuleMessages:     []string{"a resource group name must"},
+		},
+		{
+			desc: "ignore invalid internal subnet when internal load balancer annotation is absent",
+			annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternalSubnet: "lb/subnet",
+			},
+		},
+		{
+			desc: "ignore invalid internal subnet when internal load balancer annotation is false",
+			annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:       "false",
+				consts.ServiceAnnotationLoadBalancerInternalSubnet: "lb/subnet",
+			},
+		},
+		{
+			desc: "report only invalid internal subnet when PLS creation annotation is absent",
+			annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:       "true",
+				consts.ServiceAnnotationLoadBalancerInternalSubnet: "lb/subnet",
+				consts.ServiceAnnotationPLSIpConfigurationSubnet:   "pls/subnet",
+			},
+			expectedErrorAnnotations: []string{consts.ServiceAnnotationLoadBalancerInternalSubnet},
+			expectedRuleMessages:     []string{"a subnet name must"},
+		},
+		{
+			desc: "report only invalid PLS subnet when internal load balancer annotation is absent",
+			annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternalSubnet: "lb/subnet",
+				consts.ServiceAnnotationPLSCreation:                "true",
+				consts.ServiceAnnotationPLSIpConfigurationSubnet:   "pls/subnet",
+			},
+			expectedErrorAnnotations: []string{consts.ServiceAnnotationPLSIpConfigurationSubnet},
+			expectedRuleMessages:     []string{"a subnet name must"},
+		},
+		{
+			desc: "group invalid resource groups under one naming rule",
+			annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerResourceGroup: "rg/one",
+				consts.ServiceAnnotationPLSCreation:               "true",
+				consts.ServiceAnnotationPLSResourceGroup:          "rg/two",
+				consts.ServiceAnnotationPLSName:                   "pls-name",
+				consts.ServiceAnnotationPLSIpConfigurationSubnet:  "pls-subnet",
+			},
+			expectedErrorAnnotations: []string{
+				consts.ServiceAnnotationLoadBalancerResourceGroup,
+				consts.ServiceAnnotationPLSResourceGroup,
+			},
+			expectedRuleMessages: []string{"a resource group name must"},
+		},
+		{
+			desc: "group invalid subnets under one naming rule",
+			annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:       "true",
+				consts.ServiceAnnotationLoadBalancerInternalSubnet: "lb/subnet",
+				consts.ServiceAnnotationPLSCreation:                "true",
+				consts.ServiceAnnotationPLSIpConfigurationSubnet:   "pls/subnet",
+			},
+			expectedErrorAnnotations: []string{consts.ServiceAnnotationLoadBalancerInternalSubnet, consts.ServiceAnnotationPLSIpConfigurationSubnet},
+			expectedRuleMessages:     []string{"a subnet name must"},
+		},
+		{
+			desc: "report invalid PLS resource group, name, and subnet",
+			annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerResourceGroup: "rg-one",
+				consts.ServiceAnnotationPLSCreation:               "true",
+				consts.ServiceAnnotationPLSResourceGroup:          "rg/two",
+				consts.ServiceAnnotationPLSName:                   "pls/name",
+				consts.ServiceAnnotationPLSIpConfigurationSubnet:  "pls/subnet",
+			},
+			expectedErrorAnnotations: []string{
+				consts.ServiceAnnotationPLSResourceGroup,
+				consts.ServiceAnnotationPLSName,
+				consts.ServiceAnnotationPLSIpConfigurationSubnet,
+			},
+			expectedRuleMessages: []string{"a resource group name must", "a private link service name must", "a subnet name must"},
+		},
+		{
+			desc: "report all invalid resource names",
+			annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerResourceGroup:  "rg/one",
+				consts.ServiceAnnotationLoadBalancerInternal:       "true",
+				consts.ServiceAnnotationLoadBalancerInternalSubnet: "lb/subnet",
+				consts.ServiceAnnotationPLSCreation:                "true",
+				consts.ServiceAnnotationPLSResourceGroup:           "rg/two",
+				consts.ServiceAnnotationPLSName:                    "pls/name",
+				consts.ServiceAnnotationPLSIpConfigurationSubnet:   "pls/subnet",
+			},
+			expectedErrorAnnotations: []string{
+				consts.ServiceAnnotationLoadBalancerResourceGroup,
+				consts.ServiceAnnotationPLSResourceGroup,
+				consts.ServiceAnnotationPLSName,
+				consts.ServiceAnnotationLoadBalancerInternalSubnet,
+				consts.ServiceAnnotationPLSIpConfigurationSubnet,
+			},
+			expectedRuleMessages: []string{"a resource group name must", "a private link service name must", "a subnet name must"},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			service := &v1.Service{ObjectMeta: metav1.ObjectMeta{Annotations: test.annotations}}
+			err := validateServiceResourceNameAnnotations(service)
+			if len(test.expectedErrorAnnotations) == 0 {
+				assert.NoError(t, err)
+				return
+			}
+			if !assert.Error(t, err) {
+				return
+			}
+			for _, annotation := range test.expectedErrorAnnotations {
+				assert.Contains(t, err.Error(), fmt.Sprintf("%q=%q", annotation, strings.TrimSpace(test.annotations[annotation])))
+			}
+			expectedAnnotations := sets.NewString(test.expectedErrorAnnotations...)
+			for annotation := range test.annotations {
+				if !expectedAnnotations.Has(annotation) {
+					assert.NotContains(t, err.Error(), fmt.Sprintf("%q=", annotation))
+				}
+			}
+			for _, rule := range test.expectedRuleMessages {
+				assert.Equal(t, 1, strings.Count(err.Error(), rule), "rule %q must appear once", rule)
+			}
 		})
 	}
 }
