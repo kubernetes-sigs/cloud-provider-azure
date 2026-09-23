@@ -42,6 +42,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/record"
@@ -690,6 +691,21 @@ func TestSubnet(t *testing.T) {
 			},
 			expected: ptr.To("subnet"),
 		},
+		{
+			desc: "trim surrounding whitespace from the internal subnet",
+			service: &v1.Service{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:       "true",
+				consts.ServiceAnnotationLoadBalancerInternalSubnet: " \tsubnet \n",
+			}}},
+			expected: ptr.To("subnet"),
+		},
+		{
+			desc: "return nil for a whitespace-only internal subnet",
+			service: &v1.Service{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:       "true",
+				consts.ServiceAnnotationLoadBalancerInternalSubnet: " \t\n ",
+			}}},
+		},
 	} {
 		realValue := getInternalSubnet(c.service)
 		assert.Equal(t, c.expected, realValue, fmt.Sprintf("TestCase[%d]: %s", i, c.desc))
@@ -1251,6 +1267,110 @@ func TestGetPublicIPAddressResourceGroup(t *testing.T) {
 			s.Annotations = c.annotations
 			realValue := az.getPublicIPAddressResourceGroup(s)
 			assert.Equal(t, c.expected, realValue, "TestCase[%d]: %s", i, c.desc)
+		})
+	}
+}
+
+func TestLoadBalancerResourceNameValidation(t *testing.T) {
+	annotationGroups := []struct {
+		name        string
+		annotations []string
+	}{
+		{
+			name:        "load balancer resource group",
+			annotations: []string{consts.ServiceAnnotationLoadBalancerResourceGroup},
+		},
+		{
+			name:        "PLS resource group",
+			annotations: []string{consts.ServiceAnnotationPLSResourceGroup},
+		},
+		{
+			name:        "PLS name",
+			annotations: []string{consts.ServiceAnnotationPLSName},
+		},
+		{
+			name:        "internal subnet",
+			annotations: []string{consts.ServiceAnnotationLoadBalancerInternalSubnet},
+		},
+		{
+			name:        "PLS subnet",
+			annotations: []string{consts.ServiceAnnotationPLSIpConfigurationSubnet},
+		},
+		{
+			name: "all resource names",
+			annotations: []string{
+				consts.ServiceAnnotationLoadBalancerResourceGroup,
+				consts.ServiceAnnotationPLSResourceGroup,
+				consts.ServiceAnnotationPLSName,
+				consts.ServiceAnnotationLoadBalancerInternalSubnet,
+				consts.ServiceAnnotationPLSIpConfigurationSubnet,
+			},
+		},
+	}
+	tests := []struct {
+		desc       string
+		value      string
+		staleValue string
+		valid      bool
+	}{
+		{desc: "valid name reaches Azure lookup", value: "valid-name", staleValue: "name/child", valid: true},
+		{desc: "invalid name is rejected before Azure lookup", value: "name/child", staleValue: "valid-name"},
+	}
+	for _, group := range annotationGroups {
+		t.Run(group.name, func(t *testing.T) {
+			for _, test := range tests {
+				t.Run(test.desc, func(t *testing.T) {
+					for _, operation := range []string{"EnsureLoadBalancer", "UpdateLoadBalancer"} {
+						t.Run(operation, func(t *testing.T) {
+							ctrl := gomock.NewController(t)
+							az := GetTestCloud(ctrl)
+							annotations := map[string]string{}
+							for _, annotation := range group.annotations {
+								annotations[annotation] = test.value
+								if annotation == consts.ServiceAnnotationPLSResourceGroup || annotation == consts.ServiceAnnotationPLSName || annotation == consts.ServiceAnnotationPLSIpConfigurationSubnet {
+									annotations[consts.ServiceAnnotationPLSCreation] = "true"
+								}
+								if annotation == consts.ServiceAnnotationLoadBalancerInternalSubnet {
+									annotations[consts.ServiceAnnotationLoadBalancerInternal] = "true"
+								}
+							}
+							service := getTestService("test", v1.ProtocolTCP, annotations, false, 80)
+							lookupErr := errors.New("Azure lookup error")
+							if test.valid {
+								// Stop at the first Azure lookup to prove valid names pass validation
+								// without mocking the rest of reconciliation.
+								mockLBClient := az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+								mockLBClient.EXPECT().List(gomock.Any(), az.getLoadBalancerResourceGroup()).Return(nil, lookupErr)
+							}
+
+							ctx, cancel := context.WithCancel(context.Background())
+							defer cancel()
+							var err error
+							switch operation {
+							case "EnsureLoadBalancer":
+								_, err = az.EnsureLoadBalancer(ctx, testClusterName, &service, nil)
+							case "UpdateLoadBalancer":
+								informerFactory := informers.NewSharedInformerFactory(fake.NewSimpleClientset(&service), 0)
+								az.serviceLister = informerFactory.Core().V1().Services().Lister()
+								informerFactory.Start(ctx.Done())
+								informerFactory.WaitForCacheSync(ctx.Done())
+								staleService := service.DeepCopy()
+								for _, annotation := range group.annotations {
+									staleService.Annotations[annotation] = test.staleValue
+								}
+								err = az.UpdateLoadBalancer(ctx, testClusterName, staleService, nil)
+							}
+							if test.valid {
+								assert.ErrorIs(t, err, lookupErr)
+							} else {
+								for _, annotation := range group.annotations {
+									assert.ErrorContains(t, err, fmt.Sprintf("%q", annotation))
+								}
+							}
+						})
+					}
+				})
+			}
 		})
 	}
 }
