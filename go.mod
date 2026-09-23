@@ -1,8 +1,8 @@
 module sigs.k8s.io/cloud-provider-azure
 
-go 1.26.0
+go 1.27.0
 
-godebug default=go1.26
+godebug default=go1.27
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.1
