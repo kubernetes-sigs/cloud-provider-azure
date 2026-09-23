@@ -43,6 +43,13 @@ linters:
       - common-false-positives
       - legacy
       - std-error-handling
+    rules:
+      # These declarations contain public cloud endpoints and token audiences, not credentials.
+      - linters:
+          - gosec
+        path: ^cloud\.go$
+        text: "G101:"
+        source: '^\s*(PublicCloud|USGovernmentCloud|ChinaCloud) = &Environment\{'
     paths:
       - third_party$
       - builtin$
