@@ -37,6 +37,7 @@ type ClientGenConfig struct {
 	RateLimitKey              string   `marker:"rateLimitKey,optional"`
 	CrossSubFactory           bool     `marker:"crossSubFactory,optional"`
 	Etag                      bool     `marker:"etag,optional"`
+	SkipEtagTest              bool     `marker:"skipEtagTest,optional"`
 	AzureStackCloudAPIVersion string   `marker:"azureStackCloudAPIVersion,optional"`
 	MooncakeApiVersion        string   `marker:"mooncakeApiVersion,optional"`
 }
@@ -355,7 +356,7 @@ var _ = ginkgo.Describe("{{.ClientName}}",ginkgo.Ordered, func() {
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(newResource).NotTo(gomega.BeNil())
 		})
-{{if .Etag}}
+{{if and .Etag (not .SkipEtagTest)}}
 		ginkgo.It("should return error", func(ctx context.Context) {
 			newResource.Etag = to.Ptr("invalid")
 			_, err := realClient.CreateOrUpdate(ctx, resourceGroupName,{{if .SubResource}}{{toLower .Resource}}Name,{{end}} resourceName, *newResource)

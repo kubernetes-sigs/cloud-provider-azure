@@ -25,7 +25,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate;delete;list,resource=Interface,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9,packageAlias=armnetwork,clientName=InterfacesClient,expand=true,rateLimitKey=interfaceRateLimit,etag=true,azureStackCloudAPIVersion="2018-11-01"
+// +azure:client:verbs=get;createorupdate;delete;list,resource=Interface,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9,packageAlias=armnetwork,clientName=InterfacesClient,expand=true,rateLimitKey=interfaceRateLimit,etag=true,skipEtagTest=true,azureStackCloudAPIVersion="2018-11-01"
 type Interface interface {
 	// GetVirtualMachineScaleSetNetworkInterface gets a network.Interface of VMSS VM.
 	GetVirtualMachineScaleSetNetworkInterface(ctx context.Context, resourceGroupName string, virtualMachineScaleSetName string, virtualmachineIndex string, networkInterfaceName string) (*armnetwork.Interface, error)
