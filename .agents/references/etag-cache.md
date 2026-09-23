@@ -8,6 +8,16 @@ the `etag` field from the request body JSON and sets the `If-Match` HTTP header.
 If the server-side ETag has changed since the resource was last fetched, Azure
 returns HTTP 412 PreconditionFailed.
 
+The Interface client also uses this policy for NIC updates. Backend-pool
+membership changes read the NIC (including its ETag) before writing it. Without
+`If-Match`, a delayed update can recreate a NIC after its VM and NIC were
+deleted, leaving a VM-less NIC in a load-balancer backend pool. The conditional
+update fails instead; a later reconciliation must fetch current state before
+trying again. NIC creations without an ETag remain unconditional. This prevents
+new stale-write orphans but does not remove ones that already exist. Because
+`pkg/azclient` is a separate Go module, cloud-controller-manager builds need a
+new azclient release and dependency bump before they pick up this protection.
+
 The subtle problem: **updating resource A can silently change resource B's ETag**.
 If resource B is cached, the cache now holds a stale ETag. The next update to B
 will fail with 412.
