@@ -29,7 +29,7 @@
 {{- else if eq .Capabilities.KubeVersion.Minor "35" -}}
   {{- $_ := set . "cloudProviderAzureVersion" "v1.35.4" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "36" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.36.0" }}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.36.6" }}
 {{- end -}}
 {{- if ge .Capabilities.KubeVersion.Minor "32" -}}
   {{- if eq .Values.cloudNodeManager.imageRepository "mcr.microsoft.com/oss/kubernetes" -}}
