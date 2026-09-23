@@ -37,6 +37,7 @@ type ClientGenConfig struct {
 	RateLimitKey              string   `marker:"rateLimitKey,optional"`
 	CrossSubFactory           bool     `marker:"crossSubFactory,optional"`
 	Etag                      bool     `marker:"etag,optional"`
+	SkipEtagTest              bool     `marker:"skipEtagTest,optional"`
 	AzureStackCloudAPIVersion string   `marker:"azureStackCloudAPIVersion,optional"`
 	MooncakeApiVersion        string   `marker:"mooncakeApiVersion,optional"`
 }
@@ -360,7 +361,7 @@ var _ = ginkgo.Describe("{{.ClientName}}",ginkgo.Ordered, func() {
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(newResource).NotTo(gomega.BeNil())
 		})
-{{if .Etag}}
+{{if and .Etag (not .SkipEtagTest)}}
 {{if eq .Resource "PublicIPAddress"}}
 		ginkgo.It("should return 412 for a stale ETag", func(ctx context.Context) {
 			resource, err := realClient.Get(ctx, resourceGroupName, resourceName, nil)

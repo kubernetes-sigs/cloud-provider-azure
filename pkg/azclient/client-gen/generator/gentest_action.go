@@ -94,7 +94,7 @@ func (g Generator) generateTestCase(ctx *genall.GenerationContext, root *loader.
 			aliasMap[markerConf.PackageAlias] = struct{}{}
 			importList[markerConf.PackageName] = aliasMap
 			importList["strings"] = make(map[string]struct{})
-			if markerConf.Etag {
+			if markerConf.Etag && !markerConf.SkipEtagTest {
 				importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/to"] = make(map[string]struct{})
 				if markerConf.Resource == "PublicIPAddress" {
 					importList["errors"] = make(map[string]struct{})

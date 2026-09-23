@@ -18,6 +18,31 @@ new stale-write orphans but does not remove ones that already exist. Because
 `pkg/azclient` is a separate Go module, cloud-controller-manager builds need a
 new azclient release and dependency bump before they pick up this protection.
 
+NIC validation from `pkg/azclient`:
+
+```sh
+go test ./interfaceclient ./policy/etag -count=1
+```
+
+The handwritten offline NIC tests cover accepted conditional writes, stale
+ETags and recovery after a fresh read, deletion between GET and PUT, and new
+NIC creation with nil or empty ETags. They exercise the real SDK pipeline
+against a simulated server; they do not establish live NRP behavior.
+
+The generic generated invalid-ETag test is omitted for this client with
+`skipEtagTest=true`. An arbitrary error (including a missing HTTP recording)
+must not count as evidence of an Azure precondition failure. Instead, the
+custom live spec requires an Azure response error with status 412 and code
+`PreconditionFailed`, and checks GET returns 404 before and after a delayed
+PUT to a deleted NIC. It also checks accepted updates and fresh-read recovery.
+This spec explicitly skips during replay. To execute it, record the existing
+NIC integration suite with the selected `interfaceclient/testdata/<AZURE_CLOUD>.yaml`
+cassette moved aside, using `AZURE_SUBSCRIPTION_ID`, `AZURE_TENANT_ID`, and
+authorized Azure credentials for a disposable test subscription. The suite
+creates and deletes a resource group and VNet; do not run it against a
+production subscription. No synthetic Azure recording is supplied as live
+evidence.
+
 The subtle problem: **updating resource A can silently change resource B's ETag**.
 If resource B is cached, the cache now holds a stale ETag. The next update to B
 will fail with 412.

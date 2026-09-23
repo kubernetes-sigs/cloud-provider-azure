@@ -104,3 +104,46 @@ func TestServiceGatewayChinaSuiteTemplate(t *testing.T) {
 		})
 	}
 }
+
+func TestEtagTestGeneration(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		etag         bool
+		skipEtagTest bool
+	}{
+		{name: "generated coverage", etag: true},
+		{name: "custom coverage", etag: true, skipEtagTest: true},
+		{name: "no ETag policy"},
+		{name: "skip without ETag policy", skipEtagTest: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			config := ClientGenConfig{
+				Verbs:        []string{"get", "createorupdate"},
+				Resource:     "Interface",
+				PackageAlias: "armnetwork",
+				ClientName:   "InterfacesClient",
+				Etag:         test.etag,
+				SkipEtagTest: test.skipEtagTest,
+			}
+			var client bytes.Buffer
+			if err := ClientFactoryTemplate.Execute(&client, config); err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Contains(client.String(), "etag.AppendEtag"); got != test.etag {
+				t.Errorf("ETag policy generated = %t, want %t", got, test.etag)
+			}
+
+			var tests bytes.Buffer
+			if err := TestCaseTemplate.Execute(&tests, config); err != nil {
+				t.Fatal(err)
+			}
+			wantEtagTest := test.etag && !test.skipEtagTest
+			if got := strings.Contains(tests.String(), `newResource.Etag = to.Ptr("invalid")`); got != wantEtagTest {
+				t.Errorf("generic ETag test generated = %t, want %t", got, wantEtagTest)
+			}
+			if !strings.Contains(tests.String(), `ginkgo.When("update requests are raised"`) {
+				t.Error("normal update coverage was omitted")
+			}
+		})
+	}
+}
