@@ -673,17 +673,14 @@ func (az *Cloud) reconcilePLSTags(
 }
 
 func getPLSSubnetName(service *v1.Service) *string {
-	if l, found := service.Annotations[consts.ServiceAnnotationPLSIpConfigurationSubnet]; found && strings.TrimSpace(l) != "" {
-		return &l
-	}
-
-	if requiresInternalLoadBalancer(service) {
-		if l, found := service.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet]; found && strings.TrimSpace(l) != "" {
-			return &l
+	if subnetName, found := service.Annotations[consts.ServiceAnnotationPLSIpConfigurationSubnet]; found {
+		subnetName = strings.TrimSpace(subnetName)
+		if subnetName != "" {
+			return &subnetName
 		}
 	}
 
-	return nil
+	return getInternalSubnet(service)
 }
 
 func getPLSIPConfigCount(service *v1.Service) (int32, error) {
