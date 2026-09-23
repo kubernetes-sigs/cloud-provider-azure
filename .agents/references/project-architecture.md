@@ -25,6 +25,7 @@ pkg/
     azure_zones.go                Availability zone logic
     azure_instances_v1.go         Instance metadata v1
     azure_instances_v2.go         Instance metadata v2
+    azure_instance_metadata.go    IMDS retrieval/cache and built-in CEL metadata-label rules
     azure_controller_*.go         Disk attach/detach for Standard, VMSS, VMSSFlex
     azure_backoff.go              Backoff and retry logic
     azure_lock.go                 Concurrent access locking

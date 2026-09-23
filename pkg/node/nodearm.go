@@ -91,6 +91,11 @@ func (np *ARMNodeProvider) GetPlatformSubFaultDomain(_ context.Context) (string,
 	return "", nil
 }
 
+// GetMetadataLabels returns no IMDS labels for the ARM provider.
+func (np *ARMNodeProvider) GetMetadataLabels(_ context.Context) (map[string]string, error) {
+	return nil, nil
+}
+
 // GetInterconnectGroupID returns empty string for ARM provider.
 func (np *ARMNodeProvider) GetInterconnectGroupID(_ context.Context) (string, error) {
 	return "", nil
