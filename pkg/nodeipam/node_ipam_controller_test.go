@@ -94,7 +94,7 @@ func TestNewNodeIpamControllerWithCIDRMasks(t *testing.T) {
 			// This is the host process that monitors the exit code of the subprocess.
 			arg0 := os.Args[0]
 			arg1 := "-test.run=TestNewNodeIpamControllerWithCIDRMasks/" + tc.desc
-			cmd := exec.Command(arg0, arg1)
+			cmd := exec.Command(arg0, arg1) // #nosec G702 -- Runs this test binary with a fixed table-driven test name.
 			cmd.Env = append(os.Environ(), "EXIT_ON_FATAL=1")
 			err := cmd.Run()
 			var gotFatal bool

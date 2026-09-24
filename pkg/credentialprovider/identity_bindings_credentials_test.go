@@ -234,7 +234,7 @@ func TestIdentityBindingsTokenCredential_GetToken(t *testing.T) {
 			ExpiresIn:   3600,
 		}
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(resp); err != nil {
+		if err := json.NewEncoder(w).Encode(resp); err != nil { // #nosec G117 -- Test server returns a synthetic OAuth token.
 			http.Error(w, "failed to encode response", http.StatusInternalServerError)
 			return
 		}

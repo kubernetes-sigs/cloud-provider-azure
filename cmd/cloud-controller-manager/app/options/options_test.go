@@ -19,6 +19,7 @@ package options
 import (
 	"context"
 	"net"
+	"path/filepath"
 	"reflect"
 	"sync"
 	"testing"
@@ -34,7 +35,10 @@ import (
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	cpconfig "k8s.io/cloud-provider/config"
+	nodelifecycleconfig "k8s.io/cloud-provider/controllers/nodelifecycle/config"
 	serviceconfig "k8s.io/cloud-provider/controllers/service/config"
 	"k8s.io/cloud-provider/names"
 	cpoptions "k8s.io/cloud-provider/options"
@@ -83,7 +87,6 @@ func TestDefaultFlags(t *testing.T) {
 		KubeCloudShared: &cpoptions.KubeCloudSharedOptions{
 			KubeCloudSharedConfiguration: &cpconfig.KubeCloudSharedConfiguration{
 				RouteReconciliationPeriod: metav1.Duration{Duration: 10 * time.Second},
-				NodeMonitorPeriod:         metav1.Duration{Duration: 5 * time.Second},
 				ClusterName:               "kubernetes",
 				ClusterCIDR:               "",
 				AllocateNodeCIDRs:         false,
@@ -95,6 +98,12 @@ func TestDefaultFlags(t *testing.T) {
 					Name:            "azure",
 					CloudConfigFile: "",
 				},
+			},
+		},
+		NodeLifecycleController: &cpoptions.NodeLifecycleControllerOptions{
+			NodeLifecycleControllerConfiguration: &nodelifecycleconfig.NodeLifecycleControllerConfiguration{
+				NodeMonitorPeriod:            metav1.Duration{Duration: 5 * time.Second},
+				ConcurrentNodeLifecycleSyncs: 1,
 			},
 		},
 		ServiceController: &cpoptions.ServiceControllerOptions{
@@ -141,7 +150,7 @@ func TestDefaultFlags(t *testing.T) {
 		Kubeconfig:                "",
 		Master:                    "",
 		NodeStatusUpdateFrequency: metav1.Duration{Duration: 5 * time.Minute},
-		DynamicReloading: &DynamicReloadingOptions{
+		DynamicReloading: &DynamicReloadingOptions{ // #nosec G101 -- Secret names and namespaces are object identifiers, not credentials.
 			EnableDynamicReloading:     false,
 			CloudConfigSecretName:      "azure-cloud-provider",
 			CloudConfigSecretNamespace: "kube-system",
@@ -230,7 +239,6 @@ func TestAddFlags(t *testing.T) {
 		KubeCloudShared: &cpoptions.KubeCloudSharedOptions{
 			KubeCloudSharedConfiguration: &cpconfig.KubeCloudSharedConfiguration{
 				RouteReconciliationPeriod: metav1.Duration{Duration: 30 * time.Second},
-				NodeMonitorPeriod:         metav1.Duration{Duration: 5 * time.Second},
 				ClusterName:               "k8s",
 				ClusterCIDR:               "1.2.3.4/24",
 				AllocateNodeCIDRs:         true,
@@ -242,6 +250,12 @@ func TestAddFlags(t *testing.T) {
 					Name:            "azure",
 					CloudConfigFile: "/cloud-config",
 				},
+			},
+		},
+		NodeLifecycleController: &cpoptions.NodeLifecycleControllerOptions{
+			NodeLifecycleControllerConfiguration: &nodelifecycleconfig.NodeLifecycleControllerConfiguration{
+				NodeMonitorPeriod:            metav1.Duration{Duration: 5 * time.Second},
+				ConcurrentNodeLifecycleSyncs: 1,
 			},
 		},
 		ServiceController: &cpoptions.ServiceControllerOptions{
@@ -288,7 +302,7 @@ func TestAddFlags(t *testing.T) {
 		Kubeconfig:                "/kubeconfig",
 		Master:                    "192.168.4.20",
 		NodeStatusUpdateFrequency: metav1.Duration{Duration: 10 * time.Minute},
-		DynamicReloading: &DynamicReloadingOptions{
+		DynamicReloading: &DynamicReloadingOptions{ // #nosec G101 -- Secret names and namespaces are object identifiers, not credentials.
 			EnableDynamicReloading:     true,
 			CloudConfigSecretName:      "test-secret",
 			CloudConfigSecretNamespace: "kube-system",
@@ -297,6 +311,121 @@ func TestAddFlags(t *testing.T) {
 	}
 	if !reflect.DeepEqual(expected, s) {
 		t.Errorf("Got different run options than expected.\nDifference detected on:\n%s", diff.Diff(expected, s))
+	}
+}
+
+func TestNodeLifecycleControllerOptions(t *testing.T) {
+	kubeconfigPath := filepath.Join(t.TempDir(), "kubeconfig")
+	kubeconfig := clientcmdapi.Config{
+		Clusters: map[string]*clientcmdapi.Cluster{
+			"test": {Server: "https://127.0.0.1:6443"},
+		},
+		Contexts: map[string]*clientcmdapi.Context{
+			"test": {Cluster: "test"},
+		},
+		CurrentContext: "test",
+	}
+	if err := clientcmd.WriteToFile(kubeconfig, kubeconfigPath); err != nil {
+		t.Fatalf("Write kubeconfig failed: %v", err)
+	}
+
+	testCases := []struct {
+		name            string
+		args            []string
+		monitorPeriod   time.Duration
+		concurrentSyncs int32
+		expectedError   string
+	}{
+		{
+			name:            "defaults",
+			monitorPeriod:   5 * time.Second,
+			concurrentSyncs: 1,
+		},
+		{
+			name:            "custom monitor period",
+			args:            []string{"--node-monitor-period=17s"},
+			monitorPeriod:   17 * time.Second,
+			concurrentSyncs: 1,
+		},
+		{
+			name:            "custom concurrency",
+			args:            []string{"--concurrent-node-lifecycle-syncs=3"},
+			monitorPeriod:   5 * time.Second,
+			concurrentSyncs: 3,
+		},
+		{
+			name:            "custom monitor period and concurrency",
+			args:            []string{"--node-monitor-period=17s", "--concurrent-node-lifecycle-syncs=3"},
+			monitorPeriod:   17 * time.Second,
+			concurrentSyncs: 3,
+		},
+		{
+			name:          "zero concurrency",
+			args:          []string{"--concurrent-node-lifecycle-syncs=0"},
+			expectedError: "concurrent-node-lifecycle-syncs must be at least 1, but got 0",
+		},
+		{
+			name:          "negative concurrency",
+			args:          []string{"--concurrent-node-lifecycle-syncs=-1"},
+			expectedError: "concurrent-node-lifecycle-syncs must be at least 1, but got -1",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, err := NewCloudControllerManagerOptions()
+			if err != nil {
+				t.Fatalf("Create options failed: %v", err)
+			}
+			fs := pflag.NewFlagSet("node-lifecycle-test", pflag.ContinueOnError)
+			for _, f := range s.Flags(nil, nil).FlagSets {
+				fs.AddFlagSet(f)
+			}
+			for name, defaultValue := range map[string]string{
+				"node-monitor-period":             "5s",
+				"concurrent-node-lifecycle-syncs": "1",
+			} {
+				flag := fs.Lookup(name)
+				if flag == nil {
+					t.Fatalf("Flag --%s is not registered", name)
+				}
+				if flag.DefValue != defaultValue {
+					t.Errorf("Flag --%s default = %q, want %q", name, flag.DefValue, defaultValue)
+				}
+				if flag.Deprecated != "" || flag.Hidden {
+					t.Errorf("Flag --%s must not be deprecated or hidden", name)
+				}
+			}
+			args := append([]string{
+				"--secure-port=0",
+				"--kubeconfig=" + kubeconfigPath,
+				"--cloud-config=azure.json",
+			}, tc.args...)
+			if err := fs.Parse(args); err != nil {
+				t.Fatalf("Parse flags failed: %v", err)
+			}
+
+			c, err := s.Config(nil, nil, names.CCMControllerAliases())
+			if tc.expectedError != "" {
+				if err == nil || err.Error() != tc.expectedError {
+					t.Fatalf("Config error = %v, want %q", err, tc.expectedError)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Build config failed: %v", err)
+			}
+			expected := nodelifecycleconfig.NodeLifecycleControllerConfiguration{
+				NodeMonitorPeriod:            metav1.Duration{Duration: tc.monitorPeriod},
+				ConcurrentNodeLifecycleSyncs: tc.concurrentSyncs,
+			}
+			if got := *s.NodeLifecycleController.NodeLifecycleControllerConfiguration; !reflect.DeepEqual(expected, got) {
+				t.Errorf("Parsed lifecycle options differ: %s", diff.Diff(expected, got))
+			}
+			if got := c.ComponentConfig.NodeLifecycleController; !reflect.DeepEqual(expected, got) {
+				t.Errorf("Applied lifecycle config differs: %s", diff.Diff(expected, got))
+			}
+		})
 	}
 }
 

@@ -24,6 +24,8 @@ linters:
   settings:
     goconst:
       min-occurrences: 10
+      # Keep table-driven test fixtures self-contained.
+      ignore-tests: true
     gosec:
       excludes:
         - G114

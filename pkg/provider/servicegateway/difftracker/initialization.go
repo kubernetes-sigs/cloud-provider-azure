@@ -1535,7 +1535,7 @@ func parseLocationAddresses(location interface{}) map[string]NRPAddress {
 	// Use reflection to access fields since we don't know the exact concrete type
 	// The caller passes the location object from the API response
 	v := reflect.ValueOf(location)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 	if v.Kind() != reflect.Struct {
@@ -1550,7 +1550,7 @@ func parseLocationAddresses(location interface{}) map[string]NRPAddress {
 
 	for i := 0; i < addressesField.Len(); i++ {
 		addrVal := addressesField.Index(i)
-		if addrVal.Kind() == reflect.Ptr {
+		if addrVal.Kind() == reflect.Pointer {
 			if addrVal.IsNil() {
 				continue
 			}
@@ -1561,7 +1561,7 @@ func parseLocationAddresses(location interface{}) map[string]NRPAddress {
 		if !addrField.IsValid() {
 			continue
 		}
-		if addrField.Kind() == reflect.Ptr {
+		if addrField.Kind() == reflect.Pointer {
 			if addrField.IsNil() {
 				continue
 			}
@@ -1577,7 +1577,7 @@ func parseLocationAddresses(location interface{}) map[string]NRPAddress {
 		if servicesField.IsValid() && servicesField.Kind() == reflect.Slice {
 			for j := 0; j < servicesField.Len(); j++ {
 				svcVal := servicesField.Index(j)
-				if svcVal.Kind() == reflect.Ptr {
+				if svcVal.Kind() == reflect.Pointer {
 					if svcVal.IsNil() {
 						continue
 					}
