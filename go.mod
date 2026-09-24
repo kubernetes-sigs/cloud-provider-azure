@@ -31,7 +31,7 @@ require (
 	golang.org/x/sys v0.48.0
 	golang.org/x/text v0.42.0
 	k8s.io/api v0.35.8
-	k8s.io/apimachinery v0.35.8
+	k8s.io/apimachinery v0.35.9
 	k8s.io/apiserver v0.35.8
 	k8s.io/client-go v0.35.8
 	k8s.io/cloud-provider v0.35.8
