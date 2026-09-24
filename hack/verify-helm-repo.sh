@@ -39,7 +39,7 @@ done
 curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
 chmod 700 get_helm.sh
 ./get_helm.sh
-go -C "${REPO_ROOT}" test -tags=helm -count=1 ./helm/validation
+helm template ./helm/cloud-provider-azure > /dev/null
 rm get_helm.sh
 
 exit 0

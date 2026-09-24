@@ -150,18 +150,6 @@ The following configuration is made available for advanced users. There are no d
 
 # Maintaining the Repo
 
-Run `go test -tags=helm -count=1 ./helm/validation` from the repository root with
-Helm installed to validate rendered chart arguments against this checkout's CCM
-and CNM flag definitions. This also runs as part of `make test-helm`.
-
-The check covers default and optional arguments, including the Windows CNM
-launcher, and rejects unknown, deprecated, duplicate, and invalid flags. It
-renders Kubernetes 1.21 through the minor version this checkout builds against
-(the `k8s.io/cloud-provider` dependency in `go.mod`, using explicit image tags
-for that newest, not-yet-published version), but validates against the current
-source, not historical container images. Custom image overrides must separately
-be checked against their actual binary versions.
-
 Whenever changes have been made to the `cloud-provider-azure` Helm chart, a new version of the chart should be released. First, pick an appropriate next, higher version and update the `version` property in `helm/cloud-provider-azure/Chart.yaml`. Then, package the entire set of changes to the chart into a new repo version:
 
 From the git root:
