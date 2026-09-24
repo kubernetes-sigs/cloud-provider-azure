@@ -12,8 +12,10 @@ entries:
     - kubernetes-sigs
     - kubernetes
     maintainers:
-    - email: anccheng99@gmail.com
-      name: An Cheng
+    - email: jackfrancis@gmail.com
+      name: Jack Francis
+    - email: zhechengli1995@outlook.com
+      name: Zhecheng Li
     name: cloud-provider-azure
     sources:
     - https://github.com/kubernetes-sigs/cloud-provider-azure
