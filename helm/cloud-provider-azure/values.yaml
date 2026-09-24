@@ -26,7 +26,7 @@ cloudControllerManager:
   # leaderElectLeaseDuration: "30s"
   # leaderElectRenewDeadline: "15s"
   # leaderElectRetryPeriod: "5s"
-  # leaderElectResourceLock: "leases"
+  # leaderElectResourceLock: "configmap"
   logVerbosity: "2"
   # master: "192.168.4.20"
   # minResyncPeriod: "100m"
