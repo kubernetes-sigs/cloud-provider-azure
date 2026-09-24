@@ -150,7 +150,7 @@ func TestDefaultFlags(t *testing.T) {
 		Kubeconfig:                "",
 		Master:                    "",
 		NodeStatusUpdateFrequency: metav1.Duration{Duration: 5 * time.Minute},
-		DynamicReloading: &DynamicReloadingOptions{
+		DynamicReloading: &DynamicReloadingOptions{ // #nosec G101 -- Secret names and namespaces are object identifiers, not credentials.
 			EnableDynamicReloading:     false,
 			CloudConfigSecretName:      "azure-cloud-provider",
 			CloudConfigSecretNamespace: "kube-system",
@@ -302,7 +302,7 @@ func TestAddFlags(t *testing.T) {
 		Kubeconfig:                "/kubeconfig",
 		Master:                    "192.168.4.20",
 		NodeStatusUpdateFrequency: metav1.Duration{Duration: 10 * time.Minute},
-		DynamicReloading: &DynamicReloadingOptions{
+		DynamicReloading: &DynamicReloadingOptions{ // #nosec G101 -- Secret names and namespaces are object identifiers, not credentials.
 			EnableDynamicReloading:     true,
 			CloudConfigSecretName:      "test-secret",
 			CloudConfigSecretNamespace: "kube-system",

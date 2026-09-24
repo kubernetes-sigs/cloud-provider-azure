@@ -62,7 +62,7 @@ func (o *DynamicReloadingOptions) Validate() []error {
 }
 
 func defaultDynamicReloadingOptions() *DynamicReloadingOptions {
-	return &DynamicReloadingOptions{
+	return &DynamicReloadingOptions{ // #nosec G101 -- Secret names and namespaces are object identifiers, not credentials.
 		EnableDynamicReloading:     false,
 		CloudConfigSecretName:      "azure-cloud-provider",
 		CloudConfigSecretNamespace: "kube-system",
