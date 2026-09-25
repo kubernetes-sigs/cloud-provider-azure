@@ -659,6 +659,14 @@ func TestGetPrivateLinkServiceName(t *testing.T) {
 			expectedName: "pls-fipname",
 		},
 		{
+			desc: "trim whitespace from the annotated private link service name",
+			pls:  &armnetwork.PrivateLinkService{},
+			annotations: map[string]string{
+				consts.ServiceAnnotationPLSName: " 0PLS..name-_ ",
+			},
+			expectedName: "0PLS..name-_",
+		},
+		{
 			desc: "If pls name is not equal to service configuration, error should be reported",
 			pls: &armnetwork.PrivateLinkService{
 				Name: ptr.To("testpls"),
@@ -1794,11 +1802,36 @@ func TestGetPLSSubnetName(t *testing.T) {
 			expectedSubnet: ptr.To("pls-subnet"),
 		},
 		{
+			desc: "Service with surrounding whitespace in private link subnet should return trimmed subnet",
+			annotations: map[string]string{
+				consts.ServiceAnnotationPLSIpConfigurationSubnet: " \tpls-subnet \n",
+			},
+			expectedSubnet: ptr.To("pls-subnet"),
+		},
+		{
+			desc: "Service with both private link and LB subnets specified should return private link subnet",
+			annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:       "true",
+				consts.ServiceAnnotationPLSIpConfigurationSubnet:   "pls-subnet",
+				consts.ServiceAnnotationLoadBalancerInternalSubnet: "lb-subnet",
+			},
+			expectedSubnet: ptr.To("pls-subnet"),
+		},
+		{
 			desc: "Service with empty private link subnet specified but LB subnet specified should return LB subnet",
 			annotations: map[string]string{
 				consts.ServiceAnnotationLoadBalancerInternal:       "true",
 				consts.ServiceAnnotationPLSIpConfigurationSubnet:   "",
 				consts.ServiceAnnotationLoadBalancerInternalSubnet: "lb-subnet",
+			},
+			expectedSubnet: ptr.To("lb-subnet"),
+		},
+		{
+			desc: "Service with whitespace-only private link subnet and LB subnet specified should return trimmed LB subnet",
+			annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:       "true",
+				consts.ServiceAnnotationPLSIpConfigurationSubnet:   " \t ",
+				consts.ServiceAnnotationLoadBalancerInternalSubnet: " \tlb-subnet \n",
 			},
 			expectedSubnet: ptr.To("lb-subnet"),
 		},
@@ -1816,6 +1849,14 @@ func TestGetPLSSubnetName(t *testing.T) {
 				consts.ServiceAnnotationLoadBalancerInternal:       "true",
 				consts.ServiceAnnotationPLSIpConfigurationSubnet:   "",
 				consts.ServiceAnnotationLoadBalancerInternalSubnet: "",
+			},
+		},
+		{
+			desc: "Service with both whitespace-only subnets specified should return nil",
+			annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:       "true",
+				consts.ServiceAnnotationPLSIpConfigurationSubnet:   " \t ",
+				consts.ServiceAnnotationLoadBalancerInternalSubnet: " \n ",
 			},
 		},
 	}

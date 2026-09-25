@@ -322,18 +322,38 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			}()
 		}
 
+		invalidSubnetName := "invalid/name"
 		annotation := map[string]string{
 			consts.ServiceAnnotationLoadBalancerInternal:       "true",
-			consts.ServiceAnnotationLoadBalancerInternalSubnet: subnetName,
+			consts.ServiceAnnotationLoadBalancerInternalSubnet: invalidSubnetName,
 		}
 
-		// create service with given annotation and wait it to expose
-		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
+		By("Creating an internal service with an invalid subnet name")
+		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
+		beforeCreate := time.Now()
+		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		utils.PrintCreateSVCSuccessfully(serviceName, ns.Name)
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+
+		By("Verifying the invalid internal subnet name is rejected")
+		expectedMessage := fmt.Sprintf("invalid subnet annotations (%q=%q)", consts.ServiceAnnotationLoadBalancerInternalSubnet, invalidSubnetName)
+		err = utils.WaitForServiceWarningEventAfter(cs, ns.Name, serviceName, "SyncLoadBalancerFailed", expectedMessage, beforeCreate)
+		Expect(err).NotTo(HaveOccurred())
+		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(service.Status.LoadBalancer.Ingress).To(BeEmpty())
+
+		By("Updating the service to use a valid subnet name with surrounding whitespace")
+		service.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = " " + subnetName + " "
+		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []*string{})
+		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("Get External IPs: %v", utils.StrPtrSliceToStrSlice(ips))
 
 		By("Validating external ip in target subnet")
@@ -437,15 +457,30 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			}
 		}()
 
+		invalidResourceGroup := "invalid/name"
 		annotation := map[string]string{
-			consts.ServiceAnnotationLoadBalancerResourceGroup: ptr.Deref(rg.Name, ""),
+			consts.ServiceAnnotationLoadBalancerResourceGroup: invalidResourceGroup,
 		}
-		By("Creating service " + serviceName + " in namespace " + ns.Name)
+		By("Creating service " + serviceName + " in namespace " + ns.Name + " with an invalid public IP resource group")
 		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
 		service = updateServiceLBIPs(service, false, pips)
+		beforeCreate := time.Now()
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		utils.PrintCreateSVCSuccessfully(serviceName, ns.Name)
+
+		By("Verifying the invalid public IP resource group is rejected")
+		expectedMessage := fmt.Sprintf("invalid resource group annotations (%q=%q)", consts.ServiceAnnotationLoadBalancerResourceGroup, invalidResourceGroup)
+		err = utils.WaitForServiceWarningEventAfter(cs, ns.Name, serviceName, "SyncLoadBalancerFailed", expectedMessage, beforeCreate)
+		Expect(err).NotTo(HaveOccurred())
+		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(service.Status.LoadBalancer.Ingress).To(BeEmpty())
+
+		By("Updating the service to use the test resource group")
+		service.Annotations[consts.ServiceAnnotationLoadBalancerResourceGroup] = ptr.Deref(rg.Name, "")
+		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
+		Expect(err).NotTo(HaveOccurred())
 
 		//wait and get service's public IP Address
 		By("Waiting service to expose...")

@@ -219,6 +219,10 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 	// Here we'll firstly ensure service do not lie in the opposite LB.
 	const Operation = "EnsureLoadBalancer"
 
+	if err = validateServiceResourceNameAnnotations(service); err != nil {
+		return nil, err
+	}
+
 	ctx, span := trace.BeginReconcile(ctx, trace.DefaultTracer(), Operation, attributes.FeatureOfService(service)...)
 	defer func() { span.Observe(ctx, err) }()
 
@@ -347,6 +351,10 @@ func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, ser
 		isOperationSucceeded = true
 		logger.V(2).Info("Skipping because service is going to be deleted")
 		return nil
+	}
+
+	if err = validateServiceResourceNameAnnotations(service); err != nil {
+		return err
 	}
 
 	shouldUpdateLB, err := az.shouldUpdateLoadBalancer(ctx, clusterName, service, nodes)
@@ -4124,8 +4132,11 @@ func requiresInternalLoadBalancer(service *v1.Service) bool {
 
 func getInternalSubnet(service *v1.Service) *string {
 	if requiresInternalLoadBalancer(service) {
-		if l, found := service.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet]; found && strings.TrimSpace(l) != "" {
-			return &l
+		if subnetName, found := service.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet]; found {
+			subnetName = strings.TrimSpace(subnetName)
+			if subnetName != "" {
+				return &subnetName
+			}
 		}
 	}
 
