@@ -630,6 +630,155 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		})
 	})
 
+	When("creating 2 LoadBalancer services with annotations `service.beta.kubernetes.io/azure-deny-all-except-load-balancer-source-ranges` and `service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip`", Label(utils.TestSuiteLabelMultiSLB), func() {
+		It("should keep the deny-all rule only for the nodes the remaining service still needs", func() {
+
+			const (
+				Deployment1Name = "app-01"
+				Deployment2Name = "app-02"
+
+				Service1Name = "svc-01"
+				Service2Name = "svc-02"
+			)
+
+			var (
+				app1Port     int32 = 80
+				app1NodePort int32 = 30001
+				app2Port     int32 = 81
+				app2NodePort int32 = 30002
+
+				allowedIPv4Ranges = []string{"10.20.0.0/16"}
+				allowedIPv6Ranges = []string{"2c0f:fe40:8000::/48"}
+
+				annotations = map[string]string{
+					v1.AnnotationLoadBalancerSourceRangesKey:                      strings.Join(append(allowedIPv4Ranges, allowedIPv6Ranges...), ","),
+					consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges: "true",
+					consts.ServiceAnnotationDisableLoadBalancerFloatingIP:         "true",
+				}
+			)
+
+			createLocalService := func(name string, labels map[string]string, ports []v1.ServicePort) {
+				service := utils.CreateLoadBalancerServiceManifest(name, annotations, labels, namespace.Name, ports)
+				service.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
+				_, err := k8sClient.CoreV1().Services(namespace.Name).Create(context.Background(), service, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = utils.WaitServiceExposure(k8sClient, namespace.Name, name, []*string{})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			nodeIPsByName := map[string][]netip.Addr{}
+			var sharedNode, unsharedNode string
+			{
+				nodes, err := utils.GetAgentNodes(k8sClient)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(nodes)).To(BeNumerically(">=", 2), "needs 2 agent nodes to give the services different backends")
+				for _, node := range nodes {
+					for _, addr := range node.Status.Addresses {
+						if addr.Type == v1.NodeInternalIP {
+							nodeIPsByName[node.Name] = append(nodeIPsByName[node.Name], netip.MustParseAddr(addr.Address))
+						}
+					}
+				}
+				sharedNode, unsharedNode = nodes[0].Name, nodes[1].Name
+			}
+			logger.Info("Picked the backend nodes", "shared-node", sharedNode, "unshared-node", unsharedNode)
+
+			expectDenyAllRuleForNodes := func(ips []netip.Addr, expected bool, msg string) {
+				// Nodes carry addresses of both families even when the services are single-stack.
+				v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(azureClient.IPFamily)
+				v4s, v6s := groupIPsByFamily(ips)
+				Eventually(func(g Gomega) {
+					nsgs, err := azureClient.GetClusterSecurityGroups()
+					g.Expect(err).NotTo(HaveOccurred())
+
+					v := NewSecurityGroupValidator(nsgs)
+					if v4Enabled && len(v4s) > 0 {
+						g.Expect(v.HasDenyAllRuleForDestination(v4s)).To(Equal(expected), msg)
+					}
+					if v6Enabled && len(v6s) > 0 {
+						g.Expect(v.HasDenyAllRuleForDestination(v6s)).To(Equal(expected), msg)
+					}
+				}).WithTimeout(5 * time.Minute).WithPolling(10 * time.Second).Should(Succeed())
+			}
+
+			createPinnedDeployment := func(name string, labels map[string]string, port *int32, nodeName string) {
+				deployment := createDeploymentManifest(name, labels, port, nil)
+				deployment.Spec.Replicas = ptr.To(int32(1))
+				deployment.Spec.Template.Spec.NodeSelector = map[string]string{v1.LabelHostname: nodeName}
+				_, err := k8sClient.AppsV1().Deployments(namespace.Name).Create(context.Background(), deployment, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			// Deleting service 1 has to keep the node service 2 shares and drop the other.
+			createPinnedDeployment(Deployment1Name, map[string]string{"app": Deployment1Name}, &app1Port, sharedNode)
+			createPinnedDeployment(Deployment1Name+"-unshared", map[string]string{"app": Deployment1Name}, &app1Port, unsharedNode)
+			createPinnedDeployment(Deployment2Name, map[string]string{"app": Deployment2Name}, &app2Port, sharedNode)
+
+			By("Creating service 1 backed by both nodes", func() {
+				var (
+					labels = map[string]string{
+						"app": Deployment1Name,
+					}
+					ports = []v1.ServicePort{{
+						Port:       app1Port,
+						TargetPort: intstr.FromInt32(app1Port),
+						NodePort:   app1NodePort,
+					}}
+				)
+				createLocalService(Service1Name, labels, ports)
+			})
+
+			By("Creating service 2 backed by the shared node only", func() {
+				var (
+					labels = map[string]string{
+						"app": Deployment2Name,
+					}
+					ports = []v1.ServicePort{{
+						Port:       app2Port,
+						TargetPort: intstr.FromInt32(app2Port),
+						NodePort:   app2NodePort,
+					}}
+				)
+				createLocalService(Service2Name, labels, ports)
+			})
+
+			By("Checking if the pods landed on the expected nodes", func() {
+				nodesOfApp := func(appLabel string) map[string]bool {
+					pods, err := k8sClient.CoreV1().Pods(namespace.Name).List(context.Background(), metav1.ListOptions{
+						LabelSelector: "app=" + appLabel,
+					})
+					Expect(err).NotTo(HaveOccurred())
+					rv := map[string]bool{}
+					for _, pod := range pods.Items {
+						rv[pod.Spec.NodeName] = true
+					}
+					return rv
+				}
+
+				Expect(nodesOfApp(Deployment1Name)).To(Equal(map[string]bool{sharedNode: true, unsharedNode: true}))
+				Expect(nodesOfApp(Deployment2Name)).To(Equal(map[string]bool{sharedNode: true}))
+			})
+
+			By("Checking if the deny-all rule covers the backend nodes of both services", func() {
+				expectDenyAllRuleForNodes(nodeIPsByName[sharedNode], true, "Should deny all traffic to the shared node")
+				expectDenyAllRuleForNodes(nodeIPsByName[unsharedNode], true, "Should deny all traffic to the node only service 1 uses")
+			})
+
+			By("Deleting service 1", func() {
+				Expect(utils.DeleteService(k8sClient, namespace.Name, Service1Name)).NotTo(HaveOccurred())
+			})
+
+			By("Checking if the deny-all rule still covers the node service 2 needs", func() {
+				expectDenyAllRuleForNodes(nodeIPsByName[sharedNode], true, "Should keep denying all traffic because service 2 still needs it")
+			})
+
+			By("Checking if the deny-all rule dropped the node only service 1 used", func() {
+				expectDenyAllRuleForNodes(nodeIPsByName[unsharedNode], false, "Should stop denying all traffic because no service needs it")
+			})
+		})
+	})
+
 	When("creating a LoadBalancer service with annotation `service.beta.kubernetes.io/azure-additional-public-ips`", func() {
 		It("should add a rule to allow traffic from Internet", func() {
 			var (
@@ -1211,6 +1360,125 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 				Expect(
 					validator.HasExactAllowRule(expectedProtocol, []string{"Internet"}, svc2IPs, expectedDstPorts),
 				).To(BeTrue(), "Should have a rule for allowing traffic from Internet")
+			})
+		})
+
+		It("should keep the deny-all rule when one of the services is deleted", func() {
+
+			const (
+				Deployment1Name = "app-01"
+				Deployment2Name = "app-02"
+
+				Service1Name = "svc-01"
+				Service2Name = "svc-02"
+			)
+
+			var (
+				app1Port  int32 = 80
+				app2Port  int32 = 81
+				replicas  int32 = 2
+				svc1IPv4s []netip.Addr
+				svc1IPv6s []netip.Addr
+
+				allowedIPv4Ranges = []string{"10.20.0.0/16"}
+				allowedIPv6Ranges = []string{"2c0f:fe40:8000::/48"}
+			)
+
+			denyAllAnnotations := func(extra map[string]string) map[string]string {
+				rv := map[string]string{
+					v1.AnnotationLoadBalancerSourceRangesKey:                      strings.Join(append(allowedIPv4Ranges, allowedIPv6Ranges...), ","),
+					consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges: "true",
+				}
+				for k, v := range extra {
+					rv[k] = v
+				}
+				return rv
+			}
+
+			joinIPsAsString := func(ips []netip.Addr) string {
+				var s []string
+				for _, ip := range ips {
+					s = append(s, ip.String())
+				}
+				return strings.Join(s, ",")
+			}
+
+			expectDenyAllRuleForSharedIPs := func(msg string) {
+				Eventually(func(g Gomega) {
+					nsgs, err := azureClient.GetClusterSecurityGroups()
+					g.Expect(err).NotTo(HaveOccurred())
+
+					v := NewSecurityGroupValidator(nsgs)
+					if len(svc1IPv4s) > 0 {
+						g.Expect(v.HasDenyAllRuleForDestination(svc1IPv4s)).To(BeTrue(), msg)
+					}
+					if len(svc1IPv6s) > 0 {
+						g.Expect(v.HasDenyAllRuleForDestination(svc1IPv6s)).To(BeTrue(), msg)
+					}
+				}).WithTimeout(5 * time.Minute).WithPolling(10 * time.Second).Should(Succeed())
+			}
+
+			deployment1 := createDeploymentManifest(Deployment1Name, map[string]string{
+				"app": Deployment1Name,
+			}, &app1Port, nil)
+			deployment1.Spec.Replicas = &replicas
+			_, err := k8sClient.AppsV1().Deployments(namespace.Name).Create(context.Background(), deployment1, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			deployment2 := createDeploymentManifest(Deployment2Name, map[string]string{
+				"app": Deployment2Name,
+			}, &app2Port, nil)
+			deployment2.Spec.Replicas = &replicas
+			_, err = k8sClient.AppsV1().Deployments(namespace.Name).Create(context.Background(), deployment2, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating service 1 with deny-all enabled", func() {
+				var (
+					labels = map[string]string{
+						"app": Deployment1Name,
+					}
+					ports = []v1.ServicePort{{
+						Port:       app1Port,
+						TargetPort: intstr.FromInt32(app1Port),
+					}}
+				)
+				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, Service1Name, namespace.Name, labels, denyAllAnnotations(nil), ports)
+				svc1IPv4s, svc1IPv6s = groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+				logger.Info("Created the first LoadBalancer service", "svc-name", Service1Name, "v4-IPs", svc1IPv4s, "v6-IPs", svc1IPv6s)
+			})
+
+			By("Creating service 2 with deny-all enabled sharing the IP of service 1", func() {
+				var (
+					labels = map[string]string{
+						"app": Deployment2Name,
+					}
+					annotations = denyAllAnnotations(map[string]string{
+						"service.beta.kubernetes.io/azure-load-balancer-ipv4": joinIPsAsString(svc1IPv4s),
+						"service.beta.kubernetes.io/azure-load-balancer-ipv6": joinIPsAsString(svc1IPv6s),
+					})
+					ports = []v1.ServicePort{{
+						Port:       app2Port,
+						TargetPort: intstr.FromInt32(app2Port),
+					}}
+				)
+
+				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, Service2Name, namespace.Name, labels, annotations, ports)
+				svc2IPv4s, svc2IPv6s := groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+				logger.Info("Created the second LoadBalancer service", "svc-name", Service2Name, "v4-IPs", svc2IPv4s, "v6-IPs", svc2IPv6s)
+				Expect(svc2IPv4s).To(Equal(svc1IPv4s))
+				Expect(svc2IPv6s).To(Equal(svc1IPv6s))
+			})
+
+			By("Checking if the deny-all rule covers the shared IP", func() {
+				expectDenyAllRuleForSharedIPs("Should have a rule for denying all traffic while both services exist")
+			})
+
+			By("Deleting service 2", func() {
+				Expect(utils.DeleteService(k8sClient, namespace.Name, Service2Name)).NotTo(HaveOccurred())
+			})
+
+			By("Checking if the deny-all rule still covers the shared IP", func() {
+				expectDenyAllRuleForSharedIPs("Should keep denying all traffic because service 1 still needs it")
 			})
 		})
 	})
