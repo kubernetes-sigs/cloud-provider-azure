@@ -178,6 +178,66 @@ func TestReconcileTags(t *testing.T) {
 			},
 			expectedChanged: false,
 		},
+		{
+			description: "reconcileTags should preserve distinct Unicode characters",
+			currentTagsOnResource: map[string]*string{
+				"S": ptr.To("first"),
+			},
+			newTags: map[string]*string{
+				"ſ": ptr.To("second"),
+			},
+			expectedTags: map[string]*string{
+				"S": ptr.To("first"),
+				"ſ": ptr.To("second"),
+			},
+			expectedChanged: true,
+		},
+		{
+			description: "reconcileTags should keep existing tag unchanged when duplicate case-insensitive keys exist in tags and systemTags is set",
+			currentTagsOnResource: map[string]*string{
+				"OWNER": ptr.To("team"),
+			},
+			newTags: func() map[string]*string {
+				tags, _ := parseTags("owner=team,OWNER=team", nil)
+				return tags
+			}(),
+			systemTags: "aks-managed",
+			expectedTags: map[string]*string{
+				"OWNER": ptr.To("team"),
+			},
+			expectedChanged: false,
+		},
+		{
+			description: "reconcileTags should update tag value while preserving existing key casing when systemTags is set",
+			currentTagsOnResource: map[string]*string{
+				"OWNER": ptr.To("oldteam"),
+			},
+			newTags: map[string]*string{
+				"owner": ptr.To("newteam"),
+			},
+			systemTags: "aks-managed",
+			expectedTags: map[string]*string{
+				"OWNER": ptr.To("newteam"),
+			},
+			expectedChanged: true,
+		},
+		{
+			description: "reconcileTags should ignore key casing and not delete existing tags when systemTags is set",
+			currentTagsOnResource: map[string]*string{
+				"A": ptr.To("b"),
+				"c": ptr.To("d"),
+			},
+			newTags: map[string]*string{
+				"a": ptr.To("b"),
+				"C": ptr.To("d"),
+			},
+			systemTags: "aks-managed",
+			expectedTags: map[string]*string{
+				"A": ptr.To("b"),
+				"c": ptr.To("d"),
+			},
+			expectedChanged: false,
+		},
 	} {
 		t.Run(testCase.description, func(t *testing.T) {
 			cloud := &Cloud{}
@@ -194,9 +254,10 @@ func TestReconcileTags(t *testing.T) {
 
 func TestParseTags(t *testing.T) {
 	for _, testCase := range []struct {
-		description, tags string
-		tagsMap           map[string]string
-		expectedTags      map[string]*string
+		description, tags   string
+		tagsMap             map[string]string
+		expectedTags        map[string]*string
+		expectedDroppedKeys []string
 	}{
 		{
 			description: "parseTags should return a map of tags",
@@ -280,12 +341,83 @@ func TestParseTags(t *testing.T) {
 				"z": ptr.To("z"),
 			},
 		},
+		{
+			description: "parseTags should keep first occurrence when duplicate case-insensitive keys are in tags",
+			tags:        "foo=bar, FOO=baz, FOO=qux, bar=1",
+			expectedTags: map[string]*string{
+				"foo": ptr.To("bar"),
+				"bar": ptr.To("1"),
+			},
+			expectedDroppedKeys: []string{"FOO", "FOO"},
+		},
+		{
+			description: "parseTags should keep first occurrence when duplicate case-insensitive keys are in tagsMap",
+			tagsMap: map[string]string{
+				"foo": "bar",
+				"FOO": "baz",
+			},
+			expectedTags: map[string]*string{
+				"FOO": ptr.To("baz"),
+			},
+			expectedDroppedKeys: []string{"foo"},
+		},
+		{
+			description: "parseTags should handle Unicode characters in tagsMap",
+			tagsMap: map[string]string{
+				"S": "first",
+				"ſ": "second",
+			},
+			expectedTags: map[string]*string{
+				"S": ptr.To("first"),
+				"ſ": ptr.To("second"),
+			},
+		},
+		{
+			description: "parseTags should let tagsMap override tags while discarding duplicates in both",
+			tags:        "foo=1, FOO=2",
+			tagsMap: map[string]string{
+				"Foo": "3",
+				"fOO": "4",
+			},
+			expectedTags: map[string]*string{
+				"Foo": ptr.To("3"),
+			},
+			expectedDroppedKeys: []string{"FOO", "fOO"},
+		},
 	} {
 		t.Run(testCase.description, func(t *testing.T) {
-			tags := parseTags(testCase.tags, testCase.tagsMap)
+			tags, droppedKeys := parseTags(testCase.tags, testCase.tagsMap)
 			assert.Equal(t, testCase.expectedTags, tags)
+			assert.Equal(t, testCase.expectedDroppedKeys, droppedKeys)
 		})
 	}
+}
+
+func TestFindKeyInMapCaseInsensitive(t *testing.T) {
+	targetMap := map[string]*string{
+		"Foo": ptr.To("1"),
+		"S":   ptr.To("2"),
+	}
+
+	found, k := findKeyInMapCaseInsensitive(targetMap, "foo")
+	assert.True(t, found)
+	assert.Equal(t, "Foo", k)
+
+	found, k = findKeyInMapCaseInsensitive(targetMap, "FOO")
+	assert.True(t, found)
+	assert.Equal(t, "Foo", k)
+
+	found, k = findKeyInMapCaseInsensitive(targetMap, "s")
+	assert.True(t, found)
+	assert.Equal(t, "S", k)
+
+	found, k = findKeyInMapCaseInsensitive(targetMap, "ſ")
+	assert.False(t, found)
+	assert.Equal(t, "", k)
+
+	found, k = findKeyInMapCaseInsensitive(targetMap, "bar")
+	assert.False(t, found)
+	assert.Equal(t, "", k)
 }
 
 func TestGetNodePrivateIPAddress(t *testing.T) {

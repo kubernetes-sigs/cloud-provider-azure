@@ -9396,6 +9396,7 @@ func TestEnsurePIPTagged(t *testing.T) {
 				"a":                        ptr.To("b"),
 				"c":                        ptr.To("d"),
 				"a=b":                      ptr.To("c=d"),
+				"y":                        ptr.To("zz"),
 				"e":                        ptr.To(""),
 				"k8s-azure-service-suffix": ptr.To("b"),
 				"prefix-k8s-azure-service": ptr.To("b"),
@@ -9404,6 +9405,63 @@ func TestEnsurePIPTagged(t *testing.T) {
 		changed := cloud.ensurePIPTagged(&service, &pip)
 		assert.True(t, changed)
 		assert.Equal(t, expectedPIP, pip)
+	})
+
+	t.Run("ensurePIPTagged should retain first tag value and emit DuplicatePIPTags warning event on duplicate annotation keys", func(t *testing.T) {
+		recorder := record.NewFakeRecorder(10)
+		cloud.eventRecorder = recorder
+		cloud.Tags = ""
+		cloud.TagsMap = nil
+		cloud.SystemTags = ""
+
+		serviceWithDups := v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					consts.ServiceAnnotationAzurePIPTags: "key1=val1,KEY1=val2,key2=val3",
+				},
+			},
+		}
+		targetPIP := armnetwork.PublicIPAddress{
+			Tags: map[string]*string{},
+		}
+		changed := cloud.ensurePIPTagged(&serviceWithDups, &targetPIP)
+		assert.True(t, changed)
+		assert.Equal(t, map[string]*string{
+			"key1": ptr.To("val1"),
+			"key2": ptr.To("val3"),
+		}, targetPIP.Tags)
+
+		var events []string
+		for len(recorder.Events) > 0 {
+			events = append(events, <-recorder.Events)
+		}
+		if assert.Len(t, events, 1) {
+			assert.Contains(t, events[0], "Warning DuplicatePIPTags")
+			assert.Contains(t, events[0], consts.ServiceAnnotationAzurePIPTags)
+			assert.Contains(t, events[0], "KEY1")
+		}
+	})
+
+	t.Run("ensurePIPTagged should retain existing tag and not delete it when duplicate case-insensitive keys are configured and systemTags is set", func(t *testing.T) {
+		cloud.Tags = "owner=team,OWNER=team"
+		cloud.TagsMap = nil
+		cloud.SystemTags = "aks-managed"
+
+		service := v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-service",
+			},
+		}
+		targetPIP := armnetwork.PublicIPAddress{
+			Tags: map[string]*string{
+				"OWNER": ptr.To("team"),
+			},
+		}
+		changed := cloud.ensurePIPTagged(&service, &targetPIP)
+		assert.False(t, changed)
+		assert.Equal(t, map[string]*string{
+			"OWNER": ptr.To("team"),
+		}, targetPIP.Tags)
 	})
 }
 

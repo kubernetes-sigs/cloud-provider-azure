@@ -1747,6 +1747,7 @@ func TestReconcilePLSTags(t *testing.T) {
 				"foo":                     ptr.To("bar"),
 				"a":                       ptr.To("c"),
 				"a=b":                     ptr.To("c=d"),
+				"y":                       ptr.To("zz"),
 			},
 		}
 		changed := cloud.reconcilePLSTags(&pls, &clusterName, &service)
@@ -1765,11 +1766,11 @@ func TestReconcilePLSTags(t *testing.T) {
 				"foo":                     ptr.To("bar"),
 				"a":                       ptr.To("c"),
 				"a=b":                     ptr.To("c=d"),
-				"Y":                       ptr.To("zz"),
+				"y":                       ptr.To("zz"),
 			},
 		}
 		changed := cloud.reconcilePLSTags(&pls, &clusterName, &service)
-		assert.True(t, changed)
+		assert.False(t, changed)
 		assert.Equal(t, expectedPLS, pls)
 	})
 }
