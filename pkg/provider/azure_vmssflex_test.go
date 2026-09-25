@@ -1260,6 +1260,7 @@ func TestEnsureVMSSFlexInPool(t *testing.T) {
 		testVMListWithOnlyInstanceView []*armcompute.VirtualMachine
 		vmListErr                      error
 		vmssPutErr                     error
+		extendedLocation               *armcompute.ExtendedLocation
 		expectedErr                    error
 	}{
 		{
@@ -1358,6 +1359,27 @@ func TestEnsureVMSSFlexInPool(t *testing.T) {
 			vmListErr:                      nil,
 			expectedErr:                    nil,
 		},
+		{
+			description: "ensureVMSSFlexInPool should propagate ExtendedLocation onto the update request when the source VMSS Flex has one",
+			nodes: []*v1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "vmssflex1000001",
+					},
+				},
+			},
+			service:                        &v1.Service{},
+			vmSetNameOfLB:                  "",
+			backendPoolID:                  "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb-internal/backendAddressPools/backendpool-1",
+			isStandardLB:                   true,
+			hasDefaultVMProfile:            true,
+			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
+			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
+			extendedLocation: &armcompute.ExtendedLocation{
+				Name: ptr.To("microsoftlosangeles1"),
+				Type: to.Ptr(armcompute.ExtendedLocationTypesEdgeZone),
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1375,12 +1397,19 @@ func TestEnsureVMSSFlexInPool(t *testing.T) {
 		if !tc.hasDefaultVMProfile {
 			testVmssFlex.Properties.VirtualMachineProfile = nil
 		}
+		testVmssFlex.ExtendedLocation = tc.extendedLocation
 		expectedestVmssFlexList := []*armcompute.VirtualMachineScaleSet{testVmssFlex}
 
 		mockVMSSClient := fs.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(expectedestVmssFlexList, nil).AnyTimes()
 		mockVMSSClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(testVmssFlex1, nil).AnyTimes()
-		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, tc.vmssPutErr).AnyTimes()
+		var capturedVMSS armcompute.VirtualMachineScaleSet
+		mockVMSSClient.EXPECT().
+			CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, _, _ string, v armcompute.VirtualMachineScaleSet) (*armcompute.VirtualMachineScaleSet, error) {
+				capturedVMSS = v
+				return nil, tc.vmssPutErr
+			}).AnyTimes()
 
 		mockVMClient := fs.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOutInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
@@ -1391,6 +1420,7 @@ func TestEnsureVMSSFlexInPool(t *testing.T) {
 		if tc.expectedErr != nil {
 			assert.EqualError(t, err, tc.expectedErr.Error(), tc.description)
 		}
+		assert.Equal(t, tc.extendedLocation, capturedVMSS.ExtendedLocation, tc.description)
 	}
 
 }
@@ -1520,6 +1550,7 @@ func TestEnsureBackendPoolDeletedFromVMSetsVmssFlex(t *testing.T) {
 		isIPConfigEmpty      bool
 		vmssListCallingTimes int
 		vmssPutErr           error
+		extendedLocation     *armcompute.ExtendedLocation
 		expectedErr          error
 	}{
 		{
@@ -1610,6 +1641,19 @@ func TestEnsureBackendPoolDeletedFromVMSetsVmssFlex(t *testing.T) {
 			vmssListCallingTimes: 2,
 			expectedErr:          fmt.Errorf("failed to update nic"),
 		},
+		{
+			description: "EnsureBackendPoolDeletedFromVMSets should propagate ExtendedLocation onto the update request when the source VMSS Flex has one",
+			vmssNamesMap: map[string]bool{
+				"vmssflex1": true,
+			},
+			backendPoolID:        "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0",
+			hasDefaultVMProfile:  true,
+			vmssListCallingTimes: 2,
+			extendedLocation: &armcompute.ExtendedLocation{
+				Name: ptr.To("microsoftlosangeles1"),
+				Type: to.Ptr(armcompute.ExtendedLocationTypesEdgeZone),
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1631,13 +1675,20 @@ func TestEnsureBackendPoolDeletedFromVMSetsVmssFlex(t *testing.T) {
 			if tc.isIPConfigEmpty {
 				(testVmssFlex.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations)[0].Properties.IPConfigurations = []*armcompute.VirtualMachineScaleSetIPConfiguration{}
 			}
+			testVmssFlex.ExtendedLocation = tc.extendedLocation
 
 			vmssFlexList := []*armcompute.VirtualMachineScaleSet{testVmssFlex}
 
 			mockVMSSClient := fs.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
 			mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(vmssFlexList, nil).Times(tc.vmssListCallingTimes)
 			mockVMSSClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(testVmssFlex1, nil).AnyTimes()
-			mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, tc.vmssPutErr).AnyTimes()
+			var capturedVMSS armcompute.VirtualMachineScaleSet
+			mockVMSSClient.EXPECT().
+				CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ context.Context, _, _ string, v armcompute.VirtualMachineScaleSet) (*armcompute.VirtualMachineScaleSet, error) {
+					capturedVMSS = v
+					return nil, tc.vmssPutErr
+				}).AnyTimes()
 
 			err = fs.EnsureBackendPoolDeletedFromVMSets(context.TODO(), tc.vmssNamesMap, []string{tc.backendPoolID})
 			_, _ = fs.getVmssFlexByName(context.TODO(), "vmssflex1")
@@ -1647,6 +1698,7 @@ func TestEnsureBackendPoolDeletedFromVMSetsVmssFlex(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
+			assert.Equal(t, tc.extendedLocation, capturedVMSS.ExtendedLocation, tc.description)
 		})
 	}
 }
