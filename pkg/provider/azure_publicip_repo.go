@@ -59,7 +59,7 @@ func (az *Cloud) CreateOrUpdatePIP(service *v1.Service, pipResourceGroup string,
 	logger.V(10).Info("NetworkClientFactory.GetPublicIPAddressClient().CreateOrUpdate end", "pipResourceGroup", pipResourceGroup, "pipName", ptr.Deref(pip.Name, ""))
 	if rerr == nil {
 		// Invalidate the cache right after updating
-		_ = az.pipCache.Delete(pipResourceGroup)
+		_ = az.pipCache.Delete(getPIPCacheKey(pipResourceGroup))
 		return nil
 	}
 
@@ -72,7 +72,7 @@ func (az *Cloud) CreateOrUpdatePIP(service *v1.Service, pipResourceGroup string,
 	if errors.As(rerr, &respError) && respError != nil {
 		if respError.StatusCode == http.StatusPreconditionFailed {
 			logger.V(3).Info("PublicIP cache is cleanup because of http.StatusPreconditionFailed", "pipResourceGroup", pipResourceGroup, "pipName", ptr.Deref(pip.Name, ""))
-			_ = az.pipCache.Delete(pipResourceGroup)
+			_ = az.pipCache.Delete(getPIPCacheKey(pipResourceGroup))
 		}
 	}
 
@@ -80,7 +80,7 @@ func (az *Cloud) CreateOrUpdatePIP(service *v1.Service, pipResourceGroup string,
 	// Invalidate the cache because another new operation has canceled the current request.
 	if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceledErrorMessage) {
 		logger.V(3).Info("PublicIP cache is cleanup because CreateOrUpdate is canceled by another operation", "pipResourceGroup", pipResourceGroup, "pipName", ptr.Deref(pip.Name, ""))
-		_ = az.pipCache.Delete(pipResourceGroup)
+		_ = az.pipCache.Delete(getPIPCacheKey(pipResourceGroup))
 	}
 
 	return rerr
@@ -105,8 +105,12 @@ func (az *Cloud) DeletePublicIP(service *v1.Service, pipResourceGroup string, pi
 	}
 
 	// Invalidate the cache right after deleting
-	_ = az.pipCache.Delete(pipResourceGroup)
+	_ = az.pipCache.Delete(getPIPCacheKey(pipResourceGroup))
 	return nil
+}
+
+func getPIPCacheKey(pipResourceGroup string) string {
+	return strings.ToLower(pipResourceGroup)
 }
 
 func (az *Cloud) newPIPCache() (azcache.Resource, error) {
@@ -134,7 +138,8 @@ func (az *Cloud) newPIPCache() (azcache.Resource, error) {
 func (az *Cloud) getPublicIPAddress(ctx context.Context, pipResourceGroup string, pipName string, crt azcache.AzureCacheReadType) (*armnetwork.PublicIPAddress, bool, error) {
 	logger := klog.FromContext(ctx).WithName("getPublicIPAddress").
 		WithValues("pipResourceGroup", pipResourceGroup, "pipName", pipName)
-	cached, err := az.pipCache.Get(ctx, pipResourceGroup, crt)
+	cacheKey := getPIPCacheKey(pipResourceGroup)
+	cached, err := az.pipCache.Get(ctx, cacheKey, crt)
 	if err != nil {
 		return nil, false, err
 	}
@@ -143,7 +148,7 @@ func (az *Cloud) getPublicIPAddress(ctx context.Context, pipResourceGroup string
 	pip, ok := pips.Load(strings.ToLower(pipName))
 	if !ok {
 		// pip not found, refresh cache and retry
-		cached, err = az.pipCache.Get(ctx, pipResourceGroup, azcache.CacheReadTypeForceRefresh)
+		cached, err = az.pipCache.Get(ctx, cacheKey, azcache.CacheReadTypeForceRefresh)
 		if err != nil {
 			return nil, false, err
 		}
@@ -160,7 +165,7 @@ func (az *Cloud) getPublicIPAddress(ctx context.Context, pipResourceGroup string
 }
 
 func (az *Cloud) listPIP(ctx context.Context, pipResourceGroup string, crt azcache.AzureCacheReadType) ([]*armnetwork.PublicIPAddress, error) {
-	cached, err := az.pipCache.Get(ctx, pipResourceGroup, crt)
+	cached, err := az.pipCache.Get(ctx, getPIPCacheKey(pipResourceGroup), crt)
 	if err != nil {
 		return nil, err
 	}
