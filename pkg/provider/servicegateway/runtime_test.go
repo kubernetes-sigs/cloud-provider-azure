@@ -18,6 +18,7 @@ package servicegateway
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -61,6 +62,27 @@ func TestDiffTrackerConfig(t *testing.T) {
 	assert.Equal(t, "vnet", diffTrackerConfig.VNetName)
 	assert.Equal(t, "vnet-resource-group", diffTrackerConfig.VNetResourceGroup)
 	assert.Contains(t, diffTrackerConfig.ServiceGatewayResourceID(), "/subscriptions/network-subscription/")
+	assert.Equal(t, 400*time.Millisecond, diffTrackerConfig.LocationsUpdateInterval,
+		"an unset serviceGatewayLocationsUpdateIntervalInMilliseconds must default to 400ms")
+}
+
+func TestDiffTrackerConfigLocationsUpdateInterval(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		json     string
+		expected time.Duration
+	}{
+		{name: "absent", json: `{}`, expected: 400 * time.Millisecond},
+		{name: "zero", json: `{"serviceGatewayLocationsUpdateIntervalInMilliseconds": 0}`, expected: 400 * time.Millisecond},
+		{name: "custom", json: `{"serviceGatewayLocationsUpdateIntervalInMilliseconds": 1500}`, expected: 1500 * time.Millisecond},
+		{name: "negative passes through to validation", json: `{"serviceGatewayLocationsUpdateIntervalInMilliseconds": -1}`, expected: -time.Millisecond},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var config providerconfig.Config
+			assert.NoError(t, json.Unmarshal([]byte(tc.json), &config))
+			assert.Equal(t, tc.expected, diffTrackerConfig(config).LocationsUpdateInterval)
+		})
+	}
 }
 
 func TestRuntimeEnablementAndLoadBalancer(t *testing.T) {

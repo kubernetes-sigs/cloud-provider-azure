@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	v1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -80,6 +81,10 @@ func diffTrackerConfig(config providerconfig.Config) difftracker.Config {
 	}
 
 	serviceGatewayName := consts.DefaultServiceGatewayResourceName
+	locationsUpdateIntervalInMilliseconds := config.ServiceGatewayLocationsUpdateIntervalInMilliseconds
+	if locationsUpdateIntervalInMilliseconds == 0 {
+		locationsUpdateIntervalInMilliseconds = consts.DefaultServiceGatewayLocationsUpdateIntervalInMilliseconds
+	}
 	return difftracker.Config{
 		SubscriptionID:                config.SubscriptionID,
 		NetworkResourceSubscriptionID: networkSubscriptionID,
@@ -88,6 +93,7 @@ func diffTrackerConfig(config providerconfig.Config) difftracker.Config {
 		VNetName:                      config.VnetName,
 		VNetResourceGroup:             config.VnetResourceGroup,
 		ServiceGatewayResourceName:    serviceGatewayName,
+		LocationsUpdateInterval:       time.Duration(locationsUpdateIntervalInMilliseconds) * time.Millisecond,
 	}
 }
 
