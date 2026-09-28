@@ -320,14 +320,14 @@ type ClientFactory interface {
 var FactoryTestCaseTemplate = template.Must(template.New("factory-test-case").Parse(
 	`
 	var _ = ginkgo.Describe("Factory", func() {
-ginkgo.When("config is nil", func() {
+ginkgo.When("config only sets the subscription", func() {
 			{{- range $key, $client := . }}
 			{{$resource := $client.Resource }}
 			{{- if (gt (len $client.SubResource) 0) }}
 			{{- $resource = $client.SubResource -}}
 			{{- end -}}
 ginkgo.It("should create factory instance without painc - {{$resource}}", func() {
-				factory, err := NewClientFactory(nil, nil,cloud.AzurePublic, nil)
+				factory, err := NewClientFactory(&ClientFactoryConfig{SubscriptionID: "subscription"}, nil, cloud.AzurePublic, nil)
 				gomega.Expect(err).NotTo(gomega.HaveOccurred())
 				gomega.Expect(factory).NotTo(gomega.BeNil())
 				client := factory.Get{{$resource}}Client()
