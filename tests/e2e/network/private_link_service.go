@@ -128,19 +128,39 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-pls-name'", func() {
 		plsName := "testpls"
+		invalidPLSName := "invalid/name"
 		annotation := map[string]string{
 			consts.ServiceAnnotationLoadBalancerInternal: "true",
 			consts.ServiceAnnotationPLSCreation:          "true",
-			consts.ServiceAnnotationPLSName:              plsName,
+			consts.ServiceAnnotationPLSName:              invalidPLSName,
 		}
 
-		// create service with given annotation and wait it to expose
-		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
+		By("Creating a service with an invalid private link service name")
+		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
+		beforeCreate := time.Now()
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		utils.PrintCreateSVCSuccessfully(serviceName, ns.Name)
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+
+		By("Verifying the invalid private link service name is rejected")
+		expectedMessage := fmt.Sprintf("invalid private link service annotation (%q=%q)", consts.ServiceAnnotationPLSName, invalidPLSName)
+		err = utils.WaitForServiceWarningEventAfter(cs, ns.Name, serviceName, "SyncLoadBalancerFailed", expectedMessage, beforeCreate)
+		Expect(err).NotTo(HaveOccurred())
+		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(service.Status.LoadBalancer.Ingress).To(BeEmpty())
+
+		By("Updating the service to use a valid private link service name")
+		service.Annotations[consts.ServiceAnnotationPLSName] = plsName
+		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []*string{})
+		Expect(err).NotTo(HaveOccurred())
 		Expect(len(ips)).NotTo(BeZero())
 		ip := ips[0]
 		utils.Logf("Get Internal IP: %s", *ip)
@@ -155,21 +175,41 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		rg, cleanup := utils.CreateTestResourceGroup(tc)
 		defer cleanup(ptr.Deref(rg.Name, ""))
 
-		By("creating a test pls specifying the test resource group")
+		By("Creating a service with an invalid private link service resource group")
 		plsName := "testpls"
+		invalidResourceGroup := "invalid/name"
 		annotation := map[string]string{
 			consts.ServiceAnnotationLoadBalancerInternal: "true",
 			consts.ServiceAnnotationPLSCreation:          "true",
 			consts.ServiceAnnotationPLSName:              plsName,
-			consts.ServiceAnnotationPLSResourceGroup:     ptr.Deref(rg.Name, ""),
+			consts.ServiceAnnotationPLSResourceGroup:     invalidResourceGroup,
 		}
 
-		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
+		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
+		beforeCreate := time.Now()
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		utils.PrintCreateSVCSuccessfully(serviceName, ns.Name)
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+
+		By("Verifying the invalid private link service resource group is rejected")
+		expectedMessage := fmt.Sprintf("invalid resource group annotations (%q=%q)", consts.ServiceAnnotationPLSResourceGroup, invalidResourceGroup)
+		err = utils.WaitForServiceWarningEventAfter(cs, ns.Name, serviceName, "SyncLoadBalancerFailed", expectedMessage, beforeCreate)
+		Expect(err).NotTo(HaveOccurred())
+		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(service.Status.LoadBalancer.Ingress).To(BeEmpty())
+
+		By("Updating the service to use the test resource group")
+		service.Annotations[consts.ServiceAnnotationPLSResourceGroup] = ptr.Deref(rg.Name, "")
+		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []*string{})
+		Expect(err).NotTo(HaveOccurred())
 		Expect(len(ips)).NotTo(BeZero())
 		ip := ips[0]
 		utils.Logf("Get Internal IP: %s", ip)
@@ -194,19 +234,39 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}
 		newSubnetID := *subnet.ID
 
+		invalidSubnetName := "invalid/name"
 		annotation := map[string]string{
 			consts.ServiceAnnotationLoadBalancerInternal:     "true",
 			consts.ServiceAnnotationPLSCreation:              "true",
-			consts.ServiceAnnotationPLSIpConfigurationSubnet: subnetName,
+			consts.ServiceAnnotationPLSIpConfigurationSubnet: invalidSubnetName,
 		}
 
-		// create service with given annotation and wait it to expose
-		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
+		By("Creating a service with an invalid private link service subnet name")
+		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
+		beforeCreate := time.Now()
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		utils.PrintCreateSVCSuccessfully(serviceName, ns.Name)
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+
+		By("Verifying the invalid private link service subnet name is rejected")
+		expectedMessage := fmt.Sprintf("invalid subnet annotations (%q=%q)", consts.ServiceAnnotationPLSIpConfigurationSubnet, invalidSubnetName)
+		err = utils.WaitForServiceWarningEventAfter(cs, ns.Name, serviceName, "SyncLoadBalancerFailed", expectedMessage, beforeCreate)
+		Expect(err).NotTo(HaveOccurred())
+		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(service.Status.LoadBalancer.Ingress).To(BeEmpty())
+
+		By("Updating the service to use a valid private link service subnet name with surrounding whitespace")
+		service.Annotations[consts.ServiceAnnotationPLSIpConfigurationSubnet] = " " + subnetName + " "
+		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []*string{})
+		Expect(err).NotTo(HaveOccurred())
 		Expect(len(ips)).NotTo(BeZero())
 		ip := ips[0]
 		utils.Logf("Get Internal IP: %s", ip)
