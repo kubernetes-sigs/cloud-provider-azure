@@ -77,6 +77,11 @@ type LocationsUpdater struct {
 	// retry backoff. Accessed only from the single Run goroutine (process), so no lock.
 	failureCount int
 
+	// lastRunEnd is when the previous run (one process pass) finished. Run waits until
+	// config.LocationsUpdateInterval has passed since then before starting the next run. Accessed
+	// only from the single Run goroutine, so no lock.
+	lastRunEnd time.Time
+
 	// wg tracks the Run loop so Stop can wait for an in-flight sync to finish. Cancelling alone
 	// would let Stop return while process is still inside an NRP call and about to mutate tracker
 	// state, so an initialization failure could tear down and report while that work continues.
@@ -120,10 +125,15 @@ func (lu *LocationsUpdater) Run() {
 
 		case <-lu.diffTracker.locationsUpdaterTrigger:
 			lu.logger.V(4).Info("Triggered LocationsUpdater")
+			if !lu.waitForRunInterval() {
+				lu.logger.V(2).Info("Context cancelled, stopping LocationsUpdater")
+				return
+			}
 			// Bound each attempt so a hung/slow NRP call cannot pin the single worker and starve all
 			// other services' location/finalizer syncs; a timeout fails into the deferred backoffAndRetry.
 			attemptCtx, cancel := context.WithTimeout(lu.ctx, getNRPOperationTimeout())
 			lu.process(attemptCtx)
+			lu.lastRunEnd = time.Now()
 			cancel()
 		}
 	}
@@ -367,6 +377,30 @@ func computeRetryBackoff(attempt int) time.Duration {
 // Throttling (429), conflict (409), not-found (404) and 5xx are transient and remain retryable.
 func isTerminalLocationSyncStatus(httpStatus int) bool {
 	return httpStatus == http.StatusBadRequest || httpStatus == http.StatusUnprocessableEntity
+}
+
+// waitForRunInterval waits until config.LocationsUpdateInterval has passed since the previous run
+// finished, so runs never start back to back and changes that arrive in between are batched into the
+// next run. It does not wait before the first run or after an idle period. It returns false if the
+// updater is stopped while waiting.
+func (lu *LocationsUpdater) waitForRunInterval() bool {
+	interval := lu.diffTracker.config.LocationsUpdateInterval
+	if interval <= 0 || lu.lastRunEnd.IsZero() {
+		return true
+	}
+	wait := interval - time.Since(lu.lastRunEnd)
+	if wait <= 0 {
+		return true
+	}
+	lu.logger.V(4).Info("Delaying location sync run to keep the minimum interval", "delay", wait, "interval", interval)
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-lu.ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
 }
 
 // backoffAndRetry waits a bounded, jittered delay and then re-triggers the LocationsUpdater
