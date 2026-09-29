@@ -2208,6 +2208,17 @@ func (dt *DiffTracker) checkInitializationComplete() {
 	dt.checkInitializationCompleteLocked()
 }
 
+// recheckInitializationComplete reports whether this call completed initialization.
+func (dt *DiffTracker) recheckInitializationComplete() bool {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	if atomic.LoadInt32(&dt.isInitializing) == 0 {
+		return false
+	}
+	dt.checkInitializationCompleteLocked()
+	return atomic.LoadInt32(&dt.isInitializing) == 0
+}
+
 // checkInitializationCompleteLocked checks initialization completion
 // Assumes dt.mu is already held by caller
 func (dt *DiffTracker) checkInitializationCompleteLocked() {
