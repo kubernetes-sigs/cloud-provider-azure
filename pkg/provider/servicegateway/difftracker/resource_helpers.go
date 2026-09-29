@@ -19,8 +19,10 @@ package difftracker
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	v1 "k8s.io/api/core/v1"
@@ -28,6 +30,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/iputil"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -186,10 +189,20 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 			Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
 		},
 		Location: to.Ptr(dtConfig.Location),
+		Tags:     inboundPublicIPTags(config),
 		Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 			PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 			PublicIPAddressVersion:   to.Ptr(pipVersion),
 		},
+	}
+	if config != nil {
+		if config.PIPPrefixID != "" {
+			pip.Properties.PublicIPPrefix = &armnetwork.SubResource{ID: to.Ptr(config.PIPPrefixID)}
+		}
+		pip.Properties.IPTags = ipTagsFromMap(config.IPTags)
+		if config.DNSLabel != nil && *config.DNSLabel != "" {
+			pip.Properties.DNSSettings = &armnetwork.PublicIPAddressDNSSettings{DomainNameLabel: config.DNSLabel}
+		}
 	}
 
 	// Build LoadBalancer with backend pool and rules
@@ -505,6 +518,18 @@ func ExtractInboundConfigFromService(service *v1.Service) *InboundConfig {
 		config.IdleTimeoutMinutes = idleTimeout
 	}
 
+	config.ServiceName = service.Namespace + "/" + service.Name
+	config.PIPTags = parseKeyValueAnnotation(service.Annotations[consts.ServiceAnnotationAzurePIPTags])
+	for key := range config.PIPTags {
+		if isReservedPIPTagKey(key) {
+			delete(config.PIPTags, key)
+		}
+	}
+	config.IPTags = parseKeyValueAnnotation(service.Annotations[consts.ServiceAnnotationIPTagsForPublicIP])
+	if label, found := service.Annotations[consts.ServiceAnnotationDNSLabelName]; found {
+		config.DNSLabel = to.Ptr(strings.TrimSpace(label))
+	}
+	config.PIPPrefixID = publicIPPrefixID(service)
 	return config
 }
 
@@ -526,6 +551,191 @@ type WarningEventError interface {
 // WarningEvent returns the Kubernetes Event metadata for this validation error.
 func (e *InboundConfigValidationError) WarningEvent() (reason, message string) {
 	return e.Reason, e.Message
+}
+
+const (
+	azureServiceAnnotationPrefix = "service.beta.kubernetes.io/azure-"
+	portServiceAnnotationPrefix  = "service.beta.kubernetes.io/port_"
+)
+
+// serviceGatewayAnnotations are the Azure Service annotations ServiceGateway reads; the others are ignored.
+var serviceGatewayAnnotations = []string{
+	consts.ServiceAnnotationLoadBalancerInternal,
+	consts.ServiceAnnotationLoadBalancerIdleTimeout,
+	consts.ServiceAnnotationAzurePIPTags,
+	consts.ServiceAnnotationIPTagsForPublicIP,
+	consts.ServiceAnnotationDNSLabelName,
+	consts.ServiceAnnotationPIPPrefixIDDualStack[false],
+	consts.ServiceAnnotationPIPPrefixIDDualStack[true],
+}
+
+// reservedPIPTagKeys are the Public IP tags whose values the controller owns.
+var reservedPIPTagKeys = []string{
+	consts.ClusterNameKey, consts.LegacyClusterNameKey,
+	consts.ServiceTagKey, consts.LegacyServiceTagKey,
+	consts.ServiceUsingDNSKey, consts.LegacyServiceUsingDNSKey,
+}
+
+func isReservedPIPTagKey(key string) bool {
+	return slices.ContainsFunc(reservedPIPTagKeys, func(reserved string) bool { return strings.EqualFold(reserved, key) })
+}
+
+// ReservedPIPTagKeysInAnnotation returns, sorted, the reserved keys set through azure-pip-tags.
+func ReservedPIPTagKeysInAnnotation(service *v1.Service) []string {
+	var keys []string
+	for key := range parseKeyValueAnnotation(service.Annotations[consts.ServiceAnnotationAzurePIPTags]) {
+		if isReservedPIPTagKey(key) {
+			keys = append(keys, key)
+		}
+	}
+	slices.Sort(keys)
+	return keys
+}
+
+// parseKeyValueAnnotation parses "k1=v1,k2=v2" the way the Azure provider does: malformed pairs and
+// empty keys are skipped, and the last value of a key wins.
+func parseKeyValueAnnotation(value string) map[string]string {
+	var parsed map[string]string
+	for _, pair := range strings.Split(value, ",") {
+		kv := strings.Split(pair, "=")
+		if len(kv) != 2 || strings.TrimSpace(kv[0]) == "" {
+			continue
+		}
+		if parsed == nil {
+			parsed = map[string]string{}
+		}
+		parsed[strings.TrimSpace(kv[0])] = strings.TrimSpace(kv[1])
+	}
+	return parsed
+}
+
+// publicIPPrefixID returns the prefix annotation for the Service's family, the way the Azure provider
+// picks it: an IPv6 Service prefers the -ipv6 annotation and falls back to the plain one.
+func publicIPPrefixID(service *v1.Service) string {
+	if len(service.Spec.IPFamilies) > 0 && service.Spec.IPFamilies[0] == v1.IPv6Protocol {
+		if id := strings.TrimSpace(service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[true]]); id != "" {
+			return id
+		}
+	}
+	return strings.TrimSpace(service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[false]])
+}
+
+// inboundPublicIPTags returns the tags the controller sets on an inbound Public IP.
+func inboundPublicIPTags(config *InboundConfig) map[string]*string {
+	tags := map[string]*string{}
+	if config == nil {
+		return tags
+	}
+	for key, value := range config.PIPTags {
+		tags[key] = to.Ptr(value)
+	}
+	if config.ServiceName != "" {
+		tags[consts.ServiceTagKey] = to.Ptr(config.ServiceName)
+	}
+	if config.ClusterName != "" {
+		tags[consts.ClusterNameKey] = to.Ptr(config.ClusterName)
+	}
+	return tags
+}
+
+func ipTagsFromMap(tags map[string]string) []*armnetwork.IPTag {
+	if tags == nil {
+		return nil
+	}
+	ipTags := make([]*armnetwork.IPTag, 0, len(tags))
+	for tagType, tag := range tags {
+		ipTags = append(ipTags, &armnetwork.IPTag{IPTagType: to.Ptr(tagType), Tag: to.Ptr(tag)})
+	}
+	slices.SortFunc(ipTags, func(a, b *armnetwork.IPTag) int { return strings.Compare(*a.IPTagType, *b.IPTagType) })
+	return ipTags
+}
+
+var sourceRestrictionAnnotations = []string{
+	v1.AnnotationLoadBalancerSourceRangesKey,
+	consts.ServiceAnnotationAllowedIPRanges,
+	consts.ServiceAnnotationAllowedServiceTags,
+	consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges,
+}
+
+var publicIPSelectionAnnotations = []string{
+	consts.ServiceAnnotationLoadBalancerIPDualStack[false],
+	consts.ServiceAnnotationLoadBalancerIPDualStack[true],
+	consts.ServiceAnnotationPIPNameDualStack[false],
+	consts.ServiceAnnotationPIPNameDualStack[true],
+}
+
+// sourceRestriction returns the setting that stops some sources from reaching the Service, judged the
+// way the Azure provider applies it: ranges are parsed strictly, a present but empty annotation is an
+// invalid range, and only a /0 of the Service's own family allows every source.
+func sourceRestriction(service *v1.Service) (string, bool) {
+	if strings.TrimSpace(service.Annotations[consts.ServiceAnnotationAllowedServiceTags]) != "" {
+		return consts.ServiceAnnotationAllowedServiceTags, true
+	}
+	ipv6 := len(service.Spec.IPFamilies) > 0 && service.Spec.IPFamilies[0] == v1.IPv6Protocol
+	if len(service.Spec.LoadBalancerSourceRanges) > 0 && !allowsAllSources(service.Spec.LoadBalancerSourceRanges, ipv6) {
+		return "spec.loadBalancerSourceRanges", true
+	}
+	var keys, ranges []string
+	for _, key := range []string{v1.AnnotationLoadBalancerSourceRangesKey, consts.ServiceAnnotationAllowedIPRanges} {
+		if value, found := service.Annotations[key]; found {
+			keys = append(keys, key)
+			ranges = append(ranges, strings.Split(value, ",")...)
+		}
+	}
+	if len(keys) > 0 && !allowsAllSources(ranges, ipv6) {
+		return strings.Join(keys, " and "), true
+	}
+	for _, port := range service.Spec.Ports {
+		if disabled, _ := consts.IsLBRuleOnK8sServicePortDisabled(service.Annotations, port.Port); disabled {
+			return consts.BuildAnnotationKeyForPort(port.Port, consts.PortAnnotationNoLBRule), true
+		}
+	}
+	return "", false
+}
+
+// allowsAllSources reports whether every range is valid and one of them is the /0 of the family.
+func allowsAllSources(ranges []string, ipv6 bool) bool {
+	allowsAll := false
+	for _, r := range ranges {
+		prefix, err := iputil.ParsePrefix(strings.TrimSpace(r))
+		if err != nil {
+			return false
+		}
+		if prefix.Bits() == 0 && prefix.Addr().Is6() == ipv6 {
+			allowsAll = true
+		}
+	}
+	return allowsAll
+}
+
+func publicIPSelection(service *v1.Service) (string, bool) {
+	for _, annotation := range publicIPSelectionAnnotations {
+		if strings.TrimSpace(service.Annotations[annotation]) != "" {
+			return annotation, true
+		}
+	}
+	return "", false
+}
+
+// IgnoredServiceAnnotations returns, sorted, the Azure Service annotations ServiceGateway does not
+// implement and does not reject.
+func IgnoredServiceAnnotations(service *v1.Service) []string {
+	if service == nil {
+		return nil
+	}
+	var ignored []string
+	for key := range service.Annotations {
+		if (!strings.HasPrefix(key, azureServiceAnnotationPrefix) && !strings.HasPrefix(key, portServiceAnnotationPrefix)) ||
+			strings.HasSuffix(key, "_"+string(consts.PortAnnotationNoLBRule)) ||
+			slices.Contains(serviceGatewayAnnotations, key) ||
+			slices.Contains(sourceRestrictionAnnotations, key) ||
+			slices.Contains(publicIPSelectionAnnotations, key) {
+			continue
+		}
+		ignored = append(ignored, key)
+	}
+	slices.Sort(ignored)
+	return ignored
 }
 
 // Supported bounds for the idle-timeout annotation. Azure Load Balancer accepts 4-30 minutes, and
@@ -557,6 +767,19 @@ func AdmitInboundService(service *v1.Service) (*InboundConfig, error) {
 		return nil, &InboundConfigValidationError{
 			Reason:  "UnsupportedInternalLoadBalancer",
 			Message: fmt.Sprintf("internal load balancer is not supported when ServiceGateway is enabled; remove the %q annotation", consts.ServiceAnnotationLoadBalancerInternal),
+		}
+	}
+
+	if setting, ok := sourceRestriction(service); ok {
+		return nil, &InboundConfigValidationError{
+			Reason:  "UnsupportedAccessRestriction",
+			Message: fmt.Sprintf("%s limits which sources or ports can reach the Service, which is not supported when ServiceGateway is enabled; no network security rule is programmed and every port gets a load-balancing rule, so the Service would be reachable from any source", setting),
+		}
+	}
+	if annotation, ok := publicIPSelection(service); ok {
+		return nil, &InboundConfigValidationError{
+			Reason:  "UnsupportedPublicIPSelection",
+			Message: fmt.Sprintf("the %q annotation is not supported when ServiceGateway is enabled; a new Public IP is always allocated", annotation),
 		}
 	}
 
@@ -599,6 +822,21 @@ func AdmitInboundService(service *v1.Service) (*InboundConfig, error) {
 func ValidateInboundConfig(config *InboundConfig) error {
 	if config == nil {
 		return nil
+	}
+
+	if config.PIPPrefixID != "" {
+		if id, err := arm.ParseResourceID(config.PIPPrefixID); err != nil || !strings.EqualFold(id.ResourceType.String(), "Microsoft.Network/publicIPPrefixes") {
+			return &InboundConfigValidationError{
+				Reason:  "InvalidPublicIPPrefix",
+				Message: fmt.Sprintf("%q is not a Public IP prefix resource ID", config.PIPPrefixID),
+			}
+		}
+		if len(config.IPTags) > 0 {
+			return &InboundConfigValidationError{
+				Reason:  "ConflictingPublicIPSettings",
+				Message: fmt.Sprintf("the %q annotation cannot be combined with a Public IP prefix; a Public IP allocated from a prefix takes the prefix's IP tags", consts.ServiceAnnotationIPTagsForPublicIP),
+			}
+		}
 	}
 
 	// ipFamilies has at most two entries (two == dual-stack); PodIP backends are single-stack.

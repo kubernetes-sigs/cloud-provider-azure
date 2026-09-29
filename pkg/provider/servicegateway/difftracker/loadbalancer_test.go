@@ -136,6 +136,20 @@ func TestLoadBalancerEmitsWarningEventForRejectedService(t *testing.T) {
 			},
 			reason: "UnsupportedInternalLoadBalancer",
 		},
+		{
+			name: "source ranges",
+			mutate: func(svc *v1.Service) {
+				svc.Spec.LoadBalancerSourceRanges = []string{"203.0.113.0/24"}
+			},
+			reason: "UnsupportedAccessRestriction",
+		},
+		{
+			name: "public IP name",
+			mutate: func(svc *v1.Service) {
+				svc.Annotations = map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "my-pip"}
+			},
+			reason: "UnsupportedPublicIPSelection",
+		},
 	}
 
 	for _, tt := range tests {
@@ -163,6 +177,71 @@ func TestLoadBalancerEmitsWarningEventForRejectedService(t *testing.T) {
 				t.Fatalf("expected a %s warning event on the Service", tt.reason)
 			}
 		})
+	}
+}
+
+func TestLoadBalancerWarnsAboutIgnoredAnnotations(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	svc := newInboundService("service-uid")
+	svc.Annotations = map[string]string{
+		consts.ServiceAnnotationLoadBalancerResourceGroup: "rg",
+		consts.ServiceAnnotationLoadBalancerIdleTimeout:   "10",
+	}
+	tracker := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset(svc))
+	recorder := record.NewFakeRecorder(10)
+	tracker.SetEventRecorder(recorder)
+	lb := NewLoadBalancer(nil)
+	assert.NoError(t, lb.SetTracker(tracker))
+
+	_, err := lb.EnsureLoadBalancer(context.Background(), "cluster", svc, nil)
+	assert.NoError(t, err)
+	assert.True(t, tracker.IsServiceTracked(ServiceUID(svc)), "an ignored annotation must not block provisioning")
+
+	select {
+	case event := <-recorder.Events:
+		assert.Contains(t, event, v1.EventTypeWarning)
+		assert.Contains(t, event, "ServiceGatewayIgnoredAnnotations")
+		assert.Contains(t, event, consts.ServiceAnnotationLoadBalancerResourceGroup)
+		assert.NotContains(t, event, consts.ServiceAnnotationLoadBalancerIdleTimeout)
+	default:
+		t.Fatal("expected a warning event listing the ignored annotation")
+	}
+
+	delete(svc.Annotations, consts.ServiceAnnotationLoadBalancerResourceGroup)
+	_, err = lb.EnsureLoadBalancer(context.Background(), "cluster", svc, nil)
+	assert.NoError(t, err)
+	select {
+	case event := <-recorder.Events:
+		t.Fatalf("unexpected event for supported annotations only: %s", event)
+	default:
+	}
+}
+
+func TestLoadBalancerRecordsClusterNameAndReservedPIPTagKeys(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	svc := newInboundService("service-uid")
+	svc.Annotations = map[string]string{consts.ServiceAnnotationAzurePIPTags: "k8s-azure-cluster-name=spoof,team=a"}
+	tracker := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset(svc))
+	recorder := record.NewFakeRecorder(10)
+	tracker.SetEventRecorder(recorder)
+	lb := NewLoadBalancer(nil)
+	assert.NoError(t, lb.SetTracker(tracker))
+
+	_, err := lb.EnsureLoadBalancer(context.Background(), "my-cluster", svc, nil)
+	assert.NoError(t, err)
+
+	tracker.mu.Lock()
+	config := tracker.pendingServiceOps[ServiceUID(svc)].Config.InboundConfig
+	tracker.mu.Unlock()
+	assert.Equal(t, "my-cluster", config.ClusterName)
+	assert.Equal(t, map[string]string{"team": "a"}, config.PIPTags)
+
+	select {
+	case event := <-recorder.Events:
+		assert.Contains(t, event, "IgnoredPIPTagKeys")
+		assert.Contains(t, event, consts.ClusterNameKey)
+	default:
+		t.Fatal("expected an IgnoredPIPTagKeys warning event")
 	}
 }
 

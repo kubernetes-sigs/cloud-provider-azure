@@ -91,7 +91,7 @@ func (lb *LoadBalancer) GetLoadBalancerName(_ context.Context, _ string, service
 	return cloudprovider.DefaultLoadBalancerName(service)
 }
 
-func (lb *LoadBalancer) EnsureLoadBalancer(ctx context.Context, _ string, service *v1.Service, _ []*v1.Node) (status *v1.LoadBalancerStatus, err error) {
+func (lb *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, _ []*v1.Node) (status *v1.LoadBalancerStatus, err error) {
 	const operation = "EnsureLoadBalancer"
 	ctx, span := trace.BeginReconcile(ctx, trace.DefaultTracer(), operation)
 	defer func() { span.Observe(ctx, err) }()
@@ -111,6 +111,7 @@ func (lb *LoadBalancer) EnsureLoadBalancer(ctx context.Context, _ string, servic
 	metricContext := newLoadBalancerMetricContext(tracker, "ensure_loadbalancer", serviceName)
 	defer func() { metricContext.ObserveOperationWithResult(err == nil) }()
 
+	tracker.SetClusterName(clusterName)
 	if err = tracker.ReconcileInboundService(service); err != nil {
 		recordWarningEvent(tracker, service, err)
 		return nil, err

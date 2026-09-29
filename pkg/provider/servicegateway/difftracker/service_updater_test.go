@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -35,6 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/tools/record"
 	servicehelper "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/component-base/metrics/testutil"
 	"k8s.io/utils/ptr"
@@ -43,7 +45,9 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/natgatewayclient/mock_natgatewayclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient/mock_publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient/mock_servicegatewayclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -257,6 +261,7 @@ func TestServiceUpdaterProcessBatchFlow(t *testing.T) {
 	mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
 	m.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
 	m.expectNoDisassociation()
+	m.pip.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, notFoundError()).AnyTimes()
 	m.pip.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&armnetwork.PublicIPAddress{Name: ptr.To("pip")}, nil).AnyTimes()
 	m.pip.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
@@ -402,6 +407,7 @@ func TestCreateInboundService_StatusUpdateFailureRetriesInsteadOfFalseSuccess(t 
 	f.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
 
 	// PIP returns a populated response so pipIPAddress is non-empty and Step 5 actually runs.
+	mockPIP.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, notFoundError()).AnyTimes()
 	mockPIP.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "uid-status-pip", gomock.Any()).Return(
 		&armnetwork.PublicIPAddress{
 			Name: ptr.To("uid-status-pip"),
@@ -483,6 +489,7 @@ func TestCreateInboundService_PopulatesIngressOnSuccess(t *testing.T) {
 	f.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
 	f.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
 
+	mockPIP.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, notFoundError()).AnyTimes()
 	mockPIP.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "uid-status-ok-pip", gomock.Any()).Return(
 		&armnetwork.PublicIPAddress{
 			Name:       ptr.To("uid-status-ok-pip"),
@@ -592,6 +599,319 @@ func newOutboundMocks(ctrl *gomock.Controller) *outboundMocks {
 	m.factory.EXPECT().GetNatGatewayClient().Return(m.nat).AnyTimes()
 	m.factory.EXPECT().GetPublicIPAddressClient().Return(m.pip).AnyTimes()
 	return m
+}
+
+func TestServiceUpdaterCreateInboundService_ChecksPublicIPPrefix(t *testing.T) {
+	const uid = "44444444-4444-4444-4444-444444444444"
+	var events []string
+	var pipReadErr error
+	prefix := func(sku armnetwork.PublicIPPrefixSKUName, version armnetwork.IPVersion, location string) *armnetwork.PublicIPPrefix {
+		return &armnetwork.PublicIPPrefix{
+			Location:   ptr.To(location),
+			SKU:        &armnetwork.PublicIPPrefixSKU{Name: ptr.To(sku)},
+			Properties: &armnetwork.PublicIPPrefixPropertiesFormat{PublicIPAddressVersion: ptr.To(version)},
+		}
+	}
+	run := func(t *testing.T, prefixID string, got *armnetwork.PublicIPPrefix, getErr error, expectRead bool, existing ...*armnetwork.PublicIPAddress) (created *armnetwork.PublicIPAddress, success bool, err error) {
+		ctrl := gomock.NewController(t)
+		svc := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "default", UID: types.UID(uid)},
+			Spec:       v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer},
+		}
+		f := mock_azclient.NewMockClientFactory(ctrl)
+		mockPrefix := mock_publicipprefixclient.NewMockInterface(ctrl)
+		mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+		mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+		mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+		f.EXPECT().GetPublicIPPrefixClient().Return(mockPrefix).AnyTimes()
+		f.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+		f.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+		f.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+		if expectRead {
+			mockPrefix.EXPECT().Get(gomock.Any(), "rg", "prefix", gomock.Any()).Return(got, getErr)
+		}
+		if len(existing) > 0 {
+			mockPIP.EXPECT().Get(gomock.Any(), "rg", PublicIPName(uid), gomock.Any()).Return(existing[0], nil).AnyTimes()
+		} else {
+			readErr := notFoundError()
+			if pipReadErr != nil {
+				readErr = pipReadErr
+			}
+			mockPIP.EXPECT().Get(gomock.Any(), "rg", PublicIPName(uid), gomock.Any()).Return(nil, readErr).AnyTimes()
+		}
+		mockPIP.EXPECT().CreateOrUpdate(gomock.Any(), "rg", PublicIPName(uid), gomock.Any()).
+			DoAndReturn(func(_ context.Context, _, _ string, pip armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
+				created = &pip
+				pip.Properties.IPAddress = ptr.To("20.0.0.1")
+				return &pip, nil
+			}).MaxTimes(1)
+		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+		mockSGW.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.kubeClient = fake.NewSimpleClientset(svc)
+		dt.networkClientFactory = f
+		recorder := record.NewFakeRecorder(10)
+		dt.SetEventRecorder(recorder)
+		t.Cleanup(func() {
+			close(recorder.Events)
+			for event := range recorder.Events {
+				events = append(events, event)
+			}
+		})
+		config := makeInboundConfig(80)
+		config.PIPPrefixID = prefixID
+		su := newTestServiceUpdater(dt)
+		su.onComplete = func(_ string, ok bool, e error) { success, err = ok, e }
+		su.createInboundService(uid, config, "corr")
+		return created, success, err
+	}
+
+	t.Run("a matching StandardV2 prefix is used", func(t *testing.T) {
+		created, success, err := run(t, testPrefixID, prefix(armnetwork.PublicIPPrefixSKUNameStandardV2, armnetwork.IPVersionIPv4, "East US"), nil, true)
+		assert.True(t, success, "%v", err)
+		if assert.NotNil(t, created) {
+			assert.Equal(t, testPrefixID, *created.Properties.PublicIPPrefix.ID)
+		}
+	})
+
+	for name, tc := range map[string]*armnetwork.PublicIPPrefix{
+		"a Standard prefix":        prefix(armnetwork.PublicIPPrefixSKUNameStandard, armnetwork.IPVersionIPv4, "eastus"),
+		"an IPv6 prefix":           prefix(armnetwork.PublicIPPrefixSKUNameStandardV2, armnetwork.IPVersionIPv6, "eastus"),
+		"a prefix in other region": prefix(armnetwork.PublicIPPrefixSKUNameStandardV2, armnetwork.IPVersionIPv4, "westus"),
+	} {
+		t.Run(name+" is rejected terminally before creating the Public IP", func(t *testing.T) {
+			created, success, err := run(t, testPrefixID, tc, nil, true)
+			assert.False(t, success)
+			assert.True(t, isTerminalError(err), "%v", err)
+			assert.Nil(t, created)
+		})
+	}
+
+	t.Run("a failed Public IP read is retried without creating one", func(t *testing.T) {
+		pipReadErr = errors.New("throttled")
+		defer func() { pipReadErr = nil }()
+		created, success, err := run(t, testPrefixID, nil, nil, false)
+		assert.False(t, success)
+		assert.False(t, isTerminalError(err))
+		assert.Nil(t, created)
+	})
+
+	t.Run("a failed prefix read is retried", func(t *testing.T) {
+		created, success, err := run(t, testPrefixID, nil, notFoundError(), true)
+		assert.False(t, success)
+		assert.False(t, isTerminalError(err))
+		assert.Nil(t, created)
+	})
+
+	t.Run("a retry keeps the prefix of a Public IP an earlier attempt created", func(t *testing.T) {
+		otherPrefix := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/other"
+		existing := &armnetwork.PublicIPAddress{
+			Name: ptr.To(PublicIPName(uid)),
+			Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+				IPAddress:      ptr.To("20.0.0.9"),
+				PublicIPPrefix: &armnetwork.SubResource{ID: ptr.To(otherPrefix)},
+			},
+		}
+		events = nil
+		t.Run("run", func(t *testing.T) {
+			created, success, err := run(t, testPrefixID, nil, nil, false, existing)
+			assert.True(t, success, "%v", err)
+			if created != nil {
+				assert.Equal(t, otherPrefix, *created.Properties.PublicIPPrefix.ID, "the existing prefix must be kept")
+			}
+		})
+		assert.Condition(t, func() bool {
+			for _, e := range events {
+				if strings.Contains(e, "PublicIPPrefixChangeNotSupported") {
+					return true
+				}
+			}
+			return false
+		}, "expected a PublicIPPrefixChangeNotSupported warning event, got %v", events)
+	})
+
+	t.Run("a retry rewrites a Public IP an earlier attempt left failed", func(t *testing.T) {
+		failed := &armnetwork.PublicIPAddress{
+			Name: ptr.To(PublicIPName(uid)),
+			Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+				ProvisioningState: ptr.To(armnetwork.ProvisioningStateFailed),
+				PublicIPPrefix:    &armnetwork.SubResource{ID: ptr.To(testPrefixID)},
+			},
+		}
+		created, success, err := run(t, testPrefixID, nil, nil, false, failed)
+		assert.True(t, success, "%v", err)
+		if assert.NotNil(t, created, "a failed Public IP must be written again") {
+			assert.Equal(t, testPrefixID, *created.Properties.PublicIPPrefix.ID)
+		}
+	})
+
+	t.Run("a prefix in another subscription is left to Azure", func(t *testing.T) {
+		otherSub := "/subscriptions/other/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix"
+		created, success, err := run(t, otherSub, nil, nil, false)
+		assert.True(t, success, "%v", err)
+		if assert.NotNil(t, created) {
+			assert.Equal(t, otherSub, *created.Properties.PublicIPPrefix.ID)
+		}
+	})
+}
+
+func TestServiceUpdaterUpdateInboundService_ReconcilesPublicIP(t *testing.T) {
+	const uid = "33333333-3333-3333-3333-333333333333"
+	config := func() *InboundConfig {
+		return &InboundConfig{
+			FrontendPorts: []PortMapping{{Port: 80, Protocol: "TCP"}},
+			BackendPorts:  []PortMapping{{Port: 8080, Protocol: "TCP"}},
+			ServiceName:   "ns/svc",
+			ClusterName:   "cluster",
+			PIPTags:       map[string]string{"team": "a"},
+			DNSLabel:      ptr.To("app"),
+		}
+	}
+	existing := func() *armnetwork.PublicIPAddress {
+		return &armnetwork.PublicIPAddress{
+			Name: ptr.To(PublicIPName(uid)),
+			Tags: map[string]*string{"Team": ptr.To("old"), "policy": ptr.To("keep")},
+			Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+				IPTags: []*armnetwork.IPTag{{IPTagType: ptr.To("RoutingPreference"), Tag: ptr.To("Internet")}},
+			},
+		}
+	}
+	var putErr error
+	var lbCalls int
+	run := func(t *testing.T, cfg *InboundConfig, current *armnetwork.PublicIPAddress, getErr error) (put *armnetwork.PublicIPAddress, success bool, recorder *record.FakeRecorder) {
+		ctrl := gomock.NewController(t)
+		m := newOutboundMocks(ctrl)
+		m.pip.EXPECT().Get(gomock.Any(), "rg", PublicIPName(uid), gomock.Any()).Return(current, getErr)
+		m.pip.EXPECT().CreateOrUpdate(gomock.Any(), "rg", PublicIPName(uid), gomock.Any()).
+			DoAndReturn(func(_ context.Context, _, _ string, pip armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
+				put = &pip
+				return &pip, putErr
+			}).MaxTimes(1)
+		mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+		m.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+		lbCalls = 0
+		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, _, _ string, _ armnetwork.LoadBalancer) (*armnetwork.LoadBalancer, error) {
+				lbCalls++
+				return nil, nil
+			}).AnyTimes()
+
+		svc := &v1.Service{ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "ns", UID: types.UID(uid)}}
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.networkClientFactory = m.factory
+		dt.kubeClient = fake.NewSimpleClientset(svc)
+		recorder = record.NewFakeRecorder(10)
+		dt.SetEventRecorder(recorder)
+		got := &outboundCompletion{}
+		outboundUpdater(dt, got).updateInboundService(uid, cfg, "corr")
+		_, success, _ = got.result()
+		return put, success, recorder
+	}
+
+	t.Run("adds missing tags and the DNS label, keeping foreign tags and IP tags", func(t *testing.T) {
+		put, success, _ := run(t, config(), existing(), nil)
+		assert.True(t, success)
+		if assert.NotNil(t, put) {
+			assert.Equal(t, map[string]*string{
+				"Team":                ptr.To("a"),
+				"policy":              ptr.To("keep"),
+				consts.ServiceTagKey:  ptr.To("ns/svc"),
+				consts.ClusterNameKey: ptr.To("cluster"),
+			}, put.Tags)
+			assert.Equal(t, "app", *put.Properties.DNSSettings.DomainNameLabel)
+			assert.Equal(t, existing().Properties.IPTags, put.Properties.IPTags)
+		}
+	})
+
+	t.Run("an up-to-date Public IP is not written", func(t *testing.T) {
+		current := existing()
+		current.Tags = map[string]*string{"team": ptr.To("a"), consts.ServiceTagKey: ptr.To("ns/svc"), consts.ClusterNameKey: ptr.To("cluster")}
+		current.Properties.DNSSettings = &armnetwork.PublicIPAddressDNSSettings{DomainNameLabel: ptr.To("app")}
+		put, success, _ := run(t, config(), current, nil)
+		assert.True(t, success)
+		assert.Nil(t, put)
+	})
+
+	t.Run("an empty DNS label removes it", func(t *testing.T) {
+		cfg := config()
+		cfg.DNSLabel = ptr.To("")
+		current := existing()
+		current.Properties.DNSSettings = &armnetwork.PublicIPAddressDNSSettings{DomainNameLabel: ptr.To("app")}
+		put, success, _ := run(t, cfg, current, nil)
+		assert.True(t, success)
+		if assert.NotNil(t, put) {
+			assert.Nil(t, put.Properties.DNSSettings)
+		}
+	})
+
+	t.Run("an IP tag change is reported, not applied", func(t *testing.T) {
+		cfg := config()
+		cfg.IPTags = map[string]string{"RoutingPreference": "MicrosoftNetwork"}
+		put, success, recorder := run(t, cfg, existing(), nil)
+		assert.True(t, success)
+		if assert.NotNil(t, put) {
+			assert.Equal(t, existing().Properties.IPTags, put.Properties.IPTags)
+		}
+		select {
+		case event := <-recorder.Events:
+			assert.Contains(t, event, "IPTagsChangeNotSupported")
+		default:
+			t.Fatal("expected an IPTagsChangeNotSupported warning event")
+		}
+	})
+
+	t.Run("an absent DNS annotation keeps the label", func(t *testing.T) {
+		cfg := config()
+		cfg.DNSLabel = nil
+		current := existing()
+		current.Properties.DNSSettings = &armnetwork.PublicIPAddressDNSSettings{DomainNameLabel: ptr.To("keep")}
+		put, success, _ := run(t, cfg, current, nil)
+		assert.True(t, success)
+		if assert.NotNil(t, put) {
+			assert.Equal(t, "keep", *put.Properties.DNSSettings.DomainNameLabel)
+		}
+	})
+
+	t.Run("a prefix change is reported, not applied", func(t *testing.T) {
+		cfg := config()
+		cfg.PIPPrefixID = testPrefixID
+		put, success, recorder := run(t, cfg, existing(), nil)
+		assert.True(t, success)
+		if assert.NotNil(t, put) {
+			assert.Nil(t, put.Properties.PublicIPPrefix, "the prefix of an existing Public IP must not be changed")
+		}
+		select {
+		case event := <-recorder.Events:
+			assert.Contains(t, event, "PublicIPPrefixChangeNotSupported")
+		default:
+			t.Fatal("expected a PublicIPPrefixChangeNotSupported warning event")
+		}
+	})
+
+	t.Run("a failed Public IP read is retried without touching the load balancer", func(t *testing.T) {
+		put, success, _ := run(t, config(), nil, errors.New("boom"))
+		assert.False(t, success)
+		assert.Nil(t, put)
+		assert.Zero(t, lbCalls)
+	})
+
+	t.Run("a failed Public IP write fails the update before the load balancer", func(t *testing.T) {
+		putErr = errors.New("conflict")
+		defer func() { putErr = nil }()
+		put, success, _ := run(t, config(), existing(), nil)
+		assert.False(t, success)
+		assert.NotNil(t, put)
+		assert.Zero(t, lbCalls)
+	})
+}
+
+// expectInboundPIP returns an existing inbound Public IP that already matches the desired state.
+func (m *outboundMocks) expectInboundPIP(uid string) {
+	m.pip.EXPECT().Get(gomock.Any(), "rg", PublicIPName(uid), gomock.Any()).
+		Return(&armnetwork.PublicIPAddress{Name: ptr.To(PublicIPName(uid))}, nil).AnyTimes()
 }
 
 // expectNoDisassociation makes Step 1 of deleteOutboundService a clean no-op: the ServiceGateway
@@ -962,6 +1282,7 @@ func TestServiceUpdaterUpdateInboundService(t *testing.T) {
 		defer ctrl.Finish()
 
 		m := newOutboundMocks(ctrl)
+		m.expectInboundPIP(uid)
 		mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
 		m.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
 		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), "rg", uid, gomock.Any()).Return(nil, nil).Times(1)
@@ -985,6 +1306,7 @@ func TestServiceUpdaterUpdateInboundService(t *testing.T) {
 		defer ctrl.Finish()
 
 		m := newOutboundMocks(ctrl)
+		m.expectInboundPIP(uid)
 		mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
 		m.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
 		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
@@ -1047,6 +1369,7 @@ func TestServiceUpdaterUpdateInboundService_PortRemovalDropsOnlyThatRule(t *test
 	const uid = "22222222-2222-2222-2222-222222222222"
 
 	m := newOutboundMocks(ctrl)
+	m.expectInboundPIP(uid)
 	mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
 	m.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
 
@@ -1397,6 +1720,7 @@ func TestCreateInboundService_StatusPatchFailureKeepsLoadBalancerLive(t *testing
 
 		// PIP and LoadBalancer create succeed, and the ServiceGateway registration succeeds, so the
 		// service is genuinely live in Azure before the status write is attempted.
+		m.pip.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, notFoundError()).AnyTimes()
 		m.pip.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(&armnetwork.PublicIPAddress{
 				Name:       ptr.To(PublicIPName(uid)),

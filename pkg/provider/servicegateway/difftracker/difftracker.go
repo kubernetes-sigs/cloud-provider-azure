@@ -137,6 +137,19 @@ func (dt *DiffTracker) SetEventRecorder(recorder record.EventRecorder) {
 	dt.eventRecorder = recorder
 }
 
+// SetClusterName records the cluster name used for the Public IP ownership tag.
+func (dt *DiffTracker) SetClusterName(clusterName string) {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	dt.clusterName = clusterName
+}
+
+func (dt *DiffTracker) getClusterName() string {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	return dt.clusterName
+}
+
 // recordEvent emits a Kubernetes Event for object, if a recorder has been published.
 //
 // It is the only supported way to reach dt.eventRecorder. SetEventRecorder writes the field under

@@ -20,15 +20,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	"github.com/go-logr/logr"
+	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 // ServiceUpdater processes service creation/deletion in parallel
@@ -505,8 +513,9 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 		return
 	}
 
-	// Step 2: Create Public IP and capture the response to get the allocated IP address
-	pipResponse, err := s.diffTracker.createOrUpdatePIPWithResponse(ctx, s.diffTracker.config.ResourceGroup, &pipResource)
+	// Step 2: Create the Public IP, or update the one an earlier attempt created, and capture the
+	// response to get the allocated IP address
+	pipResponse, err := s.ensureInboundPublicIP(ctx, serviceUID, config, &pipResource)
 	if err != nil {
 		httpStatus, errCode := extractAzureErrorInfo(err)
 		s.logger.V(4).Info("Could not create Public IP for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
@@ -583,13 +592,10 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 	s.logger.V(2).Info("Created inbound service", "serviceUID", serviceUID, "correlationID", correlationID)
 }
 
-// updateInboundService re-PUTs the LoadBalancer for an existing inbound service to apply
-// configuration changes (e.g., port edits). It is idempotent: re-running with the same
-// config produces no Azure changes. PIP and ServiceGateway service registration are NOT
-// touched here because:
-//   - the PIP allocation is independent of LB rules
-//   - the SGW Service entry references the LB backend pool (whose ID is stable across
-//     port edits), so the SGW state does not need to be re-pushed for port-only changes.
+// updateInboundService applies configuration changes to an existing inbound service: Public IP tags and
+// DNS label first, then the LoadBalancer. It is idempotent: re-running with the same config produces no
+// Azure changes. The ServiceGateway service registration is NOT touched because it references the LB
+// backend pool, whose ID is stable across port edits.
 //
 // If, in the future, port changes need to surface to NRP (e.g., for backend-port routing
 // metadata in the SGW Service DTO), call updateNRPSGWServices here as well.
@@ -599,9 +605,8 @@ func (s *ServiceUpdater) updateInboundService(serviceUID string, config *Inbound
 	ctx, cancel := context.WithTimeout(s.ctx, getNRPOperationTimeout())
 	defer cancel()
 
-	// Rebuild the LB ARM model from the new config. We discard the PIP and DTO portions
-	// because we are doing a port-only/spec update; the underlying PIP is unchanged and
-	// the SGW service registration (which references the backend pool by ID) is stable.
+	// Rebuild the LB ARM model from the new config. The PIP is reconciled from its current state
+	// below, and the SGW service registration (which references the backend pool by ID) is stable.
 	_, lbResource, _, err := buildInboundServiceResources(serviceUID, config, s.diffTracker.config)
 	if err != nil {
 		s.logger.V(4).Info("Could not build inbound service resources for update", "serviceUID", serviceUID, "correlationID", correlationID, "err", err)
@@ -610,6 +615,13 @@ func (s *ServiceUpdater) updateInboundService(serviceUID string, config *Inbound
 		// same spec cannot help, so mark the failure terminal; the engine parks the service
 		// (its existing Azure resources keep the last-applied config) until its spec changes.
 		s.onComplete(serviceUID, false, newTerminalError(fmt.Errorf("failed to build inbound resources: %w", err)))
+		return
+	}
+
+	if err := s.reconcileInboundPublicIP(ctx, serviceUID, config); err != nil {
+		httpStatus, errCode := extractAzureErrorInfo(err)
+		s.logger.V(4).Info("Could not update Public IP for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+		s.onComplete(serviceUID, false, fmt.Errorf("failed to update Public IP: %w", err))
 		return
 	}
 
@@ -627,6 +639,152 @@ func (s *ServiceUpdater) updateInboundService(serviceUID string, config *Inbound
 
 	s.onComplete(serviceUID, true, nil)
 	s.logger.V(2).Info("Updated inbound service", "serviceUID", serviceUID, "correlationID", correlationID)
+}
+
+// reconcileInboundPublicIP applies tag and DNS label changes to the Service's Public IP.
+func (s *ServiceUpdater) reconcileInboundPublicIP(ctx context.Context, serviceUID string, config *InboundConfig) error {
+	pipName := PublicIPName(serviceUID)
+	pip, err := s.diffTracker.networkClientFactory.GetPublicIPAddressClient().Get(ctx, s.diffTracker.config.ResourceGroup, pipName, nil)
+	if err != nil {
+		return err
+	}
+	if pip == nil {
+		return fmt.Errorf("public IP %s not found", pipName)
+	}
+	_, err = s.updateInboundPublicIP(ctx, serviceUID, config, pip, false)
+	return err
+}
+
+// updateInboundPublicIP applies tag and DNS label changes to an existing Public IP and returns it. Tags
+// are only added or updated, and the prefix and IP tags keep the values the Public IP was created with.
+// force writes the Public IP even when nothing changed.
+func (s *ServiceUpdater) updateInboundPublicIP(ctx context.Context, serviceUID string, config *InboundConfig, pip *armnetwork.PublicIPAddress, force bool) (*armnetwork.PublicIPAddress, error) {
+	pipName := PublicIPName(serviceUID)
+	if pip.Properties == nil {
+		pip.Properties = &armnetwork.PublicIPAddressPropertiesFormat{}
+	}
+
+	changed := false
+	if pip.Tags == nil {
+		pip.Tags = map[string]*string{}
+	}
+	for key, value := range inboundPublicIPTags(config) {
+		for existing := range pip.Tags {
+			if strings.EqualFold(existing, key) {
+				key = existing
+				break
+			}
+		}
+		if current := pip.Tags[key]; current == nil || *current != *value {
+			pip.Tags[key] = value
+			changed = true
+		}
+	}
+
+	if config != nil && config.DNSLabel != nil {
+		current := ""
+		if pip.Properties.DNSSettings != nil {
+			current = derefString(pip.Properties.DNSSettings.DomainNameLabel)
+		}
+		if current != *config.DNSLabel {
+			if *config.DNSLabel == "" {
+				pip.Properties.DNSSettings = nil
+			} else {
+				if pip.Properties.DNSSettings == nil {
+					pip.Properties.DNSSettings = &armnetwork.PublicIPAddressDNSSettings{}
+				}
+				pip.Properties.DNSSettings.DomainNameLabel = to.Ptr(*config.DNSLabel)
+			}
+			changed = true
+		}
+	}
+
+	if config != nil && config.PIPPrefixID != "" && (pip.Properties.PublicIPPrefix == nil || !strings.EqualFold(derefString(pip.Properties.PublicIPPrefix.ID), config.PIPPrefixID)) {
+		if svc, err := s.diffTracker.getServiceByUID(ctx, serviceUID); err == nil {
+			s.diffTracker.recordEvent(svc, v1.EventTypeWarning, "PublicIPPrefixChangeNotSupported", fmt.Sprintf(
+				"Public IP %s was not allocated from prefix %s; the prefix of an existing Public IP cannot be changed, so it keeps its current address",
+				pipName, config.PIPPrefixID))
+		}
+	}
+
+	if config != nil && config.IPTags != nil && !maps.Equal(ipTagMap(pip.Properties.IPTags), config.IPTags) {
+		if svc, err := s.diffTracker.getServiceByUID(ctx, serviceUID); err == nil {
+			s.diffTracker.recordEvent(svc, v1.EventTypeWarning, "IPTagsChangeNotSupported", fmt.Sprintf(
+				"the %s annotation does not match the IP tags of Public IP %s; IP tags cannot be changed on an existing Public IP when ServiceGateway is enabled, so the Public IP keeps its current IP tags",
+				consts.ServiceAnnotationIPTagsForPublicIP, pipName))
+		}
+	}
+
+	if !changed && !force {
+		return pip, nil
+	}
+	return s.diffTracker.createOrUpdatePIPWithResponse(ctx, s.diffTracker.config.ResourceGroup, pip)
+}
+
+// ensureInboundPublicIP creates the Service's Public IP. One left by an earlier attempt is updated
+// instead, because its prefix and IP tags cannot change.
+func (s *ServiceUpdater) ensureInboundPublicIP(ctx context.Context, serviceUID string, config *InboundConfig, pip *armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
+	existing, err := s.diffTracker.networkClientFactory.GetPublicIPAddressClient().Get(ctx, s.diffTracker.config.ResourceGroup, PublicIPName(serviceUID), nil)
+	var respErr *azcore.ResponseError
+	switch {
+	case err == nil && existing != nil:
+		ready := existing.Properties != nil && derefString(existing.Properties.IPAddress) != "" &&
+			(existing.Properties.ProvisioningState == nil || *existing.Properties.ProvisioningState == armnetwork.ProvisioningStateSucceeded)
+		return s.updateInboundPublicIP(ctx, serviceUID, config, existing, !ready)
+	case err != nil && (!errors.As(err, &respErr) || respErr.StatusCode != http.StatusNotFound):
+		return nil, err
+	}
+	if config != nil && config.PIPPrefixID != "" {
+		if err := s.checkPublicIPPrefix(ctx, config.PIPPrefixID, pip.Properties.PublicIPAddressVersion); err != nil {
+			return nil, err
+		}
+	}
+	return s.diffTracker.createOrUpdatePIPWithResponse(ctx, s.diffTracker.config.ResourceGroup, pip)
+}
+
+// checkPublicIPPrefix fails terminally when the prefix can never provide the Public IP, so the Service
+// is reported instead of retrying a create Azure rejects. A prefix in another subscription is left to
+// Azure to validate.
+func (s *ServiceUpdater) checkPublicIPPrefix(ctx context.Context, prefixID string, version *armnetwork.IPVersion) error {
+	id, err := arm.ParseResourceID(prefixID)
+	if err != nil {
+		return newTerminalError(fmt.Errorf("invalid Public IP prefix %s: %w", prefixID, err))
+	}
+	if !strings.EqualFold(id.SubscriptionID, s.diffTracker.config.networkResourceSubscriptionID()) {
+		return nil
+	}
+	prefix, err := s.diffTracker.networkClientFactory.GetPublicIPPrefixClient().Get(ctx, id.ResourceGroupName, id.Name, nil)
+	if err != nil {
+		return fmt.Errorf("failed to read Public IP prefix %s: %w", prefixID, err)
+	}
+	if prefix == nil {
+		return fmt.Errorf("public IP prefix %s not found", prefixID)
+	}
+	if prefix.SKU == nil || prefix.SKU.Name == nil || *prefix.SKU.Name != armnetwork.PublicIPPrefixSKUNameStandardV2 {
+		sku := "unknown"
+		if prefix.SKU != nil && prefix.SKU.Name != nil {
+			sku = string(*prefix.SKU.Name)
+		}
+		return newTerminalError(fmt.Errorf("public IP prefix %s has SKU %s; ServiceGateway needs a StandardV2 prefix", prefixID, sku))
+	}
+	if prefix.Properties != nil && prefix.Properties.PublicIPAddressVersion != nil && version != nil && *prefix.Properties.PublicIPAddressVersion != *version {
+		return newTerminalError(fmt.Errorf("public IP prefix %s is %s but the Service needs %s", prefixID, *prefix.Properties.PublicIPAddressVersion, *version))
+	}
+	normalize := func(location string) string { return strings.ReplaceAll(strings.ToLower(location), " ", "") }
+	if prefix.Location != nil && normalize(*prefix.Location) != normalize(s.diffTracker.config.Location) {
+		return newTerminalError(fmt.Errorf("public IP prefix %s is in %s but the cluster is in %s", prefixID, *prefix.Location, s.diffTracker.config.Location))
+	}
+	return nil
+}
+
+func ipTagMap(ipTags []*armnetwork.IPTag) map[string]string {
+	tags := map[string]string{}
+	for _, tag := range ipTags {
+		if tag != nil {
+			tags[derefString(tag.IPTagType)] = derefString(tag.Tag)
+		}
+	}
+	return tags
 }
 
 // createOutboundService creates NAT Gateway resources for outbound service

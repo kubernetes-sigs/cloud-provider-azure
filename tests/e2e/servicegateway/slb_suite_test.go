@@ -60,11 +60,14 @@ var (
 
 // AzurePublicIP represents a Public IP resource in Azure
 type AzurePublicIP struct {
-	Name      string            `json:"name"`
-	IPAddress string            `json:"ipAddress"`
-	Tags      map[string]string `json:"tags"`
-	ID        string            `json:"id"`
-	Location  string            `json:"location"`
+	Name        string            `json:"name"`
+	IPAddress   string            `json:"ipAddress"`
+	Tags        map[string]string `json:"tags"`
+	ID          string            `json:"id"`
+	Location    string            `json:"location"`
+	DNSSettings *struct {
+		DomainNameLabel string `json:"domainNameLabel"`
+	} `json:"dnsSettings"`
 }
 
 // AzureLoadBalancer represents a Load Balancer resource in Azure
@@ -443,6 +446,22 @@ func natGatewayCleanupErr(egressNames []string) error {
 // verifyAzureResources failing for some unrelated reason.
 func azurePublicIPAbsentErr(serviceUID string) error {
 	return azurePublicIPNamedAbsentErr(fmt.Sprintf("%s-pip", serviceUID))
+}
+
+// getAzurePublicIP reads the exactly-named Public IP from Azure.
+func getAzurePublicIP(publicIPName string) (*AzurePublicIP, error) {
+	output, err := runAz("network", "public-ip", "show",
+		"--resource-group", resourceGroupName,
+		"--name", publicIPName,
+		"--output", "json")
+	if err != nil {
+		return nil, fmt.Errorf("failed to query Azure for Public IP %s: %w", publicIPName, err)
+	}
+	var publicIP AzurePublicIP
+	if err := json.Unmarshal(output, &publicIP); err != nil {
+		return nil, fmt.Errorf("failed to parse Public IP %s: %w", publicIPName, err)
+	}
+	return &publicIP, nil
 }
 
 // azurePublicIPNamedAbsentErr returns nil once the exactly-named Public IP is gone from Azure.

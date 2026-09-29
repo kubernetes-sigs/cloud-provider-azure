@@ -25,6 +25,8 @@ import (
 
 	"github.com/google/uuid"
 	v1 "k8s.io/api/core/v1"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 // triggerLocationsUpdater sends a non-blocking trigger to the LocationsUpdater.
@@ -111,9 +113,19 @@ func (dt *DiffTracker) ReconcileInboundService(service *v1.Service) error {
 	if err != nil {
 		return err
 	}
+	if ignored := IgnoredServiceAnnotations(service); len(ignored) > 0 {
+		dt.recordEvent(service, v1.EventTypeWarning, "ServiceGatewayIgnoredAnnotations",
+			fmt.Sprintf("these annotations are not supported when ServiceGateway is enabled and have no effect: %s", strings.Join(ignored, ", ")))
+	}
+	if reserved := ReservedPIPTagKeysInAnnotation(service); len(reserved) > 0 {
+		dt.recordEvent(service, v1.EventTypeWarning, "IgnoredPIPTagKeys",
+			fmt.Sprintf("Ignoring reserved tag keys in the %s annotation; the controller owns the values of: %s",
+				consts.ServiceAnnotationAzurePIPTags, strings.Join(reserved, ", ")))
+	}
 	if inboundConfig == nil {
 		return nil
 	}
+	inboundConfig.ClusterName = dt.getClusterName()
 
 	config := NewInboundServiceConfig(serviceUID, inboundConfig)
 	config.Namespace = service.Namespace

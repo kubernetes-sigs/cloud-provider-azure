@@ -275,4 +275,103 @@ var _ = Describe("SLB - Service Validation", Label(slbTestLabel), func() {
 
 		utils.Logf("✓ Internal service was rejected with a warning event and no Azure resources")
 	})
+
+	It("should reject services that restrict access or select their Public IP", func() {
+		cases := []struct {
+			name   string
+			reason string
+			mutate func(*v1.Service)
+		}{
+			{"source-ranges", "UnsupportedAccessRestriction", func(s *v1.Service) {
+				s.Spec.LoadBalancerSourceRanges = []string{"203.0.113.0/24"}
+			}},
+			{"allowed-service-tags", "UnsupportedAccessRestriction", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-allowed-service-tags": "AzureCloud"}
+			}},
+			{"no-lb-rule", "UnsupportedAccessRestriction", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/port_80_no_lb_rule": "true"}
+			}},
+			{"pip-name", "UnsupportedPublicIPSelection", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-pip-name": "customer-pip"}
+			}},
+			{"ipv4-address", "UnsupportedPublicIPSelection", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-load-balancer-ipv4": "203.0.113.10"}
+			}},
+		}
+
+		uids := map[string]string{}
+		for _, tc := range cases {
+			By("Creating the " + tc.name + " service")
+			service := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: tc.name, Namespace: ns.Name},
+				Spec: v1.ServiceSpec{
+					Type:     v1.ServiceTypeLoadBalancer,
+					Selector: map[string]string{"app": tc.name},
+					Ports:    []v1.ServicePort{{Name: "http", Port: 80, TargetPort: intstr.FromInt(8080), Protocol: v1.ProtocolTCP}},
+				},
+			}
+			tc.mutate(service)
+			created, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			uids[tc.name] = string(created.UID)
+		}
+
+		for _, tc := range cases {
+			By("Verifying the " + tc.name + " service is rejected with " + tc.reason)
+			expectServiceWarningEvent(tc.name, tc.reason)
+		}
+
+		By("Verifying none of the services provisioned Azure or Service Gateway resources")
+		Consistently(func() error {
+			for _, tc := range cases {
+				if err := serviceDeletedErr(uids[tc.name]); err != nil {
+					return err
+				}
+				if err := azurePublicIPAbsentErr(uids[tc.name]); err != nil {
+					return err
+				}
+				svc, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), tc.name, metav1.GetOptions{})
+				if err != nil {
+					return fmt.Errorf("get service %s: %w", tc.name, err)
+				}
+				if len(svc.Status.LoadBalancer.Ingress) != 0 {
+					return fmt.Errorf("service %s was assigned an ingress IP despite being rejected", tc.name)
+				}
+			}
+			return nil
+		}, 45*time.Second, defaultPollInterval).Should(Succeed(),
+			"a setting ServiceGateway cannot honour must be rejected (no PIP/LB/SGW registration)")
+
+		utils.Logf("✓ Services with unsupported access or Public IP settings were rejected")
+	})
+
+	It("should provision an allow-all service and warn about ignored annotations", func() {
+		const serviceName = "allow-all-service"
+		labels := map[string]string{"app": serviceName}
+
+		By("Creating a service whose source ranges allow every address and that carries an ignored annotation")
+		service := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        serviceName,
+				Namespace:   ns.Name,
+				Annotations: map[string]string{"service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path": "/healthz"},
+			},
+			Spec: v1.ServiceSpec{
+				Type:                     v1.ServiceTypeLoadBalancer,
+				Selector:                 labels,
+				LoadBalancerSourceRanges: []string{"0.0.0.0/0"},
+				Ports:                    []v1.ServicePort{{Name: "http", Port: 80, TargetPort: intstr.FromInt(8080), Protocol: v1.ProtocolTCP}},
+			},
+		}
+		created, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Verifying the service is provisioned")
+		eventuallyServiceReconciled(string(created.UID), -1, 3*time.Minute)
+
+		By("Verifying a warning event lists the ignored annotation")
+		expectServiceWarningEvent(serviceName, "ServiceGatewayIgnoredAnnotations")
+
+		utils.Logf("✓ Allow-all service was provisioned and the ignored annotation was reported")
+	})
 })
