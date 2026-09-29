@@ -60,14 +60,21 @@ Then walk the catalog as an explicit staged algorithm:
 > [`references/act-patterns.md`](references/act-patterns.md), then process failed
 > required jobs one at a time. For one failed job, walk act rows by ascending
 > Priority, inspect only enough current evidence to match a row or escalate,
-> take that row's linked Details action, then move to the next failed job. Read
+> take that row's linked Details action only when its Details preconditions and
+> exclusions hold, then move to the next failed job. Read
 > [`references/shared-actions.md`](references/shared-actions.md) only if that
 > matched workflow links to it. Continue until every failed required job is
-> examined, resolved, rerun, superseded by a push, or escalated. Track the
-> actions already taken this triage: if an action reruns CI (a push), skip any
-> later row whose only effect would be to retest jobs that the push will rerun.
-> Prefer the push-triggered rerun. An act row marked Stop ends triage after it
-> is handled.
+> examined, resolved, rerun, or escalated. Track the actions already taken this
+> triage: a push reruns CI but does not resolve other failures, so still
+> classify each later failed job from its current evidence and skip only an
+> action whose sole effect would be to retest a job the push reruns. Prefer the
+> push-triggered rerun. An act row marked Stop ends triage after it is handled.
+>
+> **Finalize.** If no Stop fired and a push recorded a pending approval,
+> evaluate [Post-push /lgtm](references/shared-actions.md#details-post-push-lgtm)
+> once, never inside the per-failure loop. Then post the single
+> [Attempt stamp](references/shared-actions.md#details-attempt-stamp) summary if
+> a retry-budgeted act-stage action completed.
 
 Classification inspects CI only after no guard Stop fired:
 
@@ -95,29 +102,14 @@ or overwrite unrelated files.
   compatibility issue, commit SHA, changed files, and validation result.
 - Use specific staging commands, never `git add .`.
 - Push only the current task's files.
-- Resolve guard rows from PR metadata, the `go.mod` diff, and PR comment/commit
-  history before any CI or log I/O. When a guard row marked Stop matches,
-  follow its linked Details action and end triage immediately — do not inspect CI, sync
-  modules, retest, comment `/lgtm`, or report that no action is needed.
-- After the guard stage, handle failed required jobs one by one. For each failed
-  job, walk act rows in ascending Priority and take a row's linked Details
-  action only when its Details preconditions and exclusions hold. Do not stop
-  after the first fixed or rerun job unless a Stop row fired, a push made the
-  remaining failures stale, or every failed required job has been examined.
-- When a row's Details action reruns CI (a push), skip any later row whose only
-  effect would be to retest the jobs that push will rerun; prefer the
-  push-triggered rerun.
-- One retry-budgeted automated unblock round consumes one attempt from one
-  PR-comment-backed counter. Public-IP quota e2e reruns are unbudgeted: a
-  quota-only triage creates no attempt stamp, while a mixed triage summarizes
-  only its budgeted actions. Read the counter once before any rebase/recreate
-  directive or CI/log I/O and reuse it throughout the triage. Guard directives
-  and budgeted act-stage paths must never create two attempt stamps in one
-  triage. When the retry budget is exhausted, mutate nothing and escalate for
-  human review. Do not invent a
-  second counter; the guard and shared-action references own the policy and
-  write mechanics.
-- A row marked Stop ends triage after it is handled.
+- Use one PR-comment-backed retry counter. The
+  [Retry budget exhausted](references/guard-patterns.md#details-retry-budget-exhausted)
+  guard reads `N` once, before any rebase/recreate directive or CI/log I/O;
+  reuse it for the
+  whole triage and write at most one attempt stamp per triage. When the budget
+  is exhausted, mutate nothing and escalate. Public-IP quota reruns are
+  unbudgeted; [Attempt stamp](references/shared-actions.md#details-attempt-stamp)
+  owns the accounting.
 - Use the retry mechanism for the CI system that produced the failure, and only
   after the failure is classified as transient or safe to rerun. For Prow jobs,
   rerun with a per-job `/test <job-name>` comment; never use `/retest`. For

@@ -23,17 +23,25 @@ git add <specific go.mod/go.sum/vendor files>
 git diff --cached --stat
 ```
 
-4. Commit and push the fix to the PR branch:
+4. Commit, run that skill's clean check on the committed tree, and push only
+   if it passes:
 
 ```bash
-git commit -m "Update Go modules"
-git push
+git commit -m "Update Go modules" &&
+  python3 .agents/skills/sync-go-modules/scripts/sync_go_modules.py --repo . --check-clean &&
+  git push &&
+  git rev-parse HEAD
 ```
 
-5. After the push succeeds, post `/lgtm` following the shared
-   [Post-push /lgtm](shared-actions.md#details-post-push-lgtm) rule. Fill its
-   Reason with the go-mod-consistency context: the pushed commit, the changed
-   `go.mod`/`go.sum`/vendor files, and the `sync-go-modules` check that passed.
+   If the sync produced no diff, or the commit, clean check, or push fails,
+   there is no confirmed successful fix push and no pending approval: report
+   the failure and the known local and remote state.
+
+5. After the push succeeds, do not post `/lgtm` here. Record a pending approval
+   (the pushed SHA, the changed `go.mod`/`go.sum`/vendor files, and the passed
+   `--check-clean`) and continue the per-failure loop. The shared
+   [Post-push /lgtm](shared-actions.md#details-post-push-lgtm) rule decides
+   after the loop.
 
 ## Details: Public-IP quota e2e
 
@@ -240,3 +248,8 @@ change linter policy, do not broaden a dependency bump, do not edit generated
 Dependabot PR metadata, and do not `/lgtm`. Stop working the PR and report it as
 needing human review in the final output, naming the failing job(s) and the
 blocker type so a reviewer knows where to look.
+
+Actions completed earlier in this triage are not undone; skip
+[Post-push /lgtm](shared-actions.md#details-post-push-lgtm), and record any
+completed retry-budgeted action in the single
+[Attempt stamp](shared-actions.md#details-attempt-stamp) summary.
