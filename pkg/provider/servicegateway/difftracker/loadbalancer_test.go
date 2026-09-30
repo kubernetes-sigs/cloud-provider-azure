@@ -144,11 +144,11 @@ func TestLoadBalancerEmitsWarningEventForRejectedService(t *testing.T) {
 			reason: "UnsupportedAccessRestriction",
 		},
 		{
-			name: "public IP name",
+			name: "invalid load balancer IP",
 			mutate: func(svc *v1.Service) {
-				svc.Annotations = map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "my-pip"}
+				svc.Annotations = map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "not-an-ip"}
 			},
-			reason: "UnsupportedPublicIPSelection",
+			reason: "InvalidLoadBalancerIP",
 		},
 	}
 
@@ -243,6 +243,39 @@ func TestLoadBalancerRecordsClusterNameAndReservedPIPTagKeys(t *testing.T) {
 	default:
 		t.Fatal("expected an IgnoredPIPTagKeys warning event")
 	}
+}
+
+// TestLoadBalancerRecordsClusterNameFromEveryCall pins that any load balancer call teaches the tracker the
+// cluster name: after a restart it is needed to decide ownership of Public IPs, and a cluster may have no
+// Service to ensure for a long time.
+func TestLoadBalancerRecordsClusterNameFromEveryCall(t *testing.T) {
+	for name, call := range map[string]func(lb *LoadBalancer, svc *v1.Service) error{
+		"GetLoadBalancer": func(lb *LoadBalancer, svc *v1.Service) error {
+			_, _, err := lb.GetLoadBalancer(context.Background(), "my-cluster", svc)
+			return err
+		},
+		"UpdateLoadBalancer": func(lb *LoadBalancer, svc *v1.Service) error {
+			return lb.UpdateLoadBalancer(context.Background(), "my-cluster", svc, nil)
+		},
+		"EnsureLoadBalancerDeleted": func(lb *LoadBalancer, svc *v1.Service) error {
+			return lb.EnsureLoadBalancerDeleted(context.Background(), "my-cluster", svc)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc := newInboundService("service-uid")
+			tracker := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset(svc))
+			lb := NewLoadBalancer(nil)
+			assert.NoError(t, lb.SetTracker(tracker))
+			assert.NoError(t, call(lb, svc))
+			assert.Equal(t, "my-cluster", tracker.getClusterName())
+		})
+	}
+
+	tracker := newTestDiffTracker()
+	tracker.SetClusterName("first")
+	tracker.SetClusterName("")
+	assert.Equal(t, "first", tracker.getClusterName(), "an empty name never replaces a known one")
 }
 
 // TestLoadBalancerDoesNotEmitEventWithoutReason keeps the Event path from turning every failure

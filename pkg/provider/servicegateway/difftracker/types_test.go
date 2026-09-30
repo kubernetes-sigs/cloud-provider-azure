@@ -40,6 +40,9 @@ func TestInboundConfigEquals_ComparesEveryField(t *testing.T) {
 			IPTags:             map[string]string{"RoutingPreference": "Internet"},
 			DNSLabel:           ptr.To("app"),
 			PIPPrefixID:        "prefix-a",
+			PIPName:            "pip-a",
+			LoadBalancerIP:     "20.0.0.1",
+			PIPResourceGroup:   "rg-a",
 		}
 	}
 
@@ -61,6 +64,9 @@ func TestInboundConfigEquals_ComparesEveryField(t *testing.T) {
 		{"DNSLabel", func(c *InboundConfig) { c.DNSLabel = ptr.To("other") }},
 		{"DNSLabel cleared", func(c *InboundConfig) { c.DNSLabel = nil }},
 		{"PIPPrefixID", func(c *InboundConfig) { c.PIPPrefixID = "prefix-b" }},
+		{"PIPName", func(c *InboundConfig) { c.PIPName = "pip-b" }},
+		{"LoadBalancerIP", func(c *InboundConfig) { c.LoadBalancerIP = "20.0.0.2" }},
+		{"PIPResourceGroup", func(c *InboundConfig) { c.PIPResourceGroup = "rg-b" }},
 	}
 
 	for _, tc := range cases {

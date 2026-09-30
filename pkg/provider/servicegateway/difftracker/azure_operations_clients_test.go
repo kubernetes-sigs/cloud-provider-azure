@@ -27,6 +27,9 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/utils/ptr"
 
@@ -35,6 +38,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/natgatewayclient/mock_natgatewayclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient/mock_servicegatewayclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -648,6 +652,75 @@ func TestInitializeFromCluster_ReusesFetchedPIPListForOrphanCleanup(t *testing.T
 	dt, err := InitializeFromCluster(ctx, testConfig(), mockFactory, fake.NewSimpleClientset())
 	assert.NoError(t, err)
 	assert.NotNil(t, dt)
+}
+
+// TestInitializeFromCluster_KeepsPublicIPsServicesChoose pins that startup hands the Public IPs Services
+// choose to both orphan sweeps. The Services are rejected by admission, so nothing is provisioned and
+// their chosen addresses are detached, which is exactly when a sweep could mistake them for leaks.
+func TestInitializeFromCluster_KeepsPublicIPsServicesChoose(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+	mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+	mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
+	mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+	mockFactory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+	mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
+	mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+	mockSGW.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+	mockSGW.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+	mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockSGW.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	// An orphaned load balancer gives initialization work to complete; without it, a cluster whose
+	// only Services are rejected waits for an initial sync nothing triggers.
+	const orphanLB = "ffffffff-ffff-ffff-ffff-ffffffffffff"
+	mockLB.EXPECT().List(gomock.Any(), "rg").Return([]*armnetwork.LoadBalancer{{Name: ptr.To(orphanLB)}}, nil).AnyTimes()
+	mockLB.EXPECT().Get(gomock.Any(), "rg", orphanLB, gomock.Any()).Return(nil, notFoundError()).AnyTimes()
+	mockLB.EXPECT().Delete(gomock.Any(), "rg", orphanLB).Return(nil).AnyTimes()
+	mockPIP.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(orphanLB)).Return(nil).AnyTimes()
+	mockNAT.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+
+	const byName, byAddress, orphan = "web-pip", "dddddddd-dddd-dddd-dddd-dddddddddddd-pip", "leftover-pip"
+	detached := func(name, address string) *armnetwork.PublicIPAddress {
+		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Properties: &armnetwork.PublicIPAddressPropertiesFormat{IPAddress: ptr.To(address)}}
+	}
+	mockPIP.EXPECT().List(gomock.Any(), "rg").Return([]*armnetwork.PublicIPAddress{
+		detached(byName, "20.0.0.7"), detached(byAddress, "20.0.0.9"), detached(orphan, "20.0.0.5"),
+	}, nil).Times(1)
+	mockPIP.EXPECT().Delete(gomock.Any(), "rg", orphan).Return(nil).Times(1)
+
+	rejected := func(name, uid string, mutate func(*v1.Service)) *v1.Service {
+		svc := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "ns", UID: types.UID(uid)},
+			Spec: v1.ServiceSpec{
+				Type:            v1.ServiceTypeLoadBalancer,
+				SessionAffinity: v1.ServiceAffinityClientIP,
+				Ports:           []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}},
+			},
+		}
+		mutate(svc)
+		return svc
+	}
+	kube := fake.NewSimpleClientset(
+		rejected("by-name", "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: byName}
+		}),
+		rejected("by-address", "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee2", func(s *v1.Service) { s.Spec.LoadBalancerIP = "20.0.0.9" }),
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	dt, err := InitializeFromCluster(ctx, testConfig(), mockFactory, kube)
+	assert.NoError(t, err)
+	if assert.NotNil(t, dt) {
+		dt.mu.Lock()
+		_, scheduled := dt.pendingServiceOps["dddddddd-dddd-dddd-dddd-dddddddddddd"]
+		dt.mu.Unlock()
+		assert.False(t, scheduled, "a Public IP a Service chooses must not be scheduled as an orphan")
+	}
 }
 
 // TestARMPrimitivesDoNotHoldStateLock enforces the package concurrency invariant: ARM

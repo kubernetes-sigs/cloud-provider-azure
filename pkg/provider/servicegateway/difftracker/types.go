@@ -132,6 +132,13 @@ type InboundConfig struct {
 	DNSLabel *string
 	// PIPPrefixID is the Public IP prefix the Public IP is allocated from.
 	PIPPrefixID string
+	// PIPName is the azure-pip-name annotation: the Public IP to use, created with that name if missing.
+	PIPName string
+	// LoadBalancerIP is the address of an existing Public IP to use, from the azure-load-balancer-ipv4/ipv6
+	// annotation or spec.loadBalancerIP.
+	LoadBalancerIP string
+	// PIPResourceGroup is where PIPName or LoadBalancerIP is looked up; empty means the cluster resource group.
+	PIPResourceGroup string
 }
 
 // OutboundConfig contains NAT Gateway configuration for outbound services
@@ -188,7 +195,9 @@ func (c *InboundConfig) Equals(other *InboundConfig) bool {
 	if !maps.Equal(c.PIPTags, other.PIPTags) || !maps.Equal(c.IPTags, other.IPTags) {
 		return false
 	}
-	return strPtrEqual(c.DNSLabel, other.DNSLabel) && strings.EqualFold(c.PIPPrefixID, other.PIPPrefixID)
+	return strPtrEqual(c.DNSLabel, other.DNSLabel) && strings.EqualFold(c.PIPPrefixID, other.PIPPrefixID) &&
+		strings.EqualFold(c.PIPName, other.PIPName) && c.LoadBalancerIP == other.LoadBalancerIP &&
+		strings.EqualFold(c.PIPResourceGroup, other.PIPResourceGroup)
 }
 
 func stringSlicesEqual(a, b []string) bool {

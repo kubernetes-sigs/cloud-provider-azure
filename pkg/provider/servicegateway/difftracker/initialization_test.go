@@ -989,10 +989,44 @@ func TestReconcileServices_AppliesRuntimeAdmissionOnStartup(t *testing.T) {
 // IgnoreCaseSet wraps a map, so an unsynchronised read there is not a tolerable data race but a
 // fatal "concurrent map read and map write" that recover() cannot catch, killing the CCM during
 // startup recovery. Run with -race.
+// recoveryFactory serves the load balancers and Public IPs startup recovery reads: frontends maps a Service
+// UID to the Public IP ID its load balancer uses (others have no load balancer), and addresses maps a Public
+// IP "rg/name" to its address.
+func recoveryFactory(t *testing.T, frontends, addresses map[string]string) *mock_azclient.MockClientFactory {
+	ctrl := gomock.NewController(t)
+	f := mock_azclient.NewMockClientFactory(ctrl)
+	lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+	pip := mock_publicipaddressclient.NewMockInterface(ctrl)
+	f.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+	f.EXPECT().GetPublicIPAddressClient().Return(pip).AnyTimes()
+	lb.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _, uid string, _ *string) (*armnetwork.LoadBalancer, error) {
+			id, ok := frontends[uid]
+			if !ok {
+				return nil, notFoundError()
+			}
+			return &armnetwork.LoadBalancer{Properties: &armnetwork.LoadBalancerPropertiesFormat{
+				FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To(id)},
+				}}},
+			}}, nil
+		}).AnyTimes()
+	pip.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, rg, name string, _ *string) (*armnetwork.PublicIPAddress, error) {
+			address, ok := addresses[rg+"/"+name]
+			if !ok {
+				return nil, notFoundError()
+			}
+			return &armnetwork.PublicIPAddress{Name: ptr.To(name), Properties: &armnetwork.PublicIPAddressPropertiesFormat{IPAddress: ptr.To(address)}}, nil
+		}).AnyTimes()
+	return f
+}
+
 func TestRecoverServiceExternalIPs_SnapshotsNRPStateUnderLock(t *testing.T) {
 	dt := newTestDiffTracker()
 	dt.config = testConfig()
 	dt.kubeClient = fake.NewSimpleClientset()
+	dt.networkClientFactory = recoveryFactory(t, nil, nil)
 
 	serviceUIDToService := make(map[string]*v1.Service)
 	for i := 0; i < 50; i++ {
@@ -1086,7 +1120,7 @@ func TestCleanupOrphanedPublicIPs_KeepsPIPForServiceStillDesiredInKubernetes(t *
 		detached(PublicIPName(desiredUID)),
 		detached(PublicIPName(egressUID)),
 		detached(PublicIPName(orphanUID)),
-	}))
+	}, nil))
 
 	assert.NotContains(t, deleted, PublicIPName(desiredUID),
 		"the Public IP of a Service Kubernetes still wants must not be deleted as an orphan")
@@ -1097,12 +1131,11 @@ func TestCleanupOrphanedPublicIPs_KeepsPIPForServiceStillDesiredInKubernetes(t *
 }
 
 // TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress pins what the sweeper may and may
-// not delete. The resource group is the cluster's managed node resource group, so every "*-pip" in
-// it belongs to this controller and an unused one is a leak, whether it is named from a Service UUID
-// or from an egress pod label. What still has to survive is an address that is attached, reserved
-// for the default gateway, or wanted by a Kubernetes object.
+// not delete. An unused "*-pip" is a leak, whether it is named from a Service UUID or from an egress
+// pod label. What still has to survive is an address that is attached, reserved for the default
+// gateway, wanted by a Kubernetes object, or chosen by a Service by name or address.
 func TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress(t *testing.T) {
-	run := func(t *testing.T, pips []*armnetwork.PublicIPAddress) []string {
+	run := func(t *testing.T, pips []*armnetwork.PublicIPAddress, chosen ...string) []string {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -1124,7 +1157,7 @@ func TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress(t *testing.T) 
 		dt := newTestDiffTracker()
 		dt.config = testConfig()
 		dt.networkClientFactory = mockFactory
-		assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), pips))
+		assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), pips, utilsets.NewString(chosen...)))
 		return deleted
 	}
 
@@ -1155,6 +1188,38 @@ func TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress(t *testing.T) 
 		"the cluster's default egress address is RP-owned and must never be deleted")
 	assert.NotContains(t, deleted, "not-one-of-ours",
 		"a name that does not follow the controller's convention must be left alone")
+
+	byAddress := detached("reserved-pip")
+	byAddress.Properties.IPAddress = ptr.To("20.0.0.7")
+	deleted = run(t, []*armnetwork.PublicIPAddress{detached("web-pip"), byAddress, detached("unused-pip")}, "Web-Pip", "20.0.0.7")
+	assert.Equal(t, []string{"unused-pip"}, deleted,
+		"a Public IP a Service chooses by name or address is the user's and must never be swept")
+}
+
+func TestChosenPublicIPs(t *testing.T) {
+	service := func(ipFamily v1.IPFamily, loadBalancerIP string, annotations map[string]string) *v1.Service {
+		return &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Annotations: annotations},
+			Spec: v1.ServiceSpec{
+				Type:           v1.ServiceTypeLoadBalancer,
+				IPFamilies:     []v1.IPFamily{ipFamily},
+				LoadBalancerIP: loadBalancerIP,
+				Ports:          []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}},
+			},
+		}
+	}
+	clusterIP := service(v1.IPv4Protocol, "", map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "cluster-ip"})
+	clusterIP.Spec.Type = v1.ServiceTypeClusterIP
+	chosen := chosenPublicIPs(map[string]*v1.Service{
+		"by-name":        service(v1.IPv4Protocol, "", map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "mine"}),
+		"by-v6-name":     service(v1.IPv6Protocol, "", map[string]string{consts.ServiceAnnotationPIPNameDualStack[true]: "mine-v6"}),
+		"by-address":     service(v1.IPv4Protocol, "20.0.0.7", nil),
+		"same-rg":        service(v1.IPv4Protocol, "", map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "same", consts.ServiceAnnotationLoadBalancerResourceGroup: "RG"}),
+		"other-rg":       service(v1.IPv4Protocol, "", map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "elsewhere", consts.ServiceAnnotationLoadBalancerResourceGroup: "other"}),
+		"not-a-balancer": clusterIP,
+		"none":           nil,
+	}, "rg")
+	assert.ElementsMatch(t, []string{"mine", "mine-v6", "20.0.0.7", "same"}, chosen.UnsortedList())
 }
 
 // TestRecoverStuckFinalizers_CountsRemovalSeparatelyFromScheduling pins that startup recovery
@@ -1409,7 +1474,9 @@ func TestRecoverServiceExternalIPs_RetriesTransientPatchFailure(t *testing.T) {
 	})
 
 	dt := newTestDiffTracker()
+	dt.config = testConfig()
 	dt.kubeClient = kube
+	dt.networkClientFactory = recoveryFactory(t, nil, nil)
 	dt.NRPResources.LoadBalancers.Insert(uid)
 
 	recoverServiceExternalIPs(context.Background(), dt,
@@ -1422,6 +1489,55 @@ func TestRecoverServiceExternalIPs_RetriesTransientPatchFailure(t *testing.T) {
 	assert.NoError(t, err)
 	if assert.Len(t, got.Status.LoadBalancer.Ingress, 1, "the External IP must be recovered") {
 		assert.Equal(t, "20.30.40.50", got.Status.LoadBalancer.Ingress[0].IP)
+	}
+}
+
+func TestRecoverServiceExternalIPs_UsesThePublicIPOfTheLoadBalancer(t *testing.T) {
+	const uid = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+	pipID := func(rg, name string) string { return publicIPAddressID("sub", rg, name) }
+	for _, tc := range []struct {
+		name     string
+		frontend string
+		want     string
+	}{
+		{name: "the Public IP named after the Service", frontend: pipID("rg", PublicIPName(uid)), want: "20.0.0.1"},
+		{name: "a chosen Public IP in the cluster resource group", frontend: pipID("RG", "Mine"), want: "20.0.0.7"},
+		{name: "a chosen Public IP in another resource group", frontend: pipID("other", "theirs"), want: "20.0.0.9"},
+		{name: "no load balancer", want: "20.0.0.1"},
+		{name: "a Public IP that cannot be read", frontend: pipID("other", "gone")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "default", UID: types.UID(uid),
+					// A choice the load balancer does not use must not decide the address.
+					Annotations: map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "other-choice"}},
+				Spec: v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer, LoadBalancerIP: "20.0.0.99",
+					Ports: []v1.ServicePort{{Port: 80, TargetPort: intstr.FromInt32(8080), Protocol: v1.ProtocolTCP}}},
+			}
+			kube := fake.NewSimpleClientset(svc)
+			dt := newTestDiffTracker()
+			dt.config = testConfig()
+			dt.kubeClient = kube
+			frontends := map[string]string{}
+			if tc.frontend != "" {
+				frontends[uid] = tc.frontend
+			}
+			dt.networkClientFactory = recoveryFactory(t, frontends, map[string]string{"other/theirs": "20.0.0.9"})
+			dt.NRPResources.LoadBalancers.Insert(uid)
+
+			recoverServiceExternalIPs(context.Background(), dt, map[string]*v1.Service{uid: svc},
+				map[string]string{strings.ToLower(PublicIPName(uid)): "20.0.0.1", "mine": "20.0.0.7", "other-choice": "20.0.0.8"})
+
+			got, err := kube.CoreV1().Services("default").Get(context.Background(), "web", metav1.GetOptions{})
+			assert.NoError(t, err)
+			if tc.want == "" {
+				assert.Empty(t, got.Status.LoadBalancer.Ingress)
+				return
+			}
+			if assert.Len(t, got.Status.LoadBalancer.Ingress, 1) {
+				assert.Equal(t, tc.want, got.Status.LoadBalancer.Ingress[0].IP)
+			}
+		})
 	}
 }
 
@@ -1720,4 +1836,14 @@ func TestInitializeFromCluster_SeedsClusterAddressFamiliesFromNodes(t *testing.T
 	v4Families := v4Only.outboundIPFamiliesLocked()
 	v4Only.mu.Unlock()
 	assert.Equal(t, []string{"IPv4"}, v4Families)
+}
+
+func TestWithoutChosenPublicIPs(t *testing.T) {
+	byAddress := &armnetwork.PublicIPAddress{Name: ptr.To("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa-pip"), Properties: &armnetwork.PublicIPAddressPropertiesFormat{IPAddress: ptr.To("20.0.0.7")}}
+	names := utilsets.NewString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb-pip", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa-pip", "cccccccc-cccc-cccc-cccc-cccccccccccc-pip")
+	remaining := withoutChosenPublicIPs(names, []*armnetwork.PublicIPAddress{byAddress}, utilsets.NewString("BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB-PIP", "20.0.0.7"))
+	assert.ElementsMatch(t, []string{"cccccccc-cccc-cccc-cccc-cccccccccccc-pip"}, remaining.UnsortedList(),
+		"a Public IP a Service chooses by name or address must not be scheduled as an orphan")
+	assert.Equal(t, 3, names.Len(), "the input set is not modified")
+	assert.Nil(t, withoutChosenPublicIPs(nil, nil, utilsets.NewString()))
 }

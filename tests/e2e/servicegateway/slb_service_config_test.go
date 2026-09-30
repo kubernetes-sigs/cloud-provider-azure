@@ -18,6 +18,7 @@ package servicegateway
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/netip"
 	"strings"
@@ -313,6 +314,278 @@ var _ = Describe("SLB - Service Config Edge Cases", Label(slbTestLabel), func() 
 		Expect(pip.IPAddress).To(Equal(ip.String()), "a prefix change must not change the IP")
 
 		utils.Logf("✓ Public IP %s was allocated from prefix %s and kept when the annotation changed", ip, allocated)
+	})
+
+	createService := func(name string, annotations map[string]string) string {
+		service := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns.Name, Annotations: annotations},
+			Spec: v1.ServiceSpec{
+				Type:     v1.ServiceTypeLoadBalancer,
+				Selector: map[string]string{"app": name},
+				Ports:    []v1.ServicePort{{Name: "http", Port: 80, TargetPort: intstr.FromInt(8080), Protocol: v1.ProtocolTCP}},
+			},
+		}
+		created, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		return string(created.UID)
+	}
+
+	updateAnnotations := func(name string, mutate func(map[string]string)) {
+		Eventually(func() error {
+			svc, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), name, metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
+			if svc.Annotations == nil {
+				svc.Annotations = map[string]string{}
+			}
+			mutate(svc.Annotations)
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc, metav1.UpdateOptions{})
+			return err
+		}, 30*time.Second, 2*time.Second).Should(Succeed())
+	}
+
+	// expectServiceOnPublicIP waits until the Service's load balancer uses the Public IP and the Service
+	// status reports its address, and returns that address.
+	expectServiceOnPublicIP := func(name, serviceUID, publicIPName string) string {
+		var address string
+		Eventually(func() error {
+			if err := serviceUsesPublicIPErr(serviceUID, publicIPID(publicIPName)); err != nil {
+				return err
+			}
+			pip, err := getAzurePublicIP(publicIPName)
+			if err != nil {
+				return err
+			}
+			svc, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), name, metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
+			if len(svc.Status.LoadBalancer.Ingress) != 1 || svc.Status.LoadBalancer.Ingress[0].IP != pip.IPAddress {
+				return fmt.Errorf("service %s ingress %+v, want %s", name, svc.Status.LoadBalancer.Ingress, pip.IPAddress)
+			}
+			address = pip.IPAddress
+			return nil
+		}, 4*time.Minute, 10*time.Second).Should(Succeed())
+		return address
+	}
+
+	// probeTraffic waits for the pod to be registered and returns an error when traffic to the address never
+	// reaches it. The dataplane depends on the environment, so specs finish their strict checks first and
+	// then skip on this error, as the other reachability specs do.
+	probeTraffic := func(serviceUID, address, podName string, port int) error {
+		Eventually(func() (int, error) { return countRegisteredEndpoints(serviceUID) }, 4*time.Minute, 10*time.Second).Should(Equal(1))
+		return verifyAllPodsReachable(address, port, []string{podName}, 4*time.Minute)
+	}
+	skipIfNoTraffic := func(err error) {
+		if err != nil {
+			Skip("the Azure checks passed but the dataplane did not carry traffic from the test runner: " + err.Error())
+		}
+	}
+
+	expectUserPublicIPUntouched := func(publicIPName string) {
+		Eventually(func() error {
+			pip, err := getAzurePublicIP(publicIPName)
+			if err != nil {
+				return err
+			}
+			if owner, ok := pip.Tags["k8s-azure-service"]; ok {
+				return fmt.Errorf("the user's Public IP %s was tagged k8s-azure-service=%q", publicIPName, owner)
+			}
+			if pip.IPConfiguration != nil {
+				return fmt.Errorf("the user's Public IP %s is still used by %s", publicIPName, pip.IPConfiguration.ID)
+			}
+			return nil
+		}, 3*time.Minute, 10*time.Second).Should(Succeed())
+	}
+
+	It("should use Public IPs chosen by name or address, keeping the user's and deleting the one it created", func() {
+		userPIPName := "sgwe2e-user-" + rand.String(6)
+		createdPIPName := "sgwe2e-created-" + rand.String(6)
+		_, userIP := createUserPublicIP(userPIPName, "StandardV2")
+		DeferCleanup(func() {
+			_, _ = runAz("network", "public-ip", "delete", "--resource-group", resourceGroupName, "--name", createdPIPName)
+		})
+
+		for _, name := range []string{"byo-user", "byo-created"} {
+			_, err := cs.CoreV1().Pods(ns.Name).Create(context.TODO(), makeNetexecPod(name+"-pod", map[string]string{"app": name}, 8080), metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}
+		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
+
+		By("Creating a service on the user's Public IP and one naming a Public IP that does not exist")
+		userUID := createService("byo-user", map[string]string{"service.beta.kubernetes.io/azure-pip-name": userPIPName})
+		createdUID := createService("byo-created", map[string]string{"service.beta.kubernetes.io/azure-pip-name": createdPIPName})
+
+		By("Verifying each load balancer uses the chosen Public IP and the status reports its address")
+		Expect(expectServiceOnPublicIP("byo-user", userUID, userPIPName)).To(Equal(userIP))
+		expectServiceOnPublicIP("byo-created", createdUID, createdPIPName)
+		Expect(azurePublicIPAbsentErr(userUID)).To(Succeed(), "no Public IP is created for a Service that names the user's")
+		Expect(azurePublicIPAbsentErr(createdUID)).To(Succeed())
+
+		By("Verifying only the created Public IP carries the ownership tags")
+		created, err := getAzurePublicIP(createdPIPName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(created.Tags).To(HaveKeyWithValue("k8s-azure-service", ns.Name+"/byo-created"))
+		user, err := getAzurePublicIP(userPIPName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(user.Tags).NotTo(HaveKey("k8s-azure-service"))
+
+		By("Probing traffic to the user's Public IP")
+		trafficErr := probeTraffic(userUID, userIP, "byo-user-pod", 80)
+
+		By("Choosing the created Public IP by its address instead, together with a new port")
+		createdIP := created.IPAddress
+		Eventually(func() error {
+			svc, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), "byo-created", metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
+			delete(svc.Annotations, "service.beta.kubernetes.io/azure-pip-name")
+			svc.Annotations["service.beta.kubernetes.io/azure-load-balancer-ipv4"] = createdIP
+			svc.Spec.Ports[0].Port = 81
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc, metav1.UpdateOptions{})
+			return err
+		}, 30*time.Second, 2*time.Second).Should(Succeed())
+
+		By("Verifying the update is applied on the same Public IP")
+		Eventually(func() error {
+			if err := serviceUsesPublicIPErr(createdUID, publicIPID(createdPIPName)); err != nil {
+				return err
+			}
+			output, err := runAz("network", "lb", "show", "--resource-group", resourceGroupName, "--name", createdUID, "--output", "json")
+			if err != nil {
+				return err
+			}
+			var lb AzureLoadBalancer
+			if err := json.Unmarshal(output, &lb); err != nil {
+				return err
+			}
+			if len(lb.LoadBalancingRules) != 1 || lb.LoadBalancingRules[0].Name != "rule-tcp-81" {
+				return fmt.Errorf("load balancer rules %+v, want only rule-tcp-81", lb.LoadBalancingRules)
+			}
+			return nil
+		}, 4*time.Minute, 10*time.Second).Should(Succeed())
+		controllerWarnings := map[string]bool{
+			"PublicIPNotFound": true, "PublicIPInUse": true, "PublicIPCleanupFailed": true, "ServiceGatewayConfigurationRejected": true,
+			"InvalidLoadBalancerIP": true, "ConflictingPublicIPSettings": true, "ServiceGatewayIgnoredAnnotations": true,
+			"PublicIPChangeNotSupported": true, "PublicIPPrefixChangeNotSupported": true,
+		}
+		events, err := cs.CoreV1().Events(ns.Name).List(context.TODO(), metav1.ListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		for _, e := range events.Items {
+			if e.InvolvedObject.Kind == "Service" && string(e.InvolvedObject.UID) == createdUID && controllerWarnings[e.Reason] {
+				Fail(fmt.Sprintf("unexpected warning %s on byo-created: %s", e.Reason, e.Message))
+			}
+		}
+
+		By("Deleting both services")
+		for _, name := range []string{"byo-user", "byo-created"} {
+			Expect(cs.CoreV1().Services(ns.Name).Delete(context.TODO(), name, metav1.DeleteOptions{})).To(Succeed())
+		}
+		eventuallyServiceDeleted(userUID, 3*time.Minute)
+		eventuallyServiceDeleted(createdUID, 3*time.Minute)
+
+		By("Verifying the user's Public IP is kept and free, and the created one is deleted")
+		expectUserPublicIPUntouched(userPIPName)
+		Eventually(func() error { return azurePublicIPNamedAbsentErr(createdPIPName) }, 3*time.Minute, 10*time.Second).Should(Succeed())
+
+		utils.Logf("✓ The user's Public IP was used and kept; the Public IP created by name was deleted with its Service")
+		skipIfNoTraffic(trafficErr)
+	})
+
+	It("should keep a service's Public IP when its choice changes", func() {
+		const serviceName = "byo-keep"
+		userPIPName := "sgwe2e-user-" + rand.String(6)
+		otherName := "sgwe2e-other-" + rand.String(6)
+		_, userIP := createUserPublicIP(userPIPName, "StandardV2")
+		DeferCleanup(func() {
+			_, _ = runAz("network", "public-ip", "delete", "--resource-group", resourceGroupName, "--name", otherName)
+		})
+
+		_, err := cs.CoreV1().Pods(ns.Name).Create(context.TODO(), makeNetexecPod(serviceName+"-pod", map[string]string{"app": serviceName}, 8080), metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
+
+		By("Creating a service that chooses the user's Public IP by address")
+		serviceUID := createService(serviceName, map[string]string{"service.beta.kubernetes.io/azure-load-balancer-ipv4": userIP})
+		Expect(expectServiceOnPublicIP(serviceName, serviceUID, userPIPName)).To(Equal(userIP))
+
+		By("Probing traffic to the user's Public IP as the baseline")
+		baselineErr := probeTraffic(serviceUID, userIP, serviceName+"-pod", 80)
+
+		expectKept := func() {
+			expectServiceEvent(serviceName, "PublicIPChangeNotSupported")
+			Consistently(func() error {
+				if err := serviceUsesPublicIPErr(serviceUID, publicIPID(userPIPName)); err != nil {
+					return err
+				}
+				return azurePublicIPNamedAbsentErr(otherName)
+			}, 30*time.Second, defaultPollInterval).Should(Succeed(), "the load balancer keeps its Public IP and no other Public IP is created")
+			svc, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(svc.Status.LoadBalancer.Ingress).To(HaveLen(1))
+			Expect(svc.Status.LoadBalancer.Ingress[0].IP).To(Equal(userIP))
+			if baselineErr == nil {
+				Expect(probeTraffic(serviceUID, userIP, serviceName+"-pod", 80)).To(Succeed(), "the kept address keeps serving")
+			}
+		}
+
+		By("Choosing a Public IP by a name that does not exist")
+		updateAnnotations(serviceName, func(a map[string]string) {
+			delete(a, "service.beta.kubernetes.io/azure-load-balancer-ipv4")
+			a["service.beta.kubernetes.io/azure-pip-name"] = otherName
+		})
+		expectKept()
+
+		By("Deleting the service")
+		Expect(cs.CoreV1().Services(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})).To(Succeed())
+		eventuallyServiceDeleted(serviceUID, 3*time.Minute)
+
+		By("Verifying the user's Public IP is kept and free")
+		expectUserPublicIPUntouched(userPIPName)
+
+		utils.Logf("✓ The service kept Public IP %s when its choice changed", userIP)
+		skipIfNoTraffic(baselineErr)
+	})
+
+	It("should reject a user's Public IP it cannot use without changing it", func() {
+		standardPIPName := "sgwe2e-standard-" + rand.String(6)
+		userPIPName := "sgwe2e-user-" + rand.String(6)
+		createUserPublicIP(standardPIPName, "Standard")
+		createUserPublicIP(userPIPName, "StandardV2")
+
+		By("Creating a service on a Standard Public IP and one that would tag the user's Public IP")
+		standardUID := createService("byo-standard", map[string]string{"service.beta.kubernetes.io/azure-pip-name": standardPIPName})
+		taggedUID := createService("byo-tagged", map[string]string{
+			"service.beta.kubernetes.io/azure-pip-name": userPIPName,
+			"service.beta.kubernetes.io/azure-pip-tags": "sgw-e2e=first",
+		})
+
+		By("Verifying both services are rejected")
+		expectServiceEvent("byo-standard", "ServiceGatewayConfigurationRejected")
+		expectServiceEvent("byo-tagged", "ServiceGatewayConfigurationRejected")
+
+		By("Verifying no load balancer was created and neither Public IP was changed")
+		Consistently(func() error {
+			for _, uid := range []string{standardUID, taggedUID} {
+				if err := serviceDeletedErr(uid); err != nil {
+					return err
+				}
+			}
+			for _, name := range []string{standardPIPName, userPIPName} {
+				pip, err := getAzurePublicIP(name)
+				if err != nil {
+					return err
+				}
+				if len(pip.Tags) != 0 || pip.IPConfiguration != nil {
+					return fmt.Errorf("public IP %s was changed: tags %v, used by %+v", name, pip.Tags, pip.IPConfiguration)
+				}
+			}
+			return nil
+		}, 45*time.Second, defaultPollInterval).Should(Succeed())
+
+		utils.Logf("✓ Unusable user Public IPs were rejected and left unchanged")
 	})
 
 	It("should let two services that select the same pods each register those pods", func() {

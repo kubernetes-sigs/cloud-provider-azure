@@ -67,7 +67,7 @@ func (lb *LoadBalancer) diffTracker() (*DiffTracker, error) {
 	return lb.tracker, nil
 }
 
-func (lb *LoadBalancer) GetLoadBalancer(ctx context.Context, _ string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
+func (lb *LoadBalancer) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
 	const operation = "GetLoadBalancer"
 	ctx, span := trace.BeginReconcile(ctx, trace.DefaultTracer(), operation)
 	defer func() { span.Observe(ctx, err) }()
@@ -76,6 +76,7 @@ func (lb *LoadBalancer) GetLoadBalancer(ctx context.Context, _ string, service *
 	if err != nil {
 		return nil, false, err
 	}
+	tracker.SetClusterName(clusterName)
 	if !tracker.IsServiceTracked(ServiceUID(service)) {
 		return nil, false, nil
 	}
@@ -140,12 +141,15 @@ func recordWarningEvent(tracker *DiffTracker, service *v1.Service, err error) {
 	tracker.recordEvent(service, v1.EventTypeWarning, reason, message)
 }
 
-func (lb *LoadBalancer) UpdateLoadBalancer(context.Context, string, *v1.Service, []*v1.Node) error {
-	_, err := lb.diffTracker()
+func (lb *LoadBalancer) UpdateLoadBalancer(_ context.Context, clusterName string, _ *v1.Service, _ []*v1.Node) error {
+	tracker, err := lb.diffTracker()
+	if err == nil {
+		tracker.SetClusterName(clusterName)
+	}
 	return err
 }
 
-func (lb *LoadBalancer) EnsureLoadBalancerDeleted(ctx context.Context, _ string, service *v1.Service) (err error) {
+func (lb *LoadBalancer) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) (err error) {
 	const operation = "EnsureLoadBalancerDeleted"
 	ctx, span := trace.BeginReconcile(ctx, trace.DefaultTracer(), operation)
 	defer func() { span.Observe(ctx, err) }()
@@ -161,6 +165,7 @@ func (lb *LoadBalancer) EnsureLoadBalancerDeleted(ctx context.Context, _ string,
 		return err
 	}
 
+	tracker.SetClusterName(clusterName)
 	serviceName := fmt.Sprintf("%s/%s", service.Namespace, service.Name)
 	metricContext := newLoadBalancerMetricContext(tracker, "ensure_loadbalancer_deleted", serviceName)
 	err = tracker.DeleteInboundService(service)

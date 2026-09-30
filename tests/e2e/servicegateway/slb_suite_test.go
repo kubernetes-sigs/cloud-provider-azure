@@ -68,6 +68,9 @@ type AzurePublicIP struct {
 	DNSSettings *struct {
 		DomainNameLabel string `json:"domainNameLabel"`
 	} `json:"dnsSettings"`
+	IPConfiguration *struct {
+		ID string `json:"id"`
+	} `json:"ipConfiguration"`
 }
 
 // AzureLoadBalancer represents a Load Balancer resource in Azure
@@ -552,6 +555,68 @@ func azureEgressResourcesAbsentErr(egressName string) error {
 }
 
 // verifyAzureResources verifies Public IP, Load Balancer, and Service Gateway for a given service
+// publicIPID returns the ID of a Public IP in the cluster resource group.
+func publicIPID(name string) string {
+	return fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s", subscriptionID, resourceGroupName, name)
+}
+
+// createUserPublicIP creates a static IPv4 Public IP outside the controller, as a user would, waits for
+// its address and deletes it after the spec.
+func createUserPublicIP(name, sku string) (id, address string) {
+	location, err := runAz("group", "show", "--name", resourceGroupName, "--query", "location", "--output", "tsv")
+	Expect(err).NotTo(HaveOccurred())
+	id = publicIPID(name)
+	url := "https://management.azure.com" + id + "?api-version=2025-05-01"
+	body := fmt.Sprintf(`{"location":%q,"sku":{"name":%q},"properties":{"publicIPAllocationMethod":"Static","publicIPAddressVersion":"IPv4"}}`,
+		strings.TrimSpace(string(location)), sku)
+	_, err = runAz("rest", "--method", "put", "--url", url, "--body", body)
+	Expect(err).NotTo(HaveOccurred())
+	DeferCleanup(func() {
+		Eventually(func() error {
+			_, err := runAz("rest", "--method", "delete", "--url", url)
+			return err
+		}, 5*time.Minute, 15*time.Second).Should(Succeed(), "the test Public IP %s must be deleted", name)
+	})
+	Eventually(func() error {
+		pip, err := getAzurePublicIP(name)
+		if err != nil {
+			return err
+		}
+		if pip.IPAddress == "" {
+			return fmt.Errorf("public IP %s has no address yet", name)
+		}
+		address = pip.IPAddress
+		return nil
+	}, 3*time.Minute, 10*time.Second).Should(Succeed())
+	return id, address
+}
+
+// serviceUsesPublicIPErr reports whether the Service's load balancer frontend uses the Public IP and the
+// Service is registered with the Service Gateway.
+func serviceUsesPublicIPErr(serviceUID, publicIPID string) error {
+	output, err := runAz("network", "lb", "show", "--resource-group", resourceGroupName, "--name", serviceUID, "--output", "json")
+	if err != nil {
+		return fmt.Errorf("failed to query Azure for Load Balancer: %w", err)
+	}
+	var lb AzureLoadBalancer
+	if err := json.Unmarshal(output, &lb); err != nil {
+		return fmt.Errorf("failed to parse Load Balancer JSON: %w", err)
+	}
+	if len(lb.FrontendIPConfigurations) == 0 || !strings.EqualFold(lb.FrontendIPConfigurations[0].PublicIPAddress.ID, publicIPID) {
+		return fmt.Errorf("load balancer %s frontends %+v, want Public IP %s", serviceUID, lb.FrontendIPConfigurations, publicIPID)
+	}
+	sgResponse, err := queryServiceGatewayServices()
+	if err != nil {
+		return fmt.Errorf("failed to query Service Gateway services: %w", err)
+	}
+	for _, sgSvc := range sgResponse.Value {
+		if sgSvc.Name == serviceUID {
+			return nil
+		}
+	}
+	return fmt.Errorf("service %s not found in Service Gateway", serviceUID)
+}
+
 func verifyAzureResources(serviceUID string) error {
 	publicIPName := fmt.Sprintf("%s-pip", serviceUID)
 	loadBalancerName := serviceUID

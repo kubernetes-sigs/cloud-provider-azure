@@ -137,11 +137,20 @@ func (dt *DiffTracker) SetEventRecorder(recorder record.EventRecorder) {
 	dt.eventRecorder = recorder
 }
 
-// SetClusterName records the cluster name used for the Public IP ownership tag.
+// SetClusterName records the cluster name used for the Public IP ownership tag. The first name received
+// releases the Public IPs whose ownership could not be decided without it.
 func (dt *DiffTracker) SetClusterName(clusterName string) {
+	if clusterName == "" {
+		return
+	}
 	dt.mu.Lock()
-	defer dt.mu.Unlock()
+	first := dt.clusterName == ""
 	dt.clusterName = clusterName
+	updater := dt.serviceUpdater
+	dt.mu.Unlock()
+	if first && updater != nil {
+		go updater.releaseDeferredPublicIPs()
+	}
 }
 
 func (dt *DiffTracker) getClusterName() string {

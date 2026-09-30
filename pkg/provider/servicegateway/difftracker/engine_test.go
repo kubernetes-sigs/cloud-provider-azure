@@ -974,6 +974,56 @@ func TestEngineOnServiceCreationComplete_TerminalErrorParksAndRecovers(t *testin
 	assert.Len(t, dt.serviceUpdaterTrigger, 1, "spec fix should trigger a fresh creation attempt")
 }
 
+// TestEngineOnServiceCreationComplete_TerminalParkPromotesEndpointsOfALiveLoadBalancer pins that a create
+// parked after its load balancer was attached replays the buffered endpoints: the load balancer serves them
+// while parked, and a later successful create must not replay a stale buffer over live changes.
+func TestEngineOnServiceCreationComplete_TerminalParkPromotesEndpointsOfALiveLoadBalancer(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		live, drift  bool
+		completeWith error
+	}{
+		{name: "parked with a live load balancer", live: true, completeWith: newTerminalError(errors.New("unsupported protocol"))},
+		{name: "parked without a load balancer", completeWith: newTerminalError(errors.New("unsupported protocol"))},
+		{name: "re-dispatched after the spec changed", live: true, drift: true, completeWith: newTerminalError(errors.New("unsupported protocol"))},
+		{name: "retried after a transient failure", live: true, completeWith: errors.New("throttled")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dt := newTestDiffTracker()
+			uid := "svc-parked-live"
+			cfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
+			inflight := cfg
+			if tc.drift {
+				inflight = NewInboundServiceConfig(uid, makeInboundConfig(81))
+			}
+			dt.pendingServiceOps[uid] = &ServiceOperationState{ServiceUID: uid, Config: cfg, InFlightConfig: &inflight, State: StateCreationInProgress}
+			dt.UpdateEndpoints(uid, nil, map[string]string{"10.244.0.7": "10.0.0.1"})
+			if tc.live {
+				dt.UpdateNRPLoadBalancers(SyncServicesReturnType{Additions: newIgnoreCaseSetFromSlice([]string{uid})})
+			}
+			for len(dt.locationsUpdaterTrigger) > 0 {
+				<-dt.locationsUpdaterTrigger
+			}
+
+			dt.OnServiceCreationComplete(uid, false, tc.completeWith)
+
+			_, registered := dt.K8sResources.Nodes["10.0.0.1"].Pods["10.244.0.7"]
+			assert.Equal(t, tc.live, registered, "only a live load balancer gets its buffered endpoints")
+			assert.Equal(t, !tc.live, len(dt.pendingEndpoints[uid]) > 0, "a buffer is kept only while nothing serves it")
+			if tc.live {
+				assert.Len(t, dt.locationsUpdaterTrigger, 1, "the promoted endpoints are published")
+				// A removal while the Service waits for its next attempt applies directly, and the next
+				// successful create must not bring the pod back.
+				dt.UpdateEndpoints(uid, map[string]string{"10.244.0.7": "10.0.0.1"}, nil)
+				dt.pendingServiceOps[uid].State = StateCreationInProgress
+				dt.OnServiceCreationComplete(uid, true, nil)
+				_, resurrected := dt.K8sResources.Nodes["10.0.0.1"].Pods["10.244.0.7"]
+				assert.False(t, resurrected, "a stale buffer must not be replayed over a live removal")
+			}
+		})
+	}
+}
+
 // TestEngineOnServiceCreationComplete_TransientErrorRetries verifies a transient failure
 // is still retried (not parked).
 func TestEngineOnServiceCreationComplete_TransientErrorRetries(t *testing.T) {

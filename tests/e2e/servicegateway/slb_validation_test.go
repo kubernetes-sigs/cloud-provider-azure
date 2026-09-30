@@ -276,7 +276,7 @@ var _ = Describe("SLB - Service Validation", Label(slbTestLabel), func() {
 		utils.Logf("✓ Internal service was rejected with a warning event and no Azure resources")
 	})
 
-	It("should reject services that restrict access or select their Public IP", func() {
+	It("should reject services that restrict access or select their Public IP inconsistently", func() {
 		cases := []struct {
 			name   string
 			reason string
@@ -291,11 +291,14 @@ var _ = Describe("SLB - Service Validation", Label(slbTestLabel), func() {
 			{"no-lb-rule", "UnsupportedAccessRestriction", func(s *v1.Service) {
 				s.Annotations = map[string]string{"service.beta.kubernetes.io/port_80_no_lb_rule": "true"}
 			}},
-			{"pip-name", "UnsupportedPublicIPSelection", func(s *v1.Service) {
-				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-pip-name": "customer-pip"}
+			{"invalid-address", "InvalidLoadBalancerIP", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-load-balancer-ipv4": "203.0.113"}
 			}},
-			{"ipv4-address", "UnsupportedPublicIPSelection", func(s *v1.Service) {
-				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-load-balancer-ipv4": "203.0.113.10"}
+			{"name-and-address", "ConflictingPublicIPSettings", func(s *v1.Service) {
+				s.Annotations = map[string]string{
+					"service.beta.kubernetes.io/azure-pip-name":           "customer-pip",
+					"service.beta.kubernetes.io/azure-load-balancer-ipv4": "203.0.113.10",
+				}
 			}},
 		}
 
@@ -342,7 +345,7 @@ var _ = Describe("SLB - Service Validation", Label(slbTestLabel), func() {
 		}, 45*time.Second, defaultPollInterval).Should(Succeed(),
 			"a setting ServiceGateway cannot honour must be rejected (no PIP/LB/SGW registration)")
 
-		utils.Logf("✓ Services with unsupported access or Public IP settings were rejected")
+		utils.Logf("✓ Services with unsupported access or inconsistent Public IP settings were rejected")
 	})
 
 	It("should provision an allow-all service and warn about ignored annotations", func() {

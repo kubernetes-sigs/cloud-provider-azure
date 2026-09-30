@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"net"
 	"net/http"
 	"runtime/debug"
 	"strings"
@@ -47,9 +48,15 @@ type ServiceUpdater struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
-	semaphore   chan struct{}   // Limits concurrent operations to 10
-	mu          sync.Mutex      // Protects activeOperations
-	activeOps   map[string]bool // Tracks which services are being processed
+	semaphore   chan struct{} // Limits concurrent operations to 10
+	mu          sync.Mutex    // Protects activeOperations
+	// namedPublicIPLocks serializes Services resolving and creating the same named Public IP, so two of
+	// them cannot both find it missing and both create it as their own.
+	namedPublicIPLocks sync.Map
+	// deferredReleases are Public IPs to release once the cluster name, needed to decide ownership, is
+	// known. Guarded by mu.
+	deferredReleases []deferredPublicIPRelease
+	activeOps        map[string]bool // Tracks which services are being processed
 	// retryTimers holds the pending re-dispatch timer per service. A parked or backed-off operation
 	// has no external driver, so it self-arms with time.AfterFunc; those timers are not tracked by wg
 	// nor bound to ctx, so they must be stopped explicitly or they keep the whole DiffTracker
@@ -514,15 +521,26 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 	}
 
 	// Step 2: Create the Public IP, or update the one an earlier attempt created, and capture the
-	// response to get the allocated IP address
-	pipResponse, err := s.ensureInboundPublicIP(ctx, serviceUID, config, &pipResource)
+	// response to get the allocated IP address. A load balancer left by an earlier attempt keeps its
+	// Public IP.
+	var pipResponse *armnetwork.PublicIPAddress
+	unlock := s.lockNamedPublicIP(config)
+	target, err := s.inboundPublicIPInUse(ctx, serviceUID, config)
+	if err == nil && target == nil {
+		target, err = s.resolveInboundPublicIP(ctx, serviceUID, config)
+	}
+	if err == nil {
+		pipResponse, err = s.ensureInboundPublicIP(ctx, serviceUID, config, &pipResource, target, true)
+	}
+	unlock()
 	if err != nil {
 		httpStatus, errCode := extractAzureErrorInfo(err)
 		s.logger.V(4).Info("Could not create Public IP for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to create Public IP: %w", err))
 		return
 	}
-	pipName := PublicIPName(serviceUID)
+	pipName := target.name
+	setFrontendPublicIPID(&lbResource, s.inboundPublicIPID(target))
 	s.logger.V(5).Info("Created Public IP for inbound service", "serviceUID", serviceUID, "publicIP", pipName)
 
 	// Extract IP address from PIP response
@@ -536,7 +554,8 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 	if err := s.diffTracker.createOrUpdateLB(ctx, lbResource); err != nil {
 		httpStatus, errCode := extractAzureErrorInfo(err)
 		s.logger.V(4).Info("Could not create LoadBalancer for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
-		// Don't delete PIP here - retry will use existing PIP
+		// Keep the Public IP named after the Service for the retry; one created for a chosen name is removed.
+		s.rollbackCreatedPublicIP(ctx, serviceUID, target)
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to create LoadBalancer: %w", err))
 		return
 	}
@@ -593,12 +612,10 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 }
 
 // updateInboundService applies configuration changes to an existing inbound service: Public IP tags and
-// DNS label first, then the LoadBalancer. It is idempotent: re-running with the same config produces no
-// Azure changes. The ServiceGateway service registration is NOT touched because it references the LB
-// backend pool, whose ID is stable across port edits.
-//
-// If, in the future, port changes need to surface to NRP (e.g., for backend-port routing
-// metadata in the SGW Service DTO), call updateNRPSGWServices here as well.
+// DNS label first, then the LoadBalancer. The Service keeps the Public IP its load balancer uses; a change of
+// the chosen Public IP is reported, not applied. It is idempotent: re-running with the same config produces
+// no Azure changes. The ServiceGateway service registration is NOT touched because it references the LB
+// backend pool, whose ID is stable across edits.
 func (s *ServiceUpdater) updateInboundService(serviceUID string, config *InboundConfig, correlationID string) {
 	s.logger.V(5).Info("Started updating inbound service", "serviceUID", serviceUID, "correlationID", correlationID)
 
@@ -607,7 +624,7 @@ func (s *ServiceUpdater) updateInboundService(serviceUID string, config *Inbound
 
 	// Rebuild the LB ARM model from the new config. The PIP is reconciled from its current state
 	// below, and the SGW service registration (which references the backend pool by ID) is stable.
-	_, lbResource, _, err := buildInboundServiceResources(serviceUID, config, s.diffTracker.config)
+	pipResource, lbResource, _, err := buildInboundServiceResources(serviceUID, config, s.diffTracker.config)
 	if err != nil {
 		s.logger.V(4).Info("Could not build inbound service resources for update", "serviceUID", serviceUID, "correlationID", correlationID, "err", err)
 		// Building resources only fails on deterministic, spec-driven validation errors
@@ -618,16 +635,27 @@ func (s *ServiceUpdater) updateInboundService(serviceUID string, config *Inbound
 		return
 	}
 
-	if err := s.reconcileInboundPublicIP(ctx, serviceUID, config); err != nil {
+	unlock := s.lockNamedPublicIP(config)
+	target, err := s.inboundPublicIPInUse(ctx, serviceUID, config)
+	if err == nil && target == nil {
+		target, err = s.resolveInboundPublicIP(ctx, serviceUID, config)
+	}
+	if err == nil {
+		_, err = s.ensureInboundPublicIP(ctx, serviceUID, config, &pipResource, target, false)
+	}
+	unlock()
+	if err != nil {
 		httpStatus, errCode := extractAzureErrorInfo(err)
 		s.logger.V(4).Info("Could not update Public IP for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to update Public IP: %w", err))
 		return
 	}
 
+	setFrontendPublicIPID(&lbResource, s.inboundPublicIPID(target))
 	if err := s.diffTracker.createOrUpdateLB(ctx, lbResource); err != nil {
 		httpStatus, errCode := extractAzureErrorInfo(err)
 		s.logger.V(4).Info("Could not update LoadBalancer for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+		s.rollbackCreatedPublicIP(ctx, serviceUID, target)
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to update LoadBalancer: %w", err))
 		return
 	}
@@ -641,25 +669,225 @@ func (s *ServiceUpdater) updateInboundService(serviceUID string, config *Inbound
 	s.logger.V(2).Info("Updated inbound service", "serviceUID", serviceUID, "correlationID", correlationID)
 }
 
-// reconcileInboundPublicIP applies tag and DNS label changes to the Service's Public IP.
-func (s *ServiceUpdater) reconcileInboundPublicIP(ctx context.Context, serviceUID string, config *InboundConfig) error {
-	pipName := PublicIPName(serviceUID)
-	pip, err := s.diffTracker.networkClientFactory.GetPublicIPAddressClient().Get(ctx, s.diffTracker.config.ResourceGroup, pipName, nil)
+// inboundPublicIP is the Public IP a Service uses. owned means the controller manages and deletes it;
+// otherwise it belongs to the user and is only referenced.
+type inboundPublicIP struct {
+	resourceGroup string
+	name          string
+	existing      *armnetwork.PublicIPAddress
+	owned         bool
+}
+
+func (s *ServiceUpdater) inboundPublicIPID(target *inboundPublicIP) string {
+	return publicIPAddressID(s.diffTracker.config.networkResourceSubscriptionID(), target.resourceGroup, target.name)
+}
+
+// lockNamedPublicIP holds the lock of the Public IP the Service chooses by name; it returns the unlock.
+func (s *ServiceUpdater) lockNamedPublicIP(config *InboundConfig) func() {
+	if config == nil || config.PIPName == "" {
+		return func() {}
+	}
+	resourceGroup := config.PIPResourceGroup
+	if resourceGroup == "" {
+		resourceGroup = s.diffTracker.config.ResourceGroup
+	}
+	lock, _ := s.namedPublicIPLocks.LoadOrStore(strings.ToLower(resourceGroup+"/"+config.PIPName), &sync.Mutex{})
+	lock.(*sync.Mutex).Lock()
+	return lock.(*sync.Mutex).Unlock
+}
+
+// rollbackCreatedPublicIP deletes a Public IP this attempt created for a name the Service chose when the
+// load balancer could not be written, so a later change of choice does not leave it behind.
+func (s *ServiceUpdater) rollbackCreatedPublicIP(ctx context.Context, serviceUID string, target *inboundPublicIP) {
+	if target == nil || target.existing != nil || !target.owned || s.isManagedPublicIPName(serviceUID, target.resourceGroup, target.name) {
+		return
+	}
+	if err := s.diffTracker.deletePublicIP(ctx, target.resourceGroup, target.name); err != nil {
+		s.logger.Error(err, "Could not delete the Public IP created for a load balancer that was not updated", "serviceUID", serviceUID, "publicIP", target.name)
+		s.warnService(ctx, serviceUID, "PublicIPCleanupFailed", fmt.Sprintf("Public IP %s was created but the load balancer could not use it, and it could not be deleted: %v", target.name, err))
+	}
+}
+
+// inboundPublicIPInUse returns the Public IP the Service's load balancer uses, or nil when it has no load
+// balancer yet. A load balancer keeps its Public IP: the dataplane is not reprogrammed when the frontend of an
+// existing load balancer moves to another Public IP, so a change of the chosen Public IP is reported instead.
+func (s *ServiceUpdater) inboundPublicIPInUse(ctx context.Context, serviceUID string, config *InboundConfig) (*inboundPublicIP, error) {
+	lb, err := s.diffTracker.networkClientFactory.GetLoadBalancerClient().Get(ctx, s.diffTracker.config.ResourceGroup, serviceUID, nil)
+	if isNotFoundError(err) {
+		return nil, nil
+	}
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("failed to read LoadBalancer %s: %w", serviceUID, err)
 	}
-	if pip == nil {
-		return fmt.Errorf("public IP %s not found", pipName)
+	id, err := arm.ParseResourceID(frontendPublicIPID(lb))
+	if err != nil {
+		return nil, nil
 	}
-	_, err = s.updateInboundPublicIP(ctx, serviceUID, config, pip, false)
-	return err
+	existing, err := s.diffTracker.networkClientFactory.GetPublicIPAddressClient().Get(ctx, id.ResourceGroupName, id.Name, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read Public IP %s of LoadBalancer %s: %w", id.Name, serviceUID, err)
+	}
+	inUse := &inboundPublicIP{resourceGroup: id.ResourceGroupName, name: id.Name, existing: existing}
+	inUse.owned = s.isManagedPublicIPName(serviceUID, inUse.resourceGroup, inUse.name) || s.ownsPublicIP(config, existing)
+
+	resourceGroup := s.diffTracker.config.ResourceGroup
+	if config != nil && config.PIPResourceGroup != "" {
+		resourceGroup = config.PIPResourceGroup
+	}
+	var chosen bool
+	switch {
+	case config != nil && config.PIPName != "":
+		chosen = strings.EqualFold(config.PIPName, inUse.name) && strings.EqualFold(resourceGroup, inUse.resourceGroup)
+	case config != nil && config.LoadBalancerIP != "":
+		chosen = existing != nil && existing.Properties != nil && net.ParseIP(derefString(existing.Properties.IPAddress)).Equal(net.ParseIP(config.LoadBalancerIP))
+	default:
+		chosen = s.isManagedPublicIPName(serviceUID, inUse.resourceGroup, inUse.name)
+	}
+	if !chosen {
+		s.warnService(ctx, serviceUID, "PublicIPChangeNotSupported", fmt.Sprintf(
+			"the Service keeps Public IP %s: the Public IP of an existing load balancer cannot be changed when ServiceGateway is enabled; recreate the Service to use another Public IP",
+			inUse.name))
+	}
+	return inUse, nil
+}
+
+func isNotFoundError(err error) bool {
+	var respErr *azcore.ResponseError
+	return errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound
+}
+
+func (s *ServiceUpdater) ownsPublicIP(config *InboundConfig, pip *armnetwork.PublicIPAddress) bool {
+	return config != nil && ownsPublicIPByTags(pip, config.ServiceName, s.clusterName(config))
+}
+
+func (s *ServiceUpdater) clusterName(config *InboundConfig) string {
+	if config != nil && config.ClusterName != "" {
+		return config.ClusterName
+	}
+	return s.diffTracker.getClusterName()
+}
+
+// isManagedPublicIPName reports the Public IP the controller names after the Service.
+func (s *ServiceUpdater) isManagedPublicIPName(serviceUID, resourceGroup, name string) bool {
+	return strings.EqualFold(name, PublicIPName(serviceUID)) && strings.EqualFold(resourceGroup, s.diffTracker.config.ResourceGroup)
+}
+
+func (s *ServiceUpdater) warnService(ctx context.Context, serviceUID, reason, message string) {
+	if svc, err := s.diffTracker.getServiceByUID(ctx, serviceUID); err == nil {
+		s.diffTracker.recordEvent(svc, v1.EventTypeWarning, reason, message)
+	}
+}
+
+// resolveInboundPublicIP finds the Public IP the Service asks for: by name, by address, or the one named
+// after the Service. A named Public IP that does not exist yet is created and owned by the controller.
+func (s *ServiceUpdater) resolveInboundPublicIP(ctx context.Context, serviceUID string, config *InboundConfig) (*inboundPublicIP, error) {
+	target := &inboundPublicIP{resourceGroup: s.diffTracker.config.ResourceGroup, name: PublicIPName(serviceUID)}
+	if config != nil && config.PIPResourceGroup != "" {
+		target.resourceGroup = config.PIPResourceGroup
+	}
+	client := s.diffTracker.networkClientFactory.GetPublicIPAddressClient()
+	switch {
+	case config != nil && config.PIPName != "":
+		target.name = config.PIPName
+	case config != nil && config.LoadBalancerIP != "":
+		pips, err := client.List(ctx, target.resourceGroup)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list Public IPs in resource group %s: %w", target.resourceGroup, err)
+		}
+		for _, pip := range pips {
+			if pip != nil && pip.Name != nil && pip.Properties != nil && net.ParseIP(derefString(pip.Properties.IPAddress)).Equal(net.ParseIP(config.LoadBalancerIP)) {
+				target.name, target.existing = *pip.Name, pip
+				target.owned = s.ownsPublicIP(config, pip)
+				return target, nil
+			}
+		}
+		message := fmt.Sprintf("no Public IP with address %s exists in resource group %s", config.LoadBalancerIP, target.resourceGroup)
+		s.warnService(ctx, serviceUID, "PublicIPNotFound", message)
+		return nil, errors.New(message)
+	default:
+		target.resourceGroup = s.diffTracker.config.ResourceGroup
+	}
+
+	existing, err := client.Get(ctx, target.resourceGroup, target.name, nil)
+	switch {
+	case isNotFoundError(err):
+		target.owned = true
+		return target, nil
+	case err != nil:
+		return nil, err
+	case existing == nil:
+		return nil, fmt.Errorf("public IP %s not found", target.name)
+	}
+	target.existing = existing
+	target.owned = s.isManagedPublicIPName(serviceUID, target.resourceGroup, target.name) || s.ownsPublicIP(config, existing)
+	return target, nil
+}
+
+// checkExistingPublicIP rejects an existing Public IP the load balancer cannot use. A Public IP the user
+// owns is only referenced, so settings that would change it are rejected, and it must be free.
+func (s *ServiceUpdater) checkExistingPublicIP(ctx context.Context, serviceUID string, config *InboundConfig, target *inboundPublicIP, version *armnetwork.IPVersion) error {
+	pip := target.existing
+	if pip.SKU != nil && pip.SKU.Name != nil && *pip.SKU.Name != armnetwork.PublicIPAddressSKUNameStandardV2 {
+		return newTerminalError(fmt.Errorf("public IP %s has SKU %s; ServiceGateway needs a StandardV2 Public IP", target.name, *pip.SKU.Name))
+	}
+	if pip.Properties != nil && pip.Properties.PublicIPAddressVersion != nil && version != nil && *pip.Properties.PublicIPAddressVersion != *version {
+		return newTerminalError(fmt.Errorf("public IP %s is %s but the Service needs %s", target.name, *pip.Properties.PublicIPAddressVersion, *version))
+	}
+	normalize := func(location string) string { return strings.ReplaceAll(strings.ToLower(location), " ", "") }
+	if pip.Location != nil && normalize(*pip.Location) != normalize(s.diffTracker.config.Location) {
+		return newTerminalError(fmt.Errorf("public IP %s is in %s but the cluster is in %s", target.name, *pip.Location, s.diffTracker.config.Location))
+	}
+	var usedBy string
+	if pip.Properties != nil && pip.Properties.IPConfiguration != nil {
+		ownFrontends := strings.ToLower(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/frontendIPConfigurations/",
+			s.diffTracker.config.networkResourceSubscriptionID(), s.diffTracker.config.ResourceGroup, serviceUID))
+		if id := derefString(pip.Properties.IPConfiguration.ID); !strings.HasPrefix(strings.ToLower(id), ownFrontends) {
+			usedBy = id
+		}
+	}
+	if pip.Properties != nil && pip.Properties.NatGateway != nil {
+		usedBy = derefString(pip.Properties.NatGateway.ID)
+	}
+	if usedBy != "" {
+		message := fmt.Sprintf("public IP %s is already used by %s", target.name, usedBy)
+		s.warnService(ctx, serviceUID, "PublicIPInUse", message)
+		return errors.New(message)
+	}
+	if target.owned {
+		return nil
+	}
+
+	if config != nil {
+		var settings []string
+		if len(config.PIPTags) > 0 {
+			settings = append(settings, consts.ServiceAnnotationAzurePIPTags)
+		}
+		if config.IPTags != nil {
+			settings = append(settings, consts.ServiceAnnotationIPTagsForPublicIP)
+		}
+		if config.DNSLabel != nil {
+			settings = append(settings, consts.ServiceAnnotationDNSLabelName)
+		}
+		if config.PIPPrefixID != "" {
+			settings = append(settings, "Public IP prefix")
+		}
+		if len(settings) > 0 {
+			return newTerminalError(fmt.Errorf("public IP %s was not created for this Service, so it is not changed; remove %s", target.name, strings.Join(settings, ", ")))
+		}
+	}
+
+	if pip.Properties == nil || derefString(pip.Properties.IPAddress) == "" ||
+		(pip.Properties.ProvisioningState != nil && *pip.Properties.ProvisioningState != armnetwork.ProvisioningStateSucceeded) {
+		return fmt.Errorf("public IP %s has no allocated address yet", target.name)
+	}
+	return nil
 }
 
 // updateInboundPublicIP applies tag and DNS label changes to an existing Public IP and returns it. Tags
 // are only added or updated, and the prefix and IP tags keep the values the Public IP was created with.
 // force writes the Public IP even when nothing changed.
-func (s *ServiceUpdater) updateInboundPublicIP(ctx context.Context, serviceUID string, config *InboundConfig, pip *armnetwork.PublicIPAddress, force bool) (*armnetwork.PublicIPAddress, error) {
-	pipName := PublicIPName(serviceUID)
+func (s *ServiceUpdater) updateInboundPublicIP(ctx context.Context, serviceUID string, config *InboundConfig, target *inboundPublicIP, force bool) (*armnetwork.PublicIPAddress, error) {
+	pip, pipName := target.existing, target.name
 	if pip.Properties == nil {
 		pip.Properties = &armnetwork.PublicIPAddressPropertiesFormat{}
 	}
@@ -700,46 +928,160 @@ func (s *ServiceUpdater) updateInboundPublicIP(ctx context.Context, serviceUID s
 	}
 
 	if config != nil && config.PIPPrefixID != "" && (pip.Properties.PublicIPPrefix == nil || !strings.EqualFold(derefString(pip.Properties.PublicIPPrefix.ID), config.PIPPrefixID)) {
-		if svc, err := s.diffTracker.getServiceByUID(ctx, serviceUID); err == nil {
-			s.diffTracker.recordEvent(svc, v1.EventTypeWarning, "PublicIPPrefixChangeNotSupported", fmt.Sprintf(
-				"Public IP %s was not allocated from prefix %s; the prefix of an existing Public IP cannot be changed, so it keeps its current address",
-				pipName, config.PIPPrefixID))
-		}
+		s.warnService(ctx, serviceUID, "PublicIPPrefixChangeNotSupported", fmt.Sprintf(
+			"Public IP %s was not allocated from prefix %s; the prefix of an existing Public IP cannot be changed, so it keeps its current address",
+			pipName, config.PIPPrefixID))
 	}
 
 	if config != nil && config.IPTags != nil && !maps.Equal(ipTagMap(pip.Properties.IPTags), config.IPTags) {
-		if svc, err := s.diffTracker.getServiceByUID(ctx, serviceUID); err == nil {
-			s.diffTracker.recordEvent(svc, v1.EventTypeWarning, "IPTagsChangeNotSupported", fmt.Sprintf(
-				"the %s annotation does not match the IP tags of Public IP %s; IP tags cannot be changed on an existing Public IP when ServiceGateway is enabled, so the Public IP keeps its current IP tags",
-				consts.ServiceAnnotationIPTagsForPublicIP, pipName))
-		}
+		s.warnService(ctx, serviceUID, "IPTagsChangeNotSupported", fmt.Sprintf(
+			"the %s annotation does not match the IP tags of Public IP %s; IP tags cannot be changed on an existing Public IP when ServiceGateway is enabled, so the Public IP keeps its current IP tags",
+			consts.ServiceAnnotationIPTagsForPublicIP, pipName))
 	}
 
 	if !changed && !force {
 		return pip, nil
 	}
-	return s.diffTracker.createOrUpdatePIPWithResponse(ctx, s.diffTracker.config.ResourceGroup, pip)
+	return s.diffTracker.createOrUpdatePIPWithResponse(ctx, target.resourceGroup, pip)
 }
 
-// ensureInboundPublicIP creates the Service's Public IP. One left by an earlier attempt is updated
-// instead, because its prefix and IP tags cannot change.
-func (s *ServiceUpdater) ensureInboundPublicIP(ctx context.Context, serviceUID string, config *InboundConfig, pip *armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
-	existing, err := s.diffTracker.networkClientFactory.GetPublicIPAddressClient().Get(ctx, s.diffTracker.config.ResourceGroup, PublicIPName(serviceUID), nil)
-	var respErr *azcore.ResponseError
-	switch {
-	case err == nil && existing != nil:
+// ensureInboundPublicIP makes the resolved Public IP ready for the load balancer. A missing one is created
+// from pip; an owned one is updated, and rewritten when forceIfNotReady finds it failed or without an
+// address; a user's one is checked and left unchanged.
+func (s *ServiceUpdater) ensureInboundPublicIP(ctx context.Context, serviceUID string, config *InboundConfig, pip *armnetwork.PublicIPAddress, target *inboundPublicIP, forceIfNotReady bool) (*armnetwork.PublicIPAddress, error) {
+	if existing := target.existing; existing != nil {
+		if err := s.checkExistingPublicIP(ctx, serviceUID, config, target, pip.Properties.PublicIPAddressVersion); err != nil {
+			return nil, err
+		}
+		if !target.owned {
+			return existing, nil
+		}
 		ready := existing.Properties != nil && derefString(existing.Properties.IPAddress) != "" &&
 			(existing.Properties.ProvisioningState == nil || *existing.Properties.ProvisioningState == armnetwork.ProvisioningStateSucceeded)
-		return s.updateInboundPublicIP(ctx, serviceUID, config, existing, !ready)
-	case err != nil && (!errors.As(err, &respErr) || respErr.StatusCode != http.StatusNotFound):
-		return nil, err
+		return s.updateInboundPublicIP(ctx, serviceUID, config, target, forceIfNotReady && !ready)
 	}
 	if config != nil && config.PIPPrefixID != "" {
 		if err := s.checkPublicIPPrefix(ctx, config.PIPPrefixID, pip.Properties.PublicIPAddressVersion); err != nil {
 			return nil, err
 		}
 	}
-	return s.diffTracker.createOrUpdatePIPWithResponse(ctx, s.diffTracker.config.ResourceGroup, pip)
+	pip.Name = to.Ptr(target.name)
+	pip.ID = to.Ptr(s.inboundPublicIPID(target))
+	return s.diffTracker.createOrUpdatePIPWithResponse(ctx, target.resourceGroup, pip)
+}
+
+type deferredPublicIPRelease struct {
+	serviceUID, serviceName, publicIPID string
+}
+
+var errClusterNameUnknown = errors.New("the cluster name is not known yet")
+
+// releaseOrDefer releases the Public IP, or queues it when its ownership needs the cluster name, which the
+// controller only learns from its first load balancer call after a restart.
+func (s *ServiceUpdater) releaseOrDefer(ctx context.Context, serviceUID, serviceName, clusterName, publicIPID string) error {
+	err := s.releasePublicIP(ctx, serviceUID, serviceName, clusterName, publicIPID)
+	if !errors.Is(err, errClusterNameUnknown) {
+		return err
+	}
+	s.mu.Lock()
+	s.deferredReleases = append(s.deferredReleases, deferredPublicIPRelease{serviceUID, serviceName, publicIPID})
+	s.mu.Unlock()
+	s.logger.Info("Deferred releasing a Public IP until the cluster name is known from a load balancer call", "serviceUID", serviceUID, "publicIP", publicIPID)
+	// The name may have arrived, and the queue been drained, while the Public IP was being read.
+	if s.diffTracker.getClusterName() != "" {
+		s.releaseDeferredPublicIPs()
+	}
+	return nil
+}
+
+// releaseDeferredPublicIPs releases the Public IPs queued while the cluster name was unknown.
+func (s *ServiceUpdater) releaseDeferredPublicIPs() {
+	s.mu.Lock()
+	pending := s.deferredReleases
+	s.deferredReleases = nil
+	s.mu.Unlock()
+	clusterName := s.diffTracker.getClusterName()
+	for _, release := range pending {
+		ctx, cancel := context.WithTimeout(s.ctx, getNRPOperationTimeout())
+		if err := s.releasePublicIP(ctx, release.serviceUID, release.serviceName, clusterName, release.publicIPID); err != nil {
+			s.logger.Error(err, "Could not delete a Public IP the Service no longer uses", "serviceUID", release.serviceUID, "publicIP", release.publicIPID)
+			s.warnService(ctx, release.serviceUID, "PublicIPCleanupFailed", fmt.Sprintf("Public IP %s could not be checked or deleted: %v", release.publicIPID, err))
+		}
+		cancel()
+	}
+}
+
+// releasePublicIP deletes the Public IP when the controller owns it for the Service: the one named after
+// it, or one whose ownership tags name it. With the Service gone (serviceName empty), the tags must name
+// a Service of this cluster.
+func (s *ServiceUpdater) releasePublicIP(ctx context.Context, serviceUID, serviceName, clusterName, publicIPID string) error {
+	id, err := arm.ParseResourceID(publicIPID)
+	if err != nil || !strings.EqualFold(id.SubscriptionID, s.diffTracker.config.networkResourceSubscriptionID()) {
+		return nil
+	}
+	if !s.isManagedPublicIPName(serviceUID, id.ResourceGroupName, id.Name) {
+		pip, err := s.diffTracker.networkClientFactory.GetPublicIPAddressClient().Get(ctx, id.ResourceGroupName, id.Name, nil)
+		if isNotFoundError(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if tagged := clusterOwnershipTag(pip); clusterName == "" && tagged != "" {
+			// Only this cluster's controller writes Public IPs into the cluster resource group, so a
+			// cluster tag there is this cluster's name; elsewhere it cannot be decided yet.
+			if !strings.EqualFold(id.ResourceGroupName, s.diffTracker.config.ResourceGroup) {
+				return errClusterNameUnknown
+			}
+			clusterName = tagged
+		}
+		owned := ownsPublicIPByTags(pip, serviceName, clusterName)
+		if serviceName == "" {
+			owned = ownedByClusterTags(pip, clusterName)
+		}
+		if !owned {
+			return nil
+		}
+	}
+	if err := s.diffTracker.deletePublicIP(ctx, id.ResourceGroupName, id.Name); err != nil {
+		return err
+	}
+	s.logger.V(2).Info("Deleted the Public IP the Service used", "serviceUID", serviceUID, "publicIP", publicIPID)
+	return nil
+}
+
+// releaseInboundPublicIPs deletes, after the load balancer, the Public IPs besides the one named after the
+// Service that the controller owns: the one the load balancer used, and the one the Service chooses by name
+// (found again when a retried delete no longer has the load balancer). A failure is reported but does not
+// hold the Service's deletion: the Public IP may be unreadable or still in use elsewhere.
+func (s *ServiceUpdater) releaseInboundPublicIPs(ctx context.Context, serviceUID, frontendID string) {
+	svc, err := s.diffTracker.getServiceByUID(ctx, serviceUID)
+	if err != nil {
+		svc = nil
+	}
+	serviceName := ""
+	ids := []string{frontendID}
+	if svc != nil {
+		serviceName = svc.Namespace + "/" + svc.Name
+		if config := ExtractInboundConfigFromService(svc); config != nil && config.PIPName != "" {
+			resourceGroup := s.diffTracker.config.ResourceGroup
+			if config.PIPResourceGroup != "" {
+				resourceGroup = config.PIPResourceGroup
+			}
+			ids = append(ids, s.inboundPublicIPID(&inboundPublicIP{resourceGroup: resourceGroup, name: config.PIPName}))
+		}
+	}
+	for i, id := range ids {
+		if id == "" || (i > 0 && strings.EqualFold(id, ids[0])) {
+			continue
+		}
+		if err := s.releaseOrDefer(ctx, serviceUID, serviceName, s.diffTracker.getClusterName(), id); err != nil {
+			s.logger.Error(err, "Could not delete the Public IP the Service used", "serviceUID", serviceUID, "publicIP", id)
+			if svc != nil {
+				s.diffTracker.recordEvent(svc, v1.EventTypeWarning, "PublicIPCleanupFailed", fmt.Sprintf("Public IP %s could not be checked or deleted: %v", id, err))
+			}
+		}
+	}
 }
 
 // checkPublicIPPrefix fails terminally when the prefix can never provide the Public IP, so the Service
@@ -871,14 +1213,27 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID s
 		s.logger.V(5).Info("Removed backend pool reference for inbound service", "serviceUID", serviceUID)
 	}
 
-	// Step 2: Delete LoadBalancer
-	if err := s.diffTracker.deleteLB(ctx, serviceUID); err != nil {
-		httpStatus, errCode := extractAzureErrorInfo(err)
-		s.logger.V(4).Info("Could not delete LoadBalancer for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
-		lastErr = fmt.Errorf("failed to delete LoadBalancer: %w", err)
-		// Continue with PIP deletion
-	} else {
-		s.logger.V(5).Info("Deleted LoadBalancer for inbound service", "serviceUID", serviceUID)
+	// Step 2: Delete LoadBalancer, remembering the Public IP it used. If it cannot be read it is kept, so the
+	// retried delete still learns which Public IP to release.
+	var frontendID string
+	lbDeleted := false
+	current, err := s.diffTracker.networkClientFactory.GetLoadBalancerClient().Get(ctx, s.diffTracker.config.ResourceGroup, serviceUID, nil)
+	switch {
+	case err != nil && !isNotFoundError(err):
+		s.logger.V(4).Info("Could not read LoadBalancer for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "err", err)
+		lastErr = fmt.Errorf("failed to read LoadBalancer: %w", err)
+	case err == nil && current != nil:
+		frontendID = frontendPublicIPID(current)
+		fallthrough
+	default:
+		if err := s.diffTracker.deleteLB(ctx, serviceUID); err != nil {
+			httpStatus, errCode := extractAzureErrorInfo(err)
+			s.logger.V(4).Info("Could not delete LoadBalancer for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+			lastErr = fmt.Errorf("failed to delete LoadBalancer: %w", err)
+		} else {
+			lbDeleted = true
+			s.logger.V(5).Info("Deleted LoadBalancer for inbound service", "serviceUID", serviceUID)
+		}
 	}
 
 	// Step 3: Fully unregister service from ServiceGateway
@@ -907,6 +1262,10 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID s
 		lastErr = fmt.Errorf("failed to delete Public IP: %w", err)
 	} else {
 		s.logger.V(5).Info("Deleted Public IP for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "publicIP", pipName)
+	}
+
+	if lbDeleted {
+		s.releaseInboundPublicIPs(ctx, serviceUID, frontendID)
 	}
 
 	// Step 5: Update NRPResources and notify completion

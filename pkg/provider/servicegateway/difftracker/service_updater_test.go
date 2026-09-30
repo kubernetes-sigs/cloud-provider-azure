@@ -19,7 +19,9 @@ package difftracker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -259,6 +261,7 @@ func TestServiceUpdaterProcessBatchFlow(t *testing.T) {
 
 	m := newOutboundMocks(ctrl)
 	mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+	mockLB.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, notFoundError()).AnyTimes()
 	m.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
 	m.expectNoDisassociation()
 	m.pip.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, notFoundError()).AnyTimes()
@@ -401,6 +404,7 @@ func TestCreateInboundService_StatusUpdateFailureRetriesInsteadOfFalseSuccess(t 
 	f := mock_azclient.NewMockClientFactory(ctrl)
 	mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
 	mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+	mockLB.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, notFoundError()).AnyTimes()
 	mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
 	f.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
 	f.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
@@ -484,6 +488,7 @@ func TestCreateInboundService_PopulatesIngressOnSuccess(t *testing.T) {
 	f := mock_azclient.NewMockClientFactory(ctrl)
 	mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
 	mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+	mockLB.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, notFoundError()).AnyTimes()
 	mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
 	f.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
 	f.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
@@ -622,6 +627,7 @@ func TestServiceUpdaterCreateInboundService_ChecksPublicIPPrefix(t *testing.T) {
 		mockPrefix := mock_publicipprefixclient.NewMockInterface(ctrl)
 		mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
 		mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+		mockLB.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, notFoundError()).AnyTimes()
 		mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
 		f.EXPECT().GetPublicIPPrefixClient().Return(mockPrefix).AnyTimes()
 		f.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
@@ -791,6 +797,7 @@ func TestServiceUpdaterUpdateInboundService_ReconcilesPublicIP(t *testing.T) {
 			}).MaxTimes(1)
 		mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
 		m.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+		expectCurrentLB(mockLB, uid)
 		lbCalls = 0
 		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(func(_ context.Context, _, _ string, _ armnetwork.LoadBalancer) (*armnetwork.LoadBalancer, error) {
@@ -905,6 +912,608 @@ func TestServiceUpdaterUpdateInboundService_ReconcilesPublicIP(t *testing.T) {
 		assert.False(t, success)
 		assert.NotNil(t, put)
 		assert.Zero(t, lbCalls)
+	})
+}
+
+// inboundLB returns a load balancer whose frontend uses the given Public IP.
+func inboundLB(pipID string) *armnetwork.LoadBalancer {
+	return &armnetwork.LoadBalancer{Properties: &armnetwork.LoadBalancerPropertiesFormat{
+		FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{
+			Name:       ptr.To("frontend"),
+			Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To(pipID)}},
+		}},
+	}}
+}
+
+// expectCurrentLB makes the load balancer read return one that uses the Service's own Public IP.
+func expectCurrentLB(lb *mock_loadbalancerclient.MockInterface, uid string) {
+	lb.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).Return(inboundLB(publicIPAddressID("sub", "rg", PublicIPName(uid))), nil).AnyTimes()
+}
+
+// publicIPWorld is an in-memory Azure for the Public IP selection tests.
+type publicIPWorld struct {
+	pips      map[string]*armnetwork.PublicIPAddress
+	currentLB *armnetwork.LoadBalancer
+	deleteErr error
+	created   []string
+	deleted   []string
+	lbPuts    int
+	lbReads   int
+	events    []string
+	ingress   string
+	lbGetErr  error
+	lbPutErr  error
+	patchErr  error
+	listErr   error
+	// ops records ServiceGateway registrations ("attach"/"detach") and load balancer writes ("lb").
+	ops []string
+	// tracked reports whether the run left the load balancer tracked as live in NRP.
+	tracked bool
+}
+
+func pipKey(resourceGroup, name string) string { return strings.ToLower(resourceGroup + "/" + name) }
+
+func newPublicIPWorld(pips map[string]*armnetwork.PublicIPAddress) *publicIPWorld {
+	w := &publicIPWorld{pips: map[string]*armnetwork.PublicIPAddress{}}
+	for key, pip := range pips {
+		w.pips[strings.ToLower(key)] = pip
+	}
+	return w
+}
+
+func userPIP(name, address string) *armnetwork.PublicIPAddress {
+	return &armnetwork.PublicIPAddress{
+		Name:     ptr.To(name),
+		Location: ptr.To("eastus"),
+		SKU:      &armnetwork.PublicIPAddressSKU{Name: ptr.To(armnetwork.PublicIPAddressSKUNameStandardV2)},
+		Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+			IPAddress:              ptr.To(address),
+			PublicIPAddressVersion: ptr.To(armnetwork.IPVersionIPv4),
+			ProvisioningState:      ptr.To(armnetwork.ProvisioningStateSucceeded),
+		},
+	}
+}
+
+func ownedPIP(name, address string) *armnetwork.PublicIPAddress {
+	pip := userPIP(name, address)
+	pip.Tags = map[string]*string{consts.ServiceTagKey: ptr.To("ns/svc"), consts.ClusterNameKey: ptr.To("cluster")}
+	return pip
+}
+
+func withLoadBalancerIP(address string) *InboundConfig {
+	config := chosenPIPConfig()
+	config.LoadBalancerIP = address
+	return config
+}
+
+func chosenPIPConfig() *InboundConfig {
+	config := makeInboundConfig(80)
+	config.ServiceName, config.ClusterName = "ns/svc", "cluster"
+	return config
+}
+
+// run creates, or when update is set updates, the inbound Service with config against the world.
+func (w *publicIPWorld) run(t *testing.T, uid string, update bool, config *InboundConfig) (bool, *v1.Service, error) {
+	ctrl := gomock.NewController(t)
+	f := mock_azclient.NewMockClientFactory(ctrl)
+	pipClient := mock_publicipaddressclient.NewMockInterface(ctrl)
+	lbClient := mock_loadbalancerclient.NewMockInterface(ctrl)
+	sgwClient := mock_servicegatewayclient.NewMockInterface(ctrl)
+	f.EXPECT().GetPublicIPAddressClient().Return(pipClient).AnyTimes()
+	f.EXPECT().GetLoadBalancerClient().Return(lbClient).AnyTimes()
+	f.EXPECT().GetServiceGatewayClient().Return(sgwClient).AnyTimes()
+	pipClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, rg, name string, _ *string) (*armnetwork.PublicIPAddress, error) {
+			if pip, ok := w.pips[pipKey(rg, name)]; ok {
+				copied := *pip
+				return &copied, nil
+			}
+			return nil, notFoundError()
+		}).AnyTimes()
+	pipClient.EXPECT().List(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, rg string) ([]*armnetwork.PublicIPAddress, error) {
+			if w.listErr != nil {
+				return nil, w.listErr
+			}
+			var pips []*armnetwork.PublicIPAddress
+			for key, pip := range w.pips {
+				if strings.HasPrefix(key, strings.ToLower(rg)+"/") {
+					pips = append(pips, pip)
+				}
+			}
+			return pips, nil
+		}).AnyTimes()
+	pipClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, rg, name string, pip armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
+			if derefString(pip.Properties.IPAddress) == "" {
+				pip.Properties.IPAddress = ptr.To("20.0.0.1")
+			}
+			w.pips[pipKey(rg, name)] = &pip
+			w.created = append(w.created, pipKey(rg, name))
+			return &pip, nil
+		}).AnyTimes()
+	pipClient.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, rg, name string) error {
+			if w.deleteErr != nil {
+				return w.deleteErr
+			}
+			delete(w.pips, pipKey(rg, name))
+			w.deleted = append(w.deleted, pipKey(rg, name))
+			return nil
+		}).AnyTimes()
+	lbClient.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).DoAndReturn(
+		func(context.Context, string, string, *string) (*armnetwork.LoadBalancer, error) {
+			w.lbReads++
+			if w.lbGetErr != nil {
+				return nil, w.lbGetErr
+			}
+			if w.currentLB == nil {
+				return nil, notFoundError()
+			}
+			return w.currentLB, nil
+		}).AnyTimes()
+	lbClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", uid, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _, _ string, lb armnetwork.LoadBalancer) (*armnetwork.LoadBalancer, error) {
+			w.lbPuts++
+			w.ops = append(w.ops, "lb")
+			if w.lbPutErr != nil {
+				return nil, w.lbPutErr
+			}
+			w.currentLB = &lb
+			return &lb, nil
+		}).AnyTimes()
+	sgwClient.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _, _ string, req armnetwork.ServiceGatewayUpdateServicesRequest) error {
+			op := "attach"
+			if len(req.ServiceRequests) != 1 || req.ServiceRequests[0].Service == nil || derefString(req.ServiceRequests[0].Service.Name) != uid {
+				op = "other-service"
+			} else if props := req.ServiceRequests[0].Service.Properties; props == nil || len(props.LoadBalancerBackendPools) == 0 {
+				op = "detach"
+			} else if !strings.HasSuffix(derefString(props.LoadBalancerBackendPools[0].ID), "/loadBalancers/"+uid+"/backendAddressPools/"+uid) {
+				op = "attach-wrong-pool"
+			}
+			w.ops = append(w.ops, op)
+			return nil
+		}).AnyTimes()
+
+	svc := &v1.Service{ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "ns", UID: types.UID(uid)}}
+	if w.ingress != "" {
+		svc.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: w.ingress}}
+	}
+	kube := fake.NewSimpleClientset(svc)
+	if w.patchErr != nil {
+		kube.PrependReactor("patch", "services", func(k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, w.patchErr
+		})
+	}
+	dt := newTestDiffTracker()
+	dt.config = testConfig()
+	dt.kubeClient = kube
+	dt.networkClientFactory = f
+	recorder := record.NewFakeRecorder(20)
+	dt.SetEventRecorder(recorder)
+	got := &outboundCompletion{}
+	su := outboundUpdater(dt, got)
+	if update {
+		su.updateInboundService(uid, config, "corr")
+	} else {
+		su.createInboundService(uid, config, "corr")
+	}
+	close(recorder.Events)
+	for event := range recorder.Events {
+		w.events = append(w.events, event)
+	}
+	dt.mu.Lock()
+	w.tracked = dt.NRPResources.LoadBalancers.Has(uid)
+	dt.mu.Unlock()
+	current, _ := kube.CoreV1().Services("ns").Get(context.Background(), "svc", metav1.GetOptions{})
+	_, success, err := got.result()
+	return success, current, err
+}
+
+func (w *publicIPWorld) frontend() string {
+	return frontendPublicIPID(w.currentLB)
+}
+
+func (w *publicIPWorld) hasEvent(reason string) bool {
+	return slices.ContainsFunc(w.events, func(e string) bool { return strings.Contains(e, reason) })
+}
+
+func ingressIP(svc *v1.Service) string {
+	if svc == nil || len(svc.Status.LoadBalancer.Ingress) == 0 {
+		return ""
+	}
+	return svc.Status.LoadBalancer.Ingress[0].IP
+}
+
+func TestServiceUpdaterCreateInboundService_UsesChosenPublicIP(t *testing.T) {
+	const uid = "55555555-5555-5555-5555-555555555555"
+	pipID := func(rg, name string) string { return publicIPAddressID("sub", rg, name) }
+	withConfig := func(mutate func(*InboundConfig)) *InboundConfig {
+		config := chosenPIPConfig()
+		mutate(config)
+		return config
+	}
+	byName := withConfig(func(c *InboundConfig) { c.PIPName = "mine" })
+
+	t.Run("a missing named Public IP is created, owned and used", func(t *testing.T) {
+		w := newPublicIPWorld(nil)
+		success, svc, err := w.run(t, uid, false, withConfig(func(c *InboundConfig) { c.PIPName = "mine"; c.PIPResourceGroup = "other" }))
+		assert.True(t, success, "%v", err)
+		assert.Equal(t, []string{"other/mine"}, w.created)
+		assert.Equal(t, "ns/svc", *w.pips["other/mine"].Tags[consts.ServiceTagKey])
+		assert.Equal(t, "cluster", *w.pips["other/mine"].Tags[consts.ClusterNameKey])
+		assert.Equal(t, pipID("other", "mine"), w.frontend())
+		assert.Equal(t, "20.0.0.1", ingressIP(svc))
+	})
+
+	t.Run("a user's Public IP chosen by name is used without being changed", func(t *testing.T) {
+		displayed := userPIP("mine", "20.0.0.7")
+		displayed.Location = ptr.To("East US")
+		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/mine": displayed})
+		success, svc, err := w.run(t, uid, false, byName)
+		assert.True(t, success, "%v", err)
+		assert.Empty(t, w.created)
+		assert.Equal(t, pipID("rg", "mine"), w.frontend())
+		assert.Equal(t, "20.0.0.7", ingressIP(svc))
+	})
+
+	t.Run("a Public IP chosen by address is looked up in the chosen resource group", func(t *testing.T) {
+		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{
+			"rg/decoy":   userPIP("decoy", "20.0.0.7"),
+			"other/mine": userPIP("mine", "20.0.0.7"),
+		})
+		success, svc, err := w.run(t, uid, false, withConfig(func(c *InboundConfig) { c.LoadBalancerIP = "20.0.0.7"; c.PIPResourceGroup = "other" }))
+		assert.True(t, success, "%v", err)
+		assert.Equal(t, pipID("other", "mine"), w.frontend())
+		assert.Equal(t, "20.0.0.7", ingressIP(svc))
+	})
+
+	t.Run("a user's Public IP chosen by address is used without being changed", func(t *testing.T) {
+		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{
+			"rg/other": userPIP("other", "20.0.0.8"),
+			"rg/mine":  userPIP("mine", "20.0.0.7"),
+		})
+		success, svc, err := w.run(t, uid, false, withConfig(func(c *InboundConfig) { c.LoadBalancerIP = "20.0.0.7" }))
+		assert.True(t, success, "%v", err)
+		assert.Empty(t, w.created)
+		assert.Equal(t, pipID("rg", "mine"), w.frontend())
+		assert.Equal(t, "20.0.0.7", ingressIP(svc))
+	})
+
+	t.Run("a Public IP the controller created earlier is managed", func(t *testing.T) {
+		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/mine": ownedPIP("mine", "20.0.0.7")})
+		success, _, err := w.run(t, uid, false, withConfig(func(c *InboundConfig) { c.PIPName = "mine"; c.DNSLabel = ptr.To("app") }))
+		assert.True(t, success, "%v", err)
+		assert.Equal(t, []string{"rg/mine"}, w.created)
+		assert.Equal(t, "app", *w.pips["rg/mine"].Properties.DNSSettings.DomainNameLabel)
+	})
+
+	natAttached := userPIP("mine", "20.0.0.7")
+	natAttached.Properties.NatGateway = &armnetwork.NatGateway{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/natGateways/nat")}
+	updating := userPIP("mine", "20.0.0.7")
+	updating.Properties.ProvisioningState = ptr.To(armnetwork.ProvisioningStateUpdating)
+	ownedInUse := ownedPIP("mine", "20.0.0.7")
+	ownedInUse.Properties.IPConfiguration = &armnetwork.IPConfiguration{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/other/frontendIPConfigurations/frontend")}
+	inUse := userPIP("mine", "20.0.0.7")
+	inUse.Properties.IPConfiguration = &armnetwork.IPConfiguration{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/other/frontendIPConfigurations/frontend")}
+	ours := userPIP("mine", "20.0.0.7")
+	ours.Properties.IPConfiguration = &armnetwork.IPConfiguration{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/" + uid + "/frontendIPConfigurations/frontend")}
+	standard := userPIP("mine", "20.0.0.7")
+	standard.SKU.Name = ptr.To(armnetwork.PublicIPAddressSKUNameStandard)
+	ipv6 := userPIP("mine", "2001:db8::1")
+	ipv6.Properties.PublicIPAddressVersion = ptr.To(armnetwork.IPVersionIPv6)
+	elsewhere := userPIP("mine", "20.0.0.7")
+	elsewhere.Location = ptr.To("westus")
+	unallocated := userPIP("mine", "")
+	otherCluster := ownedPIP("mine", "20.0.0.7")
+	otherCluster.Tags[consts.ClusterNameKey] = ptr.To("other-cluster")
+
+	for _, tc := range []struct {
+		name     string
+		pip      *armnetwork.PublicIPAddress
+		config   *InboundConfig
+		terminal bool
+		event    string
+	}{
+		{name: "a Public IP used by another resource waits", pip: inUse, config: byName, event: "PublicIPInUse"},
+		{name: "a Public IP used by a NAT gateway waits", pip: natAttached, config: byName, event: "PublicIPInUse"},
+		{name: "a Public IP created for this Service but used elsewhere waits", pip: ownedInUse, config: byName, event: "PublicIPInUse"},
+		{name: "a Public IP still provisioning waits", pip: updating, config: byName},
+		{name: "a Standard Public IP is rejected", pip: standard, config: byName, terminal: true},
+		{name: "an IPv6 Public IP for an IPv4 Service is rejected", pip: ipv6, config: byName, terminal: true},
+		{name: "a Public IP in another region is rejected", pip: elsewhere, config: byName, terminal: true},
+		{name: "a Public IP without an address waits", pip: unallocated, config: byName},
+		{name: "a user's Public IP is not given tags", pip: userPIP("mine", "20.0.0.7"), terminal: true,
+			config: withConfig(func(c *InboundConfig) { c.PIPName = "mine"; c.PIPTags = map[string]string{"team": "a"} })},
+		{name: "a user's Public IP is not given a DNS label", pip: userPIP("mine", "20.0.0.7"), terminal: true,
+			config: withConfig(func(c *InboundConfig) { c.PIPName = "mine"; c.DNSLabel = ptr.To("") })},
+		{name: "a user's Public IP is not given IP tags", pip: userPIP("mine", "20.0.0.7"), terminal: true,
+			config: withConfig(func(c *InboundConfig) { c.PIPName = "mine"; c.IPTags = map[string]string{} })},
+		{name: "a user's Public IP cannot come from a prefix", pip: userPIP("mine", "20.0.0.7"), terminal: true,
+			config: withConfig(func(c *InboundConfig) { c.PIPName = "mine"; c.PIPPrefixID = testPrefixID })},
+		{name: "another cluster's Public IP is not changed", pip: otherCluster, terminal: true,
+			config: withConfig(func(c *InboundConfig) { c.PIPName = "mine"; c.DNSLabel = ptr.To("app") })},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/mine": tc.pip})
+			success, _, err := w.run(t, uid, false, tc.config)
+			assert.False(t, success)
+			assert.Equal(t, tc.terminal, isTerminalError(err), "%v", err)
+			assert.Empty(t, w.created, "the Public IP must not be written")
+			assert.Zero(t, w.lbPuts, "the load balancer must not be written")
+			if tc.event != "" {
+				assert.True(t, w.hasEvent(tc.event), "expected a %s event, got %v", tc.event, w.events)
+			}
+		})
+	}
+
+	t.Run("a Public IP already used by this Service's load balancer is used", func(t *testing.T) {
+		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/mine": ours})
+		success, _, err := w.run(t, uid, false, byName)
+		assert.True(t, success, "%v", err)
+		assert.Equal(t, pipID("rg", "mine"), w.frontend())
+	})
+
+	t.Run("a create that finds a load balancer on another Public IP keeps it", func(t *testing.T) {
+		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/old": ownedPIP("old", "20.0.0.5"), "rg/mine": userPIP("mine", "20.0.0.7")})
+		w.currentLB = inboundLB(pipID("rg", "old"))
+		success, svc, err := w.run(t, uid, false, byName)
+		assert.True(t, success, "%v", err)
+		assert.Equal(t, pipID("rg", "old"), w.frontend())
+		assert.Empty(t, w.deleted)
+		assert.True(t, w.hasEvent("PublicIPChangeNotSupported"), "%v", w.events)
+		assert.Equal(t, "20.0.0.5", ingressIP(svc))
+	})
+
+	t.Run("an IPv6 Service uses IPv6 Public IPs", func(t *testing.T) {
+		v6 := func(name, address string) *armnetwork.PublicIPAddress {
+			pip := userPIP(name, address)
+			pip.Properties.PublicIPAddressVersion = ptr.To(armnetwork.IPVersionIPv6)
+			return pip
+		}
+		ipv6 := func(mutate func(*InboundConfig)) *InboundConfig {
+			return withConfig(func(c *InboundConfig) { c.IPFamilies = []string{"IPv6"}; mutate(c) })
+		}
+
+		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/mine": v6("mine", "2001:db8::7")})
+		success, svc, err := w.run(t, uid, false, ipv6(func(c *InboundConfig) { c.LoadBalancerIP = "2001:DB8:0::7" }))
+		assert.True(t, success, "%v", err)
+		assert.Equal(t, pipID("rg", "mine"), w.frontend(), "addresses are matched by value, not by spelling")
+		assert.Equal(t, "2001:db8::7", ingressIP(svc))
+
+		w = newPublicIPWorld(nil)
+		success, _, err = w.run(t, uid, false, ipv6(func(c *InboundConfig) { c.PIPName = "mine-v6" }))
+		assert.True(t, success, "%v", err)
+		assert.Equal(t, armnetwork.IPVersionIPv6, *w.pips["rg/mine-v6"].Properties.PublicIPAddressVersion)
+		assert.Equal(t, pipID("rg", "mine-v6"), w.frontend())
+
+		w = newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/mine": userPIP("mine", "20.0.0.7")})
+		success, _, err = w.run(t, uid, false, ipv6(func(c *InboundConfig) { c.PIPName = "mine" }))
+		assert.False(t, success)
+		assert.True(t, isTerminalError(err), "an IPv4 Public IP cannot serve an IPv6 Service: %v", err)
+	})
+
+	t.Run("a named Public IP created for a load balancer that could not be written is deleted", func(t *testing.T) {
+		w := newPublicIPWorld(nil)
+		w.lbPutErr = errors.New("conflict")
+		success, _, err := w.run(t, uid, false, byName)
+		assert.False(t, success)
+		assert.False(t, isTerminalError(err), "%v", err)
+		assert.Equal(t, []string{"rg/mine"}, w.created)
+		assert.Equal(t, []string{"rg/mine"}, w.deleted)
+	})
+
+	t.Run("the Public IP named after the Service is kept for the retry", func(t *testing.T) {
+		w := newPublicIPWorld(nil)
+		w.lbPutErr = errors.New("conflict")
+		success, _, _ := w.run(t, uid, false, chosenPIPConfig())
+		assert.False(t, success)
+		assert.Empty(t, w.deleted)
+	})
+
+	t.Run("an existing named Public IP is kept when the load balancer could not be written", func(t *testing.T) {
+		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/mine": ownedPIP("mine", "20.0.0.7")})
+		w.lbPutErr = errors.New("conflict")
+		success, _, _ := w.run(t, uid, false, byName)
+		assert.False(t, success)
+		assert.Empty(t, w.deleted)
+	})
+
+	t.Run("a retried create keeps the Public IP the load balancer already uses", func(t *testing.T) {
+		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/" + PublicIPName(uid): userPIP(PublicIPName(uid), "20.0.0.1")})
+		w.currentLB = inboundLB(pipID("rg", PublicIPName(uid)))
+		success, _, err := w.run(t, uid, false, chosenPIPConfig())
+		assert.True(t, success, "%v", err)
+		assert.Empty(t, w.deleted)
+		assert.Equal(t, pipID("rg", PublicIPName(uid)), w.frontend())
+	})
+
+	t.Run("a Public IP the controller created in another resource group is managed there", func(t *testing.T) {
+		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"other/mine": ownedPIP("mine", "20.0.0.7")})
+		success, _, err := w.run(t, uid, false, withConfig(func(c *InboundConfig) { c.PIPName = "mine"; c.PIPResourceGroup = "other"; c.DNSLabel = ptr.To("app") }))
+		assert.True(t, success, "%v", err)
+		assert.Equal(t, []string{"other/mine"}, w.created)
+		assert.Equal(t, pipID("other", "mine"), w.frontend())
+	})
+
+	t.Run("a Public IP created in another resource group is deleted there when the load balancer could not be written", func(t *testing.T) {
+		w := newPublicIPWorld(nil)
+		w.lbPutErr = errors.New("conflict")
+		success, _, _ := w.run(t, uid, false, withConfig(func(c *InboundConfig) { c.PIPName = "mine"; c.PIPResourceGroup = "other" }))
+		assert.False(t, success)
+		assert.Equal(t, []string{"other/mine"}, w.deleted)
+	})
+
+	t.Run("a failed rollback is reported", func(t *testing.T) {
+		w := newPublicIPWorld(nil)
+		w.lbPutErr = errors.New("conflict")
+		w.deleteErr = errors.New("busy")
+		success, _, _ := w.run(t, uid, false, byName)
+		assert.False(t, success)
+		assert.True(t, w.hasEvent("PublicIPCleanupFailed"), "%v", w.events)
+	})
+
+	t.Run("a Public IP the controller created, chosen by address, is managed", func(t *testing.T) {
+		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/mine": ownedPIP("mine", "20.0.0.7")})
+		success, _, err := w.run(t, uid, false, withConfig(func(c *InboundConfig) { c.LoadBalancerIP = "20.0.0.7"; c.DNSLabel = ptr.To("app") }))
+		assert.True(t, success, "%v", err)
+		assert.Equal(t, []string{"rg/mine"}, w.created)
+		assert.Equal(t, "app", *w.pips["rg/mine"].Properties.DNSSettings.DomainNameLabel)
+	})
+
+	t.Run("a create parked without a load balancer has nothing to attach", func(t *testing.T) {
+		standard := userPIP("mine", "20.0.0.7")
+		standard.SKU.Name = ptr.To(armnetwork.PublicIPAddressSKUNameStandard)
+		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/mine": standard})
+		success, _, err := w.run(t, uid, false, byName)
+		assert.False(t, success)
+		assert.True(t, isTerminalError(err), "%v", err)
+		assert.Empty(t, w.ops)
+	})
+
+	t.Run("a failed load balancer read on create is retried before any write", func(t *testing.T) {
+		w := newPublicIPWorld(nil)
+		w.lbGetErr = errors.New("throttled")
+		success, _, err := w.run(t, uid, false, withConfig(func(c *InboundConfig) { c.PIPName = "new" }))
+		assert.False(t, success)
+		assert.False(t, isTerminalError(err), "%v", err)
+		assert.Zero(t, w.lbPuts)
+		assert.Empty(t, w.created, "no Public IP is created before the load balancer is known")
+	})
+
+	t.Run("a failed Public IP listing is retried without claiming the address is missing", func(t *testing.T) {
+		w := newPublicIPWorld(nil)
+		w.listErr = errors.New("throttled")
+		success, _, err := w.run(t, uid, false, withConfig(func(c *InboundConfig) { c.LoadBalancerIP = "20.0.0.7" }))
+		assert.False(t, success)
+		assert.False(t, isTerminalError(err), "%v", err)
+		assert.False(t, w.hasEvent("PublicIPNotFound"), "%v", w.events)
+	})
+
+	t.Run("an address no Public IP has waits", func(t *testing.T) {
+		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/mine": userPIP("mine", "20.0.0.7")})
+		success, _, err := w.run(t, uid, false, withConfig(func(c *InboundConfig) { c.LoadBalancerIP = "20.0.0.9" }))
+		assert.False(t, success)
+		assert.False(t, isTerminalError(err), "%v", err)
+		assert.Zero(t, w.lbPuts)
+		assert.True(t, w.hasEvent("PublicIPNotFound"), "%v", w.events)
+	})
+}
+
+func TestServiceUpdaterUpdateInboundService_KeepsThePublicIPOfTheLoadBalancer(t *testing.T) {
+	const uid = "66666666-6666-6666-6666-666666666666"
+	managed := publicIPAddressID("sub", "rg", PublicIPName(uid))
+	pipID := func(name string) string { return publicIPAddressID("sub", "rg", name) }
+	named := func(name string) *InboundConfig {
+		config := chosenPIPConfig()
+		config.PIPName = name
+		return config
+	}
+	world := func(frontend string) *publicIPWorld {
+		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{
+			"rg/" + PublicIPName(uid): userPIP(PublicIPName(uid), "20.0.0.1"),
+			"rg/mine":                 ownedPIP("mine", "20.0.0.7"),
+			"rg/user":                 userPIP("user", "20.0.0.8"),
+		})
+		w.currentLB = inboundLB(frontend)
+		w.ingress = "20.0.0.1"
+		return w
+	}
+
+	for _, tc := range []struct {
+		name     string
+		frontend string
+		config   *InboundConfig
+		warn     bool
+	}{
+		{name: "choosing a user's Public IP", frontend: managed, config: named("user"), warn: true},
+		{name: "choosing a name that does not exist", frontend: managed, config: named("new"), warn: true},
+		{name: "choosing another address", frontend: managed, config: withLoadBalancerIP("20.0.0.8"), warn: true},
+		{name: "removing the choice", frontend: pipID("mine"), config: chosenPIPConfig(), warn: true},
+		{name: "the same name", frontend: pipID("mine"), config: named("Mine")},
+		{name: "the same name in another resource group", frontend: pipID("mine"), config: func() *InboundConfig {
+			config := named("mine")
+			config.PIPResourceGroup = "other"
+			return config
+		}(), warn: true},
+		{name: "the address of the Public IP in use", frontend: pipID("mine"), config: withLoadBalancerIP("20.0.0.7")},
+		{name: "no choice on the Public IP named after the Service", frontend: managed, config: chosenPIPConfig()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := world(tc.frontend)
+			success, svc, err := w.run(t, uid, true, tc.config)
+			assert.True(t, success, "%v", err)
+			assert.Equal(t, tc.frontend, w.frontend(), "the load balancer keeps its Public IP")
+			assert.Equal(t, tc.warn, w.hasEvent("PublicIPChangeNotSupported"), "%v", w.events)
+			assert.Empty(t, w.deleted)
+			assert.NotContains(t, w.created, "rg/new", "no Public IP is created for a choice that is not applied")
+			assert.Equal(t, "20.0.0.1", ingressIP(svc), "the Service status is not changed")
+			assert.Equal(t, []string{"lb"}, w.ops, "the ServiceGateway registration is not touched")
+		})
+	}
+
+	t.Run("the settings of the Service apply to the Public IP the controller created", func(t *testing.T) {
+		w := world(pipID("mine"))
+		config := named("mine")
+		config.DNSLabel = ptr.To("app")
+		success, _, err := w.run(t, uid, true, config)
+		assert.True(t, success, "%v", err)
+		assert.Equal(t, "app", *w.pips["rg/mine"].Properties.DNSSettings.DomainNameLabel)
+	})
+
+	t.Run("a user's Public IP in use is not given settings", func(t *testing.T) {
+		w := world(pipID("user"))
+		config := named("user")
+		config.DNSLabel = ptr.To("app")
+		success, _, err := w.run(t, uid, true, config)
+		assert.False(t, success)
+		assert.True(t, isTerminalError(err), "%v", err)
+		assert.Zero(t, w.lbPuts)
+	})
+
+	t.Run("a failed load balancer read is retried before any write", func(t *testing.T) {
+		w := world(managed)
+		w.lbGetErr = errors.New("throttled")
+		success, _, err := w.run(t, uid, true, named("user"))
+		assert.False(t, success)
+		assert.False(t, isTerminalError(err), "%v", err)
+		assert.Zero(t, w.lbPuts)
+		assert.Empty(t, w.created)
+	})
+
+	t.Run("a Public IP in use that cannot be read is retried", func(t *testing.T) {
+		w := world(pipID("gone"))
+		success, _, err := w.run(t, uid, true, named("gone"))
+		assert.False(t, success)
+		assert.False(t, isTerminalError(err), "%v", err)
+		assert.Zero(t, w.lbPuts)
+	})
+
+	t.Run("a failed load balancer write keeps the Public IP in use", func(t *testing.T) {
+		w := world(pipID("mine"))
+		w.lbPutErr = errors.New("conflict")
+		success, _, err := w.run(t, uid, true, named("mine"))
+		assert.False(t, success)
+		assert.False(t, isTerminalError(err), "%v", err)
+		assert.Empty(t, w.deleted)
+	})
+
+	t.Run("a Public IP created for a Service without a load balancer is deleted when the load balancer could not be written", func(t *testing.T) {
+		w := newPublicIPWorld(nil)
+		w.lbPutErr = errors.New("conflict")
+		success, _, err := w.run(t, uid, true, named("new"))
+		assert.False(t, success)
+		assert.False(t, isTerminalError(err), "%v", err)
+		assert.Equal(t, []string{"rg/new"}, w.deleted)
+	})
+
+	t.Run("a Service without a load balancer gets the chosen Public IP", func(t *testing.T) {
+		w := newPublicIPWorld(nil)
+		success, _, err := w.run(t, uid, true, named("new"))
+		assert.True(t, success, "%v", err)
+		assert.Equal(t, []string{"rg/new"}, w.created)
+		assert.Equal(t, pipID("new"), w.frontend())
 	})
 }
 
@@ -1285,6 +1894,7 @@ func TestServiceUpdaterUpdateInboundService(t *testing.T) {
 		m.expectInboundPIP(uid)
 		mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
 		m.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+		expectCurrentLB(mockLB, uid)
 		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), "rg", uid, gomock.Any()).Return(nil, nil).Times(1)
 		// A port-only update must not touch the Public IP or re-register with the ServiceGateway.
 		m.pip.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
@@ -1309,6 +1919,7 @@ func TestServiceUpdaterUpdateInboundService(t *testing.T) {
 		m.expectInboundPIP(uid)
 		mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
 		m.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+		expectCurrentLB(mockLB, uid)
 		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil, errors.New("boom")).AnyTimes()
 
@@ -1334,6 +1945,7 @@ func TestServiceUpdaterUpdateInboundService(t *testing.T) {
 		m.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
 		// The build fails first, so the LoadBalancer must never be PUT with an unsupported spec.
 		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+		mockLB.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, notFoundError()).AnyTimes()
 
 		dualStack := validConfig()
 		dualStack.IPFamilies = []string{"IPv4", "IPv6"}
@@ -1372,6 +1984,7 @@ func TestServiceUpdaterUpdateInboundService_PortRemovalDropsOnlyThatRule(t *test
 	m.expectInboundPIP(uid)
 	mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
 	m.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+	expectCurrentLB(mockLB, uid)
 
 	var puts []armnetwork.LoadBalancer
 	mockLB.EXPECT().CreateOrUpdate(gomock.Any(), "rg", uid, gomock.Any()).
@@ -1716,6 +2329,7 @@ func TestCreateInboundService_StatusPatchFailureKeepsLoadBalancerLive(t *testing
 
 		m := newOutboundMocks(ctrl)
 		mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+		mockLB.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, notFoundError()).AnyTimes()
 		m.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
 
 		// PIP and LoadBalancer create succeed, and the ServiceGateway registration succeeds, so the
@@ -1799,4 +2413,99 @@ func TestDeleteOutboundService_CountsSwallowedDisassociationFailure(t *testing.T
 	assert.Equal(t, float64(1), run(t, true),
 		"a swallowed disassociation failure must be counted, or a sustained NRP failure is invisible")
 	assert.Zero(t, run(t, false), "control: a successful disassociation counts nothing")
+}
+
+func TestServiceUpdater_OneServiceCreatesASharedNamedPublicIP(t *testing.T) {
+	for _, update := range []bool{false, true} {
+		t.Run(fmt.Sprintf("update=%v", update), func(t *testing.T) { testOneServiceCreatesASharedNamedPublicIP(t, update) })
+	}
+}
+
+func testOneServiceCreatesASharedNamedPublicIP(t *testing.T, update bool) {
+	ctrl := gomock.NewController(t)
+	f := mock_azclient.NewMockClientFactory(ctrl)
+	pipClient := mock_publicipaddressclient.NewMockInterface(ctrl)
+	lbClient := mock_loadbalancerclient.NewMockInterface(ctrl)
+	sgwClient := mock_servicegatewayclient.NewMockInterface(ctrl)
+	f.EXPECT().GetPublicIPAddressClient().Return(pipClient).AnyTimes()
+	f.EXPECT().GetLoadBalancerClient().Return(lbClient).AnyTimes()
+	f.EXPECT().GetServiceGatewayClient().Return(sgwClient).AnyTimes()
+
+	var mu sync.Mutex
+	var shared *armnetwork.PublicIPAddress
+	var creates, reads int32
+	bothRead := make(chan struct{})
+	// Azure names are case-insensitive, so the two Services spell the name differently.
+	isShared := gomock.Cond(func(name any) bool { return strings.EqualFold(name.(string), "shared") })
+	pipClient.EXPECT().Get(gomock.Any(), "rg", isShared, gomock.Any()).DoAndReturn(
+		func(context.Context, string, string, *string) (*armnetwork.PublicIPAddress, error) {
+			mu.Lock()
+			var snapshot *armnetwork.PublicIPAddress
+			if shared != nil {
+				copied := *shared
+				snapshot = &copied
+			}
+			mu.Unlock()
+			// Without serialization both Services read before either creates, so both find the Public
+			// IP missing; with it the second read only comes after the first create, so wait bounded.
+			if atomic.AddInt32(&reads, 1) == 2 {
+				close(bothRead)
+			}
+			select {
+			case <-bothRead:
+			case <-time.After(300 * time.Millisecond):
+			}
+			if snapshot == nil {
+				return nil, notFoundError()
+			}
+			return snapshot, nil
+		}).AnyTimes()
+	pipClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", isShared, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _, _ string, pip armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
+			atomic.AddInt32(&creates, 1)
+			pip.Properties.IPAddress = ptr.To("20.0.0.1")
+			mu.Lock()
+			shared = &pip
+			mu.Unlock()
+			return &pip, nil
+		}).AnyTimes()
+	lbClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, notFoundError()).AnyTimes()
+	lbClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	sgwClient.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	uids := []string{"77777777-7777-7777-7777-777777777771", "77777777-7777-7777-7777-777777777772"}
+	kube := fake.NewSimpleClientset()
+	for i, uid := range uids {
+		_, err := kube.CoreV1().Services("ns").Create(context.Background(), &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("svc%d", i), Namespace: "ns", UID: types.UID(uid)},
+		}, metav1.CreateOptions{})
+		assert.NoError(t, err)
+	}
+	dt := newTestDiffTracker()
+	dt.config = testConfig()
+	dt.kubeClient = kube
+	dt.networkClientFactory = f
+	su := newTestServiceUpdater(dt)
+
+	var wg sync.WaitGroup
+	for i, uid := range uids {
+		config := makeInboundConfig(80)
+		config.ServiceName, config.ClusterName, config.PIPName = fmt.Sprintf("ns/svc%d", i), "cluster", []string{"shared", "Shared"}[i]
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if update {
+				su.updateInboundService(uid, config, "corr")
+			} else {
+				su.createInboundService(uid, config, "corr")
+			}
+		}()
+	}
+	wg.Wait()
+
+	assert.Equal(t, int32(1), atomic.LoadInt32(&creates), "only one Service may create the Public IP it finds missing")
+	if assert.NotNil(t, shared) {
+		assert.True(t, ownsPublicIPByTags(shared, "ns/svc0", "cluster") != ownsPublicIPByTags(shared, "ns/svc1", "cluster"),
+			"the Public IP must be owned by exactly one Service")
+	}
 }
