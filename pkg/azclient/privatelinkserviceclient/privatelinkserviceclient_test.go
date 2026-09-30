@@ -21,7 +21,7 @@ import (
 	"context"
 	"strings"
 
-	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
+	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 )
