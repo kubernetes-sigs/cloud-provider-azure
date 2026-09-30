@@ -26,6 +26,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/kubelet/pkg/apis/credentialprovider/v1"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 )
@@ -279,6 +280,7 @@ func TestParseACRLoginServerFromImage(t *testing.T) {
 		ContainerRegistryDNSSuffix: ".azurecr.my.cloud",
 	}
 	tests := []struct {
+		suffix   *string
 		image    string
 		expected string
 	}{
@@ -334,9 +336,93 @@ func TestParseACRLoginServerFromImage(t *testing.T) {
 			image:    "foo-azurecr-io.azurecr.cn",
 			expected: "",
 		},
+		{
+			// The host may equal the configured domain, with either suffix format.
+			image:    "azurecr.my.cloud/bar/image:version",
+			expected: "azurecr.my.cloud",
+		},
+		{
+			suffix:   ptr.To("azurecr.my.cloud"),
+			image:    "azurecr.my.cloud/bar/image:version",
+			expected: "azurecr.my.cloud",
+		},
+		{
+			// Repeated suffixes must not truncate the hostname at the first occurrence.
+			image:    "foo.azurecr.my.cloud.geo.azurecr.my.cloud/bar/image:version",
+			expected: "foo.azurecr.my.cloud.geo.azurecr.my.cloud",
+		},
+		{
+			suffix:   ptr.To("azurecr.my.cloud"),
+			image:    "foo.azurecr.my.cloud.geo.azurecr.my.cloud/bar/image:version",
+			expected: "foo.azurecr.my.cloud.geo.azurecr.my.cloud",
+		},
+		{
+			// Do not truncate at the earlier suffix occurrence preceded by a hyphen.
+			image:    "foo-bar-azurecr.my.cloud.geo.azurecr.my.cloud/bar/image:version",
+			expected: "foo-bar-azurecr.my.cloud.geo.azurecr.my.cloud",
+		},
+		{
+			suffix:   ptr.To("azurecr.my.cloud"),
+			image:    "foo-bar-azurecr.my.cloud.geo.azurecr.my.cloud/bar/image:version",
+			expected: "foo-bar-azurecr.my.cloud.geo.azurecr.my.cloud",
+		},
+		{
+			// A hostname ending in "-azurecr.my.cloud" is not a subdomain of "azurecr.my.cloud".
+			image:    "foo-bar-azurecr.my.cloud/bar/image:version",
+			expected: "",
+		},
+		{
+			suffix:   ptr.To("azurecr.my.cloud"),
+			image:    "foo-bar-azurecr.my.cloud/bar/image:version",
+			expected: "",
+		},
+		{
+			image:    "foo.azurecr.my.cloud.example/bar/image:version",
+			expected: "",
+		},
+		{
+			suffix:   ptr.To("azurecr.my.cloud"),
+			image:    "foo.azurecr.my.cloud.example/bar/image:version",
+			expected: "",
+		},
+		{
+			image:    "example.com/foo.azurecr.my.cloud/bar/image:version",
+			expected: "",
+		},
+		{
+			suffix:   ptr.To("azurecr.my.cloud"),
+			image:    "example.com/foo.azurecr.my.cloud/bar/image:version",
+			expected: "",
+		},
+		{
+			image:    "foo.azurecr.my.cloud:443/bar/image:version",
+			expected: "",
+		},
+		{
+			suffix:   ptr.To("."),
+			image:    "foo.azurecr.my.cloud/bar/image:version",
+			expected: "",
+		},
+		{
+			suffix:   ptr.To(""),
+			image:    "foo.azurecr.my.cloud/bar/image:version",
+			expected: "",
+		},
+		{
+			// Built-in ACR matching still works when the cloud-suffix fallback is disabled.
+			suffix:   ptr.To(""),
+			image:    "foo.azurecr.io/bar/image:version",
+			expected: "foo.azurecr.io",
+		},
 	}
+	defaultSuffix := provider.environment.ContainerRegistryDNSSuffix
 	for _, test := range tests {
-		t.Run(test.image, func(t *testing.T) {
+		suffix := defaultSuffix
+		if test.suffix != nil {
+			suffix = *test.suffix
+		}
+		t.Run("DNS suffix: "+suffix+", image: "+test.image, func(t *testing.T) {
+			provider.environment.ContainerRegistryDNSSuffix = suffix
 			targetloginServer, _ := provider.parseACRLoginServerFromImage(test.image)
 			assert.Equal(t, test.expected, targetloginServer)
 		})
