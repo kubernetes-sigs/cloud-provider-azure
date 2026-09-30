@@ -20,12 +20,12 @@ package servicegatewayclient
 import (
 	"context"
 
-	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
+	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate;delete;list,resource=ServiceGateway,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9,packageAlias=armnetwork,clientName=ServiceGatewaysClient,expand=false,rateLimitKey=serviceGatewayRateLimit
+// +azure:client:verbs=get;createorupdate;delete;list,resource=ServiceGateway,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12,packageAlias=armnetwork,clientName=ServiceGatewaysClient,expand=false,rateLimitKey=serviceGatewayRateLimit
 type Interface interface {
 	utils.GetFunc[armnetwork.ServiceGateway]
 	utils.CreateOrUpdateFunc[armnetwork.ServiceGateway]
