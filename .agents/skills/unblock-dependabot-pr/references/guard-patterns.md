@@ -73,8 +73,9 @@ PR goes to human reviewers instead of burning more CI on the same failing jobs.
 The count comes from the one `Unblock attempt: N` stamp that each completed
 retry-budgeted triage leaves on the PR: the rebase/recreate directive carries
 its own stamp, while budgeted act-stage actions use one summary (see
-[Attempt stamp](shared-actions.md#details-attempt-stamp)). Public-IP quota
-reruns do not write this stamp. Read the highest stamp already present:
+[Attempt stamp](shared-actions.md#details-attempt-stamp)). Read the highest
+stamp already present. This is the triage's only counter read; later steps
+reuse `N`:
 
 ```bash
 gh pr view <pr> --json comments \
@@ -87,8 +88,7 @@ Let `N` be that maximum. The budget is three attempts, so:
   [Needs rebase](#details-needs-rebase) guard matches, its directive carries
   `Unblock attempt: <N+1>`; otherwise, if the act stage completes one or more
   retry-budgeted non-final actions, post one summary with that stamp per the
-  [Attempt stamp](shared-actions.md#details-attempt-stamp) rule. Quota-only
-  reruns post no summary and leave `N` unchanged.
+  [Attempt stamp](shared-actions.md#details-attempt-stamp) rule.
 - `N >= 3` — the budget is spent (a fourth attempt would exceed three). Stop
   working the PR: make no automated change, including no rebase/recreate
   directive, and report it as needing human review in the final output.
