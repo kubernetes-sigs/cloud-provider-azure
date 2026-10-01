@@ -17,10 +17,14 @@ limitations under the License.
 package difftracker
 
 import (
+	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
@@ -95,10 +99,17 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 		pendingPodDeletions:     make(map[string]*PendingPodDeletion),
 
 		recoveredServiceFinalizers: make(map[string]struct{}),
+		byoNATGateways:             make(map[string]string),
 
 		// Initialize Engine communication channels
 		serviceUpdaterTrigger:   make(chan bool, 1),
 		locationsUpdaterTrigger: make(chan bool, 1),
+	}
+
+	for identity, natGatewayID := range nrp.OutboundNATGatewayIDs {
+		if isBYONATGatewayID(natGatewayID, config) {
+			diffTracker.byoNATGateways[strings.ToLower(identity)] = natGatewayID
+		}
 	}
 
 	// Seed the outbound ref-counter from egress pods already in the initial state
@@ -188,4 +199,19 @@ func (dt *DiffTracker) GetServiceUpdaterTrigger() <-chan bool {
 // GetLocationsUpdaterTrigger returns the trigger channel for LocationsUpdater
 func (dt *DiffTracker) GetLocationsUpdaterTrigger() <-chan bool {
 	return dt.locationsUpdaterTrigger
+}
+
+// recordPodEvent emits an event on the pod identified by namespace/name, if one is known. The pod is
+// read so the event carries its UID; if it cannot be read the event is keyed by name only.
+func (dt *DiffTracker) recordPodEvent(ctx context.Context, namespace, name, eventType, reason, message string) {
+	if name == "" {
+		return
+	}
+	pod := &v1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name}}
+	if dt.kubeClient != nil {
+		if got, err := dt.kubeClient.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{}); err == nil {
+			pod = got
+		}
+	}
+	dt.recordEvent(pod, eventType, reason, message)
 }

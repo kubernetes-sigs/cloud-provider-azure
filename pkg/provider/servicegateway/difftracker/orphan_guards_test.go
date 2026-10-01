@@ -395,3 +395,19 @@ func TestGuardEgressPublicIPsAreSweptOnceNATGatewayIsGone(t *testing.T) {
 	assert.NotContains(t, deleted, PublicIPName("still-in-use"),
 		"BUG CASE: a Public IP still attached to a NAT Gateway was scheduled for deletion")
 }
+
+// A NAT Gateway in the cluster resource group that this controller did not create, or that the
+// default outbound service uses, must never be swept, even though no egress identity names it.
+func TestGuardUnmanagedNATGatewayIsNeverScheduledForOrphanDeletion(t *testing.T) {
+	dt := newTestDiffTracker()
+	dt.NRPResources.UnmanagedNATGateways = utilsets.NewString("BYO-NAT")
+
+	scheduleOrphanedResourceDeletions(dt, utilsets.NewString(), utilsets.NewString("byo-nat", "real-orphan-egress"), utilsets.NewString())
+
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	_, scheduled := dt.pendingServiceOps["byo-nat"]
+	assert.False(t, scheduled, "a NAT Gateway not created by this controller must not be deleted")
+	_, orphanScheduled := dt.pendingServiceOps["real-orphan-egress"]
+	assert.True(t, orphanScheduled, "control: a NAT Gateway this controller created must still be swept")
+}
