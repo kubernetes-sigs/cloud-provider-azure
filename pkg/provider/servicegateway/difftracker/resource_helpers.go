@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	v1 "k8s.io/api/core/v1"
@@ -115,6 +116,11 @@ func identityFromPublicIPName(pipName string) (identity string, ok bool) {
 // (with IsDefault=true) before the CCM starts, and it carries the cluster's default egress Public
 // IP. It is not managed by this controller and must never be created, updated or deleted by it.
 const DefaultOutboundNATGatewayName = "default-natgw"
+
+// EgressIdentityTagKey tags the NAT Gateway and Public IPs this controller creates for an egress
+// identity with that identity. Only cluster-resource-group NAT Gateways this controller owns (see
+// ownsNATGateway) are ever swept as orphans.
+const EgressIdentityTagKey = "k8s-azure-egress-identity"
 
 // IsReservedEgressIdentity reports whether name refers to a resource this controller must not
 // manage. Matching is case-insensitive because the value originates from a user-controlled label and
@@ -352,6 +358,7 @@ func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dt
 				Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
 			},
 			Location: to.Ptr(dtConfig.Location),
+			Tags:     egressIdentityTags(serviceUID),
 			Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 				PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 				PublicIPAddressVersion:   to.Ptr(version),
@@ -381,6 +388,7 @@ func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dt
 			Name: to.Ptr(armnetwork.NatGatewaySKUNameStandardV2),
 		},
 		Location: to.Ptr(dtConfig.Location),
+		Tags:     egressIdentityTags(serviceUID),
 		Properties: &armnetwork.NatGatewayPropertiesFormat{
 			ServiceGateway: &armnetwork.SubResource{
 				ID: to.Ptr(dtConfig.ServiceGatewayResourceID()),
@@ -405,6 +413,42 @@ func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dt
 	)
 
 	return pips, natGateway, servicesDTO
+}
+
+func egressIdentityTags(identity string) map[string]*string {
+	return map[string]*string{EgressIdentityTagKey: to.Ptr(identity)}
+}
+
+// ownsNATGateway reports whether a cluster-resource-group NAT Gateway was created by this controller:
+// tagged with its own name as egress identity or, when created before tagging, carrying only the
+// Public IPs this controller names after the identity. Neither changes when the gateway is unlinked.
+// Either kind of match could still be used by another service (for example the default outbound
+// service); callers that write to or delete one must also check that no other Service Gateway
+// service uses it.
+func ownsNATGateway(natGateway *armnetwork.NatGateway, dtConfig Config) bool {
+	if natGateway == nil {
+		return false
+	}
+	name := derefString(natGateway.Name)
+	if tag, ok := natGateway.Tags[EgressIdentityTagKey]; ok {
+		return tag != nil && strings.EqualFold(*tag, name)
+	}
+	props := natGateway.Properties
+	if props == nil || len(props.PublicIPPrefixes) > 0 || len(props.PublicIPPrefixesV6) > 0 {
+		return false
+	}
+	addresses := append(append([]*armnetwork.SubResource{}, props.PublicIPAddresses...), props.PublicIPAddressesV6...)
+	if len(addresses) == 0 {
+		return false
+	}
+	for _, address := range addresses {
+		parsed, err := arm.ParseResourceID(derefString(address.ID))
+		if err != nil || !strings.EqualFold(parsed.ResourceGroupName, dtConfig.ResourceGroup) ||
+			(!strings.EqualFold(parsed.Name, PublicIPName(name)) && !strings.EqualFold(parsed.Name, PublicIPNameV6(name))) {
+			return false
+		}
+	}
+	return true
 }
 
 // newIgnoreCaseSetFromSlice creates an IgnoreCaseSet from a slice of strings

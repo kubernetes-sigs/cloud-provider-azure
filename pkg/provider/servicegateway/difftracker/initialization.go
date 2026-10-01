@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
@@ -923,6 +924,8 @@ func buildNRPState(
 		return NRPState{}, nil, nil, nil, nil, err
 	}
 
+	recordLinkedBYONATGateways(ctx, config, networkClientFactory, &nrp)
+
 	// Fetch ServiceGateway locations
 	if err := fetchServiceGatewayLocations(ctx, config, networkClientFactory, &nrp); err != nil {
 		return NRPState{}, nil, nil, nil, nil, err
@@ -935,7 +938,7 @@ func buildNRPState(
 	}
 
 	// Fetch Azure NAT Gateways
-	currentNATs, err := fetchAzureNATGateways(ctx, config, networkClientFactory)
+	currentNATs, err := fetchAzureNATGateways(ctx, config, networkClientFactory, &nrp)
 	if err != nil {
 		return NRPState{}, nil, nil, nil, nil, err
 	}
@@ -1001,11 +1004,29 @@ func fetchServiceGatewayServices(
 			// HTTP 400 MultipleDefaultServicesNotAllowedInServiceGateway,
 			// then deletes the NAT GW + PIP and recreates them. Case-insensitive
 			// because Azure may normalize naming differently across endpoints.
-			if IsReservedEgressIdentity(*service.Name) {
+			natGatewayID := derefString(service.Properties.PublicNatGatewayID)
+			if IsReservedEgressIdentity(*service.Name) || ptr.Deref(service.Properties.IsDefault, false) {
 				logger.V(4).Info("Skipped RP-owned default outbound service", "service", *service.Name)
+				// Neither its name nor its gateway (when in the cluster resource group) may be claimed
+				// by an egress identity or swept as an orphan.
+				if nrp.UnmanagedNATGateways == nil {
+					nrp.UnmanagedNATGateways = utilsets.NewString()
+				}
+				nrp.UnmanagedNATGateways.Insert(*service.Name)
+				if natGatewayID != "" && !isBYONATGatewayID(natGatewayID, config) {
+					if parsed, err := arm.ParseResourceID(natGatewayID); err == nil {
+						nrp.UnmanagedNATGateways.Insert(parsed.Name)
+					}
+				}
 				continue
 			}
 			nrp.NATGateways.Insert(*service.Name)
+			if natGatewayID != "" {
+				if nrp.OutboundNATGatewayIDs == nil {
+					nrp.OutboundNATGatewayIDs = make(map[string]string)
+				}
+				nrp.OutboundNATGatewayIDs[strings.ToLower(*service.Name)] = natGatewayID
+			}
 		}
 	}
 	logger.V(2).Info("Fetched ServiceGateway services", "services", len(servicesDTO), "loadBalancers", nrp.LoadBalancers.Len(), "natGateways", nrp.NATGateways.Len())
@@ -1063,11 +1084,13 @@ func fetchAzureLoadBalancers(
 	return currentLBs, nil
 }
 
-// fetchAzureNATGateways fetches NAT Gateways from Azure
+// fetchAzureNATGateways fetches NAT Gateways from Azure and records in nrp.UnmanagedNATGateways
+// those this controller did not create (see ownsNATGateway)
 func fetchAzureNATGateways(
 	ctx context.Context,
 	config Config,
 	networkClientFactory azclient.ClientFactory,
+	nrp *NRPState,
 ) (*utilsets.IgnoreCaseSet, error) {
 	logger := log.FromContextOrBackground(ctx)
 	ngclient := networkClientFactory.GetNatGatewayClient()
@@ -1080,6 +1103,12 @@ func fetchAzureNATGateways(
 	for _, ng := range ngs {
 		if ng.Name != nil {
 			currentNATs.Insert(strings.ToLower(*ng.Name))
+			if !ownsNATGateway(ng, config) {
+				if nrp.UnmanagedNATGateways == nil {
+					nrp.UnmanagedNATGateways = utilsets.NewString()
+				}
+				nrp.UnmanagedNATGateways.Insert(*ng.Name)
+			}
 		}
 	}
 	logger.V(2).Info("Fetched Azure NAT gateways", "natGateways", currentNATs.Len())
@@ -1276,6 +1305,7 @@ func recoverServiceExternalIPs(ctx context.Context, diffTracker *DiffTracker, se
 //  1. Exist in Azure (currentLBsInAzure/currentNATsInAzure)
 //  2. Are NOT registered in ServiceGateway (NRPResources)
 //  3. Are NOT desired in Kubernetes (K8sResources)
+//  4. (NAT Gateways) Are NOT in NRPResources.UnmanagedNATGateways
 //
 // If a resource exists in K8s, reconcileServices will handle it - don't delete it!
 // This uses the Engine's DeleteService flow with isOrphan=true to bypass the NRP existence check.
@@ -1311,6 +1341,10 @@ func scheduleOrphanedResourceDeletions(diffTracker *DiffTracker, currentLBsInAzu
 		for _, natName := range currentNATsInAzure.UnsortedList() {
 			// Skip the default NAT Gateway
 			if IsReservedEgressIdentity(natName) {
+				continue
+			}
+			if unmanaged := diffTracker.NRPResources.UnmanagedNATGateways; unmanaged != nil && unmanaged.Has(natName) {
+				logger.V(4).Info("Skipped NAT gateway not created by this controller", "natGateway", natName)
 				continue
 			}
 			// If NAT is desired in K8s, reconcileServices will handle it - NOT orphaned

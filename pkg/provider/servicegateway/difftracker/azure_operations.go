@@ -48,6 +48,7 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	v1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -59,6 +60,7 @@ import (
 	servicehelper "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
 )
@@ -164,20 +166,54 @@ func (dt *DiffTracker) deleteNatGateway(ctx context.Context, natGatewayResourceG
 	return nil
 }
 
+// getNatGateway reads a NAT Gateway. exists is false (with a nil error) when it is not found.
+func (dt *DiffTracker) getNatGateway(ctx context.Context, resourceGroup, name string) (natGateway *armnetwork.NatGateway, exists bool, err error) {
+	natGateway, err = dt.networkClientFactory.GetNatGatewayClient().Get(ctx, resourceGroup, name, nil)
+	if err != nil {
+		if found, cerr := errutils.CheckResourceExistsFromAzcoreError(err); cerr == nil && !found {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("getting NAT Gateway %q in resource group %q: %w", name, resourceGroup, err)
+	}
+	return natGateway, true, nil
+}
+
 // disassociateNatGatewayFromServiceGateway removes the NAT gateway association from the Service Gateway
 // This should be called before deleting the NAT gateway to properly clean up the references
 func (dt *DiffTracker) disassociateNatGatewayFromServiceGateway(ctx context.Context, serviceGatewayName string, natGatewayName string) error {
-	dt.logger.V(2).Info("Disassociating NAT Gateway from Service Gateway", "natGateway", natGatewayName, "serviceGateway", serviceGatewayName, "resourceGroup", dt.config.ResourceGroup)
+	return dt.unlinkNatGateway(ctx, serviceGatewayName, natGatewayName, dt.config.ResourceGroup, natGatewayName)
+}
 
-	// Step 1: clear the ServiceGateway-side reference if it still has one.
+// getNatGatewayByID reads a NAT Gateway by resource ID. exists is false (with a nil error) when it is not found.
+func (dt *DiffTracker) getNatGatewayByID(ctx context.Context, natGatewayID string) (natGateway *armnetwork.NatGateway, exists bool, err error) {
+	parsed, err := arm.ParseResourceID(natGatewayID)
+	if err != nil {
+		return nil, false, fmt.Errorf("parsing NAT Gateway ID %q: %w", natGatewayID, err)
+	}
+	return dt.getNatGateway(ctx, parsed.ResourceGroupName, parsed.Name)
+}
+
+// unlinkNatGateway clears the association between the egress service serviceName and its NAT
+// Gateway on both sides. The NAT Gateway side is only cleared while it points at this cluster's
+// Service Gateway (a gateway since linked elsewhere is left alone) and no other Service Gateway
+// service, such as the default outbound service, uses it.
+func (dt *DiffTracker) unlinkNatGateway(ctx context.Context, serviceGatewayName, serviceName, natGatewayResourceGroup, natGatewayName string) error {
+	dt.logger.V(2).Info("Disassociating NAT Gateway from Service Gateway", "natGateway", natGatewayName, "serviceGateway", serviceGatewayName, "resourceGroup", natGatewayResourceGroup)
+
+	// Step 1: clear the ServiceGateway-side reference if it still has one (none when the Service
+	// Gateway is gone).
 	services, err := dt.networkClientFactory.GetServiceGatewayClient().GetServices(ctx, dt.config.ResourceGroup, serviceGatewayName)
+	var respErr *azcore.ResponseError
+	if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
+		services, err = nil, nil
+	}
 	if err != nil {
 		return fmt.Errorf("getting Service Gateway services: %w", err)
 	}
 
 	var serviceToBeUpdated *armnetwork.ServiceGatewayService
 	for _, service := range services {
-		if service.Name != nil && strings.EqualFold(*service.Name, natGatewayName) {
+		if service.Name != nil && strings.EqualFold(*service.Name, serviceName) {
 			serviceToBeUpdated = service
 			break
 		}
@@ -204,23 +240,27 @@ func (dt *DiffTracker) disassociateNatGatewayFromServiceGateway(ctx context.Cont
 	// Step 2: clear the NAT-gateway-side reference if it still points back at the
 	// Service Gateway. This runs independently of Step 1 so a retry after a
 	// partial failure still reconciles the NAT gateway.
-	natGateway, err := dt.networkClientFactory.GetNatGatewayClient().Get(ctx, dt.config.ResourceGroup, natGatewayName, nil)
-	if err != nil {
-		if exists, cerr := errutils.CheckResourceExistsFromAzcoreError(err); cerr == nil && !exists {
-			return nil
-		}
-		return fmt.Errorf("getting NAT Gateway %q: %w", natGatewayName, err)
+	natGatewayID := fmt.Sprintf(consts.NatGatewayIDTemplate, dt.config.networkResourceSubscriptionID(), natGatewayResourceGroup, natGatewayName)
+	if user := otherServiceUsingNATGateway(services, serviceName, natGatewayID); user != "" {
+		dt.logger.V(2).Info("Kept NAT Gateway linked to Service Gateway because another service uses it", "natGateway", natGatewayName, "service", user)
+		return nil
 	}
-
-	if natGateway.Properties != nil && natGateway.Properties.ServiceGateway != nil {
+	natGateway, exists, err := dt.getNatGateway(ctx, natGatewayResourceGroup, natGatewayName)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return nil
+	}
+	if linked := natGatewayServiceGatewayID(natGateway); linked != "" && strings.EqualFold(linked, dt.config.ServiceGatewayResourceID()) {
 		// See above: a plain nil would be omitted from the payload rather than clearing the field.
 		natGateway.Properties.ServiceGateway = azcore.NullValue[*armnetwork.SubResource]()
-		if _, err := dt.networkClientFactory.GetNatGatewayClient().CreateOrUpdate(ctx, dt.config.ResourceGroup, natGatewayName, *natGateway); err != nil {
+		if _, err := dt.networkClientFactory.GetNatGatewayClient().CreateOrUpdate(ctx, natGatewayResourceGroup, natGatewayName, *natGateway); err != nil {
 			return fmt.Errorf("updating NAT Gateway %q to remove Service Gateway reference: %w", natGatewayName, err)
 		}
 	}
 
-	dt.logger.V(5).Info("Disassociated NAT Gateway from Service Gateway", "natGateway", natGatewayName, "serviceGateway", serviceGatewayName, "resourceGroup", dt.config.ResourceGroup)
+	dt.logger.V(5).Info("Disassociated NAT Gateway from Service Gateway", "natGateway", natGatewayName, "serviceGateway", serviceGatewayName, "resourceGroup", natGatewayResourceGroup)
 	return nil
 }
 
