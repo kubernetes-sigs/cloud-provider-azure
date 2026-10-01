@@ -299,6 +299,15 @@ type NRPState struct {
 	// Gateway registered on the NRP side (SGW service identities, not Azure
 	// resource names).
 	NATGateways *utilsets.IgnoreCaseSet
+	// OutboundNATGatewayIDs maps each registered egress identity (lower-cased) to its NAT Gateway ID,
+	// including one whose unlink was interrupted (recordLinkedBYONATGateways). Start-up snapshot only,
+	// not kept up to date; the live BYO record is DiffTracker.byoNATGateways. Optional.
+	OutboundNATGatewayIDs map[string]string
+	// UnmanagedNATGateways holds names this controller must never manage: cluster-resource-group NAT
+	// Gateways it did not create, the default outbound service's name, and its gateway when that is in
+	// the cluster resource group. They are never swept as orphans, and an egress identity with such a
+	// name is rejected. Start-up snapshot only, not kept up to date. Optional.
+	UnmanagedNATGateways *utilsets.IgnoreCaseSet
 	// Locations is keyed by node/VM IP (e.g. "10.0.0.1"). "Location" here is
 	// an SGW concept identifying a node, not an Azure region (e.g. "eastus2").
 	Locations map[string]NRPLocation
@@ -462,6 +471,10 @@ type DiffTracker struct {
 	// the diff. An entry is cleared when that finalizer is actually removed, which is what closes
 	// the finalizers_recovery_scheduled_total / finalizers_recovered_total gap.
 	recoveredServiceFinalizers map[string]struct{}
+
+	// byoNATGateways maps an egress identity to the BYO NAT Gateway ID it uses.
+	// Such gateways are only linked and unlinked, never created or deleted. Guarded by mu.
+	byoNATGateways map[string]string
 
 	// Communication channels
 	serviceUpdaterTrigger   chan bool

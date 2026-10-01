@@ -701,3 +701,43 @@ func TestARMPrimitivesDoNotHoldStateLock(t *testing.T) {
 	close(releaseARM)
 	<-armDone
 }
+
+// buildNRPState must hand the NAT Gateways this controller does not own, and the default outbound
+// service's gateway, to the orphan sweep through NRPState, and recover a BYO NAT Gateway whose
+// unlink was interrupted.
+func TestBuildNRPState_RecordsUnmanagedNATGateways(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+	mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+	mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
+	mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+	mockFactory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+	mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
+	mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+
+	mockSGW.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return([]*armnetwork.ServiceGatewayService{{
+		Name: ptr.To("default-natgw"),
+		Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{ServiceType: ptr.To(armnetwork.ServiceTypeOutbound), IsDefault: ptr.To(true),
+			PublicNatGatewayID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/natGateways/dflt")},
+	}, {
+		// Restarted between the two unlink steps: registered, but its NAT Gateway ID already cleared.
+		Name:       ptr.To("byo"),
+		Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{ServiceType: ptr.To(armnetwork.ServiceTypeOutbound)},
+	}}, nil)
+	linked := byoNATGateway("byo")
+	linked.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/serviceGateways/sgw")}
+	mockNAT.EXPECT().Get(gomock.Any(), byoNATGatewayRG, "byo", gomock.Any()).Return(linked, nil)
+	mockSGW.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(nil, nil)
+	mockLB.EXPECT().List(gomock.Any(), "rg").Return(nil, nil)
+	mockNAT.EXPECT().List(gomock.Any(), "rg").Return([]*armnetwork.NatGateway{{Name: ptr.To("byo-nat"), Properties: &armnetwork.NatGatewayPropertiesFormat{}}}, nil)
+	mockPIP.EXPECT().List(gomock.Any(), "rg").Return(nil, nil)
+
+	nrp, _, _, _, _, err := buildNRPState(context.Background(), byoNATConfig(), mockFactory)
+	if assert.NoError(t, err) && assert.NotNil(t, nrp.UnmanagedNATGateways) {
+		assert.ElementsMatch(t, []string{"default-natgw", "dflt", "byo-nat"}, nrp.UnmanagedNATGateways.UnsortedList())
+		assert.Equal(t, byoNATGatewayARMID("byo"), nrp.OutboundNATGatewayIDs["byo"])
+	}
+}

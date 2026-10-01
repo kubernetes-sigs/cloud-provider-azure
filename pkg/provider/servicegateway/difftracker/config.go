@@ -16,7 +16,10 @@ limitations under the License.
 
 package difftracker
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Config holds the configuration values needed by DiffTracker
 // to perform Azure operations without depending on the entire AzureCloud struct
@@ -63,6 +66,15 @@ func (c *Config) VNetResourceGroupOrDefault() string {
 		return c.VNetResourceGroup
 	}
 	return c.ResourceGroup
+}
+
+// byoNATGatewayResourceGroup returns the resource group searched for BYO egress NAT
+// Gateways: the VNet resource group when it differs from the cluster resource group, else "".
+func (c *Config) byoNATGatewayResourceGroup() string {
+	if c.VNetResourceGroup == "" || strings.EqualFold(c.VNetResourceGroup, c.ResourceGroup) {
+		return ""
+	}
+	return c.VNetResourceGroup
 }
 
 // Validate checks if the configuration has all required fields

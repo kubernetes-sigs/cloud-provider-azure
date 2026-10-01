@@ -629,12 +629,23 @@ func (s *ServiceUpdater) updateInboundService(serviceUID string, config *Inbound
 	s.logger.V(2).Info("Updated inbound service", "serviceUID", serviceUID, "correlationID", correlationID)
 }
 
-// createOutboundService creates NAT Gateway resources for outbound service
+// createOutboundService provisions an egress identity: links its BYO NAT Gateway, or creates a managed one
 func (s *ServiceUpdater) createOutboundService(serviceUID string, config *OutboundConfig, correlationID string, triggeringPodNS string, triggeringPodName string) {
 	s.logger.V(5).Info("Started creating outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName)
 
 	ctx, cancel := context.WithTimeout(s.ctx, getNRPOperationTimeout())
 	defer cancel()
+
+	byoNATGateway, err := s.resolveBYONATGateway(ctx, serviceUID, triggeringPodNS, triggeringPodName)
+	if err != nil {
+		s.logger.V(4).Info("Could not resolve NAT Gateway for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "err", err)
+		s.onComplete(serviceUID, false, err)
+		return
+	}
+	if byoNATGateway != nil {
+		s.createBYOOutboundService(ctx, serviceUID, config, byoNATGateway, correlationID, triggeringPodNS, triggeringPodName)
+		return
+	}
 
 	// Step 1: Build resources using shared helper
 	pipResources, natGatewayResource, servicesDTO := buildOutboundServiceResources(serviceUID, config, s.diffTracker.config)
@@ -797,16 +808,36 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID s
 	}
 }
 
-// deleteOutboundService deletes NAT Gateway resources
+// deleteOutboundService releases an egress identity: unlinks its BYO NAT Gateway, or deletes the managed
+// NAT Gateway and Public IPs it owns
 func (s *ServiceUpdater) deleteOutboundService(serviceUID string, correlationID string) {
 	s.logger.V(5).Info("Started deleting outbound service", "serviceUID", serviceUID, "correlationID", correlationID)
 
 	ctx, cancel := context.WithTimeout(s.ctx, getNRPOperationTimeout())
 	defer cancel()
+
+	if natGatewayID := s.diffTracker.byoNATGatewayID(serviceUID); natGatewayID != "" {
+		s.deleteBYOOutboundService(ctx, serviceUID, natGatewayID, correlationID)
+		return
+	}
+	if s.diffTracker.isUnmanagedNATGateway(serviceUID) {
+		// Its creation was rejected, so it provisioned nothing; the gateway of its name is not ours.
+		s.finishOutboundDeletion(ctx, serviceUID, correlationID, nil)
+		return
+	}
+	// Checked before anything changes, so a failed check retries the whole delete.
+	owned, err := s.diffTracker.ownsClusterNATGateway(ctx, serviceUID)
+	if err != nil {
+		s.finishOutboundDeletion(ctx, serviceUID, correlationID, err)
+		return
+	}
 	var lastErr error
 
-	// Step 1: Disassociate NAT Gateway from ServiceGateway
-	if err := s.diffTracker.disassociateNatGatewayFromServiceGateway(ctx, s.diffTracker.config.ServiceGatewayResourceName, serviceUID); err != nil {
+	// Step 1: Disassociate NAT Gateway from ServiceGateway. A gateway this identity does not own is
+	// not written at all; Step 2 still removes the identity's own registration.
+	if !owned {
+		s.logger.V(2).Info("Skipped disassociating a NAT Gateway not owned by this identity", "serviceUID", serviceUID)
+	} else if err := s.diffTracker.disassociateNatGatewayFromServiceGateway(ctx, s.diffTracker.config.ServiceGatewayResourceName, serviceUID); err != nil {
 		// Continue: the later steps are what free the resources. Logged at error level and counted
 		// because nothing retries this step, the deletion is still recorded as a success, and the
 		// ServiceGateway keeps a stale NAT Gateway association.
@@ -834,6 +865,51 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string, correlationID 
 		s.logger.V(5).Info("Unregistered outbound service from ServiceGateway", "serviceUID", serviceUID)
 	}
 
+	// Steps 3-4: delete the NAT Gateway and its Public IPs, unless they are not this identity's to
+	// delete (not created by this controller, or used by another service such as the default one).
+	if !owned {
+		s.logger.V(2).Info("Kept NAT Gateway and Public IPs not owned by this identity", "serviceUID", serviceUID)
+	} else if err := s.deleteManagedOutboundResources(ctx, serviceUID, correlationID); err != nil {
+		lastErr = err
+	}
+
+	s.finishOutboundDeletion(ctx, serviceUID, correlationID, lastErr)
+}
+
+// finishOutboundDeletion is Step 5 of deleting an egress identity: once its Azure resources are
+// released (deleted, unlinked for BYO, or left alone when not its own; lastErr == nil) it updates NRPResources, releases the last pods' finalizers and forgets any BYO
+// NAT Gateway; otherwise it reports the failure so the delete is retried.
+func (s *ServiceUpdater) finishOutboundDeletion(ctx context.Context, serviceUID, correlationID string, lastErr error) {
+	if lastErr != nil {
+		s.logger.V(4).Info("Could not delete outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "err", lastErr)
+		s.onComplete(serviceUID, false, lastErr)
+	} else {
+		s.logger.V(2).Info("Deleted outbound service", "serviceUID", serviceUID, "correlationID", correlationID)
+		// Update NRPResources to reflect the deletion
+		s.diffTracker.UpdateNRPNATGateways(SyncServicesReturnType{
+			Additions: nil,
+			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
+		})
+
+		// Remove finalizers from last-pod entries now that the identity's Azure resources are released
+		// (deleted, or unlinked for BYO). If that exhausts retries, report the delete as failed so it
+		// retries (every Azure step is idempotent) instead of stranding the pod finalizer.
+		if err := s.diffTracker.RemoveLastPodFinalizers(ctx, serviceUID); err != nil {
+			s.logger.V(4).Info("Could not clean up last-pod finalizers for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "err", err)
+			s.onComplete(serviceUID, false, err)
+			return
+		}
+
+		// Forgotten last: a retried delete must still take the BYO (unlink-only) path.
+		s.diffTracker.setBYONATGatewayID(serviceUID, "")
+		s.onComplete(serviceUID, true, nil)
+	}
+}
+
+// deleteManagedOutboundResources deletes the NAT Gateway and Public IPs this controller created for an
+// egress identity (steps 3 and 4 of deleteOutboundService) and returns the last error.
+func (s *ServiceUpdater) deleteManagedOutboundResources(ctx context.Context, serviceUID, correlationID string) error {
+	var lastErr error
 	// Step 3: Delete NAT Gateway
 	if err := s.diffTracker.deleteNatGateway(ctx, s.diffTracker.config.ResourceGroup, serviceUID); err != nil {
 		httpStatus, errCode := extractAzureErrorInfo(err)
@@ -857,28 +933,5 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string, correlationID 
 			s.logger.V(5).Info("Deleted Public IP for outbound service", "serviceUID", serviceUID, "publicIP", pipName)
 		}
 	}
-
-	// Step 5: Update NRPResources and notify completion
-	if lastErr != nil {
-		s.logger.V(4).Info("Could not delete outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "err", lastErr)
-		s.onComplete(serviceUID, false, lastErr)
-	} else {
-		s.logger.V(2).Info("Deleted outbound service", "serviceUID", serviceUID, "correlationID", correlationID)
-		// Update NRPResources to reflect the deletion
-		s.diffTracker.UpdateNRPNATGateways(SyncServicesReturnType{
-			Additions: nil,
-			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
-		})
-
-		// Remove finalizers from last-pod entries now that the NAT Gateway is deleted.
-		// If that exhausts retries, report the delete as failed so it retries (the NAT/PIP
-		// deletes above are idempotent on 404) instead of stranding the pod finalizer.
-		if err := s.diffTracker.RemoveLastPodFinalizers(ctx, serviceUID); err != nil {
-			s.logger.V(4).Info("Could not clean up last-pod finalizers for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "err", err)
-			s.onComplete(serviceUID, false, err)
-			return
-		}
-
-		s.onComplete(serviceUID, true, nil)
-	}
+	return lastErr
 }
