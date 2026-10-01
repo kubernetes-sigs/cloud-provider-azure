@@ -291,6 +291,9 @@ var _ = Describe("SLB - Service Validation", Label(slbTestLabel), func() {
 			{"no-lb-rule", "UnsupportedAccessRestriction", func(s *v1.Service) {
 				s.Annotations = map[string]string{"service.beta.kubernetes.io/port_80_no_lb_rule": "true"}
 			}},
+			{"private-link", "UnsupportedPrivateLinkService", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-pls-create": "true"}
+			}},
 			{"invalid-address", "InvalidLoadBalancerIP", func(s *v1.Service) {
 				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-load-balancer-ipv4": "203.0.113"}
 			}},
@@ -348,16 +351,20 @@ var _ = Describe("SLB - Service Validation", Label(slbTestLabel), func() {
 		utils.Logf("✓ Services with unsupported access or inconsistent Public IP settings were rejected")
 	})
 
-	It("should provision an allow-all service and warn about ignored annotations", func() {
+	It("should provision an allow-all service and warn about ignored and health-probe annotations", func() {
 		const serviceName = "allow-all-service"
 		labels := map[string]string{"app": serviceName}
 
-		By("Creating a service whose source ranges allow every address and that carries an ignored annotation")
+		By("Creating a service whose source ranges allow every address and that carries ignored and health-probe annotations")
 		service := &v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:        serviceName,
-				Namespace:   ns.Name,
-				Annotations: map[string]string{"service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path": "/healthz"},
+				Name:      serviceName,
+				Namespace: ns.Name,
+				Annotations: map[string]string{
+					"service.beta.kubernetes.io/azure-load-balancer-mode":                      "auto",
+					"service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path": "/healthz",
+					"service.beta.kubernetes.io/port_80_no_probe_rule":                         "true",
+				},
 			},
 			Spec: v1.ServiceSpec{
 				Type:                     v1.ServiceTypeLoadBalancer,
@@ -372,9 +379,10 @@ var _ = Describe("SLB - Service Validation", Label(slbTestLabel), func() {
 		By("Verifying the service is provisioned")
 		eventuallyServiceReconciled(string(created.UID), -1, 3*time.Minute)
 
-		By("Verifying a warning event lists the ignored annotation")
+		By("Verifying warning events list the ignored and the health-probe annotations")
 		expectServiceWarningEvent(serviceName, "ServiceGatewayIgnoredAnnotations")
+		expectServiceWarningEvent(serviceName, "ServiceGatewayHealthProbeNotSupported")
 
-		utils.Logf("✓ Allow-all service was provisioned and the ignored annotation was reported")
+		utils.Logf("✓ Allow-all service was provisioned and the ignored and health-probe annotations were reported")
 	})
 })

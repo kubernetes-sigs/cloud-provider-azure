@@ -543,6 +543,38 @@ func TestRecoverStuckFinalizers_RemovesFinalizerWhenNoAzureResource(t *testing.T
 		"finalizer with no Azure resource must be removed since there is nothing to clean up")
 }
 
+// A Service that chose a Public IP by name may have had it created without a load balancer (a crash, or a
+// failed rollback). Startup keeps its finalizer and returns it for a delete, which releases the Public IP when
+// it is ours, the same as at runtime.
+func TestRecoverStuckFinalizers_DeletesServiceThatChoseAPublicIPName(t *testing.T) {
+	delTime := metav1.Now()
+	service := func(uid, name string, annotations map[string]string) *v1.Service {
+		return &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name, Namespace: "default", UID: types.UID(uid), Annotations: annotations,
+				DeletionTimestamp: &delTime, Finalizers: []string{ServiceGatewayServiceCleanupFinalizer},
+			},
+			Spec: v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer},
+		}
+	}
+	named := service("uid-named", "named", map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "web-pip"})
+	plain := service("uid-plain", "plain", nil)
+	kube := fake.NewSimpleClientset(named, plain)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+
+	deletions := recoverStuckFinalizers(context.Background(), dt, &v1.ServiceList{Items: []v1.Service{*named, *plain}},
+		nil, nil, utilsets.NewString(), utilsets.NewString(), utilsets.NewString())
+
+	assert.Equal(t, []string{"uid-named"}, deletions)
+	got, err := kube.CoreV1().Services("default").Get(context.Background(), "named", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.True(t, hasServiceGatewayFinalizer(got), "the delete, not startup, decides whether the named Public IP is ours")
+	got, err = kube.CoreV1().Services("default").Get(context.Background(), "plain", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.False(t, hasServiceGatewayFinalizer(got), "a Service without a chosen Public IP name is still released directly")
+}
+
 // TestRecoverStuckFinalizers_SeedsAllDualStackAddresses verifies that a Terminating dual-stack egress
 // pod recovered at cold start is seeded with EVERY IP family, so its drain-gated finalizer is held
 // until both families leave NRP (a single-address seed would release the finalizer while the secondary
@@ -981,14 +1013,6 @@ func TestReconcileServices_AppliesRuntimeAdmissionOnStartup(t *testing.T) {
 		"a supported Service must still be provisioned on restart")
 }
 
-// TestRecoverServiceExternalIPs_SnapshotsNRPStateUnderLock pins that the NRP LoadBalancer set is
-// read under dt.mu.
-//
-// recoverServiceExternalIPs runs after WaitForInitialSync, so the ServiceUpdater and
-// LocationsUpdater goroutines are already live and mutate NRPResources.LoadBalancers under dt.mu.
-// IgnoreCaseSet wraps a map, so an unsynchronised read there is not a tolerable data race but a
-// fatal "concurrent map read and map write" that recover() cannot catch, killing the CCM during
-// startup recovery. Run with -race.
 // recoveryFactory serves the load balancers and Public IPs startup recovery reads: frontends maps a Service
 // UID to the Public IP ID its load balancer uses (others have no load balancer), and addresses maps a Public
 // IP "rg/name" to its address.
@@ -1022,6 +1046,14 @@ func recoveryFactory(t *testing.T, frontends, addresses map[string]string) *mock
 	return f
 }
 
+// TestRecoverServiceExternalIPs_SnapshotsNRPStateUnderLock pins that the NRP LoadBalancer set is
+// read under dt.mu.
+//
+// recoverServiceExternalIPs runs after WaitForInitialSync, so the ServiceUpdater and
+// LocationsUpdater goroutines are already live and mutate NRPResources.LoadBalancers under dt.mu.
+// IgnoreCaseSet wraps a map, so an unsynchronised read there is not a tolerable data race but a
+// fatal "concurrent map read and map write" that recover() cannot catch, killing the CCM during
+// startup recovery. Run with -race.
 func TestRecoverServiceExternalIPs_SnapshotsNRPStateUnderLock(t *testing.T) {
 	dt := newTestDiffTracker()
 	dt.config = testConfig()
@@ -1116,9 +1148,12 @@ func TestCleanupOrphanedPublicIPs_KeepsPIPForServiceStillDesiredInKubernetes(t *
 		}
 	}
 
+	// Tagged the way the controller creates it, so only the Kubernetes check keeps it.
+	egress := detached(PublicIPName(egressUID))
+	egress.Tags = egressIdentityTags(egressUID)
 	assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{
 		detached(PublicIPName(desiredUID)),
-		detached(PublicIPName(egressUID)),
+		egress,
 		detached(PublicIPName(orphanUID)),
 	}, nil))
 
@@ -1131,9 +1166,10 @@ func TestCleanupOrphanedPublicIPs_KeepsPIPForServiceStillDesiredInKubernetes(t *
 }
 
 // TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress pins what the sweeper may and may
-// not delete. An unused "*-pip" is a leak, whether it is named from a Service UUID or from an egress
-// pod label. What still has to survive is an address that is attached, reserved for the default
-// gateway, wanted by a Kubernetes object, or chosen by a Service by name or address.
+// not delete. An unused address this controller created is a leak, whether it is named from a Service
+// UUID or tagged for an egress identity. What still has to survive is an address that is attached,
+// reserved for the default gateway, wanted by a Kubernetes object, chosen by a Service by name or
+// address, or not provably created by this controller (a user's "*-pip").
 func TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress(t *testing.T) {
 	run := func(t *testing.T, pips []*armnetwork.PublicIPAddress, chosen ...string) []string {
 		ctrl := gomock.NewController(t)
@@ -1170,12 +1206,22 @@ func TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress(t *testing.T) 
 
 	const managedOrphan = "22222222-2222-2222-2222-222222222222-pip"
 
+	egress := func(name string) *armnetwork.PublicIPAddress {
+		pip := detached(name)
+		identity, _ := identityFromPublicIPName(name)
+		pip.Tags = egressIdentityTags(identity)
+		return pip
+	}
+	otherIdentity := detached("team-b-pip")
+	otherIdentity.Tags = egressIdentityTags("someone-else")
 	deleted := run(t, []*armnetwork.PublicIPAddress{
-		detached("team-egress-pip"),
-		detached("team-egress-pip-v6"),
+		egress("team-egress-pip"),
+		otherIdentity,
+		egress("team-egress-pip-v6"),
 		detached(managedOrphan),
-		detached(PublicIPName(DefaultOutboundNATGatewayName)),
+		egress(PublicIPName(DefaultOutboundNATGatewayName)),
 		detached("not-one-of-ours"),
+		detached("users-pip"),
 	})
 
 	assert.Contains(t, deleted, managedOrphan,
@@ -1188,12 +1234,32 @@ func TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress(t *testing.T) 
 		"the cluster's default egress address is RP-owned and must never be deleted")
 	assert.NotContains(t, deleted, "not-one-of-ours",
 		"a name that does not follow the controller's convention must be left alone")
+	assert.NotContains(t, deleted, "users-pip",
+		"an unused \"*-pip\" this controller cannot prove it created may be a user's and must be left alone")
+	assert.NotContains(t, deleted, "team-b-pip", "an address tagged for another egress identity is not this name's")
 
-	byAddress := detached("reserved-pip")
+	// The sweep runs at startup, before the cluster name is known: a cluster tag in the cluster resource
+	// group is taken as this cluster's.
+	named := detached("chosen-name-pip")
+	named.Tags = map[string]*string{consts.ServiceTagKey: ptr.To("ns/web"), consts.ClusterNameKey: ptr.To("cluster")}
+	assert.Equal(t, []string{"chosen-name-pip"}, run(t, []*armnetwork.PublicIPAddress{named}),
+		"a Public IP created for a Service under a chosen name is swept once nothing uses it")
+	clusterOnly := detached("cluster-only-pip")
+	clusterOnly.Tags = map[string]*string{consts.ClusterNameKey: ptr.To("cluster")}
+	assert.Empty(t, run(t, []*armnetwork.PublicIPAddress{clusterOnly}), "a cluster tag without a Service tag is not an ownership tag")
+
+	// Tagged as egress addresses so that only the choice keeps the chosen ones.
+	byName := egress("web-pip")
+	byAddress := egress("reserved-pip")
 	byAddress.Properties.IPAddress = ptr.To("20.0.0.7")
-	deleted = run(t, []*armnetwork.PublicIPAddress{detached("web-pip"), byAddress, detached("unused-pip")}, "Web-Pip", "20.0.0.7")
+	unused := detached("unused-pip")
+	unused.Tags = egressIdentityTags("unused")
+	deleted = run(t, []*armnetwork.PublicIPAddress{byName, byAddress, unused}, "Web-Pip", "20.0.0.7")
 	assert.Equal(t, []string{"unused-pip"}, deleted,
 		"a Public IP a Service chooses by name or address is the user's and must never be swept")
+
+	assert.Equal(t, []string{managedOrphan}, run(t, []*armnetwork.PublicIPAddress{detached(managedOrphan)}, managedOrphan),
+		"a Public IP named after a Service UID can never be another Service's, so a choice does not keep it")
 }
 
 func TestChosenPublicIPs(t *testing.T) {
@@ -1836,14 +1902,4 @@ func TestInitializeFromCluster_SeedsClusterAddressFamiliesFromNodes(t *testing.T
 	v4Families := v4Only.outboundIPFamiliesLocked()
 	v4Only.mu.Unlock()
 	assert.Equal(t, []string{"IPv4"}, v4Families)
-}
-
-func TestWithoutChosenPublicIPs(t *testing.T) {
-	byAddress := &armnetwork.PublicIPAddress{Name: ptr.To("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa-pip"), Properties: &armnetwork.PublicIPAddressPropertiesFormat{IPAddress: ptr.To("20.0.0.7")}}
-	names := utilsets.NewString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb-pip", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa-pip", "cccccccc-cccc-cccc-cccc-cccccccccccc-pip")
-	remaining := withoutChosenPublicIPs(names, []*armnetwork.PublicIPAddress{byAddress}, utilsets.NewString("BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB-PIP", "20.0.0.7"))
-	assert.ElementsMatch(t, []string{"cccccccc-cccc-cccc-cccc-cccccccccccc-pip"}, remaining.UnsortedList(),
-		"a Public IP a Service chooses by name or address must not be scheduled as an orphan")
-	assert.Equal(t, 3, names.Len(), "the input set is not modified")
-	assert.Nil(t, withoutChosenPublicIPs(nil, nil, utilsets.NewString()))
 }

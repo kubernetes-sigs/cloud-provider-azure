@@ -120,6 +120,10 @@ func identityFromPublicIPName(pipName string) (identity string, ok bool) {
 // IP. It is not managed by this controller and must never be created, updated or deleted by it.
 const DefaultOutboundNATGatewayName = "default-natgw"
 
+// EgressIdentityTagKey tags the NAT Gateway and Public IPs this controller creates for an egress
+// identity with that identity, so an orphaned Public IP can be told apart from a user's.
+const EgressIdentityTagKey = "k8s-azure-egress-identity"
+
 // IsReservedEgressIdentity reports whether name refers to a resource this controller must not
 // manage. Matching is case-insensitive because the value originates from a user-controlled label and
 // Azure may normalise resource-name casing differently across endpoints.
@@ -366,6 +370,7 @@ func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dt
 				Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
 			},
 			Location: to.Ptr(dtConfig.Location),
+			Tags:     egressIdentityTags(serviceUID),
 			Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 				PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 				PublicIPAddressVersion:   to.Ptr(version),
@@ -395,6 +400,7 @@ func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dt
 			Name: to.Ptr(armnetwork.NatGatewaySKUNameStandardV2),
 		},
 		Location: to.Ptr(dtConfig.Location),
+		Tags:     egressIdentityTags(serviceUID),
 		Properties: &armnetwork.NatGatewayPropertiesFormat{
 			ServiceGateway: &armnetwork.SubResource{
 				ID: to.Ptr(dtConfig.ServiceGatewayResourceID()),
@@ -419,6 +425,23 @@ func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dt
 	)
 
 	return pips, natGateway, servicesDTO
+}
+
+func egressIdentityTags(identity string) map[string]*string {
+	return map[string]*string{EgressIdentityTagKey: to.Ptr(identity)}
+}
+
+// taggedForEgressIdentity reports whether the Public IP carries the egress identity tag of identity.
+func taggedForEgressIdentity(pip *armnetwork.PublicIPAddress, identity string) bool {
+	if pip == nil {
+		return false
+	}
+	for key, value := range pip.Tags {
+		if strings.EqualFold(key, EgressIdentityTagKey) && value != nil && strings.EqualFold(strings.TrimSpace(*value), identity) {
+			return true
+		}
+	}
+	return false
 }
 
 // newIgnoreCaseSetFromSlice creates an IgnoreCaseSet from a slice of strings
@@ -568,6 +591,8 @@ const (
 var serviceGatewayAnnotations = []string{
 	consts.ServiceAnnotationLoadBalancerInternal,
 	consts.ServiceAnnotationLoadBalancerIdleTimeout,
+	// Floating IP is always disabled with PodIP backend pools, which is what this annotation asks for.
+	consts.ServiceAnnotationDisableLoadBalancerFloatingIP,
 	consts.ServiceAnnotationAzurePIPTags,
 	consts.ServiceAnnotationIPTagsForPublicIP,
 	consts.ServiceAnnotationDNSLabelName,
@@ -809,7 +834,8 @@ func unusedPublicIPAnnotation(service *v1.Service, key string) bool {
 }
 
 // IgnoredServiceAnnotations returns, sorted, the Azure Service annotations ServiceGateway does not
-// implement and does not reject.
+// implement and does not reject. Health-probe annotations are reported separately
+// (HealthProbeServiceAnnotations) and port_N_no_probe_rule is what ServiceGateway already does.
 func IgnoredServiceAnnotations(service *v1.Service) []string {
 	if service == nil {
 		return nil
@@ -818,6 +844,8 @@ func IgnoredServiceAnnotations(service *v1.Service) []string {
 	for key := range service.Annotations {
 		if (!strings.HasPrefix(key, azureServiceAnnotationPrefix) && !strings.HasPrefix(key, portServiceAnnotationPrefix)) ||
 			strings.HasSuffix(key, "_"+string(consts.PortAnnotationNoLBRule)) ||
+			strings.HasSuffix(key, "_"+string(consts.PortAnnotationNoHealthProbeRule)) ||
+			healthProbeAnnotation(key) ||
 			(slices.Contains(serviceGatewayAnnotations, key) && !unusedPublicIPAnnotation(service, key)) ||
 			slices.Contains(sourceRestrictionAnnotations, key) {
 			continue
@@ -826,6 +854,32 @@ func IgnoredServiceAnnotations(service *v1.Service) []string {
 	}
 	slices.Sort(ignored)
 	return ignored
+}
+
+// healthProbeAnnotation reports an annotation that configures the load balancer health probe. A Service
+// load balancer cannot have probes (ProbeCannotBeAttachedToServiceLoadBalancer); traffic goes only to Ready pods.
+func healthProbeAnnotation(key string) bool {
+	switch key {
+	case consts.ServiceAnnotationLoadBalancerHealthProbeProtocol, consts.ServiceAnnotationLoadBalancerHealthProbeInterval,
+		consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe, consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath:
+		return true
+	}
+	return strings.HasPrefix(key, portServiceAnnotationPrefix) && strings.Contains(key, "_"+fmt.Sprintf(consts.HealthProbeAnnotationPrefixPattern, ""))
+}
+
+// HealthProbeServiceAnnotations returns, sorted, the Service's health-probe annotations, which have no effect.
+func HealthProbeServiceAnnotations(service *v1.Service) []string {
+	if service == nil {
+		return nil
+	}
+	var probes []string
+	for key := range service.Annotations {
+		if healthProbeAnnotation(key) {
+			probes = append(probes, key)
+		}
+	}
+	slices.Sort(probes)
+	return probes
 }
 
 // Supported bounds for the idle-timeout annotation. Azure Load Balancer accepts 4-30 minutes, and
@@ -864,6 +918,15 @@ func AdmitInboundService(service *v1.Service) (*InboundConfig, error) {
 		return nil, &InboundConfigValidationError{
 			Reason:  "UnsupportedAccessRestriction",
 			Message: fmt.Sprintf("%s limits which sources or ports can reach the Service, which is not supported when ServiceGateway is enabled; no network security rule is programmed and every port gets a load-balancing rule, so the Service would be reachable from any source", setting),
+		}
+	}
+
+	// A Private Link Service can be attached to a ServiceGateway load balancer, but traffic through its
+	// private endpoints does not reach the pods, so the Service would only be reachable on its public IP.
+	if consts.IsPLSEnabled(service.Annotations) {
+		return nil, &InboundConfigValidationError{
+			Reason:  "UnsupportedPrivateLinkService",
+			Message: fmt.Sprintf("a Private Link Service (%q) is not supported when ServiceGateway is enabled; traffic through its private endpoints would not reach the pods", consts.ServiceAnnotationPLSCreation),
 		}
 	}
 

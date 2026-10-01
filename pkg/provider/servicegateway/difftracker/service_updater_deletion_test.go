@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
@@ -212,7 +213,7 @@ func TestServiceUpdaterDeleteInboundService_ReleasesOwnedPublicIPs(t *testing.T)
 			pips: map[string]map[string]*string{"rg/old": {consts.ClusterNameKey: ptr.To("cluster")}}},
 		{name: "unreadable", annotations: named, frontend: mineID, readErr: &azcore.ResponseError{StatusCode: http.StatusForbidden}, wantEvent: true},
 		{name: "not deletable", annotations: named, frontend: mineID, pips: map[string]map[string]*string{"other-rg/mine": owned},
-			deleteErr: errors.New("PublicIPAddressCannotBeDeleted"), wantEvent: true},
+			deleteErr: &azcore.ResponseError{StatusCode: http.StatusBadRequest, ErrorCode: "PublicIPAddressCannotBeDeleted"}, wantEvent: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -281,7 +282,7 @@ func TestServiceUpdaterDeleteInboundService_ReleasesOwnedPublicIPs(t *testing.T)
 			var success bool
 			su := deletionTestUpdater(dt, func(_ string, ok bool, _ error) { success = ok })
 			su.deleteInboundService("uid-1", "corr")
-			assert.True(t, success, "releasing Public IPs never holds the Service's deletion")
+			assert.True(t, success, "a Public IP that cannot be released for a lasting reason does not hold the Service's deletion")
 			assert.ElementsMatch(t, tc.wantDeleted, deletedNow())
 			if tc.noCluster {
 				dt.serviceUpdater = su
@@ -349,6 +350,256 @@ func TestServiceUpdaterDeleteInboundService_ReleasesOwnedPublicIPs(t *testing.T)
 	})
 }
 
+// A transient failure releasing a Public IP the controller owns fails the delete so it is retried. The load
+// balancer that pointed to the Public IP is already gone then, so the retry must still know which one to release.
+func TestServiceUpdaterDeleteInboundService_RetriesTransientPublicIPRelease(t *testing.T) {
+	const mineID = "/subscriptions/sub/resourceGroups/other-rg/providers/Microsoft.Network/publicIPAddresses/mine"
+	owned := map[string]*string{consts.ServiceTagKey: ptr.To("default/svc"), consts.ClusterNameKey: ptr.To("cluster")}
+	for _, transient := range []error{
+		&azcore.ResponseError{StatusCode: http.StatusTooManyRequests},
+		&azcore.ResponseError{StatusCode: http.StatusServiceUnavailable},
+		context.DeadlineExceeded,
+	} {
+		t.Run(transient.Error(), func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			f := mock_azclient.NewMockClientFactory(ctrl)
+			sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+			lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+			pip := mock_publicipaddressclient.NewMockInterface(ctrl)
+			f.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+			f.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+			f.EXPECT().GetPublicIPAddressClient().Return(pip).AnyTimes()
+			sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			lbGone := false
+			lb.EXPECT().Get(gomock.Any(), "rg", "uid-1", gomock.Any()).DoAndReturn(func(context.Context, string, string, *string) (*armnetwork.LoadBalancer, error) {
+				if lbGone {
+					return nil, notFoundError()
+				}
+				return &armnetwork.LoadBalancer{Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To(mineID)},
+					}}},
+				}}, nil
+			}).AnyTimes()
+			lb.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(context.Context, string, string) error {
+				lbGone = true
+				return nil
+			}).AnyTimes()
+			pip.EXPECT().Get(gomock.Any(), "other-rg", "mine", gomock.Any()).Return(&armnetwork.PublicIPAddress{Name: ptr.To("mine"), Tags: owned}, nil).AnyTimes()
+			pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName("uid-1")).Return(nil).AnyTimes()
+			released := 0
+			gomock.InOrder(
+				pip.EXPECT().Delete(gomock.Any(), "other-rg", "mine").Return(transient),
+				pip.EXPECT().Delete(gomock.Any(), "other-rg", "mine").DoAndReturn(func(context.Context, string, string) error {
+					released++
+					return nil
+				}),
+			)
+
+			// Chosen by address, so the Service's annotations cannot name the Public IP again on the retry.
+			svc := deletionTestService()
+			svc.Spec.LoadBalancerIP = "20.0.0.7"
+			svc.Spec.Ports = []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}}
+			dt := deletionTestDiffTracker(fake.NewSimpleClientset(svc), f)
+			dt.SetClusterName("cluster")
+			var success bool
+			su := deletionTestUpdater(dt, func(_ string, ok bool, _ error) { success = ok })
+
+			su.deleteInboundService("uid-1", "corr")
+			assert.False(t, success, "a transient failure must be retried, not leak the Public IP")
+			su.deleteInboundService("uid-1", "corr")
+			assert.True(t, success)
+			assert.Equal(t, 1, released, "the retry releases the Public IP although the load balancer is gone")
+			assert.Empty(t, su.pendingReleases, "nothing is left to release")
+		})
+	}
+}
+
+// A release deferred until the cluster name is known runs after the Service's delete has completed, so a
+// transient failure there is retried on its own.
+func TestServiceUpdaterReleaseDeferredPublicIPs_RetriesTransientFailure(t *testing.T) {
+	defer func(d time.Duration) { deferredReleaseRetryDelay = d }(deferredReleaseRetryDelay)
+	deferredReleaseRetryDelay = 10 * time.Millisecond
+
+	const mineID = "/subscriptions/sub/resourceGroups/other-rg/providers/Microsoft.Network/publicIPAddresses/mine"
+	owned := map[string]*string{consts.ServiceTagKey: ptr.To("default/svc"), consts.ClusterNameKey: ptr.To("cluster")}
+	ctrl := gomock.NewController(t)
+	f := mock_azclient.NewMockClientFactory(ctrl)
+	pip := mock_publicipaddressclient.NewMockInterface(ctrl)
+	f.EXPECT().GetPublicIPAddressClient().Return(pip).AnyTimes()
+	pip.EXPECT().Get(gomock.Any(), "other-rg", "mine", gomock.Any()).Return(&armnetwork.PublicIPAddress{Name: ptr.To("mine"), Tags: owned}, nil).AnyTimes()
+	released := make(chan struct{}, 1)
+	gomock.InOrder(
+		pip.EXPECT().Delete(gomock.Any(), "other-rg", "mine").Return(&azcore.ResponseError{StatusCode: http.StatusTooManyRequests}),
+		pip.EXPECT().Delete(gomock.Any(), "other-rg", "mine").DoAndReturn(func(context.Context, string, string) error {
+			released <- struct{}{}
+			return nil
+		}),
+	)
+
+	dt := deletionTestDiffTracker(fake.NewSimpleClientset(), f)
+	su := deletionTestUpdater(dt, func(string, bool, error) {})
+	su.ctx, su.cancel = context.WithCancel(context.Background())
+	defer su.Stop()
+	su.deferredReleases = []deferredPublicIPRelease{{serviceUID: "uid-1", publicIPID: mineID}}
+	dt.SetClusterName("cluster")
+	su.releaseDeferredPublicIPs()
+
+	select {
+	case <-released:
+	case <-time.After(5 * time.Second):
+		t.Fatal("a deferred release that failed transiently was not retried")
+	}
+	assert.Eventually(t, func() bool {
+		su.mu.Lock()
+		defer su.mu.Unlock()
+		return len(su.deferredReleases) == 0
+	}, time.Second, 10*time.Millisecond)
+}
+
+// A transient failure to read the Service while releasing its Public IPs must not skip the one it chose by
+// name: the delete is retried instead.
+func TestServiceUpdaterDeleteInboundService_RetriesWhenServiceLookupFailsBeforeRelease(t *testing.T) {
+	owned := map[string]*string{consts.ServiceTagKey: ptr.To("default/svc"), consts.ClusterNameKey: ptr.To("cluster")}
+	ctrl := gomock.NewController(t)
+	f := mock_azclient.NewMockClientFactory(ctrl)
+	sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+	lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+	pip := mock_publicipaddressclient.NewMockInterface(ctrl)
+	f.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+	f.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+	f.EXPECT().GetPublicIPAddressClient().Return(pip).AnyTimes()
+	sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	lb.EXPECT().Get(gomock.Any(), "rg", "uid-1", gomock.Any()).Return(nil, notFoundError()).AnyTimes()
+	lb.EXPECT().Delete(gomock.Any(), "rg", "uid-1").Return(nil).AnyTimes()
+	pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName("uid-1")).Return(nil).AnyTimes()
+	pip.EXPECT().Get(gomock.Any(), "rg", "mine", gomock.Any()).Return(&armnetwork.PublicIPAddress{Name: ptr.To("mine"), Tags: owned}, nil).AnyTimes()
+	pip.EXPECT().Delete(gomock.Any(), "rg", "mine").Return(nil).Times(1)
+
+	svc := deletionTestService()
+	svc.Annotations = map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "mine"}
+	svc.Spec.Ports = []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}}
+	kube := fake.NewSimpleClientset(svc)
+	// Only the lookup made to find the Public IPs to release fails; the later one, before the finalizer is
+	// removed, succeeds, so only the release can make this delete fail.
+	failures := 1
+	fail := func(k8stesting.Action) (bool, runtime.Object, error) {
+		if failures == 0 {
+			return false, nil, nil
+		}
+		failures--
+		return true, nil, apierrors.NewInternalError(errors.New("etcdserver: request timed out"))
+	}
+	kube.PrependReactor("get", "services", fail)
+	kube.PrependReactor("list", "services", fail)
+	dt := deletionTestDiffTracker(kube, f)
+	dt.SetClusterName("cluster")
+	var success bool
+	su := deletionTestUpdater(dt, func(_ string, ok bool, _ error) { success = ok })
+
+	su.deleteInboundService("uid-1", "corr")
+	assert.False(t, success, "a transient Service lookup must retry the delete, not skip the named Public IP")
+	su.deleteInboundService("uid-1", "corr")
+	assert.True(t, success)
+}
+
+// The same, for a Public IP chosen by address: only the load balancer named it, and it is gone on the retry.
+func TestServiceUpdaterDeleteInboundService_RemembersFrontendWhenServiceLookupFails(t *testing.T) {
+	const mineID = "/subscriptions/sub/resourceGroups/other-rg/providers/Microsoft.Network/publicIPAddresses/mine"
+	owned := map[string]*string{consts.ServiceTagKey: ptr.To("default/svc"), consts.ClusterNameKey: ptr.To("cluster")}
+	ctrl := gomock.NewController(t)
+	f := mock_azclient.NewMockClientFactory(ctrl)
+	sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+	lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+	pip := mock_publicipaddressclient.NewMockInterface(ctrl)
+	f.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+	f.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+	f.EXPECT().GetPublicIPAddressClient().Return(pip).AnyTimes()
+	sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	gomock.InOrder(
+		lb.EXPECT().Get(gomock.Any(), "rg", "uid-1", gomock.Any()).Return(&armnetwork.LoadBalancer{Properties: &armnetwork.LoadBalancerPropertiesFormat{
+			FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+				PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To(mineID)},
+			}}},
+		}}, nil),
+		lb.EXPECT().Get(gomock.Any(), "rg", "uid-1", gomock.Any()).Return(nil, notFoundError()),
+	)
+	lb.EXPECT().Delete(gomock.Any(), "rg", "uid-1").Return(nil).AnyTimes()
+	pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName("uid-1")).Return(nil).AnyTimes()
+	pip.EXPECT().Get(gomock.Any(), "other-rg", "mine", gomock.Any()).Return(&armnetwork.PublicIPAddress{Name: ptr.To("mine"), Tags: owned}, nil).AnyTimes()
+	pip.EXPECT().Delete(gomock.Any(), "other-rg", "mine").Return(nil).Times(1)
+
+	svc := deletionTestService()
+	svc.Spec.LoadBalancerIP = "20.0.0.7"
+	svc.Spec.Ports = []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}}
+	kube := fake.NewSimpleClientset(svc)
+	failures := 1
+	fail := func(k8stesting.Action) (bool, runtime.Object, error) {
+		if failures == 0 {
+			return false, nil, nil
+		}
+		failures--
+		return true, nil, apierrors.NewInternalError(errors.New("etcdserver: request timed out"))
+	}
+	kube.PrependReactor("get", "services", fail)
+	kube.PrependReactor("list", "services", fail)
+	dt := deletionTestDiffTracker(kube, f)
+	dt.SetClusterName("cluster")
+	var success bool
+	su := deletionTestUpdater(dt, func(_ string, ok bool, _ error) { success = ok })
+
+	su.deleteInboundService("uid-1", "corr")
+	assert.False(t, success)
+	su.deleteInboundService("uid-1", "corr")
+	assert.True(t, success)
+	assert.Empty(t, su.pendingReleases)
+}
+
+// A load balancer delete that fails on our side may still complete in Azure, so the retry, which then finds no
+// load balancer, must still release the Public IP it used.
+func TestServiceUpdaterDeleteInboundService_ReleasesPublicIPAfterFailedLoadBalancerDelete(t *testing.T) {
+	const mineID = "/subscriptions/sub/resourceGroups/other-rg/providers/Microsoft.Network/publicIPAddresses/mine"
+	owned := map[string]*string{consts.ServiceTagKey: ptr.To("default/svc"), consts.ClusterNameKey: ptr.To("cluster")}
+	ctrl := gomock.NewController(t)
+	f := mock_azclient.NewMockClientFactory(ctrl)
+	sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+	lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+	pip := mock_publicipaddressclient.NewMockInterface(ctrl)
+	f.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+	f.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+	f.EXPECT().GetPublicIPAddressClient().Return(pip).AnyTimes()
+	sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	gomock.InOrder(
+		lb.EXPECT().Get(gomock.Any(), "rg", "uid-1", gomock.Any()).Return(&armnetwork.LoadBalancer{Properties: &armnetwork.LoadBalancerPropertiesFormat{
+			FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+				PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To(mineID)},
+			}}},
+		}}, nil),
+		lb.EXPECT().Get(gomock.Any(), "rg", "uid-1", gomock.Any()).Return(nil, notFoundError()),
+	)
+	gomock.InOrder(
+		lb.EXPECT().Delete(gomock.Any(), "rg", "uid-1").Return(context.DeadlineExceeded),
+		lb.EXPECT().Delete(gomock.Any(), "rg", "uid-1").Return(nil),
+	)
+	pip.EXPECT().Get(gomock.Any(), "other-rg", "mine", gomock.Any()).Return(&armnetwork.PublicIPAddress{Name: ptr.To("mine"), Tags: owned}, nil).AnyTimes()
+	pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName("uid-1")).Return(nil).AnyTimes()
+	pip.EXPECT().Delete(gomock.Any(), "other-rg", "mine").Return(nil).Times(1)
+
+	svc := deletionTestService()
+	svc.Spec.LoadBalancerIP = "20.0.0.7"
+	svc.Spec.Ports = []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}}
+	dt := deletionTestDiffTracker(fake.NewSimpleClientset(svc), f)
+	dt.SetClusterName("cluster")
+	var success bool
+	su := deletionTestUpdater(dt, func(_ string, ok bool, _ error) { success = ok })
+
+	su.deleteInboundService("uid-1", "corr")
+	assert.False(t, success)
+	su.deleteInboundService("uid-1", "corr")
+	assert.True(t, success)
+	assert.Empty(t, su.pendingReleases)
+}
+
 func TestServiceUpdaterReleaseOrDefer_DrainsWhenTheClusterNameArrivedMeanwhile(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	f := mock_azclient.NewMockClientFactory(ctrl)
@@ -377,7 +628,7 @@ func TestServiceUpdaterReleaseDeferredPublicIPs_ReportsFailures(t *testing.T) {
 	f.EXPECT().GetPublicIPAddressClient().Return(pip).AnyTimes()
 	owned := map[string]*string{consts.ServiceTagKey: ptr.To("default/svc"), consts.ClusterNameKey: ptr.To("cluster")}
 	pip.EXPECT().Get(gomock.Any(), "other-rg", "mine", gomock.Any()).Return(&armnetwork.PublicIPAddress{Name: ptr.To("mine"), Tags: owned}, nil).AnyTimes()
-	pip.EXPECT().Delete(gomock.Any(), "other-rg", "mine").Return(errors.New("PublicIPAddressCannotBeDeleted"))
+	pip.EXPECT().Delete(gomock.Any(), "other-rg", "mine").Return(&azcore.ResponseError{StatusCode: http.StatusBadRequest, ErrorCode: "PublicIPAddressCannotBeDeleted"})
 
 	svc := deletionTestService()
 	dt := deletionTestDiffTracker(fake.NewSimpleClientset(svc), f)
@@ -388,6 +639,10 @@ func TestServiceUpdaterReleaseDeferredPublicIPs_ReportsFailures(t *testing.T) {
 	assert.NoError(t, su.releaseOrDefer(context.Background(), "uid-1", "default/svc", "", id))
 	dt.SetClusterName("cluster")
 	su.releaseDeferredPublicIPs()
+	su.mu.Lock()
+	assert.Empty(t, su.deferredReleases, "a lasting failure is not retried")
+	assert.NotContains(t, su.retryTimers, deferredReleasesRetryKey)
+	su.mu.Unlock()
 	close(recorder.Events)
 	var events []string
 	for event := range recorder.Events {

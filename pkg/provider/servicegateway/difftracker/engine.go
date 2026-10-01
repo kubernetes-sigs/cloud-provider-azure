@@ -117,6 +117,10 @@ func (dt *DiffTracker) ReconcileInboundService(service *v1.Service) error {
 		dt.recordEvent(service, v1.EventTypeWarning, "ServiceGatewayIgnoredAnnotations",
 			fmt.Sprintf("these annotations are not supported when ServiceGateway is enabled and have no effect: %s", strings.Join(ignored, ", ")))
 	}
+	if probes := HealthProbeServiceAnnotations(service); len(probes) > 0 {
+		dt.recordEvent(service, v1.EventTypeWarning, "ServiceGatewayHealthProbeNotSupported",
+			fmt.Sprintf("load balancers of ServiceGateway Services cannot have health probes, so these annotations have no effect: %s; traffic is sent only to Ready pods, so use a readinessProbe on the pods to control which backends receive traffic", strings.Join(probes, ", ")))
+	}
 	if reserved := ReservedPIPTagKeysInAnnotation(service); len(reserved) > 0 {
 		dt.recordEvent(service, v1.EventTypeWarning, "IgnoredPIPTagKeys",
 			fmt.Sprintf("Ignoring reserved tag keys in the %s annotation; the controller owns the values of: %s",

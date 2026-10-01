@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -56,7 +57,11 @@ type ServiceUpdater struct {
 	// deferredReleases are Public IPs to release once the cluster name, needed to decide ownership, is
 	// known. Guarded by mu.
 	deferredReleases []deferredPublicIPRelease
-	activeOps        map[string]bool // Tracks which services are being processed
+	// pendingReleases are, per Service, the Public IPs the next delete attempt must release: one a delete could
+	// not release because of a transient error, or the one a load balancer used when its delete failed (Azure
+	// may still delete it, and the retry then cannot read it). Guarded by mu.
+	pendingReleases map[string][]string
+	activeOps       map[string]bool // Tracks which services are being processed
 	// retryTimers holds the pending re-dispatch timer per service. A parked or backed-off operation
 	// has no external driver, so it self-arms with time.AfterFunc; those timers are not tracked by wg
 	// nor bound to ctx, so they must be stopped explicitly or they keep the whole DiffTracker
@@ -728,7 +733,7 @@ func (s *ServiceUpdater) inboundPublicIPInUse(ctx context.Context, serviceUID st
 		return nil, fmt.Errorf("failed to read Public IP %s of LoadBalancer %s: %w", id.Name, serviceUID, err)
 	}
 	inUse := &inboundPublicIP{resourceGroup: id.ResourceGroupName, name: id.Name, existing: existing}
-	inUse.owned = s.isManagedPublicIPName(serviceUID, inUse.resourceGroup, inUse.name) || s.ownsPublicIP(config, existing)
+	inUse.owned = s.isManagedPublicIPName(serviceUID, inUse.resourceGroup, inUse.name) || s.ownsPublicIP(config, existing, inUse.resourceGroup)
 
 	resourceGroup := s.diffTracker.config.ResourceGroup
 	if config != nil && config.PIPResourceGroup != "" {
@@ -756,8 +761,18 @@ func isNotFoundError(err error) bool {
 	return errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound
 }
 
-func (s *ServiceUpdater) ownsPublicIP(config *InboundConfig, pip *armnetwork.PublicIPAddress) bool {
-	return config != nil && ownsPublicIPByTags(pip, config.ServiceName, s.clusterName(config))
+func (s *ServiceUpdater) ownsPublicIP(config *InboundConfig, pip *armnetwork.PublicIPAddress, resourceGroup string) bool {
+	return config != nil && ownsPublicIPByTags(pip, config.ServiceName, s.clusterNameFor(config, pip, resourceGroup))
+}
+
+// clusterNameFor returns the cluster name to judge the Public IP's ownership tags by. It is not known yet at
+// startup; as in releasePublicIP, a cluster tag in the cluster resource group is then this cluster's, since
+// only this cluster's controller writes Public IPs there.
+func (s *ServiceUpdater) clusterNameFor(config *InboundConfig, pip *armnetwork.PublicIPAddress, resourceGroup string) string {
+	if name := s.clusterName(config); name != "" || !strings.EqualFold(resourceGroup, s.diffTracker.config.ResourceGroup) {
+		return name
+	}
+	return clusterOwnershipTag(pip)
 }
 
 func (s *ServiceUpdater) clusterName(config *InboundConfig) string {
@@ -797,7 +812,7 @@ func (s *ServiceUpdater) resolveInboundPublicIP(ctx context.Context, serviceUID 
 		for _, pip := range pips {
 			if pip != nil && pip.Name != nil && pip.Properties != nil && net.ParseIP(derefString(pip.Properties.IPAddress)).Equal(net.ParseIP(config.LoadBalancerIP)) {
 				target.name, target.existing = *pip.Name, pip
-				target.owned = s.ownsPublicIP(config, pip)
+				target.owned = s.ownsPublicIP(config, pip, target.resourceGroup)
 				return target, nil
 			}
 		}
@@ -819,7 +834,7 @@ func (s *ServiceUpdater) resolveInboundPublicIP(ctx context.Context, serviceUID 
 		return nil, fmt.Errorf("public IP %s not found", target.name)
 	}
 	target.existing = existing
-	target.owned = s.isManagedPublicIPName(serviceUID, target.resourceGroup, target.name) || s.ownsPublicIP(config, existing)
+	target.owned = s.isManagedPublicIPName(serviceUID, target.resourceGroup, target.name) || s.ownsPublicIP(config, existing, target.resourceGroup)
 	return target, nil
 }
 
@@ -847,6 +862,16 @@ func (s *ServiceUpdater) checkExistingPublicIP(ctx context.Context, serviceUID s
 	}
 	if pip.Properties != nil && pip.Properties.NatGateway != nil {
 		usedBy = derefString(pip.Properties.NatGateway.ID)
+	}
+	// The managed Public IP of another Service or egress identity is never taken over, even while unattached:
+	// its own delete removes it by name.
+	if identity, ok := identityFromPublicIPName(target.name); ok && usedBy == "" && !strings.EqualFold(identity, serviceUID) &&
+		strings.EqualFold(target.resourceGroup, s.diffTracker.config.ResourceGroup) && (isValidServiceUUID(identity) || taggedForEgressIdentity(pip, identity)) {
+		usedBy = identity
+	}
+	// So is one the controller created for another Service of this cluster: that Service's delete releases it.
+	if usedBy == "" && !target.owned && ownedByClusterTags(pip, s.clusterNameFor(config, pip, target.resourceGroup)) {
+		usedBy = "another Service of this cluster"
 	}
 	if usedBy != "" {
 		message := fmt.Sprintf("public IP %s is already used by %s", target.name, usedBy)
@@ -1001,15 +1026,46 @@ func (s *ServiceUpdater) releaseDeferredPublicIPs() {
 	s.deferredReleases = nil
 	s.mu.Unlock()
 	clusterName := s.diffTracker.getClusterName()
+	var retry []deferredPublicIPRelease
 	for _, release := range pending {
 		ctx, cancel := context.WithTimeout(s.ctx, getNRPOperationTimeout())
 		if err := s.releasePublicIP(ctx, release.serviceUID, release.serviceName, clusterName, release.publicIPID); err != nil {
 			s.logger.Error(err, "Could not delete a Public IP the Service no longer uses", "serviceUID", release.serviceUID, "publicIP", release.publicIPID)
 			s.warnService(ctx, release.serviceUID, "PublicIPCleanupFailed", fmt.Sprintf("Public IP %s could not be checked or deleted: %v", release.publicIPID, err))
+			if isTransientAzureError(err) {
+				retry = append(retry, release)
+			}
 		}
 		cancel()
 	}
+	if len(retry) == 0 {
+		return
+	}
+	// The Service's delete has already completed, so nothing else retries these.
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.deferredReleases = append(s.deferredReleases, retry...)
+	if s.retryTimers == nil {
+		s.retryTimers = make(map[string]*time.Timer)
+	}
+	if _, armed := s.retryTimers[deferredReleasesRetryKey]; !armed {
+		s.retryTimers[deferredReleasesRetryKey] = time.AfterFunc(deferredReleaseRetryDelay, func() {
+			s.mu.Lock()
+			delete(s.retryTimers, deferredReleasesRetryKey)
+			s.mu.Unlock()
+			if s.ctx != nil && s.ctx.Err() != nil {
+				return
+			}
+			s.releaseDeferredPublicIPs()
+		})
+	}
 }
+
+// deferredReleasesRetryKey keys the retry of deferred releases in retryTimers, so Stop also stops it.
+const deferredReleasesRetryKey = "deferred-public-ip-releases"
+
+// deferredReleaseRetryDelay is how long a deferred release that failed transiently waits before it is retried.
+var deferredReleaseRetryDelay = 30 * time.Second
 
 // releasePublicIP deletes the Public IP when the controller owns it for the Service: the one named after
 // it, or one whose ownership tags name it. With the Service gone (serviceName empty), the tags must name
@@ -1051,11 +1107,17 @@ func (s *ServiceUpdater) releasePublicIP(ctx context.Context, serviceUID, servic
 }
 
 // releaseInboundPublicIPs deletes, after the load balancer, the Public IPs besides the one named after the
-// Service that the controller owns: the one the load balancer used, and the one the Service chooses by name
-// (found again when a retried delete no longer has the load balancer). A failure is reported but does not
-// hold the Service's deletion: the Public IP may be unreadable or still in use elsewhere.
-func (s *ServiceUpdater) releaseInboundPublicIPs(ctx context.Context, serviceUID, frontendID string) {
+// Service that the controller owns: the one the load balancer used, the one the Service chooses by name, and
+// those an earlier attempt could not release. A transient failure is returned so the delete is retried; any
+// other failure (for example the Public IP is in use elsewhere, or access is denied) is reported and does not
+// hold the Service's deletion.
+func (s *ServiceUpdater) releaseInboundPublicIPs(ctx context.Context, serviceUID, frontendID string) error {
 	svc, err := s.diffTracker.getServiceByUID(ctx, serviceUID)
+	if err != nil && !apierrors.IsNotFound(err) {
+		// The Service may still name a Public IP to release; retry rather than skip it.
+		s.rememberPendingRelease(serviceUID, frontendID)
+		return fmt.Errorf("failed to look up service to release its Public IPs: %w", err)
+	}
 	if err != nil {
 		svc = nil
 	}
@@ -1071,8 +1133,14 @@ func (s *ServiceUpdater) releaseInboundPublicIPs(ctx context.Context, serviceUID
 			ids = append(ids, s.inboundPublicIPID(&inboundPublicIP{resourceGroup: resourceGroup, name: config.PIPName}))
 		}
 	}
+	s.mu.Lock()
+	ids = append(ids, s.pendingReleases[serviceUID]...)
+	s.mu.Unlock()
+
+	var retry []string
+	var lastErr error
 	for i, id := range ids {
-		if id == "" || (i > 0 && strings.EqualFold(id, ids[0])) {
+		if id == "" || slices.ContainsFunc(ids[:i], func(earlier string) bool { return strings.EqualFold(earlier, id) }) {
 			continue
 		}
 		if err := s.releaseOrDefer(ctx, serviceUID, serviceName, s.diffTracker.getClusterName(), id); err != nil {
@@ -1080,8 +1148,47 @@ func (s *ServiceUpdater) releaseInboundPublicIPs(ctx context.Context, serviceUID
 			if svc != nil {
 				s.diffTracker.recordEvent(svc, v1.EventTypeWarning, "PublicIPCleanupFailed", fmt.Sprintf("Public IP %s could not be checked or deleted: %v", id, err))
 			}
+			if isTransientAzureError(err) {
+				retry = append(retry, id)
+				lastErr = err
+			}
 		}
 	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(retry) == 0 {
+		delete(s.pendingReleases, serviceUID)
+		return nil
+	}
+	if s.pendingReleases == nil {
+		s.pendingReleases = map[string][]string{}
+	}
+	s.pendingReleases[serviceUID] = retry
+	return fmt.Errorf("failed to delete Public IP %s: %w", retry[0], lastErr)
+}
+
+// rememberPendingRelease records a Public IP for the next delete attempt of the Service to release.
+func (s *ServiceUpdater) rememberPendingRelease(serviceUID, publicIPID string) {
+	if publicIPID == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if slices.ContainsFunc(s.pendingReleases[serviceUID], func(id string) bool { return strings.EqualFold(id, publicIPID) }) {
+		return
+	}
+	if s.pendingReleases == nil {
+		s.pendingReleases = map[string][]string{}
+	}
+	s.pendingReleases[serviceUID] = append(s.pendingReleases[serviceUID], publicIPID)
+}
+
+// isTransientAzureError reports an error that may clear by itself: throttling, a server error, or no
+// response at all (timeout, connection error).
+func isTransientAzureError(err error) bool {
+	httpStatus, _ := extractAzureErrorInfo(err)
+	return httpStatus == 0 || httpStatus == http.StatusTooManyRequests || httpStatus >= http.StatusInternalServerError
 }
 
 // checkPublicIPPrefix fails terminally when the prefix can never provide the Public IP, so the Service
@@ -1230,6 +1337,9 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID s
 			httpStatus, errCode := extractAzureErrorInfo(err)
 			s.logger.V(4).Info("Could not delete LoadBalancer for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
 			lastErr = fmt.Errorf("failed to delete LoadBalancer: %w", err)
+			// Azure may still delete it (a timeout while waiting for the operation), and the retry then cannot read
+			// which Public IP it used.
+			s.rememberPendingRelease(serviceUID, frontendID)
 		} else {
 			lbDeleted = true
 			s.logger.V(5).Info("Deleted LoadBalancer for inbound service", "serviceUID", serviceUID)
@@ -1265,7 +1375,9 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID s
 	}
 
 	if lbDeleted {
-		s.releaseInboundPublicIPs(ctx, serviceUID, frontendID)
+		if err := s.releaseInboundPublicIPs(ctx, serviceUID, frontendID); err != nil {
+			lastErr = err
+		}
 	}
 
 	// Step 5: Update NRPResources and notify completion

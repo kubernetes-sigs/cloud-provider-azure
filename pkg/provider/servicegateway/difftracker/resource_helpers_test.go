@@ -520,6 +520,8 @@ func TestBuildOutboundServiceResources_Basic(t *testing.T) {
 	assert.Contains(t, *natGw.ID, "/subscriptions/network-sub/")
 	assert.Equal(t, armnetwork.NatGatewaySKUNameStandardV2, *natGw.SKU.Name)
 	assert.Equal(t, "centralus", *natGw.Location)
+	assert.Equal(t, egressIdentityTags("egress-uid-456"), pip.Tags)
+	assert.Equal(t, egressIdentityTags("egress-uid-456"), natGw.Tags)
 
 	// Verify NAT Gateway has ServiceGateway reference
 	assert.NotNil(t, natGw.Properties.ServiceGateway)
@@ -976,6 +978,9 @@ func TestAdmitInboundService_RejectsUnimplementedSpecFields(t *testing.T) {
 		reason string
 	}{
 		{"sessionAffinity ClientIP", func(s *v1.Service) { s.Spec.SessionAffinity = v1.ServiceAffinityClientIP }, "UnsupportedSessionAffinity"},
+		{"Private Link Service", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationPLSCreation: "True"}
+		}, "UnsupportedPrivateLinkService"},
 		{"loadBalancerIP that is not an address", func(s *v1.Service) { s.Spec.LoadBalancerIP = "not-an-ip" }, "InvalidLoadBalancerIP"},
 		{"IPv6 loadBalancerIP on an IPv4 Service", func(s *v1.Service) { s.Spec.LoadBalancerIP = "2001:db8::1" }, "InvalidLoadBalancerIP"},
 		{"loadBalancerSourceRanges", func(s *v1.Service) { s.Spec.LoadBalancerSourceRanges = []string{"203.0.113.0/24"} }, "UnsupportedAccessRestriction"},
@@ -1061,6 +1066,7 @@ func TestAdmitInboundService_RejectsUnimplementedSpecFields(t *testing.T) {
 			consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges:       "true",
 			consts.ServiceAnnotationPIPNameDualStack[false]:                     "",
 			consts.BuildAnnotationKeyForPort(80, consts.PortAnnotationNoLBRule): "false",
+			consts.ServiceAnnotationPLSCreation:                                 "false",
 		}
 		config, err := AdmitInboundService(svc)
 		assert.NoError(t, err)
@@ -1184,26 +1190,52 @@ func TestAdmitInboundService_RejectsUnimplementedSpecFields(t *testing.T) {
 
 func TestIgnoredServiceAnnotations(t *testing.T) {
 	svc := &v1.Service{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{
-		consts.ServiceAnnotationLoadBalancerResourceGroup:                            "rg",
-		consts.ServiceAnnotationDNSLabelName:                                         "app",
-		consts.ServiceAnnotationAzurePIPTags:                                         "a=b",
-		consts.ServiceAnnotationIPTagsForPublicIP:                                    "RoutingPreference=Internet",
-		consts.ServiceAnnotationLoadBalancerInternal:                                 "false",
-		consts.ServiceAnnotationLoadBalancerIdleTimeout:                              "10",
-		consts.ServiceAnnotationAllowedIPRanges:                                      "0.0.0.0/0",
-		consts.ServiceAnnotationPIPNameDualStack[false]:                              "",
-		v1.AnnotationLoadBalancerSourceRangesKey:                                     "0.0.0.0/0",
-		consts.BuildAnnotationKeyForPort(80, consts.PortAnnotationNoLBRule):          "false",
-		consts.BuildAnnotationKeyForPort(80, consts.PortAnnotationNoHealthProbeRule): "true",
-		"example.com/unrelated":                                                      "x",
+		consts.ServiceAnnotationLoadBalancerResourceGroup:                                 "rg",
+		consts.ServiceAnnotationDNSLabelName:                                              "app",
+		consts.ServiceAnnotationAzurePIPTags:                                              "a=b",
+		consts.ServiceAnnotationIPTagsForPublicIP:                                         "RoutingPreference=Internet",
+		consts.ServiceAnnotationLoadBalancerInternal:                                      "false",
+		consts.ServiceAnnotationLoadBalancerIdleTimeout:                                   "10",
+		consts.ServiceAnnotationAllowedIPRanges:                                           "0.0.0.0/0",
+		consts.ServiceAnnotationPIPNameDualStack[false]:                                   "",
+		v1.AnnotationLoadBalancerSourceRangesKey:                                          "0.0.0.0/0",
+		consts.BuildAnnotationKeyForPort(80, consts.PortAnnotationNoLBRule):               "false",
+		consts.BuildAnnotationKeyForPort(80, consts.PortAnnotationNoHealthProbeRule):      "true",
+		consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath:                        "/healthz",
+		consts.BuildHealthProbeAnnotationKeyForPort(80, consts.HealthProbeParamsProtocol): "http",
+		"example.com/unrelated":                                                           "x",
 	}}}
 
+	assert.Equal(t, []string{consts.ServiceAnnotationLoadBalancerResourceGroup}, IgnoredServiceAnnotations(svc),
+		"health-probe annotations are reported separately and no_probe_rule is already the behaviour")
 	assert.Equal(t, []string{
-		consts.ServiceAnnotationLoadBalancerResourceGroup,
-		consts.BuildAnnotationKeyForPort(80, consts.PortAnnotationNoHealthProbeRule),
-	}, IgnoredServiceAnnotations(svc))
+		consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath,
+		consts.BuildHealthProbeAnnotationKeyForPort(80, consts.HealthProbeParamsProtocol),
+	}, HealthProbeServiceAnnotations(svc))
+	assert.Empty(t, HealthProbeServiceAnnotations(&v1.Service{}))
+	assert.Empty(t, HealthProbeServiceAnnotations(nil))
 	assert.Empty(t, IgnoredServiceAnnotations(&v1.Service{}))
 	assert.Empty(t, IgnoredServiceAnnotations(nil))
+
+	for _, key := range []string{
+		consts.ServiceAnnotationLoadBalancerHealthProbeProtocol,
+		consts.ServiceAnnotationLoadBalancerHealthProbeInterval,
+		consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe,
+		consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath,
+		consts.BuildHealthProbeAnnotationKeyForPort(443, consts.HealthProbeParamsPort),
+		consts.BuildHealthProbeAnnotationKeyForPort(443, consts.HealthProbeParamsProbeInterval),
+		consts.BuildHealthProbeAnnotationKeyForPort(443, consts.HealthProbeParamsNumOfProbe),
+		consts.BuildHealthProbeAnnotationKeyForPort(443, consts.HealthProbeParamsRequestPath),
+	} {
+		assert.True(t, healthProbeAnnotation(key), key)
+	}
+	for _, key := range []string{
+		consts.BuildAnnotationKeyForPort(443, consts.PortAnnotationNoHealthProbeRule),
+		consts.ServiceAnnotationLoadBalancerIdleTimeout,
+		"example.com/health-probe_protocol",
+	} {
+		assert.False(t, healthProbeAnnotation(key), key)
+	}
 
 	t.Run("Public IP annotations that do not apply to the Service", func(t *testing.T) {
 		svc := &v1.Service{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{

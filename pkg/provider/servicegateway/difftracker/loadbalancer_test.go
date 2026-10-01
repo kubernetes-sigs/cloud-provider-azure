@@ -144,6 +144,13 @@ func TestLoadBalancerEmitsWarningEventForRejectedService(t *testing.T) {
 			reason: "UnsupportedAccessRestriction",
 		},
 		{
+			name: "private link service",
+			mutate: func(svc *v1.Service) {
+				svc.Annotations = map[string]string{consts.ServiceAnnotationPLSCreation: consts.TrueAnnotationValue}
+			},
+			reason: "UnsupportedPrivateLinkService",
+		},
+		{
 			name: "invalid load balancer IP",
 			mutate: func(svc *v1.Service) {
 				svc.Annotations = map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "not-an-ip"}
@@ -184,8 +191,9 @@ func TestLoadBalancerWarnsAboutIgnoredAnnotations(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	svc := newInboundService("service-uid")
 	svc.Annotations = map[string]string{
-		consts.ServiceAnnotationLoadBalancerResourceGroup: "rg",
-		consts.ServiceAnnotationLoadBalancerIdleTimeout:   "10",
+		consts.ServiceAnnotationLoadBalancerResourceGroup:     "rg",
+		consts.ServiceAnnotationLoadBalancerIdleTimeout:       "10",
+		consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "false",
 	}
 	tracker := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset(svc))
 	recorder := record.NewFakeRecorder(10)
@@ -203,6 +211,7 @@ func TestLoadBalancerWarnsAboutIgnoredAnnotations(t *testing.T) {
 		assert.Contains(t, event, "ServiceGatewayIgnoredAnnotations")
 		assert.Contains(t, event, consts.ServiceAnnotationLoadBalancerResourceGroup)
 		assert.NotContains(t, event, consts.ServiceAnnotationLoadBalancerIdleTimeout)
+		assert.NotContains(t, event, consts.ServiceAnnotationDisableLoadBalancerFloatingIP)
 	default:
 		t.Fatal("expected a warning event listing the ignored annotation")
 	}
@@ -213,6 +222,26 @@ func TestLoadBalancerWarnsAboutIgnoredAnnotations(t *testing.T) {
 	select {
 	case event := <-recorder.Events:
 		t.Fatalf("unexpected event for supported annotations only: %s", event)
+	default:
+	}
+
+	svc.Annotations[consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath] = "/healthz"
+	svc.Annotations[consts.BuildAnnotationKeyForPort(80, consts.PortAnnotationNoHealthProbeRule)] = "true"
+	_, err = lb.EnsureLoadBalancer(context.Background(), "cluster", svc, nil)
+	assert.NoError(t, err)
+	select {
+	case event := <-recorder.Events:
+		assert.Contains(t, event, v1.EventTypeWarning)
+		assert.Contains(t, event, "ServiceGatewayHealthProbeNotSupported")
+		assert.Contains(t, event, consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath)
+		assert.Contains(t, event, "readinessProbe")
+		assert.NotContains(t, event, string(consts.PortAnnotationNoHealthProbeRule))
+	default:
+		t.Fatal("expected a warning event about the health-probe annotation")
+	}
+	select {
+	case event := <-recorder.Events:
+		t.Fatalf("health-probe annotations must not also be reported as ignored: %s", event)
 	default:
 	}
 }

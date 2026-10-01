@@ -35,9 +35,10 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-// Edge cases around the inbound service shape: a service with many distinct ports, and several
-// services that select the same pods. Both assert the cloud-provider contract (LB rules and pod
-// registrations) and are independent of the environment dataplane.
+// Edge cases around the inbound service and its Public IP: many ports, shared pod selection, Public IP
+// tags, DNS label and prefix, and Public IPs chosen by name or address. They assert the Azure and Service
+// Gateway state; specs that also probe traffic skip, after those checks, when the environment dataplane
+// does not carry it.
 var _ = Describe("SLB - Service Config Edge Cases", Label(slbTestLabel), func() {
 	basename := "slb-service-config-test"
 
@@ -469,7 +470,8 @@ var _ = Describe("SLB - Service Config Edge Cases", Label(slbTestLabel), func() 
 		controllerWarnings := map[string]bool{
 			"PublicIPNotFound": true, "PublicIPInUse": true, "PublicIPCleanupFailed": true, "ServiceGatewayConfigurationRejected": true,
 			"InvalidLoadBalancerIP": true, "ConflictingPublicIPSettings": true, "ServiceGatewayIgnoredAnnotations": true,
-			"PublicIPChangeNotSupported": true, "PublicIPPrefixChangeNotSupported": true,
+			"ServiceGatewayHealthProbeNotSupported": true,
+			"PublicIPChangeNotSupported":            true, "PublicIPPrefixChangeNotSupported": true,
 		}
 		events, err := cs.CoreV1().Events(ns.Name).List(context.TODO(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())

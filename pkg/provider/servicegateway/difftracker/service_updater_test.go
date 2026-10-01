@@ -1208,6 +1208,8 @@ func TestServiceUpdaterCreateInboundService_UsesChosenPublicIP(t *testing.T) {
 	unallocated := userPIP("mine", "")
 	otherCluster := ownedPIP("mine", "20.0.0.7")
 	otherCluster.Tags[consts.ClusterNameKey] = ptr.To("other-cluster")
+	otherService := ownedPIP("mine", "20.0.0.7")
+	otherService.Tags[consts.ServiceTagKey] = ptr.To("ns/other")
 
 	for _, tc := range []struct {
 		name     string
@@ -1219,6 +1221,7 @@ func TestServiceUpdaterCreateInboundService_UsesChosenPublicIP(t *testing.T) {
 		{name: "a Public IP used by another resource waits", pip: inUse, config: byName, event: "PublicIPInUse"},
 		{name: "a Public IP used by a NAT gateway waits", pip: natAttached, config: byName, event: "PublicIPInUse"},
 		{name: "a Public IP created for this Service but used elsewhere waits", pip: ownedInUse, config: byName, event: "PublicIPInUse"},
+		{name: "a Public IP created for another Service of this cluster waits", pip: otherService, config: byName, event: "PublicIPInUse"},
 		{name: "a Public IP still provisioning waits", pip: updating, config: byName},
 		{name: "a Standard Public IP is rejected", pip: standard, config: byName, terminal: true},
 		{name: "an IPv6 Public IP for an IPv4 Service is rejected", pip: ipv6, config: byName, terminal: true},
@@ -1247,6 +1250,53 @@ func TestServiceUpdaterCreateInboundService_UsesChosenPublicIP(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("at startup the cluster name is not known yet and the cluster tag in the cluster resource group decides", func(t *testing.T) {
+		atStartup := func(mutate func(*InboundConfig)) *InboundConfig {
+			config := withConfig(mutate)
+			config.ClusterName = ""
+			return config
+		}
+		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/mine": ownedPIP("mine", "20.0.0.7")})
+		success, _, err := w.run(t, uid, false, atStartup(func(c *InboundConfig) { c.PIPName = "mine"; c.DNSLabel = ptr.To("app") }))
+		assert.True(t, success, "the Service's own Public IP is managed, not refused as a user's: %v", err)
+		assert.Equal(t, "app", *w.pips["rg/mine"].Properties.DNSSettings.DomainNameLabel)
+
+		other := ownedPIP("mine", "20.0.0.7")
+		other.Tags[consts.ServiceTagKey] = ptr.To("ns/other")
+		w = newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/mine": other})
+		success, _, err = w.run(t, uid, false, atStartup(func(c *InboundConfig) { c.PIPName = "mine" }))
+		assert.False(t, success)
+		assert.False(t, isTerminalError(err), "%v", err)
+		assert.Zero(t, w.lbPuts, "another Service's Public IP is not attached")
+		assert.True(t, w.hasEvent("PublicIPInUse"), "%v", w.events)
+
+		// Elsewhere another cluster may have tagged it, so it waits for the cluster name.
+		w = newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"other-rg/mine": ownedPIP("mine", "20.0.0.7")})
+		success, _, err = w.run(t, uid, false, atStartup(func(c *InboundConfig) { c.PIPName = "mine"; c.PIPResourceGroup = "other-rg"; c.DNSLabel = ptr.To("app") }))
+		assert.False(t, success)
+		assert.Empty(t, w.created, "a Public IP in another resource group is not changed before its ownership is known")
+	})
+
+	t.Run("the managed Public IP of another Service or egress identity is never taken", func(t *testing.T) {
+		otherService := PublicIPName("99999999-9999-9999-9999-999999999999")
+		egress := userPIP("team-egress-pip", "20.0.0.8")
+		egress.Tags = egressIdentityTags("team-egress")
+		for name, pip := range map[string]*armnetwork.PublicIPAddress{otherService: userPIP(otherService, "20.0.0.7"), "team-egress-pip": egress} {
+			for _, config := range []*InboundConfig{
+				withConfig(func(c *InboundConfig) { c.PIPName = name }),
+				withLoadBalancerIP(*pip.Properties.IPAddress),
+			} {
+				w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/" + name: pip})
+				success, _, err := w.run(t, uid, false, config)
+				assert.False(t, success, name)
+				assert.False(t, isTerminalError(err), "%s: retried while it exists: %v", name, err)
+				assert.Empty(t, w.created, name)
+				assert.Zero(t, w.lbPuts, name)
+				assert.True(t, w.hasEvent("PublicIPInUse"), "%s: expected a PublicIPInUse event, got %v", name, w.events)
+			}
+		}
+	})
 
 	t.Run("a Public IP already used by this Service's load balancer is used", func(t *testing.T) {
 		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/mine": ours})
@@ -1459,6 +1509,7 @@ func TestServiceUpdaterUpdateInboundService_KeepsThePublicIPOfTheLoadBalancer(t 
 		config.DNSLabel = ptr.To("app")
 		success, _, err := w.run(t, uid, true, config)
 		assert.True(t, success, "%v", err)
+		assert.Equal(t, []string{"rg/mine"}, w.created, "the Public IP is written")
 		assert.Equal(t, "app", *w.pips["rg/mine"].Properties.DNSSettings.DomainNameLabel)
 	})
 

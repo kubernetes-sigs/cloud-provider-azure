@@ -554,7 +554,6 @@ func azureEgressResourcesAbsentErr(egressName string) error {
 	return azurePublicIPNamedAbsentErr(fmt.Sprintf("%s-pip-v6", egressName))
 }
 
-// verifyAzureResources verifies Public IP, Load Balancer, and Service Gateway for a given service
 // publicIPID returns the ID of a Public IP in the cluster resource group.
 func publicIPID(name string) string {
 	return fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s", subscriptionID, resourceGroupName, name)
@@ -617,6 +616,7 @@ func serviceUsesPublicIPErr(serviceUID, publicIPID string) error {
 	return fmt.Errorf("service %s not found in Service Gateway", serviceUID)
 }
 
+// verifyAzureResources verifies Public IP, Load Balancer, and Service Gateway for a given service
 func verifyAzureResources(serviceUID string) error {
 	publicIPName := fmt.Sprintf("%s-pip", serviceUID)
 	loadBalancerName := serviceUID
