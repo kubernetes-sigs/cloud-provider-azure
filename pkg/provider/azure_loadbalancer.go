@@ -1179,6 +1179,174 @@ func (az *Cloud) getServiceLoadBalancerStatus(ctx context.Context, service *v1.S
 	return &v1.LoadBalancerStatus{Ingress: lbIngresses}, lbIPsPrimaryPIPs, fipConfigs, nil
 }
 
+func (az *Cloud) validateAdditionalPublicIPs(ctx context.Context, clusterName string, service *v1.Service, managedLBs []*armnetwork.LoadBalancer) error {
+	requestedIPs, err := loadbalancer.AdditionalPublicIPs(service)
+	if err != nil || len(requestedIPs) == 0 {
+		return err
+	}
+
+	managedFrontendIPs := make(map[netip.Addr]struct{})
+
+	// Check frontend IPs selected for this reconciliation before they are attached to a managed load balancer.
+	var pipResourceGroup string
+	isInternal := requiresInternalLoadBalancer(service)
+	if !isInternal {
+		pipResourceGroup = az.getPublicIPAddressResourceGroup(service)
+	}
+	var internalSubnet *armnetwork.Subnet
+	serviceName := getServiceName(service)
+	v4Enabled, v6Enabled := getIPFamiliesEnabled(service)
+	for _, isIPv6 := range []bool{consts.IPVersionIPv4, consts.IPVersionIPv6} {
+		if (isIPv6 && !v6Enabled) || (!isIPv6 && !v4Enabled) {
+			continue
+		}
+		loadBalancerIP := getServiceLoadBalancerIP(service, isIPv6)
+		if isInternal {
+			if loadBalancerIP == "" && len(service.Status.LoadBalancer.Ingress) > 0 {
+				if internalSubnet == nil {
+					subnetName := getInternalSubnet(service)
+					if subnetName == nil {
+						subnetName = &az.SubnetName
+					}
+					vnetResourceGroup := az.ResourceGroup
+					if az.VnetResourceGroup != "" {
+						vnetResourceGroup = az.VnetResourceGroup
+					}
+					internalSubnet, err = az.subnetRepo.Get(ctx, vnetResourceGroup, az.VnetName, *subnetName)
+					if exists, err := errutils.CheckResourceExistsFromAzcoreError(err); !exists && err != nil {
+						return fmt.Errorf("get subnet %q selected by service %q: %w", *subnetName, serviceName, err)
+					} else if !exists {
+						return fmt.Errorf("subnet %q selected by service %q was not found in virtual network %q", *subnetName, serviceName, az.VnetName)
+					}
+				}
+				loadBalancerIP = getPrivateIPFromIngresses(service.Status.LoadBalancer.Ingress, isIPv6, internalSubnet)
+			}
+			if loadBalancerIP == "" {
+				continue
+			}
+			ip, err := netip.ParseAddr(loadBalancerIP)
+			if err != nil {
+				return fmt.Errorf("parse private IP %q selected by service %q: %w", loadBalancerIP, serviceName, err)
+			}
+			managedFrontendIPs[ip.Unmap()] = struct{}{}
+			continue
+		}
+		// A PIP is created before the LB is updated, so a partial reconciliation can leave it unattached.
+		// Include the selected PIP here; IPs already attached to managed LB frontends are collected below.
+		pipName, _, err := az.determinePublicIPName(ctx, clusterName, service, isIPv6)
+		if err != nil {
+			return fmt.Errorf("determine public IP for service %q: %w", serviceName, err)
+		}
+		pip, exists, err := az.getPublicIPAddress(ctx, pipResourceGroup, pipName, azcache.CacheReadTypeDefault)
+		if err != nil {
+			return fmt.Errorf("get public IP %q selected by service %q: %w", pipName, serviceName, err)
+		}
+		if !exists {
+			if getServicePIPName(service, isIPv6) != "" || loadBalancerIP != "" {
+				return fmt.Errorf("public IP %q selected by service %q was not found in resource group %q", pipName, serviceName, pipResourceGroup)
+			}
+			continue
+		}
+		address := ""
+		if pip.Properties != nil {
+			address = ptr.Deref(pip.Properties.IPAddress, "")
+		}
+		if address == "" {
+			return fmt.Errorf("public IP %q selected by service %q has no IP address", pipName, serviceName)
+		}
+		ip, err := netip.ParseAddr(address)
+		if err != nil {
+			return fmt.Errorf("parse public IP %q selected by service %q: %w", address, serviceName, err)
+		}
+		managedFrontendIPs[ip.Unmap()] = struct{}{}
+	}
+
+	// Check frontend IPs already attached to managed load balancers.
+	for _, lb := range managedLBs {
+		if lb == nil || lb.Properties == nil || len(lb.Properties.FrontendIPConfigurations) == 0 {
+			continue
+		}
+		lbName := ptr.Deref(lb.Name, "")
+		for _, frontend := range lb.Properties.FrontendIPConfigurations {
+			if frontend == nil || frontend.Properties == nil {
+				continue
+			}
+			frontendName := ptr.Deref(frontend.Name, "")
+
+			if frontend.Properties.PublicIPAddress != nil {
+				pipID := ptr.Deref(frontend.Properties.PublicIPAddress.ID, "")
+				if pipID == "" {
+					return fmt.Errorf("managed load balancer %q frontend %q has no public IP ID", lbName, frontendName)
+				}
+				pipName, err := getLastSegment(pipID, "/")
+				if err != nil {
+					return fmt.Errorf("get public IP name from ID for managed load balancer %q frontend %q: %w", lbName, frontendName, err)
+				}
+				pipResourceGroup, err := getPIPRGFromID(strings.ToLower(pipID))
+				if err != nil {
+					return fmt.Errorf("get public IP resource group from ID for managed load balancer %q frontend %q: %w", lbName, frontendName, err)
+				}
+				pip, exists, err := az.getPublicIPAddress(ctx, pipResourceGroup, pipName, azcache.CacheReadTypeDefault)
+				if err != nil {
+					return fmt.Errorf("get public IP %q for managed load balancer %q: %w", pipName, lbName, err)
+				}
+				if !exists {
+					return fmt.Errorf("public IP %q for managed load balancer %q was not found in resource group %q", pipName, lbName, pipResourceGroup)
+				}
+				address := ""
+				if pip.Properties != nil {
+					address = ptr.Deref(pip.Properties.IPAddress, "")
+				}
+				if address == "" {
+					return fmt.Errorf("public IP %q for managed load balancer %q has no IP address", pipName, lbName)
+				}
+				ip, err := netip.ParseAddr(address)
+				if err != nil {
+					return fmt.Errorf("parse public IP %q for managed load balancer %q: %w", address, lbName, err)
+				}
+				managedFrontendIPs[ip.Unmap()] = struct{}{}
+				continue
+			}
+
+			privateIP := ptr.Deref(frontend.Properties.PrivateIPAddress, "")
+			if privateIP == "" {
+				if ptr.Deref(frontend.Properties.PrivateIPAllocationMethod, "") == armnetwork.IPAllocationMethodDynamic {
+					continue
+				}
+				return fmt.Errorf("managed load balancer %q frontend %q has no IP address", lbName, frontendName)
+			}
+			ip, err := netip.ParseAddr(privateIP)
+			if err != nil {
+				return fmt.Errorf("parse managed load balancer %q frontend IP %q: %w", lbName, privateIP, err)
+			}
+			managedFrontendIPs[ip.Unmap()] = struct{}{}
+		}
+	}
+
+	conflictingIPs := make([]netip.Addr, 0)
+	seen := make(map[netip.Addr]struct{})
+	for _, ip := range requestedIPs {
+		ip = ip.Unmap()
+		if _, conflict := managedFrontendIPs[ip]; !conflict {
+			continue
+		}
+		if _, duplicate := seen[ip]; duplicate {
+			continue
+		}
+		seen[ip] = struct{}{}
+		conflictingIPs = append(conflictingIPs, ip)
+	}
+	if len(conflictingIPs) > 0 {
+		return fmt.Errorf(
+			"additional public IPs %v conflict with frontends of managed load balancers; remove them from annotation %s",
+			conflictingIPs,
+			consts.ServiceAnnotationAdditionalPublicIPs,
+		)
+	}
+
+	return nil
+}
+
 func (az *Cloud) determinePublicIPName(ctx context.Context, clusterName string, service *v1.Service, isIPv6 bool) (string, bool, error) {
 	if name := getServicePIPName(service, isIPv6); name != "" {
 		return name, true, nil
@@ -1943,6 +2111,11 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 	if err != nil {
 		return nil, false, fmt.Errorf("reconcileLoadBalancer: failed to list managed LB: %w", err)
 	}
+	if wantLb {
+		if err := az.validateAdditionalPublicIPs(ctx, clusterName, service, existingLBs); err != nil {
+			return nil, false, err
+		}
+	}
 
 	if existingLBs, err = az.cleanupBasicLoadBalancer(ctx, clusterName, service, existingLBs); err != nil {
 		logger.Error(err, "failed to check and remove outdated basic load balancers", "service", serviceName)
@@ -2138,7 +2311,7 @@ func (az *Cloud) reconcileLoadBalancer(ctx context.Context, clusterName string, 
 			// Internal LB changes (subnet/private IP) don't affect PIPs.
 			if fipChanged && !requiresInternalLoadBalancer(service) {
 				pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
-				err = az.pipCache.Delete(pipResourceGroup)
+				err = az.pipCache.Delete(getPIPCacheKey(pipResourceGroup))
 				if err != nil {
 					logger.V(5).Info("Failed to invalidate PIP cache", "lbName", lbName, "pipResourceGroup", pipResourceGroup, "err", err)
 				} else {
@@ -2977,26 +3150,19 @@ func (az *Cloud) reconcileFrontendIPConfigs(
 				}
 
 				loadBalancerIP := getServiceLoadBalancerIP(service, isIPv6)
-				privateIP := ""
-				ingressIPInSubnet := func(ingresses []v1.LoadBalancerIngress) bool {
-					for _, ingress := range ingresses {
-						ingressIP := ingress.IP
-						if (net.ParseIP(ingressIP).To4() == nil) == isIPv6 && ipInSubnet(ingressIP, subnet) {
-							privateIP = ingressIP
-							break
-						}
-					}
-					return privateIP != ""
+				var statusIngresses []v1.LoadBalancerIngress
+				if status != nil {
+					statusIngresses = status.Ingress
 				}
 				if loadBalancerIP != "" {
 					logger.V(4).Info("use loadBalancerIP from Service spec", "service", serviceName, "loadBalancerIP", loadBalancerIP)
 					configProperties.PrivateIPAllocationMethod = to.Ptr(armnetwork.IPAllocationMethodStatic)
 					configProperties.PrivateIPAddress = &loadBalancerIP
-				} else if status != nil && len(status.Ingress) > 0 && ingressIPInSubnet(status.Ingress) {
+				} else if privateIP := getPrivateIPFromIngresses(statusIngresses, isIPv6, subnet); privateIP != "" {
 					logger.V(4).Info("keep the original private IP", "service", serviceName, "privateIP", privateIP)
 					configProperties.PrivateIPAllocationMethod = to.Ptr(armnetwork.IPAllocationMethodStatic)
 					configProperties.PrivateIPAddress = ptr.To(privateIP)
-				} else if len(service.Status.LoadBalancer.Ingress) > 0 && ingressIPInSubnet(service.Status.LoadBalancer.Ingress) {
+				} else if privateIP := getPrivateIPFromIngresses(service.Status.LoadBalancer.Ingress, isIPv6, subnet); privateIP != "" {
 					logger.V(4).Info("keep the original private IP from service.status.loadbalacner.ingress", "service", serviceName, "privateIP", privateIP)
 					configProperties.PrivateIPAllocationMethod = to.Ptr(armnetwork.IPAllocationMethodStatic)
 					configProperties.PrivateIPAddress = ptr.To(privateIP)
@@ -4171,6 +4337,15 @@ func ipInSubnet(ip string, subnet *armnetwork.Subnet) bool {
 		}
 	}
 	return false
+}
+
+func getPrivateIPFromIngresses(ingresses []v1.LoadBalancerIngress, isIPv6 bool, subnet *armnetwork.Subnet) string {
+	for _, ingress := range ingresses {
+		if (net.ParseIP(ingress.IP).To4() == nil) == isIPv6 && ipInSubnet(ingress.IP, subnet) {
+			return ingress.IP
+		}
+	}
+	return ""
 }
 
 // getServiceLoadBalancerMode parses the mode value.
