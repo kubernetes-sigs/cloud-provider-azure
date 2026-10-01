@@ -34,7 +34,7 @@ level small:
 - `create-release-note-doc-pr`: generate a documentation-site release note for
   a tag and open a documentation PR
 - `cve-remediator-v2`: raise Go modules to caller-supplied minimum fixed
-  versions from a CVE/GO findings table per module root, sync `go.mod`/`go.sum`
+  versions from CVE/GO findings in any format per module root, sync `go.mod`/`go.sum`
   and root `vendor/`, and audit the source module graphs without building or
   scanning images, then run script-enforced checks and PR publication
 - `fix-image-cves`: scan a built image with Trivy, plan fixable Go-module and
