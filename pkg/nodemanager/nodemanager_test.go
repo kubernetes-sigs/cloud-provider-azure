@@ -676,6 +676,53 @@ func TestUpdateNodeAddresses(t *testing.T) {
 	assert.Equal(t, 2, len(updatedNodes[0].Status.Addresses), "Node Addresses not correctly updated")
 }
 
+func TestUpdateNodeAddressesPreservesExternalIPOnMetadataError(t *testing.T) {
+	ctx := context.Background()
+	node := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "node0"},
+		Spec:       v1.NodeSpec{ProviderID: "node0"},
+		Status: v1.NodeStatus{
+			Addresses: []v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "node0"},
+				{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+				{Type: v1.NodeExternalIP, Address: "20.0.0.1"},
+			},
+		},
+	}
+	originalNode := node.DeepCopy()
+	updatedAddresses := append([]v1.NodeAddress(nil), node.Status.Addresses...)
+	updatedAddresses[2].Address = "20.0.0.2"
+	metadataError := errors.New("loadbalancer metadata temporarily unavailable")
+	mockNP := mocknodeprovider.NewMockNodeProvider(gomock.NewController(t))
+	gomock.InOrder(
+		mockNP.EXPECT().NodeAddresses(ctx, types.NodeName("node0")).Return(node.Status.Addresses, nil),
+		mockNP.EXPECT().NodeAddresses(ctx, types.NodeName("node0")).Return(nil, metadataError).Times(2),
+		mockNP.EXPECT().NodeAddresses(ctx, types.NodeName("node0")).Return(updatedAddresses, nil),
+	)
+	client := fake.NewSimpleClientset(node)
+	controller := &CloudNodeController{kubeClient: client, nodeProvider: mockNP}
+
+	assert.NoError(t, controller.updateNodeAddress(ctx, node))
+	assert.Empty(t, client.Actions())
+	for attempt := 0; attempt < 2; attempt++ {
+		assert.ErrorIs(t, controller.updateNodeAddress(ctx, node), metadataError)
+		assert.Empty(t, client.Actions())
+		assert.Equal(t, originalNode, node)
+	}
+
+	assert.NoError(t, controller.updateNodeAddress(ctx, node))
+	actions := client.Actions()
+	if assert.Len(t, actions, 1) {
+		assert.Equal(t, "patch", actions[0].GetVerb())
+		assert.Equal(t, "status", actions[0].GetSubresource())
+	}
+	updatedNode, err := client.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
+	if assert.NoError(t, err) {
+		assert.Equal(t, updatedAddresses, updatedNode.Status.Addresses)
+	}
+	assert.Equal(t, originalNode, node)
+}
+
 // This test checks that a node with the external cloud provider taint is cloudprovider initialized and
 // and the provided node ip is validated with the cloudprovider and nodeAddresses are updated from the cloudprovider
 func TestNodeProvidedIPAddresses(t *testing.T) {

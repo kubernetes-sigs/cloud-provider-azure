@@ -21,7 +21,9 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -466,6 +468,7 @@ func TestNodeAddresses(t *testing.T) {
 		useCustomImsCache   bool
 		nilVMSet            bool
 		expectedErrMsg      error
+		lbStatusCode        int
 	}{
 		{
 			name:                "NodeAddresses should report error if metadata.Network is nil",
@@ -535,6 +538,17 @@ func TestNodeAddresses(t *testing.T) {
 			expectedAddress: expectedNodeAddress,
 		},
 		{
+			name:                "NodeAddresses should get remote instance addresses from Azure API despite a local loadbalancer metadata failure",
+			nodeName:            "vm1",
+			metadataName:        "vm2",
+			vmType:              consts.VMTypeStandard,
+			ipV4:                "10.240.0.2",
+			loadBalancerSKU:     "standard",
+			lbStatusCode:        http.StatusServiceUnavailable,
+			useInstanceMetadata: true,
+			expectedAddress:     expectedNodeAddress,
+		},
+		{
 			name:                "NodeAddresses should get IP addresses from local IMDS if node's name is equal to metadataName",
 			nodeName:            "vm1",
 			metadataName:        "vm1",
@@ -602,6 +616,39 @@ func TestNodeAddresses(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:                "NodeAddresses should report error when loadbalancer metadata returns a transient failure",
+			nodeName:            "vm1",
+			metadataName:        "vm1",
+			vmType:              consts.VMTypeStandard,
+			ipV4:                "10.240.0.1",
+			ipV4Public:          "192.168.1.12",
+			loadBalancerSKU:     "standard",
+			lbStatusCode:        http.StatusServiceUnavailable,
+			useInstanceMetadata: true,
+			expectedErrMsg:      fmt.Errorf("failed to get loadbalancer metadata: %w", &imdsResponseError{statusCode: http.StatusServiceUnavailable}),
+		},
+		{
+			name:                "NodeAddresses should not report error and keep instance addresses when the VM is not in a standard LB backend pool",
+			nodeName:            "vm1",
+			metadataName:        "vm1",
+			vmType:              consts.VMTypeStandard,
+			ipV4:                "10.240.0.1",
+			ipV4Public:          "192.168.1.12",
+			loadBalancerSKU:     "standard",
+			lbStatusCode:        http.StatusNotFound,
+			useInstanceMetadata: true,
+			expectedAddress: []v1.NodeAddress{
+				{
+					Type:    v1.NodeHostName,
+					Address: "vm1",
+				},
+				{
+					Type:    v1.NodeInternalIP,
+					Address: "10.240.0.1",
+				},
+			},
+		},
 	}
 
 	for _, test := range testcases {
@@ -620,6 +667,10 @@ func TestNodeAddresses(t *testing.T) {
 		mux := http.NewServeMux()
 		mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.Contains(r.RequestURI, consts.ImdsLoadBalancerURI) {
+				if test.lbStatusCode != 0 {
+					w.WriteHeader(test.lbStatusCode)
+					return
+				}
 				fmt.Fprintf(w, loadbalancerTemplate, test.ipV4Public, test.ipV4, test.ipV6Public, test.ipV6)
 				return
 			}
@@ -665,6 +716,164 @@ func TestNodeAddresses(t *testing.T) {
 		ipAddresses, err := cloud.NodeAddresses(context.Background(), types.NodeName(test.nodeName))
 		assert.Equal(t, test.expectedErrMsg, err, test.name)
 		assert.Equal(t, test.expectedAddress, ipAddresses, test.name)
+	}
+}
+
+func TestNodeAddressesCachesLoadBalancerMetadataError(t *testing.T) {
+	for _, statusCode := range []int{http.StatusRequestTimeout, http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusServiceUnavailable, http.StatusGatewayTimeout} {
+		t.Run(http.StatusText(statusCode), func(t *testing.T) {
+			cloud := GetTestCloud(gomock.NewController(t))
+			cloud.UseInstanceMetadata = true
+			resourceID := "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm1"
+			var instanceRequests, loadBalancerRequests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				if strings.Contains(request.URL.Path, consts.ImdsLoadBalancerURI) {
+					loadBalancerRequests.Add(1)
+					writer.WriteHeader(statusCode)
+					return
+				}
+				instanceRequests.Add(1)
+				fmt.Fprintf(writer, `{"compute":{"name":"vm1","resourceId":"%s"},"network":{"interface":[{"ipv4":{"ipAddress":[{"privateIpAddress":"10.240.0.1"}]}}]}}`, resourceID)
+			}))
+			t.Cleanup(server.Close)
+
+			var err error
+			cloud.Metadata, err = NewInstanceMetadataService(server.URL + "/")
+			if !assert.NoError(t, err) {
+				return
+			}
+			ctx := context.Background()
+			for attempt := 0; attempt < 3; attempt++ {
+				instanceID, err := cloud.InstanceID(ctx, "vm1")
+				assert.NoError(t, err)
+				assert.Equal(t, resourceID, instanceID)
+
+				metadata, err := cloud.Metadata.GetMetadata(ctx, azcache.CacheReadTypeDefault)
+				if !assert.NoError(t, err) || !assert.NotNil(t, metadata) {
+					return
+				}
+				assert.NotNil(t, metadata.Compute)
+				assert.NotNil(t, metadata.Network)
+				var responseError *imdsResponseError
+				if !assert.ErrorAs(t, metadata.LBMetadataError, &responseError) {
+					return
+				}
+				assert.Equal(t, statusCode, responseError.statusCode)
+
+				addresses, err := cloud.NodeAddresses(ctx, "vm1")
+				assert.ErrorIs(t, err, metadata.LBMetadataError)
+				assert.Nil(t, addresses)
+			}
+			assert.Equal(t, int32(1), instanceRequests.Load())
+			assert.Equal(t, int32(1), loadBalancerRequests.Load())
+		})
+	}
+}
+
+func TestNodeAddressesLoadBalancerMetadataRecovery(t *testing.T) {
+	for _, statusCode := range []int{http.StatusServiceUnavailable, http.StatusGatewayTimeout} {
+		t.Run(http.StatusText(statusCode), func(t *testing.T) {
+			cloud := GetTestCloud(gomock.NewController(t))
+			cloud.UseInstanceMetadata = true
+			var phase, instanceRequests, loadBalancerRequests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				if strings.Contains(request.URL.Path, consts.ImdsLoadBalancerURI) {
+					loadBalancerRequests.Add(1)
+					switch phase.Load() {
+					case 0:
+						fmt.Fprint(writer, `{"loadbalancer":{"publicIpAddresses":[{"frontendIpAddress":"192.168.1.12","privateIpAddress":"10.240.0.1"}]}}`)
+					case 1:
+						writer.WriteHeader(statusCode)
+					case 2:
+						fmt.Fprint(writer, `{"loadbalancer":{"publicIpAddresses":[{"frontendIpAddress":"192.168.1.13","privateIpAddress":"10.240.0.1"}]}}`)
+					case 3:
+						fmt.Fprint(writer, `{"loadbalancer":{"publicIpAddresses":[]}}`)
+					}
+					return
+				}
+				instanceRequests.Add(1)
+				fmt.Fprint(writer, `{"compute":{"name":"vm1"},"network":{"interface":[{"ipv4":{"ipAddress":[{"privateIpAddress":"10.240.0.1"}]}}]}}`)
+			}))
+			t.Cleanup(server.Close)
+
+			var err error
+			cloud.Metadata, err = NewInstanceMetadataService(server.URL + "/")
+			if !assert.NoError(t, err) {
+				return
+			}
+			ctx := context.Background()
+			expectedAddresses := []v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "vm1"},
+				{Type: v1.NodeInternalIP, Address: "10.240.0.1"},
+				{Type: v1.NodeExternalIP, Address: "192.168.1.12"},
+			}
+			addresses, err := cloud.NodeAddresses(ctx, "vm1")
+			assert.NoError(t, err)
+			assert.Equal(t, expectedAddresses, addresses)
+			lastGoodMetadata, err := cloud.Metadata.GetMetadata(ctx, azcache.CacheReadTypeDefault)
+			if !assert.NoError(t, err) || !assert.NotNil(t, lastGoodMetadata) {
+				return
+			}
+
+			cachedEntry, exists, err := cloud.Metadata.imsCache.GetStore().GetByKey(consts.MetadataCacheKey)
+			if !assert.NoError(t, err) || !assert.True(t, exists) {
+				return
+			}
+			entry := cachedEntry.(*azcache.AzureCacheEntry)
+			expireMetadata := func() {
+				entry.Lock.Lock()
+				defer entry.Lock.Unlock()
+				entry.CreatedOn = time.Now().Add(-consts.MetadataCacheTTL)
+			}
+
+			phase.Store(1)
+			expireMetadata()
+			addresses, err = cloud.NodeAddresses(ctx, "vm1")
+			var responseError *imdsResponseError
+			if assert.ErrorAs(t, err, &responseError) {
+				assert.Equal(t, statusCode, responseError.statusCode)
+			}
+			assert.Nil(t, addresses)
+			failedMetadata, err := cloud.Metadata.GetMetadata(ctx, azcache.CacheReadTypeDefault)
+			if !assert.NoError(t, err) || !assert.NotNil(t, failedMetadata) {
+				return
+			}
+			assert.Equal(t, lastGoodMetadata.Compute, failedMetadata.Compute)
+			assert.Equal(t, "192.168.1.12", lastGoodMetadata.Network.Interface[0].IPV4.IPAddress[0].PublicIP)
+			assert.NoError(t, lastGoodMetadata.LBMetadataError)
+
+			phase.Store(2)
+			for attempt := 0; attempt < 3; attempt++ {
+				addresses, err = cloud.NodeAddresses(ctx, "vm1")
+				assert.ErrorIs(t, err, failedMetadata.LBMetadataError)
+				assert.Nil(t, addresses)
+				metadata, err := cloud.Metadata.GetMetadata(ctx, azcache.CacheReadTypeDefault)
+				assert.NoError(t, err)
+				assert.Same(t, failedMetadata, metadata)
+			}
+			assert.Equal(t, int32(2), instanceRequests.Load())
+			assert.Equal(t, int32(2), loadBalancerRequests.Load())
+
+			expireMetadata()
+			addresses, err = cloud.NodeAddresses(ctx, "vm1")
+			assert.NoError(t, err)
+			expectedAddresses[2].Address = "192.168.1.13"
+			assert.Equal(t, expectedAddresses, addresses)
+			recoveredMetadata, err := cloud.Metadata.GetMetadata(ctx, azcache.CacheReadTypeDefault)
+			if assert.NoError(t, err) && assert.NotNil(t, recoveredMetadata) {
+				assert.NoError(t, recoveredMetadata.LBMetadataError)
+			}
+			assert.Equal(t, int32(3), instanceRequests.Load())
+			assert.Equal(t, int32(3), loadBalancerRequests.Load())
+
+			phase.Store(3)
+			expireMetadata()
+			addresses, err = cloud.NodeAddresses(ctx, "vm1")
+			assert.NoError(t, err)
+			assert.Equal(t, expectedAddresses[:2], addresses)
+			assert.Equal(t, int32(4), instanceRequests.Load())
+			assert.Equal(t, int32(4), loadBalancerRequests.Load())
+		})
 	}
 }
 
