@@ -52,8 +52,9 @@ class BuildImageTest(unittest.TestCase):
         self.assertEqual(plan.cmd, ["make", "build-ccm-image"])
         self.assertEqual(
             build_image.format_command(plan),
+            "env -u GOEXPERIMENT "
             "IMAGE_TAG=dev IMAGE_REGISTRY=example.azurecr.io/cpa "
-            "GOEXPERIMENT=nosystemcrypto ENABLE_GIT_COMMAND=false "
+            "MS_GO_NOSYSTEMCRYPTO=1 ENABLE_GIT_COMMAND=false "
             "make build-ccm-image",
         )
 
@@ -82,7 +83,7 @@ class BuildImageTest(unittest.TestCase):
             ),
         ]
 
-        for image, make_target, cwd, default_goexperiment in cases:
+        for image, make_target, cwd, default_no_systemcrypto in cases:
             with self.subTest(image=image):
                 plan = build_image.build_plan(
                     image=image,
@@ -99,10 +100,11 @@ class BuildImageTest(unittest.TestCase):
                 self.assertEqual(plan.env["IMAGE_TAG"], "dev")
                 self.assertEqual(plan.env["IMAGE_REGISTRY"], "example.azurecr.io/cpa")
                 self.assertEqual(plan.env["ENABLE_GIT_COMMAND"], "false")
-                if default_goexperiment:
-                    self.assertEqual(plan.env["GOEXPERIMENT"], "nosystemcrypto")
+                self.assertNotIn("GOEXPERIMENT", plan.env)
+                if default_no_systemcrypto:
+                    self.assertEqual(plan.env["MS_GO_NOSYSTEMCRYPTO"], "1")
                 else:
-                    self.assertNotIn("GOEXPERIMENT", plan.env)
+                    self.assertNotIn("MS_GO_NOSYSTEMCRYPTO", plan.env)
 
     def test_can_set_and_unset_make_flags(self) -> None:
         plan = build_image.build_plan(
@@ -120,20 +122,32 @@ class BuildImageTest(unittest.TestCase):
             build_image.format_command(plan),
             "env -u GOEXPERIMENT "
             "IMAGE_TAG=dev IMAGE_REGISTRY=example.azurecr.io/cpa "
-            "ENABLE_GIT_COMMAND=false ARCH=arm64 "
+            "MS_GO_NOSYSTEMCRYPTO=1 ENABLE_GIT_COMMAND=false ARCH=arm64 "
             "make build-node-image-linux",
         )
 
-    def test_can_explicitly_set_goexperiment_for_non_default_alias(self) -> None:
+    def test_can_explicitly_disable_systemcrypto_for_non_default_alias(self) -> None:
         plan = build_image.build_plan(
             image="hpp",
             tag="dev",
             registry="example.azurecr.io/cpa",
             repo_root=self.repo,
-            set_values=["GOEXPERIMENT=nosystemcrypto"],
+            set_values=["MS_GO_NOSYSTEMCRYPTO=1"],
         )
 
-        self.assertEqual(plan.env["GOEXPERIMENT"], "nosystemcrypto")
+        self.assertEqual(plan.env["MS_GO_NOSYSTEMCRYPTO"], "1")
+
+    def test_can_unset_default_systemcrypto_opt_out(self) -> None:
+        plan = build_image.build_plan(
+            image="ccm",
+            tag="dev",
+            registry="example.azurecr.io/cpa",
+            repo_root=self.repo,
+            unset_values=["MS_GO_NOSYSTEMCRYPTO"],
+        )
+
+        self.assertNotIn("MS_GO_NOSYSTEMCRYPTO", plan.env)
+        self.assertIn("MS_GO_NOSYSTEMCRYPTO", plan.unset_env)
 
     def test_can_force_safe_local_amd64_output(self) -> None:
         plan = build_image.build_plan(
@@ -249,8 +263,9 @@ class BuildImageTest(unittest.TestCase):
         self.assertEqual(
             stdout.getvalue(),
             "cwd: /repo\n"
-            "command: IMAGE_TAG=dev IMAGE_REGISTRY=example.azurecr.io/cpa "
-            "GOEXPERIMENT=nosystemcrypto ENABLE_GIT_COMMAND=false "
+            "command: env -u GOEXPERIMENT "
+            "IMAGE_TAG=dev IMAGE_REGISTRY=example.azurecr.io/cpa "
+            "MS_GO_NOSYSTEMCRYPTO=1 ENABLE_GIT_COMMAND=false "
             "make build-ccm-image\n",
         )
 
@@ -289,8 +304,9 @@ class BuildImageTest(unittest.TestCase):
         self.assertEqual(
             stdout.getvalue(),
             "cwd: /repo\n"
-            "command: IMAGE_TAG=dev IMAGE_REGISTRY=local "
-            "GOEXPERIMENT=nosystemcrypto ENABLE_GIT_COMMAND=false "
+            "command: env -u GOEXPERIMENT "
+            "IMAGE_TAG=dev IMAGE_REGISTRY=local "
+            "MS_GO_NOSYSTEMCRYPTO=1 ENABLE_GIT_COMMAND=false "
             "CONTAINER_CLI=/opt/podman/bin/podman make build-ccm-image\n",
         )
 
@@ -305,9 +321,9 @@ class BuildImageTest(unittest.TestCase):
 
         self.assertEqual(
             build_image.format_command(plan),
-            "env -u MAKEFLAGS "
+            "env -u GOEXPERIMENT -u MAKEFLAGS "
             "IMAGE_TAG=dev IMAGE_REGISTRY=example.azurecr.io/cpa "
-            "GOEXPERIMENT=nosystemcrypto ENABLE_GIT_COMMAND=false "
+            "MS_GO_NOSYSTEMCRYPTO=1 ENABLE_GIT_COMMAND=false "
             "make build-ccm-image",
         )
 
@@ -368,6 +384,7 @@ class BuildImageTest(unittest.TestCase):
             stdout.getvalue(),
             "cwd: /repo/health-probe-proxy\n"
             "command: env -u ENABLE_GIT_COMMAND -u GOEXPERIMENT "
+            "-u MS_GO_NOSYSTEMCRYPTO "
             "IMAGE_TAG=dev IMAGE_REGISTRY=example.azurecr.io/cpa "
             "make -B build-health-probe-proxy-image\n",
         )
@@ -379,6 +396,7 @@ class BuildImageTest(unittest.TestCase):
         self.assertEqual(kwargs["cwd"], self.repo / "health-probe-proxy")
         self.assertFalse(kwargs.get("shell", False))
         self.assertNotIn("GOEXPERIMENT", kwargs["env"])
+        self.assertNotIn("MS_GO_NOSYSTEMCRYPTO", kwargs["env"])
         self.assertNotIn("ENABLE_GIT_COMMAND", kwargs["env"])
         self.assertEqual(kwargs["env"]["IMAGE_TAG"], "dev")
         self.assertEqual(kwargs["env"]["IMAGE_REGISTRY"], "example.azurecr.io/cpa")
