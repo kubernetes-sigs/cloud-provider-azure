@@ -27,6 +27,12 @@ IMAGE_REGISTRY=<registry> IMAGE_TAG=<tag> make build-ccm-image
 IMAGE_REGISTRY=<registry> IMAGE_TAG=<tag> make build-node-image-linux
 ```
 
+The CCM and CNM Dockerfiles use Microsoft Go. Starting with version 1.27,
+`systemcrypto` is no longer configured through `GOEXPERIMENT`. For non-FIPS
+development images, use `MS_GO_NOSYSTEMCRYPTO=1 make build-ccm-image`. This
+produces a non-FIPS-compliant binary and must not be used for production or
+FIPS validation.
+
 ## File Headers
 
 Newly created tracked source files must carry the standard Kubernetes Apache 2.0

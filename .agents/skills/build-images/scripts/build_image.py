@@ -30,7 +30,13 @@ from pathlib import Path
 
 ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 REQUIRED_ENV = {"IMAGE_TAG", "IMAGE_REGISTRY"}
-MANAGED_ENV = {"IMAGE_TAG", "IMAGE_REGISTRY", "ENABLE_GIT_COMMAND", "GOEXPERIMENT"}
+MANAGED_ENV = {
+    "IMAGE_TAG",
+    "IMAGE_REGISTRY",
+    "ENABLE_GIT_COMMAND",
+    "GOEXPERIMENT",
+    "MS_GO_NOSYSTEMCRYPTO",
+}
 MAKE_CONTROL_ENV = {
     "GNUMAKEFLAGS",
     "MAKEFILES",
@@ -38,8 +44,8 @@ MAKE_CONTROL_ENV = {
     "MAKEOVERRIDES",
     "MFLAGS",
 }
-GOEXPERIMENT_DEFAULT = "nosystemcrypto"
 ENABLE_GIT_COMMAND_DEFAULT = "false"
+MS_GO_NOSYSTEMCRYPTO_DEFAULT = "1"
 RETRY_DELAY_SECONDS = 5
 PODMAN_INFO_TIMEOUT_SECONDS = 10
 FAILURE_TAIL_LINES = 50
@@ -76,7 +82,7 @@ DOCKER_BUILDX_RACE_MARKER_GROUPS = (
 class ImageTarget:
     make_target: str
     subdir: str = "."
-    default_goexperiment: bool = False
+    default_no_systemcrypto: bool = False
     force_rebuild: bool = False
 
 
@@ -96,12 +102,15 @@ class BuildAttempt:
 
 IMAGE_TARGETS = {
     "all": ImageTarget("image"),
-    "ccm": ImageTarget("build-ccm-image", default_goexperiment=True),
-    "ccm-all": ImageTarget("build-all-ccm-images", default_goexperiment=True),
+    "ccm": ImageTarget("build-ccm-image", default_no_systemcrypto=True),
+    "ccm-all": ImageTarget("build-all-ccm-images", default_no_systemcrypto=True),
     "ccm-e2e": ImageTarget("build-ccm-e2e-test-image"),
-    "cnm": ImageTarget("build-node-image-linux", default_goexperiment=True),
+    "cnm": ImageTarget("build-node-image-linux", default_no_systemcrypto=True),
     "cnm-all": ImageTarget("build-all-node-images"),
-    "cnm-linux": ImageTarget("build-node-image-linux", default_goexperiment=True),
+    "cnm-linux": ImageTarget(
+        "build-node-image-linux",
+        default_no_systemcrypto=True,
+    ),
     "cnm-windows": ImageTarget("build-node-image-windows"),
     "cnm-windows-hpc": ImageTarget("build-node-image-windows-hpc"),
     "hpp": ImageTarget(
@@ -178,8 +187,8 @@ def build_plan(
         "IMAGE_TAG": tag,
         "IMAGE_REGISTRY": registry,
     }
-    if target.default_goexperiment:
-        env["GOEXPERIMENT"] = GOEXPERIMENT_DEFAULT
+    if target.default_no_systemcrypto:
+        env["MS_GO_NOSYSTEMCRYPTO"] = MS_GO_NOSYSTEMCRYPTO_DEFAULT
     env["ENABLE_GIT_COMMAND"] = ENABLE_GIT_COMMAND_DEFAULT
 
     for key in unset_env:
