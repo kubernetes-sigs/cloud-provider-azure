@@ -56,6 +56,7 @@ func main() {
 	}
 	logger.Info("listening on port", "port", healthCheckPort)
 
+	proxyproto.DefaultPolicy = proxyproto.USE
 	proxyListener := &proxyproto.Listener{Listener: listener}
 	defer func(proxyListener *proxyproto.Listener) {
 		err := proxyListener.Close()
