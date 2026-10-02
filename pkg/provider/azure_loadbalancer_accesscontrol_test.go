@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/netip"
 	"strings"
 	"testing"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
+	discovery_v1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -44,9 +46,11 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/iputil"
+	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 func TestCloud_reconcileSecurityGroup(t *testing.T) {
@@ -422,7 +426,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
 				loadBalancerClient      = az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
 				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
-				svc                     = k8sFx.Service().Build()
+				svc                     = k8sFx.Service().WithIPFamilies(v1.IPv4Protocol, v1.IPv6Protocol).Build()
 				securityGroup           = azureFx.SecurityGroup().Build()
 				loadBalancer            = azureFx.LoadBalancer().Build()
 			)
@@ -928,7 +932,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
 				loadBalancerClient      = az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
 				loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
-				svc                     = k8sFx.Service().Build()
+				svc                     = k8sFx.Service().WithIPFamilies(v1.IPv4Protocol, v1.IPv6Protocol).Build()
 				loadBalancer            = azureFx.LoadBalancer().Build()
 			)
 			defer ctrl.Finish()
@@ -1993,6 +1997,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			allowedIPv6Ranges = fx.RandomIPv6PrefixStrings(3)
 			allowedRanges     = append(allowedIPv4Ranges, allowedIPv6Ranges...)
 			svc               = k8sFx.Service().WithNamespace("ns-01").WithName("svc-01").
+						WithIPFamilies(v1.IPv4Protocol, v1.IPv6Protocol).
 						WithAllowedServiceTags(allowedServiceTag).WithAllowedIPRanges(allowedRanges...).
 						WithDisableFloatingIP().
 						WithIngressIPs(ingressIPs).
@@ -2000,6 +2005,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			sharedIPSvc = k8sFx.Service().
 					WithNamespace("ns-02").
 					WithName("svc-02").
+					WithIPFamilies(v1.IPv4Protocol, v1.IPv6Protocol).
 					WithDisableFloatingIP().
 					WithIngressIPs(ingressIPs).
 					Build()
@@ -2947,4 +2953,1122 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			assert.Error(t, err)
 		})
 	})
+
+	// There is one deny-all rule per IP family, so every Service's destinations share it. A
+	// destination must stay in the rule while any Service still needs it.
+	t.Run("deny all rules - destinations other Services still need", func(t *testing.T) {
+		const (
+			// Addresses that more than one Service can be on.
+			sharedIP            = "10.0.0.1"
+			sharedIPv6          = "2001:db8::1"
+			unmanagedPublicIP   = "203.0.113.5"
+			unmanagedPublicIPv6 = "2001:db8:ffff::5"
+
+			// Addresses that belong to a single Service.
+			svcAUnsharedIP        = "10.0.0.8"
+			svcAUnsharedIPv6      = "2001:db8::a"
+			svcAUnmanagedPublicIP = "203.0.113.6"
+			svcBUnsharedIP        = "10.0.0.9"
+			svcBUnsharedIPv6      = "2001:db8::b"
+			svcBUnmanagedPublicIP = "203.0.113.7"
+
+			backendNodeIP  = "192.168.10.1"
+			backendNodeIP2 = "192.168.10.2"
+			backendNodeIP3 = "192.168.10.3"
+			// A node on a cluster running both families.
+			dualStackNode     = "node-dual"
+			dualStackNodeIPv4 = "192.168.10.4"
+			dualStackNodeIPv6 = "fd00::1"
+
+			// Services sharing an IP must expose distinct ports, so each gets its own allow rule.
+			portA = int32(18080)
+			portB = int32(18081)
+			portC = int32(18082)
+		)
+
+		var (
+			sourceRanges   = []string{"198.51.100.0/24"}
+			sourceRangesV6 = []string{"2001:db8:1::/48"}
+			dualStackRange = append(append([]string{}, sourceRanges...), sourceRangesV6...)
+		)
+
+		service := func(namespace, name string, ingressIPs ...string) *fixture.KubernetesServiceFixture {
+			return k8sFx.Service().WithNamespace(namespace).WithName(name).
+				WithIngressIPs(ingressIPs).
+				WithLoadBalancerSourceRanges(sourceRanges...)
+		}
+
+		denyAll := func(namespace, name string, ingressIPs ...string) *fixture.KubernetesServiceFixture {
+			return service(namespace, name, ingressIPs...).WithDenyAllExceptLoadBalancerSourceRanges()
+		}
+
+		onPort := func(f *fixture.KubernetesServiceFixture, port int32) *v1.Service {
+			svc := f.Build()
+			svc.Spec.Ports = []v1.ServicePort{
+				{Name: "p", Protocol: v1.ProtocolTCP, Port: port, NodePort: 30000 + port},
+			}
+			return &svc
+		}
+
+		withAdditionalPublicIPs := func(svc *v1.Service, ips ...string) *v1.Service {
+			svc.Annotations[consts.ServiceAnnotationAdditionalPublicIPs] = strings.Join(ips, ",")
+			return svc
+		}
+
+		withLocalTrafficPolicy := func(svc *v1.Service) *v1.Service {
+			rv := svc.DeepCopy()
+			rv.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyLocal
+			return rv
+		}
+
+		var (
+			svcADenyAll             = onPort(denyAll("ns-a", "svc-a", sharedIP), portA)
+			svcBDenyAll             = onPort(denyAll("ns-b", "svc-b", sharedIP), portB)
+			svcCDenyAll             = onPort(denyAll("ns-c", "svc-c", sharedIP), portC)
+			svcADenyAllOnUnsharedIP = onPort(denyAll("ns-a", "svc-a", svcAUnsharedIP), portA)
+			svcBDenyAllOnUnsharedIP = onPort(denyAll("ns-b", "svc-b", svcBUnsharedIP), portB)
+			// svc-b exposes the port that svc-a uses as its node port, so both share one allow rule.
+			svcBDenyAllOnUnsharedIPWithSvcANodePort = onPort(denyAll("ns-b", "svc-b", svcBUnsharedIP), 30000+portA)
+
+			// Services that need no deny-all rule of their own.
+			svcBWithoutDenyAll = onPort(service("ns-b", "svc-b", sharedIP), portB)
+			// The annotation on its own requests nothing: there is no range to make an exception for.
+			svcBWithDenyAllAnnotationOnly = onPort(k8sFx.Service().WithNamespace("ns-b").WithName("svc-b").
+							WithIngressIPs([]string{sharedIP}).
+							WithDenyAllExceptLoadBalancerSourceRanges(), portB)
+
+			svcADenyAllDualStack = onPort(denyAll("ns-a", "svc-a", sharedIP, sharedIPv6).WithLoadBalancerSourceRanges(dualStackRange...), portA)
+			svcBDenyAllDualStack = onPort(denyAll("ns-b", "svc-b", sharedIP, sharedIPv6).WithLoadBalancerSourceRanges(dualStackRange...), portB)
+
+			// An additional public IP also lands in the ingress status.
+			svcADenyAllOnSharedIPWithAdditionalPublicIP = withAdditionalPublicIPs(
+				onPort(denyAll("ns-a", "svc-a", sharedIP, svcAUnmanagedPublicIP), portA), svcAUnmanagedPublicIP)
+			svcBDenyAllOnSharedIPWithAdditionalPublicIP = withAdditionalPublicIPs(
+				onPort(denyAll("ns-b", "svc-b", sharedIP, svcBUnmanagedPublicIP), portB), svcBUnmanagedPublicIP)
+			svcADenyAllWithAdditionalPublicIP = withAdditionalPublicIPs(
+				onPort(denyAll("ns-a", "svc-a", svcAUnsharedIP, unmanagedPublicIP), portA), unmanagedPublicIP)
+			svcBDenyAllWithAdditionalPublicIP = withAdditionalPublicIPs(
+				onPort(denyAll("ns-b", "svc-b", svcBUnsharedIP, unmanagedPublicIP), portB), unmanagedPublicIP)
+
+			// Services whose rules target the nodes instead of a frontend IP.
+			svcADenyAllWithFloatingIPDisabledOnUnsharedIP          = onPort(denyAll("ns-a", "svc-a", svcAUnsharedIP).WithDisableFloatingIP(), portA)
+			svcBDenyAllWithFloatingIPDisabledOnUnsharedIP          = onPort(denyAll("ns-b", "svc-b", svcBUnsharedIP).WithDisableFloatingIP(), portB)
+			svcBDenyAllWithFloatingIPDisabledOnSharedIP            = onPort(denyAll("ns-b", "svc-b", sharedIP).WithDisableFloatingIP(), portB)
+			svcADenyAllWithFloatingIPDisabledAndAdditionalPublicIP = withAdditionalPublicIPs(
+				onPort(denyAll("ns-a", "svc-a", svcAUnsharedIP, unmanagedPublicIP).WithDisableFloatingIP(), portA), unmanagedPublicIP)
+			svcBDenyAllWithFloatingIPDisabledAndAdditionalPublicIP = withAdditionalPublicIPs(
+				onPort(denyAll("ns-b", "svc-b", svcBUnsharedIP, unmanagedPublicIP).WithDisableFloatingIP(), portB), unmanagedPublicIP)
+			svcADenyAllDualStackWithFloatingIPDisabledAndAdditionalPublicIPs = withAdditionalPublicIPs(
+				onPort(denyAll("ns-a", "svc-a", svcAUnsharedIP, svcAUnsharedIPv6).
+					WithLoadBalancerSourceRanges(dualStackRange...).WithDisableFloatingIP().
+					WithIPFamilies(v1.IPv4Protocol, v1.IPv6Protocol), portA),
+				unmanagedPublicIP, unmanagedPublicIPv6)
+
+			svcBDenyAllNodePortTypeWithFloatingIPDisabled = func() *v1.Service {
+				rv := svcBDenyAllWithFloatingIPDisabledOnUnsharedIP.DeepCopy()
+				rv.Spec.Type = v1.ServiceTypeNodePort
+				return rv
+			}()
+
+			svcADenyAllLocalWithFloatingIPDisabled = withLocalTrafficPolicy(svcADenyAllWithFloatingIPDisabledOnUnsharedIP)
+			svcBDenyAllLocalWithFloatingIPDisabled = withLocalTrafficPolicy(svcBDenyAllWithFloatingIPDisabledOnUnsharedIP)
+
+			svcAIPv4OnlyWithFloatingIPDisabled = onPort(service("ns-a", "svc-a", svcAUnsharedIP).
+								WithDisableFloatingIP().WithIPFamilies(v1.IPv4Protocol), portA)
+			svcAIPv6OnlyWithFloatingIPDisabled = onPort(service("ns-a", "svc-a", svcAUnsharedIPv6).
+								WithLoadBalancerSourceRanges(sourceRangesV6...).WithDisableFloatingIP().
+								WithIPFamilies(v1.IPv6Protocol), portA)
+			svcBIPv4OnlyDenyAllWithDualStackRangesAndFloatingIPDisabled = onPort(denyAll("ns-b", "svc-b", svcBUnsharedIP).
+											WithLoadBalancerSourceRanges(dualStackRange...).WithDisableFloatingIP().
+											WithIPFamilies(v1.IPv4Protocol), portB)
+			svcBIPv6OnlyDenyAllWithDualStackRangesAndFloatingIPDisabled = onPort(denyAll("ns-b", "svc-b", svcBUnsharedIPv6).
+											WithLoadBalancerSourceRanges(dualStackRange...).WithDisableFloatingIP().
+											WithIPFamilies(v1.IPv6Protocol), portB)
+			svcAIPv6OnlyDenyAllWithAdditionalPublicIPv4 = withAdditionalPublicIPs(
+				onPort(denyAll("ns-a", "svc-a", svcAUnsharedIPv6).
+					WithLoadBalancerSourceRanges(sourceRangesV6...).WithIPFamilies(v1.IPv6Protocol), portA),
+				unmanagedPublicIP)
+			svcAIPv4OnlyDenyAllWithAdditionalPublicIPv6 = withAdditionalPublicIPs(
+				onPort(denyAll("ns-a", "svc-a", svcAUnsharedIP).WithIPFamilies(v1.IPv4Protocol), portA),
+				unmanagedPublicIPv6)
+			svcADualStackWithFloatingIPDisabled = onPort(service("ns-a", "svc-a", svcAUnsharedIP, svcAUnsharedIPv6).
+								WithLoadBalancerSourceRanges(dualStackRange...).WithDisableFloatingIP().
+								WithIPFamilies(v1.IPv4Protocol, v1.IPv6Protocol), portA)
+			svcBDualStackDenyAllWithFloatingIPDisabled = onPort(denyAll("ns-b", "svc-b", svcBUnsharedIP, svcBUnsharedIPv6).
+									WithLoadBalancerSourceRanges(dualStackRange...).WithDisableFloatingIP().
+									WithIPFamilies(v1.IPv4Protocol, v1.IPv6Protocol), portB)
+		)
+
+		// Every node a case can place on a load balancer, keyed by name.
+		nodeAddresses := map[string][]string{
+			backendNodeIP:  {backendNodeIP},
+			backendNodeIP2: {backendNodeIP2},
+			backendNodeIP3: {backendNodeIP3},
+			dualStackNode:  {dualStackNodeIPv4, dualStackNodeIPv6},
+		}
+
+		allowRule := func(family iputil.Family, port int32, priority int32, dsts ...string) *armnetwork.SecurityRule {
+			srcs := sourceRanges
+			if family == iputil.IPv6 {
+				srcs = sourceRangesV6
+			}
+			return azureFx.
+				AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, family, srcs, []int32{port}).
+				WithPriority(priority).
+				WithDestination(dsts...).
+				Build()
+		}
+
+		denyRule := func(family iputil.Family, priority int32, dsts ...string) *armnetwork.SecurityRule {
+			return azureFx.DenyAllSecurityRule(family).WithPriority(priority).WithDestination(dsts...).Build()
+		}
+
+		lbConfig := func(name string, nodes []string, services ...string) config.MultipleStandardLoadBalancerConfiguration {
+			return config.MultipleStandardLoadBalancerConfiguration{
+				Name: name,
+				MultipleStandardLoadBalancerConfigurationStatus: config.MultipleStandardLoadBalancerConfigurationStatus{
+					ActiveNodes:    utilsets.NewString(nodes...),
+					ActiveServices: utilsets.NewString(services...),
+				},
+			}
+		}
+
+		ingressIPs := func(svc *v1.Service) []string {
+			var rv []string
+			for _, ing := range svc.Status.LoadBalancer.Ingress {
+				rv = append(rv, ing.IP)
+			}
+			return rv
+		}
+
+		tests := []struct {
+			Name                      string
+			ReconciledService         *v1.Service
+			OtherServices             []*v1.Service
+			WantLB                    bool
+			MultiSLBConfigs           []config.MultipleStandardLoadBalancerConfiguration
+			LocalServiceNodes         map[string][]string
+			ExistingBackendPrivateIPs []string
+			ExistingRules             []*armnetwork.SecurityRule
+			ExpectsSecurityGroupWrite bool
+			ExpectedRules             []*armnetwork.SecurityRule
+		}{
+			{
+				Name:              "keeps the shared IP in the deny-all rule when another deny-all Service is deleted",
+				ReconciledService: svcBDenyAll,
+				OtherServices:     []*v1.Service{svcADenyAll},
+				WantLB:            false,
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portA, 500, sharedIP),
+					allowRule(iputil.IPv4, portB, 501, sharedIP),
+					denyRule(iputil.IPv4, 4095, sharedIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portA, 500, sharedIP),
+					denyRule(iputil.IPv4, 4095, sharedIP),
+				},
+			},
+			{
+				Name:              "keeps the shared IP in the deny-all rule when only one of the other Services needs it",
+				ReconciledService: svcADenyAll,
+				OtherServices:     []*v1.Service{svcBWithoutDenyAll, svcCDenyAll},
+				WantLB:            false,
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portA, 500, sharedIP),
+					allowRule(iputil.IPv4, portB, 501, sharedIP),
+					allowRule(iputil.IPv4, portC, 502, sharedIP),
+					denyRule(iputil.IPv4, 4095, sharedIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portB, 501, sharedIP),
+					allowRule(iputil.IPv4, portC, 502, sharedIP),
+					denyRule(iputil.IPv4, 4095, sharedIP),
+				},
+			},
+			{
+				Name:              "removes the shared IP from the deny-all rule when the last deny-all Service is deleted",
+				ReconciledService: svcADenyAll,
+				WantLB:            false,
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portA, 500, sharedIP),
+					denyRule(iputil.IPv4, 4095, sharedIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules:             []*armnetwork.SecurityRule{},
+			},
+			{
+				Name:              "keeps the shared IP in the deny-all rule when a shared-IP Service without deny-all is reconciled",
+				ReconciledService: svcBWithoutDenyAll,
+				OtherServices:     []*v1.Service{svcADenyAll},
+				WantLB:            EnsureLB,
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portA, 500, sharedIP),
+					allowRule(iputil.IPv4, portB, 501, sharedIP),
+					denyRule(iputil.IPv4, 4095, sharedIP),
+				},
+				// The rules are already correct, so the reconcile must not write.
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portA, 500, sharedIP),
+					allowRule(iputil.IPv4, portB, 501, sharedIP),
+					denyRule(iputil.IPv4, 4095, sharedIP),
+				},
+			},
+			{
+				Name:              "keeps the shared IP in the deny-all rule when a shared-IP Service without deny-all is deleted",
+				ReconciledService: svcBWithoutDenyAll,
+				OtherServices:     []*v1.Service{svcADenyAll},
+				WantLB:            false,
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portA, 500, sharedIP),
+					allowRule(iputil.IPv4, portB, 501, sharedIP),
+					denyRule(iputil.IPv4, 4095, sharedIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portA, 500, sharedIP),
+					denyRule(iputil.IPv4, 4095, sharedIP),
+				},
+			},
+			{
+				Name:              "removes the shared IP from the deny-all rule when the only other Service sets the deny-all annotation without source ranges",
+				ReconciledService: svcADenyAll,
+				OtherServices:     []*v1.Service{svcBWithDenyAllAnnotationOnly},
+				WantLB:            false,
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portA, 500, sharedIP),
+					denyRule(iputil.IPv4, 4095, sharedIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules:             []*armnetwork.SecurityRule{},
+			},
+			{
+				Name:              "removes the unshared IP from the deny-all rule and keeps the shared IP in it",
+				ReconciledService: svcADenyAllOnSharedIPWithAdditionalPublicIP,
+				OtherServices:     []*v1.Service{svcBDenyAll},
+				WantLB:            false,
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portA, 500, sharedIP, svcAUnmanagedPublicIP),
+					allowRule(iputil.IPv4, portB, 501, sharedIP),
+					denyRule(iputil.IPv4, 4095, sharedIP, svcAUnmanagedPublicIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portB, 501, sharedIP),
+					denyRule(iputil.IPv4, 4095, sharedIP),
+				},
+			},
+			{
+				// svc-a never removed that IP, so restoring it is svc-b's reconcile to do.
+				Name:              "keeps the shared IP in the deny-all rule but does not add the other deny-all Service's unshared IP",
+				ReconciledService: svcADenyAll,
+				OtherServices:     []*v1.Service{svcBDenyAllOnSharedIPWithAdditionalPublicIP},
+				WantLB:            false,
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portA, 500, sharedIP),
+					allowRule(iputil.IPv4, portB, 501, sharedIP, svcBUnmanagedPublicIP),
+					denyRule(iputil.IPv4, 4095, sharedIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portB, 501, sharedIP, svcBUnmanagedPublicIP),
+					denyRule(iputil.IPv4, 4095, sharedIP),
+				},
+			},
+			{
+				Name:              "keeps the shared IPv4 and IPv6 addresses in their deny-all rules when a dual-stack Service is deleted",
+				ReconciledService: svcBDenyAllDualStack,
+				OtherServices:     []*v1.Service{svcADenyAllDualStack},
+				WantLB:            false,
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portA, 500, sharedIP),
+					allowRule(iputil.IPv4, portB, 501, sharedIP),
+					allowRule(iputil.IPv6, portA, 502, sharedIPv6),
+					allowRule(iputil.IPv6, portB, 503, sharedIPv6),
+					denyRule(iputil.IPv4, 4095, sharedIP),
+					denyRule(iputil.IPv6, 4094, sharedIPv6),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portA, 500, sharedIP),
+					allowRule(iputil.IPv6, portA, 502, sharedIPv6),
+					denyRule(iputil.IPv4, 4095, sharedIP),
+					denyRule(iputil.IPv6, 4094, sharedIPv6),
+				},
+			},
+			{
+				Name:              "keeps the shared additional public IP when both deny-all Services use the floating IP",
+				ReconciledService: svcADenyAllWithAdditionalPublicIP,
+				OtherServices:     []*v1.Service{svcBDenyAllWithAdditionalPublicIP},
+				WantLB:            false,
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portA, 500, svcAUnsharedIP, unmanagedPublicIP),
+					allowRule(iputil.IPv4, portB, 501, svcBUnsharedIP, unmanagedPublicIP),
+					denyRule(iputil.IPv4, 4095, svcAUnsharedIP, svcBUnsharedIP, unmanagedPublicIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portB, 501, svcBUnsharedIP, unmanagedPublicIP),
+					denyRule(iputil.IPv4, 4095, svcBUnsharedIP, unmanagedPublicIP),
+				},
+			},
+			{
+				Name:              "keeps the backend node IP in the deny-all rule when another deny-all Service with the floating IP disabled still needs it",
+				ReconciledService: svcADenyAllWithFloatingIPDisabledOnUnsharedIP,
+				OtherServices:     []*v1.Service{svcBDenyAllWithFloatingIPDisabledOnUnsharedIP},
+				WantLB:            false,
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portA, 500, backendNodeIP),
+					allowRule(iputil.IPv4, 30000+portB, 501, backendNodeIP),
+					denyRule(iputil.IPv4, 4095, backendNodeIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portB, 501, backendNodeIP),
+					denyRule(iputil.IPv4, 4095, backendNodeIP),
+				},
+			},
+			{
+				Name:              "removes the backend node IP from the deny-all rule when the other deny-all Service is not a LoadBalancer",
+				ReconciledService: svcADenyAllWithFloatingIPDisabledOnUnsharedIP,
+				OtherServices:     []*v1.Service{svcBDenyAllNodePortTypeWithFloatingIPDisabled},
+				WantLB:            false,
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portA, 500, backendNodeIP),
+					allowRule(iputil.IPv4, 30000+portB, 501, backendNodeIP),
+					denyRule(iputil.IPv4, 4095, backendNodeIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules:             []*armnetwork.SecurityRule{},
+			},
+			{
+				Name:              "removes the IP of a deny-all Service that uses the floating IP but keeps the node IP of deny-all Service that disables it",
+				ReconciledService: svcADenyAllOnUnsharedIP,
+				OtherServices:     []*v1.Service{svcBDenyAllWithFloatingIPDisabledOnUnsharedIP},
+				WantLB:            false,
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portA, 500, svcAUnsharedIP),
+					allowRule(iputil.IPv4, 30000+portB, 501, backendNodeIP),
+					denyRule(iputil.IPv4, 4095, svcAUnsharedIP, backendNodeIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portB, 501, backendNodeIP),
+					denyRule(iputil.IPv4, 4095, backendNodeIP),
+				},
+			},
+			{
+				Name:              "removes the backend node IP from the deny-all rule but keeps the IP of a deny-all Service that uses the floating IP",
+				ReconciledService: svcADenyAllWithFloatingIPDisabledOnUnsharedIP,
+				OtherServices:     []*v1.Service{svcBDenyAllOnUnsharedIP},
+				WantLB:            false,
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portA, 500, backendNodeIP),
+					allowRule(iputil.IPv4, portB, 501, svcBUnsharedIP),
+					denyRule(iputil.IPv4, 4095, backendNodeIP, svcBUnsharedIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portB, 501, svcBUnsharedIP),
+					denyRule(iputil.IPv4, 4095, svcBUnsharedIP),
+				},
+			},
+			{
+				// The other Service shares the frontend IP but its rules target the nodes, so it does
+				// not need the frontend IP.
+				Name:              "removes the shared IP from the deny-all rule when the only other deny-all Service on it disables the floating IP",
+				ReconciledService: svcADenyAll,
+				OtherServices:     []*v1.Service{svcBDenyAllWithFloatingIPDisabledOnSharedIP},
+				WantLB:            false,
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portA, 500, sharedIP),
+					allowRule(iputil.IPv4, 30000+portB, 501, backendNodeIP),
+					denyRule(iputil.IPv4, 4095, sharedIP, backendNodeIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portB, 501, backendNodeIP),
+					denyRule(iputil.IPv4, 4095, backendNodeIP),
+				},
+			},
+			{
+				Name:              "keeps the backend node IP and the shared additional public IP when both deny-all Services disable the floating IP",
+				ReconciledService: svcADenyAllWithFloatingIPDisabledAndAdditionalPublicIP,
+				OtherServices:     []*v1.Service{svcBDenyAllWithFloatingIPDisabledAndAdditionalPublicIP},
+				WantLB:            false,
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portA, 500, backendNodeIP, unmanagedPublicIP),
+					allowRule(iputil.IPv4, 30000+portB, 501, backendNodeIP, unmanagedPublicIP),
+					denyRule(iputil.IPv4, 4095, backendNodeIP, unmanagedPublicIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portB, 501, backendNodeIP, unmanagedPublicIP),
+					denyRule(iputil.IPv4, 4095, backendNodeIP, unmanagedPublicIP),
+				},
+			},
+			{
+				// Only a Service with the floating IP disabled can share the nodes, but any Service
+				// can share an additional public IP.
+				Name:              "keeps the shared additional public IP when only the deleted deny-all Service disables the floating IP",
+				ReconciledService: svcADenyAllWithFloatingIPDisabledAndAdditionalPublicIP,
+				OtherServices:     []*v1.Service{svcBDenyAllWithAdditionalPublicIP},
+				WantLB:            false,
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portA, 500, backendNodeIP, unmanagedPublicIP),
+					allowRule(iputil.IPv4, portB, 501, svcBUnsharedIP, unmanagedPublicIP),
+					denyRule(iputil.IPv4, 4095, backendNodeIP, svcBUnsharedIP, unmanagedPublicIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portB, 501, svcBUnsharedIP, unmanagedPublicIP),
+					denyRule(iputil.IPv4, 4095, svcBUnsharedIP, unmanagedPublicIP),
+				},
+			},
+			{
+				Name:              "keeps the backend node IP and the shared additional public IP when only the other deny-all Service disables the floating IP",
+				ReconciledService: svcBDenyAllWithAdditionalPublicIP,
+				OtherServices:     []*v1.Service{svcADenyAllWithFloatingIPDisabledAndAdditionalPublicIP},
+				WantLB:            false,
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portA, 500, backendNodeIP, unmanagedPublicIP),
+					allowRule(iputil.IPv4, portB, 501, svcBUnsharedIP, unmanagedPublicIP),
+					denyRule(iputil.IPv4, 4095, backendNodeIP, svcBUnsharedIP, unmanagedPublicIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portA, 500, backendNodeIP, unmanagedPublicIP),
+					denyRule(iputil.IPv4, 4095, backendNodeIP, unmanagedPublicIP),
+				},
+			},
+			// With multiple standard load balancers a Service can have a backend pool of its own.
+			{
+				Name:              "removes the backend node IPs when the other deny-all Service is backed by different nodes",
+				ReconciledService: svcADenyAllWithFloatingIPDisabledOnUnsharedIP,
+				OtherServices:     []*v1.Service{svcBDenyAllWithFloatingIPDisabledOnUnsharedIP},
+				WantLB:            false,
+				MultiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+					// The first configuration holds neither Service, so a lookup has to skip it.
+					lbConfig("lb-2", []string{backendNodeIP3}),
+					lbConfig("kubernetes", []string{backendNodeIP}, "ns-a/svc-a"),
+					lbConfig("lb-1", []string{backendNodeIP2}, "ns-b/svc-b"),
+				},
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portA, 500, backendNodeIP),
+					allowRule(iputil.IPv4, 30000+portB, 501, backendNodeIP2),
+					denyRule(iputil.IPv4, 4095, backendNodeIP, backendNodeIP2),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portB, 501, backendNodeIP2),
+					denyRule(iputil.IPv4, 4095, backendNodeIP2),
+				},
+			},
+			{
+				Name:              "keeps the backend node IP when the other deny-all Service is backed by the same node",
+				ReconciledService: svcADenyAllWithFloatingIPDisabledOnUnsharedIP,
+				OtherServices:     []*v1.Service{svcBDenyAllWithFloatingIPDisabledOnUnsharedIP},
+				WantLB:            false,
+				MultiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+					lbConfig("kubernetes", []string{backendNodeIP}, "ns-a/svc-a", "ns-b/svc-b"),
+				},
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portA, 500, backendNodeIP),
+					allowRule(iputil.IPv4, 30000+portB, 501, backendNodeIP),
+					denyRule(iputil.IPv4, 4095, backendNodeIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portB, 501, backendNodeIP),
+					denyRule(iputil.IPv4, 4095, backendNodeIP),
+				},
+			},
+			{
+				// Cluster-wide pools are identical or disjoint, so partial overlap needs a local Service.
+				Name:              "keeps only the shared backend node IP when the Services share one backend node",
+				ReconciledService: svcADenyAllLocalWithFloatingIPDisabled,
+				OtherServices:     []*v1.Service{svcBDenyAllLocalWithFloatingIPDisabled},
+				WantLB:            false,
+				MultiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+					lbConfig("kubernetes", []string{backendNodeIP, backendNodeIP2, backendNodeIP3}, "ns-a/svc-a", "ns-b/svc-b"),
+				},
+				LocalServiceNodes: map[string][]string{
+					"ns-a/svc-a": {backendNodeIP, backendNodeIP2},
+					"ns-b/svc-b": {backendNodeIP2, backendNodeIP3},
+				},
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portA, 500, backendNodeIP, backendNodeIP2),
+					allowRule(iputil.IPv4, 30000+portB, 501, backendNodeIP2, backendNodeIP3),
+					denyRule(iputil.IPv4, 4095, backendNodeIP, backendNodeIP2, backendNodeIP3),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portB, 501, backendNodeIP2, backendNodeIP3),
+					denyRule(iputil.IPv4, 4095, backendNodeIP2, backendNodeIP3),
+				},
+			},
+			{
+				// svc-a never removed that IP, so restoring it is svc-b's own reconcile to do.
+				Name:              "keeps the shared backend node IP but does not add the other deny-all Service's unshared node IP",
+				ReconciledService: svcADenyAllLocalWithFloatingIPDisabled,
+				OtherServices:     []*v1.Service{svcBDenyAllLocalWithFloatingIPDisabled},
+				WantLB:            false,
+				MultiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+					lbConfig("kubernetes", []string{backendNodeIP, backendNodeIP2}, "ns-a/svc-a", "ns-b/svc-b"),
+				},
+				LocalServiceNodes: map[string][]string{
+					"ns-a/svc-a": {backendNodeIP},
+					"ns-b/svc-b": {backendNodeIP, backendNodeIP2},
+				},
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portA, 500, backendNodeIP),
+					allowRule(iputil.IPv4, 30000+portB, 501, backendNodeIP, backendNodeIP2),
+					denyRule(iputil.IPv4, 4095, backendNodeIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portB, 501, backendNodeIP, backendNodeIP2),
+					denyRule(iputil.IPv4, 4095, backendNodeIP),
+				},
+			},
+			{
+				Name:              "removes the backend node IP when the other deny-all Service has no endpoints left",
+				ReconciledService: svcADenyAllLocalWithFloatingIPDisabled,
+				OtherServices:     []*v1.Service{svcBDenyAllLocalWithFloatingIPDisabled},
+				WantLB:            false,
+				MultiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+					lbConfig("kubernetes", []string{backendNodeIP}, "ns-a/svc-a", "ns-b/svc-b"),
+				},
+				LocalServiceNodes: map[string][]string{
+					"ns-a/svc-a": {backendNodeIP},
+					"ns-b/svc-b": {},
+				},
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portA, 500, backendNodeIP),
+					denyRule(iputil.IPv4, 4095, backendNodeIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules:             []*armnetwork.SecurityRule{},
+			},
+			{
+				// No configuration claims the other Service, so its nodes cannot be resolved and its
+				// destinations are dropped instead of retained.
+				Name:              "removes the backend node IP when the other deny-all Service's placement is not known",
+				ReconciledService: svcADenyAllWithFloatingIPDisabledOnUnsharedIP,
+				OtherServices:     []*v1.Service{svcBDenyAllWithFloatingIPDisabledOnUnsharedIP},
+				WantLB:            false,
+				MultiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+					lbConfig("kubernetes", []string{backendNodeIP}, "ns-a/svc-a"),
+				},
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portA, 500, backendNodeIP),
+					allowRule(iputil.IPv4, 30000+portB, 501, backendNodeIP),
+					denyRule(iputil.IPv4, 4095, backendNodeIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				// The other Service keeps its allow rule because its port is still in use.
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portB, 501, backendNodeIP),
+				},
+			},
+			{
+				// Service and node membership are recorded separately, so a configuration can hold
+				// the other Service with no nodes left on it.
+				Name:              "removes the backend node IP when the other deny-all Service's load balancer has no active nodes",
+				ReconciledService: svcADenyAllWithFloatingIPDisabledOnUnsharedIP,
+				OtherServices:     []*v1.Service{svcBDenyAllWithFloatingIPDisabledOnUnsharedIP},
+				WantLB:            false,
+				MultiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+					lbConfig("kubernetes", []string{}, "ns-a/svc-a", "ns-b/svc-b"),
+				},
+				// The backend pool still holds the node even though the config above records none.
+				ExistingBackendPrivateIPs: []string{backendNodeIP},
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portA, 500, backendNodeIP),
+					allowRule(iputil.IPv4, 30000+portB, 501, backendNodeIP),
+					denyRule(iputil.IPv4, 4095, backendNodeIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				// The other Service keeps its allow rule because its port is still in use.
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portB, 501, backendNodeIP),
+				},
+			},
+			{
+				// Azure allows these two on the same port only on separate load balancers.
+				Name:              "removes the backend node IP from the rule it shares with a deny-all Service that only has the same port",
+				ReconciledService: svcADenyAllWithFloatingIPDisabledOnUnsharedIP,
+				OtherServices:     []*v1.Service{svcBDenyAllOnUnsharedIPWithSvcANodePort},
+				WantLB:            false,
+				MultiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+					lbConfig("kubernetes", []string{backendNodeIP}, "ns-a/svc-a"),
+					lbConfig("lb-1", []string{backendNodeIP2}, "ns-b/svc-b"),
+				},
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portA, 500, backendNodeIP, svcBUnsharedIP),
+					denyRule(iputil.IPv4, 4095, backendNodeIP, svcBUnsharedIP),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portA, 500, svcBUnsharedIP),
+					denyRule(iputil.IPv4, 4095, svcBUnsharedIP),
+				},
+			},
+			{
+				Name:                      "does not add the node's IPv6 address to a deny-all rule under multiple load balancers when the only deny-all Service is IPv4-only and the IPv6-only Service is deleted",
+				ReconciledService:         svcAIPv6OnlyWithFloatingIPDisabled,
+				OtherServices:             []*v1.Service{svcBIPv4OnlyDenyAllWithDualStackRangesAndFloatingIPDisabled},
+				WantLB:                    false,
+				ExistingBackendPrivateIPs: []string{dualStackNodeIPv6},
+				MultiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+					lbConfig("kubernetes", []string{dualStackNode}, "ns-a/svc-a", "ns-b/svc-b"),
+				},
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv6, 30000+portA, 500, dualStackNodeIPv6),
+					allowRule(iputil.IPv4, 30000+portB, 501, dualStackNodeIPv4),
+					denyRule(iputil.IPv4, 4095, dualStackNodeIPv4),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portB, 501, dualStackNodeIPv4),
+					denyRule(iputil.IPv4, 4095, dualStackNodeIPv4),
+				},
+			},
+			{
+				Name:                      "does not add the node's IPv4 address to a deny-all rule under multiple load balancers when the only deny-all Service is IPv6-only and the IPv4-only Service is deleted",
+				ReconciledService:         svcAIPv4OnlyWithFloatingIPDisabled,
+				OtherServices:             []*v1.Service{svcBIPv6OnlyDenyAllWithDualStackRangesAndFloatingIPDisabled},
+				WantLB:                    false,
+				ExistingBackendPrivateIPs: []string{dualStackNodeIPv4},
+				MultiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+					lbConfig("kubernetes", []string{dualStackNode}, "ns-a/svc-a", "ns-b/svc-b"),
+				},
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portA, 500, dualStackNodeIPv4),
+					allowRule(iputil.IPv6, 30000+portB, 501, dualStackNodeIPv6),
+					denyRule(iputil.IPv6, 4094, dualStackNodeIPv6),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv6, 30000+portB, 501, dualStackNodeIPv6),
+					denyRule(iputil.IPv6, 4094, dualStackNodeIPv6),
+				},
+			},
+			{
+				Name:                      "keeps both of the node's addresses in the deny-all rules under multiple load balancers when the only deny-all Service is dual-stack and a Service without deny-all is deleted",
+				ReconciledService:         svcADualStackWithFloatingIPDisabled,
+				OtherServices:             []*v1.Service{svcBDualStackDenyAllWithFloatingIPDisabled},
+				WantLB:                    false,
+				ExistingBackendPrivateIPs: []string{dualStackNodeIPv4, dualStackNodeIPv6},
+				MultiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{
+					lbConfig("kubernetes", []string{dualStackNode}, "ns-a/svc-a", "ns-b/svc-b"),
+				},
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portA, 500, dualStackNodeIPv4),
+					allowRule(iputil.IPv6, 30000+portA, 501, dualStackNodeIPv6),
+					allowRule(iputil.IPv4, 30000+portB, 502, dualStackNodeIPv4),
+					allowRule(iputil.IPv6, 30000+portB, 503, dualStackNodeIPv6),
+					denyRule(iputil.IPv4, 4095, dualStackNodeIPv4),
+					denyRule(iputil.IPv6, 4094, dualStackNodeIPv6),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portB, 502, dualStackNodeIPv4),
+					allowRule(iputil.IPv6, 30000+portB, 503, dualStackNodeIPv6),
+					denyRule(iputil.IPv4, 4095, dualStackNodeIPv4),
+					denyRule(iputil.IPv6, 4094, dualStackNodeIPv6),
+				},
+			},
+			{
+				Name:                      "does not add the node's IPv6 address to a deny-all rule under one load balancer when the only deny-all Service is IPv4-only and the IPv6-only Service is deleted",
+				ReconciledService:         svcAIPv6OnlyWithFloatingIPDisabled,
+				OtherServices:             []*v1.Service{svcBIPv4OnlyDenyAllWithDualStackRangesAndFloatingIPDisabled},
+				WantLB:                    false,
+				ExistingBackendPrivateIPs: []string{dualStackNodeIPv4, dualStackNodeIPv6},
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv6, 30000+portA, 500, dualStackNodeIPv6),
+					allowRule(iputil.IPv4, 30000+portB, 501, dualStackNodeIPv4),
+					denyRule(iputil.IPv4, 4095, dualStackNodeIPv4),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portB, 501, dualStackNodeIPv4),
+					denyRule(iputil.IPv4, 4095, dualStackNodeIPv4),
+				},
+			},
+			{
+				Name:                      "does not add the node's IPv4 address to a deny-all rule under one load balancer when the only deny-all Service is IPv6-only and the IPv4-only Service is deleted",
+				ReconciledService:         svcAIPv4OnlyWithFloatingIPDisabled,
+				OtherServices:             []*v1.Service{svcBIPv6OnlyDenyAllWithDualStackRangesAndFloatingIPDisabled},
+				WantLB:                    false,
+				ExistingBackendPrivateIPs: []string{dualStackNodeIPv4, dualStackNodeIPv6},
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portA, 500, dualStackNodeIPv4),
+					allowRule(iputil.IPv6, 30000+portB, 501, dualStackNodeIPv6),
+					denyRule(iputil.IPv6, 4094, dualStackNodeIPv6),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv6, 30000+portB, 501, dualStackNodeIPv6),
+					denyRule(iputil.IPv6, 4094, dualStackNodeIPv6),
+				},
+			},
+			{
+				Name:                      "keeps both of the node's addresses in the deny-all rules under one load balancer when the only deny-all Service is dual-stack and a Service without deny-all is deleted",
+				ReconciledService:         svcADualStackWithFloatingIPDisabled,
+				OtherServices:             []*v1.Service{svcBDualStackDenyAllWithFloatingIPDisabled},
+				WantLB:                    false,
+				ExistingBackendPrivateIPs: []string{dualStackNodeIPv4, dualStackNodeIPv6},
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portA, 500, dualStackNodeIPv4),
+					allowRule(iputil.IPv6, 30000+portA, 501, dualStackNodeIPv6),
+					allowRule(iputil.IPv4, 30000+portB, 502, dualStackNodeIPv4),
+					allowRule(iputil.IPv6, 30000+portB, 503, dualStackNodeIPv6),
+					denyRule(iputil.IPv4, 4095, dualStackNodeIPv4),
+					denyRule(iputil.IPv6, 4094, dualStackNodeIPv6),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portB, 502, dualStackNodeIPv4),
+					allowRule(iputil.IPv6, 30000+portB, 503, dualStackNodeIPv6),
+					denyRule(iputil.IPv4, 4095, dualStackNodeIPv4),
+					denyRule(iputil.IPv6, 4094, dualStackNodeIPv6),
+				},
+			},
+			{
+				Name:                      "adds only the node's IPv4 address when the deny-all Service is IPv4-only",
+				ReconciledService:         svcBIPv4OnlyDenyAllWithDualStackRangesAndFloatingIPDisabled,
+				WantLB:                    EnsureLB,
+				ExistingBackendPrivateIPs: []string{dualStackNodeIPv4, dualStackNodeIPv6},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portB, 500, dualStackNodeIPv4),
+					denyRule(iputil.IPv4, 4095, dualStackNodeIPv4),
+				},
+			},
+			{
+				// Deny-all rules take the highest free priority, so a lone IPv6 rule gets 4095.
+				Name:                      "adds only the node's IPv6 address when the deny-all Service is IPv6-only",
+				ReconciledService:         svcBIPv6OnlyDenyAllWithDualStackRangesAndFloatingIPDisabled,
+				WantLB:                    EnsureLB,
+				ExistingBackendPrivateIPs: []string{dualStackNodeIPv4, dualStackNodeIPv6},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv6, 30000+portB, 500, dualStackNodeIPv6),
+					denyRule(iputil.IPv6, 4095, dualStackNodeIPv6),
+				},
+			},
+			{
+				Name:                      "adds both of the node's addresses when the deny-all Service is dual-stack",
+				ReconciledService:         svcBDualStackDenyAllWithFloatingIPDisabled,
+				WantLB:                    EnsureLB,
+				ExistingBackendPrivateIPs: []string{dualStackNodeIPv4, dualStackNodeIPv6},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portB, 500, dualStackNodeIPv4),
+					allowRule(iputil.IPv6, 30000+portB, 501, dualStackNodeIPv6),
+					denyRule(iputil.IPv4, 4095, dualStackNodeIPv4),
+					denyRule(iputil.IPv6, 4094, dualStackNodeIPv6),
+				},
+			},
+			{
+				// The address is the user's own, so unlike a node address its family is not filtered.
+				Name:                      "adds a deny-all rule for an additional public IPv6 when the Service is IPv4-only",
+				ReconciledService:         svcAIPv4OnlyDenyAllWithAdditionalPublicIPv6,
+				WantLB:                    EnsureLB,
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, portA, 500, svcAUnsharedIP),
+					denyRule(iputil.IPv4, 4095, svcAUnsharedIP),
+					denyRule(iputil.IPv6, 4094, unmanagedPublicIPv6),
+				},
+			},
+			{
+				Name:                      "adds a deny-all rule for an additional public IPv4 when the Service is IPv6-only",
+				ReconciledService:         svcAIPv6OnlyDenyAllWithAdditionalPublicIPv4,
+				WantLB:                    EnsureLB,
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv6, portA, 500, svcAUnsharedIPv6),
+					denyRule(iputil.IPv4, 4095, unmanagedPublicIP),
+					denyRule(iputil.IPv6, 4094, svcAUnsharedIPv6),
+				},
+			},
+			{
+				Name:                      "drops a stale IPv6 deny-all rule when the Service is IPv4-only",
+				ReconciledService:         svcBIPv4OnlyDenyAllWithDualStackRangesAndFloatingIPDisabled,
+				WantLB:                    EnsureLB,
+				ExistingBackendPrivateIPs: []string{dualStackNodeIPv4, dualStackNodeIPv6},
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portB, 500, dualStackNodeIPv4),
+					allowRule(iputil.IPv6, 30000+portB, 501, dualStackNodeIPv6),
+					denyRule(iputil.IPv4, 4095, dualStackNodeIPv4),
+					denyRule(iputil.IPv6, 4094, dualStackNodeIPv6),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portB, 500, dualStackNodeIPv4),
+					denyRule(iputil.IPv4, 4095, dualStackNodeIPv4),
+				},
+			},
+			{
+				Name:                      "drops a stale IPv4 deny-all rule when the Service is IPv6-only",
+				ReconciledService:         svcBIPv6OnlyDenyAllWithDualStackRangesAndFloatingIPDisabled,
+				WantLB:                    EnsureLB,
+				ExistingBackendPrivateIPs: []string{dualStackNodeIPv4, dualStackNodeIPv6},
+				ExistingRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portB, 501, dualStackNodeIPv4),
+					allowRule(iputil.IPv6, 30000+portB, 500, dualStackNodeIPv6),
+					denyRule(iputil.IPv4, 4095, dualStackNodeIPv4),
+					denyRule(iputil.IPv6, 4094, dualStackNodeIPv6),
+				},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv6, 30000+portB, 500, dualStackNodeIPv6),
+					denyRule(iputil.IPv6, 4094, dualStackNodeIPv6),
+				},
+			},
+			{
+				Name:                      "adds rules for both the node IP and the additional public IP when the floating IP is disabled",
+				ReconciledService:         svcADenyAllDualStackWithFloatingIPDisabledAndAdditionalPublicIPs,
+				WantLB:                    EnsureLB,
+				ExistingBackendPrivateIPs: []string{dualStackNodeIPv4, dualStackNodeIPv6},
+				ExpectsSecurityGroupWrite: true,
+				ExpectedRules: []*armnetwork.SecurityRule{
+					allowRule(iputil.IPv4, 30000+portA, 500, dualStackNodeIPv4, unmanagedPublicIP),
+					allowRule(iputil.IPv6, 30000+portA, 501, dualStackNodeIPv6, unmanagedPublicIPv6),
+					denyRule(iputil.IPv4, 4095, dualStackNodeIPv4, unmanagedPublicIP),
+					denyRule(iputil.IPv6, 4094, dualStackNodeIPv6, unmanagedPublicIPv6),
+				},
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.Name, func(t *testing.T) {
+				var (
+					ctrl                    = gomock.NewController(t)
+					az                      = GetTestCloud(ctrl)
+					securityGroupClient     = az.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+					loadBalancerClient      = az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+					loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
+					loadBalancer            = azureFx.LoadBalancer().Build()
+				)
+				defer ctrl.Finish()
+
+				runtimeObjects := []runtime.Object{tt.ReconciledService}
+				for _, other := range tt.OtherServices {
+					runtimeObjects = append(runtimeObjects, other)
+				}
+
+				for name, ips := range nodeAddresses {
+					az.nodePrivateIPs[name] = utilsets.NewString(ips...)
+					addresses := make([]v1.NodeAddress, 0, len(ips))
+					for _, ip := range ips {
+						addresses = append(addresses, v1.NodeAddress{Type: v1.NodeInternalIP, Address: ip})
+					}
+					runtimeObjects = append(runtimeObjects, &v1.Node{
+						ObjectMeta: metav1.ObjectMeta{Name: name},
+						Status:     v1.NodeStatus{Addresses: addresses},
+					})
+				}
+
+				az.MultipleStandardLoadBalancerConfigurations = tt.MultiSLBConfigs
+				if len(tt.MultiSLBConfigs) > 0 {
+					az.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+				}
+
+				for svcKey, ips := range tt.LocalServiceNodes {
+					namespace, name, _ := strings.Cut(svcKey, "/")
+					endpoints := make([]discovery_v1.Endpoint, 0, len(ips))
+					for _, ip := range ips {
+						endpoints = append(endpoints, discovery_v1.Endpoint{NodeName: ptr.To(ip)})
+					}
+					az.endpointSlicesCache.Store(strings.ToLower(svcKey), &discovery_v1.EndpointSlice{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: namespace,
+							Name:      name,
+							Labels:    map[string]string{consts.ServiceNameLabel: name},
+						},
+						Endpoints: endpoints,
+					})
+				}
+
+				backendPrivateIPs := []string{backendNodeIP}
+				reconciledKey := tt.ReconciledService.Namespace + "/" + tt.ReconciledService.Name
+				if tt.ExistingBackendPrivateIPs != nil {
+					backendPrivateIPs = tt.ExistingBackendPrivateIPs
+				} else if ips, ok := tt.LocalServiceNodes[reconciledKey]; ok {
+					backendPrivateIPs = ips
+				} else {
+					for _, cfg := range tt.MultiSLBConfigs {
+						if cfg.ActiveServices.Has(reconciledKey) {
+							backendPrivateIPs = nil
+							for _, name := range cfg.ActiveNodes.UnsortedList() {
+								backendPrivateIPs = append(backendPrivateIPs, az.nodePrivateIPs[name].UnsortedList()...)
+							}
+							break
+						}
+					}
+				}
+
+				backendPrivateIPv4s, backendPrivateIPv6s := []string{}, []string{}
+				for _, ip := range backendPrivateIPs {
+					if addr, err := netip.ParseAddr(ip); err == nil && addr.Is4() {
+						backendPrivateIPv4s = append(backendPrivateIPv4s, ip)
+					} else {
+						backendPrivateIPv6s = append(backendPrivateIPv6s, ip)
+					}
+				}
+
+				kubeClient := fake.NewSimpleClientset(runtimeObjects...)
+				informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
+				az.serviceLister = informerFactory.Core().V1().Services().Lister()
+				az.nodeLister = informerFactory.Core().V1().Nodes().Lister()
+				informerFactory.Start(wait.NeverStop)
+				informerFactory.WaitForCacheSync(wait.NeverStop)
+
+				expectedWrites := 0
+				if tt.ExpectsSecurityGroupWrite {
+					expectedWrites = 1
+				}
+
+				securityGroupClient.EXPECT().
+					Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName).
+					Return(azureFx.SecurityGroup().WithRules(tt.ExistingRules).Build(), nil).
+					Times(1)
+				securityGroupClient.EXPECT().
+					CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any()).
+					Return(nil, nil).
+					Times(expectedWrites)
+				loadBalancerClient.EXPECT().
+					Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
+					Return(loadBalancer, nil).
+					Times(1)
+				loadBalancerBackendPool.EXPECT().
+					GetBackendPrivateIPs(gomock.Any(), ClusterName, tt.ReconciledService, loadBalancer).
+					Return(backendPrivateIPv4s, backendPrivateIPv6s).
+					Times(1)
+
+				sg, err := az.reconcileSecurityGroup(ctx, ClusterName, tt.ReconciledService, *loadBalancer.Name, ingressIPs(tt.ReconciledService), tt.WantLB)
+				assert.NoError(t, err)
+
+				testutil.ExpectExactSecurityRules(t, sg, tt.ExpectedRules)
+			})
+		}
+	})
+}
+
+func TestFilterServicesSharingDestinations(t *testing.T) {
+	const (
+		reconciledIP         = "10.0.0.1"
+		unsharedIP           = "10.0.0.2"
+		sharedAdditionalIP   = "203.0.113.5"
+		unsharedAdditionalIP = "203.0.113.6"
+		nodeIP               = "192.168.10.1"
+	)
+
+	service := func(name string, disableFloatingIP bool, ingressIPs ...string) *v1.Service {
+		svc := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: name},
+			Spec:       v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer},
+		}
+		if disableFloatingIP {
+			svc.Annotations = map[string]string{
+				consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "true",
+			}
+		}
+		for _, ip := range ingressIPs {
+			svc.Status.LoadBalancer.Ingress = append(svc.Status.LoadBalancer.Ingress, v1.LoadBalancerIngress{IP: ip})
+		}
+		return svc
+	}
+	addrs := func(ips ...string) []netip.Addr {
+		rv := make([]netip.Addr, 0, len(ips))
+		for _, ip := range ips {
+			rv = append(rv, netip.MustParseAddr(ip))
+		}
+		return rv
+	}
+
+	var (
+		reconciledWithFloatingIP         = service("reconciled", false, reconciledIP, sharedAdditionalIP)
+		reconciledWithFloatingIPDisabled = service("reconciled", true, reconciledIP, sharedAdditionalIP)
+
+		floatingIP                               = service("floating-ip", false, unsharedIP)
+		floatingIPSharingFrontendIP              = service("floating-ip-sharing-frontend-ip", false, reconciledIP)
+		floatingIPWithSharedAdditionalIP         = service("floating-ip-with-shared-additional-ip", false, unsharedIP, sharedAdditionalIP)
+		floatingIPWithUnsharedAdditionalIP       = service("floating-ip-with-unshared-additional-ip", false, unsharedIP, unsharedAdditionalIP)
+		floatingIPDisabled                       = service("floating-ip-disabled", true, unsharedIP)
+		floatingIPDisabledWithSharedAdditionalIP = service("floating-ip-disabled-with-shared-additional-ip", true, unsharedIP, sharedAdditionalIP)
+		notProvisioned                           = service("not-provisioned", false)
+		notALoadBalancer                         = func() *v1.Service {
+			svc := service("not-a-load-balancer", true, reconciledIP)
+			svc.Spec.Type = v1.ServiceTypeNodePort
+			return svc
+		}()
+
+		others = []*v1.Service{
+			floatingIP, floatingIPSharingFrontendIP, floatingIPWithSharedAdditionalIP,
+			floatingIPWithUnsharedAdditionalIP, floatingIPDisabled,
+			floatingIPDisabledWithSharedAdditionalIP, notProvisioned, notALoadBalancer,
+		}
+	)
+
+	tests := []struct {
+		Name              string
+		ReconciledService *v1.Service
+		Destinations      []netip.Addr
+		Expected          []*v1.Service
+	}{
+		{
+			// A frontend IP is not a destination when the floating IP is disabled.
+			Name:              "takes the Services sharing a destination and every Service with the floating IP disabled when the reconciled Service disables it",
+			ReconciledService: reconciledWithFloatingIPDisabled,
+			Destinations:      addrs(nodeIP, sharedAdditionalIP),
+			Expected: []*v1.Service{
+				reconciledWithFloatingIPDisabled, floatingIPWithSharedAdditionalIP,
+				floatingIPDisabled, floatingIPDisabledWithSharedAdditionalIP,
+			},
+		},
+		{
+			Name:              "takes only the Services sharing a destination when the reconciled Service uses the floating IP",
+			ReconciledService: reconciledWithFloatingIP,
+			Destinations:      addrs(reconciledIP, sharedAdditionalIP),
+			Expected: []*v1.Service{
+				reconciledWithFloatingIP, floatingIPSharingFrontendIP,
+				floatingIPWithSharedAdditionalIP, floatingIPDisabledWithSharedAdditionalIP,
+			},
+		},
+		{
+			Name:              "takes every Service with the floating IP disabled when there is no destination and the reconciled Service disables it",
+			ReconciledService: reconciledWithFloatingIPDisabled,
+			Destinations:      nil,
+			Expected: []*v1.Service{
+				reconciledWithFloatingIPDisabled, floatingIPDisabled, floatingIPDisabledWithSharedAdditionalIP,
+			},
+		},
+		{
+			Name:              "takes nothing when there is no destination and the reconciled Service uses the floating IP",
+			ReconciledService: reconciledWithFloatingIP,
+			Destinations:      nil,
+			Expected:          nil,
+		},
+		{
+			Name:              "takes nothing when only a node IP is a destination and the reconciled Service uses the floating IP",
+			ReconciledService: reconciledWithFloatingIP,
+			Destinations:      addrs(nodeIP),
+			Expected:          nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.Name, func(t *testing.T) {
+			// The lister returns the reconciled Service as well.
+			services := append([]*v1.Service{tt.ReconciledService}, others...)
+			disableFloatingIP := consts.IsK8sServiceDisableLoadBalancerFloatingIP(tt.ReconciledService)
+
+			assert.Equal(t, tt.Expected, filterServicesSharingDestinations(services, tt.Destinations, disableFloatingIP))
+		})
+	}
 }
