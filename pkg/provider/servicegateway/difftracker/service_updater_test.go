@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -35,6 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/tools/record"
 	servicehelper "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/component-base/metrics/testutil"
 	"k8s.io/utils/ptr"
@@ -880,6 +882,7 @@ func TestServiceUpdaterCreateOutboundService_HappyPath(t *testing.T) {
 	defer ctrl.Finish()
 
 	m := newOutboundMocks(ctrl)
+	m.nat.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).Return(nil, notFoundError()).Times(1)
 	pipCall := m.pip.EXPECT().CreateOrUpdate(gomock.Any(), "rg", PublicIPName(uid), gomock.Any()).
 		Return(&armnetwork.PublicIPAddress{Name: ptr.To(PublicIPName(uid))}, nil).Times(1)
 	natCall := m.nat.EXPECT().CreateOrUpdate(gomock.Any(), "rg", uid, gomock.Any()).
@@ -920,6 +923,7 @@ func TestServiceUpdaterCreateOutboundService_StepFailuresDoNotRecordNRPState(t *
 			defer ctrl.Finish()
 
 			m := newOutboundMocks(ctrl)
+			m.nat.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).Return(nil, notFoundError()).Times(1)
 			m.pip.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(&armnetwork.PublicIPAddress{Name: ptr.To(PublicIPName(uid))}, tc.pipErr).AnyTimes()
 			m.nat.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
@@ -1456,6 +1460,7 @@ func TestDeleteOutboundService_CountsSwallowedDisassociationFailure(t *testing.T
 		if disassociationFails {
 			m.sgw.EXPECT().GetServices(gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(nil, errors.New("NRP unavailable")).AnyTimes()
+			m.nat.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).Return(nil, notFoundError()).AnyTimes()
 		} else {
 			m.expectNoDisassociation()
 		}
@@ -1475,4 +1480,733 @@ func TestDeleteOutboundService_CountsSwallowedDisassociationFailure(t *testing.T
 	assert.Equal(t, float64(1), run(t, true),
 		"a swallowed disassociation failure must be counted, or a sustained NRP failure is invisible")
 	assert.Zero(t, run(t, false), "control: a successful disassociation counts nothing")
+}
+
+const byoNATGatewayRG = "vnet-rg"
+
+func byoNATConfig() Config {
+	c := testConfig()
+	c.VNetResourceGroup = byoNATGatewayRG
+	return c
+}
+
+func byoNATGatewayARMID(name string) string {
+	return "/subscriptions/sub/resourceGroups/" + byoNATGatewayRG + "/providers/Microsoft.Network/natGateways/" + name
+}
+
+func byoNATGateway(name string) *armnetwork.NatGateway {
+	return &armnetwork.NatGateway{
+		ID:   ptr.To(byoNATGatewayARMID(name)),
+		Name: ptr.To(name),
+		SKU:  &armnetwork.NatGatewaySKU{Name: ptr.To(armnetwork.NatGatewaySKUNameStandardV2)},
+		Properties: &armnetwork.NatGatewayPropertiesFormat{
+			PublicIPAddresses: []*armnetwork.SubResource{{ID: ptr.To("pip-v4")}},
+			ProvisioningState: ptr.To(armnetwork.ProvisioningStateSucceeded),
+		},
+	}
+}
+
+func drainEvents(rec *record.FakeRecorder) []string {
+	var events []string
+	for {
+		select {
+		case e := <-rec.Events:
+			events = append(events, e)
+		default:
+			return events
+		}
+	}
+}
+
+func TestServiceUpdaterCreateOutboundService_BYONATGateway(t *testing.T) {
+	const uid = "byo-egress"
+	cfg := byoNATConfig()
+	serviceGatewayID := cfg.ServiceGatewayResourceID()
+	forbidden := &azcore.ResponseError{StatusCode: http.StatusForbidden}
+	boom := errors.New("ARM failure")
+
+	for _, tc := range []struct {
+		name          string
+		config        Config
+		families      []string
+		nodeRGExists  bool
+		nodeRGForeign bool
+		nodeRGErr     error
+		byo           func() *armnetwork.NatGateway
+		byoErr        error
+		services      []*armnetwork.ServiceGatewayService
+		servicesErr   error
+		linkErr       error
+		registerErr   error
+		wantManaged   bool
+		wantLink      bool
+		wantRegister  bool
+		wantSuccess   bool
+		wantRecorded  bool
+		wantEvent     string
+	}{
+		{name: "links and registers a BYO NAT Gateway", wantRecorded: true, byo: func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+			wantLink: true, wantRegister: true, wantSuccess: true, wantEvent: egressNATGatewayLinkedReason},
+		{name: "already linked gateway is not written again", wantRecorded: true, byo: func() *armnetwork.NatGateway {
+			n := byoNATGateway(uid)
+			n.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(strings.ToUpper(serviceGatewayID))}
+			return n
+		}, wantRegister: true, wantSuccess: true, wantEvent: egressNATGatewayLinkedReason},
+		{name: "linked gateway that is not Succeeded is written again", wantRecorded: true, byo: func() *armnetwork.NatGateway {
+			n := byoNATGateway(uid)
+			n.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(serviceGatewayID)}
+			n.Properties.ProvisioningState = ptr.To(armnetwork.ProvisioningStateFailed)
+			return n
+		}, wantLink: true, wantRegister: true, wantSuccess: true, wantEvent: egressNATGatewayLinkedReason},
+		{name: "dual-stack gateway serves IPv6", wantRecorded: true, families: []string{"IPv4", "IPv6"}, byo: func() *armnetwork.NatGateway {
+			n := byoNATGateway(uid)
+			n.Properties.PublicIPPrefixesV6 = []*armnetwork.SubResource{{ID: ptr.To("prefix-v6")}}
+			return n
+		}, wantLink: true, wantRegister: true, wantSuccess: true, wantEvent: egressNATGatewayLinkedReason},
+		{name: "cluster resource group NAT Gateway wins", nodeRGExists: true, wantManaged: true, wantSuccess: true},
+		{name: "a transient cluster resource group lookup error is retried without an event", nodeRGErr: boom},
+		{name: "cluster resource group NAT Gateway not created by this controller is rejected", nodeRGForeign: true,
+			wantEvent: egressNATGatewayRejectedReason},
+		{name: "no BYO NAT Gateway falls back to managed", byoErr: notFoundError(), wantManaged: true, wantSuccess: true},
+		{name: "unreadable VNet resource group falls back to managed", byoErr: forbidden,
+			wantManaged: true, wantSuccess: true, wantEvent: egressNATGatewayUnreadableReason},
+		{name: "BYO lookup failure is retried", byoErr: boom},
+		{name: "wrong SKU is rejected", byo: func() *armnetwork.NatGateway {
+			n := byoNATGateway(uid)
+			n.SKU.Name = ptr.To(armnetwork.NatGatewaySKUNameStandard)
+			return n
+		}, wantEvent: egressNATGatewayRejectedReason},
+		{name: "gateway linked to another Service Gateway is rejected", byo: func() *armnetwork.NatGateway {
+			n := byoNATGateway(uid)
+			n.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To("/subscriptions/sub/resourceGroups/other/providers/Microsoft.Network/serviceGateways/sgw")}
+			return n
+		}, wantEvent: egressNATGatewayRejectedReason},
+		{name: "gateway without IPv6 addresses is rejected on a dual-stack cluster", families: []string{"IPv4", "IPv6"},
+			byo: func() *armnetwork.NatGateway { return byoNATGateway(uid) }, wantEvent: egressNATGatewayRejectedReason},
+		{name: "gateway without addresses is rejected", byo: func() *armnetwork.NatGateway {
+			n := byoNATGateway(uid)
+			n.Properties.PublicIPAddresses = nil
+			return n
+		}, wantEvent: egressNATGatewayRejectedReason},
+		{name: "default outbound gateway is rejected", byo: func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+			services: []*armnetwork.ServiceGatewayService{{Name: ptr.To("default-natgw"), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
+				IsDefault: ptr.To(true), PublicNatGatewayID: ptr.To(strings.ToLower(byoNATGatewayARMID(uid)))}}},
+			wantEvent: egressNATGatewayRejectedReason},
+		{name: "a gateway returned without a valid resource ID is retried, nothing linked", byo: func() *armnetwork.NatGateway {
+			n := byoNATGateway(uid)
+			n.ID = ptr.To("not-an-arm-id")
+			return n
+		}},
+		{name: "its own earlier registration does not block a retry", wantRecorded: true, byo: func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+			services: []*armnetwork.ServiceGatewayService{{Name: ptr.To(uid), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{PublicNatGatewayID: ptr.To(byoNATGatewayARMID(uid))}}},
+			wantLink: true, wantRegister: true, wantSuccess: true, wantEvent: egressNATGatewayLinkedReason},
+		{name: "a transient link failure is retried without an event", wantRecorded: true, byo: func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+			linkErr: boom, wantLink: true},
+		{name: "unreadable Service Gateway services are retried, nothing linked", byo: func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+			servicesErr: boom},
+		{name: "link denied is retried with a warning", wantRecorded: true, byo: func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+			linkErr: forbidden, wantLink: true, wantEvent: egressNATGatewayRejectedReason},
+		{name: "registration failure is retried", wantRecorded: true, byo: func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+			wantLink: true, registerErr: boom, wantRegister: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			m := newOutboundMocks(ctrl)
+
+			if tc.nodeRGExists {
+				m.nat.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).Return(&armnetwork.NatGateway{Name: ptr.To(uid), Tags: egressIdentityTags(uid)}, nil).Times(1)
+			} else if tc.nodeRGErr != nil {
+				m.nat.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).Return(nil, tc.nodeRGErr).Times(1)
+			} else if tc.nodeRGForeign {
+				m.nat.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).Return(&armnetwork.NatGateway{Name: ptr.To(uid)}, nil).Times(1)
+			} else {
+				m.nat.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).Return(nil, notFoundError()).Times(1)
+				var gateway *armnetwork.NatGateway
+				if tc.byo != nil {
+					gateway = tc.byo()
+				}
+				m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, uid, gomock.Any()).Return(gateway, tc.byoErr).Times(1)
+			}
+			m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(tc.services, tc.servicesErr).AnyTimes()
+
+			linkCalls := 0
+			m.nat.EXPECT().CreateOrUpdate(gomock.Any(), byoNATGatewayRG, uid, gomock.Any()).
+				DoAndReturn(func(_ context.Context, _, _ string, n armnetwork.NatGateway) (*armnetwork.NatGateway, error) {
+					linkCalls++
+					assert.Equal(t, serviceGatewayID, derefString(n.Properties.ServiceGateway.ID))
+					assert.Equal(t, "pip-v4", derefString(n.Properties.PublicIPAddresses[0].ID), "the owner's addresses must be preserved")
+					return &n, tc.linkErr
+				}).AnyTimes()
+			registered := 0
+			if tc.wantManaged {
+				m.pip.EXPECT().CreateOrUpdate(gomock.Any(), "rg", PublicIPName(uid), gomock.Any()).
+					Return(&armnetwork.PublicIPAddress{Name: ptr.To(PublicIPName(uid))}, nil).Times(1)
+				m.nat.EXPECT().CreateOrUpdate(gomock.Any(), "rg", uid, gomock.Any()).Return(nil, nil).Times(1)
+				m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).Times(1)
+			} else {
+				m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).
+					DoAndReturn(func(_ context.Context, _, _ string, req armnetwork.ServiceGatewayUpdateServicesRequest) error {
+						registered++
+						assert.Equal(t, byoNATGatewayARMID(uid), derefString(req.ServiceRequests[0].Service.Properties.PublicNatGatewayID))
+						return tc.registerErr
+					}).AnyTimes()
+			}
+
+			dt := newTestDiffTracker()
+			dt.config = byoNATConfig()
+			dt.networkClientFactory = m.factory
+			dt.kubeClient = fake.NewSimpleClientset(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "pod", UID: "pod-uid"}})
+			rec := &captureRecorder{FakeRecorder: *record.NewFakeRecorder(10)}
+			dt.eventRecorder = rec
+			got := &outboundCompletion{}
+			outboundUpdater(dt, got).createOutboundService(uid, &OutboundConfig{IPFamilies: tc.families}, "corr", "ns", "pod")
+			for _, object := range rec.objects {
+				assert.Equal(t, types.UID("pod-uid"), object.(*v1.Pod).UID, "events must be recorded on the triggering pod")
+			}
+
+			called, success, err := got.result()
+			assert.True(t, called)
+			assert.Equal(t, tc.wantSuccess, success, "completion error: %v", err)
+			assert.Equal(t, tc.wantSuccess, dt.NRPResources.NATGateways.Has(uid))
+			assert.Equal(t, tc.wantLink, linkCalls > 0, "link calls")
+			if !tc.wantManaged {
+				assert.Equal(t, tc.wantRegister, registered > 0, "registration calls")
+			}
+			if tc.wantRecorded {
+				assert.Equal(t, byoNATGatewayARMID(uid), dt.byoNATGatewayID(uid), "a linked gateway must be recorded so a delete unlinks it")
+			} else {
+				assert.Empty(t, dt.byoNATGatewayID(uid), "a gateway that was never linked must not be unlinked on delete")
+			}
+			events := drainEvents(&rec.FakeRecorder)
+			if tc.wantEvent == "" {
+				assert.Empty(t, events)
+			} else if assert.Len(t, events, 1) {
+				assert.Contains(t, events[0], tc.wantEvent)
+				wantType := v1.EventTypeWarning
+				if tc.wantEvent != egressNATGatewayRejectedReason {
+					wantType = v1.EventTypeNormal
+				}
+				assert.True(t, strings.HasPrefix(events[0], wantType), "event %q should be %s", events[0], wantType)
+				if errors.Is(tc.linkErr, forbidden) {
+					assert.Contains(t, events[0], "access denied", "the e2e fail-fast relies on this wording")
+				}
+			}
+		})
+	}
+}
+
+func TestServiceUpdaterCreateOutboundService_KeepsLinkedBYONATGateway(t *testing.T) {
+	const uid = "byo-linked"
+	forbidden := &azcore.ResponseError{StatusCode: http.StatusForbidden}
+
+	for _, tc := range []struct {
+		name         string
+		linked       func() (*armnetwork.NatGateway, error)
+		wantManaged  bool
+		wantSuccess  bool
+		wantRecorded bool
+	}{
+		{name: "reuses the linked gateway without resolving again", linked: func() (*armnetwork.NatGateway, error) { return byoNATGateway(uid), nil },
+			wantSuccess: true, wantRecorded: true},
+		{name: "a gateway its owner deleted is forgotten and resolution starts over", linked: func() (*armnetwork.NatGateway, error) { return nil, notFoundError() },
+			wantManaged: true, wantSuccess: true},
+		{name: "an unusable linked gateway is rejected but stays recorded for the unlink", linked: func() (*armnetwork.NatGateway, error) {
+			n := byoNATGateway(uid)
+			n.Properties.PublicIPAddresses = nil
+			return n, nil
+		}, wantRecorded: true},
+		{name: "an unreadable linked gateway is retried, never replaced by a managed one", linked: func() (*armnetwork.NatGateway, error) { return nil, forbidden },
+			wantRecorded: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			m := newOutboundMocks(ctrl)
+			linked, linkedErr := tc.linked()
+			m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, uid, gomock.Any()).Return(linked, linkedErr).Times(1)
+			m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+			m.nat.EXPECT().CreateOrUpdate(gomock.Any(), byoNATGatewayRG, uid, gomock.Any()).Return(nil, nil).AnyTimes()
+			if tc.wantManaged {
+				m.nat.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).Return(nil, notFoundError()).Times(1)
+				m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, uid, gomock.Any()).Return(nil, notFoundError()).Times(1)
+				m.pip.EXPECT().CreateOrUpdate(gomock.Any(), "rg", PublicIPName(uid), gomock.Any()).Return(&armnetwork.PublicIPAddress{}, nil).Times(1)
+				m.nat.EXPECT().CreateOrUpdate(gomock.Any(), "rg", uid, gomock.Any()).Return(nil, nil).Times(1)
+			}
+			m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).AnyTimes()
+
+			dt := newTestDiffTracker()
+			dt.config = byoNATConfig()
+			dt.networkClientFactory = m.factory
+			dt.setBYONATGatewayID(uid, byoNATGatewayARMID(uid))
+			got := &outboundCompletion{}
+			outboundUpdater(dt, got).createOutboundService(uid, &OutboundConfig{}, "corr", "ns", "pod")
+
+			_, success, err := got.result()
+			assert.Equal(t, tc.wantSuccess, success, "completion error: %v", err)
+			if tc.wantRecorded {
+				assert.Equal(t, byoNATGatewayARMID(uid), dt.byoNATGatewayID(uid))
+			} else {
+				assert.Empty(t, dt.byoNATGatewayID(uid))
+			}
+		})
+	}
+}
+
+// A NAT Gateway in the cluster resource group that this controller did not create (for example the
+// default outbound service's, which may carry any name) must never be taken over, whatever the VNet layout.
+func TestServiceUpdaterCreateOutboundService_RejectsUnmanagedClusterNATGateway(t *testing.T) {
+	const uid = "custom-default"
+	for name, vnetRG := range map[string]string{"VNet in the cluster resource group": "", "VNet in its own resource group": byoNATGatewayRG} {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			m := newOutboundMocks(ctrl) // no expectations: any Azure call fails the test
+
+			dt := newTestDiffTracker()
+			dt.config = testConfig()
+			dt.config.VNetResourceGroup = vnetRG
+			dt.networkClientFactory = m.factory
+			dt.NRPResources.UnmanagedNATGateways = utilsets.NewString("Custom-Default")
+			dt.kubeClient = fake.NewSimpleClientset(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "pod", UID: "pod-uid"}})
+			rec := &captureRecorder{FakeRecorder: *record.NewFakeRecorder(10)}
+			dt.eventRecorder = rec
+			got := &outboundCompletion{}
+			outboundUpdater(dt, got).createOutboundService(uid, &OutboundConfig{}, "corr", "ns", "pod")
+
+			_, success, err := got.result()
+			assert.False(t, success)
+			assert.Error(t, err)
+			assert.False(t, dt.NRPResources.NATGateways.Has(uid))
+			events := drainEvents(&rec.FakeRecorder)
+			if assert.Len(t, events, 1) {
+				assert.Contains(t, events[0], egressNATGatewayRejectedReason)
+				assert.True(t, strings.HasPrefix(events[0], v1.EventTypeWarning), events[0])
+				assert.Equal(t, types.UID("pod-uid"), rec.objects[0].(*v1.Pod).UID, "the event must be on the triggering pod")
+			}
+		})
+	}
+}
+
+func TestServiceUpdaterCreateOutboundService_NoBYOLookupWithoutSeparateVNetResourceGroup(t *testing.T) {
+	const uid = "egress-same-rg"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	m := newOutboundMocks(ctrl)
+	m.nat.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).Return(nil, notFoundError()).Times(1) // the cluster resource group only
+	m.pip.EXPECT().CreateOrUpdate(gomock.Any(), "rg", PublicIPName(uid), gomock.Any()).
+		Return(&armnetwork.PublicIPAddress{Name: ptr.To(PublicIPName(uid))}, nil).Times(1)
+	m.nat.EXPECT().CreateOrUpdate(gomock.Any(), "rg", uid, gomock.Any()).Return(nil, nil).Times(1)
+	m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).Times(1)
+
+	dt := newTestDiffTracker()
+	dt.config = testConfig()
+	dt.config.VNetResourceGroup = "RG"
+	dt.networkClientFactory = m.factory
+	got := &outboundCompletion{}
+	outboundUpdater(dt, got).createOutboundService(uid, &OutboundConfig{}, "corr", "ns", "pod")
+
+	_, success, err := got.result()
+	assert.True(t, success, "%v", err)
+}
+
+func TestServiceUpdaterDeleteOutboundService_BYONATGateway(t *testing.T) {
+	const uid = "byo-egress"
+	cfg := byoNATConfig()
+	serviceGatewayID := cfg.ServiceGatewayResourceID()
+	boom := errors.New("ARM failure")
+
+	for _, tc := range []struct {
+		name           string
+		linkedTo       string
+		natGetErr      error
+		servicesErr    error
+		unregisterErr  error
+		linkErr        error
+		sharedWith     string
+		wantNATCleared bool
+		wantUnregister bool
+		wantSuccess    bool
+	}{
+		{name: "unlinks and unregisters without deleting", linkedTo: strings.ToUpper(serviceGatewayID), wantNATCleared: true, wantUnregister: true, wantSuccess: true},
+		{name: "gateway linked elsewhere is left alone", linkedTo: "/subscriptions/sub/resourceGroups/x/providers/Microsoft.Network/serviceGateways/other",
+			wantUnregister: true, wantSuccess: true},
+		{name: "gateway already gone", natGetErr: notFoundError(), wantUnregister: true, wantSuccess: true},
+		{name: "gateway shared with the default outbound service keeps its link", linkedTo: serviceGatewayID, sharedWith: "default-natgw",
+			wantUnregister: true, wantSuccess: true},
+		{name: "unlink failure is retried before unregistering", natGetErr: boom},
+		{name: "access denied while unlinking does not block the delete", natGetErr: &azcore.ResponseError{StatusCode: http.StatusForbidden},
+			wantUnregister: true, wantSuccess: true},
+		{name: "write access denied while unlinking does not block the delete", linkedTo: serviceGatewayID, linkErr: &azcore.ResponseError{StatusCode: http.StatusForbidden},
+			wantNATCleared: true, wantUnregister: true, wantSuccess: true},
+		{name: "a resource lock while unlinking does not block the delete", linkedTo: serviceGatewayID, linkErr: &azcore.ResponseError{StatusCode: http.StatusConflict, ErrorCode: "ScopeLocked"},
+			wantNATCleared: true, wantUnregister: true, wantSuccess: true},
+		{name: "a conflict while unlinking is retried", linkedTo: serviceGatewayID, linkErr: &azcore.ResponseError{StatusCode: http.StatusConflict, ErrorCode: "AnotherOperationInProgress"},
+			wantNATCleared: true},
+		{name: "unregister failure is retried", linkedTo: serviceGatewayID, wantNATCleared: true, unregisterErr: boom, wantUnregister: true},
+		{name: "already unregistered", linkedTo: serviceGatewayID, wantNATCleared: true, unregisterErr: notFoundError(), wantUnregister: true, wantSuccess: true},
+		{name: "Service Gateway gone: still unlinked and released", linkedTo: serviceGatewayID, servicesErr: notFoundError(), wantNATCleared: true,
+			unregisterErr: notFoundError(), wantUnregister: true, wantSuccess: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			m := newOutboundMocks(ctrl)
+
+			// The identity's own service still references the gateway when the unlink starts; it must
+			// not count as another user.
+			services := []*armnetwork.ServiceGatewayService{
+				{Name: ptr.To("11111111-1111-1111-1111-111111111111"), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{ServiceType: ptr.To(armnetwork.ServiceTypeInbound)}},
+				{Name: ptr.To(uid), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
+					ServiceType: ptr.To(armnetwork.ServiceTypeOutbound), PublicNatGatewayID: ptr.To(byoNATGatewayARMID(uid))}},
+			}
+			if tc.sharedWith != "" {
+				services = append(services, &armnetwork.ServiceGatewayService{Name: ptr.To(tc.sharedWith), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
+					IsDefault: ptr.To(true), PublicNatGatewayID: ptr.To(strings.ToUpper(byoNATGatewayARMID(uid)))}})
+			}
+			if tc.servicesErr != nil {
+				services = nil
+			}
+			m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(services, tc.servicesErr).Times(1)
+			var natGateway *armnetwork.NatGateway
+			if tc.natGetErr == nil {
+				natGateway = byoNATGateway(uid)
+				natGateway.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(tc.linkedTo)}
+			}
+			natReads := 1
+			if tc.sharedWith != "" {
+				natReads = 0
+			}
+			m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, uid, gomock.Any()).Return(natGateway, tc.natGetErr).Times(natReads)
+			cleared := false
+			m.nat.EXPECT().CreateOrUpdate(gomock.Any(), byoNATGatewayRG, uid, gomock.Any()).
+				DoAndReturn(func(_ context.Context, _, _ string, n armnetwork.NatGateway) (*armnetwork.NatGateway, error) {
+					cleared = true
+					return &n, tc.linkErr
+				}).AnyTimes()
+			unregistered := false
+			m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).
+				DoAndReturn(func(_ context.Context, _, _ string, req armnetwork.ServiceGatewayUpdateServicesRequest) error {
+					if !ptr.Deref(req.ServiceRequests[0].IsDelete, false) {
+						return nil // Step 1 of the unlink: clearing the service's NAT Gateway reference.
+					}
+					unregistered = true
+					return tc.unregisterErr
+				}).AnyTimes()
+
+			dt := newOutboundDiffTracker(uid, m, fake.NewSimpleClientset())
+			dt.config = byoNATConfig()
+			dt.setBYONATGatewayID(uid, byoNATGatewayARMID(uid))
+			got := &outboundCompletion{}
+			outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
+
+			_, success, err := got.result()
+			assert.Equal(t, tc.wantSuccess, success, "completion error: %v", err)
+			assert.Equal(t, tc.wantNATCleared, cleared, "NAT Gateway link cleared")
+			assert.Equal(t, tc.wantUnregister, unregistered, "unregistered")
+			assert.Equal(t, !tc.wantSuccess, dt.NRPResources.NATGateways.Has(uid))
+			if tc.wantSuccess {
+				assert.Empty(t, dt.byoNATGatewayID(uid))
+			} else {
+				assert.Equal(t, byoNATGatewayARMID(uid), dt.byoNATGatewayID(uid), "a failed delete must keep the BYO gateway so the retry unlinks it")
+			}
+		})
+	}
+}
+
+// A delete that unlinked the gateway but could not release the last pod's finalizer is retried; the
+// retry must still take the unlink-only path, never the managed path that deletes by name.
+func TestServiceUpdaterDeleteOutboundService_BYONATGatewayKeptUntilFinalizersReleased(t *testing.T) {
+	const (
+		uid     = "byo-finalizer"
+		podNS   = "default"
+		podName = "egress-last-pod"
+	)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	m := newOutboundMocks(ctrl)
+	m.expectNoDisassociation()
+	m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).Times(1)
+
+	kube := fake.NewSimpleClientset(&v1.Pod{ObjectMeta: metav1.ObjectMeta{
+		Name: podName, Namespace: podNS, UID: "pod-uid", Finalizers: []string{ServiceGatewayPodCleanupFinalizer},
+	}})
+	kube.PrependReactor("update", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("apiserver down")
+	})
+	dt := newOutboundDiffTracker(uid, m, kube)
+	dt.config = byoNATConfig()
+	dt.setBYONATGatewayID(uid, byoNATGatewayARMID(uid))
+	dt.pendingPodDeletions[podNS+"/"+podName] = &PendingPodDeletion{
+		Namespace: podNS, Name: podName, UID: "pod-uid", ServiceUID: uid, Addresses: []string{"10.244.0.5"}, IsLastPod: true,
+	}
+	got := &outboundCompletion{}
+	outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
+
+	_, success, _ := got.result()
+	assert.False(t, success, "a failed finalizer release must be retried")
+	assert.Equal(t, byoNATGatewayARMID(uid), dt.byoNATGatewayID(uid), "the retry must still take the unlink-only path")
+}
+
+// A pod labelled with the name of a NAT Gateway this identity does not own (the default outbound
+// service's, which may carry any name, or any other one this controller did not create) must never
+// make this controller delete that gateway or its addresses.
+func TestServiceUpdaterDeleteOutboundService_KeepsNATGatewayNotOwnedByIdentity(t *testing.T) {
+	const uid = "custom-default"
+	usedByDefault := []*armnetwork.ServiceGatewayService{{
+		Name: ptr.To("default-natgw"),
+		Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
+			IsDefault: ptr.To(true), PublicNatGatewayID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/natGateways/" + uid)},
+	}}
+	// Looks created by this controller (untagged, only its own "<name>-pip"), so only the "used by
+	// another service" check keeps it.
+	ownAddressesOnly := &armnetwork.NatGateway{Name: ptr.To(uid), Properties: &armnetwork.NatGatewayPropertiesFormat{PublicIPAddresses: []*armnetwork.SubResource{
+		{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/" + PublicIPName(uid))}}}}
+	tagged := &armnetwork.NatGateway{Name: ptr.To(uid), Tags: egressIdentityTags(uid), Properties: &armnetwork.NatGatewayPropertiesFormat{}}
+	// Linked to our Service Gateway (for example mid-attach by the RP), yet not ours: never written.
+	foreign := &armnetwork.NatGateway{Name: ptr.To(uid), Properties: &armnetwork.NatGatewayPropertiesFormat{
+		ServiceGateway: &armnetwork.SubResource{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/serviceGateways/sgw")}}}
+	// Created by this controller before tagging, then given a prefix by its user: no longer ours.
+	userModified := &armnetwork.NatGateway{Name: ptr.To(uid), Properties: &armnetwork.NatGatewayPropertiesFormat{
+		PublicIPAddresses: ownAddressesOnly.Properties.PublicIPAddresses,
+		PublicIPPrefixes:  []*armnetwork.SubResource{{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/user")}}}}
+
+	for _, tc := range []struct {
+		name        string
+		services    []*armnetwork.ServiceGatewayService
+		servicesErr error
+		gateway     *armnetwork.NatGateway
+		unmanaged   bool
+		rejected    bool
+		wantRetry   bool
+	}{
+		{name: "created by this controller but used by the default outbound service", services: usedByDefault, gateway: ownAddressesOnly},
+		{name: "tagged as ours but used by the default outbound service", services: usedByDefault, gateway: tagged},
+		{name: "tagged as ours but its users unreadable: retried, nothing deleted", gateway: tagged, servicesErr: errors.New("NRP unavailable"), wantRetry: true},
+		{name: "created after start-up by someone else", gateway: foreign},
+		{name: "recorded at start-up as not ours, creation rejected: nothing in Azure is touched", unmanaged: true, rejected: true},
+		{name: "recorded at start-up as not ours but registered: only its registration is removed", unmanaged: true, gateway: userModified},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			m := newOutboundMocks(ctrl)
+			unregistered := 0
+			if !tc.rejected {
+				m.nat.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).Return(tc.gateway, nil).AnyTimes()
+				m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(tc.services, tc.servicesErr).AnyTimes()
+				m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).
+					DoAndReturn(func(_ context.Context, _, _ string, req armnetwork.ServiceGatewayUpdateServicesRequest) error {
+						unregistered++
+						assert.True(t, ptr.Deref(req.ServiceRequests[0].IsDelete, false), "only the identity's own registration may be removed")
+						return nil
+					}).AnyTimes()
+			}
+			// No NAT Gateway write and no deletes: any such call fails the test.
+
+			dt := newOutboundDiffTracker(uid, m, fake.NewSimpleClientset())
+			if tc.unmanaged {
+				dt.NRPResources.UnmanagedNATGateways = utilsets.NewString(uid)
+			}
+			if tc.rejected {
+				dt.NRPResources.NATGateways.Delete(uid)
+			}
+			got := &outboundCompletion{}
+			outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
+
+			_, success, err := got.result()
+			assert.Equal(t, !tc.wantRetry, success, "%v", err)
+			assert.Equal(t, tc.wantRetry, dt.NRPResources.NATGateways.Has(uid))
+			wantUnregistered := 1
+			if tc.rejected || tc.wantRetry {
+				wantUnregistered = 0
+			}
+			assert.Equal(t, wantUnregistered, unregistered, "the identity's own registration must still be removed")
+		})
+	}
+}
+
+// A NAT Gateway created before tagging is recognised by its own "<name>-pip" addresses, which an
+// unlink does not change, so a delete retried after the unlink (or after the Service Gateway is gone)
+// still removes it; one whose users cannot be read is never deleted. The "used by another service" case is covered by
+// TestServiceUpdaterDeleteOutboundService_KeepsNATGatewayNotOwnedByIdentity.
+func TestServiceUpdaterDeleteOutboundService_LegacyUntaggedNATGateway(t *testing.T) {
+	const uid = "legacy-egress"
+	// Untagged, only its own "<name>-pip": created by this controller before tagging.
+	legacy := &armnetwork.NatGateway{Name: ptr.To(uid), Properties: &armnetwork.NatGatewayPropertiesFormat{PublicIPAddresses: []*armnetwork.SubResource{
+		{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/" + PublicIPName(uid))}}}}
+
+	for _, tc := range []struct {
+		name        string
+		services    []*armnetwork.ServiceGatewayService
+		servicesErr error
+		wantDeleted bool
+		wantSuccess bool
+	}{
+		{name: "retried after the unlink: still deleted", wantDeleted: true, wantSuccess: true},
+		{name: "its own service still registered: deleted", services: []*armnetwork.ServiceGatewayService{{Name: ptr.To(uid), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
+			PublicNatGatewayID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/natGateways/" + uid)}}}, wantDeleted: true, wantSuccess: true},
+		{name: "users unreadable: retried, nothing deleted", servicesErr: errors.New("NRP unavailable")},
+		{name: "Service Gateway gone: still deleted", servicesErr: &azcore.ResponseError{StatusCode: http.StatusNotFound}, wantDeleted: true, wantSuccess: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			m := newOutboundMocks(ctrl)
+			m.nat.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).Return(legacy, nil).AnyTimes()
+			m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(tc.services, tc.servicesErr).AnyTimes()
+			m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).AnyTimes()
+			if tc.wantDeleted {
+				m.nat.EXPECT().Delete(gomock.Any(), "rg", uid).Return(nil).Times(1)
+				m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(uid)).Return(nil).Times(1)
+				m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPNameV6(uid)).Return(nil).Times(1)
+			}
+
+			dt := newOutboundDiffTracker(uid, m, fake.NewSimpleClientset())
+			got := &outboundCompletion{}
+			outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
+
+			_, success, err := got.result()
+			assert.Equal(t, tc.wantSuccess, success, "%v", err)
+		})
+	}
+}
+
+// Creating an identity on an untagged NAT Gateway that another service (the default outbound
+// service) uses must be rejected rather than overwrite that gateway's addresses.
+func TestServiceUpdaterCreateOutboundService_RejectsLegacyLookingNATGatewayOfAnotherService(t *testing.T) {
+	const uid = "custom-default"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	m := newOutboundMocks(ctrl)
+	m.nat.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).Return(&armnetwork.NatGateway{Name: ptr.To(uid), Properties: &armnetwork.NatGatewayPropertiesFormat{
+		PublicIPAddresses: []*armnetwork.SubResource{{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/" + PublicIPName(uid))}}}}, nil)
+	m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return([]*armnetwork.ServiceGatewayService{{Name: ptr.To("default-natgw"), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
+		IsDefault: ptr.To(true), PublicNatGatewayID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/natGateways/" + uid)}}}, nil)
+	// No writes: any PUT or registration fails the test.
+
+	dt := newTestDiffTracker()
+	dt.config = testConfig()
+	dt.networkClientFactory = m.factory
+	rec := record.NewFakeRecorder(10)
+	dt.eventRecorder = rec
+	got := &outboundCompletion{}
+	outboundUpdater(dt, got).createOutboundService(uid, &OutboundConfig{}, "corr", "ns", "pod")
+
+	_, success, err := got.result()
+	assert.False(t, success)
+	assert.ErrorIs(t, err, errNATGatewayNotOwned)
+	events := drainEvents(rec)
+	if assert.Len(t, events, 1) {
+		assert.Contains(t, events[0], egressNATGatewayRejectedReason)
+	}
+}
+
+// A BYO unlink left behind because of missing access or a lock is counted like a swallowed managed
+// disassociation failure, so a sustained problem is visible.
+func TestDeleteBYOOutboundService_CountsSwallowedUnlinkFailure(t *testing.T) {
+	const uid = "byo-metric"
+	run := func(t *testing.T, readErr error) float64 {
+		t.Helper()
+		RegisterMetrics()
+		deleteSubstepFailuresTotal.Reset()
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		m := newOutboundMocks(ctrl)
+		m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil)
+		m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, uid, gomock.Any()).Return(nil, readErr)
+		m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).AnyTimes()
+
+		dt := newOutboundDiffTracker(uid, m, fake.NewSimpleClientset())
+		dt.config = byoNATConfig()
+		dt.setBYONATGatewayID(uid, byoNATGatewayARMID(uid))
+		NewServiceUpdater(context.Background(), dt, func(string, bool, error) {}, dt.serviceUpdaterTrigger).deleteOutboundService(uid, "corr")
+
+		got, err := testutil.GetCounterMetricValue(deleteSubstepFailuresTotal.WithLabelValues(deleteStepDisassociateNAT))
+		assert.NoError(t, err)
+		return got
+	}
+
+	assert.Equal(t, float64(1), run(t, &azcore.ResponseError{StatusCode: http.StatusForbidden}), "a left-behind link must be counted")
+	assert.Zero(t, run(t, errors.New("transient")), "control: a retried unlink failure is not a left-behind link")
+	assert.Zero(t, run(t, notFoundError()), "control: an already-gone gateway counts nothing")
+}
+
+// captureRecorder keeps the objects events were recorded on, and passes the events on to the
+// embedded FakeRecorder.
+type captureRecorder struct {
+	record.FakeRecorder
+	objects []runtime.Object
+}
+
+func (r *captureRecorder) Event(object runtime.Object, eventType, reason, message string) {
+	r.objects = append(r.objects, object)
+	r.FakeRecorder.Event(object, eventType, reason, message)
+}
+
+// Events are recorded on the live pod, so they carry its UID and appear in `kubectl describe pod`.
+func TestRecordPodEventUsesTheLivePod(t *testing.T) {
+	dt := newTestDiffTracker()
+	dt.kubeClient = fake.NewSimpleClientset(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "pod", UID: "pod-uid"}})
+	rec := &captureRecorder{FakeRecorder: *record.NewFakeRecorder(10)}
+	dt.eventRecorder = rec
+
+	dt.recordPodEvent(context.Background(), "ns", "pod", v1.EventTypeNormal, egressNATGatewayLinkedReason, "linked")
+	dt.recordPodEvent(context.Background(), "ns", "gone", v1.EventTypeNormal, egressNATGatewayLinkedReason, "linked")
+	dt.recordPodEvent(context.Background(), "ns", "", v1.EventTypeNormal, egressNATGatewayLinkedReason, "no pod")
+
+	if assert.Len(t, rec.objects, 2, "an event without a pod name is dropped") {
+		assert.Equal(t, types.UID("pod-uid"), rec.objects[0].(*v1.Pod).UID)
+		assert.Equal(t, "gone", rec.objects[1].(*v1.Pod).Name, "a pod that cannot be read still gets the event, by name")
+	}
+}
+
+// With network resources in their own subscription, a cluster-resource-group NAT Gateway ID carries
+// that subscription: another service using it must still be recognised, on delete and on unlink.
+func TestOutboundServiceWithSeparateNetworkSubscription(t *testing.T) {
+	const uid = "custom-default"
+	defaultUsing := func(natGatewayID string) []*armnetwork.ServiceGatewayService {
+		return []*armnetwork.ServiceGatewayService{{Name: ptr.To("default-natgw"), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
+			IsDefault: ptr.To(true), PublicNatGatewayID: ptr.To(natGatewayID)}}}
+	}
+	netConfig := func(c Config) Config {
+		c.NetworkResourceSubscriptionID = "netsub"
+		return c
+	}
+
+	t.Run("managed delete keeps a gateway the default uses", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		m := newOutboundMocks(ctrl)
+		m.nat.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).Return(&armnetwork.NatGateway{Name: ptr.To(uid), Tags: egressIdentityTags(uid)}, nil).AnyTimes()
+		m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").
+			Return(defaultUsing("/subscriptions/netsub/resourceGroups/rg/providers/Microsoft.Network/natGateways/"+uid), nil).AnyTimes()
+		m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).AnyTimes()
+		// No NAT Gateway write and no deletes.
+
+		dt := newOutboundDiffTracker(uid, m, fake.NewSimpleClientset())
+		dt.config = netConfig(dt.config)
+		got := &outboundCompletion{}
+		outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
+		_, success, err := got.result()
+		assert.True(t, success, "%v", err)
+	})
+
+	t.Run("BYO unlink keeps a gateway the default uses", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		m := newOutboundMocks(ctrl)
+		byoID := "/subscriptions/netsub/resourceGroups/" + byoNATGatewayRG + "/providers/Microsoft.Network/natGateways/" + uid
+		m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(defaultUsing(byoID), nil).Times(1)
+		m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).Times(1)
+		// No NAT Gateway read or write: the gateway stays linked for the default.
+
+		dt := newOutboundDiffTracker(uid, m, fake.NewSimpleClientset())
+		dt.config = netConfig(byoNATConfig())
+		dt.setBYONATGatewayID(uid, byoID)
+		got := &outboundCompletion{}
+		outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
+		_, success, err := got.result()
+		assert.True(t, success, "%v", err)
+	})
 }
