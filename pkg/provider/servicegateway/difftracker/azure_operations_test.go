@@ -31,7 +31,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
@@ -454,16 +454,14 @@ func newServiceGatewayClient(t *testing.T, status int, header http.Header) servi
 func TestServiceGatewayClientSynchronousCompletionEndToEnd(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("200 OK is tolerated", func(t *testing.T) {
+	t.Run("200 OK succeeds", func(t *testing.T) {
 		client := newServiceGatewayClient(t, http.StatusOK, nil)
 
 		err := client.UpdateServices(ctx, "rg", "sgw", armnetwork.ServiceGatewayUpdateServicesRequest{})
-		assert.Error(t, err, "the generated client rejects 200 OK")
-		assert.True(t, isSynchronousCompletion(err))
+		assert.NoError(t, err, "the client treats NRP's synchronous 200 OK as success")
 
 		err = client.UpdateAddressLocations(ctx, "rg", "sgw", armnetwork.ServiceGatewayUpdateAddressLocationsRequest{})
-		assert.Error(t, err)
-		assert.True(t, isSynchronousCompletion(err))
+		assert.NoError(t, err)
 	})
 
 	t.Run("409 Conflict still fails", func(t *testing.T) {

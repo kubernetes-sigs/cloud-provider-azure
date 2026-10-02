@@ -18,12 +18,15 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -441,12 +444,10 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 	}
 
 	if az.ComputeClientFactory == nil && az.AuthProvider != nil {
-		var (
-			computeCred = az.AuthProvider.GetAzIdentity()
-			networkCred = az.AuthProvider.GetNetworkAzIdentity() // It would fallback to compute credential if network credential is not set
+		networkSubscriptionID, networkCred := clientFactoryIdentity(
+			az.getNetworkResourceSubscriptionID(),  // It would also fallback to compute subscription ID if network subscription ID is not set
+			az.AuthProvider.GetNetworkAzIdentity(), // It would fallback to compute credential if network credential is not set
 		)
-
-		networkSubscriptionID := az.getNetworkResourceSubscriptionID() // It would also fallback to compute subscription ID if network subscription ID is not set
 		az.NetworkClientFactory, err = newARMClientFactory(&azclient.ClientFactoryConfig{
 			SubscriptionID: networkSubscriptionID,
 		}, &az.ARMClientConfig, clientOps.Cloud, networkCred)
@@ -455,13 +456,14 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 		}
 		logger.Info("Setting up ARM client factory for network resources", "subscriptionID", networkSubscriptionID)
 
+		computeSubscriptionID, computeCred := clientFactoryIdentity(az.SubscriptionID, az.AuthProvider.GetAzIdentity())
 		az.ComputeClientFactory, err = newARMClientFactory(&azclient.ClientFactoryConfig{
-			SubscriptionID: az.SubscriptionID,
+			SubscriptionID: computeSubscriptionID,
 		}, &az.ARMClientConfig, clientOps.Cloud, computeCred, az.AuthProvider.AdditionalComputeClientOptions...)
 		if err != nil {
 			return err
 		}
-		logger.Info("Setting up ARM client factory for compute resources", "subscriptionID", az.SubscriptionID)
+		logger.Info("Setting up ARM client factory for compute resources", "subscriptionID", computeSubscriptionID)
 	}
 
 	networkClientFactory := az.NetworkClientFactory
@@ -1095,4 +1097,36 @@ func (az *Cloud) GetNodeVMSet(ctx context.Context, nodeName types.NodeName, crt 
 
 	// 5. Node is managed by vmss
 	return ss, nil
+}
+
+// credentialFreeSubscriptionID is the subscription ID given to ARM client factories when there are no
+// Azure credentials, as in cloud-node-manager's default IMDS mode. The SDK rejects an empty
+// subscription ID when it creates a client.
+const credentialFreeSubscriptionID = "00000000-0000-0000-0000-000000000000"
+
+// errNoAzureCredentials is returned for every ARM request made without Azure credentials.
+var errNoAzureCredentials = errors.New("no Azure credentials are configured, so ARM requests cannot be made")
+
+// noAzureCredentials is the TokenCredential given to ARM client factories when there are no Azure
+// credentials. Every token request fails, so an ARM call returns errNoAzureCredentials before any
+// request is sent. Without it the factory would fall back to a zero-value DefaultAzureCredential,
+// which panics when asked for a token.
+type noAzureCredentials struct{}
+
+func (noAzureCredentials) GetToken(context.Context, policy.TokenRequestOptions) (azcore.AccessToken, error) {
+	return azcore.AccessToken{}, errNoAzureCredentials
+}
+
+// clientFactoryIdentity returns the subscription ID and credential to build an ARM client factory with.
+// Without credentials IMDS-only callers must still start, so an empty subscription ID becomes
+// credentialFreeSubscriptionID and the credential becomes noAzureCredentials. With credentials both are
+// returned as they are, so a missing subscriptionId fails when the factory is created.
+func clientFactoryIdentity(subscriptionID string, cred azcore.TokenCredential) (string, azcore.TokenCredential) {
+	if cred != nil {
+		return subscriptionID, cred
+	}
+	if subscriptionID == "" {
+		subscriptionID = credentialFreeSubscriptionID
+	}
+	return subscriptionID, noAzureCredentials{}
 }

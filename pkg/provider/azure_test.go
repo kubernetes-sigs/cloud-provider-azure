@@ -26,12 +26,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
@@ -3018,4 +3020,52 @@ func TestIsNodeReady(t *testing.T) {
 			assert.Equal(t, test.expected, got)
 		}
 	}
+}
+
+// staticTokenCredential is a TokenCredential that is never asked for a token.
+type staticTokenCredential struct{}
+
+func (staticTokenCredential) GetToken(context.Context, policy.TokenRequestOptions) (azcore.AccessToken, error) {
+	return azcore.AccessToken{}, nil
+}
+
+func TestClientFactoryIdentity(t *testing.T) {
+	var cred azcore.TokenCredential = staticTokenCredential{}
+
+	subscriptionID, gotCred := clientFactoryIdentity("", nil)
+	assert.Equal(t, credentialFreeSubscriptionID, subscriptionID,
+		"without credentials an empty subscription must not stop IMDS-only callers from starting")
+	assert.Equal(t, noAzureCredentials{}, gotCred, "without credentials ARM calls must fail with an error, not panic")
+
+	subscriptionID, gotCred = clientFactoryIdentity("sub", nil)
+	assert.Equal(t, "sub", subscriptionID)
+	assert.Equal(t, noAzureCredentials{}, gotCred)
+
+	subscriptionID, gotCred = clientFactoryIdentity("", cred)
+	assert.Equal(t, "", subscriptionID, "with credentials a missing subscription must fail when the factory is created")
+	assert.Equal(t, cred, gotCred)
+
+	subscriptionID, gotCred = clientFactoryIdentity("sub", cred)
+	assert.Equal(t, "sub", subscriptionID)
+	assert.Equal(t, cred, gotCred)
+}
+
+// TestNewCloudWithoutCredentialsFailsARMCallsCleanly starts the provider the way cloud-node-manager's
+// IMDS mode does (no credentials, no subscription) and checks that an ARM call returns an error. The
+// azclient factory would otherwise fall back to a zero-value DefaultAzureCredential, which panics.
+func TestNewCloudWithoutCredentialsFailsARMCallsCleanly(t *testing.T) {
+	// azclient builds a credential from these variables, so clear them to keep the test hermetic.
+	for _, env := range []string{"AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_TENANT_ID", "AZURE_FEDERATED_TOKEN_FILE"} {
+		t.Setenv(env, "")
+	}
+
+	cloud, err := NewCloud(context.Background(), nil, &providerconfig.Config{UseInstanceMetadata: true, VMType: consts.VMTypeVMSS}, false)
+	if !assert.NoError(t, err) {
+		return
+	}
+
+	assert.NotPanics(t, func() {
+		_, err = cloud.(*Cloud).NetworkClientFactory.GetSecurityGroupClient().Get(context.Background(), "rg", "nsg")
+	})
+	assert.ErrorContains(t, err, errNoAzureCredentials.Error())
 }

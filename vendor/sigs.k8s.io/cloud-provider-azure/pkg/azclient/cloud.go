@@ -211,7 +211,7 @@ const NotAvailable = "N/A" // NotAvailable is used for endpoints and resource ID
 
 var (
 	// PublicCloud is the default public Azure cloud environment
-	PublicCloud = &Environment{
+	PublicCloud = &Environment{ // #nosec G101 -- Public cloud endpoints and token audiences, not credentials.
 		Name:                         "AzurePublicCloud",
 		ManagementPortalURL:          "https://manage.windowsazure.com/",
 		PublishSettingsURL:           "https://manage.windowsazure.com/publishsettings/index",
@@ -260,7 +260,7 @@ var (
 	}
 
 	// USGovernmentCloud is the cloud environment for the US Government
-	USGovernmentCloud = &Environment{
+	USGovernmentCloud = &Environment{ // #nosec G101 -- Public cloud endpoints and token audiences, not credentials.
 		Name:                         "AzureUSGovernmentCloud",
 		ManagementPortalURL:          "https://manage.windowsazure.us/",
 		PublishSettingsURL:           "https://manage.windowsazure.us/publishsettings/index",
@@ -309,7 +309,7 @@ var (
 	}
 
 	// ChinaCloud is the cloud environment operated in China
-	ChinaCloud = &Environment{
+	ChinaCloud = &Environment{ // #nosec G101 -- Public cloud endpoints and token audiences, not credentials.
 		Name:                         "AzureChinaCloud",
 		ManagementPortalURL:          "https://manage.chinacloudapi.com/",
 		PublishSettingsURL:           "https://manage.chinacloudapi.com/publishsettings/index",
