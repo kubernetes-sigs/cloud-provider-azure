@@ -3108,6 +3108,35 @@ func TestEnsureHostsInPool(t *testing.T) {
 	}
 }
 
+func TestEnsureHostsInPoolRoutesStandaloneVM(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ss, err := NewTestScaleSet(ctrl)
+	assert.NoError(t, err)
+	ss.DisableAvailabilitySetNodes = true
+	ss.EnableVmssFlexNodes = false
+	ss.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+
+	nodes := []*v1.Node{
+		{
+			ObjectMeta: metav1.ObjectMeta{Name: "standalone-vm"},
+			Spec: v1.NodeSpec{
+				ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/standalone-vm",
+			},
+		},
+	}
+	service := &v1.Service{}
+	availabilitySet := NewMockVMSet(ctrl)
+	availabilitySet.EXPECT().EnsureHostsInPool(
+		gomock.Any(), service, nodes, testLBBackendpoolID1, testVMSSName,
+	).Return(nil)
+	ss.availabilitySet = availabilitySet
+
+	err = ss.EnsureHostsInPool(context.Background(), service, nodes, testLBBackendpoolID1, testVMSSName)
+	assert.NoError(t, err)
+}
+
 func TestEnsureHostsInPoolEtagMismatch(t *testing.T) {
 	testCases := []struct {
 		description            string
