@@ -317,13 +317,13 @@ func (a *acrProvider) parseACRLoginServerFromImage(image string) (string, string
 	// handle the custom cloud case
 	if a != nil && a.environment != nil {
 		cloudAcrSuffix := a.environment.ContainerRegistryDNSSuffix
-		cloudAcrSuffixLength := len(cloudAcrSuffix)
-		if cloudAcrSuffixLength > 0 {
-			customAcrSuffixIndex := strings.Index(targetImage, cloudAcrSuffix)
-			if customAcrSuffixIndex != -1 {
-				endIndex := customAcrSuffixIndex + cloudAcrSuffixLength
-				return targetImage[0:endIndex], sourceRegistry
-			}
+		// Normalize the suffix to start with a dot.
+		dotPrefixedAcrSuffix := "." + strings.TrimPrefix(cloudAcrSuffix, ".")
+		loginServer, _, _ := strings.Cut(targetImage, "/")
+		// Prefix the hostname with a dot to also allow an exact match with the configured suffix.
+		dotPrefixedLoginServer := "." + loginServer
+		if dotPrefixedAcrSuffix != "." && strings.HasSuffix(dotPrefixedLoginServer, dotPrefixedAcrSuffix) {
+			return loginServer, sourceRegistry
 		}
 	}
 
