@@ -177,13 +177,12 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 			// queue - so initialization could complete against NRP state this sync never
 			// reconciled, and a recovery arriving one second later was thrown away.
 			//
-			// Keep retrying instead: either NRP recovers and startup proceeds correctly, or the
-			// inside the window and startup proceeds correctly, or the deadline expires and
-			// WaitForInitialSync fails InitializeFromCluster loudly. The backoff is capped at
+			// Keep retrying instead: startup stays blocked until NRP recovers; there is no
+			// deadline (see waitForInitialSyncReportingProgress). The backoff is capped at
 			// locationsRetryMaxDelay with jitter, so this cannot hot-loop against a struggling
 			// NRP. Reported once per outage rather than every attempt.
 			if lu.failureCount == getMaxInitLocationSyncAttempts() {
-				lu.logger.Error(lastSyncErr, "NRP location sync still failing during initialization; retrying until the initial-sync deadline",
+				lu.logger.Error(lastSyncErr, "NRP location sync still failing during initialization; retrying until it succeeds while cloud-controller-manager startup stays blocked",
 					"attempts", lu.failureCount)
 				recordLocationSyncAbandoned(locationSyncAbandonReasonInitAttempts)
 			}
