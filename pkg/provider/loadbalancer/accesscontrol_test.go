@@ -449,6 +449,15 @@ func TestAccessControl_DenyAllExceptSourceRanges(t *testing.T) {
 			svc:            k8sFx.Service().WithAllowedIPRanges("10.0.0.1/24").Build(),
 			expectedOutput: true,
 		},
+		{
+			name: "internal LB with annotation and spec.loadBalancerSourceRanges specified",
+			svc: k8sFx.Service().
+				WithInternalEnabled().
+				WithDenyAllExceptLoadBalancerSourceRanges().
+				WithLoadBalancerSourceRanges("10.0.0.1/32").
+				Build(),
+			expectedOutput: true,
+		},
 	}
 
 	for i := range tests {
@@ -458,6 +467,8 @@ func TestAccessControl_DenyAllExceptSourceRanges(t *testing.T) {
 		assert.NoError(t, err)
 		actual := ac.DenyAllExceptSourceRanges()
 		assert.Equal(t, tt.expectedOutput, actual, "[%s] expecting DenyAllExceptSourceRanges returns %v", tt.name, tt.expectedOutput)
+		assert.Equal(t, actual, RequiresDenyAllExceptSourceRanges(&tt.svc),
+			"[%s] expecting RequiresDenyAllExceptSourceRanges to agree with DenyAllExceptSourceRanges", tt.name)
 	}
 }
 

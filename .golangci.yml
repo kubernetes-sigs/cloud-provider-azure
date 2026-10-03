@@ -41,6 +41,9 @@ linters:
       - std-error-handling
     rules:
       - linters:
+          - goconst
+        path: _test\.go$
+      - linters:
           - revive
         path: tests/e2e
     paths:
