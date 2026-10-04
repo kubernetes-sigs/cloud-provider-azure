@@ -35,7 +35,7 @@ python3 <SKILL_DIR>/scripts/build_image.py \
 The default CCM command is:
 
 ```bash
-IMAGE_TAG=<tag> IMAGE_REGISTRY=<registry> GOEXPERIMENT=nosystemcrypto ENABLE_GIT_COMMAND=false make build-ccm-image
+IMAGE_TAG=<tag> IMAGE_REGISTRY=<registry> MS_GO_NOSYSTEMCRYPTO=1 ENABLE_GIT_COMMAND=false make build-ccm-image
 ```
 
 ## Image Aliases
@@ -60,7 +60,7 @@ aggregate only; it does not build `hpp`, `hpp-windows`, or `ccm-e2e`.
 
 `cnm-all` maps to the raw root `build-all-node-images` aggregate. Because that
 aggregate includes Windows image targets with host-side Go builds, the helper
-does not default `GOEXPERIMENT` for `cnm-all`.
+does not default `MS_GO_NOSYSTEMCRYPTO` for `cnm-all`.
 
 The helper invokes health-probe-proxy builds with `make -B` so each `hpp` or
 `hpp-windows` image rebuilds its host binary before invoking Buildx. This
@@ -77,15 +77,19 @@ The helper always sets `IMAGE_TAG`, `IMAGE_REGISTRY`, and
 `ENABLE_GIT_COMMAND=false` unless a default is explicitly removed with
 `--unset`.
 
-The helper defaults `GOEXPERIMENT=nosystemcrypto` only for `ccm`, `ccm-all`,
-`cnm`, and `cnm-linux`. For other aliases, pass it explicitly when desired:
+The `ccm`, `ccm-all`, `cnm`, and `cnm-linux` aliases set
+`MS_GO_NOSYSTEMCRYPTO=1` for non-FIPS development images. Their Dockerfiles
+use Microsoft Go, where starting with version 1.27, `systemcrypto` is no longer
+configured through `GOEXPERIMENT`; this setting disables system crypto. For
+other aliases, pass the setting explicitly only when FIPS compliance is not
+required:
 
 ```bash
 python3 <SKILL_DIR>/scripts/build_image.py \
   --image hpp \
   --tag <tag> \
   --registry <registry> \
-  --set GOEXPERIMENT=nosystemcrypto
+  --set MS_GO_NOSYSTEMCRYPTO=1
 ```
 
 Use repeated `--set KEY=VALUE` arguments to add or override make variables:
@@ -106,7 +110,7 @@ python3 <SKILL_DIR>/scripts/build_image.py \
   --image ccm \
   --tag <tag> \
   --registry <registry> \
-  --unset GOEXPERIMENT \
+  --unset MS_GO_NOSYSTEMCRYPTO \
   --unset ENABLE_GIT_COMMAND
 ```
 
