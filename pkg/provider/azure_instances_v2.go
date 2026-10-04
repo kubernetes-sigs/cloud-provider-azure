@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
@@ -183,6 +184,18 @@ func (az *Cloud) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloudpro
 	}
 	meta.Zone = zone.FailureDomain
 	meta.Region = zone.Region
+
+	faultDomain, err := az.VMSet.GetPlatformFaultDomainByNodeName(ctx, node.Name)
+	if err != nil {
+		logger.Error(err, "failed to get the node fault domain", "node", node.Name)
+		return &cloudprovider.InstanceMetadata{}, err
+	}
+	if faultDomain != "" {
+		if meta.AdditionalLabels == nil {
+			meta.AdditionalLabels = make(map[string]string)
+		}
+		meta.AdditionalLabels[consts.FaultDomainLabel] = faultDomain
+	}
 
 	return &meta, nil
 }

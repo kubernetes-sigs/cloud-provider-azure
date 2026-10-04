@@ -41,6 +41,10 @@ const (
 	LabelFailureDomainBetaZone = "failure-domain.beta.kubernetes.io/zone"
 	// LabelFailureDomainBetaRegion failure-domain region label
 	LabelFailureDomainBetaRegion = "failure-domain.beta.kubernetes.io/region"
+	// LabelPlatformFaultDomain is the label key of platformFaultDomain
+	LabelPlatformFaultDomain = "topology.kubernetes.azure.com/fault-domain"
+	// FaultDomainLabel is the node label used to identify the fault domain of a VM
+	FaultDomainLabel = LabelPlatformFaultDomain
 	// LabelPlatformSubFaultDomain is the label key of platformSubFaultDomain
 	LabelPlatformSubFaultDomain = "topology.kubernetes.azure.com/sub-fault-domain"
 	// LabelPlatformInterconnectGroup is the label key of Platform Interconnect Group

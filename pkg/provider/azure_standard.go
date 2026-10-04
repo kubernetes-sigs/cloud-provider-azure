@@ -554,8 +554,7 @@ func (as *availabilitySet) GetInstanceTypeByNodeName(ctx context.Context, name s
 }
 
 // GetZoneByNodeName gets availability zone for the specified node. If the node is not running
-// with availability zone, then it returns fault domain.
-// for details, refer to https://kubernetes-sigs.github.io/cloud-provider-azure/topics/availability-zones/#node-labels
+// with availability zone, then it returns an empty FailureDomain.
 func (as *availabilitySet) GetZoneByNodeName(ctx context.Context, name string) (cloudprovider.Zone, error) {
 	vm, err := as.getVirtualMachine(ctx, types.NodeName(name), azcache.CacheReadTypeUnsafe)
 	if err != nil {
@@ -572,13 +571,6 @@ func (as *availabilitySet) GetZoneByNodeName(ctx context.Context, name string) (
 		}
 
 		failureDomain = as.makeZone(ptr.Deref(vm.Location, ""), zoneID)
-	} else {
-		// Availability zone is not used for the node, falling back to fault domain.
-		if prop := vm.Properties; prop == nil || prop.InstanceView == nil {
-			failureDomain = "0"
-		} else {
-			failureDomain = strconv.Itoa(int(ptr.Deref(vm.Properties.InstanceView.PlatformFaultDomain, 0)))
-		}
 	}
 
 	zone := cloudprovider.Zone{
@@ -586,6 +578,19 @@ func (as *availabilitySet) GetZoneByNodeName(ctx context.Context, name string) (
 		Region:        strings.ToLower(ptr.Deref(vm.Location, "")),
 	}
 	return zone, nil
+}
+
+// GetPlatformFaultDomainByNodeName gets the platform fault domain for the specified node.
+func (as *availabilitySet) GetPlatformFaultDomainByNodeName(ctx context.Context, name string) (string, error) {
+	vm, err := as.getVirtualMachine(ctx, types.NodeName(name), azcache.CacheReadTypeUnsafe)
+	if err != nil {
+		return "", err
+	}
+
+	if prop := vm.Properties; prop == nil || prop.InstanceView == nil || prop.InstanceView.PlatformFaultDomain == nil {
+		return "0", nil
+	}
+	return strconv.Itoa(int(ptr.Deref(vm.Properties.InstanceView.PlatformFaultDomain, 0))), nil
 }
 
 // GetPrimaryVMSetName returns the VM set name depending on the configured vmType.
