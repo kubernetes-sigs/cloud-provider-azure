@@ -41,6 +41,9 @@ linters:
       - std-error-handling
     rules:
       - linters:
+          - goconst
+        path: _test\.go$
+      - linters:
           - gosec
         path: ^(pkg/provider/azure_test|pkg/util/iputil/bits)\.go$
         text: "G602: slice index out of range"
